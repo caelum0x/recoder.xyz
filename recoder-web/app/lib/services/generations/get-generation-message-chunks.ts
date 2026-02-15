@@ -8,6 +8,8 @@ import type {
   GenerationId,
 } from './types';
 import { generationUiMessageChunksPath } from './storage';
+import { createScopedLogger } from '~/utils/logger';
+const logger = createScopedLogger('GenerationChunks');
 
 // =============================================================================
 // Types
@@ -116,7 +118,7 @@ export function parseMessageChunks(rawChunks: string[]): MessageChunk[] {
       chunks.push(chunk);
     } catch {
       // Skip invalid JSON chunks
-      console.warn('Failed to parse message chunk:', rawChunk);
+      logger.warn('Failed to parse message chunk:', rawChunk);
     }
   }
 

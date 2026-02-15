@@ -35,6 +35,9 @@ import type {
   SubAgentApprovalRequestEvent,
 } from '../subagents/subagent-events.js';
 
+import { createScopedLogger } from '~/utils/logger';
+const logger = createScopedLogger('TaskTool');
+
 export interface TaskParams {
   description: string;
   prompt: string;
@@ -103,7 +106,7 @@ export class TaskTool extends BaseDeclarativeTool<TaskParams, ToolResult> {
       this.availableSubagents = await this.subagentManager.listSubagents();
       this.updateDescriptionAndSchema();
     } catch (error) {
-      console.warn('Failed to load subagents for Task tool:', error);
+      logger.warn('Failed to load subagents for Task tool:', error);
       this.availableSubagents = [];
       this.updateDescriptionAndSchema();
     } finally {
@@ -546,7 +549,7 @@ class TaskToolInvocation extends BaseToolInvocation<TaskParams, ToolResult> {
     } catch (error) {
       const errorMessage =
         error instanceof Error ? error.message : String(error);
-      console.error(`[TaskTool] Error running subagent: ${errorMessage}`);
+      logger.error(`[TaskTool] Error running subagent: ${errorMessage}`);
 
       const errorDisplay: TaskResultDisplay = {
         ...this.currentDisplay!,

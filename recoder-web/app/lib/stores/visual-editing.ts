@@ -5,6 +5,10 @@
  */
 
 import { atom, computed } from 'nanostores';
+import { dockerPost } from '~/lib/services/docker-api';
+import { workbenchStore } from '~/lib/stores/workbench';
+import { createScopedLogger } from '~/utils/logger';
+const logger = createScopedLogger('VisualEditing');
 
 /** Information about a selected component from the preview iframe */
 export interface SelectedComponent {
@@ -126,7 +130,7 @@ export function setVisualEditingEnabled(enabled: boolean): void {
     // Clear selection when disabling
     clearSelection();
   }
-  console.log(`[VisualEditing] Mode ${enabled ? 'enabled' : 'disabled'}`);
+  logger.info(`[VisualEditing] Mode ${enabled ? 'enabled' : 'disabled'}`);
 }
 
 /**
@@ -147,7 +151,7 @@ export function selectComponent(component: SelectedComponent): void {
     componentCoordinates.set(component.bounds);
   }
 
-  console.log(`[VisualEditing] Selected: ${component.name} (${component.filePath}:${component.lineNumber})`);
+  logger.info(`[VisualEditing] Selected: ${component.name} (${component.filePath}:${component.lineNumber})`);
 }
 
 /**
@@ -294,6 +298,65 @@ export function generateEditPrompt(): string {
   return prompt;
 }
 
+/** Whether a save-to-source operation is in progress */
+export const isSavingToSource = atom<boolean>(false);
+
+/**
+ * Save pending style changes directly to source files via AST transformation.
+ * Returns { success, modifiedFiles?, error? }
+ */
+export async function saveChangesToSource(): Promise<{
+  success: boolean;
+  modifiedFiles?: string[];
+  error?: string;
+}> {
+  const changes = getPendingChangesArray();
+  if (changes.length === 0) {
+    return { success: false, error: 'No pending changes' };
+  }
+
+  const projectId = workbenchStore.projectId.get();
+  if (!projectId) {
+    return { success: false, error: 'No project ID' };
+  }
+
+  isSavingToSource.set(true);
+
+  try {
+    const payload = changes.map((change) => ({
+      filePath: change.filePath,
+      lineNumber: change.lineNumber || 0,
+      styles: change.styles,
+      textContent: change.textContent,
+    }));
+
+    const result = await dockerPost<{
+      success: boolean;
+      modifiedFiles?: string[];
+      error?: string;
+      errors?: string[];
+    }>(`/api/visual-edit/${projectId}/apply`, { changes: payload });
+
+    if (result?.success && result.modifiedFiles) {
+      clearPendingStyleChanges();
+      return { success: true, modifiedFiles: result.modifiedFiles };
+    }
+
+    return {
+      success: false,
+      error: result?.error || 'Failed to save changes',
+    };
+  } catch (err: any) {
+    logger.error('[VisualEditing] Save to source error:', err);
+    return {
+      success: false,
+      error: err?.message || 'Failed to save changes to source',
+    };
+  } finally {
+    isSavingToSource.set(false);
+  }
+}
+
 /**
  * Reset all visual editing state
  */
@@ -305,4 +368,5 @@ export function resetVisualEditingState(): void {
   pendingStyleChanges.set(new Map());
   isDynamicallyStyled.set(false);
   hasStaticText.set(false);
+  isSavingToSource.set(false);
 }

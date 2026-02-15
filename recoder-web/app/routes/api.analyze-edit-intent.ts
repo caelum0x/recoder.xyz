@@ -25,6 +25,9 @@ import {
   getAffectedFilesPreview,
 } from '~/lib/services/edit-intent';
 import { loadProjectContext, type ProjectContext } from '~/lib/services/code-context';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('AnalyzeEditIntent');
 
 interface AnalyzeEditIntentRequest {
   prompt: string;
@@ -71,9 +74,9 @@ export async function action({ request }: ActionFunctionArgs): Promise<Response>
       );
     }
 
-    console.log('[analyze-edit-intent] Request received');
-    console.log('[analyze-edit-intent] Prompt:', prompt);
-    console.log('[analyze-edit-intent] ProjectId:', projectId || 'none');
+    logger.info('[analyze-edit-intent] Request received');
+    logger.info('[analyze-edit-intent] Prompt:', prompt);
+    logger.info('[analyze-edit-intent] ProjectId:', projectId || 'none');
 
     // Get project context - either provided or load from project
     let context: ProjectContext | null = null;
@@ -81,15 +84,15 @@ export async function action({ request }: ActionFunctionArgs): Promise<Response>
     if (providedContext) {
       // Use provided context directly
       context = providedContext;
-      console.log('[analyze-edit-intent] Using provided context');
+      logger.info('[analyze-edit-intent] Using provided context');
     } else if (projectId) {
       // Load context from project
       try {
         context = await loadProjectContext(projectId);
-        console.log('[analyze-edit-intent] Loaded context for project:', projectId);
-        console.log('[analyze-edit-intent] Files count:', context?.files?.size || 0);
+        logger.info('[analyze-edit-intent] Loaded context for project:', projectId);
+        logger.info('[analyze-edit-intent] Files count:', context?.files?.size || 0);
       } catch (contextError) {
-        console.warn('[analyze-edit-intent] Failed to load project context:', contextError);
+        logger.warn('[analyze-edit-intent] Failed to load project context:', contextError);
         // Continue without context - intent analysis can still work
       }
     }
@@ -97,7 +100,7 @@ export async function action({ request }: ActionFunctionArgs): Promise<Response>
     // Analyze the edit intent
     const intent: EditIntent = analyzeEditIntent(prompt, context);
 
-    console.log('[analyze-edit-intent] Intent detected:', {
+    logger.info('[analyze-edit-intent] Intent detected:', {
       type: intent.type,
       confidence: intent.confidence,
       confidenceLevel: intent.confidenceLevel,
@@ -124,12 +127,12 @@ export async function action({ request }: ActionFunctionArgs): Promise<Response>
       },
     });
   } catch (error) {
-    console.error('[analyze-edit-intent] Error:', error);
+    logger.error('[analyze-edit-intent] Error:', error);
 
     return json<AnalyzeEditIntentResponse>(
       {
         success: false,
-        error: error instanceof Error ? error.message : 'Unknown error occurred',
+        error: 'Failed to analyze edit intent',
       },
       { status: 500 }
     );

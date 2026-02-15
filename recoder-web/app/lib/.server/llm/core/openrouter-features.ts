@@ -5,6 +5,9 @@
  */
 
 import { getOpenRouterConfig } from '../config/openrouter.js';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('OpenRouterFeatures');
 
 export interface OpenRouterCredits {
   total_credits: number;
@@ -114,7 +117,7 @@ export class OpenRouterFeaturesClient {
         },
       };
     } catch (error) {
-      console.error('Error fetching OpenRouter credits:', error);
+      logger.error('Error fetching OpenRouter credits:', error);
       throw error;
     }
   }
@@ -151,7 +154,7 @@ export class OpenRouterFeaturesClient {
       };
       return data.data || [];
     } catch (error) {
-      console.error('Error fetching OpenRouter activity:', error);
+      logger.error('Error fetching OpenRouter activity:', error);
       throw error;
     }
   }
@@ -176,7 +179,7 @@ export class OpenRouterFeaturesClient {
 
       return await response.json();
     } catch (error) {
-      console.error('Error fetching generation:', error);
+      logger.error('Error fetching generation:', error);
       throw error;
     }
   }
@@ -285,7 +288,7 @@ export class OpenRouterFeaturesClient {
         currency: 'USD',
       };
     } catch (error) {
-      console.error('Error estimating cost:', error);
+      logger.error('Error estimating cost:', error);
       throw error;
     }
   }

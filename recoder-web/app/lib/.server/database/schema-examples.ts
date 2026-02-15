@@ -4,6 +4,9 @@
  */
 
 import { generateDatabaseSchema, generateProjectFiles } from './index';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('SchemaExamples');
 
 /**
  * Example schema generations for testing and demonstration
@@ -33,8 +36,8 @@ export const schemaExamples = {
 export function testSchemaGeneration(exampleName: keyof typeof schemaExamples) {
   const example = schemaExamples[exampleName];
 
-  console.log(`\n🧪 Testing Schema Generation: ${exampleName}`);
-  console.log(`📝 Description: ${example.description}\n`);
+  logger.info(`\n🧪 Testing Schema Generation: ${exampleName}`);
+  logger.info(`📝 Description: ${example.description}\n`);
 
   const result = generateDatabaseSchema({
     description: example.description,
@@ -43,15 +46,15 @@ export function testSchemaGeneration(exampleName: keyof typeof schemaExamples) {
     seedRecordsPerEntity: 3,
   });
 
-  console.log(`✅ Generated ${result.summary.entityCount} entities:`);
+  logger.info(`✅ Generated ${result.summary.entityCount} entities:`);
   for (const entity of result.entities) {
-    console.log(`   - ${entity.name} (${entity.fields.length} fields, ${entity.relationships.length} relationships)`);
+    logger.info(`   - ${entity.name} (${entity.fields.length} fields, ${entity.relationships.length} relationships)`);
   }
 
-  console.log(`\n📊 Summary:`);
-  console.log(`   Total Fields: ${result.summary.totalFields}`);
-  console.log(`   Relationships: ${result.summary.relationshipCount}`);
-  console.log(`   Indexes: ${result.summary.indexCount}`);
+  logger.info(`\n📊 Summary:`);
+  logger.info(`   Total Fields: ${result.summary.totalFields}`);
+  logger.info(`   Relationships: ${result.summary.relationshipCount}`);
+  logger.info(`   Indexes: ${result.summary.indexCount}`);
 
   return result;
 }

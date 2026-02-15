@@ -1,4 +1,8 @@
-import type { GitHubActionId } from "@giselles-ai/action-registry";
+import type {
+	GitHubActionId,
+	SlackActionId,
+	WhatsAppActionId,
+} from "@giselles-ai/action-registry";
 import * as z from "zod/v4";
 
 const GitHubActionUnconfiguredState = z.object({
@@ -38,7 +42,63 @@ const GitHubActionData = z.object({
 });
 export type GitHubActionData = z.infer<typeof GitHubActionData>;
 
-const ActionData = z.discriminatedUnion("provider", [GitHubActionData]);
+const WhatsAppActionUnconfiguredState = z.object({
+	status: z.literal("unconfigured"),
+});
+export type WhatsAppActionUnconfiguredState = z.infer<
+	typeof WhatsAppActionUnconfiguredState
+>;
+
+const WhatsAppActionConfiguredState = z.object({
+	status: z.literal("configured"),
+	commandId: z.custom<WhatsAppActionId>(),
+	phoneNumberId: z.string(),
+	accessToken: z.string(),
+});
+export type WhatsAppActionConfiguredState = z.infer<
+	typeof WhatsAppActionConfiguredState
+>;
+
+const WhatsAppActionData = z.object({
+	provider: z.literal("whatsapp"),
+	state: z.discriminatedUnion("status", [
+		WhatsAppActionUnconfiguredState,
+		WhatsAppActionConfiguredState,
+	]),
+});
+export type WhatsAppActionData = z.infer<typeof WhatsAppActionData>;
+
+const SlackActionUnconfiguredState = z.object({
+	status: z.literal("unconfigured"),
+});
+export type SlackActionUnconfiguredState = z.infer<
+	typeof SlackActionUnconfiguredState
+>;
+
+const SlackActionConfiguredState = z.object({
+	status: z.literal("configured"),
+	commandId: z.custom<SlackActionId>(),
+	botToken: z.string(),
+	channelId: z.string(),
+});
+export type SlackActionConfiguredState = z.infer<
+	typeof SlackActionConfiguredState
+>;
+
+const SlackActionData = z.object({
+	provider: z.literal("slack"),
+	state: z.discriminatedUnion("status", [
+		SlackActionUnconfiguredState,
+		SlackActionConfiguredState,
+	]),
+});
+export type SlackActionData = z.infer<typeof SlackActionData>;
+
+const ActionData = z.discriminatedUnion("provider", [
+	GitHubActionData,
+	WhatsAppActionData,
+	SlackActionData,
+]);
 export type ActionData = z.infer<typeof ActionData>;
 
 export const ActionContent = z.object({

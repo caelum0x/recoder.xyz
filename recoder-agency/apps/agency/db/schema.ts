@@ -43,154 +43,40 @@ import type { TeamId } from "@/services/teams/types";
 import { vectorWithoutDimensions } from "./custom-types";
 
 /**
- * Stripe v2 Billing Cadence history table
+ * Polar subscription history table
  *
- * Stores snapshots of billing cadence data from Stripe v2 API.
+ * Stores snapshots of subscription data from Polar.sh webhooks.
  * Each webhook event creates a new history record.
- *
- * @see https://docs.stripe.com/api/v2/billing-cadences/object?api-version=2025-12-15.preview
  */
-export const stripeBillingCadenceHistories = pgTable(
-	"stripe_billing_cadence_histories",
+export const polarSubscriptionHistories = pgTable(
+	"polar_subscription_histories",
 	{
-		// Giselle fields
 		dbId: serial("db_id").primaryKey(),
 		teamDbId: integer("team_db_id")
 			.notNull()
 			.references(() => teams.dbId, { onDelete: "cascade" }),
 		createdAt: timestamp("created_at").defaultNow().notNull(),
 
-		// Stripe cadence ID (bc_xxx) - not unique, can have multiple records
-		id: text("id").notNull(),
-
-		// Payer info
-		customerId: text("customer_id").notNull(), // cus_xxx
-		billingProfileId: text("billing_profile_id").notNull(), // bilp_xxx
-		payerType: text("payer_type").notNull(), // "customer"
-
-		// Billing cycle
-		billingCycleType: text("billing_cycle_type").notNull(), // "month" | "year"
-		billingCycleIntervalCount: integer(
-			"billing_cycle_interval_count",
-		).notNull(),
-		billingCycleDayOfMonth: integer("billing_cycle_day_of_month"),
-		billingCycleMonthOfYear: integer("billing_cycle_month_of_year"),
-		billingCycleTimeHour: integer("billing_cycle_time_hour").notNull(),
-		billingCycleTimeMinute: integer("billing_cycle_time_minute").notNull(),
-		billingCycleTimeSecond: integer("billing_cycle_time_second").notNull(),
-
-		// Billing dates
-		nextBillingDate: timestamp("next_billing_date").notNull(),
-
-		// Status
-		status: text("status").notNull(), // "active" | etc.
-
-		// Settings
-		billSettingsId: text("bill_settings_id"), // bblset_xxx
-
-		// Timestamps from Stripe
-		created: timestamp("created").notNull(), // cadence.created
-
-		// Metadata
+		subscriptionId: text("subscription_id").notNull(),
+		customerId: text("customer_id").notNull(),
+		productId: text("product_id").notNull(),
+		status: text("status").notNull(),
+		currentPeriodEnd: timestamp("current_period_end"),
 		metadata: jsonb("metadata"),
-		lookupKey: text("lookup_key"),
-
-		// Note: livemode is available in Stripe response but omitted here as it's self-evident from the environment
 	},
 	(table) => [
-		index("stripe_cadence_hist_id_idx").on(table.id),
-		index("stripe_cadence_hist_team_db_id_idx").on(table.teamDbId),
-		index("stripe_cadence_hist_customer_id_idx").on(table.customerId),
+		index("polar_sub_hist_subscription_id_idx").on(table.subscriptionId),
+		index("polar_sub_hist_team_db_id_idx").on(table.teamDbId),
+		index("polar_sub_hist_customer_id_idx").on(table.customerId),
 	],
 );
 
-export const stripeBillingCadenceHistoryRelations = relations(
-	stripeBillingCadenceHistories,
+export const polarSubscriptionHistoryRelations = relations(
+	polarSubscriptionHistories,
 	({ one }) => ({
 		team: one(teams, {
-			fields: [stripeBillingCadenceHistories.teamDbId],
+			fields: [polarSubscriptionHistories.teamDbId],
 			references: [teams.dbId],
-		}),
-	}),
-);
-
-/**
- * Stripe v2 Pricing Plan Subscription history table
- *
- * Stores snapshots of pricing plan subscription data from Stripe v2 API.
- * Each webhook event creates a new history record.
- *
- * @see https://docs.stripe.com/api/v2/pricing-plan-subscriptions/object?api-version=2025-12-15.preview
- */
-export const stripePricingPlanSubscriptionHistories = pgTable(
-	"stripe_pricing_plan_subscription_histories",
-	{
-		// Giselle fields
-		dbId: serial("db_id").primaryKey(),
-		teamDbId: integer("team_db_id")
-			.notNull()
-			.references(() => teams.dbId, { onDelete: "cascade" }),
-		billingCadenceDbId: integer("billing_cadence_db_id")
-			.notNull()
-			.references(() => stripeBillingCadenceHistories.dbId, {
-				onDelete: "cascade",
-			}),
-		createdAt: timestamp("created_at").defaultNow().notNull(),
-
-		// Stripe subscription ID (bpps_xxx) - not unique, can have multiple records
-		id: text("id").notNull(),
-
-		// Stripe IDs
-		billingCadenceId: text("billing_cadence_id").notNull(), // bc_xxx
-		pricingPlanId: text("pricing_plan_id").notNull(), // bpp_xxx
-		pricingPlanVersionId: text("pricing_plan_version_id").notNull(), // bppv_xxx
-
-		// Status fields
-		servicingStatus: text("servicing_status").notNull(), // "active" | "canceled" | "paused" | "pending"
-		collectionStatus: text("collection_status").notNull(), // "current" | "past_due" | "paused" | "unpaid" | "awaiting_customer_action"
-
-		// Servicing status transitions
-		activatedAt: timestamp("activated_at"),
-		canceledAt: timestamp("canceled_at"),
-		pausedAt: timestamp("paused_at"),
-		willCancelAt: timestamp("will_cancel_at"), // https://docs.stripe.com/api/v2/pricing-plan-subscriptions/update?api-version=2025-12-15.preview#v2_update_pricing_plan_subscriptions-response-servicing_status_transitions-will_cancel_at
-
-		// Collection status transitions
-		collectionCurrentAt: timestamp("collection_current_at"),
-		collectionPastDueAt: timestamp("collection_past_due_at"),
-		collectionPausedAt: timestamp("collection_paused_at"),
-		collectionUnpaidAt: timestamp("collection_unpaid_at"),
-		collectionAwaitingCustomerActionAt: timestamp(
-			"collection_awaiting_customer_action_at",
-		),
-
-		// Timestamps from Stripe
-		created: timestamp("created").notNull(), // subscription.created
-
-		// Metadata
-		metadata: jsonb("metadata"),
-
-		// Note: livemode is available in Stripe response but omitted here as it's self-evident from the environment
-	},
-	(table) => [
-		index("stripe_pps_hist_id_idx").on(table.id),
-		index("stripe_pps_hist_team_db_id_idx").on(table.teamDbId),
-		index("stripe_pps_hist_billing_cadence_db_id_idx").on(
-			table.billingCadenceDbId,
-		),
-	],
-);
-
-export const stripePricingPlanSubscriptionHistoryRelations = relations(
-	stripePricingPlanSubscriptionHistories,
-	({ one }) => ({
-		team: one(teams, {
-			fields: [stripePricingPlanSubscriptionHistories.teamDbId],
-			references: [teams.dbId],
-		}),
-		billingCadence: one(stripeBillingCadenceHistories, {
-			fields: [stripePricingPlanSubscriptionHistories.billingCadenceDbId],
-			references: [stripeBillingCadenceHistories.dbId],
 		}),
 	}),
 );
@@ -512,13 +398,13 @@ export const agentTimeUsageReports = pgTable(
 			.references(() => teams.dbId, { onDelete: "cascade" }),
 		accumulatedDurationMs: numeric("accumulated_duration_ms").notNull(),
 		minutesIncrement: integer("minutes_increment").notNull(),
-		stripeMeterEventId: text("stripe_meter_event_id").notNull(),
+		meterEventId: text("meter_event_id").notNull(),
 		createdAt: timestamp("created_at").defaultNow().notNull(),
 	},
 	(table) => [
 		index().on(table.teamDbId),
 		index().on(table.createdAt),
-		index().on(table.stripeMeterEventId),
+		index().on(table.meterEventId),
 	],
 );
 
@@ -531,14 +417,14 @@ export const userSeatUsageReports = pgTable(
 			.references(() => teams.dbId, { onDelete: "cascade" }),
 		// Keep snapshot for audit purposes
 		userDbIdList: integer("user_db_id_list").array().notNull(),
-		stripeMeterEventId: text("stripe_meter_event_id").notNull(),
+		meterEventId: text("meter_event_id").notNull(),
 		value: integer("value").notNull(),
 		createdAt: timestamp("created_at").defaultNow().notNull(),
 	},
 	(table) => [
 		index().on(table.teamDbId),
 		index().on(table.createdAt),
-		index().on(table.stripeMeterEventId),
+		index().on(table.meterEventId),
 	],
 );
 
@@ -1247,6 +1133,8 @@ export const taskRelations = relations(tasks, ({ one }) => ({
 
 export type ClientStatus = "active" | "inactive" | "lead";
 
+export type ChannelProvider = "slack" | "whatsapp" | "telegram" | "discord";
+
 export type InvoiceStatus = "draft" | "sent" | "paid" | "overdue" | "cancelled";
 
 export type QuoteStatus =
@@ -1284,7 +1172,7 @@ export const clients = pgTable(
 		notes: text("notes"),
 		status: text("status").$type<ClientStatus>().notNull().default("lead"),
 		supabaseUserId: text("supabase_user_id"),
-		stripeCustomerId: text("stripe_customer_id"),
+		polarCustomerId: text("polar_customer_id"),
 		createdAt: timestamp("created_at").defaultNow().notNull(),
 		updatedAt: timestamp("updated_at")
 			.defaultNow()
@@ -1304,6 +1192,61 @@ export const clientRelations = relations(clients, ({ one, many }) => ({
 	}),
 	projects: many(projects),
 }));
+
+export const channelIdentities = pgTable(
+	"channel_identities",
+	{
+		dbId: serial("db_id").primaryKey(),
+		id: text("id").notNull().unique(),
+		teamDbId: integer("team_db_id")
+			.notNull()
+			.references(() => teams.dbId, { onDelete: "cascade" }),
+		clientDbId: integer("client_db_id")
+			.notNull()
+			.references(() => clients.dbId, { onDelete: "cascade" }),
+		provider: text("provider").$type<ChannelProvider>().notNull(),
+		providerUserId: text("provider_user_id").notNull(),
+		providerChannelId: text("provider_channel_id"),
+		createdAt: timestamp("created_at").defaultNow().notNull(),
+		updatedAt: timestamp("updated_at")
+			.defaultNow()
+			.notNull()
+			.$onUpdate(() => new Date()),
+	},
+	(table) => [
+		index("channel_identities_team_db_id_idx").on(table.teamDbId),
+		index("channel_identities_client_db_id_idx").on(table.clientDbId),
+		index("channel_identities_provider_user_idx").on(
+			table.provider,
+			table.providerUserId,
+		),
+	],
+);
+
+export const channelGatewayEvents = pgTable(
+	"channel_gateway_events",
+	{
+		dbId: serial("db_id").primaryKey(),
+		id: text("id").notNull().unique(),
+		teamDbId: integer("team_db_id").references(() => teams.dbId, {
+			onDelete: "set null",
+		}),
+		clientDbId: integer("client_db_id").references(() => clients.dbId, {
+			onDelete: "set null",
+		}),
+		provider: text("provider").$type<ChannelProvider>().notNull(),
+		eventType: text("event_type").notNull(),
+		action: text("action"),
+		projectId: text("project_id"),
+		payload: jsonb("payload"),
+		createdAt: timestamp("created_at").defaultNow().notNull(),
+	},
+	(table) => [
+		index("channel_gateway_events_provider_idx").on(table.provider),
+		index("channel_gateway_events_client_idx").on(table.clientDbId),
+		index("channel_gateway_events_team_idx").on(table.teamDbId),
+	],
+);
 
 export type DeliveryProjectStatus =
 	| "queued"
@@ -1807,7 +1750,7 @@ export const invoices = pgTable(
 		amount: integer("amount").notNull(), // cents
 		currency: text("currency").notNull().default("usd"),
 		status: text("status").$type<InvoiceStatus>().notNull().default("draft"),
-		stripeInvoiceId: text("stripe_invoice_id"),
+		polarOrderId: text("polar_order_id"),
 		dueDate: timestamp("due_date"),
 		paidAt: timestamp("paid_at"),
 		retryCount: integer("retry_count").notNull().default(0),
@@ -2327,6 +2270,75 @@ export const alertSubscriptionRelations = relations(
 		team: one(teams, {
 			fields: [alertSubscriptions.teamDbId],
 			references: [teams.dbId],
+		}),
+	}),
+);
+
+// ── Channel Conversations ──────────────────────────────────────
+export const channelConversations = pgTable(
+	"channel_conversations",
+	{
+		dbId: serial("db_id").primaryKey(),
+		id: text("id").notNull().unique(),
+		clientDbId: integer("client_db_id")
+			.notNull()
+			.references(() => clients.dbId, { onDelete: "cascade" }),
+		provider: text("provider").$type<ChannelProvider>().notNull(),
+		channelId: text("channel_id").notNull(),
+		threadId: text("thread_id"),
+		lastMessageAt: timestamp("last_message_at", {
+			withTimezone: true,
+		}).notNull(),
+		metadata: jsonb("metadata"),
+		createdAt: timestamp("created_at").defaultNow().notNull(),
+	},
+	(table) => [
+		index("channel_conversations_client_provider_channel_idx").on(
+			table.clientDbId,
+			table.provider,
+			table.channelId,
+		),
+	],
+);
+
+export const channelConversationRelations = relations(
+	channelConversations,
+	({ one, many }) => ({
+		client: one(clients, {
+			fields: [channelConversations.clientDbId],
+			references: [clients.dbId],
+		}),
+		messages: many(channelMessages),
+	}),
+);
+
+export const channelMessages = pgTable(
+	"channel_messages",
+	{
+		dbId: serial("db_id").primaryKey(),
+		id: text("id").notNull().unique(),
+		conversationDbId: integer("conversation_db_id")
+			.notNull()
+			.references(() => channelConversations.dbId, { onDelete: "cascade" }),
+		role: text("role").$type<"user" | "assistant">().notNull(),
+		content: text("content").notNull(),
+		providerMessageId: text("provider_message_id"),
+		createdAt: timestamp("created_at").defaultNow().notNull(),
+	},
+	(table) => [
+		index("channel_messages_conversation_created_idx").on(
+			table.conversationDbId,
+			table.createdAt,
+		),
+	],
+);
+
+export const channelMessageRelations = relations(
+	channelMessages,
+	({ one }) => ({
+		conversation: one(channelConversations, {
+			fields: [channelMessages.conversationDbId],
+			references: [channelConversations.dbId],
 		}),
 	}),
 );

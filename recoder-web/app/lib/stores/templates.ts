@@ -20,6 +20,9 @@ import {
   filterTemplates,
   getPopularTemplates,
 } from '~/lib/services/project-templates';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('TemplatesStore');
 
 // ==================== STORES ====================
 
@@ -213,7 +216,7 @@ export function addCustomTemplate(template: ProjectTemplate): void {
 
   // Check for duplicate ID
   if (current.some(t => t.id === template.id)) {
-    console.warn(`Custom template with ID "${template.id}" already exists`);
+    logger.warn(`Custom template with ID "${template.id}" already exists`);
     return;
   }
 
@@ -232,7 +235,7 @@ export function updateCustomTemplate(
   const index = current.findIndex(t => t.id === templateId);
 
   if (index === -1) {
-    console.warn(`Custom template with ID "${templateId}" not found`);
+    logger.warn(`Custom template with ID "${templateId}" not found`);
     return;
   }
 
@@ -307,7 +310,7 @@ export function loadCustomTemplates(): void {
       customTemplates.set(parsed);
     }
   } catch (error) {
-    console.error('Failed to load custom templates:', error);
+    logger.error('Failed to load custom templates:', error);
   }
 }
 
@@ -320,7 +323,7 @@ export function saveCustomTemplates(): void {
   try {
     localStorage.setItem(CUSTOM_TEMPLATES_KEY, JSON.stringify(customTemplates.get()));
   } catch (error) {
-    console.error('Failed to save custom templates:', error);
+    logger.error('Failed to save custom templates:', error);
   }
 }
 
@@ -337,7 +340,7 @@ export function loadRecentTemplates(): void {
       recentTemplates.set(parsed);
     }
   } catch (error) {
-    console.error('Failed to load recent templates:', error);
+    logger.error('Failed to load recent templates:', error);
   }
 }
 
@@ -350,7 +353,7 @@ export function saveRecentTemplates(): void {
   try {
     localStorage.setItem(RECENT_TEMPLATES_KEY, JSON.stringify(recentTemplates.get()));
   } catch (error) {
-    console.error('Failed to save recent templates:', error);
+    logger.error('Failed to save recent templates:', error);
   }
 }
 

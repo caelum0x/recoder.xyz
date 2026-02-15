@@ -5,6 +5,9 @@
  */
 
 import { atom, map, computed } from 'nanostores';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('EditorConfig');
 
 // Storage key
 const EDITOR_CONFIG_KEY = 'recoder_editor_config';
@@ -175,7 +178,7 @@ function loadEditorConfig(): EditorConfig {
       };
     }
   } catch (e) {
-    console.error('[EditorConfig] Failed to load config:', e);
+    logger.error('[EditorConfig] Failed to load config:', e);
   }
 
   return DEFAULT_EDITOR_CONFIG;
@@ -190,7 +193,7 @@ function saveEditorConfig(config: EditorConfig): void {
   try {
     localStorage.setItem(EDITOR_CONFIG_KEY, JSON.stringify(config));
   } catch (e) {
-    console.error('[EditorConfig] Failed to save config:', e);
+    logger.error('[EditorConfig] Failed to save config:', e);
   }
 }
 

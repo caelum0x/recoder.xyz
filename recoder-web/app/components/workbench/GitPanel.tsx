@@ -3,14 +3,14 @@
  * Enhanced with local git support, branches, and commit history
  */
 
-import { memo, useState, useCallback, useEffect, useMemo, useRef } from 'react';
+import { memo, useState, useCallback, useEffect } from 'react';
 import { useStore } from '@nanostores/react';
 import { workbenchStore } from '~/lib/stores/workbench';
-import { dockerGet, dockerPost, dockerDelete } from '~/lib/services/docker-api';
 import { classNames } from '~/utils/classNames';
 import { toast } from 'react-toastify';
-import { GitBranchList, type GitBranch } from './GitBranchList';
-import { GitHistory, type GitCommit } from './GitHistory';
+import { GitBranchList } from './GitBranchList';
+import { GitHistory } from './GitHistory';
+import { useGit } from '~/lib/hooks/useGit';
 
 interface GitPanelProps {
   files: Record<string, unknown>;
@@ -18,41 +18,18 @@ interface GitPanelProps {
   onShowDiff?: (filePath: string, original: string, modified: string) => void;
 }
 
-interface GitFileChange {
-  path: string;
-  status: 'added' | 'modified' | 'deleted' | 'renamed' | 'copied';
-  oldPath?: string;
-}
-
-interface GitStatus {
-  branch: string;
-  ahead: number;
-  behind: number;
-  staged: GitFileChange[];
-  unstaged: GitFileChange[];
-  untracked: string[];
-  conflicts: string[];
-}
-
 type TabView = 'changes' | 'history';
-
-/** Max consecutive failures before pausing git operations */
-const MAX_GIT_FAILURES = 3;
 
 export const GitPanel = memo(({ files, onFileSelect, onShowDiff }: GitPanelProps) => {
   const projectId = useStore(workbenchStore.projectId);
   const containerReady = useStore(workbenchStore.containerReady);
 
-  const [status, setStatus] = useState<GitStatus | null>(null);
-  const [branches, setBranches] = useState<GitBranch[]>([]);
-  const [commits, setCommits] = useState<GitCommit[]>([]);
+  const git = useGit({ autoFetch: true });
+
   const [commitMessage, setCommitMessage] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
-  const [isGitRepo, setIsGitRepo] = useState<boolean | null>(null);
   const [activeTab, setActiveTab] = useState<TabView>('changes');
   const [showGitHubConfig, setShowGitHubConfig] = useState(false);
-  const [gitSuspended, setGitSuspended] = useState(false);
-  const consecutiveFailuresRef = useRef(0);
+  const [pushRejected, setPushRejected] = useState(false);
   const [gitHubConfig, setGitHubConfig] = useState<{
     owner: string;
     repo: string;
@@ -70,228 +47,94 @@ export const GitPanel = memo(({ files, onFileSelect, onShowDiff }: GitPanelProps
     }
   }, []);
 
-  // Reset failure tracking when container becomes ready
-  useEffect(() => {
-    if (containerReady) {
-      consecutiveFailuresRef.current = 0;
-      setGitSuspended(false);
-    }
-  }, [containerReady]);
-
-  // Load git status when container is ready
-  useEffect(() => {
-    if (containerReady && projectId) {
-      refreshStatus();
-    }
-  }, [containerReady, projectId]);
-
-  // Refresh git status - only when container is ready
-  const refreshStatus = useCallback(async () => {
-    if (!projectId || !containerReady || gitSuspended) return;
-
-    setIsLoading(true);
-    try {
-      const data = await dockerGet<GitStatus>(`/api/git/${projectId}/status`);
-      if (data) {
-        setStatus(data);
-        setIsGitRepo(!!data.branch);
-        // Reset failure counter on success
-        consecutiveFailuresRef.current = 0;
-      } else {
-        setIsGitRepo(false);
-      }
-    } catch (error) {
-      consecutiveFailuresRef.current++;
-      if (consecutiveFailuresRef.current >= MAX_GIT_FAILURES) {
-        console.debug(`[Git] ${MAX_GIT_FAILURES} consecutive failures, suspending git polling until container is ready`);
-        setGitSuspended(true);
-      } else {
-        console.debug('[Git] Status error:', error);
-      }
-      setIsGitRepo(false);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [projectId, containerReady, gitSuspended]);
-
-  // Load branches - only when container is ready
-  const loadBranches = useCallback(async () => {
-    if (!projectId || !containerReady || gitSuspended) return;
-
-    try {
-      const data = await dockerGet<{ branches: GitBranch[] }>(`/api/git/${projectId}/branches`);
-      if (data) {
-        setBranches(data.branches || []);
-      }
-    } catch (error) {
-      console.debug('[Git] Branches error:', error);
-    }
-  }, [projectId, containerReady, gitSuspended]);
-
-  // Load commit history - only when container is ready
-  const loadHistory = useCallback(async () => {
-    if (!projectId || !containerReady || gitSuspended) return;
-
-    setIsLoading(true);
-    try {
-      const data = await dockerGet<{ commits: GitCommit[] }>(`/api/git/${projectId}/log?limit=50`);
-      if (data) {
-        setCommits(data.commits || []);
-      }
-    } catch (error) {
-      console.debug('[Git] History error:', error);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [projectId, containerReady, gitSuspended]);
-
-  // Load branches when tab changes or on mount
-  useEffect(() => {
-    if (isGitRepo && projectId) {
-      loadBranches();
-    }
-  }, [isGitRepo, projectId, loadBranches]);
-
   // Load history when history tab is active
   useEffect(() => {
-    if (activeTab === 'history' && isGitRepo) {
-      loadHistory();
+    if (activeTab === 'history' && git.isGitRepo) {
+      git.getHistory();
     }
-  }, [activeTab, isGitRepo, loadHistory]);
+  }, [activeTab, git.isGitRepo]);
 
-  // Initialize git repo
-  const initRepo = useCallback(async () => {
-    if (!projectId) return;
-
-    setIsLoading(true);
-    try {
-      await dockerPost(`/api/git/${projectId}/init`);
-      toast.success('Git repository initialized');
-      setIsGitRepo(true);
-      refreshStatus();
-    } catch (error) {
-      toast.error('Failed to initialize repository');
-    } finally {
-      setIsLoading(false);
+  // Fetch git state on mount
+  useEffect(() => {
+    if (git.isGitRepo && containerReady) {
+      git.getGitState();
     }
-  }, [projectId, refreshStatus]);
+  }, [git.isGitRepo, containerReady]);
 
-  // Stage files
-  const stageFiles = useCallback(async (paths: string[]) => {
-    if (!projectId) return;
-
-    try {
-      await dockerPost(`/api/git/${projectId}/stage`, { files: paths });
-      refreshStatus();
-    } catch (error) {
-      toast.error('Failed to stage files');
-    }
-  }, [projectId, refreshStatus]);
-
-  // Unstage files
-  const unstageFiles = useCallback(async (paths: string[]) => {
-    if (!projectId) return;
-
-    try {
-      await dockerPost(`/api/git/${projectId}/unstage`, { files: paths });
-      refreshStatus();
-    } catch (error) {
-      toast.error('Failed to unstage files');
-    }
-  }, [projectId, refreshStatus]);
-
-  // Commit changes
-  const commit = useCallback(async () => {
-    if (!projectId || !commitMessage.trim()) {
+  // Commit with local message state
+  const handleCommit = useCallback(async () => {
+    if (!commitMessage.trim()) {
       toast.error('Please enter a commit message');
       return;
     }
-
-    setIsLoading(true);
-    try {
-      await dockerPost<{ error?: string }>(`/api/git/${projectId}/commit`, {
-        message: commitMessage.trim(),
-      });
-      toast.success('Changes committed');
+    const success = await git.commit(commitMessage);
+    if (success) {
       setCommitMessage('');
-      refreshStatus();
       if (activeTab === 'history') {
-        loadHistory();
+        git.getHistory();
       }
-    } catch (error) {
-      const errorMsg = error instanceof Error ? error.message : 'Failed to commit';
-      toast.error(errorMsg);
-    } finally {
-      setIsLoading(false);
     }
-  }, [projectId, commitMessage, refreshStatus, activeTab, loadHistory]);
+  }, [commitMessage, git.commit, activeTab, git.getHistory]);
 
-  // Discard changes
-  const discardChanges = useCallback(async (paths: string[]) => {
-    if (!projectId) return;
+  // Push with auth error handling and rejection detection
+  const handlePush = useCallback(async () => {
+    setPushRejected(false);
+    const success = await git.push({
+      remote: 'origin',
+      token: gitHubConfig?.accessToken,
+      setUpstream: true,
+    });
+    if (!success) {
+      setPushRejected(true);
+      setShowGitHubConfig(true);
+    }
+  }, [git.push, gitHubConfig]);
+
+  // Force push (safe, with lease)
+  const handleForcePush = useCallback(async () => {
+    if (!confirm('Force push (with lease)? This will overwrite remote changes.')) return;
+    const success = await git.forcePush({
+      remote: 'origin',
+      token: gitHubConfig?.accessToken,
+    });
+    if (success) {
+      setPushRejected(false);
+    }
+  }, [git.forcePush, gitHubConfig]);
+
+  // Pull with auth error handling
+  const handlePull = useCallback(async () => {
+    const success = await git.pull({
+      remote: 'origin',
+      token: gitHubConfig?.accessToken,
+    });
+    if (!success) {
+      setShowGitHubConfig(true);
+    }
+    if (success && activeTab === 'history') {
+      git.getHistory();
+    }
+  }, [git.pull, gitHubConfig, activeTab, git.getHistory]);
+
+  // Discard with confirmation
+  const handleDiscard = useCallback(async (paths: string[]) => {
     if (!confirm(`Discard changes to ${paths.length} file(s)?`)) return;
+    await git.discard(paths);
+  }, [git.discard]);
 
-    try {
-      await dockerPost(`/api/git/${projectId}/discard`, { files: paths });
-      toast.success('Changes discarded');
-      refreshStatus();
-    } catch (error) {
-      toast.error('Failed to discard changes');
-    }
-  }, [projectId, refreshStatus]);
+  // Merge handler for branch list
+  const handleMerge = useCallback(async (branch: string) => {
+    await git.merge(branch);
+    await git.getGitState();
+  }, [git.merge, git.getGitState]);
 
-  // Checkout branch
-  const checkoutBranch = useCallback(async (branch: string) => {
-    if (!projectId) return;
-
-    setIsLoading(true);
-    try {
-      await dockerPost(`/api/git/${projectId}/checkout`, { branch });
-      toast.success(`Switched to ${branch}`);
-      refreshStatus();
-      loadBranches();
-    } catch (error) {
-      const errorMsg = error instanceof Error ? error.message : 'Failed to switch branch';
-      toast.error(errorMsg);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [projectId, refreshStatus, loadBranches]);
-
-  // Create branch
-  const createBranch = useCallback(async (name: string) => {
-    if (!projectId) return;
-
-    setIsLoading(true);
-    try {
-      await dockerPost(`/api/git/${projectId}/branch`, { name, checkout: true });
-      toast.success(`Created and switched to ${name}`);
-      refreshStatus();
-      loadBranches();
-    } catch (error) {
-      const errorMsg = error instanceof Error ? error.message : 'Failed to create branch';
-      toast.error(errorMsg);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [projectId, refreshStatus, loadBranches]);
-
-  // Delete branch
-  const deleteBranch = useCallback(async (name: string, force?: boolean) => {
-    if (!projectId) return;
-
-    try {
-      await dockerDelete(`/api/git/${projectId}/branch/${encodeURIComponent(name)}${force ? '?force=true' : ''}`);
-      toast.success(`Deleted branch ${name}`);
-      loadBranches();
-    } catch (error) {
-      const errorMsg = error instanceof Error ? error.message : 'Failed to delete branch';
-      toast.error(errorMsg);
-    }
-  }, [projectId, loadBranches]);
+  // Rename handler for branch list
+  const handleRenameBranch = useCallback(async (oldName: string, newName: string) => {
+    return git.renameBranch(oldName, newName);
+  }, [git.renameBranch]);
 
   // Not a git repo
-  if (isGitRepo === false) {
+  if (git.isGitRepo === false) {
     return (
       <div className="flex flex-col h-full text-sm bg-bolt-elements-background-depth-1">
         <div className="p-4 text-center">
@@ -303,11 +146,11 @@ export const GitPanel = memo(({ files, onFileSelect, onShowDiff }: GitPanelProps
             Initialize a git repository to track changes
           </p>
           <button
-            onClick={initRepo}
-            disabled={isLoading}
+            onClick={git.initRepo}
+            disabled={git.isLoading}
             className="px-4 py-2 text-xs bg-purple-600 hover:bg-purple-700 disabled:opacity-50 rounded text-white"
           >
-            {isLoading ? (
+            {git.isLoading ? (
               <span className="i-ph:spinner animate-spin" />
             ) : (
               <>
@@ -322,7 +165,7 @@ export const GitPanel = memo(({ files, onFileSelect, onShowDiff }: GitPanelProps
   }
 
   // Loading state
-  if (!containerReady || isGitRepo === null) {
+  if (!containerReady || git.isGitRepo === null) {
     return (
       <div className="flex flex-col h-full justify-center items-center text-sm bg-bolt-elements-background-depth-1">
         <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-purple-500 mb-2" />
@@ -333,38 +176,39 @@ export const GitPanel = memo(({ files, onFileSelect, onShowDiff }: GitPanelProps
     );
   }
 
-  // PERFORMANCE: Memoize derived state calculations
-  const stagedCount = useMemo(() => status?.staged?.length || 0, [status?.staged?.length]);
-  const unstagedCount = useMemo(() => (status?.unstaged?.length || 0) + (status?.untracked?.length || 0), [status?.unstaged?.length, status?.untracked?.length]);
-  const hasConflicts = useMemo(() => (status?.conflicts?.length || 0) > 0, [status?.conflicts?.length]);
+  const stagedCount = git.status?.staged?.length || 0;
+  const unstagedCount = (git.status?.unstaged?.length || 0) + (git.status?.untracked?.length || 0);
+  const hasConflicts = (git.status?.conflicts?.length || 0) > 0;
 
   return (
     <div className="flex flex-col h-full text-sm bg-bolt-elements-background-depth-1">
       {/* Header with Branch Selector */}
       <div className="px-3 py-2 border-b border-bolt-elements-borderColor">
         <GitBranchList
-          branches={branches}
-          currentBranch={status?.branch || 'main'}
-          isLoading={isLoading}
-          onCheckout={checkoutBranch}
-          onCreate={createBranch}
-          onDelete={deleteBranch}
-          onRefresh={loadBranches}
+          branches={git.branches}
+          currentBranch={git.status?.branch || 'main'}
+          isLoading={git.isLoading}
+          onCheckout={git.checkout}
+          onCreate={git.createBranch}
+          onDelete={git.deleteBranch}
+          onMerge={handleMerge}
+          onRename={handleRenameBranch}
+          onRefresh={git.getBranches}
         />
 
         {/* Ahead/Behind indicator */}
-        {(status?.ahead || status?.behind) ? (
+        {(git.status?.ahead || git.status?.behind) ? (
           <div className="flex items-center gap-2 mt-2 text-xs text-bolt-elements-textTertiary">
-            {status.ahead > 0 && (
+            {git.status.ahead > 0 && (
               <span className="flex items-center gap-1">
                 <span className="i-ph:arrow-up" />
-                {status.ahead} ahead
+                {git.status.ahead} ahead
               </span>
             )}
-            {status.behind > 0 && (
+            {git.status.behind > 0 && (
               <span className="flex items-center gap-1">
                 <span className="i-ph:arrow-down" />
-                {status.behind} behind
+                {git.status.behind} behind
               </span>
             )}
           </div>
@@ -401,24 +245,72 @@ export const GitPanel = memo(({ files, onFileSelect, onShowDiff }: GitPanelProps
           History
         </button>
         <button
-          onClick={refreshStatus}
-          disabled={isLoading}
+          onClick={git.refreshStatus}
+          disabled={git.isLoading}
           className="px-2 py-2 text-bolt-elements-textTertiary hover:text-bolt-elements-textPrimary"
           title="Refresh"
         >
-          <span className={classNames('i-ph:arrows-clockwise', isLoading ? 'animate-spin' : '')} />
+          <span className={classNames('i-ph:arrows-clockwise', git.isLoading ? 'animate-spin' : '')} />
         </button>
       </div>
 
       {/* Changes View */}
       {activeTab === 'changes' && (
         <>
-          {/* Conflicts Warning */}
-          {hasConflicts && (
+          {/* Git State Banner (merge/rebase in progress) */}
+          {git.gitState && git.gitState.state !== 'clean' && (
+            <div className="px-3 py-2 bg-orange-500/10 border-b border-orange-500/30">
+              <div className="flex items-center justify-between mb-1">
+                <div className="flex items-center gap-2 text-orange-400 text-xs font-medium">
+                  <span className="i-ph:git-merge" />
+                  {git.gitState.state === 'merging' && 'Merge in progress'}
+                  {git.gitState.state === 'rebasing' && 'Rebase in progress'}
+                  {git.gitState.state === 'cherry-picking' && 'Cherry-pick in progress'}
+                </div>
+                <div className="flex gap-1">
+                  {(git.gitState.state === 'rebasing') && (
+                    <>
+                      <button
+                        onClick={async () => { await git.rebaseContinue(); await git.getGitState(); }}
+                        disabled={git.isLoading}
+                        className="px-2 py-0.5 text-xs bg-green-600 hover:bg-green-700 disabled:opacity-50 rounded text-white"
+                      >
+                        Continue
+                      </button>
+                      <button
+                        onClick={async () => { await git.rebaseAbort(); await git.getGitState(); }}
+                        disabled={git.isLoading}
+                        className="px-2 py-0.5 text-xs bg-red-600 hover:bg-red-700 disabled:opacity-50 rounded text-white"
+                      >
+                        Abort
+                      </button>
+                    </>
+                  )}
+                </div>
+              </div>
+              {git.gitState.conflictFiles && git.gitState.conflictFiles.length > 0 && (
+                <div className="mt-1">
+                  <div className="text-xs text-orange-300 mb-1">Conflicted files:</div>
+                  {git.gitState.conflictFiles.map((file) => (
+                    <button
+                      key={file}
+                      onClick={() => onFileSelect?.(file)}
+                      className="block w-full text-left text-xs text-orange-200 hover:text-white hover:underline px-1 py-0.5 truncate"
+                    >
+                      {file}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Conflicts Warning (from status) */}
+          {hasConflicts && (!git.gitState || git.gitState.state === 'clean') && (
             <div className="px-3 py-2 bg-red-500/10 border-b border-red-500/30">
               <div className="flex items-center gap-2 text-red-400 text-xs">
                 <span className="i-ph:warning-circle" />
-                {status?.conflicts?.length} merge conflict(s)
+                {git.status?.conflicts?.length} merge conflict(s)
               </div>
             </div>
           )}
@@ -434,17 +326,50 @@ export const GitPanel = memo(({ files, onFileSelect, onShowDiff }: GitPanelProps
             />
             <div className="flex gap-1 mt-2">
               <button
-                onClick={commit}
-                disabled={isLoading || stagedCount === 0 || !commitMessage.trim()}
+                onClick={handleCommit}
+                disabled={git.isLoading || stagedCount === 0 || !commitMessage.trim()}
                 className="flex-1 px-2 py-1.5 text-xs bg-purple-600 hover:bg-purple-700 disabled:bg-bolt-elements-background-depth-3 disabled:opacity-50 rounded text-white"
               >
-                {isLoading ? (
+                {git.isLoading ? (
                   <span className="i-ph:spinner animate-spin" />
                 ) : (
                   `Commit (${stagedCount})`
                 )}
               </button>
             </div>
+            {/* Push / Pull buttons */}
+            <div className="flex gap-1 mt-1">
+              <button
+                onClick={handlePull}
+                disabled={git.isLoading}
+                className="flex-1 px-2 py-1 text-xs bg-bolt-elements-background-depth-3 hover:bg-bolt-elements-background-depth-2 text-bolt-elements-textSecondary rounded border border-bolt-elements-borderColor disabled:opacity-50"
+                title="Pull from remote"
+              >
+                <span className="i-ph:arrow-down mr-1" />
+                Pull
+              </button>
+              <button
+                onClick={handlePush}
+                disabled={git.isLoading}
+                className="flex-1 px-2 py-1 text-xs bg-bolt-elements-background-depth-3 hover:bg-bolt-elements-background-depth-2 text-bolt-elements-textSecondary rounded border border-bolt-elements-borderColor disabled:opacity-50"
+                title="Push to remote"
+              >
+                <span className="i-ph:arrow-up mr-1" />
+                Push
+              </button>
+            </div>
+            {/* Force push offer when normal push was rejected */}
+            {pushRejected && (
+              <button
+                onClick={handleForcePush}
+                disabled={git.isLoading}
+                className="w-full mt-1 px-2 py-1 text-xs bg-orange-600/20 hover:bg-orange-600/30 text-orange-400 rounded border border-orange-500/30 disabled:opacity-50"
+                title="Force push with --force-with-lease (safe)"
+              >
+                <span className="i-ph:warning mr-1" />
+                Force Push (safe)
+              </button>
+            )}
           </div>
 
           {/* Staged Changes */}
@@ -455,20 +380,20 @@ export const GitPanel = memo(({ files, onFileSelect, onShowDiff }: GitPanelProps
                   Staged Changes ({stagedCount})
                 </span>
                 <button
-                  onClick={() => unstageFiles([])}
+                  onClick={() => git.unstageAll()}
                   className="text-xs text-bolt-elements-textTertiary hover:text-bolt-elements-textPrimary"
                 >
                   Unstage All
                 </button>
               </div>
               <div className="max-h-32 overflow-auto">
-                {status?.staged?.map((file) => (
+                {git.status?.staged?.map((file) => (
                   <FileItem
                     key={file.path}
                     path={file.path}
                     status={file.status}
                     staged
-                    onToggleStage={() => unstageFiles([file.path])}
+                    onToggleStage={() => git.unstage(file.path)}
                     onSelect={() => onFileSelect?.(file.path)}
                   />
                 ))}
@@ -485,7 +410,7 @@ export const GitPanel = memo(({ files, onFileSelect, onShowDiff }: GitPanelProps
               {unstagedCount > 0 && (
                 <div className="flex items-center gap-2">
                   <button
-                    onClick={() => stageFiles([])}
+                    onClick={() => git.stageAll()}
                     className="text-xs text-bolt-elements-textTertiary hover:text-bolt-elements-textPrimary"
                   >
                     Stage All
@@ -493,9 +418,9 @@ export const GitPanel = memo(({ files, onFileSelect, onShowDiff }: GitPanelProps
                   <button
                     onClick={() => {
                       const allPaths = [
-                        ...(status?.unstaged?.map(f => f.path) || []),
+                        ...(git.status?.unstaged?.map(f => f.path) || []),
                       ];
-                      discardChanges(allPaths);
+                      handleDiscard(allPaths);
                     }}
                     className="text-xs text-red-400 hover:text-red-300"
                   >
@@ -512,25 +437,25 @@ export const GitPanel = memo(({ files, onFileSelect, onShowDiff }: GitPanelProps
               </div>
             ) : (
               <>
-                {status?.unstaged?.map((file) => (
+                {git.status?.unstaged?.map((file) => (
                   <FileItem
                     key={file.path}
                     path={file.path}
                     status={file.status}
                     staged={false}
-                    onToggleStage={() => stageFiles([file.path])}
+                    onToggleStage={() => git.stage(file.path)}
                     onSelect={() => onFileSelect?.(file.path)}
-                    onDiscard={() => discardChanges([file.path])}
+                    onDiscard={() => handleDiscard([file.path])}
                   />
                 ))}
-                {status?.untracked?.map((path) => (
+                {git.status?.untracked?.map((path) => (
                   <FileItem
                     key={path}
                     path={path}
                     status="added"
                     staged={false}
                     untracked
-                    onToggleStage={() => stageFiles([path])}
+                    onToggleStage={() => git.stage(path)}
                     onSelect={() => onFileSelect?.(path)}
                   />
                 ))}
@@ -543,11 +468,67 @@ export const GitPanel = memo(({ files, onFileSelect, onShowDiff }: GitPanelProps
       {/* History View */}
       {activeTab === 'history' && (
         <GitHistory
-          commits={commits}
-          isLoading={isLoading}
-          onLoadMore={() => {}} // TODO: implement pagination
-          hasMore={false}
+          commits={git.commits}
+          isLoading={git.isLoading}
+          onLoadMore={git.loadMoreHistory}
+          hasMore={git.hasMoreHistory}
         />
+      )}
+
+      {/* GitHub Config Panel (inline) */}
+      {showGitHubConfig && (
+        <div className="border-t border-bolt-elements-borderColor p-3 bg-bolt-elements-background-depth-2">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs font-medium text-bolt-elements-textPrimary">
+              <span className="i-ph:github-logo mr-1" />
+              GitHub Remote
+            </span>
+            <button
+              onClick={() => setShowGitHubConfig(false)}
+              className="text-xs text-bolt-elements-textTertiary hover:text-bolt-elements-textPrimary"
+            >
+              <span className="i-ph:x" />
+            </button>
+          </div>
+          <input
+            type="text"
+            placeholder="owner/repo"
+            value={gitHubConfig ? `${gitHubConfig.owner}/${gitHubConfig.repo}` : ''}
+            onChange={(e) => {
+              const [owner = '', repo = ''] = e.target.value.split('/');
+              const config = { owner, repo, branch: gitHubConfig?.branch || 'main', accessToken: gitHubConfig?.accessToken || '' };
+              setGitHubConfig(config);
+              localStorage.setItem('recoder-git-config', JSON.stringify(config));
+            }}
+            className="w-full px-2 py-1 text-xs bg-bolt-elements-background-depth-3 border border-bolt-elements-borderColor rounded mb-1 text-bolt-elements-textPrimary placeholder:text-bolt-elements-textTertiary"
+          />
+          <input
+            type="password"
+            placeholder="GitHub token (ghp_...)"
+            value={gitHubConfig?.accessToken || ''}
+            onChange={(e) => {
+              const config = { owner: gitHubConfig?.owner || '', repo: gitHubConfig?.repo || '', branch: gitHubConfig?.branch || 'main', accessToken: e.target.value };
+              setGitHubConfig(config);
+              localStorage.setItem('recoder-git-config', JSON.stringify(config));
+            }}
+            className="w-full px-2 py-1 text-xs bg-bolt-elements-background-depth-3 border border-bolt-elements-borderColor rounded mb-2 text-bolt-elements-textPrimary placeholder:text-bolt-elements-textTertiary"
+          />
+          <button
+            onClick={async () => {
+              if (!gitHubConfig?.owner || !gitHubConfig?.repo) return;
+              const url = `https://github.com/${gitHubConfig.owner}/${gitHubConfig.repo}.git`;
+              const success = await git.setRemote('origin', url);
+              if (success) {
+                toast.success('Remote configured');
+                setShowGitHubConfig(false);
+              }
+            }}
+            disabled={!gitHubConfig?.owner || !gitHubConfig?.repo}
+            className="w-full px-2 py-1 text-xs bg-purple-600 hover:bg-purple-700 disabled:opacity-50 rounded text-white"
+          >
+            Save Remote
+          </button>
+        </div>
       )}
     </div>
   );

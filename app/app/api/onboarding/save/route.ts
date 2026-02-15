@@ -6,9 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth-config';
 import { headers } from 'next/headers';
-import { PrismaClient } from '@prisma/client';
-
-const prisma = new PrismaClient();
+import { prisma } from '@/lib/prisma';
 
 export async function POST(request: NextRequest) {
   try {
@@ -57,8 +55,7 @@ export async function POST(request: NextRequest) {
     console.error('Onboarding save error:', error);
     return NextResponse.json(
       { 
-        error: 'Failed to save onboarding data',
-        message: error instanceof Error ? error.message : 'Unknown error'
+        error: 'Failed to save onboarding data'
       },
       { status: 500 }
     );
@@ -104,8 +101,7 @@ export async function GET(request: NextRequest) {
     console.error('Onboarding status error:', error);
     return NextResponse.json(
       { 
-        error: 'Failed to get onboarding status',
-        message: error instanceof Error ? error.message : 'Unknown error'
+        error: 'Failed to get onboarding status'
       },
       { status: 500 }
     );

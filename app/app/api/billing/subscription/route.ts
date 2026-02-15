@@ -1,20 +1,27 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { requireAuth } from '@/lib/auth-helpers';
 
 const PRODUCTION_ENGINE_URL = process.env.PRODUCTION_ENGINE_URL || 'http://localhost:4567';
 
 export async function GET(request: NextRequest) {
+  const authResult = await requireAuth(request);
+  if (authResult.error) return authResult.response;
+  const userId = authResult.session.user.id;
+
   try {
-    const userId = request.headers.get('x-user-id') || 'anonymous';
-    
+    const adminKey = process.env.ADMIN_KEY;
+    if (!adminKey) {
+      return NextResponse.json({ success: false, error: 'Server configuration error' }, { status: 500 });
+    }
+
     const response = await fetch(`${PRODUCTION_ENGINE_URL}/api/billing/subscription/${userId}`, {
       headers: {
         'x-user-id': userId,
-        'x-admin-key': process.env.ADMIN_KEY || 'admin-key',
+        'x-admin-key': adminKey,
       }
     });
 
     const data = await response.json();
-    
     return NextResponse.json(data, { status: response.status });
   } catch (error) {
     console.error('Subscription fetch error:', error);
@@ -26,22 +33,29 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  const authResult = await requireAuth(request);
+  if (authResult.error) return authResult.response;
+  const userId = authResult.session.user.id;
+
   try {
+    const adminKey = process.env.ADMIN_KEY;
+    if (!adminKey) {
+      return NextResponse.json({ success: false, error: 'Server configuration error' }, { status: 500 });
+    }
+
     const body = await request.json();
-    const userId = request.headers.get('x-user-id') || 'anonymous';
-    
+
     const response = await fetch(`${PRODUCTION_ENGINE_URL}/api/billing/upgrade`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'x-user-id': userId,
-        'x-admin-key': process.env.ADMIN_KEY || 'admin-key',
+        'x-admin-key': adminKey,
       },
       body: JSON.stringify({ userId, ...body })
     });
 
     const data = await response.json();
-    
     return NextResponse.json(data, { status: response.status });
   } catch (error) {
     console.error('Subscription update error:', error);

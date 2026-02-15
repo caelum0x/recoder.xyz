@@ -48,6 +48,7 @@ import { stickyScroll, toggleStickyScroll } from './sticky-scroll';
 import { rainbowBrackets } from './rainbow-brackets';
 import { errorHighlighting, updateErrors } from './error-highlighting';
 import { indentGuides, toggleIndentGuides } from './indent-guides';
+import { inlineEditExtension } from './inline-edit-widget';
 
 const logger = createScopedLogger('CodeMirrorEditor');
 
@@ -188,10 +189,10 @@ export const CodeMirrorEditor = memo(
     const [viewReady, setViewReady] = useState(false);
 
     const containerRef = useRef<HTMLDivElement | null>(null);
-    const viewRef = useRef<EditorView>();
-    const themeRef = useRef<Theme>();
-    const docRef = useRef<EditorDocument>();
-    const editorStatesRef = useRef<EditorStates>();
+    const viewRef = useRef<EditorView | undefined>(undefined);
+    const themeRef = useRef<Theme | undefined>(undefined);
+    const docRef = useRef<EditorDocument | undefined>(undefined);
+    const editorStatesRef = useRef<EditorStates | undefined>(undefined);
     const onScrollRef = useRef(onScroll);
     const onChangeRef = useRef(onChange);
     const onSaveRef = useRef(onSave);
@@ -788,6 +789,8 @@ function newEditorState(options: EditorStateOptions) {
           return '';
         }
       }, 800),
+      // Cmd+K inline editing - select code, press Cmd+K, type instruction
+      inlineEditExtension(),
       // Sticky scroll - shows current scope context at top of editor
       ...(enableStickyScroll ? [stickyScroll({ includeBlocks: false })] : []),
       // Error highlighting - line backgrounds, gutter icons, hover tooltips

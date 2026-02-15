@@ -1,3 +1,5 @@
+import { createScopedLogger } from '~/utils/logger';
+const logger = createScopedLogger('ABTesting');
 /**
  * A/B Testing System for Prompt Strategy Optimization
  * Automatically discovers the most effective prompt strategies
@@ -274,7 +276,7 @@ class ABTestingManager {
     // If we have a clear winner, update the default strategy
     if (metrics.winner && metrics.statisticalSignificance) {
       const winningResult = metrics.results[metrics.winner];
-      console.log(`A/B Test ${testId} concluded. Winner: ${metrics.winner} (${winningResult.strategy})`);
+      logger.info(`A/B Test ${testId} concluded. Winner: ${metrics.winner} (${winningResult.strategy})`);
 
       // You could automatically update the system configuration here
       // For now, we'll just log the results

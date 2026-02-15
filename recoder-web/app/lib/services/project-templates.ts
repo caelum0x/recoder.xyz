@@ -5,6 +5,8 @@
  */
 
 import { dockerPost, dockerWriteFiles } from './docker-api';
+import { createScopedLogger } from '~/utils/logger';
+const logger = createScopedLogger('ProjectTemplates');
 
 // ==================== INTERFACES ====================
 
@@ -422,7 +424,7 @@ footer {
         content: `// Main JavaScript file
 
 document.addEventListener('DOMContentLoaded', () => {
-  console.log('Website loaded!');
+  logger.info('Website loaded!');
 
   // Smooth scrolling for navigation links
   document.querySelectorAll('nav a').forEach(link => {

@@ -6,6 +6,8 @@
 import { useState, useEffect } from 'react';
 import { Wrench, Server, Play, RefreshCw, CheckCircle, XCircle, Loader2 } from 'lucide-react';
 import { toast } from 'react-toastify';
+import { createScopedLogger } from '~/utils/logger';
+const logger = createScopedLogger('MCPToolsPanel');
 
 interface MCPTool {
   name: string;
@@ -57,7 +59,7 @@ export default function MCPToolsPanel() {
         setTools(toolsData.data);
       }
     } catch (error: any) {
-      console.error('Failed to load MCP data:', error);
+      logger.error('Failed to load MCP data:', error);
       toast.error('Failed to load MCP tools');
     } finally {
       setLoading(false);
@@ -83,12 +85,12 @@ export default function MCPToolsPanel() {
 
       if (result.success) {
         toast.success(`Tool executed successfully: ${tool.name}`);
-        console.log('Tool result:', result.data);
+        logger.info('Tool result:', result.data);
       } else {
         throw new Error(result.error || 'Tool execution failed');
       }
     } catch (error: any) {
-      console.error('Tool execution error:', error);
+      logger.error('Tool execution error:', error);
       toast.error(`Failed to execute ${tool.name}`);
     } finally {
       setExecuting(null);

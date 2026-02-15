@@ -15,6 +15,9 @@ import * as process from 'process';
 import { RECODER_DIR } from '../utils/paths.js';
 import type { Config } from '../config/config.js';
 
+import { createScopedLogger } from '~/utils/logger';
+const logger = createScopedLogger('TodoWriteTool');
+
 export interface TodoItem {
   id: string;
   content: string;
@@ -350,7 +353,7 @@ class TodoWriteToolInvocation extends BaseToolInvocation<
     } catch (error) {
       const errorMessage =
         error instanceof Error ? error.message : String(error);
-      console.error(
+      logger.error(
         `[TodoWriteTool] Error executing todo_write: ${errorMessage}`,
       );
       return {

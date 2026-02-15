@@ -1,13 +1,19 @@
 import { useStore } from '@nanostores/react';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { chatStore } from '~/lib/stores/chat';
-import { workbenchStore } from '~/lib/stores/workbench';
+import { workbenchStore, type PublishState, type CustomDomainInfo } from '~/lib/stores/workbench';
 import { classNames } from '~/utils/classNames';
-import { GitHubIntegration } from '~/components/github/GitHubIntegration';
+import { GitHubImporter } from '~/components/github/GitHubImporter';
 import { DeployButton } from '~/components/deployment/DeployButton';
 import { SaveToProject } from '~/components/chat/SaveToProject';
 import { clearGitHubSyncCache } from '~/lib/runtime/github-auto-sync';
+import { dockerPost } from '~/lib/services/docker-api';
+
 import type { TemplateRepo } from '~/lib/.server/github/types';
+
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('HeaderActions');
 
 interface HeaderActionButtonsProps {}
 
@@ -15,6 +21,14 @@ export function HeaderActionButtons({}: HeaderActionButtonsProps) {
   const showWorkbench = useStore(workbenchStore.showWorkbench);
   const { showChat } = useStore(chatStore);
   const [showGitHubIntegration, setShowGitHubIntegration] = useState(false);
+  const [showFigmaImport, setShowFigmaImport] = useState(false);
+  const [figmaUrl, setFigmaUrl] = useState('');
+  const [figmaToken, setFigmaToken] = useState(() =>
+    typeof window !== 'undefined' ? localStorage.getItem('figma_token') || '' : '',
+  );
+  const [figmaImporting, setFigmaImporting] = useState(false);
+  const [figmaResult, setFigmaResult] = useState<{ files: string[]; componentCount: number } | null>(null);
+  const [figmaError, setFigmaError] = useState<string | null>(null);
   const [chatId, setChatId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -30,7 +44,7 @@ export function HeaderActionButtons({}: HeaderActionButtonsProps) {
     const fileCount = Object.keys(data.files).length;
     const isLocalStarter = data.template?.isLocal === true;
 
-    console.log('📦 Import complete:', {
+    logger.info('📦 Import complete:', {
       repository: repoInfo.name,
       fileCount,
       template: data.template?.name,
@@ -50,10 +64,10 @@ export function HeaderActionButtons({}: HeaderActionButtonsProps) {
             branch: repoInfo.default_branch || 'main'
           })
         });
-        console.log('🔗 Connected to GitHub for auto-sync:', repoInfo.full_name);
+        logger.info('🔗 Connected to GitHub for auto-sync:', repoInfo.full_name);
         clearGitHubSyncCache(); // Clear cache so new connection is picked up
       } catch (e) {
-        console.warn('Failed to connect GitHub for auto-sync:', e);
+        logger.warn('Failed to connect GitHub for auto-sync:', e);
       }
     }
 
@@ -88,7 +102,7 @@ Please analyze the project structure, create all files, install dependencies, an
       }
     }
 
-    console.log(isLocalStarter ? '📁 Local starter: files will be imported directly without AI' : '🤖 GitHub template: AI will help set up the project');
+    logger.info(isLocalStarter ? '📁 Local starter: files will be imported directly without AI' : '🤖 GitHub template: AI will help set up the project');
 
     // Show workbench and chat
     workbenchStore.showWorkbench.set(true);
@@ -107,7 +121,7 @@ Please analyze the project structure, create all files, install dependencies, an
       }
     }));
 
-    console.log('✅ Import data prepared, dispatched recoder:import event');
+    logger.info('✅ Import data prepared, dispatched recoder:import event');
     setShowGitHubIntegration(false);
   };
 
@@ -152,33 +166,535 @@ Please analyze the project structure, create all files, install dependencies, an
           <div className="i-ph:github-logo text-sm" />
         </Button>
 
+        {/* Figma Import Button */}
+        {showWorkbench && (
+          <Button
+            onClick={() => setShowFigmaImport(true)}
+            title="Import from Figma"
+          >
+            <div className="i-ph:figma-logo text-sm" />
+          </Button>
+        )}
+
         {/* Deploy Button - Only show when workbench is visible */}
         {showWorkbench && (
           <DeployButton />
         )}
+
+        {/* Go Live Button - Only show when workbench is visible */}
+        {showWorkbench && (
+          <GoLiveButton />
+        )}
       </div>
 
       {showGitHubIntegration && (
+        <GitHubImporter
+          onImport={(data) => {
+            handleImportComplete(data);
+          }}
+          onClose={() => setShowGitHubIntegration(false)}
+        />
+      )}
+
+      {showFigmaImport && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div
-            className="rounded-lg shadow-xl p-6 bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor"
-          >
+          <div className="rounded-lg shadow-xl p-6 bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor max-w-md w-full mx-4">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-semibold text-bolt-elements-textPrimary">
-                Import from GitHub
+                Import from Figma
               </h2>
               <button
-                onClick={() => setShowGitHubIntegration(false)}
+                onClick={() => { setShowFigmaImport(false); setFigmaResult(null); setFigmaError(null); }}
                 className="text-bolt-elements-textSecondary hover:text-bolt-elements-textPrimary transition-colors"
               >
                 <div className="i-ph:x text-lg" />
               </button>
             </div>
-            <GitHubIntegration onImportComplete={handleImportComplete} />
+
+            <div className="flex flex-col gap-4">
+              <div className="flex flex-col gap-1">
+                <label className="text-bolt-elements-textSecondary text-sm">Figma File URL</label>
+                <input
+                  type="text"
+                  value={figmaUrl}
+                  onChange={(e) => setFigmaUrl(e.target.value)}
+                  placeholder="https://www.figma.com/file/..."
+                  className="bg-bolt-elements-background-depth-3 text-bolt-elements-textPrimary text-sm rounded-md px-3 py-2 border border-bolt-elements-borderColor outline-none focus:border-bolt-elements-borderColorActive w-full"
+                />
+              </div>
+
+              <div className="flex flex-col gap-1">
+                <label className="text-bolt-elements-textSecondary text-sm">Figma Personal Access Token</label>
+                <input
+                  type="password"
+                  value={figmaToken}
+                  onChange={(e) => { setFigmaToken(e.target.value); localStorage.setItem('figma_token', e.target.value); }}
+                  placeholder="figd_..."
+                  className="bg-bolt-elements-background-depth-3 text-bolt-elements-textPrimary text-sm rounded-md px-3 py-2 border border-bolt-elements-borderColor outline-none focus:border-bolt-elements-borderColorActive w-full"
+                />
+                <a
+                  href="https://www.figma.com/developers/api#access-tokens"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-purple-400 text-xs hover:text-purple-300 transition-colors"
+                >
+                  Get token from figma.com
+                </a>
+              </div>
+
+              <button
+                onClick={async () => {
+                  const projectId = workbenchStore.projectId.get();
+                  if (!figmaUrl || !figmaToken || !projectId || figmaImporting) return;
+
+                  setFigmaImporting(true);
+                  setFigmaResult(null);
+                  setFigmaError(null);
+
+                  try {
+                    const data = await dockerPost<{ data: { files: string[]; componentCount: number } }>(
+                      `/api/figma-import/${projectId}`,
+                      { figmaUrl, figmaToken },
+                    );
+                    const result = ((data as any).data || data) as { files: string[]; componentCount: number };
+                    setFigmaResult(result);
+                  } catch (err: any) {
+                    setFigmaError(err?.message || 'Failed to import from Figma');
+                  } finally {
+                    setFigmaImporting(false);
+                  }
+                }}
+                disabled={!figmaUrl || !figmaToken || figmaImporting}
+                className={classNames(
+                  'w-full py-2.5 rounded-md text-sm font-medium transition-colors',
+                  !figmaUrl || !figmaToken || figmaImporting
+                    ? 'bg-bolt-elements-button-secondary-background text-bolt-elements-textTertiary cursor-not-allowed'
+                    : 'bg-purple-600 text-white hover:bg-purple-500',
+                )}
+              >
+                {figmaImporting ? (
+                  <span className="flex items-center justify-center gap-2">
+                    <span className="i-svg-spinners:90-ring-with-bg text-sm" />
+                    Importing...
+                  </span>
+                ) : (
+                  'Import Components'
+                )}
+              </button>
+
+              {figmaResult && (
+                <div className="bg-green-500/10 border border-green-500/30 rounded-md p-3 text-green-400 text-sm">
+                  Imported {figmaResult.componentCount} component{figmaResult.componentCount !== 1 ? 's' : ''}:
+                  <ul className="mt-1 text-xs text-green-400/80">
+                    {figmaResult.files.map((f) => (
+                      <li key={f}>{f}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {figmaError && (
+                <div className="text-red-400 text-sm">{figmaError}</div>
+              )}
+            </div>
           </div>
         </div>
       )}
     </>
+  );
+}
+
+// ==================== Go Live Button ====================
+
+function GoLiveButton() {
+  const publishState = useStore(workbenchStore.publishState) as PublishState;
+  const [showPopover, setShowPopover] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const [editingSlug, setEditingSlug] = useState(false);
+  const [newSlug, setNewSlug] = useState('');
+  const [slugSaving, setSlugSaving] = useState(false);
+  const [slugError, setSlugError] = useState<string | null>(null);
+  const [showDomainForm, setShowDomainForm] = useState(false);
+  const [newDomain, setNewDomain] = useState('');
+  const [domainLoading, setDomainLoading] = useState(false);
+  const [domainError, setDomainError] = useState<string | null>(null);
+  const [domainInstructions, setDomainInstructions] = useState<any>(null);
+  const popoverRef = useRef<HTMLDivElement>(null);
+
+  // Check publish status on mount
+  useEffect(() => {
+    workbenchStore.checkPublishStatus();
+  }, []);
+
+  // Close popover on outside click
+  useEffect(() => {
+    if (!showPopover) return;
+    const handleClick = (e: MouseEvent) => {
+      if (popoverRef.current && !popoverRef.current.contains(e.target as Node)) {
+        setShowPopover(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [showPopover]);
+
+  const handleGoLive = async () => {
+    if (publishState.status === 'published') {
+      setShowPopover(!showPopover);
+      return;
+    }
+    if (publishState.status === 'building' || publishState.status === 'publishing') {
+      return; // Already in progress
+    }
+    await workbenchStore.publishProject();
+  };
+
+  const handleCopyUrl = () => {
+    if (publishState.url) {
+      navigator.clipboard.writeText(publishState.url);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
+  };
+
+  const handleUpdate = async () => {
+    setShowPopover(false);
+    await workbenchStore.publishProject();
+  };
+
+  const handleUnpublish = async () => {
+    setShowPopover(false);
+    await workbenchStore.unpublishProject();
+  };
+
+  const isLoading = publishState.status === 'building' || publishState.status === 'publishing';
+  const isPublished = publishState.status === 'published';
+
+  return (
+    <div className="relative" ref={popoverRef}>
+      <button
+        onClick={handleGoLive}
+        disabled={isLoading}
+        className={classNames(
+          'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-all',
+          isPublished
+            ? 'bg-green-600 hover:bg-green-500 text-white'
+            : isLoading
+            ? 'bg-amber-600 text-white cursor-wait'
+            : publishState.status === 'error'
+            ? 'bg-red-600/80 hover:bg-red-500 text-white'
+            : 'bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-400 hover:to-blue-500 text-white hover:shadow-lg hover:shadow-blue-500/20'
+        )}
+        title={isPublished ? 'Published - click for options' : isLoading ? 'Publishing...' : 'Publish your project'}
+      >
+        {isLoading ? (
+          <>
+            <div className="i-ph:spinner-gap animate-spin text-sm" />
+            <span>Publishing...</span>
+          </>
+        ) : isPublished ? (
+          <>
+            <div className="w-2 h-2 rounded-full bg-green-300 animate-pulse" />
+            <span>Live</span>
+          </>
+        ) : publishState.status === 'error' ? (
+          <>
+            <div className="i-ph:warning text-sm" />
+            <span>Retry</span>
+          </>
+        ) : (
+          <>
+            <div className="i-ph:globe text-sm" />
+            <span>Go Live</span>
+          </>
+        )}
+      </button>
+
+      {/* Published Popover */}
+      {showPopover && isPublished && publishState.url && (
+        <div
+          className="absolute right-0 top-full mt-2 w-72 rounded-lg shadow-xl z-50 overflow-hidden"
+          style={{ backgroundColor: 'var(--bolt-elements-bg-depth-1)', border: '1px solid var(--bolt-elements-borderColor)' }}
+        >
+          <div className="p-3">
+            <div className="flex items-center justify-between mb-2">
+              <div className="text-xs font-medium text-bolt-elements-textSecondary">Published URL</div>
+              {!editingSlug && (
+                <button
+                  onClick={() => {
+                    setNewSlug(publishState.slug || '');
+                    setSlugError(null);
+                    setEditingSlug(true);
+                  }}
+                  className="text-[10px] text-bolt-elements-textSecondary hover:text-bolt-elements-textPrimary transition-colors"
+                  title="Edit URL slug"
+                >
+                  <div className="i-ph:pencil-simple text-xs" />
+                </button>
+              )}
+            </div>
+
+            {editingSlug ? (
+              <div className="mb-3">
+                <div className="flex items-center gap-1 p-2 rounded-md" style={{ backgroundColor: 'var(--bolt-elements-bg-depth-2)' }}>
+                  <span className="text-[10px] text-bolt-elements-textSecondary whitespace-nowrap">web.recoder.xyz/</span>
+                  <input
+                    type="text"
+                    value={newSlug}
+                    onChange={(e) => {
+                      setNewSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''));
+                      setSlugError(null);
+                    }}
+                    className="flex-1 bg-transparent text-xs text-bolt-elements-textPrimary outline-none border-none min-w-0"
+                    placeholder="my-project"
+                    autoFocus
+                    onKeyDown={(e) => {
+                      if (e.key === 'Escape') {
+                        setEditingSlug(false);
+                        setSlugError(null);
+                      }
+                    }}
+                  />
+                </div>
+                {slugError && (
+                  <div className="text-[10px] text-red-400 mt-1">{slugError}</div>
+                )}
+                <div className="flex gap-2 mt-2">
+                  <button
+                    onClick={async () => {
+                      if (!newSlug.trim()) {
+                        setSlugError('Slug cannot be empty');
+                        return;
+                      }
+                      setSlugSaving(true);
+                      setSlugError(null);
+                      const success = await workbenchStore.changeSlug(newSlug.trim());
+                      setSlugSaving(false);
+                      if (success) {
+                        setEditingSlug(false);
+                      } else {
+                        setSlugError('Failed to change slug. It may be taken or invalid.');
+                      }
+                    }}
+                    disabled={slugSaving || !newSlug.trim() || newSlug === publishState.slug}
+                    className="flex-1 flex items-center justify-center gap-1 px-2 py-1.5 rounded-md text-[10px] font-medium bg-blue-600 text-white hover:bg-blue-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {slugSaving ? (
+                      <div className="i-ph:spinner-gap animate-spin text-xs" />
+                    ) : (
+                      <div className="i-ph:check text-xs" />
+                    )}
+                    {slugSaving ? 'Saving...' : 'Save'}
+                  </button>
+                  <button
+                    onClick={() => {
+                      setEditingSlug(false);
+                      setSlugError(null);
+                    }}
+                    className="flex-1 flex items-center justify-center gap-1 px-2 py-1.5 rounded-md text-[10px] font-medium text-bolt-elements-textSecondary hover:bg-bolt-elements-background-depth-2 transition-colors"
+                    style={{ border: '1px solid var(--bolt-elements-borderColor)' }}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2 p-2 rounded-md" style={{ backgroundColor: 'var(--bolt-elements-bg-depth-2)' }}>
+                <span className="text-xs text-bolt-elements-textPrimary truncate flex-1">{publishState.url}</span>
+              </div>
+            )}
+
+            <div className="flex gap-2 mt-3">
+              <button
+                onClick={handleCopyUrl}
+                className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-md text-xs font-medium transition-colors text-bolt-elements-textPrimary hover:bg-bolt-elements-background-depth-2"
+                style={{ border: '1px solid var(--bolt-elements-borderColor)' }}
+              >
+                <div className={copied ? 'i-ph:check' : 'i-ph:copy'} />
+                {copied ? 'Copied' : 'Copy URL'}
+              </button>
+              <a
+                href={publishState.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-md text-xs font-medium transition-colors text-bolt-elements-textPrimary hover:bg-bolt-elements-background-depth-2"
+                style={{ border: '1px solid var(--bolt-elements-borderColor)' }}
+              >
+                <div className="i-ph:arrow-square-out" />
+                Open
+              </a>
+            </div>
+
+            <div className="flex gap-2 mt-2">
+              <button
+                onClick={handleUpdate}
+                className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-md text-xs font-medium bg-amber-500 text-black hover:bg-amber-400 transition-colors"
+              >
+                <div className="i-ph:arrow-clockwise" />
+                Update
+              </button>
+              <button
+                onClick={handleUnpublish}
+                className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-md text-xs font-medium text-red-400 hover:bg-red-500/10 transition-colors"
+                style={{ border: '1px solid var(--bolt-elements-borderColor)' }}
+              >
+                <div className="i-ph:trash" />
+                Unpublish
+              </button>
+            </div>
+
+            {/* Custom Domains Section */}
+            <div className="mt-3 pt-3 border-t" style={{ borderColor: 'var(--bolt-elements-borderColor)' }}>
+              <div className="flex items-center justify-between mb-2">
+                <div className="text-xs font-medium text-bolt-elements-textSecondary">Custom Domains</div>
+                <button
+                  onClick={() => {
+                    setShowDomainForm(!showDomainForm);
+                    setDomainError(null);
+                    setDomainInstructions(null);
+                  }}
+                  className="text-[10px] text-blue-400 hover:text-blue-300 transition-colors"
+                >
+                  {showDomainForm ? 'Cancel' : '+ Add'}
+                </button>
+              </div>
+
+              {/* Existing domains list */}
+              {publishState.customDomains && publishState.customDomains.length > 0 && (
+                <div className="space-y-1.5 mb-2">
+                  {publishState.customDomains.map((d: CustomDomainInfo) => (
+                    <div
+                      key={d.domain}
+                      className="flex items-center gap-2 p-1.5 rounded-md text-xs"
+                      style={{ backgroundColor: 'var(--bolt-elements-bg-depth-2)' }}
+                    >
+                      <div className={`w-1.5 h-1.5 rounded-full ${
+                        d.status === 'active' ? 'bg-green-400' :
+                        d.status === 'error' ? 'bg-red-400' :
+                        'bg-amber-400 animate-pulse'
+                      }`} />
+                      <span className="flex-1 truncate text-bolt-elements-textPrimary">{d.domain}</span>
+                      {d.status === 'active' && d.url && (
+                        <a
+                          href={d.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-blue-400 hover:text-blue-300"
+                        >
+                          <div className="i-ph:arrow-square-out text-[10px]" />
+                        </a>
+                      )}
+                      {(d.status === 'pending_dns' || d.status === 'dns_verified') && (
+                        <button
+                          onClick={async () => {
+                            setDomainLoading(true);
+                            const result = await workbenchStore.activateCustomDomain(d.domain);
+                            setDomainLoading(false);
+                            if (!result.success) {
+                              setDomainError(result.error || 'Activation failed');
+                            }
+                          }}
+                          className="text-[10px] text-amber-400 hover:text-amber-300"
+                          title="Verify & Activate"
+                        >
+                          {domainLoading ? '...' : 'Activate'}
+                        </button>
+                      )}
+                      <button
+                        onClick={async () => {
+                          await workbenchStore.removeCustomDomain(d.domain);
+                        }}
+                        className="text-red-400/60 hover:text-red-400 transition-colors"
+                        title="Remove domain"
+                      >
+                        <div className="i-ph:x text-[10px]" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Add domain form */}
+              {showDomainForm && (
+                <div className="space-y-2">
+                  <input
+                    type="text"
+                    value={newDomain}
+                    onChange={(e) => {
+                      setNewDomain(e.target.value.toLowerCase().trim());
+                      setDomainError(null);
+                    }}
+                    className="w-full px-2 py-1.5 rounded-md text-xs bg-transparent text-bolt-elements-textPrimary outline-none"
+                    style={{ backgroundColor: 'var(--bolt-elements-bg-depth-2)', border: '1px solid var(--bolt-elements-borderColor)' }}
+                    placeholder="example.com"
+                    autoFocus
+                  />
+                  {domainError && (
+                    <div className="text-[10px] text-red-400">{domainError}</div>
+                  )}
+                  {domainInstructions && (
+                    <div className="p-2 rounded-md text-[10px] space-y-1" style={{ backgroundColor: 'var(--bolt-elements-bg-depth-2)' }}>
+                      <div className="font-medium text-bolt-elements-textPrimary">DNS Setup Required:</div>
+                      <div className="text-bolt-elements-textSecondary">
+                        Add a <span className="text-blue-400">CNAME</span> record:
+                      </div>
+                      <div className="font-mono text-bolt-elements-textPrimary">
+                        {domainInstructions.cname?.name} → {domainInstructions.cname?.value}
+                      </div>
+                    </div>
+                  )}
+                  <button
+                    onClick={async () => {
+                      if (!newDomain) return;
+                      setDomainLoading(true);
+                      setDomainError(null);
+                      const result = await workbenchStore.addCustomDomain(newDomain);
+                      setDomainLoading(false);
+                      if (result.success) {
+                        setDomainInstructions(result.instructions);
+                        setNewDomain('');
+                      } else {
+                        setDomainError(result.error || 'Failed to add domain');
+                      }
+                    }}
+                    disabled={domainLoading || !newDomain}
+                    className="w-full flex items-center justify-center gap-1 px-2 py-1.5 rounded-md text-[10px] font-medium bg-blue-600 text-white hover:bg-blue-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {domainLoading ? (
+                      <div className="i-ph:spinner-gap animate-spin text-xs" />
+                    ) : (
+                      <div className="i-ph:plus text-xs" />
+                    )}
+                    {domainLoading ? 'Adding...' : 'Add Domain'}
+                  </button>
+                </div>
+              )}
+
+              {!showDomainForm && (!publishState.customDomains || publishState.customDomains.length === 0) && (
+                <div className="text-[10px] text-bolt-elements-textTertiary">
+                  No custom domains. Add one to use your own domain.
+                </div>
+              )}
+            </div>
+          </div>
+          {publishState.publishedAt && (
+            <div className="px-3 py-2 text-[10px] text-bolt-elements-textTertiary border-t" style={{ borderColor: 'var(--bolt-elements-borderColor)' }}>
+              Last published: {new Date(publishState.publishedAt).toLocaleString()}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Error tooltip */}
+      {publishState.status === 'error' && publishState.error && (
+        <div
+          className="absolute right-0 top-full mt-2 w-64 p-3 rounded-lg shadow-xl z-50 text-xs text-red-400"
+          style={{ backgroundColor: 'var(--bolt-elements-bg-depth-1)', border: '1px solid var(--bolt-elements-borderColor)' }}
+        >
+          {publishState.error}
+        </div>
+      )}
+    </div>
   );
 }
 

@@ -544,6 +544,7 @@ function generationModel(
 	gatewayHeaders?: AiGatewayHeaders,
 ) {
 	const llmProvider = languageModel.provider;
+	const modelOverride = parseModelOverrideFromHeaders(gatewayHeaders);
 	const gateway = createGateway(
 		gatewayHeaders === undefined
 			? undefined
@@ -551,6 +552,9 @@ function generationModel(
 					headers: gatewayHeaders,
 				},
 	);
+	if (modelOverride) {
+		return gateway(modelOverride);
+	}
 	// Use AI Gateway model specifier: "<provider>/<modelId>"
 	// e.g. "openai/gpt-4o" or "anthropic/claude-3-5-sonnet-20240620"
 	switch (llmProvider) {
@@ -565,6 +569,17 @@ function generationModel(
 			throw new Error(`Unknown LLM provider: ${_exhaustiveCheck}`);
 		}
 	}
+}
+
+function parseModelOverrideFromHeaders(
+	gatewayHeaders?: AiGatewayHeaders,
+): string | null {
+	const raw = gatewayHeaders?.["x-giselle-model-override"];
+	if (typeof raw !== "string") {
+		return null;
+	}
+	const model = raw.trim();
+	return model.includes("/") && model.length > 3 ? model : null;
 }
 
 function generateContentV2({
@@ -646,7 +661,10 @@ function generateContentV2({
 			const streamTextResult = streamText({
 				...callOptions,
 				abortSignal: abortController.signal,
-				model: gateway(operationNode.content.languageModel.id),
+				model: gateway(
+					parseModelOverrideFromHeaders(aiGatewayHeaders) ??
+						operationNode.content.languageModel.id,
+				),
 				messages,
 				tools: toolSet,
 				stopWhen: ({ steps }) => {

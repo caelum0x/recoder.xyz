@@ -9,6 +9,9 @@ import { glob } from 'glob';
 import { createEmbeddings, getEmbeddingDimension, type EmbedderConfig } from './embedder.js';
 import { getVectorStore, clearVectorStore, type CodeBlock, type IndexedBlock } from './vector-store.js';
 import { parseFile, isSupported, getSupportedExtensions } from './parser.js';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('CodeIndexer');
 
 export interface IndexerConfig {
   projectId: string;
@@ -107,7 +110,7 @@ export async function indexWorkspace(config: IndexerConfig): Promise<IndexingRes
     });
 
     progress.totalFiles = files.length;
-    console.log(`[Indexer] Found ${files.length} files to index`);
+    logger.info(`[Indexer] Found ${files.length} files to index`);
 
     // Parse files and collect code blocks
     progress.status = 'parsing';
@@ -123,7 +126,7 @@ export async function indexWorkspace(config: IndexerConfig): Promise<IndexingRes
         // Check file size
         const stats = await fs.stat(fullPath);
         if (stats.size > maxFileSize) {
-          console.log(`[Indexer] Skipping large file: ${file} (${stats.size} bytes)`);
+          logger.info(`[Indexer] Skipping large file: ${file} (${stats.size} bytes)`);
           continue;
         }
 
@@ -134,11 +137,11 @@ export async function indexWorkspace(config: IndexerConfig): Promise<IndexingRes
         allBlocks.push(...blocks);
         progress.filesParsed++;
       } catch (error) {
-        console.warn(`[Indexer] Error parsing ${file}:`, error);
+        logger.warn(`[Indexer] Error parsing ${file}:`, error);
       }
     }
 
-    console.log(`[Indexer] Parsed ${allBlocks.length} code blocks from ${progress.filesParsed} files`);
+    logger.info(`[Indexer] Parsed ${allBlocks.length} code blocks from ${progress.filesParsed} files`);
 
     if (allBlocks.length === 0) {
       progress.status = 'complete';
@@ -180,11 +183,11 @@ export async function indexWorkspace(config: IndexerConfig): Promise<IndexingRes
         await store.upsertBlocks(indexedBlocks);
         progress.blocksIndexed += indexedBlocks.length;
 
-        console.log(
+        logger.info(
           `[Indexer] Indexed batch ${Math.floor(i / batchSize) + 1}/${Math.ceil(allBlocks.length / batchSize)}`
         );
       } catch (error) {
-        console.error(`[Indexer] Error embedding batch:`, error);
+        logger.error(`[Indexer] Error embedding batch:`, error);
         throw error;
       }
     }
@@ -195,7 +198,7 @@ export async function indexWorkspace(config: IndexerConfig): Promise<IndexingRes
     progress.currentFile = undefined;
 
     const duration = Date.now() - startTime;
-    console.log(
+    logger.info(
       `[Indexer] Complete: ${progress.blocksIndexed} blocks from ${progress.filesParsed} files in ${duration}ms`
     );
 

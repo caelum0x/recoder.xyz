@@ -10,6 +10,8 @@ import { PlatformSelector } from './PlatformSelector';
 import { DeploymentProgress } from './DeploymentProgress';
 import { workbenchStore } from '~/lib/stores/workbench';
 import type { DeploymentPlatform, ProjectDetection } from '~/lib/.server/deployment/types';
+import { createScopedLogger } from '~/utils/logger';
+const logger = createScopedLogger('DeploymentModal');
 
 interface DeploymentModalProps {
   open: boolean;
@@ -38,7 +40,7 @@ export function DeploymentModal({ open, onClose }: DeploymentModalProps) {
             setUserToken(tokens[selectedPlatform]);
           }
         } catch (e) {
-          console.error('Failed to load saved tokens:', e);
+          logger.error('Failed to load saved tokens:', e);
         }
       }
     }
@@ -70,7 +72,7 @@ export function DeploymentModal({ open, onClose }: DeploymentModalProps) {
         setSelectedPlatform(result.data.recommendedPlatform);
       }
     } catch (error) {
-      console.error('Failed to detect project type:', error);
+      logger.error('Failed to detect project type:', error);
     }
   };
 
@@ -121,7 +123,7 @@ export function DeploymentModal({ open, onClose }: DeploymentModalProps) {
         throw new Error(result.error || 'Deployment failed');
       }
     } catch (error) {
-      console.error('Deployment error:', error);
+      logger.error('Deployment error:', error);
       setError(error instanceof Error ? error.message : 'Deployment failed');
       setStep('config');
     } finally {

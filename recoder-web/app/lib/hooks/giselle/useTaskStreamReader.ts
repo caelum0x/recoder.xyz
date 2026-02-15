@@ -13,6 +13,10 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { TaskId, StreamData, StreamEvent } from './types';
 import { parseStreamEvent } from './types';
 
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('GiselleTaskStream');
+
 // ============================================================
 // Types
 // ============================================================
@@ -94,14 +98,14 @@ export function useTaskStreamReader(
         const streamEvent = parseStreamEvent(parsed);
 
         if (!streamEvent) {
-          console.warn('Failed to parse stream event:', parsed);
+          logger.warn('Failed to parse stream event:', parsed);
           return true;
         }
 
         switch (streamEvent.type) {
           case 'connected':
             if (process.env.NODE_ENV === 'development') {
-              console.log('[TaskStreamReader] Connected');
+              logger.info('[TaskStreamReader] Connected');
             }
             onConnect?.();
             break;
@@ -112,7 +116,7 @@ export function useTaskStreamReader(
 
           case 'end':
             if (process.env.NODE_ENV === 'development') {
-              console.log('[TaskStreamReader] Stream ended');
+              logger.info('[TaskStreamReader] Stream ended');
             }
             onEnd?.();
             return false; // Stop processing
@@ -124,7 +128,7 @@ export function useTaskStreamReader(
             return false; // Stop processing
         }
       } catch (parseError) {
-        console.error('[TaskStreamReader] Failed to parse message:', parseError);
+        logger.error('[TaskStreamReader] Failed to parse message:', parseError);
       }
 
       return true; // Continue processing
@@ -221,7 +225,7 @@ export function useTaskStreamReader(
         retriesRef.current++;
         const delay = 1000 * Math.pow(2, retriesRef.current - 1);
         if (process.env.NODE_ENV === 'development') {
-          console.log(
+          logger.info(
             `[TaskStreamReader] Retrying in ${delay}ms (attempt ${retriesRef.current})`
           );
         }

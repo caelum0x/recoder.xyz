@@ -1,6 +1,9 @@
 import dotenv from 'dotenv';
 dotenv.config();
 
+import { createLogger } from './logger.js';
+const logger = createLogger('server');
+
 import express from 'express';
 import expressWs from 'express-ws';
 import cors from 'cors';
@@ -62,11 +65,15 @@ import { replManager, REPL_CONFIGS, type ReplLanguage } from './repl-manager.js'
 import { metricsCollector, metricsMiddleware } from './metrics.js';
 import { sandboxRouter, initSandboxRoutes, type SandboxDependencies } from './public-api/routes/sandboxes.js';
 import { projectRouter, initProjectRoutes, type ProjectDependencies } from './public-api/routes/projects.js';
+import { getPromptTaskQueueDiagnostics } from './public-api/prompt-task-queue.js';
+import { getByokReadiness } from './public-api/byok-readiness.js';
 import openclawKeysRouter from './public-api/routes/openclaw-keys.js';
 import { identityRouter, setUserInfoProvider } from './public-api/routes/identity.js';
 import { moltbookAuthRouter } from './public-api/routes/auth-moltbook.js';
 import { appKeysRouter } from './public-api/routes/app-keys.js';
 import { domainRouter } from './public-api/routes/domains.js';
+import { a2aRouter, getDockerBackendAgentCard } from './a2a-gateway.js';
+import { startA2AIntentWorker } from './a2a-intent-worker.js';
 import {
   fetchUserByokProviderKeys,
   buildInternalServiceHeaders,
@@ -96,9 +103,10 @@ import { resourceOptimizer } from './resource-optimizer.js';
 import { templateManager } from './templates/index.js';
 import { getProjectIdFromRequest, isStrictAuthMode } from './auth-utils.js';
 import { type ContainerCreationEntry, withCreationTimeout, isCreationStale } from './container-creation.js';
-import * as vercelDeploy from './deployment/vercel.js';
-import * as netlifyDeploy from './deployment/netlify.js';
-import * as cloudflareDeploy from './deployment/cloudflare.js';
+// Deployment modules are lazily imported to avoid requiring node-fetch/form-data at startup
+const getVercelDeploy = () => import('./deployment/vercel.js');
+const getNetlifyDeploy = () => import('./deployment/netlify.js');
+const getCloudflareDeploy = () => import('./deployment/cloudflare.js');
 import type { ProviderCredentials, DeploymentConfig } from './deployment/types.js';
 import {
   authenticateApiKey,
@@ -218,6 +226,20 @@ import {
   logError,
   logWarning,
 } from './errors/index.js';
+import {
+  INTERNAL_WORKFLOW_CONTRACT,
+  PUBLIC_WORKFLOW_HEALTH_CONTRACT,
+  PUBLIC_WORKFLOW_CONTRACT,
+  buildSubagentWorkflowHealthSummary,
+  buildInternalWorkflowResponse,
+  buildPublicWorkflowResponseData,
+  buildSubagentWorkflowPlan,
+  isKnownSubagentLaneId,
+  parseSubagentLaneStatusUpdate,
+  type SubagentLaneStatusEntry,
+  parseSubagentWorkflowRequest,
+  validateSubagentWorkflowRequestContract,
+} from './subagent-workflow.js';
 
 // dotenv.config() is called at the top of this file before other imports
 
@@ -228,7 +250,7 @@ function validateEnvironment() {
 
   if (!process.env.API_KEY_HASH_SALT) {
     if (process.env.NODE_ENV === 'production') {
-      console.error('❌ CRITICAL: API_KEY_HASH_SALT is required in production');
+      logger.fatal('API_KEY_HASH_SALT is required in production');
       process.exit(1);
     } else {
       process.env.API_KEY_HASH_SALT = 'dev-salt-' + Math.random().toString(36).slice(2);
@@ -238,7 +260,7 @@ function validateEnvironment() {
 
   if (!process.env.INTERNAL_SERVICE_KEY) {
     if (process.env.NODE_ENV === 'production') {
-      console.error('❌ CRITICAL: INTERNAL_SERVICE_KEY is required in production');
+      logger.fatal('INTERNAL_SERVICE_KEY is required in production');
       process.exit(1);
     } else {
       process.env.INTERNAL_SERVICE_KEY = 'dev-internal-key';
@@ -247,15 +269,15 @@ function validateEnvironment() {
   } else if (process.env.NODE_ENV === 'production') {
     const key = process.env.INTERNAL_SERVICE_KEY;
     if (key === 'dev-internal-key') {
-      console.error('❌ CRITICAL: INTERNAL_SERVICE_KEY cannot use dev default in production');
+      logger.fatal('INTERNAL_SERVICE_KEY cannot use dev default in production');
       process.exit(1);
     }
     if (key.length < 32) {
-      console.error('❌ CRITICAL: INTERNAL_SERVICE_KEY must be at least 32 characters in production');
+      logger.fatal('INTERNAL_SERVICE_KEY must be at least 32 characters in production');
       process.exit(1);
     }
     if (/^(changeme|placeholder|xxx|secret|password|test)/i.test(key)) {
-      console.error('❌ CRITICAL: INTERNAL_SERVICE_KEY appears to be a placeholder value');
+      logger.fatal('INTERNAL_SERVICE_KEY appears to be a placeholder value');
       process.exit(1);
     }
   }
@@ -266,7 +288,7 @@ function validateEnvironment() {
 
   if (!process.env.IDENTITY_TOKEN_SECRET) {
     if (process.env.NODE_ENV === 'production') {
-      console.error('❌ CRITICAL: IDENTITY_TOKEN_SECRET is required in production');
+      logger.fatal('IDENTITY_TOKEN_SECRET is required in production');
       process.exit(1);
     } else {
       process.env.IDENTITY_TOKEN_SECRET = 'dev-identity-secret-' + Math.random().toString(36).slice(2);
@@ -275,22 +297,12 @@ function validateEnvironment() {
   }
 
   if (warnings.length > 0) {
-    console.warn('⚠️ Environment warnings:');
-    warnings.forEach(w => console.warn(`  - ${w}`));
+    logger.warn({ warnings }, 'Environment warnings');
   }
 }
 
 function startupInfo(component: string, message: string, details?: Record<string, unknown>): void {
-  console.info(
-    JSON.stringify({
-      timestamp: new Date().toISOString(),
-      level: 'info',
-      type: 'STARTUP',
-      component,
-      message,
-      details,
-    }),
-  );
+  logger.info({ type: 'STARTUP', component, ...details }, message);
 }
 
 // ==================== SECURITY: Authentication & Authorization ====================
@@ -483,7 +495,7 @@ async function verifySessionToken(token: string): Promise<{ userId: string; sess
       logError({
         errorCode: ErrorCode.AUTH_SERVICE_ERROR,
         message: 'Error verifying Better Auth session',
-        details: { error: error.message },
+        details: {},
       });
     }
     return null;
@@ -546,7 +558,7 @@ async function checkProjectOwnership(userId: string, projectId: string): Promise
       logError({
         errorCode: ErrorCode.AUTHZ_SERVICE_ERROR,
         message: 'Error checking project ownership',
-        details: { error: error.message },
+        details: {},
       });
     }
     return false;
@@ -621,6 +633,24 @@ function authenticateRequest(req: AuthenticatedRequest, res: express.Response, n
   });
 }
 
+// Admin authorization middleware - requires authenticated user to be in ADMIN_USER_IDS
+const ADMIN_USER_IDS = new Set(
+  (process.env.ADMIN_USER_IDS || '').split(',').map(id => id.trim()).filter(Boolean)
+);
+
+function requireAdmin(req: AuthenticatedRequest, res: express.Response, next: express.NextFunction) {
+  if (!req.userId || req.userId === 'anonymous') {
+    return res.status(401).json({ error: 'Authentication required for admin endpoints' });
+  }
+
+  if (!ADMIN_USER_IDS.has(req.userId)) {
+    logger.warn(`[admin] Unauthorized admin access attempt by user ${req.userId} to ${req.path}`);
+    return res.status(403).json({ error: 'Admin access required' });
+  }
+
+  next();
+}
+
 // Authorization middleware - verifies project ownership
 // During migration: allows anonymous users to access projects (with warning)
 function verifyProjectOwnership(req: AuthenticatedRequest, res: express.Response, next: express.NextFunction) {
@@ -681,11 +711,7 @@ function auditLog(event: {
   details?: Record<string, unknown>;
   ip?: string;
 }) {
-  console.log(JSON.stringify({
-    timestamp: new Date().toISOString(),
-    type: 'AUDIT',
-    ...event
-  }));
+  logger.info({ type: 'AUDIT', ...event }, `audit: ${event.action}`);
 }
 
 // Input sanitization to prevent command injection
@@ -965,7 +991,7 @@ class WebSocketKeepaliveManager {
     this.connections.set(ws, info);
     this.totalConnections++;
 
-    console.log(`[WS Keepalive] Registered ${endpoint}/${projectId} [user: ${userId || 'anonymous'}] (active: ${this.connections.size})`);
+    logger.info({ endpoint, projectId, userId: userId || 'anonymous', active: this.connections.size }, 'WS Keepalive registered');
   }
 
   /**
@@ -986,7 +1012,7 @@ class WebSocketKeepaliveManager {
         this.handlePongTimeout(ws);
       }, this.pongTimeoutMs);
     } catch (err: any) {
-      console.error(`[WS Keepalive] Ping error for ${info.endpoint}/${info.projectId}: ${err.message}`);
+      logger.error({ endpoint: info.endpoint, projectId: info.projectId, err }, 'WS Keepalive ping error');
     }
   }
 
@@ -999,7 +1025,7 @@ class WebSocketKeepaliveManager {
 
     this.totalTimeouts++;
     const uptime = Math.round((Date.now() - info.connectedAt) / 1000);
-    console.log(`[WS Keepalive] Pong timeout for ${info.endpoint}/${info.projectId} after ${uptime}s uptime`);
+    logger.warn({ endpoint: info.endpoint, projectId: info.projectId, uptime }, 'WS Keepalive pong timeout');
 
     // Send connection hint before closing
     this.sendConnectionHint(ws, 'pong_timeout', 'No pong received within timeout period');
@@ -1030,7 +1056,7 @@ class WebSocketKeepaliveManager {
     const uptime = Math.round((Date.now() - info.connectedAt) / 1000);
     this.totalDisconnections++;
 
-    console.log(`[WS Keepalive] Closed ${info.endpoint}/${info.projectId} [code: ${code}, reason: ${reason || 'none'}] uptime: ${uptime}s (active: ${this.connections.size - 1})`);
+    logger.info({ endpoint: info.endpoint, projectId: info.projectId, code, reason: reason || 'none', uptime, active: this.connections.size - 1 }, 'WS Keepalive closed');
 
     this.connections.delete(ws);
   }
@@ -1153,7 +1179,7 @@ class WebSocketKeepaliveManager {
    * Shutdown all connections gracefully
    */
   shutdown(): void {
-    console.log(`[WS Keepalive] Shutting down ${this.connections.size} connections...`);
+    logger.info({ active: this.connections.size }, 'WS Keepalive shutting down');
     for (const [ws, info] of this.connections.entries()) {
       if (info.pingInterval) {
         clearInterval(info.pingInterval);
@@ -1188,7 +1214,7 @@ export function getWebSocketStats() {
 
 // Initialize Redis connection (non-blocking)
 sessionStore.connect().catch(() => {
-  console.warn('[Server] Redis not available, using memory fallback for sessions');
+  logger.warn('Redis not available, using memory fallback for sessions');
 });
 
 // Initialize container pool (non-blocking) - pre-warms containers for faster project creation
@@ -1243,9 +1269,9 @@ async function fetchClaudeCodeToken(userId: string): Promise<string | null> {
     return null;
   } catch (error: any) {
     if (error.name === 'AbortError') {
-      console.error(`[Claude Code] Fetch token timed out after 5s for user ${maskIdentifier(userId)}`);
+      logger.error({ userId: maskIdentifier(userId) }, 'Claude Code token fetch timed out after 5s');
     } else {
-      console.error(`[Claude Code] Error fetching token for user ${maskIdentifier(userId)}: ${error.message}`);
+      logger.error({ userId: maskIdentifier(userId), err: error }, 'Claude Code token fetch error');
     }
     return null;
   } finally {
@@ -1275,9 +1301,9 @@ async function fetchAIProviderKeys(userId: string): Promise<AIProviderKeys> {
     return keys || {};
   } catch (error: any) {
     if (error.name === 'AbortError') {
-      console.error(`[AI Provider Keys] Fetch keys timed out after 5s for user ${maskIdentifier(userId)}`);
+      logger.error({ userId: maskIdentifier(userId) }, 'AI Provider Keys fetch timed out after 5s');
     } else {
-      console.error(`[AI Provider Keys] Error fetching keys for user ${maskIdentifier(userId)}: ${error.message}`);
+      logger.error({ userId: maskIdentifier(userId), err: error }, 'AI Provider Keys fetch error');
     }
     return {};
   } finally {
@@ -1292,7 +1318,8 @@ const baseApp = express();
 const server = http.createServer(baseApp);
 
 // Initialize express-ws with the server so WebSocket routes work
-const { app } = expressWs(baseApp, server);
+// Cast to avoid type conflicts between @types/express-serve-static-core v4 (express) and v5 (express-ws).
+const { app } = expressWs(baseApp as any, server) as unknown as { app: express.Application & { ws: (...args: any[]) => void } };
 
 function getTrustProxySetting(): boolean | number | string {
   const raw = (process.env.TRUST_PROXY || '').trim();
@@ -1309,7 +1336,7 @@ function getTrustProxySetting(): boolean | number | string {
 
 const trustProxySetting = getTrustProxySetting();
 app.set('trust proxy', trustProxySetting);
-console.log(`[Server] trust proxy configured as: ${String(trustProxySetting)}`);
+logger.info({ trustProxy: String(trustProxySetting) }, 'Trust proxy configured');
 
 // Rate limiting
 const apiLimiter = rateLimit({
@@ -1343,7 +1370,7 @@ app.use(cors({
     if (!origin || ALLOWED_ORIGINS.includes(origin)) {
       callback(null, true);
     } else {
-      console.log(`[CORS] Blocked request from origin: ${origin}`);
+      logger.warn({ origin }, 'CORS blocked request');
       callback(new Error('CORS not allowed'));
     }
   },
@@ -1363,6 +1390,8 @@ app.use((req, res, next) => {
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
   next();
 });
+// Keep raw JSON text for signed A2A payload verification
+app.use('/api/a2a', express.text({ type: 'application/json', limit: '2mb' }));
 app.use(express.json({ limit: '50mb' }));
 // Tighter body-size limit for public API routes (2 MB vs 50 MB global)
 app.use('/api/v1', express.json({ limit: '2mb' }));
@@ -1592,29 +1621,29 @@ async function ensureContainerRunning(
 
     if (info.State.Status === 'exited' || info.State.Status === 'stopped') {
       // Container is stopped, try to restart it
-      console.log(`🔄 [Container] Restarting stopped container for ${projectId}: ${entry.id.slice(0, 12)}`);
+      logger.info({ projectId, containerId: entry.id.slice(0, 12) }, 'Restarting stopped container');
       await container.start();
-      console.log(`✅ [Container] Successfully restarted container for ${projectId}`);
+      logger.info({ projectId }, 'Successfully restarted container');
       return { running: true, restarted: true };
     }
 
     if (info.State.Status === 'paused') {
       // Container is paused, unpause it
-      console.log(`▶️ [Container] Unpausing container for ${projectId}: ${entry.id.slice(0, 12)}`);
+      logger.info({ projectId, containerId: entry.id.slice(0, 12) }, 'Unpausing container');
       await container.unpause();
       return { running: true, restarted: true };
     }
 
     // Container is in some other state (created, dead, etc.)
-    console.log(`⚠️ [Container] Container ${entry.id.slice(0, 12)} is in state: ${info.State.Status}`);
+    logger.warn({ containerId: entry.id.slice(0, 12), state: info.State.Status }, 'Container in unexpected state');
     return { running: false, restarted: false, error: `Container in unexpected state: ${info.State.Status}` };
   } catch (error: any) {
     // Container doesn't exist or other error
-    console.error(`❌ [Container] Error checking container ${entry.id.slice(0, 12)}:`, error.message);
+    logger.error({ containerId: entry.id.slice(0, 12), err: error }, 'Error checking container');
 
     // If container not found, remove from registry so it can be recreated
     if (error.statusCode === 404) {
-      console.log(`🗑️ [Container] Removing stale container entry for ${projectId}`);
+      logger.info({ projectId }, 'Removing stale container entry');
       try { getMeteringCollector().untrackContainer(entry.id); } catch (_) {}
       try { healthMonitor.unregisterContainer(entry.id); } catch (_) {}
       try { resourceOptimizer.unregisterContainer(entry.id); } catch (_) {}
@@ -1625,7 +1654,7 @@ async function ensureContainerRunning(
       releasePorts(entry.port, entry.ptyPort);
     }
 
-    return { running: false, restarted: false, error: error.message };
+    return { running: false, restarted: false, error: 'Container restart failed' };
   }
 }
 
@@ -1634,8 +1663,27 @@ app.get('/health', (_, res) => {
   res.json({ status: 'ok', containers: containers.size });
 });
 
+// Public API prompt queue health/config endpoint for deploy smoke checks.
+app.get('/api/health/public-api-queue', (_req, res) => {
+  const diagnostics = getPromptTaskQueueDiagnostics();
+  const warnings: string[] = [];
+  if (diagnostics.configuredBackend === 'redis' && !diagnostics.hasRedisUrl) {
+    warnings.push('configured redis backend is missing REDIS_URL');
+  }
+  res.json({
+    status: 'ok',
+    queue: diagnostics,
+    warnings,
+  });
+});
+
+app.get('/api/health/byok-readiness', (_req, res) => {
+  const report = getByokReadiness(process.env);
+  res.status(report.overallReady ? 200 : 503).json(report);
+});
+
 // Pool stats endpoint
-app.get('/api/pool/stats', (_, res) => {
+app.get('/api/pool/stats', metricsAuth, (_, res) => {
   if (!ENABLE_CONTAINER_POOL) {
     return res.json({ enabled: false });
   }
@@ -1644,7 +1692,7 @@ app.get('/api/pool/stats', (_, res) => {
 });
 
 // Pool detailed metrics endpoint (PERFORMANCE monitoring)
-app.get('/api/pool/metrics', (_, res) => {
+app.get('/api/pool/metrics', metricsAuth, (_, res) => {
   if (!ENABLE_CONTAINER_POOL) {
     return res.json({ enabled: false });
   }
@@ -1688,8 +1736,8 @@ app.post('/api/context/cache', authenticateRequest, async (req: AuthenticatedReq
       message: 'Context cached successfully',
     });
   } catch (error: any) {
-    console.error('[ContextCache] Error creating cache:', error);
-    res.status(500).json({ error: error.message });
+    logger.error({ err: error }, 'ContextCache: error creating cache');
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -1721,8 +1769,8 @@ app.get('/api/context/cache/:cacheId', authenticateRequest, async (req: Authenti
       hasSystemPrompt: !!cache.systemPromptHash,
     });
   } catch (error: any) {
-    console.error('[ContextCache] Error getting cache:', error);
-    res.status(500).json({ error: error.message });
+    logger.error({ err: error }, 'ContextCache: error getting cache');
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -1741,8 +1789,8 @@ app.get('/api/context/cache/:cacheId/hashes', authenticateRequest, async (req: A
       hashes: Object.fromEntries(hashes),
     });
   } catch (error: any) {
-    console.error('[ContextCache] Error getting hashes:', error);
-    res.status(500).json({ error: error.message });
+    logger.error({ err: error }, 'ContextCache: error getting hashes');
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -1772,8 +1820,8 @@ app.post('/api/context/cache/:cacheId/diff', authenticateRequest, async (req: Au
       deletedCount: diff.deletedFiles.length,
     });
   } catch (error: any) {
-    console.error('[ContextCache] Error computing diff:', error);
-    res.status(500).json({ error: error.message });
+    logger.error({ err: error }, 'ContextCache: error computing diff');
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -1802,8 +1850,8 @@ app.post('/api/context/cache/:cacheId/apply', authenticateRequest, async (req: A
       files: Object.fromEntries(result.reconstructedContext),
     });
   } catch (error: any) {
-    console.error('[ContextCache] Error applying diff:', error);
-    res.status(500).json({ error: error.message });
+    logger.error({ err: error }, 'ContextCache: error applying diff');
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -1818,8 +1866,8 @@ app.delete('/api/context/cache/project/:projectId', authenticateRequest, verifyP
       deletedCount: deleted,
     });
   } catch (error: any) {
-    console.error('[ContextCache] Error deleting project caches:', error);
-    res.status(500).json({ error: error.message });
+    logger.error({ err: error }, 'ContextCache: error deleting project caches');
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -1834,8 +1882,8 @@ app.delete('/api/context/cache/:cacheId', authenticateRequest, async (req: Authe
       message: deleted ? 'Cache deleted' : 'Cache not found',
     });
   } catch (error: any) {
-    console.error('[ContextCache] Error deleting cache:', error);
-    res.status(500).json({ error: error.message });
+    logger.error({ err: error }, 'ContextCache: error deleting cache');
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -1869,13 +1917,13 @@ app.get('/api/context/cache/project/:projectId/latest', authenticateRequest, ver
       lastAccessed: cache.lastAccessed,
     });
   } catch (error: any) {
-    console.error('[ContextCache] Error getting latest cache:', error);
-    res.status(500).json({ error: error.message });
+    logger.error({ err: error }, 'ContextCache: error getting latest cache');
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
 // Compute file hash (utility endpoint for client)
-app.post('/api/context/hash', (req, res) => {
+app.post('/api/context/hash', authenticateRequest, (req: AuthenticatedRequest, res) => {
   try {
     const { content } = req.body;
 
@@ -1886,13 +1934,13 @@ app.post('/api/context/hash', (req, res) => {
     const hash = computeFileHash(content);
     res.json({ hash });
   } catch (error: any) {
-    console.error('[ContextCache] Error computing hash:', error);
-    res.status(500).json({ error: error.message });
+    logger.error({ err: error }, 'ContextCache: error computing hash');
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
 // Compute hashes for multiple files
-app.post('/api/context/hashes', (req, res) => {
+app.post('/api/context/hashes', authenticateRequest, (req: AuthenticatedRequest, res) => {
   try {
     const { files } = req.body;
 
@@ -1907,8 +1955,8 @@ app.post('/api/context/hashes', (req, res) => {
       hashes: Object.fromEntries(hashes),
     });
   } catch (error: any) {
-    console.error('[ContextCache] Error computing hashes:', error);
-    res.status(500).json({ error: error.message });
+    logger.error({ err: error }, 'ContextCache: error computing hashes');
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -1955,7 +2003,16 @@ app.get('/api/ports/container/:containerId', (req, res) => {
 // ==================== COMPREHENSIVE METRICS ENDPOINT ====================
 // Aggregates all metrics into a single endpoint for monitoring dashboards
 
-app.get('/api/metrics', (_, res) => {
+// Metrics auth: require bearer token in production to prevent info leak
+const metricsAuth = (req: express.Request, res: express.Response, next: express.NextFunction) => {
+  const metricsToken = process.env.METRICS_BEARER_TOKEN;
+  if (!metricsToken) return next(); // skip auth if not configured
+  const auth = req.headers.authorization;
+  if (auth === `Bearer ${metricsToken}`) return next();
+  return res.status(401).json({ error: 'Unauthorized' });
+};
+
+app.get('/api/metrics', metricsAuth, (_, res) => {
   // Get metrics from all sources
   const metricsSummary = metricsCollector.getSummary();
   const containerPoolStats = ENABLE_CONTAINER_POOL ? containerPool.getStats() : null;
@@ -2039,7 +2096,7 @@ app.get('/api/metrics', (_, res) => {
 });
 
 // Prometheus-compatible metrics endpoint
-app.get('/api/metrics/prometheus', (_, res) => {
+app.get('/api/metrics/prometheus', metricsAuth, (_, res) => {
   // Get base metrics
   const prometheusMetrics = metricsCollector.getPrometheusFormat();
 
@@ -2147,7 +2204,7 @@ app.post('/api/container', containerLimiter, authenticateRequest, verifyProjectO
     if (!existingContainer) {
       const currentCount = getUserContainerCount(userId);
       if (currentCount >= MAX_CONTAINERS_PER_USER) {
-        console.log(`[Limit] User ${userId} at container limit (${currentCount}/${MAX_CONTAINERS_PER_USER})`);
+        logger.info({ userId, currentCount, max: MAX_CONTAINERS_PER_USER }, 'user at container limit');
         return res.status(429).json({
           error: `Container limit reached. You have ${currentCount} active containers. Maximum allowed: ${MAX_CONTAINERS_PER_USER}. Please close unused projects.`,
           code: 'CONTAINER_LIMIT_REACHED',
@@ -2169,7 +2226,7 @@ app.post('/api/container', containerLimiter, authenticateRequest, verifyProjectO
         });
       }
       if (quotaCheck.action === EnforcementAction.THROTTLE) {
-        console.warn(`[Quota] User ${userId} approaching sandbox limit`);
+        logger.warn({ userId }, 'user approaching sandbox limit');
       }
     } catch (_) { /* quota system may not be initialized */ }
 
@@ -2179,7 +2236,7 @@ app.post('/api/container', containerLimiter, authenticateRequest, verifyProjectO
       fetchClaudeCodeToken(userId),
       fetchAIProviderKeys(userId),
     ]);
-    console.log(`⏱️ [Container] Fetched user credentials in ${Date.now() - createStartTime}ms for ${projectId}`);
+    logger.info({ durationMs: Date.now() - createStartTime, projectId }, 'fetched user credentials');
 
     // Return existing container (after ensuring it's running)
     const existing = existingContainer;
@@ -2191,9 +2248,9 @@ app.post('/api/container', containerLimiter, authenticateRequest, verifyProjectO
 
       if (containerStatus.running) {
         if (containerStatus.restarted) {
-          console.log(`🔄 Restarted and reusing container: ${existing.id.slice(0, 12)} for ${projectId}`);
+          logger.info({ containerId: existing.id.slice(0, 12), projectId }, 'restarted and reusing container');
         } else {
-          console.log(`♻️ Reusing existing container: ${existing.id.slice(0, 12)} for ${projectId}`);
+          logger.info({ containerId: existing.id.slice(0, 12), projectId }, 'reusing existing container');
         }
         return res.json({
           containerId: existing.id,
@@ -2216,7 +2273,7 @@ app.post('/api/container', containerLimiter, authenticateRequest, verifyProjectO
       }
 
       // Container couldn't be restarted, will be recreated below
-      console.log(`⚠️ Container ${existing.id.slice(0, 12)} couldn't be restarted, creating new one`);
+      logger.info({ containerId: existing.id.slice(0, 12) }, 'container could not be restarted, creating new one');
     }
 
     // 🔒 RACE CONDITION FIX: Check if container is already being created
@@ -2224,16 +2281,16 @@ app.post('/api/container', containerLimiter, authenticateRequest, verifyProjectO
     if (inProgress) {
       const ageMs = Date.now() - inProgress.startedAt;
       if (isCreationStale(inProgress, CONTAINER_CREATE_TIMEOUT_MS)) {
-        console.warn(`⚠️ In-progress container creation stale (${ageMs}ms), dropping and retrying: ${projectId}`);
+        logger.warn({ ageMs, projectId }, 'in-progress container creation stale, dropping and retrying');
         creatingContainers.delete(projectId);
       } else {
-        console.log(`⏳ Waiting for in-progress container creation: ${projectId}`);
+        logger.info({ projectId }, 'waiting for in-progress container creation');
         try {
           const result = await withCreationTimeout(inProgress.promise, CONTAINER_CREATE_TIMEOUT_MS - ageMs, () => {
             // Clear stale entry so a follow-up request can retry
             creatingContainers.delete(projectId);
           });
-        console.log(`✅ Joined completed container creation: ${result.containerId.slice(0, 12)} for ${projectId}`);
+        logger.info({ containerId: result.containerId.slice(0, 12), projectId }, 'joined completed container creation');
         return res.json({
           containerId: result.containerId,
           reused: true,
@@ -2254,7 +2311,7 @@ app.post('/api/container', containerLimiter, authenticateRequest, verifyProjectO
         });
         } catch (err: any) {
           // Creation failed or timed out, let this request retry
-          console.error(`❌ In-progress container creation failed: ${err.message}`);
+          logger.error({ err }, 'in-progress container creation failed');
           return res.status(500).json({ error: err.message });
         }
       }
@@ -2274,14 +2331,14 @@ app.post('/api/container', containerLimiter, authenticateRequest, verifyProjectO
           const poolAcquireStart = Date.now();
           const pooled = await containerPool.acquire();
           if (pooled) {
-            console.log(`🚀 [Pool] Acquired pre-warmed container ${pooled.id.slice(0, 12)} for ${projectId} (${Date.now() - poolAcquireStart}ms)`);
+            logger.info({ containerId: pooled.id.slice(0, 12), projectId, durationMs: Date.now() - poolAcquireStart }, 'Pool: acquired pre-warmed container');
 
             // 🔧 FIX: Ensure pooled container is actually running before using it
             const pooledEntry = { id: pooled.id, lastActive: Date.now(), port: pooled.port, ptyPort: pooled.ptyPort };
             const pooledStatus = await ensureContainerRunning(pooledEntry, projectId);
 
             if (!pooledStatus.running) {
-              console.log(`⚠️ [Pool] Pooled container ${pooled.id.slice(0, 12)} not running, will create fresh container`);
+              logger.info({ containerId: pooled.id.slice(0, 12) }, 'Pool: pooled container not running, will create fresh container');
               // Return the container to pool or discard it
               releasePorts(pooled.port, pooled.ptyPort);
               // Continue to create a fresh container below
@@ -2291,7 +2348,7 @@ app.post('/api/container', containerLimiter, authenticateRequest, verifyProjectO
               ptyPort = pooled.ptyPort;
               fromPool = true;
               if (pooledStatus.restarted) {
-                console.log(`🔄 [Pool] Restarted pooled container ${pooled.id.slice(0, 12)} for ${projectId}`);
+                logger.info({ containerId: pooled.id.slice(0, 12), projectId }, 'Pool: restarted pooled container');
               }
 
               // Inject ALL env vars into pooled container in a single exec call
@@ -2340,7 +2397,7 @@ app.post('/api/container', containerLimiter, authenticateRequest, verifyProjectO
                 AttachStderr: false,
               });
               await envExec.start({ Detach: true });
-              console.log(`⏱️ [Pool] Injected ${envLines.length} env vars in ${Date.now() - envInjectStart}ms for ${projectId}`);
+              logger.info({ envVarCount: envLines.length, durationMs: Date.now() - envInjectStart, projectId }, 'Pool: injected env vars');
             } // Close: if (pooledStatus.running)
           } // Close: if (pooled)
         } // Close: if (ENABLE_CONTAINER_POOL)
@@ -2394,10 +2451,10 @@ app.post('/api/container', containerLimiter, authenticateRequest, verifyProjectO
               containerEnv.push('EXPO_DEVTOOLS_LISTEN_ADDRESS=0.0.0.0');
               containerEnv.push('BROWSER=none');
               containerEnv.push('CI=1');
-              console.log(`[Framework] Setting Expo/React Native env vars for project ${projectId}`);
+              logger.info({ projectId }, 'Framework: setting Expo/React Native env vars');
             } else if (fw.includes('next')) {
               containerEnv.push('NEXT_TELEMETRY_DISABLED=1');
-              console.log(`[Framework] Setting Next.js env vars for project ${projectId}`);
+              logger.info({ projectId }, 'Framework: setting Next.js env vars');
             }
 
             // Create new container with security sandbox and port mapping
@@ -2472,7 +2529,7 @@ app.post('/api/container', containerLimiter, authenticateRequest, verifyProjectO
               const dockerRaceResult = await Promise.race([dockerOpsPromise, dockerTimeout]);
               const { containerInstance: createdContainer, createDuration, startDuration } = dockerRaceResult;
               containerId = createdContainer.id;
-              console.log(`⏱️ [Container] On-demand create=${createDuration}ms start=${startDuration}ms total=${Date.now() - onDemandStart}ms for ${projectId}`);
+              logger.info({ createMs: createDuration, startMs: startDuration, totalMs: Date.now() - onDemandStart, projectId }, 'Container: on-demand create complete');
               break;
             } catch (err: any) {
               const errMsg = err?.message || String(err);
@@ -2483,7 +2540,7 @@ app.post('/api/container', containerLimiter, authenticateRequest, verifyProjectO
                 markPortBlockUnavailable(hostPort!);
               }
               if (isPortConflict && attempt < MAX_ATTEMPTS) {
-                console.warn(`[Container] Port conflict detected, retrying with new ports (attempt ${attempt}/${MAX_ATTEMPTS})`);
+                logger.warn({ attempt, maxAttempts: MAX_ATTEMPTS }, 'Container: port conflict detected, retrying with new ports');
                 continue;
               }
               throw err;
@@ -2526,7 +2583,7 @@ app.post('/api/container', containerLimiter, authenticateRequest, verifyProjectO
           resourceOptimizer.registerContainer(resolvedContainerId);
         } catch (_) { /* resource optimizer may not be initialized */ }
 
-        console.log(`✅ Container ${fromPool ? '(from pool)' : 'created'}: ${resolvedContainerId.slice(0, 12)} for ${projectId} (preview: ${resolvedHostPort}, pty: ${resolvedPtyPort}) [user: ${userId}] [total: ${Date.now() - totalStart}ms]`);
+        logger.info({ containerId: resolvedContainerId.slice(0, 12), projectId, fromPool, previewPort: resolvedHostPort, ptyPort: resolvedPtyPort, userId, totalMs: Date.now() - totalStart }, 'container ready');
         return { containerId: resolvedContainerId, port: resolvedHostPort, ptyPort: resolvedPtyPort, fromPool };
       } catch (err) {
         // Cleanup allocated ports on failure (only if not from pool)
@@ -2546,7 +2603,7 @@ app.post('/api/container', containerLimiter, authenticateRequest, verifyProjectO
       creationEntry.timeoutId = setTimeout(() => {
         const current = creatingContainers.get(projectId);
         if (current && current.promise === creationPromise) {
-          console.error(`❌ Container creation timed out after ${CONTAINER_CREATE_TIMEOUT_MS}ms, clearing in-progress for ${projectId}`);
+          logger.error({ timeoutMs: CONTAINER_CREATE_TIMEOUT_MS, projectId }, 'container creation timed out, clearing in-progress');
           creatingContainers.delete(projectId);
         }
       }, CONTAINER_CREATE_TIMEOUT_MS + 1000);
@@ -2582,7 +2639,7 @@ app.post('/api/container', containerLimiter, authenticateRequest, verifyProjectO
       }
     });
   } catch (err: any) {
-    console.error('❌ Container create error:', err.message);
+    logger.error({ err }, 'container create error');
     res.status(500).json({ error: err.message });
   }
 });
@@ -2680,7 +2737,7 @@ app.post('/api/file/:projectId', authenticateRequest, verifyProjectOwnership, as
   const safePath = sanitizePath(rawPath);
   const fileOpStartTime = Date.now();
 
-  console.log('📝 File write request:', projectId, safePath);
+  logger.info({ projectId, path: safePath }, 'file write request');
   try {
     const { content } = req.body;
 
@@ -2727,7 +2784,7 @@ app.post('/api/file/:projectId', authenticateRequest, verifyProjectOwnership, as
       await fastWriteFile(entry.id, safePath, content);
     } catch (tarError: any) {
       // Fallback to exec-based write if tar fails (e.g., permission issues)
-      console.warn(`[FastWrite] tar-based write failed, falling back to exec: ${tarError.message}`);
+      logger.warn({ err: tarError }, 'FastWrite: tar-based write failed, falling back to exec');
       const container = docker.getContainer(entry.id);
       const b64 = Buffer.from(content).toString('base64');
       const fullPath = `/workspace/${safePath}`;
@@ -2748,7 +2805,7 @@ app.post('/api/file/:projectId', authenticateRequest, verifyProjectOwnership, as
       });
     }
 
-    console.log('✅ File write complete:', projectId, safePath, `(${Date.now() - fileOpStartTime}ms)`);
+    logger.info({ projectId, path: safePath, durationMs: Date.now() - fileOpStartTime }, 'file write complete');
 
     // Tell FileWatcher to ignore this path on the next poll cycle
     // (prevents sending a change event back to the client that just wrote the file)
@@ -2826,10 +2883,10 @@ app.post('/api/files/:projectId/batch', authenticateRequest, verifyProjectOwners
     // Single network round trip for all files
     try {
       await fastWriteFiles(entry.id, sanitizedFiles);
-      console.log(`✅ Batch write complete: ${projectId} ${sanitizedFiles.length} files (${Date.now() - batchOpStartTime}ms)`);
+      logger.info({ projectId, fileCount: sanitizedFiles.length, durationMs: Date.now() - batchOpStartTime }, 'batch write complete');
     } catch (tarError: any) {
       // Fallback to exec-based write if tar fails
-      console.warn(`[FastWrite] tar-based batch write failed, falling back to exec: ${tarError.message}`);
+      logger.warn({ err: tarError }, 'FastWrite: tar-based batch write failed, falling back to exec');
       const container = docker.getContainer(entry.id);
       
       // Create all directories first
@@ -3252,7 +3309,7 @@ app.get('/api/workspace-state/:projectId', authenticateRequest, verifyProjectOwn
       devServerRunning,
     });
   } catch (error: any) {
-    console.warn(`[WorkspaceState] Failed to inspect workspace for ${projectId}: ${error?.message || error}`);
+    logger.warn({ err: error, projectId }, 'WorkspaceState: failed to inspect workspace');
     return res.status(500).json({ hasFiles: false, fileCount: 0, hasPackageJson: false, devServerRunning: false });
   }
 });
@@ -3541,7 +3598,7 @@ app.post('/api/workspace/copy', authenticateRequest, async (req: AuthenticatedRe
       includeDomains,
     });
   } catch (err: any) {
-    console.error(`[WorkspaceCopy] Failed ${sourceProjectId} -> ${targetProjectId}:`, err);
+    logger.error({ err, sourceProjectId, targetProjectId }, 'WorkspaceCopy: failed');
     return res.status(500).json({ error: err?.message || 'Workspace copy failed' });
   }
 });
@@ -3677,7 +3734,7 @@ app.get('/api/export/:projectId', authenticateRequest, verifyProjectOwnership, a
     }
 
     const exportDuration = Date.now() - exportStartTime;
-    console.log(`[export] Project ${projectId}: ${files.length} files exported in ${exportDuration}ms`);
+    logger.info({ projectId, fileCount: files.length, durationMs: exportDuration }, 'export complete');
 
     res.json({
       success: true,
@@ -3691,7 +3748,7 @@ app.get('/api/export/:projectId', authenticateRequest, verifyProjectOwnership, a
       },
     });
   } catch (err: any) {
-    console.error(`[export] Failed for project ${projectId}:`, err);
+    logger.error({ err, projectId }, 'export failed');
     res.status(500).json({ error: err.message });
   }
 });
@@ -3788,7 +3845,9 @@ app.post('/api/exec/:projectId', authenticateRequest, verifyProjectOwnership, as
       // Start the dev server using setsid for proper daemonization
       // NOTE: No & at the end! Docker exec Detach: true handles backgrounding
       // BROWSER=none prevents Vite from trying to open xdg-open (which doesn't exist in Docker)
-      const startScript = `cd "${cwd}" && BROWSER=none exec setsid ${command} > /tmp/dev.log 2>&1 < /dev/null`;
+      // Sanitize command: escape shell metacharacters in the command string
+      const sanitizedCommand = command.replace(/[`$\\]/g, '\\$&');
+      const startScript = `cd "${cwd.replace(/"/g, '\\"')}" && BROWSER=none exec setsid ${sanitizedCommand} > /tmp/dev.log 2>&1 < /dev/null`;
 
       const exec = await container.exec({
         Cmd: ['/bin/bash', '-c', startScript],
@@ -3798,7 +3857,7 @@ app.post('/api/exec/:projectId', authenticateRequest, verifyProjectOwnership, as
       });
 
       await exec.start({ Detach: true });
-      console.log('📝 Dev server started in background');
+      logger.info('dev server started in background');
 
       // Wait a moment for process to initialize
       await new Promise(resolve => setTimeout(resolve, 3000));
@@ -3806,28 +3865,28 @@ app.post('/api/exec/:projectId', authenticateRequest, verifyProjectOwnership, as
       // Check if npm/vite process is actually running
       try {
         const psCheck = await execCommand(container, `ps aux | grep -E "npm|vite|node" | grep -v grep || echo "No dev server process"`);
-        console.log('🔍 Process check after 3s:', psCheck);
+        logger.info({ psCheck }, 'process check after 3s');
 
         if (psCheck.includes('No dev server process')) {
-          console.error('❌ Dev server process not found!');
+          logger.error('dev server process not found');
           // Read the logs to see what went wrong
           const errorLogs = await execCommand(container, `cat /tmp/dev.log 2>&1 || echo "No logs"`);
-          console.error('💥 Dev server logs:', errorLogs);
+          logger.error({ errorLogs }, 'dev server logs');
         } else {
-          console.log('✅ Dev server process is running');
+          logger.info('dev server process is running');
         }
       } catch (e) {
-        console.error('Could not check process status:', e);
+        logger.error({ err: e }, 'could not check process status');
       }
 
-      console.log('📝 Dev server process started, performing health check...');
+      logger.info('dev server process started, performing health check');
 
       // 🔧 FIX: Wait for dev server to actually respond (up to 30 seconds)
       const portsToCheck = [entry.port + 1, entry.port, entry.port + 4, entry.port + 5, entry.port + 2]; // Vite (5173), Next.js (3000), Expo (8081), Expo legacy (19006), Other (8080)
       const healthCheck = await waitForDevServer(portsToCheck, 30000);
 
       if (healthCheck.ready) {
-        console.log(`✅ Dev server verified on port ${healthCheck.port}`);
+        logger.info({ port: healthCheck.port }, 'dev server verified');
         // mark that this project has a background dev server (so terminal can auto-tail)
         const currentEntry = containers.get(req.params.projectId);
         if (currentEntry) currentEntry.backgroundDev = true;
@@ -3838,11 +3897,11 @@ app.post('/api/exec/:projectId', authenticateRequest, verifyProjectOwnership, as
           port: healthCheck.port
         });
       } else {
-        console.warn('⚠️ Dev server started but not responding yet. May need more time to build.');
+        logger.warn('dev server started but not responding yet, may need more time to build');
 
         // Check process status even if HTTP not ready
         const psOutput = await execCommand(container, `ps aux | grep -E "vite|next|node" | grep -v grep || echo "No processes found"`).catch(() => 'Error checking processes');
-        console.log(`📊 Dev server processes:\n${psOutput}`);
+        logger.info({ psOutput }, 'dev server processes');
 
         // mark that a background dev server was started (logs will be in /tmp/dev.log)
         const currentEntry = containers.get(req.params.projectId);
@@ -3870,7 +3929,7 @@ app.post('/api/exec/:projectId', authenticateRequest, verifyProjectOwnership, as
     if (errMsg.includes('No such file or directory') ||
         errMsg.includes('not found') ||
         errMsg.includes('ENOENT')) {
-      console.log('📁 File not found (expected for new projects):', errMsg);
+      logger.info({ errMsg }, 'file not found (expected for new projects)');
       return res.json({
         output: `[File not found]\n${errMsg}`,
         fileNotFound: true,
@@ -3883,12 +3942,12 @@ app.post('/api/exec/:projectId', authenticateRequest, verifyProjectOwnership, as
     const exitCodeMatch = errMsg.match(/exit code (\d+)/);
     const exitCode = exitCodeMatch ? parseInt(exitCodeMatch[1], 10) : 1;
 
-    console.error('❌ Command execution failed:', {
+    logger.error({
       projectId: req.params.projectId,
       command: safeCommand,
       cwd: safeCwd,
       error: errMsg || 'Unknown error',
-    });
+    }, 'command execution failed');
     res.status(isDockerUnavailable ? 503 : 500).json({
       error: errMsg,
       success: false,
@@ -3970,10 +4029,10 @@ app.get('/api/errors/:projectId', authenticateRequest, verifyProjectOwnership, a
       const { hasError } = autoRestoreManager.detectErrors(logs);
       const restoreCheck = autoRestoreManager.shouldRestore(projectId);
       if (hasError && restoreCheck.allowed) {
-        console.log(`[AutoRestore] Blocking errors detected for ${projectId}, attempting restore...`);
+        logger.info({ projectId }, 'AutoRestore: blocking errors detected, attempting restore');
         autoRestoreResult = await autoRestoreManager.attemptRestore(entry.id, projectId);
         if (autoRestoreResult.success) {
-          console.log(`[AutoRestore] Successfully restored to ${autoRestoreResult.restoredTo}`);
+          logger.info({ restoredTo: autoRestoreResult.restoredTo }, 'AutoRestore: successfully restored');
         }
       }
     } else if (!blocking && errors.length === 0) {
@@ -4070,7 +4129,7 @@ app.post('/api/dev-server/start', authenticateRequest, async (req: Authenticated
 
     res.json(result);
   } catch (err: any) {
-    console.error('❌ Dev server start failed:', err.message);
+    logger.error({ err }, 'dev server start failed');
     res.status(500).json({ error: err.message });
   }
 });
@@ -4213,7 +4272,7 @@ app.post('/api/dev-server/force-retry', authenticateRequest, async (req: Authent
 
     res.json(result);
   } catch (err: any) {
-    console.error('Force retry failed:', err.message);
+    logger.error({ err }, 'force retry failed');
     res.status(500).json({ error: err.message });
   }
 });
@@ -4294,11 +4353,11 @@ app.post('/api/snapshot/:projectId', authenticateRequest, verifyProjectOwnership
         const creds = integrationStore.getUserCredentials(req.userId);
         if (creds.neon?.apiKey) {
           neonDbTimestamp = new Date().toISOString();
-          console.log(`[Snapshot] Capturing Neon DB timestamp: ${neonDbTimestamp} for ${projectId}`);
+          logger.info({ neonDbTimestamp, projectId }, 'Snapshot: capturing Neon DB timestamp');
         }
       }
     } catch (err: any) {
-      console.warn(`[Snapshot] Failed to capture DB timestamp: ${err.message}`);
+      logger.warn({ err }, 'Snapshot: failed to capture DB timestamp');
     }
 
     entry.lastActive = Date.now();
@@ -4306,7 +4365,7 @@ app.post('/api/snapshot/:projectId', authenticateRequest, verifyProjectOwnership
 
     res.json(snapshot);
   } catch (err: any) {
-    console.error('❌ Snapshot create error:', err.message);
+    logger.error({ err }, 'snapshot create error');
     res.status(500).json({ error: err.message });
   }
 });
@@ -4382,7 +4441,7 @@ app.post('/api/snapshot/:projectId/restore', authenticateRequest, verifyProjectO
         const links = integrationStore.getProjectLinks(projectId);
         const creds = integrationStore.getUserCredentials(req.userId);
         if (links.neon?.projectId && links.neon?.developmentBranchId && creds.neon?.apiKey) {
-          console.log(`[Snapshot] Restoring Neon DB to ${neonDbTimestamp} for ${projectId}`);
+          logger.info({ neonDbTimestamp, projectId }, 'Snapshot: restoring Neon DB');
           await neonClient.restoreBranch(
             creds.neon.apiKey,
             links.neon.projectId,
@@ -4390,16 +4449,16 @@ app.post('/api/snapshot/:projectId/restore', authenticateRequest, verifyProjectO
             neonDbTimestamp,
           );
           dbRestored = true;
-          console.log(`[Snapshot] Neon DB restored successfully for ${projectId}`);
+          logger.info({ projectId }, 'Snapshot: Neon DB restored successfully');
         }
       }
     } catch (dbErr: any) {
-      console.warn(`[Snapshot] DB restore failed (files still restored): ${dbErr.message}`);
+      logger.warn({ err: dbErr }, 'Snapshot: DB restore failed (files still restored)');
     }
 
     res.json({ success: true, restoredTo: safeSnapshotId, dbRestored });
   } catch (err: any) {
-    console.error('❌ Snapshot restore error:', err.message);
+    logger.error({ err }, 'snapshot restore error');
     res.status(500).json({ error: err.message });
   }
 });
@@ -4634,7 +4693,7 @@ async function waitForDevServer(ports: number[], maxWaitMs = 60000): Promise<{ r
   const startTime = Date.now();
   const checkInterval = 1000; // Check every 1 second
 
-  console.log(`🔍 Waiting for dev server on ports: ${ports.join(', ')}`);
+  logger.info({ ports }, 'waiting for dev server');
 
   while (Date.now() - startTime < maxWaitMs) {
     // Check all ports in parallel
@@ -4650,7 +4709,7 @@ async function waitForDevServer(ports: number[], maxWaitMs = 60000): Promise<{ r
         });
 
         if (isReady) {
-          console.log(`✅ Dev server responding on port ${port}`);
+          logger.info({ port }, 'dev server responding');
           return { ready: true, port };
         }
       } catch {
@@ -4661,13 +4720,13 @@ async function waitForDevServer(ports: number[], maxWaitMs = 60000): Promise<{ r
     // Log progress every 5 seconds
     const elapsed = Date.now() - startTime;
     if (elapsed % 5000 < checkInterval) {
-      console.log(`⏳ Still waiting for dev server... (${Math.round(elapsed / 1000)}s elapsed)`);
+      logger.info({ elapsedSec: Math.round(elapsed / 1000) }, 'still waiting for dev server');
     }
 
     await new Promise(resolve => setTimeout(resolve, checkInterval));
   }
 
-  console.log(`⏱️ Dev server health check timeout after ${maxWaitMs}ms`);
+  logger.info({ maxWaitMs }, 'dev server health check timeout');
   return { ready: false };
 }
 
@@ -4695,41 +4754,41 @@ lifecycleManager.setCleanupHandler(async (projectId, containerId) => {
       }
       containers.delete(projectId);
     }
-    console.log(`[Lifecycle] Cleaned up container for ${projectId}`);
+    logger.info({ projectId }, 'Lifecycle: cleaned up container');
   } catch (error: any) {
-    console.error(`[Lifecycle] Cleanup error: ${error.message}`);
+    logger.error({ err: error }, 'Lifecycle: cleanup error');
   }
 });
 
-// Debug: HTTP test route to verify routing works
-app.get('/terminal-test/:projectId', (req, res) => {
-  console.log(`🔌 [Terminal-Test] HTTP request for project: ${req.params.projectId}`);
+// Terminal test route (requires auth in production)
+app.get('/terminal-test/:projectId', authenticateRequest, (req: AuthenticatedRequest, res) => {
+  logger.info({ projectId: req.params.projectId, userId: req.userId }, 'Terminal-Test: HTTP request');
   res.json({ status: 'ok', projectId: req.params.projectId });
 });
 
 // Log all upgrade attempts
 app.use((req, res, next) => {
   if (req.headers.upgrade === 'websocket') {
-    console.log(`🔌 [WebSocket] Upgrade request: ${req.method} ${req.url} from ${req.headers.origin || 'unknown'}`);
+    logger.info({ method: req.method, url: req.url, origin: req.headers.origin || 'unknown' }, 'WebSocket upgrade request');
   }
   next();
 });
 
-app.ws('/terminal/:projectId', async (ws, req) => {
+app.ws('/terminal/:projectId', async (ws: WebSocket, req: express.Request) => {
   const { projectId } = req.params;
   const terminalId = req.query.terminalId as string || `term-${Date.now()}`;
 
-  console.log(`🔌 [Terminal] WebSocket connection attempt for project: ${projectId}, terminalId: ${terminalId}`);
-  console.log(`🔌 [Terminal] Origin: ${req.headers.origin}, IP: ${req.ip}`);
+  logger.info({ projectId, terminalId }, 'Terminal: WebSocket connection attempt');
+  logger.info({ origin: req.headers.origin, ip: req.ip }, 'Terminal: connection details');
 
   // Authenticate WebSocket connection
-  console.log(`🔌 [Terminal] Authenticating...`);
+  logger.info('Terminal: authenticating');
   const authSession = await authenticateWebSocket(ws, req);
   if (!authSession) {
-    console.log(`🔌 [Terminal] Auth FAILED for project: ${projectId}`);
+    logger.info({ projectId }, 'Terminal: auth failed');
     return; // Connection closed by auth helper
   }
-  console.log(`🔌 [Terminal] Auth SUCCESS - userId: ${authSession.userId}`);
+  logger.info({ userId: authSession.userId }, 'Terminal: auth success');
 
   // Register for WebSocket keepalive (ping/pong every 30s, timeout after 60s)
   wsKeepalive.register(ws as any, projectId, 'terminal', authSession.userId);
@@ -4742,7 +4801,7 @@ app.ws('/terminal/:projectId', async (ws, req) => {
 
   // Try to recover container from Docker if not in memory (after backend restart)
   if (!entry) {
-    console.log(`⚠️ [Terminal] Container not in memory for ${projectId}, attempting recovery...`);
+    logger.info({ projectId }, 'Terminal: container not in memory, attempting recovery');
     try {
       // Add timeout to listContainers (10 seconds) to prevent blocking
       const allContainers = await withTimeout(
@@ -4776,13 +4835,13 @@ app.ws('/terminal/:projectId', async (ws, req) => {
               backgroundDev: false
             };
             containers.set(projectId, entry);
-            console.log(`🔄 [Terminal] Recovered container for ${projectId}: ${containerInfo.Id.slice(0, 12)}`);
+            logger.info({ projectId, containerId: containerInfo.Id.slice(0, 12) }, 'Terminal: recovered container');
             break;
           }
         }
       }
     } catch (err: any) {
-      console.error(`❌ [Terminal] Recovery failed for ${projectId}:`, err.message || err);
+      logger.error({ err, projectId }, 'Terminal: recovery failed');
     }
   }
 
@@ -4824,7 +4883,7 @@ app.ws('/terminal/:projectId', async (ws, req) => {
       'exec.start'
     ) as Duplex;
     
-    console.log(`✅ Terminal session created: ${terminalId} for ${projectId}`);
+    logger.info({ terminalId, projectId }, 'terminal session created');
 
     // Send initial prompt setup
     stream.write('cd /workspace && clear\n');
@@ -4837,11 +4896,11 @@ app.ws('/terminal/:projectId', async (ws, req) => {
     });
 
     stream.on('error', (err: Error) => {
-      console.error(`Terminal ${terminalId} error:`, err.message);
+      logger.error({ err, terminalId }, 'terminal error');
     });
 
     stream.on('end', () => {
-      console.log(`Terminal ${terminalId} stream ended`);
+      logger.info({ terminalId }, 'terminal stream ended');
       terminalSessions.delete(terminalId);
       if (ws.readyState === ws.OPEN) {
         ws.close(1000);
@@ -4862,7 +4921,7 @@ app.ws('/terminal/:projectId', async (ws, req) => {
     // Register RPC handlers for this terminal session
     rpc.register('terminal.resize', async ({ cols, rows }) => {
       // Docker exec doesn't support resize directly, but we acknowledge
-      console.log(`[RPC] Terminal resize: ${cols}x${rows}`);
+      logger.info({ cols, rows }, 'RPC: terminal resize');
       return { success: true };
     });
 
@@ -4936,7 +4995,7 @@ app.ws('/terminal/:projectId', async (ws, req) => {
     });
 
     ws.on('close', () => {
-      console.log(`Terminal ${terminalId} WebSocket closed`);
+      logger.info({ terminalId }, 'terminal WebSocket closed');
       // Don't destroy session immediately - allow reconnection
       setTimeout(() => {
         const s = terminalSessions.get(terminalId);
@@ -4948,7 +5007,7 @@ app.ws('/terminal/:projectId', async (ws, req) => {
     });
   } else {
     // Reconnect to existing session
-    console.log(`♻️ Reconnecting to terminal session: ${terminalId}`);
+    logger.info({ terminalId }, 'reconnecting to terminal session');
     const stream = session.pty as unknown as Duplex;
     
     // Update RPC reference for reconnected session
@@ -4956,7 +5015,7 @@ app.ws('/terminal/:projectId', async (ws, req) => {
 
     // Re-register RPC handlers
     rpc.register('terminal.resize', async ({ cols, rows }) => {
-      console.log(`[RPC] Terminal resize: ${cols}x${rows}`);
+      logger.info({ cols, rows }, 'RPC: terminal resize');
       return { success: true };
     });
 
@@ -5004,7 +5063,7 @@ app.ws('/terminal/:projectId', async (ws, req) => {
     });
 
     ws.on('close', () => {
-      console.log(`Terminal ${terminalId} WebSocket closed (reconnectable)`);
+      logger.info({ terminalId }, 'terminal WebSocket closed (reconnectable)');
     });
   }
 });
@@ -5032,7 +5091,7 @@ app.post('/api/search/:projectId', authenticateRequest, verifyProjectOwnership, 
 
     // Try to recover container from Docker if not in memory
     if (!entry) {
-      console.log(`⚠️ [Search] Container not in memory for ${projectId}, attempting recovery...`);
+      logger.info({ projectId }, 'Search: container not in memory, attempting recovery');
       const allContainers = await withTimeout(
         docker.listContainers({ all: false }),
         10000,
@@ -5053,7 +5112,7 @@ app.post('/api/search/:projectId', authenticateRequest, verifyProjectOwnership, 
           if (basePort > 0) {
             entry = { id: containerInfo.Id, lastActive: Date.now(), port: basePort, ptyPort: basePort + 3, backgroundDev: false };
             containers.set(projectId, entry);
-            console.log(`🔄 [Search] Recovered container for ${projectId}`);
+            logger.info({ projectId }, 'Search: recovered container');
             break;
           }
         }
@@ -5218,7 +5277,7 @@ app.get('/api/project-type/:projectId', authenticateRequest, verifyProjectOwners
 
     res.json({ type, name, version });
   } catch (err: any) {
-    console.error(`[ProjectType] Detection failed for project ${req.params.projectId}:`, err);
+    logger.error({ err, projectId: req.params.projectId }, 'ProjectType: detection failed');
     res.status(500).json({ error: err.message });
   }
 });
@@ -5251,7 +5310,7 @@ app.get('/api/packages/:projectId', authenticateRequest, verifyProjectOwnership,
     const packages = await packageManagerService.getPackages(entry.id, manager as any);
     res.json({ packages, manager });
   } catch (err: any) {
-    console.error('[PackageManager] Get packages error:', err);
+    logger.error({ err }, 'PackageManager: get packages error');
     res.status(500).json({ error: err.message });
   }
 });
@@ -5272,7 +5331,7 @@ app.post('/api/packages/:projectId/search', authenticateRequest, verifyProjectOw
     const results = await packageManagerService.searchPackages(manager as any, query);
     res.json({ results });
   } catch (err: any) {
-    console.error('[PackageManager] Search error:', err);
+    logger.error({ err }, 'PackageManager: search error');
     res.status(500).json({ error: err.message });
   }
 });
@@ -5320,7 +5379,7 @@ app.post('/api/packages/:projectId/install', authenticateRequest, verifyProjectO
       res.status(400).json({ error: result.error || 'Install failed' });
     }
   } catch (err: any) {
-    console.error('[PackageManager] Install error:', err);
+    logger.error({ err }, 'PackageManager: install error');
     res.status(500).json({ error: err.message });
   }
 });
@@ -5367,7 +5426,7 @@ app.post('/api/packages/:projectId/uninstall', authenticateRequest, verifyProjec
       res.status(400).json({ error: result.error || 'Uninstall failed' });
     }
   } catch (err: any) {
-    console.error('[PackageManager] Uninstall error:', err);
+    logger.error({ err }, 'PackageManager: uninstall error');
     res.status(500).json({ error: err.message });
   }
 });
@@ -5414,7 +5473,7 @@ app.post('/api/packages/:projectId/update', authenticateRequest, verifyProjectOw
       res.status(400).json({ error: result.error || 'Update failed' });
     }
   } catch (err: any) {
-    console.error('[PackageManager] Update error:', err);
+    logger.error({ err }, 'PackageManager: update error');
     res.status(500).json({ error: err.message });
   }
 });
@@ -5449,7 +5508,7 @@ app.get('/api/secrets/:projectId', authenticateRequest, verifyProjectOwnership, 
     const secrets = await secretsManager.getSecrets(entry.id, environment);
     res.json({ secrets, environment });
   } catch (err: any) {
-    console.error('[Secrets] Get secrets error:', err);
+    logger.error({ err }, 'Secrets: get secrets error');
     res.status(500).json({ error: err.message });
   }
 });
@@ -5501,7 +5560,7 @@ app.post('/api/secrets/:projectId', authenticateRequest, verifyProjectOwnership,
       res.status(400).json({ error: result.error || 'Failed to set secret' });
     }
   } catch (err: any) {
-    console.error('[Secrets] Set secret error:', err);
+    logger.error({ err }, 'Secrets: set secret error');
     res.status(500).json({ error: err.message });
   }
 });
@@ -5544,7 +5603,7 @@ app.delete('/api/secrets/:projectId/:key', authenticateRequest, verifyProjectOwn
       res.status(400).json({ error: result.error || 'Failed to delete secret' });
     }
   } catch (err: any) {
-    console.error('[Secrets] Delete secret error:', err);
+    logger.error({ err }, 'Secrets: delete secret error');
     res.status(500).json({ error: err.message });
   }
 });
@@ -5568,7 +5627,7 @@ app.get('/api/git/:projectId/status', authenticateRequest, verifyProjectOwnershi
     const status = await gitOperations.getStatus(entry.id);
     res.json(status);
   } catch (err: any) {
-    console.error('[Git] Status error:', err);
+    logger.error({ err }, 'Git: status error');
     res.status(500).json({ error: err.message });
   }
 });
@@ -5588,7 +5647,7 @@ app.get('/api/git/:projectId/branches', authenticateRequest, verifyProjectOwners
     const branches = await gitOperations.getBranches(entry.id);
     res.json({ branches });
   } catch (err: any) {
-    console.error('[Git] Branches error:', err);
+    logger.error({ err }, 'Git: branches error');
     res.status(500).json({ error: err.message });
   }
 });
@@ -5626,7 +5685,7 @@ app.post('/api/git/:projectId/branch', authenticateRequest, verifyProjectOwnersh
       res.status(400).json({ error: result.error });
     }
   } catch (err: any) {
-    console.error('[Git] Create branch error:', err);
+    logger.error({ err }, 'Git: create branch error');
     res.status(500).json({ error: err.message });
   }
 });
@@ -5664,7 +5723,7 @@ app.post('/api/git/:projectId/checkout', authenticateRequest, verifyProjectOwner
       res.status(400).json({ error: result.error });
     }
   } catch (err: any) {
-    console.error('[Git] Checkout error:', err);
+    logger.error({ err }, 'Git: checkout error');
     res.status(500).json({ error: err.message });
   }
 });
@@ -5703,7 +5762,7 @@ app.delete('/api/git/:projectId/branch/:name', authenticateRequest, verifyProjec
       res.status(400).json({ error: result.error });
     }
   } catch (err: any) {
-    console.error('[Git] Delete branch error:', err);
+    logger.error({ err }, 'Git: delete branch error');
     res.status(500).json({ error: err.message });
   }
 });
@@ -5725,7 +5784,7 @@ app.get('/api/git/:projectId/log', authenticateRequest, verifyProjectOwnership, 
     const commits = await gitOperations.getCommitHistory(entry.id, limit, branch);
     res.json({ commits });
   } catch (err: any) {
-    console.error('[Git] Log error:', err);
+    logger.error({ err }, 'Git: log error');
     res.status(500).json({ error: err.message });
   }
 });
@@ -5747,7 +5806,7 @@ app.get('/api/git/:projectId/diff/:file(*)', authenticateRequest, verifyProjectO
     const diff = await gitOperations.getFileDiff(entry.id, filePath, staged);
     res.json({ diff });
   } catch (err: any) {
-    console.error('[Git] Diff error:', err);
+    logger.error({ err }, 'Git: diff error');
     res.status(500).json({ error: err.message });
   }
 });
@@ -5772,7 +5831,7 @@ app.post('/api/git/:projectId/stage', authenticateRequest, verifyProjectOwnershi
       res.status(400).json({ error: result.error });
     }
   } catch (err: any) {
-    console.error('[Git] Stage error:', err);
+    logger.error({ err }, 'Git: stage error');
     res.status(500).json({ error: err.message });
   }
 });
@@ -5797,7 +5856,7 @@ app.post('/api/git/:projectId/unstage', authenticateRequest, verifyProjectOwners
       res.status(400).json({ error: result.error });
     }
   } catch (err: any) {
-    console.error('[Git] Unstage error:', err);
+    logger.error({ err }, 'Git: unstage error');
     res.status(500).json({ error: err.message });
   }
 });
@@ -5835,7 +5894,7 @@ app.post('/api/git/:projectId/commit', authenticateRequest, verifyProjectOwnersh
       res.status(400).json({ error: result.error });
     }
   } catch (err: any) {
-    console.error('[Git] Commit error:', err);
+    logger.error({ err }, 'Git: commit error');
     res.status(500).json({ error: err.message });
   }
 });
@@ -5868,7 +5927,7 @@ app.post('/api/git/:projectId/discard', authenticateRequest, verifyProjectOwners
       res.status(400).json({ error: result.error });
     }
   } catch (err: any) {
-    console.error('[Git] Discard error:', err);
+    logger.error({ err }, 'Git: discard error');
     res.status(500).json({ error: err.message });
   }
 });
@@ -5899,7 +5958,7 @@ app.post('/api/git/:projectId/init', authenticateRequest, verifyProjectOwnership
       res.status(400).json({ error: result.error });
     }
   } catch (err: any) {
-    console.error('[Git] Init error:', err);
+    logger.error({ err }, 'Git: init error');
     res.status(500).json({ error: err.message });
   }
 });
@@ -5920,13 +5979,13 @@ app.post('/api/git/:projectId/auto-commit', authenticateRequest, verifyProjectOw
     const result = await gitOperations.autoCommit(entry.id, message);
 
     if (result.error) {
-      console.error('[Git] Auto-commit error:', result.error);
+      logger.error({ error: result.error }, 'Git: auto-commit error');
       return res.status(500).json({ error: result.error });
     }
 
     res.json(result);
   } catch (err: any) {
-    console.error('[Git] Auto-commit error:', err);
+    logger.error({ err }, 'Git: auto-commit error');
     res.status(500).json({ error: err.message });
   }
 });
@@ -5965,7 +6024,7 @@ app.post('/api/git/:projectId/revert', authenticateRequest, verifyProjectOwnersh
 
     res.json(result);
   } catch (err: any) {
-    console.error('[Git] Revert error:', err);
+    logger.error({ err }, 'Git: revert error');
     res.status(500).json({ error: err.message });
   }
 });
@@ -5984,7 +6043,7 @@ app.get('/api/git/:projectId/remotes', authenticateRequest, verifyProjectOwnersh
     const remotes = await gitOperations.getRemotes(entry.id);
     res.json({ remotes });
   } catch (err: any) {
-    console.error('[Git] Remotes error:', err);
+    logger.error({ err }, 'Git: remotes error');
     res.status(500).json({ error: err.message });
   }
 });
@@ -6020,7 +6079,7 @@ app.post('/api/git/:projectId/remote', authenticateRequest, verifyProjectOwnersh
       res.status(400).json({ error: result.error });
     }
   } catch (err: any) {
-    console.error('[Git] Set remote error:', err);
+    logger.error({ err }, 'Git: set remote error');
     res.status(500).json({ error: err.message });
   }
 });
@@ -6052,7 +6111,7 @@ app.delete('/api/git/:projectId/remote/:name', authenticateRequest, verifyProjec
       res.status(400).json({ error: result.error });
     }
   } catch (err: any) {
-    console.error('[Git] Remove remote error:', err);
+    logger.error({ err }, 'Git: remove remote error');
     res.status(500).json({ error: err.message });
   }
 });
@@ -6089,7 +6148,7 @@ app.post('/api/git/:projectId/push', authenticateRequest, verifyProjectOwnership
       res.status(400).json({ error: result.error });
     }
   } catch (err: any) {
-    console.error('[Git] Push error:', err);
+    logger.error({ err }, 'Git: push error');
     res.status(500).json({ error: err.message });
   }
 });
@@ -6128,7 +6187,7 @@ app.post('/api/git/:projectId/pull', authenticateRequest, verifyProjectOwnership
       });
     }
   } catch (err: any) {
-    console.error('[Git] Pull error:', err);
+    logger.error({ err }, 'Git: pull error');
     res.status(500).json({ error: err.message });
   }
 });
@@ -6153,7 +6212,7 @@ app.post('/api/git/:projectId/fetch', authenticateRequest, verifyProjectOwnershi
       res.status(400).json({ error: result.error });
     }
   } catch (err: any) {
-    console.error('[Git] Fetch error:', err);
+    logger.error({ err }, 'Git: fetch error');
     res.status(500).json({ error: err.message });
   }
 });
@@ -6190,7 +6249,7 @@ app.post('/api/git/:projectId/clone', authenticateRequest, verifyProjectOwnershi
       res.status(400).json({ error: result.error });
     }
   } catch (err: any) {
-    console.error('[Git] Clone error:', err);
+    logger.error({ err }, 'Git: clone error');
     res.status(500).json({ error: err.message });
   }
 });
@@ -6212,7 +6271,7 @@ app.get('/api/git/:projectId/state', authenticateRequest, verifyProjectOwnership
     const state = await gitOperations.getGitState(entry.id);
     res.json(state);
   } catch (err: any) {
-    console.error('[Git] State error:', err);
+    logger.error({ err }, 'Git: state error');
     res.status(500).json({ error: err.message });
   }
 });
@@ -6232,7 +6291,7 @@ app.get('/api/git/:projectId/conflicts', authenticateRequest, verifyProjectOwner
     const conflicts = await gitOperations.getConflicts(entry.id);
     res.json(conflicts);
   } catch (err: any) {
-    console.error('[Git] Conflicts error:', err);
+    logger.error({ err }, 'Git: conflicts error');
     res.status(500).json({ error: err.message });
   }
 });
@@ -6273,7 +6332,7 @@ app.post('/api/git/:projectId/merge', authenticateRequest, verifyProjectOwnershi
       });
     }
   } catch (err: any) {
-    console.error('[Git] Merge error:', err);
+    logger.error({ err }, 'Git: merge error');
     res.status(500).json({ error: err.message });
   }
 });
@@ -6314,7 +6373,7 @@ app.post('/api/git/:projectId/rebase', authenticateRequest, verifyProjectOwnersh
       });
     }
   } catch (err: any) {
-    console.error('[Git] Rebase error:', err);
+    logger.error({ err }, 'Git: rebase error');
     res.status(500).json({ error: err.message });
   }
 });
@@ -6345,7 +6404,7 @@ app.post('/api/git/:projectId/rebase-abort', authenticateRequest, verifyProjectO
       res.status(400).json({ error: result.error });
     }
   } catch (err: any) {
-    console.error('[Git] Rebase abort error:', err);
+    logger.error({ err }, 'Git: rebase abort error');
     res.status(500).json({ error: err.message });
   }
 });
@@ -6379,7 +6438,7 @@ app.post('/api/git/:projectId/rebase-continue', authenticateRequest, verifyProje
       });
     }
   } catch (err: any) {
-    console.error('[Git] Rebase continue error:', err);
+    logger.error({ err }, 'Git: rebase continue error');
     res.status(500).json({ error: err.message });
   }
 });
@@ -6422,7 +6481,7 @@ app.post('/api/git/:projectId/branch-rename', authenticateRequest, verifyProject
       res.status(400).json({ error: result.error });
     }
   } catch (err: any) {
-    console.error('[Git] Branch rename error:', err);
+    logger.error({ err }, 'Git: branch rename error');
     res.status(500).json({ error: err.message });
   }
 });
@@ -6464,7 +6523,7 @@ app.post('/api/git/:projectId/force-push', authenticateRequest, verifyProjectOwn
       res.status(400).json({ error: result.error });
     }
   } catch (err: any) {
-    console.error('[Git] Force push error:', err);
+    logger.error({ err }, 'Git: force push error');
     res.status(500).json({ error: err.message });
   }
 });
@@ -6581,7 +6640,7 @@ app.post('/api/visual-edit/:projectId/apply', authenticateRequest, verifyProject
       });
     }
   } catch (err: any) {
-    console.error('[VisualEdit] Apply error:', err);
+    logger.error({ err }, 'VisualEdit: apply error');
     res.status(500).json({ error: err.message });
   }
 });
@@ -6619,7 +6678,7 @@ app.post('/api/lsp/:projectId/start', authenticateRequest, verifyProjectOwnershi
       message: `Started ${status.length} LSP server(s)`,
     });
   } catch (err: any) {
-    console.error('[LSP] Start error:', err);
+    logger.error({ err }, 'LSP: start error');
     res.status(500).json({ error: err.message });
   }
 });
@@ -6640,7 +6699,7 @@ app.post('/api/lsp/:projectId/stop', authenticateRequest, verifyProjectOwnership
 
     res.json({ success: true });
   } catch (err: any) {
-    console.error('[LSP] Stop error:', err);
+    logger.error({ err }, 'LSP: stop error');
     res.status(500).json({ error: err.message });
   }
 });
@@ -6656,7 +6715,7 @@ app.get('/api/lsp/:projectId/status', authenticateRequest, verifyProjectOwnershi
       servers: status,
     });
   } catch (err: any) {
-    console.error('[LSP] Status error:', err);
+    logger.error({ err }, 'LSP: status error');
     res.status(500).json({ error: err.message });
   }
 });
@@ -6729,7 +6788,7 @@ app.post('/api/lsp/:projectId/request', authenticateRequest, verifyProjectOwners
       result,
     });
   } catch (err: any) {
-    console.error('[LSP] Request error:', err);
+    logger.error({ err }, 'LSP: request error');
     res.status(500).json({ error: err.message });
   }
 });
@@ -6776,7 +6835,7 @@ app.post('/api/lsp/:projectId/sync', authenticateRequest, verifyProjectOwnership
 
     res.json({ success: true, synced: true });
   } catch (err: any) {
-    console.error('[LSP] Sync error:', err);
+    logger.error({ err }, 'LSP: sync error');
     res.status(500).json({ error: err.message });
   }
 });
@@ -6808,7 +6867,7 @@ app.get('/api/collab/stats', authenticateRequest, (req: AuthenticatedRequest, re
       stats,
     });
   } catch (err: any) {
-    console.error('[Collab] Stats error:', err);
+    logger.error({ err }, 'Collab: stats error');
     res.status(500).json({ error: err.message });
   }
 });
@@ -6816,7 +6875,7 @@ app.get('/api/collab/stats', authenticateRequest, (req: AuthenticatedRequest, re
 // ==================== End Collaboration API ====================
 
 // File sync WebSocket (real-time)
-app.ws('/sync/:projectId', async (ws, req) => {
+app.ws('/sync/:projectId', async (ws: WebSocket, req: express.Request) => {
   const { projectId } = req.params;
 
   // Authenticate WebSocket connection
@@ -6902,7 +6961,7 @@ async function execCommand(container: Docker.Container, cmd: string, allowTermin
   // 🔧 FIX: Exit code 143 (SIGTERM) is OK if explicitly allowed
   // This is normal when killing background processes like dev servers
   if (inspection.ExitCode === 143 && allowTermination) {
-    console.log('✅ Process terminated gracefully (exit code 143)');
+    logger.info('process terminated gracefully (exit code 143)');
     return output;
   }
 
@@ -6960,7 +7019,7 @@ app.post('/api/repl/:projectId/start', authenticateRequest, verifyProjectOwnersh
       },
     });
   } catch (err: any) {
-    console.error(`[REPL] Start error for ${projectId}:`, err.message);
+    logger.error({ err, projectId }, 'REPL: start error');
     res.status(500).json({ error: err.message });
   }
 });
@@ -6994,7 +7053,7 @@ app.post('/api/repl/:projectId/execute', authenticateRequest, verifyProjectOwner
       language,
     });
   } catch (err: any) {
-    console.error(`[REPL] Execute error for ${projectId}:`, err.message);
+    logger.error({ err, projectId }, 'REPL: execute error');
     res.status(500).json({
       error: err.message,
       isError: true,
@@ -7024,7 +7083,7 @@ app.post('/api/repl/:projectId/stop', authenticateRequest, verifyProjectOwnershi
 
     res.json({ success: true, message: `${REPL_CONFIGS[language].name} REPL stopped` });
   } catch (err: any) {
-    console.error(`[REPL] Stop error for ${projectId}:`, err.message);
+    logger.error({ err, projectId }, 'REPL: stop error');
     res.status(500).json({ error: err.message });
   }
 });
@@ -7067,7 +7126,7 @@ app.get('/api/repl/:projectId/status', authenticateRequest, verifyProjectOwnersh
       });
     }
   } catch (err: any) {
-    console.error(`[REPL] Status error for ${projectId}:`, err.message);
+    logger.error({ err, projectId }, 'REPL: status error');
     res.status(500).json({ error: err.message });
   }
 });
@@ -7094,7 +7153,7 @@ app.get('/api/repl/:projectId/languages', authenticateRequest, verifyProjectOwne
       })),
     });
   } catch (err: any) {
-    console.error(`[REPL] Languages error for ${projectId}:`, err.message);
+    logger.error({ err, projectId }, 'REPL: languages error');
     res.status(500).json({ error: err.message });
   }
 });
@@ -7118,7 +7177,7 @@ setInterval(async () => {
           unregisterUserContainer(entry.userId, projectId);
         }
         containers.delete(projectId);
-        console.log(`Cleaned up idle container: ${projectId}`);
+        logger.info({ projectId }, 'cleaned up idle container');
       } catch {}
     }
   }
@@ -7143,7 +7202,7 @@ setInterval(async () => {
         await snapshotManager.pruneOldSnapshots(entry.id, 50);
 
         lastCompression.set(projectId, now);
-        console.log(`[Snapshot] Compressed and pruned snapshots for ${projectId}`);
+        logger.info({ projectId }, 'Snapshot: compressed and pruned snapshots');
       } catch (err) {
         // Silently ignore errors - compression is best-effort
       }
@@ -7154,14 +7213,14 @@ setInterval(async () => {
 // Startup sequence - cleanup THEN pool initialization (in correct order)
 async function startupSequence() {
   // Step 1: Cleanup old containers FIRST
-  console.log('🧹 [Startup] Cleaning up old containers...');
+  logger.info('Startup: cleaning up old containers');
   try {
-    console.log('🧹 [Startup] Listing containers...');
+    logger.info('Startup: listing containers');
     const allContainers = await docker.listContainers({ all: true });
-    console.log(`🧹 [Startup] Found ${allContainers.length} total containers`);
+    logger.info({ count: allContainers.length }, 'Startup: found total containers');
 
     const recoderContainers = allContainers.filter(c => c.Image === IMAGE_NAME);
-    console.log(`🧹 [Startup] Found ${recoderContainers.length} recoder containers to clean`);
+    logger.info({ count: recoderContainers.length }, 'Startup: found recoder containers to clean');
 
     for (const c of recoderContainers) {
       try {
@@ -7169,36 +7228,35 @@ async function startupSequence() {
         const isRunning = c.State === 'running';
         // Keep any running container to avoid breaking active workspaces or pool warmups
         if (isRunning) {
-          console.log(`🧹 [Startup] Keeping running container ${c.Id.slice(0, 12)}${projectIdLabel ? ` (${projectIdLabel})` : ''}`);
+          logger.info({ containerId: c.Id.slice(0, 12), projectIdLabel }, 'Startup: keeping running container');
           continue;
         }
-        console.log(`🧹 [Startup] Removing container ${c.Id.slice(0, 12)}...`);
+        logger.info({ containerId: c.Id.slice(0, 12) }, 'Startup: removing container');
         const container = docker.getContainer(c.Id);
         await container.stop().catch(() => {});
         await container.remove().catch(() => {});
-        console.log(`🧹 [Startup] Removed ${c.Id.slice(0, 12)}`);
+        logger.info({ containerId: c.Id.slice(0, 12) }, 'Startup: removed container');
       } catch (err: any) {
-        console.error(`🧹 [Startup] Failed to remove ${c.Id.slice(0, 12)}:`, err.message);
+        logger.error({ err, containerId: c.Id.slice(0, 12) }, 'Startup: failed to remove container');
       }
     }
-    console.log('✅ [Startup] Cleanup complete');
+    logger.info('Startup: cleanup complete');
   } catch (e: any) {
-    console.error('❌ [Startup] Cleanup failed:', e.message);
-    console.error('❌ [Startup] Full error:', e);
+    logger.error({ err: e }, 'Startup: cleanup failed');
   }
 
   // Step 1.5: Sync port manager with any remaining Docker containers
-  console.log('🔌 [Startup] Syncing port manager with Docker...');
+  logger.info('Startup: syncing port manager with Docker');
   try {
     await syncPortsWithDocker();
     const portStats = getPortStats();
-    console.log(`✅ [Startup] Port manager synced: ${portStats.containerCount} containers, ${portStats.usedPortCount} ports in use`);
+    logger.info({ containerCount: portStats.containerCount, usedPortCount: portStats.usedPortCount }, 'Startup: port manager synced');
   } catch (e: any) {
-    console.error('❌ [Startup] Port sync failed:', e.message);
+    logger.error({ err: e }, 'Startup: port sync failed');
   }
 
   // Step 1.6: Restore running project containers into in-memory registry
-  console.log('📦 [Startup] Restoring running project containers...');
+  logger.info('Startup: restoring running project containers');
   try {
     const liveContainers = await docker.listContainers({ all: false });
     let restored = 0;
@@ -7265,30 +7323,30 @@ async function startupSequence() {
       restored++;
     }
 
-    console.log(`✅ [Startup] Restored ${restored} running project container(s)`);
+    logger.info({ restored }, 'Startup: restored running project containers');
   } catch (e: any) {
-    console.error('❌ [Startup] Container restore failed:', e.message);
+    logger.error({ err: e }, 'Startup: container restore failed');
   }
 
   // Step 2: THEN initialize container pool (after cleanup is done)
   if (ENABLE_CONTAINER_POOL && !PERSIST_WORKSPACE) {
-    console.log('🚀 [Startup] Initializing container pool...');
+    logger.info('Startup: initializing container pool');
     containerPool.setPortManager(allocatePort, releasePorts);
     try {
       await containerPool.initialize();
-      console.log('✅ [Startup] Container pool ready');
+      logger.info('Startup: container pool ready');
     } catch (err: any) {
-      console.error('❌ [Startup] Container pool initialization failed:', err.message);
+      logger.error({ err }, 'Startup: container pool initialization failed');
     }
   }
 
   // Step 3: Start health monitoring
-  console.log('💊 [Startup] Starting health monitor...');
+  logger.info('Startup: starting health monitor');
   try {
     healthMonitor.start();
-    console.log('✅ [Startup] Health monitor started');
+    logger.info('Startup: health monitor started');
   } catch (err: any) {
-    console.error('❌ [Startup] Health monitor failed to start:', err.message);
+    logger.error({ err }, 'Startup: health monitor failed to start');
   }
 
   // Auto-restart unhealthy containers with cooldown and grace period
@@ -7304,7 +7362,7 @@ async function startupSequence() {
     // Skip transient network errors during grace period
     const isTransientError = reason.includes('ECONNRESET') || reason.includes('ETIMEDOUT') || reason.includes('ECONNREFUSED');
     if (isTransientError && status.uptimeMs < CONTAINER_GRACE_PERIOD_MS) {
-      console.log(`🏥 [Health] Container ${containerId.slice(0, 12)} has transient error but within grace period (${Math.round(status.uptimeMs/1000)}s), skipping restart`);
+      logger.info({ containerId: containerId.slice(0, 12), uptimeSec: Math.round(status.uptimeMs/1000) }, 'Health: container has transient error but within grace period, skipping restart');
       return;
     }
     
@@ -7312,11 +7370,11 @@ async function startupSequence() {
     const lastRestart = restartCooldowns.get(containerId);
     if (lastRestart && Date.now() - lastRestart < RESTART_COOLDOWN_MS) {
       const waitSecs = Math.round((RESTART_COOLDOWN_MS - (Date.now() - lastRestart)) / 1000);
-      console.log(`🏥 [Health] Container ${containerId.slice(0, 12)} in restart cooldown (${waitSecs}s remaining), skipping`);
+      logger.info({ containerId: containerId.slice(0, 12), waitSecs }, 'Health: container in restart cooldown, skipping');
       return;
     }
     
-    console.warn(`🏥 [Health] Container ${containerId.slice(0, 12)} unhealthy: ${reason}`);
+    logger.warn({ containerId: containerId.slice(0, 12), reason }, 'Health: container unhealthy');
 
     // Find the project using this container
     let projectId: string | null = null;
@@ -7328,13 +7386,13 @@ async function startupSequence() {
     }
 
     if (!projectId) {
-      console.warn(`🏥 [Health] Container ${containerId.slice(0, 12)} not in registry, skipping restart`);
+      logger.warn({ containerId: containerId.slice(0, 12) }, 'Health: container not in registry, skipping restart');
       return;
     }
 
     try {
       const container = docker.getContainer(containerId);
-      console.log(`🏥 [Health] Restarting container ${containerId.slice(0, 12)} for project ${projectId}...`);
+      logger.info({ containerId: containerId.slice(0, 12), projectId }, 'Health: restarting container');
       
       // Set cooldown BEFORE restart to prevent race conditions
       restartCooldowns.set(containerId, Date.now());
@@ -7347,35 +7405,35 @@ async function startupSequence() {
         entry.lastActive = Date.now();
       }
 
-      console.log(`🏥 [Health] Container ${containerId.slice(0, 12)} restarted successfully`);
+      logger.info({ containerId: containerId.slice(0, 12) }, 'Health: container restarted successfully');
 
       // Re-launch dev server if it was running before the restart
       if (entry?.backgroundDev) {
         try {
-          console.log(`🏥 [Health] Re-launching dev server for ${projectId} after container restart...`);
+          logger.info({ projectId }, 'Health: re-launching dev server after container restart');
           const ports = [entry.port + 1, entry.port, entry.port + 4, entry.port + 5, entry.port + 2];
           await devServerManager.restart(entry.id, projectId, ports);
-          console.log(`🏥 [Health] Dev server re-launched for ${projectId}`);
+          logger.info({ projectId }, 'Health: dev server re-launched');
         } catch (devErr: any) {
-          console.warn(`🏥 [Health] Failed to re-launch dev server for ${projectId}:`, devErr.message);
+          logger.warn({ err: devErr, projectId }, 'Health: failed to re-launch dev server');
         }
       }
     } catch (err: any) {
-      console.error(`🏥 [Health] Failed to restart container ${containerId.slice(0, 12)}:`, err.message);
+      logger.error({ err, containerId: containerId.slice(0, 12) }, 'Health: failed to restart container');
     }
   });
 
   // Step 4: Start resource optimizer
-  console.log('📊 [Startup] Starting resource optimizer...');
+  logger.info('Startup: starting resource optimizer');
   try {
     resourceOptimizer.start();
-    console.log('✅ [Startup] Resource optimizer started');
+    logger.info('Startup: resource optimizer started');
   } catch (err: any) {
-    console.error('❌ [Startup] Resource optimizer failed to start:', err.message);
+    logger.error({ err }, 'Startup: resource optimizer failed to start');
   }
 
   // Step 5: Initialize metering system (metrics collector -> usage aggregator -> quota enforcer)
-  console.log('📊 [Startup] Initializing metering system...');
+  logger.info('Startup: initializing metering system');
   try {
     const meteringCollector = getMeteringCollector(docker);
     const usageAggregator = getUsageAggregator();
@@ -7390,9 +7448,9 @@ async function startupSequence() {
     meteringCollector.start();
     usageAggregator.start();
 
-    console.log('✅ [Startup] Metering system initialized (collector + aggregator + quota enforcer)');
+    logger.info('Startup: metering system initialized (collector + aggregator + quota enforcer)');
   } catch (err: any) {
-    console.error('❌ [Startup] Metering system failed to initialize:', err.message);
+    logger.error({ err }, 'Startup: metering system failed to initialize');
     // Non-fatal: server continues without metering
   }
 }
@@ -7432,8 +7490,8 @@ app.post('/api/sync/:projectId/link', authenticateRequest, verifyProjectOwnershi
       message: 'CLI linked to project successfully',
     });
   } catch (error: any) {
-    console.error(`[CLI Sync] Link error: ${error.message}`);
-    res.status(500).json({ error: error.message });
+    logger.error({ err: error }, 'CLI Sync: link error');
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -7457,8 +7515,8 @@ app.delete('/api/sync/:projectId/unlink', authenticateRequest, verifyProjectOwne
       message: unlinked ? 'CLI unlinked from project' : 'Project was not linked',
     });
   } catch (error: any) {
-    console.error(`[CLI Sync] Unlink error: ${error.message}`);
-    res.status(500).json({ error: error.message });
+    logger.error({ err: error }, 'CLI Sync: unlink error');
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -7494,7 +7552,7 @@ app.get('/api/sync/:projectId/status', authenticateRequest, verifyProjectOwnersh
           }
         }
       } catch (error) {
-        console.error(`[CLI Sync] Error reading container files: ${error}`);
+        logger.error({ err: error }, 'CLI Sync: error reading container files');
       }
     }
 
@@ -7507,8 +7565,8 @@ app.get('/api/sync/:projectId/status', authenticateRequest, verifyProjectOwnersh
       fileCount: Object.keys(remoteFiles).length,
     });
   } catch (error: any) {
-    console.error(`[CLI Sync] Status error: ${error.message}`);
-    res.status(500).json({ error: error.message });
+    logger.error({ err: error }, 'CLI Sync: status error');
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -7602,8 +7660,8 @@ app.post('/api/sync/:projectId/push', authenticateRequest, verifyProjectOwnershi
       message: `Pushed ${applied.added} new, ${applied.modified} modified, ${applied.deleted} deleted files`,
     });
   } catch (error: any) {
-    console.error(`[CLI Sync] Push error: ${error.message}`);
-    res.status(500).json({ error: error.message });
+    logger.error({ err: error }, 'CLI Sync: push error');
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -7660,8 +7718,8 @@ app.get('/api/sync/:projectId/pull', authenticateRequest, verifyProjectOwnership
       fileCount: Object.keys(files).length,
     });
   } catch (error: any) {
-    console.error(`[CLI Sync] Pull error: ${error.message}`);
-    res.status(500).json({ error: error.message });
+    logger.error({ err: error }, 'CLI Sync: pull error');
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -7721,15 +7779,15 @@ app.post('/api/sync/:projectId/diff', authenticateRequest, verifyProjectOwnershi
       containerRunning: !!entry,
     });
   } catch (error: any) {
-    console.error(`[CLI Sync] Diff error: ${error.message}`);
-    res.status(500).json({ error: error.message });
+    logger.error({ err: error }, 'CLI Sync: diff error');
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
 // WebSocket endpoint for live sync
 const cliSyncClients = new Map<string, Set<WebSocket>>();
 
-app.ws('/cli-sync/:projectId', async (ws, req) => {
+app.ws('/cli-sync/:projectId', async (ws: WebSocket, req: express.Request) => {
   const { projectId } = req.params;
 
   // Authenticate WebSocket connection
@@ -7759,7 +7817,7 @@ app.ws('/cli-sync/:projectId', async (ws, req) => {
   }
   cliSyncClients.get(sanitizedProjectId)!.add(ws);
 
-  console.log(`[CLI Sync] Client ${clientId} connected for project ${sanitizedProjectId}`);
+  logger.info({ clientId, projectId: sanitizedProjectId }, 'CLI Sync: client connected');
 
   // Send initial status
   ws.send(JSON.stringify({
@@ -7831,7 +7889,7 @@ app.ws('/cli-sync/:projectId', async (ws, req) => {
         cliSyncClients.delete(sanitizedProjectId);
       }
     }
-    console.log(`[CLI Sync] Client ${clientId} disconnected from project ${sanitizedProjectId}`);
+    logger.info({ clientId, projectId: sanitizedProjectId }, 'CLI Sync: client disconnected');
   });
 });
 
@@ -7925,8 +7983,8 @@ app.post('/api/mcp/:projectId/start', authenticateRequest, verifyProjectOwnershi
       res.status(500).json({ success: false, error: result.error });
     }
   } catch (error: any) {
-    console.error(`[MCP] Error starting server:`, error);
-    res.status(500).json({ error: error.message });
+    logger.error({ err: error }, 'MCP: error starting server');
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -7949,7 +8007,7 @@ app.post('/api/mcp/:projectId/stop', authenticateRequest, verifyProjectOwnership
     });
     res.json({ success: true });
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -7961,7 +8019,7 @@ app.post('/api/mcp/:projectId/stop-all', authenticateRequest, verifyProjectOwner
     await mcpManager.stopAllServers(projectId);
     res.json({ success: true });
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -7973,7 +8031,7 @@ app.get('/api/mcp/:projectId/servers', authenticateRequest, verifyProjectOwnersh
     const servers = mcpManager.getServers(projectId);
     res.json({ servers });
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -7985,7 +8043,7 @@ app.get('/api/mcp/:projectId/tools', authenticateRequest, verifyProjectOwnership
     const tools = mcpManager.getAllTools(projectId);
     res.json({ tools });
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -8008,8 +8066,8 @@ app.post('/api/mcp/:projectId/call', authenticateRequest, verifyProjectOwnership
     });
     res.json({ success: true, result });
   } catch (error: any) {
-    console.error(`[MCP] Tool call error:`, error);
-    res.status(500).json({ success: false, error: error.message });
+    logger.error({ err: error }, 'MCP: tool call error');
+    res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 
@@ -8035,7 +8093,7 @@ const activeTunnels = new Map<string, TunnelInfo>();
  */
 async function startCloudflaredTunnel(localUrl: string): Promise<{ publicUrl: string; process: ChildProcess }> {
   return new Promise((resolve, reject) => {
-    console.log(`[Tunnel] Starting cloudflared tunnel for ${localUrl}`);
+    logger.info({ localUrl }, 'Tunnel: starting cloudflared tunnel');
 
     // Try to find cloudflared in common locations
     const cloudflaredPaths = [
@@ -8075,7 +8133,7 @@ async function startCloudflaredTunnel(localUrl: string): Promise<{ publicUrl: st
       tunnelProcess.stderr.on('data', (data) => {
         const text = data.toString();
         output += text;
-        console.log(`[Tunnel] cloudflared: ${text.trim()}`);
+        logger.info({ output: text.trim() }, 'Tunnel: cloudflared stderr');
 
         // Look for the trycloudflare.com URL
         const urlMatch = text.match(/https:\/\/[a-z0-9-]+\.trycloudflare\.com/);
@@ -8083,7 +8141,7 @@ async function startCloudflaredTunnel(localUrl: string): Promise<{ publicUrl: st
           publicUrl = urlMatch[0];
           resolved = true;
           clearTimeout(timeout);
-          console.log(`[Tunnel] Got public URL: ${publicUrl}`);
+          logger.info({ publicUrl }, 'Tunnel: got public URL');
           resolve({ publicUrl, process: tunnelProcess });
         }
       });
@@ -8091,7 +8149,7 @@ async function startCloudflaredTunnel(localUrl: string): Promise<{ publicUrl: st
       tunnelProcess.stdout.on('data', (data) => {
         const text = data.toString();
         output += text;
-        console.log(`[Tunnel] cloudflared stdout: ${text.trim()}`);
+        logger.info({ output: text.trim() }, 'Tunnel: cloudflared stdout');
 
         // Sometimes URL appears in stdout
         const urlMatch = text.match(/https:\/\/[a-z0-9-]+\.trycloudflare\.com/);
@@ -8099,7 +8157,7 @@ async function startCloudflaredTunnel(localUrl: string): Promise<{ publicUrl: st
           publicUrl = urlMatch[0];
           resolved = true;
           clearTimeout(timeout);
-          console.log(`[Tunnel] Got public URL: ${publicUrl}`);
+          logger.info({ publicUrl }, 'Tunnel: got public URL');
           resolve({ publicUrl, process: tunnelProcess });
         }
       });
@@ -8108,7 +8166,7 @@ async function startCloudflaredTunnel(localUrl: string): Promise<{ publicUrl: st
         clearTimeout(timeout);
         if (!resolved) {
           resolved = true;
-          console.error('[Tunnel] cloudflared error:', err);
+          logger.error({ err }, 'Tunnel: cloudflared error');
           reject(new Error(`Failed to start cloudflared: ${err.message}`));
         }
       });
@@ -8117,7 +8175,7 @@ async function startCloudflaredTunnel(localUrl: string): Promise<{ publicUrl: st
         clearTimeout(timeout);
         if (!resolved) {
           resolved = true;
-          console.error(`[Tunnel] cloudflared exited with code ${exitCode}`);
+          logger.error({ exitCode }, 'Tunnel: cloudflared exited');
           reject(new Error(`cloudflared exited with code ${exitCode}. Output: ${output.slice(-500)}`));
         }
       });
@@ -8187,7 +8245,7 @@ app.post('/api/tunnel/start', authenticateRequest, async (req: AuthenticatedRequ
           createdAt: Date.now(),
         });
 
-        console.log(`[Tunnel] Started cloudflared tunnel for ${projectId}: ${publicUrl}`);
+        logger.info({ projectId, publicUrl }, 'Tunnel: started cloudflared tunnel');
 
         auditLog({
           userId: req.userId,
@@ -8204,7 +8262,7 @@ app.post('/api/tunnel/start', authenticateRequest, async (req: AuthenticatedRequ
           message: 'Your project is now publicly accessible via Cloudflare tunnel',
         });
       } catch (cloudflaredError: any) {
-        console.warn(`[Tunnel] cloudflared failed, falling back to preview URL:`, cloudflaredError.message);
+        logger.warn({ err: cloudflaredError }, 'Tunnel: cloudflared failed, falling back to preview URL');
         // Fall through to preview URL fallback
       }
     }
@@ -8220,7 +8278,7 @@ app.post('/api/tunnel/start', authenticateRequest, async (req: AuthenticatedRequ
       createdAt: Date.now(),
     });
 
-    console.log(`[Tunnel] Started preview tunnel for ${projectId}: ${publicUrl}`);
+    logger.info({ projectId, publicUrl }, 'Tunnel: started preview tunnel');
 
     auditLog({
       userId: req.userId,
@@ -8237,20 +8295,20 @@ app.post('/api/tunnel/start', authenticateRequest, async (req: AuthenticatedRequ
       message: 'Your project is accessible at this URL (use cloudflared for public access)',
     });
   } catch (error: any) {
-    console.error(`[Tunnel] Failed to start tunnel for ${projectId}:`, error);
+    logger.error({ err: error, projectId }, 'Tunnel: failed to start tunnel');
 
     activeTunnels.set(projectId, {
       projectId,
       publicUrl: '',
       localPort,
       status: 'error',
-      error: error.message,
+      error: 'tunnel_start_failed',
       createdAt: Date.now(),
     });
 
     res.status(500).json({
       success: false,
-      error: `Failed to start tunnel: ${error.message}`,
+      error: 'Failed to start tunnel',
     });
   }
 });
@@ -8269,15 +8327,15 @@ app.post('/api/tunnel/stop', authenticateRequest, async (req: AuthenticatedReque
     if (tunnel.process) {
       try {
         tunnel.process.kill('SIGTERM');
-        console.log(`[Tunnel] Killed cloudflared process for ${projectId}`);
+        logger.info({ projectId }, 'Tunnel: killed cloudflared process');
       } catch (err) {
-        console.warn(`[Tunnel] Failed to kill cloudflared process:`, err);
+        logger.warn({ err }, 'Tunnel: failed to kill cloudflared process');
       }
     }
 
     tunnel.status = 'stopped';
     activeTunnels.delete(projectId);
-    console.log(`[Tunnel] Stopped tunnel for ${projectId}`);
+    logger.info({ projectId }, 'Tunnel: stopped tunnel');
   }
 
   auditLog({
@@ -8448,7 +8506,7 @@ app.get('/api/expo-url/:projectId', authenticateRequest, verifyProjectOwnership,
       hostname,
     });
   } catch (err: any) {
-    console.error(`[Expo] Failed to get Expo URL for project ${projectId}:`, err);
+    logger.error({ err, projectId }, 'Expo: failed to get Expo URL');
     res.status(500).json({ isExpo: false, error: err.message });
   }
 });
@@ -8516,7 +8574,7 @@ app.post('/api/expo-start/:projectId', authenticateRequest, verifyProjectOwnersh
 
     await exec.start({ Detach: true });
     devServerManager.registerExternalServer(projectId, 'expo');
-    console.log(`[Expo] Started Expo dev server in ${mode} mode for project ${projectId}`);
+    logger.info({ mode, projectId }, 'Expo: started Expo dev server');
 
     // Wait for Expo to initialize
     await new Promise(resolve => setTimeout(resolve, 5000));
@@ -8552,7 +8610,7 @@ app.post('/api/expo-start/:projectId', authenticateRequest, verifyProjectOwnersh
         : 'Expo process started but may still be initializing. Check logs at /tmp/expo-dev.log',
     });
   } catch (err: any) {
-    console.error(`[Expo] Failed to start Expo for project ${projectId}:`, err);
+    logger.error({ err, projectId }, 'Expo: failed to start');
     res.status(500).json({ error: err.message });
   }
 });
@@ -8635,7 +8693,7 @@ app.post('/api/eas-build/:projectId', authenticateRequest, verifyProjectOwnershi
     }
 
     // Run eas build
-    console.log(`[EAS] Starting ${platform} build for project ${projectId} (profile: ${safeProfile})`);
+    logger.info({ platform, projectId, profile: safeProfile }, 'EAS: starting build');
     const safeToken = sanitizeShellToken(expoToken);
     const buildOutput = await execInContainer(
       entry.id,
@@ -8656,7 +8714,7 @@ app.post('/api/eas-build/:projectId', authenticateRequest, verifyProjectOwnershi
         if (Array.isArray(buildData)) buildData = buildData[0];
       }
     } catch {
-      console.error(`[EAS] Failed to parse build output:`, buildOutput);
+      logger.error({ buildOutput }, 'EAS: failed to parse build output');
       return sendError(res, createError(ErrorCode.INTERNAL_ERROR, `EAS build submitted but failed to parse output. Raw: ${buildOutput.slice(0, 500)}`));
     }
 
@@ -8675,7 +8733,7 @@ app.post('/api/eas-build/:projectId', authenticateRequest, verifyProjectOwnershi
     };
 
     easBuilds.set(buildId, buildInfo);
-    console.log(`[EAS] Build ${buildId} submitted for project ${projectId} (${platform}, profile: ${safeProfile})`);
+    logger.info({ buildId, projectId, platform, profile: safeProfile }, 'EAS: build submitted');
 
     sendSuccess(res, {
       buildId,
@@ -8686,8 +8744,8 @@ app.post('/api/eas-build/:projectId', authenticateRequest, verifyProjectOwnershi
       autoSubmit: buildInfo.autoSubmit,
     });
   } catch (error: any) {
-    console.error(`[EAS] Failed to start build for project ${projectId}:`, error.message);
-    return sendError(res, createError(ErrorCode.INTERNAL_ERROR, `EAS build failed: ${error.message}`));
+    logger.error({ err: error, projectId }, 'EAS: failed to start build');
+    return sendError(res, createError(ErrorCode.INTERNAL_ERROR, 'EAS build failed'));
   }
 }));
 
@@ -8745,26 +8803,26 @@ app.get('/api/eas-build/:projectId/:buildId', authenticateRequest, verifyProject
             (async () => {
               try {
                 const safeTokenSubmit = sanitizeShellToken(expoToken);
-                console.log(`[EAS] Auto-submitting ${cached.platform} build ${buildId} for project ${projectId}`);
+                logger.info({ platform: cached.platform, buildId, projectId }, 'EAS: auto-submitting build');
                 await execInContainer(
                   entry!.id,
                   `cd /workspace && EXPO_TOKEN=${safeTokenSubmit} eas submit --platform ${cached.platform} --latest --non-interactive --json 2>&1`,
                 );
                 cached.submitStatus = 'submitted';
                 easBuilds.set(buildId, cached);
-                console.log(`[EAS] Auto-submit completed for build ${buildId}`);
+                logger.info({ buildId }, 'EAS: auto-submit completed');
               } catch (submitErr: any) {
                 cached.submitStatus = 'failed';
                 cached.submitError = submitErr.message;
                 easBuilds.set(buildId, cached);
-                console.error(`[EAS] Auto-submit failed for build ${buildId}:`, submitErr.message);
+                logger.error({ err: submitErr, buildId }, 'EAS: auto-submit failed');
               }
             })();
           }
           easBuilds.set(buildId, cached);
         }
       } catch (err: any) {
-        console.warn(`[EAS] Failed to poll build status for ${buildId}:`, err.message);
+        logger.warn({ err, buildId }, 'EAS: failed to poll build status');
       }
     }
   }
@@ -8838,7 +8896,7 @@ app.post('/api/eas-update/:projectId', authenticateRequest, verifyProjectOwnersh
     // Run eas update
     const safeBranch = sanitizeShellToken(branch);
     const safeMessage = sanitizeShellMessage(message || 'Update');
-    console.log(`[EAS Update] Pushing update for project ${projectId} on branch ${safeBranch}`);
+    logger.info({ projectId, branch: safeBranch }, 'EAS Update: pushing update');
 
     const updateOutput = await execInContainer(
       entry.id,
@@ -8858,7 +8916,7 @@ app.post('/api/eas-update/:projectId', authenticateRequest, verifyProjectOwnersh
         }
       }
     } catch {
-      console.error(`[EAS Update] Failed to parse update output:`, updateOutput);
+      logger.error({ updateOutput }, 'EAS Update: failed to parse update output');
       return sendError(res, createError(ErrorCode.INTERNAL_ERROR, `EAS update pushed but failed to parse output. Raw: ${updateOutput.slice(0, 500)}`));
     }
 
@@ -8890,7 +8948,7 @@ app.post('/api/eas-update/:projectId', authenticateRequest, verifyProjectOwnersh
     };
 
     easUpdates.set(updateId, updateInfo);
-    console.log(`[EAS Update] Update ${updateId} pushed for project ${projectId} (branch: ${safeBranch})`);
+    logger.info({ updateId, projectId, branch: safeBranch }, 'EAS Update: update pushed');
 
     sendSuccess(res, {
       updateId,
@@ -8901,8 +8959,8 @@ app.post('/api/eas-update/:projectId', authenticateRequest, verifyProjectOwnersh
       runtimeVersion,
     });
   } catch (error: any) {
-    console.error(`[EAS Update] Failed to push update for project ${projectId}:`, error.message);
-    return sendError(res, createError(ErrorCode.INTERNAL_ERROR, `EAS update failed: ${error.message}`));
+    logger.error({ err: error, projectId }, 'EAS Update: failed to push update');
+    return sendError(res, createError(ErrorCode.INTERNAL_ERROR, 'EAS update failed'));
   }
 }));
 
@@ -8938,10 +8996,10 @@ app.get('/api/eas-updates/:projectId', authenticateRequest, verifyProjectOwnersh
           }
         }
       } catch {
-        console.warn(`[EAS Update] Failed to parse update list output:`, listOutput.slice(0, 300));
+        logger.warn({ listOutput: listOutput.slice(0, 300) }, 'EAS Update: failed to parse update list output');
       }
     } catch (err: any) {
-      console.warn(`[EAS Update] Failed to list updates for project ${projectId}:`, err.message);
+      logger.warn({ err, projectId }, 'EAS Update: failed to list updates');
     }
   }
 
@@ -8977,7 +9035,7 @@ app.post('/api/eas-update/:projectId/rollback', authenticateRequest, verifyProje
   try {
     const safeToken = sanitizeShellToken(expoToken);
     const safeBranch = sanitizeShellToken(branch);
-    console.log(`[EAS Update] Rolling back update on branch ${safeBranch} for project ${projectId}`);
+    logger.info({ branch: safeBranch, projectId }, 'EAS Update: rolling back');
 
     const rollbackOutput = await execInContainer(
       entry.id,
@@ -8995,7 +9053,7 @@ app.post('/api/eas-update/:projectId/rollback', authenticateRequest, verifyProje
       // Not parseable as JSON — might be a message or error
     }
 
-    console.log(`[EAS Update] Rollback completed for project ${projectId} on branch ${safeBranch}`);
+    logger.info({ projectId, branch: safeBranch }, 'EAS Update: rollback completed');
 
     sendSuccess(res, {
       branch: safeBranch,
@@ -9004,9 +9062,9 @@ app.post('/api/eas-update/:projectId/rollback', authenticateRequest, verifyProje
       raw: rollbackData ? undefined : rollbackOutput.slice(0, 500),
     });
   } catch (error: any) {
-    console.error(`[EAS Update] Rollback failed for project ${projectId}:`, error.message);
+    logger.error({ err: error, projectId }, 'EAS Update: rollback failed');
     // Could be that the command isn't available in this EAS CLI version
-    return sendError(res, createError(ErrorCode.INTERNAL_ERROR, `EAS update rollback failed: ${error.message}. This may require a newer version of eas-cli.`));
+    return sendError(res, createError(ErrorCode.INTERNAL_ERROR, 'EAS update rollback failed'));
   }
 }));
 
@@ -9045,7 +9103,7 @@ app.post('/api/eas-share/:projectId', authenticateRequest, verifyProjectOwnershi
       await execInContainer(entry.id, `cd /workspace && EXPO_TOKEN=${safeToken} eas update:configure --non-interactive 2>&1`);
     } catch { /* already configured */ }
 
-    console.log(`[EAS Share] Pushing share update for project ${projectId}`);
+    logger.info({ projectId }, 'EAS Share: pushing share update');
 
     const updateOutput = await execInContainer(
       entry.id,
@@ -9064,7 +9122,7 @@ app.post('/api/eas-share/:projectId', authenticateRequest, verifyProjectOwnershi
         }
       }
     } catch {
-      console.error(`[EAS Share] Failed to parse output:`, updateOutput);
+      logger.error({ updateOutput }, 'EAS Share: failed to parse output');
       return sendError(res, createError(ErrorCode.INTERNAL_ERROR, `Share update pushed but output parse failed. Raw: ${updateOutput.slice(0, 500)}`));
     }
 
@@ -9082,12 +9140,12 @@ app.post('/api/eas-share/:projectId', authenticateRequest, verifyProjectOwnershi
     const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(shareUrl)}&bgcolor=1a1a2e&color=ffffff&format=svg`;
 
     easShares.set(projectId, { projectId, shareUrl, updateId, createdAt: new Date().toISOString() });
-    console.log(`[EAS Share] Share link created for project ${projectId}: ${updateId}`);
+    logger.info({ projectId, updateId }, 'EAS Share: share link created');
 
     sendSuccess(res, { shareUrl, updateId, branch: 'shared', qrUrl });
   } catch (error: any) {
-    console.error(`[EAS Share] Failed for project ${projectId}:`, error.message);
-    return sendError(res, createError(ErrorCode.INTERNAL_ERROR, `EAS share failed: ${error.message}`));
+    logger.error({ err: error, projectId }, 'EAS Share: failed');
+    return sendError(res, createError(ErrorCode.INTERNAL_ERROR, 'EAS share failed'));
   }
 }));
 
@@ -9136,7 +9194,7 @@ app.post('/api/eas-submit/:projectId', authenticateRequest, verifyProjectOwnersh
       await execInContainer(entry.id, 'npm install -g eas-cli 2>&1');
     }
 
-    console.log(`[EAS Submit] Submitting ${platform} for project ${projectId}`);
+    logger.info({ platform, projectId }, 'EAS Submit: submitting');
 
     const submitCmd = buildId
       ? `cd /workspace && EXPO_TOKEN=${safeToken} eas submit --platform ${platform} --id ${sanitizeShellToken(buildId)} --non-interactive --json 2>&1`
@@ -9154,12 +9212,12 @@ app.post('/api/eas-submit/:projectId', authenticateRequest, verifyProjectOwnersh
     } catch { /* ignore parse errors */ }
 
     const submitId = submitData?.id || `submit-${Date.now()}`;
-    console.log(`[EAS Submit] Submission ${submitId} completed for project ${projectId} (${platform})`);
+    logger.info({ submitId, projectId, platform }, 'EAS Submit: submission completed');
 
     sendSuccess(res, { submitId, status: submitData?.status || 'submitted', platform });
   } catch (error: any) {
-    console.error(`[EAS Submit] Failed for project ${projectId}:`, error.message);
-    return sendError(res, createError(ErrorCode.INTERNAL_ERROR, `EAS submit failed: ${error.message}`));
+    logger.error({ err: error, projectId }, 'EAS Submit: failed');
+    return sendError(res, createError(ErrorCode.INTERNAL_ERROR, 'EAS submit failed'));
   }
 }));
 
@@ -9183,7 +9241,7 @@ app.get('/api/app-config/:projectId', authenticateRequest, verifyProjectOwnershi
     const appJson = JSON.parse(appJsonRaw);
     sendSuccess(res, appJson.expo || appJson);
   } catch (error: any) {
-    return sendError(res, createError(ErrorCode.INTERNAL_ERROR, `Failed to read app.json: ${error.message}`));
+    return sendError(res, createError(ErrorCode.INTERNAL_ERROR, 'Failed to read app.json'));
   }
 }));
 
@@ -9223,10 +9281,10 @@ app.put('/api/app-config/:projectId', authenticateRequest, verifyProjectOwnershi
     const newContent = JSON.stringify(appJson, null, 2);
     await execInContainer(entry.id, `cat > /workspace/app.json << 'APPJSONEOF'\n${newContent}\nAPPJSONEOF`);
 
-    console.log(`[App Config] Updated app.json for project ${projectId}`);
+    logger.info({ projectId }, 'App Config: updated app.json');
     sendSuccess(res, expoConfig);
   } catch (error: any) {
-    return sendError(res, createError(ErrorCode.INTERNAL_ERROR, `Failed to update app.json: ${error.message}`));
+    return sendError(res, createError(ErrorCode.INTERNAL_ERROR, 'Failed to update app.json'));
   }
 }));
 
@@ -9268,10 +9326,10 @@ app.put('/api/eas-config/:projectId', authenticateRequest, verifyProjectOwnershi
     const newContent = JSON.stringify(easJson, null, 2);
     await execInContainer(entry.id, `cat > /workspace/eas.json << 'EASJSONEOF'\n${newContent}\nEASJSONEOF`);
 
-    console.log(`[EAS Config] Updated eas.json for project ${projectId}`);
+    logger.info({ projectId }, 'EAS Config: updated eas.json');
     sendSuccess(res, easJson);
   } catch (error: any) {
-    return sendError(res, createError(ErrorCode.INTERNAL_ERROR, `Failed to update eas.json: ${error.message}`));
+    return sendError(res, createError(ErrorCode.INTERNAL_ERROR, 'Failed to update eas.json'));
   }
 }));
 
@@ -9304,10 +9362,10 @@ app.post('/api/backend-db/:projectId/init', authenticateRequest, verifyProjectOw
       await execInContainer(entry.id, `sqlite3 /workspace/data/app.db '${safeSchema}' 2>&1`);
     }
 
-    console.log(`[Backend DB] Initialized SQLite for project ${projectId}`);
+    logger.info({ projectId }, 'Backend DB: initialized SQLite');
     sendSuccess(res, { initialized: true, path: '/workspace/data/app.db' });
   } catch (error: any) {
-    return sendError(res, createError(ErrorCode.INTERNAL_ERROR, `Failed to initialize database: ${error.message}`));
+    return sendError(res, createError(ErrorCode.INTERNAL_ERROR, 'Failed to initialize database'));
   }
 }));
 
@@ -9340,7 +9398,7 @@ app.post('/api/backend-db/:projectId/query', authenticateRequest, verifyProjectO
 
     sendSuccess(res, { rows, rowCount: rows.length });
   } catch (error: any) {
-    return sendError(res, createError(ErrorCode.INTERNAL_ERROR, `Query failed: ${error.message}`));
+    return sendError(res, createError(ErrorCode.INTERNAL_ERROR, 'Query failed'));
   }
 }));
 
@@ -9391,10 +9449,10 @@ app.post('/api/backend-db/:projectId/migrate', authenticateRequest, verifyProjec
       appliedCount++;
     }
 
-    console.log(`[Backend DB] Migrations for project ${projectId}: ${appliedCount} applied, ${skippedCount} skipped`);
+    logger.info({ projectId, appliedCount, skippedCount }, 'Backend DB: migrations complete');
     sendSuccess(res, { applied: appliedCount, skipped: skippedCount });
   } catch (error: any) {
-    return sendError(res, createError(ErrorCode.INTERNAL_ERROR, `Migration failed: ${error.message}`));
+    return sendError(res, createError(ErrorCode.INTERNAL_ERROR, 'Migration failed'));
   }
 }));
 
@@ -9485,7 +9543,7 @@ try {
   const Stripe = require('stripe');
   stripe = new Stripe(STRIPE_SECRET_KEY);
 } catch {
-  console.warn('stripe package not installed. Run: npm install stripe');
+  logger.warn('stripe package not installed, run: npm install stripe');
 }
 
 export async function createCheckoutSession(priceId: string, successUrl: string, cancelUrl: string) {
@@ -9557,10 +9615,10 @@ export function remove(id: string) {
       files.push(`src/backend/${name}.ts`);
     }
 
-    console.log(`[Backend Scaffold] Generated ${type} scaffold for project ${projectId}: ${files.join(', ')}`);
+    logger.info({ type, projectId, files }, 'Backend Scaffold: generated scaffold');
     sendSuccess(res, { files, message: `${type} scaffold generated successfully` });
   } catch (error: any) {
-    return sendError(res, createError(ErrorCode.INTERNAL_ERROR, `Scaffold generation failed: ${error.message}`));
+    return sendError(res, createError(ErrorCode.INTERNAL_ERROR, 'Scaffold generation failed'));
   }
 }));
 
@@ -9753,11 +9811,11 @@ ${jsxContent}
       files.push(filePath);
     }
 
-    console.log(`[Figma Import] Converted ${files.length} components for project ${projectId}`);
+    logger.info({ fileCount: files.length, projectId }, 'Figma Import: converted components');
     sendSuccess(res, { files, componentCount: files.length });
   } catch (error: any) {
-    console.error(`[Figma Import] Failed for project ${projectId}:`, error.message);
-    return sendError(res, createError(ErrorCode.INTERNAL_ERROR, `Figma import failed: ${error.message}`));
+    logger.error({ err: error, projectId }, 'Figma Import: failed');
+    return sendError(res, createError(ErrorCode.INTERNAL_ERROR, 'Figma import failed'));
   }
 }));
 
@@ -9785,7 +9843,7 @@ app.post('/api/appetize-upload/:projectId', authenticateRequest, verifyProjectOw
   }
 
   try {
-    console.log(`[Appetize] Uploading ${platform} build for project ${projectId}`);
+    logger.info({ platform, projectId }, 'Appetize: uploading build');
 
     const appetizeResponse = await fetch('https://api.appetize.io/v2/apps', {
       method: 'POST',
@@ -9815,12 +9873,12 @@ app.post('/api/appetize-upload/:projectId', authenticateRequest, verifyProjectOw
     const embedUrl = `https://appetize.io/embed/${publicKey}`;
 
     appetizeSessions.set(projectId, { publicKey, appUrl, platform, projectId });
-    console.log(`[Appetize] Upload complete for project ${projectId}: ${publicKey}`);
+    logger.info({ projectId, publicKey }, 'Appetize: upload complete');
 
     sendSuccess(res, { publicKey, appUrl, embedUrl });
   } catch (error: any) {
-    console.error(`[Appetize] Upload failed for project ${projectId}:`, error.message);
-    return sendError(res, createError(ErrorCode.INTERNAL_ERROR, `Appetize upload failed: ${error.message}`));
+    logger.error({ err: error, projectId }, 'Appetize: upload failed');
+    return sendError(res, createError(ErrorCode.INTERNAL_ERROR, 'Appetize upload failed'));
   }
 }));
 
@@ -9932,11 +9990,11 @@ ${jsxContent}
       files.push(filePath);
     }
 
-    console.log(`[Canvas] Generated ${files.length} components for project ${projectId}`);
+    logger.info({ fileCount: files.length, projectId }, 'Canvas: generated components');
     sendSuccess(res, { files });
   } catch (error: any) {
-    console.error(`[Canvas] Generation failed for project ${projectId}:`, error.message);
-    return sendError(res, createError(ErrorCode.INTERNAL_ERROR, `Canvas generation failed: ${error.message}`));
+    logger.error({ err: error, projectId }, 'Canvas: generation failed');
+    return sendError(res, createError(ErrorCode.INTERNAL_ERROR, 'Canvas generation failed'));
   }
 }));
 
@@ -9962,7 +10020,7 @@ app.post('/api/clone-url/:projectId', authenticateRequest, verifyProjectOwnershi
   }
 
   try {
-    console.log(`[Clone URL] Starting clone of ${url} for project ${projectId}`);
+    logger.info({ url, projectId }, 'Clone URL: starting clone');
 
     // Clone the website
     const website = await cloneWebsite(url);
@@ -9989,14 +10047,14 @@ app.post('/api/clone-url/:projectId', authenticateRequest, verifyProjectOwnershi
       // Write file using base64 to handle special characters
       const base64Content = Buffer.from(content).toString('base64');
       const writeExec = await container.exec({
-        Cmd: ['sh', '-c', `echo '${base64Content}' | base64 -d > /workspace/${filePath}`],
+        Cmd: ['sh', '-c', `echo '${base64Content}' | base64 -d > '/workspace/${filePath.replace(/'/g, "'\\''").replace(/[\$`\\]/g, '\\$&')}'`],
         AttachStdout: true,
         AttachStderr: true,
       });
       await writeExec.start({ Detach: false });
     }
 
-    console.log(`[Clone URL] Successfully cloned ${url} - ${Object.keys(website.files).length} files written`);
+    logger.info({ url, fileCount: Object.keys(website.files).length }, 'Clone URL: successfully cloned');
 
     auditLog({
       userId: req.userId,
@@ -10014,8 +10072,8 @@ app.post('/api/clone-url/:projectId', authenticateRequest, verifyProjectOwnershi
       assetCount: website.assetCount,
     });
   } catch (error: any) {
-    console.error(`[Clone URL] Error:`, error);
-    res.status(500).json({ error: error.message || 'Failed to clone website' });
+    logger.error({ err: error }, 'Clone URL: error');
+    res.status(500).json({ error: 'Failed to clone website' });
   }
 });
 
@@ -10128,8 +10186,8 @@ app.post('/api/browser/:projectId', authenticateRequest, verifyProjectOwnership,
 
     res.json(result);
   } catch (error: any) {
-    console.error(`[Browser] Error:`, error);
-    res.status(500).json({ success: false, error: error.message || 'Browser automation failed' });
+    logger.error({ err: error }, 'Browser: error');
+    res.status(500).json({ success: false, error: 'Browser automation failed' });
   }
 });
 
@@ -10160,7 +10218,7 @@ app.post('/api/code-index/:projectId/index', authenticateRequest, verifyProjectO
   }
 
   try {
-    console.log(`[CodeIndex] Starting index for ${projectId}`);
+    logger.info({ projectId }, 'CodeIndex: starting index');
 
     // Get workspace path from container
     const workspacePath = '/workspace'; // Standard path in containers
@@ -10177,8 +10235,8 @@ app.post('/api/code-index/:projectId/index', authenticateRequest, verifyProjectO
 
     res.json(result);
   } catch (error: any) {
-    console.error(`[CodeIndex] Error:`, error);
-    res.status(500).json({ success: false, error: error.message || 'Indexing failed' });
+    logger.error({ err: error }, 'CodeIndex: error');
+    res.status(500).json({ success: false, error: 'Indexing failed' });
   }
 });
 
@@ -10207,8 +10265,8 @@ app.post('/api/code-index/:projectId/search', authenticateRequest, verifyProject
 
     res.json(result);
   } catch (error: any) {
-    console.error(`[CodeIndex] Search error:`, error);
-    res.status(500).json({ success: false, error: error.message || 'Search failed' });
+    logger.error({ err: error }, 'CodeIndex: search error');
+    res.status(500).json({ success: false, error: 'Search failed' });
   }
 });
 
@@ -10226,7 +10284,7 @@ app.get('/api/code-index/:projectId/status', authenticateRequest, verifyProjectO
       indexing: progress,
     });
   } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message || 'Failed to get status' });
+    res.status(500).json({ success: false, error: 'Failed to get status' });
   }
 });
 
@@ -10245,11 +10303,280 @@ app.delete('/api/code-index/:projectId', authenticateRequest, verifyProjectOwner
 
     res.json({ success: true, message: 'Index cleared' });
   } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message || 'Failed to clear index' });
+    res.status(500).json({ success: false, error: 'Failed to clear index' });
   }
 });
 
 // ==================== END CODE INDEX ====================
+
+// ==================== SUBAGENT WORKFLOW ====================
+
+app.post('/api/agent/workflow', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const { requestContract, task, paths, lanes, continuous, retryMax, retryBackoffMs } = parseSubagentWorkflowRequest(req.body);
+  const contractValidation = validateSubagentWorkflowRequestContract(requestContract, INTERNAL_WORKFLOW_CONTRACT);
+  if (!contractValidation.ok) {
+    return res.status(400).json(contractValidation.error);
+  }
+  const workflow = buildSubagentWorkflowPlan({
+    task,
+    requestedPaths: paths,
+    requestedLanes: lanes,
+    continuous,
+    retryMax,
+    retryBackoffMs,
+  });
+
+  return res.json(buildInternalWorkflowResponse({ workflow, requestContract }));
+}));
+
+app.post('/api/agent/workflow/:projectId', authenticateRequest, verifyProjectOwnership, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const { requestContract, task, paths, lanes, continuous, retryMax, retryBackoffMs } = parseSubagentWorkflowRequest(req.body);
+  const contractValidation = validateSubagentWorkflowRequestContract(requestContract, INTERNAL_WORKFLOW_CONTRACT);
+  if (!contractValidation.ok) {
+    return res.status(400).json(contractValidation.error);
+  }
+  const workflow = buildSubagentWorkflowPlan({
+    task,
+    requestedPaths: paths,
+    requestedLanes: lanes,
+    continuous,
+    retryMax,
+    retryBackoffMs,
+  });
+
+  return res.json(buildInternalWorkflowResponse({
+    workflow,
+    projectId: req.params.projectId,
+    requestContract,
+  }));
+}));
+
+app.post(
+  '/api/v1/agent/workflow',
+  requestIdMiddleware,
+  authenticateApiKey as any,
+  requireScope('projects:read') as any,
+  asyncApiHandler(async (req: AuthenticatedApiRequest, res: express.Response) => {
+    const { requestContract, task, paths, lanes, continuous, retryMax, retryBackoffMs } = parseSubagentWorkflowRequest(req.body);
+    const contractValidation = validateSubagentWorkflowRequestContract(requestContract, PUBLIC_WORKFLOW_CONTRACT);
+    if (!contractValidation.ok) {
+      return res.status(400).json(contractValidation.error);
+    }
+    const workflow = buildSubagentWorkflowPlan({
+      task,
+      requestedPaths: paths,
+      requestedLanes: lanes,
+      continuous,
+      retryMax,
+      retryBackoffMs,
+    });
+
+    sendApiSuccess(
+      res,
+      buildPublicWorkflowResponseData({ workflow, requestContract }),
+      req.requestId || 'unknown',
+    );
+  }),
+);
+
+// Lane status store (in-memory)
+const laneStatusStore = new Map<string, {
+  status: 'running' | 'completed' | 'failed';
+  workflowRunId?: string;
+  attempts?: number;
+  duration?: number;
+  errors?: string[];
+  warnings?: string[];
+  updatedAt: string;
+}>();
+
+function parseLaneStatusBody(raw: unknown): {
+  status?: 'running' | 'completed' | 'failed';
+  workflowRunId?: string;
+  attempts?: number;
+  duration?: number;
+  errors?: string[];
+  warnings?: string[];
+} {
+  const parsed = parseSubagentLaneStatusUpdate(raw);
+  const body = (raw && typeof raw === 'object') ? (raw as Record<string, unknown>) : {};
+  const workflowRunId = String(body.workflowRunId || '').trim() || undefined;
+  const warnings = Array.isArray(body.warnings) ? body.warnings.map(String) : undefined;
+  return {
+    status: parsed?.status,
+    workflowRunId,
+    attempts: parsed?.attempts,
+    duration: parsed?.duration,
+    errors: parsed?.errors,
+    warnings,
+  };
+}
+
+function upsertLaneStatus(laneId: string, body: ReturnType<typeof parseLaneStatusBody>): void {
+  if (!body.status) return;
+  laneStatusStore.set(laneId, {
+    status: body.status,
+    ...(body.workflowRunId ? { workflowRunId: body.workflowRunId } : {}),
+    ...(typeof body.attempts === 'number' ? { attempts: body.attempts } : {}),
+    ...(typeof body.duration === 'number' ? { duration: body.duration } : {}),
+    ...(Array.isArray(body.errors) ? { errors: body.errors } : {}),
+    ...(Array.isArray(body.warnings) ? { warnings: body.warnings } : {}),
+    updatedAt: new Date().toISOString(),
+  });
+}
+
+function resolveLaneHealthSnapshot(workflowRunId?: string): {
+  laneCount: number;
+  completed: number;
+  failed: number;
+  running: number;
+  lanes: Record<string, unknown>;
+  taxonomyVersion: string;
+  state: 'healthy' | 'degraded' | 'blocked';
+  ok: boolean;
+  blockers: string[];
+  warnings: string[];
+  nextActions: string[];
+  lanesByState: {
+    running: string[];
+    completed: string[];
+    failed: string[];
+  };
+} {
+  const lanes: Record<string, unknown> = {};
+  const normalizedStatuses: Record<string, SubagentLaneStatusEntry> = {};
+  const entries = Array.from(laneStatusStore.entries()).filter(([, entry]) =>
+    workflowRunId ? entry.workflowRunId === workflowRunId : true,
+  );
+  for (const [laneId, entry] of entries) {
+    lanes[laneId] = entry;
+    normalizedStatuses[laneId] = {
+      status: entry.status,
+      ...(typeof entry.attempts === 'number' ? { attempts: entry.attempts } : {}),
+      ...(typeof entry.duration === 'number' ? { duration: entry.duration } : {}),
+      ...(Array.isArray(entry.errors) ? { errors: entry.errors } : {}),
+      updatedAt: entry.updatedAt,
+    };
+  }
+  const health = buildSubagentWorkflowHealthSummary({ statuses: normalizedStatuses });
+  return {
+    laneCount: health.laneCount,
+    completed: health.completed,
+    failed: health.failed,
+    running: health.running,
+    taxonomyVersion: health.taxonomyVersion,
+    state: health.state,
+    ok: health.ok,
+    blockers: health.blockers,
+    warnings: health.warnings,
+    nextActions: health.nextActions,
+    lanesByState: {
+      running: health.lanesByState.running,
+      completed: health.lanesByState.completed,
+      failed: health.lanesByState.failed,
+    },
+    lanes,
+  };
+}
+
+app.post('/api/agent/workflow/:laneId/status', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const { laneId } = req.params;
+  if (!isKnownSubagentLaneId(laneId)) {
+    return res.status(400).json({ error: 'Invalid lane id.' });
+  }
+  const parsed = parseLaneStatusBody(req.body);
+  if (!parsed.status) {
+    return res.status(400).json({ error: 'Invalid status. Must be running, completed, or failed.' });
+  }
+  upsertLaneStatus(laneId, parsed);
+  return res.json({
+    success: true,
+    acknowledged: true,
+    laneId,
+    contract: INTERNAL_WORKFLOW_CONTRACT,
+  });
+}));
+
+app.get('/api/agent/workflow/health', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const workflowRunId = String(req.query.workflowRunId || '').trim() || undefined;
+  const snapshot = resolveLaneHealthSnapshot(workflowRunId);
+  return res.json({
+    success: true,
+    contract: INTERNAL_WORKFLOW_CONTRACT,
+    ...(workflowRunId ? { workflowRunId } : {}),
+    ...snapshot,
+  });
+}));
+
+app.post('/api/agent/workflow/health/reset', authenticateRequest, asyncHandler(async (_req: AuthenticatedRequest, res: express.Response) => {
+  const cleared = laneStatusStore.size;
+  laneStatusStore.clear();
+  return res.json({
+    success: true,
+    contract: INTERNAL_WORKFLOW_CONTRACT,
+    cleared,
+  });
+}));
+
+app.post(
+  '/api/v1/agent/workflow/:laneId/status',
+  requestIdMiddleware,
+  authenticateApiKey as any,
+  requireScope('projects:read') as any,
+  asyncApiHandler(async (req: AuthenticatedApiRequest, res: express.Response) => {
+    const { laneId } = req.params;
+    if (!isKnownSubagentLaneId(laneId)) {
+      return res.status(400).json({ error: 'Invalid lane id.' });
+    }
+    const parsed = parseLaneStatusBody(req.body);
+    if (!parsed.status) {
+      return res.status(400).json({ error: 'Invalid status. Must be running, completed, or failed.' });
+    }
+    upsertLaneStatus(laneId, parsed);
+    sendApiSuccess(
+      res,
+      {
+        acknowledged: true,
+        laneId,
+        contract: PUBLIC_WORKFLOW_HEALTH_CONTRACT,
+      },
+      req.requestId || 'unknown',
+    );
+  }),
+);
+
+app.get(
+  '/api/v1/agent/workflow/health',
+  requestIdMiddleware,
+  authenticateApiKey as any,
+  requireScope('projects:read') as any,
+  asyncApiHandler(async (req: AuthenticatedApiRequest, res: express.Response) => {
+    const workflowRunId = String(req.query.workflowRunId || '').trim() || undefined;
+    const snapshot = resolveLaneHealthSnapshot(workflowRunId);
+    sendApiSuccess(res, {
+      contract: PUBLIC_WORKFLOW_HEALTH_CONTRACT,
+      ...(workflowRunId ? { workflowRunId } : {}),
+      ...snapshot,
+    }, req.requestId || 'unknown');
+  }),
+);
+
+app.post(
+  '/api/v1/agent/workflow/health/reset',
+  requestIdMiddleware,
+  authenticateApiKey as any,
+  requireScope('projects:read') as any,
+  asyncApiHandler(async (req: AuthenticatedApiRequest, res: express.Response) => {
+    const cleared = laneStatusStore.size;
+    laneStatusStore.clear();
+    sendApiSuccess(res, {
+      contract: PUBLIC_WORKFLOW_CONTRACT,
+      cleared,
+    }, req.requestId || 'unknown');
+  }),
+);
+
+// ==================== END SUBAGENT WORKFLOW ====================
 
 // ==================== DATABASE EXPLORER ====================
 import {
@@ -10298,7 +10625,7 @@ app.post('/api/database/:projectId/connect', databaseLimiter, authenticateReques
       details: { type: params.type, connectionId: result.connectionId },
     });
 
-    console.log(`[Database] Connected ${params.type} for project ${projectId}: ${result.connectionId}`);
+    logger.info({ type: params.type, projectId, connectionId: result.connectionId }, 'Database: connected');
 
     res.json({
       success: true,
@@ -10306,7 +10633,7 @@ app.post('/api/database/:projectId/connect', databaseLimiter, authenticateReques
       type: params.type,
     });
   } catch (error: any) {
-    console.error('[Database] Connect error:', error);
+    logger.error({ err: error }, 'Database: connect error');
     res.status(500).json({ success: false, error: 'Failed to connect to database' });
   }
 });
@@ -10335,7 +10662,7 @@ app.delete('/api/database/:projectId/disconnect/:connectionId', authenticateRequ
 
     res.json({ success: true });
   } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message });
+    res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 
@@ -10357,7 +10684,7 @@ app.get('/api/database/:projectId/connections', authenticateRequest, verifyProje
       })),
     });
   } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message });
+    res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 
@@ -10386,7 +10713,7 @@ app.get('/api/database/:projectId/tables', authenticateRequest, verifyProjectOwn
       data: result.data,
     });
   } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message });
+    res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 
@@ -10420,7 +10747,7 @@ app.get('/api/database/:projectId/schema/:table', authenticateRequest, verifyPro
       data: result.data,
     });
   } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message });
+    res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 
@@ -10456,7 +10783,7 @@ app.get('/api/database/:projectId/preview/:table', authenticateRequest, verifyPr
       columns: result.columns,
     });
   } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message });
+    res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 
@@ -10519,7 +10846,7 @@ app.post('/api/database/:projectId/query', databaseLimiter, authenticateRequest,
       truncated: result.truncated,
     });
   } catch (error: any) {
-    console.error('[Database] Query error:', error);
+    logger.error({ err: error }, 'Database: query error');
     res.status(500).json({ success: false, error: 'Query execution failed' });
   }
 });
@@ -10545,7 +10872,7 @@ app.get('/api/database/:projectId/schemas', authenticateRequest, verifyProjectOw
       schemas: result.schemas,
     });
   } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message });
+    res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 
@@ -10561,7 +10888,7 @@ app.get('/api/database/stats', authenticateRequest, (req: AuthenticatedRequest, 
       queries: queryStats,
     });
   } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message });
+    res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 
@@ -10657,7 +10984,7 @@ app.post('/api/debug/:projectId/start', authenticateRequest, verifyProjectOwners
       port: session.port,
     });
   } catch (err: any) {
-    console.error('[Debug] Start error:', err);
+    logger.error({ err }, 'Debug: start error');
     res.status(500).json({ error: err.message });
   }
 });
@@ -10693,7 +11020,7 @@ app.post('/api/debug/:projectId/stop', authenticateRequest, verifyProjectOwnersh
 
     res.json({ success: true });
   } catch (err: any) {
-    console.error('[Debug] Stop error:', err);
+    logger.error({ err }, 'Debug: stop error');
     res.status(500).json({ error: err.message });
   }
 });
@@ -10736,7 +11063,7 @@ app.post('/api/debug/:projectId/restart', authenticateRequest, verifyProjectOwne
       },
     });
   } catch (err: any) {
-    console.error('[Debug] Restart error:', err);
+    logger.error({ err }, 'Debug: restart error');
     res.status(500).json({ error: err.message });
   }
 });
@@ -10759,7 +11086,7 @@ app.get('/api/debug/:projectId/sessions', authenticateRequest, verifyProjectOwne
       })),
     });
   } catch (err: any) {
-    console.error('[Debug] Sessions error:', err);
+    logger.error({ err }, 'Debug: sessions error');
     res.status(500).json({ error: err.message });
   }
 });
@@ -10812,7 +11139,7 @@ app.post('/api/debug/:projectId/breakpoints', authenticateRequest, verifyProject
       breakpoints: verified,
     });
   } catch (err: any) {
-    console.error('[Debug] Breakpoints error:', err);
+    logger.error({ err }, 'Debug: breakpoints error');
     res.status(500).json({ error: err.message });
   }
 });
@@ -10844,7 +11171,7 @@ app.delete('/api/debug/:projectId/breakpoints', authenticateRequest, verifyProje
 
     res.json({ success: true });
   } catch (err: any) {
-    console.error('[Debug] Clear breakpoints error:', err);
+    logger.error({ err }, 'Debug: clear breakpoints error');
     res.status(500).json({ error: err.message });
   }
 });
@@ -10872,7 +11199,7 @@ app.post('/api/debug/:projectId/continue', authenticateRequest, verifyProjectOwn
 
     res.json({ success: true });
   } catch (err: any) {
-    console.error('[Debug] Continue error:', err);
+    logger.error({ err }, 'Debug: continue error');
     res.status(500).json({ error: err.message });
   }
 });
@@ -10900,7 +11227,7 @@ app.post('/api/debug/:projectId/stepOver', authenticateRequest, verifyProjectOwn
 
     res.json({ success: true });
   } catch (err: any) {
-    console.error('[Debug] Step over error:', err);
+    logger.error({ err }, 'Debug: step over error');
     res.status(500).json({ error: err.message });
   }
 });
@@ -10928,7 +11255,7 @@ app.post('/api/debug/:projectId/stepInto', authenticateRequest, verifyProjectOwn
 
     res.json({ success: true });
   } catch (err: any) {
-    console.error('[Debug] Step into error:', err);
+    logger.error({ err }, 'Debug: step into error');
     res.status(500).json({ error: err.message });
   }
 });
@@ -10956,7 +11283,7 @@ app.post('/api/debug/:projectId/stepOut', authenticateRequest, verifyProjectOwne
 
     res.json({ success: true });
   } catch (err: any) {
-    console.error('[Debug] Step out error:', err);
+    logger.error({ err }, 'Debug: step out error');
     res.status(500).json({ error: err.message });
   }
 });
@@ -10984,7 +11311,7 @@ app.post('/api/debug/:projectId/pause', authenticateRequest, verifyProjectOwners
 
     res.json({ success: true });
   } catch (err: any) {
-    console.error('[Debug] Pause error:', err);
+    logger.error({ err }, 'Debug: pause error');
     res.status(500).json({ error: err.message });
   }
 });
@@ -11015,7 +11342,7 @@ app.get('/api/debug/:projectId/threads', authenticateRequest, verifyProjectOwner
       threads,
     });
   } catch (err: any) {
-    console.error('[Debug] Threads error:', err);
+    logger.error({ err }, 'Debug: threads error');
     res.status(500).json({ error: err.message });
   }
 });
@@ -11050,7 +11377,7 @@ app.get('/api/debug/:projectId/stacktrace', authenticateRequest, verifyProjectOw
       stackFrames,
     });
   } catch (err: any) {
-    console.error('[Debug] Stack trace error:', err);
+    logger.error({ err }, 'Debug: stack trace error');
     res.status(500).json({ error: err.message });
   }
 });
@@ -11085,7 +11412,7 @@ app.get('/api/debug/:projectId/scopes', authenticateRequest, verifyProjectOwners
       scopes,
     });
   } catch (err: any) {
-    console.error('[Debug] Scopes error:', err);
+    logger.error({ err }, 'Debug: scopes error');
     res.status(500).json({ error: err.message });
   }
 });
@@ -11120,7 +11447,7 @@ app.get('/api/debug/:projectId/variables', authenticateRequest, verifyProjectOwn
       variables,
     });
   } catch (err: any) {
-    console.error('[Debug] Variables error:', err);
+    logger.error({ err }, 'Debug: variables error');
     res.status(500).json({ error: err.message });
   }
 });
@@ -11165,7 +11492,7 @@ app.post('/api/debug/:projectId/evaluate', authenticateRequest, verifyProjectOwn
       variablesReference: result.variablesReference,
     });
   } catch (err: any) {
-    console.error('[Debug] Evaluate error:', err);
+    logger.error({ err }, 'Debug: evaluate error');
     res.status(500).json({ error: err.message });
   }
 });
@@ -11179,13 +11506,13 @@ app.get('/api/debug/stats', authenticateRequest, (req: AuthenticatedRequest, res
       stats,
     });
   } catch (err: any) {
-    console.error('[Debug] Stats error:', err);
+    logger.error({ err }, 'Debug: stats error');
     res.status(500).json({ error: err.message });
   }
 });
 
 // WebSocket endpoint for real-time debug events
-app.ws('/api/debug/:projectId/events', async (ws, req) => {
+app.ws('/api/debug/:projectId/events', async (ws: WebSocket, req: express.Request) => {
   // Authenticate WebSocket connection
   const authSession = await authenticateWebSocket(ws, req);
   if (!authSession) return;
@@ -11198,7 +11525,7 @@ app.ws('/api/debug/:projectId/events', async (ws, req) => {
     return;
   }
 
-  console.log(`[Debug] WebSocket connected for ${projectId} [user: ${authSession.userId}]`);
+  logger.info({ projectId, userId: authSession.userId }, 'Debug: WebSocket connected');
 
   // Add client to event listeners
   if (!debugEventClients.has(projectId)) {
@@ -11241,7 +11568,7 @@ app.ws('/api/debug/:projectId/events', async (ws, req) => {
           break;
       }
     } catch (err) {
-      console.error('[Debug WS] Message parse error:', err);
+      logger.error({ err }, 'Debug WS: message parse error');
     }
   });
 
@@ -11253,11 +11580,11 @@ app.ws('/api/debug/:projectId/events', async (ws, req) => {
         debugEventClients.delete(projectId);
       }
     }
-    console.log(`[Debug] WebSocket disconnected for ${projectId}`);
+    logger.info({ projectId }, 'Debug: WebSocket disconnected');
   });
 
   ws.on('error', (err) => {
-    console.error(`[Debug WS] Error for ${projectId}:`, err.message);
+    logger.error({ err, projectId }, 'Debug WS: error');
   });
 });
 
@@ -11293,7 +11620,7 @@ async function waitForContainer(projectId: string, timeoutMs: number = 5000): Pr
   return undefined;
 }
 
-app.ws('/watch/:projectId', async (ws, req) => {
+app.ws('/watch/:projectId', async (ws: WebSocket, req: express.Request) => {
   const { projectId } = req.params;
 
   // Authenticate WebSocket connection
@@ -11311,7 +11638,7 @@ app.ws('/watch/:projectId', async (ws, req) => {
 
   // If container not found, wait briefly for it to be created
   if (!entry) {
-    console.log(`[FileWatch] Container not ready for ${projectId}, waiting...`);
+    logger.info({ projectId }, 'FileWatch: container not ready, waiting');
 
     // Wait up to 5 seconds for the container
     entry = await waitForContainer(projectId, 5000);
@@ -11319,12 +11646,12 @@ app.ws('/watch/:projectId', async (ws, req) => {
     if (!entry) {
       // Still not ready after waiting - close with 1008 code
       // Client will handle this gracefully with exponential backoff
-      console.log(`[FileWatch] Container still not ready for ${projectId}, closing connection`);
+      logger.info({ projectId }, 'FileWatch: container still not ready, closing connection');
       wsKeepalive.closeWithHint(ws as any, 'container_not_found', 'Container not found for this project', 1008);
       return;
     }
 
-    console.log(`[FileWatch] Container became ready for ${projectId}`);
+    logger.info({ projectId }, 'FileWatch: container became ready');
   }
 
   // Cancel any pending stop timer — a client is reconnecting
@@ -11332,7 +11659,7 @@ app.ws('/watch/:projectId', async (ws, req) => {
   if (pendingStop) {
     clearTimeout(pendingStop);
     fileWatchStopTimers.delete(projectId);
-    console.log(`[FileWatch] Cancelled pending stop for ${projectId} — client reconnected`);
+    logger.info({ projectId }, 'FileWatch: cancelled pending stop, client reconnected');
   }
 
   // Add client to watch list
@@ -11344,7 +11671,7 @@ app.ws('/watch/:projectId', async (ws, req) => {
   // Start file watcher for this project if not already running
   fileWatcher.startWatching(entry.id, projectId);
 
-  console.log(`[FileWatch] Client connected for ${projectId} [user: ${authSession.userId}]`);
+  logger.info({ projectId, userId: authSession.userId }, 'FileWatch: client connected');
 
   // Send initial connection confirmation
   ws.send(JSON.stringify({ type: 'connected', projectId }));
@@ -11372,22 +11699,22 @@ app.ws('/watch/:projectId', async (ws, req) => {
         // Don't stop watcher immediately — keep lastCheck state alive
         // so reconnecting clients don't get a full file replay
         fileWatchClients.delete(projectId);
-        console.log(`[FileWatch] Last client gone for ${projectId}, stopping watcher in ${WATCHER_STOP_GRACE_MS / 1000}s`);
+        logger.info({ projectId, graceSec: WATCHER_STOP_GRACE_MS / 1000 }, 'FileWatch: last client gone, stopping watcher after grace period');
         fileWatchStopTimers.set(projectId, setTimeout(() => {
           fileWatchStopTimers.delete(projectId);
           // Only stop if no clients reconnected during the grace period
           if (!fileWatchClients.has(projectId) || fileWatchClients.get(projectId)!.size === 0) {
             fileWatcher.stopWatching(projectId);
-            console.log(`[FileWatch] Watcher stopped for ${projectId} (grace period expired)`);
+            logger.info({ projectId }, 'FileWatch: watcher stopped (grace period expired)');
           }
         }, WATCHER_STOP_GRACE_MS));
       }
     }
-    console.log(`[FileWatch] Client disconnected for ${projectId}`);
+    logger.info({ projectId }, 'FileWatch: client disconnected');
   });
 
   ws.on('error', (err) => {
-    console.error(`[FileWatch] Error for ${projectId}:`, err.message);
+    logger.error({ err, projectId }, 'FileWatch: error');
   });
 });
 
@@ -11446,13 +11773,13 @@ function notifyBuildErrors(projectId: string, errors: ReturnType<typeof parseAll
       try {
         client.send(message);
       } catch (err) {
-        console.warn('[BuildErrors] Failed to send to client:', err);
+        logger.warn({ err }, 'BuildErrors: failed to send to client');
       }
     }
   }
 
   if (hasBlocking && errors.length > 0) {
-    console.log(`[BuildErrors] Notified ${clients.size} clients of ${errors.length} errors for ${projectId}`);
+    logger.info({ clientCount: clients.size, errorCount: errors.length, projectId }, 'BuildErrors: notified clients');
   }
 }
 
@@ -11480,12 +11807,12 @@ function startBuildErrorPolling(containerId: string, projectId: string): void {
       notifyBuildErrors(projectId, errors, blocking);
     } catch (err) {
       // Container might be gone, stop polling
-      console.warn(`[BuildErrors] Error polling for ${projectId}:`, err);
+      logger.warn({ err, projectId }, 'BuildErrors: error polling');
     }
   }, 3000); // Poll every 3 seconds
 
   buildErrorPollers.set(projectId, pollInterval);
-  console.log(`[BuildErrors] Started polling for ${projectId}`);
+  logger.info({ projectId }, 'BuildErrors: started polling');
 }
 
 function stopBuildErrorPolling(projectId: string): void {
@@ -11494,12 +11821,12 @@ function stopBuildErrorPolling(projectId: string): void {
     clearInterval(poller);
     buildErrorPollers.delete(projectId);
     lastBuildErrors.delete(projectId);
-    console.log(`[BuildErrors] Stopped polling for ${projectId}`);
+    logger.info({ projectId }, 'BuildErrors: stopped polling');
   }
 }
 
 // WebSocket endpoint for build errors
-app.ws('/build-errors/:projectId', async (ws, req) => {
+app.ws('/build-errors/:projectId', async (ws: WebSocket, req: express.Request) => {
   const { projectId } = req.params;
 
   // Authenticate WebSocket connection
@@ -11516,7 +11843,7 @@ app.ws('/build-errors/:projectId', async (ws, req) => {
   // Check if container exists
   const entry = containers.get(projectId);
   if (!entry) {
-    console.log(`[BuildErrors] Container not found for ${projectId}`);
+    logger.info({ projectId }, 'BuildErrors: container not found');
     wsKeepalive.closeWithHint(ws as any, 'container_not_found', 'Container not found for this project', 1008);
     return;
   }
@@ -11530,7 +11857,7 @@ app.ws('/build-errors/:projectId', async (ws, req) => {
   // Start polling for errors
   startBuildErrorPolling(entry.id, projectId);
 
-  console.log(`[BuildErrors] Client connected for ${projectId} [user: ${authSession.userId}]`);
+  logger.info({ projectId, userId: authSession.userId }, 'BuildErrors: client connected');
 
   // Send initial state - check current logs for errors
   try {
@@ -11566,11 +11893,11 @@ app.ws('/build-errors/:projectId', async (ws, req) => {
         stopBuildErrorPolling(projectId);
       }
     }
-    console.log(`[BuildErrors] Client disconnected for ${projectId}`);
+    logger.info({ projectId }, 'BuildErrors: client disconnected');
   });
 
   ws.on('error', (err) => {
-    console.error(`[BuildErrors] Error for ${projectId}:`, err.message);
+    logger.error({ err, projectId }, 'BuildErrors: error');
   });
 });
 
@@ -11582,7 +11909,7 @@ const mobileApiDependencies: MobileApiDependencies = {
   fetchUserProjects: async (userId, options) => {
     // In production, this would query the database via the main app API
     // For now, we return an empty list as projects are managed by the main app
-    console.log(`[Mobile] Fetching projects for user ${userId}`, options);
+    logger.info({ userId, options }, 'Mobile: fetching projects');
     try {
       const pathname = '/api/projects';
       const headers = buildInternalServiceHeaders({
@@ -11598,21 +11925,21 @@ const mobileApiDependencies: MobileApiDependencies = {
       });
 
       if (!response.ok) {
-        console.log(`[Mobile] Failed to fetch projects: ${response.status}`);
+        logger.info({ status: response.status }, 'Mobile: failed to fetch projects');
         return { projects: [], total: 0 };
       }
 
       const data = await response.json() as { projects: Record<string, unknown>[]; total: number };
       return { projects: data.projects || [], total: data.total || 0 };
     } catch (error) {
-      console.error(`[Mobile] Error fetching projects:`, error);
+      logger.error({ err: error }, 'Mobile: error fetching projects');
       return { projects: [], total: 0 };
     }
   },
 
   // Fetch single project details
   fetchProjectDetail: async (userId, projectId) => {
-    console.log(`[Mobile] Fetching project detail for ${projectId}`);
+    logger.info({ projectId }, 'Mobile: fetching project detail');
     try {
       const pathname = `/api/projects/${projectId}`;
       const headers = buildInternalServiceHeaders({
@@ -11628,21 +11955,21 @@ const mobileApiDependencies: MobileApiDependencies = {
       });
 
       if (!response.ok) {
-        console.log(`[Mobile] Failed to fetch project detail: ${response.status}`);
+        logger.info({ status: response.status }, 'Mobile: failed to fetch project detail');
         return null;
       }
 
       const data = await response.json() as Record<string, unknown>;
       return data;
     } catch (error) {
-      console.error(`[Mobile] Error fetching project detail:`, error);
+      logger.error({ err: error }, 'Mobile: error fetching project detail');
       return null;
     }
   },
 
   // Fetch project files
   fetchProjectFiles: async (userId, projectId, path) => {
-    console.log(`[Mobile] Fetching files for project ${projectId}, path: ${path || '/'}`);
+    logger.info({ projectId, path: path || '/' }, 'Mobile: fetching files');
     const entry = containers.get(projectId);
     if (!entry) {
       return [];
@@ -11668,7 +11995,7 @@ const mobileApiDependencies: MobileApiDependencies = {
 
       return files;
     } catch (error) {
-      console.error(`[Mobile] Error fetching files:`, error);
+      logger.error({ err: error }, 'Mobile: error fetching files');
       return [];
     }
   },
@@ -11721,7 +12048,7 @@ app.get('/api/mobile/stats', authenticateRequest, (req: AuthenticatedRequest, re
       stats,
     });
   } catch (err: any) {
-    console.error('[Mobile] Stats error:', err);
+    logger.error({ err }, 'Mobile: stats error');
     res.status(500).json({ error: err.message });
   }
 });
@@ -12577,24 +12904,16 @@ app.use(globalErrorHandler);
 
 // Handle unhandled promise rejections
 process.on('unhandledRejection', (reason, promise) => {
-  console.error(JSON.stringify({
-    timestamp: new Date().toISOString(),
-    level: 'error',
+  logger.error({
     type: 'UNHANDLED_REJECTION',
-    reason: reason instanceof Error ? reason.message : String(reason),
-    stack: reason instanceof Error ? reason.stack : undefined,
-  }));
+    err: reason instanceof Error ? reason : undefined,
+    reason: reason instanceof Error ? undefined : String(reason),
+  }, 'unhandled rejection');
 });
 
 // Handle uncaught exceptions
 process.on('uncaughtException', (error) => {
-  console.error(JSON.stringify({
-    timestamp: new Date().toISOString(),
-    level: 'error',
-    type: 'UNCAUGHT_EXCEPTION',
-    message: error.message,
-    stack: error.stack,
-  }));
+  logger.error({ err: error, type: 'UNCAUGHT_EXCEPTION' }, 'uncaught exception');
   // Give time for logging before exit
   setTimeout(() => process.exit(1), 1000);
 });
@@ -12610,31 +12929,31 @@ startupInfo('collaboration', 'server ready', { path: '/collab' });
 
 // Graceful shutdown handler
 async function gracefulShutdown(signal: string) {
-  console.log(`\n${signal} received. Starting graceful shutdown...`);
+  logger.info({ signal }, 'starting graceful shutdown');
 
   try {
     // Shutdown WebSocket keepalive connections first (sends hints to clients)
-    console.log('🔌 Shutting down WebSocket keepalive connections...');
+    logger.info('shutting down WebSocket keepalive connections');
     wsKeepalive.shutdown();
 
     // Save all collaboration documents
-    console.log('💾 Saving collaboration documents...');
+    logger.info('saving collaboration documents');
     await saveAllDocuments();
 
     // Shutdown LSP servers
-    console.log('🛑 Shutting down LSP servers...');
+    logger.info('shutting down LSP servers');
     await lspServerManager.shutdown();
 
     // Shutdown debug sessions
-    console.log('🐛 Shutting down debug sessions...');
+    logger.info('shutting down debug sessions');
     await debugManager.shutdown();
 
     // Close WebSocket server
-    console.log('🔌 Closing collaboration WebSocket server...');
+    logger.info('closing collaboration WebSocket server');
     collabWss.close();
 
     // Stop metering system
-    console.log('📊 Stopping metering system...');
+    logger.info('stopping metering system');
     try {
       const meteringCollector = getMeteringCollector();
       meteringCollector.stop();
@@ -12645,36 +12964,36 @@ async function gracefulShutdown(signal: string) {
     }
 
     // Stop health monitor and resource optimizer
-    console.log('💊 Stopping health monitor...');
+    logger.info('stopping health monitor');
     healthMonitor.stop();
-    console.log('📊 Stopping resource optimizer...');
+    logger.info('stopping resource optimizer');
     resourceOptimizer.stop();
 
     // Shutdown container pool
-    console.log('⛔ Shutting down container pool...');
+    logger.info('shutting down container pool');
     try {
       await containerPool.shutdown();
     } catch (err: any) {
-      console.error('Container pool shutdown error:', err.message);
+      logger.error({ err }, 'container pool shutdown error');
     }
 
     // Wait for debounced file saves to flush
     await new Promise(resolve => setTimeout(resolve, 300));
 
     // Close HTTP server
-    console.log('🌐 Closing HTTP server...');
+    logger.info('closing HTTP server');
     server.close(() => {
-      console.log('✅ Graceful shutdown complete');
+      logger.info('graceful shutdown complete');
       process.exit(0);
     });
 
     // Force exit after 10 seconds
     setTimeout(() => {
-      console.error('⚠️ Forced shutdown after timeout');
+      logger.error('forced shutdown after timeout');
       process.exit(1);
     }, 10000);
   } catch (error) {
-    console.error('❌ Error during shutdown:', error);
+    logger.error({ err: error }, 'error during shutdown');
     process.exit(1);
   }
 }
@@ -12711,7 +13030,7 @@ const sandboxDependencies: SandboxDependencies = {
     const startTime = Date.now();
 
     const exec = await container.exec({
-      Cmd: options?.cwd ? ['sh', '-c', `cd "${options.cwd}" && ${command}`] : ['sh', '-c', command],
+      Cmd: options?.cwd ? ['sh', '-c', `cd "${options.cwd.replace(/"/g, '\\"')}" && ${command}`] : ['sh', '-c', command],
       AttachStdout: true,
       AttachStderr: true,
       Tty: false,
@@ -12888,9 +13207,55 @@ const projectDependencies: ProjectDependencies = {
   getPreviewUrl: (port: number) => {
     return `http://localhost:${port}`;
   },
-  publishProject: async (_projectId: string, _containerId: string) => {
-    // TODO: Wire into existing Cloudflare/Vercel/Netlify deployment logic
-    throw new Error('Publish not yet implemented for public API projects');
+  publishProject: async (projectId: string, containerId: string) => {
+    const provider = (process.env.DEPLOY_PROVIDER || 'vercel') as 'vercel' | 'netlify' | 'cloudflare';
+    const token = process.env.DEPLOY_TOKEN;
+    if (!token) {
+      throw new Error('DEPLOY_TOKEN environment variable is required for publishing');
+    }
+
+    // Extract project files from the container workspace
+    const fileListRaw = await execInContainer(containerId, 'cd /workspace && find . -type f -not -path "./.git/*" -not -path "./node_modules/*" -not -path "./.next/*" -not -path "./dist/*" | head -500');
+    const filePaths = fileListRaw.trim().split('\n').filter(Boolean);
+
+    const files: Record<string, string> = {};
+    for (const fp of filePaths) {
+      const cleanPath = fp.startsWith('./') ? fp.slice(2) : fp;
+      try {
+        const content = await execInContainer(containerId, `cat "/workspace/${cleanPath}"`);
+        files[cleanPath] = content;
+      } catch {
+        // Skip binary or unreadable files
+      }
+    }
+
+    const slug = `recoder-${projectId.slice(0, 8)}`;
+    const deployConfig = {
+      provider,
+      projectName: slug,
+      projectId,
+      production: true,
+      teamId: process.env.DEPLOY_TEAM_ID,
+      accountId: process.env.DEPLOY_ACCOUNT_ID,
+    };
+    const credentials = {
+      provider,
+      token,
+      teamId: process.env.DEPLOY_TEAM_ID,
+      accountId: process.env.DEPLOY_ACCOUNT_ID,
+    };
+
+    let deployFn: typeof import('./deployment/vercel.js').deploy;
+    if (provider === 'netlify') {
+      deployFn = (await import('./deployment/netlify.js')).deploy;
+    } else if (provider === 'cloudflare') {
+      deployFn = (await import('./deployment/cloudflare.js')).deploy;
+    } else {
+      deployFn = (await import('./deployment/vercel.js')).deploy;
+    }
+
+    const deployment = await deployFn(credentials, deployConfig, files);
+    return { url: deployment.url, slug };
   },
 };
 
@@ -12924,6 +13289,12 @@ app.use('/api/v1/identity', identityRouter);
 
 // App key management endpoints (requires API key auth)
 app.use('/api/v1/app-keys', appKeysRouter);
+app.use('/api/a2a', a2aRouter);
+
+const agentCardBaseUrl = process.env.DOCKER_BACKEND_PUBLIC_URL || process.env.RECODER_DOCKER_BACKEND_URL || 'https://docker.recoder.xyz';
+app.get('/.well-known/agent-card.json', (_req, res) => {
+  res.status(200).json(getDockerBackendAgentCard(agentCardBaseUrl));
+});
 
 // Polar.sh webhook endpoint
 const POLAR_WEBHOOK_SECRET = process.env.POLAR_WEBHOOK_SECRET || '';
@@ -12931,18 +13302,62 @@ if (POLAR_WEBHOOK_SECRET) {
   app.post('/api/webhooks/polar', express.raw({ type: 'application/json' }), createPolarWebhookHandler(POLAR_WEBHOOK_SECRET));
   startupInfo('routes.polar-webhook', 'registered', { path: '/api/webhooks/polar' });
 } else {
-  console.log('⚠️ POLAR_WEBHOOK_SECRET not set, Polar.sh webhooks disabled');
+  logger.info('POLAR_WEBHOOK_SECRET not set, Polar.sh webhooks disabled');
 }
 
-// Handle Polar webhook events
+// Handle Polar webhook events - provision/deprovision resources on subscription changes
 onWebhookEvent('subscription.active', async (data: any) => {
-  console.log('📦 Subscription activated:', data.id);
-  // TODO: Provision resources for user
+  logger.info({ subscriptionId: data.id, productId: data.product_id }, 'subscription activated — provisioning resources');
+
+  // Resolve the user from the subscription's customer record
+  const { getCustomerByPolarId } = await import('./billing/polar-webhook.js');
+  const customer = getCustomerByPolarId(data.customer_id);
+  if (!customer) {
+    logger.warn({ customerId: data.customer_id }, 'subscription.active: customer not found, skipping provisioning');
+    return;
+  }
+
+  // Map Polar product IDs to tier (product IDs come from env or use a naming convention)
+  const proProductId =
+    process.env.POLAR_PRO_PRODUCT_ID ||
+    process.env.POLAR_PRODUCT_PRO_ID ||
+    process.env.POLAR_PRODUCT_PRO ||
+    '';
+  const enterpriseProductId =
+    process.env.POLAR_ENTERPRISE_PRODUCT_ID ||
+    process.env.POLAR_PRODUCT_ENTERPRISE_ID ||
+    process.env.POLAR_PRODUCT_ENTERPRISE ||
+    '';
+  const { resolveTierFromProductId } = await import('./billing/subscription-tier.js');
+  const tier = resolveTierFromProductId({
+    productId: data.product_id,
+    proProductId,
+    enterpriseProductId,
+  });
+
+  // Update the execution tracker with the new tier (affects resource limits immediately)
+  const { executionTracker } = await import('./resources/execution-limits.js');
+  executionTracker.updateUserTier(customer.userId, tier);
+
+  logger.info({ userId: customer.userId, tier }, 'subscription.active: resources provisioned');
 });
 
 onWebhookEvent('subscription.canceled', async (data: any) => {
-  console.log('📦 Subscription canceled:', data.id);
-  // TODO: Deprovision resources
+  logger.info({ subscriptionId: data.id }, 'subscription canceled — deprovisioning resources');
+
+  const { getCustomerByPolarId } = await import('./billing/polar-webhook.js');
+  const customer = getCustomerByPolarId(data.customer_id);
+  if (!customer) {
+    logger.warn({ customerId: data.customer_id }, 'subscription.canceled: customer not found, skipping deprovisioning');
+    return;
+  }
+
+  // Downgrade user to free tier
+  const { SubscriptionTier } = await import('./resources/types.js');
+  const { executionTracker } = await import('./resources/execution-limits.js');
+  executionTracker.updateUserTier(customer.userId, SubscriptionTier.FREE);
+
+  logger.info({ userId: customer.userId }, 'subscription.canceled: downgraded to free tier');
 });
 
 // ==================== API Key Management Endpoints ====================
@@ -13040,7 +13455,7 @@ app.get('/api/v1/api-keys/usage', authenticateRequest, asyncHandler(async (req: 
   });
 }));
 
-console.log('🔑 API key management endpoints registered');
+logger.info('API key management endpoints registered');
 
 // ==================== Usage, Subscription & Invoice Endpoints ====================
 
@@ -13114,7 +13529,7 @@ app.get('/api/invoices', authenticateRequest, asyncHandler(async (req: Authentic
   });
 }));
 
-console.log('📊 Usage, subscription, and invoice endpoints registered');
+logger.info('usage, subscription, and invoice endpoints registered');
 
 // ==================== Deployment Routes ====================
 
@@ -13122,7 +13537,7 @@ console.log('📊 Usage, subscription, and invoice endpoints registered');
 app.post('/api/deploy/vercel/validate', asyncHandler(async (req: express.Request, res: express.Response) => {
   const { token } = req.body;
   if (!token) return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'Token required'));
-  const result = await vercelDeploy.validateToken(token);
+  const result = await (await getVercelDeploy()).validateToken(token);
   sendSuccess(res, result);
 }));
 
@@ -13130,7 +13545,7 @@ app.get('/api/deploy/vercel/projects', asyncHandler(async (req: express.Request,
   const token = req.headers['x-vercel-token'] as string;
   const teamId = req.query.teamId as string | undefined;
   if (!token) return sendError(res, createError(ErrorCode.AUTH_REQUIRED, 'Token required'));
-  const projects = await vercelDeploy.listProjects({ provider: 'vercel', token, teamId });
+  const projects = await (await getVercelDeploy()).listProjects({ provider: 'vercel', token, teamId });
   sendSuccess(res, { projects });
 }));
 
@@ -13138,7 +13553,7 @@ app.post('/api/deploy/vercel', asyncHandler(async (req: express.Request, res: ex
   const { token, teamId, config, files } = req.body;
   if (!token || !config || !files) return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'Token, config, and files required'));
   const credentials: ProviderCredentials = { provider: 'vercel', token, teamId };
-  const deployment = await vercelDeploy.deploy(credentials, config, files);
+  const deployment = await (await getVercelDeploy()).deploy(credentials, config, files);
   sendSuccess(res, { deployment });
 }));
 
@@ -13148,7 +13563,7 @@ app.get('/api/deploy/vercel/:deploymentId', asyncHandler(async (req: express.Req
   const { deploymentId } = req.params;
   const projectId = req.query.projectId as string || deploymentId;
   if (!token) return sendError(res, createError(ErrorCode.AUTH_REQUIRED, 'Token required'));
-  const deployment = await vercelDeploy.getDeployment({ provider: 'vercel', token, teamId }, deploymentId, projectId);
+  const deployment = await (await getVercelDeploy()).getDeployment({ provider: 'vercel', token, teamId }, deploymentId, projectId);
   sendSuccess(res, { deployment });
 }));
 
@@ -13157,7 +13572,7 @@ app.get('/api/deploy/vercel/:projectId/deployments', asyncHandler(async (req: ex
   const teamId = req.query.teamId as string | undefined;
   const { projectId } = req.params;
   if (!token) return sendError(res, createError(ErrorCode.AUTH_REQUIRED, 'Token required'));
-  const deployments = await vercelDeploy.listDeployments({ provider: 'vercel', token, teamId }, { projectId, limit: 20 });
+  const deployments = await (await getVercelDeploy()).listDeployments({ provider: 'vercel', token, teamId }, { projectId, limit: 20 });
   sendSuccess(res, { deployments });
 }));
 
@@ -13167,7 +13582,7 @@ app.post('/api/deploy/vercel/:projectId/rollback', asyncHandler(async (req: expr
   const { projectId } = req.params;
   const { deploymentId } = req.body;
   if (!token || !deploymentId) return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'Token and deploymentId required'));
-  const deployment = await vercelDeploy.rollback({ provider: 'vercel', token, teamId }, projectId, deploymentId);
+  const deployment = await (await getVercelDeploy()).rollback({ provider: 'vercel', token, teamId }, projectId, deploymentId);
   sendSuccess(res, { deployment });
 }));
 
@@ -13175,14 +13590,14 @@ app.post('/api/deploy/vercel/:projectId/rollback', asyncHandler(async (req: expr
 app.post('/api/deploy/netlify/validate', asyncHandler(async (req: express.Request, res: express.Response) => {
   const { token } = req.body;
   if (!token) return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'Token required'));
-  const result = await netlifyDeploy.validateToken(token);
+  const result = await (await getNetlifyDeploy()).validateToken(token);
   sendSuccess(res, result);
 }));
 
 app.get('/api/deploy/netlify/sites', asyncHandler(async (req: express.Request, res: express.Response) => {
   const token = req.headers['x-netlify-token'] as string;
   if (!token) return sendError(res, createError(ErrorCode.AUTH_REQUIRED, 'Token required'));
-  const sites = await netlifyDeploy.listSites({ provider: 'netlify', token });
+  const sites = await (await getNetlifyDeploy()).listSites({ provider: 'netlify', token });
   sendSuccess(res, { sites });
 }));
 
@@ -13190,7 +13605,7 @@ app.post('/api/deploy/netlify', asyncHandler(async (req: express.Request, res: e
   const { token, config, files } = req.body;
   if (!token || !config || !files) return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'Token, config, and files required'));
   const credentials: ProviderCredentials = { provider: 'netlify', token };
-  const deployment = await netlifyDeploy.deploy(credentials, config, files);
+  const deployment = await (await getNetlifyDeploy()).deploy(credentials, config, files);
   sendSuccess(res, { deployment });
 }));
 
@@ -13198,7 +13613,7 @@ app.get('/api/deploy/netlify/:siteId/deployments', asyncHandler(async (req: expr
   const token = req.headers['x-netlify-token'] as string;
   const { siteId } = req.params;
   if (!token) return sendError(res, createError(ErrorCode.AUTH_REQUIRED, 'Token required'));
-  const deployments = await netlifyDeploy.listDeployments({ provider: 'netlify', token }, siteId, { limit: 20 });
+  const deployments = await (await getNetlifyDeploy()).listDeployments({ provider: 'netlify', token }, siteId, { limit: 20 });
   sendSuccess(res, { deployments });
 }));
 
@@ -13207,7 +13622,7 @@ app.post('/api/deploy/netlify/:siteId/rollback', asyncHandler(async (req: expres
   const { siteId } = req.params;
   const { deploymentId, projectId } = req.body;
   if (!token || !deploymentId) return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'Token and deploymentId required'));
-  const deployment = await netlifyDeploy.rollback({ provider: 'netlify', token }, siteId, deploymentId, projectId || siteId);
+  const deployment = await (await getNetlifyDeploy()).rollback({ provider: 'netlify', token }, siteId, deploymentId, projectId || siteId);
   sendSuccess(res, { deployment });
 }));
 
@@ -13215,7 +13630,7 @@ app.post('/api/deploy/netlify/:siteId/rollback', asyncHandler(async (req: expres
 app.post('/api/deploy/cloudflare/validate', asyncHandler(async (req: express.Request, res: express.Response) => {
   const { apiToken, accountId } = req.body;
   if (!apiToken || !accountId) return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'API token and account ID required'));
-  const result = await cloudflareDeploy.validateToken(apiToken, accountId);
+  const result = await (await getCloudflareDeploy()).validateToken(apiToken, accountId);
   sendSuccess(res, result);
 }));
 
@@ -13233,7 +13648,7 @@ app.post('/api/deploy/cloudflare/deploy', asyncHandler(async (req: express.Reque
     accountId,
     ...(config || {}),
   };
-  const deployment = await cloudflareDeploy.deploy(credentials, deployConfig, files);
+  const deployment = await (await getCloudflareDeploy()).deploy(credentials, deployConfig, files);
   sendSuccess(res, { success: true, url: deployment.url, workerId: deployment.id, deployment });
 }));
 
@@ -13242,7 +13657,7 @@ app.get('/api/deploy/cloudflare/list', asyncHandler(async (req: express.Request,
   const accountId = req.query.accountId as string;
   if (!apiToken || !accountId) return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'API token and account ID required'));
   const credentials: ProviderCredentials = { provider: 'cloudflare', token: apiToken, accountId };
-  const workers = await cloudflareDeploy.listWorkers(credentials);
+  const workers = await (await getCloudflareDeploy()).listWorkers(credentials);
   sendSuccess(res, { workers });
 }));
 
@@ -13252,7 +13667,7 @@ app.get('/api/deploy/cloudflare/:workerName/deployments', asyncHandler(async (re
   const { workerName } = req.params;
   if (!apiToken || !accountId) return sendError(res, createError(ErrorCode.AUTH_REQUIRED, 'Token and account ID required'));
   const credentials: ProviderCredentials = { provider: 'cloudflare', token: apiToken, accountId };
-  const deployments = await cloudflareDeploy.listDeployments(credentials, workerName);
+  const deployments = await (await getCloudflareDeploy()).listDeployments(credentials, workerName);
   sendSuccess(res, { deployments });
 }));
 
@@ -13265,7 +13680,7 @@ app.post('/api/deploy/cloudflare/:workerName/rollback', asyncHandler(async (req:
     return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'Token, account ID, and versionId required'));
   }
   const credentials: ProviderCredentials = { provider: 'cloudflare', token: apiToken, accountId };
-  const deployment = await cloudflareDeploy.rollback(credentials, workerName, versionId, projectId || workerName);
+  const deployment = await (await getCloudflareDeploy()).rollback(credentials, workerName, versionId, projectId || workerName);
   sendSuccess(res, { deployment });
 }));
 
@@ -13321,7 +13736,7 @@ import {
   savePublishMeta,
   changeSlug,
 } from './persistence.js';
-import { execSync } from 'child_process';
+import { execSync, execFileSync } from 'child_process';
 
 /**
  * Detect the build output directory based on framework/package.json
@@ -13372,7 +13787,7 @@ app.post('/api/publish/:projectId', authenticateRequest, verifyProjectOwnership,
   try {
     // 1. Detect framework
     const { buildCmd, outputDir, framework } = await detectBuildOutput(entry.id);
-    console.log(`[Publish] Project ${projectId}: framework=${framework}, buildCmd=${buildCmd}, outputDir=${outputDir}`);
+    logger.info({ projectId, framework, buildCmd, outputDir }, 'Publish: starting publish');
 
     // 2. Install dependencies if needed
     try {
@@ -13389,9 +13804,9 @@ app.post('/api/publish/:projectId', authenticateRequest, verifyProjectOwnership,
     }
 
     // 3. Run build
-    console.log(`[Publish] Building project ${projectId}...`);
+    logger.info({ projectId }, 'Publish: building project');
     const buildOutput = await execInContainer(entry.id, `cd /workspace && ${buildCmd} 2>&1`);
-    console.log(`[Publish] Build complete for ${projectId}`);
+    logger.info({ projectId }, 'Publish: build complete');
 
     // 4. Verify build output exists
     const checkOutput = await execInContainer(entry.id, `ls -la /workspace/${outputDir}/ 2>/dev/null | head -5 || echo "NOT_FOUND"`);
@@ -13402,7 +13817,7 @@ app.post('/api/publish/:projectId', authenticateRequest, verifyProjectOwnership,
       for (const dir of fallbackDirs) {
         const check = await execInContainer(entry.id, `[ -d /workspace/${dir} ] && echo "EXISTS" || echo "NOPE"`);
         if (check.includes('EXISTS')) {
-          console.log(`[Publish] Using fallback output dir: ${dir}`);
+          logger.info({ dir }, 'Publish: using fallback output dir');
           // Continue with this dir
           found = true;
           break;
@@ -13429,7 +13844,7 @@ app.post('/api/publish/:projectId', authenticateRequest, verifyProjectOwnership,
     fs.mkdirSync(tmpDir, { recursive: true });
 
     // Use docker cp to extract build output
-    execSync(`docker cp ${entry.id}:/workspace/${outputDir}/. ${tmpDir}/`, { timeout: 30000 });
+    execFileSync('docker', ['cp', `${entry.id}:/workspace/${outputDir}/.`, `${tmpDir}/`], { timeout: 30000 });
 
     // Atomic swap
     if (fs.existsSync(publishedDir)) {
@@ -13455,12 +13870,12 @@ app.post('/api/publish/:projectId', authenticateRequest, verifyProjectOwnership,
     });
 
     const url = `https://web.recoder.xyz/${slug}`;
-    console.log(`[Publish] Project ${projectId} published at ${url}`);
+    logger.info({ projectId, url }, 'Publish: project published');
 
     sendSuccess(res, { url, slug, publishedAt });
   } catch (error: any) {
-    console.error(`[Publish] Failed to publish project ${projectId}:`, error.message);
-    return sendError(res, createError(ErrorCode.INTERNAL_ERROR, `Publish failed: ${error.message}`));
+    logger.error({ err: error, projectId }, 'Publish: failed to publish project');
+    return sendError(res, createError(ErrorCode.INTERNAL_ERROR, 'Publish failed'));
   }
 }));
 
@@ -13480,7 +13895,7 @@ app.post('/api/unpublish/:projectId', authenticateRequest, verifyProjectOwnershi
     fs.rmSync(publishedDir, { recursive: true });
   }
 
-  console.log(`[Publish] Project ${projectId} unpublished (slug: ${slug})`);
+  logger.info({ projectId, slug }, 'Publish: project unpublished');
   sendSuccess(res, { success: true });
 }));
 
@@ -13526,7 +13941,7 @@ app.post('/api/publish/:projectId/slug', authenticateRequest, verifyProjectOwner
   }
 
   const url = `https://web.recoder.xyz/${result.slug}`;
-  console.log(`[Publish] Project ${projectId} slug changed to ${result.slug}`);
+  logger.info({ projectId, slug: result.slug }, 'Publish: project slug changed');
   sendSuccess(res, { url, slug: result.slug, changed: true });
 }));
 
@@ -13554,27 +13969,26 @@ performanceProfiler.startMonitoring();
 // ── S9-1: Abuse Prevention Endpoints ──
 
 // GET /api/admin/abuse/stats - Get abuse prevention statistics
-app.get('/api/admin/abuse/stats', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
-  // TODO: Add admin role check
+app.get('/api/admin/abuse/stats', authenticateRequest, requireAdmin, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
   const stats = abusePrevention.getStats();
   sendSuccess(res, stats);
 }));
 
 // GET /api/admin/abuse/events - Get recent abuse events
-app.get('/api/admin/abuse/events', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+app.get('/api/admin/abuse/events', authenticateRequest, requireAdmin, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
   const limit = parseInt(req.query.limit as string) || 100;
   const events = abusePrevention.getRecentEvents(limit);
   sendSuccess(res, { events, total: events.length });
 }));
 
 // GET /api/admin/abuse/blocklist - Get blocklist entries
-app.get('/api/admin/abuse/blocklist', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+app.get('/api/admin/abuse/blocklist', authenticateRequest, requireAdmin, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
   const blocklist = abusePrevention.getBlocklist();
   sendSuccess(res, { blocklist, total: blocklist.length });
 }));
 
 // POST /api/admin/abuse/blocklist - Add to blocklist
-app.post('/api/admin/abuse/blocklist', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+app.post('/api/admin/abuse/blocklist', authenticateRequest, requireAdmin, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
   const { type, value, reason, expiresAt } = req.body;
 
   if (!type || !value || !reason) {
@@ -13593,7 +14007,7 @@ app.post('/api/admin/abuse/blocklist', authenticateRequest, asyncHandler(async (
 }));
 
 // DELETE /api/admin/abuse/blocklist/:id - Remove from blocklist
-app.delete('/api/admin/abuse/blocklist/:id', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+app.delete('/api/admin/abuse/blocklist/:id', authenticateRequest, requireAdmin, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
   const { id } = req.params;
   const deleted = abusePrevention.removeFromBlocklist(id);
 
@@ -13604,12 +14018,12 @@ app.delete('/api/admin/abuse/blocklist/:id', authenticateRequest, asyncHandler(a
   sendSuccess(res, { deleted: true });
 }));
 
-console.log('🛡️ Abuse prevention endpoints registered');
+logger.info('abuse prevention endpoints registered');
 
 // ── S10-3: Admin Alert Endpoints ──
 
 // GET /api/admin/alerts - Get recent admin alerts
-app.get('/api/admin/alerts', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+app.get('/api/admin/alerts', authenticateRequest, requireAdmin, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
   const limit = parseInt(req.query.limit as string) || 50;
   const severity = req.query.severity as string | undefined;
   const category = req.query.category as string | undefined;
@@ -13627,7 +14041,7 @@ app.get('/api/admin/alerts', authenticateRequest, asyncHandler(async (req: Authe
 }));
 
 // POST /api/admin/alerts/:id/acknowledge - Acknowledge an alert
-app.post('/api/admin/alerts/:id/acknowledge', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+app.post('/api/admin/alerts/:id/acknowledge', authenticateRequest, requireAdmin, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
   const { id } = req.params;
   const userId = req.userId || 'unknown';
 
@@ -13640,7 +14054,7 @@ app.post('/api/admin/alerts/:id/acknowledge', authenticateRequest, asyncHandler(
 }));
 
 // GET /api/admin/security/stats - Combined security statistics
-app.get('/api/admin/security/stats', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+app.get('/api/admin/security/stats', authenticateRequest, requireAdmin, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
   const abuseStats = abusePrevention.getStats();
   const alertCounts = getAlertCounts();
   const wsRateLimitStats = getAllWsRateLimitStats();
@@ -13656,32 +14070,32 @@ app.get('/api/admin/security/stats', authenticateRequest, asyncHandler(async (re
   });
 }));
 
-console.log('🔔 Admin alert endpoints registered');
+logger.info('admin alert endpoints registered');
 
 // ── S9-3: Backup & Recovery Endpoints ──
 
 // GET /api/admin/backups - List backups
-app.get('/api/admin/backups', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+app.get('/api/admin/backups', authenticateRequest, requireAdmin, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
   const limit = parseInt(req.query.limit as string) || 50;
   const jobs = backupService.getJobs(limit);
   sendSuccess(res, { jobs, total: jobs.length });
 }));
 
 // GET /api/admin/backups/stats - Get backup statistics
-app.get('/api/admin/backups/stats', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+app.get('/api/admin/backups/stats', authenticateRequest, requireAdmin, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
   const stats = backupService.getStats();
   sendSuccess(res, stats);
 }));
 
 // POST /api/admin/backups - Create a backup
-app.post('/api/admin/backups', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+app.post('/api/admin/backups', authenticateRequest, requireAdmin, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
   const { type = 'full', scope = 'all' } = req.body;
   const job = await backupService.createBackup(type, scope);
   sendSuccess(res, { job });
 }));
 
 // POST /api/admin/backups/:id/restore - Restore from a backup
-app.post('/api/admin/backups/:id/restore', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+app.post('/api/admin/backups/:id/restore', authenticateRequest, requireAdmin, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
   const { id } = req.params;
   const { scope, targetDir, dryRun = true } = req.body;
 
@@ -13700,7 +14114,7 @@ app.post('/api/admin/backups/:id/restore', authenticateRequest, asyncHandler(asy
 }));
 
 // DELETE /api/admin/backups/:id - Delete a backup
-app.delete('/api/admin/backups/:id', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+app.delete('/api/admin/backups/:id', authenticateRequest, requireAdmin, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
   const { id } = req.params;
   const deleted = backupService.deleteBackup(id);
 
@@ -13711,44 +14125,44 @@ app.delete('/api/admin/backups/:id', authenticateRequest, asyncHandler(async (re
   sendSuccess(res, { deleted: true });
 }));
 
-console.log('💾 Backup & recovery endpoints registered');
+logger.info('backup & recovery endpoints registered');
 
 // ── S9-4: Performance Profiling Endpoints ──
 
 // GET /api/admin/performance/metrics - Get performance metrics
-app.get('/api/admin/performance/metrics', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+app.get('/api/admin/performance/metrics', authenticateRequest, requireAdmin, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
   const metrics = performanceProfiler.getMetrics();
   sendSuccess(res, metrics);
 }));
 
 // GET /api/admin/performance/slow-requests - Get slow requests
-app.get('/api/admin/performance/slow-requests', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+app.get('/api/admin/performance/slow-requests', authenticateRequest, requireAdmin, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
   const limit = parseInt(req.query.limit as string) || 50;
   const slowRequests = performanceProfiler.getSlowRequests(limit);
   sendSuccess(res, { slowRequests, total: slowRequests.length });
 }));
 
 // GET /api/admin/performance/alerts - Get performance alerts
-app.get('/api/admin/performance/alerts', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+app.get('/api/admin/performance/alerts', authenticateRequest, requireAdmin, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
   const limit = parseInt(req.query.limit as string) || 100;
   const alerts = performanceProfiler.getAlerts(limit);
   sendSuccess(res, { alerts, total: alerts.length });
 }));
 
 // GET /api/admin/performance/traces - Get recent traces
-app.get('/api/admin/performance/traces', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+app.get('/api/admin/performance/traces', authenticateRequest, requireAdmin, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
   const limit = parseInt(req.query.limit as string) || 100;
   const traces = performanceProfiler.getTraces(limit);
   sendSuccess(res, { traces, total: traces.length });
 }));
 
 // GET /api/admin/performance/heap - Get V8 heap statistics
-app.get('/api/admin/performance/heap', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+app.get('/api/admin/performance/heap', authenticateRequest, requireAdmin, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
   const heapStats = performanceProfiler.getHeapStats();
   sendSuccess(res, heapStats);
 }));
 
-console.log('📈 Performance profiling endpoints registered');
+logger.info('performance profiling endpoints registered');
 
 // ==================== END SPRINT 9 ====================
 
@@ -14917,4 +15331,13 @@ server.listen(PORT, async () => {
   // Run startup sequence AFTER server is listening
   // This ensures cleanup happens first, then pool is initialized
   await startupSequence();
+
+  if ((process.env.RECODER_A2A_ENABLE_CONSUMER || '').toLowerCase() === 'true') {
+    const worker = await startA2AIntentWorker({ serviceId: 'recoder_backend' });
+    if (worker) {
+      startupInfo('a2a-consumer', 'started', { stream: process.env.RECODER_A2A_INTENT_STREAM_KEY || 'recoder:a2a:intents' });
+    } else {
+      startupInfo('a2a-consumer', 'skipped', { reason: 'redis_not_configured' });
+    }
+  }
 });

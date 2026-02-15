@@ -1,0 +1,11 @@
+{
+	"name": "strip-workspace",
+	"description": "Strip workspace prompts to minimal format for testing node connections",
+	"type": "module",
+	"scripts": {
+		"strip-workspace": "node --experimental-strip-types cli.ts"
+	},
+	"devDependencies": {
+		"@types/node": "catalog:"
+	}
+}

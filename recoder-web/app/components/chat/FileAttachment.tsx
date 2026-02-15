@@ -15,6 +15,9 @@ import { memo, useState, useCallback, useRef, useEffect } from 'react';
 import { atom, map } from 'nanostores';
 import { useStore } from '@nanostores/react';
 import { classNames } from '~/utils/classNames';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('FileAttachment');
 
 // Types
 export interface AttachmentFile {
@@ -122,26 +125,26 @@ export const attachmentActions = {
 
     // Check file count limit
     if (current.attachments.length + fileArray.length > MAX_FILES) {
-      console.warn(`Maximum ${MAX_FILES} files allowed`);
+      logger.warn(`Maximum ${MAX_FILES} files allowed`);
       return;
     }
 
     for (const file of fileArray) {
       // Validate file type
       if (!ALL_ALLOWED_TYPES.includes(file.type) && !file.name.match(/\.(ts|tsx|js|jsx|py|md|txt|json)$/i)) {
-        console.warn(`File type not supported: ${file.type}`);
+        logger.warn(`File type not supported: ${file.type}`);
         continue;
       }
 
       // Validate file size
       if (file.size > MAX_FILE_SIZE) {
-        console.warn(`File too large: ${file.name} (${formatFileSize(file.size)})`);
+        logger.warn(`File too large: ${file.name} (${formatFileSize(file.size)})`);
         continue;
       }
 
       // Check total size limit
       if (current.totalSize + file.size > MAX_TOTAL_SIZE) {
-        console.warn('Total attachment size limit exceeded');
+        logger.warn('Total attachment size limit exceeded');
         break;
       }
 

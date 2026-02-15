@@ -3,6 +3,10 @@
  * Saves command history across sessions
  */
 
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('TerminalHistory');
+
 const HISTORY_KEY_PREFIX = 'terminal_history_';
 const MAX_HISTORY_SIZE = 1000;
 
@@ -34,7 +38,7 @@ export function saveToHistory(projectId: string, command: string): void {
       JSON.stringify(trimmed)
     );
   } catch (error) {
-    console.error('[History] Save failed:', error);
+    logger.error('[History] Save failed:', error);
   }
 }
 
@@ -49,7 +53,7 @@ export function getHistory(projectId: string): HistoryEntry[] {
     const parsed = JSON.parse(stored);
     return Array.isArray(parsed) ? parsed : [];
   } catch (error) {
-    console.error('[History] Load failed:', error);
+    logger.error('[History] Load failed:', error);
     return [];
   }
 }
@@ -68,7 +72,7 @@ export function clearHistory(projectId: string): void {
   try {
     localStorage.removeItem(`${HISTORY_KEY_PREFIX}${projectId}`);
   } catch (error) {
-    console.error('[History] Clear failed:', error);
+    logger.error('[History] Clear failed:', error);
   }
 }
 
@@ -170,6 +174,6 @@ export function importHistory(projectId: string, content: string): void {
       JSON.stringify(combined)
     );
   } catch (error) {
-    console.error('[History] Import failed:', error);
+    logger.error('[History] Import failed:', error);
   }
 }

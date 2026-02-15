@@ -8,6 +8,9 @@ import { json } from '@remix-run/cloudflare';
 import { useLoaderData } from '@remix-run/react';
 import type { LoaderFunctionArgs } from '@remix-run/cloudflare';
 import { getProfileSettings, updateProfileSettings, type ProfileSettings } from '~/lib/api/settings';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('SettingsProfile');
 
 export async function loader({ request }: LoaderFunctionArgs) {
   // Load profile settings from API
@@ -49,7 +52,7 @@ export default function ProfileSettingsPage() {
         setSaveStatus('error');
       }
     } catch (error) {
-      console.error('Failed to save profile settings:', error);
+      logger.error('Failed to save profile settings:', error);
       setSaveStatus('error');
     } finally {
       setSaving(false);

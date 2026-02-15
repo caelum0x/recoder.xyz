@@ -12,6 +12,9 @@ import * as encoding from 'lib0/encoding';
 import * as decoding from 'lib0/decoding';
 import { getSessionToken, DOCKER_URL } from '../services/docker-api';
 
+import { createScopedLogger } from '~/utils/logger';
+const logger = createScopedLogger('YjsProvider');
+
 // Message types for Yjs protocol
 const MESSAGE_SYNC = 0;
 const MESSAGE_AWARENESS = 1;
@@ -70,7 +73,8 @@ export class YjsProvider {
   constructor(doc: Y.Doc, options: YjsProviderOptions) {
     this.doc = doc;
     this.options = options;
-    this.awareness = new awarenessProtocol.Awareness(doc);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- yjs version mismatch
+    this.awareness = new awarenessProtocol.Awareness(doc as any);
 
     // Set up awareness with user info
     this.awareness.setLocalStateField('user', options.user);
@@ -142,7 +146,7 @@ export class YjsProvider {
       this.ws.onclose = this.handleClose;
       this.ws.onerror = this.handleError;
     } catch (error: any) {
-      console.error('[YjsProvider] Connection error:', error);
+      logger.error('[YjsProvider] Connection error:', error);
       this.scheduleReconnect();
     }
   }
@@ -219,14 +223,15 @@ export class YjsProvider {
    * Handle WebSocket open event
    */
   private handleOpen = (): void => {
-    console.log('[YjsProvider] Connected');
+    logger.info('[YjsProvider] Connected');
     this.setConnectionState('connected');
     this.reconnectAttempts = 0;
 
     // Send sync step 1 (our state vector)
     const encoder = encoding.createEncoder();
     encoding.writeVarUint(encoder, MESSAGE_SYNC);
-    syncProtocol.writeSyncStep1(encoder, this.doc);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- yjs version mismatch between y-protocols and yjs
+    syncProtocol.writeSyncStep1(encoder, this.doc as any);
     this.send(encoding.toUint8Array(encoder));
 
     // Send our awareness state
@@ -258,7 +263,8 @@ export class YjsProvider {
         const encoder = encoding.createEncoder();
         encoding.writeVarUint(encoder, MESSAGE_SYNC);
 
-        const syncMessageType = syncProtocol.readSyncMessage(decoder, encoder, this.doc, this);
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- yjs version mismatch
+        const syncMessageType = syncProtocol.readSyncMessage(decoder, encoder, this.doc as any, this);
 
         // If we received sync step 2, we are now synced
         if (syncMessageType === syncProtocol.messageYjsSyncStep2) {
@@ -282,7 +288,7 @@ export class YjsProvider {
       }
 
       default:
-        console.warn('[YjsProvider] Unknown message type:', messageType);
+        logger.warn('[YjsProvider] Unknown message type:', messageType);
     }
   };
 
@@ -290,7 +296,7 @@ export class YjsProvider {
    * Handle WebSocket close event
    */
   private handleClose = (event: CloseEvent): void => {
-    console.log('[YjsProvider] Disconnected:', event.code, event.reason);
+    logger.info('[YjsProvider] Disconnected:', event.code, event.reason);
     this.ws = null;
     this.synced = false;
 
@@ -303,7 +309,7 @@ export class YjsProvider {
    * Handle WebSocket error event
    */
   private handleError = (event: Event): void => {
-    console.error('[YjsProvider] WebSocket error:', event);
+    logger.error('[YjsProvider] WebSocket error:', event);
     this.options.onError?.(new Error('WebSocket connection error'));
   };
 
@@ -376,7 +382,7 @@ export class YjsProvider {
     const jitter = delay * RECONNECT_JITTER * (Math.random() * 2 - 1);
     const finalDelay = Math.round(delay + jitter);
 
-    console.log(`[YjsProvider] Reconnecting in ${finalDelay}ms (attempt ${this.reconnectAttempts + 1})`);
+    logger.info(`[YjsProvider] Reconnecting in ${finalDelay}ms (attempt ${this.reconnectAttempts + 1})`);
 
     this.reconnectTimer = setTimeout(() => {
       this.reconnectTimer = null;

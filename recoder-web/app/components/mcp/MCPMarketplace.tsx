@@ -7,6 +7,9 @@ import { useState, useEffect, useMemo } from 'react';
 // @ts-expect-error - lucide-react exports work at runtime but TypeScript has resolution issues
 import { Search, Download, Star, CheckCircle, ExternalLink, Filter, X, Loader2, Shield, Package } from 'lucide-react';
 import { toast } from 'react-toastify';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('MCPMarketplace');
 
 // Types from marketplace catalog
 export type MarketplaceCategory =
@@ -112,7 +115,7 @@ export default function MCPMarketplace({
       const data = (await response.json()) as { servers?: MarketplaceServer[] };
       setServers(data.servers || []);
     } catch (error) {
-      console.error('Failed to load marketplace:', error);
+      logger.error('Failed to load marketplace:', error);
       toast.error('Failed to load marketplace');
     } finally {
       setLoading(false);
@@ -233,7 +236,7 @@ export default function MCPMarketplace({
       onInstall(config);
       toast.success(`${server.name} installed! Click "Connect" to activate.`);
     } catch (error) {
-      console.error('Install error:', error);
+      logger.error('Install error:', error);
       toast.error('Failed to install server');
     } finally {
       setInstallingId(null);

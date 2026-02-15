@@ -5,6 +5,9 @@
  */
 
 import { atom, map, computed } from 'nanostores';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('TestDataStore');
 
 // Types
 export interface VariableExample {
@@ -105,7 +108,7 @@ function loadState(): Partial<TestDataState> {
       return parsed;
     }
   } catch (e) {
-    console.error('[TestDataStore] Failed to load state:', e);
+    logger.error('[TestDataStore] Failed to load state:', e);
   }
 
   return {};
@@ -122,7 +125,7 @@ function saveState(state: TestDataState): void {
       history: state.history,
     }));
   } catch (e) {
-    console.error('[TestDataStore] Failed to save state:', e);
+    logger.error('[TestDataStore] Failed to save state:', e);
   }
 }
 
@@ -384,7 +387,7 @@ export function importTemplates(json: string): void {
     }
     templatesStore.set(templates);
   } catch (e) {
-    console.error('[TestDataStore] Failed to import templates:', e);
+    logger.error('[TestDataStore] Failed to import templates:', e);
     throw new Error('Invalid template JSON');
   }
 }
@@ -397,7 +400,7 @@ export function importTestCases(json: string): void {
     }
     testCasesStore.set(testCases);
   } catch (e) {
-    console.error('[TestDataStore] Failed to import test cases:', e);
+    logger.error('[TestDataStore] Failed to import test cases:', e);
     throw new Error('Invalid test cases JSON');
   }
 }

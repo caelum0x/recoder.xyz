@@ -9,6 +9,8 @@ import { workbenchStore } from '~/lib/stores/workbench';
 import { useStore } from '@nanostores/react';
 import { formatTokenCount } from '~/lib/hooks/useTokenCount';
 import type { FileMap } from '~/lib/stores/files';
+import { createScopedLogger } from '~/utils/logger';
+const logger = createScopedLogger('ContextFiles');
 
 interface ContextFilesPanelProps {
   className?: string;
@@ -223,7 +225,7 @@ export const ContextFilesPanel = memo(function ContextFilesPanel({
             setFileContent(path, content);
           }
         } catch (e) {
-          console.warn(`Failed to load content for ${path}:`, e);
+          logger.warn(`Failed to load content for ${path}:`, e);
         }
       }
     };

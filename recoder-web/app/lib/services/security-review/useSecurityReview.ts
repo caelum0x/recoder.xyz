@@ -19,6 +19,8 @@ import {
   needsSecurityReview,
 } from './security-review-service';
 import { createSecuritySummary } from './types';
+import { createScopedLogger } from '~/utils/logger';
+const logger = createScopedLogger('UseSecurityReview');
 
 export interface UseSecurityReviewOptions {
   projectId: string;
@@ -68,7 +70,7 @@ export function useSecurityReview({
     const checkAndReview = () => {
       if (needsSecurityReview(projectId)) {
         // Trigger review notification - actual files would need to be provided
-        console.log(`Project ${projectId} needs security review`);
+        logger.info(`Project ${projectId} needs security review`);
       }
     };
 

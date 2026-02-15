@@ -20,6 +20,8 @@ import {
   type AgentContext,
 } from './types';
 import { dockerReadFile, dockerWriteFile } from '../docker-api';
+import { createScopedLogger } from '~/utils/logger';
+const logger = createScopedLogger('SearchReplace');
 
 // ============================================================================
 // Schema
@@ -216,7 +218,7 @@ function fastFuzzySearch(
   for (let i = startIndex; i <= endIndex - searchLen; i++) {
     const elapsed = performance.now() - startTime;
     if (elapsed > MAX_FUZZY_SEARCH_TIME_MS) {
-      console.warn(`Fast fuzzy search timed out during pre-filter after ${(elapsed / 1000).toFixed(1)}s`);
+      logger.warn(`Fast fuzzy search timed out during pre-filter after ${(elapsed / 1000).toFixed(1)}s`);
       break;
     }
 
@@ -240,7 +242,7 @@ function fastFuzzySearch(
 
     const elapsed = performance.now() - startTime;
     if (elapsed > MAX_FUZZY_SEARCH_TIME_MS) {
-      console.warn(`Fast fuzzy search timed out during detailed pass after ${(elapsed / 1000).toFixed(1)}s`);
+      logger.warn(`Fast fuzzy search timed out during detailed pass after ${(elapsed / 1000).toFixed(1)}s`);
       break;
     }
 
@@ -312,7 +314,7 @@ export function applySearchReplace(
 
     // If search and replace are identical, skip
     if (searchLines.join('\n') === replaceLines.join('\n')) {
-      console.warn('Search and replace blocks are identical');
+      logger.warn('Search and replace blocks are identical');
     }
 
     let matchIndex = -1;

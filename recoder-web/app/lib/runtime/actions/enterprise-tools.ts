@@ -32,6 +32,26 @@ export interface EnterpriseToolsResponse {
   commitHash?: string;
   appliedCount?: number;
   totalCount?: number;
+  workflow?: {
+    mode?: string;
+    summary?: string;
+    lanes?: Array<{ laneId: string; title: string }>;
+    nextActions?: string[];
+  };
+  source?: 'docker-backend' | 'local-fallback';
+  fallbackReason?: string;
+  backend?: {
+    endpoint?: string;
+    contract?: string;
+    responseContract?: string | null;
+    contractStatus?: 'match' | 'mismatch' | 'missing';
+    strictContract?: boolean;
+    authMode?: string;
+    authSource?: string;
+    attempts?: number;
+    maxAttempts?: number;
+    warnings?: string[];
+  };
 }
 
 /**

@@ -151,7 +151,7 @@ export async function copyAgent(
 		console.error("Failed to copy agent:", error);
 		return {
 			result: "error",
-			message: `Failed to copy agent: ${error instanceof Error ? error.message : "Unknown error"}`,
+			message: "Failed to copy agent",
 		};
 	}
 }
@@ -201,7 +201,7 @@ export async function deleteAgent(agentId: string): Promise<DeleteAgentResult> {
 		console.error("Failed to delete agent:", error);
 		return {
 			result: "error",
-			message: `Failed to delete agent: ${error instanceof Error ? error.message : "Unknown error"}`,
+			message: "Failed to delete agent",
 		};
 	}
 }

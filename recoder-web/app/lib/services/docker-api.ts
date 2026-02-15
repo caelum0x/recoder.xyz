@@ -133,7 +133,7 @@ function getSessionToken(): string | null {
     // Only log once per session to avoid spam
     const logKey = 'token_warning_logged';
     if (!sessionStorage.getItem(logKey)) {
-      console.debug('[docker-api] Session token not found in cookies. Auth will fall back to anonymous mode.');
+      logger.debug('[docker-api] Session token not found in cookies. Auth will fall back to anonymous mode.');
       sessionStorage.setItem(logKey, 'true');
     }
   }

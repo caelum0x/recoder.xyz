@@ -1,0 +1,107 @@
+import {
+	Body,
+	Button,
+	Container,
+	Head,
+	Heading,
+	Hr,
+	Html,
+	Link,
+	Preview,
+	Section,
+	Text,
+} from "@react-email/components";
+import {
+	button,
+	container,
+	EmailFonts,
+	EmailFooter,
+	EmailHeader,
+	h1,
+	highlightText,
+	link,
+	main,
+	section,
+	signatureText,
+	text,
+	topBorder,
+	topBorderSection,
+} from "../components";
+
+interface TeamInvitationEmailProps {
+	teamName?: string;
+	inviterEmail?: string;
+	joinUrl?: string;
+}
+
+const TEAM_NAME_PLACEHOLDER = "{{ team_name }}";
+const INVITER_EMAIL_PLACEHOLDER = "{{ inviter_email }}";
+const JOIN_URL_PLACEHOLDER = "{{ join_url }}";
+
+export const TeamInvitationEmail = ({
+	teamName,
+	inviterEmail,
+	joinUrl,
+}: TeamInvitationEmailProps) => {
+	const displayTeamName = teamName ?? TEAM_NAME_PLACEHOLDER;
+	const displayInviterEmail = inviterEmail ?? INVITER_EMAIL_PLACEHOLDER;
+	const displayJoinUrl = joinUrl ?? JOIN_URL_PLACEHOLDER;
+
+	return (
+		<Html>
+			<Head>
+				<EmailFonts />
+			</Head>
+			<Preview>Invitation to join {displayTeamName} on Recoder Studio</Preview>
+			<Body style={main}>
+				<Container style={container}>
+					<EmailHeader
+						heading="You've been invited to collaborate in Recoder Studio."
+						subheading="Join your team and start building together."
+					/>
+					<Section style={topBorderSection}>
+						<Hr style={topBorder} />
+					</Section>
+					<Section style={section}>
+						<Heading style={h1}>Team Invitation</Heading>
+						<Text style={text}>
+							You&apos;ve been invited to join the team{" "}
+							<strong style={highlightText}>{displayTeamName}</strong> by{" "}
+							<strong style={highlightText}>{displayInviterEmail}</strong>.
+						</Text>
+						<Text style={text}>
+							Click the button below to accept and access your shared workspace.
+						</Text>
+						<Button href={displayJoinUrl} style={button}>
+							Join the Team
+						</Button>
+						<Text style={text}>
+							If you didn&apos;t expect this invitation, you can safely ignore
+							this email.
+						</Text>
+						<Text style={signatureText}>
+							—<br />
+							The Recoder Studio Team
+							<br />
+							<Link href="https://giselles.ai" style={link}>
+								https://giselles.ai
+							</Link>
+						</Text>
+					</Section>
+					<Section style={topBorderSection}>
+						<Hr style={topBorder} />
+					</Section>
+				</Container>
+				<EmailFooter />
+			</Body>
+		</Html>
+	);
+};
+
+TeamInvitationEmail.PreviewProps = {
+	teamName: "Acme Design",
+	inviterEmail: "alex@example.com",
+	joinUrl: "https://example.com/join/abc",
+} as TeamInvitationEmailProps;
+
+export default TeamInvitationEmail;

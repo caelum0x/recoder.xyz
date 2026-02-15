@@ -9,50 +9,50 @@ export * from './api';
 
 // Export with aliases to resolve naming conflicts
 // Agent types
-export { Agent, AgentCapabilities, AgentConfiguration, AgentStatus } from './agent';
-export { PerformanceMetrics as AgentPerformanceMetrics } from './agent';
-export { QualityMetrics as AgentQualityMetrics } from './agent';
-export { ValidationMetrics as AgentValidationMetrics } from './agent';
-export { GenerationMetrics as AgentGenerationMetrics } from './agent';
+export type { Agent, AgentCapabilities, AgentConfiguration, AgentStatus } from './agent';
+export type { PerformanceMetrics as AgentPerformanceMetrics } from './agent';
+export type { QualityMetrics as AgentQualityMetrics } from './agent';
+export type { ValidationMetrics as AgentValidationMetrics } from './agent';
+export type { GenerationMetrics as AgentGenerationMetrics } from './agent';
 
 // Project types
-export { Project, ProjectStatus, ProjectConfiguration, ProjectStructure } from './project';
-export { DataFlow, AuthenticationConfig, RetryPolicy } from './project';
-export { Dependency as ProjectDependency } from './project';
-export { ComplianceRequirement as ProjectComplianceRequirement } from './project';
-export { EncryptionConfig as ProjectEncryptionConfig } from './project';
-export { MonitoringStrategy as ProjectMonitoringStrategy } from './project';
-export { PipelineStage as ProjectPipelineStage } from './project';
-export { QualityGate as ProjectQualityGate } from './project';
-export { SecurityModel as ProjectSecurityModel } from './project';
-export { ValidationCheck as ProjectValidationCheck } from './project';
-export { IntegrationValidation as ProjectIntegrationValidation } from './project';
-export { StructurePattern as ProjectStructurePattern } from './project';
-export { RiskAssessment as ProjectRiskAssessment } from './project';
-export { PerformanceMetrics as ProjectPerformanceMetrics } from './project';
-export { QualityMetrics as ProjectQualityMetrics } from './project';
-export { FileStructure as ProjectFileStructure } from './project';
+export type { Project, ProjectStatus, ProjectConfiguration, ProjectStructure } from './project';
+export type { DataFlow, AuthenticationConfig, RetryPolicy } from './project';
+export type { Dependency as ProjectDependency } from './project';
+export type { ComplianceRequirement as ProjectComplianceRequirement } from './project';
+export type { EncryptionConfig as ProjectEncryptionConfig } from './project';
+export type { MonitoringStrategy as ProjectMonitoringStrategy } from './project';
+export type { PipelineStage as ProjectPipelineStage } from './project';
+export type { QualityGate as ProjectQualityGate } from './project';
+export type { SecurityModel as ProjectSecurityModel } from './project';
+export type { ValidationCheck as ProjectValidationCheck } from './project';
+export type { IntegrationValidation as ProjectIntegrationValidation } from './project';
+export type { StructurePattern as ProjectStructurePattern } from './project';
+export type { RiskAssessment as ProjectRiskAssessment } from './project';
+export type { PerformanceMetrics as ProjectPerformanceMetrics } from './project';
+export type { QualityMetrics as ProjectQualityMetrics } from './project';
+export type { FileStructure as ProjectFileStructure } from './project';
 
 // Subscription types
-export { Subscription, SubscriptionPlan, SubscriptionStatus, BillingInfo } from './subscription';
-export { SupportLevel as SubscriptionSupportLevel } from './subscription';
+export type { Subscription, SubscriptionPlan, SubscriptionStatus, BillingInfo } from './subscription';
+export type { SupportLevel as SubscriptionSupportLevel } from './subscription';
 
 // Planning types  
-export { PlanningRequest } from './planning';
-export { DataSource as PlanningDataSource } from './planning';
-export { ComplianceRequirement as PlanningComplianceRequirement } from './planning';
-export { Dependency as PlanningDependency } from './planning';
-export { EncryptionConfig as PlanningEncryptionConfig } from './planning';
-export { MonitoringStrategy as PlanningMonitoringStrategy } from './planning';
-export { PipelineStage as PlanningPipelineStage } from './planning';
-export { QualityGate as PlanningQualityGate } from './planning';
-export { SecurityModel as PlanningSecurityModel } from './planning';
-export { ValidationCheck as PlanningValidationCheck } from './planning';
-export { SupportLevel as PlanningSupportLevel } from './planning';
-export { RealityValidation as PlanningRealityValidation } from './planning';
+export type { PlanningRequest } from './planning';
+export type { DataSource as PlanningDataSource } from './planning';
+export type { ComplianceRequirement as PlanningComplianceRequirement } from './planning';
+export type { Dependency as PlanningDependency } from './planning';
+export type { EncryptionConfig as PlanningEncryptionConfig } from './planning';
+export type { MonitoringStrategy as PlanningMonitoringStrategy } from './planning';
+export type { PipelineStage as PlanningPipelineStage } from './planning';
+export type { QualityGate as PlanningQualityGate } from './planning';
+export type { SecurityModel as PlanningSecurityModel } from './planning';
+export type { ValidationCheck as PlanningValidationCheck } from './planning';
+export type { SupportLevel as PlanningSupportLevel } from './planning';
+export type { RealityValidation as PlanningRealityValidation } from './planning';
 
 // Planner types (from planner.ts)
-export {
+export type {
   ProjectRequirement,
   ArchitecturalPlan,
   ImplementationPlan,
@@ -95,21 +95,21 @@ export {
 } from './planner';
 
 // Validation types
-export { ValidationRule, ValidationError, ValidationWarning } from './validation';
-export { QualityMetrics as ValidationQualityMetrics } from './validation';
-export { ValidationMetrics as ValidationValidationMetrics } from './validation';
-export { QualityGate as ValidationQualityGate } from './validation';
-export { RiskAssessment as ValidationRiskAssessment } from './validation';
-export { ValidationOptions as ValidationValidationOptions } from './validation';
-export { ValidationResult as ValidationValidationResult } from './validation';
+export type { ValidationRule, ValidationError, ValidationWarning } from './validation';
+export type { QualityMetrics as ValidationQualityMetrics } from './validation';
+export type { ValidationMetrics as ValidationValidationMetrics } from './validation';
+export type { QualityGate as ValidationQualityGate } from './validation';
+export type { RiskAssessment as ValidationRiskAssessment } from './validation';
+export type { ValidationOptions as ValidationValidationOptions } from './validation';
+export type { ValidationResult as ValidationValidationResult } from './validation';
 
 // Common types
-export { Timestamp } from './common';
-export { CodeQuality as CommonCodeQuality } from './common';
-export { ValidationLevel as CommonValidationLevel } from './common';
+export type { Timestamp } from './common';
+export type { CodeQuality as CommonCodeQuality } from './common';
+export type { ValidationLevel as CommonValidationLevel } from './common';
 
 // Code generation types
-export {
+export type {
   GenerationType,
   GenerationRequest,
   GenerationResult,
@@ -130,13 +130,13 @@ export {
 } from './code-generation';
 
 // Aliased exports from code-generation to avoid conflicts
-export { ValidationOptions as CodeGenerationValidationOptions } from './code-generation';
-export { ValidationResult as CodeGenerationValidationResult } from './code-generation';
-export { GenerationMetrics as CodeGenerationGenerationMetrics } from './code-generation';
-export { Dependency as CodeGenerationDependency } from './code-generation';
-export { FileStructure as CodeGenerationFileStructure } from './code-generation';
-export { IntegrationValidation as CodeGenerationIntegrationValidation } from './code-generation';
-export { StructurePattern as CodeGenerationStructurePattern } from './code-generation';
-export { CodeQuality as CodeGenerationCodeQuality } from './code-generation';
-export { ValidationLevel as CodeGenerationValidationLevel } from './code-generation';
-export { RealityValidation as CodeGenerationRealityValidation } from './code-generation';
+export type { ValidationOptions as CodeGenerationValidationOptions } from './code-generation';
+export type { ValidationResult as CodeGenerationValidationResult } from './code-generation';
+export type { GenerationMetrics as CodeGenerationGenerationMetrics } from './code-generation';
+export type { Dependency as CodeGenerationDependency } from './code-generation';
+export type { FileStructure as CodeGenerationFileStructure } from './code-generation';
+export type { IntegrationValidation as CodeGenerationIntegrationValidation } from './code-generation';
+export type { StructurePattern as CodeGenerationStructurePattern } from './code-generation';
+export type { CodeQuality as CodeGenerationCodeQuality } from './code-generation';
+export type { ValidationLevel as CodeGenerationValidationLevel } from './code-generation';
+export type { RealityValidation as CodeGenerationRealityValidation } from './code-generation';

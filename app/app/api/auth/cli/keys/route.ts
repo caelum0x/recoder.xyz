@@ -39,7 +39,7 @@ export async function GET(request: NextRequest) {
   } catch (error: any) {
     console.error('List API keys error:', error);
     return NextResponse.json(
-      { error: 'Failed to list API keys', message: error.message },
+      { error: 'Failed to list API keys' },
       { status: 500 }
     );
   }
@@ -102,7 +102,7 @@ export async function POST(request: NextRequest) {
   } catch (error: any) {
     console.error('Create API key error:', error);
     return NextResponse.json(
-      { error: 'Failed to create API key', message: error.message },
+      { error: 'Failed to create API key' },
       { status: 500 }
     );
   }
@@ -151,7 +151,7 @@ export async function DELETE(request: NextRequest) {
   } catch (error: any) {
     console.error('Revoke API key error:', error);
     return NextResponse.json(
-      { error: 'Failed to revoke API key', message: error.message },
+      { error: 'Failed to revoke API key' },
       { status: 500 }
     );
   }

@@ -8,7 +8,7 @@
 | `BETTER_AUTH_SECRET` | Session signing key | 16 chars |
 | `COOKIE_SECRET` | Signed cookie encryption | 16 chars |
 | `TOKEN_ENCRYPTION_KEY` | AES-256-GCM OAuth token encryption | 32 bytes (base64) |
-| `STRIPE_SECRET_KEY` | Stripe API access | 16 chars |
+| `POLAR_ACCESS_TOKEN` | Polar.sh API access | 16 chars |
 
 ## Pre-Deploy Verification
 
@@ -39,11 +39,11 @@
 2. Set the new value in the deploy environment.
 3. Redeploy. Previously encrypted OAuth tokens cannot be decrypted — users must re-link OAuth providers.
 
-### Rotating `STRIPE_SECRET_KEY`
+### Rotating `POLAR_ACCESS_TOKEN`
 
-1. Generate a new restricted key in the Stripe Dashboard.
+1. Generate a new access token in the Polar.sh Dashboard (Settings > Developers > Personal Access Tokens).
 2. Set the new value in the deploy environment.
-3. Redeploy. Verify webhook signatures still validate (update `STRIPE_V2_WEBHOOK_SECRET` if the endpoint was recreated).
+3. Redeploy. Verify webhook signatures still validate (update `POLAR_WEBHOOK_SECRET` if the endpoint was recreated).
 
 ## Credential Rotation Schedule
 

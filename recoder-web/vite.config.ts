@@ -41,6 +41,22 @@ export default defineConfig((config) => {
           /ajv.*\.json$/,
           /@modelcontextprotocol\/sdk/,
         ],
+        output: {
+          manualChunks(id: string) {
+            if (id.includes('@codemirror/') || id.includes('@lezer/')) {
+              return 'codemirror';
+            }
+            if (id.includes('@xterm/')) {
+              return 'terminal';
+            }
+            if (id.includes('react-markdown') || id.includes('remark-gfm') || id.includes('rehype-')) {
+              return 'markdown';
+            }
+            if (id.includes('framer-motion') || id.includes('lucide-react') || id.includes('react-toastify')) {
+              return 'ui';
+            }
+          },
+        },
       },
     },
     assetsInclude: ['**/*.json'],

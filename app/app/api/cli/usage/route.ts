@@ -66,7 +66,7 @@ export const POST = withCLIAuth(async (request: NextRequest, context) => {
     });
   } catch (error: any) {
     return NextResponse.json(
-      { error: 'Failed to track usage', message: error.message },
+      { error: 'Failed to track usage' },
       { status: 500 }
     );
   }
@@ -122,7 +122,7 @@ export const GET = withCLIAuth(async (request: NextRequest, context) => {
     });
   } catch (error: any) {
     return NextResponse.json(
-      { error: 'Failed to get usage', message: error.message },
+      { error: 'Failed to get usage' },
       { status: 500 }
     );
   }

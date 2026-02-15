@@ -60,7 +60,7 @@ export async function GET(request: NextRequest) {
   } catch (error: any) {
     console.error('[AI Settings GET] Error:', error);
     return NextResponse.json(
-      { success: false, error: error.message || 'Failed to fetch AI settings' },
+      { success: false, error: 'Failed to fetch AI settings' },
       { status: 500 }
     );
   }
@@ -123,7 +123,7 @@ export async function PUT(request: NextRequest) {
   } catch (error: any) {
     console.error('[AI Settings PUT] Error:', error);
     return NextResponse.json(
-      { success: false, error: error.message || 'Failed to update AI settings' },
+      { success: false, error: 'Failed to update AI settings' },
       { status: 500 }
     );
   }

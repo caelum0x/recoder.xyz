@@ -1,10 +1,4 @@
-const REQUIRED_VARS = ["DATABASE_URL", "BETTER_AUTH_SECRET"] as const;
-
-const RECOMMENDED_VARS = [
-	"BETTER_AUTH_URL",
-	"COOKIE_SECRET",
-	"TOKEN_ENCRYPTION_KEY",
-] as const;
+import { z } from "zod/v4";
 
 const PLACEHOLDER_PATTERNS = [
 	/^changeme$/i,
@@ -17,65 +11,194 @@ const PLACEHOLDER_PATTERNS = [
 	/^password$/i,
 ];
 
-const SECRET_VARS = [
-	"BETTER_AUTH_SECRET",
-	"COOKIE_SECRET",
-	"TOKEN_ENCRYPTION_KEY",
-	"STRIPE_SECRET_KEY",
-] as const;
-
 const MIN_SECRET_LENGTH = 16;
 
-export function validateEnv(): void {
-	const missing: string[] = [];
+function isPlaceholder(value: string): boolean {
+	return PLACEHOLDER_PATTERNS.some((p) => p.test(value));
+}
 
-	for (const key of REQUIRED_VARS) {
-		if (!process.env[key]) {
-			missing.push(key);
-		}
-	}
+const secretString = z
+	.string()
+	.min(MIN_SECRET_LENGTH, `Must be at least ${MIN_SECRET_LENGTH} characters`)
+	.refine((v) => !isPlaceholder(v), "Looks like a placeholder value");
 
-	if (missing.length > 0) {
+const isProduction = () => process.env.NODE_ENV === "production";
+
+const optionalNonEmpty = z
+	.union([z.string().min(1), z.literal("").transform(() => undefined)])
+	.optional();
+
+const serverEnvSchema = z.object({
+	DATABASE_URL: z.string().min(1, "DATABASE_URL is required"),
+	AUTH_DATABASE_URL: z.string().min(1, "AUTH_DATABASE_URL is required"),
+	BETTER_AUTH_SECRET: secretString,
+	BETTER_AUTH_URL: optionalNonEmpty,
+	CHANNEL_GATEWAY_SHARED_SECRET: z
+		.union([secretString, z.literal("").transform(() => undefined)])
+		.optional(),
+	COOKIE_SECRET: z
+		.union([secretString, z.literal("").transform(() => undefined)])
+		.optional(),
+	TOKEN_ENCRYPTION_KEY: z
+		.union([secretString, z.literal("").transform(() => undefined)])
+		.optional(),
+	POLAR_ACCESS_TOKEN: optionalNonEmpty,
+	POLAR_PRO_PRODUCT_ID: optionalNonEmpty,
+	POLAR_WEBHOOK_SECRET: optionalNonEmpty,
+	POLAR_ORGANIZATION_ID: optionalNonEmpty,
+});
+
+export type ServerEnv = z.infer<typeof serverEnvSchema>;
+
+export function validateEnv(): ServerEnv {
+	const result = serverEnvSchema.safeParse({
+		DATABASE_URL: process.env.DATABASE_URL,
+		AUTH_DATABASE_URL: process.env.AUTH_DATABASE_URL,
+		BETTER_AUTH_SECRET: process.env.BETTER_AUTH_SECRET,
+		BETTER_AUTH_URL: process.env.BETTER_AUTH_URL,
+		CHANNEL_GATEWAY_SHARED_SECRET: process.env.CHANNEL_GATEWAY_SHARED_SECRET,
+		COOKIE_SECRET: process.env.COOKIE_SECRET,
+		TOKEN_ENCRYPTION_KEY: process.env.TOKEN_ENCRYPTION_KEY,
+		POLAR_ACCESS_TOKEN: process.env.POLAR_ACCESS_TOKEN,
+		POLAR_PRO_PRODUCT_ID: process.env.POLAR_PRO_PRODUCT_ID,
+		POLAR_WEBHOOK_SECRET: process.env.POLAR_WEBHOOK_SECRET,
+		POLAR_ORGANIZATION_ID: process.env.POLAR_ORGANIZATION_ID,
+	});
+
+	if (!result.success) {
+		const formatted = z.prettifyError(result.error);
 		throw new Error(
-			`[env-validation] Missing required environment variables: ${missing.join(", ")}. ` +
-				"See apps/agency/.env.example for reference.",
+			`[env-validation] Invalid environment variables:\n${formatted}\nSee apps/agency/.env.example for reference.`,
 		);
 	}
 
-	const recommended: string[] = [];
-
-	for (const key of RECOMMENDED_VARS) {
-		if (!process.env[key]) {
-			recommended.push(key);
+	if (isProduction()) {
+		const prodMissing: string[] = [];
+		if (!process.env.COOKIE_SECRET) prodMissing.push("COOKIE_SECRET");
+		if (!process.env.TOKEN_ENCRYPTION_KEY)
+			prodMissing.push("TOKEN_ENCRYPTION_KEY");
+		if (!process.env.AUTH_DATABASE_URL) prodMissing.push("AUTH_DATABASE_URL");
+		if (!process.env.BETTER_AUTH_URL) prodMissing.push("BETTER_AUTH_URL");
+		if (!process.env.POLAR_ACCESS_TOKEN)
+			prodMissing.push("POLAR_ACCESS_TOKEN");
+		if (!process.env.POLAR_PRO_PRODUCT_ID)
+			prodMissing.push("POLAR_PRO_PRODUCT_ID");
+		if (!process.env.POLAR_WEBHOOK_SECRET)
+			prodMissing.push("POLAR_WEBHOOK_SECRET");
+		if (!process.env.POLAR_ORGANIZATION_ID)
+			prodMissing.push("POLAR_ORGANIZATION_ID");
+		if (prodMissing.length > 0) {
+			throw new Error(
+				`[env-validation] Required in production: ${prodMissing.join(", ")}.`,
+			);
+		}
+	} else {
+		const recommended = [
+			"AUTH_DATABASE_URL",
+			"BETTER_AUTH_URL",
+			"CHANNEL_GATEWAY_SHARED_SECRET",
+			"COOKIE_SECRET",
+			"TOKEN_ENCRYPTION_KEY",
+		].filter((key) => !process.env[key]);
+		if (recommended.length > 0) {
+			console.warn(
+				`[env-validation] Recommended environment variables not set: ${recommended.join(", ")}. ` +
+					"The app will start, but some features may not work correctly.",
+			);
 		}
 	}
 
-	if (recommended.length > 0) {
+	validateDatabaseUrlShape();
+	validateConditionalFeatureEnv();
+	validateOAuthConfig();
+	validateCronRateLimitEnv();
+
+	return result.data;
+}
+
+function validateDatabaseUrlShape(): void {
+	const databaseUrl = process.env.DATABASE_URL;
+	if (!databaseUrl) return;
+
+	if (/\s/.test(databaseUrl)) {
+		throw new Error(
+			"[env-validation] DATABASE_URL contains whitespace/newlines. Keep the connection string on a single line.",
+		);
+	}
+
+	const appearsPooled =
+		databaseUrl.includes("-pooler.") ||
+		databaseUrl.includes("pgbouncer=true") ||
+		databaseUrl.includes("connection_limit=");
+	if (!appearsPooled) {
 		console.warn(
-			`[env-validation] Recommended environment variables not set: ${recommended.join(", ")}. ` +
-				"The app will start, but some features may not work correctly.",
+			"[env-validation] DATABASE_URL does not look like a pooled connection string. Consider pooled URLs for production/staging.",
 		);
 	}
 }
 
-export function checkSecretHygiene(): void {
-	for (const key of SECRET_VARS) {
-		const value = process.env[key];
-		if (!value) continue;
-
-		if (value.length < MIN_SECRET_LENGTH) {
-			console.warn(
-				`[env-validation] ${key} is shorter than ${MIN_SECRET_LENGTH} characters. Use a strong, randomly generated value.`,
+function validateConditionalFeatureEnv(): void {
+	if (process.env.NEXT_PUBLIC_ENABLE_POSTHOG === "true") {
+		const missing = [
+			"NEXT_PUBLIC_POSTHOG_KEY",
+			"NEXT_PUBLIC_POSTHOG_HOST",
+		].filter((key) => !process.env[key]);
+		if (missing.length > 0) {
+			throw new Error(
+				`[env-validation] PostHog is enabled but missing: ${missing.join(", ")}.`,
 			);
 		}
+	}
 
-		for (const pattern of PLACEHOLDER_PATTERNS) {
-			if (pattern.test(value)) {
-				console.warn(
-					`[env-validation] ${key} looks like a placeholder ("${value}"). Replace it with a real secret before deploying.`,
-				);
-				break;
-			}
+	if (
+		process.env.SENTRY_ENABLED === "true" &&
+		!process.env.NEXT_PUBLIC_SENTRY_DSN
+	) {
+		throw new Error(
+			"[env-validation] SENTRY_ENABLED=true requires NEXT_PUBLIC_SENTRY_DSN.",
+		);
+	}
+}
+
+function validateOAuthConfig(): void {
+	const googleId = process.env.GOOGLE_OAUTH_CLIENT_ID;
+	const googleSecret = process.env.GOOGLE_OAUTH_CLIENT_SECRET;
+
+	if ((googleId && !googleSecret) || (!googleId && googleSecret)) {
+		throw new Error(
+			"[env-validation] GOOGLE_OAUTH_CLIENT_ID and GOOGLE_OAUTH_CLIENT_SECRET must both be set together.",
+		);
+	}
+
+	const hasDeprecatedGoogleAlias =
+		Boolean(process.env.GOOGLE_CLIENT_ID) ||
+		Boolean(process.env.GOOGLE_CLIENT_SECRET);
+	if (hasDeprecatedGoogleAlias && (!googleId || !googleSecret)) {
+		console.warn(
+			"[env-validation] GOOGLE_CLIENT_ID/GOOGLE_CLIENT_SECRET are deprecated aliases. Use GOOGLE_OAUTH_CLIENT_ID/GOOGLE_OAUTH_CLIENT_SECRET.",
+		);
+	}
+}
+
+function validateCronRateLimitEnv(): void {
+	const maxRequestsRaw = process.env.CRON_RATE_LIMIT_MAX_REQUESTS;
+	const windowMsRaw = process.env.CRON_RATE_LIMIT_WINDOW_MS;
+
+	if (maxRequestsRaw) {
+		const parsed = Number.parseInt(maxRequestsRaw, 10);
+		if (!Number.isFinite(parsed) || parsed <= 0) {
+			throw new Error(
+				"[env-validation] CRON_RATE_LIMIT_MAX_REQUESTS must be a positive integer.",
+			);
+		}
+	}
+
+	if (windowMsRaw) {
+		const parsed = Number.parseInt(windowMsRaw, 10);
+		if (!Number.isFinite(parsed) || parsed <= 0) {
+			throw new Error(
+				"[env-validation] CRON_RATE_LIMIT_WINDOW_MS must be a positive integer (milliseconds).",
+			);
 		}
 	}
 }

@@ -39,6 +39,9 @@ import { getProgrammingLanguage } from '../telemetry/telemetry-utils.js';
 import { logFileOperation } from '../telemetry/loggers.js';
 import { FileOperationEvent } from '../telemetry/types.js';
 
+import { createScopedLogger } from '~/utils/logger';
+const logger = createScopedLogger('WriteFileTool');
+
 /**
  * Parameters for the WriteFile tool
  */
@@ -344,7 +347,7 @@ class WriteFileToolInvocation extends BaseToolInvocation<
 
         // Include stack trace in debug mode for better troubleshooting
         if (this.config.getDebugMode() && error.stack) {
-          console.error('Write file error stack:', error.stack);
+          logger.error('Write file error stack:', error.stack);
         }
       } else if (error instanceof Error) {
         errorMsg = `Error writing to file: ${error.message}`;

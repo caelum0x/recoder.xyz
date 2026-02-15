@@ -17,6 +17,7 @@
 
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { getActionsInProgress } from '~/lib/runtime/action-runner';
+import { trackAITokenUsage } from '~/lib/services/billing/usage-billing';
 import { createScopedLogger, DEBUG, createTimer } from '~/utils/logger';
 import {
   checkShouldCondense,
@@ -192,7 +193,7 @@ function detectTruncatedResponse(content: string): {
 } {
   // Handle null/undefined/empty content
   if (!content || typeof content !== 'string') {
-    console.warn('[useSimpleChat] 🔴 TRUNCATION: Empty or invalid content');
+    logger.warn('[useSimpleChat] 🔴 TRUNCATION: Empty or invalid content');
     return {
       isTruncated: true,
       reason: 'Empty or invalid response content',
@@ -204,7 +205,7 @@ function detectTruncatedResponse(content: string): {
 
   // Early return for very short content - likely truncated if we expect code
   if (trimmed.length < 100 && trimmed.includes('<recoderArtifact')) {
-    console.warn('[useSimpleChat] 🔴 TRUNCATION: Very short content with artifact tag');
+    logger.warn('[useSimpleChat] 🔴 TRUNCATION: Very short content with artifact tag');
     return {
       isTruncated: true,
       reason: 'Very short response with artifact - likely truncated',
@@ -234,10 +235,10 @@ function detectTruncatedResponse(content: string): {
   }
 
   // ALWAYS log this check - it's the most important (use WARN for visibility)
-  console.warn(`[useSimpleChat] 📊 ACTION TAG COUNT: ${openActions} open, ${closeActions} closed`);
+  logger.warn(`[useSimpleChat] 📊 ACTION TAG COUNT: ${openActions} open, ${closeActions} closed`);
 
   if (openActions > closeActions) {
-    console.warn(`[useSimpleChat] 🔴 TRUNCATION DETECTED: ${openActions} open actions vs ${closeActions} closed actions`);
+    logger.warn(`[useSimpleChat] 🔴 TRUNCATION DETECTED: ${openActions} open actions vs ${closeActions} closed actions`);
     return {
       isTruncated: true,
       reason: `Incomplete recoderAction tag (${openActions} open, ${closeActions} closed)`,
@@ -265,10 +266,10 @@ function detectTruncatedResponse(content: string): {
     searchPos = closeIdx + 18;
   }
 
-  console.warn(`[useSimpleChat] 📊 ARTIFACT TAG COUNT: ${openArtifacts} open, ${closeArtifacts} closed`);
+  logger.warn(`[useSimpleChat] 📊 ARTIFACT TAG COUNT: ${openArtifacts} open, ${closeArtifacts} closed`);
 
   if (openArtifacts > closeArtifacts) {
-    console.warn(`[useSimpleChat] 🔴 TRUNCATION DETECTED: ${openArtifacts} open artifacts vs ${closeArtifacts} closed artifacts`);
+    logger.warn(`[useSimpleChat] 🔴 TRUNCATION DETECTED: ${openArtifacts} open artifacts vs ${closeArtifacts} closed artifacts`);
     return {
       isTruncated: true,
       reason: `Incomplete recoderArtifact tag (${openArtifacts} open, ${closeArtifacts} closed)`,
@@ -288,7 +289,7 @@ function detectTruncatedResponse(content: string): {
     }
 
     if (codeBlockCount % 2 !== 0) {
-      console.warn(`[useSimpleChat] 🔴 TRUNCATION DETECTED: ${codeBlockCount} code block markers (should be even)`);
+      logger.warn(`[useSimpleChat] 🔴 TRUNCATION DETECTED: ${codeBlockCount} code block markers (should be even)`);
       return {
         isTruncated: true,
         reason: `Incomplete code block (${codeBlockCount} markers)`,
@@ -308,7 +309,7 @@ function detectTruncatedResponse(content: string): {
 
     if (lastOpenActionIdx !== -1 && lastOpenActionIdx > lastCloseActionIdx) {
       // An action was opened more recently than the last close - check if it's still open
-      console.warn('[useSimpleChat] 🔴 TRUNCATION DETECTED: Recent action tag not closed');
+      logger.warn('[useSimpleChat] 🔴 TRUNCATION DETECTED: Recent action tag not closed');
       return {
         isTruncated: true,
         reason: 'Action tag opened but not closed in recent content',
@@ -321,7 +322,7 @@ function detectTruncatedResponse(content: string): {
   const last500Chars = trimmed.slice(-500);
   for (const { pattern, reason } of INCOMPLETE_RESPONSE_PATTERNS) {
     if (pattern.test(last500Chars)) {
-      console.warn(`[useSimpleChat] 🔴 TRUNCATION DETECTED: ${reason}`);
+      logger.warn(`[useSimpleChat] 🔴 TRUNCATION DETECTED: ${reason}`);
       return {
         isTruncated: true,
         reason,
@@ -336,7 +337,7 @@ function detectTruncatedResponse(content: string): {
   if (openActions > closeActions) {
     const actionOpenPattern = /<recoderAction[^>]*>[\s\S]{0,100}$/;
     if (actionOpenPattern.test(trimmed)) {
-      console.warn('[useSimpleChat] 🔴 TRUNCATION DETECTED: Action tag opened with minimal content at end');
+      logger.warn('[useSimpleChat] 🔴 TRUNCATION DETECTED: Action tag opened with minimal content at end');
       return {
         isTruncated: true,
         reason: 'Action tag opened but empty or minimal content',
@@ -348,7 +349,7 @@ function detectTruncatedResponse(content: string): {
   // Additional check: content ends abruptly mid-word or mid-tag
   const lastChars = trimmed.slice(-20);
   if (lastChars.includes('<') && !lastChars.includes('>')) {
-    console.warn('[useSimpleChat] 🔴 TRUNCATION DETECTED: Content ends with incomplete tag');
+    logger.warn('[useSimpleChat] 🔴 TRUNCATION DETECTED: Content ends with incomplete tag');
     return {
       isTruncated: true,
       reason: 'Content ends with incomplete XML tag',
@@ -357,7 +358,7 @@ function detectTruncatedResponse(content: string): {
   }
 
   // All checks passed
-  console.warn('[useSimpleChat] ✅ Truncation check passed - response appears complete');
+  logger.warn('[useSimpleChat] ✅ Truncation check passed - response appears complete');
   return {
     isTruncated: false,
     reason: ''
@@ -398,6 +399,11 @@ export function useSimpleChat(options: UseChatOptions) {
   } = options;
 
   const retryConfig: RetryConfig = { ...DEFAULT_RETRY_CONFIG, ...userRetryConfig };
+
+  // Always-fresh ref for extraBody so callbacks read the latest model/provider
+  // even when called from stale closures (e.g. auto-fix deferred sends).
+  const extraBodyRef = useRef(extraBody);
+  extraBodyRef.current = extraBody;
 
   const [messages, setMessages] = useState<Message[]>(initialMessages);
   const [isLoading, setIsLoading] = useState(false);
@@ -537,9 +543,9 @@ export function useSimpleChat(options: UseChatOptions) {
     const continueTimer = createTimer('continueResponse', 'SimpleChat');
     const attemptNumber = continuationCountRef.current + 1;
 
-    console.log(`[useSimpleChat] 🔄 CONTINUATION STARTING (attempt ${attemptNumber}/${maxContinuations})`);
-    console.log(`[useSimpleChat] Previous content length: ${previousContent.length} chars`);
-    console.log(`[useSimpleChat] Previous content ends with:`, previousContent.slice(-200));
+    logger.info(`[useSimpleChat] 🔄 CONTINUATION STARTING (attempt ${attemptNumber}/${maxContinuations})`);
+    logger.info(`[useSimpleChat] Previous content length: ${previousContent.length} chars`);
+    logger.info(`[useSimpleChat] Previous content ends with:`, previousContent.slice(-200));
 
     logger.info(`Continuing truncated response (attempt ${attemptNumber}/${maxContinuations})`);
 
@@ -556,14 +562,14 @@ export function useSimpleChat(options: UseChatOptions) {
         { role: 'user' as const, content: CONTINUE_PROMPT }
       ];
 
-      console.log(`[useSimpleChat] Sending continuation request with ${continuationMessages.length} messages`);
+      logger.info(`[useSimpleChat] Sending continuation request with ${continuationMessages.length} messages`);
 
       const response = await fetch(api, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           messages: continuationMessages,
-          ...extraBody,
+          ...extraBodyRef.current,
           // Signal this is a continuation
           isContinuation: true
         }),
@@ -589,7 +595,7 @@ export function useSimpleChat(options: UseChatOptions) {
         streamingTimeoutId = setTimeout(() => {
           const actionsInProgress = getActionsInProgress();
           if (actionsInProgress > 0) {
-            console.log(`[useSimpleChat] ${actionsInProgress} action(s) in progress, extending timeout...`);
+            logger.info(`[useSimpleChat] ${actionsInProgress} action(s) in progress, extending timeout...`);
             resetStreamingTimeout();
             return;
           }
@@ -625,9 +631,9 @@ export function useSimpleChat(options: UseChatOptions) {
       const duration = continueTimer.end();
       const finalContent = previousContent + continuedContent;
 
-      console.log(`[useSimpleChat] ✅ CONTINUATION COMPLETED in ${duration}ms`);
-      console.log(`[useSimpleChat] Added ${continuedContent.length} chars, total now ${finalContent.length} chars`);
-      console.log(`[useSimpleChat] New content ends with:`, finalContent.slice(-200));
+      logger.info(`[useSimpleChat] ✅ CONTINUATION COMPLETED in ${duration}ms`);
+      logger.info(`[useSimpleChat] Added ${continuedContent.length} chars, total now ${finalContent.length} chars`);
+      logger.info(`[useSimpleChat] New content ends with:`, finalContent.slice(-200));
 
       logger.timed('info', 'Continuation completed', duration, {
         addedLength: continuedContent.length,
@@ -636,7 +642,7 @@ export function useSimpleChat(options: UseChatOptions) {
       return finalContent;
     } catch (error: any) {
       const duration = continueTimer.end();
-      console.error(`[useSimpleChat] ❌ CONTINUATION FAILED:`, error.message);
+      logger.error(`[useSimpleChat] ❌ CONTINUATION FAILED:`, error.message);
       logger.timed('error', 'Continuation failed', duration, { error: error.message });
       // Return what we have so far
       return previousContent;
@@ -716,7 +722,7 @@ export function useSimpleChat(options: UseChatOptions) {
         const response = await fetch(api, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ messages: allMessages, ...extraBody }),
+          body: JSON.stringify({ messages: allMessages, ...extraBodyRef.current }),
           signal: abortControllerRef.current.signal,
         });
 
@@ -745,7 +751,7 @@ export function useSimpleChat(options: UseChatOptions) {
             // Don't abort if actions are still executing
             const actionsInProgress = getActionsInProgress();
             if (actionsInProgress > 0) {
-              console.log(`[useSimpleChat] ${actionsInProgress} action(s) in progress, extending timeout...`);
+              logger.info(`[useSimpleChat] ${actionsInProgress} action(s) in progress, extending timeout...`);
               resetStreamingTimeout();
               return;
             }
@@ -849,20 +855,20 @@ export function useSimpleChat(options: UseChatOptions) {
         try {
           onStreamEnd?.(streamMetrics);
         } catch (callbackError) {
-          console.warn('[useSimpleChat] Stream end callback error:', callbackError);
+          logger.warn('[useSimpleChat] Stream end callback error:', callbackError);
         }
 
         // ALWAYS run truncation detection and log the results
         // This is CRITICAL - wrap in its own try/catch to ensure it runs
-        console.warn('[useSimpleChat] 🔍 === TRUNCATION DETECTION START ===');
-        console.warn(`[useSimpleChat] Content length: ${finalContent.length} chars`);
-        console.warn(`[useSimpleChat] Content ends with: "${finalContent.slice(-100)}"`);
+        logger.warn('[useSimpleChat] 🔍 === TRUNCATION DETECTION START ===');
+        logger.warn(`[useSimpleChat] Content length: ${finalContent.length} chars`);
+        logger.warn(`[useSimpleChat] Content ends with: "${finalContent.slice(-100)}"`);
 
         let truncationCheck: { isTruncated: boolean; reason: string; details?: Record<string, unknown> };
         try {
           truncationCheck = detectTruncatedResponse(finalContent);
         } catch (detectError) {
-          console.error('[useSimpleChat] Truncation detection failed:', detectError);
+          logger.error('[useSimpleChat] Truncation detection failed:', detectError);
           // Fallback: assume truncated if we have open tags
           const hasOpenAction = finalContent.includes('<recoderAction') && !finalContent.includes('</recoderAction>');
           truncationCheck = {
@@ -872,7 +878,7 @@ export function useSimpleChat(options: UseChatOptions) {
         }
 
         // Log the full truncation check result - use WARN level to ensure visibility
-        console.warn('[useSimpleChat] 📋 TRUNCATION CHECK RESULT:', JSON.stringify({
+        logger.warn('[useSimpleChat] 📋 TRUNCATION CHECK RESULT:', JSON.stringify({
           isTruncated: truncationCheck.isTruncated,
           reason: truncationCheck.reason || 'none',
           enableAutoContinue,
@@ -880,7 +886,7 @@ export function useSimpleChat(options: UseChatOptions) {
           maxContinuations,
           details: truncationCheck.details || {}
         }, null, 2));
-        console.warn('[useSimpleChat] 🔍 === TRUNCATION DETECTION END ===');
+        logger.warn('[useSimpleChat] 🔍 === TRUNCATION DETECTION END ===');
 
         // Auto-continue if enabled and response appears truncated
         if (
@@ -888,8 +894,8 @@ export function useSimpleChat(options: UseChatOptions) {
           truncationCheck.isTruncated &&
           continuationCountRef.current < maxContinuations
         ) {
-          console.warn(`[useSimpleChat] ⚠️ RESPONSE TRUNCATED: ${truncationCheck.reason}`);
-          console.log(`[useSimpleChat] 🔄 Attempting auto-continuation (${continuationCountRef.current + 1}/${maxContinuations})...`);
+          logger.warn(`[useSimpleChat] ⚠️ RESPONSE TRUNCATED: ${truncationCheck.reason}`);
+          logger.info(`[useSimpleChat] 🔄 Attempting auto-continuation (${continuationCountRef.current + 1}/${maxContinuations})...`);
           logger.warn(`Response truncated: ${truncationCheck.reason}`);
           logger.info(`Attempting auto-continuation (${continuationCountRef.current + 1}/${maxContinuations})...`);
 
@@ -901,9 +907,9 @@ export function useSimpleChat(options: UseChatOptions) {
           );
 
           // Check again after continuation
-          console.log('[useSimpleChat] 🔍 Running post-continuation truncation check...');
+          logger.info('[useSimpleChat] 🔍 Running post-continuation truncation check...');
           const recheckTruncation = detectTruncatedResponse(finalContent);
-          console.log('[useSimpleChat] 📋 Post-continuation check:', {
+          logger.info('[useSimpleChat] 📋 Post-continuation check:', {
             isTruncated: recheckTruncation.isTruncated,
             reason: recheckTruncation.reason || 'none',
           });
@@ -913,7 +919,7 @@ export function useSimpleChat(options: UseChatOptions) {
             recheckTruncation.isTruncated &&
             continuationCountRef.current < maxContinuations
           ) {
-            console.warn('[useSimpleChat] ⚠️ Still truncated after continuation, trying again...');
+            logger.warn('[useSimpleChat] ⚠️ Still truncated after continuation, trying again...');
             logger.warn('Still truncated after continuation, trying again...');
             finalContent = await continueResponse(
               finalContent,
@@ -924,21 +930,21 @@ export function useSimpleChat(options: UseChatOptions) {
             // Recheck
             const nextCheck = detectTruncatedResponse(finalContent);
             if (!nextCheck.isTruncated) {
-              console.log('[useSimpleChat] ✅ Response now complete after continuation');
+              logger.info('[useSimpleChat] ✅ Response now complete after continuation');
               break;
             }
           }
         } else if (truncationCheck.isTruncated) {
           // Truncated but not auto-continuing (either disabled or max reached)
           if (!enableAutoContinue) {
-            console.warn('[useSimpleChat] ⚠️ Response truncated but auto-continue is DISABLED');
+            logger.warn('[useSimpleChat] ⚠️ Response truncated but auto-continue is DISABLED');
             logger.warn('Response truncated but auto-continue is disabled');
           } else {
-            console.warn(`[useSimpleChat] ⚠️ Response truncated but max continuations (${maxContinuations}) already reached`);
+            logger.warn(`[useSimpleChat] ⚠️ Response truncated but max continuations (${maxContinuations}) already reached`);
             logger.warn(`Response truncated but max continuations (${maxContinuations}) reached`);
           }
         } else {
-          console.log('[useSimpleChat] ✅ Response complete - no continuation needed');
+          logger.info('[useSimpleChat] ✅ Response complete - no continuation needed');
         }
 
         // Create final message with complete content for persistence
@@ -985,7 +991,7 @@ export function useSimpleChat(options: UseChatOptions) {
           logger.timed('info', 'Generation stopped by user', totalDuration, {
             contentLength: accumulatedContentRef.current.length,
           });
-          console.log(`[useSimpleChat] Generation stopped by user. Partial content: ${accumulatedContentRef.current.length} chars`);
+          logger.info(`[useSimpleChat] Generation stopped by user. Partial content: ${accumulatedContentRef.current.length} chars`);
 
           // Keep partial content visible — the message is already in state
           // from the streaming updates. Just finalize it.
@@ -1019,7 +1025,7 @@ export function useSimpleChat(options: UseChatOptions) {
           // CRITICAL FIX: Check for truncation even on timeout - partial content may be recoverable
           const partialContent = accumulatedContentRef.current;
           if (partialContent && partialContent.length > 100 && enableAutoContinue && continuationCountRef.current < maxContinuations) {
-            console.warn('[useSimpleChat] Timeout with partial content - attempting continuation...');
+            logger.warn('[useSimpleChat] Timeout with partial content - attempting continuation...');
             const truncationCheck = detectTruncatedResponse(partialContent);
             if (truncationCheck.isTruncated) {
               try {
@@ -1037,10 +1043,10 @@ export function useSimpleChat(options: UseChatOptions) {
                     ? { ...msg, content: continuedContent, truncated: finalCheck.isTruncated }
                     : msg
                 ));
-                console.log('[useSimpleChat] Successfully continued after timeout');
+                logger.info('[useSimpleChat] Successfully continued after timeout');
                 return; // Don't show timeout error if continuation succeeded
               } catch (continueError) {
-                console.warn('[useSimpleChat] Failed to continue after timeout:', continueError);
+                logger.warn('[useSimpleChat] Failed to continue after timeout:', continueError);
               }
             }
           }
@@ -1074,6 +1080,12 @@ export function useSimpleChat(options: UseChatOptions) {
       // Complete the stream with final content
       completeStream(accumulatedContentRef.current);
 
+      // Track AI token usage for billing
+      const contentLength = accumulatedContentRef.current.length;
+      if (contentLength > 0) {
+        trackAITokenUsage(Math.ceil(contentLength / 4));
+      }
+
       // ENHANCED: Check for orphaned actions and truncation in finally block
       // This ensures detection runs even if there was an error
       try {
@@ -1094,7 +1106,7 @@ export function useSimpleChat(options: UseChatOptions) {
             const artifactWithRunner = artifact as { runner?: { hasOrphanedActions?: () => boolean } } | null;
             if (artifactWithRunner?.runner?.hasOrphanedActions?.()) {
               hasOrphans = true;
-              console.warn('[useSimpleChat] 🔴 ORPHANED ACTIONS DETECTED - stream was truncated');
+              logger.warn('[useSimpleChat] 🔴 ORPHANED ACTIONS DETECTED - stream was truncated');
               break;
             }
           }
@@ -1106,13 +1118,13 @@ export function useSimpleChat(options: UseChatOptions) {
         const finalTruncated = contentTruncated || hasOrphans;
 
         if (finalTruncated) {
-          console.warn(`[useSimpleChat] ⚠️ Stream ended with truncation (content: ${contentTruncated}, orphans: ${hasOrphans})`);
+          logger.warn(`[useSimpleChat] ⚠️ Stream ended with truncation (content: ${contentTruncated}, orphans: ${hasOrphans})`);
         }
 
         workbenchStore.onStreamEndForAll(finalTruncated);
-        console.log(`[useSimpleChat] Stream ended, notified workbench (truncated: ${finalTruncated})`);
+        logger.info(`[useSimpleChat] Stream ended, notified workbench (truncated: ${finalTruncated})`);
       } catch (e) {
-        console.warn('[useSimpleChat] Failed to notify workbench of stream end:', e);
+        logger.warn('[useSimpleChat] Failed to notify workbench of stream end:', e);
       }
     }
   }, [api, messages, extraBody, onError, onFinish, onResponse, enableAutoContinue, maxContinuations, continueResponse, maybeCondense, onStreamStart, onFirstToken, onStreamEnd]);
@@ -1121,12 +1133,12 @@ export function useSimpleChat(options: UseChatOptions) {
   const continueLastResponse = useCallback(async () => {
     const lastAssistantMessage = messages.filter(m => m.role === 'assistant').pop();
     if (!lastAssistantMessage) {
-      console.warn('[useSimpleChat] No assistant message to continue');
+      logger.warn('[useSimpleChat] No assistant message to continue');
       return;
     }
 
     if (isLoading) {
-      console.warn('[useSimpleChat] Cannot continue while loading');
+      logger.warn('[useSimpleChat] Cannot continue while loading');
       return;
     }
 

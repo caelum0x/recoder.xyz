@@ -5,6 +5,9 @@
 
 import { json, type ActionFunctionArgs, type LoaderFunctionArgs } from '@remix-run/cloudflare';
 import { getTemplateRegistry } from '~/lib/.server/github/template-registry';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('GitHub');
 
 // Add loader to handle GET requests
 export async function loader({ request }: LoaderFunctionArgs) {
@@ -21,9 +24,9 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
     return json({ error: 'Invalid action for GET request' }, { status: 400 });
   } catch (error) {
-    console.error('GitHub API loader error:', error);
+    logger.error('GitHub API loader error:', error);
     return json(
-      { error: error instanceof Error ? error.message : 'Unknown error' },
+      { error: 'Failed to process GitHub request' },
       { status: 500 }
     );
   }
@@ -78,7 +81,7 @@ export async function action({ request, context }: ActionFunctionArgs) {
           return json({ repository });
         } catch (error) {
           return json(
-            { error: error instanceof Error ? error.message : 'Failed to fetch repository info' },
+            { error: 'Failed to fetch repository info' },
             { status: 500 }
           );
         }
@@ -93,7 +96,7 @@ export async function action({ request, context }: ActionFunctionArgs) {
         // Parse GitHub URL
         const repoInfo = parseGitHubUrl(repoUrl);
         if (!repoInfo) {
-          console.error('❌ [GitHub] Invalid repository URL:', repoUrl);
+          logger.error('❌ [GitHub] Invalid repository URL:', repoUrl);
           return json({ error: 'Invalid GitHub repository URL' }, { status: 400 });
         }
 
@@ -106,9 +109,9 @@ export async function action({ request, context }: ActionFunctionArgs) {
         return json({ error: 'Invalid action' }, { status: 400 });
     }
   } catch (error) {
-    console.error('GitHub API error:', error);
+    logger.error('GitHub API error:', error);
     return json(
-      { error: error instanceof Error ? error.message : 'Unknown error' },
+      { error: 'Failed to process GitHub request' },
       { status: 500 }
     );
   }

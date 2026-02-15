@@ -3,6 +3,11 @@
  * Uses Anthropic's Messages API with streaming
  */
 
+import { createScopedLogger } from '~/utils/logger';
+import { SSEParser, decode, encode } from './sse-utils';
+
+const logger = createScopedLogger('AnthropicStream');
+
 export interface StreamOptions {
   model?: string;
   temperature?: number;
@@ -17,9 +22,9 @@ export async function streamAnthropicResponse(
 ): Promise<ReadableStream<Uint8Array>> {
   const model = options.model || 'claude-sonnet-4-5-20250929';
 
-  console.log('🚀 [Anthropic] Starting request to Anthropic API');
-  console.log('📝 [Anthropic] Model:', model);
-  console.log('📊 [Anthropic] Messages count:', messages.length);
+  logger.info('🚀 [Anthropic] Starting request to Anthropic API');
+  logger.info('📝 [Anthropic] Model:', model);
+  logger.info('📊 [Anthropic] Messages count:', messages.length);
 
   // Anthropic API requires alternating user/assistant messages
   // Filter out system messages from the messages array
@@ -47,84 +52,77 @@ export async function streamAnthropicResponse(
     }),
   });
 
-  console.log('📡 [Anthropic] Response received:', response.status, response.statusText);
+  logger.info('📡 [Anthropic] Response received:', response.status, response.statusText);
 
   if (!response.ok) {
     const errorText = await response.text();
-    console.error('❌ [Anthropic] Error response:', errorText);
+    logger.error('❌ [Anthropic] Error response:', errorText);
     throw new Error(`Anthropic error: ${response.status} - ${errorText}`);
   }
 
   if (!response.body) {
-    console.error('❌ [Anthropic] No response body');
+    logger.error('❌ [Anthropic] No response body');
     throw new Error('No response body');
   }
 
-  console.log('✅ [Anthropic] Starting stream processing');
-
-  const textEncoder = new TextEncoder();
-  const textDecoder = new TextDecoder();
+  logger.info('✅ [Anthropic] Starting stream processing');
 
   return new ReadableStream({
     async start(controller) {
       const reader = response.body!.getReader();
-      let buffer = '';
       let chunkCount = 0;
+      const parser = new SSEParser((frame) => {
+        const data = frame.data.trim();
+        if (!data || data === '[DONE]') {
+          return;
+        }
 
-      console.log('🔄 [Anthropic] Stream reader started');
+        try {
+          const parsed = JSON.parse(data);
+
+          // Anthropic streams different event types
+          if (parsed.type === 'content_block_delta') {
+            // Extract text delta
+            const delta = parsed.delta;
+            if (delta?.type === 'text_delta' && delta.text) {
+              chunkCount++;
+              controller.enqueue(encode(delta.text));
+            }
+          } else if (parsed.type === 'message_stop') {
+            logger.info('✅ [Anthropic] Message complete');
+          }
+        } catch (e) {
+          logger.error('❌ [Anthropic] Failed to parse SSE data:', e);
+        }
+      });
+
+      logger.info('🔄 [Anthropic] Stream reader started');
 
       try {
         while (true) {
           const { done, value } = await reader.read();
 
           if (done) {
-            console.log('✅ [Anthropic] Stream complete. Total chunks:', chunkCount);
+            logger.info('✅ [Anthropic] Stream complete. Total chunks:', chunkCount);
             break;
           }
 
-          buffer += textDecoder.decode(value, { stream: true });
-
-          // Process complete SSE events
-          const lines = buffer.split('\n');
-          buffer = lines.pop() || ''; // Keep incomplete line in buffer
-
-          for (const line of lines) {
-            if (!line.trim() || line.startsWith(':')) continue;
-
-            if (line.startsWith('data: ')) {
-              const data = line.slice(6); // Remove 'data: ' prefix
-
-              if (data === '[DONE]') {
-                console.log('✅ [Anthropic] Received [DONE] signal');
-                continue;
-              }
-
-              try {
-                const parsed = JSON.parse(data);
-
-                // Anthropic streams different event types
-                if (parsed.type === 'content_block_delta') {
-                  // Extract text delta
-                  const delta = parsed.delta;
-                  if (delta?.type === 'text_delta' && delta.text) {
-                    chunkCount++;
-                    controller.enqueue(textEncoder.encode(delta.text));
-                  }
-                } else if (parsed.type === 'message_stop') {
-                  console.log('✅ [Anthropic] Message complete');
-                }
-              } catch (e) {
-                console.error('❌ [Anthropic] Failed to parse SSE data:', e);
-              }
-            }
-          }
+          parser.push(decode(value));
         }
 
+        const finalChunk = decode(new Uint8Array(), false);
+        if (finalChunk) {
+          parser.push(finalChunk);
+        }
+        parser.flush();
+
         controller.close();
-        console.log('✅ [Anthropic] Controller closed');
+        logger.info('✅ [Anthropic] Controller closed');
       } catch (error) {
-        console.error('❌ [Anthropic] Stream processing error:', error);
+        logger.error('❌ [Anthropic] Stream processing error:', error);
         controller.error(error);
+      } finally {
+        reader.releaseLock();
       }
     },
   });

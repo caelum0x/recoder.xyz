@@ -3,11 +3,9 @@
  * Complete billing and subscription management service
  */
 
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '@/lib/prisma';
 import { sendSubscriptionConfirmationEmail } from '../email';
 import { randomUUID } from 'crypto';
-
-const prisma = new PrismaClient();
 
 export class BillingService {
   /**

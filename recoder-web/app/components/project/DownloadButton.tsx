@@ -5,6 +5,9 @@
 import { useState } from 'react';
 import type { ApiResponse } from "~/types/api-responses";
 import { Button } from '~/components/ui/button';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('DownloadButton');
 
 interface DownloadButtonProps {
   projectId: string;
@@ -66,10 +69,10 @@ export function DownloadButton({
       URL.revokeObjectURL(url);
 
       // Success feedback (you can add toast here)
-      console.log('✅ Project downloaded successfully:', filename);
+      logger.info('✅ Project downloaded successfully:', filename);
       
     } catch (error) {
-      console.error('❌ Download failed:', error);
+      logger.error('❌ Download failed:', error);
       alert(`Download failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
     } finally {
       setIsDownloading(false);

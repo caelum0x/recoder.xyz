@@ -1,12 +1,10 @@
 import { useStore } from '@nanostores/react';
-import { memo, useCallback, useEffect, useRef, useState } from 'react';
-import { IconButton } from '~/components/ui/IconButton';
+import { lazy, memo, Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { workbenchStore } from '~/lib/stores/workbench';
 import { streamingStore } from '~/lib/stores/streaming';
 import { PortDropdown } from './PortDropdown';
 import { DeviceFrame } from './DeviceFrame';
 import { PreviewToolbar } from './PreviewToolbar';
-import { ExpoQRPanel } from './ExpoQRPanel';
 import { dockerGet, dockerPost } from '~/lib/services/docker-api';
 import {
   previewDeviceState,
@@ -24,9 +22,16 @@ import {
   setDynamicallyStyled,
   type SelectedComponent,
 } from '~/lib/stores/visual-editing';
-import { VisualEditingToolbar, VisualEditingToggle } from './VisualEditingToolbar';
 import { ContainerCreationStatus } from './ContainerCreationStatus';
 import { ErrorBanner, type RuntimeError } from './ErrorBanner';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('Preview');
+
+// Lazy-loaded conditional components
+const ExpoQRPanel = lazy(() => import('./ExpoQRPanel').then(m => ({ default: m.ExpoQRPanel })));
+const VisualEditingToolbar = lazy(() => import('./VisualEditingToolbar').then(m => ({ default: m.VisualEditingToolbar })));
+const VisualEditingToggle = lazy(() => import('./VisualEditingToolbar').then(m => ({ default: m.VisualEditingToggle })));
 
 // Maximum number of runtime errors to keep in state
 const MAX_RUNTIME_ERRORS = 10;
@@ -51,6 +56,7 @@ export const Preview = memo(() => {
   const [url, setUrl] = useState('');
   const [iframeUrl, setIframeUrl] = useState<string | undefined>();
   const [previewError, setPreviewError] = useState<string | null>(null);
+  const recoveryStatus = useStore(workbenchStore.containerRecoveryStatus);
 
   // Runtime error state for ErrorBanner
   const [runtimeErrors, setRuntimeErrors] = useState<RuntimeError[]>([]);
@@ -60,17 +66,35 @@ export const Preview = memo(() => {
   const [isIframeLoaded, setIsIframeLoaded] = useState(false);
   const [loadingElapsed, setLoadingElapsed] = useState(0);
   const loadingStartRef = useRef<number | null>(null);
-  const loadingTimerRef = useRef<ReturnType<typeof setInterval>>();
+  const loadingTimerRef = useRef<ReturnType<typeof setInterval> | undefined>(undefined);
 
   // Project type detection for Expo mode switcher
   const projectId = useStore(workbenchStore.projectId);
   const containerReady = useStore(workbenchStore.containerReady);
   const [projectType, setProjectType] = useState<string>('unknown');
-  const [previewMode, setPreviewMode] = useState<'web' | 'expo-go'>('web');
+  const [previewMode, setPreviewMode] = useState<'web' | 'expo-go' | 'device-cloud' | 'canvas'>('web');
+
+  // Device cloud state (Appetize.io)
+  const [appetizeKey, setAppetizeKey] = useState<string>('');
+  const [appetizeToken, setAppetizeToken] = useState(() =>
+    typeof window !== 'undefined' ? localStorage.getItem('appetize_token') || '' : '',
+  );
+  const [uploadingToAppetize, setUploadingToAppetize] = useState(false);
+
+  // Canvas state (OpenClaw)
+  const [canvasConnected, setCanvasConnected] = useState(false);
+  const [canvasUrl, setCanvasUrl] = useState('');
+
+  // Hot reload visual indicator state
+  const [reloadState, setReloadState] = useState<'idle' | 'pending' | 'reloading'>('idle');
 
   // Dev server restart state
   const [isRestartingDevServer, setIsRestartingDevServer] = useState(false);
   const [devServerStatus, setDevServerStatus] = useState<'unknown' | 'running' | 'stopped' | 'starting'>('unknown');
+
+  // Metro build status (Expo projects only)
+  const [metroBuildStatus, setMetroBuildStatus] = useState<'idle' | 'building' | 'ready' | 'error'>('idle');
+  const [metroError, setMetroError] = useState<string | undefined>();
 
   useEffect(() => {
     // Don't detect project type until container is ready
@@ -82,6 +106,10 @@ export const Preview = memo(() => {
       .then((data) => {
         if (!cancelled && data?.type) {
           setProjectType(data.type);
+          // Auto-switch to Expo Go tab for Expo projects
+          if (data.type === 'expo') {
+            setPreviewMode('expo-go');
+          }
         }
       })
       .catch(() => {
@@ -95,6 +123,101 @@ export const Preview = memo(() => {
       cancelled = true;
     };
   }, [projectId, containerReady]);
+
+  // Listen for preview mode switch events (e.g. from ExpoQRPanel "Test on Device Cloud")
+  useEffect(() => {
+    const handler = (e: CustomEvent) => {
+      if (e.detail?.mode) {
+        setPreviewMode(e.detail.mode);
+      }
+    };
+    window.addEventListener('recoder:switch-preview-mode', handler as any);
+    return () => window.removeEventListener('recoder:switch-preview-mode', handler as any);
+  }, []);
+
+  // Check canvas connection when switching to canvas mode
+  useEffect(() => {
+    if (previewMode !== 'canvas' || !projectId || !containerReady) return;
+    let cancelled = false;
+
+    dockerPost<{ data: { connected: boolean; canvasUrl?: string } }>(`/api/canvas-connect/${projectId}`, {})
+      .then((data) => {
+        if (cancelled) return;
+        const result = (data as any).data || data;
+        setCanvasConnected(result.connected);
+        if (result.canvasUrl) setCanvasUrl(result.canvasUrl);
+      })
+      .catch(() => {
+        if (!cancelled) setCanvasConnected(false);
+      });
+
+    return () => { cancelled = true; };
+  }, [previewMode, projectId, containerReady]);
+
+  // Listen for canvas export events
+  useEffect(() => {
+    if (previewMode !== 'canvas') return;
+
+    const handler = (event: MessageEvent) => {
+      if (event.data?.type === 'canvas:export' && event.data.elements && projectId) {
+        dockerPost(`/api/canvas-generate/${projectId}`, { elements: event.data.elements })
+          .then(() => console.log('[Preview] Canvas elements exported to components'))
+          .catch((err) => console.error('[Preview] Canvas export failed:', err));
+      }
+    };
+    window.addEventListener('message', handler);
+    return () => window.removeEventListener('message', handler);
+  }, [previewMode, projectId]);
+
+  // Listen for dev-server-ready events that indicate Expo framework
+  useEffect(() => {
+    const handler = (e: CustomEvent) => {
+      if (e.detail?.framework === 'expo') {
+        setProjectType('expo');
+        setPreviewMode('expo-go');
+      }
+    };
+    window.addEventListener('recoder:dev-server-ready', handler as any);
+    return () => window.removeEventListener('recoder:dev-server-ready', handler as any);
+  }, []);
+
+  // Poll Metro build status for Expo projects
+  useEffect(() => {
+    if (projectType !== 'expo' || !projectId || !containerReady) {
+      setMetroBuildStatus('idle');
+      setMetroError(undefined);
+      return;
+    }
+
+    let cancelled = false;
+
+    const pollMetroStatus = async () => {
+      try {
+        const data = await dockerGet<{
+          isExpo: boolean;
+          metroBuildStatus?: 'idle' | 'building' | 'ready' | 'error';
+          metroError?: string;
+        }>(`/api/expo-url/${projectId}`, { skipRetry: true, timeout: 5000 });
+
+        if (cancelled) return;
+
+        if (data?.metroBuildStatus) {
+          setMetroBuildStatus(data.metroBuildStatus);
+          setMetroError(data.metroError);
+        }
+      } catch {
+        // Silently ignore polling errors
+      }
+    };
+
+    pollMetroStatus();
+    const interval = setInterval(pollMetroStatus, 3000);
+
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [projectType, projectId, containerReady]);
 
   // Device preview stores
   const deviceState = useStore(previewDeviceState);
@@ -184,7 +307,7 @@ export const Preview = memo(() => {
     
     try {
       await dockerPost('/api/dev-server/restart', { projectId });
-      console.log('[Preview] Dev server restart requested');
+      logger.info('[Preview] Dev server restart requested');
       
       // Poll for dev server to become ready
       let attempts = 0;
@@ -202,7 +325,7 @@ export const Preview = memo(() => {
             setDevServerStatus('running');
             setIsRestartingDevServer(false);
             forceRefreshPreview();
-            console.log('[Preview] Dev server is now running');
+            logger.info('[Preview] Dev server is now running');
           } else if (attempts >= maxAttempts) {
             clearInterval(pollInterval);
             setDevServerStatus('stopped');
@@ -220,7 +343,7 @@ export const Preview = memo(() => {
       }, 1000);
       
     } catch (err: any) {
-      console.error('[Preview] Failed to restart dev server:', err);
+      logger.error('[Preview] Failed to restart dev server:', err);
       setIsRestartingDevServer(false);
       setDevServerStatus('stopped');
       setPreviewError(`Failed to restart dev server: ${err.message || 'Unknown error'}`);
@@ -248,6 +371,7 @@ export const Preview = memo(() => {
   /** Called when the iframe fires its onLoad event */
   const handleIframeLoad = useCallback(() => {
     setIsIframeLoaded(true);
+    setReloadState('idle');
   }, []);
   // ---------- End loading timeout tracking ----------
 
@@ -328,7 +452,7 @@ export const Preview = memo(() => {
       // Check if these are the same errors we already tried to fix
       const errorHash = runtimeErrors.map(e => e.message).join('|');
       if (errorHash === lastFixedRuntimeErrorRef.current) {
-        console.log('[Preview] Skipping auto-fix - same runtime errors as last attempt');
+        logger.info('[Preview] Skipping auto-fix - same runtime errors as last attempt');
         return;
       }
       
@@ -352,7 +476,7 @@ export const Preview = memo(() => {
 
       const prompt = `[AUTO-FIX] Fix these runtime errors blocking the preview:\n\n${errorDetails}\n\nPlease fix all errors above. The app crashed with these errors at runtime.`;
       
-      console.log('[Preview] Triggering auto-fix for runtime errors:', runtimeErrors.length);
+      logger.info('[Preview] Triggering auto-fix for runtime errors:', runtimeErrors.length);
       
       window.dispatchEvent(new CustomEvent('recoder:fix-errors', {
         detail: {
@@ -550,7 +674,7 @@ export const Preview = memo(() => {
       iframeDoc.head.appendChild(script);
     } catch (e) {
       // Cross-origin iframe - can't inject script, visual editing not available
-      console.warn('[Preview] Cannot inject visual editing script (cross-origin iframe)');
+      logger.warn('[Preview] Cannot inject visual editing script (cross-origin iframe)');
     }
   }, [isVisualEditing]);
 
@@ -584,14 +708,15 @@ export const Preview = memo(() => {
   // ---------- File-change coalesced refresh ----------
   // Tracks pending file paths that will trigger a single refresh
   const pendingRefreshPathsRef = useRef<Set<string>>(new Set());
-  const refreshTimerRef = useRef<NodeJS.Timeout>();
+  const refreshTimerRef = useRef<NodeJS.Timeout | undefined>(undefined);
 
   const executeRefresh = useCallback(() => {
     if (iframeRef.current && iframeRef.current.src) {
       const pathCount = pendingRefreshPathsRef.current.size;
       if (pathCount > 0) {
-        console.log(`[Preview] Refreshing preview for ${pathCount} changed files`);
+        logger.info(`[Preview] Refreshing preview for ${pathCount} changed files`);
       }
+      setReloadState('reloading');
       iframeRef.current.src = iframeRef.current.src;
     }
     pendingRefreshPathsRef.current.clear();
@@ -609,9 +734,12 @@ export const Preview = memo(() => {
 
     // If all paths were already pending, skip rescheduling
     if (newPathCount === 0) {
-      console.log('[Preview] All file paths already pending refresh, skipping');
+      logger.info('[Preview] All file paths already pending refresh, skipping');
       return;
     }
+
+    // Signal that file changes have been detected and are waiting to coalesce
+    setReloadState('pending');
 
     // Coalesce: reset the timer so rapid bursts are batched into one refresh
     if (refreshTimerRef.current) {
@@ -630,7 +758,7 @@ export const Preview = memo(() => {
       if (!changes || changes.length === 0) return;
 
       const paths = changes.map((c) => c.path);
-      console.log(`[Preview] ${paths.length} file changes received, scheduling coalesced refresh`);
+      logger.info(`[Preview] ${paths.length} file changes received, scheduling coalesced refresh`);
       scheduleCoalescedRefresh(paths);
     };
 
@@ -668,7 +796,7 @@ export const Preview = memo(() => {
 
     const { baseUrl } = activePreview;
 
-    console.log('📺 [Preview] Active preview changed:', {
+    logger.info('📺 [Preview] Active preview changed:', {
       baseUrl,
       port: activePreview.port,
       ready: activePreview.ready,
@@ -682,14 +810,14 @@ export const Preview = memo(() => {
     if (!baseUrl || baseUrl === 'about:blank') {
       const errorMsg = 'Preview not ready. Make sure the development server is running.';
       setPreviewError(errorMsg);
-      console.warn('⚠️ [Preview] Preview URL is not valid:', baseUrl);
-      console.warn('⚠️ [Preview] This usually means:');
-      console.warn('  1. WebContainer has not initialized');
-      console.warn('  2. Dev server has not started');
-      console.warn('  3. Port has not been exposed');
-      console.warn('  Check workbench store for preview state');
+      logger.warn('⚠️ [Preview] Preview URL is not valid:', baseUrl);
+      logger.warn('⚠️ [Preview] This usually means:');
+      logger.warn('  1. WebContainer has not initialized');
+      logger.warn('  2. Dev server has not started');
+      logger.warn('  3. Port has not been exposed');
+      logger.warn('  Check workbench store for preview state');
     } else {
-      console.log('✅ [Preview] Preview URL is valid:', baseUrl);
+      logger.info('✅ [Preview] Preview URL is valid:', baseUrl);
     }
   }, [activePreview, iframeUrl]);
 
@@ -741,7 +869,18 @@ export const Preview = memo(() => {
         <div className="z-iframe-overlay w-full h-full absolute" onClick={() => setIsPortDropdownOpen(false)} />
       )}
       <div className="bg-bolt-elements-background-depth-2 p-2 flex items-center gap-1.5">
-        <IconButton icon="i-ph:arrow-clockwise" onClick={reloadPreview} title="Reload preview" />
+        <button
+          onClick={reloadPreview}
+          title={reloadState === 'pending' ? 'Changes detected...' : reloadState === 'reloading' ? 'Reloading...' : 'Reload preview'}
+          className={`flex items-center text-bolt-elements-textSecondary bg-transparent enabled:hover:text-bolt-elements-textPrimary rounded-md p-1 enabled:hover:bg-bolt-elements-background-depth-3 ${
+            reloadState !== 'idle' ? 'text-blue-400' : ''
+          }`}
+        >
+          <div
+            className={`i-ph:arrow-clockwise text-xl ${reloadState !== 'idle' ? 'text-blue-400' : ''}`}
+            style={reloadState !== 'idle' ? { animation: 'spin 1s linear infinite' } : undefined}
+          />
+        </button>
         {showForceRefresh && (
           <button
             onClick={forceRefreshPreview}
@@ -800,7 +939,7 @@ export const Preview = memo(() => {
             }}
           />
         </div>
-        <VisualEditingToggle />
+        <Suspense fallback={null}><VisualEditingToggle /></Suspense>
         {previews.length > 1 && (
           <PortDropdown
             activePreviewIndex={activePreviewIndex}
@@ -810,6 +949,25 @@ export const Preview = memo(() => {
             setIsDropdownOpen={setIsPortDropdownOpen}
             previews={previews}
           />
+        )}
+        {/* Metro build status indicator (Expo projects only) */}
+        {projectType === 'expo' && metroBuildStatus !== 'idle' && (
+          metroBuildStatus === 'building' ? (
+            <span className="flex items-center gap-1 text-amber-400 text-xs whitespace-nowrap">
+              <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
+              Building...
+            </span>
+          ) : metroBuildStatus === 'error' ? (
+            <span className="flex items-center gap-1 text-red-400 text-xs max-w-[160px] whitespace-nowrap" title={metroError}>
+              <span className="w-1.5 h-1.5 rounded-full bg-red-400 flex-shrink-0" />
+              <span className="truncate">{metroError || 'Error'}</span>
+            </span>
+          ) : metroBuildStatus === 'ready' ? (
+            <span className="flex items-center gap-1 text-green-400 text-xs whitespace-nowrap">
+              <span className="w-1.5 h-1.5 rounded-full bg-green-400" />
+              Ready
+            </span>
+          ) : null
         )}
       </div>
       <PreviewToolbar />
@@ -836,13 +994,148 @@ export const Preview = memo(() => {
           >
             Expo Go
           </button>
+          <button
+            onClick={() => setPreviewMode('device-cloud')}
+            className={`px-3 py-1.5 text-xs font-medium transition-colors border-b-2 ${
+              previewMode === 'device-cloud'
+                ? 'text-bolt-elements-textPrimary border-bolt-elements-button-primary-background'
+                : 'text-bolt-elements-textTertiary border-transparent hover:text-bolt-elements-textSecondary'
+            }`}
+          >
+            Device Cloud
+          </button>
+          <button
+            onClick={() => setPreviewMode('canvas')}
+            className={`px-3 py-1.5 text-xs font-medium transition-colors border-b-2 ${
+              previewMode === 'canvas'
+                ? 'text-bolt-elements-textPrimary border-bolt-elements-button-primary-background'
+                : 'text-bolt-elements-textTertiary border-transparent hover:text-bolt-elements-textSecondary'
+            }`}
+          >
+            Canvas
+          </button>
         </div>
       )}
       <div className="flex-1 border-t border-bolt-elements-borderColor overflow-hidden relative">
         {/* ── Expo Go mode ── */}
         {projectType === 'expo' && previewMode === 'expo-go' && projectId ? (
           <div className="w-full h-full overflow-auto bg-bolt-elements-background-depth-1">
-            <ExpoQRPanel projectId={projectId} className="h-full" />
+            <Suspense fallback={null}><ExpoQRPanel projectId={projectId} className="h-full" /></Suspense>
+          </div>
+        ) : projectType === 'expo' && previewMode === 'device-cloud' && projectId ? (
+          /* ── Device Cloud (Appetize.io) mode ── */
+          <div className="w-full h-full overflow-auto bg-bolt-elements-background-depth-1">
+            <div className="flex flex-col items-center p-4 gap-4">
+              <div className="flex items-center gap-2">
+                <div className="i-ph:device-mobile text-lg text-cyan-400" />
+                <span className="text-bolt-elements-textPrimary text-sm font-medium">Device Cloud Testing</span>
+              </div>
+
+              {appetizeKey ? (
+                <div className="w-full h-[600px]">
+                  <iframe
+                    src={`https://appetize.io/embed/${appetizeKey}?device=iphone14pro&osVersion=16.0&scale=auto`}
+                    width="100%"
+                    height="100%"
+                    frameBorder="0"
+                    scrolling="no"
+                    className="rounded-lg"
+                  />
+                </div>
+              ) : (
+                <div className="flex flex-col gap-3 w-full max-w-xs">
+                  <div className="text-bolt-elements-textTertiary text-xs text-center">
+                    Test your app on a real device emulator via Appetize.io
+                  </div>
+
+                  <div className="flex flex-col gap-1">
+                    <label className="text-bolt-elements-textTertiary text-[10px]">Appetize API Token</label>
+                    <input
+                      type="password"
+                      value={appetizeToken}
+                      onChange={(e) => { setAppetizeToken(e.target.value); localStorage.setItem('appetize_token', e.target.value); }}
+                      placeholder="tok_..."
+                      className="bg-bolt-elements-background-depth-3 text-bolt-elements-textPrimary text-xs rounded px-3 py-1.5 border border-bolt-elements-borderColor outline-none focus:border-bolt-elements-borderColorActive w-full"
+                    />
+                    <a href="https://appetize.io/docs#api-token" target="_blank" rel="noopener noreferrer" className="text-cyan-400 text-[10px] hover:text-cyan-300 transition-colors">
+                      Get API token from appetize.io
+                    </a>
+                  </div>
+
+                  <button
+                    onClick={async () => {
+                      if (!appetizeToken) return;
+                      setUploadingToAppetize(true);
+                      try {
+                        // Try to get the latest build artifact URL
+                        const statusRes = await dockerGet<{ data: { active: boolean; publicKey?: string } }>(`/api/appetize-status/${projectId}`);
+                        const statusData = (statusRes as any).data || statusRes;
+                        if (statusData.publicKey) {
+                          setAppetizeKey(statusData.publicKey);
+                        } else {
+                          // No existing session, user needs to upload a build
+                          alert('Build your app first (APK/IPA), then the Device Cloud will automatically detect it.');
+                        }
+                      } catch {
+                        alert('Upload a build first using the Build APK/IPA section.');
+                      } finally {
+                        setUploadingToAppetize(false);
+                      }
+                    }}
+                    disabled={!appetizeToken || uploadingToAppetize}
+                    className={`w-full py-2 rounded text-xs font-medium transition-colors ${
+                      !appetizeToken || uploadingToAppetize
+                        ? 'bg-bolt-elements-button-secondary-background text-bolt-elements-textTertiary cursor-not-allowed'
+                        : 'bg-cyan-600 text-white hover:bg-cyan-500'
+                    }`}
+                  >
+                    {uploadingToAppetize ? (
+                      <span className="flex items-center justify-center gap-2">
+                        <span className="i-svg-spinners:90-ring-with-bg text-xs" />
+                        Connecting...
+                      </span>
+                    ) : (
+                      'Connect Device Cloud'
+                    )}
+                  </button>
+
+                  <a
+                    href="https://www.browserstack.com/app-live"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-bolt-elements-textTertiary text-[10px] hover:text-bolt-elements-textSecondary transition-colors text-center"
+                  >
+                    Or use BrowserStack App Live
+                  </a>
+                </div>
+              )}
+            </div>
+          </div>
+        ) : projectType === 'expo' && previewMode === 'canvas' && projectId ? (
+          /* ── Canvas (OpenClaw) mode ── */
+          <div className="w-full h-full overflow-auto bg-bolt-elements-background-depth-1">
+            {canvasConnected && canvasUrl ? (
+              <iframe
+                src={canvasUrl}
+                width="100%"
+                height="100%"
+                frameBorder="0"
+                className="border-none"
+              />
+            ) : (
+              <div className="flex flex-col items-center justify-center h-full gap-4 p-6">
+                <div className="i-ph:paint-brush text-4xl text-bolt-elements-textTertiary" />
+                <div className="text-bolt-elements-textSecondary text-sm font-medium">OpenClaw Canvas</div>
+                <div className="text-bolt-elements-textTertiary text-xs text-center max-w-xs">
+                  {canvasConnected === false
+                    ? 'OpenClaw Canvas is not running. Start the Canvas service to use the visual design tool.'
+                    : 'Checking Canvas connection...'}
+                </div>
+                <div className="text-bolt-elements-textTertiary text-[10px] text-center">
+                  Canvas elements can be exported as React Native components.
+                </div>
+              </div>
+            )}
           </div>
         ) : previewError ? (
         /* ── Error card ── */
@@ -980,13 +1273,29 @@ export const Preview = memo(() => {
 
             {/* ── Visual Editing Toolbar ── */}
             {isVisualEditing && (
-              <VisualEditingToolbar
-                iframeRef={iframeRef}
-                onEditInChat={(prompt) => {
-                  // Dispatch event for chat to pick up
-                  window.dispatchEvent(new CustomEvent('recoder:edit-in-chat', { detail: { prompt } }));
-                }}
-              />
+              <Suspense fallback={null}>
+                <VisualEditingToolbar
+                  iframeRef={iframeRef}
+                  onEditInChat={(prompt) => {
+                    // Dispatch event for chat to pick up
+                    window.dispatchEvent(new CustomEvent('recoder:edit-in-chat', { detail: { prompt } }));
+                  }}
+                />
+              </Suspense>
+            )}
+
+            {/* ── Container Recovery Banner ── */}
+            {recoveryStatus.recovering && (
+              <div className="absolute top-0 left-0 right-0 z-30 bg-yellow-500/10 border-b border-yellow-500/30 px-4 py-2 flex items-center gap-2 text-sm text-yellow-400">
+                <div className="i-ph:spinner-gap animate-spin" />
+                <span>{recoveryStatus.message || 'Container recovering...'}</span>
+              </div>
+            )}
+            {!recoveryStatus.recovering && recoveryStatus.lastRecovery && Date.now() - recoveryStatus.lastRecovery < 5000 && (
+              <div className="absolute top-0 left-0 right-0 z-30 bg-green-500/10 border-b border-green-500/30 px-4 py-2 flex items-center gap-2 text-sm text-green-400">
+                <div className="i-ph:check-circle" />
+                <span>Container recovered successfully</span>
+              </div>
             )}
 
             {/* ── Runtime Error Banner (anchored to bottom of preview) ── */}

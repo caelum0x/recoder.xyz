@@ -6,6 +6,10 @@
 import { useState, useEffect, useCallback } from 'react';
 import type { Message } from 'ai';
 
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('ChatHistoryHook');
+
 export interface ChatHistoryItem {
   id: string;
   urlId: string;
@@ -59,7 +63,7 @@ export function useChatHistory({ userId, anonymousId, limit = 50 }: UseChatHisto
         throw new Error(data.error || 'Failed to load history');
       }
     } catch (err) {
-      console.error('Failed to load chat history:', err);
+      logger.error('Failed to load chat history:', err);
       setError(err instanceof Error ? err.message : 'Failed to load history');
     } finally {
       setIsLoading(false);
@@ -97,7 +101,7 @@ export function useChatHistory({ userId, anonymousId, limit = 50 }: UseChatHisto
         throw new Error(result.error || 'Failed to save chat');
       }
     } catch (err) {
-      console.error('Failed to save chat:', err);
+      logger.error('Failed to save chat:', err);
       throw err;
     }
   }, [userId, anonymousId, loadHistory]);
@@ -122,7 +126,7 @@ export function useChatHistory({ userId, anonymousId, limit = 50 }: UseChatHisto
         throw new Error(result.error || 'Failed to delete chat');
       }
     } catch (err) {
-      console.error('Failed to delete chat:', err);
+      logger.error('Failed to delete chat:', err);
       throw err;
     }
   }, [loadHistory]);
@@ -144,14 +148,14 @@ export function useChatHistory({ userId, anonymousId, limit = 50 }: UseChatHisto
       const result = await response.json() as ApiResponse;
 
       if (result.success) {
-        console.log(`Claimed ${result.claimedCount} sessions`);
+        logger.info(`Claimed ${result.claimedCount} sessions`);
         await loadHistory();
         return result.claimedCount;
       } else {
         throw new Error(result.error || 'Failed to claim sessions');
       }
     } catch (err) {
-      console.error('Failed to claim sessions:', err);
+      logger.error('Failed to claim sessions:', err);
       throw err;
     }
   }, [loadHistory]);

@@ -25,6 +25,8 @@ export default function ChoosePlanPage() {
   const [loading, setLoading] = useState(true);
   const [selectedPlan, setSelectedPlan] = useState('free');
   const [billingCycle, setBillingCycle] = useState<'monthly' | 'yearly'>('monthly');
+  const [isCreatingCheckout, setIsCreatingCheckout] = useState(false);
+  const [checkoutError, setCheckoutError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!session && !isPending) {
@@ -90,7 +92,49 @@ export default function ChoosePlanPage() {
     },
   ];
 
-  const handleContinue = () => {
+  const createCheckoutSession = async (plan: string) => {
+    const providers = ['paddle', 'dodo'] as const;
+
+    for (const paymentMethod of providers) {
+      const response = await fetch('/api/billing/create-checkout', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ plan, paymentMethod }),
+      });
+
+      if (!response.ok) {
+        // Try next provider if this one is not configured.
+        if (response.status === 503) {
+          continue;
+        }
+
+        const data = await response.json().catch(() => null);
+        throw new Error(data?.error ?? `Checkout failed with status ${response.status}`);
+      }
+
+      const data = (await response.json()) as {
+        success?: boolean;
+        checkoutUrl?: string;
+      };
+
+      if (data.success && data.checkoutUrl) {
+        window.location.assign(data.checkoutUrl);
+        return;
+      }
+    }
+
+    throw new Error(
+      'Paid checkout is not configured yet. You can finish onboarding now and add billing later.',
+    );
+  };
+
+  const handleContinue = async () => {
+    if (isCreatingCheckout) return;
+
+    setCheckoutError(null);
+
     // Save selected plan to session
     sessionStorage.setItem('onboarding_plan', selectedPlan);
     
@@ -99,9 +143,19 @@ export default function ChoosePlanPage() {
     if (selectedPlan === 'free') {
       router.push('/onboarding/setup-api-key');
     } else {
-      // For paid plans, we'll go to setup-api-key for now
-      // TODO: Implement checkout flow
-      router.push('/onboarding/complete');
+      setIsCreatingCheckout(true);
+      try {
+        await createCheckoutSession(selectedPlan);
+      } catch (error) {
+        const message =
+          error instanceof Error
+            ? error.message
+            : 'Unable to start checkout. You can continue onboarding and configure billing later.';
+        setCheckoutError(message);
+        router.push('/onboarding/complete');
+      } finally {
+        setIsCreatingCheckout(false);
+      }
     }
   };
 
@@ -270,12 +324,16 @@ export default function ChoosePlanPage() {
 
             <button
               onClick={handleContinue}
-              className="px-8 py-3 bg-gradient-to-r from-orange-500 to-purple-600 hover:from-orange-600 hover:to-purple-700 rounded-xl font-medium transition-all flex items-center space-x-2"
+              disabled={isCreatingCheckout}
+              className="px-8 py-3 bg-gradient-to-r from-orange-500 to-purple-600 hover:from-orange-600 hover:to-purple-700 rounded-xl font-medium transition-all flex items-center space-x-2 disabled:opacity-70 disabled:cursor-not-allowed"
             >
-              <span>Continue</span>
+              <span>{isCreatingCheckout ? 'Starting checkout...' : 'Continue'}</span>
               <ArrowRight className="w-4 h-4" />
             </button>
           </div>
+          {checkoutError ? (
+            <p className="mt-4 text-sm text-amber-300">{checkoutError}</p>
+          ) : null}
         </div>
       </div>
     </div>

@@ -15,7 +15,7 @@ async function _getClientForUser(userDbId: number) {
 			notes: clients.notes,
 			status: clients.status,
 			supabaseUserId: clients.supabaseUserId,
-			stripeCustomerId: clients.stripeCustomerId,
+			polarCustomerId: clients.polarCustomerId,
 			createdAt: clients.createdAt,
 			updatedAt: clients.updatedAt,
 		})

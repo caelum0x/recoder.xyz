@@ -35,6 +35,9 @@ import { FileOperationEvent } from '../telemetry/types.js';
 import { getProgrammingLanguage } from '../telemetry/telemetry-utils.js';
 import { getSpecificMimeType } from '../utils/fileUtils.js';
 
+import { createScopedLogger } from '~/utils/logger';
+const logger = createScopedLogger('EditTool');
+
 export function applyReplacement(
   currentContent: string | null,
   oldString: string,
@@ -251,12 +254,12 @@ class EditToolInvocation implements ToolInvocation<EditToolParams, ToolResult> {
       editData = await this.calculateEdit(this.params);
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
-      console.log(`Error preparing edit: ${errorMsg}`);
+      logger.info(`Error preparing edit: ${errorMsg}`);
       return false;
     }
 
     if (editData.error) {
-      console.log(`Error: ${editData.error.display}`);
+      logger.info(`Error: ${editData.error.display}`);
       return false;
     }
 

@@ -9,6 +9,8 @@
 import path from 'path';
 import { ShadowCheckpointService } from './ShadowCheckpointService';
 import type { CheckpointServiceOptions } from './types';
+import { createScopedLogger } from '~/utils/logger';
+const logger = createScopedLogger('RepoCheckpoint');
 
 /**
  * Checkpoint service that creates a separate repository for each task
@@ -94,9 +96,9 @@ export class RepoPerTaskCheckpointService extends ShadowCheckpointService {
 
     try {
       await fs.rm(taskDir, { recursive: true, force: true });
-      console.log(`[RepoPerTaskCheckpointService] Deleted checkpoints for task: ${taskId}`);
+      logger.info(`[RepoPerTaskCheckpointService] Deleted checkpoints for task: ${taskId}`);
     } catch (error) {
-      console.error(
+      logger.error(
         `[RepoPerTaskCheckpointService] Failed to delete checkpoints for task ${taskId}:`,
         error
       );
@@ -203,7 +205,7 @@ export class RepoPerTaskCheckpointService extends ShadowCheckpointService {
             if (age > maxAge) {
               await fs.rm(taskPath, { recursive: true, force: true });
               cleaned++;
-              console.log(
+              logger.info(
                 `[RepoPerTaskCheckpointService] Cleaned up old task: ${entry.name} (age: ${Math.round(age / 86400000)} days)`
               );
             }

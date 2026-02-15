@@ -12,6 +12,9 @@ import {
   isQwenThrottlingError,
 } from './quotaErrorDetection.js';
 
+import { createScopedLogger } from '~/utils/logger';
+const logger = createScopedLogger('LLMRetry');
+
 export interface HttpError extends Error {
   status?: number;
 }
@@ -121,7 +124,7 @@ export async function retryWithBackoff<T>(
           }
         } catch (fallbackError) {
           // If fallback fails, continue with original error
-          console.warn('Fallback to Flash model failed:', fallbackError);
+          logger.warn('Fallback to Flash model failed:', fallbackError);
         }
       }
 
@@ -148,7 +151,7 @@ export async function retryWithBackoff<T>(
           }
         } catch (fallbackError) {
           // If fallback fails, continue with original error
-          console.warn('Fallback to Flash model failed:', fallbackError);
+          logger.warn('Fallback to Flash model failed:', fallbackError);
         }
       }
 
@@ -194,7 +197,7 @@ export async function retryWithBackoff<T>(
           }
         } catch (fallbackError) {
           // If fallback fails, continue with original error
-          console.warn('Fallback to Flash model failed:', fallbackError);
+          logger.warn('Fallback to Flash model failed:', fallbackError);
         }
       }
 
@@ -208,7 +211,7 @@ export async function retryWithBackoff<T>(
 
       if (delayDurationMs > 0) {
         // Respect Retry-After header if present and parsed
-        console.warn(
+        logger.warn(
           `Attempt ${attempt} failed with status ${delayErrorStatus ?? 'unknown'}. Retrying after explicit delay of ${delayDurationMs}ms...`,
           error,
         );
@@ -331,25 +334,25 @@ function logRetryAttempt(
   }
 
   if (errorStatus === 429) {
-    console.warn(message, error);
+    logger.warn(message, error);
   } else if (errorStatus && errorStatus >= 500 && errorStatus < 600) {
-    console.error(message, error);
+    logger.error(message, error);
   } else if (error instanceof Error) {
     // Fallback for errors that might not have a status but have a message
     if (error.message.includes('429')) {
-      console.warn(
+      logger.warn(
         `Attempt ${attempt} failed with 429 error (no Retry-After header). Retrying with backoff...`,
         error,
       );
     } else if (error.message.match(/5\d{2}/)) {
-      console.error(
+      logger.error(
         `Attempt ${attempt} failed with 5xx error. Retrying with backoff...`,
         error,
       );
     } else {
-      console.warn(message, error); // Default to warn for other errors
+      logger.warn(message, error); // Default to warn for other errors
     }
   } else {
-    console.warn(message, error); // Default to warn if error type is unknown
+    logger.warn(message, error); // Default to warn if error type is unknown
   }
 }

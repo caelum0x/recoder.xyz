@@ -6,6 +6,9 @@
 import type { DeploymentContext, ValidationResult } from '../../types';
 import { DEPLOYMENT_CONFIG } from '../../utils/common';
 import { CommonErrors } from '../../utils/errors';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('DeployValidate');
 
 /**
  * Validation-specific timeout configuration
@@ -52,7 +55,7 @@ function validateEnvironment(env: DeploymentContext['env']): void {
   // Check for Cloudflare credentials if deploying to Cloudflare
   if (!env.CLOUDFLARE_ACCOUNT_ID || !env.CLOUDFLARE_API_TOKEN) {
     // Not a fatal error - deployment might use alternative methods
-    console.warn('Cloudflare credentials not configured');
+    logger.warn('Cloudflare credentials not configured');
   }
 }
 

@@ -10,6 +10,9 @@ import type {
   ImageGenerationModel,
 } from './types.js';
 import { IMAGE_GENERATION_MODELS } from './types.js';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('OpenRouterImageGen');
 
 /**
  * OpenRouter Image Generator
@@ -171,7 +174,7 @@ export class OpenRouterImageGenerator {
             });
           } else {
             // No image data found in response
-            console.warn('No image URLs found in response. Response content:', content);
+            logger.warn('No image URLs found in response. Response content:', content);
             images.push({
               url: undefined,
               b64_json: undefined,
@@ -280,7 +283,7 @@ export class OpenRouterImageGenerator {
 
     // Validate quality
     if (options.quality && !('qualities' in modelInfo)) {
-      console.warn(
+      logger.warn(
         `Quality setting not supported by ${modelInfo.name}, ignoring.`,
       );
     }
@@ -294,31 +297,31 @@ export class OpenRouterImageGenerator {
 
     // Validate style
     if (options.style && !('supportsStyle' in modelInfo)) {
-      console.warn(
+      logger.warn(
         `Style setting not supported by ${modelInfo.name}, ignoring.`,
       );
     }
 
     // Validate negative prompt
     if (options.negativePrompt && !('supportsNegativePrompt' in modelInfo)) {
-      console.warn(
+      logger.warn(
         `Negative prompt not supported by ${modelInfo.name}, ignoring.`,
       );
     }
 
     // Validate seed
     if (options.seed !== undefined && !('supportsSeed' in modelInfo)) {
-      console.warn(`Seed not supported by ${modelInfo.name}, ignoring.`);
+      logger.warn(`Seed not supported by ${modelInfo.name}, ignoring.`);
     }
 
     // Validate steps
     if (options.steps && !('supportsSteps' in modelInfo)) {
-      console.warn(`Steps not supported by ${modelInfo.name}, ignoring.`);
+      logger.warn(`Steps not supported by ${modelInfo.name}, ignoring.`);
     }
 
     // Validate guidance scale
     if (options.guidanceScale && !('supportsGuidanceScale' in modelInfo)) {
-      console.warn(
+      logger.warn(
         `Guidance scale not supported by ${modelInfo.name}, ignoring.`,
       );
     }

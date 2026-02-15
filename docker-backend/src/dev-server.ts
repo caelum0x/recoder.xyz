@@ -4,6 +4,18 @@ import { autoRestoreManager } from './auto-restore.js';
 
 const docker = new Docker();
 
+// ── Expo public hostname (set by server.ts at startup) ──────────────
+let expoPublicHostname = process.env.PUBLIC_HOSTNAME || 'localhost';
+
+/**
+ * Set the public hostname used for Expo's REACT_NATIVE_PACKAGER_HOSTNAME.
+ * Called from server.ts after detecting the external IP.
+ */
+export function setExpoPublicHostname(hostname: string): void {
+  expoPublicHostname = hostname;
+  console.log(`[DevServer] Expo public hostname set to: ${hostname}`);
+}
+
 interface DevServerInfo {
   projectId: string;
   pid?: number;
@@ -121,13 +133,33 @@ export class DevServerManager {
   }
 
   /**
-   * Get dev server logs
+   * Register an externally-started server (e.g. Expo started via /api/expo-start)
+   * so the manager knows the framework for log routing.
    */
-  async getLogs(containerId: string, projectId: string, tail: number = 100): Promise<string> {
+  registerExternalServer(projectId: string, framework: string): void {
+    if (!this.servers.has(projectId)) {
+      this.servers.set(projectId, {
+        projectId,
+        framework,
+        startedAt: Date.now(),
+        status: 'running',
+      });
+    }
+  }
+
+  /**
+   * Get dev server logs
+   * @param source - optional hint: 'expo' reads /tmp/expo-dev.log
+   */
+  async getLogs(containerId: string, projectId: string, tail: number = 100, source?: string): Promise<string> {
     const container = docker.getContainer(containerId);
 
+    // Determine the correct log file
+    const isExpo = source === 'expo' || this.servers.get(projectId)?.framework === 'expo';
+    const logFile = isExpo ? '/tmp/expo-dev.log' : '/tmp/dev.log';
+
     try {
-      const logs = await this.execCommand(container, `tail -n ${tail} /tmp/dev.log 2>/dev/null || echo "No logs found"`);
+      const logs = await this.execCommand(container, `tail -n ${tail} ${logFile} 2>/dev/null || echo "No logs found"`);
 
       // Check for errors and trigger auto-restore if needed
       const { hasError, errors, details } = autoRestoreManager.detectErrors(logs);
@@ -218,11 +250,13 @@ export class DevServerManager {
     const container = docker.getContainer(containerId);
     let running = true;
     let lastPosition = 0;
+    const isExpo = this.servers.get(projectId)?.framework === 'expo';
+    const logFile = isExpo ? '/tmp/expo-dev.log' : '/tmp/dev.log';
 
     const poll = async () => {
       while (running) {
         try {
-          const logs = await this.execCommand(container, `tail -c +${lastPosition + 1} /tmp/dev.log 2>/dev/null || true`);
+          const logs = await this.execCommand(container, `tail -c +${lastPosition + 1} ${logFile} 2>/dev/null || true`);
           if (logs.length > 0) {
             lastPosition += logs.length;
             onData(logs);
@@ -254,7 +288,6 @@ export class DevServerManager {
 
   private getStartCommand(framework: string): string {
     // Prefer bun for 10x faster startup for Node.js projects
-    const expoHostname = process.env.PUBLIC_HOSTNAME || 'localhost';
     const commands: Record<string, string> = {
       // Node.js frameworks
       vite: 'bun run dev -- --host 0.0.0.0 2>/dev/null || npm run dev -- --host 0.0.0.0',
@@ -266,8 +299,8 @@ export class DevServerManager {
       // EXPO_DEVTOOLS_LISTEN_ADDRESS: allow connections from outside the container
       // BROWSER=none: don't try to open a browser inside the container
       // CI=1: prevent interactive prompts that would hang in a container
-      // NOTE: These env vars should also be set for Expo Go mode (expo start without --web)
-      expo: `REACT_NATIVE_PACKAGER_HOSTNAME=${expoHostname} EXPO_DEVTOOLS_LISTEN_ADDRESS=0.0.0.0 BROWSER=none CI=1 npx expo start --web --host 0.0.0.0 --port 8081`,
+      // Supports both web and native (Expo Go) — no --web flag so Metro serves both
+      expo: `REACT_NATIVE_PACKAGER_HOSTNAME=${expoPublicHostname} EXPO_DEVTOOLS_LISTEN_ADDRESS=0.0.0.0 BROWSER=none CI=1 npx expo start --host 0.0.0.0 --port 8081`,
 
       // Python frameworks
       flask: 'python -m flask run --host=0.0.0.0 --port=5173',
@@ -524,8 +557,6 @@ export function getInstallCommand(framework: string): string {
  * Get the dev server start command for a detected framework
  */
 export function getDevCommand(framework: string): string {
-  const expoHostname = process.env.PUBLIC_HOSTNAME || 'localhost';
-  
   const commands: Record<string, string> = {
     // Node.js frameworks
     'node': 'bun run dev -- --host 0.0.0.0 2>/dev/null || npm run dev -- --host 0.0.0.0',
@@ -537,7 +568,7 @@ export function getDevCommand(framework: string): string {
     'sveltekit': 'bun run dev -- --host 0.0.0.0 2>/dev/null || npm run dev -- --host 0.0.0.0',
     'angular': 'npm start -- --host 0.0.0.0',
     'nuxt': 'bun run dev 2>/dev/null || npm run dev',
-    'expo': `REACT_NATIVE_PACKAGER_HOSTNAME=${expoHostname} EXPO_DEVTOOLS_LISTEN_ADDRESS=0.0.0.0 BROWSER=none CI=1 npx expo start --web --host 0.0.0.0 --port 8081`,
+    'expo': `REACT_NATIVE_PACKAGER_HOSTNAME=${expoPublicHostname} EXPO_DEVTOOLS_LISTEN_ADDRESS=0.0.0.0 BROWSER=none CI=1 npx expo start --host 0.0.0.0 --port 8081`,
     'node-server': 'bun run start 2>/dev/null || npm start || node index.js || node server.js',
     
     // Python frameworks

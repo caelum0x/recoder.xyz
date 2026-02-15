@@ -5,6 +5,10 @@
 
 import { Paddle } from '@paddle/paddle-node-sdk';
 
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('PaddlePaymentServer');
+
 interface PaddleConfig {
   apiKey: string;
   environment: 'sandbox' | 'production';
@@ -65,7 +69,7 @@ export class PaddleClient {
         checkoutId: checkout.id,
       };
     } catch (error) {
-      console.error('Paddle checkout creation failed:', error);
+      logger.error('Paddle checkout creation failed:', error);
       throw new Error(`Failed to create Paddle checkout: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
@@ -78,7 +82,7 @@ export class PaddleClient {
       const subscription = await this.paddle.subscriptions.get(subscriptionId) as any;
       return subscription;
     } catch (error) {
-      console.error('Failed to get Paddle subscription:', error);
+      logger.error('Failed to get Paddle subscription:', error);
       throw error;
     }
   }
@@ -100,8 +104,21 @@ export class PaddleClient {
         return result;
       }
     } catch (error) {
-      console.error('Failed to cancel Paddle subscription:', error);
+      logger.error('Failed to cancel Paddle subscription:', error);
       throw error;
+    }
+  }
+
+  /**
+   * Create a billing portal session for self-service management
+   */
+  async createBillingPortalSession(customerId: string) {
+    try {
+      const portal = await (this.paddle as any).customers.createAuthToken(customerId) as any;
+      return { url: portal.url || portal.customer_auth_token };
+    } catch (error) {
+      logger.error('Failed to create Paddle billing portal session:', error);
+      throw new Error(`Failed to create billing portal: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 
@@ -117,7 +134,7 @@ export class PaddleClient {
 
       return signature === expectedSignature;
     } catch (error) {
-      console.error('Webhook verification failed:', error);
+      logger.error('Webhook verification failed:', error);
       return false;
     }
   }

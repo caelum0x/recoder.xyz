@@ -9,6 +9,9 @@ import { type ActionFunctionArgs, json } from '@remix-run/cloudflare';
 import { streamText } from '~/lib/.server/llm/stream-text';
 import { verifySession } from '~/lib/auth/session.server';
 import { stripIndents } from '~/utils/stripIndent';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('AIEnhance');
 
 interface EnhanceRequest {
   prompt: string;
@@ -124,7 +127,7 @@ export async function action({ request, context }: ActionFunctionArgs) {
     const enhanceMode = (mode in ENHANCEMENT_MODES ? mode : 'enhance') as EnhanceMode;
     const systemPrompt = ENHANCEMENT_MODES[enhanceMode];
 
-    console.log(`[AI Enhance] Starting enhancement for user ${session.user.id}`, {
+    logger.info(`[AI Enhance] Starting enhancement for user ${session.user.id}`, {
       mode: enhanceMode,
       promptLength: prompt.length,
       remaining: rateLimit.remaining,
@@ -150,7 +153,7 @@ export async function action({ request, context }: ActionFunctionArgs) {
       { request },
     );
 
-    console.log(`[AI Enhance] Enhancement completed for user ${session.user.id}`);
+    logger.info(`[AI Enhance] Enhancement completed for user ${session.user.id}`);
 
     // Return streaming response
     return new Response(result.textStream, {
@@ -162,10 +165,10 @@ export async function action({ request, context }: ActionFunctionArgs) {
       },
     });
   } catch (error) {
-    console.error('[AI Enhance] Error:', error);
+    logger.error('[AI Enhance] Error:', error);
     return json({
       success: false,
-      error: error instanceof Error ? error.message : 'Enhancement failed',
+      error: 'Enhancement failed',
     }, { status: 500 });
   }
 }

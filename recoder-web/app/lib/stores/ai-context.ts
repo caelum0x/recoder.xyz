@@ -13,6 +13,10 @@
 import { atom, map } from 'nanostores';
 import type { ContextFile } from '~/lib/hooks/useContextPaths';
 
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('AIContext');
+
 // Storage keys
 const AI_CONTEXT_SETTINGS_KEY = 'recoder_ai_context_settings';
 const AI_CONTEXT_FILES_KEY = 'recoder_ai_context_files';
@@ -146,7 +150,7 @@ function loadSettings(): AIContextSettings {
       };
     }
   } catch (e) {
-    console.error('[AIContext] Failed to load settings:', e);
+    logger.error('[AIContext] Failed to load settings:', e);
   }
 
   return DEFAULT_AI_CONTEXT_SETTINGS;
@@ -164,7 +168,7 @@ function saveSettings(settings: AIContextSettings): void {
       updatedAt: Date.now(),
     }));
   } catch (e) {
-    console.error('[AIContext] Failed to save settings:', e);
+    logger.error('[AIContext] Failed to save settings:', e);
   }
 }
 
@@ -181,7 +185,7 @@ function loadSelectedFiles(): Map<string, AIContextFile> {
       return new Map(Object.entries(parsed));
     }
   } catch (e) {
-    console.error('[AIContext] Failed to load selected files:', e);
+    logger.error('[AIContext] Failed to load selected files:', e);
   }
 
   return new Map();
@@ -197,7 +201,7 @@ function saveSelectedFiles(files: Map<string, AIContextFile>): void {
     const obj = Object.fromEntries(files);
     localStorage.setItem(AI_CONTEXT_FILES_KEY, JSON.stringify(obj));
   } catch (e) {
-    console.error('[AIContext] Failed to save selected files:', e);
+    logger.error('[AIContext] Failed to save selected files:', e);
   }
 }
 
@@ -537,7 +541,7 @@ export function importAIContextSettings(jsonString: string): boolean {
     });
     return true;
   } catch (e) {
-    console.error('[AIContext] Failed to import settings:', e);
+    logger.error('[AIContext] Failed to import settings:', e);
     return false;
   }
 }

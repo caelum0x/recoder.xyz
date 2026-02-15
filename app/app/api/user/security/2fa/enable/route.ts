@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from "@/lib/auth-helpers";
-import { auth } from '@/lib/auth-config';
-import { headers } from 'next/headers';
-
+import { assertTwoFactorEnableResponse } from '@/lib/contracts/security-contracts';
 import { TwoFactorAuthService } from '@/lib/services/2fa.service';
 import { prisma } from '@/lib/prisma';
 
@@ -52,14 +50,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    return NextResponse.json({
+    return NextResponse.json(assertTwoFactorEnableResponse({
       success: true,
       backupCodes: result.backupCodes,
       message: result.message,
-    });
+    }));
   } catch (error: any) {
     return NextResponse.json(
-      { error: 'Failed to enable 2FA', message: error.message },
+      { error: 'Failed to enable 2FA' },
       { status: 500 }
     );
   }

@@ -6,6 +6,9 @@
 
 import { z } from 'zod';
 import { atom, map, computed } from 'nanostores';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('CheckpointsService');
 
 // =============================================================================
 // Schemas
@@ -405,7 +408,7 @@ export function startAutoCheckpoint(
       isCheckpointOperationInProgress.set(true);
       await createFn();
     } catch (error) {
-      console.error('Auto-checkpoint failed:', error);
+      logger.error('Auto-checkpoint failed:', error);
     } finally {
       isCheckpointOperationInProgress.set(false);
     }
@@ -458,7 +461,7 @@ export async function waitForCheckpointInit(
         resolve(true);
       } else if (Date.now() - startTime > timeoutMs) {
         clearInterval(checkInterval);
-        console.warn('Checkpoint initialization timeout');
+        logger.warn('Checkpoint initialization timeout');
         resolve(false);
       }
     }, 100);

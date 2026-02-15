@@ -340,7 +340,7 @@ interface DebugToolbarProps {
   isLoading: boolean;
   isConnected: boolean;
   showLaunchMenu: boolean;
-  launchMenuRef: React.RefObject<HTMLDivElement>;
+  launchMenuRef: React.RefObject<HTMLDivElement | null>;
   onToggleLaunchMenu: () => void;
   onLaunch: (type: DebuggerType) => void;
   onStop: () => void;

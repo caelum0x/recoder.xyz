@@ -17,6 +17,10 @@
 /**
  * Schema definition for XML nodes
  */
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('StreamingXMLParser');
+
 type NodeSchema = {
   /** Whether this node contains content directly (vs only children) */
   isContentNode?: boolean;
@@ -553,7 +557,7 @@ async function processActionTag(
     const fileTag = tag.children.find((t) => t.name === 'file');
 
     if (!fileTag) {
-      console.error('[StreamingXMLParser] File action is missing file tag');
+      logger.error('[StreamingXMLParser] File action is missing file tag');
       return;
     }
 
@@ -1045,7 +1049,7 @@ export async function consumeStreamWithHandlers(
               break;
           }
         } catch (e) {
-          console.warn('[StreamingXMLParser] Failed to parse chunk:', line, e);
+          logger.warn('[StreamingXMLParser] Failed to parse chunk:', line, e);
         }
       }
     }

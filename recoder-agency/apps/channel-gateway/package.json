@@ -1,0 +1,29 @@
+{
+	"$schema": "https://json.schemastore.org/package.json",
+	"name": "channel-gateway",
+	"version": "0.0.0",
+	"private": true,
+	"type": "module",
+	"engines": {
+		"node": "24.x"
+	},
+	"scripts": {
+		"dev": "tsx watch src/server.ts",
+		"build": "tsup",
+		"start": "node dist/server.js",
+		"format": "biome check --write .",
+		"check-types": "tsc --noEmit"
+	},
+	"dependencies": {
+		"discord.js": "^14.16.3",
+		"pino": "catalog:",
+		"zod": "catalog:"
+	},
+	"devDependencies": {
+		"@biomejs/biome": "catalog:",
+		"@types/node": "catalog:",
+		"tsup": "catalog:",
+		"tsx": "catalog:",
+		"typescript": "catalog:"
+	}
+}

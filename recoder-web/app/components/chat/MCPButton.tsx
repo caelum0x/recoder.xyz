@@ -1,6 +1,9 @@
 import { useState, useEffect } from 'react';
 import { classNames } from '~/utils/classNames';
 import type { MCPServersResponse } from '~/types/mcp';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('MCPButton');
 
 export default function MCPButton() {
   const [isOpen, setIsOpen] = useState(false);
@@ -19,7 +22,7 @@ export default function MCPButton() {
         setServers(data.servers || []);
       }
     } catch (error: any) {
-      console.error('Failed to load MCP servers:', error);
+      logger.error('Failed to load MCP servers:', error);
     }
   }
 
@@ -33,7 +36,7 @@ export default function MCPButton() {
       });
       await loadServers();
     } catch (error: any) {
-      console.error('Failed to add server:', error);
+      logger.error('Failed to add server:', error);
     }
     setLoading(false);
   }
@@ -44,7 +47,7 @@ export default function MCPButton() {
       await fetch(`/api/mcp/servers/${serverId}`, { method: 'DELETE' });
       await loadServers();
     } catch (error: any) {
-      console.error('Failed to remove server:', error);
+      logger.error('Failed to remove server:', error);
     }
     setLoading(false);
   }

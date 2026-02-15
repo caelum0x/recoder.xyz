@@ -11,6 +11,8 @@
  * - Automatic retry with exponential backoff
  * - Provider-specific error handling
  */
+import { createScopedLogger } from '~/utils/logger';
+const logger = createScopedLogger('ProviderRegistry');
 
 // ============================================================================
 // Types and Interfaces
@@ -722,7 +724,7 @@ class ProviderRegistry {
         }
 
         const delay = getRetryDelay(attempt);
-        console.log(
+        logger.info(
           `[ProviderRegistry] ${provider} attempt ${attempt + 1} failed (retryable). ` +
           `Retrying in ${Math.round(delay)}ms... (${retriesLeft} retries left). ` +
           `Error: ${error instanceof Error ? error.message : String(error)}`
@@ -740,7 +742,7 @@ class ProviderRegistry {
       const fallbackOptions: StreamOptions = { ...options, model: remappedModel };
       const keyForFallback = fallbackApiKey ?? apiKey;
 
-      console.log(
+      logger.info(
         `[ProviderRegistry] All retries exhausted for ${provider}. ` +
         `Falling back to ${fallbackProvider} with model ${remappedModel} ` +
         `(original: ${originalModel}). ` +
@@ -752,7 +754,7 @@ class ProviderRegistry {
           fallbackProvider, systemPrompt, messages, keyForFallback, fallbackOptions
         );
       } catch (fallbackError) {
-        console.log(
+        logger.info(
           `[ProviderRegistry] Fallback provider ${fallbackProvider} also failed: ` +
           `${fallbackError instanceof Error ? fallbackError.message : String(fallbackError)}`
         );

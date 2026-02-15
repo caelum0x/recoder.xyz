@@ -5,6 +5,9 @@
 
 import { SandboxProvider, type SandboxProviderConfig, type SandboxProviderType } from './types';
 import { DockerProvider } from './providers/docker-provider';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('SandboxFactoryLocal');
 
 /**
  * Factory for creating sandbox providers
@@ -27,13 +30,13 @@ export class SandboxFactory {
       case 'e2b':
         // E2B provider would be implemented here
         // For now, fall back to Docker
-        console.warn('[SandboxFactory] E2B provider not yet implemented, using Docker');
+        logger.warn('[SandboxFactory] E2B provider not yet implemented, using Docker');
         return new DockerProvider(config || {});
 
       case 'vercel':
         // Vercel provider would be implemented here
         // For now, fall back to Docker
-        console.warn('[SandboxFactory] Vercel provider not yet implemented, using Docker');
+        logger.warn('[SandboxFactory] Vercel provider not yet implemented, using Docker');
         return new DockerProvider(config || {});
 
       case 'local':

@@ -132,6 +132,27 @@ export async function detectFramework(projectId: string): Promise<string> {
       return 'fastapi';
     }
 
+    // Expo / React Native detection (check BEFORE plain React)
+    // Look for Expo-specific config files or expo dependency in package.json
+    if (fileList.includes('app.json') || fileList.includes('app.config.js') || fileList.includes('app.config.ts') || fileList.includes('metro.config.js')) {
+      // Verify it's actually Expo by checking for expo in package.json
+      try {
+        const pkgContent = await dockerExec(projectId, 'cat /workspace/package.json 2>/dev/null');
+        if (pkgContent) {
+          const pkg = JSON.parse(pkgContent);
+          const deps = { ...pkg.dependencies, ...pkg.devDependencies };
+          if (deps['expo'] || deps['react-native']) {
+            return 'expo';
+          }
+        }
+      } catch {
+        // If we see metro.config.js, it's likely Expo/RN even without package.json
+        if (fileList.includes('metro.config.js')) {
+          return 'expo';
+        }
+      }
+    }
+
     // Default to Vite for React/Vue/Svelte
     return 'vite';
   } catch (e) {

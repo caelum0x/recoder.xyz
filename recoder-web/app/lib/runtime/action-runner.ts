@@ -9,6 +9,7 @@ import { snapshotBeforeAI, snapshotAfterAI, setAutoSave, createSnapshot } from '
 import { dockerFetch, dockerPost, dockerGet, DOCKER_URL, CONTAINER_CREATE_TIMEOUT_MS, getSessionToken } from '~/lib/services/docker-api';
 import { isNonNodeFramework, getInstallCommand, getDevServerCommand } from './language-generators';
 import * as undoManager from '~/lib/services/undo-manager';
+import type { FileChange } from '~/lib/types/proposals';
 import { validateCode, formatValidationResult, canWriteWithValidation, type ValidationResult } from '~/lib/services/code-validator';
 import * as actionQueue from './action-queue';
 import {
@@ -175,12 +176,30 @@ const logger = createScopedLogger('ActionRunner');
 
 export type ActionStatus = 'pending' | 'running' | 'complete' | 'aborted' | 'failed';
 
+export interface ActionResultMeta {
+  provider?: string;
+  warnings?: string[];
+  capabilities?: {
+    supportsWebSearch?: boolean;
+    supportsWebCrawl?: boolean;
+    supportsAllowedDomains?: boolean;
+    supportsBlockedDomains?: boolean;
+    supportsMaxUses?: boolean;
+  };
+  effectivePolicy?: {
+    allowedDomains?: string[];
+    blockedDomains?: string[];
+  };
+  resultCount?: number;
+}
+
 export type BaseActionState = RecoderAction & {
   status: Exclude<ActionStatus, 'failed'>;
   abort: () => void;
   executed: boolean;
   abortSignal: AbortSignal;
   validation?: ValidationResult;  // Code validation result
+  resultMeta?: ActionResultMeta;
 };
 
 export type FailedActionState = RecoderAction &
@@ -238,6 +257,7 @@ export class ActionRunner {
   #dockerReady: boolean = false;
   #isRestoredChat: boolean = false;  // True if this is a restored past chat
   #restoredFilePaths: Set<string> = new Set();  // Files that were restored from snapshot
+  #proposalStarted: boolean = false;  // True if proposal collection has been started for this runner
 
   #normalizeFilePath(filePath: string): string {
     if (!filePath) return '';
@@ -278,6 +298,7 @@ export class ActionRunner {
   #compileRecheckHandler: (() => void) | null = null;
   #compileCheckRetryTimer: NodeJS.Timeout | null = null;
   #compileCheckRetryCount: number = 0;
+  #toolUseCounts: Map<string, number> = new Map();
 
   actions: ActionsMap = map({});
 
@@ -474,15 +495,15 @@ export class ActionRunner {
       });
 
       if (result.success && result.mergedCode) {
-        console.debug(`[ActionRunner] Morph applied to ${filePath} in ${result.duration}ms`);
+        logger.debug(`[ActionRunner] Morph applied to ${filePath} in ${result.duration}ms`);
         return { used: true, content: result.mergedCode };
       }
 
       // Morph failed - fall back to normal write
-      console.warn(`[ActionRunner] Morph failed for ${filePath}: ${result.error}`);
+      logger.warn(`[ActionRunner] Morph failed for ${filePath}: ${result.error}`);
       return { used: false };
     } catch (error) {
-      console.warn('[ActionRunner] Morph apply error (falling back to normal write):', error);
+      logger.warn('[ActionRunner] Morph apply error (falling back to normal write):', error);
       return { used: false };
     }
   }
@@ -751,14 +772,14 @@ export class ActionRunner {
 
   addAction(data: ActionCallbackData) {
     const { actionId } = data;
-    console.debug('➕ [ActionRunner] addAction called:', data.action.type, actionId);
+    logger.debug('➕ [ActionRunner] addAction called:', data.action.type, actionId);
 
     const actions = this.actions.get();
     const action = actions[actionId];
 
     if (action) {
       // action already added
-      console.debug('⏭️  [ActionRunner] Action already added, skipping:', actionId);
+      logger.debug('⏭️  [ActionRunner] Action already added, skipping:', actionId);
       return;
     }
 
@@ -767,6 +788,16 @@ export class ActionRunner {
     // Track when this action was added (for orphan detection)
     this.#actionAddedTimestamps.set(actionId, Date.now());
     this.#streamingActive = true;
+
+    // 🔍 PROPOSAL MODE: Start collecting file changes for this message
+    if (this.#chatId && !this.#proposalStarted) {
+      getWorkbenchStore().then(store => {
+        if (store.isProposalModeEnabled()) {
+          store.startProposal(this.#chatId!);
+          this.#proposalStarted = true;
+        }
+      }).catch(() => {});
+    }
 
     this.actions.setKey(actionId, {
       ...data.action,
@@ -786,7 +817,7 @@ export class ActionRunner {
 
   async runAction(data: ActionCallbackData) {
     const { actionId } = data;
-    console.debug('▶️  [ActionRunner] runAction called:', data.action.type, actionId);
+    logger.debug('▶️  [ActionRunner] runAction called:', data.action.type, actionId);
 
     // Validate actionId is a string
     if (typeof actionId !== 'string') {
@@ -805,12 +836,12 @@ export class ActionRunner {
     const action = this.actions.get()[actionId];
 
     if (!action) {
-      console.error('❌ [ActionRunner] Action not found:', actionId, 'Available:', Object.keys(this.actions.get()));
+      logger.error('❌ [ActionRunner] Action not found:', actionId, 'Available:', Object.keys(this.actions.get()));
       unreachable(`Action ${actionId} not found`);
     }
 
     if (action.executed) {
-      console.debug('⏭️  [ActionRunner] Action already executed, skipping:', actionId);
+      logger.debug('⏭️  [ActionRunner] Action already executed, skipping:', actionId);
       return;
     }
 
@@ -828,17 +859,17 @@ export class ActionRunner {
 
     this.#updateAction(actionId, { ...action, ...data.action, executed: true });
 
-    console.debug('🔗 [ActionRunner] Queueing action execution:', actionId, action.type);
+    logger.debug('🔗 [ActionRunner] Queueing action execution:', actionId, action.type);
     this.#currentExecutionPromise = this.#currentExecutionPromise
       .then(() => {
-        console.debug('⏩ [ActionRunner] Previous action done, executing:', actionId, action.type);
+        logger.debug('⏩ [ActionRunner] Previous action done, executing:', actionId, action.type);
         return this.#executeAction(actionId);
       })
       .then(() => {
-        console.debug('✅ [ActionRunner] Action execution complete:', actionId, action.type);
+        logger.debug('✅ [ActionRunner] Action execution complete:', actionId, action.type);
       })
       .catch((error) => {
-        console.error('❌ [ActionRunner] Action failed:', actionId, error);
+        logger.error('❌ [ActionRunner] Action failed:', actionId, error);
         // Surface action errors to the user via custom event
         if (typeof window !== 'undefined') {
           window.dispatchEvent(new CustomEvent('recoder:action-error', {
@@ -859,13 +890,13 @@ export class ActionRunner {
 
     // Structured logging for action start
     if (DEBUG) {
-      console.log(`[${new Date().toISOString()}] [ActionRunner] Starting action:`, {
+      logger.info(`[${new Date().toISOString()}] [ActionRunner] Starting action:`, {
         actionId,
         type: action?.type,
         filePath: (action as any)?.filePath,
       });
     } else {
-      console.debug('🚀 [ActionRunner] #executeAction called:', actionId, action?.type);
+      logger.debug('🚀 [ActionRunner] #executeAction called:', actionId, action?.type);
     }
 
     // Guard against undefined action
@@ -933,14 +964,14 @@ export class ActionRunner {
 
       this.#updateAction(actionId, { status: 'running' });
 
-      console.debug('🔀 [ActionRunner] Executing action type:', action.type);
+      logger.debug('🔀 [ActionRunner] Executing action type:', action.type);
       switch (action.type) {
         case 'shell': {
           await this.#runShellAction(action);
           break;
         }
         case 'file': {
-          console.debug('📄 [ActionRunner] Calling #runFileAction');
+          logger.debug('📄 [ActionRunner] Calling #runFileAction');
           await this.#runFileAction(action);
           break;
         }
@@ -992,8 +1023,20 @@ export class ActionRunner {
           await this.#runWebSearchAction(action);
           break;
         }
+        case 'web_crawl': {
+          await this.#runWebCrawlAction(action);
+          break;
+        }
+        case 'github_documents': {
+          await this.#runGitHubDocumentsAction(action);
+          break;
+        }
         case 'web_fetch': {
           await this.#runWebFetchAction(action);
+          break;
+        }
+        case 'copy_project': {
+          await this.#runCopyProjectAction(action);
           break;
         }
         case 'memory_operation': {
@@ -1072,7 +1115,7 @@ export class ActionRunner {
         isTimeout,
       });
       if (DEBUG) {
-        console.error(`[${new Date().toISOString()}] [ActionRunner] Action failed:`, {
+        logger.error(`[${new Date().toISOString()}] [ActionRunner] Action failed:`, {
           actionId,
           type: action.type,
           error,
@@ -1113,7 +1156,7 @@ export class ActionRunner {
 
       // Don't re-throw to prevent stopping other actions
       // Just log the error (safe access to action.type)
-      console.error(`Action ${actionId} (${action?.type || 'unknown'}) failed:`, errorMessage);
+      logger.error(`Action ${actionId} (${action?.type || 'unknown'}) failed:`, errorMessage);
     } finally {
       // 🔒 FIX 0B: Decrement actions in progress counter
       globalActionsInProgress--;
@@ -1130,19 +1173,19 @@ export class ActionRunner {
    * won't exist for new projects until files are created.
    */
   async #waitForContainerReady(timeoutMs: number = 60000): Promise<void> {
-    console.debug('⏳ [ActionRunner] #waitForContainerReady starting...');
+    logger.debug('⏳ [ActionRunner] #waitForContainerReady starting...');
 
     try {
       // Ensure Docker container is created (this is all we need for file operations)
-      console.debug('⏳ [ActionRunner] Calling #ensureDockerReady...');
+      logger.debug('⏳ [ActionRunner] Calling #ensureDockerReady...');
       await this.#ensureDockerReady();
-      console.debug('✅ [ActionRunner] Container created, ready for file operations');
+      logger.debug('✅ [ActionRunner] Container created, ready for file operations');
 
       // NOTE: We do NOT wait for workbenchStore.containerReady here.
       // That flag tracks the dev server, which won't exist for new projects.
       // File operations only need the container to exist.
     } catch (error) {
-      console.error('❌ [ActionRunner] #waitForContainerReady error:', error);
+      logger.error('❌ [ActionRunner] #waitForContainerReady error:', error);
       throw error;
     }
   }
@@ -1407,14 +1450,14 @@ export class ActionRunner {
   }
 
   async #runFileAction(action: ActionState) {
-    console.debug('📁 [ActionRunner] #runFileAction called for:', (action as any).filePath);
+    logger.debug('📁 [ActionRunner] #runFileAction called for:', (action as any).filePath);
     if (action.type !== 'file') {
       unreachable('Expected file action');
     }
 
     // FIX #3: Prevent file generation after repository clone
     if (this.#repositoryCloned) {
-      console.debug(`⚠️ [ActionRunner] Skipping file - repository was cloned:`, action.filePath);
+      logger.debug(`⚠️ [ActionRunner] Skipping file - repository was cloned:`, action.filePath);
       logger.warn(`⚠️ Skipping file action for '${action.filePath}' - Repository '${this.#clonedRepoUrl}' was already cloned. AI should not generate additional files after cloning.`);
       return;
     }
@@ -1536,7 +1579,7 @@ export class ActionRunner {
     }
 
     // Write file with retry logic
-    console.debug('📝 [FileAction] Writing file:', action.filePath, 'content length:', action.content?.length || 0);
+    logger.debug('📝 [FileAction] Writing file:', action.filePath, 'content length:', action.content?.length || 0);
 
     // ✅ VALIDATION: Validate code before writing
     const validationResult = await validateCode(action.content, action.filePath, this.#projectId || undefined);
@@ -1581,6 +1624,41 @@ export class ActionRunner {
       // File doesn't exist yet, no previous content
     }
 
+    // 🔍 PROPOSAL MODE: If enabled, collect file change for review instead of writing
+    {
+      const wbStore = await getWorkbenchStore();
+      if (wbStore.isProposalModeEnabled()) {
+        const changeType: 'create' | 'update' | 'delete' = previousContent === null ? 'create' : 'update';
+        const fileName = action.filePath.split('/').pop() || action.filePath;
+
+        // Add file change to the current proposal
+        wbStore.addFileChangeToProposal(this.#chatId || 'unknown', {
+          name: fileName,
+          path: action.filePath,
+          summary: changeType === 'create' ? `Create ${fileName}` : `Update ${fileName}`,
+          type: changeType,
+          oldContent: previousContent || undefined,
+          newContent: action.content,
+          linesDelta: (action.content.split('\n').length) - ((previousContent || '').split('\n').length),
+        });
+
+        // Update local file store so the file tree shows the file (but don't write to Docker)
+        const relativePath = action.filePath.startsWith('/') ? action.filePath.substring(1) : action.filePath;
+        const fullPath = `${WORK_DIR}/${relativePath}`;
+        const parts = fullPath.split('/').filter(Boolean);
+        for (let i = 1; i < parts.length; i++) {
+          const folderPath = '/' + parts.slice(0, i).join('/');
+          if (!wbStore.files.get()[folderPath]) {
+            wbStore.files.setKey(folderPath, { type: 'folder' });
+          }
+        }
+        wbStore.files.setKey(fullPath, { type: 'file', content: action.content, isBinary: false });
+
+        logger.info(`[ActionRunner] 🔍 Proposal mode: collected ${changeType} for ${action.filePath}`);
+        return; // Skip Docker write — user must approve first
+      }
+    }
+
     // Streaming-aware file writes:
     // During streaming: write DIRECTLY to Docker for immediate feedback (no batching delay)
     // Non-streaming: use batch mode for efficiency (GitHub import, template loading, etc.)
@@ -1593,7 +1671,7 @@ export class ActionRunner {
       while (retries >= 0) {
         try {
           await this.#dockerWriteFile(action.filePath, action.content);
-          console.debug('⚡ [FileAction] File written immediately:', action.filePath);
+          logger.debug('⚡ [FileAction] File written immediately:', action.filePath);
           break;
         } catch (error: any) {
           if (retries === 0) {
@@ -1622,7 +1700,7 @@ export class ActionRunner {
     } else {
       // Batch mode — queue for bulk write (used for non-streaming operations)
       const opId = queueFileWrite(action.filePath, action.content);
-      console.debug('📦 [FileAction] File queued for batch:', action.filePath, 'opId:', opId);
+      logger.debug('📦 [FileAction] File queued for batch:', action.filePath, 'opId:', opId);
       logger.debug(`File queued for batch: ${action.filePath} (${action.content.length} bytes)`);
 
       // Schedule flush if not already scheduled
@@ -1817,9 +1895,9 @@ export class ActionRunner {
       logger.info(`✅ Starter template loaded: ${fileCount} files`);
 
       // Write all files from the starter template using Docker
-      console.debug('📦 [importStarter] Ensuring Docker is ready...');
+      logger.debug('📦 [importStarter] Ensuring Docker is ready...');
       await this.#ensureDockerReady();
-      console.debug('📦 [importStarter] Docker ready, writing', Object.keys(result.data.files).length, 'files...');
+      logger.debug('📦 [importStarter] Docker ready, writing', Object.keys(result.data.files).length, 'files...');
       const files = result.data.files;
       const store = await getWorkbenchStore();
 
@@ -1857,13 +1935,13 @@ export class ActionRunner {
           }
           store.files.setKey(fullPath, { type: 'file', content: content as string, isBinary: false });
           filesWritten++;
-          console.debug(`📦 [importStarter] Written ${filesWritten}/${fileCount}: ${filePath}`);
+          logger.debug(`📦 [importStarter] Written ${filesWritten}/${fileCount}: ${filePath}`);
         }
       } finally {
         signalBatchWriteEnd();
       }
 
-      console.debug(`📦 [importStarter] All ${filesWritten} files written to Docker`);
+      logger.debug(`📦 [importStarter] All ${filesWritten} files written to Docker`);
       logger.info(`✅ Starter template imported successfully: ${action.templateId}`);
     } catch (error) {
       logger.error(`❌ Failed to import starter template:`, error);
@@ -2246,6 +2324,46 @@ export class ActionRunner {
       // Handle non-Node.js languages
       if (isNonNodeFramework(framework)) {
         await this.#runNonNodeInstall(framework);
+        return;
+      }
+
+      // Handle Expo / React Native projects
+      if (framework === 'expo') {
+        logger.info('📱 Expo project detected — installing deps and starting Metro via Expo API');
+
+        // Install dependencies (Expo uses npm/bun)
+        try {
+          await this.#dockerExec('bun install --force');
+          logger.info('✅ Expo dependencies installed with bun');
+        } catch {
+          logger.warn('⚠️ bun install failed for Expo, trying npm...');
+          await this.#dockerExec('npm install --legacy-peer-deps --prefer-offline --no-audit --no-fund');
+          logger.info('✅ Expo dependencies installed with npm');
+        }
+
+        globalNpmInstallComplete = true;
+        globalNpmInstallRunning = false;
+
+        // Start Expo via the backend API (tunnel mode for production accessibility)
+        try {
+          const projectId = this.#projectId;
+          if (projectId) {
+            await dockerPost(`/api/expo-start/${encodeURIComponent(projectId)}`, { mode: 'tunnel' });
+            logger.info('🚀 Expo Metro started in tunnel mode');
+          }
+        } catch (expoErr) {
+          logger.warn('⚠️ Failed to start Expo via API (will need manual start):', expoErr);
+        }
+
+        // Dispatch dev-server-ready event so Preview can switch to expo-go mode
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('recoder:dev-server-ready', {
+            detail: { framework: 'expo' },
+          }));
+        }
+
+        const ws = await getWorkbenchStore();
+        ws.containerReady.set(true);
         return;
       }
 
@@ -3359,6 +3477,7 @@ export class ActionRunner {
     logger.info(`Delegating task to ${action.agentType} subagent: ${action.taskDescription}`);
 
     try {
+      const strictWorkflowContract = this.#resolveDelegateStrictContract(action);
       // Call enterprise tools API for subagent delegation
       const response = await fetch('/api/enterprise-tools', {
         method: 'POST',
@@ -3368,14 +3487,26 @@ export class ActionRunner {
           params: {
             agentType: action.agentType,
             task: action.taskDescription,
-            context: action.context || ''
+            context: action.context || '',
+            projectId: this.#projectId || undefined,
+            strict: strictWorkflowContract,
           }
         })
       });
       
       const result = await response.json() as EnterpriseToolsResponse;
 
-      action.content = `Subagent (${action.agentType}) completed:\n${result.output || result.message}`;
+      const laneSummary = result.workflow?.lanes?.length
+        ? `\n\nActive lanes:\n${result.workflow.lanes.map((lane) => `- ${lane.laneId}: ${lane.title}`).join('\n')}`
+        : '';
+      const backendSummary = result.backend
+        ? `\n\nWorkflow backend: ${result.source || 'unknown'} (${result.backend.attempts || 0}/${result.backend.maxAttempts || 0} attempts)\nEndpoint: ${result.backend.endpoint || 'unknown'}\nContract: ${result.backend.contract || 'unknown'}${result.backend.responseContract ? ` (response ${result.backend.responseContract})` : ''}${result.backend.contractStatus ? ` [${result.backend.contractStatus}]` : ''}`
+        : '';
+      const fallbackSummary = result.fallbackReason
+        ? `\nFallback reason: ${result.fallbackReason}`
+        : '';
+
+      action.content = `Subagent (${action.agentType}) completed:\n${result.output || result.message}${laneSummary}${backendSummary}${fallbackSummary}`;
       logger.info(`Subagent task completed successfully`);
     } catch (error) {
       logger.error(`Subagent delegation failed:`, error);
@@ -3383,37 +3514,94 @@ export class ActionRunner {
     }
   }
 
+  #resolveDelegateStrictContract(action: ActionState): boolean {
+    if (action.type === 'delegate_subagent' && action.strict === true) {
+      return true;
+    }
+    const runtimeEnv = (import.meta as any)?.env ?? {};
+    const candidates = [
+      runtimeEnv.VITE_RECODER_WORKFLOW_STRICT_CONTRACT,
+      runtimeEnv.VITE_OPENCLAW_WORKFLOW_STRICT_CONTRACT,
+      (globalThis as any).__RECODER_WORKFLOW_STRICT_CONTRACT,
+      (globalThis as any).__OPENCLAW_WORKFLOW_STRICT_CONTRACT,
+    ];
+    return candidates.some((value) => {
+      const raw = typeof value === 'string' ? value : String(value ?? '');
+      const normalized = raw.trim().toLowerCase();
+      return normalized === '1' || normalized === 'true' || normalized === 'yes' || normalized === 'on';
+    });
+  }
+
   async #runWebSearchAction(action: ActionState) {
     if (action.type !== 'web_search') {
       unreachable('Expected web_search action');
     }
 
-    logger.info(`Web searching: ${action.query}`);
+    const query = (action.query || action.content || '').trim();
+    if (!query) {
+      action.content = 'Web search requires a query.';
+      return;
+    }
+    if (!this.#consumeToolUseBudget('web_search', action.maxUses)) {
+      action.content = `Web search use limit reached (maxUses=${action.maxUses}).`;
+      return;
+    }
+
+    logger.info(`Web searching: ${query}`);
 
     try {
-      const response = await fetch('/api/enterprise-tools', {
+      const response = await fetch('/api/tools/web-search', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          tool: 'webSearch',
-          params: {
-            query: action.query,
-            options: { maxResults: action.maxResults || 5 }
-          }
+          query,
+          maxResults: action.maxResults || 5,
+          providerHint: this.#resolveWebToolProviderHint(action.providerHint),
+          allowedDomains: action.allowedDomains,
+          blockedDomains: action.blockedDomains,
+          maxUses: action.maxUses,
         })
       });
-      const result = await response.json() as EnterpriseToolsResponse;
+      const result = await response.json() as {
+        results?: Array<{ title?: string; snippet?: string }>;
+        summary?: string;
+        provider?: string;
+        warnings?: string[];
+        capabilities?: {
+          supportsWebSearch?: boolean;
+          supportsWebCrawl?: boolean;
+          supportsAllowedDomains?: boolean;
+          supportsBlockedDomains?: boolean;
+          supportsMaxUses?: boolean;
+        };
+        effectivePolicy?: {
+          allowedDomains?: string[];
+          blockedDomains?: string[];
+        };
+        error?: string;
+      };
 
-      if (!result || !result.results || result.results.length === 0) {
-        action.content = `Web search completed but no results found for "${action.query}"`;
+      if (!result?.results || result.results.length === 0) {
+        action.content = `Web search completed but no results found for "${query}"`;
         return;
       }
 
-      action.content = `Web search results for "${action.query}":\n${result.results.map((r: any) => `• ${r.title}: ${r.snippet}`).join('\n')}`;
+      const providerNote = result.provider ? `\n\n[provider=${result.provider}]` : '';
+      const warningNote = result.warnings && result.warnings.length > 0
+        ? `\n\n[warning] ${result.warnings.join(' | ')}`
+        : '';
+      action.content = `Web search results for "${query}":\n${result.results.map((r: any) => `• ${r.title}: ${r.snippet}`).join('\n')}${providerNote}${warningNote}`;
+      action.resultMeta = {
+        provider: result.provider,
+        warnings: result.warnings || [],
+        capabilities: result.capabilities,
+        effectivePolicy: result.effectivePolicy,
+        resultCount: result.results.length,
+      };
       logger.info(`Web search completed with ${result.results.length} results`);
     } catch (error) {
       logger.warn('Web search unavailable:', error);
-      action.content = `Web search for "${action.query}" - Service temporarily unavailable. Try using webFetch with a specific URL instead.`;
+      action.content = `Web search for "${query}" - Service temporarily unavailable. Try using webFetch with a specific URL instead.`;
     }
   }
 
@@ -3448,6 +3636,234 @@ export class ActionRunner {
     } catch (error) {
       logger.warn('URL fetch unavailable:', error);
       action.content = `Failed to fetch ${action.url} - Service temporarily unavailable or URL inaccessible.`;
+    }
+  }
+
+  async #runWebCrawlAction(action: ActionState) {
+    if (action.type !== 'web_crawl') {
+      unreachable('Expected web_crawl action');
+    }
+
+    const targetUrl = (action.url || action.content || '').trim();
+    if (!targetUrl) {
+      action.content = 'Web crawl requires a URL.';
+      return;
+    }
+    if (!this.#consumeToolUseBudget('web_crawl', action.maxUses)) {
+      action.content = `Web crawl use limit reached (maxUses=${action.maxUses}).`;
+      return;
+    }
+
+    logger.info(`Crawling URL: ${targetUrl}`);
+
+    try {
+      const response = await fetch('/api/tools/web-crawl', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          url: targetUrl,
+          projectId: this.#projectId || undefined,
+          includeScreenshot: true,
+          providerHint: this.#resolveWebToolProviderHint(action.providerHint),
+          allowedDomains: action.allowedDomains,
+          blockedDomains: action.blockedDomains,
+          maxUses: action.maxUses,
+        }),
+      });
+
+      const result = await response.json() as {
+        rootUrl?: string;
+        markdown?: string;
+        html?: string;
+        screenshot?: string;
+        provider?: string;
+        warnings?: string[];
+        capabilities?: {
+          supportsWebSearch?: boolean;
+          supportsWebCrawl?: boolean;
+          supportsAllowedDomains?: boolean;
+          supportsBlockedDomains?: boolean;
+          supportsMaxUses?: boolean;
+        };
+        effectivePolicy?: {
+          allowedDomains?: string[];
+          blockedDomains?: string[];
+        };
+        error?: string;
+      };
+      if (!response.ok || (!result?.markdown && !result?.html)) {
+        action.content = `Failed to crawl ${targetUrl}${result?.error ? `: ${result.error}` : ''}`;
+        return;
+      }
+
+      const markdown = result.markdown || '';
+      const html = result.html || '';
+      const preview = markdown || html;
+      const screenshotNote = result.screenshot
+        ? '\n\n[Screenshot captured for visual cloning reference]'
+        : '\n\n[Screenshot unavailable; using markdown/html only]';
+      const providerNote = result.provider ? `\n\n[provider=${result.provider}]` : '';
+      const warningNote = result.warnings && result.warnings.length > 0
+        ? `\n\n[warning] ${result.warnings.join(' | ')}`
+        : '';
+
+      action.content = `Crawled ${result.rootUrl || targetUrl}:\n${preview.substring(0, 7000)}${preview.length > 7000 ? '\n\n[Content truncated]' : ''}${screenshotNote}${providerNote}${warningNote}`;
+      action.resultMeta = {
+        provider: result.provider,
+        warnings: result.warnings || [],
+        capabilities: result.capabilities,
+        effectivePolicy: result.effectivePolicy,
+        resultCount: preview ? 1 : 0,
+      };
+      logger.info(`Web crawl completed for ${result.rootUrl || targetUrl}`);
+    } catch (error) {
+      logger.warn('Web crawl unavailable:', error);
+      action.content = `Failed to crawl ${targetUrl} - Service temporarily unavailable or URL inaccessible.`;
+    }
+  }
+
+  async #runGitHubDocumentsAction(action: ActionState) {
+    if (action.type !== 'github_documents') {
+      unreachable('Expected github_documents action');
+    }
+
+    const owner = (action.owner || '').trim();
+    const repo = (action.repo || '').trim();
+
+    if (!owner || !repo) {
+      action.content = 'GitHub documents action requires both owner and repo.';
+      return;
+    }
+    if (!this.#consumeToolUseBudget('github_documents', action.maxUses)) {
+      action.content = `GitHub documents use limit reached (maxUses=${action.maxUses}).`;
+      return;
+    }
+
+    logger.info(`Loading GitHub documents for ${owner}/${repo}`);
+
+    try {
+      const response = await fetch('/api/github/documents', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          owner,
+          repo,
+          accessToken: action.accessToken,
+          sourceType: action.sourceType || 'pull_requests',
+          maxDocuments: action.maxDocuments || 20,
+        }),
+      });
+
+      const result = await response.json() as {
+        success?: boolean;
+        error?: string;
+        provider?: string;
+        sourceType?: string;
+        count?: number;
+        documents?: Array<{ content: string; metadata?: Record<string, unknown> }>;
+      };
+
+      if (!response.ok || !result.success || !result.documents) {
+        action.content = `Failed to load GitHub documents${result?.error ? `: ${result.error}` : ''}`;
+        return;
+      }
+
+      if (result.documents.length === 0) {
+        action.content = `No ${result.sourceType || 'issues'} documents found for ${owner}/${repo}.`;
+        return;
+      }
+
+      const preview = result.documents
+        .slice(0, 5)
+        .map((doc, idx) => {
+          const snippet = (doc.content || '').replace(/\s+/g, ' ').trim().slice(0, 260);
+          return `• [${idx + 1}] ${snippet}`;
+        })
+        .join('\n');
+
+      action.content = `Loaded ${result.count || result.documents.length} GitHub documents from ${owner}/${repo} (${result.sourceType || 'issues'}, provider=${result.provider || 'unknown'}).\n${preview}`;
+    } catch (error) {
+      logger.warn('GitHub documents load failed:', error);
+      action.content = `Failed to load GitHub documents for ${owner}/${repo} - service unavailable or invalid token.`;
+    }
+  }
+
+  #resolveWebToolProviderHint(actionProviderHint?: string): string {
+    if (actionProviderHint?.trim()) {
+      return actionProviderHint.trim();
+    }
+
+    if (typeof window === 'undefined') {
+      return 'free-fallback';
+    }
+
+    const selectedModel = localStorage.getItem('selectedModel') || '';
+    const selectedProvider = localStorage.getItem('selectedProvider') || '';
+
+    const modelPrefix = selectedModel.split('/')[0]?.trim().toLowerCase();
+    if (modelPrefix === 'openai' || modelPrefix === 'anthropic' || modelPrefix === 'google' || modelPrefix === 'gemini') {
+      return modelPrefix;
+    }
+
+    if (selectedProvider.trim()) {
+      return selectedProvider.trim();
+    }
+
+    return 'free-fallback';
+  }
+
+  #consumeToolUseBudget(toolName: string, maxUses?: number): boolean {
+    if (!maxUses || maxUses < 1) return true;
+    const current = this.#toolUseCounts.get(toolName) || 0;
+    if (current >= maxUses) {
+      return false;
+    }
+    this.#toolUseCounts.set(toolName, current + 1);
+    return true;
+  }
+
+  async #runCopyProjectAction(action: ActionState) {
+    if (action.type !== 'copy_project') {
+      unreachable('Expected copy_project action');
+    }
+
+    try {
+      const response = await fetch('/api/projects/copy', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sourceProjectId: action.sourceProjectId || this.#projectId,
+          newProjectName: action.newProjectName,
+          includeGit: action.includeGit ?? false,
+          includeGitRemotes: action.includeGitRemotes ?? false,
+          includeTriggers: action.includeTriggers ?? false,
+          includeEnvFiles: action.includeEnvFiles ?? false,
+          includeSecrets: action.includeSecrets ?? false,
+          includeDeployConfig: action.includeDeployConfig ?? false,
+          includeDomains: action.includeDomains ?? false,
+        }),
+      });
+
+      const result = await response.json() as {
+        success?: boolean;
+        error?: string;
+        project?: { id: string; name: string };
+        sourceProject?: { id: string; name: string };
+      };
+
+      if (!response.ok || !result.success || !result.project) {
+        action.content = `Failed to copy project${result?.error ? `: ${result.error}` : ''}`;
+        return;
+      }
+
+      action.content = `Project copied successfully.\nSource: ${result.sourceProject?.name || result.sourceProject?.id || action.sourceProjectId || this.#projectId}\nNew project: ${result.project.name} (${result.project.id})`;
+
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('projects:refresh'));
+      }
+    } catch (error) {
+      logger.error('Project copy failed:', error);
+      action.content = `Failed to copy project: ${error instanceof Error ? error.message : 'Unknown error'}`;
     }
   }
 
@@ -3710,6 +4126,22 @@ export class ActionRunner {
           detected = 'java-spring';
         } else {
           detected = 'java';
+        }
+      } else if (fileList.includes('app.json') || fileList.includes('app.config.js') || fileList.includes('app.config.ts') || fileList.includes('metro.config.js')) {
+        // Expo / React Native detection
+        try {
+          const pkgContent = await this.#dockerExec('cat /workspace/package.json 2>/dev/null');
+          if (pkgContent) {
+            const pkg = JSON.parse(pkgContent);
+            const deps = { ...pkg.dependencies, ...pkg.devDependencies };
+            if (deps['expo'] || deps['react-native']) {
+              detected = 'expo';
+            }
+          }
+        } catch {
+          if (fileList.includes('metro.config.js')) {
+            detected = 'expo';
+          }
         }
       }
     } catch (e) {
@@ -4382,6 +4814,18 @@ export class ActionRunner {
     logger.debug(`Stream ended, truncated: ${isTruncated}`);
     this.#streamingActive = false;
     this.#firstArtifactComplete = true;
+
+    // 🔍 PROPOSAL MODE: Finalize the proposal now that all actions are collected
+    if (this.#chatId) {
+      getWorkbenchStore().then(store => {
+        if (store.isProposalModeEnabled()) {
+          const proposal = store.finalizeProposal(this.#chatId!, 'AI Changes');
+          if (proposal) {
+            logger.info(`[ActionRunner] 🔍 Proposal finalized: ${proposal.id} with ${proposal.filesChanged.length} files`);
+          }
+        }
+      }).catch(() => {});
+    }
 
     // Trigger deferred auto-install now that streaming is done
     if (this.#packageJsonCreated && !globalAutoInstallTriggered) {

@@ -7,6 +7,10 @@ import type { TaskId, TaskExecutionContext } from './types';
 import type { Patch } from './object/patch-object';
 import { patchTask as patchTaskDirect } from './patch-task';
 
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('PatchQueue');
+
 interface QueuedPatch {
   taskId: TaskId;
   patches: Patch[];
@@ -120,13 +124,13 @@ export function createPatchQueue(
               timestamp: Date.now(),
             };
             state.queue.unshift(retryItem);
-            console.warn(
+            logger.warn(
               `Patch failed for task ${item.taskId}, retry ${item.retryCount + 1}/${state.retryConfig.maxRetries}:`,
               error
             );
           } else {
             // Permanent failure - log with severe warning
-            console.error(
+            logger.error(
               `Patch permanently failed for task ${item.taskId} after ${state.retryConfig.maxRetries} retries. Data loss may occur:`,
               error,
               'Failed patches:',
@@ -136,7 +140,7 @@ export function createPatchQueue(
         }
       }
     } catch (error) {
-      console.error('Error processing patch queue:', error);
+      logger.error('Error processing patch queue:', error);
     } finally {
       state.processing = false;
     }
@@ -152,7 +156,7 @@ export function createPatchQueue(
 
     state.intervalId = setInterval(() => {
       processQueue().catch((error) => {
-        console.error('Unhandled error in patch queue processing:', error);
+        logger.error('Unhandled error in patch queue processing:', error);
       });
     }, BATCH_INTERVAL_MS);
   }
@@ -171,7 +175,7 @@ export function createPatchQueue(
     // Since cleanup indicates end of task execution, remaining patches
     // likely represent incomplete or invalid state changes
     if (state.queue.length > 0) {
-      console.warn(`Discarding ${state.queue.length} unprocessed patches during cleanup`);
+      logger.warn(`Discarding ${state.queue.length} unprocessed patches during cleanup`);
     }
     state.queue = [];
   }

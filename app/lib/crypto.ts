@@ -10,12 +10,7 @@ const getEncryptionKey = (): Buffer => {
   const key = process.env.API_KEY_ENCRYPTION_SECRET;
   
   if (!key) {
-    // Development fallback (NEVER use in production)
-    if (process.env.NODE_ENV === 'development') {
-      console.warn('⚠️  Using development encryption key. Set API_KEY_ENCRYPTION_SECRET in production!');
-      return Buffer.from('0'.repeat(64), 'hex');
-    }
-    throw new Error('API_KEY_ENCRYPTION_SECRET is required');
+    throw new Error('API_KEY_ENCRYPTION_SECRET environment variable is required. Generate one with: node -e "console.log(require(\'crypto\').randomBytes(32).toString(\'hex\'))"');
   }
   
   if (key.length !== 64) {

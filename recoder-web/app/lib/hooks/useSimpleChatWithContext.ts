@@ -12,6 +12,9 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 import { webcontainer } from '~/lib/webcontainer';
 import { integrateRecoderContext } from '~/lib/recoder-context/webcontainer-integration';
 import { getActionsInProgress } from '~/lib/runtime/action-runner';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('SimpleChatContext');
 
 export interface Message {
   id: string;
@@ -206,7 +209,7 @@ async function generateProjectStructure(
 
     return structure;
   } catch (error) {
-    console.warn(`Failed to read directory ${basePath}:`, error);
+    logger.warn(`Failed to read directory ${basePath}:`, error);
     return '';
   }
 }
@@ -266,7 +269,7 @@ async function collectFiles(
       }
     }
   } catch (error) {
-    console.warn(`Failed to collect files from ${basePath}:`, error);
+    logger.warn(`Failed to collect files from ${basePath}:`, error);
   }
 
   return collected;
@@ -344,7 +347,7 @@ export function useSimpleChatWithContext(options: UseChatOptions) {
       );
       setRecoderContext(contextPrompt);
     } catch (error) {
-      console.error('Failed to load .recoder/ context:', error);
+      logger.error('Failed to load .recoder/ context:', error);
       setRecoderContext('');
     }
   };
@@ -384,7 +387,7 @@ export function useSimpleChatWithContext(options: UseChatOptions) {
         dependencies,
       });
     } catch (error) {
-      console.error('Failed to load project context:', error);
+      logger.error('Failed to load project context:', error);
     }
   };
 
@@ -413,7 +416,7 @@ export function useSimpleChatWithContext(options: UseChatOptions) {
       scoredFiles.sort((a, b) => b.relevanceScore - a.relevanceScore);
       return scoredFiles.slice(0, maxContextFiles);
     } catch (error) {
-      console.error('Failed to load relevant files:', error);
+      logger.error('Failed to load relevant files:', error);
       return [];
     }
   };
@@ -508,7 +511,7 @@ export function useSimpleChatWithContext(options: UseChatOptions) {
           streamingTimeoutId = setTimeout(() => {
             const actionsInProgress = getActionsInProgress();
             if (actionsInProgress > 0) {
-              console.log(`[useSimpleChatWithContext] ${actionsInProgress} action(s) in progress, extending timeout...`);
+              logger.info(`[useSimpleChatWithContext] ${actionsInProgress} action(s) in progress, extending timeout...`);
               resetStreamingTimeout();
               return;
             }
@@ -564,7 +567,7 @@ export function useSimpleChatWithContext(options: UseChatOptions) {
     } catch (error: any) {
       if (error.name === 'AbortError') {
         const timeoutError = new Error('Request timed out. The response is taking too long. Please try a shorter message or simpler request.');
-        console.error('Chat timeout:', timeoutError);
+        logger.error('Chat timeout:', timeoutError);
         if (onError) {
           onError(timeoutError);
         }
@@ -577,7 +580,7 @@ export function useSimpleChatWithContext(options: UseChatOptions) {
           );
         });
       } else {
-        console.error('Chat error:', error);
+        logger.error('Chat error:', error);
         if (onError) {
           onError(error);
         }

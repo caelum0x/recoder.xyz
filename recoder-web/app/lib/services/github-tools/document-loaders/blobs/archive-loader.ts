@@ -9,11 +9,14 @@ import {
   replaceNullCharacters,
 } from "../types";
 import { executeRestRequest } from "../utils";
+import { createScopedLogger } from '~/utils/logger';
 import type {
   GitHubBlobMetadata,
   GitHubArchiveLoaderParams,
   GitHubArchiveLoaderOptions,
 } from "./types";
+
+const logger = createScopedLogger('ArchiveLoader');
 
 /**
  * Create a document loader that downloads and extracts a repository archive
@@ -87,7 +90,7 @@ export function createGitHubArchiveLoader(
     try {
       entries = await fs.readdir(dir, { withFileTypes: true });
     } catch (error) {
-      console.warn(`Failed to read directory ${dir}:`, error);
+      logger.warn(`Failed to read directory ${dir}:`, error);
       return;
     }
     for (const entry of entries) {
@@ -119,7 +122,7 @@ export function createGitHubArchiveLoader(
     for await (const file of walk(root)) {
       const stat = await fs.stat(file);
       if (stat.size > maxBlobSize) {
-        console.warn(
+        logger.warn(
           `Blob size is too large: ${stat.size} bytes, skipping: ${file}`
         );
         continue;
@@ -128,7 +131,7 @@ export function createGitHubArchiveLoader(
       const fileSha = computeSha(content);
       const relative = file.slice(root.length + 1);
       if (!isValidPath(relative)) {
-        console.warn(`Skipping potentially unsafe path: ${relative}`);
+        logger.warn(`Skipping potentially unsafe path: ${relative}`);
         continue;
       }
       yield { owner, repo, fileSha, path: relative };
@@ -143,7 +146,7 @@ export function createGitHubArchiveLoader(
 
     // Prevent path traversal attacks
     if (!fullPath.startsWith(normalize(root))) {
-      console.warn(`Path traversal attempt detected: ${metadata.path}`);
+      logger.warn(`Path traversal attempt detected: ${metadata.path}`);
       return null;
     }
 
@@ -154,7 +157,7 @@ export function createGitHubArchiveLoader(
       return null;
     }
     if (contentBytes.length > maxBlobSize) {
-      console.warn(
+      logger.warn(
         `Blob size is too large: ${contentBytes.length} bytes, skipping: ${metadata.path}`
       );
       return null;

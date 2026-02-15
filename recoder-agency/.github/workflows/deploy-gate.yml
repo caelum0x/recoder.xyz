@@ -75,3 +75,148 @@ jobs:
         run: pnpm -C apps/agency exec playwright test --project=chromium --grep @smoke
         env:
           CI: true
+
+  agency-smoke-required:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        browser:
+          - chromium-authenticated
+        spec:
+          - tests/e2e/logged-in/admin-playbook-bootstrap-smoke.spec.ts
+          - tests/e2e/logged-in/admin-transition-history-roundtrip.spec.ts
+          - tests/e2e/logged-in/admin-retry-panel-suggestions.spec.ts
+          - tests/e2e/logged-in/client-portal-review-smoke.spec.ts
+    env:
+      DATABASE_URL: ${{ secrets.AGENCY_STAGING_DATABASE_URL }}
+      PLAYWRIGHT_BASE_URL: ${{ secrets.PLAYWRIGHT_BASE_URL }}
+      PLAYWRIGHT_LOGIN_EMAIL: ${{ secrets.PLAYWRIGHT_LOGIN_EMAIL }}
+      PLAYWRIGHT_LOGIN_PASSWORD: ${{ secrets.PLAYWRIGHT_LOGIN_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@41ff72655975bd51cab0327fa583b6e92b6d3061 # v4.2.0
+      - name: Set node version to 24.x
+        uses: actions/setup-node@2028fbc5c25fe9cf00d9f06a71cc4710d4507903 # v6.0.0
+        with:
+          node-version: 24.x
+          cache: "pnpm"
+      - run: pnpm install
+      - name: Validate required Playwright secrets
+        run: |
+          if [ -z "${DATABASE_URL}" ]; then
+            echo "Missing secret: AGENCY_STAGING_DATABASE_URL"
+            exit 1
+          fi
+          if [ -z "${PLAYWRIGHT_BASE_URL}" ]; then
+            echo "Missing secret: PLAYWRIGHT_BASE_URL"
+            exit 1
+          fi
+          if [ -z "${PLAYWRIGHT_LOGIN_EMAIL}" ] || [ -z "${PLAYWRIGHT_LOGIN_PASSWORD}" ]; then
+            echo "Missing secret: PLAYWRIGHT_LOGIN_EMAIL or PLAYWRIGHT_LOGIN_PASSWORD"
+            exit 1
+          fi
+      - name: Install psql
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+      - name: Seed deterministic playbook bootstrap fixtures
+        run: |
+          psql "$DATABASE_URL" \
+            -v ON_ERROR_STOP=1 \
+            -v playwright_login_email="$PLAYWRIGHT_LOGIN_EMAIL" \
+            -f apps/agency/db/scripts/seed_playwright_playbook_smoke.sql
+      - name: Install Playwright browsers
+        run: pnpm --filter agency exec playwright install --with-deps
+      - name: Run required agency smoke spec
+        working-directory: apps/agency
+        run: pnpm exec playwright test --project="${{ matrix.browser }}" "${{ matrix.spec }}"
+      - name: Cleanup deterministic playbook bootstrap fixtures
+        if: always()
+        run: |
+          psql "$DATABASE_URL" \
+            -v ON_ERROR_STOP=1 \
+            -v playwright_login_email="$PLAYWRIGHT_LOGIN_EMAIL" \
+            -f apps/agency/db/scripts/cleanup_playwright_playbook_smoke.sql
+
+  agency-seeded-smoke-required:
+    runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: ${{ secrets.AGENCY_STAGING_DATABASE_URL }}
+      PLAYWRIGHT_BASE_URL: ${{ secrets.PLAYWRIGHT_BASE_URL }}
+      PLAYWRIGHT_LOGIN_EMAIL: ${{ secrets.PLAYWRIGHT_LOGIN_EMAIL }}
+      PLAYWRIGHT_LOGIN_PASSWORD: ${{ secrets.PLAYWRIGHT_LOGIN_PASSWORD }}
+      PLAYWRIGHT_CLIENT_SUPABASE_USER_ID: ${{ secrets.PLAYWRIGHT_CLIENT_SUPABASE_USER_ID }}
+      PLAYWRIGHT_SEEDED_PROJECT_ID: e2e_client_review_project
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@41ff72655975bd51cab0327fa583b6e92b6d3061 # v4.2.0
+      - name: Set node version to 24.x
+        uses: actions/setup-node@2028fbc5c25fe9cf00d9f06a71cc4710d4507903 # v6.0.0
+        with:
+          node-version: 24.x
+          cache: "pnpm"
+      - run: pnpm install
+      - name: Validate required seeded-smoke secrets
+        run: |
+          if [ -z "${DATABASE_URL}" ]; then
+            echo "Missing secret: AGENCY_STAGING_DATABASE_URL"
+            exit 1
+          fi
+          if [ -z "${PLAYWRIGHT_BASE_URL}" ]; then
+            echo "Missing secret: PLAYWRIGHT_BASE_URL"
+            exit 1
+          fi
+          if [ -z "${PLAYWRIGHT_LOGIN_EMAIL}" ] || [ -z "${PLAYWRIGHT_LOGIN_PASSWORD}" ]; then
+            echo "Missing secret: PLAYWRIGHT_LOGIN_EMAIL or PLAYWRIGHT_LOGIN_PASSWORD"
+            exit 1
+          fi
+          if [ -z "${PLAYWRIGHT_CLIENT_SUPABASE_USER_ID}" ]; then
+            echo "Missing secret: PLAYWRIGHT_CLIENT_SUPABASE_USER_ID"
+            exit 1
+          fi
+      - name: Install psql
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+      - name: Seed deterministic client review project
+        run: |
+          psql "$DATABASE_URL" \
+            -v ON_ERROR_STOP=1 \
+            -v client_supabase_user_id="$PLAYWRIGHT_CLIENT_SUPABASE_USER_ID" \
+            -v project_id="$PLAYWRIGHT_SEEDED_PROJECT_ID" \
+            -f apps/agency/db/scripts/seed_playwright_client_review_project.sql
+      - name: Install Playwright browsers
+        run: pnpm --filter agency exec playwright install --with-deps chromium
+      - name: Run seeded agency smoke
+        working-directory: apps/agency
+        run: pnpm exec playwright test --project=chromium-authenticated tests/e2e/logged-in/client-portal-seeded-transition.spec.ts
+
+  post-gate-healthcheck:
+    runs-on: ubuntu-latest
+    needs:
+      - typecheck-and-tests
+      - db-guardrails
+      - smoke-tests
+      - agency-smoke-required
+      - agency-seeded-smoke-required
+    env:
+      PLAYWRIGHT_BASE_URL: ${{ secrets.PLAYWRIGHT_BASE_URL }}
+    steps:
+      - name: Validate healthcheck target URL
+        run: |
+          if [ -z "${PLAYWRIGHT_BASE_URL}" ]; then
+            echo "Missing secret: PLAYWRIGHT_BASE_URL"
+            exit 1
+          fi
+      - name: Probe app health endpoint
+        run: |
+          HEALTH_URL="${PLAYWRIGHT_BASE_URL%/}/api/health"
+          BODY="$(mktemp)"
+          STATUS="$(curl -sS -o "$BODY" -w "%{http_code}" "$HEALTH_URL")"
+          if [ "$STATUS" -ne 200 ]; then
+            echo "Healthcheck failed with HTTP $STATUS at $HEALTH_URL"
+            cat "$BODY"
+            exit 1
+          fi
+          if ! grep -q '"status":"ok"' "$BODY"; then
+            echo "Healthcheck response is missing expected status payload."
+            cat "$BODY"
+            exit 1
+          fi

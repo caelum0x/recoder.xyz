@@ -3,7 +3,7 @@ import type { TeamWithSubscription } from "@/services/teams";
 /**
  * Build AI Gateway headers for billing attribution.
  * This function creates headers required for AI Gateway requests,
- * including Stripe customer ID for usage tracking.
+ * including Polar customer ID for usage tracking.
  */
 export function buildAiGatewayHeaders(
 	team: TeamWithSubscription | null,
@@ -14,14 +14,12 @@ export function buildAiGatewayHeaders(
 		"x-title": process.env.AI_GATEWAY_X_TITLE ?? "Recoder Agency",
 	};
 
-	const stripeCustomerId = team?.activeCustomerId ?? undefined;
-	if (stripeCustomerId !== undefined) {
-		headers["stripe-customer-id"] = stripeCustomerId;
-		headers["stripe-restricted-access-key"] =
-			process.env.STRIPE_AI_GATEWAY_RESTRICTED_ACCESS_KEY ?? "";
+	const polarCustomerId = team?.activeCustomerId ?? undefined;
+	if (polarCustomerId !== undefined) {
+		headers["polar-customer-id"] = polarCustomerId;
 	} else if (team?.plan === "pro" || team?.plan === "team") {
 		console.warn(
-			`Stripe customer ID not found for vector store ingest (team: ${team?.id})`,
+			`Polar customer ID not found for vector store ingest (team: ${team?.id})`,
 		);
 	}
 

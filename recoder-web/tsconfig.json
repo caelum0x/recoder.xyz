@@ -16,7 +16,9 @@
     "forceConsistentCasingInFileNames": true,
     "baseUrl": ".",
     "paths": {
-      "~/*": ["./app/*"]
+      "~/*": ["./app/*"],
+      "@recoder/shared": ["../shared/src/index.ts"],
+      "@recoder/shared/*": ["../shared/src/*"]
     },
 
     // vite takes care of building everything, not tsc
@@ -32,6 +34,7 @@
   ],
   "exclude": [
     "starters/**/*",
+    "scaffold/**/*",
     "node_modules",
     "vscode-components/**/*",
     "tests/**/*",

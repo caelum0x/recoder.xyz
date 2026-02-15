@@ -55,7 +55,7 @@ export async function DELETE(
       return NextResponse.json(
         { 
           error: 'Failed to revoke CLI session',
-          message: error.message || 'Backend request failed',
+          message: 'Backend request failed',
         },
         { status: response.status }
       );
@@ -71,7 +71,7 @@ export async function DELETE(
     return NextResponse.json(
       { 
         error: 'Internal server error',
-        message: error instanceof Error ? error.message : 'Failed to revoke CLI session',
+        message: 'Failed to revoke CLI session',
       },
       { status: 500 }
     );

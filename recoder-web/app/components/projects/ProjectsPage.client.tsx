@@ -2,6 +2,9 @@ import React, { useState, useMemo, useEffect } from 'react';
 import type { Project } from '~/lib/.server/db/projects-db';
 import { useAuth } from '~/lib/contexts/AuthContext';
 import { ProjectTemplateSelector, type ProjectTemplate } from './ProjectTemplateSelector';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('ProjectsPage');
 
 interface ProjectsPageProps {
   initialProjects: Project[];
@@ -116,7 +119,7 @@ export function ProjectsPage({ initialProjects, error, databaseConfigured = true
         window.location.href = `/?projectId=${result.project.id}${starterPath ? `&starter=${starterPath}` : ''}`;
       }
     } catch (err) {
-      console.error('Error creating project:', err);
+      logger.error('Error creating project:', err);
       alert(err instanceof Error ? err.message : 'Failed to create project');
     } finally {
       setIsLoading(false);
@@ -158,7 +161,7 @@ export function ProjectsPage({ initialProjects, error, databaseConfigured = true
       
       setProjects(prev => prev.filter(p => p.id !== projectId));
     } catch (err) {
-      console.error('Error deleting project:', err);
+      logger.error('Error deleting project:', err);
       alert(err instanceof Error ? err.message : 'Failed to delete project');
     }
   };
@@ -173,7 +176,7 @@ export function ProjectsPage({ initialProjects, error, databaseConfigured = true
         setProjects(data.projects);
       }
     } catch (err) {
-      console.error('Error refreshing projects:', err);
+      logger.error('Error refreshing projects:', err);
     } finally {
       setIsLoading(false);
     }
@@ -188,29 +191,31 @@ export function ProjectsPage({ initialProjects, error, databaseConfigured = true
     if (!userId) return;
 
     try {
-      const response = await fetch('/api/projects', {
+      const response = await fetch('/api/projects/copy', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          name: `${project.name} (Copy)`,
-          description: project.description,
-          type: project.type,
-          framework: project.framework,
-          language: project.language,
-          isPrivate: project.isPrivate,
-          userId,
+          sourceProjectId: project.id,
+          newProjectName: `${project.name} (Copy)`,
+          includeGit: false,
+          includeGitRemotes: false,
+          includeTriggers: false,
+          includeEnvFiles: false,
+          includeSecrets: false,
+          includeDeployConfig: false,
+          includeDomains: false,
         }),
       });
 
-      const result = await response.json() as { error?: string };
+      const result = await response.json() as { error?: string; success?: boolean };
 
-      if (!response.ok) {
+      if (!response.ok || !result.success) {
         throw new Error(result.error || 'Failed to duplicate project');
       }
 
       await refreshProjects(userId);
     } catch (err) {
-      console.error('Error duplicating project:', err);
+      logger.error('Error duplicating project:', err);
       alert(err instanceof Error ? err.message : 'Failed to duplicate project');
     }
   };

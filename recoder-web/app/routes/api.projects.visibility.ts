@@ -6,6 +6,9 @@
 import { type ActionFunctionArgs, json } from '@remix-run/cloudflare';
 import { ProjectsDB } from '~/lib/.server/db/projects-db';
 import { verifySession } from '~/lib/auth/session.server';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('ProjectVisibility');
 
 interface UpdateVisibilityRequest {
   projectId: string;
@@ -86,7 +89,7 @@ export async function action({ request, context }: ActionFunctionArgs) {
       return json({ success: false, error: 'Failed to update project visibility' }, { status: 500 });
     }
 
-    console.log(`[Projects] Visibility updated for project ${projectId}: ${visibility}`);
+    logger.info(`[Projects] Visibility updated for project ${projectId}: ${visibility}`);
 
     return json({
       success: true,
@@ -94,10 +97,10 @@ export async function action({ request, context }: ActionFunctionArgs) {
       visibility,
     });
   } catch (error) {
-    console.error('[Projects] Visibility update error:', error);
+    logger.error('[Projects] Visibility update error:', error);
     return json({
       success: false,
-      error: error instanceof Error ? error.message : 'Internal server error',
+      error: 'Internal server error',
     }, { status: 500 });
   }
 }

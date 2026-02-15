@@ -42,7 +42,7 @@ export async function loader({ context }: LoaderFunctionArgs) {
       serverCount: 0,
       activeCount: 0,
       servers: [],
-      message: error.message || 'Failed to check MCP status',
+      message: 'Failed to check MCP status',
       info: 'MCP servers should be configured in the database. Check if mcp_servers table exists.',
     }, { status: 500 });
   }

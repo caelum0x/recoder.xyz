@@ -1,6 +1,8 @@
 import { memo, useCallback, useState, useRef, useEffect } from 'react';
+import { useStore } from '@nanostores/react';
 import { IconButton } from '~/components/ui/IconButton';
 import { classNames } from '~/utils/classNames';
+import { terminalConnection, type ConnectionStatus } from '~/lib/stores/connection';
 
 export interface TerminalTab {
   id: string;
@@ -20,6 +22,14 @@ interface TerminalTabsProps {
   className?: string;
 }
 
+const STATUS_CONFIG: Record<ConnectionStatus, { color: string; label: string; pulse?: boolean }> = {
+  connected: { color: 'bg-green-500', label: 'Connected' },
+  connecting: { color: 'bg-yellow-500', label: 'Connecting...', pulse: true },
+  reconnecting: { color: 'bg-yellow-500', label: 'Reconnecting...', pulse: true },
+  disconnected: { color: 'bg-gray-500', label: 'Disconnected' },
+  error: { color: 'bg-red-500', label: 'Connection error' },
+};
+
 export const TerminalTabs = memo(({
   tabs,
   activeIndex,
@@ -30,6 +40,8 @@ export const TerminalTabs = memo(({
   onRename,
   className,
 }: TerminalTabsProps) => {
+  const connection = useStore(terminalConnection);
+  const statusConfig = STATUS_CONFIG[connection.status];
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [editValue, setEditValue] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
@@ -72,6 +84,21 @@ export const TerminalTabs = memo(({
 
   return (
     <div className={classNames('flex items-center gap-1', className)}>
+      {/* Connection status dot - only show when NOT connected */}
+      {connection.status !== 'connected' && (
+        <div
+          className="flex-shrink-0 mr-0.5"
+          title={`Terminal: ${statusConfig.label}${connection.reconnectAttempt ? ` (attempt ${connection.reconnectAttempt})` : ''}`}
+        >
+          <span
+            className={classNames(
+              'inline-block w-2 h-2 rounded-full',
+              statusConfig.color,
+              statusConfig.pulse ? 'animate-pulse' : '',
+            )}
+          />
+        </div>
+      )}
       {tabs.map((tab, index) => {
         const isActive = index === activeIndex;
         const isEditing = editingIndex === index;

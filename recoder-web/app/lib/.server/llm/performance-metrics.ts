@@ -1,3 +1,5 @@
+import { createScopedLogger } from '~/utils/logger';
+const logger = createScopedLogger('PerformanceMetrics');
 /**
  * Performance Metrics Tracker
  * Tracks system performance, costs, and optimization effectiveness
@@ -43,7 +45,7 @@ class PerformanceMetricsTracker {
 
     // Log slow operations
     if (metric.duration > 5000) {
-      console.warn(`⚠️ Slow ${metric.metricType} operation: ${metric.duration}ms`, metric.details);
+      logger.warn(`⚠️ Slow ${metric.metricType} operation: ${metric.duration}ms`, metric.details);
     }
   }
 

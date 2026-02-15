@@ -1,5 +1,8 @@
 import { type ActionFunctionArgs } from '@remix-run/cloudflare';
 import { Octokit } from '@octokit/rest';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('GitHubPull');
 
 /**
  * API endpoint to pull latest changes from GitHub repository
@@ -9,6 +12,12 @@ import { Octokit } from '@octokit/rest';
 export async function action({ request }: ActionFunctionArgs) {
   if (request.method !== 'POST') {
     return new Response('Method not allowed', { status: 405 });
+  }
+
+  const { verifySession } = await import('~/lib/auth/session.server');
+  const session = await verifySession(request);
+  if (!session?.user) {
+    return new Response(JSON.stringify({ error: 'Authentication required' }), { status: 401, headers: { 'Content-Type': 'application/json' } });
   }
 
   try {
@@ -27,7 +36,7 @@ export async function action({ request }: ActionFunctionArgs) {
       );
     }
 
-    console.log('📥 [github-pull] Pulling from', `${owner}/${repo}:${branch}`);
+    logger.info('📥 [github-pull] Pulling from', `${owner}/${repo}:${branch}`);
 
     const octokit = new Octokit({ auth: accessToken });
 
@@ -66,12 +75,12 @@ export async function action({ request }: ActionFunctionArgs) {
           const content = Buffer.from(blobData.content, 'base64').toString('utf-8');
           files[`/${item.path}`] = content;
         } catch (error) {
-          console.warn(`⚠️ Failed to fetch ${item.path}:`, error);
+          logger.warn(`⚠️ Failed to fetch ${item.path}:`, error);
         }
       }
     }
 
-    console.log('✅ [github-pull] Pulled', Object.keys(files).length, 'files');
+    logger.info('✅ [github-pull] Pulled', Object.keys(files).length, 'files');
 
     return new Response(
       JSON.stringify({
@@ -84,11 +93,10 @@ export async function action({ request }: ActionFunctionArgs) {
       { status: 200, headers: { 'Content-Type': 'application/json' } }
     );
   } catch (error: any) {
-    console.error('❌ [github-pull] Failed:', error);
+    logger.error('❌ [github-pull] Failed:', error);
     return new Response(
       JSON.stringify({
-        error: error.message || 'Failed to pull from GitHub',
-        details: error.response?.data || error.toString(),
+        error: 'Failed to pull from GitHub',
       }),
       { status: 500, headers: { 'Content-Type': 'application/json' } }
     );

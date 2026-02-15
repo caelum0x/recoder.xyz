@@ -76,7 +76,7 @@ export function getMonthlyBillingCycle(
 	return { start: cycleStart, end: cycleEnd };
 }
 
-// see: https://docs.stripe.com/billing/subscriptions/billing-cycle
+// Billing date helper — ensures day-of-month clamping for short months
 function createBillingDate(
 	year: number,
 	month: number,

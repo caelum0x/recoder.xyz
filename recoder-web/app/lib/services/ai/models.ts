@@ -5,6 +5,8 @@
  */
 
 import type { AIModel, AIProvider, ProviderOptions } from './types';
+import { createScopedLogger } from '~/utils/logger';
+const logger = createScopedLogger('AIModels');
 
 // ============================================================================
 // Model Definitions
@@ -324,7 +326,7 @@ export function selectModel(
     // Check access
     if (!canAccessModel(userPlan, modelToUse)) {
       const requestedModel = getModelById(modelToUse);
-      console.warn(
+      logger.warn(
         `Model ${requestedModel?.name || modelToUse} not accessible, using default`
       );
       modelToUse = getDefaultModelForPlan(userPlan).id;

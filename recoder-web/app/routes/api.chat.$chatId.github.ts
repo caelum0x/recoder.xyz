@@ -1,6 +1,9 @@
 import { json, type LoaderFunctionArgs, type ActionFunctionArgs } from '@remix-run/cloudflare';
 import { verifySession } from '~/lib/auth/session.server';
 import { neon } from '@neondatabase/serverless';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('ChatGitHub');
 
 function getDb(context: any) {
   const dbUrl = context?.cloudflare?.env?.DATABASE_URL || process.env.DATABASE_URL;
@@ -177,8 +180,8 @@ export async function action({ params, request, context }: ActionFunctionArgs) {
 
       return json({ success: true, commit: newCommit.sha });
     } catch (error: any) {
-      console.error('GitHub push error:', error);
-      return json({ error: error.message || 'Failed to push to GitHub' }, { status: 500 });
+      logger.error('GitHub push error:', error);
+      return json({ error: 'Failed to push to GitHub' }, { status: 500 });
     }
   }
 
@@ -242,8 +245,8 @@ export async function action({ params, request, context }: ActionFunctionArgs) {
 
       return json({ success: true, files });
     } catch (error: any) {
-      console.error('GitHub clone error:', error);
-      return json({ error: error.message || 'Failed to clone repository' }, { status: 500 });
+      logger.error('GitHub clone error:', error);
+      return json({ error: 'Failed to clone repository' }, { status: 500 });
     }
   }
 
@@ -316,8 +319,8 @@ export async function action({ params, request, context }: ActionFunctionArgs) {
 
       return json({ success: true, files });
     } catch (error: any) {
-      console.error('GitHub pull error:', error);
-      return json({ error: error.message || 'Failed to pull from GitHub' }, { status: 500 });
+      logger.error('GitHub pull error:', error);
+      return json({ error: 'Failed to pull from GitHub' }, { status: 500 });
     }
   }
 

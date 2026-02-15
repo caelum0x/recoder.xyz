@@ -24,6 +24,10 @@
  */
 
 import { type ActionFunctionArgs, json } from '@remix-run/cloudflare';
+import { DockerHttpError, createDockerProxyHeaders, dockerFetchJson, getDockerBackendUrl } from '~/lib/http/docker-server';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('InstallPackages');
 
 // Package manager configurations
 const PACKAGE_MANAGERS = {
@@ -178,20 +182,19 @@ async function detectPackageManager(
     // Check which lock file exists
     const checkCommand = `ls -la ${workingDir} 2>/dev/null | grep -E "(bun\\.lockb|pnpm-lock\\.yaml|yarn\\.lock|package-lock\\.json)" | head -1`;
 
-    const response = await fetch(`${dockerBackendUrl}/api/exec/${projectId}`, {
-      method: 'POST',
+    const result = await dockerFetchJson<{ output?: string }>(
+      `${dockerBackendUrl}/api/exec/${projectId}`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ command: checkCommand, cwd: workingDir }),
+      },
       headers,
-      body: JSON.stringify({ command: checkCommand, cwd: workingDir }),
-    });
+    );
+    const output = result.output || '';
 
-    if (response.ok) {
-      const result = (await response.json()) as { output?: string };
-      const output = result.output || '';
-
-      for (const { file, manager } of lockFiles) {
-        if (output.includes(file)) {
-          return manager;
-        }
+    for (const { file, manager } of lockFiles) {
+      if (output.includes(file)) {
+        return manager;
       }
     }
   } catch {
@@ -210,6 +213,15 @@ export async function action({ request }: ActionFunctionArgs) {
     return json<InstallPackagesResponse>(
       { success: false, error: 'Method not allowed', packageManager: 'npm' },
       { status: 405 },
+    );
+  }
+
+  const { verifySession } = await import('~/lib/auth/session.server');
+  const session = await verifySession(request);
+  if (!session?.user) {
+    return json<InstallPackagesResponse>(
+      { success: false, error: 'Authentication required', packageManager: 'npm' },
+      { status: 401 },
     );
   }
 
@@ -271,22 +283,8 @@ export async function action({ request }: ActionFunctionArgs) {
   // Prevent directory traversal
   sanitizedWorkingDir = sanitizedWorkingDir.replace(/\.{2,}/g, '.');
 
-  const dockerBackendUrl = process.env.DOCKER_BACKEND_URL || 'http://localhost:3100';
-
-  // Forward auth headers from the request
-  const authHeader = request.headers.get('Authorization');
-  const cookie = request.headers.get('Cookie');
-
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-  };
-
-  if (authHeader) {
-    headers['Authorization'] = authHeader;
-  }
-  if (cookie) {
-    headers['Cookie'] = cookie;
-  }
+  const dockerBackendUrl = getDockerBackendUrl();
+  const headers = createDockerProxyHeaders(request);
 
   // Detect or use specified package manager
   let packageManager: PackageManager = requestedPM || 'npm';
@@ -294,13 +292,13 @@ export async function action({ request }: ActionFunctionArgs) {
   if (!requestedPM) {
     // Auto-detect based on lock files
     packageManager = await detectPackageManager(projectId, sanitizedWorkingDir, dockerBackendUrl, headers);
-    console.log(`[install-packages] Auto-detected package manager: ${packageManager}`);
+    logger.info(`[install-packages] Auto-detected package manager: ${packageManager}`);
   }
 
   // Build the install command
   const command = buildInstallCommand(validation.packages, packageManager, { dev, legacyPeerDeps });
 
-  console.log(`[install-packages] Installing in project ${projectId}:`, {
+  logger.info(`[install-packages] Installing in project ${projectId}:`, {
     packages: validation.packages,
     packageManager,
     dev,
@@ -310,40 +308,17 @@ export async function action({ request }: ActionFunctionArgs) {
 
   try {
     // Execute the install command via docker-backend
-    const response = await fetch(`${dockerBackendUrl}/api/exec/${projectId}`, {
-      method: 'POST',
+    const result = await dockerFetchJson<{ output?: string; success?: boolean; error?: string; exitCode?: number }>(
+      `${dockerBackendUrl}/api/exec/${projectId}`,
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          command,
+          cwd: sanitizedWorkingDir,
+        }),
+      },
       headers,
-      body: JSON.stringify({
-        command,
-        cwd: sanitizedWorkingDir,
-      }),
-    });
-
-    if (!response.ok) {
-      const errorData = (await response.json().catch(() => ({ error: 'Unknown error' }))) as { error?: string };
-
-      // Handle specific error cases
-      if (response.status === 404) {
-        return json<InstallPackagesResponse>(
-          { success: false, error: 'Container not found. Please ensure your project is running.', packageManager },
-          { status: 404 },
-        );
-      }
-
-      if (response.status === 401 || response.status === 403) {
-        return json<InstallPackagesResponse>(
-          { success: false, error: 'Authentication required', packageManager },
-          { status: response.status },
-        );
-      }
-
-      return json<InstallPackagesResponse>(
-        { success: false, error: errorData.error || `Failed to execute command (${response.status})`, packageManager },
-        { status: response.status },
-      );
-    }
-
-    const result = (await response.json()) as { output?: string; success?: boolean; error?: string; exitCode?: number };
+    );
 
     // Check for non-zero exit code
     if (result.exitCode && result.exitCode !== 0) {
@@ -380,7 +355,28 @@ export async function action({ request }: ActionFunctionArgs) {
       command,
     });
   } catch (error) {
-    console.error('[install-packages] Error:', error);
+    logger.error('[install-packages] Error:', error);
+
+    if (error instanceof DockerHttpError) {
+      if (error.status === 404) {
+        return json<InstallPackagesResponse>(
+          { success: false, error: 'Container not found. Please ensure your project is running.', packageManager },
+          { status: 404 },
+        );
+      }
+
+      if (error.status === 401 || error.status === 403) {
+        return json<InstallPackagesResponse>(
+          { success: false, error: 'Authentication required', packageManager },
+          { status: error.status },
+        );
+      }
+
+      return json<InstallPackagesResponse>(
+        { success: false, error: `Failed to execute command (${error.status})`, packageManager },
+        { status: error.status },
+      );
+    }
 
     // Handle network errors
     if (error instanceof TypeError && error.message.includes('fetch')) {
@@ -391,7 +387,7 @@ export async function action({ request }: ActionFunctionArgs) {
     }
 
     return json<InstallPackagesResponse>(
-      { success: false, error: error instanceof Error ? error.message : 'Unknown error occurred', packageManager },
+      { success: false, error: 'Package installation failed', packageManager },
       { status: 500 },
     );
   }

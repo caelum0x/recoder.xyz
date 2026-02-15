@@ -6,6 +6,8 @@
 
 import { PaddleClient, createPaddleClient, PADDLE_PLANS } from './paddle-integration';
 import { DodoPayClient, createDodoPayClient, DODOPAY_PLANS } from './dodopay-integration';
+import { createScopedLogger } from '~/utils/logger';
+const logger = createScopedLogger('UnifiedPayment');
 
 export type PaymentProvider = 'paddle' | 'dodopay';
 
@@ -67,7 +69,7 @@ export class UnifiedPaymentService {
   }): Promise<{ checkoutUrl: string; provider: PaymentProvider }> {
     const provider = this.selectProvider(params.config || {});
 
-    console.log(`Creating checkout with ${provider} for plan ${params.planId}`);
+    logger.info(`Creating checkout with ${provider} for plan ${params.planId}`);
 
     if (provider === 'paddle') {
       const session = await this.paddleClient.createCheckoutSession({

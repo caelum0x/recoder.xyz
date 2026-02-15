@@ -2,16 +2,28 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { PromptTaskQueueStore } from './prompt-task-queue.js';
+import type { PromptTaskQueueStore as PromptTaskQueueStoreType } from './prompt-task-queue.js';
 
 const tempDirs: string[] = [];
+let PromptTaskQueueStoreCtor: typeof PromptTaskQueueStoreType | null = null;
+let sqliteAvailable = true;
 
-function createStore(): { store: PromptTaskQueueStore; dir: string } {
+try {
+  ({ PromptTaskQueueStore: PromptTaskQueueStoreCtor } = await import('./prompt-task-queue.js'));
+} catch (error) {
+  const message = String((error as Error)?.message ?? error);
+  sqliteAvailable = !message.includes('better_sqlite3.node');
+}
+
+function createStore(): { store: PromptTaskQueueStoreType; dir: string } {
+  if (!PromptTaskQueueStoreCtor) {
+    throw new Error('PromptTaskQueueStore unavailable: better-sqlite3 native binding missing');
+  }
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'recoder-prompt-queue-'));
   tempDirs.push(dir);
   const dbPath = path.join(dir, 'queue.sqlite');
   return {
-    store: new PromptTaskQueueStore(dbPath),
+    store: new PromptTaskQueueStoreCtor(dbPath),
     dir,
   };
 }
@@ -22,7 +34,9 @@ afterEach(() => {
   }
 });
 
-describe('PromptTaskQueueStore', () => {
+const suite = sqliteAvailable ? describe : describe.skip;
+
+suite('PromptTaskQueueStore', () => {
   it('supports enqueue, claim, reschedule, and ack', async () => {
     const { store } = createStore();
     const now = Date.now();

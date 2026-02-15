@@ -23,6 +23,9 @@ import { Storage } from '../config/storage.js';
 import { AuthType } from '../core/contentGenerator.js';
 import { FatalAuthenticationError, getErrorMessage } from '../utils/errors.js';
 import { UserAccountManager } from '../utils/userAccountManager.js';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('CodeAssistOAuth2');
 
 const userAccountManager = new UserAccountManager();
 
@@ -98,7 +101,7 @@ async function initOauthClient(
         // Non-fatal, continue with existing auth.
       }
     }
-    console.log('Loaded cached credentials.');
+    logger.info('Loaded cached credentials.');
     return client;
   }
 
@@ -107,13 +110,13 @@ async function initOauthClient(
   // the identity of the user logged into Cloud Shell.
   if (authType === AuthType.CLOUD_SHELL) {
     try {
-      console.log("Attempting to authenticate via Cloud Shell VM's ADC.");
+      logger.info("Attempting to authenticate via Cloud Shell VM's ADC.");
       const computeClient = new Compute({
         // We can leave this empty, since the metadata server will provide
         // the service account email.
       });
       await computeClient.getAccessToken();
-      console.log('Authentication successful.');
+      logger.info('Authentication successful.');
 
       // Do not cache creds in this case; note that Compute client will handle its own refresh
       return computeClient;
@@ -132,7 +135,7 @@ async function initOauthClient(
     for (let i = 0; !success && i < maxRetries; i++) {
       success = await authWithUserCode(client);
       if (!success) {
-        console.error(
+        logger.error(
           '\nFailed to authenticate with user code.',
           i === maxRetries - 1 ? '' : 'Retrying...\n',
         );
@@ -146,7 +149,7 @@ async function initOauthClient(
   } else {
     const webLogin = await authWithWeb(client);
 
-    console.log(
+    logger.info(
       `\n\nCode Assist login required.\n` +
         `Attempting to open authentication page in your browser.\n` +
         `Otherwise navigate to:\n\n${webLogin.authUrl}\n\n`,
@@ -162,20 +165,20 @@ async function initOauthClient(
       // in a minimal Docker container), it will emit an unhandled 'error' event,
       // causing the entire Node.js process to crash.
       childProcess.on('error', (_) => {
-        console.error(
+        logger.error(
           'Failed to open browser automatically. Please try running again with NO_BROWSER=true set.',
         );
         throw new FatalAuthenticationError('Failed to open browser.');
       });
     } catch (err) {
-      console.error(
+      logger.error(
         'An unexpected error occurred while trying to open the browser:',
         err,
         '\nPlease try running again with NO_BROWSER=true set.',
       );
       throw new FatalAuthenticationError('Failed to open browser.');
     }
-    console.log('Waiting for authentication...');
+    logger.info('Waiting for authentication...');
 
     await webLogin.loginCompletePromise;
   }
@@ -205,10 +208,10 @@ async function authWithUserCode(client: OAuth2Client): Promise<boolean> {
     code_challenge: codeVerifier.codeChallenge,
     state,
   });
-  console.log('Please visit the following URL to authorize the application:');
-  console.log('');
-  console.log(authUrl);
-  console.log('');
+  logger.info('Please visit the following URL to authorize the application:');
+  logger.info('');
+  logger.info(authUrl);
+  logger.info('');
 
   const code = await new Promise<string>((resolve) => {
     const rl = readline.createInterface({
@@ -222,7 +225,7 @@ async function authWithUserCode(client: OAuth2Client): Promise<boolean> {
   });
 
   if (!code) {
-    console.error('Authorization code is required.');
+    logger.error('Authorization code is required.');
     return false;
   }
 
@@ -285,7 +288,7 @@ async function authWithWeb(client: OAuth2Client): Promise<OauthWebLogin> {
           try {
             await fetchAndCacheUserInfo(client);
           } catch (error) {
-            console.error(
+            logger.error(
               'Failed to retrieve Google Account ID during authentication:',
               error,
             );
@@ -409,10 +412,10 @@ export async function clearCachedCredentialFile() {
 
       await clearQwenCredentials();
     } catch (qwenError) {
-      console.debug('Could not clear Qwen credentials:', qwenError);
+      logger.debug('Could not clear Qwen credentials:', qwenError);
     }
   } catch (e) {
-    console.error('Failed to clear cached credentials:', e);
+    logger.error('Failed to clear cached credentials:', e);
   }
 }
 
@@ -433,7 +436,7 @@ async function fetchAndCacheUserInfo(client: OAuth2Client): Promise<void> {
     );
 
     if (!response.ok) {
-      console.error(
+      logger.error(
         'Failed to fetch user info:',
         response.status,
         response.statusText,
@@ -446,7 +449,7 @@ async function fetchAndCacheUserInfo(client: OAuth2Client): Promise<void> {
       await userAccountManager.cacheGoogleAccount(userInfo.email);
     }
   } catch (error) {
-    console.error('Error retrieving user info:', error);
+    logger.error('Error retrieving user info:', error);
   }
 }
 

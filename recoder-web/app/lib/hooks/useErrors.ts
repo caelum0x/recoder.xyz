@@ -15,6 +15,8 @@ import {
   type ErrorsResponse,
 } from '~/lib/stores/errors';
 import { dockerGet } from '~/lib/services/docker-api';
+import { createScopedLogger } from '~/utils/logger';
+const logger = createScopedLogger('ErrorsHook');
 
 interface UseErrorsResult {
   /** Current errors from store */
@@ -56,7 +58,7 @@ export async function fetchProjectErrors(projectId: string): Promise<ErrorsRespo
     setErrors(data);
     return data;
   } catch (err: any) {
-    console.error('[fetchProjectErrors] Error:', err.message);
+    logger.error('[fetchProjectErrors] Error:', err.message);
     return null;
   }
 }

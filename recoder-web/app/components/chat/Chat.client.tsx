@@ -1,10 +1,14 @@
 import { useStore } from '@nanostores/react';
 import { useAnimate } from 'framer-motion';
 import { lazy, memo, Suspense, useCallback, useEffect, useRef, useState } from 'react';
+import { flushSync } from 'react-dom';
 import { cssTransition, toast, ToastContainer } from 'react-toastify';
 import { useLoaderData } from '@remix-run/react';
 import { useMessageParser, usePromptEnhancer, useShortcuts, useSnapScroll, useContextPaths } from '~/lib/hooks';
 import { useSimpleChat, type Message } from '~/lib/hooks/useSimpleChat';
+import { useAgentSession } from '~/lib/hooks/useAgentSession';
+import { useChatDraft } from '~/lib/hooks/useChatDraft';
+import { trackAITokenUsage, initializeUsageTracking } from '~/lib/services/billing/usage-billing';
 import { useKeyboardShortcuts, COMMON_SHORTCUTS } from '~/lib/hooks/useKeyboardShortcuts';
 import { useCommandPalette } from '~/lib/hooks/useCommandPalette';
 import { useEditIntent, getIntentSummary, intentRequiresCodeChanges } from '~/lib/hooks/useEditIntent';
@@ -13,7 +17,8 @@ import { chatStore } from '~/lib/stores/chat';
 import { workbenchStore } from '~/lib/stores/workbench';
 import { getToolsForAI, initCustomTools } from '~/lib/stores/custom-tools';
 import { currentMode } from '~/lib/stores/mode';
-import { currentChatMode } from '~/lib/stores/chat-mode';
+import { currentChatMode, type ChatMode } from '~/lib/stores/chat-mode';
+import { autoSelectProfileForMode, selectErrorFixProfile, activeProfileModelStore } from '~/lib/stores/model-profiles';
 import { startHealthCheckPolling, stopHealthCheckPolling } from '~/lib/stores/connection';
 import { inferenceParamsStore } from '~/lib/stores/inference-params';
 import { preferencesStore } from '~/lib/stores/settings';
@@ -21,8 +26,9 @@ import { fileModificationsToHTML } from '~/utils/diff';
 import { cubicEasingFn } from '~/utils/easings';
 import { createScopedLogger, renderLogger } from '~/utils/logger';
 import { showSmartError } from '~/lib/errors/toast-error';
+import { projectContextCache } from '~/lib/services/project-context-cache';
 import { BaseChat } from './BaseChat';
-// import { QuickActions } from './QuickActions'; // Removed - orange lightning button
+import { QuickActions } from './QuickActions';
 import { CloneUrlModal } from './CloneUrlModal';
 import { commandPaletteOpen } from '~/lib/stores/command-palette';
 
@@ -48,7 +54,7 @@ const toastAnimation = cssTransition({
   exit: 'animated fadeOutRight',
 });
 
-const logger = createScopedLogger('Chat');
+const logger = createScopedLogger('ChatClient');
 
 export function Chat() {
   renderLogger.trace('Chat');
@@ -109,6 +115,11 @@ interface ChatProps {
 export const ChatImpl = memo(({ chatId, projectId, projectName, projectFramework, projectTemplateId, initialMessages, storeMessageHistory }: ChatProps) => {
   useShortcuts();
 
+  // Initialize usage tracking on mount
+  useEffect(() => {
+    initializeUsageTracking();
+  }, []);
+
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const [chatStarted, setChatStarted] = useState(initialMessages.length > 0);
@@ -145,6 +156,21 @@ export const ChatImpl = memo(({ chatId, projectId, projectName, projectFramework
   // Chat Mode (build, ask, agent)
   const chatMode = useStore(currentChatMode);
 
+  // Agent session (for agent mode)
+  const { startAgent, isActive: isAgentActive } = useAgentSession();
+
+  // Auto-select model profile when chat mode changes
+  const prevChatModeRef = useRef<ChatMode>(chatMode);
+  useEffect(() => {
+    if (chatMode !== prevChatModeRef.current) {
+      prevChatModeRef.current = chatMode;
+      autoSelectProfileForMode(chatMode);
+    }
+  }, [chatMode]);
+
+  // Sync model selection from profile store
+  const profileModel = useStore(activeProfileModelStore);
+
   // Max tokens is managed by inference params store directly
 
   // Provider and Model Selection
@@ -160,6 +186,18 @@ export const ChatImpl = memo(({ chatId, projectId, projectName, projectFramework
     }
     return 'x-ai/grok-code-fast-1';
   });
+
+  // When the active profile's model changes, sync to component state.
+  // Use a ref for selectedModel to avoid stale closure and prevent
+  // this effect from fighting with manual ModelSelector changes.
+  const selectedModelRef = useRef(selectedModel);
+  selectedModelRef.current = selectedModel;
+  useEffect(() => {
+    if (profileModel && profileModel !== selectedModelRef.current) {
+      setSelectedModel(profileModel);
+      setSelectedProvider('openrouter');
+    }
+  }, [profileModel]);
 
   // Save preferences to localStorage when they change
   useEffect(() => {
@@ -201,11 +239,15 @@ export const ChatImpl = memo(({ chatId, projectId, projectName, projectFramework
       initProject({ projectId: projectIdForDocker });
     });
 
+    // Initialize project context cache (subscribes to file-change events)
+    projectContextCache.init();
+
     // Start connection health monitoring
     startHealthCheckPolling(30000); // Check every 30 seconds
 
     return () => {
       stopHealthCheckPolling();
+      projectContextCache.destroy();
     };
   }, [projectIdForDocker, projectFramework, projectTemplateId]);
 
@@ -269,25 +311,26 @@ export const ChatImpl = memo(({ chatId, projectId, projectName, projectFramework
 
   // Load code context when project changes or before sending messages
   // Now uses focused context from edit intent analyzer when available
+  // Uses ProjectContextCache to avoid redundant Docker API calls
   const loadCodeContext = async (userMessage: string) => {
     try {
-      // If we have focused context from edit intent, prefer that (more efficient)
+      // Priority 1: focused context from edit intent (already cached via shared cache)
       if (focusedContext && editIntent && intentRequiresCodeChanges(editIntent)) {
         logger.debug('Using focused context from edit intent analyzer');
         setCodeContext(focusedContext);
         return focusedContext;
       }
 
-      // Fallback to full context loading
-      const { generateContextPrompt, parseFileReferences } = await import('~/lib/services/code-context');
-      const context = await workbenchStore.loadProjectContext();
+      // Priority 2: cached project context — only fetches if files changed
+      const context = await projectContextCache.getContext(projectIdForDocker);
       if (context) {
-        const contextPrompt = generateContextPrompt(context, userMessage, 4000);
-        setCodeContext(contextPrompt);
-        return contextPrompt;
+        const { generateContextPrompt } = await import('~/lib/services/code-context');
+        const xml = generateContextPrompt(context, userMessage, 4000);
+        setCodeContext(xml);
+        return xml;
       }
     } catch (error) {
-      console.warn('Failed to load code context:', error);
+      logger.warn('Failed to load code context:', error);
     }
     return '';
   };
@@ -295,6 +338,9 @@ export const ChatImpl = memo(({ chatId, projectId, projectName, projectFramework
   // Get inference parameters from store
   const inferenceParams = useStore(inferenceParamsStore);
   const preferences = useStore(preferencesStore);
+
+  // Ref for clearDraft (set after useChatDraft, used by onFinish callback)
+  const clearDraftRef = useRef<(() => void) | null>(null);
 
   const { messages, isLoading, input, handleInputChange, setInput, stop, append } = useSimpleChat({
     api: '/api/chat',
@@ -318,7 +364,7 @@ export const ChatImpl = memo(({ chatId, projectId, projectName, projectFramework
     },
     onError: (error) => {
       logger.error('Request failed\n\n', error);
-      console.error('❌ Chat API error:', error);
+      logger.error('❌ Chat API error:', error);
       // Use smart error handler instead of generic toast
       showSmartError(error, {
         onAction: (action) => {
@@ -329,6 +375,14 @@ export const ChatImpl = memo(({ chatId, projectId, projectName, projectFramework
     },
     onFinish: (assistantMessage) => {
       logger.debug('Finished streaming');
+      // Clear draft on successful AI response
+      clearDraftRef.current?.();
+
+      // Track AI token usage for billing
+      const estimatedTokens = (assistantMessage.content?.length || 0) / 4;
+      if (estimatedTokens > 0) {
+        trackAITokenUsage(Math.ceil(estimatedTokens));
+      }
 
       // Create AI snapshot after AI changes complete
       workbenchStore.createAISnapshotForAll('AI response completed').catch((err) => {
@@ -360,7 +414,7 @@ export const ChatImpl = memo(({ chatId, projectId, projectName, projectFramework
           })
           .catch((error) => {
             setIsSaving(false);
-            console.error('Failed to save after AI response:', error);
+            logger.error('Failed to save after AI response:', error);
           });
       }, 500);
     },
@@ -374,6 +428,10 @@ export const ChatImpl = memo(({ chatId, projectId, projectName, projectFramework
   useEffect(() => {
     messagesRef.current = messages;
   }, [messages]);
+
+  // Draft auto-save: persist chat input to localStorage, restore on page refresh
+  const { clearDraft, wasDraftRestored } = useChatDraft(chatId, input, setInput);
+  clearDraftRef.current = clearDraft;
 
   const { enhancingPrompt, promptEnhanced, enhancePrompt, resetEnhancer } = usePromptEnhancer();
   const { parsedMessages, parseMessages } = useMessageParser();
@@ -531,7 +589,7 @@ export const ChatImpl = memo(({ chatId, projectId, projectName, projectFramework
           })
           .catch((error) => {
             setIsSaving(false);
-            console.error('Failed to save chat history:', error);
+            logger.error('Failed to save chat history:', error);
             showSmartError(error, {
               onAction: (action) => {
                 if (action.type === 'command' && action.action === 'retry') {
@@ -593,6 +651,9 @@ export const ChatImpl = memo(({ chatId, projectId, projectName, projectFramework
     setChatStarted(true);
   };
 
+  // Ref to always track the latest sendMessage for deferred calls (e.g. auto-fix)
+  const sendMessageRef = useRef<typeof sendMessage>(null!);
+
   const sendMessage = async (_event: React.UIEvent, messageInput?: string, attachments?: FileAttachment[]) => {
     const _input = messageInput || input;
 
@@ -600,12 +661,26 @@ export const ChatImpl = memo(({ chatId, projectId, projectName, projectFramework
 
     // Allow sending with just attachments (no text required)
     if (_input.length === 0 && (!attachments || attachments.length === 0)) {
-      console.warn('⚠️ Message not sent - empty input and no attachments');
+      logger.warn('⚠️ Message not sent - empty input and no attachments');
       return;
     }
 
     if (isLoading) {
-      console.warn('⚠️ Message not sent - already loading');
+      logger.warn('⚠️ Message not sent - already loading');
+      return;
+    }
+
+    // Agent Mode: Route through agent orchestrator instead of normal chat
+    if (chatMode === 'agent' && !isAgentActive) {
+      logger.info('🤖 Agent mode - starting agent session');
+      workbenchStore.showWorkbench.set(true);
+      setInput('');
+      clearDraft();
+      // Add the user message to chat for display
+      append({ role: 'user', content: _input });
+      // Start the agent session (runs autonomously)
+      startAgent(_input);
+      runAnimation();
       return;
     }
 
@@ -695,12 +770,16 @@ export const ChatImpl = memo(({ chatId, projectId, projectName, projectFramework
     }
 
     setInput('');
+    clearDraft();
 
     resetEnhancer();
     clearAnalysis(); // Clear edit intent analysis after sending
 
     textareaRef.current?.blur();
   };
+
+  // Keep ref in sync so deferred callers always use the latest sendMessage
+  sendMessageRef.current = sendMessage;
 
   // Handle cloned website files
   const handleCloneComplete = async (data: { files: Record<string, string>; prompt: string; title: string }) => {
@@ -732,21 +811,35 @@ export const ChatImpl = memo(({ chatId, projectId, projectName, projectFramework
     setShowGitHubModal(false);
   };
 
-  // Listen for "Fix with AI" events from Problems panel and auto-fix feature
+  // Listen for "Fix with AI" events from Problems panel and auto-fix feature.
+  // Uses isLoadingRef to avoid re-attaching the listener every render.
+  const isLoadingRef = useRef(isLoading);
+  isLoadingRef.current = isLoading;
+
   useEffect(() => {
     const handleFixErrors = async (event: CustomEvent) => {
       const { prompt, auto } = event.detail || {};
 
       // Only proceed if we have a prompt and are not currently loading
-      if (prompt && !isLoading) {
+      if (prompt && !isLoadingRef.current) {
         if (auto) {
-          console.log('[Chat] Auto-fix triggered, sending error fix request to AI');
+          logger.info('[Chat] Auto-fix triggered, sending error fix request to AI');
+          // Switch to fast profile for quick error fixes.
+          // flushSync forces React to re-render synchronously so the
+          // useSimpleChat body (extraBodyRef) has the new model/provider
+          // BEFORE sendMessage fires the fetch request.
+          selectErrorFixProfile();
+          const fastModel = activeProfileModelStore.get();
+          flushSync(() => {
+            setSelectedModel(fastModel);
+            setSelectedProvider('openrouter');
+          });
         }
-        sendMessage({} as React.UIEvent, prompt);
+        sendMessageRef.current({} as React.UIEvent, prompt);
       } else if (!prompt) {
-        console.warn('[Chat] recoder:fix-errors event received without prompt');
-      } else if (isLoading) {
-        console.log('[Chat] Fix request skipped - AI is currently responding');
+        logger.warn('[Chat] recoder:fix-errors event received without prompt');
+      } else if (isLoadingRef.current) {
+        logger.info('[Chat] Fix request skipped - AI is currently responding');
       }
     };
 
@@ -755,31 +848,31 @@ export const ChatImpl = memo(({ chatId, projectId, projectName, projectFramework
     return () => {
       window.removeEventListener('recoder:fix-errors', handleFixErrors as any);
     };
-  }, [isLoading, sendMessage]);
+  }, []);
 
   // Listen for spawn task events from AI actions
   useEffect(() => {
     const handleSpawnTask = async (event: CustomEvent) => {
       const { taskId, prompt, mode } = event.detail;
 
-      console.log(`[Spawn Task] Received task ${taskId}:`, prompt?.substring(0, 100));
+      logger.info(`[Spawn Task] Received task ${taskId}:`, prompt?.substring(0, 100));
 
       // Switch mode if specified
       if (mode && mode !== 'code') {
         try {
           const { setMode } = await import('~/lib/stores/mode');
           setMode(mode);
-          console.log(`[Spawn Task] Switched to ${mode} mode`);
+          logger.info(`[Spawn Task] Switched to ${mode} mode`);
         } catch (error) {
-          console.warn('[Spawn Task] Failed to switch mode:', error);
+          logger.warn('[Spawn Task] Failed to switch mode:', error);
         }
       }
 
       // Send the task as a message to the AI
-      if (prompt && !isLoading) {
+      if (prompt && !isLoadingRef.current) {
         // Small delay to ensure mode switch takes effect
         setTimeout(() => {
-          sendMessage({} as React.UIEvent, prompt);
+          sendMessageRef.current({} as React.UIEvent, prompt);
         }, 100);
       }
     };
@@ -789,7 +882,7 @@ export const ChatImpl = memo(({ chatId, projectId, projectName, projectFramework
     return () => {
       window.removeEventListener('recoder:spawn-task', handleSpawnTask as any);
     };
-  }, [isLoading, sendMessage]);
+  }, []);
 
   // Listen for import events from GitHub/Starters/Templates
   useEffect(() => {
@@ -840,7 +933,7 @@ export const ChatImpl = memo(({ chatId, projectId, projectName, projectFramework
 
             createdCount++;
           } catch (error) {
-            console.error(`   ❌ Failed to create file ${filePath}:`, error);
+            logger.error(`   ❌ Failed to create file ${filePath}:`, error);
           }
         }));
 
@@ -856,10 +949,10 @@ export const ChatImpl = memo(({ chatId, projectId, projectName, projectFramework
       // console.log(`✅ Import complete: ${createdCount}/${fileEntries.length} files created`);
 
       // After files are created, optionally send AI message about the import
-      if (prompt && !isLoading) {
+      if (prompt && !isLoadingRef.current) {
         setTimeout(() => {
           // console.log('✨ Notifying AI about imported files');
-          sendMessage({} as React.UIEvent, prompt);
+          sendMessageRef.current({} as React.UIEvent, prompt);
         }, 500);
       }
     };
@@ -869,7 +962,7 @@ export const ChatImpl = memo(({ chatId, projectId, projectName, projectFramework
     return () => {
       window.removeEventListener('recoder:import', handleImport as any);
     };
-  }, [isLoading, sendMessage]);
+  }, []);
 
   const [messageRef, scrollRef] = useSnapScroll();
 
@@ -950,15 +1043,15 @@ export const ChatImpl = memo(({ chatId, projectId, projectName, projectFramework
       {/* Save Indicator */}
       <SaveIndicator isSaving={isSaving} lastSaved={lastSaved} />
 
-      {/* Quick Actions FAB - Removed
       <QuickActions
         onSelectAction={(prompt) => sendMessage({} as React.UIEvent, prompt)}
         disabled={isLoading}
+        open={showQuickActions}
+        onOpenChange={setShowQuickActions}
         onCloneWebsite={() => setShowCloneModal(true)}
         onImportGitHub={() => setShowGitHubModal(true)}
         onDeploy={() => setShowDeployModal(true)}
       />
-      */}
 
       {/* Clone Website Modal */}
       <CloneUrlModal

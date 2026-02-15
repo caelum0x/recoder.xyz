@@ -8,6 +8,9 @@
 
 import { nanoid } from 'nanoid';
 
+import { createScopedLogger } from '~/utils/logger';
+const logger = createScopedLogger('SessionState');
+
 // ============================================
 // State Definitions
 // ============================================
@@ -309,14 +312,14 @@ export class SessionStateMachine {
   ): Promise<boolean> {
     // Prevent concurrent transitions
     if (this._isTransitioning) {
-      console.warn(`[SessionStateMachine] Transition already in progress, ignoring event: ${event}`);
+      logger.warn(`[SessionStateMachine] Transition already in progress, ignoring event: ${event}`);
       return false;
     }
 
     const transition = this._findTransition(event);
 
     if (!transition) {
-      console.warn(
+      logger.warn(
         `[SessionStateMachine] Invalid transition: ${this._state} + ${event}. ` +
         `Valid events: ${this.getValidEvents().join(', ')}`
       );
@@ -331,11 +334,11 @@ export class SessionStateMachine {
       try {
         const allowed = await guard(this._context, event, payload);
         if (!allowed) {
-          console.log(`[SessionStateMachine] Transition blocked by guard: ${this._state} -> ${transition.to}`);
+          logger.info(`[SessionStateMachine] Transition blocked by guard: ${this._state} -> ${transition.to}`);
           return false;
         }
       } catch (err) {
-        console.error(`[SessionStateMachine] Guard error:`, err);
+        logger.error(`[SessionStateMachine] Guard error:`, err);
         return false;
       }
     }
@@ -378,7 +381,7 @@ export class SessionStateMachine {
         try {
           await effect(previousState, transition.to, this._context, payload);
         } catch (err) {
-          console.error(`[SessionStateMachine] Transition effect error:`, err);
+          logger.error(`[SessionStateMachine] Transition effect error:`, err);
         }
       }
 
@@ -393,7 +396,7 @@ export class SessionStateMachine {
       // Start timeout for new state
       this._startStateTimeout();
 
-      console.log(`[SessionStateMachine] ${previousState} -> ${transition.to} (${event})`);
+      logger.info(`[SessionStateMachine] ${previousState} -> ${transition.to} (${event})`);
       return true;
     } finally {
       this._isTransitioning = false;
@@ -432,7 +435,7 @@ export class SessionStateMachine {
     this._recordHistory(null, null);
     this._persistState();
     this._startStateTimeout();
-    console.log('[SessionStateMachine] Reset to initial state');
+    logger.info('[SessionStateMachine] Reset to initial state');
   }
 
   /**
@@ -591,7 +594,7 @@ export class SessionStateMachine {
     }
 
     this._timeoutId = setTimeout(() => {
-      console.warn(`[SessionStateMachine] State timeout: ${this._state} after ${timeoutConfig.timeout}ms`);
+      logger.warn(`[SessionStateMachine] State timeout: ${this._state} after ${timeoutConfig.timeout}ms`);
 
       this._config.listeners.onTimeout?.(this._state, this._context);
 
@@ -641,7 +644,7 @@ export class SessionStateMachine {
       };
       localStorage.setItem(this._config.storageKey, JSON.stringify(data));
     } catch (err) {
-      console.warn('[SessionStateMachine] Failed to persist state:', err);
+      logger.warn('[SessionStateMachine] Failed to persist state:', err);
     }
   }
 
@@ -671,7 +674,7 @@ export class SessionStateMachine {
 
       // Don't restore if in active state (might have been interrupted)
       if (data.state !== 'IDLE' && data.state !== 'ERROR') {
-        console.log('[SessionStateMachine] Not restoring active state, resetting to IDLE');
+        logger.info('[SessionStateMachine] Not restoring active state, resetting to IDLE');
         return null;
       }
 
@@ -691,7 +694,7 @@ export class SessionStateMachine {
         })),
       };
     } catch (err) {
-      console.warn('[SessionStateMachine] Failed to restore state:', err);
+      logger.warn('[SessionStateMachine] Failed to restore state:', err);
       return null;
     }
   }

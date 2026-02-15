@@ -6,6 +6,9 @@
 import type { ActionFunctionArgs } from '@remix-run/cloudflare';
 import { json } from '@remix-run/cloudflare';
 import { verifySession } from '~/lib/auth/session.server';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('UserProfile');
 
 export async function loader({ request }: ActionFunctionArgs) {
   try {
@@ -20,7 +23,7 @@ export async function loader({ request }: ActionFunctionArgs) {
       }, { status: 401 });
     }
 
-    console.log('[API Profile] Returning profile for:', session.user.email);
+    logger.info('[API Profile] Returning profile for:', session.user.email);
 
     // Return user profile
     return json({
@@ -34,7 +37,7 @@ export async function loader({ request }: ActionFunctionArgs) {
       },
     });
   } catch (error) {
-    console.error('[API Profile] Error:', error);
+    logger.error('[API Profile] Error:', error);
     return json({
       success: false,
       error: 'Failed to load profile',

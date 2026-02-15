@@ -6,12 +6,15 @@
 import { getAuthEnv } from '../env';
 import type { Organization, OrganizationMember, AuthUser } from '../types';
 
+import { createScopedLogger } from '~/utils/logger';
+const logger = createScopedLogger('OrganizationUtils');
+
 /**
  * Generate a unique ID (simplified cuid-like)
  */
 function generateId(): string {
   const timestamp = Date.now().toString(36);
-  const randomPart = Math.random().toString(36).substring(2, 9);
+  const randomPart = crypto.randomUUID().replace(/-/g, '').slice(0, 9);
   return `${timestamp}${randomPart}`;
 }
 
@@ -45,7 +48,7 @@ export async function getActiveOrganization(
 
     return null;
   } catch (error) {
-    console.error('[Organization] Error fetching organization:', error);
+    logger.error('[Organization] Error fetching organization:', error);
     return null;
   }
 }
@@ -73,14 +76,14 @@ export async function createDefaultOrganization(
     });
 
     if (!response.ok) {
-      console.error('[Organization] Failed to create default organization');
+      logger.error('[Organization] Failed to create default organization');
       return null;
     }
 
     const org = (await response.json()) as Organization;
     return { id: org.id, stripeCustomerId: org.stripeCustomerId };
   } catch (error) {
-    console.error('[Organization] Error creating organization:', error);
+    logger.error('[Organization] Error creating organization:', error);
     return null;
   }
 }
@@ -106,7 +109,7 @@ export async function getOrganizationById(organizationId: string): Promise<Organ
 
     return (await response.json()) as Organization;
   } catch (error) {
-    console.error('[Organization] Error fetching organization:', error);
+    logger.error('[Organization] Error fetching organization:', error);
     return null;
   }
 }
@@ -135,7 +138,7 @@ export async function getOrganizationMembers(
     const data = (await response.json()) as { members?: OrganizationMember[] };
     return data.members || [];
   } catch (error) {
-    console.error('[Organization] Error fetching members:', error);
+    logger.error('[Organization] Error fetching members:', error);
     return [];
   }
 }
@@ -173,7 +176,7 @@ export async function isOrganizationMember(
 
     return response.ok;
   } catch (error) {
-    console.error('[Organization] Error checking membership:', error);
+    logger.error('[Organization] Error checking membership:', error);
     return false;
   }
 }
@@ -206,7 +209,7 @@ export async function isOrganizationOwner(
     const data = (await response.json()) as { role?: string };
     return data.role === 'owner';
   } catch (error) {
-    console.error('[Organization] Error checking ownership:', error);
+    logger.error('[Organization] Error checking ownership:', error);
     return false;
   }
 }
@@ -236,7 +239,7 @@ export async function addOrganizationMember(
 
     return response.ok;
   } catch (error) {
-    console.error('[Organization] Error adding member:', error);
+    logger.error('[Organization] Error adding member:', error);
     return false;
   }
 }
@@ -264,7 +267,7 @@ export async function removeOrganizationMember(
 
     return response.ok;
   } catch (error) {
-    console.error('[Organization] Error removing member:', error);
+    logger.error('[Organization] Error removing member:', error);
     return false;
   }
 }
@@ -294,7 +297,7 @@ export async function updateMemberRole(
 
     return response.ok;
   } catch (error) {
-    console.error('[Organization] Error updating role:', error);
+    logger.error('[Organization] Error updating role:', error);
     return false;
   }
 }
@@ -321,7 +324,7 @@ export async function getUserOrganizations(userId: string): Promise<Organization
     const data = (await response.json()) as { organizations?: Organization[] };
     return data.organizations || [];
   } catch (error) {
-    console.error('[Organization] Error fetching user organizations:', error);
+    logger.error('[Organization] Error fetching user organizations:', error);
     return [];
   }
 }

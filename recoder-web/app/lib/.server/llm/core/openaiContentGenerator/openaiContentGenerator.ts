@@ -15,6 +15,9 @@ import { DefaultTelemetryService } from './telemetryService.js';
 import { EnhancedErrorHandler } from './errorHandler.js';
 import { getDefaultTokenizer } from '../../utils/request-tokenizer/index.js';
 import type { ContentGeneratorConfig } from '../contentGenerator.js';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('OpenAIContentGenerator');
 
 export class OpenAIContentGenerator implements ContentGenerator {
   protected pipeline: ContentGenerationPipeline;
@@ -83,7 +86,7 @@ export class OpenAIContentGenerator implements ContentGenerator {
         totalTokens: result.totalTokens,
       };
     } catch (error) {
-      console.warn(
+      logger.warn(
         'Failed to calculate tokens with new tokenizer, falling back to simple method:',
         error,
       );
@@ -147,7 +150,7 @@ export class OpenAIContentGenerator implements ContentGenerator {
         ],
       };
     } catch (error) {
-      console.error('OpenAI API Embedding Error:', error);
+      logger.error('OpenAI API Embedding Error:', error);
       throw new Error(
         `OpenAI API error: ${error instanceof Error ? error.message : String(error)}`,
       );

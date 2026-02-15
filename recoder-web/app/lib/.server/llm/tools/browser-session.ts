@@ -276,9 +276,10 @@ export async function browserExecute(
 
     const result = await page.evaluate((code: string) => {
       try {
-        // eslint-disable-next-line no-eval
-        const evalResult = eval(code);
-        return { success: true, result: String(evalResult) };
+        // Use Function constructor instead of eval - no access to enclosing scope
+        const fn = new Function(code);
+        const fnResult = fn();
+        return { success: true, result: String(fnResult) };
       } catch (e) {
         return { success: false, error: String(e) };
       }

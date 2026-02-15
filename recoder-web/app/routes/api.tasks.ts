@@ -14,6 +14,9 @@
 
 import { type ActionFunctionArgs, type LoaderFunctionArgs, json } from '@remix-run/cloudflare';
 import { z } from 'zod';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('Tasks');
 
 // Dynamic import for session verification
 async function verifySession(request: Request) {
@@ -212,10 +215,10 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
     return json({ success: false, error: 'workspaceId or taskId required' }, { status: 400 });
   } catch (error) {
-    console.error('[Tasks] Loader error:', error);
+    logger.error('[Tasks] Loader error:', error);
     return json({
       success: false,
-      error: error instanceof Error ? error.message : 'Failed to get tasks',
+      error: 'Failed to get tasks',
     }, { status: 500 });
   }
 }
@@ -267,7 +270,7 @@ export async function action({ request }: ActionFunctionArgs) {
         taskStore.set(taskId, updatedTask);
         broadcastTaskUpdate(taskId, { type: 'status', task: updatedTask });
 
-        console.log(`[Tasks] Started task: ${taskId}`);
+        logger.info(`[Tasks] Started task: ${taskId}`);
         return new Response(null, { status: 204 });
       }
 
@@ -303,7 +306,7 @@ export async function action({ request }: ActionFunctionArgs) {
         taskStore.set(taskId, newTask);
         broadcastTaskUpdate(taskId, { type: 'created', task: newTask });
 
-        console.log(`[Tasks] Created and started task: ${taskId}`);
+        logger.info(`[Tasks] Created and started task: ${taskId}`);
         return new Response(null, { status: 204 });
       }
 
@@ -336,7 +339,7 @@ export async function action({ request }: ActionFunctionArgs) {
 
       taskStore.set(taskId, newTask);
 
-      console.log(`[Tasks] Created task: ${taskId}`);
+      logger.info(`[Tasks] Created task: ${taskId}`);
       return json({ success: true, task: newTask });
     }
 
@@ -372,7 +375,7 @@ export async function action({ request }: ActionFunctionArgs) {
       taskStore.set(taskId, patchedTask);
       broadcastTaskUpdate(taskId, { type: 'patched', task: patchedTask });
 
-      console.log(`[Tasks] Patched task: ${taskId}`);
+      logger.info(`[Tasks] Patched task: ${taskId}`);
       return json({ success: true, task: patchedTask });
     }
 
@@ -401,16 +404,16 @@ export async function action({ request }: ActionFunctionArgs) {
       taskStore.set(taskId, cancelledTask);
       broadcastTaskUpdate(taskId, { type: 'cancelled', task: cancelledTask });
 
-      console.log(`[Tasks] Cancelled task: ${taskId}`);
+      logger.info(`[Tasks] Cancelled task: ${taskId}`);
       return new Response(null, { status: 204 });
     }
 
     return json({ success: false, error: 'Method not allowed' }, { status: 405 });
   } catch (error) {
-    console.error('[Tasks] Action error:', error);
+    logger.error('[Tasks] Action error:', error);
     return json({
       success: false,
-      error: error instanceof Error ? error.message : 'Task operation failed',
+      error: 'Task operation failed',
     }, { status: 500 });
   }
 }

@@ -6,6 +6,9 @@
 
 import type { MCPOAuthConfig } from './oauth-provider.js';
 import { getErrorMessage } from '../utils/errors.js';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('OAuthUtils');
 
 /**
  * OAuth authorization server metadata as per RFC 8414.
@@ -94,7 +97,7 @@ export class OAuthUtils {
       }
       return (await response.json()) as OAuthProtectedResourceMetadata;
     } catch (error) {
-      console.debug(
+      logger.debug(
         `Failed to fetch protected resource metadata from ${resourceMetadataUrl}: ${getErrorMessage(error)}`,
       );
       return null;
@@ -117,7 +120,7 @@ export class OAuthUtils {
       }
       return (await response.json()) as OAuthAuthorizationServerMetadata;
     } catch (error) {
-      console.debug(
+      logger.debug(
         `Failed to fetch authorization server metadata from ${authServerMetadataUrl}: ${getErrorMessage(error)}`,
       );
       return null;
@@ -204,7 +207,7 @@ export class OAuthUtils {
       }
     }
 
-    console.debug(
+    logger.debug(
       `Metadata discovery failed for authorization server ${authServerUrl}`,
     );
     return null;
@@ -248,7 +251,7 @@ export class OAuthUtils {
         if (authServerMetadata) {
           const config = this.metadataToOAuthConfig(authServerMetadata);
           if (authServerMetadata.registration_endpoint) {
-            console.log(
+            logger.info(
               'Dynamic client registration is supported at:',
               authServerMetadata.registration_endpoint,
             );
@@ -258,14 +261,14 @@ export class OAuthUtils {
       }
 
       // Fallback: try well-known endpoints at the base URL
-      console.debug(`Trying OAuth discovery fallback at ${serverUrl}`);
+      logger.debug(`Trying OAuth discovery fallback at ${serverUrl}`);
       const authServerMetadata =
         await this.discoverAuthorizationServerMetadata(serverUrl);
 
       if (authServerMetadata) {
         const config = this.metadataToOAuthConfig(authServerMetadata);
         if (authServerMetadata.registration_endpoint) {
-          console.log(
+          logger.info(
             'Dynamic client registration is supported at:',
             authServerMetadata.registration_endpoint,
           );
@@ -275,7 +278,7 @@ export class OAuthUtils {
 
       return null;
     } catch (error) {
-      console.debug(
+      logger.debug(
         `Failed to discover OAuth configuration: ${getErrorMessage(error)}`,
       );
       return null;

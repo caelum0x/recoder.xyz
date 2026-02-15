@@ -6,6 +6,7 @@
 
 import type { VaultDriver, EncryptOptions, StoredSecret, SecretMetadata } from './types';
 import { generateSecretId } from './crypto-utils';
+import { noopVaultDriver as giselleNoopVaultDriver } from '@giselles-ai/vault';
 
 /**
  * In-memory storage for secrets (stores plaintext)
@@ -18,11 +19,10 @@ const noopStore = new Map<string, { plaintext: string; metadata: SecretMetadata 
  */
 export const noopVaultDriver: VaultDriver = {
   async encrypt(plaintext: string, options?: EncryptOptions): Promise<string> {
-    const secretId = generateSecretId();
+    const encrypted = await giselleNoopVaultDriver.encrypt(plaintext, options);
     const now = Date.now();
-
-    const metadata: SecretMetadata = {
-      id: secretId,
+    const fallbackMetadata: SecretMetadata = {
+      id: generateSecretId(),
       name: options?.name,
       description: options?.description,
       workspaceId: options?.workspaceId,
@@ -31,21 +31,49 @@ export const noopVaultDriver: VaultDriver = {
       algorithm: 'NOOP',
     };
 
-    // Store plaintext (no encryption)
-    noopStore.set(secretId, { plaintext, metadata });
+    try {
+      const parsed = JSON.parse(encrypted);
+      if (parsed?.metadata?.id) {
+        noopStore.set(parsed.metadata.id, {
+          plaintext,
+          metadata: {
+            id: parsed.metadata.id,
+            name: options?.name,
+            description: options?.description,
+            workspaceId: options?.workspaceId,
+            createdAt: parsed.metadata.createdAt ?? now,
+            updatedAt: parsed.metadata.updatedAt ?? now,
+            algorithm: 'NOOP',
+          },
+        });
+        return encrypted;
+      }
+    } catch {
+      // fall through to normalized local format
+    }
 
-    // Return a serialized format that includes metadata
+    noopStore.set(fallbackMetadata.id, { plaintext, metadata: fallbackMetadata });
     return JSON.stringify({
       version: 1,
       plaintext,
-      metadata,
+      metadata: fallbackMetadata,
     });
   },
 
   async decrypt(serializedCiphertext: string): Promise<string> {
-    const parsed = JSON.parse(serializedCiphertext);
-    // Simply return the plaintext
-    return parsed.plaintext;
+    try {
+      const parsed = JSON.parse(serializedCiphertext);
+      if (typeof parsed?.plaintext === 'string') {
+        return parsed.plaintext;
+      }
+      if (typeof parsed?.ciphertext === 'string') {
+        // Normalize noop payload variants to plaintext output.
+        return parsed.ciphertext;
+      }
+    } catch {
+      // Raw plaintext from external noop drivers
+    }
+    return giselleNoopVaultDriver.decrypt(serializedCiphertext);
   },
 
   async store(secret: StoredSecret): Promise<void> {
@@ -117,7 +145,13 @@ export function createNoopVaultDriver(): VaultDriver {
 
     async decrypt(serializedCiphertext: string): Promise<string> {
       const parsed = JSON.parse(serializedCiphertext);
-      return parsed.plaintext;
+      if (typeof parsed?.plaintext === 'string') {
+        return parsed.plaintext;
+      }
+      if (typeof parsed?.ciphertext === 'string') {
+        return parsed.ciphertext;
+      }
+      return serializedCiphertext;
     },
 
     async store(secret: StoredSecret): Promise<void> {

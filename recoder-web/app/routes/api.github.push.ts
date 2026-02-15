@@ -1,5 +1,8 @@
 import { type ActionFunctionArgs } from '@remix-run/cloudflare';
 import { Octokit } from '@octokit/rest';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('GitHubPush');
 
 /**
  * API endpoint to push code to GitHub repository
@@ -15,6 +18,12 @@ import { Octokit } from '@octokit/rest';
 export async function action({ request, context }: ActionFunctionArgs) {
   if (request.method !== 'POST') {
     return new Response('Method not allowed', { status: 405 });
+  }
+
+  const { verifySession } = await import('~/lib/auth/session.server');
+  const session = await verifySession(request);
+  if (!session?.user) {
+    return new Response(JSON.stringify({ error: 'Authentication required' }), { status: 401, headers: { 'Content-Type': 'application/json' } });
   }
 
   try {
@@ -48,7 +57,7 @@ export async function action({ request, context }: ActionFunctionArgs) {
       );
     }
 
-    console.log('📤 [github-push] Pushing', Object.keys(files).length, 'files to', repoName);
+    logger.info('📤 [github-push] Pushing', Object.keys(files).length, 'files to', repoName);
 
     // Initialize Octokit with user's access token
     const octokit = new Octokit({
@@ -57,7 +66,7 @@ export async function action({ request, context }: ActionFunctionArgs) {
 
     // Get authenticated user
     const { data: user } = await octokit.users.getAuthenticated();
-    console.log('👤 [github-push] Authenticated as:', user.login);
+    logger.info('👤 [github-push] Authenticated as:', user.login);
 
     // Check if repository exists
     let repo;
@@ -67,11 +76,11 @@ export async function action({ request, context }: ActionFunctionArgs) {
         repo: repoName,
       });
       repo = data;
-      console.log('📁 [github-push] Repository exists:', repo.html_url);
+      logger.info('📁 [github-push] Repository exists:', repo.html_url);
     } catch (error: any) {
       if (error.status === 404) {
         // Repository doesn't exist, create it
-        console.log('🆕 [github-push] Creating new repository:', repoName);
+        logger.info('🆕 [github-push] Creating new repository:', repoName);
         const { data } = await octokit.repos.createForAuthenticatedUser({
           name: repoName,
           description: description || 'Created with Recoder.xyz',
@@ -79,7 +88,7 @@ export async function action({ request, context }: ActionFunctionArgs) {
           auto_init: true, // Initialize with README
         });
         repo = data;
-        console.log('✅ [github-push] Repository created:', repo.html_url);
+        logger.info('✅ [github-push] Repository created:', repo.html_url);
       } else {
         throw error;
       }
@@ -122,7 +131,7 @@ export async function action({ request, context }: ActionFunctionArgs) {
       })
     );
 
-    console.log('📝 [github-push] Created', blobs.length, 'blobs');
+    logger.info('📝 [github-push] Created', blobs.length, 'blobs');
 
     // Create a new tree
     const { data: newTree } = await octokit.git.createTree({
@@ -132,7 +141,7 @@ export async function action({ request, context }: ActionFunctionArgs) {
       tree: blobs,
     });
 
-    console.log('🌳 [github-push] Created tree:', newTree.sha);
+    logger.info('🌳 [github-push] Created tree:', newTree.sha);
 
     // Create a new commit
     const { data: newCommit } = await octokit.git.createCommit({
@@ -143,7 +152,7 @@ export async function action({ request, context }: ActionFunctionArgs) {
       parents: [latestCommitSha],
     });
 
-    console.log('💾 [github-push] Created commit:', newCommit.sha);
+    logger.info('💾 [github-push] Created commit:', newCommit.sha);
 
     // Update the reference
     await octokit.git.updateRef({
@@ -153,7 +162,7 @@ export async function action({ request, context }: ActionFunctionArgs) {
       sha: newCommit.sha,
     });
 
-    console.log('✅ [github-push] Successfully pushed to', repo.html_url);
+    logger.info('✅ [github-push] Successfully pushed to', repo.html_url);
 
     return new Response(
       JSON.stringify({
@@ -168,11 +177,10 @@ export async function action({ request, context }: ActionFunctionArgs) {
       }
     );
   } catch (error: any) {
-    console.error('❌ [github-push] Failed:', error);
+    logger.error('❌ [github-push] Failed:', error);
     return new Response(
       JSON.stringify({
-        error: error.message || 'Failed to push to GitHub',
-        details: error.response?.data || error.toString(),
+        error: 'Failed to push to GitHub',
       }),
       { status: 500, headers: { 'Content-Type': 'application/json' } }
     );

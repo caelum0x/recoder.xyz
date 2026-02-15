@@ -2,10 +2,19 @@ import { json } from '@remix-run/cloudflare';
 import type { ActionFunctionArgs } from '@remix-run/cloudflare';
 import { Octokit } from '@octokit/rest';
 import { getDatabase } from '~/lib/.server/db/client';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('PushGitHub');
 
 export async function action({ params, request, context }: ActionFunctionArgs) {
+  const { verifySession } = await import('~/lib/auth/session.server');
+  const session = await verifySession(request);
+  if (!session?.user) {
+    return json({ error: 'Authentication required' }, { status: 401 });
+  }
+
   const projectId = params.projectId;
-  
+
   if (!projectId) {
     return json({ error: 'Project ID required' }, { status: 400 });
   }
@@ -134,14 +143,14 @@ export async function action({ params, request, context }: ActionFunctionArgs) {
       repoName: repo.full_name,
     });
   } catch (error: any) {
-    console.error('GitHub push error:', error);
+    logger.error('GitHub push error:', error);
     
     if (error.status === 422) {
       return json({ error: 'Repository name already exists' }, { status: 422 });
     }
     
-    return json({ 
-      error: error.message || 'Failed to push to GitHub' 
+    return json({
+      error: 'Failed to push to GitHub'
     }, { status: 500 });
   }
 }

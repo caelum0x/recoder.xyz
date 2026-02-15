@@ -7,6 +7,8 @@
 import type { Part } from '@google/genai';
 import type { Config } from '../config/config.js';
 import { getFolderStructure } from './getFolderStructure.js';
+import { createScopedLogger } from '~/utils/logger';
+const logger = createScopedLogger('EnvironmentContext');
 
 /**
  * Generates a string describing the current workspace directories and their structures.
@@ -87,18 +89,18 @@ ${directoryContext}
             text: `\n--- Full File Context ---\n${result.llmContent}`,
           });
         } else {
-          console.warn(
+          logger.warn(
             'Full context requested, but read_many_files returned no content.',
           );
         }
       } else {
-        console.warn(
+        logger.warn(
           'Full context requested, but read_many_files tool not found.',
         );
       }
     } catch (error) {
       // Not using reportError here as it's a startup/config phase, not a chat/generation phase error.
-      console.error('Error reading full file context:', error);
+      logger.error('Error reading full file context:', error);
       initialParts.push({
         text: '\n--- Error reading full file context ---',
       });

@@ -22,6 +22,8 @@ import type {
 import { SandboxError, SandboxErrorType, SandboxStatus } from '../types';
 import { tryCatch, createSandboxLogger } from '../utils';
 import { CONTAINER_TIMEOUTS } from '../config';
+import { createScopedLogger } from '~/utils/logger';
+const logger = createScopedLogger('DockerProviderService');
 
 // Docker backend URL from environment
 const getDockerUrl = (): string => {
@@ -129,7 +131,7 @@ export class DockerSandboxProvider extends BaseSandboxProvider {
 
     // Validate that docker-backend is available
     if (!(await this.isAvailable())) {
-      console.warn('Docker backend is not available. Some features may not work.');
+      logger.warn('Docker backend is not available. Some features may not work.');
     }
   }
 

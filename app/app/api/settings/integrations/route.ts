@@ -56,7 +56,7 @@ export async function GET(request: NextRequest) {
   } catch (error: any) {
     console.error('[Integration Settings GET] Error:', error);
     return NextResponse.json(
-      { success: false, error: error.message || 'Failed to fetch integration settings' },
+      { success: false, error: 'Failed to fetch integration settings' },
       { status: 500 }
     );
   }
@@ -109,7 +109,7 @@ export async function PUT(request: NextRequest) {
   } catch (error: any) {
     console.error('[Integration Settings PUT] Error:', error);
     return NextResponse.json(
-      { success: false, error: error.message || 'Failed to update integration settings' },
+      { success: false, error: 'Failed to update integration settings' },
       { status: 500 }
     );
   }

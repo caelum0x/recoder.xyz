@@ -1,5 +1,7 @@
 import React, { Component, type ErrorInfo, type ReactNode, useState, useCallback, useEffect } from 'react';
 import { reportError, type ErrorInfo as ErrorInfoType, errorEvents } from '~/lib/utils/error-handler';
+import { createScopedLogger } from '~/utils/logger';
+const logger = createScopedLogger('ErrorBoundary');
 
 interface Props {
   children: ReactNode;
@@ -63,7 +65,7 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    console.error('ErrorBoundary caught error:', error, errorInfo);
+    logger.error('ErrorBoundary caught error:', error, errorInfo);
     this.setState({ errorInfo });
     this.props.onError?.(error, errorInfo);
 
@@ -115,7 +117,7 @@ export class ErrorBoundary extends Component<Props, State> {
         retryCount: this.state.retryCount,
       };
 
-      console.error('[Error Report]', errorReport);
+      logger.error('[Error Report]', errorReport);
 
       // Store in localStorage for debugging (limited to last 10 errors)
       if (typeof localStorage !== 'undefined') {
@@ -240,7 +242,7 @@ export class ErrorBoundary extends Component<Props, State> {
       window.open(issueUrl, '_blank');
       this.setState({ reportSuccess: true });
     } catch (e) {
-      console.error('Failed to report issue:', e);
+      logger.error('Failed to report issue:', e);
     } finally {
       this.setState({ isReporting: false });
     }

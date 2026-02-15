@@ -6,6 +6,9 @@
 
 import type { GenerateContentParameters } from '@google/genai';
 import type { RequestContext } from './telemetryService.js';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('ContentErrorHandler');
 
 export interface ErrorHandler {
   handle(
@@ -40,7 +43,7 @@ export class EnhancedErrorHandler implements ErrorHandler {
       const logPrefix = context.isStreaming
         ? 'OpenAI API Streaming Error:'
         : 'OpenAI API Error:';
-      console.error(logPrefix, errorMessage);
+      logger.error(logPrefix, errorMessage);
     }
 
     // Provide helpful timeout-specific error message

@@ -5,6 +5,8 @@
 
 import { PLAN_TYPES, type PlanType, type PlanLimits } from './types';
 import { getAuthEnv } from '../env';
+import { createScopedLogger } from '~/utils/logger';
+const logger = createScopedLogger('SubLimitConstants');
 
 /**
  * Default plan limits (fallback when DB is unavailable)
@@ -72,7 +74,7 @@ export async function getPlanLimits(
       }
     }
   } catch (error) {
-    console.error(`[PlanLimits] Failed to fetch plan limits for ${planType}:`, error);
+    logger.error(`[PlanLimits] Failed to fetch plan limits for ${planType}:`, error);
   }
 
   // Fallback to default constants
@@ -84,7 +86,7 @@ export async function getPlanLimits(
   }
 
   // If plan type is not recognized, return FREE plan limits
-  console.warn(`[PlanLimits] Unknown plan type: ${planType}, using FREE plan defaults`);
+  logger.warn(`[PlanLimits] Unknown plan type: ${planType}, using FREE plan defaults`);
   return { limits: DEFAULT_PLAN_LIMITS[PLAN_TYPES.FREE], source: 'CONST' };
 }
 
@@ -126,7 +128,7 @@ export function parsePlanLimits(limitsJson: string): PlanLimits | null {
       deployLimit: parseInt(parsed.deploy_limit ?? String((parsed.ai_nums ?? 0) * 2), 10),
     };
   } catch (error) {
-    console.warn('[PlanLimits] Failed to parse plan limits JSON:', limitsJson, error);
+    logger.warn('[PlanLimits] Failed to parse plan limits JSON:', limitsJson, error);
     return null;
   }
 }

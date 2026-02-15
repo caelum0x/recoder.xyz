@@ -16,6 +16,10 @@
 
 import { type ActionFunctionArgs, json } from '@remix-run/cloudflare';
 import { verifySession } from '~/lib/auth/session.server';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('KillSandbox');
+import { DockerHttpError, createDockerAuthHeaders, dockerFetchJson, getDockerBackendUrl } from '~/lib/http/docker-server';
 
 interface KillSandboxRequest {
   projectId: string;
@@ -30,101 +34,37 @@ interface KillSandboxResult {
   error?: string;
 }
 
-// Get docker backend URL
-function getDockerBackendUrl(): string {
-  return process.env.VITE_DOCKER_BACKEND_URL || 'http://localhost:3100';
-}
-
-// Get session token from cookies for authentication with docker-backend
-function getSessionToken(request: Request): string | null {
-  const cookieHeader = request.headers.get('Cookie');
-  if (!cookieHeader) return null;
-
-  const cookies = cookieHeader.split(';');
-  const cookieNames = [
-    '__Secure-recoder.session_token',
-    'recoder.session_token',
-    '__Secure-session_token',
-    'session_token',
-    'recoder_session_token',
-  ];
-
-  for (const cookie of cookies) {
-    const [name, ...valueParts] = cookie.trim().split('=');
-    const value = valueParts.join('=');
-    if (cookieNames.includes(name) && value) {
-      return decodeURIComponent(value);
-    }
-  }
-
-  return null;
-}
-
 /**
  * Stop and optionally remove a Docker container via docker-backend
  */
 async function killSandbox(
+  request: Request,
   projectId: string,
   options: {
     removeContainer?: boolean;
     timeout?: number;
-    token?: string | null;
   }
 ): Promise<KillSandboxResult> {
   const dockerUrl = getDockerBackendUrl();
-  const { timeout = 30000, token } = options;
+  const { timeout = 30000 } = options;
 
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeout);
 
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-  };
-
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
-  }
+  const headers = createDockerAuthHeaders(request);
 
   try {
     // The docker-backend DELETE /api/container/:projectId endpoint
-    // stops and removes the container
-    const response = await fetch(`${dockerUrl}/api/container/${encodeURIComponent(projectId)}`, {
-      method: 'DELETE',
+    // stops and removes the container.
+    await dockerFetchJson<{ success?: boolean }>(
+      `${dockerUrl}/api/container/${encodeURIComponent(projectId)}`,
+      {
+        method: 'DELETE',
+        signal: controller.signal,
+      },
       headers,
-      signal: controller.signal,
-    });
-
+    );
     clearTimeout(timeoutId);
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      let errorMessage: string;
-
-      try {
-        const errorJson = JSON.parse(errorText);
-        errorMessage = errorJson.error || errorJson.message || `HTTP ${response.status}`;
-      } catch {
-        errorMessage = errorText || `HTTP ${response.status}`;
-      }
-
-      // 404 means container not found - treat as success (nothing to kill)
-      if (response.status === 404) {
-        return {
-          success: true,
-          sandboxKilled: false,
-          message: 'No active sandbox found for this project',
-        };
-      }
-
-      return {
-        success: false,
-        sandboxKilled: false,
-        error: errorMessage,
-        message: 'Failed to stop sandbox',
-      };
-    }
-
-    const result = await response.json() as { success?: boolean };
 
     return {
       success: true,
@@ -133,6 +73,25 @@ async function killSandbox(
     };
   } catch (error) {
     clearTimeout(timeoutId);
+
+    if (error instanceof DockerHttpError) {
+      // 404 means container not found - treat as success (nothing to kill).
+      if (error.status === 404) {
+        return {
+          success: true,
+          sandboxKilled: false,
+          message: 'No active sandbox found for this project',
+        };
+      }
+
+      const dockerPayload = error.payload as { error?: string } | null;
+      return {
+        success: false,
+        sandboxKilled: false,
+        error: dockerPayload?.error || error.message || `Failed to stop sandbox (HTTP ${error.status})`,
+        message: 'Failed to stop sandbox',
+      };
+    }
 
     if (error instanceof DOMException && error.name === 'AbortError') {
       return {
@@ -156,7 +115,7 @@ async function killSandbox(
     return {
       success: false,
       sandboxKilled: false,
-      error: error instanceof Error ? error.message : 'Unknown error',
+      error: 'Failed to stop sandbox',
       message: 'Failed to stop sandbox',
     };
   }
@@ -226,24 +185,20 @@ export async function action({ request }: ActionFunctionArgs) {
     );
   }
 
-  // Get auth token for docker-backend
-  const token = getSessionToken(request);
-
-  console.log(`[kill-sandbox] User: ${session.user.email}, Project: ${projectId}, Remove: ${removeContainer}`);
+  logger.info(`[kill-sandbox] User: ${session.user.email}, Project: ${projectId}, Remove: ${removeContainer}`);
 
   // Kill the sandbox
-  const result = await killSandbox(projectId, {
+  const result = await killSandbox(request, projectId, {
     removeContainer,
     timeout,
-    token,
   });
 
   if (result.sandboxKilled) {
-    console.log(`[kill-sandbox] Successfully stopped sandbox for project: ${projectId}`);
+    logger.info(`[kill-sandbox] Successfully stopped sandbox for project: ${projectId}`);
   } else if (result.success) {
-    console.log(`[kill-sandbox] No sandbox to kill for project: ${projectId}`);
+    logger.info(`[kill-sandbox] No sandbox to kill for project: ${projectId}`);
   } else {
-    console.error(`[kill-sandbox] Failed to stop sandbox for project: ${projectId}`, result.error);
+    logger.error(`[kill-sandbox] Failed to stop sandbox for project: ${projectId}`, result.error);
   }
 
   return json(result, {

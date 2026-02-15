@@ -2,6 +2,8 @@
  * Terminal State Sync - Persistence for terminal sessions
  * Saves and restores terminal state across page reloads
  */
+import { createScopedLogger } from '~/utils/logger';
+const logger = createScopedLogger('TerminalSync');
 
 interface TerminalState {
   terminalId: string;
@@ -67,7 +69,7 @@ export class TerminalSync {
         };
       }
     } catch (error) {
-      console.warn('[TerminalSync] Failed to load state:', error);
+      logger.warn('[TerminalSync] Failed to load state:', error);
     }
   }
 
@@ -80,7 +82,7 @@ export class TerminalSync {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(this.storage));
     } catch (error) {
-      console.warn('[TerminalSync] Failed to persist state:', error);
+      logger.warn('[TerminalSync] Failed to persist state:', error);
     }
   }
 
@@ -169,7 +171,7 @@ export class TerminalSync {
     );
 
     if (this.storage.sessions.length !== before) {
-      console.log(`[TerminalSync] Cleaned up ${before - this.storage.sessions.length} expired sessions`);
+      logger.info(`[TerminalSync] Cleaned up ${before - this.storage.sessions.length} expired sessions`);
       this.persist();
     }
   }

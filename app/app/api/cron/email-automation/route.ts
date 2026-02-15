@@ -116,7 +116,7 @@ export async function GET(request: NextRequest) {
   } catch (error) {
     console.error('[Email Automation] Error:', error);
     return NextResponse.json(
-      { error: 'Email automation failed', details: String(error) },
+      { error: 'Email automation failed' },
       { status: 500 }
     );
   }

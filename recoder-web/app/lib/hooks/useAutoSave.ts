@@ -12,6 +12,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useStore } from '@nanostores/react';
 import { atom } from 'nanostores';
 import { fileHasErrors, errorsAtom } from '~/lib/stores/errors';
+import { createScopedLogger } from '~/utils/logger';
+const logger = createScopedLogger('AutoSave');
 
 // Storage key for auto-save preference
 const AUTO_SAVE_ENABLED_KEY = 'recoder_auto_save_enabled';
@@ -68,7 +70,7 @@ function saveAutoSaveEnabled(enabled: boolean): void {
   try {
     localStorage.setItem(AUTO_SAVE_ENABLED_KEY, JSON.stringify(enabled));
   } catch (e) {
-    console.error('[AutoSave] Failed to save enabled setting:', e);
+    logger.error('[AutoSave] Failed to save enabled setting:', e);
   }
 }
 
@@ -77,7 +79,7 @@ function saveAutoSaveDelay(delay: number): void {
   try {
     localStorage.setItem(AUTO_SAVE_DELAY_KEY, JSON.stringify(delay));
   } catch (e) {
-    console.error('[AutoSave] Failed to save delay setting:', e);
+    logger.error('[AutoSave] Failed to save delay setting:', e);
   }
 }
 
@@ -86,7 +88,7 @@ function saveAutoSaveSkipErrors(skip: boolean): void {
   try {
     localStorage.setItem(AUTO_SAVE_SKIP_ERRORS_KEY, JSON.stringify(skip));
   } catch (e) {
-    console.error('[AutoSave] Failed to save skip errors setting:', e);
+    logger.error('[AutoSave] Failed to save skip errors setting:', e);
   }
 }
 

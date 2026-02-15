@@ -4,6 +4,9 @@
  */
 
 import { atom, computed } from 'nanostores';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('RecentFiles');
 
 export interface RecentFile {
   path: string;
@@ -40,7 +43,7 @@ function loadFromStorage(projectId: string): RecentFile[] {
       }
     }
   } catch (e) {
-    console.warn('[RecentFiles] Failed to load from localStorage:', e);
+    logger.warn('[RecentFiles] Failed to load from localStorage:', e);
   }
   return [];
 }
@@ -52,7 +55,7 @@ function saveToStorage(projectId: string, files: RecentFile[]): void {
   try {
     localStorage.setItem(getStorageKey(projectId), JSON.stringify(files));
   } catch (e) {
-    console.warn('[RecentFiles] Failed to save to localStorage:', e);
+    logger.warn('[RecentFiles] Failed to save to localStorage:', e);
   }
 }
 

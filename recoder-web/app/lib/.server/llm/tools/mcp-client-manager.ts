@@ -15,6 +15,9 @@ import {
 import { getErrorMessage } from '../utils/errors.js';
 import type { WorkspaceContext } from '../utils/workspaceContext.js';
 
+import { createScopedLogger } from '~/utils/logger';
+const logger = createScopedLogger('MCPClientManager');
+
 /**
  * Manages the lifecycle of multiple MCP clients, including local child processes.
  * This class is responsible for starting, stopping, and discovering tools from
@@ -75,7 +78,7 @@ export class McpClientManager {
           await client.discover();
         } catch (error) {
           // Log the error but don't let a single failed server stop the others
-          console.error(
+          logger.error(
             `Error during discovery for server '${name}': ${getErrorMessage(
               error,
             )}`,
@@ -98,7 +101,7 @@ export class McpClientManager {
         try {
           await client.disconnect();
         } catch (error) {
-          console.error(
+          logger.error(
             `Error stopping client '${name}': ${getErrorMessage(error)}`,
           );
         }

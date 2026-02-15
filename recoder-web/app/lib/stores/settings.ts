@@ -1,5 +1,8 @@
 import { atom, map } from 'nanostores';
 import { workbenchStore } from './workbench';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('SettingsStore');
 
 // Storage keys
 const SETTINGS_KEY = 'recoder_settings';
@@ -133,7 +136,7 @@ function loadPreferences(): AppPreferences {
       };
     }
   } catch (e) {
-    console.error('[Settings] Failed to load preferences:', e);
+    logger.error('[Settings] Failed to load preferences:', e);
   }
 
   return DEFAULT_PREFERENCES;
@@ -146,7 +149,7 @@ function savePreferences(preferences: AppPreferences): void {
   try {
     localStorage.setItem(SETTINGS_KEY, JSON.stringify(preferences));
   } catch (e) {
-    console.error('[Settings] Failed to save preferences:', e);
+    logger.error('[Settings] Failed to save preferences:', e);
   }
 }
 

@@ -114,7 +114,7 @@ export async function GET(request: NextRequest) {
     console.error('❌ [api/cli/device/poll] Error:', error);
     return NextResponse.json(
       {
-        error: error instanceof Error ? error.message : 'Polling failed',
+        error: 'Polling failed',
       },
       { status: 500 }
     );

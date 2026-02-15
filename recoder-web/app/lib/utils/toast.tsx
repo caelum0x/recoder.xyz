@@ -1,5 +1,8 @@
 import { toast, type Id, type ToastOptions } from 'react-toastify';
 import { addNotification, type NotificationType } from '~/lib/stores/notifications';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('Toast');
 
 /**
  * Toast utility functions for consistent notifications across the app
@@ -111,7 +114,7 @@ export function showError(message: string | Error | unknown, options?: ShowToast
       ? message
       : String(message);
 
-  console.error('[Toast Error]', message);
+  logger.error('[Toast Error]', message);
 
   const dedupeKey = options?.dedupeKey || `error:${errorMessage.substring(0, 50)}`;
 
@@ -229,7 +232,7 @@ function ErrorToastContent({
  * @param options Toast options
  */
 export function showWarning(message: string, options?: ShowToastOptions): Id {
-  console.warn('[Toast Warning]', message);
+  logger.warn('[Toast Warning]', message);
 
   const dedupeKey = options?.dedupeKey;
 

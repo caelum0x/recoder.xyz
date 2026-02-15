@@ -5,6 +5,10 @@
  * Providers: OpenRouter, Anthropic, OpenAI, Google, Groq, DeepSeek, Ollama
  */
 
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('Models');
+
 export interface ModelInfo {
   id: string;
   name: string;
@@ -204,4 +208,141 @@ export function addCustomModel(providerId: string, model: ModelInfo): boolean {
   // Add the new model to the provider
   provider.models.push(model);
   return true;
+}
+
+// ==================== Dynamic OpenRouter Model Fetching ====================
+
+const OPENROUTER_MODELS_CACHE_KEY = 'recoder_openrouter_models_cache';
+const OPENROUTER_CACHE_TTL = 3600000; // 1 hour
+
+interface OpenRouterCacheEntry {
+  models: ModelInfo[];
+  fetchedAt: number;
+}
+
+interface OpenRouterApiModel {
+  id: string;
+  name: string;
+  description?: string;
+  pricing?: { prompt?: string; completion?: string };
+  context_length?: number;
+  top_provider?: { max_completion_tokens?: number };
+  architecture?: { modality?: string };
+}
+
+function getOpenRouterCache(): OpenRouterCacheEntry | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const stored = localStorage.getItem(OPENROUTER_MODELS_CACHE_KEY);
+    if (!stored) return null;
+    return JSON.parse(stored) as OpenRouterCacheEntry;
+  } catch {
+    return null;
+  }
+}
+
+function setOpenRouterCache(models: ModelInfo[]): void {
+  if (typeof window === 'undefined') return;
+  try {
+    const entry: OpenRouterCacheEntry = { models, fetchedAt: Date.now() };
+    localStorage.setItem(OPENROUTER_MODELS_CACHE_KEY, JSON.stringify(entry));
+  } catch (e) {
+    logger.error('[Models] Failed to cache OpenRouter models:', e);
+  }
+}
+
+function mapOpenRouterModel(m: OpenRouterApiModel): ModelInfo {
+  const promptCost = m.pricing?.prompt ? parseFloat(m.pricing.prompt) * 1_000_000 : undefined;
+  const completionCost = m.pricing?.completion ? parseFloat(m.pricing.completion) * 1_000_000 : undefined;
+  const modality = m.architecture?.modality || '';
+
+  return {
+    id: m.id,
+    name: m.name || m.id,
+    description: m.description,
+    contextWindow: m.context_length,
+    maxTokens: m.top_provider?.max_completion_tokens,
+    supportsVision: modality.includes('image') || modality.includes('multimodal'),
+    costPer1MInput: promptCost,
+    costPer1MOutput: completionCost,
+  };
+}
+
+let _dynamicModelsPromise: Promise<ModelInfo[]> | null = null;
+let _dynamicModelsLoaded = false;
+
+/**
+ * Fetch models from OpenRouter API. Two-tier cache:
+ * 1. Server-side Redis cache via /api/models/list (1h TTL)
+ * 2. Client-side localStorage cache (1h TTL)
+ * Falls back to direct OpenRouter API, then hardcoded models.
+ */
+export async function fetchOpenRouterModels(): Promise<ModelInfo[]> {
+  // Check client-side cache first
+  const cache = getOpenRouterCache();
+  if (cache && (Date.now() - cache.fetchedAt) < OPENROUTER_CACHE_TTL) {
+    return cache.models;
+  }
+
+  // Try server-side cached route first
+  try {
+    const serverResponse = await fetch('/api/models/list');
+    if (serverResponse.ok) {
+      const result = await serverResponse.json() as { models: ModelInfo[]; cached: boolean };
+      if (result.models && result.models.length > 0) {
+        setOpenRouterCache(result.models);
+        return result.models;
+      }
+    }
+  } catch {
+    // Server route failed, fall through to direct API
+  }
+
+  // Fall back to direct OpenRouter API
+  try {
+    const response = await fetch('https://openrouter.ai/api/v1/models');
+    if (!response.ok) {
+      throw new Error(`OpenRouter API returned ${response.status}`);
+    }
+    const data = await response.json() as { data: OpenRouterApiModel[] };
+    const models = (data.data || []).map(mapOpenRouterModel);
+    setOpenRouterCache(models);
+    return models;
+  } catch (e) {
+    logger.error('[Models] Failed to fetch OpenRouter models:', e);
+    // Return stale cache if available
+    if (cache) return cache.models;
+    // Last resort: return hardcoded models
+    return MODEL_PROVIDERS.openrouter.models;
+  }
+}
+
+/**
+ * Get dynamic OpenRouter models. Returns cached/fetched models.
+ * Deduplicates concurrent calls.
+ */
+export async function getOpenRouterModels(): Promise<ModelInfo[]> {
+  if (!_dynamicModelsPromise) {
+    _dynamicModelsPromise = fetchOpenRouterModels().finally(() => {
+      _dynamicModelsPromise = null;
+      _dynamicModelsLoaded = true;
+    });
+  }
+  return _dynamicModelsPromise;
+}
+
+/**
+ * Check if dynamic models have been loaded at least once.
+ */
+export function isDynamicModelsLoaded(): boolean {
+  return _dynamicModelsLoaded;
+}
+
+/**
+ * Get all OpenRouter models: dynamic if loaded, otherwise hardcoded fallback.
+ */
+export function getOpenRouterModelsCached(): ModelInfo[] {
+  const cache = getOpenRouterCache();
+  if (cache) return cache.models;
+  return MODEL_PROVIDERS.openrouter.models;
 }

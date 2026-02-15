@@ -266,7 +266,7 @@ export const CodeBlockMessage = memo(function CodeBlockMessage({ block, classNam
       <div className="p-3 overflow-x-auto">
         <div
           className="text-sm [&_pre]:m-0 [&_pre]:bg-transparent [&_code]:text-bolt-elements-textSecondary"
-          dangerouslySetInnerHTML={{ __html: html ?? `<pre><code>${block.content}</code></pre>` }}
+          dangerouslySetInnerHTML={{ __html: html ?? `<pre><code>${(block.content || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</code></pre>` }}
         />
       </div>
     </div>

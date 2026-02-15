@@ -10,14 +10,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { sendVerificationEmail, sendWelcomeEmail, sendPasswordResetEmail, sendTemporaryPasswordEmail } from '@/lib/email';
 
-// Simple admin check - in production, use proper auth
-const ADMIN_SECRET = process.env.ADMIN_SECRET || 'recoder-admin-2026';
+const ADMIN_SECRET = process.env.ADMIN_SECRET;
+if (!ADMIN_SECRET) {
+  console.warn('[admin] ADMIN_SECRET not configured - admin endpoints disabled');
+}
 
 export async function POST(request: NextRequest) {
   try {
     // Check admin authorization
     const authHeader = request.headers.get('x-admin-secret');
-    if (authHeader !== ADMIN_SECRET) {
+    if (!ADMIN_SECRET || !authHeader || authHeader !== ADMIN_SECRET) {
       return NextResponse.json(
         { success: false, error: 'Unauthorized. Provide x-admin-secret header.' },
         { status: 401 }
@@ -79,7 +81,7 @@ export async function POST(request: NextRequest) {
   } catch (error: any) {
     console.error('Test email error:', error);
     return NextResponse.json(
-      { success: false, error: error.message || 'Internal server error' },
+      { success: false, error: 'Internal server error' },
       { status: 500 }
     );
   }

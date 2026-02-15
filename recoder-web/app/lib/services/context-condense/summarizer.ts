@@ -11,6 +11,8 @@ import {
   estimateTokens,
 } from './utils';
 import { QUICK_SUMMARY_TEMPLATE } from './constants';
+import { createScopedLogger } from '~/utils/logger';
+const logger = createScopedLogger('ContextSummarizer');
 
 /**
  * Configuration for summary building
@@ -251,7 +253,7 @@ export async function buildLLMSummary(
     const summary = await llmCall(summaryPrompt, messagesForSummary);
     return summary.trim();
   } catch (error) {
-    console.error('LLM summarization failed:', error);
+    logger.error('LLM summarization failed:', error);
     // Fall back to quick summary
     return buildQuickSummary(messages);
   }

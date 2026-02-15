@@ -5,6 +5,9 @@
 
 import { createCodeAssistContentGenerator } from './code_assist/codeAssist';
 import { AuthType } from './core/contentGenerator';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('CloudAIIntegration');
 
 let cloudAIProvider: any = null;
 
@@ -23,10 +26,10 @@ export async function initializeCloudAI(config?: any): Promise<boolean> {
       config
     );
 
-    console.log('✅ Google Cloud AI provider initialized');
+    logger.info('✅ Google Cloud AI provider initialized');
     return true;
   } catch (error) {
-    console.warn('Google Cloud AI initialization failed:', error);
+    logger.warn('Google Cloud AI initialization failed:', error);
     return false;
   }
 }
@@ -46,7 +49,7 @@ export async function generateWithCloudAI(prompt: string, context?: any): Promis
       content: result.content
     };
   } catch (error) {
-    console.warn('Cloud AI generation failed, using fallback:', error);
+    logger.warn('Cloud AI generation failed, using fallback:', error);
     return { success: false, fallback: true };
   }
 }

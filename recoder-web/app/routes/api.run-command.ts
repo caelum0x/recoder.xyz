@@ -20,6 +20,10 @@
 
 import { type ActionFunctionArgs, json } from '@remix-run/cloudflare';
 import { verifySession } from '~/lib/auth/session.server';
+import { DockerHttpError, dockerFetchJson, getDockerBackendUrl, getSessionTokenFromRequest } from '~/lib/http/docker-server';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('RunCommand');
 
 interface RunCommandRequest {
   command: string;
@@ -40,36 +44,6 @@ interface CommandResult {
   ready?: boolean;
   port?: number;
   fileNotFound?: boolean;
-}
-
-// Get docker backend URL
-function getDockerBackendUrl(): string {
-  return process.env.VITE_DOCKER_BACKEND_URL || 'http://localhost:3100';
-}
-
-// Get session token from cookies
-function getSessionToken(request: Request): string | null {
-  const cookieHeader = request.headers.get('Cookie');
-  if (!cookieHeader) return null;
-
-  const cookies = cookieHeader.split(';');
-  const cookieNames = [
-    '__Secure-recoder.session_token',
-    'recoder.session_token',
-    '__Secure-session_token',
-    'session_token',
-    'recoder_session_token',
-  ];
-
-  for (const cookie of cookies) {
-    const [name, ...valueParts] = cookie.trim().split('=');
-    const value = valueParts.join('=');
-    if (cookieNames.includes(name) && value) {
-      return decodeURIComponent(value);
-    }
-  }
-
-  return null;
 }
 
 /**
@@ -182,7 +156,7 @@ async function executeCommandWithStreaming(
           } catch (error) {
             controller.enqueue(
               encoder.encode(
-                `data: ${JSON.stringify({ error: error instanceof Error ? error.message : 'Stream error' })}\n\n`
+                `data: ${JSON.stringify({ error: 'Stream error' })}\n\n`
               )
             );
             controller.close();
@@ -204,12 +178,14 @@ async function executeCommandWithStreaming(
     clearTimeout(timeoutId);
 
     const encoder = new TextEncoder();
-    let errorMessage = 'Unknown error';
+    let errorMessage = 'Command execution failed';
 
     if (error instanceof DOMException && error.name === 'AbortError') {
       errorMessage = `Command timed out after ${timeout}ms`;
-    } else if (error instanceof Error) {
-      errorMessage = error.message;
+    }
+
+    if (error instanceof Error) {
+      logger.error('[run-command] Error:', error.message);
     }
 
     return new ReadableStream({
@@ -258,41 +234,20 @@ async function executeCommand(
   }
 
   try {
-    const response = await fetch(`${dockerUrl}/api/exec/${projectId}`, {
-      method: 'POST',
+    const result = await dockerFetchJson<CommandResult>(
+      `${dockerUrl}/api/exec/${projectId}`,
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          command,
+          cwd,
+          background,
+        }),
+        signal: controller.signal,
+      },
       headers,
-      body: JSON.stringify({
-        command,
-        cwd,
-        background,
-      }),
-      signal: controller.signal,
-    });
-
+    );
     clearTimeout(timeoutId);
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      let errorMessage: string;
-      let exitCode = 1;
-
-      try {
-        const errorJson = JSON.parse(errorText);
-        errorMessage = errorJson.error || errorJson.message || `HTTP ${response.status}`;
-        exitCode = errorJson.exitCode ?? 1;
-      } catch {
-        errorMessage = errorText || `HTTP ${response.status}`;
-      }
-
-      return {
-        success: false,
-        error: errorMessage,
-        exitCode,
-        message: 'Command execution failed',
-      };
-    }
-
-    const result = (await response.json()) as CommandResult;
 
     return {
       success: result.success ?? true,
@@ -317,9 +272,19 @@ async function executeCommand(
       };
     }
 
+    if (error instanceof DockerHttpError) {
+      const payload = error.payload as { exitCode?: number; error?: string; message?: string } | null;
+      return {
+        success: false,
+        error: payload?.error || payload?.message || 'Command execution failed',
+        exitCode: payload?.exitCode ?? 1,
+        message: 'Command execution failed',
+      };
+    }
+
     return {
       success: false,
-      error: error instanceof Error ? error.message : 'Unknown error',
+      error: 'Command execution failed',
       exitCode: 1,
       message: 'Command execution failed',
     };
@@ -382,9 +347,9 @@ export async function action({ request }: ActionFunctionArgs) {
   }
 
   // Get auth token for docker-backend
-  const token = getSessionToken(request);
+  const token = getSessionTokenFromRequest(request);
 
-  console.log(`[run-command] User: ${session.user.email}, Project: ${projectId}, Command: ${command.substring(0, 100)}`);
+  logger.info(`[run-command] User: ${session.user.email}, Project: ${projectId}, Command: ${command.substring(0, 100)}`);
 
   // Handle streaming response
   if (stream) {

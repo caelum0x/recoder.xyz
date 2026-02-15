@@ -14,6 +14,9 @@ import { shortenPath, makeRelative } from '../utils/paths.js';
 import type { Config } from '../config/config.js';
 import { ToolErrorType } from './tool-error.js';
 
+import { createScopedLogger } from '~/utils/logger';
+const logger = createScopedLogger('GlobTool');
+
 // Subset of 'Path' interface provided by 'glob' that we can implement for testing
 export interface GlobPath {
   fullpath(): string;
@@ -235,7 +238,7 @@ class GlobToolInvocation extends BaseToolInvocation<
     } catch (error) {
       const errorMessage =
         error instanceof Error ? error.message : String(error);
-      console.error(`GlobLogic execute Error: ${errorMessage}`, error);
+      logger.error(`GlobLogic execute Error: ${errorMessage}`, error);
       const rawError = `Error during glob search operation: ${errorMessage}`;
       return {
         llmContent: rawError,

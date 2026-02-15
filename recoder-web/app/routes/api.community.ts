@@ -1,5 +1,8 @@
 import { type ActionFunctionArgs, type LoaderFunctionArgs, json } from '@remix-run/cloudflare';
 import { requireAuth } from '~/lib/auth-helpers';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('Community');
 
 export async function loader({ request }: LoaderFunctionArgs) {
   try {
@@ -19,7 +22,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
     return json({ success: true, projects: projects.rows });
   } catch (error) {
-    console.error('Failed to load community projects:', error);
+    logger.error('Failed to load community projects:', error);
     return json({ success: false, projects: [] });
   }
 }
@@ -53,7 +56,7 @@ export async function action({ request }: ActionFunctionArgs) {
 
       return json({ success: true, projectId: result.rows[0].id });
     } catch (error) {
-      console.error('Failed to share project:', error);
+      logger.error('Failed to share project:', error);
       return json({ success: false, error: 'Failed to share project' }, { status: 500 });
     }
   }

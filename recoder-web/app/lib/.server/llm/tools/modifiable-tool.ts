@@ -18,6 +18,9 @@ import type {
   ToolResult,
 } from './tools.js';
 
+import { createScopedLogger } from '~/utils/logger';
+const logger = createScopedLogger('ModifiableTool');
+
 /**
  * A declarative tool that supports a modify operation.
  */
@@ -128,13 +131,13 @@ function deleteTempFiles(oldPath: string, newPath: string): void {
   try {
     fs.unlinkSync(oldPath);
   } catch {
-    console.error(`Error deleting temp diff file: ${oldPath}`);
+    logger.error(`Error deleting temp diff file: ${oldPath}`);
   }
 
   try {
     fs.unlinkSync(newPath);
   } catch {
-    console.error(`Error deleting temp diff file: ${newPath}`);
+    logger.error(`Error deleting temp diff file: ${newPath}`);
   }
 }
 

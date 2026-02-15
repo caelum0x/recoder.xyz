@@ -11,6 +11,9 @@
  */
 
 import { atom, map } from 'nanostores';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('QuickActionsStore');
 
 // =============================================================================
 // Types
@@ -247,7 +250,7 @@ export async function executeQuickAction(id: string): Promise<void> {
   const action = quickActionsRegistry.get()[id] || customQuickActions.get()[id];
 
   if (!action) {
-    console.warn(`[QuickActions] Action not found: ${id}`);
+    logger.warn(`[QuickActions] Action not found: ${id}`);
     return;
   }
 
@@ -261,7 +264,7 @@ export async function executeQuickAction(id: string): Promise<void> {
   try {
     await action.action();
   } catch (error) {
-    console.error(`[QuickActions] Error executing action ${id}:`, error);
+    logger.error(`[QuickActions] Error executing action ${id}:`, error);
   }
 }
 

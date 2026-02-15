@@ -10,6 +10,9 @@ import { createGoogleGenerativeAI } from '@ai-sdk/google';
 import type { LanguageModel } from 'ai';
 import type { ModelConfig } from './model-router';
 
+import { createScopedLogger } from '~/utils/logger';
+const logger = createScopedLogger('ModelProvider');
+
 export interface ModelProviderConfig {
   openrouterKey?: string;
   anthropicKey?: string; // Fallback for direct Anthropic access
@@ -84,7 +87,7 @@ export function getModel(
 
   // Fallback to direct Anthropic if no OpenRouter key
   if (providerConfig.anthropicKey && modelConfig.provider === 'anthropic') {
-    console.warn('⚠️  Using direct Anthropic (OpenRouter recommended for cost savings)');
+    logger.warn('⚠️  Using direct Anthropic (OpenRouter recommended for cost savings)');
     return getAnthropicDirect(modelConfig.id, providerConfig.anthropicKey);
   }
 
@@ -108,7 +111,7 @@ function getOpenRouterModel(modelId: string, apiKey: string): LanguageModel {
   // Map our model ID to OpenRouter model ID
   const openrouterModelId = OPENROUTER_MODEL_MAP[modelId] || modelId;
 
-  console.log(`🌐 OpenRouter: ${modelId} → ${openrouterModelId}`);
+  logger.info(`🌐 OpenRouter: ${modelId} → ${openrouterModelId}`);
 
   // Use .chat() for OpenAI SDK adapter - cast through unknown to avoid type mismatch
   return openrouter.chat(openrouterModelId) as unknown as LanguageModel;
@@ -136,14 +139,14 @@ function getAnthropicDirect(modelId: string, apiKey: string): LanguageModel {
  * Get fallback model (free Gemini via OpenRouter)
  */
 export function getFallbackModel(providerConfig: ModelProviderConfig): LanguageModel {
-  console.log('⚠️  Using fallback model: Gemini 2.0 Flash (free via OpenRouter)');
+  logger.info('⚠️  Using fallback model: Gemini 2.0 Flash (free via OpenRouter)');
 
   if (providerConfig.openrouterKey) {
     return getOpenRouterModel('gemini-2.5-flash', providerConfig.openrouterKey);
   }
 
   if (providerConfig.anthropicKey) {
-    console.warn('⚠️  OpenRouter not configured, using Anthropic Haiku');
+    logger.warn('⚠️  OpenRouter not configured, using Anthropic Haiku');
     return getAnthropicDirect('claude-haiku-3.5', providerConfig.anthropicKey);
   }
 
@@ -188,7 +191,7 @@ export function getModelWithFallback(
   const validation = validateProviderConfig(modelConfig, providerConfig);
 
   if (!validation.valid) {
-    console.warn(`⚠️  ${validation.error}, using fallback model`);
+    logger.warn(`⚠️  ${validation.error}, using fallback model`);
     return {
       model: getFallbackModel(providerConfig),
       usingFallback: true
@@ -199,7 +202,7 @@ export function getModelWithFallback(
     const model = getModel(modelConfig, providerConfig);
     return { model, usingFallback: false };
   } catch (error) {
-    console.error(`Failed to get model ${modelConfig.id}:`, error);
+    logger.error(`Failed to get model ${modelConfig.id}:`, error);
     return {
       model: getFallbackModel(providerConfig),
       usingFallback: true

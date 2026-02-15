@@ -1,0 +1,25 @@
+{
+  "name": "@recoder/auth",
+  "version": "0.1.0",
+  "private": true,
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./client": "./src/client.ts",
+    "./session": "./src/session.ts",
+    "./keys": "./src/keys.ts"
+  },
+  "scripts": {
+    "build": "prisma generate --schema=\"./prisma/schema.prisma\" --no-hints",
+    "postinstall": "prisma generate --schema=\"./prisma/schema.prisma\" --no-hints"
+  },
+  "dependencies": {
+    "@prisma/client": "7.1.0",
+    "better-auth": "^1.2.0"
+  },
+  "devDependencies": {
+    "prisma": "7.1.0",
+    "typescript": "^5.8.3"
+  }
+}

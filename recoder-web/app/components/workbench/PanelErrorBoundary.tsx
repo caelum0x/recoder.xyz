@@ -4,6 +4,8 @@
  */
 
 import React, { Component, type ErrorInfo, type ReactNode } from 'react';
+import { createScopedLogger } from '~/utils/logger';
+const logger = createScopedLogger('PanelErrorBoundary');
 
 interface Props {
   children: ReactNode;
@@ -27,7 +29,7 @@ export class PanelErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    console.error(`[${this.props.panelName}] Panel error:`, error, errorInfo);
+    logger.error(`[${this.props.panelName}] Panel error:`, error, errorInfo);
   }
 
   handleRetry = () => {

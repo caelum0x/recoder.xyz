@@ -11,6 +11,8 @@ import { createNetlifyDeployer } from './platforms/netlify';
 import { createRailwayDeployer } from './platforms/railway';
 import { createCloudflareDeployer } from './platforms/cloudflare';
 import type { FileTree, DeploymentConfig as PlatformDeploymentConfig } from './types';
+import { createScopedLogger } from '~/utils/logger';
+const logger = createScopedLogger('DeploymentManager');
 
 interface Deployment {
   id: string;
@@ -52,10 +54,10 @@ export class DeploymentManager {
         deployments.forEach(deployment => {
           this.deployments.set(deployment.id, deployment);
         });
-        console.log(`✅ Loaded ${deployments.length} deployments from KV`);
+        logger.info(`✅ Loaded ${deployments.length} deployments from KV`);
       }
     } catch (error) {
-      console.error('Failed to load deployments from KV:', error);
+      logger.error('Failed to load deployments from KV:', error);
     }
   }
 
@@ -66,7 +68,7 @@ export class DeploymentManager {
       const deployments = Array.from(this.deployments.values());
       await this.env.KV.put('deployments', JSON.stringify(deployments));
     } catch (error) {
-      console.error('Failed to save deployments to KV:', error);
+      logger.error('Failed to save deployments to KV:', error);
     }
   }
 
@@ -84,9 +86,9 @@ export class DeploymentManager {
     const id = `deploy_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     const projectName = config.config?.projectName || `recoder-${Date.now()}`;
 
-    console.log(`🚀 Creating deployment to ${config.platform}...`);
-    console.log(`   Project: ${projectName}`);
-    console.log(`   Files: ${Object.keys(config.files).length}`);
+    logger.info(`🚀 Creating deployment to ${config.platform}...`);
+    logger.info(`   Project: ${projectName}`);
+    logger.info(`   Files: ${Object.keys(config.files).length}`);
 
     const deployment: Deployment = {
       id,
@@ -101,7 +103,7 @@ export class DeploymentManager {
 
     // Deploy in background (don't await)
     this.deployToPlatform(id, config).catch(error => {
-      console.error(`Deployment ${id} failed:`, error);
+      logger.error(`Deployment ${id} failed:`, error);
       this.updateDeploymentStatus(id, 'error', undefined, error.message);
     });
 
@@ -130,9 +132,9 @@ export class DeploymentManager {
       }
 
       await this.updateDeploymentStatus(deploymentId, 'ready', deploymentUrl);
-      console.log(`✅ Deployment ${deploymentId} complete: ${deploymentUrl}`);
+      logger.info(`✅ Deployment ${deploymentId} complete: ${deploymentUrl}`);
     } catch (error) {
-      console.error(`❌ Deployment ${deploymentId} failed:`, error);
+      logger.error(`❌ Deployment ${deploymentId} failed:`, error);
       await this.updateDeploymentStatus(
         deploymentId,
         'error',
@@ -165,7 +167,7 @@ export class DeploymentManager {
       throw new Error('VERCEL_TOKEN not configured. Please add VERCEL_TOKEN to your environment variables (.dev.vars file). Get your token from: https://vercel.com/account/tokens');
     }
 
-    console.log('📦 Deploying to Vercel...');
+    logger.info('📦 Deploying to Vercel...');
 
     const projectName = config.config?.projectName || `recoder-${Date.now()}`;
 
@@ -201,7 +203,7 @@ export class DeploymentManager {
       throw new Error('NETLIFY_TOKEN not configured. Please add NETLIFY_TOKEN to your environment variables (.dev.vars file). Get your token from: https://app.netlify.com/user/applications#personal-access-tokens');
     }
 
-    console.log('📦 Deploying to Netlify...');
+    logger.info('📦 Deploying to Netlify...');
 
     const projectName = config.config?.projectName || `recoder-${Date.now()}`;
 
@@ -239,7 +241,7 @@ export class DeploymentManager {
       throw new Error('Cloudflare credentials not configured. Please add CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID to your environment variables (.dev.vars file). Get your credentials from: https://dash.cloudflare.com/profile/api-tokens');
     }
 
-    console.log('📦 Deploying to Cloudflare Pages...');
+    logger.info('📦 Deploying to Cloudflare Pages...');
 
     const projectName = config.config?.projectName || `recoder-${Date.now()}`;
 

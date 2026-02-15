@@ -15,6 +15,7 @@ import {
 	serviceSkus,
 	workspaces,
 } from "@/db";
+import { createProjectFromPlaybook as createProjectFromPlaybookHelper } from "@/lib/agency/playbook-actions";
 import { applyProjectTransitionWithAudit } from "@/lib/agency/project-transition";
 import {
 	deliveryProjectStatusLabels,
@@ -239,6 +240,43 @@ export async function createProjectFromTemplate(formData: FormData) {
 
 	revalidatePath("/projects");
 	redirect(`/projects/${id}`);
+}
+
+export async function createProjectFromPlaybook(formData: FormData) {
+	const team = await requireAdminRole();
+	const name = formData.get("name") as string;
+	const clientId = formData.get("clientId") as string;
+	const playbookDbIdRaw = Number.parseInt(
+		String(formData.get("playbookDbId") ?? ""),
+		10,
+	);
+
+	if (!name?.trim()) {
+		throw new Error("Project name is required");
+	}
+	if (!clientId) {
+		throw new Error("Client is required");
+	}
+	if (Number.isNaN(playbookDbIdRaw)) {
+		throw new Error("Playbook is required");
+	}
+
+	const client = await db.query.clients.findFirst({
+		where: and(eq(clients.id, clientId), eq(clients.teamDbId, team.dbId)),
+	});
+	if (!client) {
+		throw new Error("Client not found");
+	}
+
+	const { projectId } = await createProjectFromPlaybookHelper({
+		teamDbId: team.dbId,
+		clientDbId: client.dbId,
+		playbookDbId: playbookDbIdRaw,
+		projectName: name.trim(),
+	});
+
+	revalidatePath("/projects");
+	redirect(`/projects/${projectId}`);
 }
 
 export async function updateProjectStatus(

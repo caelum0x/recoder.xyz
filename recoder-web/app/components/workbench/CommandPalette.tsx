@@ -401,8 +401,59 @@ export const CommandPalette = memo(({ files, recentFiles = [], className }: Comm
     return fuse.search(searchQuery, { limit: 15 }).map(r => r.item);
   }, [commands, mode, query]);
 
+  // Build symbol results from workspace files
+  const symbolResults = useMemo(() => {
+    if (!files || mode !== 'symbols') return [];
+
+    const symbols: SymbolResult[] = [];
+
+    // Regex patterns for extracting symbols from TS/JS files
+    const patterns: Array<{ regex: RegExp; kind: SymbolResult['kind'] }> = [
+      { regex: /^(?:export\s+)?(?:async\s+)?function\s+(\w+)/gm, kind: 'function' },
+      { regex: /^(?:export\s+)?class\s+(\w+)/gm, kind: 'class' },
+      { regex: /^(?:export\s+)?interface\s+(\w+)/gm, kind: 'interface' },
+      { regex: /^(?:export\s+)?type\s+(\w+)\s*=/gm, kind: 'type' },
+      { regex: /^(?:export\s+)?const\s+(\w+)\s*=/gm, kind: 'variable' },
+      { regex: /^(?:export\s+)?(?:default\s+)?function\*?\s+(\w+)/gm, kind: 'function' },
+    ];
+
+    const codeExts = /\.(ts|tsx|js|jsx|py|rs|go|java|c|cpp|h)$/;
+
+    for (const [path, dirent] of Object.entries(files)) {
+      if (dirent?.type !== 'file' || !codeExts.test(path)) continue;
+      const content = dirent.content;
+      if (!content) continue;
+
+      for (const { regex, kind } of patterns) {
+        regex.lastIndex = 0;
+        let match: RegExpExecArray | null;
+        while ((match = regex.exec(content)) !== null) {
+          const lineIndex = content.slice(0, match.index).split('\n').length;
+          const name = match[1];
+          // Skip common non-symbol names
+          if (name && name.length > 1 && !/^(if|else|for|while|return|import|from)$/.test(name)) {
+            symbols.push({ name, kind, line: lineIndex, file: path });
+          }
+        }
+      }
+    }
+
+    const searchQuery = query.startsWith('@') ? query.slice(1).trim() : query;
+
+    if (!searchQuery) {
+      return symbols.slice(0, 30);
+    }
+
+    const fuse = new Fuse(symbols, {
+      keys: ['name', 'file'],
+      threshold: 0.4,
+    });
+
+    return fuse.search(searchQuery, { limit: 25 }).map(r => r.item);
+  }, [files, mode, query]);
+
   // Get total results
-  const results = mode === 'files' ? fileResults : mode === 'commands' ? commandResults : [];
+  const results = mode === 'files' ? fileResults : mode === 'commands' ? commandResults : mode === 'symbols' ? symbolResults : [];
   const totalResults = results.length;
 
   // Handle selection
@@ -415,10 +466,16 @@ export const CommandPalette = memo(({ files, recentFiles = [], className }: Comm
       const cmd = commandResults[index];
       closeCommandPalette();
       cmd.action();
+    } else if (mode === 'symbols' && symbolResults[index]) {
+      const sym = symbolResults[index];
+      if (sym.file) {
+        workbenchStore.setSelectedFile(sym.file);
+        workbenchStore.navigateToLine(sym.file, sym.line);
+      }
+      closeCommandPalette();
     } else if (mode === 'lines') {
       const lineNum = parseInt(query.slice(1), 10);
       if (!isNaN(lineNum)) {
-        // Navigate to line
         const currentFile = workbenchStore.selectedFile.get();
         if (currentFile) {
           workbenchStore.navigateToLine(currentFile, lineNum);
@@ -426,7 +483,7 @@ export const CommandPalette = memo(({ files, recentFiles = [], className }: Comm
         closeCommandPalette();
       }
     }
-  }, [mode, fileResults, commandResults, query]);
+  }, [mode, fileResults, commandResults, symbolResults, query]);
 
   // Keyboard navigation
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
@@ -662,11 +719,64 @@ export const CommandPalette = memo(({ files, recentFiles = [], className }: Comm
               </div>
             )}
 
-            {/* Symbols mode placeholder */}
+            {/* Symbols mode */}
             {mode === 'symbols' && (
-              <div className="px-4 py-8 text-center text-bolt-elements-textTertiary">
-                Symbol search coming soon...
-              </div>
+              <>
+                {symbolResults.length === 0 ? (
+                  <div className="px-4 py-8 text-center text-bolt-elements-textTertiary">
+                    {query.length > 1 ? 'No symbols found' : 'Type to search symbols...'}
+                  </div>
+                ) : (
+                  symbolResults.map((sym, index) => {
+                    const kindIcons: Record<string, string> = {
+                      function: 'i-ph:function',
+                      class: 'i-ph:cube',
+                      interface: 'i-ph:puzzle-piece',
+                      type: 'i-ph:tag',
+                      variable: 'i-ph:equals',
+                      constant: 'i-ph:hash',
+                      method: 'i-ph:gear',
+                      property: 'i-ph:dot',
+                    };
+                    const kindColors: Record<string, string> = {
+                      function: 'text-yellow-500',
+                      class: 'text-blue-500',
+                      interface: 'text-purple-500',
+                      type: 'text-green-500',
+                      variable: 'text-cyan-500',
+                      constant: 'text-orange-500',
+                      method: 'text-yellow-500',
+                      property: 'text-gray-500',
+                    };
+                    return (
+                      <button
+                        key={`${sym.file}:${sym.name}:${sym.line}`}
+                        className={classNames(
+                          'w-full flex items-center gap-3 px-4 py-2 text-left transition-colors',
+                          index === selectedIndex
+                            ? 'bg-purple-500/20 text-bolt-elements-textPrimary'
+                            : 'hover:bg-bolt-elements-background-depth-2 text-bolt-elements-textSecondary'
+                        )}
+                        onClick={() => handleSelect(index)}
+                        onMouseEnter={() => setSelectedIndex(index)}
+                      >
+                        <span className={classNames(kindIcons[sym.kind] || 'i-ph:code', kindColors[sym.kind] || 'text-gray-500', 'text-lg shrink-0')} />
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="font-mono text-sm truncate">{sym.name}</span>
+                            <span className="text-xs text-bolt-elements-textTertiary">{sym.kind}</span>
+                          </div>
+                          {sym.file && (
+                            <div className="text-xs text-bolt-elements-textTertiary truncate">
+                              {sym.file}:{sym.line}
+                            </div>
+                          )}
+                        </div>
+                      </button>
+                    );
+                  })
+                )}
+              </>
             )}
           </div>
 

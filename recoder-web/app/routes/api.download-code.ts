@@ -1,5 +1,8 @@
 import { type ActionFunctionArgs } from '@remix-run/cloudflare';
 import JSZip from 'jszip';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('DownloadCode');
 
 /**
  * API endpoint to download project files as a ZIP
@@ -9,6 +12,12 @@ import JSZip from 'jszip';
 export async function action({ request }: ActionFunctionArgs) {
   if (request.method !== 'POST') {
     return new Response('Method not allowed', { status: 405 });
+  }
+
+  const { verifySession } = await import('~/lib/auth/session.server');
+  const session = await verifySession(request);
+  if (!session?.user) {
+    return new Response(JSON.stringify({ error: 'Authentication required' }), { status: 401, headers: { 'Content-Type': 'application/json' } });
   }
 
   try {
@@ -21,7 +30,7 @@ export async function action({ request }: ActionFunctionArgs) {
       );
     }
 
-    console.log('📦 [download-code] Creating ZIP with', Object.keys(files).length, 'files');
+    logger.info('📦 [download-code] Creating ZIP with', Object.keys(files).length, 'files');
 
     // Create ZIP file
     const zip = new JSZip();
@@ -36,7 +45,7 @@ export async function action({ request }: ActionFunctionArgs) {
     // Generate ZIP file
     const zipBlob = await zip.generateAsync({ type: 'uint8array' }) as Uint8Array;
 
-    console.log('✅ [download-code] ZIP created successfully:', zipBlob.byteLength, 'bytes');
+    logger.info('✅ [download-code] ZIP created successfully:', zipBlob.byteLength, 'bytes');
 
     // Return ZIP file
     return new Response(zipBlob as any, {
@@ -47,7 +56,7 @@ export async function action({ request }: ActionFunctionArgs) {
       },
     });
   } catch (error) {
-    console.error('❌ [download-code] Failed to create ZIP:', error);
+    logger.error('❌ [download-code] Failed to create ZIP:', error);
     return new Response(
       JSON.stringify({ error: 'Failed to create ZIP file' }),
       { status: 500, headers: { 'Content-Type': 'application/json' } }

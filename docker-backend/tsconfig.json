@@ -2,6 +2,11 @@
   "compilerOptions": {
     "target": "ES2022",
     "module": "commonjs",
+    "paths": {
+      "@giselles-ai/stream/public-task-stream": ["../packages/stream/dist/public-task-stream"],
+      "@giselles-ai/vault": ["../packages/vault/dist/index"],
+      "@giselles-ai/vault/node-crypto": ["../packages/vault/dist/node-crypto"]
+    },
     "lib": ["ES2022", "dom"],
     "outDir": "./dist",
     "rootDir": "./src",
@@ -10,7 +15,7 @@
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
-    "declaration": true,
+    "declaration": false,
     "downlevelIteration": true,
     "types": ["node"]
   },

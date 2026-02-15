@@ -83,7 +83,7 @@ export const GET = withCLIAuth(async (request: NextRequest, context) => {
     });
   } catch (error: any) {
     return NextResponse.json(
-      { error: 'Failed to get quota', message: error.message },
+      { error: 'Failed to get quota' },
       { status: 500 }
     );
   }

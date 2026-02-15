@@ -5,6 +5,7 @@
 
 import { useCallback, useMemo, useEffect } from 'react';
 import { useStore } from '@nanostores/react';
+import { createScopedLogger } from '~/utils/logger';
 import {
   checkpointsStore,
   checkpointConfigStore,
@@ -40,6 +41,8 @@ import {
   type CheckpointConfig,
   type CheckpointStatus,
 } from '~/lib/services/checkpoints';
+
+const logger = createScopedLogger('Checkpoints');
 
 export interface UseCheckpointsOptions {
   projectId: string;
@@ -130,7 +133,7 @@ export function useCheckpoints(
       opts?: { taskId?: string; description?: string }
     ): Promise<Checkpoint | null> => {
       if (!onCreateCheckpoint) {
-        console.warn('No onCreateCheckpoint handler provided');
+        logger.warn('No onCreateCheckpoint handler provided');
         return null;
       }
 

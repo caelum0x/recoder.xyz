@@ -20,7 +20,7 @@ const { mockExecStart, mockExec, mockGetContainer } = vi.hoisted(() => {
           // Return mock git output
           cb(Buffer.from('\x01\x00\x00\x00\x00\x00\x00\x08abc123|abc123|test|1700000000'));
         }
-        if (event === 'end') setTimeout(cb, 10);
+        if (event === 'end') process.nextTick(cb);
         return { on: vi.fn() };
       }),
     }),
@@ -63,7 +63,7 @@ describe('SnapshotManager', () => {
         start: vi.fn().mockResolvedValue({
           on: vi.fn((event, cb) => {
             if (event === 'data') cb(Buffer.from('\x01\x00\x00\x00\x00\x00\x00\x02no'));
-            if (event === 'end') setTimeout(cb, 10);
+            if (event === 'end') process.nextTick(cb);
             return { on: vi.fn() };
           }),
         }),
@@ -85,7 +85,7 @@ describe('SnapshotManager', () => {
         start: vi.fn().mockResolvedValue({
           on: vi.fn((event, cb) => {
             if (event === 'data') cb(Buffer.from('\x01\x00\x00\x00\x00\x00\x00\x03yes'));
-            if (event === 'end') setTimeout(cb, 10);
+            if (event === 'end') process.nextTick(cb);
             return { on: vi.fn() };
           }),
         }),
@@ -117,24 +117,26 @@ describe('SnapshotManager', () => {
       ];
 
       let callIndex = 0;
-      mockExec.mockImplementation(() => ({
-        start: vi.fn().mockResolvedValue({
-          on: vi.fn((event, cb) => {
-            if (event === 'data') {
-              const response = execResponses[callIndex] || { data: '' };
-              const data = response.data;
-              const buf = Buffer.alloc(8 + data.length);
-              buf.writeUInt8(1, 0);
-              buf.writeUInt32BE(data.length, 4);
-              buf.write(data, 8);
-              cb(buf);
-            }
-            if (event === 'end') setTimeout(cb, 10);
-            callIndex++;
-            return { on: vi.fn() };
+      mockExec.mockImplementation(() => {
+        const idx = callIndex++;
+        return {
+          start: vi.fn().mockResolvedValue({
+            on: vi.fn((event, cb) => {
+              if (event === 'data') {
+                const response = execResponses[idx] || { data: '' };
+                const data = response.data;
+                const buf = Buffer.alloc(8 + data.length);
+                buf.writeUInt8(1, 0);
+                buf.writeUInt32BE(data.length, 4);
+                buf.write(data, 8);
+                cb(buf);
+              }
+              if (event === 'end') process.nextTick(cb);
+              return { on: vi.fn() };
+            }),
           }),
-        }),
-      }));
+        };
+      });
 
       const snapshot = await snapshotManager.createSnapshot(
         testContainerId,
@@ -159,7 +161,7 @@ describe('SnapshotManager', () => {
               buf.writeUInt8(1, 0);
               cb(buf);
             }
-            if (event === 'end') setTimeout(cb, 10);
+            if (event === 'end') process.nextTick(cb);
             return { on: vi.fn() };
           }),
         }),
@@ -189,23 +191,25 @@ describe('SnapshotManager', () => {
       ];
 
       let callIndex = 0;
-      mockExec.mockImplementation(() => ({
-        start: vi.fn().mockResolvedValue({
-          on: vi.fn((event, cb) => {
-            if (event === 'data') {
-              const data = execResponses[callIndex]?.data || '';
-              const buf = Buffer.alloc(8 + data.length);
-              buf.writeUInt8(1, 0);
-              buf.writeUInt32BE(data.length, 4);
-              buf.write(data, 8);
-              cb(buf);
-            }
-            if (event === 'end') setTimeout(cb, 10);
-            callIndex++;
-            return { on: vi.fn() };
+      mockExec.mockImplementation(() => {
+        const idx = callIndex++;
+        return {
+          start: vi.fn().mockResolvedValue({
+            on: vi.fn((event, cb) => {
+              if (event === 'data') {
+                const data = execResponses[idx]?.data || '';
+                const buf = Buffer.alloc(8 + data.length);
+                buf.writeUInt8(1, 0);
+                buf.writeUInt32BE(data.length, 4);
+                buf.write(data, 8);
+                cb(buf);
+              }
+              if (event === 'end') process.nextTick(cb);
+              return { on: vi.fn() };
+            }),
           }),
-        }),
-      }));
+        };
+      });
 
       const snapshot = await snapshotManager.createSnapshot(
         testContainerId,
@@ -234,7 +238,7 @@ ghi789|ghi78|[auto] Third|1700002000`;
               buf.write(gitLogOutput, 8);
               cb(buf);
             }
-            if (event === 'end') setTimeout(cb, 10);
+            if (event === 'end') process.nextTick(cb);
             return { on: vi.fn() };
           }),
         }),
@@ -250,7 +254,7 @@ ghi789|ghi78|[auto] Third|1700002000`;
         start: vi.fn().mockResolvedValue({
           on: vi.fn((event, cb) => {
             if (event === 'data') cb(Buffer.alloc(8));
-            if (event === 'end') setTimeout(cb, 10);
+            if (event === 'end') process.nextTick(cb);
             return { on: vi.fn() };
           }),
         }),
@@ -275,13 +279,13 @@ ghi789|ghi78|[auto] Third|1700002000`;
       mockExec.mockResolvedValue({
         start: vi.fn().mockResolvedValue({
           on: vi.fn((event, cb) => {
-            if (event === 'end') setTimeout(cb, 10);
+            if (event === 'end') process.nextTick(cb);
             return { on: vi.fn() };
           }),
         }),
       });
 
-      await snapshotManager.restoreSnapshot(testContainerId, snapshotId);
+      await snapshotManager.restoreSnapshot(testContainerId, testProjectId, snapshotId);
 
       // Should call git checkout
       expect(mockExec).toHaveBeenCalled();
@@ -305,14 +309,14 @@ ghi789|ghi78|[auto] Third|1700002000`;
               buf.write(error, 8);
               cb(buf);
             }
-            if (event === 'end') setTimeout(cb, 10);
+            if (event === 'end') process.nextTick(cb);
             return { on: vi.fn() };
           }),
         }),
       });
 
       try {
-        await snapshotManager.restoreSnapshot(testContainerId, 'invalid-id');
+        await snapshotManager.restoreSnapshot(testContainerId, testProjectId, 'invalid-id');
       } catch (error) {
         // Expected to throw or handle gracefully
       }
@@ -339,7 +343,7 @@ index abc123..def456 100644
               buf.write(diffOutput, 8);
               cb(buf);
             }
-            if (event === 'end') setTimeout(cb, 10);
+            if (event === 'end') process.nextTick(cb);
             return { on: vi.fn() };
           }),
         }),
@@ -355,7 +359,7 @@ index abc123..def456 100644
         start: vi.fn().mockResolvedValue({
           on: vi.fn((event, cb) => {
             if (event === 'data') cb(Buffer.alloc(8)); // Empty diff
-            if (event === 'end') setTimeout(cb, 10);
+            if (event === 'end') process.nextTick(cb);
             return { on: vi.fn() };
           }),
         }),
@@ -372,14 +376,14 @@ index abc123..def456 100644
     it('should start auto-save interval', () => {
       snapshotManager.startAutoSave(testContainerId, testProjectId, 60000);
 
-      expect(snapshotManager['autoSaveEnabled'].get(testContainerId)).toBe(true);
+      expect(snapshotManager['autoSaveEnabled'].get(testProjectId)).toBe(true);
     });
 
     it('should stop auto-save', () => {
       snapshotManager.startAutoSave(testContainerId, testProjectId, 60000);
-      snapshotManager.stopAutoSave(testContainerId);
+      snapshotManager.stopAutoSave(testProjectId);
 
-      expect(snapshotManager['autoSaveEnabled'].get(testContainerId)).toBe(false);
+      expect(snapshotManager['autoSaveEnabled'].get(testProjectId)).toBe(false);
     });
 
     it('should trigger auto-save at interval', async () => {
@@ -398,7 +402,7 @@ index abc123..def456 100644
         start: vi.fn().mockResolvedValue({
           on: vi.fn((event, cb) => {
             if (event === 'data') cb(Buffer.alloc(8));
-            if (event === 'end') setTimeout(cb, 10);
+            if (event === 'end') process.nextTick(cb);
             return { on: vi.fn() };
           }),
         }),
@@ -408,7 +412,7 @@ index abc123..def456 100644
       await vi.advanceTimersByTimeAsync(1100);
 
       // Should not throw, just skip silently
-      snapshotManager.stopAutoSave(testContainerId);
+      snapshotManager.stopAutoSave(testProjectId);
     });
   });
 
@@ -426,7 +430,7 @@ index abc123..def456 100644
               buf.write(headOutput, 8);
               cb(buf);
             }
-            if (event === 'end') setTimeout(cb, 10);
+            if (event === 'end') process.nextTick(cb);
             return { on: vi.fn() };
           }),
         }),
@@ -443,7 +447,7 @@ index abc123..def456 100644
         start: vi.fn().mockResolvedValue({
           on: vi.fn((event, cb) => {
             if (event === 'data') cb(Buffer.alloc(8));
-            if (event === 'end') setTimeout(cb, 10);
+            if (event === 'end') process.nextTick(cb);
             return { on: vi.fn() };
           }),
         }),
@@ -483,7 +487,7 @@ describe('SnapshotManager Edge Cases', () => {
     mockExec.mockResolvedValue({
       start: vi.fn().mockResolvedValue({
         on: vi.fn((event, cb) => {
-          if (event === 'end') setTimeout(cb, 10);
+          if (event === 'end') process.nextTick(cb);
           return { on: vi.fn() };
         }),
       }),
@@ -509,7 +513,7 @@ describe('SnapshotManager Edge Cases', () => {
     mockExec.mockResolvedValue({
       start: vi.fn().mockResolvedValue({
         on: vi.fn((event, cb) => {
-          if (event === 'end') setTimeout(cb, 10);
+          if (event === 'end') process.nextTick(cb);
           return { on: vi.fn() };
         }),
       }),

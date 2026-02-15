@@ -81,6 +81,8 @@ export async function createProjectFromPlaybook(
 		SELECT db_id, service_sku_db_id, default_budget_cents, default_sla_days, phases
 		FROM public.delivery_playbooks
 		WHERE db_id = ${input.playbookDbId}
+			AND team_db_id = ${input.teamDbId}
+			AND is_active = true
 	`);
 	const playbook = playbookRows.rows[0] as PlaybookRow | undefined;
 	if (!playbook) {
@@ -88,6 +90,9 @@ export async function createProjectFromPlaybook(
 	}
 
 	const projectId = `prj_${crypto.randomUUID()}`;
+	const scopeOverrideReason = playbook.service_sku_db_id
+		? null
+		: "Project created from playbook without a fixed service SKU.";
 
 	const projectResult = await db.execute(sql`
 		INSERT INTO public.projects (
@@ -96,6 +101,7 @@ export async function createProjectFromPlaybook(
 			client_db_id,
 			service_sku_db_id,
 			playbook_db_id,
+			scope_override_reason,
 			name,
 			budget_cents,
 			status
@@ -105,6 +111,7 @@ export async function createProjectFromPlaybook(
 			${input.clientDbId},
 			${playbook.service_sku_db_id},
 			${input.playbookDbId},
+			${scopeOverrideReason},
 			${input.projectName},
 			${playbook.default_budget_cents},
 			'queued'

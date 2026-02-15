@@ -1,5 +1,8 @@
 import { type ActionFunctionArgs } from '@remix-run/cloudflare';
 import { Octokit } from '@octokit/rest';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('GitHubSync');
 
 /**
  * API endpoint for bidirectional GitHub sync
@@ -16,6 +19,12 @@ import { Octokit } from '@octokit/rest';
 export async function action({ request }: ActionFunctionArgs) {
   if (request.method !== 'POST') {
     return new Response('Method not allowed', { status: 405 });
+  }
+
+  const { verifySession } = await import('~/lib/auth/session.server');
+  const session = await verifySession(request);
+  if (!session?.user) {
+    return new Response(JSON.stringify({ error: 'Authentication required' }), { status: 401, headers: { 'Content-Type': 'application/json' } });
   }
 
   try {
@@ -36,7 +45,7 @@ export async function action({ request }: ActionFunctionArgs) {
       );
     }
 
-    console.log('🔄 [github-sync] Syncing', `${owner}/${repo}:${branch}`, 'mode:', syncMode);
+    logger.info('🔄 [github-sync] Syncing', `${owner}/${repo}:${branch}`, 'mode:', syncMode);
 
     const octokit = new Octokit({ auth: accessToken });
 
@@ -72,7 +81,7 @@ export async function action({ request }: ActionFunctionArgs) {
           });
           remoteFiles[`/${item.path}`] = Buffer.from(blobData.content, 'base64').toString('utf-8');
         } catch (error) {
-          console.warn(`⚠️ Failed to fetch ${item.path}`);
+          logger.warn(`⚠️ Failed to fetch ${item.path}`);
         }
       }
     }
@@ -139,7 +148,7 @@ export async function action({ request }: ActionFunctionArgs) {
     // If push is required, commit changes
     let newCommitSha: string | undefined;
     if ((syncMode === 'push' || syncMode === 'both') && (syncResult.pushed.length > 0 || syncResult.conflicts.length > 0)) {
-      console.log('📤 [github-sync] Pushing changes...');
+      logger.info('📤 [github-sync] Pushing changes...');
 
       // Create blobs for modified/new files
       const blobs = await Promise.all(
@@ -185,10 +194,10 @@ export async function action({ request }: ActionFunctionArgs) {
       });
 
       newCommitSha = newCommit.sha;
-      console.log('✅ [github-sync] Pushed commit:', newCommitSha);
+      logger.info('✅ [github-sync] Pushed commit:', newCommitSha);
     }
 
-    console.log('✅ [github-sync] Sync complete:', syncResult);
+    logger.info('✅ [github-sync] Sync complete:', syncResult);
 
     return new Response(
       JSON.stringify({
@@ -201,11 +210,10 @@ export async function action({ request }: ActionFunctionArgs) {
       { status: 200, headers: { 'Content-Type': 'application/json' } }
     );
   } catch (error: any) {
-    console.error('❌ [github-sync] Failed:', error);
+    logger.error('❌ [github-sync] Failed:', error);
     return new Response(
       JSON.stringify({
-        error: error.message || 'Failed to sync with GitHub',
-        details: error.response?.data || error.toString(),
+        error: 'Failed to sync with GitHub',
       }),
       { status: 500, headers: { 'Content-Type': 'application/json' } }
     );

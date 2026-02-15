@@ -13,7 +13,12 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const agent = await prisma.marketplace_agents.create({
+    const marketplaceAgentsModel = (prisma as any).marketplace_agents;
+    if (!marketplaceAgentsModel?.create) {
+      return NextResponse.json({ error: 'Agent marketplace is not available in this schema' }, { status: 503 });
+    }
+
+    const agent = await marketplaceAgentsModel.create({
       data: {
         name,
         description,

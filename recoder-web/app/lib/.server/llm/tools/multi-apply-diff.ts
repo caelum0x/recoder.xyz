@@ -8,6 +8,9 @@ import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import * as Diff from 'diff';
 
+import { createScopedLogger } from '~/utils/logger';
+const logger = createScopedLogger('MultiApplyDiff');
+
 export interface DiffOperation {
   filePath: string;
   oldString: string;
@@ -189,7 +192,7 @@ export async function multiApplyDiff(
       try {
         commitHash = await autoCommit(workingDir, backups.map(b => b.filePath), options.commitMessage);
       } catch (err) {
-        console.warn('Auto-commit failed:', err);
+        logger.warn('Auto-commit failed:', err);
         // Don't fail the operation if commit fails
       }
     }
@@ -231,7 +234,7 @@ async function rollbackChanges(backups: FileBackup[]): Promise<void> {
         await fs.writeFile(backup.absolutePath, backup.originalContent, 'utf-8');
       }
     } catch (err) {
-      console.error(`Failed to rollback ${backup.filePath}:`, err);
+      logger.error(`Failed to rollback ${backup.filePath}:`, err);
     }
   }
 }
@@ -261,7 +264,7 @@ async function autoCommit(workingDir: string, files: string[], message: string):
     return hashMatch ? hashMatch[1] : undefined;
 
   } catch (err) {
-    console.warn('Auto-commit failed:', err);
+    logger.warn('Auto-commit failed:', err);
     return undefined;
   }
 }

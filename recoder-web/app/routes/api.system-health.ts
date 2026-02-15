@@ -3,22 +3,50 @@
  * Provides real-time system health and performance metrics using actual database
  */
 
-import { json, type LoaderFunctionArgs } from '@remix-run/cloudflare';
+import { type LoaderFunctionArgs } from '@remix-run/cloudflare';
+import { createScopedLogger } from '~/utils/logger';
 import { getDatabase } from '~/lib/.server/db/client';
+
+const logger = createScopedLogger('SystemHealth');
 import { llmAnalytics } from '~/lib/.server/llm/analytics';
+import { getCacheManager, CacheKeys, CacheTTL } from '~/lib/.server/cache/redis';
+import { JsonResponse } from '~/lib/http/json-response';
 
 export async function loader({ request, context }: LoaderFunctionArgs) {
   try {
     const env = (context as any)?.cloudflare?.env || process.env as unknown as Env;
+
+    // Admin auth check
+    const url = new URL(request.url);
+    const userId = url.searchParams.get('userId') || request.headers.get('x-user-id');
+    const adminIds = ((env as any).ADMIN_USER_IDS || '').split(',').map((id: string) => id.trim()).filter(Boolean);
+    if (adminIds.length > 0 && (!userId || !adminIds.includes(userId))) {
+      return JsonResponse.json({ error: 'Unauthorized' }, { status: 403 });
+    }
+
+    // Try Redis cache
+    const cacheManager = getCacheManager(env);
+    if (cacheManager) {
+      const cached = await cacheManager.getOrSet(
+        CacheKeys.systemHealth(),
+        async () => ({
+          health: await getSystemHealth(env),
+          timestamp: new Date().toISOString(),
+        }),
+        CacheTTL.SHORT,
+      );
+      return JsonResponse.json(cached);
+    }
+
     const health = await getSystemHealth(env);
-    
-    return json({
+
+    return JsonResponse.json({
       health,
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    console.error('System health check failed:', error);
-    return json(
+    logger.error('System health check failed:', error);
+    return JsonResponse.json(
       {
         error: 'Failed to fetch system health',
         health: getDefaultHealth(),
@@ -113,7 +141,7 @@ async function checkDatabase(env: Env): Promise<{
   } catch (error) {
     return {
       status: 'down',
-      message: `Database error: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      message: 'Database error',
       lastCheck: Date.now(),
     };
   }

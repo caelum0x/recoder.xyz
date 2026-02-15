@@ -29,6 +29,9 @@ import { SubagentValidator } from './validation.js';
 import { SubAgentScope } from './subagent.js';
 import type { Config } from '../config/config.js';
 import { BuiltinAgentRegistry } from './builtin-agents.js';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('SubagentManager');
 
 const RECODER_CONFIG_DIR = '.recoder';
 const AGENT_CONFIG_DIR = 'agents';
@@ -58,7 +61,7 @@ export class SubagentManager {
       try {
         listener();
       } catch (error) {
-        console.warn('Subagent change listener threw an error:', error);
+        logger.warn('Subagent change listener threw an error:', error);
       }
     }
   }
@@ -644,7 +647,7 @@ export class SubagentManager {
       // If no match found, preserve the original identifier as-is
       // This allows for tools that might not be registered yet or custom tools
       result.push(toolIdentifier);
-      console.warn(
+      logger.warn(
         `Tool "${toolIdentifier}" not found in tool registry, preserving as-is`,
       );
     }

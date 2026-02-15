@@ -3,6 +3,10 @@
  * Fetches user's AI provider API keys from main app
  */
 
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('UserAPIKey');
+
 const MAIN_APP_URL = process.env.MAIN_SITE_URL || process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
 
 interface UserApiKeyResponse {
@@ -23,53 +27,40 @@ export async function getUserApiKey(
   provider: string = 'openrouter'
 ): Promise<string | null> {
   if (!sessionCookie) {
-    console.warn('[getUserApiKey] No session cookie provided');
     return null;
   }
 
   try {
-    const url = `${MAIN_APP_URL}/api/user/ai-provider-keys/decrypt?provider=${provider}`;
+    const mainAppUrl = process.env.APP_API_URL || MAIN_APP_URL;
+    const requestUrl = `${mainAppUrl}/api/user/ai-provider-keys/decrypt?provider=${encodeURIComponent(provider)}`;
 
-    console.log(`[getUserApiKey] Fetching API key for provider: ${provider}`);
-    console.log(`[getUserApiKey] Main app URL: ${MAIN_APP_URL}`);
-    console.log(`[getUserApiKey] Cookie present: ${sessionCookie.length} chars`);
-    console.log(`[getUserApiKey] Cookie preview: ${sessionCookie.substring(0, 100)}...`);
-
-    const response = await fetch(url, {
+    const response = await fetch(requestUrl, {
       method: 'GET',
       headers: {
         'Cookie': sessionCookie,
         'Content-Type': 'application/json',
       },
       credentials: 'include',
+      cache: 'no-store',
     });
 
-    console.log(`[getUserApiKey] Response status: ${response.status}`);
-
     if (!response.ok) {
-      const errorText = await response.text();
-      console.error(`[getUserApiKey] Error response: ${errorText}`);
-      
       if (response.status === 404) {
-        console.warn(`[getUserApiKey] No API key found for provider: ${provider}`);
         return null;
       }
-
-      console.error(`[getUserApiKey] Failed to fetch API key: ${response.status}`);
+      logger.error(`[getUserApiKey] Failed to fetch API key for ${provider}: ${response.status}`);
       return null;
     }
 
     const data = await response.json() as UserApiKeyResponse;
 
     if (data.success && data.apiKey) {
-      console.log(`[getUserApiKey] Successfully fetched API key for ${provider}`);
       return data.apiKey;
     }
 
-    console.warn(`[getUserApiKey] Response success but no apiKey:`, data);
     return null;
   } catch (error) {
-    console.error('[getUserApiKey] Error fetching user API key:', error);
+    logger.error('[getUserApiKey] Error fetching user API key:', error);
     return null;
   }
 }
@@ -104,7 +95,7 @@ export async function hasUserApiKey(sessionCookie: string | null): Promise<boole
 
     return !!(data.success && data.keys && data.keys.length > 0);
   } catch (error) {
-    console.error('[hasUserApiKey] Error checking API keys:', error);
+    logger.error('[hasUserApiKey] Error checking API keys:', error);
     return false;
   }
 }

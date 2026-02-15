@@ -1,0 +1,1 @@
+ALTER TABLE "agents" ALTER COLUMN "graphv2" DROP DEFAULT;

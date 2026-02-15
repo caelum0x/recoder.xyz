@@ -5,6 +5,8 @@
 
 import { useEffect, useState } from 'react';
 import type { ApiResponse } from "~/types/api-responses";
+import { createScopedLogger } from '~/utils/logger';
+const logger = createScopedLogger('OptDashboard');
 
 interface OptimizationStats {
   templateBasedSavings: number;
@@ -49,7 +51,7 @@ export function OptimizationDashboard() {
       setMetrics(data.metrics);
       setLoading(false);
     } catch (error) {
-      console.error('Failed to fetch analytics:', error);
+      logger.error('Failed to fetch analytics:', error);
       setLoading(false);
     }
   };

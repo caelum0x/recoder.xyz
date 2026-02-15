@@ -1,3 +1,7 @@
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('SwitchableStream');
+
 export default class SwitchableStream extends TransformStream {
   private _controller: TransformStreamDefaultController | null = null;
   private _currentReader: ReadableStreamDefaultReader | null = null;
@@ -37,14 +41,14 @@ export default class SwitchableStream extends TransformStream {
     }
 
     try {
-      console.log('🔄 [SwitchableStream] Starting to pump stream');
+      logger.info('🔄 [SwitchableStream] Starting to pump stream');
       let chunkCount = 0;
 
       while (true) {
         const { done, value } = await this._currentReader.read();
 
         if (done) {
-          console.log(`✅ [SwitchableStream] Stream complete. Pumped ${chunkCount} chunks`);
+          logger.info(`✅ [SwitchableStream] Stream complete. Pumped ${chunkCount} chunks`);
           this._controller.terminate();
           break;
         }
@@ -53,11 +57,11 @@ export default class SwitchableStream extends TransformStream {
         chunkCount++;
 
         if (chunkCount === 1) {
-          console.log('📝 [SwitchableStream] First chunk pumped');
+          logger.info('📝 [SwitchableStream] First chunk pumped');
         }
       }
     } catch (error) {
-      console.error('❌ [SwitchableStream] Pump error:', error);
+      logger.error('❌ [SwitchableStream] Pump error:', error);
       this._controller.error(error);
     }
   }

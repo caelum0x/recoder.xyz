@@ -3,6 +3,10 @@
  * Handles subscription management, webhooks, and billing
  */
 
+import { createScopedLogger } from '~/utils/logger';
+const logger = createScopedLogger('PaddleIntegration');
+
+
 export interface PaddleConfig {
   vendorId: string;
   apiKey: string;
@@ -217,32 +221,32 @@ export class PaddleClient {
         await this.onPaymentFailed(event);
         break;
       default:
-        console.log('Unhandled webhook event:', event.alert_name);
+        logger.info('Unhandled webhook event:', event.alert_name);
     }
   }
 
   private async onSubscriptionCreated(event: any): Promise<void> {
-    console.log('Paddle: Subscription created', event);
+    logger.info('Paddle: Subscription created', event);
     // Handled by webhook route with DB integration
   }
 
   private async onSubscriptionUpdated(event: any): Promise<void> {
-    console.log('Paddle: Subscription updated', event);
+    logger.info('Paddle: Subscription updated', event);
     // Handled by webhook route with DB integration
   }
 
   private async onSubscriptionCancelled(event: any): Promise<void> {
-    console.log('Paddle: Subscription cancelled', event);
+    logger.info('Paddle: Subscription cancelled', event);
     // Handled by webhook route with DB integration
   }
 
   private async onPaymentSucceeded(event: any): Promise<void> {
-    console.log('Paddle: Payment succeeded', event);
+    logger.info('Paddle: Payment succeeded', event);
     // Handled by webhook route with DB integration
   }
 
   private async onPaymentFailed(event: any): Promise<void> {
-    console.log('Paddle: Payment failed', event);
+    logger.info('Paddle: Payment failed', event);
     // Handled by webhook route with DB integration
   }
 }

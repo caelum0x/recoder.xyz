@@ -28,6 +28,8 @@ import {
   SUPPORTED_EXTENSIONS,
 } from '~/lib/services/attachments';
 import { toast } from 'react-hot-toast';
+import { createScopedLogger } from '~/utils/logger';
+const logger = createScopedLogger('FileDropZone');
 
 export type DropZoneState = 'idle' | 'hovering' | 'invalid' | 'accepted';
 
@@ -215,7 +217,7 @@ export const FileDropZone = memo(({
         toast.error(errors[0]);
       } else {
         toast.error(`${errors.length} files could not be added`);
-        console.warn('File validation errors:', errors);
+        logger.warn('File validation errors:', errors);
       }
     }
 

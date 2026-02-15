@@ -1,4 +1,4 @@
-export type ActionType = 'file' | 'shell' | 'importStarter' | 'cloneGitHub' | 'cloneUrl' | 'readFile' | 'listFiles' | 'searchFiles' | 'str_replace' | 'delegate_subagent' | 'ripgrep_search' | 'edit_file' | 'read_many_files' | 'web_search' | 'web_fetch' | 'memory_operation' | 'glob_search' | 'multi_apply_diff' | 'spawn_task' | 'switch_mode';
+export type ActionType = 'file' | 'shell' | 'importStarter' | 'cloneGitHub' | 'cloneUrl' | 'readFile' | 'listFiles' | 'searchFiles' | 'str_replace' | 'delegate_subagent' | 'ripgrep_search' | 'edit_file' | 'read_many_files' | 'web_search' | 'web_fetch' | 'web_crawl' | 'github_documents' | 'copy_project' | 'memory_operation' | 'glob_search' | 'multi_apply_diff' | 'spawn_task' | 'switch_mode';
 
 export interface BaseAction {
   content: string;
@@ -77,18 +77,55 @@ export interface DelegateSubagentAction extends BaseAction {
   taskDescription: string;
   agentType: 'coder' | 'debugger' | 'architect' | 'tester';
   context?: string;
+  strict?: boolean;
 }
 
 export interface WebSearchAction extends BaseAction {
   type: 'web_search';
   query: string;
   maxResults?: number;
+  providerHint?: string;
+  allowedDomains?: string[];
+  blockedDomains?: string[];
+  maxUses?: number;
 }
 
 export interface WebFetchAction extends BaseAction {
   type: 'web_fetch';
   url: string;
   selector?: string;
+}
+
+export interface WebCrawlAction extends BaseAction {
+  type: 'web_crawl';
+  url: string;
+  providerHint?: string;
+  allowedDomains?: string[];
+  blockedDomains?: string[];
+  maxUses?: number;
+}
+
+export interface GitHubDocumentsAction extends BaseAction {
+  type: 'github_documents';
+  owner: string;
+  repo: string;
+  accessToken?: string;
+  sourceType?: 'issues' | 'pull_requests';
+  maxDocuments?: number;
+  maxUses?: number;
+}
+
+export interface CopyProjectAction extends BaseAction {
+  type: 'copy_project';
+  sourceProjectId?: string;
+  newProjectName?: string;
+  includeGit?: boolean;
+  includeGitRemotes?: boolean;
+  includeTriggers?: boolean;
+  includeEnvFiles?: boolean;
+  includeSecrets?: boolean;
+  includeDeployConfig?: boolean;
+  includeDomains?: boolean;
 }
 
 export interface MemoryAction extends BaseAction {
@@ -152,6 +189,6 @@ export interface MultiApplyDiffAction extends BaseAction {
   commitMessage?: string;
 }
 
-export type RecoderAction = FileAction | ShellAction | ImportStarterAction | CloneGitHubAction | CloneUrlAction | SpawnTaskAction | SwitchModeAction | ReadFileAction | ListFilesAction | SearchFilesAction | StrReplaceAction | DelegateSubagentAction | WebSearchAction | WebFetchAction | MemoryAction | GlobAction | RipGrepAction | EditFileAction | ReadManyFilesAction | MultiApplyDiffAction;
+export type RecoderAction = FileAction | ShellAction | ImportStarterAction | CloneGitHubAction | CloneUrlAction | SpawnTaskAction | SwitchModeAction | ReadFileAction | ListFilesAction | SearchFilesAction | StrReplaceAction | DelegateSubagentAction | WebSearchAction | WebFetchAction | WebCrawlAction | GitHubDocumentsAction | CopyProjectAction | MemoryAction | GlobAction | RipGrepAction | EditFileAction | ReadManyFilesAction | MultiApplyDiffAction;
 
 export type RecoderActionData = RecoderAction | BaseAction;

@@ -1,3 +1,5 @@
+import { createScopedLogger } from '~/utils/logger';
+const logger = createScopedLogger('DeployRetry');
 /**
  * Retry utilities for deployment operations
  */
@@ -99,7 +101,7 @@ export async function fetchWithRetry(
   }, {
     ...retryOptions,
     onRetry: (attempt, error, nextDelay) => {
-      console.log(`[Retry] Attempt ${attempt}, waiting ${Math.round(nextDelay)}ms: ${error.message}`);
+      logger.info(`[Retry] Attempt ${attempt}, waiting ${Math.round(nextDelay)}ms: ${error.message}`);
       retryOptions.onRetry?.(attempt, error, nextDelay);
     },
   });

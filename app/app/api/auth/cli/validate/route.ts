@@ -38,7 +38,7 @@ export async function GET(req: NextRequest) {
   } catch (error: any) {
     console.error('Token validation error:', error);
     return NextResponse.json(
-      { valid: false, error: error.message || 'Invalid token' },
+      { valid: false, error: 'Invalid token' },
       { status: 401 }
     );
   }

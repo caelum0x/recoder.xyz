@@ -16,13 +16,23 @@ import { cubicEasingFn } from '~/utils/easings';
 import { renderLogger } from '~/utils/logger';
 import { EditorPanel } from './EditorPanel';
 import { Preview } from './Preview';
-import { GitHubSyncModal } from './GitHubSyncModal';
 import { VersionHistoryPanel } from './VersionHistoryPanel';
 import { BuildProgressIndicator } from './BuildProgressIndicator';
 import { CompactActionStatus } from './ActionStatusPanel';
+import { SupabasePanel } from './SupabasePanel';
+import { NeonPanel } from './NeonPanel';
+import { ThemePanel } from './ThemePanel';
+import { PromptLibraryPanel } from './PromptLibraryPanel';
+import { VercelPanel } from './VercelPanel';
+import { ProposalView } from './ProposalView';
+import { GitCollaboratorsPanel } from './GitCollaboratorsPanel';
+import { AgentPanel } from '~/components/agent/AgentPanel';
+import { agentSessionActive } from '~/lib/stores/agent-session';
 import { useLSPDiagnostics } from '~/lib/hooks/useLSPDiagnostics';
 import { useFileWatcher } from '~/lib/hooks/useFileWatcher';
 import { useAutoErrorFix } from '~/lib/hooks/useAutoErrorFix';
+import { createScopedLogger } from '~/utils/logger';
+const logger = createScopedLogger('Workbench');
 
 interface WorkspaceProps {
   chatStarted?: boolean;
@@ -75,6 +85,7 @@ export const Workbench = memo(({ chatStarted, isStreaming }: WorkspaceProps) => 
   // NOTE: Use projectId atom (stable) NOT currentProjectId getter (creates new atom each call)
   const projectId = useStore(workbenchStore.projectId);
   const containerReady = useStore(workbenchStore.containerReady);
+  const isAgentActive = useStore(agentSessionActive);
 
   // Connect to LSP diagnostics WebSocket
   useLSPDiagnostics(projectId);
@@ -89,7 +100,7 @@ export const Workbench = memo(({ chatStarted, isStreaming }: WorkspaceProps) => 
     },
     onPreviewRefresh: () => {
       // Preview will auto-refresh via the recoder:file-changed event
-      console.log('[Workbench] File change detected, preview will refresh');
+      logger.info('[Workbench] File change detected, preview will refresh');
     },
   });
 
@@ -175,27 +186,12 @@ export const Workbench = memo(({ chatStarted, isStreaming }: WorkspaceProps) => 
     workbenchStore.resetCurrentDocument();
   }, []);
 
-  const [showGitHubModal, setShowGitHubModal] = useState(false);
   const [showVersionHistory, setShowVersionHistory] = useState(false);
+  const [activePanel, setActivePanel] = useState<'supabase' | 'database' | 'themes' | 'prompts' | 'vercel' | 'proposals' | 'collaborators' | null>(null);
 
-  const handleFilesUpdate = useCallback((newFiles: Record<string, string>) => {
-    // console.log('📥 Updating files from GitHub:', Object.keys(newFiles).length, 'files');
-
-    // Convert plain object to workbench format
-    const updatedFiles: Record<string, any> = {};
-    Object.entries(newFiles).forEach(([path, content]) => {
-      updatedFiles[path] = {
-        type: 'file',
-        content,
-        isBinary: false,
-      };
-    });
-
-    workbenchStore.files.set(updatedFiles);
-    workbenchStore.setDocuments(updatedFiles);
-    workbenchStore.showWorkbench.set(true);
-    toast.success(`Updated ${Object.keys(newFiles).length} files from GitHub`);
-  }, []);
+  const togglePanel = (panel: 'supabase' | 'database' | 'themes' | 'prompts' | 'vercel' | 'proposals' | 'collaborators') => {
+    setActivePanel(prev => prev === panel ? null : panel);
+  };
 
   return (
     chatStarted && (
@@ -238,19 +234,61 @@ export const Workbench = memo(({ chatStarted, isStreaming }: WorkspaceProps) => 
                     </PanelHeaderButton>
                     <PanelHeaderButton
                       className="mr-1 text-sm"
-                      onClick={() => setShowGitHubModal(true)}
-                      title="GitHub Sync"
-                    >
-                      <div className="i-ph:git-branch" />
-                    </PanelHeaderButton>
-                    <PanelHeaderButton
-                      className="mr-1 text-sm"
                       onClick={() => {
                         workbenchStore.toggleTerminal(!workbenchStore.showTerminal.get());
                       }}
                       title="Toggle Terminal"
                     >
                       <div className="i-ph:terminal" />
+                    </PanelHeaderButton>
+                    <PanelHeaderButton
+                      className={`mr-1 text-sm ${activePanel === 'supabase' ? 'text-green-500' : ''}`}
+                      onClick={() => togglePanel('supabase')}
+                      title="Supabase"
+                    >
+                      <div className="i-ph:database" />
+                    </PanelHeaderButton>
+                    <PanelHeaderButton
+                      className={`mr-1 text-sm ${activePanel === 'database' ? 'text-blue-500' : ''}`}
+                      onClick={() => togglePanel('database')}
+                      title="Database (Neon)"
+                    >
+                      <div className="i-ph:hard-drives" />
+                    </PanelHeaderButton>
+                    <PanelHeaderButton
+                      className={`mr-1 text-sm ${activePanel === 'themes' ? 'text-purple-500' : ''}`}
+                      onClick={() => togglePanel('themes')}
+                      title="Themes"
+                    >
+                      <div className="i-ph:palette" />
+                    </PanelHeaderButton>
+                    <PanelHeaderButton
+                      className={`mr-1 text-sm ${activePanel === 'prompts' ? 'text-orange-500' : ''}`}
+                      onClick={() => togglePanel('prompts')}
+                      title="Prompt Library"
+                    >
+                      <div className="i-ph:note-pencil" />
+                    </PanelHeaderButton>
+                    <PanelHeaderButton
+                      className={`mr-1 text-sm ${activePanel === 'proposals' ? 'text-yellow-500' : ''}`}
+                      onClick={() => togglePanel('proposals')}
+                      title="Proposals"
+                    >
+                      <div className="i-ph:git-diff" />
+                    </PanelHeaderButton>
+                    <PanelHeaderButton
+                      className={`mr-1 text-sm ${activePanel === 'collaborators' ? 'text-cyan-500' : ''}`}
+                      onClick={() => togglePanel('collaborators')}
+                      title="GitHub Collaborators"
+                    >
+                      <div className="i-ph:users-three" />
+                    </PanelHeaderButton>
+                    <PanelHeaderButton
+                      className={`mr-1 text-sm ${activePanel === 'vercel' ? 'text-white' : ''}`}
+                      onClick={() => togglePanel('vercel')}
+                      title="Vercel"
+                    >
+                      <div className="i-ph:rocket-launch" />
                     </PanelHeaderButton>
                   </>
                 )}
@@ -293,16 +331,48 @@ export const Workbench = memo(({ chatStarted, isStreaming }: WorkspaceProps) => 
                 >
                   <Preview />
                 </View>
+
+                {/* Agent Panel overlay */}
+                {isAgentActive && (
+                  <div className="absolute inset-0 z-30 bg-bolt-elements-background-depth-2 border-l border-bolt-elements-borderColor overflow-hidden">
+                    <AgentPanel />
+                  </div>
+                )}
+
+                {/* Integration & Theme Panels (slide over code view) */}
+                {activePanel && (
+                  <div className="absolute inset-0 z-20 bg-bolt-elements-background-depth-2 border-l border-bolt-elements-borderColor overflow-hidden">
+                    <div className="flex items-center justify-between px-3 py-2 border-b border-bolt-elements-borderColor">
+                      <span className="text-sm font-medium text-bolt-elements-textPrimary">
+                        {activePanel === 'supabase' && 'Supabase'}
+                        {activePanel === 'database' && 'Database'}
+                        {activePanel === 'themes' && 'Themes'}
+                        {activePanel === 'prompts' && 'Prompt Library'}
+                        {activePanel === 'vercel' && 'Vercel'}
+                        {activePanel === 'proposals' && 'Proposals'}
+                        {activePanel === 'collaborators' && 'Collaborators'}
+                      </span>
+                      <IconButton
+                        icon="i-ph:x"
+                        size="md"
+                        onClick={() => setActivePanel(null)}
+                      />
+                    </div>
+                    <div className="h-[calc(100%-40px)] overflow-auto">
+                      {activePanel === 'supabase' && <SupabasePanel />}
+                      {activePanel === 'database' && <NeonPanel />}
+                      {activePanel === 'themes' && <ThemePanel />}
+                      {activePanel === 'prompts' && <PromptLibraryPanel />}
+                      {activePanel === 'vercel' && <VercelPanel />}
+                      {activePanel === 'proposals' && <ProposalView />}
+                      {activePanel === 'collaborators' && <GitCollaboratorsPanel />}
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           </div>
         </div>
-        <GitHubSyncModal
-          isOpen={showGitHubModal}
-          onClose={() => setShowGitHubModal(false)}
-          files={files}
-          onFilesUpdate={handleFilesUpdate}
-        />
         <VersionHistoryPanel
           isOpen={showVersionHistory}
           onClose={() => setShowVersionHistory(false)}
@@ -314,7 +384,7 @@ export const Workbench = memo(({ chatStarted, isStreaming }: WorkspaceProps) => 
 });
 
 interface ViewProps extends HTMLMotionProps<'div'> {
-  children: JSX.Element;
+  children: React.JSX.Element;
 }
 
 const View = memo(({ children, ...props }: ViewProps) => {

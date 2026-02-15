@@ -31,9 +31,8 @@ export async function POST(request: NextRequest) {
     const validation = generateKeySchema.safeParse(body);
     
     if (!validation.success) {
-      return NextResponse.json({ 
-        error: 'Invalid request', 
-        details: validation.error.errors 
+      return NextResponse.json({
+        error: 'Invalid request'
       }, { status: 400 });
     }
 

@@ -70,7 +70,7 @@ export async function GET(request: NextRequest) {
   } catch (error: any) {
     console.error('[Profile Settings GET] Error:', error);
     return NextResponse.json(
-      { success: false, error: error.message || 'Failed to fetch profile' },
+      { success: false, error: 'Failed to fetch profile' },
       { status: 500 }
     );
   }
@@ -134,7 +134,7 @@ export async function PUT(request: NextRequest) {
   } catch (error: any) {
     console.error('[Profile Settings PUT] Error:', error);
     return NextResponse.json(
-      { success: false, error: error.message || 'Failed to update profile' },
+      { success: false, error: 'Failed to update profile' },
       { status: 500 }
     );
   }

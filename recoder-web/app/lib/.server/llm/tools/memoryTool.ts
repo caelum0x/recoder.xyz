@@ -24,6 +24,9 @@ import type {
 } from './modifiable-tool.js';
 import { ToolErrorType } from './tool-error.js';
 
+import { createScopedLogger } from '~/utils/logger';
+const logger = createScopedLogger('MemoryTool');
+
 const memoryToolSchemaData: FunctionDeclaration = {
   name: 'save_memory',
   description:
@@ -369,7 +372,7 @@ Project: ${projectPath} (current project only)`;
     } catch (error) {
       const errorMessage =
         error instanceof Error ? error.message : String(error);
-      console.error(
+      logger.error(
         `[MemoryTool] Error executing save_memory for fact "${fact}" in ${scope}: ${errorMessage}`,
       );
       return {
@@ -476,7 +479,7 @@ export class MemoryTool
       }
       await fsAdapter.writeFile(memoryFilePath, content, 'utf-8');
     } catch (error) {
-      console.error(
+      logger.error(
         `[MemoryTool] Error adding memory entry to ${memoryFilePath}:`,
         error,
       );

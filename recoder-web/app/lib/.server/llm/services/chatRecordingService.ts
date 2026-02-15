@@ -9,6 +9,9 @@ import { type Status } from '../core/coreToolScheduler.js';
 import { type ThoughtSummary } from '../core/turn.js';
 import { getProjectHash } from '../utils/paths.js';
 import path from 'node:path';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('ChatRecording');
 import fs from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import type { PartListUnion } from '@google/genai';
@@ -165,7 +168,7 @@ export class ChatRecordingService {
       this.queuedThoughts = [];
       this.queuedTokens = null;
     } catch (error) {
-      console.error('Error initializing chat recording service:', error);
+      logger.error('Error initializing chat recording service:', error);
       throw error;
     }
   }
@@ -226,7 +229,7 @@ export class ChatRecordingService {
         }
       });
     } catch (error) {
-      console.error('Error saving message:', error);
+      logger.error('Error saving message:', error);
       throw error;
     }
   }
@@ -244,7 +247,7 @@ export class ChatRecordingService {
       });
     } catch (error) {
       if (this.config.getDebugMode()) {
-        console.error('Error saving thought:', error);
+        logger.error('Error saving thought:', error);
         throw error;
       }
     }
@@ -276,7 +279,7 @@ export class ChatRecordingService {
         }
       });
     } catch (error) {
-      console.error('Error updating message tokens:', error);
+      logger.error('Error updating message tokens:', error);
       throw error;
     }
   }
@@ -357,7 +360,7 @@ export class ChatRecordingService {
         }
       });
     } catch (error) {
-      console.error('Error adding tool call to message:', error);
+      logger.error('Error adding tool call to message:', error);
       throw error;
     }
   }
@@ -371,7 +374,7 @@ export class ChatRecordingService {
       return JSON.parse(this.cachedLastConvData);
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
-        console.error('Error reading conversation file:', error);
+        logger.error('Error reading conversation file:', error);
         throw error;
       }
 
@@ -403,7 +406,7 @@ export class ChatRecordingService {
         fs.writeFileSync(this.conversationFile, newContent);
       }
     } catch (error) {
-      console.error('Error writing conversation file:', error);
+      logger.error('Error writing conversation file:', error);
       throw error;
     }
   }
@@ -432,7 +435,7 @@ export class ChatRecordingService {
       const sessionPath = path.join(chatsDir, `${sessionId}.json`);
       fs.unlinkSync(sessionPath);
     } catch (error) {
-      console.error('Error deleting session:', error);
+      logger.error('Error deleting session:', error);
       throw error;
     }
   }

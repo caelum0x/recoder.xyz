@@ -16,12 +16,15 @@ import type {
   ToolInvocation,
   ToolResult,
 } from './tools.js';
+import { createScopedLogger } from '~/utils/logger';
 import {
   BaseDeclarativeTool,
   BaseToolInvocation,
   Kind,
   ToolConfirmationOutcome,
 } from './tools.js';
+
+const logger = createScopedLogger('WebFetchTool');
 
 const URL_FETCH_TIMEOUT_MS = 10000;
 const MAX_CONTENT_LENGTH = 100000;
@@ -62,22 +65,22 @@ class WebFetchToolInvocation extends BaseToolInvocation<
       url = url
         .replace('github.com', 'raw.githubusercontent.com')
         .replace('/blob/', '/');
-      console.debug(
+      logger.debug(
         `[WebFetchTool] Converted GitHub blob URL to raw URL: ${url}`,
       );
     }
 
     try {
-      console.debug(`[WebFetchTool] Fetching content from: ${url}`);
+      logger.debug(`[WebFetchTool] Fetching content from: ${url}`);
       const response = await fetchWithTimeout(url, URL_FETCH_TIMEOUT_MS);
 
       if (!response.ok) {
         const errorMessage = `Request failed with status code ${response.status} ${response.statusText}`;
-        console.error(`[WebFetchTool] ${errorMessage}`);
+        logger.error(`[WebFetchTool] ${errorMessage}`);
         throw new Error(errorMessage);
       }
 
-      console.debug(`[WebFetchTool] Successfully fetched content from ${url}`);
+      logger.debug(`[WebFetchTool] Successfully fetched content from ${url}`);
       const html = await response.text();
       const textContent = convert(html, {
         wordwrap: false,
@@ -87,7 +90,7 @@ class WebFetchToolInvocation extends BaseToolInvocation<
         ],
       }).substring(0, MAX_CONTENT_LENGTH);
 
-      console.debug(
+      logger.debug(
         `[WebFetchTool] Converted HTML to text (${textContent.length} characters)`,
       );
 
@@ -100,7 +103,7 @@ I have fetched the content from ${this.params.url}. Please use the following con
 ${textContent}
 ---`;
 
-      console.debug(
+      logger.debug(
         `[WebFetchTool] Processing content with prompt: "${this.params.prompt}"`,
       );
 
@@ -111,7 +114,7 @@ ${textContent}
       );
       const resultText = getResponseText(result) || '';
 
-      console.debug(
+      logger.debug(
         `[WebFetchTool] Successfully processed content from ${this.params.url}`,
       );
 
@@ -122,7 +125,7 @@ ${textContent}
     } catch (e) {
       const error = e as Error;
       const errorMessage = `Error during fetch for ${url}: ${error.message}`;
-      console.error(`[WebFetchTool] ${errorMessage}`, error);
+      logger.error(`[WebFetchTool] ${errorMessage}`, error);
       return {
         llmContent: `Error: ${errorMessage}`,
         returnDisplay: `Error: ${errorMessage}`,
@@ -168,11 +171,11 @@ ${textContent}
     const isPrivate = isPrivateIp(this.params.url);
 
     if (isPrivate) {
-      console.debug(
+      logger.debug(
         `[WebFetchTool] Private IP detected for ${this.params.url}, using direct fetch`,
       );
     } else {
-      console.debug(
+      logger.debug(
         `[WebFetchTool] Public URL detected for ${this.params.url}, using direct fetch`,
       );
     }

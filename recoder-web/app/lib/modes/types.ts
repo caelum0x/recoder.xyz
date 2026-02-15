@@ -4,6 +4,7 @@
  */
 
 export type ToolGroup = 'read' | 'edit' | 'browser' | 'command' | 'mcp' | 'delegate';
+export type WebToolProvider = 'openai' | 'anthropic' | 'google' | 'free-fallback';
 
 export interface ModeDefinition {
   id: string;
@@ -136,12 +137,121 @@ Maintain a clear task list and update status as work progresses.`
 // Tool definitions for each group
 export const TOOL_GROUPS: Record<ToolGroup, string[]> = {
   read: ['readFile', 'readManyFiles', 'listFiles', 'searchFiles', 'ripGrep', 'glob'],
-  edit: ['createFile', 'createFiles', 'strReplace', 'editFile'],
-  browser: ['webSearch', 'webFetch'],
+  edit: ['createFile', 'createFiles', 'strReplace', 'editFile', 'copyProject'],
+  browser: ['webSearch', 'webFetch', 'webCrawl'],
   command: ['runShellCommand'],
   mcp: ['mcpTool'],
   delegate: ['delegateSubagent']
 };
+
+export interface WebToolProviderCapability {
+  provider: WebToolProvider;
+  supportsWebSearch: boolean;
+  supportsWebCrawl: boolean;
+  supportsAllowedDomains: boolean;
+  supportsBlockedDomains: boolean;
+  supportsMaxUses: boolean;
+}
+
+export const WEB_TOOL_PROVIDER_CAPABILITY_MATRIX: Record<WebToolProvider, WebToolProviderCapability> = {
+  openai: {
+    provider: 'openai',
+    supportsWebSearch: true,
+    supportsWebCrawl: false,
+    supportsAllowedDomains: true,
+    supportsBlockedDomains: false,
+    supportsMaxUses: false,
+  },
+  anthropic: {
+    provider: 'anthropic',
+    supportsWebSearch: true,
+    supportsWebCrawl: false,
+    supportsAllowedDomains: true,
+    supportsBlockedDomains: true,
+    supportsMaxUses: true,
+  },
+  google: {
+    provider: 'google',
+    supportsWebSearch: true,
+    supportsWebCrawl: false,
+    supportsAllowedDomains: false,
+    supportsBlockedDomains: false,
+    supportsMaxUses: false,
+  },
+  'free-fallback': {
+    provider: 'free-fallback',
+    supportsWebSearch: true,
+    supportsWebCrawl: true,
+    supportsAllowedDomains: true,
+    supportsBlockedDomains: true,
+    supportsMaxUses: true,
+  },
+};
+
+export function getWebProviderOrder(): WebToolProvider[] {
+  return ['openai', 'anthropic', 'google', 'free-fallback'];
+}
+
+export function resolveWebToolProvider(providerHint?: string): WebToolProvider {
+  const normalized = (providerHint || '').trim().toLowerCase();
+  if (normalized === 'openai') return 'openai';
+  if (normalized === 'anthropic') return 'anthropic';
+  if (normalized === 'google' || normalized === 'gemini') return 'google';
+  return 'free-fallback';
+}
+
+export function getWebToolProviderCapability(providerHint?: string): WebToolProviderCapability {
+  const provider = resolveWebToolProvider(providerHint);
+  return WEB_TOOL_PROVIDER_CAPABILITY_MATRIX[provider];
+}
+
+export function resolveWebToolProviderFromRuntime(provider?: string, model?: string): WebToolProvider {
+  const providerNormalized = (provider || '').trim().toLowerCase();
+  const modelNormalized = (model || '').trim().toLowerCase();
+  const modelPrefix = modelNormalized.split('/')[0] || '';
+
+  // Direct provider wins when explicit.
+  if (providerNormalized === 'openai' || providerNormalized === 'anthropic' || providerNormalized === 'google') {
+    return resolveWebToolProvider(providerNormalized);
+  }
+
+  // Model prefix often carries upstream provider in aggregator paths.
+  if (modelPrefix === 'openai' || modelPrefix === 'anthropic' || modelPrefix === 'google' || modelPrefix === 'gemini') {
+    return resolveWebToolProvider(modelPrefix);
+  }
+
+  // OpenRouter or unknown providers use our deterministic free fallback policy.
+  return 'free-fallback';
+}
+
+export function getWebToolCapabilityPrompt(provider?: string, model?: string): string {
+  const resolved = resolveWebToolProviderFromRuntime(provider, model);
+  const capability = getWebToolProviderCapability(resolved);
+
+  const crawlGuidance = capability.supportsWebCrawl
+    ? 'web_crawl is supported for this provider.'
+    : 'web_crawl is NOT supported for this provider. If crawling is required, set providerHint="free-fallback".';
+  const allowedDomainsGuidance = capability.supportsAllowedDomains
+    ? 'allowedDomains is supported.'
+    : 'allowedDomains is ignored.';
+  const blockedDomainsGuidance = capability.supportsBlockedDomains
+    ? 'blockedDomains is supported.'
+    : 'blockedDomains is ignored.';
+  const maxUsesGuidance = capability.supportsMaxUses
+    ? 'maxUses is supported.'
+    : 'maxUses is ignored.';
+
+  return `
+<web_tool_capabilities>
+ACTIVE_WEB_TOOL_PROVIDER: ${capability.provider}
+${crawlGuidance}
+${allowedDomainsGuidance}
+${blockedDomainsGuidance}
+${maxUsesGuidance}
+When emitting web_search/web_crawl actions, set providerHint="${capability.provider}" unless the task requires a different supported provider.
+</web_tool_capabilities>
+`;
+}
 
 /**
  * Get allowed tools for a mode

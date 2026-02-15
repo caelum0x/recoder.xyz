@@ -1,0 +1,19 @@
+{
+	"extends": ["//"],
+	"tasks": {
+		"dev": {
+			"inputs": [
+				"$TURBO_DEFAULT$",
+				".env.development.local",
+				".env.local",
+				".env.development",
+				".env"
+			]
+		},
+		"test": {},
+		"typegen": {},
+		"check-types": {
+			"dependsOn": ["^check-types", "typegen"]
+		}
+	}
+}

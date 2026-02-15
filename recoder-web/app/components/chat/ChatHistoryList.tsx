@@ -3,6 +3,8 @@ import { Link } from '@remix-run/react';
 import { getCurrentUser } from '~/utils/auth-utils';
 import { getOrCreateAnonymousId } from '~/utils/anonymous-id';
 import type { Message } from 'ai';
+import { createScopedLogger } from '~/utils/logger';
+const logger = createScopedLogger('ChatHistoryList');
 
 interface ChatSessionItem {
   id: string;
@@ -62,7 +64,7 @@ export function ChatHistoryList() {
         setChats(enrichedChats);
       }
     } catch (err) {
-      console.error('Failed to load chat history:', err);
+      logger.error('Failed to load chat history:', err);
       setError(err instanceof Error ? err.message : 'Failed to load chat history');
     } finally {
       setLoading(false);

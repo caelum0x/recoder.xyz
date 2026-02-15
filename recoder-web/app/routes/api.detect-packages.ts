@@ -40,11 +40,15 @@
 
 import { type ActionFunctionArgs, json } from '@remix-run/cloudflare';
 import { verifySession } from '~/lib/auth/session.server';
+import { createDockerAuthHeaders, dockerFetchJson, getDockerBackendUrl } from '~/lib/http/docker-server';
 import {
   detectMissingPackages,
   detectPackageManager,
   type PackageDetectionOptions,
 } from '~/lib/services/package-detector';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('DetectPackages');
 
 // Package manager configurations
 const PACKAGE_MANAGERS = {
@@ -98,40 +102,6 @@ interface DetectPackagesResponse {
 }
 
 /**
- * Get docker backend URL
- */
-function getDockerBackendUrl(): string {
-  return process.env.VITE_DOCKER_BACKEND_URL || process.env.DOCKER_BACKEND_URL || 'http://localhost:3100';
-}
-
-/**
- * Get session token from cookies
- */
-function getSessionToken(request: Request): string | null {
-  const cookieHeader = request.headers.get('Cookie');
-  if (!cookieHeader) return null;
-
-  const cookies = cookieHeader.split(';');
-  const cookieNames = [
-    '__Secure-recoder.session_token',
-    'recoder.session_token',
-    '__Secure-session_token',
-    'session_token',
-    'recoder_session_token',
-  ];
-
-  for (const cookie of cookies) {
-    const [name, ...valueParts] = cookie.trim().split('=');
-    const value = valueParts.join('=');
-    if (cookieNames.includes(name) && value) {
-      return decodeURIComponent(value);
-    }
-  }
-
-  return null;
-}
-
-/**
  * Check if a package is installed in the container
  */
 async function checkPackageInstalled(
@@ -148,20 +118,17 @@ async function checkPackageInstalled(
       ? `node_modules/${packageName}`
       : `node_modules/${packageName}`;
 
-    const response = await fetch(`${dockerUrl}/api/exec/${projectId}`, {
-      method: 'POST',
+    const result = await dockerFetchJson<{ output?: string }>(
+      `${dockerUrl}/api/exec/${projectId}`,
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          command: `test -d "${workingDir}/${checkPath}" && echo "exists" || echo "missing"`,
+          cwd: workingDir,
+        }),
+      },
       headers,
-      body: JSON.stringify({
-        command: `test -d "${workingDir}/${checkPath}" && echo "exists" || echo "missing"`,
-        cwd: workingDir,
-      }),
-    });
-
-    if (!response.ok) {
-      return false;
-    }
-
-    const result = (await response.json()) as { output?: string };
+    );
     return result.output?.trim() === 'exists';
   } catch {
     return false;
@@ -190,29 +157,20 @@ async function installPackages(
   const quotedPackages = packages.map((pkg) => `"${pkg}"`).join(' ');
   const command = `${config.install} ${config.saveFlag} ${quotedPackages}`.replace(/\s+/g, ' ').trim();
 
-  console.log(`[detect-packages] Installing packages: ${command}`);
+  logger.info(`[detect-packages] Installing packages: ${command}`);
 
   try {
-    const response = await fetch(`${dockerUrl}/api/exec/${projectId}`, {
-      method: 'POST',
+    const result = await dockerFetchJson<{ output?: string; exitCode?: number }>(
+      `${dockerUrl}/api/exec/${projectId}`,
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          command,
+          cwd: workingDir,
+        }),
+      },
       headers,
-      body: JSON.stringify({
-        command,
-        cwd: workingDir,
-      }),
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      return {
-        success: false,
-        output: errorText,
-        installed: [],
-        failed: packages,
-      };
-    }
-
-    const result = (await response.json()) as { output?: string; exitCode?: number };
+    );
     const output = result.output || '';
 
     // Check if installation was successful
@@ -250,10 +208,10 @@ async function installPackages(
       failed,
     };
   } catch (error) {
-    console.error('[detect-packages] Install error:', error);
+    logger.error('[detect-packages] Install error:', error);
     return {
       success: false,
-      output: error instanceof Error ? error.message : 'Unknown error',
+      output: 'Package installation failed',
       installed: [],
       failed: packages,
     };
@@ -345,7 +303,7 @@ export async function action({ request }: ActionFunctionArgs) {
   }
   sanitizedWorkingDir = sanitizedWorkingDir.replace(/\.{2,}/g, '.');
 
-  console.log(`[detect-packages] Processing ${Object.keys(files).length} files for project ${projectId}`);
+  logger.info(`[detect-packages] Processing ${Object.keys(files).length} files for project ${projectId}`);
 
   // Detection options
   const detectionOptions: PackageDetectionOptions = {
@@ -355,7 +313,7 @@ export async function action({ request }: ActionFunctionArgs) {
   // Detect packages from files
   const { detected, missingPackages, installedPackages } = detectMissingPackages(files, detectionOptions);
 
-  console.log('[detect-packages] Detection results:', {
+  logger.info('[detect-packages] Detection results:', {
     totalImports: detected.allImports.length,
     packagesToInstall: detected.packagesToInstall.length,
     missingPackages: missingPackages.length,
@@ -384,16 +342,10 @@ export async function action({ request }: ActionFunctionArgs) {
   }
 
   // Auto-install missing packages
-  console.log(`[detect-packages] Auto-installing ${missingPackages.length} packages:`, missingPackages);
+  logger.info(`[detect-packages] Auto-installing ${missingPackages.length} packages:`, missingPackages);
 
   // Build auth headers for docker-backend
-  const token = getSessionToken(request);
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-  };
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
-  }
+  const headers = createDockerAuthHeaders(request);
 
   const installResult = await installPackages(
     projectId,
@@ -403,7 +355,7 @@ export async function action({ request }: ActionFunctionArgs) {
     headers
   );
 
-  console.log('[detect-packages] Install result:', {
+  logger.info('[detect-packages] Install result:', {
     success: installResult.success,
     installed: installResult.installed.length,
     failed: installResult.failed.length,

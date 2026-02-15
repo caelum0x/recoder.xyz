@@ -439,14 +439,14 @@ export class SessionManager extends EventEmitter {
    * Generate unique session ID
    */
   private generateSessionId(): string {
-    return `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    return `session_${Date.now()}_${crypto.randomUUID().replace(/-/g, '').slice(0, 12)}`;
   }
 
   /**
    * Generate unique message ID
    */
   private generateMessageId(): string {
-    return `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    return `msg_${Date.now()}_${crypto.randomUUID().replace(/-/g, '').slice(0, 12)}`;
   }
 
   /**

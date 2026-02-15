@@ -7,6 +7,8 @@
 
 import { atom, computed } from 'nanostores';
 import { dockerPost } from '../docker-api';
+import { createScopedLogger } from '~/utils/logger';
+const logger = createScopedLogger('BuildService');
 
 // ============================================
 // Types
@@ -587,7 +589,7 @@ export class BuildService {
     this.logs.push(logEntry);
 
     if (this.config.verbose) {
-      console.log(`[BuildService] ${message}`);
+      logger.info(`[BuildService] ${message}`);
     }
   }
 

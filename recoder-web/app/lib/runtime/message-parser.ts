@@ -1,6 +1,8 @@
-import type { ActionType, RecoderAction, RecoderActionData, FileAction, ShellAction, ImportStarterAction, CloneGitHubAction, CloneUrlAction, SpawnTaskAction, SwitchModeAction, MultiApplyDiffAction, DiffOperation } from '~/types/actions';
+import type { ActionType, RecoderAction, RecoderActionData, FileAction, ShellAction, ImportStarterAction, CloneGitHubAction, CloneUrlAction, SpawnTaskAction, SwitchModeAction, MultiApplyDiffAction, DiffOperation, WebSearchAction, WebFetchAction, WebCrawlAction, GitHubDocumentsAction, CopyProjectAction, DelegateSubagentAction } from '~/types/actions';
 import type { RecoderArtifactData } from '~/types/artifact';
 import { unreachable } from '~/utils/unreachable';
+import { createScopedLogger } from '~/utils/logger';
+const logger = createScopedLogger('MessageParserRuntime');
 
 const ARTIFACT_TAG_OPEN = '<recoderArtifact';
 const ARTIFACT_TAG_CLOSE = '</recoderArtifact>';
@@ -104,7 +106,7 @@ export class StreamingMessageParser {
     // Fix unquoted attributes in recoderAction tags
     // Match: attribute=value where value has no quotes and is not already quoted
     sanitized = sanitized.replace(
-      /(<recoderAction[^>]*\s)(filePath|type|templateId|repoUrl|reason|url|query|filePattern|path|recursive|oldString|newString|targetMode|mode|taskDescription|context|commitMessage|agentType)=([^"'\s>][^\s>]*)/g,
+      /(<recoderAction[^>]*\s)(filePath|type|templateId|repoUrl|reason|url|query|filePattern|path|recursive|oldString|newString|targetMode|mode|taskDescription|context|commitMessage|agentType|strict|maxResults|maxUses|providerHint|allowedDomains|blockedDomains|sourceProjectId|newProjectName|includeGit|includeGitRemotes|includeTriggers|includeEnvFiles|includeSecrets|includeDeployConfig|includeDomains|owner|repo|accessToken|sourceType|maxDocuments)=([^"'\s>][^\s>]*)/g,
       '$1$2="$3"'
     );
 
@@ -159,7 +161,7 @@ export class StreamingMessageParser {
 
     state.parseAttempts++;
     if (state.parseAttempts > 10000) {
-      console.error('Parser safety limit reached');
+      logger.error('Parser safety limit reached');
       return input.substring(state.position);
     }
 
@@ -409,6 +411,164 @@ export class StreamingMessageParser {
       (actionAttributes as any).filePath = filePath || '';
       (actionAttributes as any).oldString = oldString || '';
       (actionAttributes as any).newString = newString || '';
+    } else if (actionType === 'delegate_subagent') {
+      const taskDescription = this.#extractAttribute(actionTag, 'taskDescription') as string;
+      const agentType = this.#extractAttribute(actionTag, 'agentType') as string;
+      const context = this.#extractAttribute(actionTag, 'context') as string;
+      const strict = this.#extractAttribute(actionTag, 'strict') as string;
+      (actionAttributes as DelegateSubagentAction).taskDescription = taskDescription || '';
+      const normalizedAgentType = (agentType || '').toLowerCase();
+      if (normalizedAgentType === 'coder' || normalizedAgentType === 'debugger' || normalizedAgentType === 'architect' || normalizedAgentType === 'tester') {
+        (actionAttributes as DelegateSubagentAction).agentType = normalizedAgentType as DelegateSubagentAction['agentType'];
+      } else {
+        (actionAttributes as DelegateSubagentAction).agentType = 'coder';
+      }
+      if (context) {
+        (actionAttributes as DelegateSubagentAction).context = context;
+      }
+      if (strict === 'true') {
+        (actionAttributes as DelegateSubagentAction).strict = true;
+      } else if (strict === 'false') {
+        (actionAttributes as DelegateSubagentAction).strict = false;
+      }
+    } else if (actionType === 'web_search') {
+      const query = this.#extractAttribute(actionTag, 'query') as string;
+      const maxResults = this.#extractAttribute(actionTag, 'maxResults') as string;
+      const maxUses = this.#extractAttribute(actionTag, 'maxUses') as string;
+      const providerHint = this.#extractAttribute(actionTag, 'providerHint') as string;
+      const allowedDomains = this.#parseCsvAttribute(this.#extractAttribute(actionTag, 'allowedDomains') as string | undefined);
+      const blockedDomains = this.#parseCsvAttribute(this.#extractAttribute(actionTag, 'blockedDomains') as string | undefined);
+      (actionAttributes as WebSearchAction).query = query || '';
+      if (maxResults) {
+        const parsed = Number.parseInt(maxResults, 10);
+        if (!Number.isNaN(parsed) && parsed > 0) {
+          (actionAttributes as WebSearchAction).maxResults = parsed;
+        }
+      }
+      if (maxUses) {
+        const parsed = Number.parseInt(maxUses, 10);
+        if (!Number.isNaN(parsed) && parsed > 0) {
+          (actionAttributes as WebSearchAction).maxUses = parsed;
+        }
+      }
+      if (providerHint) {
+        (actionAttributes as WebSearchAction).providerHint = providerHint;
+      }
+      if (allowedDomains && allowedDomains.length > 0) {
+        (actionAttributes as WebSearchAction).allowedDomains = allowedDomains;
+      }
+      if (blockedDomains && blockedDomains.length > 0) {
+        (actionAttributes as WebSearchAction).blockedDomains = blockedDomains;
+      }
+    } else if (actionType === 'web_fetch') {
+      const url = this.#extractAttribute(actionTag, 'url') as string;
+      const selector = this.#extractAttribute(actionTag, 'selector') as string;
+      (actionAttributes as WebFetchAction).url = url || '';
+      if (selector) {
+        (actionAttributes as WebFetchAction).selector = selector;
+      }
+    } else if (actionType === 'web_crawl') {
+      const url = this.#extractAttribute(actionTag, 'url') as string;
+      const maxUses = this.#extractAttribute(actionTag, 'maxUses') as string;
+      const providerHint = this.#extractAttribute(actionTag, 'providerHint') as string;
+      const allowedDomains = this.#parseCsvAttribute(this.#extractAttribute(actionTag, 'allowedDomains') as string | undefined);
+      const blockedDomains = this.#parseCsvAttribute(this.#extractAttribute(actionTag, 'blockedDomains') as string | undefined);
+      (actionAttributes as WebCrawlAction).url = url || '';
+      if (maxUses) {
+        const parsed = Number.parseInt(maxUses, 10);
+        if (!Number.isNaN(parsed) && parsed > 0) {
+          (actionAttributes as WebCrawlAction).maxUses = parsed;
+        }
+      }
+      if (providerHint) {
+        (actionAttributes as WebCrawlAction).providerHint = providerHint;
+      }
+      if (allowedDomains && allowedDomains.length > 0) {
+        (actionAttributes as WebCrawlAction).allowedDomains = allowedDomains;
+      }
+      if (blockedDomains && blockedDomains.length > 0) {
+        (actionAttributes as WebCrawlAction).blockedDomains = blockedDomains;
+      }
+    } else if (actionType === 'github_documents') {
+      const owner = this.#extractAttribute(actionTag, 'owner') as string;
+      const repo = this.#extractAttribute(actionTag, 'repo') as string;
+      const accessToken = this.#extractAttribute(actionTag, 'accessToken') as string;
+      const sourceType = this.#extractAttribute(actionTag, 'sourceType') as string;
+      const maxDocuments = this.#extractAttribute(actionTag, 'maxDocuments') as string;
+      const maxUses = this.#extractAttribute(actionTag, 'maxUses') as string;
+
+      (actionAttributes as GitHubDocumentsAction).owner = owner || '';
+      (actionAttributes as GitHubDocumentsAction).repo = repo || '';
+
+      if (accessToken) {
+        (actionAttributes as GitHubDocumentsAction).accessToken = accessToken;
+      }
+      if (sourceType === 'issues' || sourceType === 'pull_requests') {
+        (actionAttributes as GitHubDocumentsAction).sourceType = sourceType;
+      }
+      if (maxDocuments) {
+        const parsed = Number.parseInt(maxDocuments, 10);
+        if (!Number.isNaN(parsed) && parsed > 0) {
+          (actionAttributes as GitHubDocumentsAction).maxDocuments = parsed;
+        }
+      }
+      if (maxUses) {
+        const parsed = Number.parseInt(maxUses, 10);
+        if (!Number.isNaN(parsed) && parsed > 0) {
+          (actionAttributes as GitHubDocumentsAction).maxUses = parsed;
+        }
+      }
+    } else if (actionType === 'copy_project') {
+      const sourceProjectId = this.#extractAttribute(actionTag, 'sourceProjectId') as string;
+      const newProjectName = this.#extractAttribute(actionTag, 'newProjectName') as string;
+      const includeGit = this.#extractAttribute(actionTag, 'includeGit') as string;
+      const includeGitRemotes = this.#extractAttribute(actionTag, 'includeGitRemotes') as string;
+      const includeTriggers = this.#extractAttribute(actionTag, 'includeTriggers') as string;
+      const includeEnvFiles = this.#extractAttribute(actionTag, 'includeEnvFiles') as string;
+      const includeSecrets = this.#extractAttribute(actionTag, 'includeSecrets') as string;
+      const includeDeployConfig = this.#extractAttribute(actionTag, 'includeDeployConfig') as string;
+      const includeDomains = this.#extractAttribute(actionTag, 'includeDomains') as string;
+      if (sourceProjectId) {
+        (actionAttributes as CopyProjectAction).sourceProjectId = sourceProjectId;
+      }
+      if (newProjectName) {
+        (actionAttributes as CopyProjectAction).newProjectName = newProjectName;
+      }
+      if (includeGit === 'true') {
+        (actionAttributes as CopyProjectAction).includeGit = true;
+      } else if (includeGit === 'false') {
+        (actionAttributes as CopyProjectAction).includeGit = false;
+      }
+      if (includeGitRemotes === 'true') {
+        (actionAttributes as CopyProjectAction).includeGitRemotes = true;
+      } else if (includeGitRemotes === 'false') {
+        (actionAttributes as CopyProjectAction).includeGitRemotes = false;
+      }
+      if (includeTriggers === 'true') {
+        (actionAttributes as CopyProjectAction).includeTriggers = true;
+      } else if (includeTriggers === 'false') {
+        (actionAttributes as CopyProjectAction).includeTriggers = false;
+      }
+      if (includeEnvFiles === 'true') {
+        (actionAttributes as CopyProjectAction).includeEnvFiles = true;
+      } else if (includeEnvFiles === 'false') {
+        (actionAttributes as CopyProjectAction).includeEnvFiles = false;
+      }
+      if (includeSecrets === 'true') {
+        (actionAttributes as CopyProjectAction).includeSecrets = true;
+      } else if (includeSecrets === 'false') {
+        (actionAttributes as CopyProjectAction).includeSecrets = false;
+      }
+      if (includeDeployConfig === 'true') {
+        (actionAttributes as CopyProjectAction).includeDeployConfig = true;
+      } else if (includeDeployConfig === 'false') {
+        (actionAttributes as CopyProjectAction).includeDeployConfig = false;
+      }
+      if (includeDomains === 'true') {
+        (actionAttributes as CopyProjectAction).includeDomains = true;
+      } else if (includeDomains === 'false') {
+        (actionAttributes as CopyProjectAction).includeDomains = false;
+      }
     } else if (actionType === 'multi_apply_diff') {
       const commitMessage = this.#extractAttribute(actionTag, 'commitMessage') as string;
       (actionAttributes as MultiApplyDiffAction).diffs = [];
@@ -428,6 +588,15 @@ export class StreamingMessageParser {
     match = tag.match(REGEX_CACHE.noQuotes(attributeName));
     if (match) return match[1];
     return undefined;
+  }
+
+  #parseCsvAttribute(value?: string): string[] | undefined {
+    if (!value) return undefined;
+    const values = value
+      .split(',')
+      .map((item) => item.trim())
+      .filter(Boolean);
+    return values.length > 0 ? values : undefined;
   }
 
   /**

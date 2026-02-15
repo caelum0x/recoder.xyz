@@ -3,6 +3,9 @@
  * Manages MCP server connections and state
  */
 
+import { createScopedLogger } from '~/utils/logger';
+const logger = createScopedLogger('MCPServerManager');
+
 interface MCPServer {
   id: string;
   name: string;
@@ -42,10 +45,10 @@ export class MCPServerManager {
         servers.forEach(server => {
           this.servers.set(server.id, server);
         });
-        console.log(`✅ Loaded ${servers.length} MCP servers from KV`);
+        logger.info(`✅ Loaded ${servers.length} MCP servers from KV`);
       }
     } catch (error) {
-      console.error('Failed to load MCP servers from KV:', error);
+      logger.error('Failed to load MCP servers from KV:', error);
     }
   }
 
@@ -55,9 +58,9 @@ export class MCPServerManager {
       
       const servers = Array.from(this.servers.values());
       await this.env.KV.put('mcp_servers', JSON.stringify(servers));
-      console.log(`✅ Saved ${servers.length} MCP servers to KV`);
+      logger.info(`✅ Saved ${servers.length} MCP servers to KV`);
     } catch (error) {
-      console.error('Failed to save MCP servers to KV:', error);
+      logger.error('Failed to save MCP servers to KV:', error);
     }
   }
 
@@ -81,7 +84,7 @@ export class MCPServerManager {
     this.servers.set(id, server);
     await this.saveServersToKV();
 
-    console.log(`✅ Added MCP server: ${server.name} (${id})`);
+    logger.info(`✅ Added MCP server: ${server.name} (${id})`);
     return server;
   }
 
@@ -99,7 +102,7 @@ export class MCPServerManager {
     this.servers.delete(serverId);
     await this.saveServersToKV();
 
-    console.log(`✅ Removed MCP server: ${server.name} (${serverId})`);
+    logger.info(`✅ Removed MCP server: ${server.name} (${serverId})`);
   }
 
   async connectServer(serverId: string): Promise<MCPServer> {
@@ -115,7 +118,7 @@ export class MCPServerManager {
       // 3. Perform handshake
       // 4. Register available tools/resources
       
-      console.log(`🔌 Connecting to MCP server: ${server.name}`);
+      logger.info(`🔌 Connecting to MCP server: ${server.name}`);
       
       // Simulate connection (replace with actual implementation)
       server.status = 'connected';
@@ -125,7 +128,7 @@ export class MCPServerManager {
       this.servers.set(serverId, server);
       await this.saveServersToKV();
 
-      console.log(`✅ Connected to MCP server: ${server.name}`);
+      logger.info(`✅ Connected to MCP server: ${server.name}`);
       return server;
     } catch (error) {
       server.status = 'error';
@@ -155,7 +158,7 @@ export class MCPServerManager {
     this.servers.set(serverId, server);
     await this.saveServersToKV();
 
-    console.log(`✅ Disconnected from MCP server: ${server.name}`);
+    logger.info(`✅ Disconnected from MCP server: ${server.name}`);
   }
 
   async getServer(serverId: string): Promise<MCPServer | null> {
@@ -177,7 +180,7 @@ export class MCPServerManager {
     // 2. Wait for response
     // 3. Return result
 
-    console.log(`🔧 Invoking tool "${toolName}" on server: ${server.name}`);
+    logger.info(`🔧 Invoking tool "${toolName}" on server: ${server.name}`);
     
     // Placeholder implementation
     return {

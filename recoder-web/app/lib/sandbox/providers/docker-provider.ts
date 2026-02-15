@@ -22,6 +22,9 @@ import {
   type SandboxFile,
   type SandboxProviderConfig,
 } from '../types';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('DockerProvider');
 
 export class DockerProvider extends SandboxProvider {
   private wsConnection: WebSocket | null = null;
@@ -106,7 +109,7 @@ export class DockerProvider extends SandboxProvider {
       this.sandbox = true;
       return this.sandboxInfo;
     } catch (error) {
-      console.error('[DockerProvider] Error creating sandbox:', error);
+      logger.error('[DockerProvider] Error creating sandbox:', error);
       throw error;
     }
   }
@@ -179,7 +182,7 @@ export class DockerProvider extends SandboxProvider {
 
       this.existingFiles.add(normalizedPath);
     } catch (error) {
-      console.error('[DockerProvider] Error writing file:', error);
+      logger.error('[DockerProvider] Error writing file:', error);
       throw error;
     }
   }
@@ -220,7 +223,7 @@ export class DockerProvider extends SandboxProvider {
         this.existingFiles.add(normalizedPath);
       });
     } catch (error) {
-      console.error('[DockerProvider] Batch write failed, falling back:', error);
+      logger.error('[DockerProvider] Batch write failed, falling back:', error);
       // Fall back to individual writes
       await Promise.all(
         files.map(async (file) => {
@@ -254,7 +257,7 @@ export class DockerProvider extends SandboxProvider {
       const result = await response.json() as Record<string, unknown>;
       return (result.content as string) || '';
     } catch (error) {
-      console.error('[DockerProvider] Error reading file:', error);
+      logger.error('[DockerProvider] Error reading file:', error);
       throw error;
     }
   }
@@ -281,7 +284,7 @@ export class DockerProvider extends SandboxProvider {
       const result = await response.json() as Record<string, unknown>;
       return (result.files as string[]) || (result.tree as string[]) || [];
     } catch (error) {
-      console.error('[DockerProvider] Error listing files:', error);
+      logger.error('[DockerProvider] Error listing files:', error);
       return [];
     }
   }
@@ -414,6 +417,10 @@ export default {
 import ReactDOM from 'react-dom/client'
 import App from './App.jsx'
 import './index.css'
+
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('DockerProvider');
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>

@@ -17,6 +17,9 @@ import {
 import { getAuthEnv } from '../env';
 import { getPlanLimits } from './constants';
 import { createDefaultUsage, isPeriodExpired } from './utils';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('SubscriptionLimits');
 
 /**
  * Create or update subscription limits for an organization
@@ -46,10 +49,11 @@ export async function createOrUpdateSubscriptionLimit(
 
   if (!response.ok) {
     const error = await response.text();
-    throw new Error(`Failed to create/update subscription limit: ${error}`);
+    logger.error('[SubscriptionLimits] Failed to create/update subscription limit:', error);
+    throw new Error('Failed to create/update subscription limit');
   }
 
-  console.log(`[SubscriptionLimits] Created/updated subscription limit for org ${params.organizationId}`);
+  logger.info(`[SubscriptionLimits] Created/updated subscription limit for org ${params.organizationId}`);
 }
 
 /**
@@ -69,10 +73,11 @@ export async function cancelSubscriptionLimits(organizationId: string): Promise<
 
   if (!response.ok) {
     const error = await response.text();
-    throw new Error(`Failed to cancel subscription limits: ${error}`);
+    logger.error('[SubscriptionLimits] Failed to cancel subscription limits:', error);
+    throw new Error('Failed to cancel subscription limits');
   }
 
-  console.log(`[SubscriptionLimits] Cancelled subscription limits for org ${organizationId}`);
+  logger.info(`[SubscriptionLimits] Cancelled subscription limits for org ${organizationId}`);
 }
 
 /**
@@ -91,14 +96,14 @@ export async function getSubscriptionUsage(organizationId: string): Promise<Subs
     });
 
     if (!response.ok) {
-      console.error(`[SubscriptionLimits] Failed to get usage: ${response.status}`);
+      logger.error(`[SubscriptionLimits] Failed to get usage: ${response.status}`);
       return createDefaultUsage();
     }
 
     const data = (await response.json()) as SubscriptionUsage;
     return data;
   } catch (error) {
-    console.error('[SubscriptionLimits] Error getting subscription usage:', error);
+    logger.error('[SubscriptionLimits] Error getting subscription usage:', error);
     return createDefaultUsage();
   }
 }
@@ -157,17 +162,17 @@ export async function deductQuota(
 
     if (!response.ok) {
       const data = (await response.json()) as { error?: string };
-      console.error(`[SubscriptionLimits] Quota deduction failed: ${data.error || 'Unknown error'}`);
+      logger.error(`[SubscriptionLimits] Quota deduction failed: ${data.error || 'Unknown error'}`);
       return false;
     }
 
     const result = (await response.json()) as QuotaDeductionResult;
-    console.log(
+    logger.info(
       `[SubscriptionLimits] Quota deducted: ${quotaType} from ${result.source || 'unknown'} plan, remaining: ${result.remaining}`
     );
     return result.success;
   } catch (error) {
-    console.error('[SubscriptionLimits] Error deducting quota:', error);
+    logger.error('[SubscriptionLimits] Error deducting quota:', error);
     return false;
   }
 }
@@ -191,7 +196,7 @@ export async function getCombinedProjectQuota(organizationId: string): Promise<C
     );
 
     if (!response.ok) {
-      console.error(`[SubscriptionLimits] Failed to get project quota: ${response.status}`);
+      logger.error(`[SubscriptionLimits] Failed to get project quota: ${response.status}`);
       return {
         projectNums: 0,
         projectNumsLimit: 0,
@@ -202,7 +207,7 @@ export async function getCombinedProjectQuota(organizationId: string): Promise<C
 
     return (await response.json()) as CombinedProjectQuota;
   } catch (error) {
-    console.error('[SubscriptionLimits] Error getting project quota:', error);
+    logger.error('[SubscriptionLimits] Error getting project quota:', error);
     return {
       projectNums: 0,
       projectNumsLimit: 0,
@@ -239,7 +244,7 @@ export async function restoreProjectQuotaOnDeletion(
 
     return (await response.json()) as QuotaRestorationResult;
   } catch (error) {
-    console.error('[SubscriptionLimits] Error restoring project quota:', error);
+    logger.error('[SubscriptionLimits] Error restoring project quota:', error);
     return { success: false, error: 'Failed to restore quota' };
   }
 }
@@ -269,7 +274,7 @@ export async function checkAndRefreshAnnualQuota(organizationId: string): Promis
     const data = (await response.json()) as { refreshed: boolean };
     return data.refreshed;
   } catch (error) {
-    console.error('[SubscriptionLimits] Error refreshing annual quota:', error);
+    logger.error('[SubscriptionLimits] Error refreshing annual quota:', error);
     return false;
   }
 }
@@ -311,7 +316,7 @@ export async function checkRefreshAndDeductQuota(
 
     return (await response.json()) as QuotaDeductionResult;
   } catch (error) {
-    console.error('[SubscriptionLimits] Error in refresh and deduct:', error);
+    logger.error('[SubscriptionLimits] Error in refresh and deduct:', error);
     return { success: false, reason: 'concurrency' };
   }
 }
@@ -336,7 +341,7 @@ export async function deductQuotaUnified(
       };
     }
   } catch (error) {
-    console.warn('[SubscriptionLimits] Annual quota deduction failed, using fallback');
+    logger.warn('[SubscriptionLimits] Annual quota deduction failed, using fallback');
   }
 
   // Fallback to regular quota deduction
@@ -373,7 +378,7 @@ export async function hasAvailableQuota(
         return false;
     }
   } catch (error) {
-    console.error('[SubscriptionLimits] Error checking quota:', error);
+    logger.error('[SubscriptionLimits] Error checking quota:', error);
     return false;
   }
 }
@@ -386,7 +391,7 @@ export async function getOrganizationPlan(organizationId: string): Promise<PlanT
     const usage = await getSubscriptionUsage(organizationId);
     return (usage.plan as PlanType) || PLAN_TYPES.FREE;
   } catch (error) {
-    console.error('[SubscriptionLimits] Error getting plan:', error);
+    logger.error('[SubscriptionLimits] Error getting plan:', error);
     return PLAN_TYPES.FREE;
   }
 }

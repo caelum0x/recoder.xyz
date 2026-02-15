@@ -40,7 +40,7 @@ Open [http://localhost:3000](http://localhost:3000) and start building.
 - **Multi-Model Composition** - Leverage GPT, Claude, Gemini, and more
 - **Client Portal** - Dedicated portal for clients to submit briefs, review deliverables, and track projects
 - **Project Management** - Kanban-style project tracking with status workflows
-- **Invoice & Billing** - Stripe-integrated invoicing per project
+- **Invoice & Billing** - Polar.sh-integrated invoicing per project
 - **Knowledge Store** - Access and search your code and data from one place
 - **Team Collaboration** - Shared configurations and contextual awareness
 

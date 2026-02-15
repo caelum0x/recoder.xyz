@@ -11,6 +11,10 @@
  */
 
 import { type ActionFunctionArgs, json } from '@remix-run/cloudflare';
+import { firecrawlDisabledError, isFirecrawlEnabled } from '~/lib/.server/firecrawl-control';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('ScrapeUrlEnhanced');
 
 // ============================================================================
 // Types
@@ -102,6 +106,10 @@ export async function action({ request, context }: ActionFunctionArgs) {
     return json({ success: false, error: 'Method not allowed' }, { status: 405 });
   }
 
+  if (!isFirecrawlEnabled(context)) {
+    return json(firecrawlDisabledError(), { status: 403 });
+  }
+
   try {
     const body = (await request.json()) as EnhancedScrapeRequest;
     const {
@@ -129,7 +137,7 @@ export async function action({ request, context }: ActionFunctionArgs) {
       );
     }
 
-    console.log('[scrape-url-enhanced] Scraping with caching:', url);
+    logger.info('[scrape-url-enhanced] Scraping with caching:', url);
 
     // Get API key from environment
     const env = (context as any)?.cloudflare?.env || process.env;
@@ -183,7 +191,7 @@ export async function action({ request, context }: ActionFunctionArgs) {
 
     if (!firecrawlResponse.ok) {
       const errorText = await firecrawlResponse.text();
-      console.error('[scrape-url-enhanced] Firecrawl API error:', firecrawlResponse.status, errorText);
+      logger.error('[scrape-url-enhanced] Firecrawl API error:', firecrawlResponse.status, errorText);
       return json({
         success: false,
         error: `Firecrawl API error: ${errorText}`,
@@ -260,7 +268,7 @@ ${sanitizedMarkdown}
       message: `URL scraped successfully with Firecrawl${data.data.cached ? ' (from cache - 500% faster)' : ''}`,
     };
 
-    console.log('[scrape-url-enhanced] Success:', {
+    logger.info('[scrape-url-enhanced] Success:', {
       url,
       title,
       contentLength: formattedContent.length,
@@ -270,10 +278,10 @@ ${sanitizedMarkdown}
 
     return json(response);
   } catch (error) {
-    console.error('[scrape-url-enhanced] Error:', error);
+    logger.error('[scrape-url-enhanced] Error:', error);
     return json({
       success: false,
-      error: (error as Error).message,
+      error: 'URL scraping failed',
     }, { status: 500 });
   }
 }

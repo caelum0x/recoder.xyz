@@ -14,6 +14,8 @@
 export type ApiKeyScope =
   | 'sandboxes:read'      // Read sandbox info
   | 'sandboxes:write'     // Create/delete sandboxes
+  | 'projects:read'       // Read project info
+  | 'projects:write'      // Create/modify/publish projects
   | 'files:read'          // Read files from sandbox
   | 'files:write'         // Write files to sandbox
   | 'execute:commands'    // Execute commands in sandbox
@@ -575,6 +577,270 @@ export interface ApiUsageStats {
   totalDataTransferredBytes: number;
 }
 
+// ==================== Identity Token Types ====================
+
+/**
+ * Scopes for identity tokens (what third-party apps can access)
+ */
+export type IdentityTokenScope =
+  | 'profile:read'     // Read basic profile info
+  | 'projects:read'    // Read project list
+  | 'usage:read';      // Read usage stats
+
+/**
+ * Identity token stored in database
+ */
+export interface IdentityToken {
+  /** Unique token identifier (jti) */
+  id: string;
+
+  /** User ID who generated this token */
+  userId: string;
+
+  /** Hashed token (never store plain text) */
+  hashedToken: string;
+
+  /** Token prefix for identification */
+  tokenPrefix: string;
+
+  /** Unix timestamp when token expires */
+  expiresAt: number;
+
+  /** Scopes granted to this token */
+  scopes: IdentityTokenScope[];
+
+  /** Intended audience (optional - restricts which apps can verify) */
+  audience?: string;
+
+  /** Creation timestamp */
+  createdAt: number;
+
+  /** Whether the token has been revoked */
+  isRevoked: boolean;
+}
+
+/**
+ * Request to create an identity token
+ */
+export interface CreateIdentityTokenRequest {
+  /** Intended audience (e.g., "myapp.com") */
+  audience?: string;
+
+  /** Scopes to grant (defaults to ['profile:read']) */
+  scopes?: IdentityTokenScope[];
+}
+
+/**
+ * Response when creating identity token
+ */
+export interface CreateIdentityTokenResponse {
+  /** The identity token - valid for 1 hour */
+  identity_token: string;
+
+  /** ISO timestamp when token expires */
+  expires_at: string;
+
+  /** Seconds until expiration */
+  expires_in: number;
+}
+
+/**
+ * Request to verify an identity token
+ */
+export interface VerifyIdentityRequest {
+  /** The identity token to verify */
+  token: string;
+
+  /** Expected audience (must match if token has audience) */
+  audience?: string;
+}
+
+/**
+ * Agent info returned on successful verification
+ */
+export interface VerifiedAgentInfo {
+  /** Recoder user ID */
+  id: string;
+
+  /** Display name */
+  name: string;
+
+  /** User's tier */
+  tier: ApiKeyTier;
+
+  /** Basic stats */
+  stats: {
+    totalProjects: number;
+    memberSince: number;
+  };
+}
+
+/**
+ * Response when verifying identity token
+ */
+export interface VerifyIdentityResponse {
+  /** Whether the token is valid */
+  valid: boolean;
+
+  /** Error message if invalid */
+  error?: string;
+
+  /** Agent info if valid */
+  agent?: VerifiedAgentInfo;
+}
+
+// ==================== App Key Types ====================
+
+/**
+ * App key for third-party developers to verify identity tokens
+ */
+export interface AppKey {
+  /** Unique identifier */
+  id: string;
+
+  /** Human-readable name for the app */
+  name: string;
+
+  /** Hashed key (never store plain text) */
+  hashedKey: string;
+
+  /** Key prefix for identification (e.g., app_xxx) */
+  keyPrefix: string;
+
+  /** User ID who owns this app key */
+  ownerId: string;
+
+  /** Whether the key is active */
+  isActive: boolean;
+
+  /** Creation timestamp */
+  createdAt: number;
+
+  /** Last used timestamp */
+  lastUsedAt?: number;
+
+  /** Total verification requests */
+  totalVerifications: number;
+
+  /** Allowed callback URLs (optional) */
+  allowedCallbackUrls?: string[];
+
+  /** App description */
+  description?: string;
+}
+
+/**
+ * Publicly visible app key info (without hash)
+ */
+export interface AppKeyInfo {
+  id: string;
+  name: string;
+  keyPrefix: string;
+  ownerId: string;
+  isActive: boolean;
+  createdAt: number;
+  lastUsedAt?: number;
+  totalVerifications: number;
+  description?: string;
+}
+
+/**
+ * Request to create an app key
+ */
+export interface CreateAppKeyRequest {
+  /** Human-readable name for the app */
+  name: string;
+
+  /** Optional description */
+  description?: string;
+
+  /** Optional allowed callback URLs */
+  allowedCallbackUrls?: string[];
+}
+
+/**
+ * Response when creating app key
+ */
+export interface CreateAppKeyResponse {
+  /** The full app key - ONLY SHOWN ONCE */
+  appKey: string;
+
+  /** Key info */
+  keyInfo: AppKeyInfo;
+}
+
+// ==================== External Identity Types ====================
+
+/**
+ * Supported external identity providers
+ */
+export type ExternalProvider = 'moltbook' | 'openclaw';
+
+/**
+ * External identity mapping
+ */
+export interface ExternalIdentity {
+  /** Recoder user ID */
+  recoderUserId: string;
+
+  /** External provider */
+  provider: ExternalProvider;
+
+  /** External ID from the provider */
+  externalId: string;
+
+  /** Display name from external provider */
+  externalName?: string;
+
+  /** When the link was created */
+  linkedAt: number;
+
+  /** Additional metadata from the provider */
+  metadata?: Record<string, unknown>;
+}
+
+/**
+ * Request to authenticate with Moltbook
+ */
+export interface MoltbookAuthRequest {
+  /** Moltbook identity token */
+  identity_token: string;
+}
+
+/**
+ * Moltbook agent info
+ */
+export interface MoltbookAgentInfo {
+  /** Moltbook agent ID */
+  id: string;
+
+  /** Agent name */
+  name: string;
+
+  /** Agent type */
+  type: string;
+
+  /** Capabilities */
+  capabilities?: string[];
+}
+
+/**
+ * Response when authenticating with Moltbook
+ */
+export interface MoltbookAuthResponse {
+  /** Recoder API key for the agent */
+  apiKey: string;
+
+  /** Key info */
+  keyInfo: ApiKeyInfo;
+
+  /** Whether this created a new account */
+  isNewAccount: boolean;
+
+  /** Moltbook agent info */
+  moltbookAgent: MoltbookAgentInfo;
+}
+
 // ==================== Error Codes ====================
 
 /**
@@ -599,6 +865,11 @@ export enum PublicApiErrorCode {
   SANDBOX_CREATION_FAILED = 'SANDBOX_CREATION_FAILED',
   SANDBOX_LIMIT_EXCEEDED = 'SANDBOX_LIMIT_EXCEEDED',
 
+  // Project errors
+  PROJECT_NOT_FOUND = 'PROJECT_NOT_FOUND',
+  PROJECT_CREATION_FAILED = 'PROJECT_CREATION_FAILED',
+  PROJECT_PUBLISH_FAILED = 'PROJECT_PUBLISH_FAILED',
+
   // File errors
   FILE_NOT_FOUND = 'FILE_NOT_FOUND',
   FILE_TOO_LARGE = 'FILE_TOO_LARGE',
@@ -614,6 +885,27 @@ export enum PublicApiErrorCode {
   VALIDATION_ERROR = 'VALIDATION_ERROR',
   INVALID_REQUEST = 'INVALID_REQUEST',
   MISSING_REQUIRED_FIELD = 'MISSING_REQUIRED_FIELD',
+
+  // Identity token errors
+  IDENTITY_TOKEN_INVALID = 'IDENTITY_TOKEN_INVALID',
+  IDENTITY_TOKEN_EXPIRED = 'IDENTITY_TOKEN_EXPIRED',
+  IDENTITY_TOKEN_REVOKED = 'IDENTITY_TOKEN_REVOKED',
+  IDENTITY_TOKEN_AUDIENCE_MISMATCH = 'IDENTITY_TOKEN_AUDIENCE_MISMATCH',
+  IDENTITY_TOKEN_CREATION_FAILED = 'IDENTITY_TOKEN_CREATION_FAILED',
+  IDENTITY_SCOPE_INVALID = 'IDENTITY_SCOPE_INVALID',
+
+  // App key errors
+  APP_KEY_INVALID = 'APP_KEY_INVALID',
+  APP_KEY_REVOKED = 'APP_KEY_REVOKED',
+  APP_KEY_NOT_FOUND = 'APP_KEY_NOT_FOUND',
+  APP_KEY_CREATION_FAILED = 'APP_KEY_CREATION_FAILED',
+  APP_KEY_FORBIDDEN = 'APP_KEY_FORBIDDEN',
+
+  // External identity errors
+  EXTERNAL_IDENTITY_NOT_FOUND = 'EXTERNAL_IDENTITY_NOT_FOUND',
+  EXTERNAL_IDENTITY_ALREADY_LINKED = 'EXTERNAL_IDENTITY_ALREADY_LINKED',
+  EXTERNAL_PROVIDER_ERROR = 'EXTERNAL_PROVIDER_ERROR',
+  EXTERNAL_TOKEN_INVALID = 'EXTERNAL_TOKEN_INVALID',
 
   // Server errors
   INTERNAL_ERROR = 'INTERNAL_ERROR',

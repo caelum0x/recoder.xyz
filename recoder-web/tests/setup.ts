@@ -44,16 +44,53 @@ global.TextDecoder = TextDecoder;
 
 // Mock Request/Response for API testing
 global.Request = class MockRequest {
-  constructor(public url: string, public init?: any) {}
-  headers = new Map();
-};
+  url: string;
+  method: string;
+  headers: Headers;
+  private _body?: string;
+
+  constructor(url: string, init?: any) {
+    this.url = url;
+    this.method = init?.method ?? 'GET';
+    this.headers = new Headers(init?.headers ?? {});
+    this._body = typeof init?.body === 'string' ? init.body : undefined;
+  }
+
+  async json() {
+    if (!this._body) return {};
+    return JSON.parse(this._body);
+  }
+
+  async text() {
+    return this._body ?? '';
+  }
+} as any;
 
 global.Response = class MockResponse {
-  constructor(public body?: any, public init?: any) {}
-  headers = new Map();
-  status = 200;
-  ok = true;
-};
+  body: any;
+  init: any;
+  status: number;
+  ok: boolean;
+  headers: Headers;
+
+  constructor(body?: any, init?: any) {
+    this.body = body;
+    this.init = init;
+    this.status = init?.status ?? 200;
+    this.ok = this.status >= 200 && this.status < 300;
+    this.headers = new Headers(init?.headers ?? {});
+  }
+
+  async json() {
+    if (typeof this.body === 'string') return JSON.parse(this.body);
+    return this.body;
+  }
+
+  async text() {
+    if (typeof this.body === 'string') return this.body;
+    return JSON.stringify(this.body);
+  }
+} as any;
 
 // Clean up after each test
 afterEach(() => {

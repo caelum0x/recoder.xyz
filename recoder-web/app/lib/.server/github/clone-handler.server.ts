@@ -5,6 +5,9 @@
 
 import { json } from '@remix-run/cloudflare';
 import { isRepoPublic, clonePublicRepo } from './public-clone';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('CloneHandler');
 
 export async function handleCloneRepoJSON(
   repoUrl: string,
@@ -12,7 +15,7 @@ export async function handleCloneRepoJSON(
   githubToken?: string,
   repoInfo?: { owner: string; repo: string; branch?: string }
 ) {
-  console.log('📦 [GitHub] Clone request:', {
+  logger.info('📦 [GitHub] Clone request:', {
     repoUrl,
     subPath,
     hasToken: !!githubToken,
@@ -22,16 +25,16 @@ export async function handleCloneRepoJSON(
     throw new Error('Repository info is required');
   }
 
-  console.log('📦 [GitHub] Parsed repo info:', repoInfo);
+  logger.info('📦 [GitHub] Parsed repo info:', repoInfo);
 
   try {
     // Try public clone first (no token needed!)
-    console.log('📦 [GitHub] Checking if repo is public...');
+    logger.info('📦 [GitHub] Checking if repo is public...');
 
     const isPublic = await isRepoPublic(repoUrl);
 
     if (isPublic) {
-      console.log('✅ [GitHub] Repository is public! Cloning without token...');
+      logger.info('✅ [GitHub] Repository is public! Cloning without token...');
       const files = await clonePublicRepo(repoUrl);
 
       // Get repo info
@@ -51,7 +54,7 @@ export async function handleCloneRepoJSON(
     }
 
     // Fallback to authenticated clone for private repos
-    console.log('📦 [GitHub] Repository is private, using token...');
+    logger.info('📦 [GitHub] Repository is private, using token...');
 
     if (!githubToken) {
       throw new Error('This repository is private. Please add GITHUB_TOKEN to .dev.vars to clone private repositories.');
@@ -68,7 +71,7 @@ export async function handleCloneRepoJSON(
       githubToken
     );
 
-    console.log('✅ [GitHub] Clone successful:', {
+    logger.info('✅ [GitHub] Clone successful:', {
       fileCount: Object.keys(result.files).length,
       repoName: result.repository.name,
     });
@@ -78,7 +81,7 @@ export async function handleCloneRepoJSON(
       repository: result.repository
     });
   } catch (error) {
-    console.error('❌ [GitHub] Clone error:', error);
+    logger.error('❌ [GitHub] Clone error:', error);
 
     // Provide helpful error messages
     let errorMessage = 'Failed to clone repository';

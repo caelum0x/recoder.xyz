@@ -10,6 +10,9 @@ import { useState, useEffect, useCallback } from 'react';
 import { useStore } from '@nanostores/react';
 import { workbenchStore } from '../stores/workbench';
 import { dockerGet, dockerPost } from '../services/docker-api';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('MCPHook');
 
 export interface MCPServerConfig {
   id: string;
@@ -88,7 +91,7 @@ export function useMCP() {
         const data = await dockerGet<{ servers?: CatalogServer[] }>('/api/mcp/catalog');
         setCatalog(data.servers || []);
       } catch (err) {
-        console.error('[MCP] Failed to load catalog:', err);
+        logger.error('[MCP] Failed to load catalog:', err);
       }
     }
     loadCatalog();
@@ -111,7 +114,7 @@ export function useMCP() {
         }
         setTools(allTools);
       } catch (err) {
-        console.error('[MCP] Failed to load status:', err);
+        logger.error('[MCP] Failed to load status:', err);
       }
     }
     loadStatus();
@@ -153,10 +156,10 @@ export function useMCP() {
           if (data.success && data.tools) {
             allTools.push(...data.tools);
             connected.push(server.id);
-            console.log(`[MCP] Connected to ${server.name} with ${data.tools.length} tools`);
+            logger.info(`[MCP] Connected to ${server.name} with ${data.tools.length} tools`);
           }
         } catch (err: any) {
-          console.error(`[MCP] Error starting ${server.name}:`, err.message);
+          logger.error(`[MCP] Error starting ${server.name}:`, err.message);
         }
       }
 
@@ -182,7 +185,7 @@ export function useMCP() {
       setTools([]);
       setConnectedServers([]);
     } catch (err: any) {
-      console.error('[MCP] Error disconnecting:', err.message);
+      logger.error('[MCP] Error disconnecting:', err.message);
     }
   }, [projectId]);
 
@@ -190,7 +193,7 @@ export function useMCP() {
   const addServer = useCallback((server: Omit<MCPServerConfig, 'id'> & { id?: string }) => {
     const existingId = server.id;
     if (existingId && servers.some(s => s.id === existingId)) {
-      console.log(`Server ${existingId} already exists, skipping`);
+      logger.info(`Server ${existingId} already exists, skipping`);
       return;
     }
 
@@ -212,7 +215,7 @@ export function useMCP() {
       try {
         await dockerPost(`/api/mcp/${projectId}/stop`, { serverId: id });
       } catch (err) {
-        console.error('[MCP] Error stopping server:', err);
+        logger.error('[MCP] Error stopping server:', err);
       }
     }
     saveServers(servers.filter(s => s.id !== id));

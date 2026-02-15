@@ -247,11 +247,8 @@ export async function POST(
 			workspaceId: app.workspaceId,
 		});
 	} catch (error) {
-		const message =
-			error instanceof Error && error.message.length > 0
-				? error.message
-				: "Invalid request body";
-		return new Response(message, {
+		console.error("[api-apps-run] buildInputs error:", error);
+		return new Response("Invalid request body", {
 			status: 400,
 			headers: rateLimitHeaders,
 		});

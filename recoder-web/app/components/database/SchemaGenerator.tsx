@@ -6,6 +6,8 @@
 import { useState, useEffect } from 'react';
 import { workbenchStore } from '~/lib/stores/workbench';
 import { toast } from 'react-toastify';
+import { createScopedLogger } from '~/utils/logger';
+const logger = createScopedLogger('SchemaGenerator');
 
 interface Entity {
   name: string;
@@ -140,7 +142,7 @@ export default function SchemaGenerator() {
       const fileCount = Object.keys(fileMap).length;
       const fileList = Object.keys(fileMap).join(', ');
 
-      console.log('📦 Importing SQL schema files:', fileList);
+      logger.info('📦 Importing SQL schema files:', fileList);
 
       // Create prompt for AI to import the schema
       const prompt = `Import this database schema to the project:
@@ -172,7 +174,7 @@ Please create all these files in the project and set up the database configurati
       }));
 
       toast.success(`Importing ${fileCount} schema files to project...`);
-      console.log('✅ SQL schema import event dispatched');
+      logger.info('✅ SQL schema import event dispatched');
 
       // Close the schema generator view after brief delay
       setTimeout(() => {
@@ -185,7 +187,7 @@ Please create all these files in the project and set up the database configurati
 
     } catch (error) {
       toast.error('Failed to import schema files');
-      console.error('❌ Schema import error:', error);
+      logger.error('❌ Schema import error:', error);
     }
   };
 

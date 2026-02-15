@@ -121,7 +121,7 @@ const DEFAULT_RESOURCE_THRESHOLDS: ResourceThresholds = {
 
 // ==================== HEALTH MONITOR ====================
 
-class HealthMonitor extends EventEmitter {
+export class HealthMonitor extends EventEmitter {
   private config: HealthMonitorConfig;
   private containerConfigs: Map<string, HealthCheckConfig> = new Map();
   private healthHistory: Map<string, ContainerHealthHistory> = new Map();
@@ -724,6 +724,55 @@ class HealthMonitor extends EventEmitter {
    */
   getAllStatuses(): HealthStatus[] {
     return Array.from(this.currentStatus.values());
+  }
+
+  /**
+   * Get recovery history - containers that transitioned from unhealthy/degraded back to healthy
+   */
+  getRecoveryHistory(): Array<{
+    containerId: string;
+    projectId?: string;
+    recoveredAt: number;
+    previousStatus: string;
+    downtimeMs: number;
+  }> {
+    const recoveries: Array<{
+      containerId: string;
+      projectId?: string;
+      recoveredAt: number;
+      previousStatus: string;
+      downtimeMs: number;
+    }> = [];
+
+    for (const [containerId, history] of this.healthHistory) {
+      const checks = history.checks;
+      for (let i = 1; i < checks.length; i++) {
+        const prev = checks[i - 1];
+        const curr = checks[i];
+        if (
+          (prev.status === 'unhealthy' || prev.status === 'degraded') &&
+          curr.status === 'healthy'
+        ) {
+          // Find how long the container was down
+          let downtimeStart = prev.timestamp;
+          for (let j = i - 2; j >= 0; j--) {
+            if (checks[j].status === 'healthy') break;
+            downtimeStart = checks[j].timestamp;
+          }
+
+          const currentStatus = this.currentStatus.get(containerId);
+          recoveries.push({
+            containerId,
+            projectId: currentStatus?.projectId,
+            recoveredAt: curr.timestamp,
+            previousStatus: prev.status,
+            downtimeMs: curr.timestamp - downtimeStart,
+          });
+        }
+      }
+    }
+
+    return recoveries.sort((a, b) => b.recoveredAt - a.recoveredAt).slice(0, 50);
   }
 }
 

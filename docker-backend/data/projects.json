@@ -1,0 +1,23 @@
+{
+  "projects": [],
+  "projectsByApiKey": [],
+  "promptTasks": [
+    [
+      "task-cancel",
+      {
+        "id": "task-cancel",
+        "projectId": "project-1",
+        "apiKeyId": "key-1",
+        "userId": "user-1",
+        "prompt": "cancel me",
+        "model": "openrouter/auto",
+        "status": "running",
+        "createdAt": 1770610338585,
+        "updatedAt": 1770610338585
+      }
+    ]
+  ],
+  "promptTasksByProject": [],
+  "taskEventSequences": [],
+  "taskEventHistory": []
+}

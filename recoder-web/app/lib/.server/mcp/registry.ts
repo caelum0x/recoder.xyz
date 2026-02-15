@@ -4,6 +4,9 @@
  */
 
 import type { MCPServer, MCPTool, MCPServerStatus } from './types';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('MCPRegistry');
 
 export class MCPRegistry {
   private servers: Map<string, MCPServer> = new Map();
@@ -15,14 +18,14 @@ export class MCPRegistry {
   register(server: MCPServer): void {
     // Allow re-registration (for hot reload)
     if (this.servers.has(server.id)) {
-      console.log(`🔄 Re-registering MCP server: ${server.name} (${server.id})`);
+      logger.info(`🔄 Re-registering MCP server: ${server.name} (${server.id})`);
       // Remove old tools
       for (const tool of this.servers.get(server.id)!.tools) {
         const toolKey = `${server.id}:${tool.name}`;
         this.tools.delete(toolKey);
       }
     } else {
-      console.log(`✅ Registered MCP server: ${server.name} (${server.id})`);
+      logger.info(`✅ Registered MCP server: ${server.name} (${server.id})`);
     }
 
     this.servers.set(server.id, server);
@@ -51,7 +54,7 @@ export class MCPRegistry {
     }
 
     this.servers.delete(serverId);
-    console.log(`🗑️ Unregistered MCP server: ${server.name}`);
+    logger.info(`🗑️ Unregistered MCP server: ${server.name}`);
   }
 
   /**
@@ -136,7 +139,7 @@ export class MCPRegistry {
     server.enabled = enabled;
     server.updatedAt = new Date();
     
-    console.log(`${enabled ? '✅' : '❌'} Server ${server.name} ${enabled ? 'enabled' : 'disabled'}`);
+    logger.info(`${enabled ? '✅' : '❌'} Server ${server.name} ${enabled ? 'enabled' : 'disabled'}`);
   }
 
   /**

@@ -8,6 +8,7 @@ on:
 
 env:
   NODE_VERSION: '20.x'
+  COMPOSER_REQUIRE_INBOX: 'false'
 
 jobs:
   test:
@@ -137,10 +138,71 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+  eval-gate:
+    name: Eval Gate
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run eval gate
+        run: |
+          node scripts/run-eval-benchmark.js
+          node scripts/check-eval-gate.js
+
+      - name: Upload eval artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: eval-artifacts-${{ github.run_id }}
+          path: |
+            tools/evals/latest.json
+            tools/evals/runs/*.json
+            tools/evals/composer/latest.json
+            tools/evals/composer/results/latest-results.json
+          if-no-files-found: warn
+
+  desktop-smoke:
+    name: Desktop Smoke
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: apps/desktop/package-lock.json
+
+      - name: Install desktop dependencies
+        working-directory: apps/desktop
+        run: npm ci
+
+      - name: Run desktop production smoke
+        working-directory: apps/desktop
+        run: npm run smoke:prod
+
   quality-gate:
     name: Quality Gate
     runs-on: ubuntu-latest
-    needs: [test, security, docker-test]
+    needs: [test, security, docker-test, eval-gate, desktop-smoke]
     
     steps:
       - name: Quality Gate Check
@@ -149,4 +211,6 @@ jobs:
           echo "- Tests completed"
           echo "- Security audit completed"
           echo "- Docker build test completed"
+          echo "- Eval gate completed"
+          echo "- Desktop smoke completed"
           echo "Ready for deployment!"

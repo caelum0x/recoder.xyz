@@ -4,21 +4,44 @@
  */
 
 import { json, type LoaderFunctionArgs } from '@remix-run/cloudflare';
+import { createScopedLogger } from '~/utils/logger';
 import { getDatabase } from '~/lib/.server/db/client';
+
+const logger = createScopedLogger('Analytics');
 import { llmAnalytics } from '~/lib/.server/llm/analytics';
+import { getCacheManager, CacheKeys, CacheTTL } from '~/lib/.server/cache/redis';
 
 export async function loader({ request, context }: LoaderFunctionArgs) {
   try {
     const env = (context as any)?.cloudflare?.env || process.env as unknown as Env;
     const url = new URL(request.url);
+
+    // Admin auth check
+    const userId = url.searchParams.get('userId') || request.headers.get('x-user-id');
+    const adminIds = ((env as any).ADMIN_USER_IDS || '').split(',').map((id: string) => id.trim()).filter(Boolean);
+    if (adminIds.length > 0 && (!userId || !adminIds.includes(userId))) {
+      return json({ error: 'Unauthorized' }, { status: 403 });
+    }
+
     const range = url.searchParams.get('range') || '24h';
-    
-    // Get analytics data based on time range from real systems
+
+    // Try Redis cache
+    const cacheManager = getCacheManager(env);
+    if (cacheManager) {
+      const cached = await cacheManager.getOrSet(
+        CacheKeys.analytics(range),
+        () => getAnalytics(env, range as '24h' | '7d' | '30d'),
+        CacheTTL.SHORT,
+      );
+      return json(cached);
+    }
+
+    // No cache, fetch directly
     const analytics = await getAnalytics(env, range as '24h' | '7d' | '30d');
-    
+
     return json(analytics);
   } catch (error) {
-    console.error('Analytics fetch failed:', error);
+    logger.error('Analytics fetch failed:', error);
     return json(
       {
         error: 'Failed to fetch analytics',
@@ -88,7 +111,7 @@ async function getAnalytics(env: Env, range: '24h' | '7d' | '30d') {
     return { stats, metrics };
     
   } catch (dbError) {
-    console.error('Database query failed, falling back to in-memory analytics:', dbError);
+    logger.error('Database query failed, falling back to in-memory analytics:', dbError);
     
     // Fallback to in-memory analytics only
     return {

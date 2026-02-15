@@ -3,31 +3,35 @@
  * Downloads HTML, CSS, images, fonts and creates a working project
  */
 
-import { type ActionFunctionArgs, json } from '@remix-run/cloudflare';
+import { type ActionFunctionArgs } from '@remix-run/cloudflare';
+import { JsonResponse } from '~/lib/http/json-response';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('CloneUrl');
 
 export async function action({ request }: ActionFunctionArgs) {
   const { verifySession } = await import('~/lib/auth/session.server');
 
   const session = await verifySession(request);
   if (!session?.user) {
-    return json({ error: 'Unauthorized' }, { status: 401 });
+    return JsonResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
   const { url } = await request.json<{ url: string }>();
 
   if (!url) {
-    return json({ error: 'URL is required' }, { status: 400 });
+    return JsonResponse.json({ error: 'URL is required' }, { status: 400 });
   }
 
   try {
     const { cloneWebsite, generateClonePrompt } = await import('~/lib/.server/url-clone/url-cloner');
 
-    console.log(`[Clone URL] Starting exact clone of: ${url}`);
+    logger.info(`[Clone URL] Starting exact clone of: ${url}`);
 
     const website = await cloneWebsite(url);
 
     // Return the files to be written by the action runner
-    return json({
+    return JsonResponse.json({
       success: true,
       title: website.title,
       url: website.url,
@@ -37,9 +41,9 @@ export async function action({ request }: ActionFunctionArgs) {
       prompt: generateClonePrompt(website),
     });
   } catch (error) {
-    console.error('[Clone URL] Error:', error);
-    return json({
-      error: error instanceof Error ? error.message : 'Failed to clone website'
+    logger.error('[Clone URL] Error:', error);
+    return JsonResponse.json({
+      error: 'Failed to clone website'
     }, { status: 500 });
   }
 }

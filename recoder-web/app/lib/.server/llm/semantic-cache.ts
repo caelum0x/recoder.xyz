@@ -1,3 +1,5 @@
+import { createScopedLogger } from '~/utils/logger';
+const logger = createScopedLogger('SemanticCache');
 /**
  * Semantic Similarity Caching System
  * Caches responses based on semantic similarity rather than exact matches
@@ -475,7 +477,7 @@ export const checkSemanticCache = async (
   const match = await semanticCache.findSimilar(query, strategy, framework);
 
   if (match) {
-    console.log(`Semantic cache hit! Similarity: ${match.similarity.toFixed(3)}, Confidence: ${match.confidence.toFixed(3)}`);
+    logger.info(`Semantic cache hit! Similarity: ${match.similarity.toFixed(3)}, Confidence: ${match.confidence.toFixed(3)}`);
     return match.entry.response;
   }
 

@@ -4,6 +4,9 @@ import { ClientOnly } from 'remix-utils/client-only';
 import { ProjectsPage } from '~/components/projects/ProjectsPage.client';
 import { Header } from '~/components/header/Header';
 import { ProjectsDB, type Project } from '~/lib/.server/db/projects-db';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('Projects');
 
 // Remix serializes Date to string via JSON
 type SerializedProject = Omit<Project, 'createdAt' | 'updatedAt'> & {
@@ -27,7 +30,7 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
     const databaseUrl = env?.DATABASE_URL || process.env.DATABASE_URL;
 
     if (!databaseUrl) {
-      console.warn('DATABASE_URL not available');
+      logger.warn('DATABASE_URL not available');
       return json({ projects: [], error: null, databaseConfigured: false });
     }
 
@@ -41,7 +44,7 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
 
     return json({ projects, error: null, databaseConfigured: true });
   } catch (error) {
-    console.error('Projects loader error:', error);
+    logger.error('Projects loader error:', error);
     return json({ projects: [], error: 'Failed to load projects', databaseConfigured: true });
   }
 }

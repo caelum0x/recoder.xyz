@@ -8,6 +8,9 @@ import { type LoaderFunctionArgs, json } from '@remix-run/cloudflare';
 import { createVercelDeployer } from '~/lib/.server/deployment/platforms/vercel';
 import { createNetlifyDeployer } from '~/lib/.server/deployment/platforms/netlify';
 import { createRailwayDeployer } from '~/lib/.server/deployment/platforms/railway';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('DeployStatus');
 
 type DeploymentProvider = 'vercel' | 'netlify' | 'railway';
 
@@ -167,11 +170,11 @@ export async function loader({ request, context }: LoaderFunctionArgs): Promise<
       },
     });
   } catch (error) {
-    console.error(`Failed to get ${provider} deployment status:`, error);
+    logger.error(`Failed to get ${provider} deployment status:`, error);
     return json<DeploymentStatusResponse>(
       {
         success: false,
-        error: error instanceof Error ? error.message : 'Failed to get deployment status',
+        error: 'Failed to get deployment status',
       },
       { status: 500 }
     );

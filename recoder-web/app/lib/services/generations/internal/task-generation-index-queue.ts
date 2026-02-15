@@ -8,6 +8,7 @@ import {
   setTaskGenerationIndexes,
   taskGenerationIndexesPath,
 } from '../storage';
+import { createScopedLogger } from '~/utils/logger';
 import type {
   GenerationContextConfig,
   GenerationId,
@@ -15,6 +16,8 @@ import type {
   NodeGenerationIndex,
   TaskId,
 } from '../types';
+
+const logger = createScopedLogger('GenerationIndexQueue');
 
 // =============================================================================
 // Types
@@ -145,12 +148,12 @@ async function processQueue(storage: GenerationStorage): Promise<void> {
         } else {
           state.queue.set(taskId, retryItem);
         }
-        console.warn(
+        logger.warn(
           `Generation index patch failed for task ${taskId}, retry ${item.retryCount + 1}/${state.retryConfig.maxRetries}:`,
           error,
         );
       } else {
-        console.error(
+        logger.error(
           `Generation index patch permanently failed for task ${taskId} after ${state.retryConfig.maxRetries} retries. Data loss may occur:`,
           error,
           'Failed patches:',
@@ -170,7 +173,7 @@ function startProcessing(storage: GenerationStorage): void {
 
   state.intervalId = setInterval(() => {
     processQueue(storage).catch((error) => {
-      console.error('Unhandled error in generation index queue processing:', error);
+      logger.error('Unhandled error in generation index queue processing:', error);
     });
   }, BATCH_INTERVAL_MS);
 }

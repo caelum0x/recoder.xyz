@@ -1,0 +1,107 @@
+{
+  "generated_at_utc": "2026-02-14T09:19:23.283Z",
+  "source": "tools/evals/cases.json",
+  "total_cases": 9,
+  "passed_cases": 9,
+  "failed_cases": 0,
+  "metrics": {
+    "task_success_rate": 1,
+    "first_pass_accept_rate": 1,
+    "median_time_to_first_token_ms": 23,
+    "median_time_to_apply_ms": 23,
+    "p95_end_to_end_request_latency_ms": 848,
+    "critical_incidents_per_week": 0
+  },
+  "cases": [
+    {
+      "id": "repo.plan.exists",
+      "name": "Plan file exists",
+      "critical": true,
+      "command": "node -e \"const fs=require('fs'); process.exit(fs.existsSync('plan.md')?0:1)\"",
+      "status": "pass",
+      "exit_code": 0,
+      "duration_ms": 23,
+      "first_output_ms": 23
+    },
+    {
+      "id": "repo.eval.script.exists",
+      "name": "Eval gate script exists",
+      "critical": true,
+      "command": "node -e \"const fs=require('fs'); process.exit(fs.existsSync('scripts/check-eval-gate.js')?0:1)\"",
+      "status": "pass",
+      "exit_code": 0,
+      "duration_ms": 22,
+      "first_output_ms": 22
+    },
+    {
+      "id": "repo.eval.command.wired",
+      "name": "Package command wired",
+      "critical": true,
+      "command": "node -e \"const p=require('./package.json'); process.exit(p.scripts && p.scripts['check:eval-gate']?0:1)\"",
+      "status": "pass",
+      "exit_code": 0,
+      "duration_ms": 22,
+      "first_output_ms": 22
+    },
+    {
+      "id": "repo.eval.thresholds.valid",
+      "name": "Thresholds file valid JSON with metrics",
+      "critical": true,
+      "command": "node -e \"const t=require('./tools/evals/thresholds.json'); process.exit(t && t.metrics ? 0 : 1)\"",
+      "status": "pass",
+      "exit_code": 0,
+      "duration_ms": 23,
+      "first_output_ms": 23
+    },
+    {
+      "id": "repo.workflow.eval-gate.present",
+      "name": "CI workflow contains eval-gate job",
+      "critical": true,
+      "command": "node -e \"const fs=require('fs'); const y=fs.readFileSync('.github/workflows/test.yml','utf8'); process.exit(y.includes('eval-gate') ? 0 : 1)\"",
+      "status": "pass",
+      "exit_code": 0,
+      "duration_ms": 22,
+      "first_output_ms": 22
+    },
+    {
+      "id": "code.copy-route.regression",
+      "name": "Recoder-web copy route regression tests",
+      "critical": true,
+      "command": "pnpm -C recoder-web exec vitest --run app/routes/api.projects.copy.test.ts app/routes/api.tools-and-copy.smoke.test.ts",
+      "status": "pass",
+      "exit_code": 0,
+      "duration_ms": 848,
+      "first_output_ms": 393
+    },
+    {
+      "id": "code.message-parser.regression",
+      "name": "Recoder-web message parser action tests",
+      "critical": true,
+      "command": "pnpm -C recoder-web exec vitest --run app/lib/runtime/message-parser-actions.test.ts",
+      "status": "pass",
+      "exit_code": 0,
+      "duration_ms": 738,
+      "first_output_ms": 391
+    },
+    {
+      "id": "composer.dataset.score",
+      "name": "Composer dataset scoring gate",
+      "critical": true,
+      "command": "pnpm run eval:composer-score -- --dataset tools/evals/composer/dataset.json --results tools/evals/composer/sample-results.json --output tools/evals/composer/latest.json --min-pass-rate 1 --strict",
+      "status": "pass",
+      "exit_code": 0,
+      "duration_ms": 158,
+      "first_output_ms": 128
+    },
+    {
+      "id": "repo.plan.evidence.check",
+      "name": "Plan evidence governance check",
+      "critical": false,
+      "command": "pnpm run check:plan-evidence",
+      "status": "pass",
+      "exit_code": 0,
+      "duration_ms": 152,
+      "first_output_ms": 130
+    }
+  ]
+}

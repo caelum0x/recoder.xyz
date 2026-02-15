@@ -6,6 +6,10 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { glob } from 'glob';
+import { isDomainAllowed, parseDomainList } from '~/lib/.server/web/web-safety';
+
+import { createScopedLogger } from '~/utils/logger';
+const logger = createScopedLogger('SimpleWrappers');
 
 /**
  * Simple glob search function
@@ -277,19 +281,26 @@ export async function applyEdits(
  */
 export async function webSearch(
   query: string,
-  options?: { maxResults?: number; tavilyApiKey?: string }
+  options?: {
+    maxResults?: number;
+    tavilyApiKey?: string;
+    allowedDomains?: string[] | string;
+    blockedDomains?: string[] | string;
+  }
 ): Promise<{ success: boolean; results: Array<{ title: string; url: string; snippet: string }>; error?: string }> {
   const maxResults = options?.maxResults || 5;
+  const allowedDomains = parseDomainList(options?.allowedDomains);
+  const blockedDomains = parseDomainList(options?.blockedDomains);
 
   // Try Tavily first if API key is available
   if (options?.tavilyApiKey) {
     try {
       const tavilyResult = await searchWithTavily(query, options.tavilyApiKey, maxResults);
       if (tavilyResult.success && tavilyResult.results.length > 0) {
-        return tavilyResult;
+        return filterSearchResults(tavilyResult, allowedDomains, blockedDomains, maxResults);
       }
     } catch (e) {
-      console.warn('Tavily search failed, falling back:', e);
+      logger.warn('Tavily search failed, falling back:', e);
     }
   }
 
@@ -297,24 +308,54 @@ export async function webSearch(
   try {
     const ddgResult = await searchWithDuckDuckGo(query, maxResults);
     if (ddgResult.success && ddgResult.results.length > 0) {
-      return ddgResult;
+      return filterSearchResults(ddgResult, allowedDomains, blockedDomains, maxResults);
     }
   } catch (e) {
-    console.warn('DuckDuckGo search failed, falling back:', e);
+    logger.warn('DuckDuckGo search failed, falling back:', e);
   }
 
   // Fallback: Use DuckDuckGo HTML search scraping
   try {
     const scrapeResult = await searchWithScraping(query, maxResults);
-    return scrapeResult;
+    return filterSearchResults(scrapeResult, allowedDomains, blockedDomains, maxResults);
   } catch (e) {
-    console.error('All search methods failed:', e);
+    logger.error('All search methods failed:', e);
     return {
       success: false,
       results: [],
       error: 'All search methods failed. Please try a more specific query.'
     };
   }
+}
+
+function filterSearchResults(
+  result: { success: boolean; results: Array<{ title: string; url: string; snippet: string }>; error?: string },
+  allowedDomains?: string[],
+  blockedDomains?: string[],
+  maxResults: number = 5
+): { success: boolean; results: Array<{ title: string; url: string; snippet: string }>; error?: string } {
+  const filtered = result.results.filter((item) => {
+    if (!item.url) return true;
+    try {
+      const host = new URL(item.url).hostname.toLowerCase();
+      return isDomainAllowed(host, { allowedDomains, blockedDomains });
+    } catch {
+      return false;
+    }
+  }).slice(0, maxResults);
+
+  if (filtered.length === 0) {
+    return {
+      success: false,
+      results: [],
+      error: result.error || 'No search results matched the configured domain policy',
+    };
+  }
+
+  return {
+    success: true,
+    results: filtered,
+  };
 }
 
 /**

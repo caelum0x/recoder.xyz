@@ -11,6 +11,7 @@ import {
 	projects,
 } from "@/db";
 import { ClientDigestEmail } from "@/emails/transactional/client-digest";
+import { notifyClient } from "@/lib/agency/channel-notifier";
 import { sendEmail } from "@/services/external/email";
 
 export async function sendClientDigest(clientDbId: number, teamDbId: number) {
@@ -91,6 +92,27 @@ export async function sendClientDigest(clientDbId: number, teamDbId: number) {
 		[{ userDisplayName: client.name, userEmail: client.email }],
 		{ html },
 	);
+
+	// Also send a summary via linked messaging channels
+	const channelParts = [`Weekly update for ${client.name}:`, ""];
+	for (const summary of projectSummaries) {
+		const pending =
+			summary.pendingDecisions > 0
+				? ` (${summary.pendingDecisions} awaiting review)`
+				: "";
+		channelParts.push(`- ${summary.name}: ${summary.status}${pending}`);
+		if (summary.recentDeliverables.length > 0) {
+			channelParts.push(`  Recent: ${summary.recentDeliverables.join(", ")}`);
+		}
+	}
+	channelParts.push("", "Check your portal for details.");
+
+	try {
+		await notifyClient(clientDbId, channelParts.join("\n"));
+	} catch (channelError) {
+		// Channel delivery is best-effort; email is the primary channel
+		console.error("Channel digest delivery failed:", channelError);
+	}
 
 	await db
 		.update(clientDigestSchedules)

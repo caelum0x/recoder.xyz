@@ -5,17 +5,17 @@ on:
     branches: [ main, staging ]
     paths:
       - 'recoder-web/**'
-      - 'lib/**'
+      - 'packages/shared/**'
       - '.github/workflows/web-platform.yml'
   pull_request:
     branches: [ main ]
     paths:
       - 'recoder-web/**'
-      - 'lib/**'
+      - 'packages/shared/**'
 
 env:
-  NODE_VERSION: '18'
-  PNPM_VERSION: '8'
+  NODE_VERSION: '20'
+  PNPM_VERSION: '9'
 
 jobs:
   # ===== BUILD AND TEST =====
@@ -71,7 +71,7 @@ jobs:
         run: pnpm run test:integration
         env:
           NODE_ENV: test
-          DATABASE_URL: sqlite::memory:
+          DATABASE_URL: "sqlite::memory:"
 
   # ===== SECURITY SCAN =====
   security:
@@ -184,6 +184,7 @@ jobs:
         env:
           NODE_ENV: production
           NEXT_TELEMETRY_DISABLED: 1
+          SKIP_ENV_VALIDATION: true
 
       - name: 📊 Generate build info
         id: build-info
@@ -308,11 +309,41 @@ jobs:
             -H "Authorization: Bearer ${{ secrets.ROLLBACK_TOKEN }}" \
             -d '{"platform": "web", "action": "rollback"}'
 
+  smoke-static-staging:
+    name: 🧪 Static Smoke Staging
+    runs-on: ubuntu-latest
+    needs: [deploy-staging]
+    if: github.ref == 'refs/heads/staging' || github.event_name == 'pull_request'
+
+    steps:
+      - name: 📥 Checkout
+        uses: actions/checkout@v4
+
+      - name: 🧪 Run static asset smoke (staging)
+        run: |
+          chmod +x app/scripts/smoke-static-assets.sh
+          BASE_URL="https://staging-web.recoder.xyz" app/scripts/smoke-static-assets.sh
+
+  smoke-static-production:
+    name: 🧪 Static Smoke Production
+    runs-on: ubuntu-latest
+    needs: [deploy-production]
+    if: github.ref == 'refs/heads/main'
+
+    steps:
+      - name: 📥 Checkout
+        uses: actions/checkout@v4
+
+      - name: 🧪 Run static asset smoke (production)
+        run: |
+          chmod +x app/scripts/smoke-static-assets.sh
+          BASE_URL="https://web.recoder.xyz" app/scripts/smoke-static-assets.sh
+
   # ===== NOTIFICATIONS =====
   notify:
     name: 📢 Notify
     runs-on: ubuntu-latest
-    needs: [deploy-staging, deploy-production]
+    needs: [deploy-staging, deploy-production, smoke-static-staging, smoke-static-production]
     if: always()
 
     steps:

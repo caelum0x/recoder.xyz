@@ -1,3 +1,5 @@
+import { createScopedLogger } from '~/utils/logger';
+const logger = createScopedLogger('ResponseValidator');
 /**
  * Response Quality Validator
  * Ensures AI responses meet quality standards before returning to user
@@ -204,7 +206,7 @@ export function logQualityMetrics(
   qualityScore: QualityScore,
   retried: boolean
 ): void {
-  console.log(`📊 Quality Validation:`, {
+  logger.info(`📊 Quality Validation:`, {
     model: modelUsed,
     score: qualityScore.overall,
     passed: qualityScore.passed,

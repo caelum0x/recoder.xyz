@@ -3,10 +3,11 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { computed } from 'nanostores';
 import { memo, useEffect, useRef, useState } from 'react';
 import { createHighlighter, type BundledLanguage, type BundledTheme, type HighlighterGeneric } from 'shiki';
-import type { ActionState } from '~/lib/runtime/action-runner';
+import type { ActionResultMeta, ActionState } from '~/lib/runtime/action-runner';
 import { workbenchStore } from '~/lib/stores/workbench';
 import { classNames } from '~/utils/classNames';
 import { cubicEasingFn } from '~/utils/easings';
+import { getActionMetaBadges, getActionPolicyText, getActionSummary } from './artifact-ui';
 
 const highlighterOptions = {
   langs: ['shell'],
@@ -136,6 +137,8 @@ const ActionList = memo(({ actions }: ActionListProps) => {
         {actions.map((action, index) => {
           const { status, type, content } = action;
           const isLast = index === actions.length - 1;
+          const summary = getActionSummary(action);
+          const resultMeta = action.resultMeta;
 
           return (
             <motion.li
@@ -171,7 +174,11 @@ const ActionList = memo(({ actions }: ActionListProps) => {
                   <div className="flex items-center w-full min-h-[28px]">
                     <span className="flex-1">Run command</span>
                   </div>
-                ) : null}
+                ) : (
+                  <div className="flex items-center w-full min-h-[28px]">
+                    <span className="flex-1">{summary}</span>
+                  </div>
+                )}
               </div>
               {type === 'shell' && (
                 <ShellCodeBlock
@@ -181,11 +188,56 @@ const ActionList = memo(({ actions }: ActionListProps) => {
                   code={content}
                 />
               )}
+              {resultMeta && (
+                <ActionResultMetaView
+                  className={classNames({
+                    'mb-3.5': !isLast,
+                  })}
+                  meta={resultMeta}
+                />
+              )}
             </motion.li>
           );
         })}
       </ul>
     </motion.div>
+  );
+});
+
+interface ActionResultMetaViewProps {
+  className?: string;
+  meta: ActionResultMeta;
+}
+
+const ActionResultMetaView = memo(({ className, meta }: ActionResultMetaViewProps) => {
+  const badges = getActionMetaBadges(meta);
+  const policyText = getActionPolicyText(meta);
+
+  return (
+    <div className={classNames('mt-1.5 space-y-1', className)}>
+      {badges.length > 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          {badges.map((badge) => (
+            <span
+              key={badge}
+              className="text-[11px] px-1.5 py-0.5 rounded-md bg-bolt-elements-artifacts-inlineCode-background text-bolt-elements-textSecondary"
+            >
+              {badge}
+            </span>
+          ))}
+        </div>
+      )}
+      {meta.warnings && meta.warnings.length > 0 && (
+        <div className="text-xs text-amber-300">
+          {meta.warnings.join(' | ')}
+        </div>
+      )}
+      {policyText && (
+        <div className="text-[11px] text-bolt-elements-textTertiary">
+          {policyText}
+        </div>
+      )}
+    </div>
   );
 });
 

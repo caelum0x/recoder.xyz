@@ -5,6 +5,9 @@
  */
 
 import { atom, computed } from 'nanostores';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('PreviewDevice');
 
 // Storage key for persisting preferences
 const PREVIEW_DEVICE_KEY = 'recoder_preview_device';
@@ -265,7 +268,7 @@ function loadState(): PreviewDeviceState {
       return { ...DEFAULT_STATE, ...parsed };
     }
   } catch (e) {
-    console.error('[PreviewDevice] Failed to load state:', e);
+    logger.error('[PreviewDevice] Failed to load state:', e);
   }
 
   return DEFAULT_STATE;
@@ -277,7 +280,7 @@ function saveState(state: PreviewDeviceState): void {
   try {
     localStorage.setItem(PREVIEW_DEVICE_KEY, JSON.stringify(state));
   } catch (e) {
-    console.error('[PreviewDevice] Failed to save state:', e);
+    logger.error('[PreviewDevice] Failed to save state:', e);
   }
 }
 
@@ -359,7 +362,7 @@ export function selectDevice(deviceId: string): void {
     selectedDeviceId: deviceId,
     customMode: deviceId === 'custom',
   });
-  console.log(`[PreviewDevice] Selected: ${deviceId}`);
+  logger.info(`[PreviewDevice] Selected: ${deviceId}`);
 }
 
 /**
@@ -372,7 +375,7 @@ export function toggleOrientation(): void {
     ...state,
     orientation: newOrientation,
   });
-  console.log(`[PreviewDevice] Orientation: ${newOrientation}`);
+  logger.info(`[PreviewDevice] Orientation: ${newOrientation}`);
 }
 
 /**
@@ -396,7 +399,7 @@ export function setZoom(zoom: number): void {
     ...state,
     zoom: clampedZoom,
   });
-  console.log(`[PreviewDevice] Zoom: ${Math.round(clampedZoom * 100)}%`);
+  logger.info(`[PreviewDevice] Zoom: ${Math.round(clampedZoom * 100)}%`);
 }
 
 /**
@@ -434,7 +437,7 @@ export function setCustomDimensions(width: number, height: number): void {
     customMode: true,
     selectedDeviceId: 'custom',
   });
-  console.log(`[PreviewDevice] Custom dimensions: ${width}x${height}`);
+  logger.info(`[PreviewDevice] Custom dimensions: ${width}x${height}`);
 }
 
 /**
@@ -464,7 +467,7 @@ export function setShowFrame(show: boolean): void {
  */
 export function resetPreviewDevice(): void {
   previewDeviceState.set(DEFAULT_STATE);
-  console.log('[PreviewDevice] Reset to defaults');
+  logger.info('[PreviewDevice] Reset to defaults');
 }
 
 /**

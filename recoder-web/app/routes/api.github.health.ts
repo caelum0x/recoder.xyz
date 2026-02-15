@@ -67,7 +67,7 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
     return json({
       status: 'error',
       connected: false,
-      message: error.message || 'Failed to check GitHub status',
+      message: 'Failed to check GitHub status',
     }, { status: 500 });
   }
 }

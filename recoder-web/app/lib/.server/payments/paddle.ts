@@ -3,6 +3,9 @@
  * Handles Paddle subscriptions for US/EU markets
  */
 
+import { createScopedLogger } from '~/utils/logger';
+const logger = createScopedLogger('PaddlePayments');
+
 interface PaddleConfig {
   vendorId: string;
   apiKey: string;
@@ -83,8 +86,9 @@ export async function createPaddleCheckout(
   });
 
   if (!response.ok) {
-    const error = await response.text();
-    throw new Error(`Paddle checkout failed: ${error}`);
+    const errorBody = await response.text();
+    logger.error(`Paddle checkout failed (${response.status}):`, errorBody);
+    throw new Error('Paddle checkout failed');
   }
 
   const data = await response.json() as any;
@@ -112,8 +116,9 @@ export async function getPaddleSubscription(
   });
 
   if (!response.ok) {
-    const error = await response.text();
-    throw new Error(`Failed to get Paddle subscription: ${error}`);
+    const errorBody = await response.text();
+    logger.error(`Failed to get Paddle subscription (${response.status}):`, errorBody);
+    throw new Error('Failed to get Paddle subscription');
   }
 
   const data = await response.json() as any;
@@ -156,8 +161,9 @@ export async function cancelPaddleSubscription(
   });
 
   if (!response.ok) {
-    const error = await response.text();
-    throw new Error(`Failed to cancel Paddle subscription: ${error}`);
+    const errorBody = await response.text();
+    logger.error(`Failed to cancel Paddle subscription (${response.status}):`, errorBody);
+    throw new Error('Failed to cancel Paddle subscription');
   }
 }
 
@@ -189,8 +195,9 @@ export async function updatePaddleSubscription(
   });
 
   if (!response.ok) {
-    const error = await response.text();
-    throw new Error(`Failed to update Paddle subscription: ${error}`);
+    const errorBody = await response.text();
+    logger.error(`Failed to update Paddle subscription (${response.status}):`, errorBody);
+    throw new Error('Failed to update Paddle subscription');
   }
 }
 
@@ -231,7 +238,7 @@ export function verifyPaddleWebhook(
       Buffer.from(expectedHash)
     );
   } catch (error) {
-    console.error('Paddle webhook verification failed:', error);
+    logger.error('Paddle webhook verification failed:', error);
     return false;
   }
 }
@@ -244,7 +251,7 @@ export async function processPaddleWebhook(
   eventData: any,
   db: any // Your database client
 ): Promise<void> {
-  console.log(`Processing Paddle webhook: ${eventType}`);
+  logger.info(`Processing Paddle webhook: ${eventType}`);
 
   switch (eventType) {
     case 'subscription.created':
@@ -270,7 +277,7 @@ export async function processPaddleWebhook(
       break;
 
     default:
-      console.log(`Unhandled Paddle event: ${eventType}`);
+      logger.info(`Unhandled Paddle event: ${eventType}`);
   }
 }
 
@@ -315,7 +322,7 @@ async function handleSubscriptionActivated(data: any, db: any) {
     data.customer_email
   ]);
 
-  console.log(` Paddle subscription activated: ${subscriptionId}`);
+  logger.info(` Paddle subscription activated: ${subscriptionId}`);
 }
 
 async function handleSubscriptionUpdated(data: any, db: any) {
@@ -336,7 +343,7 @@ async function handleSubscriptionUpdated(data: any, db: any) {
     subscriptionId
   ]);
 
-  console.log(` Paddle subscription updated: ${subscriptionId}`);
+  logger.info(` Paddle subscription updated: ${subscriptionId}`);
 }
 
 async function handleSubscriptionCanceled(data: any, db: any) {
@@ -351,7 +358,7 @@ async function handleSubscriptionCanceled(data: any, db: any) {
     WHERE subscription_id = $1
   `, [subscriptionId]);
 
-  console.log(` Paddle subscription canceled: ${subscriptionId}`);
+  logger.info(` Paddle subscription canceled: ${subscriptionId}`);
 }
 
 async function handlePaymentSucceeded(data: any, db: any) {
@@ -377,7 +384,7 @@ async function handlePaymentSucceeded(data: any, db: any) {
     subscriptionId
   ]);
 
-  console.log(` Paddle payment succeeded: ${transactionId}`);
+  logger.info(` Paddle payment succeeded: ${transactionId}`);
 }
 
 async function handlePaymentFailed(data: any, db: any) {
@@ -408,5 +415,5 @@ async function handlePaymentFailed(data: any, db: any) {
     WHERE subscription_id = $1
   `, [subscriptionId]);
 
-  console.log(`L Paddle payment failed: ${transactionId}`);
+  logger.info(`L Paddle payment failed: ${transactionId}`);
 }

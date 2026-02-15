@@ -1,8 +1,9 @@
 import { eq, sql } from "drizzle-orm";
 import Link from "next/link";
-import { db, workspaces } from "@/db";
+import { clients, db, workspaces } from "@/db";
 import { fetchCurrentTeam } from "@/services/teams";
 import {
+	createProjectFromPlaybookAction,
 	createServiceSku,
 	upsertDefinitionOfDoneTemplate,
 	upsertDeliveryPlaybookAction,
@@ -19,6 +20,7 @@ type DodTemplateRow = {
 };
 
 type ServiceSkuRow = {
+	dbId: number;
 	id: string;
 	code: string;
 	name: string;
@@ -38,6 +40,16 @@ type PlaybookRow = {
 	defaultBudgetCents: number | null;
 	defaultSlaDays: number;
 	namePrefix: string | null;
+	serviceSkuDbId: number | null;
+	phases: {
+		order: number;
+		name: string;
+		deliverableType: "document" | "code" | "design" | "other";
+		description?: string;
+		isBillableMilestone: boolean;
+		milestoneLabel?: string;
+	}[];
+	checklist: string[];
 	isActive: boolean;
 	updatedAt: Date | null;
 };
@@ -71,6 +83,14 @@ function toPlaybookRecord(row: Record<string, unknown>): PlaybookRow {
 				: null,
 		defaultSlaDays: Number(row.default_sla_days ?? 7),
 		namePrefix: row.name_prefix ? String(row.name_prefix) : null,
+		serviceSkuDbId:
+			row.service_sku_db_id != null ? Number(row.service_sku_db_id) : null,
+		phases: Array.isArray(row.phases)
+			? (row.phases as PlaybookRow["phases"])
+			: [],
+		checklist: Array.isArray(row.checklist)
+			? row.checklist.map((item) => String(item))
+			: [],
 		isActive: asBoolean(row.is_active),
 		updatedAt:
 			updatedAt && !Number.isNaN(updatedAt.getTime()) ? updatedAt : null,
@@ -151,6 +171,7 @@ function toServiceSkuRecord(row: Record<string, unknown>): ServiceSkuRow {
 				? new Date(String(updatedAtRaw))
 				: null;
 	return {
+		dbId: Number(row.db_id),
 		id: String(row.id),
 		code: String(row.code),
 		name: String(row.name),
@@ -175,9 +196,14 @@ export default async function TemplatesPage() {
 		.where(eq(workspaces.teamDbId, team.dbId));
 
 	const sampleTemplates = templates.filter((w) => w.metadata?.sample);
-	const [dodTemplatesRaw, serviceSkusRaw, playbooksRaw, routingPoliciesRaw] =
-		await Promise.all([
-			db.execute(sql`
+	const [
+		dodTemplatesRaw,
+		serviceSkusRaw,
+		playbooksRaw,
+		routingPoliciesRaw,
+		clientRows,
+	] = await Promise.all([
+		db.execute(sql`
 		SELECT
 			deliverable_type,
 			min_content_length,
@@ -188,8 +214,9 @@ export default async function TemplatesPage() {
 		FROM public.deliverable_definition_of_done_templates
 		WHERE team_db_id = ${team.dbId}
 	`),
-			db.execute(sql`
+		db.execute(sql`
 		SELECT
+			db_id,
 			id,
 			code,
 			name,
@@ -204,15 +231,15 @@ export default async function TemplatesPage() {
 		WHERE team_db_id = ${team.dbId}
 		ORDER BY is_active DESC, code ASC
 	`),
-			db.execute(sql`
+		db.execute(sql`
 		SELECT
-			db_id, name, description, default_budget_cents, default_sla_days,
-			name_prefix, is_active, updated_at
+			db_id, name, description, service_sku_db_id, default_budget_cents, default_sla_days,
+			name_prefix, phases, checklist, is_active, updated_at
 		FROM public.delivery_playbooks
 		WHERE team_db_id = ${team.dbId}
 		ORDER BY is_active DESC, sort_order ASC, name ASC
 	`),
-			db.execute(sql`
+		db.execute(sql`
 		SELECT
 			db_id, name, preferred_model_id, fallback_model_id,
 			cost_ceiling_cents_per_generation, is_active, project_db_id, priority
@@ -220,7 +247,16 @@ export default async function TemplatesPage() {
 		WHERE team_db_id = ${team.dbId}
 		ORDER BY priority DESC, name ASC
 	`),
-		]);
+		db
+			.select({
+				dbId: clients.dbId,
+				id: clients.id,
+				name: clients.name,
+			})
+			.from(clients)
+			.where(eq(clients.teamDbId, team.dbId))
+			.orderBy(clients.name),
+	]);
 	const dodTemplateMap = new Map<string, DodTemplateRow>();
 	for (const row of dodTemplatesRaw.rows) {
 		const parsed = toTemplateRecord(row as Record<string, unknown>);
@@ -332,6 +368,56 @@ export default async function TemplatesPage() {
 							className="rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-white hover:bg-primary/90 transition-colors"
 						>
 							Save SKU
+						</button>
+					</div>
+				</form>
+				<form
+					action={createProjectFromPlaybookAction}
+					className="rounded-xl border border-border/70 bg-bg-hover/20 p-4 space-y-3"
+				>
+					<p className="text-xs font-medium text-text">Bootstrap Project</p>
+					<div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+						<select
+							name="playbookDbId"
+							required
+							defaultValue=""
+							className="rounded-lg border border-border bg-background px-3 py-2 text-sm text-text"
+						>
+							<option value="">Select playbook</option>
+							{playbooks
+								.filter((playbook) => playbook.isActive)
+								.map((playbook) => (
+									<option key={playbook.dbId} value={String(playbook.dbId)}>
+										{playbook.name}
+									</option>
+								))}
+						</select>
+						<select
+							name="clientDbId"
+							required
+							defaultValue=""
+							className="rounded-lg border border-border bg-background px-3 py-2 text-sm text-text"
+						>
+							<option value="">Select client</option>
+							{clientRows.map((client) => (
+								<option key={client.id} value={String(client.dbId)}>
+									{client.name}
+								</option>
+							))}
+						</select>
+						<input
+							name="projectName"
+							required
+							placeholder="Project name"
+							className="rounded-lg border border-border bg-background px-3 py-2 text-sm text-text"
+						/>
+					</div>
+					<div className="flex justify-end">
+						<button
+							type="submit"
+							className="rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-white hover:bg-primary/90 transition-colors"
+						>
+							Create From Playbook
 						</button>
 					</div>
 				</form>
@@ -513,12 +599,18 @@ export default async function TemplatesPage() {
 							placeholder="Name prefix (optional)"
 							className="rounded-lg border border-border bg-background px-3 py-2 text-sm text-text"
 						/>
-						<input
+						<select
 							name="serviceSkuDbId"
-							type="number"
-							placeholder="SKU db_id (optional)"
+							defaultValue=""
 							className="rounded-lg border border-border bg-background px-3 py-2 text-sm text-text"
-						/>
+						>
+							<option value="">No linked SKU</option>
+							{serviceSkus.map((sku) => (
+								<option key={sku.id} value={String(sku.dbId)}>
+									{sku.code} - {sku.name}
+								</option>
+							))}
+						</select>
 					</div>
 					<textarea
 						name="description"
@@ -630,7 +722,13 @@ export default async function TemplatesPage() {
 										? `$${(pb.defaultBudgetCents / 100).toFixed(2)}`
 										: "—"}{" "}
 									• SLA {pb.defaultSlaDays}d
+									{pb.serviceSkuDbId != null
+										? ` • SKU #${pb.serviceSkuDbId}`
+										: " • no SKU"}
 									{pb.namePrefix ? ` • prefix "${pb.namePrefix}"` : ""}
+								</p>
+								<p className="text-xs text-text-muted">
+									Phases {pb.phases.length} • Checklist {pb.checklist.length}
 								</p>
 							</div>
 						))

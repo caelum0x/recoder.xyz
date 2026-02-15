@@ -1,6 +1,17 @@
-import { useEffect, useState, useCallback } from 'react';
-import { getAllProviders, getModelsByProvider, type ModelInfo, type ProviderConfig } from '~/lib/models';
+import { useEffect, useState, useCallback, useMemo } from 'react';
+import { useStore } from '@nanostores/react';
+import { getAllProviders, getModelsByProvider, getOpenRouterModelsCached, type ModelInfo, type ProviderConfig } from '~/lib/models';
+import {
+  loadDynamicModels,
+  dynamicModelsStore,
+  dynamicModelsLoadingStore,
+  dynamicModelsLoadedStore,
+  searchDynamicModels,
+} from '~/lib/stores/model-selection';
 import { classNames } from '~/utils/classNames';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('ModelSelector');
 
 const CUSTOM_MODELS_KEY = 'recoder_custom_models';
 
@@ -23,7 +34,7 @@ function saveCustomModels(models: CustomModelsStorage): void {
   try {
     localStorage.setItem(CUSTOM_MODELS_KEY, JSON.stringify(models));
   } catch (e) {
-    console.error('Failed to save custom models:', e);
+    logger.error('Failed to save custom models:', e);
   }
 }
 
@@ -50,6 +61,14 @@ export function ModelSelector({
     name: '',
     id: '',
   });
+  const [modelSearchQuery, setModelSearchQuery] = useState('');
+  const [addModelSearchQuery, setAddModelSearchQuery] = useState('');
+  const [selectedAddModel, setSelectedAddModel] = useState<ModelInfo | null>(null);
+
+  // Dynamic model stores
+  const dynamicModels = useStore(dynamicModelsStore);
+  const dynamicModelsLoading = useStore(dynamicModelsLoadingStore);
+  const dynamicModelsLoaded = useStore(dynamicModelsLoadedStore);
 
   // Load custom models from localStorage on mount
   useEffect(() => {
@@ -59,12 +78,36 @@ export function ModelSelector({
   const providers = getAllProviders();
   const currentProvider = providers.find((p) => p.id === selectedProvider);
 
-  // Combine default models with custom models for current provider
-  const defaultModels = getModelsByProvider(selectedProvider);
-  const userCustomModels = customModels[selectedProvider] || [];
-  const models = [...defaultModels, ...userCustomModels];
+  // For OpenRouter: use dynamic models if loaded, otherwise hardcoded
+  const defaultModels = useMemo(() => {
+    if (selectedProvider === 'openrouter' && dynamicModelsLoaded && dynamicModels.length > 0) {
+      return dynamicModels;
+    }
+    return getModelsByProvider(selectedProvider);
+  }, [selectedProvider, dynamicModelsLoaded, dynamicModels]);
 
-  const currentModel = models.find((m) => m.id === selectedModel);
+  const userCustomModels = customModels[selectedProvider] || [];
+  const allModels = [...defaultModels, ...userCustomModels];
+
+  // Filter models by search query
+  const models = useMemo(() => {
+    if (!modelSearchQuery.trim()) return allModels;
+    const q = modelSearchQuery.toLowerCase();
+    return allModels.filter(
+      (m) =>
+        m.name.toLowerCase().includes(q) ||
+        m.id.toLowerCase().includes(q) ||
+        (m.description && m.description.toLowerCase().includes(q))
+    );
+  }, [allModels, modelSearchQuery]);
+
+  const currentModel = allModels.find((m) => m.id === selectedModel);
+
+  // Search results for add model flow
+  const addModelResults = useMemo(() => {
+    if (!addModelSearchQuery.trim()) return [];
+    return searchDynamicModels(addModelSearchQuery).slice(0, 50);
+  }, [addModelSearchQuery]);
 
   // Close menus when clicking outside
   useEffect(() => {
@@ -79,10 +122,18 @@ export function ModelSelector({
     }
   }, [showProviderMenu, showModelMenu]);
 
+  // Lazy load dynamic models when OpenRouter dropdown opens
+  useEffect(() => {
+    if (showModelMenu && selectedProvider === 'openrouter' && !dynamicModelsLoaded) {
+      loadDynamicModels();
+    }
+  }, [showModelMenu, selectedProvider, dynamicModelsLoaded]);
+
   const handleProviderClick = (e: React.MouseEvent, providerId: string) => {
     e.stopPropagation();
     onProviderChange(providerId);
     setShowProviderMenu(false);
+    setModelSearchQuery('');
 
     // Auto-select first model of the new provider
     const newProviderModels = getModelsByProvider(providerId);
@@ -95,11 +146,25 @@ export function ModelSelector({
     e.stopPropagation();
     onModelChange(modelId);
     setShowModelMenu(false);
+    setModelSearchQuery('');
   };
 
   const handleAddModel = () => {
     setShowAddModelForm(true);
     setShowModelMenu(false);
+    setAddModelSearchQuery('');
+    setSelectedAddModel(null);
+    setNewModelForm({ name: '', id: '' });
+    // Ensure dynamic models are loaded for search
+    if (!dynamicModelsLoaded) {
+      loadDynamicModels();
+    }
+  };
+
+  const handleSelectAddModel = (model: ModelInfo) => {
+    setSelectedAddModel(model);
+    setNewModelForm({ name: model.name, id: model.id });
+    setAddModelSearchQuery('');
   };
 
   const handleSaveNewModel = async () => {
@@ -117,10 +182,20 @@ export function ModelSelector({
       return;
     }
 
-    updatedModels[selectedProvider].push({
+    const modelToAdd: ModelInfo = {
       id: newModelForm.id,
       name: newModelForm.name,
-    });
+      ...(selectedAddModel ? {
+        description: selectedAddModel.description,
+        contextWindow: selectedAddModel.contextWindow,
+        maxTokens: selectedAddModel.maxTokens,
+        supportsVision: selectedAddModel.supportsVision,
+        costPer1MInput: selectedAddModel.costPer1MInput,
+        costPer1MOutput: selectedAddModel.costPer1MOutput,
+      } : {}),
+    };
+
+    updatedModels[selectedProvider].push(modelToAdd);
 
     // Save to localStorage and update state
     saveCustomModels(updatedModels);
@@ -133,17 +208,17 @@ export function ModelSelector({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           providerId: selectedProvider,
-          model: newModelForm
+          model: modelToAdd
         })
       });
     } catch (error) {
-      console.error('Failed to save model to server:', error);
-      // Continue anyway - localStorage has the model
+      logger.error('Failed to save model to server:', error);
     }
 
     // Reset form and close modal
     const modelId = newModelForm.id;
     setNewModelForm({ name: '', id: '' });
+    setSelectedAddModel(null);
     setShowAddModelForm(false);
 
     // Auto-select the new model
@@ -152,10 +227,9 @@ export function ModelSelector({
 
   const handleCancelAddModel = () => {
     setShowAddModelForm(false);
-    setNewModelForm({
-      name: '',
-      id: '',
-    });
+    setNewModelForm({ name: '', id: '' });
+    setSelectedAddModel(null);
+    setAddModelSearchQuery('');
   };
 
   const handleDeleteCustomModel = (e: React.MouseEvent, modelId: string) => {
@@ -168,8 +242,8 @@ export function ModelSelector({
       setCustomModels(updatedModels);
 
       // If deleted model was selected, select first available model
-      if (selectedModel === modelId && models.length > 1) {
-        const nextModel = models.find(m => m.id !== modelId);
+      if (selectedModel === modelId && allModels.length > 1) {
+        const nextModel = allModels.find(m => m.id !== modelId);
         if (nextModel) {
           onModelChange(nextModel.id);
         }
@@ -179,6 +253,14 @@ export function ModelSelector({
 
   const isCustomModel = (modelId: string): boolean => {
     return (customModels[selectedProvider] || []).some(m => m.id === modelId);
+  };
+
+  const formatCost = (cost: number | undefined): string => {
+    if (cost === undefined) return '';
+    if (cost === 0) return 'Free';
+    if (cost < 0.01) return `$${cost.toFixed(4)}`;
+    if (cost < 1) return `$${cost.toFixed(2)}`;
+    return `$${cost.toFixed(1)}`;
   };
 
   return (
@@ -267,6 +349,7 @@ export function ModelSelector({
             e.stopPropagation();
             setShowModelMenu(!showModelMenu);
             setShowProviderMenu(false);
+            setModelSearchQuery('');
           }}
           className={classNames(
             'w-full flex items-center justify-between gap-2 px-3 py-2 rounded-lg border transition-colors h-[38px] text-sm',
@@ -282,78 +365,113 @@ export function ModelSelector({
         {/* Model Menu */}
         {showModelMenu && (
           <>
-            <div className="fixed inset-0 z-[999]" onClick={() => setShowModelMenu(false)} />
-            <div className="absolute bottom-full left-0 mb-1 w-full max-w-lg rounded-lg shadow-xl z-[1000] max-h-96 overflow-y-auto"
+            <div className="fixed inset-0 z-[999]" onClick={() => { setShowModelMenu(false); setModelSearchQuery(''); }} />
+            <div className="absolute bottom-full left-0 mb-1 w-full max-w-lg rounded-lg shadow-xl z-[1000] max-h-96 overflow-hidden flex flex-col"
               style={{ zIndex: 1000, backgroundColor: 'var(--bolt-elements-bg-depth-1)', borderColor: 'var(--bolt-elements-borderColor)', border: '1px solid var(--bolt-elements-borderColor)' }}>
+
+            {/* Search Input */}
+            <div className="px-3 py-2 border-b sticky top-0" style={{ borderColor: 'var(--bolt-elements-borderColor)', backgroundColor: 'var(--bolt-elements-bg-depth-1)' }}>
+              <div className="relative">
+                <div className="i-ph:magnifying-glass absolute left-2.5 top-1/2 -translate-y-1/2 text-bolt-elements-textTertiary text-sm" />
+                <input
+                  type="text"
+                  value={modelSearchQuery}
+                  onChange={(e) => setModelSearchQuery(e.target.value)}
+                  placeholder="Search models..."
+                  autoFocus
+                  className="w-full pl-8 pr-3 py-1.5 rounded-md text-sm text-bolt-elements-textPrimary placeholder:text-bolt-elements-textTertiary focus:outline-none focus:ring-1 focus:ring-amber-500/50"
+                  style={{ backgroundColor: 'var(--bolt-elements-bg-depth-2)', border: '1px solid var(--bolt-elements-borderColor)' }}
+                  onClick={(e) => e.stopPropagation()}
+                />
+              </div>
+            </div>
+
             {/* Provider Name Header */}
-            <div className="px-4 py-2 text-xs font-semibold text-bolt-elements-textSecondary sticky top-0" style={{ backgroundColor: 'var(--bolt-elements-bg-depth-1)' }}>
-              {currentProvider?.name}
+            <div className="px-4 py-1.5 text-xs font-semibold text-bolt-elements-textSecondary" style={{ backgroundColor: 'var(--bolt-elements-bg-depth-1)' }}>
+              {currentProvider?.name} {dynamicModelsLoaded && selectedProvider === 'openrouter' ? `(${allModels.length} models)` : ''}
             </div>
 
             {/* Model List */}
-            {models.map((model) => (
-              <button
-                key={model.id}
-                onClick={(e) => handleModelClick(e, model.id)}
-                className={classNames(
-                  'w-full px-4 py-2.5 text-left transition-colors flex items-center justify-between group',
-                  model.id === selectedModel
-                    ? 'bg-bolt-elements-background-depth-3 text-bolt-elements-textPrimary'
-                    : 'bg-bolt-elements-background-depth-1 text-bolt-elements-textSecondary hover:bg-bolt-elements-background-depth-2 hover:text-bolt-elements-textPrimary'
-                )}
-                style={{ backgroundColor: model.id === selectedModel ? 'var(--bolt-elements-bg-depth-3)' : 'var(--bolt-elements-bg-depth-1)' }}
-              >
-                <div className="flex flex-col gap-0.5 flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm font-medium truncate">{model.name}</span>
-                    {/* Capability badges */}
-                    {model.supportsVision && (
-                      <span className="text-[9px] px-1 py-0.5 rounded bg-blue-500/20 text-blue-400" title="Supports vision/images">
-                        Vision
-                      </span>
-                    )}
+            <div className="overflow-y-auto flex-1">
+              {models.map((model) => (
+                <button
+                  key={model.id}
+                  onClick={(e) => handleModelClick(e, model.id)}
+                  className={classNames(
+                    'w-full px-4 py-2.5 text-left transition-colors flex items-center justify-between group',
+                    model.id === selectedModel
+                      ? 'bg-bolt-elements-background-depth-3 text-bolt-elements-textPrimary'
+                      : 'bg-bolt-elements-background-depth-1 text-bolt-elements-textSecondary hover:bg-bolt-elements-background-depth-2 hover:text-bolt-elements-textPrimary'
+                  )}
+                  style={{ backgroundColor: model.id === selectedModel ? 'var(--bolt-elements-bg-depth-3)' : 'var(--bolt-elements-bg-depth-1)' }}
+                >
+                  <div className="flex flex-col gap-0.5 flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-medium truncate">{model.name}</span>
+                      {/* Capability badges */}
+                      {model.supportsVision && (
+                        <span className="text-[9px] px-1 py-0.5 rounded bg-blue-500/20 text-blue-400" title="Supports vision/images">
+                          Vision
+                        </span>
+                      )}
+                      {isCustomModel(model.id) && (
+                        <span className="text-[9px] px-1 py-0.5 rounded text-bolt-elements-textSecondary" style={{ backgroundColor: 'var(--bolt-elements-bg-depth-2)' }}>
+                          Custom
+                        </span>
+                      )}
+                    </div>
+                    {/* Model metadata row */}
+                    <div className="flex items-center gap-2 text-[10px] text-bolt-elements-textTertiary">
+                      {model.contextWindow && (
+                        <span title="Context window size">
+                          {model.contextWindow >= 1000000
+                            ? `${(model.contextWindow / 1000000).toFixed(1)}M ctx`
+                            : `${(model.contextWindow / 1000).toFixed(0)}K ctx`}
+                        </span>
+                      )}
+                      {model.costPer1MInput !== undefined && model.costPer1MInput > 0 && (
+                        <span title="Cost per 1M tokens (input/output)">
+                          ${model.costPer1MInput}/{model.costPer1MOutput}
+                        </span>
+                      )}
+                      {model.costPer1MInput === 0 && (
+                        <span className="text-green-500" title="Free - runs locally">Free</span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1 flex-shrink-0">
                     {isCustomModel(model.id) && (
-                      <span className="text-[9px] px-1 py-0.5 rounded text-bolt-elements-textSecondary" style={{ backgroundColor: 'var(--bolt-elements-bg-depth-2)' }}>
-                        Custom
-                      </span>
+                      <button
+                        onClick={(e) => handleDeleteCustomModel(e, model.id)}
+                        className="p-1 text-bolt-elements-textTertiary hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"
+                        title="Remove custom model"
+                      >
+                        <div className="i-ph:trash text-sm" />
+                      </button>
+                    )}
+                    {model.id === selectedModel && (
+                      <div className="i-ph:check text-green-500" />
                     )}
                   </div>
-                  {/* Model metadata row */}
-                  <div className="flex items-center gap-2 text-[10px] text-bolt-elements-textTertiary">
-                    {model.contextWindow && (
-                      <span title="Context window size">
-                        {model.contextWindow >= 1000000
-                          ? `${(model.contextWindow / 1000000).toFixed(1)}M ctx`
-                          : `${(model.contextWindow / 1000).toFixed(0)}K ctx`}
-                      </span>
-                    )}
-                    {model.costPer1MInput !== undefined && model.costPer1MInput > 0 && (
-                      <span title="Cost per 1M tokens (input/output)">
-                        ${model.costPer1MInput}/{model.costPer1MOutput}
-                      </span>
-                    )}
-                    {model.costPer1MInput === 0 && (
-                      <span className="text-green-500" title="Free - runs locally">Free</span>
-                    )}
-                  </div>
+                </button>
+              ))}
+
+              {/* Loading indicator for dynamic models */}
+              {dynamicModelsLoading && selectedProvider === 'openrouter' && (
+                <div className="px-4 py-3 text-center text-xs text-bolt-elements-textTertiary">
+                  <div className="i-ph:spinner-gap animate-spin inline-block mr-2" />
+                  Loading more models...
                 </div>
-                <div className="flex items-center gap-1 flex-shrink-0">
-                  {isCustomModel(model.id) && (
-                    <button
-                      onClick={(e) => handleDeleteCustomModel(e, model.id)}
-                      className="p-1 text-bolt-elements-textTertiary hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"
-                      title="Remove custom model"
-                    >
-                      <div className="i-ph:trash text-sm" />
-                    </button>
-                  )}
-                  {model.id === selectedModel && (
-                    <div className="i-ph:check text-green-500" />
-                  )}
+              )}
+
+              {/* No results */}
+              {models.length === 0 && modelSearchQuery && (
+                <div className="px-4 py-6 text-center text-sm text-bolt-elements-textTertiary">
+                  No models match "{modelSearchQuery}"
                 </div>
-              </button>
-            ))}
-            
+              )}
+            </div>
+
             {/* Add Model Button */}
             <div className="border-t" style={{ borderColor: 'var(--bolt-elements-borderColor)' }}>
               <button
@@ -374,7 +492,7 @@ export function ModelSelector({
       {showAddModelForm && (
         <>
           <div className="fixed inset-0 z-[1001] bg-black/70" onClick={handleCancelAddModel} />
-          <div className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-96 rounded-xl shadow-2xl z-[1002]"
+          <div className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-[440px] rounded-xl shadow-2xl z-[1002]"
             style={{ backgroundColor: 'var(--bolt-elements-bg-depth-1)', border: '1px solid var(--bolt-elements-borderColor)' }}>
             <div className="p-6">
               <div className="flex items-center justify-between mb-5">
@@ -387,31 +505,129 @@ export function ModelSelector({
                 </button>
               </div>
 
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-bolt-elements-textSecondary mb-2">Model Name</label>
-                  <input
-                    type="text"
-                    value={newModelForm.name}
-                    onChange={(e) => setNewModelForm({...newModelForm, name: e.target.value})}
-                    className="w-full px-3 py-2.5 rounded-lg text-bolt-elements-textPrimary placeholder:text-bolt-elements-textTertiary focus:outline-none focus:ring-2 focus:ring-amber-500/50 transition-all"
-                    style={{ backgroundColor: 'var(--bolt-elements-bg-depth-2)', border: '1px solid var(--bolt-elements-borderColor)' }}
-                    placeholder="e.g., GPT-4 Turbo"
-                  />
-                </div>
+              {/* Model Search */}
+              {selectedProvider === 'openrouter' && !selectedAddModel && (
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-bolt-elements-textSecondary mb-2">
+                    Search OpenRouter Models
+                  </label>
+                  <div className="relative">
+                    <div className="i-ph:magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-bolt-elements-textTertiary" />
+                    <input
+                      type="text"
+                      value={addModelSearchQuery}
+                      onChange={(e) => setAddModelSearchQuery(e.target.value)}
+                      placeholder="Search by name or ID..."
+                      autoFocus
+                      className="w-full pl-9 pr-3 py-2.5 rounded-lg text-bolt-elements-textPrimary placeholder:text-bolt-elements-textTertiary focus:outline-none focus:ring-2 focus:ring-amber-500/50 transition-all"
+                      style={{ backgroundColor: 'var(--bolt-elements-bg-depth-2)', border: '1px solid var(--bolt-elements-borderColor)' }}
+                    />
+                  </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-bolt-elements-textSecondary mb-2">Model ID</label>
-                  <input
-                    type="text"
-                    value={newModelForm.id}
-                    onChange={(e) => setNewModelForm({...newModelForm, id: e.target.value})}
-                    className="w-full px-3 py-2.5 rounded-lg text-bolt-elements-textPrimary placeholder:text-bolt-elements-textTertiary focus:outline-none focus:ring-2 focus:ring-amber-500/50 transition-all"
-                    style={{ backgroundColor: 'var(--bolt-elements-bg-depth-2)', border: '1px solid var(--bolt-elements-borderColor)' }}
-                    placeholder="e.g., gpt-4-turbo"
-                  />
-                  <p className="text-xs text-bolt-elements-textTertiary mt-1.5">Use the exact model ID from the provider</p>
+                  {/* Search Results */}
+                  {addModelSearchQuery && (
+                    <div className="mt-2 max-h-48 overflow-y-auto rounded-lg" style={{ border: '1px solid var(--bolt-elements-borderColor)' }}>
+                      {addModelResults.length > 0 ? (
+                        addModelResults.map((model) => (
+                          <button
+                            key={model.id}
+                            onClick={() => handleSelectAddModel(model)}
+                            className="w-full px-3 py-2 text-left hover:bg-bolt-elements-background-depth-2 transition-colors flex items-center justify-between"
+                            style={{ backgroundColor: 'var(--bolt-elements-bg-depth-1)' }}
+                          >
+                            <div className="flex-1 min-w-0">
+                              <div className="text-sm font-medium text-bolt-elements-textPrimary truncate">{model.name}</div>
+                              <div className="flex items-center gap-2 text-[10px] text-bolt-elements-textTertiary">
+                                <span className="truncate">{model.id}</span>
+                                {model.contextWindow && (
+                                  <span>
+                                    {model.contextWindow >= 1000000
+                                      ? `${(model.contextWindow / 1000000).toFixed(1)}M ctx`
+                                      : `${(model.contextWindow / 1000).toFixed(0)}K ctx`}
+                                  </span>
+                                )}
+                                {model.costPer1MInput !== undefined && model.costPer1MInput > 0 && (
+                                  <span>{formatCost(model.costPer1MInput)}/M in</span>
+                                )}
+                              </div>
+                            </div>
+                            {model.supportsVision && (
+                              <span className="text-[9px] px-1 py-0.5 rounded bg-blue-500/20 text-blue-400 flex-shrink-0 ml-2">Vision</span>
+                            )}
+                          </button>
+                        ))
+                      ) : (
+                        <div className="px-3 py-4 text-center text-sm text-bolt-elements-textTertiary">
+                          {dynamicModelsLoading ? 'Loading models...' : 'No models found'}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
+              )}
+
+              {/* Selected Model Info / Manual Form */}
+              <div className="space-y-4">
+                {selectedAddModel && (
+                  <div className="p-3 rounded-lg flex items-start justify-between" style={{ backgroundColor: 'var(--bolt-elements-bg-depth-2)', border: '1px solid var(--bolt-elements-borderColor)' }}>
+                    <div>
+                      <div className="text-sm font-medium text-bolt-elements-textPrimary">{selectedAddModel.name}</div>
+                      <div className="text-xs text-bolt-elements-textTertiary mt-1">{selectedAddModel.id}</div>
+                      <div className="flex items-center gap-2 mt-2 flex-wrap">
+                        {selectedAddModel.contextWindow && (
+                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-bolt-elements-background-depth-3 text-bolt-elements-textSecondary">
+                            {selectedAddModel.contextWindow >= 1000000
+                              ? `${(selectedAddModel.contextWindow / 1000000).toFixed(1)}M context`
+                              : `${(selectedAddModel.contextWindow / 1000).toFixed(0)}K context`}
+                          </span>
+                        )}
+                        {selectedAddModel.costPer1MInput !== undefined && (
+                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-bolt-elements-background-depth-3 text-bolt-elements-textSecondary">
+                            {formatCost(selectedAddModel.costPer1MInput)}/{formatCost(selectedAddModel.costPer1MOutput)} per 1M
+                          </span>
+                        )}
+                        {selectedAddModel.supportsVision && (
+                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-400">Vision</span>
+                        )}
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => { setSelectedAddModel(null); setNewModelForm({ name: '', id: '' }); }}
+                      className="text-bolt-elements-textTertiary hover:text-bolt-elements-textSecondary p-1"
+                    >
+                      <div className="i-ph:x text-sm" />
+                    </button>
+                  </div>
+                )}
+
+                {!selectedAddModel && (
+                  <>
+                    <div>
+                      <label className="block text-sm font-medium text-bolt-elements-textSecondary mb-2">Model Name</label>
+                      <input
+                        type="text"
+                        value={newModelForm.name}
+                        onChange={(e) => setNewModelForm({...newModelForm, name: e.target.value})}
+                        className="w-full px-3 py-2.5 rounded-lg text-bolt-elements-textPrimary placeholder:text-bolt-elements-textTertiary focus:outline-none focus:ring-2 focus:ring-amber-500/50 transition-all"
+                        style={{ backgroundColor: 'var(--bolt-elements-bg-depth-2)', border: '1px solid var(--bolt-elements-borderColor)' }}
+                        placeholder="e.g., GPT-4 Turbo"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-bolt-elements-textSecondary mb-2">Model ID</label>
+                      <input
+                        type="text"
+                        value={newModelForm.id}
+                        onChange={(e) => setNewModelForm({...newModelForm, id: e.target.value})}
+                        className="w-full px-3 py-2.5 rounded-lg text-bolt-elements-textPrimary placeholder:text-bolt-elements-textTertiary focus:outline-none focus:ring-2 focus:ring-amber-500/50 transition-all"
+                        style={{ backgroundColor: 'var(--bolt-elements-bg-depth-2)', border: '1px solid var(--bolt-elements-borderColor)' }}
+                        placeholder="e.g., gpt-4-turbo"
+                      />
+                      <p className="text-xs text-bolt-elements-textTertiary mt-1.5">Use the exact model ID from the provider</p>
+                    </div>
+                  </>
+                )}
               </div>
 
               <div className="flex justify-end gap-3 mt-6">

@@ -40,10 +40,8 @@ export async function GET(request: NextRequest) {
       console.error('Backend premium status error:', error);
       
       return NextResponse.json(
-        { 
-          error: 'Backend error',
-          message: 'Failed to fetch premium status from backend',
-          details: error 
+        {
+          error: 'Failed to fetch premium status',
         },
         { status: response.status }
       );
@@ -63,7 +61,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(
       { 
         error: 'Internal server error',
-        message: error instanceof Error ? error.message : 'Failed to fetch premium status',
+        message: 'Failed to fetch premium status',
       },
       { status: 500 }
     );

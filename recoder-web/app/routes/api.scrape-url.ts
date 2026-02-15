@@ -1,4 +1,8 @@
 import { type ActionFunctionArgs, json } from '@remix-run/cloudflare';
+import { firecrawlDisabledError, isFirecrawlEnabled } from '~/lib/.server/firecrawl-control';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('ScrapeUrl');
 
 /**
  * POST /api/scrape-url
@@ -59,12 +63,20 @@ function sanitizeQuotes(text: string): string {
 }
 
 /**
- * Validate URL format
+ * Validate URL format and reject internal/private addresses.
  */
 function isValidUrl(urlString: string): boolean {
   try {
     const url = new URL(urlString);
-    return url.protocol === 'http:' || url.protocol === 'https:';
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') return false;
+    const h = url.hostname.toLowerCase();
+    if (
+      h === 'localhost' || h === '127.0.0.1' || h === '0.0.0.0' ||
+      h === '::1' || h === '[::1]' ||
+      h.startsWith('10.') || h.startsWith('172.') || h.startsWith('192.168.') ||
+      h === '169.254.169.254' || h.endsWith('.internal') || h.endsWith('.local')
+    ) return false;
+    return true;
   } catch {
     return false;
   }
@@ -73,6 +85,10 @@ function isValidUrl(urlString: string): boolean {
 export async function action({ request, context }: ActionFunctionArgs) {
   if (request.method !== 'POST') {
     return json({ success: false, error: 'Method not allowed' }, { status: 405 });
+  }
+
+  if (!isFirecrawlEnabled(context)) {
+    return json(firecrawlDisabledError(), { status: 403 });
   }
 
   try {
@@ -101,14 +117,14 @@ export async function action({ request, context }: ActionFunctionArgs) {
       }, { status: 400 });
     }
 
-    console.log('[scrape-url] Scraping with Firecrawl:', url);
+    logger.info('[scrape-url] Scraping with Firecrawl:', url);
 
     // Get Firecrawl API key from environment
     const env = (context as any)?.cloudflare?.env || process.env;
     const FIRECRAWL_API_KEY = env.FIRECRAWL_API_KEY;
 
     if (!FIRECRAWL_API_KEY) {
-      console.error('[scrape-url] FIRECRAWL_API_KEY not configured');
+      logger.error('[scrape-url] FIRECRAWL_API_KEY not configured');
       return json({
         success: false,
         error: 'Scraping service not configured. Please set FIRECRAWL_API_KEY.'
@@ -147,7 +163,7 @@ export async function action({ request, context }: ActionFunctionArgs) {
 
     if (!firecrawlResponse.ok) {
       const errorText = await firecrawlResponse.text();
-      console.error('[scrape-url] Firecrawl API error:', firecrawlResponse.status, errorText);
+      logger.error('[scrape-url] Firecrawl API error:', firecrawlResponse.status, errorText);
 
       // Parse error for better messaging
       let errorMessage = 'Failed to scrape URL';
@@ -167,7 +183,7 @@ export async function action({ request, context }: ActionFunctionArgs) {
     const data = await firecrawlResponse.json() as FirecrawlResponse;
 
     if (!data.success || !data.data) {
-      console.error('[scrape-url] Firecrawl returned unsuccessful:', data);
+      logger.error('[scrape-url] Firecrawl returned unsuccessful:', data);
       return json({
         success: false,
         error: data.error || 'Failed to scrape content from URL'
@@ -225,7 +241,7 @@ ${sanitizedMarkdown}
         : 'URL scraped successfully with Firecrawl'
     };
 
-    console.log('[scrape-url] Success:', {
+    logger.info('[scrape-url] Success:', {
       url,
       contentLength: formattedContent.length,
       hasScreenshot: !!screenshotUrl,
@@ -235,7 +251,7 @@ ${sanitizedMarkdown}
     return json(response);
 
   } catch (error) {
-    console.error('[scrape-url] Error:', error);
+    logger.error('[scrape-url] Error:', error);
 
     // Handle specific error types
     if (error instanceof SyntaxError) {
@@ -247,7 +263,7 @@ ${sanitizedMarkdown}
 
     return json({
       success: false,
-      error: error instanceof Error ? error.message : 'Unknown error occurred'
+      error: 'Failed to scrape URL'
     }, { status: 500 });
   }
 }

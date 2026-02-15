@@ -13,6 +13,8 @@ import {
   type SandboxFile,
 } from './types';
 import { SandboxFactory } from './factory';
+import { createScopedLogger } from '~/utils/logger';
+const logger = createScopedLogger('SandboxManager');
 
 // =============================================================================
 // Types
@@ -86,7 +88,7 @@ class SandboxManager {
       // Return the new provider - caller will need to create a new sandbox
       return provider;
     } catch (error) {
-      console.error(`[SandboxManager] Error reconnecting to sandbox ${sandboxId}:`, error);
+      logger.error(`[SandboxManager] Error reconnecting to sandbox ${sandboxId}:`, error);
       throw error;
     }
   }
@@ -301,7 +303,7 @@ class SandboxManager {
         sandbox.status = 'terminated';
         await sandbox.provider.terminate();
       } catch (error) {
-        console.error(`[SandboxManager] Error terminating sandbox ${sandboxId}:`, error);
+        logger.error(`[SandboxManager] Error terminating sandbox ${sandboxId}:`, error);
       }
       this.sandboxes.delete(sandboxId);
 
@@ -321,7 +323,7 @@ class SandboxManager {
   async terminateAll(): Promise<void> {
     const promises = Array.from(this.sandboxes.values()).map((sandbox) =>
       sandbox.provider.terminate().catch((err) =>
-        console.error(`[SandboxManager] Error terminating sandbox ${sandbox.sandboxId}:`, err)
+        logger.error(`[SandboxManager] Error terminating sandbox ${sandbox.sandboxId}:`, err)
       )
     );
 

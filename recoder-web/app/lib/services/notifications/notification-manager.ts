@@ -19,6 +19,9 @@ import type {
   AddNotificationOptions,
 } from './types';
 import { DEFAULT_PREFERENCES } from './types';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('NotificationManager');
 
 // ==================== Constants ====================
 
@@ -85,7 +88,7 @@ function emitEvent(type: NotificationEventType, notification?: Notification, met
       try {
         listener(event);
       } catch (error) {
-        console.error('[NotificationManager] Error in event listener:', error);
+        logger.error('[NotificationManager] Error in event listener:', error);
       }
     });
   }
@@ -104,7 +107,7 @@ function saveNotifications(notifications: Notification[]): void {
       .slice(0, MAX_NOTIFICATIONS);
     localStorage.setItem(STORAGE_KEY, JSON.stringify(toSave));
   } catch (error) {
-    console.error('[NotificationManager] Failed to save notifications:', error);
+    logger.error('[NotificationManager] Failed to save notifications:', error);
   }
 }
 
@@ -123,7 +126,7 @@ function loadNotifications(): Notification[] {
       return parsed.filter(n => n.timestamp > cutoff);
     }
   } catch (error) {
-    console.error('[NotificationManager] Failed to load notifications:', error);
+    logger.error('[NotificationManager] Failed to load notifications:', error);
   }
 
   return [];
@@ -138,7 +141,7 @@ function savePreferences(preferences: NotificationPreferences): void {
   try {
     localStorage.setItem(PREFERENCES_KEY, JSON.stringify(preferences));
   } catch (error) {
-    console.error('[NotificationManager] Failed to save preferences:', error);
+    logger.error('[NotificationManager] Failed to save preferences:', error);
   }
 }
 
@@ -154,7 +157,7 @@ function loadPreferences(): NotificationPreferences {
       return { ...DEFAULT_PREFERENCES, ...JSON.parse(stored) };
     }
   } catch (error) {
-    console.error('[NotificationManager] Failed to load preferences:', error);
+    logger.error('[NotificationManager] Failed to load preferences:', error);
   }
 
   return DEFAULT_PREFERENCES;
@@ -210,7 +213,7 @@ export function initNotificationManager(): void {
   preferencesStore.set(preferences);
 
   isInitialized = true;
-  console.log('[NotificationManager] Initialized with', notifications.length, 'notifications');
+  logger.info('[NotificationManager] Initialized with', notifications.length, 'notifications');
 }
 
 /**

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { withCLIAuth } from '@/lib/middleware/cli-auth-middleware';
 import { prisma } from '@/lib/prisma';
+import { decryptApiKey } from '@/lib/crypto';
 
 /**
  * POST /api/cli/proxy
@@ -63,8 +64,8 @@ export const POST = withCLIAuth(
         );
       }
 
-      // Decrypt platform key (you'll need to implement decryption)
-      const apiKey = platformKey.keyEncrypted; // TODO: decrypt this
+      // Decrypt platform key
+      const apiKey = decryptApiKey(platformKey.keyEncrypted);
 
       // Make request to OpenRouter
       const startTime = Date.now();
@@ -86,8 +87,9 @@ export const POST = withCLIAuth(
       });
 
       if (!openRouterResponse.ok) {
-        const error = await openRouterResponse.text();
-        throw new Error(`OpenRouter error: ${error}`);
+        const errorText = await openRouterResponse.text();
+        console.error('[CLI Proxy] OpenRouter error:', openRouterResponse.status, errorText);
+        throw new Error('AI provider request failed');
       }
 
       const data = await openRouterResponse.json();
@@ -142,8 +144,9 @@ export const POST = withCLIAuth(
         duration,
       });
     } catch (error: any) {
+      console.error('[CLI Proxy] Request failed:', error);
       return NextResponse.json(
-        { error: 'Proxy request failed', message: error.message },
+        { error: 'Proxy request failed' },
         { status: 500 }
       );
     }

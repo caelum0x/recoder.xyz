@@ -11,6 +11,10 @@
 
 import { atom, map, computed, type WritableAtom } from 'nanostores';
 
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('AgentInspector');
+
 // ============================================
 // Types
 // ============================================
@@ -177,7 +181,7 @@ function loadConfig(): InspectorConfig {
       return { ...DEFAULT_CONFIG, ...parsed };
     }
   } catch (e) {
-    console.warn('[AgentInspector] Failed to load config:', e);
+    logger.warn('[AgentInspector] Failed to load config:', e);
   }
 
   return DEFAULT_CONFIG;
@@ -189,7 +193,7 @@ function saveConfig(config: InspectorConfig): void {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(config));
   } catch (e) {
-    console.warn('[AgentInspector] Failed to save config:', e);
+    logger.warn('[AgentInspector] Failed to save config:', e);
   }
 }
 
@@ -399,7 +403,7 @@ export function startSession(messageId: string, userMessage: string): ExecutionS
     data: { metadata: { fullMessage: userMessage } },
   });
 
-  console.log('[AgentInspector] Started session:', session.id);
+  logger.info('[AgentInspector] Started session:', session.id);
   return session;
 }
 
@@ -427,7 +431,7 @@ export function endSession(error?: string): void {
   // Clear current
   currentSessionStore.set(null);
 
-  console.log('[AgentInspector] Ended session:', session.id, error ? `Error: ${error}` : 'Success');
+  logger.info('[AgentInspector] Ended session:', session.id, error ? `Error: ${error}` : 'Success');
 }
 
 /**
@@ -487,7 +491,7 @@ export function addStep(stepData: Partial<ExecutionStep> & Pick<ExecutionStep, '
 
   // Check step limit
   if (steps.length >= config.maxStepsPerSession) {
-    console.warn('[AgentInspector] Max steps reached, pruning oldest');
+    logger.warn('[AgentInspector] Max steps reached, pruning oldest');
     executionStepsStore.set(steps.slice(-Math.floor(config.maxStepsPerSession * 0.8)));
   }
 

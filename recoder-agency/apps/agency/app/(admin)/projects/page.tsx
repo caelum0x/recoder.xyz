@@ -4,6 +4,7 @@ import Link from "next/link";
 import {
 	clients,
 	db,
+	deliveryPlaybooks,
 	projectStatusTransitions,
 	projects,
 	serviceSkus,
@@ -35,6 +36,7 @@ export default async function ProjectsPage({
 		allProjects,
 		allClients,
 		templates,
+		activePlaybooks,
 		activeServiceSkus,
 		recentTransitions,
 		recentTransitionMeta,
@@ -57,6 +59,20 @@ export default async function ProjectsPage({
 			.select({ id: workspaces.id, name: workspaces.name })
 			.from(workspaces)
 			.where(eq(workspaces.teamDbId, team.dbId)),
+		db
+			.select({
+				dbId: deliveryPlaybooks.dbId,
+				name: deliveryPlaybooks.name,
+				defaultSlaDays: deliveryPlaybooks.defaultSlaDays,
+			})
+			.from(deliveryPlaybooks)
+			.where(
+				and(
+					eq(deliveryPlaybooks.teamDbId, team.dbId),
+					eq(deliveryPlaybooks.isActive, true),
+				),
+			)
+			.orderBy(deliveryPlaybooks.name),
 		db
 			.select({
 				dbId: serviceSkus.dbId,
@@ -214,6 +230,7 @@ export default async function ProjectsPage({
 				<NewProjectDialog
 					clients={allClients}
 					templates={sampleTemplates}
+					playbooks={activePlaybooks}
 					serviceSkus={activeServiceSkus}
 					preselectedTemplate={preselectedTemplate}
 				/>

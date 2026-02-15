@@ -12,6 +12,8 @@
 
 import type { DeploymentConfig, DeploymentResult, FileTree } from '../types';
 import { fetchWithRetry, withRetry } from '../utils/retry';
+import { createScopedLogger } from '~/utils/logger';
+const logger = createScopedLogger('CloudflareDeploy');
 
 interface CloudflareProject {
   id: string;
@@ -72,7 +74,7 @@ export class CloudflareDeployer {
     const startTime = Date.now();
 
     try {
-      console.log(`[Cloudflare] Starting deployment: ${config.projectName}`);
+      logger.info(`[Cloudflare] Starting deployment: ${config.projectName}`);
 
       if (!this.token) {
         throw new Error('Cloudflare API token not configured. Get your token from https://dash.cloudflare.com/profile/api-tokens');
@@ -84,18 +86,18 @@ export class CloudflareDeployer {
 
       // Step 1: Create or get project
       const project = await this.createOrGetProject(config.projectName);
-      console.log(`[Cloudflare] Project: ${project.name} (${project.subdomain}.pages.dev)`);
+      logger.info(`[Cloudflare] Project: ${project.name} (${project.subdomain}.pages.dev)`);
 
       // Step 2: Set environment variables if provided
       if (config.environmentVariables && Object.keys(config.environmentVariables).length > 0) {
         await this.setEnvironmentVariables(project.name, config.environmentVariables);
-        console.log(`[Cloudflare] Environment variables set`);
+        logger.info(`[Cloudflare] Environment variables set`);
       }
 
       // Step 3: Prepare and upload files (creates deployment via Direct Upload API)
       const preparedFiles = await this.prepareFiles(files, config);
       const deployment = await this.uploadFilesAndDeploy(project.name, preparedFiles);
-      console.log(`[Cloudflare] Uploaded ${preparedFiles.length} files, deployment created: ${deployment.id}`);
+      logger.info(`[Cloudflare] Uploaded ${preparedFiles.length} files, deployment created: ${deployment.id}`);
 
       // Step 4: Wait for deployment to complete
       const finalDeployment = await this.waitForDeployment(project.name, deployment.id);
@@ -104,7 +106,7 @@ export class CloudflareDeployer {
       const totalTime = endTime - startTime;
 
       const url = finalDeployment.url || `https://${project.subdomain}.pages.dev`;
-      console.log(`[Cloudflare] Deployment successful: ${url}`);
+      logger.info(`[Cloudflare] Deployment successful: ${url}`);
 
       return {
         id: deployment.id,
@@ -122,7 +124,7 @@ export class CloudflareDeployer {
         },
       };
     } catch (error) {
-      console.error('[Cloudflare] Deployment failed:', error);
+      logger.error('[Cloudflare] Deployment failed:', error);
 
       return {
         id: `cloudflare-${Date.now()}`,
@@ -173,7 +175,7 @@ export class CloudflareDeployer {
     }, {
       maxRetries: 3,
       onRetry: (attempt, error) => {
-        console.log(`[Cloudflare] Retrying API request (attempt ${attempt}): ${error.message}`);
+        logger.info(`[Cloudflare] Retrying API request (attempt ${attempt}): ${error.message}`);
       },
     });
   }
@@ -195,11 +197,11 @@ export class CloudflareDeployer {
       const project = await this.apiRequest<CloudflareProject>(
         `/pages/projects/${sanitizedName}`
       );
-      console.log(`[Cloudflare] Found existing project: ${project.name}`);
+      logger.info(`[Cloudflare] Found existing project: ${project.name}`);
       return project;
     } catch (error) {
       // Project doesn't exist, create it
-      console.log(`[Cloudflare] Creating new project: ${sanitizedName}`);
+      logger.info(`[Cloudflare] Creating new project: ${sanitizedName}`);
     }
 
     // Create new project
@@ -387,7 +389,7 @@ export class CloudflareDeployer {
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
       const deployment = await this.getDeployment(projectName, deploymentId);
 
-      console.log(`[Cloudflare] Deployment status: ${deployment.latest_stage.name} - ${deployment.latest_stage.status}`);
+      logger.info(`[Cloudflare] Deployment status: ${deployment.latest_stage.name} - ${deployment.latest_stage.status}`);
 
       if (deployment.latest_stage.status === 'success') {
         return deployment;

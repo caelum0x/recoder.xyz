@@ -5,6 +5,9 @@
 
 import { neon } from '@neondatabase/serverless';
 import type { Message } from 'ai';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('ChatHistoryDB');
 
 /**
  * Sanitize content for PostgreSQL UTF8 encoding
@@ -335,7 +338,7 @@ export class ChatHistoryDB {
     const fileCount = Object.keys(mergedFileSnapshot).length;
     const totalFileSize = Object.values(mergedFileSnapshot).reduce((sum, content) => sum + content.length, 0);
 
-    console.log('💾 [saveChat] File snapshot merge:', {
+    logger.info('💾 [saveChat] File snapshot merge:', {
       existingFiles: session?.metadata?.fileCount || 0,
       newFiles: data.fileSnapshot ? Object.keys(data.fileSnapshot).length : 0,
       mergedFiles: fileCount,
@@ -380,7 +383,7 @@ export class ChatHistoryDB {
     // Get existing messages to compare and update
     const existingMessages = await this.getMessages(session.id);
 
-    console.log('💾 [saveChat] Syncing messages:', {
+    logger.info('💾 [saveChat] Syncing messages:', {
       sessionId: session.id,
       existingCount: existingMessages.length,
       newCount: data.messages.length,
@@ -398,13 +401,13 @@ export class ChatHistoryDB {
         if (existingMsg.content !== msg.content) {
           const oldSize = existingMsg.content.length;
           const newSize = msg.content.length;
-          console.log(`💾 [saveChat] Updating message ${i} (${msg.role}): ${oldSize} -> ${newSize} chars`);
+          logger.info(`💾 [saveChat] Updating message ${i} (${msg.role}): ${oldSize} -> ${newSize} chars`);
           await this.updateMessage(existingMsg.id, msg.content);
         }
       } else {
         // New message - add it
         const contentSize = msg.content.length;
-        console.log(`💾 [saveChat] Adding new message ${i} (${msg.role}): ${contentSize} chars`);
+        logger.info(`💾 [saveChat] Adding new message ${i} (${msg.role}): ${contentSize} chars`);
         await this.addMessage({
           sessionId: session.id,
           role: msg.role as 'user' | 'assistant' | 'system',
@@ -423,7 +426,7 @@ export class ChatHistoryDB {
       WHERE id = ${session.id}
     `;
 
-    console.log('✅ [saveChat] Complete chat saved:', {
+    logger.info('✅ [saveChat] Complete chat saved:', {
       sessionId: session.id,
       urlId: session.urlId,
       messages: data.messages.length,
@@ -461,7 +464,7 @@ export class ChatHistoryDB {
     // Extract file snapshot from metadata
     const fileSnapshot = session.metadata?.fileSnapshot || {};
 
-    console.log('📂 [loadChat] Loaded chat with file snapshot:', {
+    logger.info('📂 [loadChat] Loaded chat with file snapshot:', {
       sessionId: session.id,
       urlId: session.urlId,
       messageCount: messages.length,

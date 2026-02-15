@@ -1,0 +1,10 @@
+{
+  "metrics": {
+    "task_success_rate": { "type": "min", "value": 0.65 },
+    "first_pass_accept_rate": { "type": "min", "value": 0.5 },
+    "median_time_to_first_token_ms": { "type": "max", "value": 2500 },
+    "median_time_to_apply_ms": { "type": "max", "value": 12000 },
+    "p95_end_to_end_request_latency_ms": { "type": "max", "value": 30000 },
+    "critical_incidents_per_week": { "type": "max", "value": 2 }
+  }
+}

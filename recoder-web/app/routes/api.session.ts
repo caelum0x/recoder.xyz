@@ -5,6 +5,9 @@
 
 import { type LoaderFunctionArgs, json } from '@remix-run/cloudflare';
 import { verifySession } from '~/lib/auth/session.server';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('Session');
 
 export async function loader({ request }: LoaderFunctionArgs) {
   try {
@@ -21,7 +24,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
       expiresAt: session.expiresAt.toISOString(),
     });
   } catch (error) {
-    console.error('[api.session] Error:', error);
+    logger.error('[api.session] Error:', error);
     return json({ user: null, authenticated: false, error: 'Session error' }, { status: 500 });
   }
 }

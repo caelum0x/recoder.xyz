@@ -5,6 +5,8 @@
 import { WebContainer } from '@webcontainer/api';
 import { WORK_DIR_NAME } from '~/utils/constants';
 import { getSessionToken } from '~/lib/services/docker-api';
+import { createScopedLogger } from '~/utils/logger';
+const logger = createScopedLogger('RuntimeIndex');
 
 export type RuntimeMode = 'webcontainer' | 'docker';
 
@@ -301,7 +303,7 @@ export async function setRuntimeMode(mode: RuntimeMode): Promise<void> {
   if (mode === 'docker') {
     const available = await isDockerAvailable();
     if (!available) {
-      console.warn('Docker backend not available, staying on WebContainer');
+      logger.warn('Docker backend not available, staying on WebContainer');
       return;
     }
   }

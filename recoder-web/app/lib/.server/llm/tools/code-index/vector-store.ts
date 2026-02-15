@@ -1,3 +1,5 @@
+import { createScopedLogger } from '~/utils/logger';
+const logger = createScopedLogger('VectorStore');
 /**
  * Vector Store for code indexing
  * Uses in-memory storage with cosine similarity search
@@ -58,7 +60,7 @@ export class InMemoryVectorStore {
    */
   async initialize(): Promise<void> {
     // In-memory store is ready immediately
-    console.log(`[VectorStore] Initialized with dimension ${this.dimension}`);
+    logger.info(`[VectorStore] Initialized with dimension ${this.dimension}`);
   }
 
   /**

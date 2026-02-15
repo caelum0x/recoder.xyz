@@ -7,6 +7,9 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 import { useStore } from '@nanostores/react';
 import { workbenchStore } from '~/lib/stores/workbench';
 import { dockerPost } from '~/lib/services/docker-api';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('SearchHook');
 
 export interface SearchResult {
   file: string;
@@ -110,8 +113,8 @@ export function useSearch(hookOptions: UseSearchOptions = {}): UseSearchReturn {
   const [isSearching, setIsSearching] = useState(false);
   const [options, setOptionsState] = useState<SearchOptions>(defaultOptions);
 
-  const searchTimeoutRef = useRef<NodeJS.Timeout>();
-  const abortControllerRef = useRef<AbortController>();
+  const searchTimeoutRef = useRef<NodeJS.Timeout | undefined>(undefined);
+  const abortControllerRef = useRef<AbortController | undefined>(undefined);
 
   // Compute derived values
   const resultsByFile = results.reduce((acc, result) => {
@@ -152,7 +155,7 @@ export function useSearch(hookOptions: UseSearchOptions = {}): UseSearchReturn {
       return searchResults;
     } catch (error) {
       if ((error as Error).name !== 'AbortError') {
-        console.error('[useSearch] Search error:', error);
+        logger.error('[useSearch] Search error:', error);
       }
       return [];
     } finally {
@@ -243,7 +246,7 @@ export function useSearch(hookOptions: UseSearchOptions = {}): UseSearchReturn {
 
       return result;
     } catch (error) {
-      console.error('[useSearch] Replace error:', error);
+      logger.error('[useSearch] Replace error:', error);
       return { success: false, filesModified: 0 };
     }
   }, [projectId, containerReady, query, minQueryLength, options, executeSearch]);

@@ -3,11 +3,9 @@
  * API key management service
  */
 
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '@/lib/prisma';
 import { generateSecureToken, encryptApiKey, decryptApiKey } from '../crypto';
 import crypto from 'crypto';
-
-const prisma = new PrismaClient();
 
 export class ApiKeyService {
   /**

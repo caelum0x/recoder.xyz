@@ -15,6 +15,9 @@ import { useVersions, type Version, type VersionDiff } from '~/lib/hooks/useVers
 import { dockerGet, dockerPost } from '~/lib/services/docker-api';
 import { classNames } from '~/utils/classNames';
 import { toast } from 'react-toastify';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('VersionHistory');
 
 // ============================================
 // Types
@@ -145,7 +148,7 @@ export const VersionHistoryPanel = memo(function VersionHistoryPanel({
     } catch (err: any) {
       const message = err?.message || 'Failed to load git history';
       setGitError(message);
-      console.error('[VersionHistory] Git log error:', err);
+      logger.error('[VersionHistory] Git log error:', err);
     } finally {
       setGitLoading(false);
     }
@@ -159,17 +162,21 @@ export const VersionHistoryPanel = memo(function VersionHistoryPanel({
       setCommitReverting(commit.hash);
       setConfirmRevertHash(null);
       try {
-        await dockerPost(`/api/snapshot/${encodeURIComponent(projectId)}/restore`, {
+        const result = await dockerPost<{ success: boolean; dbRestored?: boolean }>(`/api/snapshot/${encodeURIComponent(projectId)}/restore`, {
           snapshotId: commit.hash,
         });
-        toast.success(`Restored to: ${commit.message}`);
+        if (result?.dbRestored) {
+          toast.success(`Restored files & database to: ${commit.message}`);
+        } else {
+          toast.success(`Restored to: ${commit.message}`);
+        }
         // Refresh file tree and commits
         workbenchStore.refreshFiles?.();
         await fetchGitCommits();
         setSelectedCommit(null);
         onClose();
       } catch (err: any) {
-        console.error('[VersionHistory] Revert error:', err);
+        logger.error('[VersionHistory] Revert error:', err);
         toast.error(err?.message || 'Failed to revert to selected commit');
       } finally {
         setCommitReverting(null);
@@ -419,6 +426,12 @@ export const VersionHistoryPanel = memo(function VersionHistoryPanel({
                       <span className={authorBadge.icon} />
                       {authorBadge.label}
                     </span>
+                    {version.neonDbTimestamp && (
+                      <span className="px-1.5 py-0.5 text-xs bg-emerald-500/20 text-emerald-400 rounded border border-emerald-500/30 flex items-center gap-1" title={`DB state: ${version.neonDbTimestamp}`}>
+                        <span className="i-ph:database" />
+                        DB
+                      </span>
+                    )}
                   </div>
 
                   <p className="text-sm text-bolt-elements-textPrimary truncate font-medium">
@@ -605,6 +618,12 @@ export const VersionHistoryPanel = memo(function VersionHistoryPanel({
               >
                 {getAuthorBadge(selectedVersion.author).label}
               </span>
+              {selectedVersion.neonDbTimestamp && (
+                <span className="px-1.5 py-0.5 text-xs rounded bg-emerald-500/20 text-emerald-400 flex items-center gap-1" title={`DB state: ${selectedVersion.neonDbTimestamp}`}>
+                  <span className="i-ph:database" />
+                  DB snapshot
+                </span>
+              )}
             </div>
           </div>
 
@@ -622,7 +641,7 @@ export const VersionHistoryPanel = memo(function VersionHistoryPanel({
               {snapshotRestoring ? (
                 <>
                   <span className="i-ph:spinner animate-spin" />
-                  Restoring...
+                  {selectedVersion.neonDbTimestamp ? 'Restoring files & DB...' : 'Restoring...'}
                 </>
               ) : confirmRestore === selectedVersion.id ? (
                 <>
@@ -632,7 +651,7 @@ export const VersionHistoryPanel = memo(function VersionHistoryPanel({
               ) : (
                 <>
                   <span className="i-ph:arrow-counter-clockwise" />
-                  Restore This Version
+                  {selectedVersion.neonDbTimestamp ? 'Restore Files & DB' : 'Restore This Version'}
                 </>
               )}
             </button>
@@ -891,6 +910,10 @@ export const VersionHistoryPanel = memo(function VersionHistoryPanel({
                       Restoring to this commit will reset all files to their state at this point in
                       history. Any uncommitted changes will be lost. A backup snapshot is created
                       automatically before restoring.
+                    </p>
+                    <p className="text-xs text-bolt-elements-textTertiary mt-1">
+                      If a database snapshot was captured at this point, your Neon database will also
+                      be restored to that state.
                     </p>
                   </div>
                 </div>

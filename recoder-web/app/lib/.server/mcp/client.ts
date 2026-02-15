@@ -5,6 +5,8 @@
 
 import type { MCPToolCall, MCPToolResult, MCPError, MCPServer } from './types';
 import { mcpRegistry } from './registry';
+import { createScopedLogger } from '~/utils/logger';
+const logger = createScopedLogger('MCPClientServer');
 
 export class MCPClient {
   /**
@@ -14,7 +16,7 @@ export class MCPClient {
     const startTime = Date.now();
 
     try {
-      console.log(`🔧 Executing tool: ${call.toolName}`);
+      logger.info(`🔧 Executing tool: ${call.toolName}`);
 
       // Get the tool and its server
       const toolInfo = mcpRegistry.getTool(call.toolName);
@@ -53,7 +55,7 @@ export class MCPClient {
 
       const executionTime = Date.now() - startTime;
 
-      console.log(`✅ Tool executed successfully in ${executionTime}ms`);
+      logger.info(`✅ Tool executed successfully in ${executionTime}ms`);
 
       return {
         callId: call.id,
@@ -64,7 +66,7 @@ export class MCPClient {
     } catch (error) {
       const executionTime = Date.now() - startTime;
 
-      console.error(`❌ Tool execution failed:`, error);
+      logger.error(`❌ Tool execution failed:`, error);
 
       return {
         callId: call.id,

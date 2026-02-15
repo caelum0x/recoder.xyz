@@ -6,6 +6,9 @@
 import { type LoaderFunctionArgs, json } from '@remix-run/cloudflare';
 import { ProjectsDB } from '~/lib/.server/db/projects-db';
 import { verifySession } from '~/lib/auth/session.server';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('ProjectsSearch');
 
 /**
  * GET /api/projects/search
@@ -59,7 +62,7 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
       );
     }
 
-    console.log(`[Projects] Search "${query}" returned ${userProjects.length} user + ${publicProjects.length} public results`);
+    logger.info(`[Projects] Search "${query}" returned ${userProjects.length} user + ${publicProjects.length} public results`);
 
     return json({
       success: true,
@@ -89,10 +92,10 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
       count: userProjects.length + publicProjects.length,
     });
   } catch (error) {
-    console.error('[Projects] Search error:', error);
+    logger.error('[Projects] Search error:', error);
     return json({
       success: false,
-      error: error instanceof Error ? error.message : 'Search failed',
+      error: 'Search failed',
     }, { status: 500 });
   }
 }

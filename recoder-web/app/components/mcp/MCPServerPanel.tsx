@@ -6,6 +6,9 @@
 import { useState, useEffect } from 'react';
 import { Server, Circle, Settings, RefreshCw, AlertCircle, CheckCircle2, XCircle } from 'lucide-react';
 import { toast } from 'react-toastify';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('MCPServerPanel');
 
 interface MCPServer {
   id: string;
@@ -46,7 +49,7 @@ export default function MCPServerPanel() {
         toast.error('Failed to load MCP servers');
       }
     } catch (error: any) {
-      console.error('Failed to load MCP servers:', error);
+      logger.error('Failed to load MCP servers:', error);
       toast.error('Error loading MCP servers');
     } finally {
       setLoading(false);
@@ -77,7 +80,7 @@ export default function MCPServerPanel() {
         toast.error(data.error || 'Failed to update server');
       }
     } catch (error: any) {
-      console.error('Failed to toggle server:', error);
+      logger.error('Failed to toggle server:', error);
       toast.error('Error updating server');
     }
   };

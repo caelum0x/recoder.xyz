@@ -9,6 +9,9 @@
  */
 
 import { atom, computed } from 'nanostores';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('ConnectionStore');
 
 export type ConnectionStatus = 'connected' | 'connecting' | 'disconnected' | 'reconnecting' | 'error';
 
@@ -220,7 +223,7 @@ function showToast(type: 'success' | 'error' | 'info' | 'warning', message: stri
     }
   }).catch(() => {
     // Silently fail if toast not available
-    console.log(`[Connection] ${type}: ${message}`);
+    logger.info(`[Connection] ${type}: ${message}`);
   });
 }
 
@@ -368,7 +371,7 @@ export function startConnectionHealthMonitor() {
       consecutiveUnhealthyChecks++;
 
       if (consecutiveUnhealthyChecks >= UNHEALTHY_THRESHOLD) {
-        console.log('[ConnectionHealthMonitor] Detected prolonged unhealthy state, triggering reconnection');
+        logger.info('[ConnectionHealthMonitor] Detected prolonged unhealthy state, triggering reconnection');
         consecutiveUnhealthyChecks = 0;
 
         // Dispatch reconnect-all event
@@ -384,7 +387,7 @@ export function startConnectionHealthMonitor() {
 
     // Log connection status for debugging (only in development)
     if (typeof window !== 'undefined' && (window as any).__DEV__) {
-      console.log('[ConnectionHealthMonitor] Status:', {
+      logger.info('[ConnectionHealthMonitor] Status:', {
         health,
         docker: docker.status,
         terminal: terminal.status,
@@ -444,7 +447,7 @@ export function getConnectionStats() {
  * Force trigger reconnection of all WebSocket connections
  */
 export function forceReconnectAll() {
-  console.log('[Connection] Force reconnecting all connections');
+  logger.info('[Connection] Force reconnecting all connections');
 
   // Reset reconnect counters
   consecutiveUnhealthyChecks = 0;

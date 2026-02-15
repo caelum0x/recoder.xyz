@@ -21,6 +21,9 @@ import {
   lspDiagnostics as diagnosticsExtension,
 } from '~/lib/lsp';
 import { workbenchStore } from '~/lib/stores/workbench';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('LSPExtensions');
 
 // ============================================
 // Types
@@ -121,7 +124,7 @@ export function lspHoverTooltip(projectId: string, filePath: string) {
 
         return createHoverTooltip(pos, hover);
       } catch (err) {
-        console.error('[LSP Hover] Error:', err);
+        logger.error('[LSP Hover] Error:', err);
         return null;
       }
     },
@@ -220,7 +223,7 @@ async function performGotoDefinition(
       return true;
     }
   } catch (err) {
-    console.error('[LSP Definition] Error:', err);
+    logger.error('[LSP Definition] Error:', err);
   }
   return false;
 }
@@ -272,7 +275,7 @@ export function gotoDefinition(
             onGoto(targetFile, location.range.start.line + 1, location.range.start.character);
           }
         } catch (err) {
-          console.error('[LSP Definition] Error:', err);
+          logger.error('[LSP Definition] Error:', err);
         }
       })();
 
@@ -659,7 +662,7 @@ export function findReferences(
               );
             }
           } catch (err) {
-            console.error('[LSP References] Error:', err);
+            logger.error('[LSP References] Error:', err);
           }
         })();
 
@@ -738,7 +741,7 @@ export function lspCompletionSource(projectId: string, filePath: string) {
         validFor: /^[\w.]*$/,
       };
     } catch (err) {
-      console.error('[LSP Completions] Error:', err);
+      logger.error('[LSP Completions] Error:', err);
       return null;
     }
   };
@@ -827,7 +830,7 @@ export function lspExtension(
   if (useEnhancedClient && workbenchStore.containerReady.get()) {
     const client = getEnhancedLSPClient(projectId);
     client.connect().catch((err) => {
-      console.warn('[LSP] Failed to connect enhanced client:', err);
+      logger.warn('[LSP] Failed to connect enhanced client:', err);
     });
   }
 
@@ -911,7 +914,7 @@ export function lspAutoInit(projectId: string, filePath: string) {
     const client = getLSPClient(projectId);
     if (!client.isReady()) {
       client.initialize().catch((err) => {
-        console.warn('[LSP] Auto-init failed:', err);
+        logger.warn('[LSP] Auto-init failed:', err);
       });
     }
   });
@@ -960,7 +963,7 @@ export function lspDocumentSync(projectId: string, filePath: string, debounceMs 
           lastContent = content;
         }
       } catch (err) {
-        console.warn('[LSP] Document sync failed:', err);
+        logger.warn('[LSP] Document sync failed:', err);
       }
     }, debounceMs);
   });

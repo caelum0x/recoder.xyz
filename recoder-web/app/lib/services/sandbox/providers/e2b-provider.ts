@@ -22,6 +22,9 @@ import type {
 import { SandboxError, SandboxErrorType, SandboxStatus } from '../types';
 import { tryCatch, createSandboxLogger } from '../utils';
 import { CONTAINER_TIMEOUTS } from '../config';
+import { createScopedLogger } from '~/utils/logger';
+
+const logger = createScopedLogger('E2BProvider');
 
 // E2B SDK types (dynamically imported)
 type E2BSandboxType = {
@@ -79,7 +82,7 @@ export class E2BSandboxProvider extends BaseSandboxProvider {
       const e2bModule = await import('e2b') as E2BModuleType;
       this.E2B = e2bModule.default;
     } catch (error) {
-      console.warn('E2B SDK not available. E2B provider will not work.');
+      logger.warn('E2B SDK not available. E2B provider will not work.');
       // Don't throw - allow graceful degradation
     }
   }
@@ -210,7 +213,7 @@ export class E2BSandboxProvider extends BaseSandboxProvider {
       }
     } catch (iterError) {
       // Handle iteration errors gracefully
-      console.warn('Error iterating E2B sandboxes:', iterError);
+      logger.warn('Error iterating E2B sandboxes:', iterError);
     }
 
     return sandboxes;
