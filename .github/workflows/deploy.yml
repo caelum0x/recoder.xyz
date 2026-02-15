@@ -42,6 +42,10 @@ jobs:
           else
             echo "No tests or tests failed"
           fi
+
+      - name: Prune route test files for production build
+        run: |
+          find "${{ matrix.project }}/app/routes" -type f \( -name "*.test.ts" -o -name "*.test.tsx" \) -delete
       
       - name: Build project
         run: SKIP_ENV_VALIDATION=true pnpm -C "${{ matrix.project }}" run build
