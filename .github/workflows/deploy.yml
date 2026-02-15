@@ -51,6 +51,7 @@ jobs:
         run: SKIP_ENV_VALIDATION=true pnpm -C "${{ matrix.project }}" run build
         env:
           SKIP_ENV_VALIDATION: true
+          NODE_OPTIONS: --max_old_space_size=6144
 
   # Deploy recoder-web to Vercel
   deploy-web:
