@@ -27,24 +27,30 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 9
-      
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        working-directory: ${{ matrix.project }}
+        run: |
+          if [ -f "package-lock.json" ]; then
+            npm ci --legacy-peer-deps
+          elif [ -f "package.json" ]; then
+            npm install --legacy-peer-deps
+          else
+            echo "No package.json found in ${{ matrix.project }}"
+            exit 1
+          fi
       
       - name: Run tests
+        working-directory: ${{ matrix.project }}
         run: |
-          if pnpm -C "${{ matrix.project }}" run test --if-present; then
+          if npm run test --if-present; then
             echo "Tests passed"
           else
             echo "No tests or tests failed"
           fi
       
       - name: Build project
-        run: SKIP_ENV_VALIDATION=true pnpm -C "${{ matrix.project }}" run build
+        working-directory: ${{ matrix.project }}
+        run: SKIP_ENV_VALIDATION=true npm run build
         env:
           SKIP_ENV_VALIDATION: true
 
