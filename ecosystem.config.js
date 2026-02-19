@@ -49,7 +49,7 @@ module.exports = {
       name: 'recoder-web',
       cwd: '/root/recoder.xyz/recoder-web',
       script: 'server.js',
-      max_memory_restart: '1.5G',
+      max_memory_restart: '1536M',
       restart_delay: 3000,
       kill_timeout: 5000,
       listen_timeout: 10000,
@@ -107,12 +107,11 @@ module.exports = {
       }
     },
 
-    // ── recoder-pm (Turbo monorepo – Next.js web app) ───────────────
+    // ── recoder-pm (Turbo monorepo – Next.js web app, standalone) ───
     {
       name: 'recoder-pm',
       cwd: '/root/recoder.xyz/recoder-pm/apps/web',
-      script: '../../node_modules/.bin/next',
-      args: 'start',
+      script: '.next/standalone/recoder-pm/apps/web/server.js',
       max_memory_restart: '512M',
       restart_delay: 3000,
       kill_timeout: 5000,
@@ -151,12 +150,11 @@ module.exports = {
       }
     },
 
-    // ── recoder-agency (Turbo monorepo – Next.js agency app) ────────
+    // ── recoder-agency (Turbo monorepo – Next.js agency app, standalone) ──
     {
       name: 'recoder-agency',
       cwd: '/root/recoder.xyz/recoder-agency/apps/agency',
-      script: '../../node_modules/.bin/next',
-      args: 'start',
+      script: '.next/standalone/apps/agency/server.js',
       max_memory_restart: '1G',
       restart_delay: 3000,
       kill_timeout: 5000,
