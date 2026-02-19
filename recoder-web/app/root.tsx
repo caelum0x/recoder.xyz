@@ -95,6 +95,10 @@ export const links: LinksFunction = () => [
     href: '/apple-touch-icon.png',
     sizes: '180x180',
   },
+  {
+    rel: 'manifest',
+    href: '/manifest.json',
+  },
   { rel: 'stylesheet', href: reactToastifyStyles },
   { rel: 'stylesheet', href: tailwindReset },
   { rel: 'stylesheet', href: globalStyles },

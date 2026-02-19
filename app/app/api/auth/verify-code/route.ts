@@ -9,6 +9,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import crypto from 'crypto';
+import { logger } from '@/lib/logger';
 
 export async function POST(request: NextRequest) {
   try {
@@ -77,9 +78,9 @@ export async function POST(request: NextRequest) {
           updatedAt: new Date()
         }
       });
-      console.log(`[verify-code] User verified in 'user' table: ${verifiedEmail}`);
+      logger.info('User verified in user table', { route: 'api/auth/verify-code', email: verifiedEmail });
     } catch (e) {
-      console.log(`[verify-code] User not in 'user' table (Better Auth): ${verifiedEmail}`);
+      logger.info('User not in user table (Better Auth)', { route: 'api/auth/verify-code', email: verifiedEmail });
     }
 
     // CLI users table
@@ -91,9 +92,9 @@ export async function POST(request: NextRequest) {
           updatedAt: new Date()
         }
       });
-      console.log(`[verify-code] User verified in 'users' table: ${verifiedEmail}`);
+      logger.info('User verified in users table', { route: 'api/auth/verify-code', email: verifiedEmail });
     } catch (e) {
-      console.log(`[verify-code] User not in 'users' table (CLI): ${verifiedEmail}`);
+      logger.info('User not in users table (CLI)', { route: 'api/auth/verify-code', email: verifiedEmail });
     }
 
     // Delete the verification record
@@ -101,7 +102,7 @@ export async function POST(request: NextRequest) {
       where: { id: verification.id }
     });
 
-    console.log(`✅ Email verified via code for ${verifiedEmail}`);
+    logger.info('Email verified via code', { route: 'api/auth/verify-code', email: verifiedEmail });
 
     return NextResponse.json({
       success: true,
@@ -110,7 +111,7 @@ export async function POST(request: NextRequest) {
     });
 
   } catch (error: any) {
-    console.error('Code verification error:', error);
+    logger.error('Code verification error', { route: 'api/auth/verify-code', error: error instanceof Error ? error.message : String(error) });
     return NextResponse.json(
       { success: false, error: 'Verification failed. Please try again.' },
       { status: 500 }

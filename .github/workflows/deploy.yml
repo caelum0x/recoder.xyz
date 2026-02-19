@@ -98,6 +98,17 @@ jobs:
             npx next build
             echo ">>> Batch 3 complete"
 
+            # ── Create log directories for PM2 ──
+            echo ""
+            echo ">>> Ensuring log directories exist..."
+            mkdir -p /root/recoder.xyz/logs/{recoder-app,recoder-frontend,recoder-web,docker-backend,recoder-backend,recoder-pm,recoder-studio,recoder-agency,openclaw}
+
+            # ── Deploy nginx config ──
+            echo ""
+            echo ">>> Deploying nginx production config..."
+            cp /root/recoder.xyz/nginx/nginx-production.conf /etc/nginx/nginx.conf
+            nginx -t && nginx -s reload || echo "WARNING: nginx config test failed, skipping reload"
+
             # ── Rolling restart with health verification ──
             echo ""
             echo ">>> Rolling restart with health verification..."

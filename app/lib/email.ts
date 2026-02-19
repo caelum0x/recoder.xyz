@@ -126,7 +126,7 @@ export async function sendWelcomeEmail(email: string, name: string) {
             <p>Happy coding! 🎉</p>
           </div>
           <div class="footer">
-            <p>© 2024 Recoder.xyz. All rights reserved.</p>
+            <p>© 2024–2026 Recoder.xyz. All rights reserved.</p>
             <p>Questions? Contact us at support@recoder.xyz</p>
           </div>
         </div>

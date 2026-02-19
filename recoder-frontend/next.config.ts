@@ -36,7 +36,7 @@ const nextConfig = (): NextConfig => ({
   output: (process.env.NEXT_OUTPUT as 'standalone') || undefined,
 
   // Transpile shared package
-  transpilePackages: ['@recoder/shared'],
+  transpilePackages: ['@recoder/shared', '@recoder/auth'],
 
   // Keep Node.js-only packages out of client bundles
   serverExternalPackages: ['redis', '@redis/client'],
