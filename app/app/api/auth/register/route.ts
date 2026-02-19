@@ -11,6 +11,7 @@ import { getPlanLimits } from '@/lib/plan-config';
 import { sendVerificationEmail } from '@/lib/email';
 import { nanoid } from 'nanoid';
 import crypto from 'crypto';
+import { logger } from '@/lib/logger';
 
 interface RegisterRequest {
   email: string;
@@ -111,10 +112,10 @@ export async function POST(request: NextRequest) {
 
     // Send verification email (non-blocking)
     sendVerificationEmail(user.email, verificationUrl).catch(err =>
-      console.error('Failed to send verification email:', err)
+      logger.error('Failed to send verification email', { route: 'api/auth/register', error: err instanceof Error ? err.message : String(err) })
     );
 
-    console.log(`📧 Verification email sent to ${user.email}`);
+    logger.info('Verification email sent', { route: 'api/auth/register', email: user.email });
 
     return NextResponse.json({
       success: true,
@@ -131,7 +132,7 @@ export async function POST(request: NextRequest) {
     });
 
   } catch (error) {
-    console.error('Registration Error:', error);
+    logger.error('Registration error', { route: 'api/auth/register', error: error instanceof Error ? error.message : String(error) });
     return NextResponse.json(
       { error: 'Registration failed' },
       { status: 500 }

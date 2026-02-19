@@ -7,6 +7,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { sendVerificationEmail, sendVerificationEmailWithCode } from '@/lib/email';
 import crypto from 'crypto';
+import { logger } from '@/lib/logger';
 
 export async function GET(request: NextRequest) {
   try {
@@ -53,7 +54,7 @@ export async function GET(request: NextRequest) {
       });
     } catch (e) {
       // User might not exist in this table - that's OK
-      console.log(`[verify-email] User not in 'user' table (Better Auth): ${email}`);
+      logger.info('User not in user table (Better Auth)', { route: 'api/auth/verify-email', email });
     }
 
     // CLI users table
@@ -67,7 +68,7 @@ export async function GET(request: NextRequest) {
       });
     } catch (e) {
       // User might not exist in this table - that's OK
-      console.log(`[verify-email] User not in 'users' table (CLI): ${email}`);
+      logger.info('User not in users table (CLI)', { route: 'api/auth/verify-email', email });
     }
 
     // Delete the verification token
@@ -75,13 +76,13 @@ export async function GET(request: NextRequest) {
       where: { id: verification.id }
     });
 
-    console.log(`✅ Email verified for ${email}`);
+    logger.info('Email verified', { route: 'api/auth/verify-email', email });
 
     // Redirect to signin with success message
     return NextResponse.redirect(new URL('/auth/signin?verified=true', request.url));
 
   } catch (error) {
-    console.error('Email verification error:', error);
+    logger.error('Email verification error', { route: 'api/auth/verify-email', error: error instanceof Error ? error.message : String(error) });
     return NextResponse.redirect(new URL('/auth/signin?error=verification_failed', request.url));
   }
 }
@@ -162,7 +163,7 @@ export async function POST(request: NextRequest) {
     // Send verification email with code and URL
     const emailResult = await sendVerificationEmailWithCode(email, verificationCode, verificationUrl);
 
-    console.log(`Verification email sent to ${email} with code ${verificationCode}`);
+    logger.info('Verification email sent', { route: 'api/auth/verify-email', email });
 
     // In development, include the verification token for testing
     const isDev = process.env.NODE_ENV === 'development';
@@ -185,7 +186,7 @@ export async function POST(request: NextRequest) {
     });
 
   } catch (error) {
-    console.error('Email verification error:', error);
+    logger.error('Email verification error', { route: 'api/auth/verify-email', error: error instanceof Error ? error.message : String(error) });
     return NextResponse.json(
       { success: false, error: 'Internal server error' },
       { status: 500 }

@@ -9,6 +9,7 @@ import { nanoid } from 'nanoid';
 import { z } from 'zod';
 import { auth } from '@/lib/auth-config';
 import { prisma } from '@/lib/prisma';
+import { logger } from '@/lib/logger';
 
 const deviceFlowSchema = z.object({
   client_id: z.string(),
@@ -92,7 +93,7 @@ export async function GET(request: NextRequest) {
     });
 
   } catch (error: any) {
-    console.error('CLI auth GET error:', error);
+    logger.error('CLI auth GET error', { route: 'api/auth/cli', error: error instanceof Error ? error.message : String(error) });
     return NextResponse.json({
       success: false,
       error: 'server_error'
@@ -129,7 +130,7 @@ export async function POST(request: NextRequest) {
     }
 
   } catch (error: any) {
-    console.error('CLI auth POST error:', error);
+    logger.error('CLI auth POST error', { route: 'api/auth/cli', error: error instanceof Error ? error.message : String(error) });
     return NextResponse.json({
       success: false,
       error: 'server_error'
@@ -547,7 +548,7 @@ async function handleCodeExchange(body: any): Promise<NextResponse> {
     });
 
   } catch (error: any) {
-    console.error('Code exchange error:', error);
+    logger.error('Code exchange error', { route: 'api/auth/cli', error: error instanceof Error ? error.message : String(error) });
     return NextResponse.json({
       success: false,
       error: 'server_error'
@@ -619,7 +620,7 @@ async function handleTokenRefresh(body: any): Promise<NextResponse> {
     });
 
   } catch (error: any) {
-    console.error('Token refresh error:', error);
+    logger.error('Token refresh error', { route: 'api/auth/cli', error: error instanceof Error ? error.message : String(error) });
     return NextResponse.json({
       success: false,
       error: 'server_error'
@@ -805,7 +806,7 @@ async function handleDeviceTokenPoll(body: any): Promise<NextResponse> {
     }
 
   } catch (error: any) {
-    console.error('Device token poll error:', error);
+    logger.error('Device token poll error', { route: 'api/auth/cli', error: error instanceof Error ? error.message : String(error) });
     return NextResponse.json({
       success: false,
       error: 'server_error'

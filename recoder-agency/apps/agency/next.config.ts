@@ -36,7 +36,7 @@ const pdfiumTracingConfig = {
 const nextConfig: NextConfig = {
 	output: "standalone",
 	turbopack: {
-		root: join(__dirname, "../../"),
+		root: join(projectDir, "../../"),
 	},
 	serverExternalPackages,
 	images: {

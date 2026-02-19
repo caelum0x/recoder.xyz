@@ -10,6 +10,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth-config';
 import { headers } from 'next/headers';
 import { assertAuthSessionGetResponse } from '@/lib/contracts/auth-session-contracts';
+import { logger } from '@/lib/logger';
 
 export async function GET(request: NextRequest) {
   try {
@@ -19,11 +20,11 @@ export async function GET(request: NextRequest) {
     });
 
     if (!session?.user) {
-      console.log('[Session API] No session found');
+      logger.info('No session found', { route: 'api/auth/session' });
       return NextResponse.json(assertAuthSessionGetResponse({ user: null }), { status: 200 });
     }
 
-    console.log('[Session API] Session verified for user:', session.user.email);
+    logger.info('Session verified', { route: 'api/auth/session', email: session.user.email });
 
     return NextResponse.json(assertAuthSessionGetResponse({
       user: {
@@ -41,7 +42,7 @@ export async function GET(request: NextRequest) {
     }));
 
   } catch (error) {
-    console.error('[Session API] Error:', error);
+    logger.error('Session API error', { route: 'api/auth/session', error: error instanceof Error ? error.message : String(error) });
     return NextResponse.json(assertAuthSessionGetResponse({ user: null }), { status: 200 });
   }
 }
