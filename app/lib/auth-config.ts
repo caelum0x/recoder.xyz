@@ -64,7 +64,7 @@ export const auth = betterAuth({
       domain: process.env.NODE_ENV === 'production' ? '.recoder.xyz' : undefined, // Leading dot for subdomain sharing
     },
     useSecureCookies: process.env.NODE_ENV === 'production',
-    // SameSite=None is required for cross-origin requests (web.recoder.xyz -> docker.recoder.xyz)
+    // SameSite=None is required for cross-origin requests (web.recoder.xyz -> api.recoder.xyz)
     // Must be paired with Secure=true (handled by useSecureCookies in production)
     defaultCookieAttributes: {
       sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
@@ -77,22 +77,34 @@ export const auth = betterAuth({
         "https://recoder.xyz",
         "https://www.recoder.xyz",
         "https://web.recoder.xyz",
+        "https://frontend.recoder.xyz",
         "https://pm.recoder.xyz",
         "https://agency.recoder.xyz",
-        "https://docker.recoder.xyz", // Docker backend for cross-origin API calls
+        "https://studio.recoder.xyz",
+        "https://openclaw.recoder.xyz",
+        "https://backend.recoder.xyz",
+        "https://api.recoder.xyz",
       ]
     : [
         "http://localhost:3000",
         "http://localhost:3001",
-        "http://localhost:3002",
+        "http://localhost:3004",
+        "http://localhost:3005",
+        "http://localhost:3007",
+        "http://localhost:3100",
         "http://localhost:5173",
-        "http://localhost:8788",
+        "http://localhost:8000",
+        "http://localhost:18789",
         "https://recoder.xyz",
         "https://www.recoder.xyz",
         "https://web.recoder.xyz",
+        "https://frontend.recoder.xyz",
         "https://pm.recoder.xyz",
         "https://agency.recoder.xyz",
-        "https://docker.recoder.xyz",
+        "https://studio.recoder.xyz",
+        "https://openclaw.recoder.xyz",
+        "https://backend.recoder.xyz",
+        "https://api.recoder.xyz",
       ],
   pages: {
     signIn: "/auth/signin",

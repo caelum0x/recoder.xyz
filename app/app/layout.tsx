@@ -10,17 +10,18 @@ export const metadata: Metadata = {
   description: 'The only platform with seamless Web IDE + Terminal CLI sync. 100% FREE beta with BYOK (Bring Your Own Key). Access Claude, GPT-4, Gemini & 40+ AI models. Start in browser, continue in terminal.',
   icons: {
     icon: [
+      { url: '/favicon.svg', type: 'image/svg+xml' },
       { url: '/favicon-16x16.png', sizes: '16x16', type: 'image/png' },
       { url: '/favicon-32x32.png', sizes: '32x32', type: 'image/png' },
       { url: '/favicon.ico', sizes: 'any' },
-      { url: '/logo.png', sizes: '512x512', type: 'image/png' }
+      { url: '/favicon-512x512.png', sizes: '512x512', type: 'image/png' },
     ],
     shortcut: '/favicon.ico',
-    apple: '/logo.png',
+    apple: '/apple-touch-icon.png',
     other: [
-      { rel: 'android-chrome-192x192', url: '/android-chrome-192x192.png', sizes: '192x192' },
-      { rel: 'android-chrome-512x512', url: '/logo.png', sizes: '512x512' }
-    ]
+      { rel: 'icon', url: '/android-chrome-192x192.png', sizes: '192x192', type: 'image/png' },
+      { rel: 'icon', url: '/favicon-512x512.png', sizes: '512x512', type: 'image/png' },
+    ],
   },
   keywords: [
     'AI coding platform',

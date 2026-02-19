@@ -16,6 +16,8 @@ export const serverExternalPackages = [
 	"happy-dom",
 	"@supabase/supabase-js",
 	"@supabase/realtime-js",
+	"@prisma/client",
+	"@recoder/auth",
 ];
 const pdfiumWasmInclude = relative(projectDir, pdfiumWasmPath).replace(
 	/\\/g,

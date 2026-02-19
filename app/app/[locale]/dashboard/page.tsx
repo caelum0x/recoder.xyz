@@ -3,14 +3,37 @@
 import { useEffect, useState, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { useSession, signOut } from '@/lib/session-provider';
+import { useSession } from '@/lib/session-provider';
 import { LaunchWebIDEButton } from '@/app/components/LaunchWebIDEButton';
 import {
-  Globe, Settings, LogOut,
+  Globe,
   ArrowRight, CheckCircle, Sparkles, TrendingUp,
   BarChart3, FolderOpen, X, Key, AlertCircle,
-  MessageCircle, User, ChevronDown, Terminal, Zap
+  MessageCircle, Terminal, Zap, Code2, Bot, Workflow,
+  Database, Server, Cpu, Shield, ExternalLink
 } from 'lucide-react';
+import { RECODER_SERVICES, getServiceUrlClient } from '@/lib/config/platforms';
+
+const serviceIcons: Record<string, React.ElementType> = {
+  app: Globe,
+  frontend: Bot,
+  web: Code2,
+  'docker-backend': Server,
+  backend: Cpu,
+  pm: Database,
+  studio: Sparkles,
+  agency: Workflow,
+  openclaw: Terminal,
+  redis: Shield,
+};
+
+interface ServiceHealthEntry {
+  id: string;
+  name: string;
+  status: 'operational' | 'degraded' | 'down';
+  responseTime: number | null;
+  lastChecked: string;
+}
 
 function DashboardContent() {
   const router = useRouter();
@@ -19,7 +42,7 @@ function DashboardContent() {
   const [showWelcome, setShowWelcome] = useState(false);
   const [hasApiKey, setHasApiKey] = useState<boolean | null>(null);
   const [showApiKeyModal, setShowApiKeyModal] = useState(false);
-  const [showUserMenu, setShowUserMenu] = useState(false);
+  const [serviceHealth, setServiceHealth] = useState<Record<string, ServiceHealthEntry>>({});
 
   useEffect(() => {
     if (!isPending && !session) {
@@ -46,18 +69,21 @@ function DashboardContent() {
     }
   }, [session]);
 
-  const handleSignOut = async () => {
-    await signOut();
-    router.push('/');
-  };
-
-  const handleWebIDEClick = (e: React.MouseEvent) => {
-    if (hasApiKey === false) {
-      e.preventDefault();
-      setShowApiKeyModal(true);
-    }
-    // If hasApiKey is true, let the Link work normally
-  };
+  // Fetch ecosystem health for status dots
+  useEffect(() => {
+    fetch('/api/ecosystem-health')
+      .then(r => r.json())
+      .then((data: { services?: ServiceHealthEntry[] }) => {
+        if (data.services) {
+          const map: Record<string, ServiceHealthEntry> = {};
+          for (const s of data.services) {
+            map[s.id] = s;
+          }
+          setServiceHealth(map);
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   if (isPending) {
     return (
@@ -83,7 +109,6 @@ function DashboardContent() {
       {showApiKeyModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
           <div className="bg-gradient-to-br from-gray-900 to-black border border-orange-500/30 rounded-2xl shadow-2xl max-w-2xl w-full overflow-hidden">
-            {/* Header */}
             <div className="p-6 border-b border-white/10">
               <div className="flex items-start justify-between">
                 <div className="flex items-center space-x-3">
@@ -95,107 +120,36 @@ function DashboardContent() {
                     <p className="text-sm text-gray-400">One quick step before you start coding</p>
                   </div>
                 </div>
-                <button
-                  onClick={() => setShowApiKeyModal(false)}
-                  className="text-gray-400 hover:text-white transition-colors"
-                >
+                <button onClick={() => setShowApiKeyModal(false)} className="text-gray-400 hover:text-white transition-colors">
                   <X className="w-6 h-6" />
                 </button>
               </div>
             </div>
-
-            {/* Content */}
             <div className="p-6 space-y-6">
-              {/* Beta Explanation */}
               <div className="p-4 bg-gradient-to-r from-orange-500/10 to-purple-600/10 border border-orange-500/20 rounded-xl">
                 <div className="flex items-start space-x-3">
                   <Sparkles className="w-5 h-5 text-orange-500 mt-0.5 flex-shrink-0" />
                   <div>
-                    <h3 className="font-bold text-white mb-2">Welcome to Recoder.xyz FREE BETA! 🎉</h3>
-                    <p className="text-sm text-gray-300 mb-3">
-                      We're launching completely free to build the best AI coding platform.
-                      Instead of charging you for AI features, we use a <strong>Bring Your Own Key (BYOK)</strong> model.
-                    </p>
-                    <ul className="space-y-2 text-sm text-gray-300">
-                      <li className="flex items-start space-x-2">
-                        <CheckCircle className="w-4 h-4 text-green-500 mt-0.5 flex-shrink-0" />
-                        <span><strong>You control costs:</strong> Pay AI providers directly (typically $0.02-0.10 per request)</span>
-                      </li>
-                      <li className="flex items-start space-x-2">
-                        <CheckCircle className="w-4 h-4 text-green-500 mt-0.5 flex-shrink-0" />
-                        <span><strong>You choose models:</strong> Access 40+ models from OpenRouter, Anthropic, OpenAI, Groq</span>
-                      </li>
-                      <li className="flex items-start space-x-2">
-                        <CheckCircle className="w-4 h-4 text-green-500 mt-0.5 flex-shrink-0" />
-                        <span><strong>We're 100% free:</strong> No subscriptions, no hidden fees, just bring your API key</span>
-                      </li>
-                    </ul>
+                    <h3 className="font-bold text-white mb-2">Recoder uses BYOK (Bring Your Own Key)</h3>
+                    <p className="text-sm text-gray-300">You bring your API key, we provide the platform. No markup, no subscriptions.</p>
                   </div>
                 </div>
               </div>
-
-              {/* Why BYOK */}
-              <div className="p-4 bg-white/5 rounded-xl border border-white/10">
-                <div className="flex items-start space-x-3">
-                  <AlertCircle className="w-5 h-5 text-blue-500 mt-0.5 flex-shrink-0" />
-                  <div>
-                    <h3 className="font-bold text-white mb-2">Why we can't afford to provide API credits</h3>
-                    <p className="text-sm text-gray-300">
-                      As a beta startup with zero capital, we can't subsidize AI API costs.
-                      But this works in your favor - you get <strong>full transparency</strong>,
-                      <strong>unlimited usage</strong>, and <strong>premium features</strong> without any platform markup.
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Getting Started */}
-              <div>
-                <h3 className="font-bold text-white mb-3">Getting Started (2 minutes):</h3>
-                <div className="space-y-3">
-                  <div className="flex items-start space-x-3">
-                    <div className="w-6 h-6 bg-orange-500 rounded-full flex items-center justify-center flex-shrink-0 text-sm font-bold">1</div>
-                    <div className="text-sm text-gray-300">
-                      <strong className="text-white">Get an API key</strong> from OpenRouter (recommended), Anthropic, OpenAI, or Groq
-                    </div>
-                  </div>
-                  <div className="flex items-start space-x-3">
-                    <div className="w-6 h-6 bg-orange-500 rounded-full flex items-center justify-center flex-shrink-0 text-sm font-bold">2</div>
-                    <div className="text-sm text-gray-300">
-                      <strong className="text-white">Add it to Recoder</strong> - we encrypt it securely (AES-256-GCM)
-                    </div>
-                  </div>
-                  <div className="flex items-start space-x-3">
-                    <div className="w-6 h-6 bg-orange-500 rounded-full flex items-center justify-center flex-shrink-0 text-sm font-bold">3</div>
-                    <div className="text-sm text-gray-300">
-                      <strong className="text-white">Start coding!</strong> Access Web IDE + CLI with full features
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Recommendation */}
               <div className="p-4 bg-gradient-to-r from-blue-500/10 to-cyan-600/10 border border-blue-500/20 rounded-xl">
                 <div className="flex items-start space-x-3">
                   <Zap className="w-5 h-5 text-blue-500 mt-0.5 flex-shrink-0" />
                   <div className="text-sm">
-                    <strong className="text-white">Our Recommendation:</strong>
+                    <strong className="text-white">Recommendation:</strong>
                     <p className="text-gray-300 mt-1">
-                      Start with <strong className="text-blue-400">OpenRouter</strong> - one key gives you access to 40+ models
-                      (GPT-4, Claude 3.5 Sonnet, Gemini, Llama) with pay-as-you-go pricing. $5 = ~500 requests.
+                      Start with <strong className="text-blue-400">OpenRouter</strong> - one key for 40+ models. $5 = ~500 requests.
                     </p>
                   </div>
                 </div>
               </div>
             </div>
-
-            {/* Footer Actions */}
             <div className="p-6 border-t border-white/10 bg-white/5">
               <div className="flex items-center justify-between">
-                <button
-                  onClick={() => setShowApiKeyModal(false)}
-                  className="text-gray-400 hover:text-white transition-colors text-sm"
-                >
+                <button onClick={() => setShowApiKeyModal(false)} className="text-gray-400 hover:text-white transition-colors text-sm">
                   I'll do this later
                 </button>
                 <Link
@@ -212,102 +166,7 @@ function DashboardContent() {
         </div>
       )}
 
-      {/* Header */}
-      <header className="border-b border-white/10 bg-black/80 backdrop-blur-xl sticky top-0 z-40">
-        <div className="container mx-auto px-6 h-16 flex items-center justify-between">
-          <Link href="/" className="flex items-center space-x-2">
-            <img src="/logo.png" alt="Recoder" className="w-8 h-8 rounded" />
-            <span className="text-xl font-bold">Recoder</span>
-          </Link>
-          <div className="flex items-center space-x-4">
-            {/* Quick Access - Settings */}
-            <Link
-              href="/settings"
-              className="text-gray-400 hover:text-white transition-colors"
-              title="Settings"
-            >
-              <Settings className="w-5 h-5" />
-            </Link>
-
-            {/* User Menu */}
-            <div className="relative">
-              <button
-                onClick={() => setShowUserMenu(!showUserMenu)}
-                className="flex items-center space-x-2 px-3 py-2 rounded-lg hover:bg-white/5 transition-colors"
-              >
-                <div className="w-8 h-8 bg-gradient-to-br from-orange-500 to-purple-600 rounded-full flex items-center justify-center">
-                  <User className="w-4 h-4" />
-                </div>
-                <ChevronDown className="w-4 h-4 text-gray-400" />
-              </button>
-
-              {/* Dropdown Menu */}
-              {showUserMenu && (
-                <>
-                  {/* Backdrop to close menu */}
-                  <div
-                    className="fixed inset-0 z-40"
-                    onClick={() => setShowUserMenu(false)}
-                  />
-
-                  {/* Menu */}
-                  <div className="absolute right-0 mt-2 w-56 rounded-xl border border-white/10 bg-black/95 backdrop-blur-xl shadow-2xl z-50 overflow-hidden">
-                    {/* User Info */}
-                    <div className="p-4 border-b border-white/10">
-                      <div className="font-medium text-white truncate">{session?.user?.name || 'User'}</div>
-                      <div className="text-sm text-gray-400 truncate">{session?.user?.email}</div>
-                    </div>
-
-                    {/* Menu Items */}
-                    <div className="p-2">
-                      <Link
-                        href="/settings/account"
-                        onClick={() => setShowUserMenu(false)}
-                        className="flex items-center space-x-3 px-3 py-2 rounded-lg hover:bg-white/5 transition-colors group"
-                      >
-                        <User className="w-4 h-4 text-gray-400 group-hover:text-orange-500" />
-                        <span className="text-sm text-gray-300 group-hover:text-white">Account</span>
-                      </Link>
-                      <Link
-                        href="/settings"
-                        onClick={() => setShowUserMenu(false)}
-                        className="flex items-center space-x-3 px-3 py-2 rounded-lg hover:bg-white/5 transition-colors group"
-                      >
-                        <Settings className="w-4 h-4 text-gray-400 group-hover:text-orange-500" />
-                        <span className="text-sm text-gray-300 group-hover:text-white">Settings</span>
-                      </Link>
-                      <Link
-                        href="/settings/ai-providers"
-                        onClick={() => setShowUserMenu(false)}
-                        className="flex items-center space-x-3 px-3 py-2 rounded-lg hover:bg-white/5 transition-colors group"
-                      >
-                        <Key className="w-4 h-4 text-gray-400 group-hover:text-orange-500" />
-                        <span className="text-sm text-gray-300 group-hover:text-white">AI Providers</span>
-                      </Link>
-                    </div>
-
-                    {/* Sign Out */}
-                    <div className="p-2 border-t border-white/10">
-                      <button
-                        onClick={() => {
-                          setShowUserMenu(false);
-                          handleSignOut();
-                        }}
-                        className="w-full flex items-center space-x-3 px-3 py-2 rounded-lg hover:bg-red-500/10 transition-colors group"
-                      >
-                        <LogOut className="w-4 h-4 text-gray-400 group-hover:text-red-500" />
-                        <span className="text-sm text-gray-300 group-hover:text-red-500">Sign Out</span>
-                      </button>
-                    </div>
-                  </div>
-                </>
-              )}
-            </div>
-          </div>
-        </div>
-      </header>
-
-      <div className="container mx-auto px-6 py-12">
+      <div className="px-8 py-12">
         {/* User Info */}
         <div className="mb-12">
           <h1 className="text-4xl font-bold mb-2">
@@ -376,6 +235,43 @@ function DashboardContent() {
                 </div>
               )}
             </div>
+          </div>
+        </div>
+
+        {/* Ecosystem Services */}
+        <div className="mb-12">
+          <h2 className="text-2xl font-bold mb-6">Ecosystem Services</h2>
+          <div className="grid md:grid-cols-3 lg:grid-cols-4 gap-4">
+            {RECODER_SERVICES.filter(s => s.showInSwitcher).map(service => {
+              const Icon = serviceIcons[service.id] || Globe;
+              const health = serviceHealth[service.id];
+              const statusColor = health
+                ? health.status === 'operational' ? 'bg-green-500'
+                  : health.status === 'degraded' ? 'bg-yellow-500'
+                  : 'bg-red-500'
+                : 'bg-gray-500';
+              return (
+                <a
+                  key={service.id}
+                  href={getServiceUrlClient(service.id)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="group p-5 rounded-2xl border border-white/10 bg-white/5 hover:border-orange-500/40 hover:bg-white/10 transition-all"
+                >
+                  <div className="flex items-start justify-between mb-3">
+                    <div className="w-10 h-10 bg-gradient-to-br from-orange-500/20 to-purple-600/20 rounded-xl flex items-center justify-center group-hover:from-orange-500/30 group-hover:to-purple-600/30 transition-colors">
+                      <Icon className="w-5 h-5 text-gray-300 group-hover:text-orange-400 transition-colors" />
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <div className={`w-2 h-2 rounded-full ${statusColor}`} />
+                      <ExternalLink className="w-3.5 h-3.5 text-gray-600 group-hover:text-orange-400 transition-colors" />
+                    </div>
+                  </div>
+                  <h3 className="font-semibold text-sm mb-1">{service.label}</h3>
+                  <p className="text-xs text-gray-500">{service.description}</p>
+                </a>
+              );
+            })}
           </div>
         </div>
 

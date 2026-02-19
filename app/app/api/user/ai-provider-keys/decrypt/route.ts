@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { decrypt } from '@/lib/encryption';
 import { requireAuth } from '@/lib/auth-helpers';
+import { logger } from '@/lib/logger';
 
 /**
  * GET /api/user/ai-provider-keys/decrypt?provider=openrouter
@@ -75,7 +76,7 @@ export async function GET(request: NextRequest) {
       apiKey: decryptedKey
     });
   } catch (error) {
-    console.error('Error decrypting API key:', error);
+    logger.error('Error decrypting API key', { route: 'api/user/ai-provider-keys/decrypt', error: error instanceof Error ? error.message : String(error) });
     return NextResponse.json(
       { error: 'Failed to decrypt API key' },
       { status: 500 }

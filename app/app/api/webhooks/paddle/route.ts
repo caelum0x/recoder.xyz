@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import crypto from 'crypto';
 import { serialize } from 'php-serialize';
+import { logger } from '@/lib/logger';
 
 const PADDLE_PUBLIC_KEY = process.env.PADDLE_PUBLIC_KEY || '';
 
@@ -25,7 +26,7 @@ function verifyPaddleSignature(body: any): boolean {
     
     return verifier.verify(PADDLE_PUBLIC_KEY, signature, 'base64');
   } catch (error) {
-    console.error('Paddle signature verification error:', error);
+    logger.error('Paddle signature verification error', { route: 'api/webhooks/paddle', error: error instanceof Error ? error.message : String(error) });
     return false;
   }
 }
@@ -35,12 +36,12 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     
     if (!verifyPaddleSignature(body)) {
-      console.error('Invalid Paddle webhook signature');
+      logger.error('Invalid Paddle webhook signature', { route: 'api/webhooks/paddle' });
       return NextResponse.json({ error: 'Invalid signature' }, { status: 401 });
     }
 
     const alertName = body.alert_name;
-    console.log(`Processing Paddle webhook: ${alertName}`);
+    logger.info('Processing Paddle webhook', { route: 'api/webhooks/paddle', alertName });
 
     switch (alertName) {
       case 'payment_succeeded':
@@ -72,13 +73,13 @@ export async function POST(request: NextRequest) {
         break;
 
       default:
-        console.log(`Unhandled Paddle webhook: ${alertName}`);
+        logger.warn('Unhandled Paddle webhook', { route: 'api/webhooks/paddle', alertName });
     }
 
     return NextResponse.json({ success: true, processed: alertName });
 
   } catch (error) {
-    console.error('Paddle webhook error:', error);
+    logger.error('Paddle webhook error', { route: 'api/webhooks/paddle', error: error instanceof Error ? error.message : String(error) });
     return NextResponse.json(
       { error: 'Webhook processing failed' },
       { status: 500 }
@@ -94,7 +95,7 @@ async function handlePaymentSucceeded(data: any) {
     const passthroughData = JSON.parse(passthrough);
     userId = passthroughData.user_id;
   } catch {
-    console.error('Invalid passthrough data in Paddle webhook');
+    logger.error('Invalid passthrough data in Paddle webhook', { route: 'api/webhooks/paddle' });
     return;
   }
 
@@ -124,7 +125,7 @@ async function handlePaymentSucceeded(data: any) {
     }
   });
 
-  console.log(`Paddle payment succeeded for user ${userId}: ${sale_gross} ${currency}`);
+  logger.info('Paddle payment succeeded', { route: 'api/webhooks/paddle', userId, amount: sale_gross, currency });
 }
 
 async function handleSubscriptionCreated(data: any) {
@@ -137,7 +138,7 @@ async function handleSubscriptionCreated(data: any) {
     userId = passthroughData.user_id;
     planName = passthroughData.plan || 'pro';
   } catch {
-    console.error('Invalid passthrough data in Paddle webhook');
+    logger.error('Invalid passthrough data in Paddle webhook', { route: 'api/webhooks/paddle' });
     return;
   }
 
@@ -167,7 +168,7 @@ async function handleSubscriptionCreated(data: any) {
     }
   });
 
-  console.log(`Paddle subscription created for user ${userId}: ${planName}`);
+  logger.info('Paddle subscription created', { route: 'api/webhooks/paddle', userId, plan: planName });
 }
 
 async function handleSubscriptionUpdated(data: any) {
@@ -180,7 +181,7 @@ async function handleSubscriptionUpdated(data: any) {
     userId = passthroughData.user_id;
     planName = passthroughData.plan || 'pro';
   } catch {
-    console.error('Invalid passthrough data in Paddle webhook');
+    logger.error('Invalid passthrough data in Paddle webhook', { route: 'api/webhooks/paddle' });
     return;
   }
 
@@ -209,7 +210,7 @@ async function handleSubscriptionUpdated(data: any) {
     }
   });
 
-  console.log(`Paddle subscription updated for user ${userId}: ${planName}`);
+  logger.info('Paddle subscription updated', { route: 'api/webhooks/paddle', userId, plan: planName });
 }
 
 async function handleSubscriptionCancelled(data: any) {
@@ -220,7 +221,7 @@ async function handleSubscriptionCancelled(data: any) {
     const passthroughData = JSON.parse(passthrough);
     userId = passthroughData.user_id;
   } catch {
-    console.error('Invalid passthrough data in Paddle webhook');
+    logger.error('Invalid passthrough data in Paddle webhook', { route: 'api/webhooks/paddle' });
     return;
   }
 
@@ -247,7 +248,7 @@ async function handleSubscriptionCancelled(data: any) {
     }
   });
 
-  console.log(`Paddle subscription cancelled for user ${userId}`);
+  logger.info('Paddle subscription cancelled', { route: 'api/webhooks/paddle', userId });
 }
 
 async function handleSubscriptionPaymentSucceeded(data: any) {
@@ -258,7 +259,7 @@ async function handleSubscriptionPaymentSucceeded(data: any) {
     const passthroughData = JSON.parse(passthrough);
     userId = passthroughData.user_id;
   } catch {
-    console.error('Invalid passthrough data in Paddle webhook');
+    logger.error('Invalid passthrough data in Paddle webhook', { route: 'api/webhooks/paddle' });
     return;
   }
 
@@ -288,7 +289,7 @@ async function handleSubscriptionPaymentSucceeded(data: any) {
     }
   });
 
-  console.log(`Paddle subscription payment succeeded for user ${userId}: ${sale_gross}`);
+  logger.info('Paddle subscription payment succeeded', { route: 'api/webhooks/paddle', userId, amount: sale_gross });
 }
 
 async function handleSubscriptionPaymentFailed(data: any) {
@@ -299,7 +300,7 @@ async function handleSubscriptionPaymentFailed(data: any) {
     const passthroughData = JSON.parse(passthrough);
     userId = passthroughData.user_id;
   } catch {
-    console.error('Invalid passthrough data in Paddle webhook');
+    logger.error('Invalid passthrough data in Paddle webhook', { route: 'api/webhooks/paddle' });
     return;
   }
 
@@ -326,7 +327,7 @@ async function handleSubscriptionPaymentFailed(data: any) {
     }
   });
 
-  console.log(`Paddle subscription payment failed for user ${userId}`);
+  logger.info('Paddle subscription payment failed', { route: 'api/webhooks/paddle', userId });
 }
 
 async function handleSubscriptionPaymentRefunded(data: any) {
@@ -337,7 +338,7 @@ async function handleSubscriptionPaymentRefunded(data: any) {
     const passthroughData = JSON.parse(passthrough);
     userId = passthroughData.user_id;
   } catch {
-    console.error('Invalid passthrough data in Paddle webhook');
+    logger.error('Invalid passthrough data in Paddle webhook', { route: 'api/webhooks/paddle' });
     return;
   }
 
@@ -357,5 +358,5 @@ async function handleSubscriptionPaymentRefunded(data: any) {
     }
   });
 
-  console.log(`Paddle payment refunded for user ${userId}: ${amount}`);
+  logger.info('Paddle payment refunded', { route: 'api/webhooks/paddle', userId, amount });
 }

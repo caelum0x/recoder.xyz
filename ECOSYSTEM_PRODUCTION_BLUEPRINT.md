@@ -1,13 +1,13 @@
 # Recoder Ecosystem Production Blueprint
 
-Date: 2026-02-15
+Date: 2026-02-18 (updated from 2026-02-15)
 Launch board: `/Users/arhansubasi/recoder.xyz/GO_NO_GO_LAUNCH_BOARD_2026-02-15.md`
 Scope roots:
 - /Users/arhansubasi/recoder.xyz/app
 - /Users/arhansubasi/recoder.xyz/apps/desktop
-- /Users/arhansubasi/recoder.xyz/apps/frontend
+- /Users/arhansubasi/recoder.xyz/recoder-frontend
 - /Users/arhansubasi/recoder.xyz/apps/mobile
-- /Users/arhansubasi/recoder.xyz/apps/studio.giselles.ai
+- /Users/arhansubasi/recoder.xyz/apps/ui.giselles.ai
 - /Users/arhansubasi/recoder.xyz/backend
 - /Users/arhansubasi/recoder.xyz/docker-backend
 - /Users/arhansubasi/recoder.xyz/packages
@@ -16,26 +16,62 @@ Scope roots:
 - /Users/arhansubasi/recoder.xyz/recoder-web
 - /Users/arhansubasi/recoder.xyz/shared
 - /Users/arhansubasi/recoder.xyz/openclaw
-## Canonical ecosystem readiness (source of truth, 2026-02-15)
+
+## Production deployment map (Hetzner 77.42.23.19, Nginx + Cloudflare)
+
+| Service | Subdomain | Port | Health Endpoint | PM2 Name |
+|---|---|---|---|---|
+| app (hub) | `recoder.xyz` | 3000 | `GET /` | `recoder-app` |
+| recoder-frontend (Suna IDE) | `frontend.recoder.xyz` | 3001 | `GET /` | `recoder-frontend` |
+| recoder-web (Bolt IDE) | `web.recoder.xyz` | 5173 | `GET /` | `recoder-web` |
+| docker-backend | `api.recoder.xyz` | 3100 | `GET /health` | `docker-backend` |
+| backend (Python) | `backend.recoder.xyz` | 8000 | `GET /v1/health` | `recoder-backend` |
+| recoder-pm | `pm.recoder.xyz` | 3004 | `GET /` | `recoder-pm` |
+| recoder-studio | `studio.recoder.xyz` | 3005 | `GET /` | `recoder-studio` |
+| recoder-agency | `agency.recoder.xyz` | 3007 | `GET /` | `recoder-agency` |
+| openclaw | `openclaw.recoder.xyz` | 18789 | `GET /health` | `openclaw` |
+| redis | internal | 6379 | N/A | system |
+
+## Canonical ecosystem readiness (source of truth, 2026-02-18)
 
 | Repo / Surface | Status | Evidence / Blockers |
 |---|---|---|
-| `docker-backend` | Production-capable | In prod, 44/44 suites and 867/867 tests green. |
-| `recoder-web` | Production-capable | In prod, deterministic parity/tests green. |
-| `app` | Near-ready | Typecheck + contract tests green; final prod smoke gate required. |
-| `apps/frontend` | Near-ready | Typecheck + contract assertions green; deployment config + integrated smoke required. |
-| `apps/mobile` | Near-ready | Typecheck/contract assertions green; app store release pipeline + device smoke evidence required. |
-| `openclaw` | Release-candidate | Core status/doctor/workflow paths stable; non-core security/fix test failures remain. |
-| `apps/studio.giselles.ai` | Near-ready | Typecheck/test validation unblocked in this environment; final production evidence still required. |
+| `docker-backend` | **Deployed** | In prod at api.recoder.xyz:3100, 44/44 suites and 867/867 tests green. |
+| `recoder-web` | **Deployed** | In prod at web.recoder.xyz:5173, deterministic parity/tests green. |
+| `app` | **Deployed** | In prod at recoder.xyz:3000. Ecosystem routing aligned (2026-02-18). |
+| `recoder-frontend` | **Deployed** | In prod at frontend.recoder.xyz:3001. Backend URL fixed to backend.recoder.xyz. |
+| `backend` | **Deployed** | In prod at backend.recoder.xyz:8000. Health OK. |
+| `recoder-pm` | **Deployed** | In prod at pm.recoder.xyz:3004. |
+| `recoder-studio` | **Deployed** | In prod at studio.recoder.xyz:3005. Nginx route added 2026-02-18. |
+| `recoder-agency` | **Deployed** | In prod at agency.recoder.xyz:3007. |
+| `openclaw` | **Deployed** | In prod at openclaw.recoder.xyz:18789. Health OK. |
+| `apps/mobile` | Near-ready | Typecheck/contract assertions green; app store release pipeline pending. |
 | `apps/desktop` | Not signed off | Packaging/signing + parity/smoke matrix closeout pending. |
-| `backend` | Not signed off | Integration gate evidence pending. |
-| `recoder-agency` | Not signed off | Cross-surface hardening + required env closure pending. |
-| `recoder-pm` | Not signed off | Contract/smoke closure + required env closure pending. |
-| `packages` / `shared` | Support layer | Not deployed standalone; must be validated by consumer smoke gates. |
+| `packages` / `shared` | Support layer | Not deployed standalone; validated by consumer smoke gates. |
+
+### App routing architecture (added 2026-02-18)
+The hub app (`recoder.xyz`) provides routing to all ecosystem services:
+
+| Route | Purpose |
+|---|---|
+| `/agents` | AI agent hub - links to Suna, Agency, Web, OpenClaw, Studio |
+| `/plan` | Plans & pricing with ecosystem service overview |
+| `/platform` | Platform index - all 10 services with status |
+| `/platform/frontend` | Suna AI IDE detail page |
+| `/platform/web` | Bolt AI IDE detail page |
+| `/platform/studio` | Visual Workflow Designer detail page |
+| `/platform/pm` | Project Management detail page |
+| `/platform/agency` | AI Agent Workflows detail page |
+| `/platform/openclaw` | Open-source AI Tools detail page |
+| `/platform/api` | Docker Backend API detail page |
+| `/platform/backend` | Python Backend detail page |
+| `/status` | Real-time health status for all 10 services |
+
+Favicon/icon: Uses `recoder-web/public/apple-touch-icon.png` as the canonical icon across all services (copied to `app/public/`).
 
 ### Scope freeze (current launch lock)
-1. Ship: `docker-backend`, `recoder-web`, `app`, `apps/frontend`, `apps/mobile`, `openclaw`.
-2. Defer: `apps/studio.giselles.ai`, `apps/desktop`, `backend`, `recoder-agency`, `recoder-pm`.
+1. Deployed (all 10 services live): `app`, `recoder-frontend`, `recoder-web`, `docker-backend`, `backend`, `recoder-pm`, `recoder-studio`, `recoder-agency`, `openclaw`, `redis`.
+2. Defer: `apps/desktop`, `apps/mobile`.
 
 ### Promotion order (dependency-first)
 1. `docker-backend` promotion.
@@ -80,6 +116,22 @@ Canonical architecture reference: `shared/src/a2a/UNIFIED_A2A_UACB_ARCHITECTURE.
 1. Tier-1 connectors (active): `codex`, `claude`.
 2. Tier-2 connectors (backlog): `cursor`, `windsurf`, `replit`, `vscode-copilot`, `jetbrains`, other future adapters.
 3. Tier-2 promotion precondition: successful no-skip Phase 3 closeout (`Phase 3 implementation status`, item 1 under "Remaining for true Phase 3 complete").
+
+### Canonical connector support status (single source of truth)
+Status ledger: `SUPPORTED_CONNECTORS.md`  
+Runtime evidence artifacts: `logs/phase3-gates/<run-id>-connectors-support.{json,md}` and `logs/release-evidence/<run-id>-connectors-support.{json,md}`
+
+| Connector | Tier | Baseline status | Status source | Promotion gate |
+|---|---|---|---|---|
+| `codex` | Tier-1 | `experimental` | latest Phase 3 connector-support artifact from `scripts/phase3-production-gates.sh` | becomes `supported` only when all Tier-1 support gates pass in a qualifying no-skip production run |
+| `claude` | Tier-1 | `experimental` | latest Phase 3 connector-support artifact from `scripts/phase3-production-gates.sh` | becomes `supported` only when all Tier-1 support gates pass in a qualifying no-skip production run |
+| `cursor` | Tier-2 | `backlog` | `SUPPORTED_CONNECTORS.md` | blocked until no-skip Phase 3 closeout succeeds and explicit promotion decision is recorded |
+| `windsurf` | Tier-2 | `backlog` | `SUPPORTED_CONNECTORS.md` | blocked until no-skip Phase 3 closeout succeeds and explicit promotion decision is recorded |
+| `replit` | Tier-2 | `backlog` | `SUPPORTED_CONNECTORS.md` | blocked until no-skip Phase 3 closeout succeeds and explicit promotion decision is recorded |
+| `vscode-copilot` | Tier-2 | `backlog` | `SUPPORTED_CONNECTORS.md` | blocked until no-skip Phase 3 closeout succeeds and explicit promotion decision is recorded |
+| `jetbrains` | Tier-2 | `backlog` | `SUPPORTED_CONNECTORS.md` | blocked until no-skip Phase 3 closeout succeeds and explicit promotion decision is recorded |
+
+Resolution rule: if any other document shows a conflicting connector readiness snapshot, treat this table and the latest gate artifacts as authoritative.
 
 ---
 
