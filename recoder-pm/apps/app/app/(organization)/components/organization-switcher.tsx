@@ -12,15 +12,21 @@ import { ArrowUpRightIcon, LayoutGridIcon } from "lucide-react";
 
 const apps = [
   {
-    label: "IDE",
-    description: "AI Web IDE",
+    label: "Hub",
+    description: "Dashboard & Settings",
     href: "https://recoder.xyz",
     current: false,
   },
   {
-    label: "Agency",
-    description: "AI Agency Platform",
-    href: "https://agency.recoder.xyz",
+    label: "Frontend",
+    description: "Suna AI IDE",
+    href: "https://frontend.recoder.xyz",
+    current: false,
+  },
+  {
+    label: "Web",
+    description: "Bolt AI IDE",
+    href: "https://web.recoder.xyz",
     current: false,
   },
   {
@@ -28,6 +34,24 @@ const apps = [
     description: "Product Management",
     href: "https://pm.recoder.xyz",
     current: true,
+  },
+  {
+    label: "Studio",
+    description: "Visual Workflow Designer",
+    href: "https://studio.recoder.xyz",
+    current: false,
+  },
+  {
+    label: "Agency",
+    description: "AI Agent Workflows",
+    href: "https://agency.recoder.xyz",
+    current: false,
+  },
+  {
+    label: "OpenClaw",
+    description: "Open-Source AI Tools",
+    href: "https://openclaw.recoder.xyz",
+    current: false,
   },
 ] as const;
 

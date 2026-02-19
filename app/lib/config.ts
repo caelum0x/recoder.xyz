@@ -12,18 +12,42 @@ export const config = {
   // Core URLs
   urls: {
     // Main website (landing, auth pages, pricing)
-    web: process.env.NEXT_PUBLIC_APP_URL || 
-         process.env.NEXT_PUBLIC_SITE_URL || 
-         (process.env.NODE_ENV === 'production' ? 'https://recoder.xyz' : 'http://localhost:3002'),
-    
+    web: process.env.NEXT_PUBLIC_APP_URL ||
+         process.env.NEXT_PUBLIC_SITE_URL ||
+         (process.env.NODE_ENV === 'production' ? 'https://recoder.xyz' : 'http://localhost:3000'),
+
     // Bolt-like IDE app
-    app: process.env.NEXT_PUBLIC_WEB_APP_URL || 
-         (process.env.NODE_ENV === 'production' ? 'https://web.recoder.xyz' : 'http://localhost:3003'),
-    
-    // Backend API
-    api: process.env.NEXT_PUBLIC_API_URL || 
-         (process.env.NODE_ENV === 'production' ? 'https://api.recoder.xyz' : 'http://localhost:3001'),
-    
+    app: process.env.NEXT_PUBLIC_WEB_APP_URL ||
+         (process.env.NODE_ENV === 'production' ? 'https://web.recoder.xyz' : 'http://localhost:5173'),
+
+    // Docker backend API gateway
+    api: process.env.NEXT_PUBLIC_API_URL ||
+         (process.env.NODE_ENV === 'production' ? 'https://api.recoder.xyz' : 'http://localhost:3100'),
+
+    // Suna frontend IDE
+    frontend: process.env.RECODER_FRONTEND_URL ||
+         (process.env.NODE_ENV === 'production' ? 'https://frontend.recoder.xyz' : 'http://localhost:3001'),
+
+    // Python backend
+    backend: process.env.RECODER_BACKEND_URL ||
+         (process.env.NODE_ENV === 'production' ? 'https://backend.recoder.xyz' : 'http://localhost:8000'),
+
+    // Project management
+    pm: process.env.RECODER_PM_URL ||
+         (process.env.NODE_ENV === 'production' ? 'https://pm.recoder.xyz' : 'http://localhost:3004'),
+
+    // Visual workflow designer
+    studio: process.env.RECODER_STUDIO_URL ||
+         (process.env.NODE_ENV === 'production' ? 'https://studio.recoder.xyz' : 'http://localhost:3005'),
+
+    // AI agent workflows
+    agency: process.env.RECODER_AGENCY_URL ||
+         (process.env.NODE_ENV === 'production' ? 'https://agency.recoder.xyz' : 'http://localhost:3007'),
+
+    // Open-source AI tools
+    openclaw: process.env.RECODER_OPENCLAW_URL ||
+         (process.env.NODE_ENV === 'production' ? 'https://openclaw.recoder.xyz' : 'http://localhost:18789'),
+
     // CLI callback (local only for development)
     cliCallback: process.env.CLI_CALLBACK_URL || 'http://localhost:8080/auth/callback',
   },

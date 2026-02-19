@@ -46,13 +46,14 @@ export class SessionSyncManager {
   // Generate sync URLs for cross-platform access
   generateSyncUrls(syncToken: string): string[] {
     const domains = [
-      'chat.recoder.xyz',   // AI Chat Platform
-      'worthy-truth-production.up.railway.app',    // AI App Builder (Railway deployment)
-      'resplendent-marshmallow-7de2b1.netlify.app', // Backend API (Netlify deployment)
-      'recoder-production-engine.netlify.app'       // Production Engine (Netlify deployment)
-      // Note: CLI is npm package (@recoder/cli), not a web domain
+      'web.recoder.xyz',        // Bolt AI IDE
+      'frontend.recoder.xyz',   // Suna AI IDE
+      'studio.recoder.xyz',     // Visual workflow designer
+      'agency.recoder.xyz',     // AI agent workflows
+      'pm.recoder.xyz',         // Project management
+      'openclaw.recoder.xyz',   // Open-source AI tools
     ];
-    
+
     return domains.map(domain => `https://${domain}/api/auth/sync?token=${encodeURIComponent(syncToken)}`);
   }
 
@@ -157,8 +158,11 @@ export class SessionSyncManager {
     const recoderDomains = [
       'recoder.xyz',
       'web.recoder.xyz',
-      'chat.recoder.xyz',
-      'cli.recoder.xyz'
+      'frontend.recoder.xyz',
+      'studio.recoder.xyz',
+      'agency.recoder.xyz',
+      'pm.recoder.xyz',
+      'openclaw.recoder.xyz',
     ].filter(domain => domain !== currentDomain);
 
     const syncResults = await Promise.allSettled(
@@ -210,9 +214,12 @@ export class SessionSyncManager {
   async logoutAcrossDomains(userId: string, currentDomain: string): Promise<void> {
     const recoderDomains = [
       'recoder.xyz',
-      'web.recoder.xyz', 
-      'chat.recoder.xyz',
-      'cli.recoder.xyz'
+      'web.recoder.xyz',
+      'frontend.recoder.xyz',
+      'studio.recoder.xyz',
+      'agency.recoder.xyz',
+      'pm.recoder.xyz',
+      'openclaw.recoder.xyz',
     ].filter(domain => domain !== currentDomain);
 
     const logoutPromises = recoderDomains.map(async (domain) => {

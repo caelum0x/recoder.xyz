@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { encrypt, decrypt, maskApiKey, validateApiKeyFormat } from '@/lib/encryption';
 import { requireAuth } from '@/lib/auth-helpers';
 import { verifyInternalServiceRequest } from '@/lib/internal-service-auth';
+import { logger } from '@/lib/logger';
 
 /**
  * GET /api/user/ai-provider-keys
@@ -54,7 +55,7 @@ export async function GET(request: NextRequest) {
       keys: apiKeys
     });
   } catch (error) {
-    console.error('Error fetching AI provider keys:', error);
+    logger.error('Error fetching AI provider keys', { route: 'api/user/ai-provider-keys', error: error instanceof Error ? error.message : String(error) });
     return NextResponse.json(
       { error: 'Failed to fetch API keys' },
       { status: 500 }
@@ -72,7 +73,7 @@ export async function POST(request: NextRequest) {
     if (authResult.error) return authResult.response;
     const { user } = authResult;
 
-    console.log('[DEBUG Add API Key] User from session:', JSON.stringify(user, null, 2));
+    logger.info('Add API key request', { route: 'api/user/ai-provider-keys', userId: user.id });
 
     // Look up the user in the users table (Better Auth uses 'user' table, app uses 'users' table)
     const appUser = await prisma.users.findUnique({
@@ -81,7 +82,7 @@ export async function POST(request: NextRequest) {
     });
 
     if (!appUser) {
-      console.error('[DEBUG Add API Key] User not found in users table for email:', user.email);
+      logger.warn('User not found in users table', { route: 'api/user/ai-provider-keys', email: user.email });
       return NextResponse.json(
         { error: 'User not found in application database' },
         { status: 404 }
@@ -89,8 +90,7 @@ export async function POST(request: NextRequest) {
     }
 
     const userId = appUser.id;
-    console.log('[DEBUG Add API Key] App User ID:', userId);
-    console.log('[DEBUG Add API Key] User email:', user.email);
+    logger.info('Resolved app user', { route: 'api/user/ai-provider-keys', userId, email: user.email });
 
     const body = await request.json();
     const { provider, apiKey, name } = body;
@@ -181,7 +181,7 @@ export async function POST(request: NextRequest) {
       message: 'API key added successfully'
     });
   } catch (error) {
-    console.error('Error adding AI provider key:', error);
+    logger.error('Error adding AI provider key', { route: 'api/user/ai-provider-keys', error: error instanceof Error ? error.message : String(error) });
     return NextResponse.json(
       { error: 'Failed to add API key' },
       { status: 500 }
@@ -259,17 +259,17 @@ export async function PUT(request: NextRequest) {
         const decrypted = decrypt(key.encryptedKey);
         decryptedKeys[key.provider] = decrypted;
       } catch (e) {
-        console.error(`Failed to decrypt key for provider ${key.provider}:`, e);
+        logger.error('Failed to decrypt key', { route: 'api/user/ai-provider-keys', provider: key.provider, error: e instanceof Error ? e.message : String(e) });
       }
     }
 
-    console.log(`[AI Provider Keys] Retrieved ${Object.keys(decryptedKeys).length} keys for user ${userId}`);
+    logger.info('Retrieved decrypted keys', { route: 'api/user/ai-provider-keys', userId, keyCount: Object.keys(decryptedKeys).length });
 
     return NextResponse.json({
       keys: decryptedKeys,
     });
   } catch (error: any) {
-    console.error('Get decrypted AI provider keys error:', error);
+    logger.error('Get decrypted AI provider keys error', { route: 'api/user/ai-provider-keys', error: error instanceof Error ? error.message : String(error) });
     return NextResponse.json({ error: 'Failed to get keys' }, { status: 500 });
   }
 }
@@ -334,7 +334,7 @@ export async function DELETE(request: NextRequest) {
       message: 'API key deleted successfully'
     });
   } catch (error) {
-    console.error('Error deleting AI provider key:', error);
+    logger.error('Error deleting AI provider key', { route: 'api/user/ai-provider-keys', error: error instanceof Error ? error.message : String(error) });
     return NextResponse.json(
       { error: 'Failed to delete API key' },
       { status: 500 }

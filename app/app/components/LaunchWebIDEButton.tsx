@@ -56,16 +56,22 @@ export function LaunchWebIDEButton({
     // Check 3: If still loading, wait
     if (hasApiKey === null) {
       setLoading(true);
-      // Wait a bit for API key check to complete, then re-check
+      // Wait a bit for API key check to complete, then redirect
       setTimeout(() => {
-        // Redirect to platform/web for authentication
-        router.push('/platform/web');
+        window.location.href = getRecoderWebUrlClient();
       }, 1000);
       return;
     }
 
-    // All checks passed - redirect to platform/web for authentication
-    router.push('/platform/web');
+    // Non-blocking analytics
+    fetch('/api/platform/access', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ platform: 'web' }),
+    }).catch(() => {}); // fire-and-forget
+
+    // All checks passed - launch the Web IDE directly
+    window.location.href = getRecoderWebUrlClient();
   };
 
   return (

@@ -1,12 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-const RECODER_ECOSYSTEM_APPS = [
-  { id: 'web', label: 'Recoder Web', description: 'AI-powered coding platform', href: 'https://recoder.xyz' },
-  { id: 'app', label: 'Recoder App', description: 'Dashboard & settings', href: 'https://app.recoder.xyz' },
-  { id: 'agency', label: 'Recoder Agency', description: 'AI agent workflows', href: 'https://agency.recoder.xyz' },
-  { id: 'studio', label: 'Giselle Studio', description: 'Visual workflow designer', href: 'https://studio.giselles.ai' },
-];
+import { getSwitcherApps, getServiceUrlClient } from '@/lib/config/platforms';
 
 export function AppSwitcher() {
   const [showMenu, setShowMenu] = useState(false);
@@ -18,6 +13,13 @@ export function AppSwitcher() {
       setCurrentHost(window.location.hostname);
     }
   }, []);
+
+  const switcherApps = getSwitcherApps().map(s => ({
+    id: s.id,
+    label: s.label,
+    description: s.description,
+    href: getServiceUrlClient(s.id),
+  }));
 
   const isCurrentApp = (href: string) => {
     try {
@@ -54,7 +56,7 @@ export function AppSwitcher() {
       {showMenu && (
         <div className="absolute right-0 mt-2 w-56 py-2 bg-black/95 backdrop-blur-xl border border-white/10 rounded-lg shadow-xl z-50">
           <div className="px-4 py-1.5 text-xs text-gray-500 font-medium">Recoder Platform</div>
-          {RECODER_ECOSYSTEM_APPS.map((app) => {
+          {switcherApps.map((app) => {
             const isCurrent = isCurrentApp(app.href);
             return (
             <a

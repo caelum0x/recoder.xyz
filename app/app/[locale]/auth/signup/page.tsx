@@ -111,11 +111,8 @@ function SignUpForm() {
         onSuccess: () => {
           setSuccess(true);
           setTimeout(() => {
-            if (returnUrl.startsWith('http')) {
-              window.location.href = returnUrl;
-            } else {
-              router.push(returnUrl);
-            }
+            // New users go to onboarding to set up API key
+            router.push('/auth/onboarding');
           }, 1000);
         },
         onError: (ctx) => {

@@ -4,6 +4,7 @@ import { auth } from '@/lib/auth-config';
 import { headers } from 'next/headers';
 
 import { prisma } from '@/lib/prisma';
+import { logger } from '@/lib/logger';
 
 export async function POST(request: NextRequest) {
   try {
@@ -77,7 +78,7 @@ export async function POST(request: NextRequest) {
     });
 
   } catch (error) {
-    console.error('Cancellation error:', error);
+    logger.error('Cancellation error', { route: 'api/billing/subscription/cancel', error: error instanceof Error ? error.message : String(error) });
     return NextResponse.json(
       { error: 'Failed to cancel subscription' },
       { status: 500 }
@@ -91,7 +92,7 @@ async function cancelPaddleSubscription(subscriptionId: string) {
     const PADDLE_API_KEY = process.env.PADDLE_API_KEY;
 
     if (!PADDLE_VENDOR_ID || !PADDLE_API_KEY) {
-      console.error('Paddle credentials not configured');
+      logger.error('Paddle credentials not configured', { route: 'api/billing/subscription/cancel' });
       return;
     }
 
@@ -110,10 +111,10 @@ async function cancelPaddleSubscription(subscriptionId: string) {
     const data = await response.json();
     
     if (!data.success) {
-      console.error('Paddle cancellation failed:', data);
+      logger.error('Paddle cancellation failed', { route: 'api/billing/subscription/cancel', data });
     }
   } catch (error) {
-    console.error('Error cancelling Paddle subscription:', error);
+    logger.error('Error cancelling Paddle subscription', { route: 'api/billing/subscription/cancel', error: error instanceof Error ? error.message : String(error) });
   }
 }
 
@@ -122,7 +123,7 @@ async function cancelDodoSubscription(subscriptionId: string) {
     const DODO_API_KEY = process.env.DODO_API_KEY;
 
     if (!DODO_API_KEY) {
-      console.error('DODO API key not configured');
+      logger.error('DODO API key not configured', { route: 'api/billing/subscription/cancel' });
       return;
     }
 
@@ -137,9 +138,9 @@ async function cancelDodoSubscription(subscriptionId: string) {
     const data = await response.json();
     
     if (!response.ok) {
-      console.error('DODO cancellation failed:', data);
+      logger.error('DODO cancellation failed', { route: 'api/billing/subscription/cancel', data });
     }
   } catch (error) {
-    console.error('Error cancelling DODO subscription:', error);
+    logger.error('Error cancelling DODO subscription', { route: 'api/billing/subscription/cancel', error: error instanceof Error ? error.message : String(error) });
   }
 }

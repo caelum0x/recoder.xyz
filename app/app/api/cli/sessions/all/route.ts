@@ -7,6 +7,7 @@ import {
   assertCliSessionActionResponse,
   assertCliSessionErrorResponse,
 } from '@/lib/contracts/cli-session-contracts';
+import { logger } from '@/lib/logger';
 
 
 const BACKEND_URL = process.env.BACKEND_URL || 'http://localhost:3001';
@@ -45,7 +46,7 @@ export async function DELETE(request: NextRequest) {
 
     if (!response.ok) {
       const error = await response.json().catch(() => ({ message: 'Unknown error' }));
-      console.error('Failed to revoke all CLI sessions:', error);
+      logger.error('Failed to revoke all CLI sessions', { route: 'api/cli/sessions/all', error: JSON.stringify(error) });
       const payload = assertCliSessionErrorResponse({
         contract: APP_CLI_SESSION_CONTRACT,
         error: 'Failed to revoke all CLI sessions',
@@ -66,7 +67,7 @@ export async function DELETE(request: NextRequest) {
     return NextResponse.json(payload);
 
   } catch (error) {
-    console.error('CLI sessions DELETE all error:', error);
+    logger.error('CLI sessions DELETE all error', { route: 'api/cli/sessions/all', error: error instanceof Error ? error.message : String(error) });
     const payload = assertCliSessionErrorResponse({
       contract: APP_CLI_SESSION_CONTRACT,
       error: 'Internal server error',

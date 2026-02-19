@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import crypto from 'crypto';
+import { logger } from '@/lib/logger';
 
 const DODO_WEBHOOK_SECRET = process.env.DODO_WEBHOOK_SECRET || '';
 
@@ -22,14 +23,14 @@ export async function POST(request: NextRequest) {
     const payload = await request.text();
     
     if (!verifyDodoSignature(payload, signature)) {
-      console.error('Invalid DODO webhook signature');
+      logger.error('Invalid DODO webhook signature', { route: 'api/webhooks/dodo' });
       return NextResponse.json({ error: 'Invalid signature' }, { status: 401 });
     }
 
     const event = JSON.parse(payload);
     const { type, data } = event;
 
-    console.log(`Processing DODO webhook: ${type}`);
+    logger.info('Processing DODO webhook', { route: 'api/webhooks/dodo', type });
 
     switch (type) {
       case 'payment.succeeded':
@@ -61,13 +62,13 @@ export async function POST(request: NextRequest) {
         break;
 
       default:
-        console.log(`Unhandled DODO webhook type: ${type}`);
+        logger.warn('Unhandled DODO webhook type', { route: 'api/webhooks/dodo', type });
     }
 
     return NextResponse.json({ success: true, processed: type });
 
   } catch (error) {
-    console.error('DODO webhook error:', error);
+    logger.error('DODO webhook error', { route: 'api/webhooks/dodo', error: error instanceof Error ? error.message : String(error) });
     return NextResponse.json(
       { error: 'Webhook processing failed' },
       { status: 500 }
@@ -98,7 +99,7 @@ async function handlePaymentSucceeded(data: any) {
     }
   });
 
-  console.log(`Payment succeeded for user ${user_id}: ${amount} ${currency}`);
+  logger.info('Payment succeeded', { route: 'api/webhooks/dodo', userId: user_id, amount, currency });
 }
 
 async function handlePaymentFailed(data: any) {
@@ -122,7 +123,7 @@ async function handlePaymentFailed(data: any) {
     }
   });
 
-  console.log(`Payment failed for user ${user_id}: ${reason}`);
+  logger.info('Payment failed', { route: 'api/webhooks/dodo', userId: user_id, reason });
 }
 
 async function handleSubscriptionCreated(data: any) {
@@ -149,7 +150,7 @@ async function handleSubscriptionCreated(data: any) {
     }
   });
 
-  console.log(`Subscription created for user ${user_id}: ${plan}`);
+  logger.info('Subscription created', { route: 'api/webhooks/dodo', userId: user_id, plan });
 }
 
 async function handleSubscriptionUpdated(data: any) {
@@ -175,7 +176,7 @@ async function handleSubscriptionUpdated(data: any) {
     }
   });
 
-  console.log(`Subscription updated for user ${user_id}: ${plan}`);
+  logger.info('Subscription updated', { route: 'api/webhooks/dodo', userId: user_id, plan });
 }
 
 async function handleSubscriptionCancelled(data: any) {
@@ -200,7 +201,7 @@ async function handleSubscriptionCancelled(data: any) {
     }
   });
 
-  console.log(`Subscription cancelled for user ${user_id}`);
+  logger.info('Subscription cancelled', { route: 'api/webhooks/dodo', userId: user_id });
 }
 
 async function handleSubscriptionRenewed(data: any) {
@@ -226,7 +227,7 @@ async function handleSubscriptionRenewed(data: any) {
     }
   });
 
-  console.log(`Subscription renewed for user ${user_id}`);
+  logger.info('Subscription renewed', { route: 'api/webhooks/dodo', userId: user_id });
 }
 
 async function handleRefundCreated(data: any) {
@@ -243,5 +244,5 @@ async function handleRefundCreated(data: any) {
     }
   });
 
-  console.log(`Refund created for user ${user_id}: ${amount}`);
+  logger.info('Refund created', { route: 'api/webhooks/dodo', userId: user_id, amount });
 }

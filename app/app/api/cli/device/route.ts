@@ -8,6 +8,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth-config';
 import { prisma } from '@/lib/prisma';
 import { randomBytes } from 'crypto';
+import { logger } from '@/lib/logger';
 
 // Generate user-friendly 6-character code (ABC-123)
 function generateUserCode(): string {
@@ -67,7 +68,7 @@ export async function POST(request: NextRequest) {
       interval: 5, // Poll every 5 seconds
     });
   } catch (error) {
-    console.error('❌ [api/cli/device] Error:', error);
+    logger.error('Device code creation error', { route: 'api/cli/device', error: error instanceof Error ? error.message : String(error) });
     return NextResponse.json(
       {
         error: 'Failed to create device code',
@@ -173,7 +174,7 @@ export async function GET(request: NextRequest) {
       { status: 400 }
     );
   } catch (error) {
-    console.error('❌ [api/cli/device/poll] Error:', error);
+    logger.error('Device poll error', { route: 'api/cli/device', error: error instanceof Error ? error.message : String(error) });
     return NextResponse.json(
       {
         error: 'Polling failed',
@@ -266,7 +267,7 @@ export async function PUT(request: NextRequest) {
         : 'Device authorization denied.',
     });
   } catch (error) {
-    console.error('❌ [api/cli/device/authorize] Error:', error);
+    logger.error('Device authorization error', { route: 'api/cli/device', error: error instanceof Error ? error.message : String(error) });
     return NextResponse.json(
       {
         error: 'Authorization failed',

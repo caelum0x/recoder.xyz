@@ -1,198 +1,110 @@
-import React from 'react';
+'use client';
+
+import React, { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { 
-  Activity, 
-  CheckCircle, 
-  AlertTriangle, 
+import {
+  Activity,
+  CheckCircle,
+  AlertTriangle,
   XCircle,
   Clock,
   Zap,
-  Database,
   Globe,
   Server,
-  Wifi,
-  Monitor,
   ArrowUp,
-  ArrowDown,
   TrendingUp,
-  Calendar,
   Bell,
   ExternalLink,
   RefreshCw
 } from 'lucide-react';
 
+interface ServiceHealth {
+  id: string;
+  name: string;
+  status: 'operational' | 'degraded' | 'down';
+  responseTime: number | null;
+  lastChecked: string;
+  version?: string;
+  details?: Record<string, unknown>;
+}
+
+interface HealthData {
+  services: ServiceHealth[];
+  overall: 'operational' | 'degraded' | 'down';
+  cachedAt: string;
+}
+
 export default function StatusPage() {
-  const currentStatus = 'operational'; // operational, degraded, outage, maintenance
+  const [health, setHealth] = useState<HealthData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [lastRefresh, setLastRefresh] = useState<Date | null>(null);
 
-  const services = [
-    {
-      name: 'Recoder Web Platform',
-      status: 'operational',
-      uptime: '99.99%',
-      responseTime: '142ms',
-      description: 'Web-based development environment',
-      lastIncident: null,
-      endpoint: 'https://web.recoder.xyz'
-    },
-    {
-      name: 'Recoder Chat',
-      status: 'operational', 
-      uptime: '99.97%',
-      responseTime: '89ms',
-      description: 'AI-powered chat platform',
-      lastIncident: null,
-      endpoint: 'https://chat.recoder.xyz'
-    },
-    {
-      name: 'Production Engine API',
-      status: 'operational',
-      uptime: '99.95%',
-      responseTime: '234ms',
-      description: 'AI code generation backend',
-      lastIncident: null,
-      endpoint: 'https://api.recoder.xyz/production'
-    },
-    {
-      name: 'Authentication Service',
-      status: 'operational',
-      uptime: '99.98%',
-      responseTime: '67ms',
-      description: 'User authentication and authorization',
-      lastIncident: null,
-      endpoint: 'https://auth.recoder.xyz'
-    },
-    {
-      name: 'CLI Backend',
-      status: 'operational',
-      uptime: '99.96%',
-      responseTime: '156ms',
-      description: 'Command-line interface backend',
-      lastIncident: null,
-      endpoint: 'https://api.recoder.xyz/cli'
-    },
-    {
-      name: 'Database Cluster',
-      status: 'operational',
-      uptime: '99.99%',
-      responseTime: '12ms',
-      description: 'Primary database infrastructure',
-      lastIncident: null,
-      endpoint: 'Internal'
-    },
-    {
-      name: 'CDN & Static Assets',
-      status: 'operational',
-      uptime: '99.98%',
-      responseTime: '45ms',
-      description: 'Content delivery network',
-      lastIncident: null,
-      endpoint: 'Global'
-    },
-    {
-      name: 'AI Model Router',
-      status: 'degraded',
-      uptime: '98.12%',
-      responseTime: '1.2s',
-      description: 'AI model selection and routing',
-      lastIncident: '2024-01-28 14:30 UTC',
-      endpoint: 'https://router.recoder.xyz'
+  const fetchHealth = useCallback(async () => {
+    try {
+      const res = await fetch('/api/ecosystem-health');
+      if (res.ok) {
+        const data: HealthData = await res.json();
+        setHealth(data);
+        setLastRefresh(new Date());
+      }
+    } catch {
+      // Keep previous data on error
+    } finally {
+      setLoading(false);
     }
-  ];
+  }, []);
 
-  const recentIncidents = [
-    {
-      id: 1,
-      title: 'Increased response times for AI Model Router',
-      description: 'We are experiencing increased response times for the AI Model Router service. Investigation is ongoing.',
-      status: 'investigating',
-      severity: 'minor',
-      startTime: '2024-01-28 14:30 UTC',
-      endTime: null,
-      affectedServices: ['AI Model Router'],
-      updates: [
-        {
-          time: '2024-01-28 15:45 UTC',
-          message: 'We have identified the root cause and are implementing a fix. Response times should improve within the next 30 minutes.'
-        },
-        {
-          time: '2024-01-28 14:45 UTC', 
-          message: 'We are investigating reports of increased response times for AI model routing.'
-        }
-      ]
-    },
-    {
-      id: 2,
-      title: 'Scheduled maintenance for Production Engine',
-      description: 'Scheduled maintenance to improve performance and reliability.',
-      status: 'completed',
-      severity: 'maintenance',
-      startTime: '2024-01-25 02:00 UTC',
-      endTime: '2024-01-25 04:00 UTC',
-      affectedServices: ['Production Engine API'],
-      updates: [
-        {
-          time: '2024-01-25 04:00 UTC',
-          message: 'Maintenance completed successfully. All services are now fully operational.'
-        },
-        {
-          time: '2024-01-25 02:00 UTC',
-          message: 'Scheduled maintenance has begun. Expected completion time: 04:00 UTC.'
-        }
-      ]
-    },
-    {
-      id: 3,
-      title: 'Brief authentication service disruption',
-      description: 'Some users experienced login issues due to a configuration change.',
-      status: 'resolved',
-      severity: 'minor',
-      startTime: '2024-01-20 09:15 UTC',
-      endTime: '2024-01-20 09:43 UTC',
-      affectedServices: ['Authentication Service'],
-      updates: [
-        {
-          time: '2024-01-20 09:43 UTC',
-          message: 'Issue resolved. All authentication services are now operating normally.'
-        },
-        {
-          time: '2024-01-20 09:20 UTC',
-          message: 'We have identified the issue and are implementing a fix.'
-        }
-      ]
-    }
-  ];
+  useEffect(() => {
+    fetchHealth();
+    const interval = setInterval(fetchHealth, 30_000);
+    return () => clearInterval(interval);
+  }, [fetchHealth]);
+
+  const currentStatus = health?.overall ?? 'operational';
+
+  const operationalCount = health?.services.filter(s => s.status === 'operational').length ?? 0;
+  const totalCount = health?.services.length ?? 0;
+
+  const avgResponseTime = health
+    ? Math.round(
+        health.services
+          .filter(s => s.responseTime !== null)
+          .reduce((sum, s) => sum + (s.responseTime ?? 0), 0) /
+        (health.services.filter(s => s.responseTime !== null).length || 1)
+      )
+    : 0;
 
   const metrics = [
     {
-      name: 'Overall Uptime',
-      value: '99.96%',
-      period: 'Last 30 days',
-      trend: 'up',
-      icon: TrendingUp
+      name: 'Services Online',
+      value: health ? `${operationalCount}/${totalCount}` : '--',
+      period: 'Current',
+      trend: operationalCount === totalCount ? 'up' : 'down',
+      icon: Server
     },
     {
       name: 'Average Response Time',
-      value: '156ms',
-      period: 'Last 24 hours',
-      trend: 'up',
+      value: health ? `${avgResponseTime}ms` : '--',
+      period: 'Latest check',
+      trend: avgResponseTime < 500 ? 'up' : 'down',
       icon: Zap
     },
     {
       name: 'Active Incidents',
-      value: '1',
+      value: health ? `${totalCount - operationalCount}` : '--',
       period: 'Current',
-      trend: 'stable',
+      trend: operationalCount === totalCount ? 'up' : 'stable',
       icon: AlertTriangle
     },
     {
-      name: 'Services Online',
-      value: '7/8',
+      name: 'Overall Status',
+      value: health ? (currentStatus === 'operational' ? 'Healthy' : currentStatus === 'degraded' ? 'Degraded' : 'Outage') : '--',
       period: 'Current',
-      trend: 'down',
-      icon: Server
+      trend: currentStatus === 'operational' ? 'up' : 'down',
+      icon: TrendingUp
     }
   ];
 
@@ -202,7 +114,7 @@ export default function StatusPage() {
         return <CheckCircle className="w-5 h-5 text-green-500" />;
       case 'degraded':
         return <AlertTriangle className="w-5 h-5 text-yellow-500" />;
-      case 'outage':
+      case 'down':
         return <XCircle className="w-5 h-5 text-red-500" />;
       case 'maintenance':
         return <Clock className="w-5 h-5 text-blue-500" />;
@@ -217,27 +129,12 @@ export default function StatusPage() {
         return 'bg-green-500';
       case 'degraded':
         return 'bg-yellow-500';
-      case 'outage':
+      case 'down':
         return 'bg-red-500';
       case 'maintenance':
         return 'bg-blue-500';
       default:
         return 'bg-gray-500';
-    }
-  };
-
-  const getSeverityColor = (severity: string) => {
-    switch (severity) {
-      case 'critical':
-        return 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200';
-      case 'major':
-        return 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200';
-      case 'minor':
-        return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200';
-      case 'maintenance':
-        return 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200';
-      default:
-        return 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200';
     }
   };
 
@@ -260,8 +157,8 @@ export default function StatusPage() {
                 <Bell className="w-4 h-4 mr-2" />
                 Subscribe to Updates
               </Button>
-              <Button variant="ghost" size="sm">
-                <RefreshCw className="w-4 h-4 mr-2" />
+              <Button variant="ghost" size="sm" onClick={fetchHealth} disabled={loading}>
+                <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
                 Refresh
               </Button>
             </div>
@@ -272,26 +169,40 @@ export default function StatusPage() {
       {/* Current Status Banner */}
       <section className="py-8 px-4">
         <div className="container mx-auto max-w-6xl">
-          <Card className={`border-0 shadow-lg ${currentStatus === 'operational' ? 'bg-green-50 dark:bg-green-900/20' : currentStatus === 'degraded' ? 'bg-yellow-50 dark:bg-yellow-900/20' : 'bg-red-50 dark:bg-red-900/20'}`}>
-            <CardContent className="p-8 text-center">
-              <div className="flex items-center justify-center mb-4">
-                {getStatusIcon(currentStatus)}
-                <span className="ml-2 text-2xl font-bold">
-                  {currentStatus === 'operational' ? 'All Systems Operational' : 
-                   currentStatus === 'degraded' ? 'Partial System Outage' : 
-                   'Major System Outage'}
-                </span>
-              </div>
-              <p className="text-lg text-slate-600 dark:text-slate-300">
-                {currentStatus === 'operational' ? 'All systems are running smoothly.' :
-                 currentStatus === 'degraded' ? 'Some services are experiencing issues.' :
-                 'We are experiencing significant issues.'}
-              </p>
-              <div className="mt-4 text-sm text-slate-500">
-                Last updated: {new Date().toLocaleString()} UTC
-              </div>
-            </CardContent>
-          </Card>
+          {loading && !health ? (
+            <Card className="border-0 shadow-lg bg-slate-50 dark:bg-slate-800/50">
+              <CardContent className="p-8 text-center">
+                <div className="flex items-center justify-center mb-4">
+                  <RefreshCw className="w-5 h-5 animate-spin text-slate-400" />
+                  <span className="ml-2 text-2xl font-bold text-slate-400">
+                    Checking services...
+                  </span>
+                </div>
+                <p className="text-lg text-slate-400">Running health checks across the ecosystem</p>
+              </CardContent>
+            </Card>
+          ) : (
+            <Card className={`border-0 shadow-lg ${currentStatus === 'operational' ? 'bg-green-50 dark:bg-green-900/20' : currentStatus === 'degraded' ? 'bg-yellow-50 dark:bg-yellow-900/20' : 'bg-red-50 dark:bg-red-900/20'}`}>
+              <CardContent className="p-8 text-center">
+                <div className="flex items-center justify-center mb-4">
+                  {getStatusIcon(currentStatus)}
+                  <span className="ml-2 text-2xl font-bold">
+                    {currentStatus === 'operational' ? 'All Systems Operational' :
+                     currentStatus === 'degraded' ? 'Partial System Degradation' :
+                     'Service Disruption Detected'}
+                  </span>
+                </div>
+                <p className="text-lg text-slate-600 dark:text-slate-300">
+                  {currentStatus === 'operational' ? 'All systems are running smoothly.' :
+                   currentStatus === 'degraded' ? 'Some services are experiencing issues.' :
+                   'One or more services are currently unreachable.'}
+                </p>
+                <div className="mt-4 text-sm text-slate-500">
+                  Last checked: {lastRefresh ? lastRefresh.toLocaleString() : '--'}
+                </div>
+              </CardContent>
+            </Card>
+          )}
         </div>
       </section>
 
@@ -305,9 +216,12 @@ export default function StatusPage() {
                   <div className="flex items-center justify-between mb-2">
                     <metric.icon className="w-5 h-5 text-slate-500" />
                     {metric.trend === 'up' && <ArrowUp className="w-4 h-4 text-green-500" />}
-                    {metric.trend === 'down' && <ArrowDown className="w-4 h-4 text-red-500" />}
                   </div>
-                  <div className="text-2xl font-bold mb-1">{metric.value}</div>
+                  {loading && !health ? (
+                    <div className="h-8 w-20 bg-slate-200 dark:bg-slate-700 rounded animate-pulse mb-1" />
+                  ) : (
+                    <div className="text-2xl font-bold mb-1">{metric.value}</div>
+                  )}
                   <div className="text-sm text-slate-500">{metric.name}</div>
                   <div className="text-xs text-slate-400 mt-1">{metric.period}</div>
                 </CardContent>
@@ -322,47 +236,64 @@ export default function StatusPage() {
         <div className="container mx-auto max-w-6xl">
           <h2 className="text-2xl font-bold mb-6">Service Status</h2>
           <div className="space-y-4">
-            {services.map((service, index) => (
-              <Card key={index} className="border-0 shadow-lg">
-                <CardContent className="p-6">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center space-x-4 flex-1">
-                      <div className={`w-3 h-3 rounded-full ${getStatusColor(service.status)}`}></div>
-                      <div className="flex-1">
-                        <div className="flex items-center space-x-2 mb-1">
-                          <h3 className="font-semibold">{service.name}</h3>
-                          {service.status !== 'operational' && (
-                            <Badge variant="secondary" className={getSeverityColor(service.status)}>
-                              {service.status}
-                            </Badge>
-                          )}
+            {loading && !health ? (
+              Array.from({ length: 6 }).map((_, i) => (
+                <Card key={i} className="border-0 shadow-lg">
+                  <CardContent className="p-6">
+                    <div className="flex items-center space-x-4">
+                      <div className="w-3 h-3 rounded-full bg-slate-200 dark:bg-slate-700 animate-pulse" />
+                      <div className="flex-1 space-y-2">
+                        <div className="h-5 w-48 bg-slate-200 dark:bg-slate-700 rounded animate-pulse" />
+                        <div className="h-4 w-32 bg-slate-200 dark:bg-slate-700 rounded animate-pulse" />
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))
+            ) : (
+              health?.services.map((service) => (
+                <Card key={service.id} className="border-0 shadow-lg">
+                  <CardContent className="p-6">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-4 flex-1">
+                        <div className={`w-3 h-3 rounded-full ${getStatusColor(service.status)}`}></div>
+                        <div className="flex-1">
+                          <div className="flex items-center space-x-2 mb-1">
+                            <h3 className="font-semibold">{service.name}</h3>
+                            {service.version && (
+                              <Badge variant="outline" className="text-[10px] px-1.5 py-0 font-mono text-slate-500">
+                                v{service.version}
+                              </Badge>
+                            )}
+                            {service.status !== 'operational' && (
+                              <Badge variant="secondary" className={
+                                service.status === 'down'
+                                  ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
+                                  : 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200'
+                              }>
+                                {service.status}
+                              </Badge>
+                            )}
+                          </div>
                         </div>
-                        <p className="text-sm text-slate-500">{service.description}</p>
-                        {service.lastIncident && (
-                          <p className="text-xs text-red-500 mt-1">
-                            Last incident: {service.lastIncident}
-                          </p>
-                        )}
+                      </div>
+                      <div className="flex items-center space-x-6 text-sm">
+                        <div className="text-center">
+                          <div className="font-semibold">
+                            {service.responseTime !== null ? `${service.responseTime}ms` : '--'}
+                          </div>
+                          <div className="text-slate-500">Response</div>
+                        </div>
+                        <div className="text-center">
+                          <div className="font-semibold capitalize">{service.status}</div>
+                          <div className="text-slate-500">Status</div>
+                        </div>
                       </div>
                     </div>
-                    <div className="flex items-center space-x-6 text-sm">
-                      <div className="text-center">
-                        <div className="font-semibold">{service.uptime}</div>
-                        <div className="text-slate-500">Uptime</div>
-                      </div>
-                      <div className="text-center">
-                        <div className="font-semibold">{service.responseTime}</div>
-                        <div className="text-slate-500">Response</div>
-                      </div>
-                      <div className="text-center">
-                        <div className="font-semibold">{service.endpoint}</div>
-                        <div className="text-slate-500">Endpoint</div>
-                      </div>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
+                  </CardContent>
+                </Card>
+              ))
+            )}
           </div>
         </div>
       </section>
@@ -371,117 +302,15 @@ export default function StatusPage() {
       <section className="py-8 px-4">
         <div className="container mx-auto max-w-6xl">
           <h2 className="text-2xl font-bold mb-6">Recent Incidents</h2>
-          <div className="space-y-6">
-            {recentIncidents.map((incident) => (
-              <Card key={incident.id} className="border-0 shadow-lg">
-                <CardHeader>
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center space-x-3">
-                      {incident.status === 'resolved' && <CheckCircle className="w-5 h-5 text-green-500" />}
-                      {incident.status === 'investigating' && <Activity className="w-5 h-5 text-yellow-500" />}
-                      {incident.status === 'completed' && <CheckCircle className="w-5 h-5 text-blue-500" />}
-                      <div>
-                        <CardTitle className="text-lg">{incident.title}</CardTitle>
-                        <div className="flex items-center space-x-4 mt-1">
-                          <Badge className={getSeverityColor(incident.severity)}>
-                            {incident.severity}
-                          </Badge>
-                          <span className="text-sm text-slate-500">
-                            {incident.startTime} - {incident.endTime || 'Ongoing'}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                  <CardDescription className="text-base">
-                    {incident.description}
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="mb-4">
-                    <h4 className="font-semibold mb-2">Affected Services:</h4>
-                    <div className="flex flex-wrap gap-2">
-                      {incident.affectedServices.map((service, idx) => (
-                        <Badge key={idx} variant="outline">{service}</Badge>
-                      ))}
-                    </div>
-                  </div>
-                  <div>
-                    <h4 className="font-semibold mb-3">Updates:</h4>
-                    <div className="space-y-3">
-                      {incident.updates.map((update, idx) => (
-                        <div key={idx} className="border-l-2 border-blue-500 pl-4 py-2">
-                          <div className="text-sm text-slate-500 mb-1">{update.time}</div>
-                          <div className="text-sm">{update.message}</div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* Historical Data */}
-      <section className="py-8 px-4 bg-white/50 dark:bg-slate-800/50">
-        <div className="container mx-auto max-w-6xl">
-          <div className="grid md:grid-cols-2 gap-8">
-            <Card className="border-0 shadow-lg">
-              <CardHeader>
-                <CardTitle>Uptime History</CardTitle>
-                <CardDescription>Last 30 days</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  <div className="flex justify-between items-center">
-                    <span>Overall Uptime</span>
-                    <span className="font-semibold text-green-600">99.96%</span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span>Total Incidents</span>
-                    <span className="font-semibold">3</span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span>Average Resolution</span>
-                    <span className="font-semibold">23 minutes</span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span>Scheduled Maintenance</span>
-                    <span className="font-semibold">1</span>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="border-0 shadow-lg">
-              <CardHeader>
-                <CardTitle>Performance Metrics</CardTitle>
-                <CardDescription>Last 24 hours</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  <div className="flex justify-between items-center">
-                    <span>Average Response Time</span>
-                    <span className="font-semibold">156ms</span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span>Peak Response Time</span>
-                    <span className="font-semibold">1.2s</span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span>Requests Served</span>
-                    <span className="font-semibold">2.3M</span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span>Error Rate</span>
-                    <span className="font-semibold text-green-600">0.01%</span>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
+          <Card className="border-0 shadow-lg">
+            <CardContent className="p-8 text-center">
+              <CheckCircle className="w-12 h-12 text-green-500 mx-auto mb-4" />
+              <CardTitle className="text-lg mb-2">No Recent Incidents</CardTitle>
+              <CardDescription>
+                All services have been running without disruption. Historical incident tracking is coming soon.
+              </CardDescription>
+            </CardContent>
+          </Card>
         </div>
       </section>
 
