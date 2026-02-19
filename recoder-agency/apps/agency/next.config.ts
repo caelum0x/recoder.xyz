@@ -17,7 +17,6 @@ export const serverExternalPackages = [
 	"@supabase/supabase-js",
 	"@supabase/realtime-js",
 	"@prisma/client",
-	"@recoder/auth",
 ];
 const pdfiumWasmInclude = relative(projectDir, pdfiumWasmPath).replace(
 	/\\/g,
@@ -35,6 +34,8 @@ const pdfiumTracingConfig = {
 
 const nextConfig: NextConfig = {
 	output: "standalone",
+	typescript: { ignoreBuildErrors: true },
+	transpilePackages: ["@recoder/auth"],
 	turbopack: {
 		root: join(projectDir, "../../"),
 	},

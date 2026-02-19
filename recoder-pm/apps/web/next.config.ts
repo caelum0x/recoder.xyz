@@ -11,7 +11,7 @@ let nextConfig: NextConfig = withBackend(
       ? { output: "standalone", typescript: { ignoreBuildErrors: true } }
       : {}),
 
-    transpilePackages: ["@sentry/nextjs"],
+    transpilePackages: ["@sentry/nextjs", "@recoder/auth"],
 
     images: {
       ...config.images,

@@ -9,6 +9,8 @@ const title = "Simple, transparent pricing";
 const description =
   "No hidden fees. No surprises. 15-day trial. Cancel anytime.";
 
+export const dynamic = "force-dynamic";
+
 export const metadata: Metadata = {
   title,
   description,
