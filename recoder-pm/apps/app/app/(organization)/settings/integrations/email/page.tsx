@@ -43,7 +43,7 @@ const EmailPage = async () => {
           name="email"
           readOnly
           type="email"
-          value={`${organizationId}@inbound.recoderpm.app`}
+          value={`${organizationId}@inbound.recoder.xyz`}
         />
       </StackCard>
     </>

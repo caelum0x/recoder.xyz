@@ -19,7 +19,7 @@ export const getStatus = async () => {
 
     const { data } = (await response.json()) as BetterStackResponse;
     const sites = data.filter((monitor) =>
-      monitor.attributes.url.includes("recoderpm.app")
+      monitor.attributes.url.includes("recoder.xyz")
     );
 
     const status =

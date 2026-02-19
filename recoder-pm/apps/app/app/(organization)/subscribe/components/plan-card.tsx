@@ -91,7 +91,7 @@ export const PlanCard = ({
         </div>
         <Link
           className="mt-4 w-full text-center text-muted-foreground text-xs underline"
-          href="https://www.recoderpm.app/pricing"
+          href="https://pm.recoder.xyz/pricing"
         >
           Compare all features
         </Link>

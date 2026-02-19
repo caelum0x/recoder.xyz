@@ -15,7 +15,7 @@ const getResend = () => {
 };
 
 const getFromAddress = () =>
-  process.env.RESEND_FROM ?? "Recoder PM <noreply@recoderpm.app>";
+  process.env.RESEND_FROM ?? "Recoder PM <noreply@recoder.xyz>";
 
 export const sendMagicLinkEmail = async (email: string, url: string) => {
   const resend = getResend();

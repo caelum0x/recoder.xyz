@@ -106,7 +106,7 @@ const getPlans = ({
         value: "Get in touch",
       },
     ],
-    cta: currentPlan === "ENTERPRISE" ? null : "mailto:hayden@recoderpm.app",
+    cta: currentPlan === "ENTERPRISE" ? null : "mailto:hello@recoder.xyz",
     label: currentPlan === "ENTERPRISE" ? "Current plan" : "Get in touch",
     features: [
       "99.99% Uptime SLA",

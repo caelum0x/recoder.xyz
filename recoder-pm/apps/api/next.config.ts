@@ -13,13 +13,7 @@ let nextConfig: NextConfig = withBackend(
 
     // biome-ignore lint/suspicious/useAwait: "redirects is async"
     async redirects() {
-      return [
-        {
-          source: "/",
-          destination: "https://www.recoderpm.app/",
-          permanent: true,
-        },
-      ];
+      return [];
     },
 
     devIndicators: false,

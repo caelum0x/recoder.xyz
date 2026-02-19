@@ -60,9 +60,9 @@ export const SignupEmailTemplate = ({
 );
 
 SignupEmailTemplate.PreviewProps = {
-  magicLink: "https://app.recoderpm.app/sign-up",
+  magicLink: "https://pm.recoder.xyz/app/sign-up",
   email: "test@test.com",
-  siteUrl: "www.recoderpm.app",
+  siteUrl: "pm.recoder.xyz",
 } as SignupEmailTemplateProps;
 
 export default SignupEmailTemplate;

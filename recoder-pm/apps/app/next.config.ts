@@ -31,7 +31,7 @@ let nextConfig: NextConfig = withBackend(
         },
         {
           source: "/api/webhooks/:path*",
-          destination: "https://api.recoderpm.app/webhooks/:path*",
+          destination: "https://pm.recoder.xyz/api/webhooks/:path*",
           permanent: true,
         },
         {
