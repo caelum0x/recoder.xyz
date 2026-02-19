@@ -786,7 +786,7 @@ export default function BlogPostPage() {
             </div>
 
             <div className="text-sm text-gray-500">
-              © 2024 Recoder.xyz
+              © 2024–2026 Recoder.xyz
             </div>
           </div>
         </div>

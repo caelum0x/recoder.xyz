@@ -23,6 +23,7 @@ export const metadata: Metadata = {
       { rel: 'icon', url: '/favicon-512x512.png', sizes: '512x512', type: 'image/png' },
     ],
   },
+  manifest: '/manifest.json',
   keywords: [
     'AI coding platform',
     'free AI development',

@@ -2,6 +2,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import jwt from 'jsonwebtoken';
 import { userDb } from './database';
+import { logger } from '@/lib/logger';
 
 export interface SessionData {
   userId: string;
@@ -90,7 +91,7 @@ export class SessionSyncManager {
         }
       };
     } catch (error) {
-      console.error('Session sync token validation failed:', error);
+      logger.error('Session sync token validation failed', { error: String(error) });
       return { isValid: false };
     }
   }
@@ -145,7 +146,7 @@ export class SessionSyncManager {
 
       return null;
     } catch (error) {
-      console.error('Session extraction failed:', error);
+      logger.error('Session extraction failed', { error: String(error) });
       return null;
     }
   }
@@ -205,7 +206,7 @@ export class SessionSyncManager {
 
       return response.ok;
     } catch (error) {
-      console.error(`Failed to sync session to ${domain}:`, error);
+      logger.error('Failed to sync session to domain', { domain, error: String(error) });
       return false;
     }
   }
@@ -238,7 +239,7 @@ export class SessionSyncManager {
           })
         });
       } catch (error) {
-        console.error(`Failed to logout from ${domain}:`, error);
+        logger.error('Failed to logout from domain', { domain, error: String(error) });
       }
     });
 
@@ -328,7 +329,7 @@ export async function handleSessionSync(request: NextRequest): Promise<NextRespo
       { status: 405 }
     );
   } catch (error) {
-    console.error('Session sync handler error:', error);
+    logger.error('Session sync handler error', { error: String(error) });
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }
@@ -369,7 +370,7 @@ export const clientSessionSync = {
       
       return { synced: false };
     } catch (error) {
-      console.error('Failed to check sync status:', error);
+      logger.error('Failed to check sync status', { error: String(error) });
       return { synced: false };
     }
   },
@@ -391,7 +392,7 @@ export const clientSessionSync = {
 
       return response.ok;
     } catch (error) {
-      console.error('Failed to trigger session sync:', error);
+      logger.error('Failed to trigger session sync', { error: String(error) });
       return false;
     }
   },
@@ -413,7 +414,7 @@ export const clientSessionSync = {
 
       return response.ok;
     } catch (error) {
-      console.error('Failed to trigger logout sync:', error);
+      logger.error('Failed to trigger logout sync', { error: String(error) });
       return false;
     }
   }
