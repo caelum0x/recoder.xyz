@@ -216,7 +216,7 @@ const Welcome = async () => {
         </Button>
         <Button asChild variant="secondary">
           <a
-            href="https://docs.recoderpm.app/api-reference/introduction"
+            href="https://pm.recoder.xyz/docs/api-reference/introduction"
             rel="noreferrer noopener"
             target="_blank"
           >

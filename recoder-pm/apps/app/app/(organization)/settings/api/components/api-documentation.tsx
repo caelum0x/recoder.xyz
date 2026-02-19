@@ -28,7 +28,7 @@ Recoder PM uses conventional HTTP response codes to indicate the success or fail
 
 \`\`\`bash
 curl --request GET \\
-  --url https://api.recoderpm.app/changelog \\
+  --url https://pm.recoder.xyz/api/changelog \\
   --header 'Authorization: Bearer <token>'
 \`\`\`
 
@@ -52,7 +52,7 @@ Example response:
 
 \`\`\`bash
 curl --request POST \\
-  --url https://api.recoderpm.app/feature \\
+  --url https://pm.recoder.xyz/api/feature \\
   --header 'Authorization: Bearer <token>' \\
   --header 'Content-Type: application/json' \\
   --data '{
@@ -71,7 +71,7 @@ curl --request POST \\
 
 \`\`\`bash
 curl --request POST \\
-  --url https://api.recoderpm.app/feedback \\
+  --url https://pm.recoder.xyz/api/feedback \\
   --header 'Authorization: Bearer <token>' \\
   --header 'Content-Type: application/json' \\
   --data '{

@@ -19,7 +19,7 @@ const SignUpPage = async () => {
           By signing in, you agree to our{" "}
           <a
             className="font-medium text-primary underline"
-            href="https://www.recoderpm.app/legal/terms"
+            href="https://pm.recoder.xyz/legal/terms"
             rel="noreferrer noopener"
             target="_blank"
           >
@@ -28,7 +28,7 @@ const SignUpPage = async () => {
           and{" "}
           <a
             className="font-medium text-primary underline"
-            href="https://www.recoderpm.app/legal/privacy"
+            href="https://pm.recoder.xyz/legal/privacy"
             rel="noreferrer noopener"
             target="_blank"
           >

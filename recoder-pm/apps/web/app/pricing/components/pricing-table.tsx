@@ -396,7 +396,7 @@ export const PricingTable = ({
         yearly: "Free forever",
       },
       cta: "Get started for free",
-      link: "https://app.recoderpm.app/",
+      link: "https://pm.recoder.xyz/app/",
       caption: "No credit card required.",
     },
     {
@@ -407,7 +407,7 @@ export const PricingTable = ({
         yearly: annualPrice,
       },
       cta: "Start your free trial",
-      link: "https://app.recoderpm.app/",
+      link: "https://pm.recoder.xyz/app/",
       caption: `Billed ${yearly ? "annually" : "monthly"}.`,
     },
     {

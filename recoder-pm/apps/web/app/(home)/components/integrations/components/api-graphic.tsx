@@ -25,7 +25,7 @@ const code = [
   },
 }
   
-const response = await fetch('https://app.recoderpm.app/••••••••', {
+const response = await fetch('https://pm.recoder.xyz/api/••••••••', {
   method: 'POST',
   headers: {
     'Content-Type': 'application/json',

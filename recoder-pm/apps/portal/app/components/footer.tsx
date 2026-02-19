@@ -6,7 +6,7 @@ export const Footer = () => (
       Powered by{" "}
       <a
         className="underline"
-        href="https://www.recoderpm.app/"
+        href="https://pm.recoder.xyz/"
         rel="noreferrer"
         target="_blank"
       >

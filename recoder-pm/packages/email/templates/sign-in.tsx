@@ -59,9 +59,9 @@ export const LoginEmailTemplate = ({
 );
 
 LoginEmailTemplate.PreviewProps = {
-  magicLink: "https://app.recoderpm.app/login",
+  magicLink: "https://pm.recoder.xyz/app/login",
   email: "test@test.com",
-  siteUrl: "www.recoderpm.app",
+  siteUrl: "pm.recoder.xyz",
 } as LoginEmailTemplateProps;
 
 export default LoginEmailTemplate;

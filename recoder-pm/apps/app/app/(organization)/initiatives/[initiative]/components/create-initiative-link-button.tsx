@@ -38,7 +38,7 @@ export const externalLinkProperties: {
 }[] = [
   {
     value: "recoder-pm",
-    regex: /recoderpm.app/u,
+    regex: /recoder\.xyz/u,
     icon: EververseIcon as StaticImageData,
   },
   {

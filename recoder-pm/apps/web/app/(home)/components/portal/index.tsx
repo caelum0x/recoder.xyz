@@ -29,7 +29,7 @@ export const Portal = (properties: PortalProperties) => (
               width={2136}
             />
             <Button asChild className="relative z-10" variant="secondary">
-              <Link href="https://portal.recoderpm.app/">
+              <Link href="https://pm.recoder.xyz/portal/">
                 See the Recoder PM Portal
               </Link>
             </Button>
