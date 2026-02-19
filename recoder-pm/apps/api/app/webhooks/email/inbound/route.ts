@@ -65,9 +65,9 @@ const messageSchema = z.object({
   ),
 });
 
-const inboundEmailRegex = /org_([a-zA-Z0-9]+)@inbound\.recoderpm\.app/;
+const inboundEmailRegex = /org_([a-zA-Z0-9]+)@inbound\.recoder\.xyz/;
 
-// Should come in from reply+{organizationId}@inbound.recoderpm.app
+// Should come in from reply+{organizationId}@inbound.recoder.xyz
 export const POST = async (request: Request): Promise<Response> => {
   const body = (await request.json()) as object;
   const parse = messageSchema.safeParse(body);

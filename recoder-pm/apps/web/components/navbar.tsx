@@ -32,7 +32,7 @@ const links = [
     icon: MessageSquareIcon,
   },
   {
-    href: "https://portal.recoderpm.app",
+    href: "https://pm.recoder.xyz/portal",
     label: "Roadmap",
     icon: CalendarIcon,
   },
@@ -90,10 +90,10 @@ export const Navbar = () => (
         </div>
         <div className="flex justify-end">
           <Button asChild className="hidden md:flex">
-            <a href="https://app.recoderpm.app">Get started</a>
+            <a href="https://pm.recoder.xyz/app">Get started</a>
           </Button>
           <Button asChild className="flex md:hidden" size="icon">
-            <a href="https://app.recoderpm.app">
+            <a href="https://pm.recoder.xyz/app">
               <ArrowRightIcon size={16} />
             </a>
           </Button>

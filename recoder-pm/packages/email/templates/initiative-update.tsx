@@ -92,7 +92,7 @@ InitiativeUpdateTemplate.PreviewProps = {
     <p>If you have any questions or suggestions, please don't hesitate to reach out.</p>
   `,
   date: new Date(),
-  siteUrl: "www.recoderpm.app",
+  siteUrl: "pm.recoder.xyz",
 } as InitiativeUpdateTemplateProperties;
 
 export default InitiativeUpdateTemplate;
