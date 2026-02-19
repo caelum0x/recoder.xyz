@@ -1,0 +1,123 @@
+"use client";
+
+import {
+	AppDesignerProvider,
+	Editor,
+} from "@giselle-internal/workflow-designer-ui";
+import type { Integration } from "@giselles-ai/giselle";
+import type { Trigger, Workspace } from "@giselles-ai/protocol";
+import {
+	GiselleClientProvider as RecoderStudioClientProvider,
+	WorkspaceProvider,
+} from "@giselles-ai/react";
+import { use, useMemo } from "react";
+import { getTeamDataStores } from "@/lib/data-stores/actions";
+import { createInternalRecoderStudioClient } from "@/lib/internal-api/create-recoder-studio-client";
+import type { LoaderData } from "./data-loader";
+
+interface Props {
+	dataLoader: Promise<LoaderData>;
+	integrationRefreshAction: () => Promise<Partial<Integration>>;
+	triggerUpdateAction: (trigger: Trigger) => Promise<void>;
+	workspaceSaveAction: (workspace: Workspace) => Promise<void>;
+	workspaceNameUpdateAction: (name: string) => Promise<void>;
+}
+export function Page({
+	dataLoader,
+	integrationRefreshAction,
+	triggerUpdateAction: flowTriggerUpdateAction,
+	workspaceNameUpdateAction,
+	workspaceSaveAction,
+}: Props) {
+	const data = use(dataLoader);
+	const client = useMemo(() => {
+		return createInternalRecoderStudioClient();
+	}, []);
+
+	return (
+		<RecoderStudioClientProvider value={client}>
+			<AppDesignerProvider
+				giselleClient={client}
+				llmProviders={data.llmProviders}
+				save={workspaceSaveAction}
+				initialWorkspace={data.data}
+			>
+				<WorkspaceProvider
+					// TODO: Make it reference the same timeout setting as in trigger.config.ts
+					generationTimeout={3600 * 1000}
+					integration={{
+						value: {
+							github: data.gitHubIntegrationState,
+						},
+						refresh: integrationRefreshAction,
+					}}
+					vectorStore={{
+						githubRepositoryIndexes: data.gitHubRepositoryIndexes,
+						documentSettingPath: "/settings/team/vector-stores/document",
+						githubSettingPath: "/settings/team/vector-stores",
+						documentStores: data.documentVectorStores.map((store) => ({
+							id: store.id,
+							name: store.name,
+							embeddingProfileIds: store.embeddingProfileIds,
+							sources: store.sources.map((source) => ({
+								id: source.id,
+								fileName: source.fileName,
+								ingestStatus: source.ingestStatus,
+								ingestErrorCode: source.ingestErrorCode,
+							})),
+							isOfficial: store.isOfficial,
+						})),
+					}}
+					usageLimits={data.usageLimits}
+					dataStore={{
+						workspaceId: data.data.id,
+						initialDataStores: data.teamDataStores,
+						settingPath: "/settings/team/data-stores",
+						fetchDataStores: () => getTeamDataStores(data.workspaceTeam.dbId),
+					}}
+					telemetry={{
+						metadata: {
+							teamPlan: data.workspaceTeam.plan,
+							userId: data.currentUser.id,
+							subscriptionId: data.workspaceTeam.activeSubscriptionId ?? "",
+						},
+					}}
+					featureFlag={data.featureFlags}
+					trigger={{
+						callbacks: {
+							triggerUpdate: flowTriggerUpdateAction,
+						},
+					}}
+				>
+					<div className="flex flex-col h-screen bg-black-900">
+						{data.starterTemplate ? (
+							<div className="mx-4 mt-3 rounded-[10px] border border-primary-100/35 bg-primary-100/10 px-3 py-2 text-xs text-text">
+								<p className="text-primary-100 font-medium">
+									Starter Template: {data.starterTemplate.useCaseId}
+								</p>
+								{data.starterTemplate.workflowBlueprint?.objective ? (
+									<p className="text-text/75 mt-1 line-clamp-2">
+										Objective: {data.starterTemplate.workflowBlueprint.objective}
+									</p>
+								) : null}
+								{data.starterTemplate.deployment?.stage ? (
+									<p className="text-text/75 mt-1">
+										Stage: {data.starterTemplate.deployment.stage}
+									</p>
+								) : null}
+								<p className="text-text/70 mt-1 line-clamp-2">
+									{data.starterTemplate.starterPrompt}
+								</p>
+							</div>
+						) : null}
+						<Editor
+							onFlowNameChange={workspaceNameUpdateAction}
+							teamName={data.workspaceTeam.name}
+							teamAvatarUrl={data.workspaceTeam.avatarUrl}
+						/>
+					</div>
+				</WorkspaceProvider>
+			</AppDesignerProvider>
+		</RecoderStudioClientProvider>
+	);
+}

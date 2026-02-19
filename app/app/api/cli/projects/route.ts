@@ -6,6 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth-config';
 import { neon } from '@neondatabase/serverless';
+import { logger } from '@/lib/logger';
 
 // Database connection
 function getSQL() {
@@ -80,7 +81,7 @@ export async function GET(request: NextRequest) {
       projects,
     });
   } catch (error) {
-    console.error('❌ [api/cli/projects] Error:', error);
+    logger.error('CLI projects error', { route: 'api/cli/projects', error: error instanceof Error ? error.message : String(error) });
     return NextResponse.json(
       {
         error: 'Failed to fetch projects',
@@ -174,7 +175,7 @@ export async function POST(request: NextRequest) {
       project,
     });
   } catch (error) {
-    console.error('❌ [api/cli/projects] Error:', error);
+    logger.error('CLI projects error', { route: 'api/cli/projects', error: error instanceof Error ? error.message : String(error) });
     return NextResponse.json(
       {
         error: 'Failed to fetch project',

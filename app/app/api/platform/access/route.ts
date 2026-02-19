@@ -1,17 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth-config';
+import { logger } from '@/lib/logger';
 
 interface PlatformAccessRequest {
-  platform: 'web' | 'chat' | 'cli' | 'extension';
+  platform: 'web' | 'frontend' | 'studio' | 'pm' | 'agency' | 'openclaw' | 'cli' | 'extension';
   userId?: string;
   redirect?: string;
 }
 
-const PLATFORM_URLS = {
-  web: process.env.RECODER_WEB_URL || 'http://localhost:3009',
-  chat: process.env.RECODER_CHAT_URL || 'http://localhost:3008',
+const PLATFORM_URLS: Record<string, string> = {
+  web: process.env.RECODER_WEB_URL || (process.env.NODE_ENV === 'production' ? 'https://web.recoder.xyz' : 'http://localhost:5173'),
+  frontend: process.env.RECODER_FRONTEND_URL || (process.env.NODE_ENV === 'production' ? 'https://frontend.recoder.xyz' : 'http://localhost:3001'),
+  studio: process.env.RECODER_STUDIO_URL || (process.env.NODE_ENV === 'production' ? 'https://studio.recoder.xyz' : 'http://localhost:3005'),
+  pm: process.env.RECODER_PM_URL || (process.env.NODE_ENV === 'production' ? 'https://pm.recoder.xyz' : 'http://localhost:3004'),
+  agency: process.env.RECODER_AGENCY_URL || (process.env.NODE_ENV === 'production' ? 'https://agency.recoder.xyz' : 'http://localhost:3007'),
+  openclaw: process.env.RECODER_OPENCLAW_URL || (process.env.NODE_ENV === 'production' ? 'https://openclaw.recoder.xyz' : 'http://localhost:18789'),
   cli: '/cli',
-  extension: '/extension'
+  extension: '/extension',
 };
 
 export async function POST(request: NextRequest) {
@@ -64,7 +69,7 @@ export async function POST(request: NextRequest) {
     });
 
   } catch (error) {
-    console.error('Platform Access Error:', error);
+    logger.error('Platform access error', { route: 'api/platform/access', error: error instanceof Error ? error.message : String(error) });
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

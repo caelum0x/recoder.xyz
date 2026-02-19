@@ -1,0 +1,2 @@
+CREATE INDEX "gh_content_status_query_idx" ON "github_repository_content_status" USING btree ("enabled","status","updated_at","retry_after");--> statement-breakpoint
+CREATE INDEX "gh_pr_emb_repo_doc_idx" ON "github_repository_pull_request_embeddings" USING btree ("repository_index_db_id","document_key");

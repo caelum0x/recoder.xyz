@@ -1,101 +1,119 @@
-name: 🏥 Recoder.xyz Health Check
+name: Production Health Check
 
 on:
   workflow_dispatch:
   schedule:
-    - cron: '0 */6 * * *' # Every 6 hours
+    - cron: '*/15 * * * *' # Every 15 minutes
 
 jobs:
   health-check:
-    name: 🏥 System Health Check
+    name: Production Endpoint Health
     runs-on: ubuntu-latest
-    
+    timeout-minutes: 5
+
     steps:
-      - name: 📂 Checkout
-        uses: actions/checkout@v4
-        
-      - name: 📦 Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          
-      - name: 🔍 Platform Detection
+      - name: Check all production endpoints
         run: |
-          echo "## 🏗️ Platform Health Status" >> $GITHUB_STEP_SUMMARY
-          echo "| Platform | Status | Issues |" >> $GITHUB_STEP_SUMMARY
-          echo "|----------|--------|--------|" >> $GITHUB_STEP_SUMMARY
-          
-          # Check each platform
-          for platform in recoder-web recoder-chat recoder-extension recoder-desktop recoder-chat-mobile; do
-            if [[ -d "$platform" ]]; then
-              if [[ -f "$platform/package.json" ]]; then
-                echo "| $platform | ✅ Ready | None |" >> $GITHUB_STEP_SUMMARY
+          # ── define services ────────────────────────────────────────
+          # Format: "Name|URL"
+          SERVICES=(
+            "App Hub|https://recoder.xyz"
+            "Suna IDE|https://frontend.recoder.xyz"
+            "Bolt IDE|https://web.recoder.xyz"
+            "Docker Backend|https://api.recoder.xyz/health"
+            "Python Backend|https://backend.recoder.xyz/v1/health"
+            "Project Management|https://pm.recoder.xyz"
+            "Workflow Studio|https://studio.recoder.xyz"
+            "AI Agency|https://agency.recoder.xyz"
+            "OpenClaw|https://openclaw.recoder.xyz/health"
+          )
+
+          TOTAL=${#SERVICES[@]}
+          PASSED=0
+          FAILED=0
+          FAILED_NAMES=""
+          SLOW_THRESHOLD_MS=5000
+
+          # Start JSON artifact
+          echo '[' > health-results.json
+
+          echo "## Production Health Check" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "| # | Service | URL | HTTP Status | Response Time | Result |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|---|---------|-----|-------------|---------------|--------|" >> "$GITHUB_STEP_SUMMARY"
+
+          INDEX=0
+          FIRST_JSON=true
+          for entry in "${SERVICES[@]}"; do
+            INDEX=$((INDEX + 1))
+            NAME="${entry%%|*}"
+            URL="${entry##*|}"
+
+            # Capture both HTTP code and response time
+            CURL_OUTPUT=$(curl -s -o /dev/null -w "%{http_code}|%{time_total}" \
+              --connect-timeout 10 --max-time 30 \
+              -L "$URL" 2>/dev/null || echo "000|0")
+
+            HTTP_CODE="${CURL_OUTPUT%%|*}"
+            RESPONSE_TIME="${CURL_OUTPUT##*|}"
+            RESPONSE_MS=$(echo "$RESPONSE_TIME * 1000" | bc | cut -d. -f1)
+            # Default to 0 if bc returns empty
+            RESPONSE_MS="${RESPONSE_MS:-0}"
+
+            SLOW_FLAG=""
+            if [[ "$HTTP_CODE" -ge 200 && "$HTTP_CODE" -lt 400 ]]; then
+              if [[ "$RESPONSE_MS" -gt "$SLOW_THRESHOLD_MS" ]]; then
+                STATUS="SLOW"
+                SLOW_FLAG=" :warning: SLOW"
+                PASSED=$((PASSED + 1))
               else
-                echo "| $platform | ⚠️ No package.json | Missing config |" >> $GITHUB_STEP_SUMMARY
+                STATUS="UP"
+                PASSED=$((PASSED + 1))
               fi
+              echo "| $INDEX | $NAME | \`$URL\` | $HTTP_CODE | ${RESPONSE_MS}ms | :white_check_mark: ${STATUS}${SLOW_FLAG} |" >> "$GITHUB_STEP_SUMMARY"
             else
-              echo "| $platform | ❌ Missing | Directory not found |" >> $GITHUB_STEP_SUMMARY
+              STATUS="DOWN"
+              FAILED=$((FAILED + 1))
+              FAILED_NAMES="${FAILED_NAMES}  - ${NAME} (${URL}) -> HTTP ${HTTP_CODE}\n"
+              echo "| $INDEX | $NAME | \`$URL\` | $HTTP_CODE | ${RESPONSE_MS}ms | :x: DOWN |" >> "$GITHUB_STEP_SUMMARY"
             fi
+
+            echo "[$STATUS] $NAME ($URL) -> HTTP $HTTP_CODE, ${RESPONSE_MS}ms"
+
+            # Append JSON entry
+            if [[ "$FIRST_JSON" != "true" ]]; then
+              echo ',' >> health-results.json
+            fi
+            FIRST_JSON=false
+            cat >> health-results.json <<ENTRY
+          {"name":"$NAME","url":"$URL","httpCode":$HTTP_CODE,"responseTimeMs":$RESPONSE_MS,"status":"$STATUS"}
+          ENTRY
           done
-          
-      - name: 🤖 AI Integration Check
-        run: |
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "## 🤖 AI Integration Status" >> $GITHUB_STEP_SUMMARY
-          
-          # Check for AI provider files
-          ai_providers=0
-          if grep -r "ollama" . --include="*.ts" --include="*.js" >/dev/null 2>&1; then
-            echo "- ✅ Ollama integration found" >> $GITHUB_STEP_SUMMARY
-            ai_providers=$((ai_providers + 1))
+
+          echo ']' >> health-results.json
+
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "---" >> "$GITHUB_STEP_SUMMARY"
+          echo "**Result: ${PASSED}/${TOTAL} services healthy** (slow threshold: ${SLOW_THRESHOLD_MS}ms)" >> "$GITHUB_STEP_SUMMARY"
+
+          if [[ "$FAILED" -gt 0 ]]; then
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "### Failed services" >> "$GITHUB_STEP_SUMMARY"
+            echo -e "$FAILED_NAMES" >> "$GITHUB_STEP_SUMMARY"
+            echo ""
+            echo "=== HEALTH CHECK FAILED ==="
+            echo "${FAILED} service(s) unreachable:"
+            echo -e "$FAILED_NAMES"
+            exit 1
           fi
-          
-          if grep -r "anthropic\|claude" . --include="*.ts" --include="*.js" >/dev/null 2>&1; then
-            echo "- ✅ Anthropic/Claude integration found" >> $GITHUB_STEP_SUMMARY
-            ai_providers=$((ai_providers + 1))
-          fi
-          
-          if grep -r "together.*ai" . --include="*.ts" --include="*.js" >/dev/null 2>&1; then
-            echo "- ✅ Together AI integration found" >> $GITHUB_STEP_SUMMARY
-            ai_providers=$((ai_providers + 1))
-          fi
-          
-          echo "- 🎯 **Total AI Providers**: $ai_providers" >> $GITHUB_STEP_SUMMARY
-          
-      - name: 🔧 Build Health Check
-        run: |
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "## 🔧 Build Status" >> $GITHUB_STEP_SUMMARY
-          
-          # Quick build test for key platforms
-          if [[ -d "recoder-chat" ]]; then
-            cd recoder-chat
-            if npm ci --silent && npm run build --silent; then
-              echo "- ✅ Chat Platform: Build successful" >> $GITHUB_STEP_SUMMARY
-            else
-              echo "- ❌ Chat Platform: Build failed" >> $GITHUB_STEP_SUMMARY
-            fi
-            cd ..
-          fi
-          
-          if [[ -d "recoder-extension/src" ]]; then
-            cd recoder-extension/src
-            if pnpm install --silent && pnpm bundle --silent; then
-              echo "- ✅ VS Code Extension: Build successful" >> $GITHUB_STEP_SUMMARY
-            else
-              echo "- ❌ VS Code Extension: Build failed" >> $GITHUB_STEP_SUMMARY
-            fi
-            cd ../..
-          fi
-          
-      - name: 📊 Overall Health Status
-        run: |
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "## 📊 Overall Status" >> $GITHUB_STEP_SUMMARY
-          echo "✅ **Recoder.xyz is operational and ready for production deployment**" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### 🚀 Next Steps:" >> $GITHUB_STEP_SUMMARY
-          echo "1. Deploy Chat Platform (production-ready)" >> $GITHUB_STEP_SUMMARY
-          echo "2. Publish VS Code Extension" >> $GITHUB_STEP_SUMMARY
-          echo "3. Fix Web Platform Anthropic SDK conflicts" >> $GITHUB_STEP_SUMMARY
-          echo "4. Launch mobile and desktop apps" >> $GITHUB_STEP_SUMMARY
+
+          echo ""
+          echo "=== ALL ${TOTAL} SERVICES HEALTHY ==="
+
+      - name: Upload health results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: health-results
+          path: health-results.json
+          retention-days: 30

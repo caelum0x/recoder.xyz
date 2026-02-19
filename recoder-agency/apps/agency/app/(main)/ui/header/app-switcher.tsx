@@ -6,21 +6,45 @@ import { Popover } from "radix-ui";
 
 const apps = [
 	{
-		label: "IDE",
-		description: "AI Web IDE",
+		label: "Hub",
+		description: "Dashboard & Settings",
 		href: "https://recoder.xyz",
 		current: false,
 	},
 	{
+		label: "Frontend",
+		description: "Suna AI IDE",
+		href: "https://frontend.recoder.xyz",
+		current: false,
+	},
+	{
+		label: "Web",
+		description: "Bolt AI IDE",
+		href: "https://web.recoder.xyz",
+		current: false,
+	},
+	{
+		label: "PM",
+		description: "Project Management",
+		href: "https://pm.recoder.xyz",
+		current: false,
+	},
+	{
+		label: "Studio",
+		description: "Visual Workflow Designer",
+		href: "https://studio.recoder.xyz",
+		current: false,
+	},
+	{
 		label: "Agency",
-		description: "AI Agency Platform",
+		description: "AI Agent Workflows",
 		href: "https://agency.recoder.xyz",
 		current: true,
 	},
 	{
-		label: "PM",
-		description: "Product Management",
-		href: "https://pm.recoder.xyz",
+		label: "OpenClaw",
+		description: "Open-Source AI Tools",
+		href: "https://openclaw.recoder.xyz",
 		current: false,
 	},
 ] as const;

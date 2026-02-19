@@ -1,11 +1,11 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useSession } from '@/lib/session-provider';
 import { Terminal, CheckCircle, X } from 'lucide-react';
 
-export default function CLICallbackPage() {
+function CLICallbackContent() {
   const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading');
   const [message, setMessage] = useState('');
   const searchParams = useSearchParams();
@@ -17,9 +17,9 @@ export default function CLICallbackPage() {
       const state = searchParams.get('state');
       const redirectUri = searchParams.get('redirect_uri');
 
-      if (!code || !state || !redirectUri) {
+      if (!code) {
         setStatus('error');
-        setMessage('Missing required parameters');
+        setMessage('Missing authorization code');
         return;
       }
 
@@ -34,7 +34,7 @@ export default function CLICallbackPage() {
         const response = await fetch('/api/auth/cli-internal/set-user', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ 
+          body: JSON.stringify({
             code: code,
             user_id: session.user.id,
             user_email: session.user.email,
@@ -46,20 +46,27 @@ export default function CLICallbackPage() {
           throw new Error('Failed to store user info');
         }
 
-        // Redirect back to CLI
-        const params = new URLSearchParams({
-          code: code,
-          state: state
-        });
-        
-        const callbackUrl = `${decodeURIComponent(redirectUri)}?${params.toString()}`;
-        
-        setStatus('success');
-        setMessage('Redirecting back to CLI...');
-        
-        setTimeout(() => {
-          window.location.href = callbackUrl;
-        }, 1500);
+        // If redirect_uri and state are provided, redirect back to CLI
+        if (redirectUri && state) {
+          const params = new URLSearchParams({
+            code: code,
+            state: state
+          });
+
+          const callbackUrl = `${decodeURIComponent(redirectUri)}?${params.toString()}`;
+
+          setStatus('success');
+          setMessage('Redirecting back to CLI...');
+
+          setTimeout(() => {
+            window.location.href = callbackUrl;
+          }, 1500);
+        } else {
+          // No redirect URI - just show success (e.g. from device flow callback)
+          setStatus('success');
+          setMessage('CLI Authentication Successful. You can return to your terminal.');
+          setTimeout(() => window.close(), 3000);
+        }
       } catch (error) {
         console.error('CLI callback error:', error);
         setStatus('error');
@@ -89,18 +96,18 @@ export default function CLICallbackPage() {
               <p className="text-gray-400">Completing CLI authentication...</p>
             </>
           )}
-          
+
           {status === 'success' && (
             <>
               <div className="w-12 h-12 bg-green-500/10 border border-green-500/20 rounded-full flex items-center justify-center mx-auto">
                 <CheckCircle className="w-6 h-6 text-green-500" />
               </div>
-              <h2 className="text-2xl font-bold text-green-400">Authentication Successful!</h2>
+              <h2 className="text-2xl font-bold text-green-400">CLI Authentication Successful!</h2>
               <p className="text-gray-400">{message}</p>
               <p className="text-sm text-gray-500">This window will close automatically.</p>
             </>
           )}
-          
+
           {status === 'error' && (
             <>
               <div className="w-12 h-12 bg-red-500/10 border border-red-500/20 rounded-full flex items-center justify-center mx-auto">
@@ -109,13 +116,13 @@ export default function CLICallbackPage() {
               <h2 className="text-2xl font-bold text-red-400">Authentication Failed</h2>
               <p className="text-gray-400">{message}</p>
               <div className="space-y-2 mt-4">
-                <button 
+                <button
                   onClick={() => window.location.href = '/auth/signin'}
                   className="w-full px-6 py-2 bg-orange-500 hover:bg-orange-600 rounded-lg transition-colors"
                 >
                   Try Again
                 </button>
-                <button 
+                <button
                   onClick={() => window.close()}
                   className="w-full px-6 py-2 bg-[#222] hover:bg-[#333] rounded-lg transition-colors"
                 >
@@ -127,5 +134,17 @@ export default function CLICallbackPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function CLICallbackPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-black flex items-center justify-center">
+        <div className="w-12 h-12 border-2 border-orange-500 border-t-transparent rounded-full animate-spin"></div>
+      </div>
+    }>
+      <CLICallbackContent />
+    </Suspense>
   );
 }

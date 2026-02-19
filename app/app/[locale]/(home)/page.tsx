@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { Terminal, Globe, ArrowRight, Github, Sparkles, Copy, Check, Code, Zap, Shield, Cpu } from 'lucide-react';
 import { useState } from 'react';
 import { useSession } from '@/lib/session-provider';
-import { getRecoderWebUrlClient } from '@/lib/config/platforms';
+import { getRecoderWebUrlClient, getServiceUrlClient } from '@/lib/config/platforms';
 import { LaunchWebIDEButton } from '@/app/components/LaunchWebIDEButton';
 import { LanguageSwitcher } from '@/components/LanguageSwitcher';
 import { useTranslations } from 'next-intl';
@@ -35,6 +35,15 @@ export default function HomePage() {
           </Link>
 
           <nav className="flex items-center space-x-6">
+            <Link href="/agents" className="text-sm text-gray-400 hover:text-white transition-colors">
+              Agents
+            </Link>
+            <Link href="/plan" className="text-sm text-gray-400 hover:text-white transition-colors">
+              Plan
+            </Link>
+            <Link href="/platform" className="text-sm text-gray-400 hover:text-white transition-colors">
+              Platform
+            </Link>
             <Link href="/docs/getting-started" className="text-sm text-gray-400 hover:text-white transition-colors">
               {t('common.gettingStarted')}
             </Link>
@@ -49,12 +58,20 @@ export default function HomePage() {
                 <LaunchWebIDEButton className="px-4 py-2 text-sm bg-gradient-to-r from-orange-500 to-purple-600 hover:from-orange-600 hover:to-purple-700 rounded-lg transition-colors flex items-center space-x-2" />
               </>
             ) : (
-              <Link
-                href="/auth/signin"
-                className="px-4 py-2 text-sm bg-orange-500 hover:bg-orange-600 rounded-lg transition-colors"
-              >
-                {t('common.signIn')}
-              </Link>
+              <>
+                <Link
+                  href="/auth/signin"
+                  className="px-4 py-2 text-sm text-gray-300 hover:text-white border border-white/20 hover:border-white/40 rounded-lg transition-colors"
+                >
+                  {t('common.signIn')}
+                </Link>
+                <Link
+                  href="/auth/signup"
+                  className="px-4 py-2 text-sm bg-orange-500 hover:bg-orange-600 rounded-lg transition-colors"
+                >
+                  Sign Up
+                </Link>
+              </>
             )}
             <LanguageSwitcher />
           </nav>
@@ -122,7 +139,7 @@ export default function HomePage() {
               ) : (
                 <>
                   <Link
-                    href="/auth/signin"
+                    href="/auth/signup"
                     className="px-8 py-4 text-lg font-semibold bg-gradient-to-r from-orange-500 to-purple-600 hover:from-orange-600 hover:to-purple-700 rounded-xl transition-all transform hover:scale-105 flex items-center space-x-2 shadow-lg shadow-orange-500/50"
                   >
                     <span>Get Started Free</span>
@@ -291,7 +308,7 @@ export default function HomePage() {
             </Link>
 
             {/* Recoder Web */}
-            <Link href="https://recoder-web.vercel.app" target="_blank" className="group">
+            <Link href={getRecoderWebUrlClient()} target="_blank" className="group">
               <div className="relative h-full p-8 rounded-2xl border border-white/10 bg-gradient-to-br from-purple-500/5 to-transparent hover:border-purple-500/30 transition-all duration-300">
                 <div className="absolute top-8 right-8">
                   <Globe className="w-12 h-12 text-purple-500 opacity-20 group-hover:opacity-40 transition-opacity" />
@@ -717,6 +734,60 @@ export default function HomePage() {
         </div>
       </section>
 
+      {/* Ecosystem Section */}
+      <section className="py-20 px-6 border-t border-white/10">
+        <div className="container mx-auto max-w-6xl">
+          <div className="text-center mb-12">
+            <h2 className="text-4xl font-bold mb-4">The Recoder Ecosystem</h2>
+            <p className="text-xl text-gray-400">10 services powering the complete AI development platform</p>
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+            {([
+              { id: 'frontend', name: 'Suna AI IDE', tag: 'Agents' },
+              { id: 'web', name: 'Bolt AI IDE', tag: 'Web IDE' },
+              { id: 'studio', name: 'Studio', tag: 'Workflows' },
+              { id: 'agency', name: 'Agency', tag: 'Multi-Agent' },
+              { id: 'pm', name: 'PM', tag: 'Projects' },
+              { id: 'openclaw', name: 'OpenClaw', tag: 'Open Source' },
+              { id: 'docker-backend', name: 'API Gateway', tag: 'Backend' },
+              { id: 'backend', name: 'AI Backend', tag: 'FastAPI' },
+            ] as const).map((svc) => (
+              <a
+                key={svc.id}
+                href={getServiceUrlClient(svc.id)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="p-4 rounded-xl border border-white/10 bg-white/5 hover:border-orange-500/30 hover:bg-orange-500/5 transition-all text-center group"
+              >
+                <div className="text-sm font-medium group-hover:text-orange-400 transition-colors">{svc.name}</div>
+                <div className="text-xs text-gray-600 mt-1">{svc.tag}</div>
+              </a>
+            ))}
+            <Link
+              href="/platform"
+              className="p-4 rounded-xl border border-orange-500/20 bg-orange-500/5 hover:bg-orange-500/10 transition-all text-center flex flex-col items-center justify-center"
+            >
+              <div className="text-sm font-medium text-orange-400">View All</div>
+              <div className="text-xs text-gray-600 mt-1">10 services</div>
+            </Link>
+          </div>
+          <div className="flex justify-center mt-8 space-x-4">
+            <Link href="/agents" className="text-sm text-orange-400 hover:text-orange-300 transition-colors flex items-center space-x-1">
+              <span>AI Agents</span>
+              <ArrowRight className="w-3 h-3" />
+            </Link>
+            <Link href="/plan" className="text-sm text-purple-400 hover:text-purple-300 transition-colors flex items-center space-x-1">
+              <span>Plans & Pricing</span>
+              <ArrowRight className="w-3 h-3" />
+            </Link>
+            <Link href="/status" className="text-sm text-gray-400 hover:text-white transition-colors flex items-center space-x-1">
+              <span>System Status</span>
+              <ArrowRight className="w-3 h-3" />
+            </Link>
+          </div>
+        </div>
+      </section>
+
       {/* CTA - Free Beta */}
       <section className="py-32 px-6">
         <div className="container mx-auto max-w-4xl text-center space-y-8">
@@ -732,19 +803,36 @@ export default function HomePage() {
             Join the free beta. No credit card required.
           </p>
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-4">
-            <Link
-              href="/auth/signin"
-              className="px-8 py-4 text-lg font-semibold bg-gradient-to-r from-orange-500 to-purple-600 hover:from-orange-600 hover:to-purple-700 rounded-xl transition-all transform hover:scale-105 flex items-center space-x-2 shadow-lg shadow-orange-500/50"
-            >
-              <span>Get Started Free</span>
-              <ArrowRight className="w-5 h-5" />
-            </Link>
-            <Link
-              href="/docs"
-              className="px-8 py-4 text-lg font-semibold border border-white/20 hover:border-white/40 rounded-xl transition-all"
-            >
-              View Documentation
-            </Link>
+            {session?.user ? (
+              <>
+                <Link
+                  href="/dashboard"
+                  className="px-8 py-4 text-lg font-semibold bg-gradient-to-r from-orange-500 to-purple-600 hover:from-orange-600 hover:to-purple-700 rounded-xl transition-all transform hover:scale-105 flex items-center space-x-2 shadow-lg shadow-orange-500/50"
+                >
+                  <span>Go to Dashboard</span>
+                  <ArrowRight className="w-5 h-5" />
+                </Link>
+                <LaunchWebIDEButton className="px-8 py-4 text-lg font-semibold border border-white/20 hover:border-white/40 rounded-xl transition-all flex items-center space-x-2">
+                  Launch Web IDE <ArrowRight className="w-5 h-5 ml-2" />
+                </LaunchWebIDEButton>
+              </>
+            ) : (
+              <>
+                <Link
+                  href="/auth/signup"
+                  className="px-8 py-4 text-lg font-semibold bg-gradient-to-r from-orange-500 to-purple-600 hover:from-orange-600 hover:to-purple-700 rounded-xl transition-all transform hover:scale-105 flex items-center space-x-2 shadow-lg shadow-orange-500/50"
+                >
+                  <span>Get Started Free</span>
+                  <ArrowRight className="w-5 h-5" />
+                </Link>
+                <Link
+                  href="/docs"
+                  className="px-8 py-4 text-lg font-semibold border border-white/20 hover:border-white/40 rounded-xl transition-all"
+                >
+                  View Documentation
+                </Link>
+              </>
+            )}
           </div>
           <p className="text-sm text-gray-500 pt-4">
             No credit card • No trial period • No hidden fees
@@ -761,7 +849,11 @@ export default function HomePage() {
               <span className="font-bold">recoder</span>
             </div>
 
-            <div className="flex items-center space-x-8 text-sm text-gray-500">
+            <div className="flex items-center flex-wrap gap-x-6 gap-y-2 text-sm text-gray-500">
+              <Link href="/agents" className="hover:text-white transition-colors">Agents</Link>
+              <Link href="/plan" className="hover:text-white transition-colors">Plan</Link>
+              <Link href="/platform" className="hover:text-white transition-colors">Platform</Link>
+              <Link href="/status" className="hover:text-white transition-colors">Status</Link>
               <Link href="/docs" className="hover:text-white transition-colors">Docs</Link>
               <Link href="/cli" className="hover:text-white transition-colors">CLI</Link>
               <Link href="/legal/privacy" className="hover:text-white transition-colors">Privacy</Link>

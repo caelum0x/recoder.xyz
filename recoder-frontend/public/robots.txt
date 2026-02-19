@@ -1,0 +1,15 @@
+# Recoder Robots.txt
+User-agent: *
+Allow: /
+
+# Sitemap
+Sitemap: https://recoder.xyz/sitemap.xml
+
+# Disallow sensitive routes
+Disallow: /api/
+Disallow: /_next/
+Disallow: /admin/
+
+# Allow crawling of public pages
+Allow: /
+

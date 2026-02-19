@@ -1,0 +1,43 @@
+import { Suspense } from "react";
+import { Skeleton } from "@/components/ui/skeleton";
+import { GitHubAuthentication } from "../github-authentication";
+import { GoogleAuthentication } from "../google-authentication";
+
+export default async function AccountAuthenticationPage({
+	searchParams,
+}: {
+	searchParams?: Promise<{ [key: string]: string | string[] | undefined }>;
+}) {
+	const params = await searchParams;
+	const oauthError =
+		typeof params?.oauthError === "string" ? params.oauthError : undefined;
+	return (
+		<div className="flex flex-col gap-[12px]">
+			<p className="text-link-muted text-[12px] leading-[20.4px] tracking-normal font-geist">
+				Connect your Recoder Studio account with a third-party service to use it for
+				login.
+			</p>
+			{oauthError && (
+				<div className="text-error-900 bg-error-900/12 border border-error-900/40 rounded-[12px] p-3 text-[12px] font-geist">
+					OAuth Error: {oauthError}
+				</div>
+			)}
+			<div className="flex flex-col gap-y-4">
+				<Suspense
+					fallback={
+						<Skeleton className="rounded-md border border-border-muted w-full h-16" />
+					}
+				>
+					<GoogleAuthentication />
+				</Suspense>
+				<Suspense
+					fallback={
+						<Skeleton className="rounded-md border border-border-muted w-full h-16" />
+					}
+				>
+					<GitHubAuthentication />
+				</Suspense>
+			</div>
+		</div>
+	);
+}

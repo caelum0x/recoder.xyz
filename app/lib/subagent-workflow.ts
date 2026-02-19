@@ -17,7 +17,7 @@ const DEFAULT_PATHS = [
   '/Users/arhansubasi/recoder.xyz/apps/desktop',
   '/Users/arhansubasi/recoder.xyz/apps/frontend',
   '/Users/arhansubasi/recoder.xyz/apps/mobile',
-  '/Users/arhansubasi/recoder.xyz/apps/studio.giselles.ai',
+  '/Users/arhansubasi/recoder.xyz/recoder-studio',
   '/Users/arhansubasi/recoder.xyz/apps/ui.giselles.ai',
   '/Users/arhansubasi/recoder.xyz/backend',
   '/Users/arhansubasi/recoder.xyz/docker-backend',
@@ -36,13 +36,13 @@ const LANE_CATALOG: SubagentLane[] = [
     title: 'Ecosystem app chain (mobile -> studio -> frontend -> app)',
     paths: [
       '/Users/arhansubasi/recoder.xyz/apps/mobile',
-      '/Users/arhansubasi/recoder.xyz/apps/studio.giselles.ai',
+      '/Users/arhansubasi/recoder.xyz/recoder-studio',
       '/Users/arhansubasi/recoder.xyz/apps/frontend',
       '/Users/arhansubasi/recoder.xyz/app',
     ],
     validationCommands: [
       'pnpm -C /Users/arhansubasi/recoder.xyz/apps/mobile run typecheck',
-      'pnpm -C /Users/arhansubasi/recoder.xyz/apps/studio.giselles.ai run typecheck',
+      'pnpm -C /Users/arhansubasi/recoder.xyz/recoder-studio run typecheck',
       'pnpm -C /Users/arhansubasi/recoder.xyz/apps/frontend run typecheck',
       'pnpm -C /Users/arhansubasi/recoder.xyz/app run typecheck',
     ],
@@ -78,10 +78,10 @@ const LANE_CATALOG: SubagentLane[] = [
     laneId: 'A4',
     title: 'Studio and UI apps',
     paths: [
-      '/Users/arhansubasi/recoder.xyz/apps/studio.giselles.ai',
+      '/Users/arhansubasi/recoder.xyz/recoder-studio',
       '/Users/arhansubasi/recoder.xyz/apps/ui.giselles.ai',
     ],
-    validationCommands: ['pnpm -C /Users/arhansubasi/recoder.xyz/apps/studio.giselles.ai run check'],
+    validationCommands: ['pnpm -C /Users/arhansubasi/recoder.xyz/recoder-studio run check'],
   },
   {
     laneId: 'A5',

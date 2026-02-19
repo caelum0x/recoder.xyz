@@ -4,6 +4,7 @@ import { auth } from '@/lib/auth-config';
 import { headers } from 'next/headers';
 
 import { prisma } from '@/lib/prisma';
+import { logger } from '@/lib/logger';
 
 // GET /api/billing/payment-methods - List payment methods
 export async function GET(req: NextRequest) {
@@ -49,7 +50,7 @@ export async function GET(req: NextRequest) {
       })),
     });
   } catch (error) {
-    console.error('Error fetching payment methods:', error);
+    logger.error('Error fetching payment methods', { route: 'api/billing/payment-methods', error: error instanceof Error ? error.message : String(error) });
     return NextResponse.json(
       { success: false, error: 'Failed to fetch payment methods' },
       { status: 500 }
@@ -143,7 +144,7 @@ export async function POST(req: NextRequest) {
       },
     });
   } catch (error) {
-    console.error('Error adding payment method:', error);
+    logger.error('Error adding payment method', { route: 'api/billing/payment-methods', error: error instanceof Error ? error.message : String(error) });
     return NextResponse.json(
       { success: false, error: 'Failed to add payment method' },
       { status: 500 }
@@ -195,7 +196,7 @@ export async function PUT(req: NextRequest) {
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error('Error updating payment method:', error);
+    logger.error('Error updating payment method', { route: 'api/billing/payment-methods', error: error instanceof Error ? error.message : String(error) });
     return NextResponse.json(
       { success: false, error: 'Failed to update payment method' },
       { status: 500 }
@@ -262,7 +263,7 @@ export async function DELETE(req: NextRequest) {
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error('Error deleting payment method:', error);
+    logger.error('Error deleting payment method', { route: 'api/billing/payment-methods', error: error instanceof Error ? error.message : String(error) });
     return NextResponse.json(
       { success: false, error: 'Failed to delete payment method' },
       { status: 500 }
