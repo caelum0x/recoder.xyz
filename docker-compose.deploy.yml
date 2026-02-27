@@ -88,6 +88,9 @@ services:
       - "5173:5173"
     env_file:
       - ./recoder-web/.env
+    depends_on:
+      redis:
+        condition: service_healthy
     environment:
       - NODE_ENV=production
       - PORT=5173
@@ -127,8 +130,13 @@ services:
       - NEXT_PUBLIC_APP_URL=https://app.recoder.xyz
       - NEXT_PUBLIC_RECODER_WEB_URL=https://web.recoder.xyz
       - BACKEND_URL=http://recoder-docker-backend:3100
+    depends_on:
+      redis:
+        condition: service_healthy
+      docker-backend:
+        condition: service_healthy
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3000/"]
+      test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -255,9 +263,12 @@ services:
       - '--storage.tsdb.retention.time=15d'
       - '--web.enable-lifecycle'
     depends_on:
-      - alertmanager
-      - node-exporter
-      - redis-exporter
+      alertmanager:
+        condition: service_healthy
+      node-exporter:
+        condition: service_healthy
+      redis-exporter:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:9090/-/healthy"]
       interval: 30s
