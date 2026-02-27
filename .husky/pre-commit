@@ -9,34 +9,26 @@ if [ "$SKIP_HOOKS" = "true" ]; then
     exit 0
 fi
 
-# Check for common secret patterns in staged files
 SECRETS_FOUND=0
 
-# Check for common secret patterns in staged files (exclude safe files)
-SECRETS_FOUND=0
-
-# Check for common secret patterns in staged files (exclude safe files)
-SECRETS_FOUND=0
-
-# Get actual secrets (not in documentation, templates, config files, or images)
-STAGED_FILES=$(git diff --cached --name-only | grep -v -E "\.(md|template|example|gitignore|png|jpg|jpeg|gif|ico|svg|webp|bmp)$" | grep -v -E "(README|GUIDE|DOCS)" | head -20)
-
-if [ -n "$STAGED_FILES" ]; then
-  if echo "$STAGED_FILES" | xargs grep -l -E "(password|passwd|pwd|secret|token|api[_-]?key|private[_-]?key|ssh[_-]?key|database[_-]?url|connection[_-]?string|postgresql://)" --ignore-case 2>/dev/null; then
-    echo "❌ ERROR: Potential secrets detected in staged files!"
-    echo "Please remove secrets and use environment variables instead."
+# 1. Use the strict leak scanner (high-confidence token patterns) if available.
+#    This catches real API keys, DB connection strings with creds, etc.
+#    It uses an allowlist to skip known-safe files.
+if [ -x "scripts/scan-secrets-strict.sh" ]; then
+  if ! scripts/scan-secrets-strict.sh; then
+    echo "❌ ERROR: Strict secret scan failed!"
     SECRETS_FOUND=1
   fi
 fi
 
-# Check for .env files (except examples)
+# 2. Block .env files (except examples/templates)
 if git diff --cached --name-only | grep -E "\.env$|\.env\.local$|\.env\.production$" | grep -v "\.env\.example$" | grep -v "\.env\..*\.template$"; then
   echo "❌ ERROR: .env file detected in staged files!"
   echo "Never commit .env files. Use .env.example instead."
   SECRETS_FOUND=1
 fi
 
-# Check for SSH keys and PEM files
+# 3. Block SSH keys and PEM files
 if git diff --cached --name-only | grep -E "\.(pem|key|pub)$|id_rsa|id_dsa|id_ecdsa|id_ed25519|private-key"; then
   echo "❌ ERROR: SSH key or private key detected in staged files!"
   echo "Never commit SSH keys or private keys."
@@ -54,4 +46,3 @@ if [ $SECRETS_FOUND -eq 1 ]; then
 fi
 
 echo "✅ No secrets detected - commit allowed"
-
