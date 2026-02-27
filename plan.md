@@ -81,6 +81,17 @@ Last updated: 2026-02-27
 - Verification command: `bash scripts/verify-mobile-release.sh [ref]`
 - Combined closeout command: `bash scripts/verify-native-release-closeout.sh [desktop_tag] [mobile_ref]`
 
+## Deferred (Budget-Constrained)
+1. GitHub Actions billing-dependent release execution
+- Status: Deferred by owner due budget constraint (2026-02-27).
+- Impact: Desktop/Mobile GitHub-hosted workflow runs cannot start until billing/spending limits are restored.
+- iOS CI note: `.github/workflows/ios-ci.yml` is manual-only (`workflow_dispatch`) and job-disabled (`if: false`); use local gate `bash scripts/verify-openclaw-ios-local.sh`.
+- Owner: Arhan Subasi
+- Revisit target: 2026-03-31
+- Last verified blocker evidence:
+  - Mobile CI run `22490203332`: jobs not started due billing/spending limit.
+  - Desktop Release run `22490262473`: jobs not started due billing/spending limit.
+
 ## Manual/External dependencies
 - Apple Developer cert for Desktop + macOS notarization
 - Play Store keystore + `keystore.properties` for Android release signing
