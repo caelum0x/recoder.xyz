@@ -45,6 +45,46 @@ ssh_retry() {
   return 255
 }
 
+echo "=== Phase 0: Pre-flight checks ==="
+
+# Verify SSH connectivity
+echo -n "Checking SSH connectivity... "
+if ! ssh $SSH_OPTS "${SERVER}" "echo ok" >/dev/null 2>&1; then
+  echo "FAIL"
+  echo "FATAL: Cannot reach ${SERVER} via SSH."
+  exit 1
+fi
+echo "OK"
+
+# Check disk space (fail if root >90% full)
+echo -n "Checking disk space... "
+DISK_USAGE=$(ssh $SSH_OPTS "${SERVER}" "df / --output=pcent | tail -1 | tr -d ' %'" 2>/dev/null || echo "0")
+if [ "$DISK_USAGE" -gt 90 ]; then
+  echo "FAIL (${DISK_USAGE}%)"
+  echo "FATAL: Root filesystem is ${DISK_USAGE}% full. Free space before deploying."
+  exit 1
+fi
+echo "OK (${DISK_USAGE}% used)"
+
+# Check Docker daemon is running
+echo -n "Checking Docker daemon... "
+if ! ssh $SSH_OPTS "${SERVER}" "docker info >/dev/null 2>&1"; then
+  echo "FAIL"
+  echo "FATAL: Docker daemon is not running on ${SERVER}."
+  exit 1
+fi
+echo "OK"
+
+# Check available memory (warn if <1GB free)
+echo -n "Checking available memory... "
+FREE_MB=$(ssh $SSH_OPTS "${SERVER}" "free -m | awk '/^Mem:/{print \$7}'" 2>/dev/null || echo "0")
+if [ "$FREE_MB" -lt 1024 ]; then
+  echo "WARNING (${FREE_MB}MB free — builds may OOM)"
+else
+  echo "OK (${FREE_MB}MB available)"
+fi
+
+echo ""
 echo "=== Phase 1: Generate secrets (if not already set) ==="
 
 remote_env_value() {
@@ -186,8 +226,6 @@ pm2 stop all 2>/dev/null || true
 pm2 delete all 2>/dev/null || true
 
 echo "--- Stopping legacy standalone Next servers on host (if any) ---"
-pkill -f "next-server" 2>/dev/null || true
-pkill -f "next start" 2>/dev/null || true
 # Force-free port 3000 if still occupied by any non-docker process.
 PORT_3000_PIDS=$(ss -ltnp 2>/dev/null | sed -n 's/.*:3000 .*users:(("\([^"]*\)",pid=\([0-9]\+\).*/\2/p' | tr '\n' ' ')
 if [ -n "${PORT_3000_PIDS}" ]; then
@@ -332,6 +370,9 @@ curl -sf -o /dev/null -w "%{http_code}" http://localhost:3001 && echo " OK" || e
 echo -n "openclaw-gateway (:18789): "
 curl -sf -o /dev/null -w "%{http_code}" http://localhost:18789/health && echo " OK" || echo " FAIL"
 
+echo -n "recoder-studio (:3005): "
+curl -sf -o /dev/null -w "%{http_code}" http://localhost:3005/login && echo " OK" || echo " FAIL"
+
 echo -n "A2A runtime: "
 curl -sf http://localhost:5173/api/a2a/runtime | head -c 200
 echo ""
@@ -340,7 +381,34 @@ echo -n "Redis ping: "
 docker compose -f docker-compose.deploy.yml exec -T redis redis-cli -a "$(grep REDIS_PASSWORD .env | cut -d= -f2)" ping 2>/dev/null
 ENDSSH
 
-echo "=== Phase 6: Start A2A workers ==="
+echo "=== Phase 6: Ensure recoder-studio is running ==="
+
+ssh_retry 3 10 bash -s <<'ENDSSH'
+set -euo pipefail
+cd /root/recoder.xyz/recoder-studio
+
+# Ensure only one studio process is bound to 3005 and start if missing.
+if ss -ltnp 2>/dev/null | grep -q ':3005 '; then
+  echo "recoder-studio listener already present on :3005"
+else
+  echo "Starting recoder-studio on :3005..."
+  nohup env PORT=3005 pnpm start > /var/log/recoder-studio.log 2>&1 &
+fi
+
+for i in $(seq 1 30); do
+  if curl -sf -o /dev/null http://localhost:3005/login; then
+    echo "recoder-studio health check passed"
+    exit 0
+  fi
+  sleep 2
+done
+
+echo "ERROR: recoder-studio failed health check on :3005"
+tail -n 80 /var/log/recoder-studio.log || true
+exit 1
+ENDSSH
+
+echo "=== Phase 7: Start A2A workers ==="
 
 ssh_retry 3 10 bash -s <<'ENDSSH'
 set -euo pipefail
@@ -357,7 +425,7 @@ else
 fi
 ENDSSH
 
-echo "=== Phase 6b: Install A2A watchdog cron ==="
+echo "=== Phase 7b: Install A2A watchdog cron ==="
 
 ssh_retry 3 10 bash -s <<'ENDSSH'
 set -euo pipefail
@@ -372,7 +440,7 @@ else
 fi
 ENDSSH
 
-echo "=== Phase 7: A2A production smoke test ==="
+echo "=== Phase 8: A2A production smoke test ==="
 
 ssh_retry 3 10 bash -s <<'ENDSSH'
 set -euo pipefail
@@ -392,6 +460,7 @@ echo "Services:"
 echo "  docker-backend:    http://77.42.23.19:3100"
 echo "  recoder-web:       http://77.42.23.19:5173"
 echo "  recoder-frontend:  http://77.42.23.19:3001"
+echo "  recoder-studio:    http://77.42.23.19:3005"
 echo "  openclaw-gateway:  http://77.42.23.19:18789"
 echo ""
 echo "A2A Secrets (save these):"

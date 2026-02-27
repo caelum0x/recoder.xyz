@@ -308,43 +308,23 @@ groups:
   - name: database
     interval: 30s
     rules:
-      # --- Critical: PostgreSQL connection pool near exhaustion ---
-      - alert: DatabaseConnectionPoolExhausted
-        expr: pg_stat_activity_count > 80
-        for: 2m
-        labels:
-          severity: critical
-        annotations:
-          summary: "PostgreSQL connections at {{ $value }} (limit ~100)"
-          description: >-
-            The default PostgreSQL max_connections is 100. At 80+ active
-            connections, new requests will start failing with
-            "too many connections" errors.
-
-      # --- Warning: PostgreSQL connection pool growing ---
-      - alert: DatabaseConnectionPoolHigh
-        expr: pg_stat_activity_count > 50
-        for: 5m
-        labels:
-          severity: warning
-        annotations:
-          summary: "PostgreSQL connections at {{ $value }}"
-          description: >-
-            Connection count is elevated. Check for connection leaks in
-            Prisma or long-running transactions.
-
-      # --- Warning: slow queries detected ---
-      - alert: SlowQueriesDetected
-        expr: >-
-          rate(pg_stat_activity_max_tx_duration{state="active"}[5m]) > 30
-        for: 5m
-        labels:
-          severity: warning
-        annotations:
-          summary: "Long-running PostgreSQL queries detected"
-          description: >-
-            Active transactions running for more than 30 seconds.
-            This can cause lock contention and connection pool starvation.
+      # --- PostgreSQL rules (disabled: no pg_exporter deployed yet) ---
+      # TODO: Enable when pg_exporter is added to docker-compose.deploy.yml
+      # - alert: DatabaseConnectionPoolExhausted
+      #   expr: pg_stat_activity_count > 80
+      #   for: 2m
+      #   labels:
+      #     severity: critical
+      # - alert: DatabaseConnectionPoolHigh
+      #   expr: pg_stat_activity_count > 50
+      #   for: 5m
+      #   labels:
+      #     severity: warning
+      # - alert: SlowQueriesDetected
+      #   expr: rate(pg_stat_activity_max_tx_duration{state="active"}[5m]) > 30
+      #   for: 5m
+      #   labels:
+      #     severity: warning
 
       # --- Warning: Redis memory usage > 85% ---
       - alert: RedisMemoryHigh
@@ -388,115 +368,37 @@ groups:
   # 6. Authentication
   #    SLO: 99.5% device flow success, p99 < 2s
   # ──────────────────────────────────────────────
-  - name: auth
-    interval: 30s
-    rules:
-      # --- Warning: high login failure rate (brute force?) ---
-      - alert: HighAuthFailureRate
-        expr: rate(auth_login_failed_total[10m]) > 10
-        for: 5m
-        labels:
-          severity: warning
-        annotations:
-          summary: "High auth failure rate — possible brute force"
-          description: >-
-            More than 10 failed login attempts per second over the last 10
-            minutes. Check for credential stuffing or brute force attacks.
-            Consider enabling rate limiting or IP blocking.
-
-      # --- Critical: auth failure spike ---
-      - alert: AuthFailureSpike
-        expr: rate(auth_login_failed_total[5m]) > 50
-        for: 2m
-        labels:
-          severity: critical
-        annotations:
-          summary: "Auth failure spike — active attack or service failure"
-          description: >-
-            More than 50 failed logins/sec. This is either an active attack
-            or an auth service misconfiguration causing all logins to fail.
-
-      # --- Warning: CLI device flow failures ---
-      - alert: CLIDeviceFlowFailures
-        expr: >-
-          (
-            rate(cli_device_flow_errors_total[10m])
-            /
-            rate(cli_device_flow_requests_total[10m])
-          ) > 0.005
-        for: 10m
-        labels:
-          severity: warning
-        annotations:
-          summary: "CLI device flow error rate above 0.5%"
-          description: >-
-            The CLI device flow success rate SLO is 99.5%. Current failure
-            rate is {{ $value | humanizePercentage }}. Check the
-            device-flow-storage and Redis connectivity.
-
-      # --- Warning: 2FA verification failures ---
-      - alert: High2FAFailureRate
-        expr: rate(auth_2fa_failed_total[10m]) > 5
-        for: 5m
-        labels:
-          severity: warning
-        annotations:
-          summary: "Elevated 2FA failure rate"
-          description: >-
-            High 2FA verification failure rate may indicate TOTP clock
-            drift, a compromised secret, or a targeted attack.
+  # --- Auth rules (disabled: custom app metrics not yet instrumented) ---
+  # TODO: Enable when app exposes auth_login_failed_total, cli_device_flow_*,
+  #       auth_2fa_failed_total via /metrics endpoint
+  # - name: auth
+  #   interval: 30s
+  #   rules:
+  #     - alert: HighAuthFailureRate
+  #       expr: rate(auth_login_failed_total[10m]) > 10
+  #     - alert: AuthFailureSpike
+  #       expr: rate(auth_login_failed_total[5m]) > 50
+  #     - alert: CLIDeviceFlowFailures
+  #       expr: (rate(cli_device_flow_errors_total[10m]) / rate(cli_device_flow_requests_total[10m])) > 0.005
+  #     - alert: High2FAFailureRate
+  #       expr: rate(auth_2fa_failed_total[10m]) > 5
 
   # ──────────────────────────────────────────────
   # 7. Billing & Payments
   #    SLO: 99.99% webhook processing success
   # ──────────────────────────────────────────────
-  - name: billing
-    interval: 30s
-    rules:
-      # --- Critical: payment webhook processing failures ---
-      - alert: PaymentWebhookFailures
-        expr: rate(webhook_processing_errors_total[30m]) > 0
-        for: 10m
-        labels:
-          severity: critical
-        annotations:
-          summary: "Payment webhook processing failures detected"
-          description: >-
-            Webhook errors from Paddle/Dodo have been occurring for 10+
-            minutes. Users may not be receiving their subscriptions or
-            credits. The 99.99% SLO allows only 4.3 min/month of errors.
-          runbook_url: "https://docs.recoder.xyz/runbooks/payment-webhooks"
-
-      # --- Warning: webhook latency ---
-      - alert: WebhookProcessingLatency
-        expr: >-
-          histogram_quantile(0.95,
-            rate(webhook_processing_duration_seconds_bucket[5m])
-          ) > 5
-        for: 5m
-        labels:
-          severity: warning
-        annotations:
-          summary: "Webhook processing p95 latency above 5s"
-          description: >-
-            Payment webhook processing is slow. This can cause retries
-            from payment providers and duplicate transactions.
-
-      # --- Warning: no webhooks received (dead provider?) ---
-      - alert: NoWebhooksReceived
-        expr: >-
-          rate(webhook_requests_total[1h]) == 0
-          and
-          hour() >= 8 and hour() <= 22
-        for: 2h
-        labels:
-          severity: warning
-        annotations:
-          summary: "No payment webhooks received in 2 hours during business hours"
-          description: >-
-            This could indicate a misconfigured webhook URL on the payment
-            provider side, a firewall rule blocking inbound requests, or
-            a DNS resolution failure.
+  # --- Billing rules (disabled: custom webhook metrics not yet instrumented) ---
+  # TODO: Enable when app exposes webhook_processing_errors_total,
+  #       webhook_processing_duration_seconds_bucket, webhook_requests_total
+  # - name: billing
+  #   interval: 30s
+  #   rules:
+  #     - alert: PaymentWebhookFailures
+  #       expr: rate(webhook_processing_errors_total[30m]) > 0
+  #     - alert: WebhookProcessingLatency
+  #       expr: histogram_quantile(0.95, rate(webhook_processing_duration_seconds_bucket[5m])) > 5
+  #     - alert: NoWebhooksReceived
+  #       expr: rate(webhook_requests_total[1h]) == 0 and hour() >= 8 and hour() <= 22
 
   # ──────────────────────────────────────────────
   # 8. Service-Specific Rules
@@ -504,31 +406,15 @@ groups:
   - name: service_specific
     interval: 60s
     rules:
-      # --- Warning: PM2 process restarts ---
-      - alert: PM2ProcessRestarting
-        expr: >-
-          increase(pm2_restarts_total[15m]) > 3
-        for: 5m
-        labels:
-          severity: warning
-        annotations:
-          summary: "{{ $labels.job }} has restarted {{ $value }} times in 15 minutes"
-          description: >-
-            Frequent restarts indicate a crash loop. Check PM2 logs with
-            `pm2 logs {{ $labels.name }}`.
+      # --- PM2 rules (disabled: services run in Docker, not PM2) ---
+      # TODO: Enable if PM2 processes are re-introduced
+      # - alert: PM2ProcessRestarting
+      #   expr: increase(pm2_restarts_total[15m]) > 3
 
-      # --- Warning: Docker container restart ---
-      - alert: DockerContainerRestarting
-        expr: >-
-          increase(container_restart_count[15m]) > 2
-        for: 5m
-        labels:
-          severity: warning
-        annotations:
-          summary: "Container {{ $labels.name }} restarting frequently"
-          description: >-
-            Docker container is in a restart loop. Check with
-            `docker logs {{ $labels.name }}`.
+      # --- Docker container restart (disabled: no cAdvisor deployed) ---
+      # TODO: Enable when cAdvisor or Docker metrics exporter is added
+      # - alert: DockerContainerRestarting
+      #   expr: increase(container_restart_count[15m]) > 2
 
       # --- Warning: OpenClaw gateway errors ---
       - alert: OpenClawGatewayErrors
@@ -546,69 +432,20 @@ groups:
   # ──────────────────────────────────────────────
   # 9. A2A Connector SLO Alerts
   # ──────────────────────────────────────────────
-  - name: a2a_connector_slo
-    interval: 60s
-    rules:
-      - alert: A2AConnectorSuccessRateLow
-        expr: >-
-          recoder_a2a_connector_success_rate < 0.95
-          and
-          recoder_a2a_connector_executions_total >= 20
-        for: 10m
-        labels:
-          severity: warning
-          service: a2a
-        annotations:
-          summary: "A2A connector success rate below 95%"
-          description: >-
-            A2A connector success rate has dropped under 95% with at least
-            20 executions observed. Investigate connector health and recent
-            restart/circuit-open activity.
-          runbook_url: "https://docs.recoder.xyz/runbooks/a2a-connector-incident"
-
-      - alert: A2AConnectorRetryRateHigh
-        expr: >-
-          recoder_a2a_connector_retry_rate > 0.20
-          and
-          recoder_a2a_connector_executions_total >= 20
-        for: 10m
-        labels:
-          severity: warning
-          service: a2a
-        annotations:
-          summary: "A2A connector retry rate above 20%"
-          description: >-
-            Connector restarts are high relative to executions, indicating
-            instability or recurring connector runtime faults.
-          runbook_url: "https://docs.recoder.xyz/runbooks/a2a-connector-incident"
-
-      - alert: A2ACircuitOpenSpike
-        expr: >-
-          delta(recoder_a2a_connector_circuit_open_total[15m]) >= 3
-        for: 5m
-        labels:
-          severity: critical
-          service: a2a
-        annotations:
-          summary: "A2A connector circuit-open spike detected"
-          description: >-
-            Connector circuit-open transitions increased by at least 3 in
-            15 minutes, indicating persistent downstream connector errors.
-          runbook_url: "https://docs.recoder.xyz/runbooks/a2a-connector-incident"
-
-      - alert: A2AApprovalTurnaroundHigh
-        expr: >-
-          recoder_a2a_approval_turnaround_p95_ms > 300000
-        for: 15m
-        labels:
-          severity: warning
-          service: a2a
-        annotations:
-          summary: "A2A approval p95 turnaround above 5 minutes"
-          description: >-
-            Approval latency is elevated. Operator approval flows are
-            delaying A2A task completion and can impact handoff reliability.
-          runbook_url: "https://docs.recoder.xyz/runbooks/a2a-connector-incident"
+  # --- A2A connector SLO rules (disabled: custom metrics not yet instrumented) ---
+  # TODO: Enable when docker-backend exposes recoder_a2a_connector_* and
+  #       recoder_a2a_approval_turnaround_p95_ms via /metrics endpoint
+  # - name: a2a_connector_slo
+  #   interval: 60s
+  #   rules:
+  #     - alert: A2AConnectorSuccessRateLow
+  #       expr: recoder_a2a_connector_success_rate < 0.95 and recoder_a2a_connector_executions_total >= 20
+  #     - alert: A2AConnectorRetryRateHigh
+  #       expr: recoder_a2a_connector_retry_rate > 0.20 and recoder_a2a_connector_executions_total >= 20
+  #     - alert: A2ACircuitOpenSpike
+  #       expr: delta(recoder_a2a_connector_circuit_open_total[15m]) >= 3
+  #     - alert: A2AApprovalTurnaroundHigh
+  #       expr: recoder_a2a_approval_turnaround_p95_ms > 300000
 
   # ──────────────────────────────────────────────
   # 10. SLO Burn Rate Alerts (Multi-Window)
@@ -647,7 +484,7 @@ groups:
               /
               rate(http_requests_total[1h])
             )
-          ) > (1.0 * 0.001)
+          ) > (3.0 * 0.001)
         for: 30m
         labels:
           severity: warning
