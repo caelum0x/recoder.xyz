@@ -399,10 +399,8 @@ async function main() {
   console.log('');
   console.log('🎉 Database seeded successfully!');
   console.log('');
-  console.log('Test Users:');
-  console.log('  Free:       free@recoder.xyz / password123');
-  console.log('  Pro:        pro@recoder.xyz / password123');
-  console.log('  Enterprise: enterprise@recoder.xyz / password123');
+  console.log('Test Users: free@recoder.xyz, pro@recoder.xyz, enterprise@recoder.xyz');
+  console.log('Passwords are set via hashPassword() — see seed script source for details.');
   console.log('');
 }
 

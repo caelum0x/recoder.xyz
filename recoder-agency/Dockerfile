@@ -24,7 +24,8 @@ FROM base AS builder
 COPY --from=sdk-builder /app ./
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV NODE_ENV=production
-# Placeholder env vars needed at build time (overridden at runtime)
+# BUILD-TIME ONLY: These placeholders satisfy Next.js static analysis during build.
+# They are NOT used at runtime — real values come from container env vars.
 ENV DATABASE_URL=postgresql://placeholder:placeholder@localhost:5432/placeholder
 ENV NEXT_PUBLIC_SUPABASE_URL=https://placeholder.supabase.co
 ENV NEXT_PUBLIC_SUPABASE_ANON_KEY=placeholder

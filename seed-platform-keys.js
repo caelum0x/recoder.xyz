@@ -13,15 +13,26 @@
 const { Client } = require('pg');
 const crypto = require('crypto');
 
-// User's OpenRouter API key from .env
-const OPENROUTER_API_KEY = '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';
+// User's OpenRouter API key — must be set in environment
+const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
+if (!OPENROUTER_API_KEY) {
+  console.error('❌ OPENROUTER_API_KEY environment variable is required');
+  process.exit(1);
+}
 
 // Database connection from environment
-const DATABASE_URL = process.env.DATABASE_URL || 'postgresql://neondb_owner:npg_giGdQ9T1FsUC@ep-restless-bird-adezgw23-pooler.c-2.us-east-1.aws.neon.tech/neondb?sslmode=require';
+const DATABASE_URL = process.env.DATABASE_URL;
+if (!DATABASE_URL) {
+  console.error('❌ DATABASE_URL environment variable is required');
+  process.exit(1);
+}
 
 // Encryption function (same as used in user-service)
 function encryptApiKey(apiKey) {
-  const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || 'recoder_encryption_key_prod_2025_32c';
+  const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY;
+  if (!ENCRYPTION_KEY) {
+    throw new Error('ENCRYPTION_KEY environment variable is required');
+  }
   const algorithm = 'aes-256-gcm';
   const key = crypto.scryptSync(ENCRYPTION_KEY, 'salt', 32);
   const iv = crypto.randomBytes(16);
