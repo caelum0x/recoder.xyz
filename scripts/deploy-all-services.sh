@@ -189,6 +189,22 @@ exec > >(tee -a "$LOG") 2>&1
 
 cd /root/recoder.xyz
 
+# Validate required env files exist before building
+echo "--- Validating required env files ---"
+MISSING_ENV=0
+for envfile in app/.env.production recoder-web/.env docker-backend/.env recoder-frontend/.env.local; do
+  if [ ! -f "$envfile" ]; then
+    echo "FATAL: Missing required env file: $envfile"
+    MISSING_ENV=1
+  else
+    echo "  OK: $envfile"
+  fi
+done
+if [ "$MISSING_ENV" -eq 1 ]; then
+  echo "Cannot proceed — create the missing env file(s) on the server."
+  exit 1
+fi
+
 # Prevent concurrent deploy runs from racing on container names.
 if command -v flock >/dev/null 2>&1; then
   exec 9>/root/.deploy-build.lock
