@@ -62,7 +62,8 @@ Last updated: 2026-02-27
 - ✅ `isDebuggable=false` in release
 
 **iOS (OpenClaw)** — 4/10 → 6/10
-- ✅ CI workflow: `.github/workflows/ios-ci.yml` (XcodeGen → build → test on simulator)
+- ✅ CI workflow template present: `.github/workflows/ios-ci.yml` (manual-only `workflow_dispatch`, job disabled via `if: false` due billing constraint)
+- ✅ Active verification path: local gate via `bash scripts/verify-openclaw-ios-local.sh`
 - ✅ Deployment target: lowered from 18.0 → 16.0 in project.yml
 
 **macOS (OpenClaw)** — 8/10 (no changes needed, already production-ready)
@@ -111,6 +112,14 @@ Quick checklist (explicit):
 - Run one full Desktop release dry-run and publish release evidence
 - Run one full Mobile end-to-end release dry-run and publish release evidence
 - Verification: `bash scripts/verify-native-release-closeout.sh [desktop_tag] [mobile_ref]`
+
+### Deferred (Budget-Constrained)
+- GitHub Actions billing-dependent release execution — Deferred by owner due budget constraint (2026-02-27).
+- Current blocker evidence:
+  - Mobile CI run `22490203332` failed before job start with billing/spending-limit annotation.
+  - Desktop Release run `22490262473` failed before job start with billing/spending-limit annotation.
+- Owner: Arhan Subasi
+- Revisit target: 2026-03-31
 
 ## Done criteria
 1. Credential rotation complete and documented.
