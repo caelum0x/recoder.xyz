@@ -103,6 +103,10 @@ ENV PORT=${APP_PORT}
 
 ENV HOSTNAME="0.0.0.0"
 ENV NODE_OPTIONS="--max-old-space-size=1536"
+
+HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
+  CMD node -e "fetch('http://localhost:${PORT}').then(r => process.exit(r.status < 400 ? 0 : 1)).catch(() => process.exit(1))"
+
 # Next.js standalone output in a monorepo creates server.js at recoder-frontend/server.js
 # relative to the standalone root (which we copied to /app)
 CMD ["node", "recoder-frontend/server.js"]
