@@ -1,0 +1,660 @@
+# Prometheus Alerting Rules for Recoder Platform
+# Deployed alongside prometheus.yml on monitor.recoder.xyz
+# Server: Hetzner 8 vCPU, 16GB RAM (77.42.23.19)
+#
+# Services monitored (10):
+#   Docker: recoder-app(:3000), recoder-frontend(:3001), docker-backend(:3100),
+#           recoder-web(:5173), openclaw-gateway(:18789), redis(:6379)
+#   PM2 (when deployed): recoder-pm(:3004), recoder-studio(:3005), recoder-agency(:3007)
+#   Infra (when deployed): node-exporter(:9100), redis-exporter(:9121)
+#
+# SLO reference: docs/SLO.md
+
+groups:
+  # ──────────────────────────────────────────────
+  # 1. Service Availability
+  #    SLO: 99.9% uptime (43.2 min/month budget)
+  # ──────────────────────────────────────────────
+  - name: availability
+    interval: 30s
+    rules:
+      # --- Critical: any service target unreachable ---
+      - alert: ServiceDown
+        expr: up == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "{{ $labels.job }} is DOWN"
+          description: >-
+            Target {{ $labels.instance }} for job {{ $labels.job }} has been
+            unreachable for more than 2 minutes. This counts against the 99.9%
+            availability SLO (43.2 min/month error budget).
+          runbook_url: "https://docs.recoder.xyz/runbooks/service-down"
+
+      # --- Warning: service flapping (up/down within window) ---
+      - alert: ServiceFlapping
+        expr: changes(up[15m]) > 3
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.job }} is flapping"
+          description: >-
+            Target {{ $labels.instance }} changed state more than 3 times
+            in the last 15 minutes. Likely a crash loop or resource starvation.
+
+      # --- Critical: multiple services down simultaneously ---
+      - alert: MultipleServicesDown
+        expr: count(up == 0) > 2
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "{{ $value }} services are simultaneously DOWN"
+          description: >-
+            More than 2 services are unreachable. This may indicate a host-level
+            failure, network partition, or infrastructure outage.
+
+  # ──────────────────────────────────────────────
+  # 2. HTTP Error Rate
+  #    SLO: < 1% 5xx error rate
+  # ──────────────────────────────────────────────
+  - name: error_rate
+    interval: 30s
+    rules:
+      # --- Warning: error rate > 1% ---
+      - alert: HighErrorRate
+        expr: >-
+          (
+            rate(http_requests_total{status=~"5.."}[5m])
+            /
+            rate(http_requests_total[5m])
+          ) > 0.01
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Error rate above 1% on {{ $labels.job }}"
+          description: >-
+            {{ $labels.job }} is returning {{ $value | humanizePercentage }}
+            5xx responses over the last 5 minutes. SLO target is < 1%.
+
+      # --- Critical: error rate > 5% ---
+      - alert: CriticalErrorRate
+        expr: >-
+          (
+            rate(http_requests_total{status=~"5.."}[5m])
+            /
+            rate(http_requests_total[5m])
+          ) > 0.05
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Error rate above 5% on {{ $labels.job }} — CRITICAL"
+          description: >-
+            {{ $labels.job }} is returning {{ $value | humanizePercentage }}
+            5xx responses. This will burn through the monthly error budget
+            in under 10 hours at this rate.
+
+      # --- Warning: elevated 4xx may indicate client-side breakage ---
+      - alert: High4xxRate
+        expr: >-
+          (
+            rate(http_requests_total{status=~"4.."}[5m])
+            /
+            rate(http_requests_total[5m])
+          ) > 0.15
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "4xx rate above 15% on {{ $labels.job }}"
+          description: >-
+            High client error rate may indicate a broken frontend deployment,
+            expired auth tokens, or API contract change.
+
+  # ──────────────────────────────────────────────
+  # 3. Latency
+  #    SLO: p95 < 500ms (API), p99 < 2s (auth)
+  # ──────────────────────────────────────────────
+  - name: latency
+    interval: 30s
+    rules:
+      # --- Warning: p95 latency > 500ms ---
+      - alert: HighLatencyP95
+        expr: >-
+          histogram_quantile(0.95,
+            rate(http_request_duration_seconds_bucket[5m])
+          ) > 0.5
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "p95 latency above 500ms on {{ $labels.job }}"
+          description: >-
+            The 95th percentile response time for {{ $labels.job }} is
+            {{ $value | humanizeDuration }}. SLO target is < 500ms.
+
+      # --- Critical: p95 latency > 2s ---
+      - alert: CriticalLatencyP95
+        expr: >-
+          histogram_quantile(0.95,
+            rate(http_request_duration_seconds_bucket[5m])
+          ) > 2
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "p95 latency above 2s on {{ $labels.job }} — CRITICAL"
+          description: >-
+            The 95th percentile response time for {{ $labels.job }} is
+            {{ $value | humanizeDuration }}. Users are experiencing severe
+            degradation.
+
+      # --- Warning: p99 auth latency > 2s ---
+      - alert: AuthLatencyHigh
+        expr: >-
+          histogram_quantile(0.99,
+            rate(http_request_duration_seconds_bucket{job=~"recoder-app|recoder-backend"}[5m])
+          ) > 2
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Auth p99 latency above 2s"
+          description: >-
+            Auth-serving endpoints are responding slowly. CLI device flow
+            and login may be timing out.
+
+      # --- Warning: health endpoint slow (should be < 200ms) ---
+      - alert: HealthEndpointSlow
+        expr: >-
+          probe_duration_seconds > 0.2
+          or
+          histogram_quantile(0.95,
+            rate(http_request_duration_seconds_bucket{handler="/api/health"}[5m])
+          ) > 0.2
+        for: 3m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Health endpoint response > 200ms on {{ $labels.job }}"
+          description: >-
+            Health checks should complete in under 200ms. Slow health checks
+            indicate resource starvation or downstream dependency issues.
+
+  # ──────────────────────────────────────────────
+  # 4. Infrastructure (requires node_exporter)
+  #    Host: Hetzner 8 vCPU, 16GB RAM
+  # ──────────────────────────────────────────────
+  - name: infrastructure
+    interval: 30s
+    rules:
+      # --- Warning: memory usage > 90% ---
+      - alert: HighMemoryUsage
+        expr: >-
+          (
+            node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes
+          ) / node_memory_MemTotal_bytes > 0.9
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Memory usage above 90% on {{ $labels.instance }}"
+          description: >-
+            {{ $value | humanizePercentage }} of memory is in use. On a 16GB
+            server this leaves under 1.6GB free. Services may start getting
+            OOM-killed.
+
+      # --- Critical: memory usage > 95% ---
+      - alert: CriticalMemoryUsage
+        expr: >-
+          (
+            node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes
+          ) / node_memory_MemTotal_bytes > 0.95
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Memory usage above 95% — OOM risk"
+          description: >-
+            Under 800MB remaining on a 16GB host. OOM killer may terminate
+            services at any moment.
+
+      # --- Critical: disk usage > 85% ---
+      - alert: HighDiskUsage
+        expr: >-
+          (
+            node_filesystem_size_bytes{mountpoint="/"}
+            - node_filesystem_avail_bytes{mountpoint="/"}
+          ) / node_filesystem_size_bytes{mountpoint="/"} > 0.85
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Disk usage above 85% on {{ $labels.instance }}"
+          description: >-
+            Root filesystem is {{ $value | humanizePercentage }} full. The
+            disk-alert.sh auto-cleanup triggers at 90%. Investigate large
+            log files or Docker images.
+
+      # --- Warning: disk predicted full within 24h ---
+      - alert: DiskWillFillIn24h
+        expr: >-
+          predict_linear(
+            node_filesystem_avail_bytes{mountpoint="/"}[6h], 24*3600
+          ) < 0
+        for: 30m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Disk predicted to fill within 24 hours"
+          description: >-
+            Based on the last 6 hours of disk consumption, the root
+            filesystem will be completely full within 24 hours.
+
+      # --- Warning: CPU usage > 85% sustained ---
+      - alert: HighCPUUsage
+        expr: >-
+          100 - (
+            avg by(instance) (
+              rate(node_cpu_seconds_total{mode="idle"}[5m])
+            ) * 100
+          ) > 85
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "CPU usage above 85% on {{ $labels.instance }}"
+          description: >-
+            Sustained high CPU on an 8 vCPU server. Check for runaway
+            processes with `htop` or PM2 process restarts.
+
+      # --- Critical: CPU usage > 95% sustained ---
+      - alert: CriticalCPUUsage
+        expr: >-
+          100 - (
+            avg by(instance) (
+              rate(node_cpu_seconds_total{mode="idle"}[5m])
+            ) * 100
+          ) > 95
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "CPU usage above 95% — host may be unresponsive"
+          description: >-
+            Nearly all CPU capacity is consumed. SSH may be sluggish.
+            Consider killing non-essential processes or scaling up.
+
+      # --- Warning: high open file descriptors ---
+      - alert: HighFileDescriptorUsage
+        expr: >-
+          process_open_fds / process_max_fds > 0.8
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "File descriptor usage above 80% on {{ $labels.job }}"
+          description: >-
+            Process is approaching its file descriptor limit. This can cause
+            connection failures and EMFILE errors.
+
+  # ──────────────────────────────────────────────
+  # 5. Database (PostgreSQL + Redis)
+  # ──────────────────────────────────────────────
+  - name: database
+    interval: 30s
+    rules:
+      # --- Critical: PostgreSQL connection pool near exhaustion ---
+      - alert: DatabaseConnectionPoolExhausted
+        expr: pg_stat_activity_count > 80
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "PostgreSQL connections at {{ $value }} (limit ~100)"
+          description: >-
+            The default PostgreSQL max_connections is 100. At 80+ active
+            connections, new requests will start failing with
+            "too many connections" errors.
+
+      # --- Warning: PostgreSQL connection pool growing ---
+      - alert: DatabaseConnectionPoolHigh
+        expr: pg_stat_activity_count > 50
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "PostgreSQL connections at {{ $value }}"
+          description: >-
+            Connection count is elevated. Check for connection leaks in
+            Prisma or long-running transactions.
+
+      # --- Warning: slow queries detected ---
+      - alert: SlowQueriesDetected
+        expr: >-
+          rate(pg_stat_activity_max_tx_duration{state="active"}[5m]) > 30
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Long-running PostgreSQL queries detected"
+          description: >-
+            Active transactions running for more than 30 seconds.
+            This can cause lock contention and connection pool starvation.
+
+      # --- Warning: Redis memory usage > 85% ---
+      - alert: RedisMemoryHigh
+        expr: redis_memory_used_bytes / redis_memory_max_bytes > 0.85
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Redis memory at {{ $value | humanizePercentage }} of max"
+          description: >-
+            Redis is approaching its memory limit. Eviction policies will
+            start dropping keys. Check for large session caches or
+            device-flow tokens that are not expiring.
+
+      # --- Critical: Redis memory usage > 95% ---
+      - alert: RedisMemoryCritical
+        expr: redis_memory_used_bytes / redis_memory_max_bytes > 0.95
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Redis memory above 95% — evictions imminent"
+          description: >-
+            Redis will begin aggressive key eviction or reject writes
+            depending on the eviction policy. Session and cache data
+            will be lost.
+
+      # --- Warning: Redis not reachable ---
+      - alert: RedisDown
+        expr: redis_up == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Redis is DOWN"
+          description: >-
+            Redis is unreachable. This affects session storage, device
+            flow tokens, rate limiting, and caching across all services.
+
+  # ──────────────────────────────────────────────
+  # 6. Authentication
+  #    SLO: 99.5% device flow success, p99 < 2s
+  # ──────────────────────────────────────────────
+  - name: auth
+    interval: 30s
+    rules:
+      # --- Warning: high login failure rate (brute force?) ---
+      - alert: HighAuthFailureRate
+        expr: rate(auth_login_failed_total[10m]) > 10
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High auth failure rate — possible brute force"
+          description: >-
+            More than 10 failed login attempts per second over the last 10
+            minutes. Check for credential stuffing or brute force attacks.
+            Consider enabling rate limiting or IP blocking.
+
+      # --- Critical: auth failure spike ---
+      - alert: AuthFailureSpike
+        expr: rate(auth_login_failed_total[5m]) > 50
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Auth failure spike — active attack or service failure"
+          description: >-
+            More than 50 failed logins/sec. This is either an active attack
+            or an auth service misconfiguration causing all logins to fail.
+
+      # --- Warning: CLI device flow failures ---
+      - alert: CLIDeviceFlowFailures
+        expr: >-
+          (
+            rate(cli_device_flow_errors_total[10m])
+            /
+            rate(cli_device_flow_requests_total[10m])
+          ) > 0.005
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "CLI device flow error rate above 0.5%"
+          description: >-
+            The CLI device flow success rate SLO is 99.5%. Current failure
+            rate is {{ $value | humanizePercentage }}. Check the
+            device-flow-storage and Redis connectivity.
+
+      # --- Warning: 2FA verification failures ---
+      - alert: High2FAFailureRate
+        expr: rate(auth_2fa_failed_total[10m]) > 5
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Elevated 2FA failure rate"
+          description: >-
+            High 2FA verification failure rate may indicate TOTP clock
+            drift, a compromised secret, or a targeted attack.
+
+  # ──────────────────────────────────────────────
+  # 7. Billing & Payments
+  #    SLO: 99.99% webhook processing success
+  # ──────────────────────────────────────────────
+  - name: billing
+    interval: 30s
+    rules:
+      # --- Critical: payment webhook processing failures ---
+      - alert: PaymentWebhookFailures
+        expr: rate(webhook_processing_errors_total[30m]) > 0
+        for: 10m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Payment webhook processing failures detected"
+          description: >-
+            Webhook errors from Paddle/Dodo have been occurring for 10+
+            minutes. Users may not be receiving their subscriptions or
+            credits. The 99.99% SLO allows only 4.3 min/month of errors.
+          runbook_url: "https://docs.recoder.xyz/runbooks/payment-webhooks"
+
+      # --- Warning: webhook latency ---
+      - alert: WebhookProcessingLatency
+        expr: >-
+          histogram_quantile(0.95,
+            rate(webhook_processing_duration_seconds_bucket[5m])
+          ) > 5
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Webhook processing p95 latency above 5s"
+          description: >-
+            Payment webhook processing is slow. This can cause retries
+            from payment providers and duplicate transactions.
+
+      # --- Warning: no webhooks received (dead provider?) ---
+      - alert: NoWebhooksReceived
+        expr: >-
+          rate(webhook_requests_total[1h]) == 0
+          and
+          hour() >= 8 and hour() <= 22
+        for: 2h
+        labels:
+          severity: warning
+        annotations:
+          summary: "No payment webhooks received in 2 hours during business hours"
+          description: >-
+            This could indicate a misconfigured webhook URL on the payment
+            provider side, a firewall rule blocking inbound requests, or
+            a DNS resolution failure.
+
+  # ──────────────────────────────────────────────
+  # 8. Service-Specific Rules
+  # ──────────────────────────────────────────────
+  - name: service_specific
+    interval: 60s
+    rules:
+      # --- Warning: PM2 process restarts ---
+      - alert: PM2ProcessRestarting
+        expr: >-
+          increase(pm2_restarts_total[15m]) > 3
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.job }} has restarted {{ $value }} times in 15 minutes"
+          description: >-
+            Frequent restarts indicate a crash loop. Check PM2 logs with
+            `pm2 logs {{ $labels.name }}`.
+
+      # --- Warning: Docker container restart ---
+      - alert: DockerContainerRestarting
+        expr: >-
+          increase(container_restart_count[15m]) > 2
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Container {{ $labels.name }} restarting frequently"
+          description: >-
+            Docker container is in a restart loop. Check with
+            `docker logs {{ $labels.name }}`.
+
+      # --- Warning: OpenClaw gateway errors ---
+      - alert: OpenClawGatewayErrors
+        expr: >-
+          rate(http_requests_total{job="openclaw-gateway", status=~"5.."}[5m]) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "OpenClaw gateway returning 5xx errors"
+          description: >-
+            The AI gateway is experiencing errors. This affects all AI
+            model routing and may block agent execution.
+
+  # ──────────────────────────────────────────────
+  # 9. A2A Connector SLO Alerts
+  # ──────────────────────────────────────────────
+  - name: a2a_connector_slo
+    interval: 60s
+    rules:
+      - alert: A2AConnectorSuccessRateLow
+        expr: >-
+          recoder_a2a_connector_success_rate < 0.95
+          and
+          recoder_a2a_connector_executions_total >= 20
+        for: 10m
+        labels:
+          severity: warning
+          service: a2a
+        annotations:
+          summary: "A2A connector success rate below 95%"
+          description: >-
+            A2A connector success rate has dropped under 95% with at least
+            20 executions observed. Investigate connector health and recent
+            restart/circuit-open activity.
+          runbook_url: "https://docs.recoder.xyz/runbooks/a2a-connector-incident"
+
+      - alert: A2AConnectorRetryRateHigh
+        expr: >-
+          recoder_a2a_connector_retry_rate > 0.20
+          and
+          recoder_a2a_connector_executions_total >= 20
+        for: 10m
+        labels:
+          severity: warning
+          service: a2a
+        annotations:
+          summary: "A2A connector retry rate above 20%"
+          description: >-
+            Connector restarts are high relative to executions, indicating
+            instability or recurring connector runtime faults.
+          runbook_url: "https://docs.recoder.xyz/runbooks/a2a-connector-incident"
+
+      - alert: A2ACircuitOpenSpike
+        expr: >-
+          delta(recoder_a2a_connector_circuit_open_total[15m]) >= 3
+        for: 5m
+        labels:
+          severity: critical
+          service: a2a
+        annotations:
+          summary: "A2A connector circuit-open spike detected"
+          description: >-
+            Connector circuit-open transitions increased by at least 3 in
+            15 minutes, indicating persistent downstream connector errors.
+          runbook_url: "https://docs.recoder.xyz/runbooks/a2a-connector-incident"
+
+      - alert: A2AApprovalTurnaroundHigh
+        expr: >-
+          recoder_a2a_approval_turnaround_p95_ms > 300000
+        for: 15m
+        labels:
+          severity: warning
+          service: a2a
+        annotations:
+          summary: "A2A approval p95 turnaround above 5 minutes"
+          description: >-
+            Approval latency is elevated. Operator approval flows are
+            delaying A2A task completion and can impact handoff reliability.
+          runbook_url: "https://docs.recoder.xyz/runbooks/a2a-connector-incident"
+
+  # ──────────────────────────────────────────────
+  # 10. SLO Burn Rate Alerts (Multi-Window)
+  #    Uses the Google SRE "multi-window, multi-burn-rate" approach
+  # ──────────────────────────────────────────────
+  - name: slo_burn_rate
+    interval: 60s
+    rules:
+      # --- Page: fast burn (will exhaust 30-day budget in 2 hours) ---
+      - alert: SLOBudgetFastBurn
+        expr: >-
+          (
+            1 - (
+              rate(http_requests_total{status=~"2..|3.."}[5m])
+              /
+              rate(http_requests_total[5m])
+            )
+          ) > (14.4 * 0.001)
+        for: 2m
+        labels:
+          severity: critical
+          alert_type: slo_burn
+        annotations:
+          summary: "Fast SLO burn on {{ $labels.job }} — budget exhausts in ~2h"
+          description: >-
+            Error rate is 14.4x the SLO burn rate (99.9% target). At this
+            rate, the entire 30-day error budget will be consumed in roughly
+            2 hours. Immediate action required.
+
+      # --- Ticket: slow burn (will exhaust 30-day budget in 3 days) ---
+      - alert: SLOBudgetSlowBurn
+        expr: >-
+          (
+            1 - (
+              rate(http_requests_total{status=~"2..|3.."}[1h])
+              /
+              rate(http_requests_total[1h])
+            )
+          ) > (1.0 * 0.001)
+        for: 30m
+        labels:
+          severity: warning
+          alert_type: slo_burn
+        annotations:
+          summary: "Slow SLO burn on {{ $labels.job }} — budget exhausts in ~10d"
+          description: >-
+            Error rate is consuming the 99.9% SLO error budget at a rate
+            that will exhaust it within the month. Investigate and resolve
+            before the budget is depleted.
