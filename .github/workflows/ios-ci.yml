@@ -22,7 +22,7 @@ concurrency:
 jobs:
   build-and-test:
     name: Build & Test (iOS)
-    runs-on: macos-15
+    runs-on: macos-latest
     defaults:
       run:
         working-directory: openclaw/apps/ios
@@ -35,24 +35,48 @@ jobs:
       - name: Generate Xcode project
         run: xcodegen generate
 
+      - name: Select available simulator destination
+        run: |
+          set -euo pipefail
+          DEST="$(xcrun simctl list devices available | grep -E 'iPhone' | head -n 1 | sed -E 's/^[[:space:]]*([^()]+) .*/\1/' | sed 's/[[:space:]]*$//')"
+          if [ -z "${DEST}" ]; then
+            echo "No available iPhone simulator found on runner" >&2
+            xcrun simctl list devices available || true
+            exit 1
+          fi
+          echo "IOS_DESTINATION=platform=iOS Simulator,name=${DEST}" >> "$GITHUB_ENV"
+          echo "Using simulator destination: ${DEST}"
+
       - name: Build (no signing)
         run: |
           xcodebuild build \
             -project OpenClaw.xcodeproj \
             -scheme OpenClaw \
-            -destination 'platform=iOS Simulator,name=iPhone 16' \
+            -destination "${IOS_DESTINATION}" \
             CODE_SIGN_IDENTITY="" \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_ALLOWED=NO \
-            | xcpretty || true
+            | xcpretty || xcodebuild build \
+              -project OpenClaw.xcodeproj \
+              -scheme OpenClaw \
+              -destination "${IOS_DESTINATION}" \
+              CODE_SIGN_IDENTITY="" \
+              CODE_SIGNING_REQUIRED=NO \
+              CODE_SIGNING_ALLOWED=NO
 
       - name: Run tests
         run: |
           xcodebuild test \
             -project OpenClaw.xcodeproj \
             -scheme OpenClaw \
-            -destination 'platform=iOS Simulator,name=iPhone 16' \
+            -destination "${IOS_DESTINATION}" \
             CODE_SIGN_IDENTITY="" \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_ALLOWED=NO \
-            | xcpretty || true
+            | xcpretty || xcodebuild test \
+              -project OpenClaw.xcodeproj \
+              -scheme OpenClaw \
+              -destination "${IOS_DESTINATION}" \
+              CODE_SIGN_IDENTITY="" \
+              CODE_SIGNING_REQUIRED=NO \
+              CODE_SIGNING_ALLOWED=NO
