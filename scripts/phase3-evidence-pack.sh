@@ -25,9 +25,38 @@ src_files=(
   "$PHASE3_DIR/$run_id-scorecard.json"
 )
 
+optional_phase3_files=(
+  "$PHASE3_DIR/$run_id-connectors-support.md"
+  "$PHASE3_DIR/$run_id-connectors-support.json"
+)
+
+for f in "${optional_phase3_files[@]}"; do
+  if [[ -f "$f" ]]; then
+    src_files+=("$f")
+  fi
+done
+
 for f in "${src_files[@]}"; do
   [[ -f "$f" ]] || { echo "Missing required phase3 artifact: $f" >&2; exit 1; }
 done
+
+# Keep Tier-1 support ledger in sync with latest gate artifact.
+bash "$REPO_ROOT/scripts/p15-tier1-status-autopublish.sh" publish
+src_files+=("$REPO_ROOT/SUPPORTED_CONNECTORS.md")
+
+latest_p15_summary_md="$(ls -1t "$REPO_ROOT"/logs/p15-tier1-status/*-summary.md 2>/dev/null | head -n1 || true)"
+latest_p15_summary_json="$(ls -1t "$REPO_ROOT"/logs/p15-tier1-status/*-summary.json 2>/dev/null | head -n1 || true)"
+latest_p15_log="$(ls -1t "$REPO_ROOT"/logs/p15-tier1-status/*.log 2>/dev/null | head -n1 || true)"
+
+if [[ -n "$latest_p15_summary_md" && -f "$latest_p15_summary_md" ]]; then
+  src_files+=("$latest_p15_summary_md")
+fi
+if [[ -n "$latest_p15_summary_json" && -f "$latest_p15_summary_json" ]]; then
+  src_files+=("$latest_p15_summary_json")
+fi
+if [[ -n "$latest_p15_log" && -f "$latest_p15_log" ]]; then
+  src_files+=("$latest_p15_log")
+fi
 
 bundle_dir="$OUT_ROOT/$run_id"
 mkdir -p "$bundle_dir"
@@ -40,7 +69,7 @@ latest_release_summary="$(ls -1t "$RELEASE_DIR"/*-summary.json 2>/dev/null | hea
 if [[ -n "$latest_release_summary" && -f "$latest_release_summary" ]]; then
   latest_release_run="$(basename "$latest_release_summary")"
   latest_release_run="${latest_release_run%-summary.json}"
-  for ext in log summary.md summary.json; do
+  for ext in log summary.md summary.json connectors-support.md connectors-support.json; do
     cand="$RELEASE_DIR/$latest_release_run.$ext"
     if [[ -f "$cand" ]]; then
       cp "$cand" "$bundle_dir/release-evidence-$latest_release_run.$ext"
