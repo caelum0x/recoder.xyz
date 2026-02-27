@@ -2,18 +2,6 @@ name: OpenClaw iOS CI
 
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths:
-      - 'openclaw/apps/ios/**'
-      - 'openclaw/apps/shared/**'
-      - '.github/workflows/ios-ci.yml'
-  pull_request:
-    branches: [main]
-    paths:
-      - 'openclaw/apps/ios/**'
-      - 'openclaw/apps/shared/**'
-      - '.github/workflows/ios-ci.yml'
 
 concurrency:
   group: ios-ci-${{ github.ref }}
@@ -22,6 +10,10 @@ concurrency:
 jobs:
   build-and-test:
     name: Build & Test (iOS)
+    # Deferred: GitHub-hosted macOS billing is unavailable for this repo.
+    # Local verification remains the active gate:
+    #   bash scripts/verify-openclaw-ios-local.sh
+    if: false
     runs-on: self-hosted
     defaults:
       run:
