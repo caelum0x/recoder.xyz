@@ -1,4 +1,3 @@
-# syntax=docker.io/docker/dockerfile:1
 FROM node:22-slim AS base
 
 # ---- Deps Stage ----
@@ -25,11 +24,13 @@ RUN for dir in production-engine docker-backend recoder-web recoder-chat app app
       mkdir -p "$dir" && echo '{"name":"stub-'$(echo $dir | tr / -)'","version":"0.0.0","private":true}' > "$dir/package.json"; \
     done
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN apt-get -o Acquire::Retries=5 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 update && \
+    apt-get -o Acquire::Retries=5 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 install -y --no-install-recommends \
     python3 \
     make \
     g++ \
     build-essential \
+    openssl \
     pkg-config \
     libcairo2-dev \
     libpango1.0-dev \
@@ -40,11 +41,17 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Install only the frontend workspace project (and its deps) using pnpm.
 RUN corepack enable pnpm && pnpm install --filter ./recoder-frontend... ${PNPM_LOCKFILE_MODE}
+RUN AUTH_DATABASE_URL="postgresql://build:build@localhost:5432/build" pnpm install --filter @recoder/auth... --no-frozen-lockfile
+RUN AUTH_DATABASE_URL="postgresql://build:build@localhost:5432/build" pnpm --filter @recoder/auth run build
 
 
 # ---- Builder Stage ----
 FROM base AS builder
 WORKDIR /app
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    openssl \
+    && rm -rf /var/lib/apt/lists/*
 
 # Bring the fully-installed workspace into the builder image.
 COPY --from=deps /app /app
@@ -61,7 +68,8 @@ WORKDIR /app/recoder-frontend
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV NEXT_OUTPUT=standalone
 
-RUN corepack enable pnpm && NODE_OPTIONS=--max_old_space_size=4096 pnpm run build || echo "Build completed with warnings"
+RUN corepack enable pnpm && NODE_OPTIONS=--max_old_space_size=4096 pnpm run build
+RUN test -d .next/standalone
 
 
 # ---- Runner Stage ----
@@ -71,6 +79,10 @@ WORKDIR /app
 ENV NEXT_PUBLIC_VERCEL_ENV=production
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    openssl \
+    && rm -rf /var/lib/apt/lists/*
 
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs
@@ -90,6 +102,7 @@ EXPOSE ${APP_PORT}
 ENV PORT=${APP_PORT}
 
 ENV HOSTNAME="0.0.0.0"
+ENV NODE_OPTIONS="--max-old-space-size=1536"
 # Next.js standalone output in a monorepo creates server.js at recoder-frontend/server.js
 # relative to the standalone root (which we copied to /app)
 CMD ["node", "recoder-frontend/server.js"]
