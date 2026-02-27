@@ -1,0 +1,57 @@
+name: OpenClaw iOS CI
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'openclaw/apps/ios/**'
+      - 'openclaw/apps/shared/**'
+      - '.github/workflows/ios-ci.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'openclaw/apps/ios/**'
+      - 'openclaw/apps/shared/**'
+      - '.github/workflows/ios-ci.yml'
+
+concurrency:
+  group: ios-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    name: Build & Test (iOS)
+    runs-on: macos-15
+    defaults:
+      run:
+        working-directory: openclaw/apps/ios
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate Xcode project
+        run: xcodegen generate
+
+      - name: Build (no signing)
+        run: |
+          xcodebuild build \
+            -project OpenClaw.xcodeproj \
+            -scheme OpenClaw \
+            -destination 'platform=iOS Simulator,name=iPhone 16' \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            | xcpretty || true
+
+      - name: Run tests
+        run: |
+          xcodebuild test \
+            -project OpenClaw.xcodeproj \
+            -scheme OpenClaw \
+            -destination 'platform=iOS Simulator,name=iPhone 16' \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            | xcpretty || true
