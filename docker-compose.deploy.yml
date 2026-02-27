@@ -229,6 +229,55 @@ services:
           cpus: '0.1'
           memory: 64M
 
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: recoder-prometheus
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/alert-rules.yml:/etc/prometheus/alert-rules.yml:ro
+      - prometheus-data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=15d'
+      - '--web.enable-lifecycle'
+    depends_on:
+      - alertmanager
+      - node-exporter
+      - redis-exporter
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+
+  alertmanager:
+    image: prom/alertmanager:latest
+    container_name: recoder-alertmanager
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:9093:9093"
+    volumes:
+      - ./monitoring/alertmanager.yml:/etc/alertmanager/alertmanager.yml.tpl:ro
+      - ./scripts/alertmanager-entrypoint.sh:/app/alertmanager-entrypoint.sh:ro
+      - alertmanager-data:/alertmanager
+    environment:
+      - ALERT_WEBHOOK_URL=${ALERT_WEBHOOK_URL:-}
+      - ALERT_EMAIL=${ALERT_EMAIL:-}
+      - SMTP_SMARTHOST=${SMTP_SMARTHOST:-}
+      - SMTP_FROM=${SMTP_FROM:-}
+      - SMTP_AUTH_USERNAME=${SMTP_AUTH_USERNAME:-}
+      - SMTP_AUTH_PASSWORD=${SMTP_AUTH_PASSWORD:-}
+    entrypoint: ["/bin/sh", "/app/alertmanager-entrypoint.sh"]
+    deploy:
+      resources:
+        limits:
+          cpus: '0.2'
+          memory: 256M
+
   # Build the base workspace image
   recoder-base:
     build: ./docker-backend/docker
@@ -241,6 +290,8 @@ volumes:
   redis-data:
   openclaw-config:
   openclaw-workspace:
+  prometheus-data:
+  alertmanager-data:
 
 networks:
   default:
