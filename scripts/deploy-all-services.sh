@@ -1,0 +1,400 @@
+#!/bin/bash
+set -euo pipefail
+
+# Deploy all services to Hetzner production server (77.42.23.19)
+# Usage: ./scripts/deploy-all-services.sh
+#
+# Prerequisites:
+#   - SSH key access to root@77.42.23.19
+#   - Docker and docker-compose installed on server
+#   - Repository cloned at /root/recoder.xyz on server
+
+SERVER="root@77.42.23.19"
+REMOTE_DIR="/root/recoder.xyz"
+
+# SSH options: keep-alive every 30s, tolerate 20 missed pings (10 min idle tolerance)
+SSH_OPTS="-o StrictHostKeyChecking=no -o ServerAliveInterval=30 -o ServerAliveCountMax=20 -o TCPKeepAlive=yes -o ConnectionAttempts=3"
+if [ -f "${HOME}/.ssh/id_ed25519_hetzner" ]; then
+  SSH_OPTS="${SSH_OPTS} -i ${HOME}/.ssh/id_ed25519_hetzner"
+fi
+
+ssh_cmd() {
+  ssh $SSH_OPTS "${SERVER}" "$@"
+}
+
+# Retry wrapper: retries an SSH command up to N times on connection failure
+ssh_retry() {
+  local max_attempts="${1:-3}"
+  local delay="${2:-10}"
+  shift 2
+  local attempt=1
+  while [ "$attempt" -le "$max_attempts" ]; do
+    if ssh $SSH_OPTS "${SERVER}" "$@"; then
+      return 0
+    fi
+    local exit_code=$?
+    # Only retry on SSH transport errors (255), not on command failures
+    if [ "$exit_code" -ne 255 ]; then
+      return "$exit_code"
+    fi
+    echo "[retry] SSH connection lost (attempt ${attempt}/${max_attempts}), retrying in ${delay}s..."
+    sleep "$delay"
+    attempt=$((attempt + 1))
+  done
+  echo "[retry] All ${max_attempts} attempts failed"
+  return 255
+}
+
+echo "=== Phase 1: Generate secrets (if not already set) ==="
+
+remote_env_value() {
+  local key="$1"
+  ssh $SSH_OPTS "${SERVER}" "if [ -f '${REMOTE_DIR}/.env' ]; then sed -n \"s/^${key}=//p\" '${REMOTE_DIR}/.env' | tail -n1; fi" 2>/dev/null || true
+}
+
+if [ -z "${RECODER_A2A_SHARED_SECRET:-}" ]; then
+  RECODER_A2A_SHARED_SECRET="$(remote_env_value RECODER_A2A_SHARED_SECRET)"
+fi
+if [ -z "${RECODER_A2A_WORKER_TOKEN:-}" ]; then
+  RECODER_A2A_WORKER_TOKEN="$(remote_env_value RECODER_A2A_WORKER_TOKEN)"
+fi
+if [ -z "${OPENCLAW_GATEWAY_TOKEN:-}" ]; then
+  OPENCLAW_GATEWAY_TOKEN="$(remote_env_value OPENCLAW_GATEWAY_TOKEN)"
+fi
+if [ -z "${REDIS_PASSWORD:-}" ]; then
+  REDIS_PASSWORD="$(remote_env_value REDIS_PASSWORD)"
+fi
+
+if [ -z "${RECODER_A2A_SHARED_SECRET:-}" ]; then
+  RECODER_A2A_SHARED_SECRET=$(openssl rand -hex 32)
+  echo "Generated RECODER_A2A_SHARED_SECRET"
+fi
+
+if [ -z "${RECODER_A2A_WORKER_TOKEN:-}" ]; then
+  RECODER_A2A_WORKER_TOKEN=$(openssl rand -hex 32)
+  echo "Generated RECODER_A2A_WORKER_TOKEN"
+fi
+
+if [ -z "${OPENCLAW_GATEWAY_TOKEN:-}" ]; then
+  OPENCLAW_GATEWAY_TOKEN=$(openssl rand -hex 32)
+  echo "Generated OPENCLAW_GATEWAY_TOKEN"
+fi
+
+if [ -z "${REDIS_PASSWORD:-}" ]; then
+  REDIS_PASSWORD=$(openssl rand -hex 24)
+  echo "Generated REDIS_PASSWORD"
+fi
+
+echo "=== Phase 1b: Validate generated secrets ==="
+missing_vars=0
+for var_name in RECODER_A2A_SHARED_SECRET RECODER_A2A_WORKER_TOKEN OPENCLAW_GATEWAY_TOKEN REDIS_PASSWORD; do
+  eval val="\${${var_name}:-}"
+  if [ -z "$val" ]; then
+    echo "FATAL: ${var_name} is empty after generation phase"
+    missing_vars=1
+  fi
+done
+if [ "$missing_vars" -eq 1 ]; then
+  echo "Cannot proceed — secret generation failed."
+  exit 1
+fi
+echo "All 4 secrets validated."
+
+echo "=== Phase 2: Sync code to server ==="
+
+rsync -az --timeout=120 --progress \
+  --exclude='node_modules' --exclude='.git' \
+  --exclude='.next' --exclude='.turbo' --exclude='coverage' \
+  --exclude='.aitimemachine' --exclude='.claude' --exclude='.codex' \
+  --exclude='*.log' --exclude='logs' \
+  --exclude='.venv' --exclude='__pycache__' --exclude='*.pyc' \
+  --exclude='.cache' --exclude='.parcel-cache' --exclude='.swc' \
+  --exclude='*.mp4' --exclude='*.mov' --exclude='*.zip' --exclude='*.tar.gz' \
+  --exclude='apps/mobile' \
+  --include='packages/*/dist/***' --include='shared/dist/***' \
+  --exclude='recoder-web/dist' \
+  --exclude='production-engine/dist' --exclude='app/dist' \
+  -e "ssh ${SSH_OPTS}" \
+  ./ "${SERVER}:${REMOTE_DIR}/"
+
+echo "=== Phase 3: Write .env and upload remote build script ==="
+
+ssh_cmd bash -s <<ENDSSH
+set -euo pipefail
+cd "${REMOTE_DIR}"
+
+# Write the deploy .env with shared secrets
+cat > .env <<'INNEREOF'
+REDIS_PASSWORD=${REDIS_PASSWORD}
+RECODER_A2A_SHARED_SECRET=${RECODER_A2A_SHARED_SECRET}
+RECODER_A2A_WORKER_TOKEN=${RECODER_A2A_WORKER_TOKEN}
+OPENCLAW_GATEWAY_TOKEN=${OPENCLAW_GATEWAY_TOKEN}
+INNEREOF
+
+echo "Wrote .env with shared secrets"
+ENDSSH
+
+# Upload a self-contained build script to the server so that even if
+# the SSH session drops mid-build, we can re-attach to check progress.
+ssh_cmd bash -c "cat > ${REMOTE_DIR}/_remote-build.sh" <<'REMOTESCRIPT'
+#!/bin/bash
+set -euo pipefail
+
+# Prefer BuildKit for reliable multi-stage builds and clearer progress output.
+export DOCKER_BUILDKIT=1
+export COMPOSE_DOCKER_CLI_BUILD=1
+
+LOG="/root/deploy-build.log"
+exec > >(tee -a "$LOG") 2>&1
+
+cd /root/recoder.xyz
+
+# Prevent concurrent deploy runs from racing on container names.
+if command -v flock >/dev/null 2>&1; then
+  exec 9>/root/.deploy-build.lock
+  if ! flock -n 9; then
+    echo "Another deployment is currently running (lock: /root/.deploy-build.lock). Exiting."
+    exit 1
+  fi
+fi
+
+CONTAINER_NAMES=(
+  recoder-redis
+  recoder-docker-backend
+  recoder-web
+  recoder-frontend
+  openclaw-gateway
+  recoder-app
+)
+
+cleanup_named_containers() {
+  for name in "${CONTAINER_NAMES[@]}"; do
+    docker rm -f "$name" 2>/dev/null || true
+  done
+}
+
+# Remove stale generated/legacy files that can survive rsync and break Next typecheck.
+rm -rf /root/recoder.xyz/app/app/api/auth/[...nextauth].disabled || true
+rm -rf /root/recoder.xyz/app/api/auth/[...nextauth].disabled || true
+rm -rf /root/recoder.xyz/app/.next /root/recoder.xyz/app/app/.next || true
+rm -f /root/recoder.xyz/app/tsconfig.tsbuildinfo /root/recoder.xyz/app/app/tsconfig.tsbuildinfo || true
+
+echo "[$(date -u)] === Remote build started ==="
+
+echo "--- Stopping existing PM2 processes (if any) ---"
+pm2 stop all 2>/dev/null || true
+pm2 delete all 2>/dev/null || true
+
+echo "--- Stopping legacy standalone Next servers on host (if any) ---"
+pkill -f "next-server" 2>/dev/null || true
+pkill -f "next start" 2>/dev/null || true
+# Force-free port 3000 if still occupied by any non-docker process.
+PORT_3000_PIDS=$(ss -ltnp 2>/dev/null | sed -n 's/.*:3000 .*users:(("\([^"]*\)",pid=\([0-9]\+\).*/\2/p' | tr '\n' ' ')
+if [ -n "${PORT_3000_PIDS}" ]; then
+  echo "Killing processes on :3000 -> ${PORT_3000_PIDS}"
+  kill -9 ${PORT_3000_PIDS} 2>/dev/null || true
+fi
+
+echo "--- Stopping and removing existing containers ---"
+docker compose -f docker-compose.deploy.yml down --remove-orphans 2>/dev/null || true
+# Also remove any standalone containers with matching names
+cleanup_named_containers
+
+echo "--- Starting Redis ---"
+docker compose -f docker-compose.deploy.yml up -d --build redis
+
+echo "Waiting for Redis to be healthy..."
+for i in $(seq 1 30); do
+  if docker compose -f docker-compose.deploy.yml exec -T redis redis-cli -a "$(grep REDIS_PASSWORD .env | cut -d= -f2)" ping 2>/dev/null | grep -q PONG; then
+    echo "Redis is ready"
+    break
+  fi
+  if [ "$i" -eq 30 ]; then
+    echo "WARNING: Redis health check timed out, continuing anyway..."
+  fi
+  sleep 2
+done
+
+echo "--- Building docker-backend ---"
+docker build -f docker-backend/Dockerfile -t recoderxyz-docker-backend:latest .
+echo "[$(date -u)] docker-backend built"
+
+echo "--- Building recoder-web ---"
+docker build -f recoder-web/Dockerfile -t recoderxyz-recoder-web:latest .
+echo "[$(date -u)] recoder-web built"
+
+echo "--- Building recoder-frontend ---"
+docker build \
+  -f recoder-frontend/Dockerfile \
+  -t recoderxyz-recoder-frontend:latest \
+  --build-arg APP_PORT=3001 \
+  --build-arg PNPM_LOCKFILE_MODE=--no-frozen-lockfile \
+  .
+echo "[$(date -u)] recoder-frontend built"
+
+echo "--- Building openclaw-gateway ---"
+docker build -f openclaw/Dockerfile -t recoderxyz-openclaw-gateway:latest ./openclaw
+echo "[$(date -u)] openclaw-gateway built"
+
+echo "--- Starting all services ---"
+# Re-run explicit cleanup right before startup to avoid stale-name conflicts.
+cleanup_named_containers
+if ! docker compose -f docker-compose.deploy.yml up -d --remove-orphans; then
+  echo "WARN: docker compose up failed; retrying once after force-cleanup."
+  cleanup_named_containers
+  docker compose -f docker-compose.deploy.yml up -d --remove-orphans
+fi
+
+echo "--- Waiting for services to start ---"
+sleep 10
+
+echo "--- Waiting for service health ---"
+for service in redis docker-backend recoder-web recoder-frontend openclaw-gateway recoder-app; do
+  for i in $(seq 1 30); do
+    CID=$(docker compose -f docker-compose.deploy.yml ps -q "$service" 2>/dev/null || true)
+    if [ -n "$CID" ]; then
+      STATUS=$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "$CID" 2>/dev/null || true)
+      if [ "$STATUS" = "healthy" ] || [ "$STATUS" = "running" ]; then
+        break
+      fi
+    fi
+    if [ "$i" -eq 30 ]; then
+      echo "WARNING: ${service} did not become healthy in time (status=${STATUS:-unknown})"
+    fi
+    sleep 2
+  done
+done
+
+echo "=== Service Status ==="
+docker compose -f docker-compose.deploy.yml ps
+
+echo "[$(date -u)] === Remote build finished ==="
+# Write a sentinel file so we can detect completion
+echo "DONE" > /root/.deploy-build-done
+REMOTESCRIPT
+
+ssh_cmd chmod +x "${REMOTE_DIR}/_remote-build.sh"
+
+echo "=== Phase 4: Build and start services (runs on server via nohup) ==="
+
+# Remove previous sentinel
+ssh_cmd "rm -f /root/.deploy-build-done /root/deploy-build.log"
+
+# Launch the build in a nohup session so it survives SSH drops
+ssh_cmd "nohup ${REMOTE_DIR}/_remote-build.sh > /dev/null 2>&1 &"
+echo "Build launched on server. Tailing logs..."
+
+# Poll the log and wait for completion, reconnecting if SSH drops
+POLL_INTERVAL=15
+MAX_WAIT=1800  # 30 minutes
+ELAPSED=0
+
+while [ "$ELAPSED" -lt "$MAX_WAIT" ]; do
+  sleep "$POLL_INTERVAL"
+  ELAPSED=$((ELAPSED + POLL_INTERVAL))
+
+  # Check if build is done
+  if ssh $SSH_OPTS "${SERVER}" "test -f /root/.deploy-build-done" 2>/dev/null; then
+    echo ""
+    echo "Build completed! Fetching full log..."
+    ssh_cmd "cat /root/deploy-build.log" 2>/dev/null || true
+    break
+  fi
+
+  # Show recent log output (ignore SSH errors - just retry next loop)
+  RECENT=$(ssh $SSH_OPTS "${SERVER}" "tail -3 /root/deploy-build.log 2>/dev/null" 2>/dev/null || echo "(waiting for connection...)")
+  echo "[${ELAPSED}s] ${RECENT}"
+done
+
+if [ "$ELAPSED" -ge "$MAX_WAIT" ]; then
+  echo "WARNING: Build timed out after ${MAX_WAIT}s. Check server manually:"
+  echo "  ssh ${SERVER} tail -50 /root/deploy-build.log"
+  exit 1
+fi
+
+echo "=== Phase 5: Verify services ==="
+
+ssh_retry 3 10 bash -s <<'ENDSSH'
+set -euo pipefail
+cd /root/recoder.xyz
+echo ""
+echo "=== Verification ==="
+
+echo -n "docker-backend (:3100): "
+curl -sf http://localhost:3100/health && echo " OK" || echo " FAIL"
+
+echo -n "recoder-web (:5173): "
+curl -sf -o /dev/null -w "%{http_code}" http://localhost:5173 && echo " OK" || echo " FAIL"
+
+echo -n "recoder-frontend (:3001): "
+curl -sf -o /dev/null -w "%{http_code}" http://localhost:3001 && echo " OK" || echo " FAIL"
+
+echo -n "openclaw-gateway (:18789): "
+curl -sf -o /dev/null -w "%{http_code}" http://localhost:18789/health && echo " OK" || echo " FAIL"
+
+echo -n "A2A runtime: "
+curl -sf http://localhost:5173/api/a2a/runtime | head -c 200
+echo ""
+
+echo -n "Redis ping: "
+docker compose -f docker-compose.deploy.yml exec -T redis redis-cli -a "$(grep REDIS_PASSWORD .env | cut -d= -f2)" ping 2>/dev/null
+ENDSSH
+
+echo "=== Phase 6: Start A2A workers ==="
+
+ssh_retry 3 10 bash -s <<'ENDSSH'
+set -euo pipefail
+cd /root/recoder.xyz
+
+if [ -x ./scripts/a2a-workers-hetzner.sh ]; then
+  echo "Restarting A2A workers..."
+  ./scripts/a2a-workers-hetzner.sh restart
+  sleep 5
+  echo "A2A worker status:"
+  ./scripts/a2a-workers-hetzner.sh status || true
+else
+  echo "WARNING: a2a-workers-hetzner.sh not found, skipping worker startup"
+fi
+ENDSSH
+
+echo "=== Phase 6b: Install A2A watchdog cron ==="
+
+ssh_retry 3 10 bash -s <<'ENDSSH'
+set -euo pipefail
+cd /root/recoder.xyz
+
+if [ -x ./scripts/install-a2a-watchdog-cron.sh ]; then
+  ./scripts/install-a2a-watchdog-cron.sh
+  echo "Current cron entries:"
+  crontab -l | grep -E 'recoder-a2a-worker-watchdog|a2a-worker-watchdog' || true
+else
+  echo "WARNING: install-a2a-watchdog-cron.sh not found, skipping watchdog install"
+fi
+ENDSSH
+
+echo "=== Phase 7: A2A production smoke test ==="
+
+ssh_retry 3 10 bash -s <<'ENDSSH'
+set -euo pipefail
+cd /root/recoder.xyz
+
+if [ -x ./scripts/a2a-production-smoke.sh ]; then
+  BACKEND_URL=http://localhost:3100 ./scripts/a2a-production-smoke.sh
+else
+  echo "WARNING: a2a-production-smoke.sh not found, skipping smoke test"
+fi
+ENDSSH
+
+echo ""
+echo "=== Deployment complete ==="
+echo ""
+echo "Services:"
+echo "  docker-backend:    http://77.42.23.19:3100"
+echo "  recoder-web:       http://77.42.23.19:5173"
+echo "  recoder-frontend:  http://77.42.23.19:3001"
+echo "  openclaw-gateway:  http://77.42.23.19:18789"
+echo ""
+echo "A2A Secrets (save these):"
+echo "  RECODER_A2A_SHARED_SECRET=${RECODER_A2A_SHARED_SECRET}"
+echo "  RECODER_A2A_WORKER_TOKEN=${RECODER_A2A_WORKER_TOKEN}"
+echo "  OPENCLAW_GATEWAY_TOKEN=${OPENCLAW_GATEWAY_TOKEN}"

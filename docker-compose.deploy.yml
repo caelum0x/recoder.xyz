@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   redis:
     image: redis:7-alpine
@@ -7,7 +5,7 @@ services:
     restart: unless-stopped
     command: >
       redis-server
-      --requirepass ${REDIS_PASSWORD:-changeme}
+      --requirepass ${REDIS_PASSWORD}
       --appendonly yes
       --appendfsync everysec
       --maxmemory 256mb
@@ -17,7 +15,7 @@ services:
     ports:
       - "127.0.0.1:6379:6379"
     healthcheck:
-      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-changeme}", "ping"]
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -28,9 +26,12 @@ services:
           memory: 512M
 
   docker-backend:
-    build: ./docker-backend
+    build:
+      context: .
+      dockerfile: docker-backend/Dockerfile
     container_name: recoder-docker-backend
     restart: unless-stopped
+    command: ["pnpm", "exec", "tsx", "src/server.ts"]
     ports:
       - "3100:3100"
     volumes:
@@ -41,8 +42,28 @@ services:
     environment:
       - NODE_ENV=production
       - PORT=3100
-      - REDIS_URL=redis://:${REDIS_PASSWORD:-changeme}@redis:6379/0
+      - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379/0
       - PUBLIC_PROMPT_TASK_QUEUE_BACKEND=redis
+      - RECODER_A2A_SHARED_SECRET=${RECODER_A2A_SHARED_SECRET}
+      - RECODER_A2A_REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379/0
+      - RECODER_A2A_ENABLE_CONSUMER=true
+      - RECODER_A2A_CONSUMER_SERVICE=recoder_backend
+      - RECODER_A2A_CONSUME_UNTARGETED=true
+      - RECODER_A2A_PLAN_HANDLER_URL=http://recoder-web:5173/api/a2a/intents/plan
+      - RECODER_A2A_EXECUTE_HANDLER_URL=http://recoder-web:5173/api/a2a/intents/execute
+      - RECODER_A2A_HANDOFF_HANDLER_URL=http://recoder-web:5173/api/a2a/intents/handoff
+      - RECODER_A2A_TOOL_CALL_HANDLER_URL=http://recoder-web:5173/api/a2a/intents/tool_call
+      - RECODER_A2A_DEFAULT_HANDLER_URL=http://recoder-web:5173/api/a2a/intents/execute
+      - RECODER_A2A_WORKER_TOKEN=${RECODER_A2A_WORKER_TOKEN}
+      # A2A gateway identity and security
+      - RECODER_A2A_AGENT_ID=docker-backend
+      - RECODER_A2A_ADMIN_TOKEN=${RECODER_A2A_ADMIN_TOKEN:-}
+      - RECODER_A2A_BRIDGE_TOKEN=${RECODER_A2A_BRIDGE_TOKEN:-}
+      - RECODER_A2A_EGRESS_ALLOWLIST=http://recoder-web:5173,http://openclaw-gateway:18789
+      - RECODER_A2A_ALLOWED_AGENTS=codex,claude_code,recoder-web,docker-backend,openclaw-gateway,recoder-agency,recoder-pm,recoder-studio
+      # Tier-1 connector flags (runtime image installs codex/claude CLIs).
+      - RECODER_A2A_ENABLE_CODEX=${RECODER_A2A_ENABLE_CODEX:-true}
+      - RECODER_A2A_ENABLE_CLAUDE_CODE=${RECODER_A2A_ENABLE_CLAUDE_CODE:-true}
     depends_on:
       redis:
         condition: service_healthy
@@ -58,7 +79,9 @@ services:
           memory: 4G
 
   recoder-web:
-    build: ./recoder-web
+    build:
+      context: .
+      dockerfile: recoder-web/Dockerfile
     container_name: recoder-web
     restart: unless-stopped
     ports:
@@ -68,6 +91,15 @@ services:
     environment:
       - NODE_ENV=production
       - PORT=5173
+      - RECODER_A2A_SHARED_SECRET=${RECODER_A2A_SHARED_SECRET}
+      - RECODER_A2A_AGENT_ID=recoder-web
+      - RECODER_A2A_REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379/0
+      - RECODER_A2A_PLAN_HANDLER_URL=http://recoder-docker-backend:3100/api/a2a/intent/plan
+      - RECODER_A2A_EXECUTE_HANDLER_URL=http://recoder-docker-backend:3100/api/a2a/intent/execute
+      - RECODER_A2A_HANDOFF_HANDLER_URL=http://recoder-docker-backend:3100/api/a2a/intent/handoff
+      - RECODER_A2A_TOOL_CALL_HANDLER_URL=http://recoder-docker-backend:3100/api/a2a/intent/tool_call
+      - RECODER_A2A_WORKER_TOKEN=${RECODER_A2A_WORKER_TOKEN}
+      - RECODER_A2A_EGRESS_ALLOWLIST=http://recoder-docker-backend:3100
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://localhost:5173',{redirect:'manual'}).then(r => process.exit(r.status < 400 ? 0 : 1)).catch(() => process.exit(1))"]
       interval: 30s
@@ -79,6 +111,124 @@ services:
           cpus: '2'
           memory: 2G
 
+  recoder-app:
+    build:
+      context: .
+      dockerfile: app/Dockerfile
+    container_name: recoder-app
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    env_file:
+      - ./app/.env.production
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - NEXT_PUBLIC_APP_URL=https://app.recoder.xyz
+      - NEXT_PUBLIC_RECODER_WEB_URL=https://web.recoder.xyz
+      - BACKEND_URL=http://recoder-docker-backend:3100
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+
+  recoder-frontend:
+    build:
+      context: .
+      dockerfile: recoder-frontend/Dockerfile
+      args:
+        APP_PORT: 3001
+        PNPM_LOCKFILE_MODE: --no-frozen-lockfile
+    container_name: recoder-frontend
+    restart: unless-stopped
+    ports:
+      - "3001:3001"
+    env_file:
+      - ./recoder-frontend/.env.local
+    environment:
+      - NODE_ENV=production
+      - PORT=3001
+      - NEXT_PUBLIC_APP_URL=https://frontend.recoder.xyz
+      - NEXT_PUBLIC_API_URL=http://recoder-docker-backend:3100
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3001',{redirect:'manual'}).then(r => process.exit(r.status < 400 ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+
+  openclaw-gateway:
+    build: ./openclaw
+    container_name: openclaw-gateway
+    restart: unless-stopped
+    ports:
+      - "18789:18789"
+    environment:
+      - HOME=/home/node
+      - TERM=xterm-256color
+      - OPENCLAW_GATEWAY_TOKEN=${OPENCLAW_GATEWAY_TOKEN}
+      - NODE_OPTIONS=--max_old_space_size=1536
+    volumes:
+      - openclaw-config:/home/node/.openclaw
+      - openclaw-workspace:/home/node/.openclaw/workspace
+    command: ["node", "dist/index.js", "gateway", "--allow-unconfigured", "--bind", "lan", "--port", "18789"]
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:18789/health').then(r => process.exit(r.status < 400 ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 2G
+
+  # --- Monitoring exporters ---
+  node-exporter:
+    image: prom/node-exporter:latest
+    container_name: recoder-node-exporter
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:9100:9100"
+    command:
+      - '--path.rootfs=/host'
+      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+    volumes:
+      - /:/host:ro,rslave
+    deploy:
+      resources:
+        limits:
+          cpus: '0.2'
+          memory: 128M
+
+  redis-exporter:
+    image: oliver006/redis_exporter:latest
+    container_name: recoder-redis-exporter
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:9121:9121"
+    environment:
+      - REDIS_ADDR=redis://redis:6379
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+    depends_on:
+      redis:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: '0.1'
+          memory: 64M
+
   # Build the base workspace image
   recoder-base:
     build: ./docker-backend/docker
@@ -89,6 +239,8 @@ services:
 volumes:
   backend-data:
   redis-data:
+  openclaw-config:
+  openclaw-workspace:
 
 networks:
   default:
