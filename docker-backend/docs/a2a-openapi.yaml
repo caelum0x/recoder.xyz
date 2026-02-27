@@ -1,0 +1,516 @@
+openapi: 3.1.0
+info:
+  title: Recoder A2A API
+  version: 1.0.0
+  description: |
+    OpenAPI surface for docker-backend A2A routes.
+    This spec documents the 13 A2A route groups mounted under `/api/a2a`.
+servers:
+  - url: https://docker.recoder.xyz
+    description: Production
+  - url: http://localhost:7777
+    description: Local development
+tags:
+  - name: A2A Gateway
+  - name: Tasks
+  - name: Collaboration
+  - name: Heartbeat
+  - name: Agents
+  - name: Approvals
+  - name: OpenClaw
+  - name: SSE
+  - name: Claude Connector
+  - name: Codex Connector
+  - name: Context Bridge
+  - name: Connector Health
+  - name: Patterns
+paths:
+  /api/a2a/envelope:
+    post:
+      tags: [A2A Gateway]
+      summary: Accept and route an A2A envelope
+      responses:
+        '200':
+          description: Envelope accepted
+  /api/a2a/tasks:
+    post:
+      tags: [Tasks]
+      summary: Create a task
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateTaskRequest'
+      responses:
+        '201':
+          description: Task created
+    get:
+      tags: [Tasks]
+      summary: List tasks
+      responses:
+        '200':
+          description: Task list
+  /api/a2a/tasks/{taskId}:
+    get:
+      tags: [Tasks]
+      summary: Get task by id
+      parameters:
+        - $ref: '#/components/parameters/taskId'
+      responses:
+        '200':
+          description: Task found
+        '404':
+          description: Task not found
+  /api/a2a/channels:
+    get:
+      tags: [Collaboration]
+      summary: List channels
+      responses:
+        '200':
+          description: Channels listed
+    post:
+      tags: [Collaboration]
+      summary: Create channel
+      responses:
+        '201':
+          description: Channel created
+  /api/a2a/channels/{channelId}/threads:
+    get:
+      tags: [Collaboration]
+      summary: List threads in channel
+      parameters:
+        - $ref: '#/components/parameters/channelId'
+      responses:
+        '200':
+          description: Threads listed
+    post:
+      tags: [Collaboration]
+      summary: Create thread in channel
+      parameters:
+        - $ref: '#/components/parameters/channelId'
+      responses:
+        '201':
+          description: Thread created
+  /api/a2a/channels/{channelId}/threads/{threadId}/messages:
+    get:
+      tags: [Collaboration]
+      summary: List messages for thread
+      parameters:
+        - $ref: '#/components/parameters/channelId'
+        - $ref: '#/components/parameters/threadId'
+      responses:
+        '200':
+          description: Messages listed
+    post:
+      tags: [Collaboration]
+      summary: Send message to thread
+      parameters:
+        - $ref: '#/components/parameters/channelId'
+        - $ref: '#/components/parameters/threadId'
+      responses:
+        '201':
+          description: Message accepted
+  /api/a2a/heartbeat:
+    post:
+      tags: [Heartbeat]
+      summary: Record agent heartbeat
+      responses:
+        '200':
+          description: Heartbeat recorded
+  /api/a2a/health/agents:
+    get:
+      tags: [Heartbeat]
+      summary: Aggregated agent liveness
+      responses:
+        '200':
+          description: Agent health summary
+  /api/a2a/agents:
+    get:
+      tags: [Agents]
+      summary: List/discover registered agents
+      responses:
+        '200':
+          description: Agent list
+    post:
+      tags: [Agents]
+      summary: Register an agent
+      responses:
+        '201':
+          description: Agent registered
+  /api/a2a/approvals:
+    post:
+      tags: [Approvals]
+      summary: Submit approval decision/workflow action
+      responses:
+        '200':
+          description: Approval processed
+  /api/a2a/openclaw/intent:
+    post:
+      tags: [OpenClaw]
+      summary: Forward A2A intent into OpenClaw adapter
+      responses:
+        '200':
+          description: Forwarded
+  /api/a2a/tasks/{taskId}/stream:
+    get:
+      tags: [SSE]
+      summary: SSE task stream
+      parameters:
+        - $ref: '#/components/parameters/taskId'
+      responses:
+        '200':
+          description: text/event-stream
+          content:
+            text/event-stream:
+              schema:
+                type: string
+  /api/a2a/channels/{channelId}/stream:
+    get:
+      tags: [SSE]
+      summary: SSE channel stream
+      parameters:
+        - $ref: '#/components/parameters/channelId'
+      responses:
+        '200':
+          description: text/event-stream
+          content:
+            text/event-stream:
+              schema:
+                type: string
+  /api/a2a/events/stream:
+    get:
+      tags: [SSE]
+      summary: Global SSE stream
+      responses:
+        '200':
+          description: text/event-stream
+          content:
+            text/event-stream:
+              schema:
+                type: string
+  /api/a2a/connectors/claude/status:
+    get:
+      tags: [Claude Connector]
+      summary: Get Claude connector runtime status
+      responses:
+        '200':
+          description: Runtime state
+  /api/a2a/connectors/claude/tools:
+    get:
+      tags: [Claude Connector]
+      summary: List discovered Claude MCP tools
+      responses:
+        '200':
+          description: Tool list
+  /api/a2a/connectors/claude/start:
+    post:
+      tags: [Claude Connector]
+      summary: Start Claude connector runtime
+      responses:
+        '201':
+          description: Started
+  /api/a2a/connectors/claude/stop:
+    post:
+      tags: [Claude Connector]
+      summary: Stop Claude connector runtime
+      responses:
+        '200':
+          description: Stopped
+  /api/a2a/connectors/claude/restart:
+    post:
+      tags: [Claude Connector]
+      summary: Restart Claude connector runtime
+      responses:
+        '200':
+          description: Restarted
+  /api/a2a/connectors/claude/tools/refresh:
+    post:
+      tags: [Claude Connector]
+      summary: Refresh/discover Claude MCP tools from running connector
+      responses:
+        '200':
+          description: Refreshed tools
+  /api/a2a/connectors/claude/execute:
+    post:
+      tags: [Claude Connector]
+      summary: Execute task via Claude connector
+      responses:
+        '200':
+          description: Task executed
+  /api/a2a/connectors/claude/call:
+    post:
+      tags: [Claude Connector]
+      summary: Low-level Claude MCP tool call
+      responses:
+        '200':
+          description: Tool call result
+  /api/a2a/connectors/claude/task/{taskId}:
+    get:
+      tags: [Claude Connector]
+      summary: Get Claude task status
+      parameters:
+        - $ref: '#/components/parameters/taskId'
+      responses:
+        '200':
+          description: Claude task status
+  /api/a2a/connectors/claude/task/{taskId}/cancel:
+    post:
+      tags: [Claude Connector]
+      summary: Cancel a running Claude task
+      parameters:
+        - $ref: '#/components/parameters/taskId'
+      responses:
+        '200':
+          description: Cancellation result
+  /api/a2a/connectors/claude/approval/{approvalId}:
+    post:
+      tags: [Claude Connector]
+      summary: Respond to pending Claude approval request
+      parameters:
+        - name: approvalId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Approval response accepted
+  /api/a2a/connectors/codex/status:
+    get:
+      tags: [Codex Connector]
+      summary: Get Codex connector runtime status
+      responses:
+        '200':
+          description: Runtime state
+  /api/a2a/connectors/codex/start:
+    post:
+      tags: [Codex Connector]
+      summary: Start Codex connector runtime
+      responses:
+        '201':
+          description: Started
+  /api/a2a/connectors/codex/stop:
+    post:
+      tags: [Codex Connector]
+      summary: Stop Codex connector runtime
+      responses:
+        '200':
+          description: Stopped
+  /api/a2a/connectors/codex/restart:
+    post:
+      tags: [Codex Connector]
+      summary: Restart Codex connector runtime
+      responses:
+        '200':
+          description: Restarted
+  /api/a2a/connectors/codex/execute:
+    post:
+      tags: [Codex Connector]
+      summary: Execute task via Codex connector
+      responses:
+        '200':
+          description: Task executed
+  /api/a2a/connectors/codex/task/{taskId}:
+    get:
+      tags: [Codex Connector]
+      summary: Get Codex task status
+      parameters:
+        - $ref: '#/components/parameters/taskId'
+      responses:
+        '200':
+          description: Codex task status
+  /api/a2a/connectors/codex/task/{taskId}/cancel:
+    post:
+      tags: [Codex Connector]
+      summary: Cancel a running Codex task
+      parameters:
+        - $ref: '#/components/parameters/taskId'
+      responses:
+        '200':
+          description: Cancellation result
+  /api/a2a/connectors/codex/approval/{approvalId}:
+    post:
+      tags: [Codex Connector]
+      summary: Respond to pending Codex approval request
+      parameters:
+        - name: approvalId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Approval response accepted
+  /api/a2a/context/{taskId}:
+    post:
+      tags: [Context Bridge]
+      summary: Create context entry for task
+      parameters:
+        - $ref: '#/components/parameters/taskId'
+      responses:
+        '201':
+          description: Context entry created
+    get:
+      tags: [Context Bridge]
+      summary: Get context snapshot for task
+      parameters:
+        - $ref: '#/components/parameters/taskId'
+      responses:
+        '200':
+          description: Context snapshot
+    delete:
+      tags: [Context Bridge]
+      summary: Delete context for task
+      parameters:
+        - $ref: '#/components/parameters/taskId'
+      responses:
+        '200':
+          description: Context deleted
+  /api/a2a/context/{taskId}/{type}:
+    get:
+      tags: [Context Bridge]
+      summary: Get context entries for task by type
+      parameters:
+        - $ref: '#/components/parameters/taskId'
+        - name: type
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Typed context entries
+  /api/a2a/context/transfer:
+    post:
+      tags: [Context Bridge]
+      summary: Transfer context between tasks
+      responses:
+        '200':
+          description: Context transferred
+  /api/a2a/connectors/health:
+    get:
+      tags: [Connector Health]
+      summary: Get all connector health states
+      responses:
+        '200':
+          description: Connector health summary
+  /api/a2a/connectors/{connectorId}/health:
+    get:
+      tags: [Connector Health]
+      summary: Get single connector health
+      parameters:
+        - $ref: '#/components/parameters/connectorId'
+      responses:
+        '200':
+          description: Connector health
+        '404':
+          description: Connector not registered
+  /api/a2a/connectors/{connectorId}/restart:
+    post:
+      tags: [Connector Health]
+      summary: Manually restart connector
+      parameters:
+        - $ref: '#/components/parameters/connectorId'
+      responses:
+        '200':
+          description: Restart initiated
+  /api/a2a/connectors/{connectorId}/circuit/reset:
+    post:
+      tags: [Connector Health]
+      summary: Reset connector circuit breaker to closed
+      parameters:
+        - $ref: '#/components/parameters/connectorId'
+      responses:
+        '200':
+          description: Circuit reset
+  /api/a2a/patterns:
+    get:
+      tags: [Patterns]
+      summary: List available collaboration patterns
+      responses:
+        '200':
+          description: Pattern list
+  /api/a2a/patterns/{type}:
+    get:
+      tags: [Patterns]
+      summary: Get pattern details
+      parameters:
+        - name: type
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Pattern details
+        '404':
+          description: Pattern not found
+  /api/a2a/patterns/execute:
+    post:
+      tags: [Patterns]
+      summary: Execute a collaboration pattern
+      responses:
+        '200':
+          description: Pattern execution result
+  /api/a2a/openapi.yaml:
+    get:
+      tags: [A2A Gateway]
+      summary: Serve the A2A OpenAPI YAML document
+      responses:
+        '200':
+          description: OpenAPI YAML
+  /api/a2a/docs:
+    get:
+      tags: [A2A Gateway]
+      summary: Serve Swagger UI docs shell for A2A OpenAPI
+      responses:
+        '200':
+          description: HTML docs shell
+components:
+  parameters:
+    taskId:
+      name: taskId
+      in: path
+      required: true
+      schema:
+        type: string
+    channelId:
+      name: channelId
+      in: path
+      required: true
+      schema:
+        type: string
+    threadId:
+      name: threadId
+      in: path
+      required: true
+      schema:
+        type: string
+    connectorId:
+      name: connectorId
+      in: path
+      required: true
+      schema:
+        type: string
+  schemas:
+    CreateTaskRequest:
+      type: object
+      required: [workspace_id, thread_id, requester, assignee, connector, payload]
+      properties:
+        workspace_id:
+          type: string
+        thread_id:
+          type: string
+        requester:
+          type: object
+          additionalProperties: true
+        assignee:
+          type: object
+          additionalProperties: true
+        connector:
+          type: object
+          additionalProperties: true
+        payload:
+          type: object
+          additionalProperties: true
