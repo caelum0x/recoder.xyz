@@ -18,10 +18,9 @@ jobs:
           # Format: "Name|URL"
           SERVICES=(
             "App Hub|https://recoder.xyz"
-            "Suna IDE|https://frontend.recoder.xyz"
-            "Bolt IDE|https://web.recoder.xyz"
+            "Frontend IDE|https://frontend.recoder.xyz"
+            "Web IDE|https://web.recoder.xyz"
             "Docker Backend|https://api.recoder.xyz/health"
-            "Python Backend|https://backend.recoder.xyz/v1/health"
             "Project Management|https://pm.recoder.xyz"
             "Workflow Studio|https://studio.recoder.xyz"
             "AI Agency|https://agency.recoder.xyz"
