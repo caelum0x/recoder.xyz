@@ -1,5 +1,5 @@
 FROM node:20-slim AS base
-RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y curl python3 make g++ && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 
 # Enable pnpm
@@ -22,26 +22,15 @@ COPY packages/database/prisma/ ./packages/database/prisma/
 COPY packages/ ./packages/
 COPY shared/package.json ./shared/
 
-# Stub out @recoder/auth — its postinstall runs prisma generate which fails
-# with Prisma 7.x, and app does not depend on it.
-RUN rm -rf packages/auth && \
-    mkdir -p packages/auth && \
-    echo '{"name":"@recoder/auth","version":"0.0.0","private":true}' > packages/auth/package.json
-
-# Create stubs for workspace members we don't need
-RUN for dir in production-engine docker-backend recoder-web recoder-chat recoder-frontend apps/mobile recoder-studio apps/ui.giselles.ai scripts deployment; do \
-      mkdir -p "$dir" && echo '{"name":"stub-'$(echo $dir | tr / -)'","version":"0.0.0","private":true}' > "$dir/package.json"; \
-    done && \
-    mkdir -p internal-packages/stub && echo '{"name":"stub-internal","version":"0.0.0","private":true}' > internal-packages/stub/package.json
-
 # Install dependencies
-RUN pnpm install --filter ./app... --no-frozen-lockfile
+RUN AUTH_DATABASE_URL="postgresql://build:build@localhost:5432/build" pnpm install --filter ./app... --no-frozen-lockfile
 
 # Generate Prisma client using the app's own schema (Prisma 6.x compatible)
 WORKDIR /app/app
 RUN pnpm exec prisma generate
 
-# Copy source code
+# Copy source code into the workspace root paths (not nested under /app/app)
+WORKDIR /app
 COPY app/ ./app/
 COPY packages/database/ ./packages/database/
 COPY shared/ ./shared/
@@ -61,6 +50,9 @@ RUN addgroup --system --gid 1001 nodejs && \
 COPY --from=base /app/app/public ./public
 COPY --from=base --chown=nextjs:nodejs /app/app/.next/standalone ./
 COPY --from=base --chown=nextjs:nodejs /app/app/.next/static ./app/.next/static
+# Next standalone output keeps pnpm symlinks pointing to /node_modules/.pnpm.
+# Copy the virtual store so those symlinks resolve at runtime.
+COPY --from=base --chown=nextjs:nodejs /app/node_modules/.pnpm /node_modules/.pnpm
 
 USER nextjs
 
@@ -68,8 +60,9 @@ EXPOSE 3000
 ENV PORT=3000
 ENV NODE_ENV=production
 ENV HOSTNAME="0.0.0.0"
+ENV NODE_OPTIONS="--max-old-space-size=2048"
 
-HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
-  CMD curl -f http://localhost:3000/ || exit 1
+HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
+  CMD curl -sf http://localhost:3000/api/health -o /dev/null || exit 1
 
-CMD ["node", "app/server.js"]
+CMD ["node", "server.js"]
