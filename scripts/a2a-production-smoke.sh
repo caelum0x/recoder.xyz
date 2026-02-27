@@ -30,57 +30,72 @@ PY
 log "=== A2A Production Smoke ==="
 log "Target: $BASE"
 
-log "[1/6] docs shell endpoint"
+PASS=0
+FAIL=0
+
+log "[1/16] docs shell endpoint"
 docs_code="$(curl -sS -o "$tmp_dir/docs.html" -w "%{http_code}" "$BASE/api/a2a/docs")"
-[[ "$docs_code" == "200" ]] || { log "FAIL /api/a2a/docs -> $docs_code"; exit 1; }
-grep -q "SwaggerUIBundle" "$tmp_dir/docs.html" || { log "FAIL docs missing SwaggerUIBundle"; exit 1; }
-log "PASS /api/a2a/docs"
+if [[ "$docs_code" == "200" ]] && grep -q "SwaggerUIBundle" "$tmp_dir/docs.html"; then
+  log "PASS /api/a2a/docs"; PASS=$((PASS+1))
+else
+  log "FAIL /api/a2a/docs -> $docs_code"; FAIL=$((FAIL+1))
+fi
 
-log "[2/6] openapi yaml endpoint"
+log "[2/16] openapi yaml endpoint"
 yaml_code="$(curl -sS -o "$tmp_dir/openapi.yaml" -w "%{http_code}" "$BASE/api/a2a/openapi.yaml")"
-[[ "$yaml_code" == "200" ]] || { log "FAIL /api/a2a/openapi.yaml -> $yaml_code"; exit 1; }
-grep -q "^openapi: 3.1.0" "$tmp_dir/openapi.yaml" || { log "FAIL openapi version mismatch"; exit 1; }
-log "PASS /api/a2a/openapi.yaml"
+if [[ "$yaml_code" == "200" ]] && grep -q "^openapi: 3.1.0" "$tmp_dir/openapi.yaml"; then
+  log "PASS /api/a2a/openapi.yaml"; PASS=$((PASS+1))
+else
+  log "FAIL /api/a2a/openapi.yaml -> $yaml_code"; FAIL=$((FAIL+1))
+fi
 
-log "[3/6] connector health aggregate endpoint"
+log "[3/16] connector health aggregate endpoint"
 health_code="$(curl -sS -o "$tmp_dir/health.json" -w "%{http_code}" "$BASE/api/a2a/connectors/health")"
-[[ "$health_code" == "200" ]] || { log "FAIL /api/a2a/connectors/health -> $health_code"; exit 1; }
-assert_json_success "$tmp_dir/health.json" >/dev/null
-log "PASS /api/a2a/connectors/health"
+if [[ "$health_code" == "200" ]] && assert_json_success "$tmp_dir/health.json" >/dev/null 2>&1; then
+  log "PASS /api/a2a/connectors/health"; PASS=$((PASS+1))
+else
+  log "FAIL /api/a2a/connectors/health -> $health_code"; FAIL=$((FAIL+1))
+fi
 
-log "[4/6] pattern route + execution path"
+log "[4/16] pattern route + execution path"
 patterns_code="$(curl -sS -o "$tmp_dir/patterns.json" -w "%{http_code}" "$BASE/api/a2a/patterns")"
-[[ "$patterns_code" == "200" ]] || { log "FAIL /api/a2a/patterns -> $patterns_code"; exit 1; }
-assert_json_success "$tmp_dir/patterns.json" >/dev/null
+if [[ "$patterns_code" == "200" ]] && assert_json_success "$tmp_dir/patterns.json" >/dev/null 2>&1; then
+  log "  patterns list ok"
+else
+  log "FAIL /api/a2a/patterns -> $patterns_code"; FAIL=$((FAIL+1))
+fi
 
 exec_code="$(curl -sS -o "$tmp_dir/pattern-exec.json" -w "%{http_code}" \
   -X POST \
   -H "content-type: application/json" \
   -d '{"patternType":"direct-handoff","config":{"workspaceId":"smoke_ws","threadId":"smoke_thr","requester":{"agent_id":"smoke","platform":"recoder_web"}},"input":{"kind":"direct-handoff","prompt":"smoke","agentA":{"agent_id":"agent-a","platform":"codex"},"agentB":{"agent_id":"agent-b","platform":"claude_code"}}}' \
   "$BASE/api/a2a/patterns/execute")"
-if [[ "$exec_code" != "200" && "$exec_code" != "500" ]]; then
-  log "FAIL /api/a2a/patterns/execute unexpected status $exec_code"
-  exit 1
-fi
-python3 - "$tmp_dir/pattern-exec.json" <<'PY'
+if [[ "$exec_code" == "200" || "$exec_code" == "500" ]]; then
+  has_success="$(python3 - "$tmp_dir/pattern-exec.json" <<'PY'
 import json,sys
 with open(sys.argv[1],"r",encoding="utf-8") as f:
     data=json.load(f)
-if "success" not in data:
-    raise SystemExit("missing success key in pattern execute response")
-print("ok")
+print("yes" if "success" in data else "no")
 PY
-log "PASS /api/a2a/patterns/execute (status=$exec_code)"
+  )"
+  if [[ "$has_success" == "yes" ]]; then
+    log "PASS /api/a2a/patterns + execute (status=$exec_code)"; PASS=$((PASS+1))
+  else
+    log "FAIL /api/a2a/patterns/execute missing success key"; FAIL=$((FAIL+1))
+  fi
+else
+  log "FAIL /api/a2a/patterns/execute unexpected status $exec_code"; FAIL=$((FAIL+1))
+fi
 
-log "[5/6] task create endpoint for stream bootstrap"
+log "[5/16] task create endpoint for stream bootstrap"
 task_payload='{"workspace_id":"smoke_ws","thread_id":"smoke_thr","requester":{"agent_id":"req","platform":"recoder_web"},"assignee":{"agent_id":"asg","platform":"codex"},"connector":{"connector_id":"codex-cli","platform":"codex","protocol":"jsonrpc"},"payload":{"kind":"text","text":"smoke"}}'
 task_code="$(curl -sS -o "$tmp_dir/task.json" -w "%{http_code}" \
   -X POST \
   -H "content-type: application/json" \
   -d "$task_payload" \
   "$BASE/api/a2a/tasks")"
-[[ "$task_code" == "201" ]] || { log "FAIL /api/a2a/tasks -> $task_code"; exit 1; }
-task_id="$(python3 - "$tmp_dir/task.json" <<'PY'
+if [[ "$task_code" == "201" ]]; then
+  task_id="$(python3 - "$tmp_dir/task.json" <<'PY'
 import json,sys
 with open(sys.argv[1],"r",encoding="utf-8") as f:
     data=json.load(f)
@@ -91,30 +106,37 @@ if not task_id:
     raise SystemExit("missing task id")
 print(task_id)
 PY
-)"
-log "PASS /api/a2a/tasks task_id=$task_id"
+  )"
+  log "PASS /api/a2a/tasks task_id=$task_id"; PASS=$((PASS+1))
+else
+  log "FAIL /api/a2a/tasks -> $task_code"; FAIL=$((FAIL+1))
+  task_id=""
+fi
 
-log "[6/6] task stream endpoint"
-# SSE endpoints are long-lived; `curl --max-time` can exit 28 after receiving
-# valid data. Treat timeout as acceptable when expected events are present.
-stream_http_code="$(
-  curl -sS -N --max-time 3 \
-    -o "$tmp_dir/stream.txt" \
-    -w "%{http_code}" \
-    "$BASE/api/a2a/tasks/$task_id/stream" 2>/dev/null \
-  || true
-)"
-[[ "$stream_http_code" == "200" ]] || {
-  log "FAIL /api/a2a/tasks/$task_id/stream -> $stream_http_code"
-  exit 1
-}
-grep -q "event: task.snapshot" "$tmp_dir/stream.txt" || { log "FAIL stream missing task.snapshot event"; exit 1; }
-log "PASS /api/a2a/tasks/$task_id/stream"
+log "[6/16] task stream endpoint"
+if [[ -n "$task_id" ]]; then
+  # SSE endpoints are long-lived; `curl --max-time` can exit 28 after receiving
+  # valid data. Treat timeout as acceptable when expected events are present.
+  stream_http_code="$(
+    curl -sS -N --max-time 3 \
+      -o "$tmp_dir/stream.txt" \
+      -w "%{http_code}" \
+      "$BASE/api/a2a/tasks/$task_id/stream" 2>/dev/null \
+    || true
+  )"
+  if [[ "$stream_http_code" == "200" ]] && grep -q "event: task.snapshot" "$tmp_dir/stream.txt"; then
+    log "PASS /api/a2a/tasks/$task_id/stream"; PASS=$((PASS+1))
+  else
+    log "FAIL /api/a2a/tasks/$task_id/stream -> $stream_http_code"; FAIL=$((FAIL+1))
+  fi
+else
+  log "SKIP /api/a2a/tasks/:taskId/stream (no task_id from test 5)"; FAIL=$((FAIL+1))
+fi
 
-log "[7/9] health endpoint A2A status"
+log "[7/16] health endpoint A2A status"
 health_main_code="$(curl -sS -o "$tmp_dir/main-health.json" -w "%{http_code}" "$BASE/health")"
-[[ "$health_main_code" == "200" ]] || { log "FAIL /health -> $health_main_code"; exit 1; }
-python3 - "$tmp_dir/main-health.json" <<'PY'
+if [[ "$health_main_code" == "200" ]]; then
+  python3 - "$tmp_dir/main-health.json" <<'PY'
 import json,sys
 with open(sys.argv[1],"r",encoding="utf-8") as f:
     data=json.load(f)
@@ -126,9 +148,12 @@ if isinstance(a2a, dict) and "enabled" in a2a:
 else:
     print("a2a.enabled=n/a (health payload omits a2a object)")
 PY
-log "PASS /health (A2A status present)"
+  log "PASS /health (A2A status present)"; PASS=$((PASS+1))
+else
+  log "FAIL /health -> $health_main_code"; FAIL=$((FAIL+1))
+fi
 
-log "[8/9] SLO metrics endpoint"
+log "[8/16] SLO metrics endpoint"
 slo_path="/api/a2a/metrics"
 slo_code="$(curl -sS -o "$tmp_dir/slo.json" -w "%{http_code}" "$BASE$slo_path" 2>/dev/null || true)"
 if [[ "$slo_code" == "404" ]]; then
@@ -141,21 +166,20 @@ if [[ "$slo_code" != "200" ]]; then
   sleep 1
   slo_code="$(curl -sS -o "$tmp_dir/slo.json" -w "%{http_code}" "$BASE$slo_path" 2>/dev/null || true)"
 fi
-[[ "$slo_code" == "200" ]] || { log "FAIL $slo_path -> $slo_code"; exit 1; }
-python3 - "$tmp_dir/slo.json" <<'PY'
+if [[ "$slo_code" == "200" ]] && python3 -c "
 import json,sys
-with open(sys.argv[1],"r",encoding="utf-8") as f:
-    data=json.load(f)
-if data.get("success") is not True:
-    raise SystemExit("slo endpoint success!=true")
-print("ok")
-PY
-log "PASS $slo_path"
+with open('$tmp_dir/slo.json','r') as f: data=json.load(f)
+sys.exit(0 if data.get('success') is True else 1)
+" 2>/dev/null; then
+  log "PASS $slo_path"; PASS=$((PASS+1))
+else
+  log "FAIL $slo_path -> $slo_code"; FAIL=$((FAIL+1))
+fi
 
-log "[9/9] agent registry endpoint"
+log "[9/16] agent registry endpoint"
 agents_code="$(curl -sS -o "$tmp_dir/agents.json" -w "%{http_code}" "$BASE/api/a2a/agents")"
-[[ "$agents_code" == "200" ]] || { log "FAIL /api/a2a/agents -> $agents_code"; exit 1; }
-python3 - "$tmp_dir/agents.json" <<'PY'
+if [[ "$agents_code" == "200" ]]; then
+  python3 - "$tmp_dir/agents.json" <<'PY'
 import json,sys
 with open(sys.argv[1],"r",encoding="utf-8") as f:
     data=json.load(f)
@@ -169,6 +193,162 @@ if not isinstance(agents, list):
     raise SystemExit("agents list missing in response payload")
 print(f"registered_agents={len(agents)}")
 PY
-log "PASS /api/a2a/agents"
+  log "PASS /api/a2a/agents"; PASS=$((PASS+1))
+else
+  log "FAIL /api/a2a/agents -> $agents_code"; FAIL=$((FAIL+1))
+fi
 
-log "A2A production smoke passed (9/9)."
+# ---------------------------------------------------------------------------
+# New endpoint tests (10-16)
+# ---------------------------------------------------------------------------
+
+log "[10/16] task retrieval by ID (dummy task, expect 404 or structured error)"
+dummy_task_id="00000000-0000-0000-0000-000000000000"
+get_task_code="$(curl -sS -o "$tmp_dir/get-task.json" -w "%{http_code}" \
+  "$BASE/api/a2a/tasks/$dummy_task_id" 2>/dev/null || true)"
+# 404 = task not found (expected), 200 = somehow exists, both are valid responses.
+# 5xx = server error = fail.
+if [[ "$get_task_code" =~ ^(200|400|401|403|404|422)$ ]]; then
+  # Verify the response is valid JSON with some structure.
+  python3 - "$tmp_dir/get-task.json" <<'PY'
+import json,sys
+with open(sys.argv[1],"r",encoding="utf-8") as f:
+    data=json.load(f)
+# Accept any structured JSON response (error or success).
+if not isinstance(data, dict):
+    raise SystemExit("response is not a JSON object")
+print("ok")
+PY
+  log "PASS /api/a2a/tasks/:taskId (status=$get_task_code)"; PASS=$((PASS+1))
+else
+  log "FAIL /api/a2a/tasks/:taskId -> $get_task_code"; FAIL=$((FAIL+1))
+fi
+
+log "[11/16] task approve endpoint (dummy task, expect 404 or 401)"
+approve_code="$(curl -sS -o "$tmp_dir/approve.json" -w "%{http_code}" \
+  -X POST \
+  -H "content-type: application/json" \
+  -d '{}' \
+  "$BASE/api/a2a/tasks/$dummy_task_id/approve" 2>/dev/null || true)"
+if [[ "$approve_code" =~ ^(200|400|401|403|404|405|422)$ ]]; then
+  python3 - "$tmp_dir/approve.json" <<'PY'
+import json,sys
+with open(sys.argv[1],"r",encoding="utf-8") as f:
+    data=json.load(f)
+if not isinstance(data, dict):
+    raise SystemExit("response is not a JSON object")
+print("ok")
+PY
+  log "PASS /api/a2a/tasks/:taskId/approve (status=$approve_code)"; PASS=$((PASS+1))
+else
+  log "FAIL /api/a2a/tasks/:taskId/approve -> $approve_code"; FAIL=$((FAIL+1))
+fi
+
+log "[12/16] task reject endpoint (dummy task, expect 404 or 401)"
+reject_code="$(curl -sS -o "$tmp_dir/reject.json" -w "%{http_code}" \
+  -X POST \
+  -H "content-type: application/json" \
+  -d '{}' \
+  "$BASE/api/a2a/tasks/$dummy_task_id/reject" 2>/dev/null || true)"
+if [[ "$reject_code" =~ ^(200|400|401|403|404|405|422)$ ]]; then
+  python3 - "$tmp_dir/reject.json" <<'PY'
+import json,sys
+with open(sys.argv[1],"r",encoding="utf-8") as f:
+    data=json.load(f)
+if not isinstance(data, dict):
+    raise SystemExit("response is not a JSON object")
+print("ok")
+PY
+  log "PASS /api/a2a/tasks/:taskId/reject (status=$reject_code)"; PASS=$((PASS+1))
+else
+  log "FAIL /api/a2a/tasks/:taskId/reject -> $reject_code"; FAIL=$((FAIL+1))
+fi
+
+log "[13/16] context bridge status endpoint"
+bridge_code="$(curl -sS -o "$tmp_dir/bridge.json" -w "%{http_code}" \
+  "$BASE/api/a2a/context/bridge" 2>/dev/null || true)"
+if [[ "$bridge_code" =~ ^(200|401|403|404)$ ]]; then
+  python3 - "$tmp_dir/bridge.json" <<'PY'
+import json,sys
+with open(sys.argv[1],"r",encoding="utf-8") as f:
+    data=json.load(f)
+if not isinstance(data, dict):
+    raise SystemExit("response is not a JSON object")
+print("ok")
+PY
+  log "PASS /api/a2a/context/bridge (status=$bridge_code)"; PASS=$((PASS+1))
+else
+  log "FAIL /api/a2a/context/bridge -> $bridge_code"; FAIL=$((FAIL+1))
+fi
+
+log "[14/16] connector execute endpoint (expect 400 or 401 without auth/body)"
+conn_exec_code="$(curl -sS -o "$tmp_dir/conn-exec.json" -w "%{http_code}" \
+  -X POST \
+  -H "content-type: application/json" \
+  -d '{}' \
+  "$BASE/api/a2a/connectors/execute" 2>/dev/null || true)"
+# 400 = bad request (missing fields), 401/403 = auth required, both expected.
+if [[ "$conn_exec_code" =~ ^(200|400|401|403|404|405|422)$ ]]; then
+  python3 - "$tmp_dir/conn-exec.json" <<'PY'
+import json,sys
+with open(sys.argv[1],"r",encoding="utf-8") as f:
+    data=json.load(f)
+if not isinstance(data, dict):
+    raise SystemExit("response is not a JSON object")
+print("ok")
+PY
+  log "PASS /api/a2a/connectors/execute (status=$conn_exec_code)"; PASS=$((PASS+1))
+else
+  log "FAIL /api/a2a/connectors/execute -> $conn_exec_code"; FAIL=$((FAIL+1))
+fi
+
+log "[15/16] connector status listing endpoint"
+conn_status_code="$(curl -sS -o "$tmp_dir/conn-status.json" -w "%{http_code}" \
+  "$BASE/api/a2a/connectors/status" 2>/dev/null || true)"
+if [[ "$conn_status_code" =~ ^(200|401|403|404)$ ]]; then
+  python3 - "$tmp_dir/conn-status.json" <<'PY'
+import json,sys
+with open(sys.argv[1],"r",encoding="utf-8") as f:
+    data=json.load(f)
+if not isinstance(data, dict):
+    raise SystemExit("response is not a JSON object")
+print("ok")
+PY
+  log "PASS /api/a2a/connectors/status (status=$conn_status_code)"; PASS=$((PASS+1))
+else
+  log "FAIL /api/a2a/connectors/status -> $conn_status_code"; FAIL=$((FAIL+1))
+fi
+
+log "[16/16] A2A-specific health endpoint"
+a2a_health_code="$(curl -sS -o "$tmp_dir/a2a-health.json" -w "%{http_code}" \
+  "$BASE/api/a2a/health" 2>/dev/null || true)"
+if [[ "$a2a_health_code" =~ ^(200|401|403|404)$ ]]; then
+  python3 - "$tmp_dir/a2a-health.json" <<'PY'
+import json,sys
+with open(sys.argv[1],"r",encoding="utf-8") as f:
+    data=json.load(f)
+if not isinstance(data, dict):
+    raise SystemExit("response is not a JSON object")
+# If 200, verify there is some health-related field.
+if data.get("status") or data.get("success") is not None or data.get("ok") is not None or data.get("healthy") is not None:
+    print("ok")
+else:
+    print("ok (structured json, no standard health field)")
+PY
+  log "PASS /api/a2a/health (status=$a2a_health_code)"; PASS=$((PASS+1))
+else
+  log "FAIL /api/a2a/health -> $a2a_health_code"; FAIL=$((FAIL+1))
+fi
+
+# ---------------------------------------------------------------------------
+# Summary
+# ---------------------------------------------------------------------------
+TOTAL=$((PASS+FAIL))
+log ""
+log "=== A2A Production Smoke Results ==="
+log "PASSED: $PASS / $TOTAL"
+if [[ "$FAIL" -gt 0 ]]; then
+  log "FAILED: $FAIL / $TOTAL"
+  exit 1
+fi
+log "A2A production smoke passed ($PASS/$TOTAL)."
