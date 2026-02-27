@@ -76,6 +76,7 @@ Quick checklist (explicit):
 - `EXPO_TOKEN` secret for mobile CI EAS builds
 - OpenClawKit `Package.swift` iOS platform update (`.v18` -> `.v16`) to match lowered deployment target
 - iOS local verification command: `bash scripts/verify-openclaw-ios-local.sh`
+- GitHub Actions billing/spend-limit fix for iOS CI runners (current failure: job not started due to account payments/spending limit)
 
 1. **Apple Developer certificate** ($99/year)
    - Required for: Desktop app notarization, macOS code signing
@@ -105,6 +106,8 @@ Quick checklist (explicit):
    - Verification: `bash scripts/verify-openclaw-ios-local.sh`
 
 ### Legacy pipeline items
+- Desktop baseline CI quality gate (lint + unit smoke) ✅ completed 2026-02-27 (`desktop-release.yml` enforces `npm run lint` + `npm test`)
+- Mobile CI lane for build/test/version consistency ✅ completed 2026-02-27 (`mobile-ci.yml` adds `Version Consistency` gate and EAS build depends on version+typecheck+lint+tests)
 - Run one full Desktop release dry-run and publish release evidence
 - Run one full Mobile end-to-end release dry-run and publish release evidence
 - Verification: `bash scripts/verify-native-release-closeout.sh [desktop_tag] [mobile_ref]`
