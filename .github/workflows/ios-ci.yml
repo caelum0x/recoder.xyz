@@ -22,7 +22,7 @@ concurrency:
 jobs:
   build-and-test:
     name: Build & Test (iOS)
-    runs-on: macos-latest
+    runs-on: [self-hosted, macOS, ARM64]
     defaults:
       run:
         working-directory: openclaw/apps/ios
