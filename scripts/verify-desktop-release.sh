@@ -24,8 +24,8 @@ if ! command -v gh >/dev/null 2>&1; then
   fail "GitHub CLI (gh) not installed"
 fi
 
-if ! gh auth status -h github.com >/dev/null 2>&1; then
-  fail "gh auth invalid or expired (run: gh auth login -h github.com)"
+if ! gh api user >/dev/null 2>&1; then
+  fail "gh auth invalid/expired or missing API scope (run: gh auth login -h github.com -w -s repo,workflow,read:org,gist)"
 fi
 
 if [[ "$FAIL" -gt 0 ]]; then

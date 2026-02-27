@@ -29,18 +29,20 @@ else
   pass "GitHub CLI available"
 fi
 
-if ! gh auth status -h github.com >/dev/null 2>&1; then
-  fail "gh auth invalid or expired for github.com (run: gh auth login -h github.com)"
+if ! gh api user >/dev/null 2>&1; then
+  fail "gh auth invalid/expired or missing API scope (run: gh auth login -h github.com -w -s repo,workflow,read:org,gist)"
 else
   pass "gh auth is valid"
 fi
 
 if [[ "$FAIL" -eq 0 ]]; then
-  secret_names="$(gh secret list --repo "$REPO_SLUG" --json name --jq '.[].name' 2>/dev/null || true)"
-  if [[ -z "$secret_names" ]]; then
-    fail "unable to read repo secrets (check repo access: $REPO_SLUG)"
+  if ! secret_names="$(gh secret list --repo "$REPO_SLUG" --json name --jq '.[].name' 2>/dev/null)"; then
+    fail "unable to read repo secrets (check repo access/permissions: $REPO_SLUG)"
   else
     pass "repo secret list readable"
+    if [[ -z "$secret_names" ]]; then
+      fail "no repository secrets configured for $REPO_SLUG"
+    fi
     for key in "${REQUIRED_SECRETS[@]}"; do
       if echo "$secret_names" | grep -Fxq "$key"; then
         pass "secret present: $key"

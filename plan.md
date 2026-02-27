@@ -29,12 +29,44 @@ Last updated: 2026-02-27
 - ✅ backup-volumes.sh: nightly Docker volume backups with 7-day retention
 - ✅ A2A smoke test expanded: 9 → 16 endpoints (tasks, approvals, connectors, context bridge)
 
+3. Dockerfile hardening ✅
+- Completed on 2026-02-27.
+- ✅ docker-backend: non-root user (backend:1001), NODE_OPTIONS=3072, HEALTHCHECK /health
+- ✅ recoder-web: curl installed, non-root user (webuser:1001), NODE_OPTIONS=1536, HEALTHCHECK /api/health
+- ✅ recoder-frontend: NODE_OPTIONS=1536, HEALTHCHECK via node fetch
+- ✅ docker-backend/.dockerignore created
+
+4. A2A connector correctness ✅
+- Completed on 2026-02-27.
+- ✅ Claude connector parity: GET /task/:taskId, POST /task/:taskId/cancel, POST /approval/:approvalId
+- ✅ Artifact support: Claude accepts/returns TaskArtifact[], extractArtifacts() for MCP results
+- ✅ Connector retry wrapper: withConnectorRetry() with exponential backoff, jitter, retryable error detection
+- ✅ Cursor/Windsurf state bug fixed: 'succeeded' → 'completed', switched to completeTask()/failTask() helpers
+- ✅ Tier-2 connector parity: Cursor, Windsurf, Replit all have task/cancel/approval endpoints
+- ✅ Retry wrapper wired into all 5 connectors (Claude, Codex, Cursor, Windsurf, Replit)
+- ✅ Replit artifact support added (types + route)
+- ✅ Connector contract snapshot: MESSAGE_NOT_FOUND drift fixed
+- ✅ Structured AuditEvent emission in Claude + Codex runtimes (ConnectorAttached/Detached/Error)
+
+5. Docker Compose production hardening ✅
+- Completed on 2026-02-27.
+- ✅ docker-backend: resource reservations (2 CPU, 2GB), stop_grace_period 45s, healthcheck start_period
+- ✅ recoder-web: VITE_DOCKER_BACKEND_URL + DOCKER_BACKEND_URL added, resource reservations, stop_grace_period, healthcheck targets /api/health
+- ✅ recoder-app: resource reservations (1 CPU, 1GB), stop_grace_period 30s, healthcheck start_period
+- ✅ recoder-frontend: resource reservations (0.5 CPU, 512MB), stop_grace_period 30s, healthcheck start_period
+
+6. CI workflow fixes ✅
+- Completed on 2026-02-27.
+- ✅ automated-testing.yml: removed silent test failure swallowing (|| echo "...")
+- ✅ deploy.yml: A2A smoke test warns instead of silently skipping
+- ✅ Mobile typecheck: moved from || echo to continue-on-error for proper status visibility
+
 ## P2 — Release closeout (Planned)
 1. Desktop pipeline (planned)
 - Owner: Arhan Subasi
 - Target date: 2026-03-31
 - Remaining work:
-  - Add baseline CI quality gate (lint + unit smoke)
+  - ✅ Add baseline CI quality gate (lint + unit smoke) — completed 2026-02-27 (`desktop-release.yml` now runs blocking `npm run lint` + `npm test` in `apps/desktop`)
   - Finalize production signing/notarization secrets and release workflow
   - Run one full release dry-run and publish release evidence
 - Verification command: `bash scripts/verify-desktop-release.sh [tag]`
@@ -43,7 +75,7 @@ Last updated: 2026-02-27
 - Owner: Arhan Subasi
 - Target date: 2026-03-31
 - Remaining work:
-  - Add CI lane for build/test/version consistency checks
+  - ✅ Add CI lane for build/test/version consistency checks — completed 2026-02-27 (`mobile-ci.yml` includes blocking `Version Consistency` job + existing typecheck/lint/tests; EAS build now depends on all)
   - Stabilize release signing/config for Android + iOS paths
   - Run one end-to-end release dry-run and publish release evidence
 - Verification command: `bash scripts/verify-mobile-release.sh [ref]`
@@ -56,6 +88,7 @@ Last updated: 2026-02-27
 - `EXPO_TOKEN` secret for mobile CI EAS builds
 - OpenClawKit `Package.swift` iOS platform update (`.v18` -> `.v16`) to match lowered deployment target
 - iOS local verification command: `bash scripts/verify-openclaw-ios-local.sh`
+- GitHub Actions billing/spend-limit fix for iOS CI runners (current failure: job not started due to account payments/spending limit)
 
 ## Done criteria
 1. Credential rotation complete and documented.

@@ -10,6 +10,10 @@
   "main": "main.js",
   "scripts": {
     "start": "electron .",
+    "lint": "npm run lint:syntax",
+    "lint:syntax": "node --check main.js && node --check preload.js && node --check build-signed.js && node --check notarize.js",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "smoke:prod": "node scripts/smoke-production.js",
     "validate:release": "node scripts/validate-release-artifacts.js",
     "build": "electron-builder",
@@ -27,7 +31,8 @@
     "@electron/notarize": "^2.3.2",
     "dotenv": "^16.4.5",
     "electron": "^33.0.0",
-    "electron-builder": "^25.1.8"
+    "electron-builder": "^25.1.8",
+    "vitest": "^3.0.0"
   },
   "build": {
     "appId": "xyz.recoder.desktop",

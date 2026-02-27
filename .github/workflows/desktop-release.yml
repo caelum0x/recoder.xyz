@@ -45,6 +45,12 @@ jobs:
         working-directory: apps/desktop
         run: npm ci
 
+      - name: Desktop quality gate (lint + unit smoke)
+        working-directory: apps/desktop
+        run: |
+          npm run lint
+          npm test
+
       - name: Run desktop smoke gate
         working-directory: apps/desktop
         run: npm run smoke:prod
