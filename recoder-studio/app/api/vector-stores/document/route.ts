@@ -4,7 +4,7 @@ import {
 	getDocumentVectorStores,
 	getOfficialDocumentVectorStores,
 } from "@/lib/vector-stores/document/queries";
-import { getUser } from "@/lib/supabase/get-user";
+import { getUser } from "@/lib/auth/user";
 
 export async function GET() {
 	try {

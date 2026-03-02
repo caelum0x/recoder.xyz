@@ -5,7 +5,7 @@ import * as DocumentPicker from 'expo-document-picker';
 import * as Haptics from 'expo-haptics';
 import { useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
-import type { UnifiedMessage, Message, ActiveAgentRun } from '@/api/types';
+import type { UnifiedMessage, Message, ActiveAgentRun, Thread } from '@/api/types';
 import { useLanguage } from '@/contexts';
 import type { ToolMessagePair } from '@/components/chat';
 import {
@@ -94,7 +94,7 @@ export interface UseChatReturn {
     createdAt: Date;
     updatedAt: Date;
   } | null;
-  threads: any[];
+  threads: Thread[];
   loadThread: (threadId: string) => void;
   startNewChat: () => void;
   updateThreadTitle: (newTitle: string) => Promise<void>;
@@ -202,7 +202,7 @@ export function useChat(): UseChatReturn {
 
   // Track ALL created threads to prevent race condition losses
   // Maps optimisticId -> realThread object (once API returns)
-  const createdThreadsRef = useRef<Map<string, { thread_id: string; title: string; created_at: string; updated_at: string; is_public: boolean; metadata: any }>>(new Map());
+  const createdThreadsRef = useRef<Map<string, { thread_id: string; title: string; created_at: string; updated_at: string; is_public: boolean; metadata: Record<string, unknown> }>>(new Map());
   
   
   // Per-mode full state: keeps entire mode state in memory for instant switching (like browser tabs)
@@ -958,7 +958,7 @@ export function useChat(): UseChatReturn {
     setModeViewState('thread');
     
     // Sync the selected mode with the thread's mode metadata
-    const thread = threadsData.find((t: any) => t.thread_id === threadId);
+    const thread = threadsData.find((t: Thread) => t.thread_id === threadId);
     if (thread?.metadata?.mode) {
       log.log('[useChat] Syncing mode from thread metadata:', thread.metadata.mode);
       setSelectedQuickAction(thread.metadata.mode);
@@ -1113,7 +1113,7 @@ export function useChat(): UseChatReturn {
             return key.length >= 2 && key[0] === 'chat' && key[1] === 'threads' &&
               (key.length === 2 || (key.length === 3 && typeof key[2] === 'object'));
           }},
-          (oldThreads: any) => {
+          (oldThreads: Thread[] | undefined) => {
             if (!Array.isArray(oldThreads)) return oldThreads; // Safety: don't corrupt non-array query data
             log.log('✨ [useChat] Adding optimistic thread to side menu:', optimisticThreadId);
             return [optimisticThread, ...oldThreads];
@@ -1260,19 +1260,19 @@ export function useChat(): UseChatReturn {
                 return key.length >= 2 && key[0] === 'chat' && key[1] === 'threads' &&
                   (key.length === 2 || (key.length === 3 && typeof key[2] === 'object'));
               }},
-              (oldThreads: any) => {
+              (oldThreads: Thread[] | undefined) => {
                 if (!Array.isArray(oldThreads)) return oldThreads;
                 // Get all created threads from ref
                 const allCreatedThreads = Array.from(createdThreadsRef.current.values());
                 const allOptimisticIds = Array.from(createdThreadsRef.current.keys());
 
                 // Remove ALL optimistic threads
-                let result = oldThreads.filter((t: any) => !allOptimisticIds.includes(t.thread_id));
+                let result = oldThreads.filter((t) => !allOptimisticIds.includes(t.thread_id));
 
                 // Add ALL real threads that don't exist yet
                 for (const thread of allCreatedThreads) {
-                  if (!result.some((t: any) => t.thread_id === thread.thread_id)) {
-                    result = [thread, ...result];
+                  if (!result.some((t) => t.thread_id === thread.thread_id)) {
+                    result = [thread as Thread, ...result];
                   }
                 }
 
@@ -1307,19 +1307,19 @@ export function useChat(): UseChatReturn {
               return key.length >= 2 && key[0] === 'chat' && key[1] === 'threads' &&
                 (key.length === 2 || (key.length === 3 && typeof key[2] === 'object'));
             }},
-            (oldThreads: any) => {
+            (oldThreads: Thread[] | undefined) => {
               if (!Array.isArray(oldThreads)) return oldThreads;
               // Get all created threads from ref
               const allCreatedThreads = Array.from(createdThreadsRef.current.values());
               const allOptimisticIds = Array.from(createdThreadsRef.current.keys());
 
               // Remove ALL optimistic threads
-              let result = oldThreads.filter((t: any) => !allOptimisticIds.includes(t.thread_id));
+              let result = oldThreads.filter((t) => !allOptimisticIds.includes(t.thread_id));
 
               // Add ALL real threads that don't exist yet
               for (const thread of allCreatedThreads) {
-                if (!result.some((t: any) => t.thread_id === thread.thread_id)) {
-                  result = [thread, ...result];
+                if (!result.some((t) => t.thread_id === thread.thread_id)) {
+                  result = [thread as Thread, ...result];
                 }
               }
 
@@ -1362,7 +1362,7 @@ export function useChat(): UseChatReturn {
           if (pendingAttachments.length > 0 && createResult.sandbox_id) {
             log.log(`✅ [useChat] Files uploaded to sandbox ${createResult.sandbox_id} during agent start`);
           }
-        } catch (agentStartError: any) {
+        } catch (agentStartError: unknown) {
           log.error('[useChat] Error starting agent for new thread:', agentStartError);
 
           // Remove optimistic thread from cache on error
@@ -1372,9 +1372,9 @@ export function useChat(): UseChatReturn {
               return key.length >= 2 && key[0] === 'chat' && key[1] === 'threads' &&
                 (key.length === 2 || (key.length === 3 && typeof key[2] === 'object'));
             }},
-            (oldThreads: any) => {
+            (oldThreads: Thread[] | undefined) => {
               if (!Array.isArray(oldThreads)) return oldThreads;
-              const filtered = oldThreads.filter((t: any) => t.thread_id !== optimisticThreadId);
+              const filtered = oldThreads.filter((t) => t.thread_id !== optimisticThreadId);
               log.log('❌ [useChat] Removed optimistic thread due to error');
               return filtered;
             }
@@ -1564,35 +1564,37 @@ export function useChat(): UseChatReturn {
           }
           
           setIsNewThreadOptimistic(false);
-        } catch (sendMessageError: any) {
+        } catch (sendMessageError: unknown) {
           log.error('[useChat] Error sending message to existing thread:', sendMessageError);
-          
+
           // Parse and handle tier restriction errors (thread limit, billing, etc.)
           const parsedError = parseTierRestrictionError(sendMessageError);
           const tierError = extractTierLimitErrorState(parsedError);
-          
+
           if (tierError) {
             log.log('⚠️ [useChat] Tier limit error detected:', tierError.type, tierError.message);
             // Format error messages for pricing modal using shared function
             const { alertTitle, alertSubtitle } = formatTierLimitErrorForUI(tierError);
-            
+
             // Open pricing modal with clear error messages
             openPricingModal({
               alertTitle,
               alertSubtitle,
               creditsExhausted: tierError.type === 'INSUFFICIENT_CREDITS',
             });
-            
+
             // Navigate to plans page
             router.push('/plans');
             return;
           }
-          
+
           throw sendMessageError;
         }
       }
-    } catch (error: any) {
-      log.error('[useChat] Error sending message:', error?.message || error, error?.stack);
+    } catch (error: unknown) {
+      const errMsg = error instanceof Error ? error.message : String(error);
+      const errStack = error instanceof Error ? error.stack : undefined;
+      log.error('[useChat] Error sending message:', errMsg, errStack);
       // Don't re-throw - callers don't await/catch this, so re-throwing causes
       // unhandled promise rejections that break subsequent sends
     }

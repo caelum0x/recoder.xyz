@@ -1,5 +1,5 @@
-import type { Tier } from "@giselles-ai/language-model";
-import type { WorkspaceId } from "@giselles-ai/protocol";
+import type { Tier } from "@recoder/language-model";
+import type { WorkspaceId } from "@recoder/protocol";
 
 export interface UsageLimits {
 	featureTier: Tier;

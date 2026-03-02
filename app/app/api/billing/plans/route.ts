@@ -4,6 +4,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { logger } from '@/lib/logger';
 
 // Plan configuration matching the subscription service
 // Note: Not exported because route files can only export HTTP handlers
@@ -98,7 +99,7 @@ export async function GET(request: NextRequest) {
       plans: plans  // Return plans at top level for easier access
     });
   } catch (error) {
-    console.error('Failed to get plans:', error);
+    logger.error('Failed to get plans', { route: 'api/billing/plans', error: error instanceof Error ? error.message : String(error) });
     return NextResponse.json(
       {
         success: false,

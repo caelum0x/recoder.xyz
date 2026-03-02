@@ -1,6 +1,6 @@
 "use server";
 
-import { App, AppId, NodeId } from "@giselles-ai/protocol";
+import { App, AppId, NodeId } from "@recoder/protocol";
 import { createId } from "@paralleldrive/cuid2";
 import { giselle } from "@/app/giselle";
 import {

@@ -1,10 +1,10 @@
-import type { WorkspaceId } from "@giselles-ai/protocol";
+import type { WorkspaceId } from "@recoder/protocol";
 import {
 	isActionNode,
 	isTextGenerationNode,
 	isTriggerNode,
 	isVectorStoreNode,
-} from "@giselles-ai/protocol";
+} from "@recoder/protocol";
 import { RequestError } from "@octokit/request-error";
 import { and, count, desc, eq, inArray, isNotNull } from "drizzle-orm";
 import { Suspense, use } from "react";

@@ -90,7 +90,7 @@ export const ValidationStatus = memo(function ValidationStatus({
         <div className="validation-details">
           {validation.errors.length > 0 && (
             <div className="validation-section">
-              <div className="section-header text-xs text-bolt-elements-textSecondary mb-1">Errors</div>
+              <div className="section-header text-xs text-recoder-elements-textSecondary mb-1">Errors</div>
               {validation.errors.map((error, idx) => (
                 <ValidationErrorItem key={idx} error={error} />
               ))}
@@ -99,7 +99,7 @@ export const ValidationStatus = memo(function ValidationStatus({
 
           {validation.warnings.length > 0 && (
             <div className="validation-section">
-              <div className="section-header text-xs text-bolt-elements-textSecondary mb-1 mt-2">Warnings</div>
+              <div className="section-header text-xs text-recoder-elements-textSecondary mb-1 mt-2">Warnings</div>
               {validation.warnings.map((warning, idx) => (
                 <ValidationWarningItem key={idx} warning={warning} />
               ))}
@@ -108,7 +108,7 @@ export const ValidationStatus = memo(function ValidationStatus({
 
           {validation.quickFixes.length > 0 && onQuickFix && (
             <div className="validation-section">
-              <div className="section-header text-xs text-bolt-elements-textSecondary mb-1 mt-2">Quick Fixes</div>
+              <div className="section-header text-xs text-recoder-elements-textSecondary mb-1 mt-2">Quick Fixes</div>
               {validation.quickFixes.map((fix, idx) => (
                 <QuickFixItem key={idx} fix={fix} onClick={() => onQuickFix(fix)} />
               ))}

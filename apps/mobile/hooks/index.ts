@@ -85,3 +85,6 @@ export { useAgents, useAgent } from '@/lib/agents';
 export { useTrigger } from '@/lib/triggers';
 export { useSubscription, useCreditBalance } from '@/lib/billing';
 export { useBillingCheck } from '@/lib/billing/validation';
+
+// A2A delegated task hooks
+export { useDelegatedTasks, useDelegatedTask, useTaskApproval, useTaskActivationEvents } from '@/lib/a2a-tasks';

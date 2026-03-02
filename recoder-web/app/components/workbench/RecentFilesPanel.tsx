@@ -30,9 +30,9 @@ const FILE_ICON_MAP: Record<string, string> = {
   json: 'i-ph:file-duotone text-yellow-300',
   yaml: 'i-ph:file-duotone text-red-400',
   yml: 'i-ph:file-duotone text-red-400',
-  md: 'i-ph:file-md-duotone text-bolt-elements-textSecondary',
+  md: 'i-ph:file-md-duotone text-recoder-elements-textSecondary',
   mdx: 'i-ph:file-md-duotone text-yellow-400',
-  txt: 'i-ph:file-text-duotone text-bolt-elements-textSecondary',
+  txt: 'i-ph:file-text-duotone text-recoder-elements-textSecondary',
   png: 'i-ph:file-image-duotone text-purple-400',
   jpg: 'i-ph:file-image-duotone text-purple-400',
   jpeg: 'i-ph:file-image-duotone text-purple-400',
@@ -81,7 +81,7 @@ function getFileIcon(fileName: string): string {
     return FILE_ICON_MAP[ext];
   }
 
-  return 'i-ph:file-duotone text-bolt-elements-textSecondary';
+  return 'i-ph:file-duotone text-recoder-elements-textSecondary';
 }
 
 function formatTimestamp(timestamp: number): string {
@@ -212,13 +212,13 @@ export const RecentFilesPanel = memo(function RecentFilesPanel({
       onClick={onClose}
     >
       <div
-        className="bg-bolt-elements-background-depth-2 rounded-lg shadow-xl w-[90%] max-w-xl overflow-hidden flex flex-col"
+        className="bg-recoder-elements-background-depth-2 rounded-lg shadow-xl w-[90%] max-w-xl overflow-hidden flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Search Input */}
-        <div className="p-3 border-b border-bolt-elements-borderColor">
+        <div className="p-3 border-b border-recoder-elements-borderColor">
           <div className="relative">
-            <span className="i-ph:magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-bolt-elements-textTertiary" />
+            <span className="i-ph:magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-recoder-elements-textTertiary" />
             <input
               ref={inputRef}
               type="text"
@@ -226,7 +226,7 @@ export const RecentFilesPanel = memo(function RecentFilesPanel({
               onChange={(e) => setSearchQuery(e.target.value)}
               onKeyDown={handleKeyDown}
               placeholder="Search recent files..."
-              className="w-full pl-9 pr-3 py-2 bg-bolt-elements-background-depth-3 border border-bolt-elements-borderColor rounded-lg text-sm text-bolt-elements-textPrimary placeholder:text-bolt-elements-textTertiary focus:outline-none focus:ring-1 focus:ring-blue-500"
+              className="w-full pl-9 pr-3 py-2 bg-recoder-elements-background-depth-3 border border-recoder-elements-borderColor rounded-lg text-sm text-recoder-elements-textPrimary placeholder:text-recoder-elements-textTertiary focus:outline-none focus:ring-1 focus:ring-blue-500"
             />
           </div>
         </div>
@@ -238,12 +238,12 @@ export const RecentFilesPanel = memo(function RecentFilesPanel({
           role="listbox"
         >
           {filteredFiles.length === 0 ? (
-            <div className="px-4 py-8 text-center text-bolt-elements-textSecondary">
+            <div className="px-4 py-8 text-center text-recoder-elements-textSecondary">
               {recentFiles.length === 0 ? (
                 <>
                   <span className="i-ph:files-duotone text-3xl mb-2 block" />
                   <p>No recent files</p>
-                  <p className="text-sm text-bolt-elements-textTertiary mt-1">
+                  <p className="text-sm text-recoder-elements-textTertiary mt-1">
                     Files you open will appear here
                   </p>
                 </>
@@ -272,16 +272,16 @@ export const RecentFilesPanel = memo(function RecentFilesPanel({
         </div>
 
         {/* Footer */}
-        <div className="px-3 py-2 border-t border-bolt-elements-borderColor flex items-center justify-between text-xs text-bolt-elements-textTertiary">
+        <div className="px-3 py-2 border-t border-recoder-elements-borderColor flex items-center justify-between text-xs text-recoder-elements-textTertiary">
           <div className="flex items-center gap-3">
             <span className="flex items-center gap-1">
-              <kbd className="px-1.5 py-0.5 bg-bolt-elements-background-depth-3 rounded text-[10px]">
+              <kbd className="px-1.5 py-0.5 bg-recoder-elements-background-depth-3 rounded text-[10px]">
                 Enter
               </kbd>
               <span>Open</span>
             </span>
             <span className="flex items-center gap-1">
-              <kbd className="px-1.5 py-0.5 bg-bolt-elements-background-depth-3 rounded text-[10px]">
+              <kbd className="px-1.5 py-0.5 bg-recoder-elements-background-depth-3 rounded text-[10px]">
                 Esc
               </kbd>
               <span>Close</span>
@@ -290,7 +290,7 @@ export const RecentFilesPanel = memo(function RecentFilesPanel({
           {recentFiles.length > 0 && (
             <button
               onClick={handleClearAll}
-              className="flex items-center gap-1 text-bolt-elements-textTertiary hover:text-red-400 transition-colors"
+              className="flex items-center gap-1 text-recoder-elements-textTertiary hover:text-red-400 transition-colors"
             >
               <span className="i-ph:trash" />
               Clear all
@@ -331,8 +331,8 @@ const RecentFileItem = memo(function RecentFileItem({
       className={classNames(
         'group flex items-center gap-3 px-3 py-2 mx-2 rounded-lg cursor-pointer transition-colors',
         {
-          'bg-blue-500/20 text-bolt-elements-textPrimary': isSelected,
-          'hover:bg-bolt-elements-background-depth-3 text-bolt-elements-textSecondary':
+          'bg-blue-500/20 text-recoder-elements-textPrimary': isSelected,
+          'hover:bg-recoder-elements-background-depth-3 text-recoder-elements-textSecondary':
             !isSelected,
         }
       )}
@@ -345,21 +345,21 @@ const RecentFileItem = memo(function RecentFileItem({
       <div className="flex-1 min-w-0">
         <div className="font-medium text-sm truncate">{file.name}</div>
         {displayPath && (
-          <div className="text-xs text-bolt-elements-textTertiary truncate">
+          <div className="text-xs text-recoder-elements-textTertiary truncate">
             {displayPath}
           </div>
         )}
       </div>
       <div className="flex items-center gap-2 shrink-0">
-        <span className="text-xs text-bolt-elements-textTertiary">
+        <span className="text-xs text-recoder-elements-textTertiary">
           {formatTimestamp(file.timestamp)}
         </span>
         <button
           onClick={onRemove}
-          className="p-1 opacity-0 group-hover:opacity-100 hover:bg-bolt-elements-background-depth-4 rounded transition-all"
+          className="p-1 opacity-0 group-hover:opacity-100 hover:bg-recoder-elements-background-depth-4 rounded transition-all"
           title="Remove from recent files"
         >
-          <span className="i-ph:x text-sm text-bolt-elements-textTertiary hover:text-red-400" />
+          <span className="i-ph:x text-sm text-recoder-elements-textTertiary hover:text-red-400" />
         </button>
       </div>
     </div>

@@ -102,7 +102,7 @@ export const SaveIndicator = memo(({
         if (isEnabled && lastSaved) {
           return (
             <div
-              className="flex items-center gap-1.5 text-bolt-elements-textTertiary opacity-60"
+              className="flex items-center gap-1.5 text-recoder-elements-textTertiary opacity-60"
               title={`Auto-save enabled. Last saved: ${formatLastSaved(lastSaved)}`}
             >
               <div className="i-ph:cloud-check text-sm" />
@@ -113,7 +113,7 @@ export const SaveIndicator = memo(({
         if (isEnabled) {
           return (
             <div
-              className="flex items-center gap-1.5 text-bolt-elements-textTertiary opacity-60"
+              className="flex items-center gap-1.5 text-recoder-elements-textTertiary opacity-60"
               title="Auto-save enabled"
             >
               <div className="i-ph:cloud-check text-sm" />
@@ -142,7 +142,7 @@ export const SaveIndicator = memo(({
             'flex items-center gap-1 px-1.5 py-0.5 rounded text-xs transition-colors',
             isEnabled
               ? 'bg-green-500/10 text-green-400 hover:bg-green-500/20'
-              : 'bg-bolt-elements-background-depth-3 text-bolt-elements-textTertiary hover:bg-bolt-elements-background-depth-4 hover:text-bolt-elements-textSecondary'
+              : 'bg-recoder-elements-background-depth-3 text-recoder-elements-textTertiary hover:bg-recoder-elements-background-depth-4 hover:text-recoder-elements-textSecondary'
           )}
           title={isEnabled ? 'Disable auto-save' : 'Enable auto-save'}
         >

@@ -18,7 +18,7 @@ export function TokenControl({ value, onChange }: TokenControlProps) {
 
   return (
     <div className="flex items-center gap-2 text-xs">
-      <span className="text-bolt-elements-textTertiary">Max Tokens:</span>
+      <span className="text-recoder-elements-textTertiary">Max Tokens:</span>
       <div className="flex gap-1 items-center">
         {TOKEN_PRESETS.map((preset) => (
           <button
@@ -26,8 +26,8 @@ export function TokenControl({ value, onChange }: TokenControlProps) {
             onClick={() => { onChange(preset.value); setShowCustom(false); }}
             className={`px-2 py-0.5 rounded text-xs transition-colors ${
               value === preset.value && !showCustom
-                ? 'bg-bolt-elements-button-primary-background text-bolt-elements-button-primary-text'
-                : 'bg-bolt-elements-background-depth-3 text-bolt-elements-textSecondary hover:bg-bolt-elements-background-depth-4'
+                ? 'bg-recoder-elements-button-primary-background text-recoder-elements-button-primary-text'
+                : 'bg-recoder-elements-background-depth-3 text-recoder-elements-textSecondary hover:bg-recoder-elements-background-depth-4'
             }`}
           >
             {preset.label}
@@ -38,14 +38,14 @@ export function TokenControl({ value, onChange }: TokenControlProps) {
             type="number"
             value={value}
             onChange={(e) => onChange(Math.max(100, parseInt(e.target.value) || 1000))}
-            className="w-16 px-1 py-0.5 rounded text-xs bg-bolt-elements-background-depth-3 text-bolt-elements-textPrimary border border-bolt-elements-borderColor"
+            className="w-16 px-1 py-0.5 rounded text-xs bg-recoder-elements-background-depth-3 text-recoder-elements-textPrimary border border-recoder-elements-borderColor"
             min={100}
             max={128000}
           />
         ) : (
           <button
             onClick={() => setShowCustom(true)}
-            className="px-2 py-0.5 rounded text-xs bg-bolt-elements-background-depth-3 text-bolt-elements-textSecondary hover:bg-bolt-elements-background-depth-4"
+            className="px-2 py-0.5 rounded text-xs bg-recoder-elements-background-depth-3 text-recoder-elements-textSecondary hover:bg-recoder-elements-background-depth-4"
           >
             Custom
           </button>

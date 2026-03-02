@@ -1,7 +1,6 @@
 "use client";
 
-import type { Generation } from "@giselles-ai/protocol";
-import type { UIMessage } from "ai";
+import type { Generation } from "@recoder/protocol";
 import { ChevronRightIcon } from "lucide-react";
 import { Accordion } from "radix-ui";
 import { Fragment, useEffect, useMemo, useState } from "react";
@@ -11,7 +10,7 @@ import { THUMB_HEIGHT } from "./constants";
 import { ImageCard } from "./image-card";
 import { Lightbox } from "./lightbox";
 
-type ToolPart = Extract<UIMessage["parts"][number], { type: string }> & {
+type ToolPart = {
 	type: string;
 	toolCallId?: string;
 	state?: string;
@@ -293,18 +292,25 @@ function ToolResult({ part }: { part: ToolPart }) {
 	);
 }
 
-function mergeAdjacentTextParts<T extends UIMessage>({ parts, ...message }: T) {
-	const merged: T["parts"] = [];
+type RenderTextPart = { type: "text"; text: string };
+type RenderAnyPart = { type: string; [key: string]: unknown };
+type RenderMessage = { parts: RenderAnyPart[]; [key: string]: unknown };
+
+function mergeAdjacentTextParts<T extends RenderMessage>({
+	parts,
+	...message
+}: T): T {
+	const merged: RenderAnyPart[] = [];
 	let buffer = "";
 
 	for (const part of parts) {
 		if (part.type === "text") {
-			buffer += part.text;
+			buffer += typeof part.text === "string" ? part.text : "";
 			continue;
 		}
 		// Flush any buffered text before pushing a non-text part
 		if (buffer.length > 0) {
-			merged.push({ type: "text", text: buffer });
+			merged.push({ type: "text", text: buffer } as RenderTextPart);
 			buffer = "";
 		}
 		merged.push(part);
@@ -312,13 +318,13 @@ function mergeAdjacentTextParts<T extends UIMessage>({ parts, ...message }: T) {
 
 	// Flush tail buffer
 	if (buffer.length > 0) {
-		merged.push({ type: "text", text: buffer });
+		merged.push({ type: "text", text: buffer } as RenderTextPart);
 	}
 
 	return {
 		...message,
 		parts: merged,
-	};
+	} as T;
 }
 
 function Spinner() {
@@ -351,11 +357,11 @@ export function GenerationView({ generation }: { generation: Generation }) {
 		};
 	}, [lightboxImage]);
 
-	const generatedMessages = useMemo(() => {
+	const generatedMessages = useMemo<RenderMessage[]>(() => {
 		if ("messages" in generation && generation.messages !== undefined) {
 			return generation.messages
-				.filter((m) => m.role === "assistant")
-				.map((message) => mergeAdjacentTextParts(message));
+				.filter((m: { role?: string }) => m.role === "assistant")
+				.map((message: RenderMessage) => mergeAdjacentTextParts(message));
 		}
 		return [];
 	}, [generation]);
@@ -384,7 +390,7 @@ export function GenerationView({ generation }: { generation: Generation }) {
 	return (
 		<>
 			{generation.status === "completed" &&
-				generation.outputs.map((output) => {
+				generation.outputs.map((output: any) => {
 					if (output.type !== "generated-image") {
 						return null;
 					}
@@ -394,7 +400,7 @@ export function GenerationView({ generation }: { generation: Generation }) {
 							className="flex gap-[12px] pt-[8px] overflow-x-auto max-w-full"
 							style={{ height: `${THUMB_HEIGHT.sm}px` }}
 						>
-							{output.contents.map((content) => (
+							{output.contents.map((content: any) => (
 								// Generated images are served by the Giselle HTTP handler.
 								// `content.pathname` is stored as `/generations/...`, so we prefix it here.
 								// This avoids putting transport details (basePath) on `GiselleClient`.
@@ -414,9 +420,9 @@ export function GenerationView({ generation }: { generation: Generation }) {
 						</div>
 					);
 				})}
-			{generatedMessages.map((message, messageIndex) => (
+			{generatedMessages.map((message: any, messageIndex: number) => (
 				<div key={`${message.id ?? "message"}-${messageIndex}`}>
-					{message.parts.map((part, partIndex) => {
+					{message.parts.map((part: any, partIndex: number) => {
 						const lastPart = message.parts.length === partIndex + 1;
 						const partKey = `${message.id}-${partIndex}-${part.type}`;
 						const toolPart = part as ToolPart;
@@ -503,8 +509,8 @@ export function GenerationView({ generation }: { generation: Generation }) {
 			{generation.status !== "completed" &&
 				generation.status !== "cancelled" &&
 				// Show the spinner only when there is no reasoning part
-				!generatedMessages.some((message) =>
-					message.parts.some((part) => part.type === "reasoning"),
+				!generatedMessages.some((message: RenderMessage) =>
+					message.parts.some((part: RenderAnyPart) => part.type === "reasoning"),
 				) && (
 					<div className="pt-[8px]">
 						<Spinner />

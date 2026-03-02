@@ -16,6 +16,7 @@ import {
   Check
 } from 'lucide-react';
 import { signUp, signIn } from '@/lib/auth-client';
+import { SiteHeader } from '@/components/SiteHeader';
 
 function SignUpForm() {
   const [formData, setFormData] = useState({
@@ -165,21 +166,7 @@ function SignUpForm() {
 
   return (
     <div className="min-h-screen bg-black text-white">
-      {/* Header */}
-      <header className="fixed top-0 w-full z-50 border-b border-white/10 bg-black/80 backdrop-blur-xl">
-        <div className="container mx-auto px-6 h-16 flex items-center justify-between">
-          <Link href="/" className="flex items-center space-x-2 group text-white hover:text-orange-500 transition-colors">
-            <ArrowLeft className="w-5 h-5" />
-            <span>Back to Home</span>
-          </Link>
-          <Link href="/" className="flex items-center space-x-2">
-            <div className="w-8 h-8 bg-gradient-to-br from-orange-500 to-purple-600 rounded-lg flex items-center justify-center">
-              <Terminal className="w-5 h-5 text-white" />
-            </div>
-            <span className="text-xl font-bold">recoder</span>
-          </Link>
-        </div>
-      </header>
+      <SiteHeader />
 
       <div className="container mx-auto px-6 py-24">
         <div className="max-w-6xl mx-auto grid md:grid-cols-2 gap-12">
@@ -187,7 +174,7 @@ function SignUpForm() {
           <div className="space-y-8">
             <div className="space-y-4">
               <h1 className="text-4xl font-bold">
-                Join <span className="text-transparent bg-clip-text bg-gradient-to-r from-orange-500 to-purple-600">10,000+</span> Developers
+                Start Building with <span className="text-transparent bg-clip-text bg-gradient-to-r from-orange-500 to-purple-600">AI</span>
               </h1>
               <p className="text-xl text-gray-400">
                 Build production-ready software with AI-powered tools

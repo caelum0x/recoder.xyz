@@ -1,13 +1,16 @@
 import React from 'react';
+import type { Metadata } from 'next';
 import Link from 'next/link';
+import { SiteHeader } from '@/components/SiteHeader';
+import { SiteFooter } from '@/components/SiteFooter';
 import Image from 'next/image';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { 
-  Target, 
-  Users, 
-  Globe, 
+import {
+  Target,
+  Users,
+  Globe,
   Zap,
   Shield,
   Heart,
@@ -19,6 +22,35 @@ import {
   TrendingUp,
   Code2
 } from 'lucide-react';
+
+export const metadata: Metadata = {
+  title: 'About Recoder - AI-Powered Development Platform | Recoder.xyz',
+  description: 'Learn about Recoder.xyz, the AI-powered development platform democratizing software development. Our mission is to generate production-ready code with 15+ AI models, serving 10K+ developers across 80+ countries.',
+  openGraph: {
+    title: 'About Recoder - AI-Powered Development Platform | Recoder.xyz',
+    description: 'Democratizing software development with AI tools that generate production-ready code. 10K+ active developers, 15+ AI models, 80+ countries.',
+    url: 'https://recoder.xyz/about',
+    siteName: 'Recoder.xyz',
+    images: [
+      {
+        url: 'https://recoder.xyz/og-image.png',
+        width: 1200,
+        height: 630,
+        alt: 'About Recoder - AI-Powered Development Platform',
+      },
+    ],
+    type: 'website',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'About Recoder - AI-Powered Development Platform',
+    description: 'Democratizing software development with AI tools that generate production-ready code.',
+    images: ['https://recoder.xyz/og-image.png'],
+  },
+  alternates: {
+    canonical: 'https://recoder.xyz/about',
+  },
+};
 
 export default function AboutPage() {
   const stats = [
@@ -110,6 +142,7 @@ export default function AboutPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 dark:from-slate-900 dark:via-slate-900 dark:to-slate-800">
+      <SiteHeader />
       {/* Hero Section */}
       <section className="pt-20 pb-16 px-4">
         <div className="container mx-auto text-center">
@@ -257,7 +290,7 @@ export default function AboutPage() {
         <div className="container mx-auto text-center">
           <h2 className="text-3xl md:text-4xl font-bold mb-6">Ready to Transform Your Development?</h2>
           <p className="text-xl text-slate-600 dark:text-slate-300 mb-8 max-w-2xl mx-auto">
-            Join thousands of developers who are building faster and smarter with AI-powered tools.
+            Try Recoder free during beta — no credit card, no subscriptions, no hidden fees.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <Link href="/auth/signin" className="px-6 py-3 bg-blue-600 text-white rounded-md font-medium hover:bg-blue-700 flex items-center gap-2">
@@ -270,6 +303,7 @@ export default function AboutPage() {
           </div>
         </div>
       </section>
+      <SiteFooter />
     </div>
   );
 }

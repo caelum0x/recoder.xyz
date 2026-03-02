@@ -50,19 +50,19 @@ function CancelModal({
       <div className="absolute inset-0 bg-black/60" onClick={onClose} />
 
       {/* Modal */}
-      <div className="relative bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor rounded-xl p-6 max-w-md w-full mx-4 shadow-2xl">
-        <h3 className="text-xl font-semibold text-bolt-elements-textPrimary mb-3">
+      <div className="relative bg-recoder-elements-background-depth-2 border border-recoder-elements-borderColor rounded-xl p-6 max-w-md w-full mx-4 shadow-2xl">
+        <h3 className="text-xl font-semibold text-recoder-elements-textPrimary mb-3">
           Cancel subscription?
         </h3>
 
-        <p className="text-bolt-elements-textSecondary text-sm mb-2">
+        <p className="text-recoder-elements-textSecondary text-sm mb-2">
           Your subscription will remain active until the end of the current billing period.
         </p>
 
         {periodEnd && (
-          <p className="text-bolt-elements-textTertiary text-sm mb-4">
+          <p className="text-recoder-elements-textTertiary text-sm mb-4">
             You will keep access until{' '}
-            <span className="text-bolt-elements-textPrimary font-medium">
+            <span className="text-recoder-elements-textPrimary font-medium">
               {new Date(periodEnd).toLocaleDateString()}
             </span>
             . After that, your account will revert to the Free plan.
@@ -79,7 +79,7 @@ function CancelModal({
           <button
             onClick={onClose}
             disabled={loading}
-            className="px-4 py-2 rounded-lg text-sm font-medium text-bolt-elements-textPrimary bg-bolt-elements-background-depth-3 hover:bg-bolt-elements-item-backgroundHover transition-colors"
+            className="px-4 py-2 rounded-lg text-sm font-medium text-recoder-elements-textPrimary bg-recoder-elements-background-depth-3 hover:bg-recoder-elements-item-backgroundHover transition-colors"
           >
             Keep subscription
           </button>
@@ -205,7 +205,7 @@ export function SubscriptionDashboard({ readOnlyMode = false }: { readOnlyMode?:
       <div className="space-y-6">
         <div>
           <h1 className="text-3xl font-bold mb-2">Billing</h1>
-          <p className="text-bolt-elements-textSecondary">Manage your subscription and usage</p>
+          <p className="text-recoder-elements-textSecondary">Manage your subscription and usage</p>
         </div>
         <div className="bg-red-500/10 border border-red-500/50 rounded-lg p-4">
           <p className="text-red-400">{error}</p>
@@ -235,24 +235,24 @@ export function SubscriptionDashboard({ readOnlyMode = false }: { readOnlyMode?:
       {/* Header */}
       <div>
         <h1 className="text-3xl font-bold mb-2">Billing</h1>
-        <p className="text-bolt-elements-textSecondary">Manage your subscription and usage</p>
+        <p className="text-recoder-elements-textSecondary">Manage your subscription and usage</p>
       </div>
 
       <div className="grid md:grid-cols-2 gap-6">
         {/* Current Plan */}
-        <div className="bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor rounded-xl p-6">
+        <div className="bg-recoder-elements-background-depth-2 border border-recoder-elements-borderColor rounded-xl p-6">
           <div className="flex items-center gap-3 mb-4">
             <CreditCard className="w-6 h-6 text-blue-400" />
-            <h2 className="text-xl font-semibold text-bolt-elements-textPrimary">Current Plan</h2>
+            <h2 className="text-xl font-semibold text-recoder-elements-textPrimary">Current Plan</h2>
           </div>
 
           {subscription ? (
             <>
               <div className="mb-4">
-                <p className="text-3xl font-bold text-bolt-elements-textPrimary capitalize">
+                <p className="text-3xl font-bold text-recoder-elements-textPrimary capitalize">
                   {subscription.plan_id}
                 </p>
-                <p className="text-bolt-elements-textTertiary text-sm mt-1">
+                <p className="text-recoder-elements-textTertiary text-sm mt-1">
                   Provider: {subscription.provider === 'paddle' ? 'Paddle' : 'DodoPay'}
                 </p>
               </div>
@@ -264,14 +264,14 @@ export function SubscriptionDashboard({ readOnlyMode = false }: { readOnlyMode?:
                   ) : (
                     <AlertCircle className="w-4 h-4 text-yellow-400" />
                   )}
-                  <span className="text-bolt-elements-textSecondary capitalize">
+                  <span className="text-recoder-elements-textSecondary capitalize">
                     Status: {subscription.status}
                   </span>
                 </div>
 
                 <div className="flex items-center gap-2">
-                  <Calendar className="w-4 h-4 text-bolt-elements-textTertiary" />
-                  <span className="text-bolt-elements-textSecondary text-sm">
+                  <Calendar className="w-4 h-4 text-recoder-elements-textTertiary" />
+                  <span className="text-recoder-elements-textSecondary text-sm">
                     Renews: {new Date(subscription.current_period_end).toLocaleDateString()}
                   </span>
                 </div>
@@ -289,7 +289,7 @@ export function SubscriptionDashboard({ readOnlyMode = false }: { readOnlyMode?:
                 {!subscription.cancel_at_period_end && !readOnlyMode && (
                   <button
                     onClick={() => setCancelModalOpen(true)}
-                    className="flex-1 bg-bolt-elements-background-depth-3 hover:bg-bolt-elements-item-backgroundHover text-bolt-elements-textSecondary py-2 px-4 rounded-lg font-medium transition-colors text-sm"
+                    className="flex-1 bg-recoder-elements-background-depth-3 hover:bg-recoder-elements-item-backgroundHover text-recoder-elements-textSecondary py-2 px-4 rounded-lg font-medium transition-colors text-sm"
                   >
                     Cancel Plan
                   </button>
@@ -305,8 +305,8 @@ export function SubscriptionDashboard({ readOnlyMode = false }: { readOnlyMode?:
                 </div>
               )}
               {readOnlyMode && (
-                <div className="mt-4 p-3 bg-bolt-elements-background-depth-3 border border-bolt-elements-borderColor rounded-lg">
-                  <p className="text-bolt-elements-textSecondary text-sm">
+                <div className="mt-4 p-3 bg-recoder-elements-background-depth-3 border border-recoder-elements-borderColor rounded-lg">
+                  <p className="text-recoder-elements-textSecondary text-sm">
                     Billing write actions are disabled in this environment.
                   </p>
                 </div>
@@ -314,7 +314,7 @@ export function SubscriptionDashboard({ readOnlyMode = false }: { readOnlyMode?:
             </>
           ) : (
             <div className="text-center py-8">
-              <p className="text-bolt-elements-textTertiary mb-4">No active subscription</p>
+              <p className="text-recoder-elements-textTertiary mb-4">No active subscription</p>
               <a
                 href="/pricing"
                 className="inline-block bg-blue-600 hover:bg-blue-700 text-white py-2 px-6 rounded-lg font-medium transition-colors text-sm"
@@ -326,24 +326,24 @@ export function SubscriptionDashboard({ readOnlyMode = false }: { readOnlyMode?:
         </div>
 
         {/* Usage Stats */}
-        <div className="bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor rounded-xl p-6">
+        <div className="bg-recoder-elements-background-depth-2 border border-recoder-elements-borderColor rounded-xl p-6">
           <div className="flex items-center gap-3 mb-4">
             <TrendingUp className="w-6 h-6 text-green-400" />
-            <h2 className="text-xl font-semibold text-bolt-elements-textPrimary">Usage This Month</h2>
+            <h2 className="text-xl font-semibold text-recoder-elements-textPrimary">Usage This Month</h2>
           </div>
 
           {usage && (
             <>
               <div className="mb-4">
                 <div className="flex justify-between items-baseline mb-2">
-                  <span className="text-bolt-elements-textTertiary">AI Generations</span>
-                  <span className="text-2xl font-bold text-bolt-elements-textPrimary">
+                  <span className="text-recoder-elements-textTertiary">AI Generations</span>
+                  <span className="text-2xl font-bold text-recoder-elements-textPrimary">
                     {usage.limit - usage.remaining} / {usage.limit}
                   </span>
                 </div>
 
                 {/* Progress bar */}
-                <div className="w-full h-3 bg-bolt-elements-background-depth-3 rounded-full overflow-hidden">
+                <div className="w-full h-3 bg-recoder-elements-background-depth-3 rounded-full overflow-hidden">
                   <div
                     className={`h-full transition-all ${
                       usagePercent > 80
@@ -356,7 +356,7 @@ export function SubscriptionDashboard({ readOnlyMode = false }: { readOnlyMode?:
                   />
                 </div>
 
-                <p className="text-bolt-elements-textTertiary text-sm mt-2">
+                <p className="text-recoder-elements-textTertiary text-sm mt-2">
                   {usage.remaining} generations remaining
                 </p>
               </div>
@@ -383,26 +383,26 @@ export function SubscriptionDashboard({ readOnlyMode = false }: { readOnlyMode?:
 
       {/* Additional Stats */}
       {stats && stats.totalGenerations > 0 && (
-        <div className="bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor rounded-xl p-6">
-          <h2 className="text-xl font-semibold text-bolt-elements-textPrimary mb-4">
+        <div className="bg-recoder-elements-background-depth-2 border border-recoder-elements-borderColor rounded-xl p-6">
+          <h2 className="text-xl font-semibold text-recoder-elements-textPrimary mb-4">
             Usage Statistics (30 days)
           </h2>
 
           <div className="grid grid-cols-3 gap-4 mb-6">
             <div>
-              <p className="text-bolt-elements-textTertiary text-sm">Total Generations</p>
-              <p className="text-2xl font-bold text-bolt-elements-textPrimary">
+              <p className="text-recoder-elements-textTertiary text-sm">Total Generations</p>
+              <p className="text-2xl font-bold text-recoder-elements-textPrimary">
                 {stats.totalGenerations}
               </p>
             </div>
             <div>
-              <p className="text-bolt-elements-textTertiary text-sm">Tokens Used</p>
-              <p className="text-2xl font-bold text-bolt-elements-textPrimary">
+              <p className="text-recoder-elements-textTertiary text-sm">Tokens Used</p>
+              <p className="text-2xl font-bold text-recoder-elements-textPrimary">
                 {stats.totalTokens.toLocaleString()}
               </p>
             </div>
             <div>
-              <p className="text-bolt-elements-textTertiary text-sm">Est. Cost Saved</p>
+              <p className="text-recoder-elements-textTertiary text-sm">Est. Cost Saved</p>
               <p className="text-2xl font-bold text-green-400">${stats.totalCost.toFixed(2)}</p>
             </div>
           </div>
@@ -410,14 +410,14 @@ export function SubscriptionDashboard({ readOnlyMode = false }: { readOnlyMode?:
           {/* Model usage breakdown */}
           {Object.keys(stats.byModel).length > 0 && (
             <div>
-              <h3 className="text-lg font-semibold text-bolt-elements-textPrimary mb-3">
+              <h3 className="text-lg font-semibold text-recoder-elements-textPrimary mb-3">
                 By AI Model
               </h3>
               <div className="space-y-2">
                 {Object.entries(stats.byModel).map(([model, count]) => (
                   <div key={model} className="flex justify-between items-center">
-                    <span className="text-bolt-elements-textSecondary">{model}</span>
-                    <span className="text-bolt-elements-textPrimary font-medium">
+                    <span className="text-recoder-elements-textSecondary">{model}</span>
+                    <span className="text-recoder-elements-textPrimary font-medium">
                       {count} generations
                     </span>
                   </div>

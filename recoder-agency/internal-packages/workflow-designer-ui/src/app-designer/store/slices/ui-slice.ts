@@ -1,5 +1,5 @@
-import type { LanguageModelProvider } from "@giselles-ai/language-model";
-import type { NodeLike, ShortcutScope } from "@giselles-ai/protocol";
+import type { LanguageModelProvider } from "@recoder/language-model";
+import type { NodeLike, ShortcutScope } from "@recoder/protocol";
 import type { StateCreator } from "zustand";
 import type { WorkspaceSlice } from "./workspace-slice";
 

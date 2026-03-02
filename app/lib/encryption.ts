@@ -1,4 +1,5 @@
 import crypto from 'crypto';
+import { logger } from '@/lib/logger';
 
 const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || process.env.API_KEY_ENCRYPTION_SECRET;
 const ALGORITHM = 'aes-256-gcm';
@@ -10,7 +11,7 @@ if (!ENCRYPTION_KEY) {
   if (process.env.NODE_ENV === 'production') {
     throw new Error('CRITICAL: ENCRYPTION_KEY environment variable is not set. Cannot start application in production without encryption.');
   }
-  console.error('CRITICAL: ENCRYPTION_KEY is not set. API key encryption is DISABLED.');
+  logger.error('CRITICAL: ENCRYPTION_KEY is not set. API key encryption is DISABLED.');
 }
 
 if (ENCRYPTION_KEY && ENCRYPTION_KEY.length < 32) {
@@ -19,7 +20,7 @@ if (ENCRYPTION_KEY && ENCRYPTION_KEY.length < 32) {
 
 // For hex keys (64 chars = 32 bytes), validate the format
 if (ENCRYPTION_KEY && ENCRYPTION_KEY.length === 64 && !/^[0-9a-fA-F]{64}$/.test(ENCRYPTION_KEY)) {
-  console.warn('WARNING: ENCRYPTION_KEY appears to be hex but contains invalid characters. Using as-is.');
+  logger.warn('ENCRYPTION_KEY appears to be hex but contains invalid characters. Using as-is.');
 }
 
 /**

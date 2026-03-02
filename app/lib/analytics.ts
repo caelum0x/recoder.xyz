@@ -1,48 +1,49 @@
-// Google Analytics event tracking
+/**
+ * Main analytics entrypoint.
+ *
+ * This file intentionally stays at `lib/analytics.ts` for compatibility with
+ * existing imports (`@/lib/analytics`), while re-exporting the typed taxonomy
+ * from `lib/analytics/*`.
+ */
 
-declare global {
-  interface Window {
-    gtag?: (...args: any[]) => void;
-  }
-}
+import { trackEvent } from './analytics/tracker';
 
-export function trackEvent(eventName: string, params?: Record<string, any>) {
-  if (typeof window !== 'undefined' && window.gtag) {
-    window.gtag('event', eventName, params);
-  }
-}
+export { AnalyticsEvents } from './analytics/events';
+export type {
+  AnalyticsEvent,
+  BaseEventProperties,
+  AuthEventProperties,
+  OnboardingEventProperties,
+  ActivationEventProperties,
+  EngagementEventProperties,
+  BillingEventProperties,
+  PageViewEventProperties,
+  EventPropertiesMap,
+} from './analytics/events';
+export { trackEvent, trackServerEvent } from './analytics/tracker';
 
-// Pre-defined events
+// Backward-compatible convenience API used by older auth UI components.
 export const analytics = {
-  // Auth events
   signUp: (method: 'email' | 'google' | 'github') => {
-    trackEvent('sign_up', { method });
+    trackEvent('sign_up' as any, { method });
   },
-
   signIn: (method: 'email' | 'google' | 'github') => {
-    trackEvent('login', { method });
+    trackEvent('login' as any, { method });
   },
-
   signOut: () => {
-    trackEvent('logout');
+    trackEvent('logout' as any);
   },
-
-  // Feature usage
   launchWebIDE: () => {
-    trackEvent('launch_web_ide');
+    trackEvent('launch_web_ide' as any);
   },
-
   createProject: (type?: string) => {
-    trackEvent('create_project', { project_type: type });
+    trackEvent('create_project' as any, { project_type: type });
   },
-
   apiKeyAdded: (provider: string) => {
-    trackEvent('api_key_added', { provider });
+    trackEvent('api_key_added' as any, { provider });
   },
-
-  // Page views (automatic with GA, but useful for SPAs)
   pageView: (pagePath: string, pageTitle?: string) => {
-    trackEvent('page_view', {
+    trackEvent('page_view' as any, {
       page_path: pagePath,
       page_title: pageTitle,
     });

@@ -103,23 +103,23 @@ export function NeonPanel() {
       <div className="h-full flex flex-col p-4 overflow-auto">
         <div className="flex items-center gap-2 mb-4">
           <div className="i-ph:database text-blue-500 text-xl" />
-          <h3 className="font-semibold text-bolt-elements-textPrimary">Connect Neon PostgreSQL</h3>
+          <h3 className="font-semibold text-recoder-elements-textPrimary">Connect Neon PostgreSQL</h3>
         </div>
 
-        <p className="text-sm text-bolt-elements-textSecondary mb-4">
+        <p className="text-sm text-recoder-elements-textSecondary mb-4">
           Connect your Neon database to automatically set POSTGRES_URL in your container and manage branches.
         </p>
 
         <div className="space-y-3">
           <div>
-            <label className="block text-xs text-bolt-elements-textSecondary mb-1">API Key</label>
+            <label className="block text-xs text-recoder-elements-textSecondary mb-1">API Key</label>
             <input
               type="password"
               value={apiKeyInput}
               onChange={(e) => setApiKeyInput(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && handleConnect()}
               placeholder="neon_xxxxxxxxxxxxxxxx"
-              className="w-full px-3 py-2 rounded-lg border border-bolt-elements-borderColor bg-bolt-elements-background-depth-1 text-bolt-elements-textPrimary text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+              className="w-full px-3 py-2 rounded-lg border border-recoder-elements-borderColor bg-recoder-elements-background-depth-1 text-recoder-elements-textPrimary text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50"
             />
           </div>
 
@@ -153,11 +153,11 @@ export function NeonPanel() {
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2">
             <div className="i-ph:database text-blue-500 text-xl" />
-            <h3 className="font-semibold text-bolt-elements-textPrimary">Link Neon Project</h3>
+            <h3 className="font-semibold text-recoder-elements-textPrimary">Link Neon Project</h3>
           </div>
           <button
             onClick={disconnect}
-            className="text-xs text-bolt-elements-textSecondary hover:text-red-500"
+            className="text-xs text-recoder-elements-textSecondary hover:text-red-500"
           >
             Disconnect
           </button>
@@ -171,12 +171,12 @@ export function NeonPanel() {
               onChange={(e) => setNewProjectName(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && handleCreateProject()}
               placeholder="Project name"
-              className="w-full px-3 py-2 rounded-lg border border-bolt-elements-borderColor bg-bolt-elements-background-depth-1 text-bolt-elements-textPrimary text-sm"
+              className="w-full px-3 py-2 rounded-lg border border-recoder-elements-borderColor bg-recoder-elements-background-depth-1 text-recoder-elements-textPrimary text-sm"
             />
             <div className="flex gap-2">
               <button
                 onClick={() => setShowCreateProject(false)}
-                className="flex-1 px-3 py-1.5 rounded-lg border border-bolt-elements-borderColor text-bolt-elements-textSecondary text-sm"
+                className="flex-1 px-3 py-1.5 rounded-lg border border-recoder-elements-borderColor text-recoder-elements-textSecondary text-sm"
               >
                 Cancel
               </button>
@@ -205,8 +205,8 @@ export function NeonPanel() {
               onClick={() => setSelectedProject(proj)}
               className={`w-full text-left px-3 py-2 rounded-lg border text-sm transition-colors ${
                 selectedProject?.id === proj.id
-                  ? 'border-blue-500 bg-blue-500/10 text-bolt-elements-textPrimary'
-                  : 'border-bolt-elements-borderColor hover:border-blue-500/50 text-bolt-elements-textSecondary'
+                  ? 'border-blue-500 bg-blue-500/10 text-recoder-elements-textPrimary'
+                  : 'border-recoder-elements-borderColor hover:border-blue-500/50 text-recoder-elements-textSecondary'
               }`}
             >
               <div className="font-medium">{proj.name}</div>
@@ -220,7 +220,7 @@ export function NeonPanel() {
         <div className="mt-3 flex gap-2">
           <button
             onClick={refreshProjects}
-            className="flex-1 px-3 py-2 rounded-lg border border-bolt-elements-borderColor text-bolt-elements-textSecondary text-sm"
+            className="flex-1 px-3 py-2 rounded-lg border border-recoder-elements-borderColor text-recoder-elements-textSecondary text-sm"
           >
             Refresh
           </button>
@@ -242,12 +242,12 @@ export function NeonPanel() {
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2">
           <div className="i-ph:database text-blue-500 text-xl" />
-          <h3 className="font-semibold text-bolt-elements-textPrimary">Neon PostgreSQL</h3>
+          <h3 className="font-semibold text-recoder-elements-textPrimary">Neon PostgreSQL</h3>
           <span className="px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-500 text-xs">Connected</span>
         </div>
         <button
           onClick={unlinkProject}
-          className="text-xs text-bolt-elements-textSecondary hover:text-red-500"
+          className="text-xs text-recoder-elements-textSecondary hover:text-red-500"
         >
           Unlink
         </button>
@@ -256,7 +256,7 @@ export function NeonPanel() {
       {/* Branch list */}
       <div className="mb-3">
         <div className="flex items-center justify-between mb-2">
-          <span className="text-xs font-medium text-bolt-elements-textSecondary">Branches</span>
+          <span className="text-xs font-medium text-recoder-elements-textSecondary">Branches</span>
           <button
             onClick={() => setShowCreateBranch(!showCreateBranch)}
             className="text-xs text-blue-500 hover:underline"
@@ -273,7 +273,7 @@ export function NeonPanel() {
               onChange={(e) => setNewBranchName(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && handleCreateBranch()}
               placeholder="Branch name"
-              className="flex-1 px-2 py-1.5 rounded border border-bolt-elements-borderColor bg-bolt-elements-background-depth-1 text-bolt-elements-textPrimary text-xs"
+              className="flex-1 px-2 py-1.5 rounded border border-recoder-elements-borderColor bg-recoder-elements-background-depth-1 text-recoder-elements-textPrimary text-xs"
             />
             <button
               onClick={handleCreateBranch}
@@ -289,10 +289,10 @@ export function NeonPanel() {
           {branches.map((branch) => (
             <div
               key={branch.id}
-              className="flex items-center justify-between px-3 py-2 rounded-lg border border-bolt-elements-borderColor bg-bolt-elements-background-depth-1"
+              className="flex items-center justify-between px-3 py-2 rounded-lg border border-recoder-elements-borderColor bg-recoder-elements-background-depth-1"
             >
               <div className="flex items-center gap-2">
-                <span className="text-sm text-bolt-elements-textPrimary">{branch.name}</span>
+                <span className="text-sm text-recoder-elements-textPrimary">{branch.name}</span>
                 <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-medium ${getBranchBadgeColor(branch)}`}>
                   {getBranchLabel(branch)}
                 </span>
@@ -318,7 +318,7 @@ export function NeonPanel() {
           ))}
 
           {branches.length === 0 && (
-            <p className="text-xs text-bolt-elements-textSecondary text-center py-3">
+            <p className="text-xs text-recoder-elements-textSecondary text-center py-3">
               No branches found.
               <button onClick={refreshBranches} className="text-blue-500 ml-1 hover:underline">
                 Refresh

@@ -6,6 +6,7 @@ import { textToContent } from "@repo/editor/lib/tiptap";
 import { MAX_FREE_INITIATIVES } from "@repo/lib/consts";
 import { parseError } from "@repo/lib/parse-error";
 import { revalidatePath } from "next/cache";
+import { PmEvents, trackPmServerEvent } from "@/lib/analytics";
 import { database } from "@/lib/database";
 
 export const createInitiative = async (
@@ -80,6 +81,14 @@ export const createInitiative = async (
         creatorId: user.id,
         organizationId,
       },
+    });
+
+    trackPmServerEvent(PmEvents.INITIATIVE_CREATED, {
+      initiativeId: id,
+      title,
+      ownerId,
+      userId: user.id,
+      organizationId,
     });
 
     revalidatePath("/initiatives");

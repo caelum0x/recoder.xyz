@@ -55,22 +55,22 @@ export function Header() {
   return (
     <header
       className={classNames(
-        'flex items-center bg-bolt-elements-background-depth-1 p-5 border-b h-[var(--header-height)]',
+        'flex items-center bg-recoder-elements-background-depth-1 p-5 border-b h-[var(--header-height)]',
         {
           'border-transparent': !chat.started,
-          'border-bolt-elements-borderColor': chat.started,
+          'border-recoder-elements-borderColor': chat.started,
         },
       )}
     >
-      <div className="flex items-center gap-2 z-logo text-bolt-elements-textPrimary">
+      <div className="flex items-center gap-2 z-logo text-recoder-elements-textPrimary">
         {/* History Toggle Button - Black Square with White Icon */}
         <button
           onClick={handleHistoryToggle}
-          className="p-2.5 bg-transparent hover:bg-bolt-elements-background-depth-3 rounded-md transition-all"
+          className="p-2.5 bg-transparent hover:bg-recoder-elements-background-depth-3 rounded-md transition-all"
           title="Toggle Chat History"
           aria-label="Toggle chat history sidebar"
         >
-          <div className="i-ph:clock-clockwise text-xl text-bolt-elements-textPrimary" />
+          <div className="i-ph:clock-clockwise text-xl text-recoder-elements-textPrimary" />
         </button>
         
         <a href="/" className="text-2xl font-semibold text-accent flex items-center gap-2 cursor-pointer hover:opacity-80 transition-opacity">
@@ -82,14 +82,14 @@ export function Header() {
         <nav className="ml-4 hidden md:flex items-center gap-1">
           <a
             href="/projects"
-            className="p-2 lg:px-3 lg:py-2 text-sm text-bolt-elements-textSecondary hover:text-bolt-elements-textPrimary transition-colors rounded-md hover:bg-bolt-elements-background-depth-2 flex items-center gap-1"
+            className="p-2 lg:px-3 lg:py-2 text-sm text-recoder-elements-textSecondary hover:text-recoder-elements-textPrimary transition-colors rounded-md hover:bg-recoder-elements-background-depth-2 flex items-center gap-1"
           >
             <div className="i-ph:folder text-sm" />
             <span className="hidden lg:inline">Projects</span>
           </a>
         </nav>
       </div>
-      <span className="flex-1 px-4 truncate text-center text-bolt-elements-textPrimary hidden sm:block">
+      <span className="flex-1 px-4 truncate text-center text-recoder-elements-textPrimary hidden sm:block">
         <ClientOnly>{() => <ChatDescription />}</ClientOnly>
       </span>
       <div className="flex items-center gap-2">
@@ -105,7 +105,7 @@ export function Header() {
         {/* Settings Button */}
         <button
           onClick={openSettingsPanel}
-          className="p-2 bg-transparent text-bolt-elements-textSecondary hover:text-bolt-elements-textPrimary hover:bg-bolt-elements-background-depth-3 rounded-md transition-colors"
+          className="p-2 bg-transparent text-recoder-elements-textSecondary hover:text-recoder-elements-textPrimary hover:bg-recoder-elements-background-depth-3 rounded-md transition-colors"
           title="Settings (Cmd+,)"
           aria-label="Open settings"
         >

@@ -1,4 +1,4 @@
-import type { TriggerId } from "@giselles-ai/protocol";
+import type { TriggerId } from "@recoder/protocol";
 import type { GiselleContext } from "../types";
 import { deleteTrigger as systemDeleteTrigger } from "./utils";
 

@@ -10,7 +10,7 @@ import {
 	UploadedFileData,
 	type UploadedFileData as UploadedFileDataType,
 	type WorkspaceId,
-} from "@giselles-ai/protocol";
+} from "@recoder/protocol";
 import { eq } from "drizzle-orm";
 import type { NextRequest } from "next/server";
 import * as z from "zod/v4";

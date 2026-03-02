@@ -1,4 +1,4 @@
-import { PopoverContent } from "@giselle-internal/ui/popover";
+import { PopoverContent } from "@recoder-internal/ui/popover";
 import { clsx } from "clsx/lite";
 import { ChevronRightIcon, ExternalLinkIcon } from "lucide-react";
 import Link from "next/link";
@@ -7,7 +7,7 @@ import { use } from "react";
 import type { TeamPlan } from "@/db";
 import { getCurrentUser as getCurrentUserApi } from "@/lib/get-current-user";
 import { logger } from "@/lib/logger";
-import { getUser } from "@/lib/supabase";
+import { getUser } from "@/lib/auth/user";
 import { AvatarImage } from "@/services/accounts/components/user-button/avatar-image";
 import { SignOutButton } from "@/services/accounts/components/user-button/sign-out-button";
 import { fetchCurrentTeam } from "@/services/teams";

@@ -9,9 +9,9 @@ import {
 	DialogFooter,
 	DialogHeader,
 	DialogTitle,
-} from "@giselle-internal/ui/dialog";
-import { GlassSurfaceLayers } from "@giselle-internal/ui/glass-surface";
-import { useToasts } from "@giselle-internal/ui/toast";
+} from "@recoder-internal/ui/dialog";
+import { GlassSurfaceLayers } from "@recoder-internal/ui/glass-surface";
+import { useToasts } from "@recoder-internal/ui/toast";
 import * as DropdownMenuPrimitive from "@radix-ui/react-dropdown-menu";
 import clsx from "clsx/lite";
 import { Ellipsis, File, X, Zap } from "lucide-react";

@@ -1,6 +1,6 @@
 # Smoke Command Index
 
-Last updated: 2026-02-15
+Last updated: 2026-02-26
 
 This is the single operator index for production smoke coverage.
 
@@ -18,6 +18,9 @@ This is the single operator index for production smoke coverage.
   - Required when A2A transport/envelope/orchestration code changes.
 - `bash scripts/a2a-workers-hetzner.sh status`
   - Scope: worker fleet process visibility.
+- `pnpm run phase16:validate:production-deploy`
+  - Scope: Phase 16 deployment validation on Hetzner (local DNS probe + remote repo readiness + remote `a2a-production-smoke.sh` execution).
+  - Writes evidence to `logs/phase16-validation/<run-id>-summary.{json,md}`.
 
 ## Gate wrappers
 - `pnpm run release:evidence`

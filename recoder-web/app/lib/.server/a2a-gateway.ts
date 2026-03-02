@@ -1,7 +1,29 @@
 import {
+  A2AControlPlane,
+  InMemoryAgentRegistry,
+  InMemoryAuditLogService,
+  InMemoryCollaborationService,
+  InMemoryTaskStore,
+  PersistentAuditLogService,
+  PersistentCollaborationService,
+  PersistentTaskStore,
+  RedisBackedPersistenceAdapter,
+  UnifiedPolicyPlane,
   buildInvalidA2AEnvelopeErrorResponse,
+  createRecoderAgentCard,
   type A2AEnvelopeValidationIssue,
+  type ConnectorAdapter,
+  type ConnectorAuditEvent,
+  type ConnectorCapability,
+  type ConnectorContextScope,
+  type ConnectorContextSnapshot,
+  type ConnectorTaskRequest,
+  type ConnectorTaskResult,
+  type PolicyAction,
+  type RecoderAgentIdentity,
   type RecoderA2AEnvelope,
+  type TaskState,
+  type TaskUpdate,
 } from '@recoder/shared/a2a';
 
 type VerifyResult =
@@ -90,6 +112,12 @@ type RedisLike = {
 const idempotencyStore = new Map<string, number>();
 let redisClient: RedisLike | null = null;
 let redisLoadAttempted = false;
+let controlPlaneRuntimePromise: Promise<{
+  controlPlane: A2AControlPlane;
+  registry: InMemoryAgentRegistry;
+  policy: UnifiedPolicyPlane;
+  persistence: 'redis' | 'memory';
+}> | null = null;
 
 function getRedisUrl(): string {
   return process.env.RECODER_A2A_REDIS_URL || process.env.REDIS_URL || '';
@@ -144,6 +172,335 @@ function normalizePlatform(value: unknown): GatewayAgentPlatform {
     return platform as GatewayAgentPlatform;
   }
   return 'custom';
+}
+
+class GatewayPassthroughConnector implements ConnectorAdapter {
+  readonly protocol = 'rest' as const;
+
+  constructor(readonly platform: RecoderAgentIdentity['platform']) {}
+
+  async discoverCapabilities(): Promise<ConnectorCapability[]> {
+    return [
+      {
+        id: 'gateway-intent-routing',
+        name: 'Gateway Intent Routing',
+        description: 'Records and routes incoming A2A intents through Recoder Web gateway',
+      },
+    ];
+  }
+
+  async executeTask(request: ConnectorTaskRequest): Promise<ConnectorTaskResult> {
+    return {
+      state: 'completed',
+      resultText: `accepted:${request.assignee.id}`,
+    };
+  }
+
+  async *streamTaskUpdates(taskId: string): AsyncIterable<TaskUpdate> {
+    yield { taskId, state: 'completed' };
+  }
+
+  async cancelTask(): Promise<boolean> {
+    return false;
+  }
+
+  async extractContext(scope: ConnectorContextScope): Promise<ConnectorContextSnapshot> {
+    return { scope, metadata: { source: 'recoder-web-gateway', platform: this.platform } };
+  }
+
+  mapPlatformActionToPolicyAction(): PolicyAction | undefined {
+    return 'network:call';
+  }
+
+  async emitAuditEvent(_event: ConnectorAuditEvent): Promise<void> {}
+}
+
+async function getA2AControlPlaneRuntime() {
+  if (controlPlaneRuntimePromise) {
+    return controlPlaneRuntimePromise;
+  }
+
+  controlPlaneRuntimePromise = (async () => {
+    const registry = new InMemoryAgentRegistry();
+    const policy = new UnifiedPolicyPlane();
+    const redisUrl = getRedisUrl();
+
+    if (redisUrl) {
+      try {
+        const moduleName = process.env.RECODER_A2A_REDIS_MODULE || 'ioredis';
+        const mod = await import(/* @vite-ignore */ moduleName);
+        const RedisCtor = (mod as any).default;
+        const client = new RedisCtor(redisUrl, {
+          maxRetriesPerRequest: 2,
+          enableReadyCheck: true,
+          lazyConnect: true,
+        });
+        await client.connect();
+        const adapter = await RedisBackedPersistenceAdapter.fromClient({
+          redis: {
+            get: (key) => client.get(key),
+            set: (key, value) => client.set(key, value),
+          },
+          keyPrefix: process.env.RECODER_A2A_PERSIST_PREFIX || 'a2a:persist:',
+        });
+        const controlPlane = new A2AControlPlane(
+          registry,
+          new PersistentTaskStore(adapter),
+          policy,
+          new PersistentAuditLogService(adapter),
+          new PersistentCollaborationService(adapter),
+        );
+        return { controlPlane, registry, policy, persistence: 'redis' as const };
+      } catch {
+        // Fall back to in-memory runtime.
+      }
+    }
+
+    const controlPlane = new A2AControlPlane(
+      registry,
+      new InMemoryTaskStore(),
+      policy,
+      new InMemoryAuditLogService(),
+      new InMemoryCollaborationService(),
+    );
+    return { controlPlane, registry, policy, persistence: 'memory' as const };
+  })();
+
+  return controlPlaneRuntimePromise;
+}
+
+async function loadLatestConnectorSupportStatus(): Promise<{
+  available: boolean;
+  source?: string;
+  path?: string;
+  generatedAt?: string;
+  supportGatesPass?: boolean;
+  noSkipCloseoutPrecondition?: boolean;
+  connectors?: Array<{ id: string; tier: string; status: string }>;
+  error?: string;
+}> {
+  const explicitPath = process.env.RECODER_A2A_CONNECTOR_STATUS_FILE || '';
+  try {
+    const fs = await import('node:fs/promises');
+    const path = await import('node:path');
+
+    const readStatusFile = async (filePath: string, source: string) => {
+      const raw = await fs.readFile(filePath, 'utf8');
+      const parsed = JSON.parse(raw) as Record<string, any>;
+      const connectors = Array.isArray(parsed.connectors)
+        ? parsed.connectors
+            .filter((item) => item && typeof item.id === 'string')
+            .map((item) => ({
+              id: String(item.id),
+              tier: String(item.tier || 'unknown'),
+              status: String(item.status || 'unknown'),
+            }))
+        : [];
+      const supportInputs = (parsed.support_gate_inputs || {}) as Record<string, unknown>;
+      return {
+        available: true as const,
+        source,
+        path: filePath,
+        generatedAt: typeof parsed.generated_at_utc === 'string' ? parsed.generated_at_utc : undefined,
+        supportGatesPass:
+          typeof supportInputs.support_gates_pass === 'boolean'
+            ? supportInputs.support_gates_pass
+            : undefined,
+        noSkipCloseoutPrecondition:
+          typeof supportInputs.no_skip_closeout_precondition === 'boolean'
+            ? supportInputs.no_skip_closeout_precondition
+            : undefined,
+        connectors,
+      };
+    };
+
+    if (explicitPath) {
+      return await readStatusFile(explicitPath, 'explicit');
+    }
+
+    const root = process.cwd();
+    const candidateDirs = [
+      path.resolve(root, 'logs/phase3-gates'),
+      path.resolve(root, '../logs/phase3-gates'),
+      path.resolve(root, 'logs/release-evidence'),
+      path.resolve(root, '../logs/release-evidence'),
+    ];
+
+    for (const dir of candidateDirs) {
+      try {
+        const entries = await fs.readdir(dir);
+        const candidates = entries
+          .filter((name) => name.endsWith('-connectors-support.json'))
+          .sort()
+          .reverse();
+        if (candidates.length === 0) continue;
+        const filePath = path.join(dir, candidates[0]);
+        const source = dir.includes('phase3-gates') ? 'phase3-gates' : 'release-evidence';
+        return await readStatusFile(filePath, source);
+      } catch {
+        // try next directory
+      }
+    }
+
+    return { available: false, error: 'no connector support artifact found' };
+  } catch (error) {
+    return {
+      available: false,
+      error: error instanceof Error ? error.message : 'connector_status_load_failed',
+    };
+  }
+}
+
+export async function getA2ARuntimeDiagnostics(): Promise<Record<string, unknown>> {
+  const redisUrl = getRedisUrl();
+  try {
+    const runtime = await getA2AControlPlaneRuntime();
+    const registeredAgents = runtime.registry.list();
+    const connectorStatus = await loadLatestConnectorSupportStatus();
+    const gateReadiness =
+      connectorStatus.available === true && typeof connectorStatus.supportGatesPass === 'boolean'
+        ? connectorStatus.supportGatesPass
+        : null;
+    const lastError = connectorStatus.available ? undefined : connectorStatus.error;
+
+    return {
+      ok: true,
+      persistence: runtime.persistence,
+      redisConfigured: Boolean(redisUrl),
+      redisModule: process.env.RECODER_A2A_REDIS_MODULE || 'ioredis',
+      persistPrefix: process.env.RECODER_A2A_PERSIST_PREFIX || 'a2a:persist:',
+      registeredAgents: registeredAgents.length,
+      tier1Agents: registeredAgents.filter((agent) => agent.tier === 'tier1').length,
+      tier2Agents: registeredAgents.filter((agent) => agent.tier === 'tier2').length,
+      gateReadiness,
+      connectorStatus,
+      ...(lastError ? { lastError } : {}),
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      persistence: 'error',
+      redisConfigured: Boolean(redisUrl),
+      gateReadiness: false,
+      connectorStatus: { available: false },
+      lastError: error instanceof Error ? error.message : 'runtime_diagnostics_failed',
+      error: error instanceof Error ? error.message : 'runtime_diagnostics_failed',
+    };
+  }
+}
+
+function extractEnvelopeText(envelope: GatewayEnvelope): string {
+  const textPart = Array.isArray(envelope.payload)
+    ? envelope.payload.find((part) => isRecord(part) && part.kind === 'text' && typeof part.text === 'string')
+    : null;
+  if (isRecord(textPart) && typeof textPart.text === 'string') {
+    return textPart.text;
+  }
+  return `intent:${envelope.intent}`;
+}
+
+function ensureGatewayAgentRegistered(input: {
+  runtime: Awaited<ReturnType<typeof getA2AControlPlaneRuntime>>;
+  identity: RecoderAgentIdentity;
+}): void {
+  const { runtime, identity } = input;
+  const existing = runtime.registry.get(identity.id);
+  if (existing) return;
+
+  const isTier1 = identity.platform === 'codex' || identity.platform === 'claude_code';
+  runtime.registry.register({
+    identity,
+    protocol: 'rest',
+    tier: isTier1 ? 'tier1' : 'tier2',
+    status: isTier1 ? 'experimental' : 'backlog',
+    tags: ['a2a-gateway', identity.platform],
+    card: createRecoderAgentCard({
+      name: identity.name || identity.id,
+      description: `Gateway-registered identity for ${identity.platform}`,
+      version: '2026-02-15',
+      url: process.env.RECODER_WEB_URL || process.env.MAIN_SITE_URL || 'https://web.recoder.xyz',
+      skills: [
+        {
+          id: 'intent-routing',
+          name: 'Intent Routing',
+          description: 'Accept and route A2A intents through Recoder Web',
+          tags: ['a2a', 'routing'],
+        },
+      ],
+    }),
+  });
+  runtime.controlPlane.attachConnector(identity.id, new GatewayPassthroughConnector(identity.platform));
+
+  const autoActions: PolicyAction[] = [
+    'file:read',
+    'file:write',
+    'file:delete',
+    'bash:exec',
+    'network:call',
+    'git:push',
+    'env:access',
+  ];
+  for (const action of autoActions) {
+    runtime.policy.setRule(identity.id, action, 'auto');
+  }
+}
+
+async function recordEnvelopeInControlPlane(envelope: GatewayEnvelope): Promise<Record<string, unknown>> {
+  try {
+    const runtime = await getA2AControlPlaneRuntime();
+    ensureGatewayAgentRegistered({ runtime, identity: envelope.from });
+    ensureGatewayAgentRegistered({ runtime, identity: envelope.to });
+
+    const details: Record<string, unknown> = {
+      persistence: runtime.persistence,
+    };
+
+    try {
+      const channelId = `a2a:${envelope.threadId}`;
+      runtime.controlPlane.createChannel({
+        id: channelId,
+        scope: 'channel',
+        name: `a2a-${envelope.threadId}`,
+        memberAgentIds: [envelope.from.id, envelope.to.id],
+      });
+      runtime.controlPlane.createThread({
+        id: envelope.threadId,
+        channelId,
+        title: `${envelope.intent}:${envelope.messageId}`,
+      });
+      runtime.controlPlane.postMessage({
+        id: `${envelope.messageId}:msg`,
+        threadId: envelope.threadId,
+        senderAgentId: envelope.from.id,
+        text: extractEnvelopeText(envelope),
+      });
+    } catch (error) {
+      details.collaborationError = error instanceof Error ? error.message : 'collaboration_record_failed';
+    }
+
+    try {
+      const task = await runtime.controlPlane.submitTask({
+        taskId: envelope.messageId,
+        threadId: envelope.threadId,
+        requesterId: envelope.from.id,
+        assigneeId: envelope.to.id,
+        prompt: extractEnvelopeText(envelope),
+        requiredAction: 'network:call',
+        policyDetails: { source: 'recoder-web-api.a2a.envelope', intent: envelope.intent },
+      });
+      details.taskState = task.state as TaskState;
+      details.taskId = task.id;
+    } catch (error) {
+      details.taskError = error instanceof Error ? error.message : 'task_record_failed';
+    }
+
+    return details;
+  } catch (error) {
+    return {
+      persistence: 'error',
+      error: error instanceof Error ? error.message : 'control_plane_record_failed',
+    };
+  }
 }
 
 export function parseEnvelopeFromUnknown(
@@ -443,17 +800,55 @@ async function dispatchIntentToBackend(envelope: GatewayEnvelope): Promise<Recor
 }
 
 export async function handleA2AIntent(envelope: GatewayEnvelope): Promise<IntentResult> {
+  const controlPlane = await recordEnvelopeInControlPlane(envelope);
   switch (envelope.intent) {
     case 'plan':
-      return { handled: true, status: 'accepted', action: 'plan_registered', details: await dispatchIntentToBackend(envelope) };
+      return {
+        handled: true,
+        status: 'accepted',
+        action: 'plan_registered',
+        details: {
+          ...(await dispatchIntentToBackend(envelope)),
+          controlPlane,
+        },
+      };
     case 'execute':
-      return { handled: true, status: 'accepted', action: 'execution_requested', details: await dispatchIntentToBackend(envelope) };
+      return {
+        handled: true,
+        status: 'accepted',
+        action: 'execution_requested',
+        details: {
+          ...(await dispatchIntentToBackend(envelope)),
+          controlPlane,
+        },
+      };
     case 'handoff':
-      return { handled: true, status: 'accepted', action: 'handoff_received', details: await dispatchIntentToBackend(envelope) };
+      return {
+        handled: true,
+        status: 'accepted',
+        action: 'handoff_received',
+        details: {
+          ...(await dispatchIntentToBackend(envelope)),
+          controlPlane,
+        },
+      };
     case 'tool_call':
-      return { handled: true, status: 'accepted', action: 'tool_call_received', details: await dispatchIntentToBackend(envelope) };
+      return {
+        handled: true,
+        status: 'accepted',
+        action: 'tool_call_received',
+        details: {
+          ...(await dispatchIntentToBackend(envelope)),
+          controlPlane,
+        },
+      };
     default:
-      return { handled: false, status: 'ignored', action: 'unsupported_intent', details: { intent: envelope.intent } };
+      return {
+        handled: false,
+        status: 'ignored',
+        action: 'unsupported_intent',
+        details: { intent: envelope.intent, controlPlane },
+      };
   }
 }
 
@@ -483,4 +878,5 @@ export async function __createSignatureForTest(timestamp: string, rawBody: strin
 
 export function __resetA2ATestState(): void {
   idempotencyStore.clear();
+  controlPlaneRuntimePromise = null;
 }

@@ -1,6 +1,7 @@
-import { ToastProvider } from "@giselle-internal/ui/toast";
+import { ToastProvider } from "@recoder-internal/ui/toast";
 import { SentryUserWrapper } from "@/components/sentry-user-wrapper";
 import { InternalRecoderStudioClientProvider } from "./internal-recoder-studio-client-provider";
+import { InteropPanel } from "./interop/components/interop-panel";
 import { Header } from "./ui/header";
 import { Sidebar } from "./ui/sidebar";
 import { TaskOverlay } from "./ui/task-overlay";
@@ -19,6 +20,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 								<TaskOverlay />
 							</main>
 						</div>
+						<InteropPanel />
 					</div>
 				</InternalRecoderStudioClientProvider>
 			</ToastProvider>

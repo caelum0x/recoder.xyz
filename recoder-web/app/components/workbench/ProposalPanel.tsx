@@ -84,7 +84,7 @@ const FileChangeIcon = memo(function FileChangeIcon({ type, className = 'w-4 h-4
       );
     default:
       return (
-        <svg className={`${className} text-bolt-elements-textTertiary`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg className={`${className} text-recoder-elements-textTertiary`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
         </svg>
       );
@@ -130,7 +130,7 @@ const SecurityWarning = memo(function SecurityWarning({ risks }: SecurityWarning
             <span className={`font-medium ${risk.type === 'danger' ? 'text-red-300' : 'text-yellow-300'}`}>
               {risk.title}:
             </span>{' '}
-            <span className="text-bolt-elements-textTertiary">{risk.description}</span>
+            <span className="text-recoder-elements-textTertiary">{risk.description}</span>
           </li>
         ))}
       </ul>
@@ -152,7 +152,7 @@ const ActionSummaryDisplay = memo(function ActionSummaryDisplay({ summary }: Act
       {summary.filesCreated > 0 && (
         <div className="flex items-center gap-1.5">
           <div className="w-2 h-2 rounded-full bg-green-500" />
-          <span className="text-bolt-elements-textTertiary">
+          <span className="text-recoder-elements-textTertiary">
             {summary.filesCreated} new {summary.filesCreated === 1 ? 'file' : 'files'}
           </span>
         </div>
@@ -160,7 +160,7 @@ const ActionSummaryDisplay = memo(function ActionSummaryDisplay({ summary }: Act
       {summary.filesModified > 0 && (
         <div className="flex items-center gap-1.5">
           <div className="w-2 h-2 rounded-full bg-blue-500" />
-          <span className="text-bolt-elements-textTertiary">
+          <span className="text-recoder-elements-textTertiary">
             {summary.filesModified} modified
           </span>
         </div>
@@ -168,7 +168,7 @@ const ActionSummaryDisplay = memo(function ActionSummaryDisplay({ summary }: Act
       {summary.filesDeleted > 0 && (
         <div className="flex items-center gap-1.5">
           <div className="w-2 h-2 rounded-full bg-red-500" />
-          <span className="text-bolt-elements-textTertiary">
+          <span className="text-recoder-elements-textTertiary">
             {summary.filesDeleted} deleted
           </span>
         </div>
@@ -184,7 +184,7 @@ const ActionSummaryDisplay = memo(function ActionSummaryDisplay({ summary }: Act
           <svg className="w-4 h-4 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
           </svg>
-          <span className="text-bolt-elements-textTertiary">
+          <span className="text-recoder-elements-textTertiary">
             {summary.packages.length} {summary.packages.length === 1 ? 'package' : 'packages'}
           </span>
         </div>
@@ -216,8 +216,8 @@ const FileChangeItem = memo(function FileChangeItem({
     <div
       className={`flex items-center gap-3 p-3 rounded-lg border transition-colors cursor-pointer ${
         selected
-          ? 'bg-bolt-elements-background-depth-2 border-bolt-elements-borderColorActive'
-          : 'bg-bolt-elements-background-depth-2 border-bolt-elements-borderColor hover:border-bolt-elements-borderColorActive'
+          ? 'bg-recoder-elements-background-depth-2 border-recoder-elements-borderColorActive'
+          : 'bg-recoder-elements-background-depth-2 border-recoder-elements-borderColor hover:border-recoder-elements-borderColorActive'
       }`}
       onClick={onShowDiff}
     >
@@ -229,7 +229,7 @@ const FileChangeItem = memo(function FileChangeItem({
             e.stopPropagation();
             onToggle();
           }}
-          className="w-4 h-4 rounded border-bolt-elements-borderColor bg-bolt-elements-background-depth-2 text-blue-500 focus:ring-blue-500"
+          className="w-4 h-4 rounded border-recoder-elements-borderColor bg-recoder-elements-background-depth-2 text-blue-500 focus:ring-blue-500"
         />
       )}
 
@@ -237,7 +237,7 @@ const FileChangeItem = memo(function FileChangeItem({
 
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
-          <span className="font-mono text-sm text-bolt-elements-textPrimary truncate">
+          <span className="font-mono text-sm text-recoder-elements-textPrimary truncate">
             {file.path}
           </span>
           <FileChangeBadge type={file.type} />
@@ -248,7 +248,7 @@ const FileChangeItem = memo(function FileChangeItem({
           )}
         </div>
         {file.summary && (
-          <p className="text-xs text-bolt-elements-textTertiary mt-1 truncate">
+          <p className="text-xs text-recoder-elements-textTertiary mt-1 truncate">
             {file.summary}
           </p>
         )}
@@ -260,7 +260,7 @@ const FileChangeItem = memo(function FileChangeItem({
             e.stopPropagation();
             onShowDiff();
           }}
-          className="px-2 py-1 text-xs text-bolt-elements-textTertiary hover:text-bolt-elements-textPrimary hover:bg-bolt-elements-background-depth-3 rounded transition-colors"
+          className="px-2 py-1 text-xs text-recoder-elements-textTertiary hover:text-recoder-elements-textPrimary hover:bg-recoder-elements-background-depth-3 rounded transition-colors"
         >
           View Diff
         </button>
@@ -282,7 +282,7 @@ const PackagesSection = memo(function PackagesSection({ packages }: PackagesSect
 
   return (
     <div className="space-y-2">
-      <h4 className="text-sm font-medium text-bolt-elements-textPrimary flex items-center gap-2">
+      <h4 className="text-sm font-medium text-recoder-elements-textPrimary flex items-center gap-2">
         <svg className="w-4 h-4 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
         </svg>
@@ -323,17 +323,17 @@ const DiffModal = memo(function DiffModal({ file, onClose }: DiffModalProps) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
-      <div className="w-full max-w-4xl max-h-[80vh] bg-bolt-elements-background-depth-1 rounded-lg border border-bolt-elements-borderColor overflow-hidden flex flex-col">
+      <div className="w-full max-w-4xl max-h-[80vh] bg-recoder-elements-background-depth-1 rounded-lg border border-recoder-elements-borderColor overflow-hidden flex flex-col">
         {/* Header */}
-        <div className="flex items-center justify-between px-4 py-3 bg-bolt-elements-background-depth-2 border-b border-bolt-elements-borderColor">
+        <div className="flex items-center justify-between px-4 py-3 bg-recoder-elements-background-depth-2 border-b border-recoder-elements-borderColor">
           <div className="flex items-center gap-3">
             <FileChangeIcon type={file.type} />
-            <span className="font-mono text-sm text-bolt-elements-textPrimary">{file.path}</span>
+            <span className="font-mono text-sm text-recoder-elements-textPrimary">{file.path}</span>
             <FileChangeBadge type={file.type} />
           </div>
           <button
             onClick={onClose}
-            className="p-1 text-bolt-elements-textTertiary hover:text-bolt-elements-textPrimary hover:bg-bolt-elements-background-depth-2 rounded transition-colors"
+            className="p-1 text-recoder-elements-textTertiary hover:text-recoder-elements-textPrimary hover:bg-recoder-elements-background-depth-2 rounded transition-colors"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -420,19 +420,19 @@ export const ProposalPanel = memo(function ProposalPanel({
   const isResolved = isApproved || isRejected || isPartial;
 
   return (
-    <div className={`bg-bolt-elements-background-depth-1 rounded-lg border overflow-hidden ${
+    <div className={`bg-recoder-elements-background-depth-1 rounded-lg border overflow-hidden ${
       highestRisk === 'danger' ? 'border-red-500/50' :
       highestRisk === 'warning' ? 'border-yellow-500/50' :
-      'border-bolt-elements-borderColor'
+      'border-recoder-elements-borderColor'
     }`}>
       {/* Header */}
       <div
-        className="flex items-center justify-between px-4 py-3 bg-bolt-elements-background-depth-2 cursor-pointer"
+        className="flex items-center justify-between px-4 py-3 bg-recoder-elements-background-depth-2 cursor-pointer"
         onClick={() => setExpanded(!expanded)}
       >
         <div className="flex items-center gap-3">
           <svg
-            className={`w-5 h-5 text-bolt-elements-textTertiary transition-transform ${expanded ? 'rotate-90' : ''}`}
+            className={`w-5 h-5 text-recoder-elements-textTertiary transition-transform ${expanded ? 'rotate-90' : ''}`}
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
@@ -440,7 +440,7 @@ export const ProposalPanel = memo(function ProposalPanel({
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
           </svg>
           <div>
-            <h3 className="text-sm font-medium text-bolt-elements-textPrimary">
+            <h3 className="text-sm font-medium text-recoder-elements-textPrimary">
               {proposal.title}
             </h3>
             {!expanded && (
@@ -506,18 +506,18 @@ export const ProposalPanel = memo(function ProposalPanel({
             <div className="flex items-center gap-2 text-xs">
               <button
                 onClick={selectAll}
-                className="text-bolt-elements-textTertiary hover:text-bolt-elements-textPrimary"
+                className="text-recoder-elements-textTertiary hover:text-recoder-elements-textPrimary"
               >
                 Select all
               </button>
-              <span className="text-bolt-elements-textTertiary">|</span>
+              <span className="text-recoder-elements-textTertiary">|</span>
               <button
                 onClick={selectNone}
-                className="text-bolt-elements-textTertiary hover:text-bolt-elements-textPrimary"
+                className="text-recoder-elements-textTertiary hover:text-recoder-elements-textPrimary"
               >
                 Select none
               </button>
-              <span className="text-bolt-elements-textTertiary ml-auto">
+              <span className="text-recoder-elements-textTertiary ml-auto">
                 {selectedFiles.size} of {proposal.filesChanged.length} selected
               </span>
             </div>
@@ -525,7 +525,7 @@ export const ProposalPanel = memo(function ProposalPanel({
 
           {/* File Changes */}
           <div className="space-y-2">
-            <h4 className="text-sm font-medium text-bolt-elements-textPrimary">
+            <h4 className="text-sm font-medium text-recoder-elements-textPrimary">
               File Changes
             </h4>
             <div className="space-y-2">
@@ -548,7 +548,7 @@ export const ProposalPanel = memo(function ProposalPanel({
           {/* Shell Commands */}
           {proposal.shellCommands && proposal.shellCommands.length > 0 && (
             <div className="space-y-2">
-              <h4 className="text-sm font-medium text-bolt-elements-textPrimary flex items-center gap-2">
+              <h4 className="text-sm font-medium text-recoder-elements-textPrimary flex items-center gap-2">
                 <svg className="w-4 h-4 text-orange-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                 </svg>
@@ -558,7 +558,7 @@ export const ProposalPanel = memo(function ProposalPanel({
                 {proposal.shellCommands.map((cmd, index) => (
                   <div
                     key={index}
-                    className="px-3 py-2 font-mono text-xs bg-bolt-elements-background-depth-2 text-bolt-elements-textTertiary rounded"
+                    className="px-3 py-2 font-mono text-xs bg-recoder-elements-background-depth-2 text-recoder-elements-textTertiary rounded"
                   >
                     $ {cmd}
                   </div>
@@ -600,7 +600,7 @@ export const CompactProposalIndicator = memo(function CompactProposalIndicator({
   return (
     <button
       onClick={onClick}
-      className="flex items-center gap-2 px-3 py-2 bg-bolt-elements-background-depth-2 rounded-lg border border-bolt-elements-borderColor hover:border-bolt-elements-borderColorActive transition-colors"
+      className="flex items-center gap-2 px-3 py-2 bg-recoder-elements-background-depth-2 rounded-lg border border-recoder-elements-borderColor hover:border-recoder-elements-borderColorActive transition-colors"
     >
       {status === 'pending' ? (
         <div className="w-2 h-2 bg-yellow-500 rounded-full animate-pulse" />
@@ -614,7 +614,7 @@ export const CompactProposalIndicator = memo(function CompactProposalIndicator({
         </svg>
       )}
 
-      <span className="text-sm text-bolt-elements-textPrimary">
+      <span className="text-sm text-recoder-elements-textPrimary">
         {summary.filesCreated + summary.filesModified + summary.filesDeleted} files
       </span>
 
@@ -652,7 +652,7 @@ export const ProposalList = memo(function ProposalList({
     <div className="space-y-4">
       {pendingProposals.length > 0 && (
         <div className="flex items-center justify-between">
-          <h3 className="text-sm font-medium text-bolt-elements-textPrimary">
+          <h3 className="text-sm font-medium text-recoder-elements-textPrimary">
             Pending Proposals ({pendingProposals.length})
           </h3>
           <div className="flex gap-2">

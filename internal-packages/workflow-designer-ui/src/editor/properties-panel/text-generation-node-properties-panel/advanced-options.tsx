@@ -1,4 +1,4 @@
-import type { TextGenerationNode } from "@giselles-ai/protocol";
+import type { TextGenerationNode } from "@recoder/protocol";
 import { ChevronRightIcon } from "lucide-react";
 import { useState } from "react";
 import { SettingDetail, SettingLabel } from "../ui/setting-label";

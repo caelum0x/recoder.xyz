@@ -1,4 +1,4 @@
-import { GenerationId, isRunningGeneration } from "@giselles-ai/protocol";
+import { GenerationId, isRunningGeneration } from "@recoder/protocol";
 import { logger, schemaTask as schemaJob } from "@trigger.dev/sdk";
 import type { ModelMessage } from "ai";
 import { z } from "zod/v4";
@@ -11,12 +11,20 @@ const EMPTY_BYTES = new Uint8Array([]);
 function stripImageBytesFromMessages(
 	inputMessages: ModelMessage[],
 ): ModelMessage[] {
-	return inputMessages.map((msg) => {
+	return inputMessages.map((rawMsg) => {
+		const msg = rawMsg as {
+			content:
+				| string
+				| Array<{
+						type?: string;
+						image?: unknown;
+				  }>;
+		};
 		if (typeof msg.content === "string") {
-			return msg;
+			return rawMsg;
 		}
 		return {
-			...msg,
+			...(rawMsg as Record<string, unknown>),
 			content: msg.content.map((part) => {
 				if (part.type === "image" && part.image instanceof Uint8Array) {
 					return {

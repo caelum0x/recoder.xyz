@@ -31,7 +31,7 @@ vi.mock("@/app/giselle", () => {
 	};
 });
 
-import { AppId, TaskId } from "@giselles-ai/protocol";
+import { AppId, TaskId } from "@recoder/protocol";
 import { giselle } from "@/app/giselle";
 import { db } from "@/db";
 import { verifyApiSecretForTeam } from "@/lib/api-keys";

@@ -1,5 +1,5 @@
-import { parseConfiguration } from "@giselles-ai/data-store-registry";
-import { DataStore, type DataStoreId } from "@giselles-ai/protocol";
+import { parseConfiguration } from "@recoder/data-store-registry";
+import { DataStore, type DataStoreId } from "@recoder/protocol";
 import type { GiselleContext } from "../types";
 import { dataStorePath } from "./paths";
 

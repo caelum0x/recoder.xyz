@@ -12,7 +12,7 @@
 		"check": "pnpm run check-types && pnpm run lint"
 	},
 	"dependencies": {
-		"@giselle-internal/ui": "workspace:*",
+		"@recoder-internal/ui": "workspace:*",
 		"@recoder/ecosystem-config": "workspace:*",
 		"clsx": "catalog:",
 		"lucide-react": "catalog:",

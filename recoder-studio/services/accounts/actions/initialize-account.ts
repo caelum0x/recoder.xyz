@@ -1,14 +1,14 @@
 "use server";
 
-import { App, AppId, NodeId } from "@giselles-ai/protocol";
+import { App, AppId, NodeId } from "@recoder/protocol";
 import { createId } from "@paralleldrive/cuid2";
-import type { User } from "@supabase/auth-js";
+// Auth user field types (decoupled from Supabase)
 import { giselle } from "@/app/giselle";
 import {
 	agents,
 	apps,
 	db,
-	supabaseUserMappings,
+	authUserMappings,
 	teamMemberships,
 	teams,
 	users,
@@ -18,9 +18,9 @@ import { isEmailFromRoute06 } from "@/lib/utils";
 import { createTeamId } from "@/services/teams/utils";
 
 export const initializeAccount = async (
-	supabaseUserId: User["id"],
-	supabaseUserEmail: User["email"],
-	supabaseUserAvatarUrl?: User["user_metadata"]["avatar_url"],
+	authUserId: string,
+	supabaseUserEmail: string | undefined,
+	supabaseUserAvatarUrl?: string | null,
 ) => {
 	const result = await db.transaction(async (tx) => {
 		const userId = `usr_${createId()}` as const;
@@ -34,9 +34,9 @@ export const initializeAccount = async (
 			.returning({
 				dbId: users.dbId,
 			});
-		await tx.insert(supabaseUserMappings).values({
+		await tx.insert(authUserMappings).values({
 			userDbId: user.dbId,
-			supabaseUserId,
+			authUserId,
 		});
 		const internalAccount = isEmailFromRoute06(supabaseUserEmail ?? "");
 		const [team] = await tx

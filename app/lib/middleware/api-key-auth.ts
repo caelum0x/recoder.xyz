@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { PlatformApiKeyService } from '@/lib/services/platform-api-key.service';
+import { logger } from '@/lib/logger';
 
 export interface AuthenticatedRequest extends NextRequest {
   userId?: string;
@@ -75,7 +76,7 @@ export function withApiKeyAuth(
       // Call the actual handler
       return await handler(authenticatedReq);
     } catch (error: any) {
-      console.error('API key authentication error:', error);
+      logger.error('API key authentication error', { error: String(error) });
       return NextResponse.json(
         { error: 'Authentication failed' },
         { status: 500 }

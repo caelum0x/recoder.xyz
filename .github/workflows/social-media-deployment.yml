@@ -147,13 +147,16 @@ jobs:
 
   # ===== SETUP CLI ENVIRONMENT =====
   setup-cli:
-    name: 🛠️ Setup Recoder CLI
+    name: Required - Setup Recoder CLI
     runs-on: ubuntu-latest
     needs: [validate-inputs]
     
     steps:
       - name: 📥 Checkout
         uses: actions/checkout@v4
+
+      - name: 🔐 Run strict leak scan
+        run: bash scripts/leak-scan-strict.sh
         
       - name: 📦 Setup Node.js
         uses: actions/setup-node@v4
@@ -162,27 +165,24 @@ jobs:
           
       - name: 📦 Install CLI dependencies
         working-directory: ./packages/cli
-        run: |
-          npm install --production
-          npm run build || echo "Build failed but continuing..."
-          
+        run: npm install --production
+
       - name: 🧪 Test CLI Social Deploy Command
         working-directory: ./packages/cli
         run: |
-          # Test that the social deploy command exists
-          npx tsx src/index.ts social-deploy --help || echo "CLI command test failed but continuing..."
-          
+          test -f src/index.js
+          node src/index.js social-deploy --help
+
       - name: 📦 Cache CLI build
         uses: actions/cache@v4
         with:
           path: |
             packages/cli/node_modules
-            packages/cli/dist
           key: cli-${{ runner.os }}-${{ hashFiles('packages/cli/package*.json') }}
 
   # ===== ANNOUNCEMENT EXECUTION =====
   execute-announcement:
-    name: 📢 Execute Social Media Announcement
+    name: Required - Execute Social Media Announcement
     runs-on: ubuntu-latest
     needs: [validate-inputs, setup-cli]
     
@@ -200,7 +200,6 @@ jobs:
         with:
           path: |
             packages/cli/node_modules
-            packages/cli/dist
           key: cli-${{ runner.os }}-${{ hashFiles('packages/cli/package*.json') }}
           
       - name: 🎯 Prepare announcement context
@@ -259,10 +258,10 @@ jobs:
             CLI_ARGS+=("--changes" "$change")
           done
           
-          echo "Executing: npx tsx src/index.ts ${CLI_ARGS[*]}"
-          
-          # Execute the CLI command
-          if npx tsx src/index.ts "${CLI_ARGS[@]}"; then
+          echo "Executing: node src/index.js ${CLI_ARGS[*]}"
+
+          # Execute the CLI command (.js not .ts)
+          if node src/index.js "${CLI_ARGS[@]}"; then
             echo "status=success" >> $GITHUB_OUTPUT
             echo "✅ Social media announcement executed successfully"
           else
@@ -360,15 +359,19 @@ jobs:
           
   # ===== ANALYTICS & TRACKING =====
   track-announcement:
-    name: 📈 Track Announcement
+    name: Advisory - Track Announcement
     runs-on: ubuntu-latest  
     needs: [validate-inputs, execute-announcement]
     if: always()
+    continue-on-error: true
     
     steps:
       - name: 📊 Record announcement metrics
         run: |
-          # Record deployment announcement metrics
+          if [ -z "${{ secrets.ANALYTICS_WEBHOOK_URL }}" ]; then
+            echo "ANALYTICS_WEBHOOK_URL not configured, skipping analytics tracking"
+            exit 0
+          fi
           curl -X POST "${{ secrets.ANALYTICS_WEBHOOK_URL }}" \
             -H "Content-Type: application/json" \
             -d '{
@@ -382,8 +385,7 @@ jobs:
               "timestamp": "'$(date -u +%Y-%m-%dT%H:%M:%SZ)'",
               "workflow_run_id": "${{ github.run_id }}",
               "deployment_url": "${{ inputs.deployment_url }}"
-            }' \
-            || echo "Analytics tracking skipped (webhook not configured)"
+            }'
             
       - name: 💾 Store announcement record
         run: |
@@ -415,7 +417,7 @@ jobs:
 
   # ===== NOTIFICATION =====
   notify-completion:
-    name: 📢 Notify Team
+    name: Advisory - Notify Team
     runs-on: ubuntu-latest
     needs: [validate-inputs, execute-announcement, verify-platforms, track-announcement]
     if: always()

@@ -258,7 +258,7 @@ export function ProductionEngineFeatureSection() {
                 Ready to 10x Your Development Speed?
               </h3>
               <p className="text-blue-100 mb-6 text-lg">
-                Join thousands of developers using our production engine to build faster, deploy easier, and scale better.
+                Use our production engine to build faster, deploy easier, and scale better — free during beta.
               </p>
               <div className="flex flex-col sm:flex-row gap-4 justify-center">
                 <Button 

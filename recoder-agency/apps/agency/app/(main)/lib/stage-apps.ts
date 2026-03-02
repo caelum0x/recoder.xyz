@@ -1,4 +1,4 @@
-import { isTextGenerationNode, isVectorStoreNode } from "@giselles-ai/protocol";
+import { isTextGenerationNode, isVectorStoreNode } from "@recoder/protocol";
 import { giselle } from "@/app/giselle";
 import { apps as appsDefinition, db } from "@/db";
 import { getCurrentUser } from "@/lib/get-current-user";

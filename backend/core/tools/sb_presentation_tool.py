@@ -473,7 +473,7 @@ class SandboxPresentationTool(SandboxToolsBase):
                     copied_files.append(rel_file_path)
                 except Exception as e:
                     # Log error but continue with other files
-                    print(f"Error copying {rel_file_path}: {str(e)}")
+                    logger.warning(f"Error copying {rel_file_path}: {str(e)}")
         
         # Update metadata.json with correct paths for the new presentation
         metadata = await self._load_presentation_metadata(presentation_path)
@@ -877,7 +877,7 @@ class SandboxPresentationTool(SandboxToolsBase):
         presentation_title: str = "Presentation",
         **kwargs
     ) -> ToolResult:
-        print(f"[create_slide] ENTERED FUNCTION - presentation_name={repr(presentation_name)}, slide_number={repr(slide_number)}")
+        logger.info(f"[create_slide] ENTERED FUNCTION - presentation_name={repr(presentation_name)}, slide_number={repr(slide_number)}")
         logger.info(f"[create_slide] Received params: presentation_name={repr(presentation_name)}, "
                     f"slide_number={repr(slide_number)}, slide_title={repr(slide_title)[:50] if slide_title else repr(slide_title)}, "
                     f"content_length={len(content) if content else 0}, kwargs={list(kwargs.keys())}")

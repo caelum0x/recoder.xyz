@@ -5,8 +5,8 @@
 import * as Sentry from "@sentry/nextjs";
 
 Sentry.init({
-	dsn: "https://31ef4d348c8e420af1d1d8dcec3ab19e@o544600.ingest.us.sentry.io/4507535341387776",
-	environment: process.env.NEXT_PUBLIC_VERCEL_ENV || "development",
+	dsn: process.env.NEXT_PUBLIC_SENTRY_DSN,
+	environment: process.env.NODE_ENV || "development",
 
 	// Add optional integrations for additional features
 	integrations: [Sentry.replayIntegration()],
@@ -24,7 +24,7 @@ Sentry.init({
 
 	// Setting this option to true will print useful information to the console while you're setting up Sentry.
 	debug: false,
-	enabled: process.env.NEXT_PUBLIC_VERCEL_ENV !== undefined,
+	enabled: !!process.env.NEXT_PUBLIC_SENTRY_DSN,
 });
 
 export const onRouterTransitionStart = Sentry.captureRouterTransitionStart;

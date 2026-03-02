@@ -89,7 +89,7 @@ const highlightMatch = (text: string, query: string): React.ReactNode => {
     for (let i = 0; i < text.length; i++) {
       if (queryIndex < lowerQuery.length && lowerText[i] === lowerQuery[queryIndex]) {
         result.push(
-          <mark key={i} className="rounded-sm bg-blue-500/30 px-0.5 text-bolt-elements-textPrimary">
+          <mark key={i} className="rounded-sm bg-blue-500/30 px-0.5 text-recoder-elements-textPrimary">
             {text[i]}
           </mark>
         );
@@ -106,7 +106,7 @@ const highlightMatch = (text: string, query: string): React.ReactNode => {
   return (
     <>
       {text.slice(0, index)}
-      <mark className="rounded-sm bg-blue-500/30 px-0.5 text-bolt-elements-textPrimary">
+      <mark className="rounded-sm bg-blue-500/30 px-0.5 text-recoder-elements-textPrimary">
         {text.slice(index, end)}
       </mark>
       {text.slice(end)}
@@ -142,7 +142,7 @@ const FILE_ICONS: Record<string, { icon: string; color: string }> = {
   js: { icon: 'i-ph:file-js-duotone', color: 'text-yellow-400' },
   jsx: { icon: 'i-ph:file-jsx-duotone', color: 'text-yellow-500' },
   json: { icon: 'i-ph:file-duotone', color: 'text-yellow-300' },
-  md: { icon: 'i-ph:file-md-duotone', color: 'text-bolt-elements-textSecondary' },
+  md: { icon: 'i-ph:file-md-duotone', color: 'text-recoder-elements-textSecondary' },
   css: { icon: 'i-ph:file-css-duotone', color: 'text-blue-300' },
   scss: { icon: 'i-ph:file-css-duotone', color: 'text-pink-400' },
   html: { icon: 'i-ph:file-html-duotone', color: 'text-orange-400' },
@@ -154,7 +154,7 @@ const FILE_ICONS: Record<string, { icon: string; color: string }> = {
   env: { icon: 'i-ph:gear-duotone', color: 'text-yellow-500' },
   yaml: { icon: 'i-ph:file-duotone', color: 'text-red-400' },
   yml: { icon: 'i-ph:file-duotone', color: 'text-red-400' },
-  lock: { icon: 'i-ph:lock-duotone', color: 'text-bolt-elements-textTertiary' },
+  lock: { icon: 'i-ph:lock-duotone', color: 'text-recoder-elements-textTertiary' },
   gitignore: { icon: 'i-ph:git-branch-duotone', color: 'text-orange-400' },
 };
 
@@ -475,10 +475,10 @@ export const EnhancedFileTree = memo(function EnhancedFileTree({
       tabIndex={0}
     >
       {/* Header with stats, search, and actions */}
-      <div className="p-2 border-b border-bolt-elements-borderColor">
+      <div className="p-2 border-b border-recoder-elements-borderColor">
         {/* Top row: Stats and action buttons */}
         <div className="flex items-center justify-between mb-2">
-          <div className="flex items-center gap-2 text-xs text-bolt-elements-textSecondary">
+          <div className="flex items-center gap-2 text-xs text-recoder-elements-textSecondary">
             <span className="flex items-center gap-1" title={`${fileStats.files} files`}>
               <File className="w-3 h-3" />
               {fileStats.files}
@@ -494,12 +494,12 @@ export const EnhancedFileTree = memo(function EnhancedFileTree({
 
         {/* Clipboard indicator */}
         {hasClipboard && (
-          <div className="flex items-center gap-2 text-xs text-bolt-elements-textSecondary mb-2 py-1 px-2 bg-bolt-elements-background-depth-2 rounded">
+          <div className="flex items-center gap-2 text-xs text-recoder-elements-textSecondary mb-2 py-1 px-2 bg-recoder-elements-background-depth-2 rounded">
             <span className={clipboardOp === 'cut' ? 'i-ph:scissors' : 'i-ph:copy'} />
             <span>{clipboard.length} item{clipboard.length > 1 ? 's' : ''} {clipboardOp === 'cut' ? 'cut' : 'copied'}</span>
             <button
               onClick={clearClipboard}
-              className="ml-auto hover:text-bolt-elements-textPrimary"
+              className="ml-auto hover:text-recoder-elements-textPrimary"
               title="Clear clipboard"
             >
               <X className="w-3 h-3" />
@@ -509,12 +509,12 @@ export const EnhancedFileTree = memo(function EnhancedFileTree({
 
         {/* Multi-selection indicator */}
         {isMultiSelect && (
-          <div className="flex items-center gap-2 text-xs text-bolt-elements-textSecondary mb-2 py-1 px-2 bg-blue-500/10 border border-blue-500/30 rounded">
+          <div className="flex items-center gap-2 text-xs text-recoder-elements-textSecondary mb-2 py-1 px-2 bg-blue-500/10 border border-blue-500/30 rounded">
             <span className="i-ph:selection" />
             <span>{selectedFiles.size} items selected</span>
             <button
               onClick={clearSelection}
-              className="ml-auto hover:text-bolt-elements-textPrimary"
+              className="ml-auto hover:text-recoder-elements-textPrimary"
               title="Clear selection"
             >
               <X className="w-3 h-3" />
@@ -525,7 +525,7 @@ export const EnhancedFileTree = memo(function EnhancedFileTree({
         {/* Search input */}
         {searchActive && (
           <div className="relative">
-            <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-bolt-elements-textSecondary" />
+            <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-recoder-elements-textSecondary" />
             <input
               ref={searchInputRef}
               type="text"
@@ -533,7 +533,7 @@ export const EnhancedFileTree = memo(function EnhancedFileTree({
               onChange={(e) => setLocalSearchQuery(e.target.value)}
               placeholder="Search files... (fuzzy matching)"
               autoFocus
-              className="w-full pl-7 pr-7 py-1.5 text-sm bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor rounded outline-none focus:border-bolt-elements-borderColorActive text-bolt-elements-textPrimary placeholder:text-bolt-elements-textSecondary"
+              className="w-full pl-7 pr-7 py-1.5 text-sm bg-recoder-elements-background-depth-2 border border-recoder-elements-borderColor rounded outline-none focus:border-recoder-elements-borderColorActive text-recoder-elements-textPrimary placeholder:text-recoder-elements-textSecondary"
               onKeyDown={(e) => {
                 if (e.key === 'Escape') {
                   e.preventDefault();
@@ -544,14 +544,14 @@ export const EnhancedFileTree = memo(function EnhancedFileTree({
             {localSearchQuery && (
               <button
                 onClick={handleClearSearch}
-                className="absolute right-2 top-1/2 -translate-y-1/2 text-bolt-elements-textSecondary hover:text-bolt-elements-textPrimary"
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-recoder-elements-textSecondary hover:text-recoder-elements-textPrimary"
               >
                 <X className="w-3.5 h-3.5" />
               </button>
             )}
             {/* Search results count */}
             {isSearchActive && (
-              <div className="mt-1 text-xs text-bolt-elements-textSecondary">
+              <div className="mt-1 text-xs text-recoder-elements-textSecondary">
                 {filteredFileCount} file{filteredFileCount !== 1 ? 's' : ''} found
               </div>
             )}
@@ -562,12 +562,12 @@ export const EnhancedFileTree = memo(function EnhancedFileTree({
       {/* File tree */}
       <div className="flex-1 overflow-y-auto">
         {hasNoResults ? (
-          <div className="px-3 py-4 text-sm text-bolt-elements-textSecondary text-center">
+          <div className="px-3 py-4 text-sm text-recoder-elements-textSecondary text-center">
             <div className="i-ph:magnifying-glass w-8 h-8 mx-auto mb-2 opacity-50" />
             <div>No files matched your search.</div>
             <button
               onClick={handleClearSearch}
-              className="mt-2 text-xs text-bolt-elements-textTertiary hover:text-bolt-elements-textSecondary underline"
+              className="mt-2 text-xs text-recoder-elements-textTertiary hover:text-recoder-elements-textSecondary underline"
             >
               Clear search
             </button>

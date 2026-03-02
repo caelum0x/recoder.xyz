@@ -3,19 +3,19 @@
  *
  * This script:
  * 1. Fetches all users from Supabase Auth API (up to 500 users)
- * 2. Updates email addresses in the users table using supabaseUserMappings as a join table
+ * 2. Updates email addresses in the users table using authUserMappings as a join table
  * 3. Handles errors gracefully and logs any issues
  * 4. Performs updates in a single batch operation
  *
  * Requirements:
  * - Supabase service role key for authentication
- * - Access to users and supabaseUserMappings tables
+ * - Access to users and authUserMappings tables
  * - Proper database permissions for UPDATE operations
  */
 
 import { createClient } from "@supabase/supabase-js";
 import { sql } from "drizzle-orm";
-import { db, supabaseUserMappings, users as usersSchema } from "@/db";
+import { db, authUserMappings, users as usersSchema } from "@/db";
 
 async function main() {
 	const url = process.env.NEXT_PUBLIC_SUPABASE_URL as string;
@@ -47,19 +47,19 @@ async function main() {
 	// Perform update for all valid users
 	try {
 		for (const user of validUsers) {
-			const { id: supabaseUserId, email } = user;
+			const { id: authUserId, email } = user;
 
 			await db.execute(
 				sql`
           UPDATE ${usersSchema}
           SET email = ${email}
-          FROM ${supabaseUserMappings}
-          WHERE ${usersSchema.dbId} = ${supabaseUserMappings.userDbId}
-          AND ${supabaseUserMappings.supabaseUserId} = ${supabaseUserId}
+          FROM ${authUserMappings}
+          WHERE ${usersSchema.dbId} = ${authUserMappings.userDbId}
+          AND ${authUserMappings.authUserId} = ${authUserId}
         `,
 			);
 
-			console.log(`Updated user ${supabaseUserId} with email ${email}`);
+			console.log(`Updated user ${authUserId} with email ${email}`);
 		}
 	} catch (err) {
 		console.error("Failed to update users:", err);

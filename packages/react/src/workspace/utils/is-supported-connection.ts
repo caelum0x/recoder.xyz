@@ -2,7 +2,7 @@ import {
 	Capability,
 	hasCapability,
 	languageModels,
-} from "@giselles-ai/language-model";
+} from "@recoder/language-model";
 import {
 	type Connection,
 	isAppEntryNode,
@@ -16,7 +16,7 @@ import {
 	isTextGenerationNode,
 	isVectorStoreNode,
 	type NodeLike,
-} from "@giselles-ai/protocol";
+} from "@recoder/protocol";
 
 export type ConnectionValidationResult =
 	| { canConnect: true }

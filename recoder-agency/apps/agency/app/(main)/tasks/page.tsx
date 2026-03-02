@@ -1,7 +1,7 @@
-import { DocsLink } from "@giselle-internal/ui/docs-link";
-import { PageHeading } from "@giselle-internal/ui/page-heading";
-import { StatusBadge } from "@giselle-internal/ui/status-badge";
-import type { Task, TaskId as TaskIdType } from "@giselles-ai/protocol";
+import { DocsLink } from "@recoder-internal/ui/docs-link";
+import { PageHeading } from "@recoder-internal/ui/page-heading";
+import { StatusBadge } from "@recoder-internal/ui/status-badge";
+import type { Task, TaskId as TaskIdType } from "@recoder/protocol";
 import { ClipboardList } from "lucide-react";
 import Link from "next/link";
 import { createSearchParamsCache, parseAsInteger } from "nuqs/server";

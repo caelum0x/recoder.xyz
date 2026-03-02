@@ -1,4 +1,4 @@
-import { ToastProvider } from "@giselle-internal/ui/toast";
+import { ToastProvider } from "@recoder-internal/ui/toast";
 import { SentryUserWrapper } from "@/components/sentry-user-wrapper";
 import { InternalGiselleClientProvider } from "./internal-giselle-client-provider";
 import { Header } from "./ui/header";

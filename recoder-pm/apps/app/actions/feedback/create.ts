@@ -6,6 +6,7 @@ import { textToContent } from "@repo/editor/lib/tiptap";
 import { MAX_FREE_FEEDBACK } from "@repo/lib/consts";
 import { parseError } from "@repo/lib/parse-error";
 import { revalidatePath } from "next/cache";
+import { PmEvents, trackPmServerEvent } from "@/lib/analytics";
 import { database } from "@/lib/database";
 
 type CreateFeedbackProperties = {
@@ -71,6 +72,15 @@ export const createFeedback = async ({
         videoUrl,
       },
       select: { id: true },
+    });
+
+    trackPmServerEvent(PmEvents.FEEDBACK_CREATED, {
+      feedbackId: id,
+      title,
+      hasAudio: Boolean(audioUrl),
+      hasVideo: Boolean(videoUrl),
+      userId: user.id,
+      organizationId,
     });
 
     revalidatePath("/feedback", "layout");

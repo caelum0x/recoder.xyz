@@ -23,6 +23,7 @@ import {
   ChevronLeft,
   ChevronFirst,
   ChevronsUpDown,
+  ClipboardList,
 } from 'lucide-react-native';
 import { ConversationSection } from '@/components/menu/ConversationSection';
 import { BottomNav } from '@/components/menu/BottomNav';
@@ -850,6 +851,19 @@ export function MenuPage({
               strokeWidth={2}
             />
           </AnimatedPressable>
+          <Pressable
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              router.push('/tasks');
+            }}
+            className="flex-row items-center gap-3 rounded-xl border border-border/60 px-3.5 py-2.5 active:opacity-70"
+          >
+            <Icon as={ClipboardList} size={16} className="text-muted-foreground" />
+            <Text className="flex-1 font-roobert-medium text-sm text-foreground">
+              Delegated Tasks
+            </Text>
+            <Icon as={ChevronLeft} size={14} className="rotate-180 text-muted-foreground" />
+          </Pressable>
           {advancedFeaturesEnabled && (
             <BottomNav
               activeTab={activeTab}

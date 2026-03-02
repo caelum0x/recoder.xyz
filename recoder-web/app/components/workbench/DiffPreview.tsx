@@ -41,11 +41,11 @@ export function DiffPreview({ diff, onAccept, onReject, onPartialAccept }: DiffP
   };
 
   return (
-    <div className="bg-bolt-elements-background-depth-2 rounded-lg border border-bolt-elements-borderColor overflow-hidden">
+    <div className="bg-recoder-elements-background-depth-2 rounded-lg border border-recoder-elements-borderColor overflow-hidden">
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 bg-bolt-elements-background-depth-3 border-b border-bolt-elements-borderColor">
+      <div className="flex items-center justify-between px-4 py-3 bg-recoder-elements-background-depth-3 border-b border-recoder-elements-borderColor">
         <div className="flex items-center gap-3">
-          <span className="font-mono text-sm text-bolt-elements-textPrimary">{diff.filePath}</span>
+          <span className="font-mono text-sm text-recoder-elements-textPrimary">{diff.filePath}</span>
           <span className="text-xs text-green-500">+{stats.additions}</span>
           <span className="text-xs text-red-500">-{stats.deletions}</span>
         </div>
@@ -98,15 +98,15 @@ interface DiffHunkViewProps {
 
 function DiffHunkView({ hunk, selected, onToggle, showCheckbox }: DiffHunkViewProps) {
   return (
-    <div className={`border-b border-bolt-elements-borderColor last:border-b-0 ${!selected ? 'opacity-50' : ''}`}>
+    <div className={`border-b border-recoder-elements-borderColor last:border-b-0 ${!selected ? 'opacity-50' : ''}`}>
       {/* Hunk Header */}
-      <div className="flex items-center gap-2 px-4 py-2 bg-bolt-elements-background-depth-1 text-xs font-mono text-bolt-elements-textSecondary">
+      <div className="flex items-center gap-2 px-4 py-2 bg-recoder-elements-background-depth-1 text-xs font-mono text-recoder-elements-textSecondary">
         {showCheckbox && (
           <input
             type="checkbox"
             checked={selected}
             onChange={onToggle}
-            className="w-4 h-4 rounded border-bolt-elements-borderColor bg-bolt-elements-background-depth-2 text-blue-500 focus:ring-blue-500"
+            className="w-4 h-4 rounded border-recoder-elements-borderColor bg-recoder-elements-background-depth-2 text-blue-500 focus:ring-blue-500"
           />
         )}
         <span>@@ -{hunk.oldStart},{hunk.oldLines} +{hunk.newStart},{hunk.newLines} @@</span>
@@ -122,13 +122,13 @@ function DiffHunkView({ hunk, selected, onToggle, showCheckbox }: DiffHunkViewPr
                 ? 'bg-green-500/10 text-green-400'
                 : line.type === 'remove'
                 ? 'bg-red-500/10 text-red-400'
-                : 'text-bolt-elements-textSecondary'
+                : 'text-recoder-elements-textSecondary'
             }`}
           >
-            <span className="w-12 flex-shrink-0 px-2 text-right text-bolt-elements-textTertiary select-none border-r border-bolt-elements-borderColor">
+            <span className="w-12 flex-shrink-0 px-2 text-right text-recoder-elements-textTertiary select-none border-r border-recoder-elements-borderColor">
               {line.oldLineNumber || ''}
             </span>
-            <span className="w-12 flex-shrink-0 px-2 text-right text-bolt-elements-textTertiary select-none border-r border-bolt-elements-borderColor">
+            <span className="w-12 flex-shrink-0 px-2 text-right text-recoder-elements-textTertiary select-none border-r border-recoder-elements-borderColor">
               {line.newLineNumber || ''}
             </span>
             <span className="w-6 flex-shrink-0 text-center select-none">
@@ -164,7 +164,7 @@ export function PendingChangesList({
   return (
     <div className="space-y-4 p-4">
       <div className="flex items-center justify-between">
-        <h3 className="text-lg font-medium text-bolt-elements-textPrimary">
+        <h3 className="text-lg font-medium text-recoder-elements-textPrimary">
           Pending Changes ({changes.length})
         </h3>
         <div className="flex gap-2">
@@ -205,7 +205,7 @@ interface UndoHistoryProps {
 export function UndoHistory({ history, onRevert }: UndoHistoryProps) {
   if (history.length === 0) {
     return (
-      <div className="p-4 text-center text-bolt-elements-textSecondary">
+      <div className="p-4 text-center text-recoder-elements-textSecondary">
         No history available
       </div>
     );
@@ -213,24 +213,24 @@ export function UndoHistory({ history, onRevert }: UndoHistoryProps) {
 
   return (
     <div className="p-4 space-y-2">
-      <h3 className="text-sm font-medium text-bolt-elements-textPrimary mb-3">Version History</h3>
+      <h3 className="text-sm font-medium text-recoder-elements-textPrimary mb-3">Version History</h3>
       {history.map((state, index) => (
         <div
           key={index}
-          className="flex items-center justify-between p-3 bg-bolt-elements-background-depth-2 rounded-lg border border-bolt-elements-borderColor hover:border-bolt-elements-borderColorActive transition-colors"
+          className="flex items-center justify-between p-3 bg-recoder-elements-background-depth-2 rounded-lg border border-recoder-elements-borderColor hover:border-recoder-elements-borderColorActive transition-colors"
         >
           <div className="flex items-center gap-3">
             <div className={`w-2 h-2 rounded-full ${state.aiGenerated ? 'bg-blue-500' : 'bg-green-500'}`} />
             <div>
-              <div className="text-sm text-bolt-elements-textPrimary">{state.description}</div>
-              <div className="text-xs text-bolt-elements-textSecondary">
+              <div className="text-sm text-recoder-elements-textPrimary">{state.description}</div>
+              <div className="text-xs text-recoder-elements-textSecondary">
                 {state.timestamp.toLocaleTimeString()}
               </div>
             </div>
           </div>
           <button
             onClick={() => onRevert(index)}
-            className="px-3 py-1 text-xs font-medium text-bolt-elements-textSecondary hover:text-bolt-elements-textPrimary bg-bolt-elements-background-depth-3 hover:bg-bolt-elements-background-depth-4 rounded transition-colors"
+            className="px-3 py-1 text-xs font-medium text-recoder-elements-textSecondary hover:text-recoder-elements-textPrimary bg-recoder-elements-background-depth-3 hover:bg-recoder-elements-background-depth-4 rounded transition-colors"
           >
             Revert
           </button>

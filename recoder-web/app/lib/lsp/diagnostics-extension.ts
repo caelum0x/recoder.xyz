@@ -256,10 +256,10 @@ function diagnosticHoverTooltip() {
           max-width: 500px;
           font-size: 13px;
           padding: 8px 12px;
-          background: var(--bolt-elements-background-depth-3, #1e1e1e);
-          border: 1px solid var(--bolt-elements-borderColor, #333);
+          background: var(--recoder-elements-background-depth-3, #1e1e1e);
+          border: 1px solid var(--recoder-elements-borderColor, #333);
           border-radius: 6px;
-          color: var(--bolt-elements-textPrimary, #e1e1e1);
+          color: var(--recoder-elements-textPrimary, #e1e1e1);
           box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
         `;
 

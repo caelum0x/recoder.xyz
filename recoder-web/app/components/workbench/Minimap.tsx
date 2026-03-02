@@ -230,7 +230,7 @@ export const Minimap = memo(({
       ref={containerRef}
       className={classNames(
         'relative select-none cursor-pointer',
-        'bg-bolt-elements-background-depth-2/50',
+        'bg-recoder-elements-background-depth-2/50',
         className
       )}
       style={{ width }}
@@ -249,8 +249,8 @@ export const Minimap = memo(({
       <div
         className={classNames(
           'absolute left-0 right-0 pointer-events-none',
-          'bg-bolt-elements-textPrimary/10',
-          'border-y border-bolt-elements-textPrimary/20',
+          'bg-recoder-elements-textPrimary/10',
+          'border-y border-recoder-elements-textPrimary/20',
           'transition-all duration-75'
         )}
         style={{
@@ -273,8 +273,8 @@ export const Minimap = memo(({
             <div
               className={classNames(
                 'absolute right-full mr-2 px-2 py-1 rounded text-xs',
-                'bg-bolt-elements-background-depth-3 border border-bolt-elements-borderColor',
-                'text-bolt-elements-textPrimary whitespace-nowrap',
+                'bg-recoder-elements-background-depth-3 border border-recoder-elements-borderColor',
+                'text-recoder-elements-textPrimary whitespace-nowrap',
                 'opacity-0 group-hover:opacity-100 pointer-events-none',
                 'transition-opacity duration-150 z-50'
               )}

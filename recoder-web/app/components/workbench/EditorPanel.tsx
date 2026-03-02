@@ -620,7 +620,7 @@ export const EditorPanel = memo(
     }, []);
 
     return (
-      <div className="flex flex-col h-full bg-bolt-elements-background-depth-1">
+      <div className="flex flex-col h-full bg-recoder-elements-background-depth-1">
       <PanelGroup direction="vertical" className="flex-1">
         <Panel defaultSize={showTerminal ? DEFAULT_EDITOR_SIZE : 100} minSize={20}>
           <PanelGroup direction="horizontal">
@@ -630,17 +630,17 @@ export const EditorPanel = memo(
               maxSize={40}      // ✅ P2: Added max size to prevent over-expansion
               collapsible
             >
-              <div className="flex flex-col border-r border-bolt-elements-borderColor h-full overflow-hidden bg-bolt-elements-background-depth-1">
+              <div className="flex flex-col border-r border-recoder-elements-borderColor h-full overflow-hidden bg-recoder-elements-background-depth-1">
                 {/* Sidebar Tabs */}
                 {/* PERFORMANCE: Using memoized click handlers */}
-                <div className="flex border-b border-bolt-elements-borderColor">
+                <div className="flex border-b border-recoder-elements-borderColor">
                   <button
                     onClick={handleSetFilesView}
                     className={classNames(
                       'flex-1 px-3 py-2 text-sm flex items-center justify-center gap-1.5 transition-colors',
                       sidebarView === 'files'
-                        ? 'bg-bolt-elements-background-depth-2 text-bolt-elements-textPrimary border-b-2 border-blue-500'
-                        : 'text-bolt-elements-textTertiary hover:bg-bolt-elements-background-depth-2 hover:text-bolt-elements-textSecondary'
+                        ? 'bg-recoder-elements-background-depth-2 text-recoder-elements-textPrimary border-b-2 border-blue-500'
+                        : 'text-recoder-elements-textTertiary hover:bg-recoder-elements-background-depth-2 hover:text-recoder-elements-textSecondary'
                     )}
                     title="Explorer - Browse project files (Cmd+Shift+E)"
                     aria-label="File explorer"
@@ -654,8 +654,8 @@ export const EditorPanel = memo(
                     className={classNames(
                       'flex-1 px-3 py-2 text-sm flex items-center justify-center gap-1.5 transition-colors',
                       sidebarView === 'search'
-                        ? 'bg-bolt-elements-background-depth-2 text-bolt-elements-textPrimary border-b-2 border-blue-500'
-                        : 'text-bolt-elements-textTertiary hover:bg-bolt-elements-background-depth-2 hover:text-bolt-elements-textSecondary'
+                        ? 'bg-recoder-elements-background-depth-2 text-recoder-elements-textPrimary border-b-2 border-blue-500'
+                        : 'text-recoder-elements-textTertiary hover:bg-recoder-elements-background-depth-2 hover:text-recoder-elements-textSecondary'
                     )}
                     title="Search - Find in files (Cmd+Shift+F)"
                     aria-label="Search files"
@@ -669,8 +669,8 @@ export const EditorPanel = memo(
                     className={classNames(
                       'flex-1 px-3 py-2 text-sm flex items-center justify-center gap-1.5 transition-colors',
                       sidebarView === 'git'
-                        ? 'bg-bolt-elements-background-depth-2 text-bolt-elements-textPrimary border-b-2 border-purple-500'
-                        : 'text-bolt-elements-textTertiary hover:bg-bolt-elements-background-depth-2 hover:text-bolt-elements-textSecondary'
+                        ? 'bg-recoder-elements-background-depth-2 text-recoder-elements-textPrimary border-b-2 border-purple-500'
+                        : 'text-recoder-elements-textTertiary hover:bg-recoder-elements-background-depth-2 hover:text-recoder-elements-textSecondary'
                     )}
                     title="Source Control - Git changes and history (Cmd+Shift+G)"
                     aria-label="Git source control"
@@ -684,8 +684,8 @@ export const EditorPanel = memo(
                     className={classNames(
                       'flex-1 px-3 py-2 text-sm flex items-center justify-center gap-1.5 transition-colors',
                       sidebarView === 'packages'
-                        ? 'bg-bolt-elements-background-depth-2 text-bolt-elements-textPrimary border-b-2 border-green-500'
-                        : 'text-bolt-elements-textTertiary hover:bg-bolt-elements-background-depth-2 hover:text-bolt-elements-textSecondary'
+                        ? 'bg-recoder-elements-background-depth-2 text-recoder-elements-textPrimary border-b-2 border-green-500'
+                        : 'text-recoder-elements-textTertiary hover:bg-recoder-elements-background-depth-2 hover:text-recoder-elements-textSecondary'
                     )}
                     title="Package Manager - Install and manage dependencies"
                     aria-label="Package manager"
@@ -699,8 +699,8 @@ export const EditorPanel = memo(
                     className={classNames(
                       'flex-1 px-3 py-2 text-sm flex items-center justify-center gap-1.5 transition-colors',
                       sidebarView === 'architecture'
-                        ? 'bg-bolt-elements-background-depth-2 text-bolt-elements-textPrimary border-b-2 border-orange-500'
-                        : 'text-bolt-elements-textTertiary hover:bg-bolt-elements-background-depth-2 hover:text-bolt-elements-textSecondary'
+                        ? 'bg-recoder-elements-background-depth-2 text-recoder-elements-textPrimary border-b-2 border-orange-500'
+                        : 'text-recoder-elements-textTertiary hover:bg-recoder-elements-background-depth-2 hover:text-recoder-elements-textSecondary'
                     )}
                     title="Architecture - Project structure and stats overview"
                     aria-label="Project architecture"
@@ -712,7 +712,7 @@ export const EditorPanel = memo(
                 </div>
                 
                 {/* Sidebar Content */}
-                <div className="flex-1 overflow-auto bg-bolt-elements-background-depth-1">
+                <div className="flex-1 overflow-auto bg-recoder-elements-background-depth-1">
                   {sidebarView === 'files' && (
                     <PanelErrorBoundary panelName="File Explorer">
                       <EnhancedFileTree
@@ -734,7 +734,7 @@ export const EditorPanel = memo(
                   )}
                   {sidebarView === 'search' && (
                     <PanelErrorBoundary panelName="Search">
-                      <Suspense fallback={<div className="flex items-center justify-center h-full text-bolt-elements-textTertiary text-sm">Loading...</div>}>
+                      <Suspense fallback={<div className="flex items-center justify-center h-full text-recoder-elements-textTertiary text-sm">Loading...</div>}>
                         <SearchPanel
                           onFileOpen={(file, line, column) => {
                             onFileSelect?.(`${WORK_DIR}/${file}`);
@@ -745,7 +745,7 @@ export const EditorPanel = memo(
                   )}
                   {sidebarView === 'git' && (
                     <PanelErrorBoundary panelName="Git">
-                      <Suspense fallback={<div className="flex items-center justify-center h-full text-bolt-elements-textTertiary text-sm">Loading...</div>}>
+                      <Suspense fallback={<div className="flex items-center justify-center h-full text-recoder-elements-textTertiary text-sm">Loading...</div>}>
                         <GitPanel
                           files={files || {}}
                           onFileSelect={onFileSelect}
@@ -758,7 +758,7 @@ export const EditorPanel = memo(
                   )}
                   {sidebarView === 'packages' && (
                     <PanelErrorBoundary panelName="Package Manager">
-                      <Suspense fallback={<div className="flex items-center justify-center h-full text-bolt-elements-textTertiary text-sm">Loading...</div>}>
+                      <Suspense fallback={<div className="flex items-center justify-center h-full text-recoder-elements-textTertiary text-sm">Loading...</div>}>
                         <PackageManagerPanel
                           files={files || {}}
                         />
@@ -832,7 +832,7 @@ export const EditorPanel = memo(
                 )}
               </PanelHeader>
               {/* Editor Content Area - Single or Split View */}
-              <div className="h-full flex-1 overflow-hidden bg-bolt-elements-background-depth-1">
+              <div className="h-full flex-1 overflow-hidden bg-recoder-elements-background-depth-1">
                 {splitEnabled ? (
                   <PanelGroup direction="horizontal">
                     {/* Primary Editor Pane */}
@@ -870,7 +870,7 @@ export const EditorPanel = memo(
                       />
                     </Panel>
                     {/* Resizable Divider */}
-                    <PanelResizeHandle className="w-1 bg-bolt-elements-borderColor hover:bg-blue-500 transition-colors cursor-col-resize" />
+                    <PanelResizeHandle className="w-1 bg-recoder-elements-borderColor hover:bg-blue-500 transition-colors cursor-col-resize" />
                     {/* Secondary Editor Pane */}
                     <Panel defaultSize={100 - splitRatio} minSize={20}>
                       <SplitEditorPane
@@ -944,10 +944,10 @@ export const EditorPanel = memo(
           }}
         >
           <div className="h-full">
-            <div className="bg-bolt-elements-background-depth-1 h-full flex flex-col">
+            <div className="bg-recoder-elements-background-depth-1 h-full flex flex-col">
               <div
                 className={classNames(
-                  'flex items-center bg-bolt-elements-background-depth-2 border-y border-bolt-elements-borderColor gap-1.5 min-h-[34px] p-2 transition-all duration-300',
+                  'flex items-center bg-recoder-elements-background-depth-2 border-y border-recoder-elements-borderColor gap-1.5 min-h-[34px] p-2 transition-all duration-300',
                   {
                     'bg-orange-500/10 border-orange-500/30':
                       highlightTerminal,
@@ -959,8 +959,8 @@ export const EditorPanel = memo(
                   className={classNames(
                     'flex items-center text-sm cursor-pointer gap-1.5 px-3 py-2 h-full whitespace-nowrap rounded-full',
                     {
-                      'bg-bolt-elements-background-depth-3 text-bolt-elements-textPrimary': bottomPanelView === 'terminal',
-                      'bg-bolt-elements-background-depth-2 text-bolt-elements-textSecondary hover:bg-bolt-elements-background-depth-3':
+                      'bg-recoder-elements-background-depth-3 text-recoder-elements-textPrimary': bottomPanelView === 'terminal',
+                      'bg-recoder-elements-background-depth-2 text-recoder-elements-textSecondary hover:bg-recoder-elements-background-depth-3':
                         bottomPanelView !== 'terminal',
                     },
                   )}
@@ -981,8 +981,8 @@ export const EditorPanel = memo(
                   className={classNames(
                     'flex items-center text-sm cursor-pointer gap-1.5 px-3 py-2 h-full whitespace-nowrap rounded-full',
                     {
-                      'bg-bolt-elements-background-depth-3 text-bolt-elements-textPrimary': bottomPanelView === 'logs',
-                      'bg-bolt-elements-background-depth-2 text-bolt-elements-textSecondary hover:bg-bolt-elements-background-depth-3':
+                      'bg-recoder-elements-background-depth-3 text-recoder-elements-textPrimary': bottomPanelView === 'logs',
+                      'bg-recoder-elements-background-depth-2 text-recoder-elements-textSecondary hover:bg-recoder-elements-background-depth-3':
                         bottomPanelView !== 'logs',
                     },
                   )}
@@ -1000,8 +1000,8 @@ export const EditorPanel = memo(
                   className={classNames(
                     'flex items-center text-sm cursor-pointer gap-1.5 px-3 py-2 h-full whitespace-nowrap rounded-full',
                     {
-                      'bg-bolt-elements-background-depth-3 text-bolt-elements-textPrimary': bottomPanelView === 'problems',
-                      'bg-bolt-elements-background-depth-2 text-bolt-elements-textSecondary hover:bg-bolt-elements-background-depth-3':
+                      'bg-recoder-elements-background-depth-3 text-recoder-elements-textPrimary': bottomPanelView === 'problems',
+                      'bg-recoder-elements-background-depth-2 text-recoder-elements-textSecondary hover:bg-recoder-elements-background-depth-3':
                         bottomPanelView !== 'problems',
                     },
                   )}
@@ -1027,8 +1027,8 @@ export const EditorPanel = memo(
                   className={classNames(
                     'flex items-center text-sm cursor-pointer gap-1.5 px-3 py-2 h-full whitespace-nowrap rounded-full',
                     {
-                      'bg-bolt-elements-background-depth-3 text-bolt-elements-textPrimary': bottomPanelView === 'console',
-                      'bg-bolt-elements-background-depth-2 text-bolt-elements-textSecondary hover:bg-bolt-elements-background-depth-3':
+                      'bg-recoder-elements-background-depth-3 text-recoder-elements-textPrimary': bottomPanelView === 'console',
+                      'bg-recoder-elements-background-depth-2 text-recoder-elements-textSecondary hover:bg-recoder-elements-background-depth-3':
                         bottomPanelView !== 'console',
                     },
                   )}
@@ -1051,8 +1051,8 @@ export const EditorPanel = memo(
                   className={classNames(
                     'flex items-center text-sm cursor-pointer gap-1.5 px-3 py-2 h-full whitespace-nowrap rounded-full',
                     {
-                      'bg-bolt-elements-background-depth-3 text-bolt-elements-textPrimary': bottomPanelView === 'secrets',
-                      'bg-bolt-elements-background-depth-2 text-bolt-elements-textSecondary hover:bg-bolt-elements-background-depth-3':
+                      'bg-recoder-elements-background-depth-3 text-recoder-elements-textPrimary': bottomPanelView === 'secrets',
+                      'bg-recoder-elements-background-depth-2 text-recoder-elements-textSecondary hover:bg-recoder-elements-background-depth-3':
                         bottomPanelView !== 'secrets',
                     },
                   )}
@@ -1068,7 +1068,7 @@ export const EditorPanel = memo(
                 {/* Terminal tabs (only show when terminal view is active) */}
                 {bottomPanelView === 'terminal' && (
                   <>
-                    <div className="w-px h-4 bg-bolt-elements-borderColor mx-1" />
+                    <div className="w-px h-4 bg-recoder-elements-borderColor mx-1" />
                     <TerminalTabs
                       tabs={terminalTabs}
                       activeIndex={activeTerminal}
@@ -1088,17 +1088,17 @@ export const EditorPanel = memo(
                   <div className="flex items-center gap-1 relative">
                     {/* Quick Commands */}
                     <QuickCommands onRunCommand={handleQuickCommand} />
-                    <div className="w-px h-4 bg-bolt-elements-borderColor mx-1" />
+                    <div className="w-px h-4 bg-recoder-elements-borderColor mx-1" />
                     {/* History Search Button */}
                     <button
                       onClick={() => setShowHistorySearch(true)}
-                      className="flex items-center gap-1 px-2 py-1 rounded text-xs transition-colors bg-bolt-elements-background-depth-2 text-bolt-elements-textSecondary hover:bg-bolt-elements-background-depth-3 hover:text-bolt-elements-textPrimary border border-bolt-elements-borderColor"
+                      className="flex items-center gap-1 px-2 py-1 rounded text-xs transition-colors bg-recoder-elements-background-depth-2 text-recoder-elements-textSecondary hover:bg-recoder-elements-background-depth-3 hover:text-recoder-elements-textPrimary border border-recoder-elements-borderColor"
                       title="Search command history (Ctrl+R)"
                     >
                       <div className="i-ph:clock-counter-clockwise" />
                       <span className="hidden sm:inline">History</span>
                     </button>
-                    <div className="w-px h-4 bg-bolt-elements-borderColor mx-1" />
+                    <div className="w-px h-4 bg-recoder-elements-borderColor mx-1" />
                     <ReplLauncher
                       onLaunch={handleReplLaunch}
                       availableFiles={availableFileNames}

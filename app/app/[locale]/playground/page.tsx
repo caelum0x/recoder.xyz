@@ -1,5 +1,7 @@
 'use client';
 
+import { SiteHeader } from '@/components/SiteHeader';
+import { SiteFooter } from '@/components/SiteFooter';
 import { useState, useEffect } from 'react';
 import { useSession } from '@/lib/session-provider';
 import { useRouter } from 'next/navigation';
@@ -173,6 +175,7 @@ print(response.json())`;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-900">
+      <SiteHeader />
       {/* Header */}
       <nav className="border-b border-gray-800 bg-gray-900/50 backdrop-blur-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
@@ -392,6 +395,7 @@ print(response.json())`;
           </div>
         </div>
       </div>
+      <SiteFooter />
     </div>
   );
 }

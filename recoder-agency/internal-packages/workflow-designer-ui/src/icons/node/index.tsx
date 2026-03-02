@@ -1,4 +1,4 @@
-import { getImageGenerationModelProvider } from "@giselles-ai/language-model";
+import { getImageGenerationModelProvider } from "@recoder/language-model";
 import {
 	isActionNode,
 	isContentGenerationNode,
@@ -8,7 +8,7 @@ import {
 	isTriggerNode,
 	isVectorStoreNode,
 	type NodeLike,
-} from "@giselles-ai/protocol";
+} from "@recoder/protocol";
 import { DatabaseZapIcon, FlagIcon, PlayIcon, ZapIcon } from "lucide-react";
 import type { SVGProps } from "react";
 import { AnthropicIcon } from "../anthropic";

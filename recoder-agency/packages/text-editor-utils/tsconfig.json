@@ -1,5 +1,5 @@
 {
-	"extends": "@giselles-ai/tsconfig/react-library.json",
+	"extends": "@recoder/tsconfig/react-library.json",
 	"compilerOptions": {
 		"target": "ES2018",
 		"module": "ESNext",

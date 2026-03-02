@@ -16,17 +16,17 @@ function getPhaseIcon(phase: AgentPhase, status: string): string {
   if (status === 'error') return 'i-ph:x-circle text-red-400';
   if (status === 'complete') return 'i-ph:check-circle text-green-400';
   if (status === 'active') return 'i-ph:circle-notch animate-spin text-purple-400';
-  if (status === 'skipped') return 'i-ph:minus-circle text-bolt-elements-textTertiary';
+  if (status === 'skipped') return 'i-ph:minus-circle text-recoder-elements-textTertiary';
 
   // Pending - show phase-specific icon
   switch (phase) {
-    case 'analyzing': return 'i-ph:magnifying-glass text-bolt-elements-textTertiary';
-    case 'planning': return 'i-ph:list-checks text-bolt-elements-textTertiary';
-    case 'executing': return 'i-ph:code text-bolt-elements-textTertiary';
-    case 'verifying': return 'i-ph:check-square text-bolt-elements-textTertiary';
-    case 'fixing': return 'i-ph:wrench text-bolt-elements-textTertiary';
-    case 'reviewing': return 'i-ph:eye text-bolt-elements-textTertiary';
-    default: return 'i-ph:circle text-bolt-elements-textTertiary';
+    case 'analyzing': return 'i-ph:magnifying-glass text-recoder-elements-textTertiary';
+    case 'planning': return 'i-ph:list-checks text-recoder-elements-textTertiary';
+    case 'executing': return 'i-ph:code text-recoder-elements-textTertiary';
+    case 'verifying': return 'i-ph:check-square text-recoder-elements-textTertiary';
+    case 'fixing': return 'i-ph:wrench text-recoder-elements-textTertiary';
+    case 'reviewing': return 'i-ph:eye text-recoder-elements-textTertiary';
+    default: return 'i-ph:circle text-recoder-elements-textTertiary';
   }
 }
 
@@ -50,7 +50,7 @@ export const AgentTimeline = memo(({ steps, currentPhase }: AgentTimelineProps) 
               <div
                 className={classNames(
                   'w-px h-4 mt-0.5',
-                  step.status === 'complete' ? 'bg-green-400/30' : 'bg-bolt-elements-borderColor',
+                  step.status === 'complete' ? 'bg-green-400/30' : 'bg-recoder-elements-borderColor',
                 )}
               />
             )}
@@ -63,21 +63,21 @@ export const AgentTimeline = memo(({ steps, currentPhase }: AgentTimelineProps) 
                 className={classNames(
                   'text-xs font-medium truncate',
                   step.status === 'active' ? 'text-purple-400' :
-                  step.status === 'complete' ? 'text-bolt-elements-textPrimary' :
+                  step.status === 'complete' ? 'text-recoder-elements-textPrimary' :
                   step.status === 'error' ? 'text-red-400' :
-                  'text-bolt-elements-textTertiary',
+                  'text-recoder-elements-textTertiary',
                 )}
               >
                 {step.label}
               </span>
               {step.startedAt && (
-                <span className="text-[10px] text-bolt-elements-textTertiary flex-shrink-0">
+                <span className="text-[10px] text-recoder-elements-textTertiary flex-shrink-0">
                   {formatDuration(step.startedAt, step.completedAt)}
                 </span>
               )}
             </div>
             {step.detail && (
-              <p className="text-[10px] text-bolt-elements-textTertiary mt-0.5 truncate">
+              <p className="text-[10px] text-recoder-elements-textTertiary mt-0.5 truncate">
                 {step.detail}
               </p>
             )}

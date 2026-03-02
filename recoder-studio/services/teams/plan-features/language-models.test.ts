@@ -1,4 +1,4 @@
-import { Tier } from "@giselles-ai/language-model";
+import { Tier } from "@recoder/language-model";
 import { describe, expect, test } from "vitest";
 import type { TeamPlan } from "@/db/schema";
 import {

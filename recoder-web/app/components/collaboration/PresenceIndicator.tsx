@@ -62,14 +62,14 @@ export function PresenceIndicator({
     return (
       <div
         className={classNames(
-          'flex flex-col gap-2 p-3 rounded-lg bg-bolt-elements-background-depth-2',
+          'flex flex-col gap-2 p-3 rounded-lg bg-recoder-elements-background-depth-2',
           className
         )}
       >
         {/* Header */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <span className="text-sm font-medium text-bolt-elements-textPrimary">
+            <span className="text-sm font-medium text-recoder-elements-textPrimary">
               Collaborators
             </span>
             {showConnectionStatus && (
@@ -80,13 +80,13 @@ export function PresenceIndicator({
                     connectionColor
                   )}
                 />
-                <span className="text-xs text-bolt-elements-textSecondary">
+                <span className="text-xs text-recoder-elements-textSecondary">
                   {connectionText}
                 </span>
               </div>
             )}
           </div>
-          <span className="text-xs text-bolt-elements-textSecondary">
+          <span className="text-xs text-recoder-elements-textSecondary">
             {online} online
           </span>
         </div>
@@ -99,7 +99,7 @@ export function PresenceIndicator({
             ))}
           </div>
         ) : (
-          <div className="text-sm text-bolt-elements-textSecondary py-2">
+          <div className="text-sm text-recoder-elements-textSecondary py-2">
             No other collaborators online
           </div>
         )}
@@ -124,7 +124,7 @@ export function PresenceIndicator({
         onClick={onClick}
         className={classNames(
           'flex items-center gap-2 px-2 py-1.5 rounded-lg transition-all',
-          'hover:bg-bolt-elements-background-depth-2',
+          'hover:bg-recoder-elements-background-depth-2',
           onClick && 'cursor-pointer'
         )}
       >
@@ -153,7 +153,7 @@ export function PresenceIndicator({
 
         {/* Count badge */}
         {online > maxAvatars && (
-          <span className="text-xs text-bolt-elements-textSecondary">
+          <span className="text-xs text-recoder-elements-textSecondary">
             +{online - maxAvatars}
           </span>
         )}
@@ -166,17 +166,17 @@ export function PresenceIndicator({
           className={classNames(
             'absolute top-full right-0 mt-2 z-50',
             'min-w-[200px] max-w-[300px] p-3',
-            'bg-bolt-elements-background-depth-3 rounded-lg shadow-lg',
-            'border border-bolt-elements-borderColor',
+            'bg-recoder-elements-background-depth-3 rounded-lg shadow-lg',
+            'border border-recoder-elements-borderColor',
             'animate-in fade-in slide-in-from-top-2 duration-200'
           )}
         >
           <div className="flex items-center justify-between mb-2">
-            <span className="text-sm font-medium text-bolt-elements-textPrimary">
+            <span className="text-sm font-medium text-recoder-elements-textPrimary">
               Online ({online})
             </span>
             {active < online && (
-              <span className="text-xs text-bolt-elements-textSecondary">
+              <span className="text-xs text-recoder-elements-textSecondary">
                 {active} active
               </span>
             )}
@@ -215,7 +215,7 @@ function CollaboratorRow({ collaborator, compact }: CollaboratorRowProps) {
     <div
       className={classNames(
         'flex items-center gap-2',
-        compact ? 'py-1' : 'py-1.5 px-2 rounded-md hover:bg-bolt-elements-background-depth-3'
+        compact ? 'py-1' : 'py-1.5 px-2 rounded-md hover:bg-recoder-elements-background-depth-3'
       )}
     >
       {/* Avatar with status */}
@@ -237,7 +237,7 @@ function CollaboratorRow({ collaborator, compact }: CollaboratorRowProps) {
         <div
           className={classNames(
             'absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full',
-            'border-2 border-bolt-elements-background-depth-2',
+            'border-2 border-recoder-elements-background-depth-2',
             statusColor
           )}
         />
@@ -246,17 +246,17 @@ function CollaboratorRow({ collaborator, compact }: CollaboratorRowProps) {
       {/* Name and file */}
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-1.5">
-          <span className="text-sm text-bolt-elements-textPrimary truncate">
+          <span className="text-sm text-recoder-elements-textPrimary truncate">
             {user.name}
           </span>
           {!compact && (
-            <span className="text-xs text-bolt-elements-textTertiary">
+            <span className="text-xs text-recoder-elements-textTertiary">
               ({statusText})
             </span>
           )}
         </div>
         {currentFile && (
-          <div className="text-xs text-bolt-elements-textSecondary truncate">
+          <div className="text-xs text-recoder-elements-textSecondary truncate">
             {getFileName(currentFile)}
           </div>
         )}

@@ -51,7 +51,7 @@ export function EditableText({
         className={classNames(
           'rounded px-2 py-1 hidden data-[editing=true]:block w-full',
           'outline-none ring-1 ring-accent-500',
-          'text-bolt-elements-textPrimary text-sm bg-bolt-elements-background-depth-2',
+          'text-recoder-elements-textPrimary text-sm bg-recoder-elements-background-depth-2',
           inputClassName
         )}
         ref={inputRef}
@@ -76,9 +76,9 @@ export function EditableText({
         type="button"
         className={classNames(
           'rounded px-2 py-1 data-[editing=true]:hidden',
-          'text-bolt-elements-textPrimary text-sm text-left truncate',
+          'text-recoder-elements-textPrimary text-sm text-left truncate',
           'border-0 bg-transparent',
-          !readonly && 'hover:bg-bolt-elements-background-depth-3 cursor-text',
+          !readonly && 'hover:bg-recoder-elements-background-depth-3 cursor-text',
           readonly && 'cursor-default',
           buttonClassName
         )}

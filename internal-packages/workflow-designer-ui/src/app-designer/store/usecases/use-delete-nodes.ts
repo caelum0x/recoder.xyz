@@ -8,7 +8,7 @@ import {
 	NodeId,
 	type NodeLike,
 	type UIState,
-} from "@giselles-ai/protocol";
+} from "@recoder/protocol";
 import { useCallback } from "react";
 import { useConfirm } from "../../confirm";
 import { useAppDesignerStoreApi } from "../app-designer-provider";

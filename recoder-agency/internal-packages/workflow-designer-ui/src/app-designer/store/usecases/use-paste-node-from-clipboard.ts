@@ -1,4 +1,4 @@
-import { isFileNode, Node } from "@giselles-ai/protocol";
+import { isFileNode, Node } from "@recoder/protocol";
 import { useCallback } from "react";
 import { useAppDesignerStoreApi } from "../app-designer-provider";
 import { useAppDesignerStore, useWorkspaceActions } from "../hooks";

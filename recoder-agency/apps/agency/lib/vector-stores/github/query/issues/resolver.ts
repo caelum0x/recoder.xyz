@@ -1,4 +1,4 @@
-import type { GitHubQueryContext } from "@giselles-ai/giselle";
+import type { GitHubQueryContext } from "@recoder/giselle";
 import { githubRepositoryIssueEmbeddings } from "@/db";
 import { resolveGitHubRepositoryIndex } from "../resolve-github-repository-index";
 

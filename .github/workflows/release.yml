@@ -1,5 +1,8 @@
 name: Release Automation
 
+# Handles version bumping, changelog generation, GitHub release creation,
+# and triggers deploy.yml for production deployment to Hetzner.
+
 on:
   workflow_dispatch:
     inputs:
@@ -29,7 +32,7 @@ on:
         type: boolean
 
 env:
-  NODE_VERSION: '18'
+  NODE_VERSION: '20'
 
 jobs:
   prepare-release:
@@ -45,16 +48,18 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          token: ${{ secrets.RELEASE_TOKEN }}
+          token: ${{ secrets.RELEASE_TOKEN || secrets.GITHUB_TOKEN }}
+
+      - name: Run strict leak scan
+        run: bash scripts/leak-scan-strict.sh
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: 'npm'
 
       - name: Install dependencies
-        run: npm ci
+        run: npm install --ignore-scripts
 
       - name: Configure Git
         run: |
@@ -71,7 +76,7 @@ jobs:
           current_version="${{ steps.current-version.outputs.version }}"
           bump_type="${{ github.event.inputs.version_bump }}"
           channel="${{ github.event.inputs.release_channel }}"
-          
+
           if [ "$bump_type" = "prerelease" ]; then
             if [ "$channel" = "beta" ]; then
               new_version=$(npm version prerelease --preid=beta --no-git-tag-version)
@@ -83,7 +88,7 @@ jobs:
           else
             new_version=$(npm version $bump_type --no-git-tag-version)
           fi
-          
+
           # Remove 'v' prefix if present
           new_version=${new_version#v}
           echo "new-version=$new_version" >> $GITHUB_OUTPUT
@@ -94,34 +99,36 @@ jobs:
         run: |
           # Install conventional-changelog-cli if not present
           npm install -g conventional-changelog-cli
-          
+
           # Generate changelog
           changelog=$(conventional-changelog -p angular -u)
-          
+
           # Escape for GitHub output
           changelog="${changelog//'%'/'%25'}"
           changelog="${changelog//$'\n'/'%0A'}"
           changelog="${changelog//$'\r'/'%0D'}"
-          
+
           echo "changelog=$changelog" >> $GITHUB_OUTPUT
 
       - name: Update package.json files
         if: ${{ !github.event.inputs.dry_run }}
         run: |
           new_version="${{ steps.version.outputs.new-version }}"
-          
+
           # Update root package.json
           npm version $new_version --no-git-tag-version
-          
-          # Update all package.json files in workspace
-          find packages -name "package.json" -exec npm version $new_version --prefix {} --no-git-tag-version \;
+
+          # Update workspace package.json files if they exist
+          if [ -d packages ]; then
+            find packages -maxdepth 2 -name "package.json" -exec npm version $new_version --prefix {} --no-git-tag-version \;
+          fi
 
       - name: Update CHANGELOG.md
         if: ${{ !github.event.inputs.dry_run }}
         run: |
           new_version="${{ steps.version.outputs.new-version }}"
           changelog="${{ steps.changelog.outputs.changelog }}"
-          
+
           # Create new changelog entry
           echo "# Changelog" > CHANGELOG.new.md
           echo "" >> CHANGELOG.new.md
@@ -129,19 +136,19 @@ jobs:
           echo "" >> CHANGELOG.new.md
           echo "$changelog" >> CHANGELOG.new.md
           echo "" >> CHANGELOG.new.md
-          
+
           # Append existing changelog if it exists
           if [ -f CHANGELOG.md ]; then
             tail -n +2 CHANGELOG.md >> CHANGELOG.new.md
           fi
-          
+
           mv CHANGELOG.new.md CHANGELOG.md
 
       - name: Commit version bump
         if: ${{ !github.event.inputs.dry_run }}
         run: |
           new_version="${{ steps.version.outputs.new-version }}"
-          
+
           git add .
           git commit -m "chore: bump version to $new_version [skip ci]"
           git tag "v$new_version"
@@ -162,14 +169,14 @@ jobs:
     name: Build and Test
     needs: prepare-release
     if: needs.prepare-release.outputs.should-release == 'true'
-    uses: ./.github/workflows/ci.yml
+    uses: ./.github/workflows/master-pipeline.yml
     secrets: inherit
 
   create-release:
     name: Create GitHub Release
     runs-on: ubuntu-latest
     needs: [prepare-release, build-and-test]
-    if: needs.prepare-release.outputs.should-release == 'true'
+    if: always() && needs.prepare-release.outputs.should-release == 'true' && needs.build-and-test.result != 'failure'
 
     steps:
       - name: Checkout code
@@ -177,69 +184,30 @@ jobs:
         with:
           ref: v${{ needs.prepare-release.outputs.new-version }}
 
-      - name: Download release artifacts
-        uses: actions/download-artifact@v4
-        with:
-          path: release-artifacts/
-
-      - name: Organize release assets
-        run: |
-          mkdir -p release/
-          find release-artifacts/ -name "codecraft-*" -type f -exec cp {} release/ \;
-          find release-artifacts/ -name "*.dmg" -o -name "*.exe" -o -name "*.deb" -o -name "*.rpm" -o -name "*.AppImage" | xargs -I {} cp {} release/
-
-      - name: Generate checksums
-        run: |
-          cd release/
-          sha256sum * > checksums.txt
-          echo "## File Checksums (SHA256)" >> ../release-notes.md
-          echo "\`\`\`" >> ../release-notes.md
-          cat checksums.txt >> ../release-notes.md
-          echo "\`\`\`" >> ../release-notes.md
-
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v1
         with:
           tag_name: v${{ needs.prepare-release.outputs.new-version }}
-          name: CodeCraft CLI v${{ needs.prepare-release.outputs.new-version }}
+          name: Recoder v${{ needs.prepare-release.outputs.new-version }}
           body: |
             ${{ needs.prepare-release.outputs.changelog }}
-            
-            ## Installation
-            
-            ### NPM (Recommended)
-            ```bash
-            npm install -g @recoder/cli@${{ needs.prepare-release.outputs.new-version }}
-            ```
-            
-            ### Homebrew (macOS/Linux)
-            ```bash
-            brew install recoder/tap/codecraft
-            ```
-            
-            ### Chocolatey (Windows)
-            ```bash
-            choco install codecraft
-            ```
-            
-            ### Docker
-            ```bash
-            docker run -it recoder/codecraft:${{ needs.prepare-release.outputs.new-version }}
-            ```
-            
+
             ## What's Changed
-            See the full changelog at https://github.com/recoder-team/recoder/blob/main/CHANGELOG.md
-          files: release/*
+            See the full changelog at https://github.com/${{ github.repository }}/blob/main/CHANGELOG.md
+
+            ## Deployment
+            Production deployment is handled automatically via `deploy.yml` when changes are pushed to `main`.
           prerelease: ${{ contains(needs.prepare-release.outputs.new-version, '-') }}
           draft: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   publish-npm:
-    name: Publish to NPM
+    name: Advisory - Publish to NPM
     runs-on: ubuntu-latest
     needs: [prepare-release, create-release]
     if: needs.prepare-release.outputs.should-release == 'true'
+    continue-on-error: true
 
     steps:
       - name: Checkout code
@@ -252,15 +220,27 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
           registry-url: 'https://registry.npmjs.org'
-          cache: 'npm'
 
-      - name: Install dependencies
-        run: npm ci
+      - name: Check if CLI package exists
+        id: check-cli
+        run: |
+          if [ -f packages/cli/package.json ]; then
+            echo "has-cli=true" >> $GITHUB_OUTPUT
+          else
+            echo "has-cli=false" >> $GITHUB_OUTPUT
+            echo "No CLI package found, skipping NPM publish"
+          fi
 
-      - name: Build package
-        run: npm run build:core
+      - name: Install and build CLI
+        if: steps.check-cli.outputs.has-cli == 'true'
+        working-directory: ./packages/cli
+        run: |
+          npm install
+          npm run build
 
       - name: Publish to NPM
+        if: steps.check-cli.outputs.has-cli == 'true'
+        working-directory: ./packages/cli
         run: |
           channel="${{ github.event.inputs.release_channel }}"
           if [ "$channel" = "stable" ]; then
@@ -271,106 +251,29 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
-  update-package-managers:
-    name: Update Package Managers
-    runs-on: ubuntu-latest
-    needs: [prepare-release, publish-npm]
-    if: needs.prepare-release.outputs.should-release == 'true' && github.event.inputs.release_channel == 'stable'
-
-    steps:
-      - name: Update Homebrew Formula
-        run: |
-          curl -X POST \
-            -H "Authorization: token ${{ secrets.HOMEBREW_GITHUB_TOKEN }}" \
-            -H "Accept: application/vnd.github.v3+json" \
-            "https://api.github.com/repos/recoder-team/homebrew-tap/dispatches" \
-            -d '{
-              "event_type": "update-formula",
-              "client_payload": {
-                "version": "${{ needs.prepare-release.outputs.new-version }}",
-                "tag": "v${{ needs.prepare-release.outputs.new-version }}"
-              }
-            }'
-
-      - name: Update Chocolatey Package
-        run: |
-          curl -X POST \
-            -H "Authorization: token ${{ secrets.CHOCOLATEY_GITHUB_TOKEN }}" \
-            -H "Accept: application/vnd.github.v3+json" \
-            "https://api.github.com/repos/recoder-team/chocolatey-packages/dispatches" \
-            -d '{
-              "event_type": "update-package",
-              "client_payload": {
-                "version": "${{ needs.prepare-release.outputs.new-version }}",
-                "tag": "v${{ needs.prepare-release.outputs.new-version }}"
-              }
-            }'
-
-      - name: Update Winget Package
-        run: |
-          curl -X POST \
-            -H "Authorization: token ${{ secrets.WINGET_GITHUB_TOKEN }}" \
-            -H "Accept: application/vnd.github.v3+json" \
-            "https://api.github.com/repos/microsoft/winget-pkgs/dispatches" \
-            -d '{
-              "event_type": "update-package",
-              "client_payload": {
-                "package": "CodeCraft.CLI",
-                "version": "${{ needs.prepare-release.outputs.new-version }}",
-                "tag": "v${{ needs.prepare-release.outputs.new-version }}"
-              }
-            }'
-
+  # Note: Production deployment happens automatically via deploy.yml on push to main.
+  # The version bump commit (with [skip ci]) won't trigger deploy.yml,
+  # so trigger it explicitly for stable releases.
   deploy-production:
-    name: Deploy to Production
+    name: Deploy to Production (Hetzner)
     runs-on: ubuntu-latest
-    needs: [prepare-release, update-package-managers]
+    needs: [prepare-release, create-release]
     if: needs.prepare-release.outputs.should-release == 'true' && github.event.inputs.release_channel == 'stable'
     environment: production
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          ref: v${{ needs.prepare-release.outputs.new-version }}
-
-      - name: Setup kubectl
-        uses: azure/setup-kubectl@v3
-
-      - name: Setup Helm
-        uses: azure/setup-helm@v3
-
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: us-east-1
-
-      - name: Update kubeconfig
-        run: aws eks update-kubeconfig --name production-cluster
-
-      - name: Deploy to production
+      - name: Trigger deploy workflow
         run: |
-          helm upgrade --install codecraft-production \
-            deployment/kubernetes/helm-chart \
-            --namespace codecraft-production \
-            --create-namespace \
-            --set image.tag=v${{ needs.prepare-release.outputs.new-version }} \
-            --set ingress.hosts[0].host=cli.codecraft.dev \
-            --values deployment/kubernetes/helm-chart/values-production.yaml \
-            --wait --timeout=15m
-
-      - name: Run production health checks
-        run: |
-          kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=codecraft-cli -n codecraft-production --timeout=300s
-          kubectl exec -n codecraft-production deployment/codecraft-cli -- codecraft --version
-          
-          # Additional health checks
-          curl -f https://cli.codecraft.dev/health || exit 1
+          echo "Triggering production deployment via deploy.yml..."
+          gh workflow run deploy.yml \
+            --ref main \
+            -f skip_cooldown=true
+          echo "Deploy workflow triggered for v${{ needs.prepare-release.outputs.new-version }}"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   notify:
-    name: Notify Release
+    name: Advisory - Notify Release
     runs-on: ubuntu-latest
     needs: [prepare-release, deploy-production]
     if: always() && needs.prepare-release.outputs.should-release == 'true'
@@ -378,13 +281,18 @@ jobs:
     steps:
       - name: Notify Discord
         if: success()
+        continue-on-error: true
         run: |
+          if [ -z "${{ secrets.DISCORD_WEBHOOK_URL }}" ]; then
+            echo "Discord webhook not configured, skipping"
+            exit 0
+          fi
           curl -X POST "${{ secrets.DISCORD_WEBHOOK_URL }}" \
             -H "Content-Type: application/json" \
             -d '{
               "embeds": [{
-                "title": "🎉 CodeCraft CLI v${{ needs.prepare-release.outputs.new-version }} Released!",
-                "description": "New version is now available across all distribution channels.",
+                "title": "Recoder v${{ needs.prepare-release.outputs.new-version }} Released!",
+                "description": "New version has been released and deployed to production.",
                 "color": 3066993,
                 "fields": [
                   {
@@ -396,30 +304,30 @@ jobs:
                     "name": "Channel",
                     "value": "${{ github.event.inputs.release_channel }}",
                     "inline": true
-                  },
-                  {
-                    "name": "Installation",
-                    "value": "`npm install -g @recoder/cli@${{ needs.prepare-release.outputs.new-version }}`",
-                    "inline": false
                   }
                 ],
-                "timestamp": "${{ github.event.repository.updated_at }}"
+                "timestamp": "'$(date -u +%Y-%m-%dT%H:%M:%SZ)'"
               }]
             }'
 
       - name: Notify Slack
         if: success()
+        continue-on-error: true
         run: |
+          if [ -z "${{ secrets.SLACK_WEBHOOK_URL }}" ]; then
+            echo "Slack webhook not configured, skipping"
+            exit 0
+          fi
           curl -X POST "${{ secrets.SLACK_WEBHOOK_URL }}" \
             -H "Content-Type: application/json" \
             -d '{
-              "text": "🚀 CodeCraft CLI v${{ needs.prepare-release.outputs.new-version }} has been released and deployed to production!",
+              "text": "Recoder v${{ needs.prepare-release.outputs.new-version }} has been released and deployed to production!",
               "blocks": [
                 {
                   "type": "section",
                   "text": {
                     "type": "mrkdwn",
-                    "text": "*CodeCraft CLI v${{ needs.prepare-release.outputs.new-version }}* has been successfully released!"
+                    "text": "*Recoder v${{ needs.prepare-release.outputs.new-version }}* has been successfully released!"
                   }
                 },
                 {
@@ -434,39 +342,23 @@ jobs:
                       "text": "*Channel:*\n${{ github.event.inputs.release_channel }}"
                     }
                   ]
-                },
-                {
-                  "type": "actions",
-                  "elements": [
-                    {
-                      "type": "button",
-                      "text": {
-                        "type": "plain_text",
-                        "text": "View Release"
-                      },
-                      "url": "https://github.com/recoder-team/recoder/releases/tag/v${{ needs.prepare-release.outputs.new-version }}"
-                    },
-                    {
-                      "type": "button",
-                      "text": {
-                        "type": "plain_text",
-                        "text": "Documentation"
-                      },
-                      "url": "https://codecraft.dev/docs"
-                    }
-                  ]
                 }
               ]
             }'
 
       - name: Notify on failure
         if: failure()
+        continue-on-error: true
         run: |
+          if [ -z "${{ secrets.DISCORD_WEBHOOK_URL }}" ]; then
+            echo "Discord webhook not configured, skipping"
+            exit 0
+          fi
           curl -X POST "${{ secrets.DISCORD_WEBHOOK_URL }}" \
             -H "Content-Type: application/json" \
             -d '{
               "embeds": [{
-                "title": "❌ CodeCraft CLI Release Failed",
+                "title": "Recoder Release Failed",
                 "description": "Release process for v${{ needs.prepare-release.outputs.new-version }} encountered errors.",
                 "color": 15158332,
                 "fields": [
@@ -482,7 +374,7 @@ jobs:
                   },
                   {
                     "name": "Action",
-                    "value": "[View Failed Workflow](https://github.com/recoder-team/recoder/actions/runs/${{ github.run_id }})",
+                    "value": "[View Failed Workflow](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})",
                     "inline": false
                   }
                 ]

@@ -1,11 +1,11 @@
-import { defaultName } from "@giselles-ai/node-registry";
+import { defaultName } from "@recoder/node-registry";
 import type {
 	ContentGenerationNode,
 	NodeId,
 	NodeLike,
 	OutputId,
-} from "@giselles-ai/protocol";
-import { isSupportedConnection, type UIConnection } from "@giselles-ai/react";
+} from "@recoder/protocol";
+import { isSupportedConnection, type UIConnection } from "@recoder/react";
 import { useCallback, useMemo } from "react";
 import { useShallow } from "zustand/shallow";
 import {

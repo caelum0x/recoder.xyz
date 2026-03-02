@@ -81,12 +81,12 @@ export function diffFiles(fileName: string, oldFileContent: string, newFileConte
  * Example:
  *
  * ```html
- * <bolt_file_modifications>
+ * <recoder_file_modifications>
  * <diff path="/home/project/index.js">
  * - console.log('Hello, World!');
- * + console.log('Hello, Bolt!');
+ * + console.log('Hello, Recoder!');
  * </diff>
- * </bolt_file_modifications>
+ * </recoder_file_modifications>
  * ```
  */
 export function fileModificationsToHTML(modifications: FileModifications) {

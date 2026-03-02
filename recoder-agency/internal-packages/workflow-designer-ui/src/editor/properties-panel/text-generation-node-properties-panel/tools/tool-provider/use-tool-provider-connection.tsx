@@ -2,7 +2,7 @@ import {
 	SecretId,
 	type TextGenerationNode,
 	type ToolSet,
-} from "@giselles-ai/protocol";
+} from "@recoder/protocol";
 import { useCallback, useMemo, useState, useTransition } from "react";
 import z from "zod/v4";
 import {

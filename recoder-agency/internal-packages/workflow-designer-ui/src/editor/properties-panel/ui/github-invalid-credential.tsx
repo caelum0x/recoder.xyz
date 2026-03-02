@@ -1,4 +1,4 @@
-import { useIntegration } from "@giselles-ai/react";
+import { useIntegration } from "@recoder/react";
 import { useCallback, useEffect, useTransition } from "react";
 import { SourceLinkIcon, SpinnerIcon } from "../../../icons";
 import { usePopupWindow } from "../trigger-node-properties-panel/hooks/use-popup-window";

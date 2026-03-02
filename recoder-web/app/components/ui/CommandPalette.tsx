@@ -64,11 +64,11 @@ const ShortcutBadge = memo(({ shortcut }: { shortcut: { mac: string[]; win: stri
     <div className="flex items-center gap-0.5">
       {keys.map((key, index) => (
         <span key={index} className="flex items-center">
-          <kbd className="inline-flex items-center justify-center min-w-[20px] px-1.5 py-0.5 text-[10px] font-medium rounded bg-bolt-elements-background-depth-3 text-bolt-elements-textTertiary border border-bolt-elements-borderColor">
+          <kbd className="inline-flex items-center justify-center min-w-[20px] px-1.5 py-0.5 text-[10px] font-medium rounded bg-recoder-elements-background-depth-3 text-recoder-elements-textTertiary border border-recoder-elements-borderColor">
             {key}
           </kbd>
           {index < keys.length - 1 && (
-            <span className="text-bolt-elements-textTertiary mx-0.5 text-[10px]">+</span>
+            <span className="text-recoder-elements-textTertiary mx-0.5 text-[10px]">+</span>
           )}
         </span>
       ))}
@@ -101,8 +101,8 @@ const CommandItem = memo(
           'w-full flex items-center gap-3 px-4 py-2.5 text-left',
           'transition-colors duration-75',
           isSelected
-            ? 'bg-bolt-elements-item-backgroundAccent'
-            : 'hover:bg-bolt-elements-item-backgroundHover'
+            ? 'bg-recoder-elements-item-backgroundAccent'
+            : 'hover:bg-recoder-elements-item-backgroundHover'
         )}
         onClick={onSelect}
         onMouseEnter={onHover}
@@ -111,24 +111,24 @@ const CommandItem = memo(
         <div
           className={classNames(
             'flex items-center justify-center w-8 h-8 rounded-md shrink-0',
-            'bg-bolt-elements-background-depth-3'
+            'bg-recoder-elements-background-depth-3'
           )}
         >
-          <div className={classNames(command.icon || categoryInfo.icon, 'text-lg text-bolt-elements-textSecondary')} />
+          <div className={classNames(command.icon || categoryInfo.icon, 'text-lg text-recoder-elements-textSecondary')} />
         </div>
 
         {/* Label and description */}
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
-            <span className="text-sm font-medium text-bolt-elements-textPrimary truncate">
+            <span className="text-sm font-medium text-recoder-elements-textPrimary truncate">
               {command.label}
             </span>
-            <span className="text-[10px] text-bolt-elements-textTertiary uppercase tracking-wide shrink-0">
+            <span className="text-[10px] text-recoder-elements-textTertiary uppercase tracking-wide shrink-0">
               {categoryInfo.label}
             </span>
           </div>
           {command.description && (
-            <p className="text-xs text-bolt-elements-textTertiary truncate mt-0.5">
+            <p className="text-xs text-recoder-elements-textTertiary truncate mt-0.5">
               {command.description}
             </p>
           )}
@@ -280,15 +280,15 @@ export const CommandPalette = memo(() => {
       <div
         className={classNames(
           'relative w-full max-w-2xl mx-4',
-          'bg-bolt-elements-background-depth-1 border border-bolt-elements-borderColor',
+          'bg-recoder-elements-background-depth-1 border border-recoder-elements-borderColor',
           'rounded-xl shadow-2xl overflow-hidden'
         )}
         onClick={(e) => e.stopPropagation()}
         onKeyDown={handleKeyDown}
       >
         {/* Header with search input */}
-        <div className="flex items-center gap-3 px-4 py-3 border-b border-bolt-elements-borderColor">
-          <div className="i-ph:magnifying-glass text-lg text-bolt-elements-textTertiary" />
+        <div className="flex items-center gap-3 px-4 py-3 border-b border-recoder-elements-borderColor">
+          <div className="i-ph:magnifying-glass text-lg text-recoder-elements-textTertiary" />
           <input
             ref={inputRef}
             type="text"
@@ -297,19 +297,19 @@ export const CommandPalette = memo(() => {
             placeholder="Type a command or search..."
             className={classNames(
               'flex-1 bg-transparent',
-              'text-bolt-elements-textPrimary placeholder:text-bolt-elements-textTertiary',
+              'text-recoder-elements-textPrimary placeholder:text-recoder-elements-textTertiary',
               'focus:outline-none text-sm'
             )}
           />
-          <div className="flex items-center gap-2 text-xs text-bolt-elements-textTertiary">
-            <kbd className="px-1.5 py-0.5 font-mono bg-bolt-elements-background-depth-3 rounded border border-bolt-elements-borderColor">
+          <div className="flex items-center gap-2 text-xs text-recoder-elements-textTertiary">
+            <kbd className="px-1.5 py-0.5 font-mono bg-recoder-elements-background-depth-3 rounded border border-recoder-elements-borderColor">
               {isMac ? 'Cmd' : 'Ctrl'}+Shift+P
             </kbd>
           </div>
         </div>
 
         {/* Category tabs */}
-        <div className="flex items-center gap-1 px-3 py-2 border-b border-bolt-elements-borderColor overflow-x-auto scrollbar-hide">
+        <div className="flex items-center gap-1 px-3 py-2 border-b border-recoder-elements-borderColor overflow-x-auto scrollbar-hide">
           {CATEGORIES.map((category) => (
             <button
               key={category.id}
@@ -318,8 +318,8 @@ export const CommandPalette = memo(() => {
                 'flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs whitespace-nowrap',
                 'transition-colors duration-100',
                 selectedCategory === category.id
-                  ? 'bg-bolt-elements-item-backgroundAccent text-bolt-elements-textPrimary'
-                  : 'text-bolt-elements-textSecondary hover:bg-bolt-elements-item-backgroundHover'
+                  ? 'bg-recoder-elements-item-backgroundAccent text-recoder-elements-textPrimary'
+                  : 'text-recoder-elements-textSecondary hover:bg-recoder-elements-item-backgroundHover'
               )}
             >
               <div className={classNames(category.icon, 'text-sm')} />
@@ -331,7 +331,7 @@ export const CommandPalette = memo(() => {
         {/* Command list */}
         <div ref={listRef} className="max-h-[50vh] overflow-y-auto">
           {filteredCommands.length === 0 ? (
-            <div className="px-4 py-12 text-center text-bolt-elements-textTertiary">
+            <div className="px-4 py-12 text-center text-recoder-elements-textTertiary">
               <div className="i-ph:magnifying-glass text-4xl mx-auto mb-3 opacity-50" />
               <p className="text-sm">No commands found</p>
               <p className="text-xs mt-1 opacity-75">Try a different search or category</p>
@@ -340,7 +340,7 @@ export const CommandPalette = memo(() => {
             <>
               {/* Recently Used section header when showing 'all' with recent commands */}
               {selectedCategory === 'all' && !query && getRecentCommands().length > 0 && (
-                <div className="px-4 py-2 text-xs font-medium text-bolt-elements-textTertiary uppercase tracking-wide bg-bolt-elements-background-depth-2 border-b border-bolt-elements-borderColor flex items-center gap-2">
+                <div className="px-4 py-2 text-xs font-medium text-recoder-elements-textTertiary uppercase tracking-wide bg-recoder-elements-background-depth-2 border-b border-recoder-elements-borderColor flex items-center gap-2">
                   <div className="i-ph:clock text-sm" />
                   Recently Used
                 </div>
@@ -359,7 +359,7 @@ export const CommandPalette = memo(() => {
                   <div key={command.id}>
                     {/* All Commands section header */}
                     {isFirstNonRecent && (
-                      <div className="px-4 py-2 text-xs font-medium text-bolt-elements-textTertiary uppercase tracking-wide bg-bolt-elements-background-depth-2 border-b border-bolt-elements-borderColor flex items-center gap-2 mt-2">
+                      <div className="px-4 py-2 text-xs font-medium text-recoder-elements-textTertiary uppercase tracking-wide bg-recoder-elements-background-depth-2 border-b border-recoder-elements-borderColor flex items-center gap-2 mt-2">
                         <div className="i-ph:list text-sm" />
                         All Commands
                       </div>
@@ -378,28 +378,28 @@ export const CommandPalette = memo(() => {
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-between px-4 py-2 border-t border-bolt-elements-borderColor bg-bolt-elements-background-depth-2 text-xs text-bolt-elements-textTertiary">
+        <div className="flex items-center justify-between px-4 py-2 border-t border-recoder-elements-borderColor bg-recoder-elements-background-depth-2 text-xs text-recoder-elements-textTertiary">
           <div className="flex items-center gap-4">
             <span className="flex items-center gap-1">
-              <kbd className="px-1 py-0.5 font-mono bg-bolt-elements-background-depth-3 rounded border border-bolt-elements-borderColor">
+              <kbd className="px-1 py-0.5 font-mono bg-recoder-elements-background-depth-3 rounded border border-recoder-elements-borderColor">
                 ↑↓
               </kbd>
               Navigate
             </span>
             <span className="flex items-center gap-1">
-              <kbd className="px-1 py-0.5 font-mono bg-bolt-elements-background-depth-3 rounded border border-bolt-elements-borderColor">
+              <kbd className="px-1 py-0.5 font-mono bg-recoder-elements-background-depth-3 rounded border border-recoder-elements-borderColor">
                 Enter
               </kbd>
               Execute
             </span>
             <span className="flex items-center gap-1">
-              <kbd className="px-1 py-0.5 font-mono bg-bolt-elements-background-depth-3 rounded border border-bolt-elements-borderColor">
+              <kbd className="px-1 py-0.5 font-mono bg-recoder-elements-background-depth-3 rounded border border-recoder-elements-borderColor">
                 Tab
               </kbd>
               Category
             </span>
             <span className="flex items-center gap-1">
-              <kbd className="px-1 py-0.5 font-mono bg-bolt-elements-background-depth-3 rounded border border-bolt-elements-borderColor">
+              <kbd className="px-1 py-0.5 font-mono bg-recoder-elements-background-depth-3 rounded border border-recoder-elements-borderColor">
                 Esc
               </kbd>
               Close

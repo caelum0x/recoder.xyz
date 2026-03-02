@@ -1,6 +1,6 @@
 "use client";
 
-import type { TelemetrySettings, UsageLimits } from "@giselles-ai/giselle";
+import type { TelemetrySettings, UsageLimits } from "@recoder/giselle";
 import type { ReactNode } from "react";
 import {
 	DataStoreProvider,

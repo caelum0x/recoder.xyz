@@ -6,6 +6,7 @@ import type { Feature } from "@repo/backend/prisma/client";
 import { MAX_FREE_FEATURES } from "@repo/lib/consts";
 import { parseError } from "@repo/lib/parse-error";
 import { revalidatePath } from "next/cache";
+import { PmEvents, trackPmServerEvent } from "@/lib/analytics";
 import { database } from "@/lib/database";
 
 type CreateFeatureProperties = {
@@ -84,6 +85,17 @@ export const createFeature = async ({
       select: {
         id: true,
       },
+    });
+
+    trackPmServerEvent(PmEvents.FEATURE_CREATED, {
+      featureId: id,
+      title,
+      assigneeId: assignee ?? undefined,
+      productId: productId ?? undefined,
+      groupId: groupId ?? undefined,
+      statusId: defaultStatus.id,
+      userId: user.id,
+      organizationId,
     });
 
     revalidatePath("/features");

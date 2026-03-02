@@ -1,4 +1,4 @@
-import type { EmbeddingProfile } from "@giselles-ai/protocol";
+import type { EmbeddingProfile } from "@recoder/protocol";
 import { type EmbeddingModel, embed, embedMany } from "ai";
 import { ConfigurationError, EmbeddingError } from "../errors";
 import type {

@@ -5,12 +5,24 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { sendTemporaryPasswordEmail, sendWelcomeEmail } from '@/lib/email';
+import { sendTemporaryPasswordEmail } from '@/lib/email';
+import { scheduleOnboardingEmails } from '@/lib/services/onboarding-email.service';
 import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
+import { logger } from '@/lib/logger';
+import { rateLimit, rateLimitConfigs } from '@/lib/middleware/rate-limit';
+import { trackServerEvent, AnalyticsEvents } from '@/lib/analytics';
+import { extractAttribution } from '@/lib/attribution';
+import { generateReferralCode } from '@/lib/referral';
+
+const authRateLimiter = rateLimit(rateLimitConfigs.auth);
 
 export async function POST(request: NextRequest) {
   try {
+    // Rate limit: 5 requests per minute
+    const rateLimitResponse = await authRateLimiter(request);
+    if (rateLimitResponse) return rateLimitResponse;
+
     const body = await request.json();
     const { email, name } = body;
 
@@ -40,6 +52,8 @@ export async function POST(request: NextRequest) {
     // Hash the password
     const hashedPassword = await bcrypt.hash(tempPassword, 12);
 
+    const attribution = extractAttribution(request, body);
+
     // Create user account
     // emailVerified: true because receiving the temp password proves email ownership
     const user = await prisma.users.create({
@@ -52,6 +66,16 @@ export async function POST(request: NextRequest) {
         subscription: 'free',
         role: 'user',
         isActive: true,
+        referralCode: generateReferralCode(email),
+        referredByCode: attribution.referredByCode ?? undefined,
+        utmSource: attribution.utmSource ?? undefined,
+        utmMedium: attribution.utmMedium ?? undefined,
+        utmCampaign: attribution.utmCampaign ?? undefined,
+        utmTerm: attribution.utmTerm ?? undefined,
+        utmContent: attribution.utmContent ?? undefined,
+        firstTouchReferrer: attribution.firstTouchReferrer ?? undefined,
+        firstTouchLanding: attribution.firstTouchLanding ?? undefined,
+        acquisitionSource: attribution.acquisitionSource,
         updatedAt: new Date(),
       }
     });
@@ -81,10 +105,25 @@ export async function POST(request: NextRequest) {
     // Send temporary password email
     const emailResult = await sendTemporaryPasswordEmail(email, tempPassword);
 
-    // ✅ Send welcome email to new user
-    await sendWelcomeEmail(email, name);
+    // Schedule onboarding email sequence (welcome + day 1/3/7 emails)
+    // Runs in background - never blocks the signup response
+    scheduleOnboardingEmails(user.id, email, name).catch((err) =>
+      logger.error('Failed to schedule onboarding emails', {
+        email,
+        error: err instanceof Error ? err.message : String(err),
+        route: 'auth/signup-email',
+      })
+    );
 
-    console.log(`✅ Account created for ${email}, welcome and temporary password emails sent`);
+    logger.info('Account created, temp password sent, onboarding scheduled', { email, route: 'auth/signup-email' });
+
+    // Track successful signup
+    trackServerEvent(AnalyticsEvents.SIGNUP_COMPLETED, {
+      method: 'email',
+      userId: user.id,
+      plan: 'free',
+      source: attribution.acquisitionSource,
+    });
 
     // In development, include the temp password for testing
     const isDev = process.env.NODE_ENV === 'development';
@@ -106,7 +145,7 @@ export async function POST(request: NextRequest) {
     });
 
   } catch (error: any) {
-    console.error('Email signup error:', error);
+    logger.error('Email signup error:', { error: String(error), route: 'auth/signup-email' });
     return NextResponse.json(
       { success: false, error: 'Failed to create account. Please try again.' },
       { status: 500 }

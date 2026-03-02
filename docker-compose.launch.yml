@@ -1,3 +1,12 @@
+# DEPRECATED — DO NOT USE FOR PRODUCTION DEPLOYMENTS
+#
+# The actual production compose file is: docker-compose.deploy.yml
+# This file is an earlier template that references non-existent services
+# (recoder-chat, production-engine) and uses a different architecture than
+# the nginx reverse proxy that's actually deployed on Hetzner.
+#
+# Kept for reference only.
+
 version: '3.8'
 
 services:

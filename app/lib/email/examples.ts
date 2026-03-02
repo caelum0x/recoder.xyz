@@ -6,6 +6,7 @@
  */
 
 import { sendEmail } from '../email';
+import { logger } from '@/lib/logger';
 import {
   generateNewsletterEmail,
   generateProductUpdateEmail,
@@ -59,7 +60,7 @@ export async function exampleWeeklyNewsletter() {
     }
   );
 
-  console.log(`Newsletter sent to ${result.sent} users, ${result.failed} failed`);
+  logger.info('Newsletter sent', { sent: String(result.sent), failed: String(result.failed) });
   return result;
 }
 
@@ -101,7 +102,7 @@ export async function exampleProductUpdate() {
     'https://recoder.xyz/dashboard?feature=collaboration'
   );
 
-  console.log(`Product update sent to ${result.sent} users`);
+  logger.info('Product update sent', { sent: String(result.sent) });
   return result;
 }
 
@@ -150,7 +151,7 @@ export async function exampleFeatureAnnouncement() {
     'https://recoder.xyz/docs/deployment'
   );
 
-  console.log(`Feature announcement sent to ${result.sent} users`);
+  logger.info('Feature announcement sent', { sent: String(result.sent) });
   return result;
 }
 
@@ -170,7 +171,7 @@ export async function exampleFirstProject(userEmail: string, userName: string, p
     }
   );
 
-  console.log(`First project email sent to ${userEmail}: ${result.success ? 'success' : 'failed'}`);
+  logger.info('First project email sent', { email: userEmail, success: String(result.success) });
   return result;
 }
 
@@ -198,7 +199,7 @@ export async function exampleFirstDeployment(
     }
   );
 
-  console.log(`First deployment email sent to ${userEmail}: ${result.success ? 'success' : 'failed'}`);
+  logger.info('First deployment email sent', { email: userEmail, success: String(result.success) });
   return result;
 }
 
@@ -223,7 +224,7 @@ export async function exampleProjectMilestone(
     }
   );
 
-  console.log(`Milestone email sent to ${userEmail}: ${projectCount} projects`);
+  logger.info('Milestone email sent', { email: userEmail, projectCount: String(projectCount) });
   return result;
 }
 
@@ -255,7 +256,7 @@ export async function exampleScheduledNewsletter() {
     }
   );
 
-  console.log(`Newsletter scheduled for ${nextMonday.toISOString()}, Campaign ID: ${campaignId}`);
+  logger.info('Newsletter scheduled', { scheduledFor: nextMonday.toISOString(), campaignId });
   return campaignId;
 }
 
@@ -287,7 +288,7 @@ export async function exampleSingleNewsletter(
     html,
   });
 
-  console.log(`Newsletter sent to ${userEmail}: ${result.success ? 'success' : 'failed'}`);
+  logger.info('Newsletter sent to user', { email: userEmail, success: String(result.success) });
   return result;
 }
 
@@ -300,18 +301,16 @@ export async function exampleCheckCampaignStatus(campaignId: string) {
   const campaign = getCampaignStatus(campaignId);
 
   if (campaign) {
-    console.log(`Campaign ${campaignId}:`);
-    console.log(`- Type: ${campaign.type}`);
-    console.log(`- Status: ${campaign.status}`);
-    console.log(`- Scheduled for: ${campaign.scheduledFor.toISOString()}`);
-    console.log(`- Recipients: ${campaign.recipients.length}`);
-
-    if (campaign.result) {
-      console.log(`- Sent: ${campaign.result.sent}`);
-      console.log(`- Failed: ${campaign.result.failed}`);
-    }
+    logger.info('Campaign status', {
+      campaignId,
+      type: campaign.type,
+      status: campaign.status,
+      scheduledFor: campaign.scheduledFor.toISOString(),
+      recipients: String(campaign.recipients.length),
+      ...(campaign.result ? { sent: String(campaign.result.sent), failed: String(campaign.result.failed) } : {}),
+    });
   } else {
-    console.log(`Campaign ${campaignId} not found`);
+    logger.info('Campaign not found', { campaignId });
   }
 
   return campaign;

@@ -65,7 +65,7 @@ export async function POST(request: Request) {
 
     const { name, email, subject, message, priority } = validation.data;
     const submittedAt = new Date().toISOString();
-    const appUrl = process.env.NEXTAUTH_URL || "https://recoder.xyz";
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://recoder.xyz";
 
     const emailResult = await sendEmail({
       to: SUPPORT_EMAIL,

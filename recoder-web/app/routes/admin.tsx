@@ -30,10 +30,10 @@ export function ErrorBoundary() {
 
   if (isRouteErrorResponse(error)) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-bolt-elements-background-depth-1">
+      <div className="min-h-screen flex items-center justify-center bg-recoder-elements-background-depth-1">
         <div className="text-center">
-          <h1 className="text-4xl font-bold text-bolt-elements-textPrimary mb-2">{error.status}</h1>
-          <p className="text-bolt-elements-textSecondary mb-4">{error.statusText || 'Access Denied'}</p>
+          <h1 className="text-4xl font-bold text-recoder-elements-textPrimary mb-2">{error.status}</h1>
+          <p className="text-recoder-elements-textSecondary mb-4">{error.statusText || 'Access Denied'}</p>
           <a href="/" className="text-blue-500 hover:underline">Back to App</a>
         </div>
       </div>
@@ -41,10 +41,10 @@ export function ErrorBoundary() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-bolt-elements-background-depth-1">
+    <div className="min-h-screen flex items-center justify-center bg-recoder-elements-background-depth-1">
       <div className="text-center">
-        <h1 className="text-4xl font-bold text-bolt-elements-textPrimary mb-2">Error</h1>
-        <p className="text-bolt-elements-textSecondary mb-4">Something went wrong loading the admin dashboard.</p>
+        <h1 className="text-4xl font-bold text-recoder-elements-textPrimary mb-2">Error</h1>
+        <p className="text-recoder-elements-textSecondary mb-4">Something went wrong loading the admin dashboard.</p>
         <a href="/" className="text-blue-500 hover:underline">Back to App</a>
       </div>
     </div>
@@ -57,20 +57,20 @@ export default function AdminDashboard() {
   const [activeTab, setActiveTab] = useState<Tab>('analytics');
 
   return (
-    <div className="min-h-screen bg-bolt-elements-background-depth-1">
+    <div className="min-h-screen bg-recoder-elements-background-depth-1">
       {/* Header */}
-      <div className="bg-bolt-elements-background-depth-2 border-b border-bolt-elements-borderColor">
+      <div className="bg-recoder-elements-background-depth-2 border-b border-recoder-elements-borderColor">
         <div className="max-w-7xl mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-2xl font-bold text-bolt-elements-textPrimary">Admin Dashboard</h1>
-              <p className="text-sm text-bolt-elements-textSecondary">API usage, costs, and system health</p>
+              <h1 className="text-2xl font-bold text-recoder-elements-textPrimary">Admin Dashboard</h1>
+              <p className="text-sm text-recoder-elements-textSecondary">API usage, costs, and system health</p>
             </div>
             <div className="flex items-center gap-3">
               <AdminHealthSummary onClick={() => setActiveTab('system')} />
               <a
                 href="/"
-                className="px-4 py-2 bg-bolt-elements-button-primary-background text-bolt-elements-button-primary-text rounded-lg hover:bg-bolt-elements-button-primary-backgroundHover"
+                className="px-4 py-2 bg-recoder-elements-button-primary-background text-recoder-elements-button-primary-text rounded-lg hover:bg-recoder-elements-button-primary-backgroundHover"
               >
                 Back to App
               </a>
@@ -83,8 +83,8 @@ export default function AdminDashboard() {
               onClick={() => setActiveTab('analytics')}
               className={`px-4 py-2 rounded-lg font-medium transition-colors ${
                 activeTab === 'analytics'
-                  ? 'bg-bolt-elements-button-primary-background text-bolt-elements-button-primary-text'
-                  : 'text-bolt-elements-textSecondary hover:text-bolt-elements-textPrimary hover:bg-bolt-elements-item-backgroundActive'
+                  ? 'bg-recoder-elements-button-primary-background text-recoder-elements-button-primary-text'
+                  : 'text-recoder-elements-textSecondary hover:text-recoder-elements-textPrimary hover:bg-recoder-elements-item-backgroundActive'
               }`}
             >
               <div className="flex items-center gap-2">
@@ -96,8 +96,8 @@ export default function AdminDashboard() {
               onClick={() => setActiveTab('usage')}
               className={`px-4 py-2 rounded-lg font-medium transition-colors ${
                 activeTab === 'usage'
-                  ? 'bg-bolt-elements-button-primary-background text-bolt-elements-button-primary-text'
-                  : 'text-bolt-elements-textSecondary hover:text-bolt-elements-textPrimary hover:bg-bolt-elements-item-backgroundActive'
+                  ? 'bg-recoder-elements-button-primary-background text-recoder-elements-button-primary-text'
+                  : 'text-recoder-elements-textSecondary hover:text-recoder-elements-textPrimary hover:bg-recoder-elements-item-backgroundActive'
               }`}
             >
               <div className="flex items-center gap-2">
@@ -109,8 +109,8 @@ export default function AdminDashboard() {
               onClick={() => setActiveTab('system')}
               className={`px-4 py-2 rounded-lg font-medium transition-colors ${
                 activeTab === 'system'
-                  ? 'bg-bolt-elements-button-primary-background text-bolt-elements-button-primary-text'
-                  : 'text-bolt-elements-textSecondary hover:text-bolt-elements-textPrimary hover:bg-bolt-elements-item-backgroundActive'
+                  ? 'bg-recoder-elements-button-primary-background text-recoder-elements-button-primary-text'
+                  : 'text-recoder-elements-textSecondary hover:text-recoder-elements-textPrimary hover:bg-recoder-elements-item-backgroundActive'
               }`}
             >
               <div className="flex items-center gap-2">

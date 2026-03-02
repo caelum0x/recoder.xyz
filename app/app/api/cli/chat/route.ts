@@ -82,7 +82,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: true,
       chatId,
-      url: `${process.env.NEXTAUTH_URL || 'https://recoder.xyz'}/chat/${chatId}`
+      url: `${process.env.NEXT_PUBLIC_APP_URL || 'https://recoder.xyz'}/chat/${chatId}`
     });
   } catch (error) {
     console.error('[cli/chat] POST error:', error);

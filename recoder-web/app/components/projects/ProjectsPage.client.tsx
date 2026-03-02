@@ -247,13 +247,13 @@ export function ProjectsPage({ initialProjects, error, databaseConfigured = true
   }
 
   return (
-    <div className="flex-1 p-8 bg-bolt-elements-background-depth-1 overflow-auto">
+    <div className="flex-1 p-8 bg-recoder-elements-background-depth-1 overflow-auto">
       <div className="max-w-7xl mx-auto">
         {/* Header */}
         <div className="flex items-center justify-between mb-8">
           <div>
-            <h1 className="text-3xl font-bold text-bolt-elements-textPrimary">Projects</h1>
-            <p className="text-bolt-elements-textTertiary mt-1">Manage your AI development projects</p>
+            <h1 className="text-3xl font-bold text-recoder-elements-textPrimary">Projects</h1>
+            <p className="text-recoder-elements-textTertiary mt-1">Manage your AI development projects</p>
           </div>
           <button
             onClick={() => setIsCreateModalOpen(true)}
@@ -267,18 +267,18 @@ export function ProjectsPage({ initialProjects, error, databaseConfigured = true
         {/* Search & Filter */}
         <div className="mb-6 flex gap-4">
           <div className="flex-1 relative">
-            <span className="absolute left-3 top-1/2 -translate-y-1/2 i-ph:magnifying-glass text-bolt-elements-textTertiary" />
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 i-ph:magnifying-glass text-recoder-elements-textTertiary" />
             <input
               type="text"
               placeholder="Search projects... (Ctrl+K)"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-10 py-2 bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor rounded-lg text-bolt-elements-textPrimary placeholder:text-bolt-elements-textTertiary focus:outline-none focus:border-orange-500"
+              className="w-full pl-10 pr-10 py-2 bg-recoder-elements-background-depth-2 border border-recoder-elements-borderColor rounded-lg text-recoder-elements-textPrimary placeholder:text-recoder-elements-textTertiary focus:outline-none focus:border-orange-500"
             />
             {searchQuery && (
               <button
                 onClick={() => setSearchQuery('')}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-bolt-elements-textTertiary hover:text-bolt-elements-textPrimary"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-recoder-elements-textTertiary hover:text-recoder-elements-textPrimary"
                 title="Clear search"
               >
                 <span className="i-ph:x" />
@@ -288,7 +288,7 @@ export function ProjectsPage({ initialProjects, error, databaseConfigured = true
           <select
             value={sortBy}
             onChange={(e) => setSortBy(e.target.value as 'updated' | 'created' | 'name')}
-            className="px-4 py-2 bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor rounded-lg text-bolt-elements-textPrimary focus:outline-none focus:border-orange-500"
+            className="px-4 py-2 bg-recoder-elements-background-depth-2 border border-recoder-elements-borderColor rounded-lg text-recoder-elements-textPrimary focus:outline-none focus:border-orange-500"
           >
             <option value="updated">Last Updated</option>
             <option value="created">Created</option>
@@ -297,7 +297,7 @@ export function ProjectsPage({ initialProjects, error, databaseConfigured = true
           <button
             onClick={() => userId && refreshProjects(userId)}
             disabled={isLoading}
-            className="px-4 py-2 bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor rounded-lg text-bolt-elements-textPrimary hover:bg-bolt-elements-background-depth-3 disabled:opacity-50"
+            className="px-4 py-2 bg-recoder-elements-background-depth-2 border border-recoder-elements-borderColor rounded-lg text-recoder-elements-textPrimary hover:bg-recoder-elements-background-depth-3 disabled:opacity-50"
             title="Refresh projects"
           >
             {isLoading ? '...' : '↻'}
@@ -306,21 +306,21 @@ export function ProjectsPage({ initialProjects, error, databaseConfigured = true
 
         {/* Results count */}
         {searchQuery && (
-          <div className="mb-4 text-sm text-bolt-elements-textTertiary">
+          <div className="mb-4 text-sm text-recoder-elements-textTertiary">
             Found {filteredProjects.length} project{filteredProjects.length !== 1 ? 's' : ''} matching "{searchQuery}"
           </div>
         )}
 
         {/* Projects Grid */}
         {isLoading && projects.length === 0 ? (
-          <div className="text-center py-12 text-bolt-elements-textTertiary">
+          <div className="text-center py-12 text-recoder-elements-textTertiary">
             Loading projects...
           </div>
         ) : filteredProjects.length === 0 ? (
           <div className="text-center py-12">
             <div className="text-6xl mb-4 opacity-30"><div className="i-ph:folder-open" /></div>
-            <h3 className="text-xl font-semibold mb-2 text-bolt-elements-textPrimary">No projects yet</h3>
-            <p className="text-bolt-elements-textTertiary mb-6">Create your first project to get started</p>
+            <h3 className="text-xl font-semibold mb-2 text-recoder-elements-textPrimary">No projects yet</h3>
+            <p className="text-recoder-elements-textTertiary mb-6">Create your first project to get started</p>
             <button
               onClick={() => setIsCreateModalOpen(true)}
               className="px-6 py-3 bg-orange-500 hover:bg-orange-600 text-white rounded-lg"
@@ -333,7 +333,7 @@ export function ProjectsPage({ initialProjects, error, databaseConfigured = true
             {filteredProjects.map(project => (
               <div
                 key={project.id}
-                className="bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor rounded-lg p-4 hover:border-orange-500 transition-all cursor-pointer group"
+                className="bg-recoder-elements-background-depth-2 border border-recoder-elements-borderColor rounded-lg p-4 hover:border-orange-500 transition-all cursor-pointer group"
                 onClick={() => openProject(project)}
               >
                 <div className="flex items-start justify-between mb-3">
@@ -348,7 +348,7 @@ export function ProjectsPage({ initialProjects, error, databaseConfigured = true
                     <div className="opacity-0 group-hover:opacity-100 flex items-center gap-1 transition-all">
                       <button
                         onClick={(e) => handleDuplicateProject(project, e)}
-                        className="p-1 text-bolt-elements-textTertiary hover:text-bolt-elements-textPrimary transition-colors"
+                        className="p-1 text-recoder-elements-textTertiary hover:text-recoder-elements-textPrimary transition-colors"
                         title="Duplicate project"
                       >
                         <span className="i-ph:copy" />
@@ -363,17 +363,17 @@ export function ProjectsPage({ initialProjects, error, databaseConfigured = true
                     </div>
                   </div>
                 </div>
-                <h3 className="font-semibold text-bolt-elements-textPrimary mb-1">{project.name}</h3>
-                <p className="text-sm text-bolt-elements-textTertiary mb-3 line-clamp-2">
+                <h3 className="font-semibold text-recoder-elements-textPrimary mb-1">{project.name}</h3>
+                <p className="text-sm text-recoder-elements-textTertiary mb-3 line-clamp-2">
                   {project.description || 'No description'}
                 </p>
-                <div className="flex items-center gap-2 text-xs text-bolt-elements-textTertiary flex-wrap">
-                  <span className="px-2 py-1 bg-bolt-elements-background-depth-1 rounded">{project.type || 'web'}</span>
-                  {project.framework && <span className="px-2 py-1 bg-bolt-elements-background-depth-1 rounded">{project.framework}</span>}
-                  {project.language && <span className="px-2 py-1 bg-bolt-elements-background-depth-1 rounded">{project.language}</span>}
-                  <span className="px-2 py-1 bg-bolt-elements-background-depth-1 rounded">{project.status}</span>
+                <div className="flex items-center gap-2 text-xs text-recoder-elements-textTertiary flex-wrap">
+                  <span className="px-2 py-1 bg-recoder-elements-background-depth-1 rounded">{project.type || 'web'}</span>
+                  {project.framework && <span className="px-2 py-1 bg-recoder-elements-background-depth-1 rounded">{project.framework}</span>}
+                  {project.language && <span className="px-2 py-1 bg-recoder-elements-background-depth-1 rounded">{project.language}</span>}
+                  <span className="px-2 py-1 bg-recoder-elements-background-depth-1 rounded">{project.status}</span>
                 </div>
-                <div className="mt-3 flex items-center justify-between text-xs text-bolt-elements-textTertiary">
+                <div className="mt-3 flex items-center justify-between text-xs text-recoder-elements-textTertiary">
                   <span title={new Date(project.updatedAt).toLocaleString()}>
                     Updated {formatRelativeTime(project.updatedAt)}
                   </span>
@@ -390,27 +390,27 @@ export function ProjectsPage({ initialProjects, error, databaseConfigured = true
         {isCreateModalOpen && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={closeCreateModal}>
             <div
-              className={`bg-bolt-elements-background-depth-1 rounded-lg border border-bolt-elements-borderColor transition-all duration-300 ${
+              className={`bg-recoder-elements-background-depth-1 rounded-lg border border-recoder-elements-borderColor transition-all duration-300 ${
                 createStep === 'template' ? 'w-full max-w-4xl max-h-[90vh]' : 'w-full max-w-md'
               }`}
               onClick={e => e.stopPropagation()}
             >
               {/* Modal Header */}
-              <div className="flex items-center justify-between p-6 border-b border-bolt-elements-borderColor">
+              <div className="flex items-center justify-between p-6 border-b border-recoder-elements-borderColor">
                 <div className="flex items-center gap-4">
                   {createStep === 'details' && (
                     <button
                       onClick={handleBackToTemplates}
-                      className="p-2 text-bolt-elements-textTertiary hover:text-bolt-elements-textPrimary transition-colors"
+                      className="p-2 text-recoder-elements-textTertiary hover:text-recoder-elements-textPrimary transition-colors"
                     >
                       <div className="i-ph:arrow-left" />
                     </button>
                   )}
                   <div>
-                    <h2 className="text-xl font-bold text-bolt-elements-textPrimary">
+                    <h2 className="text-xl font-bold text-recoder-elements-textPrimary">
                       {createStep === 'template' ? 'Choose a Template' : 'Project Details'}
                     </h2>
-                    <p className="text-sm text-bolt-elements-textTertiary mt-1">
+                    <p className="text-sm text-recoder-elements-textTertiary mt-1">
                       {createStep === 'template'
                         ? 'Select a starter template or start from scratch'
                         : 'Configure your new project'}
@@ -419,26 +419,26 @@ export function ProjectsPage({ initialProjects, error, databaseConfigured = true
                 </div>
                 <button
                   onClick={closeCreateModal}
-                  className="p-2 text-bolt-elements-textTertiary hover:text-bolt-elements-textPrimary transition-colors"
+                  className="p-2 text-recoder-elements-textTertiary hover:text-recoder-elements-textPrimary transition-colors"
                 >
                   <div className="i-ph:x text-xl" />
                 </button>
               </div>
 
               {/* Step Indicator */}
-              <div className="flex items-center gap-2 px-6 py-3 bg-bolt-elements-background-depth-2">
-                <div className={`flex items-center gap-2 text-sm ${createStep === 'template' ? 'text-orange-400' : 'text-bolt-elements-textTertiary'}`}>
+              <div className="flex items-center gap-2 px-6 py-3 bg-recoder-elements-background-depth-2">
+                <div className={`flex items-center gap-2 text-sm ${createStep === 'template' ? 'text-orange-400' : 'text-recoder-elements-textTertiary'}`}>
                   <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium ${
-                    createStep === 'template' ? 'bg-orange-500 text-white' : 'bg-bolt-elements-background-depth-2 text-bolt-elements-textTertiary'
+                    createStep === 'template' ? 'bg-orange-500 text-white' : 'bg-recoder-elements-background-depth-2 text-recoder-elements-textTertiary'
                   }`}>
                     1
                   </div>
                   Template
                 </div>
-                <div className="w-8 h-px bg-bolt-elements-borderColor" />
-                <div className={`flex items-center gap-2 text-sm ${createStep === 'details' ? 'text-orange-400' : 'text-bolt-elements-textTertiary'}`}>
+                <div className="w-8 h-px bg-recoder-elements-borderColor" />
+                <div className={`flex items-center gap-2 text-sm ${createStep === 'details' ? 'text-orange-400' : 'text-recoder-elements-textTertiary'}`}>
                   <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium ${
-                    createStep === 'details' ? 'bg-orange-500 text-white' : 'bg-bolt-elements-background-depth-2 text-bolt-elements-textTertiary'
+                    createStep === 'details' ? 'bg-orange-500 text-white' : 'bg-recoder-elements-background-depth-2 text-recoder-elements-textTertiary'
                   }`}>
                     2
                   </div>
@@ -459,14 +459,14 @@ export function ProjectsPage({ initialProjects, error, databaseConfigured = true
                   <form onSubmit={handleCreateProject} id="create-project-form">
                     {/* Selected Template Summary */}
                     {selectedTemplate && (
-                      <div className="mb-6 p-4 bg-bolt-elements-background-depth-2 rounded-lg border border-bolt-elements-borderColor">
+                      <div className="mb-6 p-4 bg-recoder-elements-background-depth-2 rounded-lg border border-recoder-elements-borderColor">
                         <div className="flex items-center gap-3">
                           <div className="w-10 h-10 rounded-lg bg-orange-500/20 flex items-center justify-center">
                             <div className={`${selectedTemplate.icon} text-xl text-orange-400`} />
                           </div>
                           <div>
-                            <h4 className="font-medium text-bolt-elements-textPrimary">{selectedTemplate.name}</h4>
-                            <p className="text-xs text-bolt-elements-textTertiary">
+                            <h4 className="font-medium text-recoder-elements-textPrimary">{selectedTemplate.name}</h4>
+                            <p className="text-xs text-recoder-elements-textTertiary">
                               {selectedTemplate.technologies.join(', ') || 'Empty project'}
                             </p>
                           </div>
@@ -482,30 +482,30 @@ export function ProjectsPage({ initialProjects, error, databaseConfigured = true
                     )}
 
                     <div className="mb-4">
-                      <label className="block text-sm text-bolt-elements-textTertiary mb-1">Project Name *</label>
+                      <label className="block text-sm text-recoder-elements-textTertiary mb-1">Project Name *</label>
                       <input
                         name="name"
                         required
-                        className="w-full px-3 py-2 bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor rounded-lg text-bolt-elements-textPrimary focus:outline-none focus:ring-2 focus:ring-orange-500"
+                        className="w-full px-3 py-2 bg-recoder-elements-background-depth-2 border border-recoder-elements-borderColor rounded-lg text-recoder-elements-textPrimary focus:outline-none focus:ring-2 focus:ring-orange-500"
                         placeholder="My Awesome Project"
                         defaultValue={selectedTemplate?.name !== 'Blank Project' ? `My ${selectedTemplate?.name || ''} Project`.trim() : ''}
                       />
                     </div>
                     <div className="mb-4">
-                      <label className="block text-sm text-bolt-elements-textTertiary mb-1">Description</label>
+                      <label className="block text-sm text-recoder-elements-textTertiary mb-1">Description</label>
                       <textarea
                         name="description"
                         rows={3}
-                        className="w-full px-3 py-2 bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor rounded-lg text-bolt-elements-textPrimary focus:outline-none focus:ring-2 focus:ring-orange-500"
+                        className="w-full px-3 py-2 bg-recoder-elements-background-depth-2 border border-recoder-elements-borderColor rounded-lg text-recoder-elements-textPrimary focus:outline-none focus:ring-2 focus:ring-orange-500"
                         placeholder="What are you building?"
                         defaultValue={selectedTemplate?.description || ''}
                       />
                     </div>
                     <div className="mb-4">
-                      <label className="block text-sm text-bolt-elements-textTertiary mb-1">Project Type</label>
+                      <label className="block text-sm text-recoder-elements-textTertiary mb-1">Project Type</label>
                       <select
                         name="type"
-                        className="w-full px-3 py-2 bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor rounded-lg text-bolt-elements-textPrimary focus:outline-none focus:ring-2 focus:ring-orange-500"
+                        className="w-full px-3 py-2 bg-recoder-elements-background-depth-2 border border-recoder-elements-borderColor rounded-lg text-recoder-elements-textPrimary focus:outline-none focus:ring-2 focus:ring-orange-500"
                         defaultValue={
                           selectedTemplate?.category === 'frontend' ? 'web' :
                           selectedTemplate?.category === 'backend' ? 'api' :
@@ -524,11 +524,11 @@ export function ProjectsPage({ initialProjects, error, databaseConfigured = true
               </div>
 
               {/* Modal Footer */}
-              <div className="flex gap-3 p-6 border-t border-bolt-elements-borderColor">
+              <div className="flex gap-3 p-6 border-t border-recoder-elements-borderColor">
                 <button
                   type="button"
                   onClick={closeCreateModal}
-                  className="flex-1 px-4 py-2 border border-bolt-elements-borderColor rounded-lg text-bolt-elements-textPrimary hover:bg-bolt-elements-background-depth-2 transition-colors"
+                  className="flex-1 px-4 py-2 border border-recoder-elements-borderColor rounded-lg text-recoder-elements-textPrimary hover:bg-recoder-elements-background-depth-2 transition-colors"
                   disabled={isLoading}
                 >
                   Cancel

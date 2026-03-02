@@ -1,7 +1,7 @@
 "use client";
 
-import { Button } from "@giselle-internal/ui/button";
-import { DropdownMenu } from "@giselle-internal/ui/dropdown-menu";
+import { Button } from "@recoder-internal/ui/button";
+import { DropdownMenu } from "@recoder-internal/ui/dropdown-menu";
 import { FileText, HelpCircle, LogOut, Settings, User } from "lucide-react";
 import { DemoSection } from "../components/demo-section";
 import { UiPage } from "../components/ui-page";

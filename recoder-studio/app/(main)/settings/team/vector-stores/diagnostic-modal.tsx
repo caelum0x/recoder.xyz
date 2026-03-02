@@ -9,7 +9,7 @@ import {
 	DialogFooter,
 	DialogHeader,
 	DialogTitle,
-} from "@giselle-internal/ui/dialog";
+} from "@recoder-internal/ui/dialog";
 import { Check, Loader2, X } from "lucide-react";
 import { useCallback, useEffect, useState, useTransition } from "react";
 import type { RepositoryWithStatuses } from "@/lib/vector-stores/github";

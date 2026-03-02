@@ -1,0 +1,173 @@
+import type { NextConfig } from 'next';
+
+// Dynamically determine backend URL based on Vercel environment
+const getBackendUrl = (): string => {
+  // If explicitly set via Vercel dashboard/env, use that (highest priority)
+  const explicitUrl = process.env.NEXT_PUBLIC_BACKEND_URL;
+  if (explicitUrl && explicitUrl.trim() !== '') {
+    return explicitUrl;
+  }
+  
+  // Vercel environment detection
+  const vercelEnv = process.env.VERCEL_ENV; // 'production', 'preview', or 'development'
+  const gitRef = process.env.VERCEL_GIT_COMMIT_REF || ''; // Branch name
+  
+  // Production environment
+  if (vercelEnv === 'production') {
+    return 'https://api.recoder.xyz/v1';
+  }
+  
+  // Preview deployments (non-main branches)
+  if (vercelEnv === 'preview' && gitRef && gitRef !== 'main') {
+    // Sanitize branch name for URL
+    const sanitizedBranch = gitRef
+      .toLowerCase()
+      .replace(/[^a-z0-9-]/g, '-')
+      .replace(/-+/g, '-')
+      .replace(/^-|-$/g, '');
+    return `https://${sanitizedBranch}.staging-api.recoder.xyz/v1`;
+  }
+
+  // Main branch / staging (default)
+  return 'https://staging-api.recoder.xyz/v1';
+};
+
+const nextConfig = (): NextConfig => ({
+  output: (process.env.NEXT_OUTPUT as 'standalone') || undefined,
+
+  // Transpile shared package
+  transpilePackages: ['@recoder/shared', '@recoder/auth'],
+
+  // Keep Node.js-only packages out of client bundles
+  serverExternalPackages: ['redis', '@redis/client'],
+  
+  // Set environment variables
+  env: {
+    NEXT_PUBLIC_BACKEND_URL: getBackendUrl(),
+  },
+  
+  // Webpack configuration to make Konva work with Next.js
+  webpack: (config) => {
+    config.externals = [...config.externals, { canvas: 'canvas' }]; // required to make Konva & react-konva work
+    return config;
+  },
+  
+  // Turbopack configuration
+  turbopack: {
+    // Handle Node.js modules that shouldn't be bundled for browser builds
+    // Canvas is a Node.js native module that needs to be externalized (required for Konva & react-konva)
+    resolveAlias: {
+      canvas: {
+        browser: './src/lib/empty-module.ts', // Exclude canvas from browser builds
+      },
+    },
+  },
+  
+  // Performance optimizations
+  experimental: {
+    // Optimize package imports for faster builds and smaller bundles
+    optimizePackageImports: [
+      'lucide-react',
+      'framer-motion',
+      '@radix-ui/react-icons',
+      'recharts',
+      'date-fns',
+      '@tanstack/react-query',
+      'react-icons',
+    ],
+  },
+  
+  // Enable compression
+  compress: true,
+
+  // Build reliability in CI/container: lint runs separately.
+  eslint: {
+    ignoreDuringBuilds: true,
+  },
+  
+  // Optimize images
+  images: {
+    formats: ['image/avif', 'image/webp'],
+    deviceSizes: [640, 750, 828, 1080, 1200, 1920],
+    imageSizes: [16, 32, 48, 64, 96, 128, 256],
+    qualities: [75, 100],
+  },
+  
+  async rewrites() {
+    return [
+      {
+        source: '/ingest/static/:path*',
+        destination: 'https://eu-assets.i.posthog.com/static/:path*',
+      },
+      {
+        source: '/ingest/:path*',
+        destination: 'https://eu.i.posthog.com/:path*',
+      },
+      {
+        source: '/ingest/flags',
+        destination: 'https://eu.i.posthog.com/flags',
+      },
+    ];
+  },
+  
+  // HTTP headers for caching, performance, and security
+  async headers() {
+    return [
+      {
+        source: '/(.*)',
+        headers: [
+          {
+            key: 'X-Frame-Options',
+            value: 'DENY',
+          },
+          {
+            key: 'X-Content-Type-Options',
+            value: 'nosniff',
+          },
+          {
+            key: 'Referrer-Policy',
+            value: 'strict-origin-when-cross-origin',
+          },
+          {
+            key: 'X-XSS-Protection',
+            value: '1; mode=block',
+          },
+          {
+            key: 'Strict-Transport-Security',
+            value: 'max-age=31536000; includeSubDomains',
+          },
+          {
+            key: 'Permissions-Policy',
+            value: 'camera=(), microphone=(), geolocation=()',
+          },
+          {
+            key: 'Content-Security-Policy',
+            value: "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.googletagmanager.com https://www.google-analytics.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' https://www.google-analytics.com https://region1.google-analytics.com https://*.recoder.xyz wss://*.recoder.xyz https://*.posthog.com https://*.i.posthog.com; frame-ancestors 'none';",
+          },
+        ],
+      },
+      {
+        source: '/fonts/:path*',
+        headers: [
+          {
+            key: 'Cache-Control',
+            value: 'public, max-age=31536000, immutable',
+          },
+        ],
+      },
+      {
+        source: '/:path*.woff2',
+        headers: [
+          {
+            key: 'Cache-Control',
+            value: 'public, max-age=31536000, immutable',
+          },
+        ],
+      },
+    ];
+  },
+  
+  skipTrailingSlashRedirect: true,
+});
+
+export default nextConfig;

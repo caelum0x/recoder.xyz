@@ -57,7 +57,7 @@ export function DeploymentProgress({ platform }: DeploymentProgressProps) {
                 ? 'bg-green-500 scale-100' 
                 : index === currentStep 
                 ? 'bg-blue-500 scale-110 animate-pulse' 
-                : 'bg-bolt-elements-background-depth-3 scale-90 opacity-50'
+                : 'bg-recoder-elements-background-depth-3 scale-90 opacity-50'
               }
             `}>
               {index < currentStep ? <div className="i-ph:check" /> : <div className={step.iconClass} />}
@@ -68,14 +68,14 @@ export function DeploymentProgress({ platform }: DeploymentProgressProps) {
               <div className={`
                 font-medium transition-all
                 ${index <= currentStep 
-                  ? 'text-bolt-elements-textPrimary' 
-                  : 'text-bolt-elements-textTertiary'
+                  ? 'text-recoder-elements-textPrimary' 
+                  : 'text-recoder-elements-textTertiary'
                 }
               `}>
                 {step.label}
               </div>
               {index === currentStep && (
-                <div className="text-sm text-bolt-elements-textSecondary mt-1">
+                <div className="text-sm text-recoder-elements-textSecondary mt-1">
                   In progress...
                 </div>
               )}
@@ -95,11 +95,11 @@ export function DeploymentProgress({ platform }: DeploymentProgressProps) {
       </div>
 
       {/* Platform Info */}
-      <div className="mt-8 p-4 bg-bolt-elements-background-depth-3 rounded-lg border border-bolt-elements-borderColor">
-        <div className="text-sm text-bolt-elements-textSecondary">
-          Deploying to <span className="font-semibold text-bolt-elements-textPrimary capitalize">{platform}</span>
+      <div className="mt-8 p-4 bg-recoder-elements-background-depth-3 rounded-lg border border-recoder-elements-borderColor">
+        <div className="text-sm text-recoder-elements-textSecondary">
+          Deploying to <span className="font-semibold text-recoder-elements-textPrimary capitalize">{platform}</span>
         </div>
-        <div className="text-xs text-bolt-elements-textTertiary mt-1">
+        <div className="text-xs text-recoder-elements-textTertiary mt-1">
           This usually takes 2-5 minutes
         </div>
       </div>

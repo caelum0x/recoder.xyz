@@ -287,7 +287,7 @@ export default function AISettingsPage() {
       {/* Header */}
       <div>
         <h1 className="text-3xl font-bold mb-2">AI Settings</h1>
-        <p className="text-bolt-elements-textSecondary">
+        <p className="text-recoder-elements-textSecondary">
           Configure AI model preferences and behavior
         </p>
       </div>
@@ -305,7 +305,7 @@ export default function AISettingsPage() {
       )}
 
       {/* Model Selection */}
-      <section className="p-6 rounded-xl border border-bolt-elements-borderColor bg-bolt-elements-background-depth-2">
+      <section className="p-6 rounded-xl border border-recoder-elements-borderColor bg-recoder-elements-background-depth-2">
         <h2 className="text-xl font-bold mb-4">Model Selection</h2>
         <div className="space-y-5">
           <div className="flex flex-wrap gap-2">
@@ -318,8 +318,8 @@ export default function AISettingsPage() {
                 }}
                 className={`rounded-full px-3 py-1 text-sm border transition-colors ${
                   provider === item.id
-                    ? 'border-bolt-elements-item-contentAccent bg-bolt-elements-item-backgroundActive'
-                    : 'border-bolt-elements-borderColor hover:bg-bolt-elements-item-backgroundHover'
+                    ? 'border-recoder-elements-item-contentAccent bg-recoder-elements-item-backgroundActive'
+                    : 'border-recoder-elements-borderColor hover:bg-recoder-elements-item-backgroundHover'
                 }`}
               >
                 {item.label}
@@ -335,8 +335,8 @@ export default function AISettingsPage() {
                   onClick={() => selectModel(model.id)}
                   className={`rounded-full px-3 py-1 text-xs border transition-colors ${
                     settings.default_model === normalizeModel(model.id, provider)
-                      ? 'border-bolt-elements-item-contentAccent bg-bolt-elements-item-backgroundActive'
-                      : 'border-bolt-elements-borderColor hover:bg-bolt-elements-item-backgroundHover'
+                      ? 'border-recoder-elements-item-contentAccent bg-recoder-elements-item-backgroundActive'
+                      : 'border-recoder-elements-borderColor hover:bg-recoder-elements-item-backgroundHover'
                   }`}
                 >
                   {model.label}
@@ -344,7 +344,7 @@ export default function AISettingsPage() {
               ))}
               <button
                 onClick={setRecommendedModel}
-                className="rounded-full px-3 py-1 text-xs border border-bolt-elements-borderColor hover:bg-bolt-elements-item-backgroundHover"
+                className="rounded-full px-3 py-1 text-xs border border-recoder-elements-borderColor hover:bg-recoder-elements-item-backgroundHover"
               >
                 Use recommended
               </button>
@@ -354,19 +354,19 @@ export default function AISettingsPage() {
               value={modelQuery}
               onChange={(event) => setModelQuery(event.target.value)}
               placeholder={`Search ${providers.find((p) => p.id === provider)?.label} models`}
-              className="w-full rounded-lg border border-bolt-elements-borderColor bg-bolt-elements-background px-3 py-2 text-sm"
+              className="w-full rounded-lg border border-recoder-elements-borderColor bg-recoder-elements-background px-3 py-2 text-sm"
             />
             {modelQuery.trim() && (
               <div className="mt-2">
                 <button
                   onClick={() => selectModel(modelQuery)}
-                  className="rounded-full px-3 py-1 text-xs border border-bolt-elements-borderColor hover:bg-bolt-elements-item-backgroundHover"
+                  className="rounded-full px-3 py-1 text-xs border border-recoder-elements-borderColor hover:bg-recoder-elements-item-backgroundHover"
                 >
                   Use search as model
                 </button>
               </div>
             )}
-            <p className="mt-2 text-xs text-bolt-elements-textSecondary">
+            <p className="mt-2 text-xs text-recoder-elements-textSecondary">
               {providerHints[provider].help} Examples: {providerHints[provider].examples.join(', ')}.
             </p>
             <div className="mt-2 flex flex-wrap gap-2">
@@ -374,7 +374,7 @@ export default function AISettingsPage() {
                 <button
                   key={example}
                   onClick={() => selectModel(example)}
-                  className="rounded-full px-3 py-1 text-xs border border-bolt-elements-borderColor hover:bg-bolt-elements-item-backgroundHover"
+                  className="rounded-full px-3 py-1 text-xs border border-recoder-elements-borderColor hover:bg-recoder-elements-item-backgroundHover"
                 >
                   {example}
                 </button>
@@ -395,10 +395,10 @@ export default function AISettingsPage() {
               </div>
             )}
             {modelsLoading[provider] && (
-              <p className="mt-2 text-sm text-bolt-elements-textSecondary">Loading models...</p>
+              <p className="mt-2 text-sm text-recoder-elements-textSecondary">Loading models...</p>
             )}
             {settings.default_model && (
-              <p className="mt-2 text-xs text-bolt-elements-textSecondary">
+              <p className="mt-2 text-xs text-recoder-elements-textSecondary">
                 Selected model: {settings.default_model}
               </p>
             )}
@@ -409,27 +409,27 @@ export default function AISettingsPage() {
                   onClick={() => selectModel(model.id)}
                   className={`w-full p-3 rounded-lg border transition-colors text-left ${
                     settings.default_model === normalizeModel(model.id, provider)
-                      ? 'border-bolt-elements-item-contentAccent bg-bolt-elements-item-backgroundActive'
-                      : 'border-bolt-elements-borderColor hover:bg-bolt-elements-item-backgroundHover'
+                      ? 'border-recoder-elements-item-contentAccent bg-recoder-elements-item-backgroundActive'
+                      : 'border-recoder-elements-borderColor hover:bg-recoder-elements-item-backgroundHover'
                   }`}
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div>
                       <div className="font-medium">{model.name ?? model.id}</div>
                       {model.description ? (
-                        <div className="text-sm text-bolt-elements-textSecondary mt-1">
+                        <div className="text-sm text-recoder-elements-textSecondary mt-1">
                           {model.description}
                         </div>
                       ) : null}
                     </div>
                     {settings.default_model === normalizeModel(model.id, provider) && (
-                      <div className="text-bolt-elements-item-contentAccent">✓</div>
+                      <div className="text-recoder-elements-item-contentAccent">✓</div>
                     )}
                   </div>
                 </button>
               ))}
               {!modelsLoading[provider] && filteredModels.length === 0 && !modelsError[provider] && (
-                <p className="text-sm text-bolt-elements-textSecondary">
+                <p className="text-sm text-recoder-elements-textSecondary">
                   No models found. Try a different search or provider.
                 </p>
               )}
@@ -439,14 +439,14 @@ export default function AISettingsPage() {
       </section>
 
       {/* Model Parameters */}
-      <section className="p-6 rounded-xl border border-bolt-elements-borderColor bg-bolt-elements-background-depth-2">
+      <section className="p-6 rounded-xl border border-recoder-elements-borderColor bg-recoder-elements-background-depth-2">
         <h2 className="text-xl font-bold mb-4">Model Parameters</h2>
         <div className="space-y-6">
           {/* Temperature */}
           <div>
             <div className="flex justify-between mb-2">
               <label className="text-sm font-medium">Temperature</label>
-              <span className="text-sm text-bolt-elements-textSecondary">
+              <span className="text-sm text-recoder-elements-textSecondary">
                 {settings.temperature.toFixed(2)}
               </span>
             </div>
@@ -459,11 +459,11 @@ export default function AISettingsPage() {
               onChange={(e) => updateSetting('temperature', parseFloat(e.target.value))}
               className="w-full"
             />
-            <div className="flex justify-between text-xs text-bolt-elements-textSecondary mt-1">
+            <div className="flex justify-between text-xs text-recoder-elements-textSecondary mt-1">
               <span>More focused</span>
               <span>More creative</span>
             </div>
-            <p className="text-xs text-bolt-elements-textSecondary mt-2">
+            <p className="text-xs text-recoder-elements-textSecondary mt-2">
               Controls randomness. Lower = more deterministic, Higher = more creative
             </p>
           </div>
@@ -472,7 +472,7 @@ export default function AISettingsPage() {
           <div>
             <div className="flex justify-between mb-2">
               <label className="text-sm font-medium">Max Tokens</label>
-              <span className="text-sm text-bolt-elements-textSecondary">
+              <span className="text-sm text-recoder-elements-textSecondary">
                 {settings.max_tokens}
               </span>
             </div>
@@ -485,11 +485,11 @@ export default function AISettingsPage() {
               onChange={(e) => updateSetting('max_tokens', parseInt(e.target.value))}
               className="w-full"
             />
-            <div className="flex justify-between text-xs text-bolt-elements-textSecondary mt-1">
+            <div className="flex justify-between text-xs text-recoder-elements-textSecondary mt-1">
               <span>1K</span>
               <span>8K</span>
             </div>
-            <p className="text-xs text-bolt-elements-textSecondary mt-2">
+            <p className="text-xs text-recoder-elements-textSecondary mt-2">
               Maximum length of AI responses. Higher = longer responses but slower
             </p>
           </div>
@@ -498,7 +498,7 @@ export default function AISettingsPage() {
           <div>
             <div className="flex justify-between mb-2">
               <label className="text-sm font-medium">Top P (Nucleus Sampling)</label>
-              <span className="text-sm text-bolt-elements-textSecondary">
+              <span className="text-sm text-recoder-elements-textSecondary">
                 {settings.top_p.toFixed(2)}
               </span>
             </div>
@@ -511,11 +511,11 @@ export default function AISettingsPage() {
               onChange={(e) => updateSetting('top_p', parseFloat(e.target.value))}
               className="w-full"
             />
-            <div className="flex justify-between text-xs text-bolt-elements-textSecondary mt-1">
+            <div className="flex justify-between text-xs text-recoder-elements-textSecondary mt-1">
               <span>Conservative</span>
               <span>Diverse</span>
             </div>
-            <p className="text-xs text-bolt-elements-textSecondary mt-2">
+            <p className="text-xs text-recoder-elements-textSecondary mt-2">
               Controls diversity of responses. Lower = more conservative, Higher = more diverse
             </p>
           </div>
@@ -523,21 +523,21 @@ export default function AISettingsPage() {
       </section>
 
       {/* AI Behavior */}
-      <section className="p-6 rounded-xl border border-bolt-elements-borderColor bg-bolt-elements-background-depth-2">
+      <section className="p-6 rounded-xl border border-recoder-elements-borderColor bg-recoder-elements-background-depth-2">
         <h2 className="text-xl font-bold mb-4">AI Behavior</h2>
         <div className="space-y-4">
           {/* Streaming */}
           <div className="flex items-center justify-between">
             <div>
               <div className="font-medium">Response Streaming</div>
-              <div className="text-sm text-bolt-elements-textSecondary">
+              <div className="text-sm text-recoder-elements-textSecondary">
                 Show AI responses as they're generated (recommended)
               </div>
             </div>
             <button
               onClick={() => updateSetting('streaming_enabled', !settings.streaming_enabled)}
               className={`relative w-12 h-6 rounded-full transition-colors ${
-                settings.streaming_enabled ? 'bg-bolt-elements-item-contentAccent' : 'bg-gray-600'
+                settings.streaming_enabled ? 'bg-recoder-elements-item-contentAccent' : 'bg-gray-600'
               }`}
             >
               <div
@@ -552,14 +552,14 @@ export default function AISettingsPage() {
           <div className="flex items-center justify-between">
             <div>
               <div className="font-medium">Code Validation</div>
-              <div className="text-sm text-bolt-elements-textSecondary">
+              <div className="text-sm text-recoder-elements-textSecondary">
                 Validate generated code for syntax errors
               </div>
             </div>
             <button
               onClick={() => updateSetting('code_validation', !settings.code_validation)}
               className={`relative w-12 h-6 rounded-full transition-colors ${
-                settings.code_validation ? 'bg-bolt-elements-item-contentAccent' : 'bg-gray-600'
+                settings.code_validation ? 'bg-recoder-elements-item-contentAccent' : 'bg-gray-600'
               }`}
             >
               <div
@@ -574,14 +574,14 @@ export default function AISettingsPage() {
           <div className="flex items-center justify-between">
             <div>
               <div className="font-medium">Auto-Fix Errors</div>
-              <div className="text-sm text-bolt-elements-textSecondary">
+              <div className="text-sm text-recoder-elements-textSecondary">
                 Automatically attempt to fix detected errors
               </div>
             </div>
             <button
               onClick={() => updateSetting('auto_fix_errors', !settings.auto_fix_errors)}
               className={`relative w-12 h-6 rounded-full transition-colors ${
-                settings.auto_fix_errors ? 'bg-bolt-elements-item-contentAccent' : 'bg-gray-600'
+                settings.auto_fix_errors ? 'bg-recoder-elements-item-contentAccent' : 'bg-gray-600'
               }`}
             >
               <div
@@ -595,21 +595,21 @@ export default function AISettingsPage() {
       </section>
 
       {/* Context Settings */}
-      <section className="p-6 rounded-xl border border-bolt-elements-borderColor bg-bolt-elements-background-depth-2">
+      <section className="p-6 rounded-xl border border-recoder-elements-borderColor bg-recoder-elements-background-depth-2">
         <h2 className="text-xl font-bold mb-4">Context & Memory</h2>
         <div className="space-y-4">
           {/* Include File Tree */}
           <div className="flex items-center justify-between">
             <div>
               <div className="font-medium">Include File Tree</div>
-              <div className="text-sm text-bolt-elements-textSecondary">
+              <div className="text-sm text-recoder-elements-textSecondary">
                 Send project structure to AI for better context
               </div>
             </div>
             <button
               onClick={() => updateSetting('include_file_tree', !settings.include_file_tree)}
               className={`relative w-12 h-6 rounded-full transition-colors ${
-                settings.include_file_tree ? 'bg-bolt-elements-item-contentAccent' : 'bg-gray-600'
+                settings.include_file_tree ? 'bg-recoder-elements-item-contentAccent' : 'bg-gray-600'
               }`}
             >
               <div
@@ -624,7 +624,7 @@ export default function AISettingsPage() {
           <div>
             <div className="flex justify-between mb-2">
               <label className="text-sm font-medium">Max Context Files</label>
-              <span className="text-sm text-bolt-elements-textSecondary">
+              <span className="text-sm text-recoder-elements-textSecondary">
                 {settings.max_context_files}
               </span>
             </div>
@@ -637,11 +637,11 @@ export default function AISettingsPage() {
               onChange={(e) => updateSetting('max_context_files', parseInt(e.target.value))}
               className="w-full"
             />
-            <div className="flex justify-between text-xs text-bolt-elements-textSecondary mt-1">
+            <div className="flex justify-between text-xs text-recoder-elements-textSecondary mt-1">
               <span>1 file</span>
               <span>50 files</span>
             </div>
-            <p className="text-xs text-bolt-elements-textSecondary mt-2">
+            <p className="text-xs text-recoder-elements-textSecondary mt-2">
               Maximum number of files to include in AI context
             </p>
           </div>
@@ -653,7 +653,7 @@ export default function AISettingsPage() {
         <button
           onClick={handleSave}
           disabled={saving || Boolean(modelWarning)}
-          className="px-6 py-3 bg-bolt-elements-item-contentAccent hover:bg-bolt-elements-item-contentActive rounded-lg font-medium transition-colors disabled:opacity-50"
+          className="px-6 py-3 bg-recoder-elements-item-contentAccent hover:bg-recoder-elements-item-contentActive rounded-lg font-medium transition-colors disabled:opacity-50"
         >
           {saving ? 'Saving...' : 'Save Changes'}
         </button>

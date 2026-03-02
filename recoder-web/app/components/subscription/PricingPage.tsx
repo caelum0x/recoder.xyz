@@ -158,14 +158,14 @@ export function PricingPage() {
   };
 
   return (
-    <div className="min-h-screen bg-bolt-elements-background-depth-1 py-20 px-4">
+    <div className="min-h-screen bg-recoder-elements-background-depth-1 py-20 px-4">
       <div className="max-w-7xl mx-auto">
         {/* Header */}
         <div className="text-center mb-16">
-          <h1 className="text-5xl font-bold text-bolt-elements-textPrimary mb-4">
+          <h1 className="text-5xl font-bold text-recoder-elements-textPrimary mb-4">
             Simple, Transparent Pricing
           </h1>
-          <p className="text-xl text-bolt-elements-textTertiary">
+          <p className="text-xl text-recoder-elements-textTertiary">
             Build production apps without breaking the bank
           </p>
         </div>
@@ -186,10 +186,10 @@ export function PricingPage() {
             return (
               <div
                 key={plan.id}
-                className={`relative bg-bolt-elements-background-depth-2 backdrop-blur-sm rounded-2xl p-8 border-2 transition-all hover:scale-105 ${
+                className={`relative bg-recoder-elements-background-depth-2 backdrop-blur-sm rounded-2xl p-8 border-2 transition-all hover:scale-105 ${
                   isPopular
                     ? 'border-blue-500 shadow-lg shadow-blue-500/20'
-                    : 'border-bolt-elements-borderColor'
+                    : 'border-recoder-elements-borderColor'
                 }`}
               >
                 {/* Popular badge */}
@@ -203,24 +203,24 @@ export function PricingPage() {
 
                 {/* Icon */}
                 <div className="mb-4">
-                  <Icon className={`w-12 h-12 ${isPopular ? 'text-blue-400' : 'text-bolt-elements-textTertiary'}`} />
+                  <Icon className={`w-12 h-12 ${isPopular ? 'text-blue-400' : 'text-recoder-elements-textTertiary'}`} />
                 </div>
 
                 {/* Plan name */}
-                <h3 className="text-2xl font-bold text-bolt-elements-textPrimary mb-2">{plan.name}</h3>
+                <h3 className="text-2xl font-bold text-recoder-elements-textPrimary mb-2">{plan.name}</h3>
 
                 {/* Price */}
                 <div className="mb-6">
-                  <span className="text-5xl font-bold text-bolt-elements-textPrimary">
+                  <span className="text-5xl font-bold text-recoder-elements-textPrimary">
                     ${plan.price}
                   </span>
-                  <span className="text-bolt-elements-textTertiary ml-2">/month</span>
+                  <span className="text-recoder-elements-textTertiary ml-2">/month</span>
                 </div>
 
                 {/* Generations limit */}
-                <div className="mb-6 p-3 bg-bolt-elements-background-depth-3 rounded-lg">
-                  <p className="text-bolt-elements-textSecondary text-sm">
-                    <span className="font-semibold text-bolt-elements-textPrimary">{plan.limit}</span> AI generations/month
+                <div className="mb-6 p-3 bg-recoder-elements-background-depth-3 rounded-lg">
+                  <p className="text-recoder-elements-textSecondary text-sm">
+                    <span className="font-semibold text-recoder-elements-textPrimary">{plan.limit}</span> AI generations/month
                   </p>
                 </div>
 
@@ -229,7 +229,7 @@ export function PricingPage() {
                   {plan.features.map((feature, idx) => (
                     <li key={idx} className="flex items-start gap-3">
                       <Check className="w-5 h-5 text-green-400 flex-shrink-0 mt-0.5" />
-                      <span className="text-bolt-elements-textSecondary text-sm">{feature}</span>
+                      <span className="text-recoder-elements-textSecondary text-sm">{feature}</span>
                     </li>
                   ))}
                 </ul>
@@ -242,8 +242,8 @@ export function PricingPage() {
                     isPopular
                       ? 'bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white'
                       : plan.id === 'free'
-                      ? 'bg-bolt-elements-background-depth-3 text-bolt-elements-textTertiary cursor-not-allowed'
-                      : 'bg-bolt-elements-background-depth-3 hover:bg-bolt-elements-background-depth-3 text-bolt-elements-textPrimary'
+                      ? 'bg-recoder-elements-background-depth-3 text-recoder-elements-textTertiary cursor-not-allowed'
+                      : 'bg-recoder-elements-background-depth-3 hover:bg-recoder-elements-background-depth-3 text-recoder-elements-textPrimary'
                   } ${loading === plan.id ? 'opacity-50 cursor-wait' : ''}`}
                 >
                   {loading === plan.id ? (
@@ -264,10 +264,10 @@ export function PricingPage() {
 
         {/* FAQ or additional info */}
         <div className="mt-20 text-center">
-          <p className="text-bolt-elements-textTertiary mb-4">
+          <p className="text-recoder-elements-textTertiary mb-4">
             All plans include access to our AI-powered code generation, templates, and deployment tools.
           </p>
-          <p className="text-bolt-elements-textTertiary text-sm">
+          <p className="text-recoder-elements-textTertiary text-sm">
             Payments processed securely via Paddle or DodoPay. Cancel anytime.
           </p>
         </div>

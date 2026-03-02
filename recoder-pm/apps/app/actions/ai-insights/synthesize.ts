@@ -16,7 +16,11 @@ export const runAiInsightsSynthesis = async () => {
     const aiJob = await createAiJob({
       type: "INSIGHTS_SYNTHESIZE",
       organizationId,
-      payload: { organizationId },
+      payload: {
+        organizationId,
+        connectorId: "recoder-pm-ai",
+        traceId: crypto.randomUUID(),
+      },
     });
 
     await enqueueAiJob(

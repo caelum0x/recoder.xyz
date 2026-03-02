@@ -3,7 +3,7 @@ import type { KnipConfig } from "knip";
 const config: KnipConfig = {
 	biome: false,
 	ignoreIssues: {
-		"apps/studio.giselles.ai/emails/**/*.tsx": ["duplicates"],
+		"recoder-studio/emails/**/*.tsx": ["duplicates"],
 	},
 	workspaces: {
 		"apps/playground": {
@@ -16,7 +16,7 @@ const config: KnipConfig = {
 				"pg",
 			],
 		},
-		"apps/studio.giselles.ai": {
+		"recoder-studio": {
 			entry: ["tests/e2e/global-setup.ts", "emails/**/*.tsx"],
 			ignore: [
 				"scripts/**",

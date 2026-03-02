@@ -40,6 +40,14 @@ jobs:
         if: always()
         run: pnpm run phase3:evidence-pack
 
+      - name: Auto-publish Tier-1 support status
+        if: always()
+        run: pnpm run phase3:publish-support-status
+
+      - name: Validate Tier-2 promotion checklist
+        if: always()
+        run: pnpm run phase3:tier2:gate
+
       - name: Upload Phase 3 evidence artifacts
         if: always()
         uses: actions/upload-artifact@v4
@@ -48,4 +56,5 @@ jobs:
           path: |
             logs/phase3-gates/
             logs/phase3-evidence/
+            SUPPORTED_CONNECTORS.md
           if-no-files-found: ignore

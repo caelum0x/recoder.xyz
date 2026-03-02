@@ -1,5 +1,10 @@
 import { timingSafeEqual } from 'node:crypto';
 import { NextResponse } from 'next/server';
+import {
+  PmInteropEvents,
+  createPmTraceId,
+  trackPmInteropEvent,
+} from '@/lib/analytics';
 
 const ALLOWED_INTENTS = new Set(['plan', 'execute', 'handoff', 'tool_call']);
 
@@ -59,19 +64,65 @@ export async function POST(request: Request, { params }: { params: { intent: str
   }
 
   const envelope = (payload.envelope || {}) as { messageId?: string; threadId?: string };
+  const traceId = createPmTraceId();
+  const connectorId = `intent-executor:${intent}`;
+
+  trackPmInteropEvent(PmInteropEvents.CONNECTOR_INVOKED, {
+    connector_id: connectorId,
+    traceId,
+    intent,
+    messageId: String(envelope.messageId || ''),
+    threadId: String(envelope.threadId || ''),
+  });
+
   const executorUrl = resolveExecutorUrl(intent);
 
   let executor: Record<string, unknown> = { executed: false, reason: 'no_executor_configured' };
   if (executorUrl) {
+    const executorStart = Date.now();
     try {
       const response = await fetch(executorUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ intent, source: 'a2a-intent-handler', payload }),
       });
+      const durationMs = Date.now() - executorStart;
       executor = { executed: response.ok, status: response.status };
+
+      if (response.ok) {
+        trackPmInteropEvent(PmInteropEvents.CONNECTOR_RESPONSE, {
+          connector_id: connectorId,
+          traceId,
+          intent,
+          messageId: String(envelope.messageId || ''),
+          threadId: String(envelope.threadId || ''),
+          responseStatus: response.status,
+          durationMs,
+        });
+      } else {
+        trackPmInteropEvent(PmInteropEvents.CONNECTOR_ERROR, {
+          connector_id: connectorId,
+          traceId,
+          intent,
+          messageId: String(envelope.messageId || ''),
+          threadId: String(envelope.threadId || ''),
+          responseStatus: response.status,
+          errorMessage: `Executor returned ${response.status}`,
+          durationMs,
+        });
+      }
     } catch {
+      const durationMs = Date.now() - executorStart;
       executor = { executed: false, error: 'executor_failed' };
+      trackPmInteropEvent(PmInteropEvents.CONNECTOR_ERROR, {
+        connector_id: connectorId,
+        traceId,
+        intent,
+        messageId: String(envelope.messageId || ''),
+        threadId: String(envelope.threadId || ''),
+        errorMessage: 'executor_failed',
+        durationMs,
+      });
     }
   }
 

@@ -3,15 +3,15 @@ import type {
 	GitHubAuthConfig,
 	WebhookEvent,
 	WebhookEventName,
-} from "@giselles-ai/github-tool";
-import { createTriggerNode } from "@giselles-ai/node-registry";
+} from "@recoder/github-tool";
+import { createTriggerNode } from "@recoder/node-registry";
 import {
 	type GitHubEventData,
 	NodeId,
 	type Trigger,
 	TriggerId,
-} from "@giselles-ai/protocol";
-import { memoryStorageDriver } from "@giselles-ai/storage";
+} from "@recoder/protocol";
+import { memoryStorageDriver } from "@recoder/storage";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { GiselleContext } from "../types";
 import {

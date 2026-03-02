@@ -8,7 +8,7 @@ interface PropertyPanelProps {
 export function PropertyPanel({ element, onUpdate }: PropertyPanelProps) {
   if (!element) {
     return (
-      <div className="p-4 text-center text-bolt-elements-textSecondary">
+      <div className="p-4 text-center text-recoder-elements-textSecondary">
         Select an element to edit properties
       </div>
     );
@@ -20,7 +20,7 @@ export function PropertyPanel({ element, onUpdate }: PropertyPanelProps) {
 
   return (
     <div className="p-4 space-y-4">
-      <h3 className="font-semibold text-bolt-elements-textPrimary">Properties</h3>
+      <h3 className="font-semibold text-recoder-elements-textPrimary">Properties</h3>
 
       <div>
         <label className="block text-sm mb-1">Background</label>

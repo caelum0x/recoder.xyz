@@ -34,7 +34,6 @@ const pdfiumTracingConfig = {
 
 const nextConfig: NextConfig = {
 	output: "standalone",
-	typescript: { ignoreBuildErrors: true },
 	transpilePackages: ["@recoder/auth"],
 	turbopack: {
 		root: join(projectDir, "../../"),
@@ -94,7 +93,7 @@ const nextConfig: NextConfig = {
 					},
 					{
 						key: "Referrer-Policy",
-						value: "origin-when-cross-origin",
+						value: "strict-origin-when-cross-origin",
 					},
 					{
 						key: "Strict-Transport-Security",
@@ -112,7 +111,7 @@ const nextConfig: NextConfig = {
 							"style-src 'self' 'unsafe-inline'",
 							"img-src 'self' data: blob: https://avatars.githubusercontent.com https://lh3.googleusercontent.com",
 							"font-src 'self'",
-							"connect-src 'self' https://*.ingest.us.sentry.io https://*.posthog.com https://*.supabase.co wss://*.supabase.co",
+							"connect-src 'self' https://*.ingest.us.sentry.io https://*.posthog.com https://*.supabase.co wss://*.supabase.co https://*.recoder.xyz wss://*.recoder.xyz https://www.google-analytics.com https://region1.google-analytics.com",
 							"frame-ancestors 'none'",
 							"base-uri 'self'",
 							"form-action 'self'",

@@ -152,7 +152,7 @@ class SandboxVisionTool(SandboxToolsBase):
                         screenshot_base64 = response_data.get("screenshot_base64")
                         if screenshot_base64:
                             png_bytes = base64.b64decode(screenshot_base64)
-                            print(f"[SeeImage] Converted SVG '{os.path.basename(svg_full_path)}' to PNG using sandbox browser")
+                            logger.info(f"[SeeImage] Converted SVG '{os.path.basename(svg_full_path)}' to PNG using sandbox browser")
                             return png_bytes, 'image/png'
                         else:
                             raise Exception("No screenshot data in browser response")
@@ -190,7 +190,7 @@ class SandboxVisionTool(SandboxToolsBase):
                     image_bytes = png_bytes
                     mime_type = png_mime
                 except Exception as browser_error:
-                    print(f"[SeeImage] Browser-based SVG conversion failed: {browser_error}")
+                    logger.warning(f"[SeeImage] Browser-based SVG conversion failed: {browser_error}")
                     
                     # Fallback to svglib approach
                     try:
@@ -207,7 +207,7 @@ class SandboxVisionTool(SandboxToolsBase):
                             renderPM.drawToFile(drawing, png_buffer, fmt='PNG')
                             png_bytes = png_buffer.getvalue()
                             
-                            print(f"[SeeImage] Converted SVG '{file_path}' to PNG using fallback method (svglib)")
+                            logger.info(f"[SeeImage] Converted SVG '{file_path}' to PNG using fallback method (svglib)")
                             # Update for PIL processing
                             image_bytes = png_bytes
                             mime_type = 'image/png'
@@ -239,7 +239,7 @@ class SandboxVisionTool(SandboxToolsBase):
                 new_width = int(width * ratio)
                 new_height = int(height * ratio)
                 img = img.resize((new_width, new_height), Image.Resampling.LANCZOS)
-                print(f"[SeeImage] Resized image from {width}x{height} to {new_width}x{new_height}")
+                logger.info(f"[SeeImage] Resized image from {width}x{height} to {new_width}x{new_height}")
             
             # Save to bytes with compression
             output = BytesIO()
@@ -264,7 +264,7 @@ class SandboxVisionTool(SandboxToolsBase):
             original_size = len(image_bytes)
             compressed_size = len(compressed_bytes)
             compression_ratio = (1 - compressed_size / original_size) * 100
-            print(f"[SeeImage] Compressed '{file_path}' from {original_size / 1024:.1f}KB to {compressed_size / 1024:.1f}KB ({compression_ratio:.1f}% reduction)")
+            logger.info(f"[SeeImage] Compressed '{file_path}' from {original_size / 1024:.1f}KB to {compressed_size / 1024:.1f}KB ({compression_ratio:.1f}% reduction)")
             
             return compressed_bytes, output_mime
             
@@ -272,7 +272,7 @@ class SandboxVisionTool(SandboxToolsBase):
             # CRITICAL: Never return unsupported formats
             # If compression fails, we need to ensure we still return a supported format
             if mime_type in ['image/jpeg', 'image/png', 'image/gif', 'image/webp']:
-                print(f"[SeeImage] Failed to compress image: {str(e)}. Using original (format is supported).")
+                logger.warning(f"[SeeImage] Failed to compress image: {str(e)}. Using original (format is supported).")
                 return image_bytes, mime_type
             else:
                 # Unsupported format and compression failed - must fail
@@ -412,9 +412,9 @@ Images remain in the sandbox and can be loaded again anytime. SVG files are auto
                     # Save converted PNG to sandbox
                     await self.sandbox.fs.upload_file(compressed_bytes, png_full_path)
                     cleaned_path = png_filename
-                    print(f"[SeeImage] Saved converted PNG to sandbox as '{png_filename}' for frontend display")
+                    logger.info(f"[SeeImage] Saved converted PNG to sandbox as '{png_filename}' for frontend display")
                 except Exception as e:
-                    print(f"[SeeImage] Warning: Could not save converted PNG to sandbox: {e}")
+                    logger.warning(f"[SeeImage] Warning: Could not save converted PNG to sandbox: {e}")
                     # Continue with original path if save fails
 
             # CRITICAL: Validate MIME type before upload - Anthropic only accepts 4 formats
@@ -449,10 +449,10 @@ Images remain in the sandbox and can be loaded again anytime. SVG files are auto
                 await storage_upload('image-uploads', storage_filename, compressed_bytes, {"content-type": compressed_mime_type})
                 public_url = await storage_get_public_url('image-uploads', storage_filename)
                 
-                print(f"[LoadImage] Uploaded image to cloud storage: {public_url}")
+                logger.info(f"[LoadImage] Uploaded image to cloud storage: {public_url}")
                 
             except Exception as upload_error:
-                print(f"[LoadImage] Failed to upload to cloud storage: {upload_error}")
+                logger.error(f"[LoadImage] Failed to upload to cloud storage: {upload_error}")
                 return self.fail_response(f"Failed to upload image to cloud storage: {str(upload_error)}")
 
             # Check current image count in context (enforce 3-image limit)
@@ -513,7 +513,7 @@ Images remain in the sandbox and can be loaded again anytime. SVG files are auto
             )
             return result.get("image_count", 0) if result else 0
         except Exception as e:
-            print(f"[LoadImage] Error counting images in context: {e}")
+            logger.error(f"[LoadImage] Error counting images in context: {e}")
             return 0
     
     async def _clear_all_images(self) -> int:
@@ -530,7 +530,7 @@ Images remain in the sandbox and can be loaded again anytime. SVG files are auto
             )
             return len(deleted_rows) if deleted_rows else 0
         except Exception as e:
-            print(f"[LoadImage] Error clearing images: {e}")
+            logger.error(f"[LoadImage] Error clearing images: {e}")
             return 0
 
     # @openapi_schema({

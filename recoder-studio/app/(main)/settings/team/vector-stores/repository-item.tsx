@@ -9,9 +9,9 @@ import {
 	DialogFooter,
 	DialogHeader,
 	DialogTitle,
-} from "@giselle-internal/ui/dialog";
-import { StatusBadge } from "@giselle-internal/ui/status-badge";
-import { formatTimestamp } from "@giselles-ai/lib/utils";
+} from "@recoder-internal/ui/dialog";
+import { StatusBadge } from "@recoder-internal/ui/status-badge";
+import { formatTimestamp } from "@recoder/lib/utils";
 import { RefreshCw, Settings, Trash, X } from "lucide-react";
 import { useCallback, useMemo, useState, useTransition } from "react";
 import type {

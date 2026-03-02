@@ -5,7 +5,7 @@ import {
 	type LanguageModel,
 	openaiLanguageModels,
 	Tier,
-} from "@giselles-ai/language-model";
+} from "@recoder/language-model";
 import {
 	type AnthropicLanguageModelData,
 	type Connection,
@@ -14,8 +14,8 @@ import {
 	OutputId,
 	type TextGenerationContent,
 	type TextGenerationNode,
-} from "@giselles-ai/protocol";
-import { useUsageLimits } from "@giselles-ai/react";
+} from "@recoder/protocol";
+import { useUsageLimits } from "@recoder/react";
 import { useCallback, useMemo } from "react";
 import { useShallow } from "zustand/shallow";
 import { useAppDesignerStore } from "../../../../app-designer";

@@ -1,4 +1,4 @@
-import type { FileId, GenerationOrigin } from "@giselles-ai/protocol";
+import type { FileId, GenerationOrigin } from "@recoder/protocol";
 
 export function filePath(params: { fileId: FileId } & GenerationOrigin) {
 	switch (params.type) {

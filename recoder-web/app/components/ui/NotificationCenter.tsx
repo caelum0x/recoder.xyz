@@ -72,7 +72,7 @@ const NotificationItem = memo(({
   return (
     <div
       className={classNames(
-        'relative p-3 rounded-lg border transition-all hover:border-bolt-elements-borderColor group',
+        'relative p-3 rounded-lg border transition-all hover:border-recoder-elements-borderColor group',
         colors.bg,
         colors.border,
         !read && 'ring-1 ring-blue-500/50'
@@ -93,7 +93,7 @@ const NotificationItem = memo(({
           <div className="flex items-start justify-between gap-2">
             <h4 className={classNames(
               'text-sm font-medium truncate',
-              read ? 'text-bolt-elements-textSecondary' : 'text-bolt-elements-textPrimary'
+              read ? 'text-recoder-elements-textSecondary' : 'text-recoder-elements-textPrimary'
             )}>
               {title}
             </h4>
@@ -102,7 +102,7 @@ const NotificationItem = memo(({
                 e.stopPropagation();
                 onRemove(id);
               }}
-              className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-bolt-elements-background-depth-2 text-bolt-elements-textTertiary hover:text-bolt-elements-textSecondary transition-all shrink-0"
+              className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-recoder-elements-background-depth-2 text-recoder-elements-textTertiary hover:text-recoder-elements-textSecondary transition-all shrink-0"
               aria-label="Remove notification"
             >
               <div className="i-ph:x text-sm" />
@@ -110,11 +110,11 @@ const NotificationItem = memo(({
           </div>
           <p className={classNames(
             'text-sm mt-0.5 line-clamp-2',
-            read ? 'text-bolt-elements-textTertiary' : 'text-bolt-elements-textSecondary'
+            read ? 'text-recoder-elements-textTertiary' : 'text-recoder-elements-textSecondary'
           )}>
             {message}
           </p>
-          <span className="text-xs text-bolt-elements-textTertiary mt-1 block">
+          <span className="text-xs text-recoder-elements-textTertiary mt-1 block">
             {formatRelativeTime(timestamp)}
           </span>
         </div>
@@ -135,8 +135,8 @@ export const NotificationBell = memo(() => {
       className={classNames(
         'relative p-2 rounded-md transition-colors',
         isOpen
-          ? 'bg-bolt-elements-background-depth-3 text-bolt-elements-textPrimary'
-          : 'text-bolt-elements-textSecondary hover:text-bolt-elements-textPrimary hover:bg-bolt-elements-background-depth-3'
+          ? 'bg-recoder-elements-background-depth-3 text-recoder-elements-textPrimary'
+          : 'text-recoder-elements-textSecondary hover:text-recoder-elements-textPrimary hover:bg-recoder-elements-background-depth-3'
       )}
       title="Notifications"
       aria-label={`Notifications${unreadCount > 0 ? ` (${unreadCount} unread)` : ''}`}
@@ -198,13 +198,13 @@ export const NotificationCenter = memo(() => {
   return (
     <div
       ref={panelRef}
-      className="absolute top-full right-0 mt-2 w-96 max-h-[500px] rounded-xl shadow-2xl z-[100] flex flex-col overflow-hidden bg-bolt-elements-background-depth-1 border border-bolt-elements-borderColor"
+      className="absolute top-full right-0 mt-2 w-96 max-h-[500px] rounded-xl shadow-2xl z-[100] flex flex-col overflow-hidden bg-recoder-elements-background-depth-1 border border-recoder-elements-borderColor"
     >
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-bolt-elements-borderColor bg-bolt-elements-background-depth-2">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-recoder-elements-borderColor bg-recoder-elements-background-depth-2">
         <div className="flex items-center gap-2">
-          <div className="i-ph:bell text-lg text-bolt-elements-textPrimary" />
-          <h3 className="text-sm font-semibold text-bolt-elements-textPrimary">
+          <div className="i-ph:bell text-lg text-recoder-elements-textPrimary" />
+          <h3 className="text-sm font-semibold text-recoder-elements-textPrimary">
             Notifications
           </h3>
           {unreadCount > 0 && (
@@ -218,7 +218,7 @@ export const NotificationCenter = memo(() => {
           {unreadCount > 0 && (
             <button
               onClick={markAllAsRead}
-              className="px-2 py-1 text-xs font-medium rounded-md text-bolt-elements-textSecondary hover:text-bolt-elements-textPrimary hover:bg-bolt-elements-background-depth-3 transition-colors"
+              className="px-2 py-1 text-xs font-medium rounded-md text-recoder-elements-textSecondary hover:text-recoder-elements-textPrimary hover:bg-recoder-elements-background-depth-3 transition-colors"
               title="Mark all as read"
             >
               Mark all read
@@ -227,7 +227,7 @@ export const NotificationCenter = memo(() => {
           {notifications.length > 0 && (
             <button
               onClick={clearAll}
-              className="px-2 py-1 text-xs font-medium rounded-md text-bolt-elements-textSecondary hover:text-red-400 hover:bg-red-500/10 transition-colors"
+              className="px-2 py-1 text-xs font-medium rounded-md text-recoder-elements-textSecondary hover:text-red-400 hover:bg-red-500/10 transition-colors"
               title="Clear all notifications"
             >
               Clear all
@@ -240,9 +240,9 @@ export const NotificationCenter = memo(() => {
       <div className="flex-1 overflow-y-auto">
         {notifications.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-12 px-4 text-center">
-            <div className="i-ph:bell-slash text-4xl text-bolt-elements-textTertiary mb-3" />
-            <p className="text-sm text-bolt-elements-textSecondary">No notifications</p>
-            <p className="text-xs text-bolt-elements-textTertiary mt-1">
+            <div className="i-ph:bell-slash text-4xl text-recoder-elements-textTertiary mb-3" />
+            <p className="text-sm text-recoder-elements-textSecondary">No notifications</p>
+            <p className="text-xs text-recoder-elements-textTertiary mt-1">
               You're all caught up!
             </p>
           </div>
@@ -262,8 +262,8 @@ export const NotificationCenter = memo(() => {
 
       {/* Footer */}
       {notifications.length > 0 && (
-        <div className="px-4 py-2 border-t border-bolt-elements-borderColor bg-bolt-elements-background-depth-2">
-          <p className="text-xs text-bolt-elements-textTertiary text-center">
+        <div className="px-4 py-2 border-t border-recoder-elements-borderColor bg-recoder-elements-background-depth-2">
+          <p className="text-xs text-recoder-elements-textTertiary text-center">
             Showing {notifications.length} notification{notifications.length !== 1 ? 's' : ''}
           </p>
         </div>

@@ -5,8 +5,8 @@ import type { LanguageModelV2CallOptions } from "@ai-sdk/provider";
 import {
 	getEntry,
 	parseConfiguration,
-} from "@giselles-ai/language-model-registry";
-import type { ContentGenerationContent } from "@giselles-ai/protocol";
+} from "@recoder/language-model-registry";
+import type { ContentGenerationContent } from "@recoder/protocol";
 
 export function transformGiselleLanguageModelToAiSdkLanguageModelCallOptions(
 	content: ContentGenerationContent,

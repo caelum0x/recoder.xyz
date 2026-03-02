@@ -118,15 +118,15 @@ export function ModelPicker({
         onClick={() => setIsOpen(!isOpen)}
         className={classNames(
           'w-full flex justify-between items-center gap-2 px-3 py-2 rounded-lg',
-          'bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor text-sm text-bolt-elements-textPrimary',
-          'hover:bg-bolt-elements-background-depth-3 hover:border-bolt-elements-borderColor transition-colors',
+          'bg-recoder-elements-background-depth-2 border border-recoder-elements-borderColor text-sm text-recoder-elements-textPrimary',
+          'hover:bg-recoder-elements-background-depth-3 hover:border-recoder-elements-borderColor transition-colors',
           'focus:outline-none focus:ring-2 focus:ring-accent-500/50'
         )}
       >
         <span className="truncate">{currentModelLabel}</span>
         <ChevronDownIcon
           className={classNames(
-            'w-4 h-4 text-bolt-elements-textTertiary transition-transform',
+            'w-4 h-4 text-recoder-elements-textTertiary transition-transform',
             isOpen && 'transform rotate-180'
           )}
         />
@@ -135,25 +135,25 @@ export function ModelPicker({
       {/* Dropdown */}
       {isOpen && (
         <div
-          className="absolute z-50 mt-1 w-full bg-bolt-elements-background-depth-1 border border-bolt-elements-borderColor rounded-lg shadow-xl overflow-hidden"
+          className="absolute z-50 mt-1 w-full bg-recoder-elements-background-depth-1 border border-recoder-elements-borderColor rounded-lg shadow-xl overflow-hidden"
           style={{ width }}
         >
           {/* Search Input */}
-          <div className="p-2 border-b border-bolt-elements-borderColor">
-            <div className="flex items-center gap-2 px-2 py-1.5 bg-bolt-elements-background-depth-2 rounded-lg">
-              <SearchIcon className="w-4 h-4 text-bolt-elements-textTertiary" />
+          <div className="p-2 border-b border-recoder-elements-borderColor">
+            <div className="flex items-center gap-2 px-2 py-1.5 bg-recoder-elements-background-depth-2 rounded-lg">
+              <SearchIcon className="w-4 h-4 text-recoder-elements-textTertiary" />
               <input
                 type="text"
                 placeholder={searchPlaceholder}
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                className="flex-1 bg-transparent border-none text-sm text-bolt-elements-textPrimary placeholder:text-bolt-elements-textTertiary focus:outline-none"
+                className="flex-1 bg-transparent border-none text-sm text-recoder-elements-textPrimary placeholder:text-recoder-elements-textTertiary focus:outline-none"
               />
             </div>
           </div>
 
           {/* Provider Tabs */}
-          <div className="flex gap-1 p-2 border-b border-bolt-elements-borderColor overflow-x-auto">
+          <div className="flex gap-1 p-2 border-b border-recoder-elements-borderColor overflow-x-auto">
             {providers.map((p) => {
               const label =
                 p === 'all'
@@ -168,7 +168,7 @@ export function ModelPicker({
                     'px-2 py-1 text-xs font-medium rounded whitespace-nowrap transition-colors',
                     providerFilter === p
                       ? 'bg-accent-500/20 text-accent-400'
-                      : 'text-bolt-elements-textTertiary hover:text-bolt-elements-textPrimary hover:bg-bolt-elements-background-depth-2'
+                      : 'text-recoder-elements-textTertiary hover:text-recoder-elements-textPrimary hover:bg-recoder-elements-background-depth-2'
                   )}
                 >
                   {label}
@@ -180,13 +180,13 @@ export function ModelPicker({
           {/* Model List */}
           <div className="max-h-64 overflow-y-auto p-2">
             {filteredGroups.length === 0 ? (
-              <div className="px-3 py-4 text-center text-sm text-bolt-elements-textTertiary">
+              <div className="px-3 py-4 text-center text-sm text-recoder-elements-textTertiary">
                 No models found
               </div>
             ) : (
               filteredGroups.map((group) => (
                 <div key={group.provider} className="mb-2 last:mb-0">
-                  <div className="px-2 py-1 text-xs font-medium text-bolt-elements-textTertiary uppercase tracking-wider">
+                  <div className="px-2 py-1 text-xs font-medium text-recoder-elements-textTertiary uppercase tracking-wider">
                     {group.label || group.provider}
                   </div>
                   <div className="space-y-0.5">
@@ -209,8 +209,8 @@ export function ModelPicker({
                           className={classNames(
                             'w-full flex items-center gap-2 px-2 py-1.5 rounded text-left text-sm',
                             isSelected && 'bg-accent-500/20 text-accent-400',
-                            !isSelected && !isDisabled && 'text-bolt-elements-textPrimary hover:bg-bolt-elements-background-depth-2',
-                            isDisabled && 'opacity-50 cursor-not-allowed text-bolt-elements-textTertiary'
+                            !isSelected && !isDisabled && 'text-recoder-elements-textPrimary hover:bg-recoder-elements-background-depth-2',
+                            isDisabled && 'opacity-50 cursor-not-allowed text-recoder-elements-textTertiary'
                           )}
                         >
                           {model.icon && <span className="flex-shrink-0">{model.icon}</span>}
@@ -243,7 +243,7 @@ export function ModelSelector({
   return (
     <div className="space-y-1">
       {label && (
-        <label className="block text-xs text-bolt-elements-textTertiary">{label}</label>
+        <label className="block text-xs text-recoder-elements-textTertiary">{label}</label>
       )}
       <ModelPicker
         currentProvider={currentProvider}

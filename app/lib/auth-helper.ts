@@ -5,6 +5,7 @@
 
 import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { logger } from '@/lib/logger';
 
 export async function getUserFromToken(request: NextRequest) {
   const authHeader = request.headers.get('authorization');
@@ -27,7 +28,7 @@ export async function getUserFromToken(request: NextRequest) {
 
     return session.users;
   } catch (error) {
-    console.error('Token validation error:', error);
+    logger.error('Token validation error', { error: String(error) });
     return null;
   }
 }

@@ -5,7 +5,7 @@
  * All templates include proper unsubscribe links and CAN-SPAM compliance
  */
 
-const BASE_URL = process.env.NEXTAUTH_URL || 'https://recoder.xyz';
+const BASE_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://recoder.xyz';
 
 // Common email styles for marketing emails
 const MARKETING_STYLES = `

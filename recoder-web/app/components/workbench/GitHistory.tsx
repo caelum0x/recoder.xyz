@@ -84,7 +84,7 @@ export const GitHistory = memo(({ commits, isLoading, onLoadMore, hasMore }: Git
 
   if (isLoading && commits.length === 0) {
     return (
-      <div className="p-4 text-center text-bolt-elements-textTertiary text-sm">
+      <div className="p-4 text-center text-recoder-elements-textTertiary text-sm">
         <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-purple-500 mx-auto mb-2" />
         Loading history...
       </div>
@@ -93,7 +93,7 @@ export const GitHistory = memo(({ commits, isLoading, onLoadMore, hasMore }: Git
 
   if (commits.length === 0) {
     return (
-      <div className="p-4 text-center text-bolt-elements-textTertiary text-sm">
+      <div className="p-4 text-center text-recoder-elements-textTertiary text-sm">
         <span className="i-ph:git-commit text-2xl block mb-2" />
         No commits yet
       </div>
@@ -110,7 +110,7 @@ export const GitHistory = memo(({ commits, isLoading, onLoadMore, hasMore }: Git
               'relative flex gap-3 px-3 py-2 cursor-pointer transition-colors',
               expandedCommit === commit.hash
                 ? 'bg-purple-500/10'
-                : 'hover:bg-bolt-elements-background-depth-2'
+                : 'hover:bg-recoder-elements-background-depth-2'
             )}
             onClick={() => setExpandedCommit(expandedCommit === commit.hash ? null : commit.hash)}
           >
@@ -122,7 +122,7 @@ export const GitHistory = memo(({ commits, isLoading, onLoadMore, hasMore }: Git
                   index === 0 ? '' : 'bg-purple-500/30'
                 )}
               />
-              <div className="w-3 h-3 rounded-full bg-purple-500 border-2 border-bolt-elements-background-depth-1 z-10" />
+              <div className="w-3 h-3 rounded-full bg-purple-500 border-2 border-recoder-elements-background-depth-1 z-10" />
               <div
                 className={classNames(
                   'w-0.5 flex-1',
@@ -147,10 +147,10 @@ export const GitHistory = memo(({ commits, isLoading, onLoadMore, hasMore }: Git
 
                 {/* Message */}
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm text-bolt-elements-textPrimary truncate">
+                  <p className="text-sm text-recoder-elements-textPrimary truncate">
                     {commit.message}
                   </p>
-                  <div className="flex items-center gap-2 mt-0.5 text-xs text-bolt-elements-textTertiary">
+                  <div className="flex items-center gap-2 mt-0.5 text-xs text-recoder-elements-textTertiary">
                     <span>{commit.author}</span>
                     <span>•</span>
                     <span>{formatDate(commit.timestamp)}</span>
@@ -160,7 +160,7 @@ export const GitHistory = memo(({ commits, isLoading, onLoadMore, hasMore }: Git
                 {/* Hash */}
                 <button
                   onClick={(e) => handleCopyHash(commit.hash, e)}
-                  className="shrink-0 px-1.5 py-0.5 text-xs font-mono bg-bolt-elements-background-depth-3 hover:bg-bolt-elements-background-depth-4 rounded text-bolt-elements-textTertiary"
+                  className="shrink-0 px-1.5 py-0.5 text-xs font-mono bg-recoder-elements-background-depth-3 hover:bg-recoder-elements-background-depth-4 rounded text-recoder-elements-textTertiary"
                   title="Copy full hash"
                 >
                   {commit.shortHash}
@@ -169,14 +169,14 @@ export const GitHistory = memo(({ commits, isLoading, onLoadMore, hasMore }: Git
 
               {/* Expanded details */}
               {expandedCommit === commit.hash && (
-                <div className="mt-2 ml-8 p-2 bg-bolt-elements-background-depth-3 rounded text-xs">
+                <div className="mt-2 ml-8 p-2 bg-recoder-elements-background-depth-3 rounded text-xs">
                   <div className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
-                    <span className="text-bolt-elements-textTertiary">Hash:</span>
-                    <span className="font-mono text-bolt-elements-textSecondary">{commit.hash}</span>
-                    <span className="text-bolt-elements-textTertiary">Author:</span>
-                    <span className="text-bolt-elements-textSecondary">{commit.author} &lt;{commit.authorEmail}&gt;</span>
-                    <span className="text-bolt-elements-textTertiary">Date:</span>
-                    <span className="text-bolt-elements-textSecondary">{commit.date}</span>
+                    <span className="text-recoder-elements-textTertiary">Hash:</span>
+                    <span className="font-mono text-recoder-elements-textSecondary">{commit.hash}</span>
+                    <span className="text-recoder-elements-textTertiary">Author:</span>
+                    <span className="text-recoder-elements-textSecondary">{commit.author} &lt;{commit.authorEmail}&gt;</span>
+                    <span className="text-recoder-elements-textTertiary">Date:</span>
+                    <span className="text-recoder-elements-textSecondary">{commit.date}</span>
                   </div>
                 </div>
               )}
@@ -189,7 +189,7 @@ export const GitHistory = memo(({ commits, isLoading, onLoadMore, hasMore }: Git
           <button
             onClick={onLoadMore}
             disabled={isLoading}
-            className="w-full py-2 text-xs text-center text-bolt-elements-textTertiary hover:bg-bolt-elements-background-depth-2"
+            className="w-full py-2 text-xs text-center text-recoder-elements-textTertiary hover:bg-recoder-elements-background-depth-2"
           >
             {isLoading ? (
               <span className="i-ph:spinner animate-spin" />

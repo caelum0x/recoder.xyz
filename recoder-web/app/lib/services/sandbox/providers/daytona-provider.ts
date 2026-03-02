@@ -101,8 +101,7 @@ export class DaytonaSandboxProvider extends BaseSandboxProvider {
 
     // Dynamically import Daytona SDK
     try {
-      // @ts-ignore - @daytonaio/sdk is an optional dependency
-      const daytonaModule = (await import('@daytonaio/sdk')) as DaytonaModuleType;
+      const daytonaModule = await (import('@daytonaio/sdk' /* optional dep */) as Promise<DaytonaModuleType>);
       this.client = new daytonaModule.Daytona({
         apiKey: this.apiKey,
       });

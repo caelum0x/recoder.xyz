@@ -2,7 +2,7 @@ import type { TourStep } from "./workspace-tour";
 
 export const tourSteps: TourStep[] = [
 	{
-		title: "Welcome to Giselle",
+		title: "Welcome to Recoder",
 		content: "This platform helps you build and manage AI workflows easily.",
 		placement: "bottom" as const,
 	},
@@ -36,7 +36,7 @@ export const tourSteps: TourStep[] = [
 	{
 		title: "Resources & Support",
 		content:
-			"Get help when you need it. Explore our <a href='https://docs.giselles.ai/en' target='_blank' class='text-primary-200 hover:underline'>comprehensive Docs</a> for detailed guidance and best practices whenever you encounter challenges.",
+			"Get help when you need it. Explore our <a href='https://docs.recoder.xyz/en' target='_blank' class='text-primary-200 hover:underline'>comprehensive Docs</a> for detailed guidance and best practices whenever you encounter challenges.",
 		placement: "bottom" as const,
 	},
 ];

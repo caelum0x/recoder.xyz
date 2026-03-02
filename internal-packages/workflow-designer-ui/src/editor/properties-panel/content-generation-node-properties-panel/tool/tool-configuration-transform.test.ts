@@ -1,7 +1,7 @@
 import type {
 	LanguageModelTool,
 	LanguageModelToolConfigurationOption,
-} from "@giselles-ai/language-model-registry";
+} from "@recoder/language-model-registry";
 import { describe, expect, it } from "vitest";
 import {
 	applyDefaultValues,

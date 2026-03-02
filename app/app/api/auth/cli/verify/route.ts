@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { CLIAuthService } from '@/lib/services/cli-auth.service';
+import { logger } from '@/lib/logger';
 
 /**
  * POST /api/auth/cli/verify
@@ -63,7 +64,7 @@ export async function POST(request: NextRequest) {
       );
     }
   } catch (error: any) {
-    console.error('Token verification error:', error);
+    logger.error('Token verification error:', { error: String(error), route: 'auth/cli/verify' });
     return NextResponse.json(
       { error: 'Verification failed' },
       { status: 500 }

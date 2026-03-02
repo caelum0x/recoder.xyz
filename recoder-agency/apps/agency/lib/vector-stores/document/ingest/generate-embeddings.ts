@@ -1,11 +1,11 @@
-import type { EmbeddingProfileId } from "@giselles-ai/protocol";
-import { EMBEDDING_PROFILES } from "@giselles-ai/protocol";
+import type { EmbeddingProfileId } from "@recoder/protocol";
+import { EMBEDDING_PROFILES } from "@recoder/protocol";
 import {
 	createEmbedderFromProfile,
 	type EmbedderFunction,
 	type EmbeddingCompleteCallback,
 	isGatewaySupportedEmbeddingProfile,
-} from "@giselles-ai/rag";
+} from "@recoder/rag";
 
 interface GenerateEmbeddingsOptions {
 	chunks: string[];

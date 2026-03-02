@@ -1,4 +1,4 @@
-import { Select } from "@giselle-internal/ui/select";
+import { Select } from "@recoder-internal/ui/select";
 import {
 	ArrowDownAZ,
 	ArrowUpAZ,

@@ -34,15 +34,15 @@ export function UsageCard({
   return (
     <div
       className={classNames(
-        'border border-bolt-elements-borderColor bg-bolt-elements-background-depth-2 rounded-lg hover:bg-bolt-elements-background-depth-3 transition-colors',
+        'border border-recoder-elements-borderColor bg-recoder-elements-background-depth-2 rounded-lg hover:bg-recoder-elements-background-depth-3 transition-colors',
         className
       )}
     >
       <div className="p-4">
         {/* Header */}
         <div className="flex items-center gap-2 mb-3">
-          <Icon className="h-4 w-4 text-bolt-elements-textSecondary" />
-          <h3 className="font-medium text-sm text-bolt-elements-textPrimary flex-1">
+          <Icon className="h-4 w-4 text-recoder-elements-textSecondary" />
+          <h3 className="font-medium text-sm text-recoder-elements-textPrimary flex-1">
             {title}
           </h3>
         </div>
@@ -54,12 +54,12 @@ export function UsageCard({
               <span
                 className={classNames(
                   'text-lg font-semibold',
-                  isInsufficient ? 'text-red-500' : 'text-bolt-elements-textPrimary'
+                  isInsufficient ? 'text-red-500' : 'text-recoder-elements-textPrimary'
                 )}
               >
                 {used.toLocaleString()}
               </span>
-              <span className="text-sm text-bolt-elements-textSecondary">
+              <span className="text-sm text-recoder-elements-textSecondary">
                 / {total.toLocaleString()}
               </span>
             </div>
@@ -71,7 +71,7 @@ export function UsageCard({
           </div>
 
           {/* Progress bar */}
-          <div className="w-full bg-bolt-elements-background-depth-3 rounded-full h-1.5">
+          <div className="w-full bg-recoder-elements-background-depth-3 rounded-full h-1.5">
             <div
               className={classNames(
                 'h-1.5 rounded-full transition-all duration-300',
@@ -82,7 +82,7 @@ export function UsageCard({
           </div>
 
           {/* Description */}
-          <p className="text-xs text-bolt-elements-textTertiary">{description}</p>
+          <p className="text-xs text-recoder-elements-textTertiary">{description}</p>
 
           {/* Action button */}
           {actionButton && <div className="pt-2">{actionButton}</div>}
@@ -108,16 +108,16 @@ export function UsageCardCompact({
 }) {
   const getTextColor = () => {
     if (status === 'danger') return 'text-red-500';
-    return 'text-bolt-elements-textPrimary';
+    return 'text-recoder-elements-textPrimary';
   };
 
   return (
     <div className={classNames('text-center space-y-2', className)}>
-      <Icon className="h-4 w-4 text-bolt-elements-textSecondary mx-auto" />
+      <Icon className="h-4 w-4 text-recoder-elements-textSecondary mx-auto" />
       <div className={classNames('text-lg font-semibold', getTextColor())}>
         {typeof value === 'number' ? value.toLocaleString() : value}
       </div>
-      <div className="text-xs text-bolt-elements-textTertiary">{title}</div>
+      <div className="text-xs text-recoder-elements-textTertiary">{title}</div>
     </div>
   );
 }

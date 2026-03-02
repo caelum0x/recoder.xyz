@@ -9,6 +9,7 @@ import { headers } from 'next/headers';
 import { prisma } from '@/lib/prisma';
 import { authenticator } from 'otplib';
 import crypto from 'crypto';
+import { logger } from '@/lib/logger';
 
 export async function POST(request: NextRequest) {
   try {
@@ -35,24 +36,24 @@ export async function POST(request: NextRequest) {
     }
 
     // Get user's security settings
-    const settings = await prisma.$queryRaw<any[]>`
-      SELECT * FROM security_settings WHERE user_id = ${userId}
-    `;
+    const settings = await prisma.security_settings.findUnique({
+      where: { userId },
+    });
 
-    if (!settings || settings.length === 0 || !settings[0].two_factor_enabled) {
+    if (!settings || !settings.twoFactorEnabled) {
       return NextResponse.json(
         { success: false, error: '2FA is not enabled' },
         { status: 400 }
       );
     }
 
-    const secret = settings[0].two_factor_secret;
+    const secret = settings.twoFactorSecret;
     let isValid = false;
 
     // Check if it's a backup code
     if (code.length === 8) {
-      const backupCodes = settings[0].backup_codes ?
-        JSON.parse(settings[0].backup_codes as string) : [];
+      const backupCodes = settings.backupCodes ?
+        JSON.parse(settings.backupCodes as string) : [];
 
       const codeHash = crypto.createHash('sha256').update(code.toUpperCase()).digest('hex');
       isValid = backupCodes.includes(codeHash);
@@ -72,15 +73,15 @@ export async function POST(request: NextRequest) {
     }
 
     // Disable 2FA and clear secret and backup codes
-    await prisma.$executeRaw`
-      UPDATE security_settings
-      SET
-        two_factor_enabled = false,
-        two_factor_secret = NULL,
-        backup_codes = NULL,
-        updated_at = NOW()
-      WHERE user_id = ${userId}
-    `;
+    await prisma.security_settings.update({
+      where: { userId },
+      data: {
+        twoFactorEnabled: false,
+        twoFactorSecret: null,
+        backupCodes: null,
+        updatedAt: new Date(),
+      },
+    });
 
     return NextResponse.json({
       success: true,
@@ -88,7 +89,7 @@ export async function POST(request: NextRequest) {
     });
 
   } catch (error: any) {
-    console.error('[2FA Disable] Error:', error);
+    logger.error('[2FA Disable] Error:', { error: String(error), route: 'auth/2fa/disable' });
     return NextResponse.json(
       { success: false, error: 'Failed to disable 2FA' },
       { status: 500 }

@@ -1,4 +1,4 @@
-import { DocsLink } from "@giselle-internal/ui/docs-link";
+import { DocsLink } from "@recoder-internal/ui/docs-link";
 import { GitHubIntegration } from "./github-integration";
 
 export default function TeamIntegrationsPage() {

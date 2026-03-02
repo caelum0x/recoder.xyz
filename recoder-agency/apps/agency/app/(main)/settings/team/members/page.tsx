@@ -1,5 +1,5 @@
-import { DocsLink } from "@giselle-internal/ui/docs-link";
-import { PageHeading } from "@giselle-internal/ui/page-heading";
+import { DocsLink } from "@recoder-internal/ui/docs-link";
+import { PageHeading } from "@recoder-internal/ui/page-heading";
 import Link from "next/link";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import type { TeamPlan } from "@/db/schema";

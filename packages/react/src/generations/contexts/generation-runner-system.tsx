@@ -10,7 +10,7 @@ import type {
 	NodeId,
 	QueuedGeneration,
 	RunningGeneration,
-} from "@giselles-ai/protocol";
+} from "@recoder/protocol";
 import type { UIMessage } from "ai";
 import { createContext, useContext } from "react";
 

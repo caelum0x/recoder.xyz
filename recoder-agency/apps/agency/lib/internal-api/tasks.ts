@@ -1,7 +1,7 @@
 "use server";
 
-import type { CreateTaskInputs, StartTaskInputs } from "@giselles-ai/giselle";
-import type { TaskId, WorkspaceId } from "@giselles-ai/protocol";
+import type { CreateTaskInputs, StartTaskInputs } from "@recoder/giselle";
+import type { TaskId, WorkspaceId } from "@recoder/protocol";
 import { giselle } from "@/app/giselle";
 
 export async function createTask(input: CreateTaskInputs) {

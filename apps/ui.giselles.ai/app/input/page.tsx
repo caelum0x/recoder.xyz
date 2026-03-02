@@ -1,4 +1,4 @@
-import { Input } from "@giselle-internal/ui/input";
+import { Input } from "@recoder-internal/ui/input";
 import { DemoSection } from "../components/demo-section";
 import { UiPage } from "../components/ui-page";
 

@@ -1,5 +1,5 @@
-import type { TaskId } from "@giselles-ai/protocol";
-import type { StreamData, StreamEvent } from "@giselles-ai/stream";
+import type { TaskId } from "@recoder/protocol";
+import type { StreamData, StreamEvent } from "@recoder/stream";
 import type { GiselleContext } from "../types";
 import { getTask } from "./get-task";
 

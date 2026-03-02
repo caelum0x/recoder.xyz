@@ -7,8 +7,11 @@ OUT_DIR="${OUT_DIR:-$REPO_ROOT/logs/release-evidence}"
 LOG_FILE="$OUT_DIR/$RUN_ID.log"
 SUMMARY_MD="$OUT_DIR/$RUN_ID-summary.md"
 SUMMARY_JSON="$OUT_DIR/$RUN_ID-summary.json"
+CONNECTOR_SUPPORT_MD="$OUT_DIR/$RUN_ID-connectors-support.md"
+CONNECTOR_SUPPORT_JSON="$OUT_DIR/$RUN_ID-connectors-support.json"
 A5_SKIP_ENV_GATES_RAW="${A5_SKIP_ENV_GATES:-false}"
 A5_SKIP_TYPECHECK_GATES_RAW="${A5_SKIP_TYPECHECK_GATES:-false}"
+PRODUCTION_SCOPE="${PRODUCTION_SCOPE:-core}"
 mkdir -p "$OUT_DIR"
 
 FAILURES=0
@@ -48,13 +51,18 @@ run_step() {
 
 echo "A5 release evidence run started: $RUN_ID" | tee "$LOG_FILE"
 echo "repo: $REPO_ROOT" | tee -a "$LOG_FILE"
+echo "production_scope: $PRODUCTION_SCOPE" | tee -a "$LOG_FILE"
 
 run_step "A5 structure: required repos present" /bin/zsh -lc '
   set -euo pipefail
-  req=(app backend docker-backend apps/frontend apps/mobile recoder-agency recoder-pm recoder-web)
+  req=(backend docker-backend apps/mobile recoder-agency recoder-pm recoder-web)
   for d in "${req[@]}"; do
     [[ -d "$d" ]] || { echo "missing directory: $d" >&2; exit 1; }
   done
+  if [[ ! -d "app" && ! -d "apps/frontend" ]]; then
+    echo "missing frontend directory: expected app or apps/frontend" >&2
+    exit 1
+  fi
   echo "all required directories present"
 '
 
@@ -84,8 +92,8 @@ if [[ "$A5_SKIP_ENV_GATES" == "true" ]]; then
   echo "=== A5 guard: production env gate ===" | tee -a "$LOG_FILE"
   echo "status: SKIP (A5_SKIP_ENV_GATES=true)" | tee -a "$LOG_FILE"
 else
-  run_step "A5 guard: ecosystem readiness" pnpm -C "$REPO_ROOT" run check:ecosystem
-  run_step "A5 guard: production env gate" pnpm -C "$REPO_ROOT" run check:prod-env-gate
+  run_step "A5 guard: ecosystem readiness" env ECOSYSTEM_SCOPE="$PRODUCTION_SCOPE" pnpm -C "$REPO_ROOT" run check:ecosystem
+  run_step "A5 guard: production env gate" env PRODUCTION_SCOPE="$PRODUCTION_SCOPE" pnpm -C "$REPO_ROOT" run check:prod-env-gate
 fi
 
 if [[ "$A5_SKIP_TYPECHECK_GATES" == "true" ]]; then
@@ -96,7 +104,11 @@ if [[ "$A5_SKIP_TYPECHECK_GATES" == "true" ]]; then
   echo "=== A5 typecheck: mobile ===" | tee -a "$LOG_FILE"
   echo "status: SKIP (A5_SKIP_TYPECHECK_GATES=true)" | tee -a "$LOG_FILE"
 else
-  run_step "A5 typecheck: frontend" pnpm -C "$REPO_ROOT/apps/frontend" run typecheck
+  FRONTEND_DIR="$REPO_ROOT/app"
+  if [[ ! -d "$FRONTEND_DIR" ]]; then
+    FRONTEND_DIR="$REPO_ROOT/apps/frontend"
+  fi
+  run_step "A5 typecheck: frontend" pnpm -C "$FRONTEND_DIR" run typecheck
   run_step "A5 typecheck: mobile" pnpm -C "$REPO_ROOT/apps/mobile" run typecheck
 fi
 
@@ -124,6 +136,47 @@ OVERALL="PASS"
 if [[ "$FAILURES" -gt 0 ]]; then
   OVERALL="FAIL ($FAILURES failing step(s))"
 fi
+
+{
+  echo "{"
+  echo "  \"generated_at_utc\": \"$(date -u +"%Y-%m-%dT%H:%M:%SZ")\","
+  echo "  \"run_id\": \"$RUN_ID\","
+  echo "  \"source\": \"a5-release-evidence\","
+  echo "  \"overall\": \"$OVERALL\","
+  echo "  \"note\": \"A5 lane does not execute full support smoke gates; Tier-1 remains experimental in this lane\","
+  echo "  \"connectors\": ["
+  echo "    { \"id\": \"codex\", \"tier\": \"tier1\", \"status\": \"experimental\", \"reason\": \"A5 evidence lane only; full support gates not executed here\" },"
+  echo "    { \"id\": \"claude\", \"tier\": \"tier1\", \"status\": \"experimental\", \"reason\": \"A5 evidence lane only; full support gates not executed here\" },"
+  echo "    { \"id\": \"cursor\", \"tier\": \"tier2\", \"status\": \"backlog\", \"reason\": \"Tier-2 backlog until no-skip Phase 3 closeout succeeds\" },"
+  echo "    { \"id\": \"windsurf\", \"tier\": \"tier2\", \"status\": \"backlog\", \"reason\": \"Tier-2 backlog until no-skip Phase 3 closeout succeeds\" },"
+  echo "    { \"id\": \"replit\", \"tier\": \"tier2\", \"status\": \"backlog\", \"reason\": \"Tier-2 backlog until no-skip Phase 3 closeout succeeds\" },"
+  echo "    { \"id\": \"vscode-copilot\", \"tier\": \"tier2\", \"status\": \"backlog\", \"reason\": \"Tier-2 backlog until no-skip Phase 3 closeout succeeds\" },"
+  echo "    { \"id\": \"jetbrains\", \"tier\": \"tier2\", \"status\": \"backlog\", \"reason\": \"Tier-2 backlog until no-skip Phase 3 closeout succeeds\" }"
+  echo "  ]"
+  echo "}"
+} > "$CONNECTOR_SUPPORT_JSON"
+
+{
+  echo "# Connector Support Status (A5 lane)"
+  echo ""
+  echo "- Run ID: $RUN_ID"
+  echo "- Generated (UTC): $(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+  echo "- Overall: $OVERALL"
+  echo "- JSON: \`$CONNECTOR_SUPPORT_JSON\`"
+  echo ""
+  echo "A5 lane does not execute full support smoke gates; Tier-1 remains experimental in this lane."
+  echo ""
+  echo "## Connectors"
+  echo "| Connector | Tier | Status | Reason |"
+  echo "|---|---|---|---|"
+  echo "| codex | tier1 | experimental | A5 evidence lane only; full support gates not executed here |"
+  echo "| claude | tier1 | experimental | A5 evidence lane only; full support gates not executed here |"
+  echo "| cursor | tier2 | backlog | Tier-2 backlog until no-skip Phase 3 closeout succeeds |"
+  echo "| windsurf | tier2 | backlog | Tier-2 backlog until no-skip Phase 3 closeout succeeds |"
+  echo "| replit | tier2 | backlog | Tier-2 backlog until no-skip Phase 3 closeout succeeds |"
+  echo "| vscode-copilot | tier2 | backlog | Tier-2 backlog until no-skip Phase 3 closeout succeeds |"
+  echo "| jetbrains | tier2 | backlog | Tier-2 backlog until no-skip Phase 3 closeout succeeds |"
+} > "$CONNECTOR_SUPPORT_MD"
 
 {
   echo "{"
@@ -166,6 +219,8 @@ echo "" | tee -a "$LOG_FILE"
 echo "A5 release evidence complete. Log: $LOG_FILE" | tee -a "$LOG_FILE"
 echo "Summary markdown: $SUMMARY_MD" | tee -a "$LOG_FILE"
 echo "Summary json: $SUMMARY_JSON" | tee -a "$LOG_FILE"
+echo "Connector support markdown: $CONNECTOR_SUPPORT_MD" | tee -a "$LOG_FILE"
+echo "Connector support json: $CONNECTOR_SUPPORT_JSON" | tee -a "$LOG_FILE"
 echo "overall: $OVERALL" | tee -a "$LOG_FILE"
 
 if [[ "$FAILURES" -gt 0 ]]; then

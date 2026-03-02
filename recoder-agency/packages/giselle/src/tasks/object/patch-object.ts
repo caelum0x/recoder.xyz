@@ -1,4 +1,4 @@
-import type { Task } from "@giselles-ai/protocol";
+import type { Task } from "@recoder/protocol";
 
 // Patch types - one for each operation
 export type Patch =

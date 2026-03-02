@@ -1,6 +1,6 @@
-import { Select } from "@giselle-internal/ui/select";
-import { imageGenerationSizes } from "@giselles-ai/language-model";
-import { FalLanguageModelData } from "@giselles-ai/protocol";
+import { Select } from "@recoder-internal/ui/select";
+import { imageGenerationSizes } from "@recoder/language-model";
+import { FalLanguageModelData } from "@recoder/protocol";
 import { Slider } from "../../../../ui/slider";
 import { SettingRow } from "../../ui/setting-row";
 

@@ -5,7 +5,7 @@ import {
 	type FileData,
 	type FileNode,
 	isFileNode,
-} from "@giselles-ai/protocol";
+} from "@recoder/protocol";
 import { useCallback } from "react";
 import { useAppDesignerStoreApi } from "../app-designer-provider";
 import { useGiselle } from "../giselle-client-provider";

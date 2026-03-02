@@ -1,7 +1,7 @@
-import { GenerationId } from "@giselles-ai/protocol";
+import { GenerationId } from "@recoder/protocol";
 import type { NextRequest } from "next/server";
 import { giselle } from "@/app/giselle";
-import { getUser } from "@/lib/supabase/get-user";
+import { getUser } from "@/lib/auth/user";
 
 const SAFE_FILENAME_RE = /^[a-zA-Z0-9_\-][a-zA-Z0-9_\-. ]{0,254}$/;
 

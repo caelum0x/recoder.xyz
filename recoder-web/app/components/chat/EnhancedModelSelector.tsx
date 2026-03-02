@@ -120,9 +120,9 @@ export function EnhancedModelSelector({ className, compact = false }: EnhancedMo
         onClick={toggleDropdown}
         className={classNames(
           'flex items-center gap-2 px-3 py-2 rounded-lg border transition-all',
-          'border-bolt-elements-borderColor bg-bolt-elements-background-depth-2',
-          'hover:bg-bolt-elements-background-depth-3 hover:border-bolt-elements-borderColorActive',
-          'text-bolt-elements-textPrimary font-medium',
+          'border-recoder-elements-borderColor bg-recoder-elements-background-depth-2',
+          'hover:bg-recoder-elements-background-depth-3 hover:border-recoder-elements-borderColorActive',
+          'text-recoder-elements-textPrimary font-medium',
           compact ? 'text-xs h-[32px]' : 'text-sm h-[38px]'
         )}
       >
@@ -147,7 +147,7 @@ export function EnhancedModelSelector({ className, compact = false }: EnhancedMo
         )}
 
         {/* Dropdown Arrow */}
-        <div className="i-ph:caret-down text-xs text-bolt-elements-textSecondary" />
+        <div className="i-ph:caret-down text-xs text-recoder-elements-textSecondary" />
       </button>
 
       {/* Quick Switch - Recent Models */}
@@ -159,9 +159,9 @@ export function EnhancedModelSelector({ className, compact = false }: EnhancedMo
               onClick={() => handleModelSelect(model.id)}
               className={classNames(
                 'px-2 py-0.5 rounded text-[10px] transition-colors',
-                'bg-bolt-elements-background-depth-3 hover:bg-bolt-elements-background-depth-4',
-                'text-bolt-elements-textSecondary hover:text-bolt-elements-textPrimary',
-                'border border-transparent hover:border-bolt-elements-borderColor'
+                'bg-recoder-elements-background-depth-3 hover:bg-recoder-elements-background-depth-4',
+                'text-recoder-elements-textSecondary hover:text-recoder-elements-textPrimary',
+                'border border-transparent hover:border-recoder-elements-borderColor'
               )}
               title={`Switch to ${model.name}`}
             >
@@ -176,15 +176,15 @@ export function EnhancedModelSelector({ className, compact = false }: EnhancedMo
         <div
           className={classNames(
             'absolute z-[1000] mt-1 rounded-xl shadow-2xl overflow-hidden',
-            'border border-bolt-elements-borderColor',
+            'border border-recoder-elements-borderColor',
             'w-[380px] max-h-[480px]'
           )}
-          style={{ backgroundColor: 'var(--bolt-elements-bg-depth-1)' }}
+          style={{ backgroundColor: 'var(--recoder-elements-bg-depth-1)' }}
         >
           {/* Search Input */}
-          <div className="p-3 border-b border-bolt-elements-borderColor sticky top-0 bg-bolt-elements-background-depth-1 z-10">
+          <div className="p-3 border-b border-recoder-elements-borderColor sticky top-0 bg-recoder-elements-background-depth-1 z-10">
             <div className="relative">
-              <div className="i-ph:magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-bolt-elements-textSecondary" />
+              <div className="i-ph:magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-recoder-elements-textSecondary" />
               <input
                 ref={searchInputRef}
                 type="text"
@@ -193,8 +193,8 @@ export function EnhancedModelSelector({ className, compact = false }: EnhancedMo
                 placeholder="Search models..."
                 className={classNames(
                   'w-full pl-9 pr-3 py-2 rounded-lg text-sm',
-                  'bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor',
-                  'text-bolt-elements-textPrimary placeholder-bolt-elements-textTertiary',
+                  'bg-recoder-elements-background-depth-2 border border-recoder-elements-borderColor',
+                  'text-recoder-elements-textPrimary placeholder-recoder-elements-textTertiary',
                   'focus:outline-none focus:border-amber-500/50 focus:ring-1 focus:ring-amber-500/20'
                 )}
               />
@@ -206,7 +206,7 @@ export function EnhancedModelSelector({ className, compact = false }: EnhancedMo
             {/* Recent Models Section */}
             {!searchQuery && recentModels.length > 0 && (
               <div className="py-2">
-                <div className="px-3 py-1 text-[10px] font-semibold text-bolt-elements-textTertiary uppercase tracking-wider">
+                <div className="px-3 py-1 text-[10px] font-semibold text-recoder-elements-textTertiary uppercase tracking-wider">
                   Recent
                 </div>
                 {recentModels.slice(0, 3).map((model) => (
@@ -217,7 +217,7 @@ export function EnhancedModelSelector({ className, compact = false }: EnhancedMo
                     onSelect={handleModelSelect}
                   />
                 ))}
-                <div className="border-b border-bolt-elements-borderColor my-2" />
+                <div className="border-b border-recoder-elements-borderColor my-2" />
               </div>
             )}
 
@@ -229,10 +229,10 @@ export function EnhancedModelSelector({ className, compact = false }: EnhancedMo
                   {/* Provider Header */}
                   <div className="px-3 py-1 flex items-center gap-2">
                     <div className={classNames(info.icon, 'text-sm')} style={{ color: info.color }} />
-                    <span className="text-xs font-semibold text-bolt-elements-textSecondary">
+                    <span className="text-xs font-semibold text-recoder-elements-textSecondary">
                       {info.name}
                     </span>
-                    <span className="text-[10px] text-bolt-elements-textTertiary">
+                    <span className="text-[10px] text-recoder-elements-textTertiary">
                       ({models.length})
                     </span>
                   </div>
@@ -252,7 +252,7 @@ export function EnhancedModelSelector({ className, compact = false }: EnhancedMo
 
             {/* No Results */}
             {filteredModels.length === 0 && (
-              <div className="p-6 text-center text-bolt-elements-textTertiary">
+              <div className="p-6 text-center text-recoder-elements-textTertiary">
                 <div className="i-ph:magnifying-glass-minus text-3xl mb-2 opacity-50" />
                 <p className="text-sm">No models found for "{searchQuery}"</p>
               </div>
@@ -281,7 +281,7 @@ function ModelItem({ model, isSelected, onSelect }: ModelItemProps) {
       onClick={() => onSelect(model.id)}
       className={classNames(
         'w-full px-3 py-2.5 flex items-start gap-3 transition-colors text-left',
-        isSelected ? 'bg-amber-500/10' : 'hover:bg-bolt-elements-background-depth-2'
+        isSelected ? 'bg-amber-500/10' : 'hover:bg-recoder-elements-background-depth-2'
       )}
     >
       {/* Selection Indicator */}
@@ -289,7 +289,7 @@ function ModelItem({ model, isSelected, onSelect }: ModelItemProps) {
         {isSelected ? (
           <div className="i-ph:check-circle-fill text-amber-500" />
         ) : (
-          <div className="w-4 h-4 rounded-full border border-bolt-elements-borderColor" />
+          <div className="w-4 h-4 rounded-full border border-recoder-elements-borderColor" />
         )}
       </div>
 
@@ -300,7 +300,7 @@ function ModelItem({ model, isSelected, onSelect }: ModelItemProps) {
           <span
             className={classNames(
               'font-medium truncate',
-              isSelected ? 'text-amber-500' : 'text-bolt-elements-textPrimary'
+              isSelected ? 'text-amber-500' : 'text-recoder-elements-textPrimary'
             )}
           >
             {model.name}
@@ -320,14 +320,14 @@ function ModelItem({ model, isSelected, onSelect }: ModelItemProps) {
         </div>
 
         {/* Description */}
-        <p className="text-[11px] text-bolt-elements-textTertiary mt-0.5 line-clamp-1">
+        <p className="text-[11px] text-recoder-elements-textTertiary mt-0.5 line-clamp-1">
           {model.description}
         </p>
 
         {/* Metadata Row */}
         <div className="flex items-center gap-3 mt-1">
           {/* Context Window */}
-          <span className="text-[10px] text-bolt-elements-textTertiary flex items-center gap-1">
+          <span className="text-[10px] text-recoder-elements-textTertiary flex items-center gap-1">
             <div className="i-ph:stack" />
             {formatContextWindow(model.contextWindow)}
           </span>

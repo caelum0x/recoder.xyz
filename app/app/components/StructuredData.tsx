@@ -136,6 +136,177 @@ export function FAQPageSchema() {
   );
 }
 
+// ---------------------------------------------------------------------------
+// Platform Service Schemas (Product-level JSON-LD for each Recoder service)
+// ---------------------------------------------------------------------------
+
+interface PlatformServiceSchemaProps {
+  name: string;
+  description: string;
+  url: string;
+  applicationCategory: string;
+}
+
+/**
+ * Reusable component that renders a SoftwareApplication JSON-LD schema
+ * for a single platform service.
+ */
+export function PlatformServiceSchema({
+  name,
+  description,
+  url,
+  applicationCategory,
+}: PlatformServiceSchemaProps) {
+  const schema = {
+    '@context': 'https://schema.org',
+    '@type': 'SoftwareApplication',
+    name,
+    description,
+    url,
+    applicationCategory,
+    operatingSystem: 'Web',
+    offers: {
+      '@type': 'Offer',
+      price: '0',
+      priceCurrency: 'USD',
+      description: 'Free tier available',
+    },
+    isPartOf: {
+      '@type': 'SoftwareApplication',
+      name: 'Recoder.xyz',
+      url: 'https://recoder.xyz',
+    },
+  };
+
+  return (
+    <script
+      type="application/ld+json"
+      dangerouslySetInnerHTML={{ __html: JSON.stringify(schema) }}
+    />
+  );
+}
+
+// --- Individual service schema components ---
+
+export function RecoderStudioSchema() {
+  return (
+    <PlatformServiceSchema
+      name="Recoder Studio"
+      description="Visual AI workflow designer for building, simulating, and deploying AI agent pipelines with drag-and-drop interface, canary deployments, simulation gates, and real-time monitoring."
+      url="https://recoder.xyz/platform/studio"
+      applicationCategory="DeveloperApplication"
+    />
+  );
+}
+
+export function RecoderAgencySchema() {
+  return (
+    <PlatformServiceSchema
+      name="Recoder Agency"
+      description="Multi-agent orchestration platform for building, deploying, and managing collaborative AI agent workflows with role definitions, inter-agent communication, custom triggers, and performance monitoring."
+      url="https://recoder.xyz/platform/agency"
+      applicationCategory="DeveloperApplication"
+    />
+  );
+}
+
+export function RecoderFrontendSchema() {
+  return (
+    <PlatformServiceSchema
+      name="Recoder Frontend"
+      description="Autonomous AI coding environment with browser automation, sandboxed execution, multi-model support including Claude, GPT-4, and Gemini, Git integration, and end-to-end development workflow automation."
+      url="https://recoder.xyz/platform/frontend"
+      applicationCategory="DeveloperApplication"
+    />
+  );
+}
+
+export function RecoderWebSchema() {
+  return (
+    <PlatformServiceSchema
+      name="Recoder Web"
+      description="Browser-based AI IDE supporting 40+ AI models via BYOK, real-time preview, integrated terminal, WebContainer-based execution, and instant deployment for full-stack development."
+      url="https://recoder.xyz/platform/web"
+      applicationCategory="DeveloperApplication"
+    />
+  );
+}
+
+export function RecoderPMSchema() {
+  return (
+    <PlatformServiceSchema
+      name="Recoder PM"
+      description="AI-powered project management with task tracking, sprint management, AI agent task assignment, cross-platform coordination, project analytics, and workflow automation."
+      url="https://recoder.xyz/platform/pm"
+      applicationCategory="ProjectManagement"
+    />
+  );
+}
+
+export function RecoderBackendSchema() {
+  return (
+    <PlatformServiceSchema
+      name="Recoder Backend"
+      description="FastAPI AI processing engine handling multi-model orchestration, sandbox management, browser automation, file operations, and real-time agent execution with scalable async architecture."
+      url="https://recoder.xyz/platform/backend"
+      applicationCategory="DeveloperApplication"
+    />
+  );
+}
+
+export function OpenClawSchema() {
+  return (
+    <PlatformServiceSchema
+      name="OpenClaw"
+      description="Open-source AI agent framework with CLI workflow management, plugin and extension system, lane-based parallel execution, diagnostics, and JSON schema for DevOps automation."
+      url="https://recoder.xyz/platform/openclaw"
+      applicationCategory="DeveloperApplication"
+    />
+  );
+}
+
+export function RecoderAPISchema() {
+  return (
+    <PlatformServiceSchema
+      name="Recoder API"
+      description="Unified API gateway and task engine with real-time streaming, queue management, rate limiting, BYOK proxy, public API versioning, and A2A (Agent-to-Agent) protocol support."
+      url="https://recoder.xyz/platform/api"
+      applicationCategory="DeveloperApplication"
+    />
+  );
+}
+
+export function RecoderChatSchema() {
+  return (
+    <PlatformServiceSchema
+      name="Recoder Chat"
+      description="AI conversation interface for coding assistance with multi-AI model conversations, code context awareness, artifact generation, and cross-platform session synchronization."
+      url="https://recoder.xyz/platform/chat"
+      applicationCategory="DeveloperApplication"
+    />
+  );
+}
+
+/**
+ * Renders JSON-LD schemas for all platform services at once.
+ * Drop this into the platform layout to emit every service schema in one shot.
+ */
+export function AllPlatformServicesSchema() {
+  return (
+    <>
+      <RecoderStudioSchema />
+      <RecoderAgencySchema />
+      <RecoderFrontendSchema />
+      <RecoderWebSchema />
+      <RecoderPMSchema />
+      <RecoderBackendSchema />
+      <OpenClawSchema />
+      <RecoderAPISchema />
+      <RecoderChatSchema />
+    </>
+  );
+}
+
 export function BreadcrumbSchema({ items }: { items: Array<{ name: string; url: string }> }) {
   const schema = {
     '@context': 'https://schema.org',

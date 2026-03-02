@@ -134,7 +134,7 @@ export const FileSearchModal = memo(({ files, isOpen, onClose, onFileSelect }: P
       // Add non-matched text
       if (start > lastIndex) {
         parts.push(
-          <span key={`text-${i}`} className="text-bolt-elements-textSecondary">
+          <span key={`text-${i}`} className="text-recoder-elements-textSecondary">
             {path.slice(lastIndex, start)}
           </span>
         );
@@ -142,7 +142,7 @@ export const FileSearchModal = memo(({ files, isOpen, onClose, onFileSelect }: P
 
       // Add matched text with highlight
       parts.push(
-        <span key={`match-${i}`} className="text-bolt-elements-textPrimary font-semibold bg-bolt-elements-item-backgroundAccent/30">
+        <span key={`match-${i}`} className="text-recoder-elements-textPrimary font-semibold bg-recoder-elements-item-backgroundAccent/30">
           {path.slice(start, end + 1)}
         </span>
       );
@@ -153,7 +153,7 @@ export const FileSearchModal = memo(({ files, isOpen, onClose, onFileSelect }: P
     // Add remaining text
     if (lastIndex < path.length) {
       parts.push(
-        <span key="text-end" className="text-bolt-elements-textSecondary">
+        <span key="text-end" className="text-recoder-elements-textSecondary">
           {path.slice(lastIndex)}
         </span>
       );
@@ -173,19 +173,19 @@ export const FileSearchModal = memo(({ files, isOpen, onClose, onFileSelect }: P
       />
 
       {/* Modal */}
-      <div className="relative w-full max-w-2xl mx-4 bg-bolt-elements-background-depth-2 rounded-lg shadow-2xl border border-bolt-elements-borderColor overflow-hidden">
+      <div className="relative w-full max-w-2xl mx-4 bg-recoder-elements-background-depth-2 rounded-lg shadow-2xl border border-recoder-elements-borderColor overflow-hidden">
         {/* Search Input */}
-        <div className="flex items-center gap-3 px-4 py-3 border-b border-bolt-elements-borderColor">
-          <div className="i-ph:magnifying-glass text-xl text-bolt-elements-textTertiary" />
+        <div className="flex items-center gap-3 px-4 py-3 border-b border-recoder-elements-borderColor">
+          <div className="i-ph:magnifying-glass text-xl text-recoder-elements-textTertiary" />
           <input
             ref={inputRef}
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search files..."
-            className="flex-1 bg-transparent outline-none text-bolt-elements-textPrimary placeholder-bolt-elements-textTertiary"
+            className="flex-1 bg-transparent outline-none text-recoder-elements-textPrimary placeholder-recoder-elements-textTertiary"
           />
-          <kbd className="px-2 py-1 text-xs bg-bolt-elements-background-depth-1 rounded border border-bolt-elements-borderColor text-bolt-elements-textTertiary">
+          <kbd className="px-2 py-1 text-xs bg-recoder-elements-background-depth-1 rounded border border-recoder-elements-borderColor text-recoder-elements-textTertiary">
             Esc
           </kbd>
         </div>
@@ -196,13 +196,13 @@ export const FileSearchModal = memo(({ files, isOpen, onClose, onFileSelect }: P
           className="max-h-96 overflow-y-auto"
         >
           {query && results.length === 0 && (
-            <div className="px-4 py-8 text-center text-bolt-elements-textTertiary">
+            <div className="px-4 py-8 text-center text-recoder-elements-textTertiary">
               No files found
             </div>
           )}
 
           {!query && (
-            <div className="px-4 py-8 text-center text-bolt-elements-textTertiary">
+            <div className="px-4 py-8 text-center text-recoder-elements-textTertiary">
               Type to search files...
             </div>
           )}
@@ -213,14 +213,14 @@ export const FileSearchModal = memo(({ files, isOpen, onClose, onFileSelect }: P
               className={classNames(
                 'w-full px-4 py-2 text-left flex items-center gap-3 transition-colors',
                 {
-                  'bg-bolt-elements-item-backgroundAccent': index === selectedIndex,
-                  'hover:bg-bolt-elements-item-backgroundActive': index !== selectedIndex,
+                  'bg-recoder-elements-item-backgroundAccent': index === selectedIndex,
+                  'hover:bg-recoder-elements-item-backgroundActive': index !== selectedIndex,
                 }
               )}
               onClick={() => handleSelectFile(result.path)}
               onMouseEnter={() => setSelectedIndex(index)}
             >
-              <div className="i-ph:file-duotone text-lg text-bolt-elements-textTertiary shrink-0" />
+              <div className="i-ph:file-duotone text-lg text-recoder-elements-textTertiary shrink-0" />
               <div className="flex-1 truncate text-sm">
                 {highlightMatches(result.path, result.matches)}
               </div>
@@ -229,14 +229,14 @@ export const FileSearchModal = memo(({ files, isOpen, onClose, onFileSelect }: P
         </div>
 
         {/* Footer with keyboard hints */}
-        <div className="px-4 py-2 border-t border-bolt-elements-borderColor bg-bolt-elements-background-depth-1 flex items-center justify-between text-xs text-bolt-elements-textTertiary">
+        <div className="px-4 py-2 border-t border-recoder-elements-borderColor bg-recoder-elements-background-depth-1 flex items-center justify-between text-xs text-recoder-elements-textTertiary">
           <div className="flex items-center gap-4">
             <span className="flex items-center gap-1">
-              <kbd className="px-1.5 py-0.5 bg-bolt-elements-background-depth-2 rounded border border-bolt-elements-borderColor">↑↓</kbd>
+              <kbd className="px-1.5 py-0.5 bg-recoder-elements-background-depth-2 rounded border border-recoder-elements-borderColor">↑↓</kbd>
               Navigate
             </span>
             <span className="flex items-center gap-1">
-              <kbd className="px-1.5 py-0.5 bg-bolt-elements-background-depth-2 rounded border border-bolt-elements-borderColor">Enter</kbd>
+              <kbd className="px-1.5 py-0.5 bg-recoder-elements-background-depth-2 rounded border border-recoder-elements-borderColor">Enter</kbd>
               Select
             </span>
           </div>

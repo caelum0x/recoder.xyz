@@ -39,7 +39,7 @@ export async function scrapeUrl(
 	const res = await fetch(url, {
 		headers: {
 			"User-Agent":
-				"Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko; compatible; Giselle-User/1.0; +support@giselles.ai)",
+				"Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko; compatible; Recoder-User/1.0; +support@recoder.xyz)",
 		},
 	});
 	if (!res.ok) {

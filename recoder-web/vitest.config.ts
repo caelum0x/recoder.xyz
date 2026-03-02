@@ -14,7 +14,9 @@ export default defineConfig({
     include: ['tests/**/*.test.ts', 'app/**/*.test.ts'],
     exclude: ['node_modules', 'starters', 'app/lib/.server/llm/**'],
     coverage: {
-      reporter: ['text', 'json', 'html'],
+      provider: 'v8',
+      reporter: ['text', 'json-summary', 'json', 'html'],
+      reportsDirectory: './coverage',
       exclude: [
         'node_modules/',
         'starters/',
@@ -22,6 +24,12 @@ export default defineConfig({
         '**/*.d.ts',
         '**/*.config.*',
       ],
+      thresholds: {
+        lines: 50,
+        functions: 50,
+        branches: 40,
+        statements: 50,
+      },
     },
   },
   resolve: {

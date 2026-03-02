@@ -2,7 +2,7 @@ import {
 	type Generation,
 	isQueuedGeneration,
 	type RunningGeneration,
-} from "@giselles-ai/protocol";
+} from "@recoder/protocol";
 import type { GiselleContext } from "../types";
 import { generateContent } from "./generate-content";
 import { internalSetGeneration } from "./internal/set-generation";

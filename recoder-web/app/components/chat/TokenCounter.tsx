@@ -41,14 +41,14 @@ export function TokenCounter() {
       ? 'text-red-400'
       : percentage > 50
         ? 'text-yellow-400'
-        : 'text-bolt-elements-textSecondary';
+        : 'text-recoder-elements-textSecondary';
 
   const barColor =
     percentage > 80
       ? 'bg-red-400'
       : percentage > 50
         ? 'bg-yellow-400'
-        : 'bg-bolt-elements-borderColor';
+        : 'bg-recoder-elements-borderColor';
 
   return (
     <div className="relative" ref={panelRef}>
@@ -58,7 +58,7 @@ export function TokenCounter() {
         title={`${formatK(total)} / ${formatK(limit)} tokens (${percentage}%)`}
       >
         {/* Mini progress bar */}
-        <div className="w-12 h-1.5 bg-bolt-elements-background-depth-3 rounded-full overflow-hidden">
+        <div className="w-12 h-1.5 bg-recoder-elements-background-depth-3 rounded-full overflow-hidden">
           <div
             className={`h-full ${barColor} rounded-full transition-all`}
             style={{ width: `${Math.min(percentage, 100)}%` }}
@@ -68,8 +68,8 @@ export function TokenCounter() {
       </button>
 
       {showDetails && (
-        <div className="absolute bottom-full right-0 mb-2 p-3 rounded-lg bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor shadow-lg text-xs min-w-[220px] z-50">
-          <div className="font-medium text-bolt-elements-textPrimary mb-2">
+        <div className="absolute bottom-full right-0 mb-2 p-3 rounded-lg bg-recoder-elements-background-depth-2 border border-recoder-elements-borderColor shadow-lg text-xs min-w-[220px] z-50">
+          <div className="font-medium text-recoder-elements-textPrimary mb-2">
             Token Usage
           </div>
 
@@ -96,7 +96,7 @@ export function TokenCounter() {
             />
           </div>
 
-          <div className="mt-2 pt-2 border-t border-bolt-elements-borderColor flex justify-between text-bolt-elements-textPrimary">
+          <div className="mt-2 pt-2 border-t border-recoder-elements-borderColor flex justify-between text-recoder-elements-textPrimary">
             <span>Total</span>
             <span>
               {formatK(total)} / {formatK(limit)}
@@ -124,7 +124,7 @@ function TokenRow({
   const pct = total > 0 ? Math.round((tokens / total) * 100) : 0;
 
   return (
-    <div className="flex justify-between text-bolt-elements-textSecondary">
+    <div className="flex justify-between text-recoder-elements-textSecondary">
       <span>{label}</span>
       <span>
         {formatK(tokens)} ({pct}%)

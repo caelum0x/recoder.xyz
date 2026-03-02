@@ -1,1 +1,0 @@
-ALTER TABLE "user_seat_usage_reports" DROP COLUMN "is_delta";

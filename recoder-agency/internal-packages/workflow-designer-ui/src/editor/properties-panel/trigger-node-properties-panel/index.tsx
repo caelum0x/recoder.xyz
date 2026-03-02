@@ -1,4 +1,4 @@
-import type { TriggerNode } from "@giselles-ai/protocol";
+import type { TriggerNode } from "@recoder/protocol";
 import clsx from "clsx/lite";
 import { createContext, useContext, useState } from "react";
 import { useDeleteNode, useUpdateNodeData } from "../../../app-designer";
@@ -16,7 +16,7 @@ export function TriggerNodePropertiesPanel({ node }: { node: TriggerNode }) {
 			<NodePanelHeader
 				node={node}
 				onChangeName={(name) => updateNodeData(node, { name })}
-				docsUrl="https://docs.giselles.ai/en/glossary/trigger-node"
+				docsUrl="https://docs.recoder.xyz/en/glossary/trigger-node"
 				onDelete={() => deleteNode(node.id)}
 			/>
 			<PropertiesPanelContent>

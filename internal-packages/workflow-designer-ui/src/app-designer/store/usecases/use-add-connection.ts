@@ -4,7 +4,7 @@ import {
 	type InputId,
 	type NodeLike,
 	type OutputId,
-} from "@giselles-ai/protocol";
+} from "@recoder/protocol";
 import { useCallback } from "react";
 import { useWorkspaceActions } from "../hooks";
 import { useSyncAppConnectionStateIfNeeded } from "./use-sync-app-connection-state-if-needed";

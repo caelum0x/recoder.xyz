@@ -98,7 +98,7 @@ export function CloneUrlModal({ open, onClose, onCloneComplete }: CloneUrlModalP
         <div className="space-y-4">
           {/* URL Input */}
           <div>
-            <label className="block text-sm font-medium text-bolt-elements-textPrimary mb-2">
+            <label className="block text-sm font-medium text-recoder-elements-textPrimary mb-2">
               Website URL
             </label>
             <input
@@ -111,11 +111,11 @@ export function CloneUrlModal({ open, onClose, onCloneComplete }: CloneUrlModalP
               placeholder="https://example.com"
               disabled={isCloning}
               className={classNames(
-                'w-full px-3 py-2 rounded-lg text-bolt-elements-textPrimary',
-                'bg-bolt-elements-background-depth-3 border border-bolt-elements-borderColor',
-                'focus:ring-2 focus:ring-bolt-elements-focus focus:border-transparent',
+                'w-full px-3 py-2 rounded-lg text-recoder-elements-textPrimary',
+                'bg-recoder-elements-background-depth-3 border border-recoder-elements-borderColor',
+                'focus:ring-2 focus:ring-recoder-elements-focus focus:border-transparent',
                 'disabled:opacity-50 disabled:cursor-not-allowed',
-                'placeholder:text-bolt-elements-textTertiary'
+                'placeholder:text-recoder-elements-textTertiary'
               )}
               onKeyDown={(e) => {
                 if (e.key === 'Enter' && !isCloning) {
@@ -143,7 +143,7 @@ export function CloneUrlModal({ open, onClose, onCloneComplete }: CloneUrlModalP
           )}
 
           {/* Example URLs */}
-          <div className="text-xs text-bolt-elements-textTertiary">
+          <div className="text-xs text-recoder-elements-textTertiary">
             <span className="font-medium">Examples:</span> Landing pages, portfolios, marketing sites.
             <br />
             Note: Some sites may block cloning or have dynamic content that won't work.
@@ -157,8 +157,8 @@ export function CloneUrlModal({ open, onClose, onCloneComplete }: CloneUrlModalP
             disabled={isCloning}
             className={classNames(
               'px-4 py-2 rounded-lg transition-colors',
-              'bg-bolt-elements-button-secondary-background hover:bg-bolt-elements-button-secondary-backgroundHover',
-              'text-bolt-elements-button-secondary-text',
+              'bg-recoder-elements-button-secondary-background hover:bg-recoder-elements-button-secondary-backgroundHover',
+              'text-recoder-elements-button-secondary-text',
               'disabled:opacity-50 disabled:cursor-not-allowed'
             )}
           >

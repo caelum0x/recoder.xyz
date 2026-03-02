@@ -15,10 +15,10 @@ const requiredModules = [
 ];
 
 const requiredWorkspacePackages = [
-  "@giselles-ai/protocol",
-  "@giselles-ai/giselle",
-  "@giselles-ai/react",
-  "@giselles-ai/rag",
+  "@recoder/protocol",
+  "@recoder/giselle",
+  "@recoder/react",
+  "@recoder/rag",
 ];
 
 const missing = [];

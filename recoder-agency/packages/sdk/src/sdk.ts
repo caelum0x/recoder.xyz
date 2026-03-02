@@ -1,4 +1,4 @@
-import { App as AppSchema, type App as AppType } from "@giselles-ai/protocol";
+import { App as AppSchema, type App as AppType } from "@recoder/protocol";
 import {
 	ApiError,
 	ConfigurationError,
@@ -8,8 +8,8 @@ import {
 
 export type GiselleOptions = {
 	/**
-	 * Base URL of the Studio instance (e.g. "https://studio.giselles.ai").
-	 * Defaults to "https://studio.giselles.ai".
+	 * Base URL of the Studio instance (e.g. "https://studio.recoder.xyz").
+	 * Defaults to "https://studio.recoder.xyz".
 	 */
 	baseUrl?: string;
 	/**
@@ -91,7 +91,7 @@ export type AppListResult = {
 	apps: AppListItem[];
 };
 
-const defaultBaseUrl = "https://studio.giselles.ai";
+const defaultBaseUrl = "https://studio.recoder.xyz";
 const defaultPollIntervalMs = 1000;
 const defaultTimeoutMs = 20 * 60 * 1000;
 const maxInlineFileDecodedBytes = 1024 * 1024 * 3;

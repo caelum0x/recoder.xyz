@@ -1,18 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getSessionStats } from '@/lib/session-management';
-import { verify } from 'jsonwebtoken';
-
-const JWT_SECRET = process.env.JWT_SECRET!;
+import { getUserIdFromBearerAuthHeader } from '@/lib/auth/jwt-auth';
 
 async function authenticateRequest(request: NextRequest): Promise<string> {
-  const authHeader = request.headers.get('authorization');
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    throw new Error('Missing authorization header');
-  }
-  const token = authHeader.substring(7);
-  const decoded = verify(token, JWT_SECRET) as any;
-  return decoded.userId;
+  return getUserIdFromBearerAuthHeader(request.headers.get('authorization'));
 }
 
 export async function GET(request: NextRequest) {
@@ -53,7 +45,7 @@ export async function GET(request: NextRequest) {
       },
       activeSession: sessionStats.activeSession
     });
-  } catch (error) {
+  } catch (_error: unknown) {
     return NextResponse.json(
       { success: false, error: 'Unauthorized' },
       { status: 401 }
@@ -75,7 +67,7 @@ export async function PUT(request: NextRequest) {
     });
 
     return NextResponse.json({ success: true });
-  } catch (error) {
+  } catch (_error: unknown) {
     return NextResponse.json(
       { success: false, error: 'Unauthorized' },
       { status: 401 }

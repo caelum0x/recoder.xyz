@@ -543,10 +543,10 @@ recoder models install qwen2.5-coder:32b
 # =================================
 
 # API Keys for Cloud AI Models
-ANTHROPIC_API_KEY=sk-ant-api03-your-key-here
-GROQ_API_KEY=gsk_your-groq-key-here
-GOOGLE_API_KEY=AIza-your-google-key-here
-OPENAI_API_KEY=sk-your-openai-key-here
+ANTHROPIC_API_KEY=YOUR_ANTHROPIC_API_KEY
+GROQ_API_KEY=YOUR_GROQ_API_KEY
+GOOGLE_API_KEY=YOUR_GOOGLE_API_KEY
+OPENAI_API_KEY=YOUR_OPENAI_API_KEY
 
 # Local AI Configuration
 OLLAMA_BASE_URL=http://localhost:11434

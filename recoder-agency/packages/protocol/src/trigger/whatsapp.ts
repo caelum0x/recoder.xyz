@@ -1,4 +1,4 @@
-import { whatsappMessageReceivedEvent } from "@giselles-ai/trigger-registry";
+import { whatsappMessageReceivedEvent } from "@recoder/trigger-registry";
 import * as z from "zod/v4";
 
 const Provider = z.literal("whatsapp");

@@ -1,12 +1,12 @@
 import {
 	createGitHubPullRequestsLoader,
 	type GitHubAuthConfig,
-} from "@giselles-ai/github-tool";
-import type { EmbeddingProfileId } from "@giselles-ai/protocol";
+} from "@recoder/github-tool";
+import type { EmbeddingProfileId } from "@recoder/protocol";
 import {
 	createPipeline,
 	type EmbeddingCompleteCallback,
-} from "@giselles-ai/rag";
+} from "@recoder/rag";
 import { and, eq } from "drizzle-orm";
 import {
 	db,

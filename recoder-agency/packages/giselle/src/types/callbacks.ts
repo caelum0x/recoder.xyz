@@ -1,5 +1,5 @@
-import type { RunningGeneration, Trigger } from "@giselles-ai/protocol";
-import type { EmbeddingMetrics } from "@giselles-ai/rag";
+import type { RunningGeneration, Trigger } from "@recoder/protocol";
+import type { EmbeddingMetrics } from "@recoder/rag";
 import type { OnAppConnectionChange, OnAppCreate, OnAppDelete } from "../apps";
 import type {
 	GenerationMetadata,

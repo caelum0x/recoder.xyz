@@ -26,6 +26,7 @@ import { PromptLibraryPanel } from './PromptLibraryPanel';
 import { VercelPanel } from './VercelPanel';
 import { ProposalView } from './ProposalView';
 import { GitCollaboratorsPanel } from './GitCollaboratorsPanel';
+import { AgentTeamPanel } from './AgentTeamPanel';
 import { AgentPanel } from '~/components/agent/AgentPanel';
 import { agentSessionActive } from '~/lib/stores/agent-session';
 import { useLSPDiagnostics } from '~/lib/hooks/useLSPDiagnostics';
@@ -187,9 +188,9 @@ export const Workbench = memo(({ chatStarted, isStreaming }: WorkspaceProps) => 
   }, []);
 
   const [showVersionHistory, setShowVersionHistory] = useState(false);
-  const [activePanel, setActivePanel] = useState<'supabase' | 'database' | 'themes' | 'prompts' | 'vercel' | 'proposals' | 'collaborators' | null>(null);
+  const [activePanel, setActivePanel] = useState<'supabase' | 'database' | 'themes' | 'prompts' | 'vercel' | 'proposals' | 'collaborators' | 'agent-team' | null>(null);
 
-  const togglePanel = (panel: 'supabase' | 'database' | 'themes' | 'prompts' | 'vercel' | 'proposals' | 'collaborators') => {
+  const togglePanel = (panel: 'supabase' | 'database' | 'themes' | 'prompts' | 'vercel' | 'proposals' | 'collaborators' | 'agent-team') => {
     setActivePanel(prev => prev === panel ? null : panel);
   };
 
@@ -212,8 +213,8 @@ export const Workbench = memo(({ chatStarted, isStreaming }: WorkspaceProps) => 
           )}
         >
           <div className="absolute inset-0 px-6">
-            <div className="h-full flex flex-col bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor shadow-sm rounded-lg overflow-hidden">
-              <div className="flex items-center px-3 py-2 border-b border-bolt-elements-borderColor">
+            <div className="h-full flex flex-col bg-recoder-elements-background-depth-2 border border-recoder-elements-borderColor shadow-sm rounded-lg overflow-hidden">
+              <div className="flex items-center px-3 py-2 border-b border-recoder-elements-borderColor">
                 <Slider selected={selectedView} options={sliderOptions} setSelected={setSelectedView} />
                 <div className="ml-auto" />
                 {selectedView === 'code' && (
@@ -284,6 +285,13 @@ export const Workbench = memo(({ chatStarted, isStreaming }: WorkspaceProps) => 
                       <div className="i-ph:users-three" />
                     </PanelHeaderButton>
                     <PanelHeaderButton
+                      className={`mr-1 text-sm ${activePanel === 'agent-team' ? 'text-emerald-500' : ''}`}
+                      onClick={() => togglePanel('agent-team')}
+                      title="Agent Team"
+                    >
+                      <div className="i-ph:users" />
+                    </PanelHeaderButton>
+                    <PanelHeaderButton
                       className={`mr-1 text-sm ${activePanel === 'vercel' ? 'text-white' : ''}`}
                       onClick={() => togglePanel('vercel')}
                       title="Vercel"
@@ -334,16 +342,16 @@ export const Workbench = memo(({ chatStarted, isStreaming }: WorkspaceProps) => 
 
                 {/* Agent Panel overlay */}
                 {isAgentActive && (
-                  <div className="absolute inset-0 z-30 bg-bolt-elements-background-depth-2 border-l border-bolt-elements-borderColor overflow-hidden">
+                  <div className="absolute inset-0 z-30 bg-recoder-elements-background-depth-2 border-l border-recoder-elements-borderColor overflow-hidden">
                     <AgentPanel />
                   </div>
                 )}
 
                 {/* Integration & Theme Panels (slide over code view) */}
                 {activePanel && (
-                  <div className="absolute inset-0 z-20 bg-bolt-elements-background-depth-2 border-l border-bolt-elements-borderColor overflow-hidden">
-                    <div className="flex items-center justify-between px-3 py-2 border-b border-bolt-elements-borderColor">
-                      <span className="text-sm font-medium text-bolt-elements-textPrimary">
+                  <div className="absolute inset-0 z-20 bg-recoder-elements-background-depth-2 border-l border-recoder-elements-borderColor overflow-hidden">
+                    <div className="flex items-center justify-between px-3 py-2 border-b border-recoder-elements-borderColor">
+                      <span className="text-sm font-medium text-recoder-elements-textPrimary">
                         {activePanel === 'supabase' && 'Supabase'}
                         {activePanel === 'database' && 'Database'}
                         {activePanel === 'themes' && 'Themes'}
@@ -351,6 +359,7 @@ export const Workbench = memo(({ chatStarted, isStreaming }: WorkspaceProps) => 
                         {activePanel === 'vercel' && 'Vercel'}
                         {activePanel === 'proposals' && 'Proposals'}
                         {activePanel === 'collaborators' && 'Collaborators'}
+                        {activePanel === 'agent-team' && 'Agent Team'}
                       </span>
                       <IconButton
                         icon="i-ph:x"
@@ -366,6 +375,7 @@ export const Workbench = memo(({ chatStarted, isStreaming }: WorkspaceProps) => 
                       {activePanel === 'vercel' && <VercelPanel />}
                       {activePanel === 'proposals' && <ProposalView />}
                       {activePanel === 'collaborators' && <GitCollaboratorsPanel />}
+                      {activePanel === 'agent-team' && <AgentTeamPanel />}
                     </div>
                   </div>
                 )}

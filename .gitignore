@@ -5,6 +5,9 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
+# Backup files
+*.bak
+
 # Production builds
 dist/
 build/
@@ -41,6 +44,16 @@ backend/.env.production
 packages/cli/.env.production
 packages/recoder-cli-router/.env.production
 .env.domain
+.env.launch-template
+UNIFIED_AUTH_CONFIG.env
+
+# Render deployment configs (contain hardcoded secrets, unused — deploy is Hetzner)
+render.yaml
+render-*.yaml
+
+# Test files with hardcoded DB connections
+test-db-connection.js
+test-e2e-subscription-api.js
 
 # Recoder extension environment files
 recoder-extension/.env*
@@ -233,6 +246,7 @@ test-results.xml
 tmp/
 temp/
 .tmp/
+*.bak
 
 # Database
 *.db

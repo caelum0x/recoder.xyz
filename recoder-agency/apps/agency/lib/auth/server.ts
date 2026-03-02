@@ -2,10 +2,7 @@ import "server-only";
 import { eq } from "drizzle-orm";
 import { cookies } from "next/headers";
 import { cache } from "react";
-import {
-	verifySessionToken,
-	SESSION_COOKIE_NAMES,
-} from "@recoder/auth/session";
+import { verifySession } from "@recoder/auth/verify";
 import { db, type UserId, users } from "@/db";
 
 type SessionUser = {
@@ -28,15 +25,9 @@ export const getSessionUser = cache(_getSessionUser);
 
 export async function getSessionUserOrNull(): Promise<SessionUser | null> {
 	const cookieStore = await cookies();
-	const rawToken =
-		cookieStore.get(SESSION_COOKIE_NAMES[0])?.value ??
-		cookieStore.get(SESSION_COOKIE_NAMES[1])?.value;
-
-	if (!rawToken) {
-		return null;
-	}
-
-	const session = await verifySessionToken(rawToken);
+	const session = await verifySession(
+		(name) => cookieStore.get(name)?.value ?? null,
+	);
 
 	if (!session) {
 		return null;

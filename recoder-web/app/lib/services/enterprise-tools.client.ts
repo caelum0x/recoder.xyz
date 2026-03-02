@@ -11,6 +11,12 @@ interface ToolResponse<T = any> {
   [key: string]: T | boolean | string | undefined;
 }
 
+function getDesktopBridge(): RecoderDesktopBridge | null {
+  if (typeof window === 'undefined') return null;
+  if (!window.recoderDesktop?.isDesktop) return null;
+  return window.recoderDesktop;
+}
+
 async function callTool<T>(tool: string, params: Record<string, any>): Promise<ToolResponse<T>> {
   try {
     const response = await fetch(API_ENDPOINT, {
@@ -86,6 +92,62 @@ export async function delegateSubagent(
   context?: any,
   options?: { paths?: string[]; continuous?: boolean; projectId?: string }
 ) {
+  const desktopBridge = getDesktopBridge();
+  if (desktopBridge?.delegateTask) {
+    try {
+      const delegated = await desktopBridge.delegateTask({
+        task,
+        agentId: `${agentType}-agent`,
+        targetName: `${agentType} subagent`,
+        targetPlatform: 'custom',
+        threadId: options?.projectId || 'desktop-thread',
+        metadata: {
+          context: context ?? null,
+          paths: options?.paths ?? [],
+          continuous: options?.continuous !== false,
+        },
+      });
+
+      if (!delegated?.success) {
+        return {
+          success: false,
+          error: delegated?.error || 'Desktop delegated task failed',
+        };
+      }
+
+      let status = 'queued';
+      if (delegated.jobId && desktopBridge.pollDelegatedTaskStatus) {
+        const polled = await desktopBridge.pollDelegatedTaskStatus({
+          jobId: delegated.jobId,
+          intervalMs: 2000,
+          timeoutMs: 45000,
+        });
+        if (polled?.success) {
+          status = polled.status || (polled.complete ? 'completed' : 'pending');
+        }
+      }
+
+      return {
+        success: true,
+        output: `Delegated via desktop bridge (job ${delegated.jobId || 'n/a'}) status=${status}`,
+        message: `Delegated to ${agentType}: ${task}`,
+        source: 'desktop-bridge',
+        backend: {
+          endpoint: 'ipc://agent:delegateTask',
+          contract: 'a2a-bridge-v1',
+          contractStatus: 'match',
+          attempts: 1,
+          maxAttempts: 1,
+        },
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Desktop bridge error',
+      };
+    }
+  }
+
   return callTool('delegateSubagent', { agentType, task, context, ...options });
 }
 

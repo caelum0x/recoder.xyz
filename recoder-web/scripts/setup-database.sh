@@ -1,15 +1,15 @@
 #!/bin/bash
 
-# Database Setup Script for Bolt.new
+# Database Setup Script for Recoder Web
 # This script initializes the Neon database with all required tables
 
 set -e  # Exit on error
 
-echo "🚀 Setting up Bolt.new Database..."
+echo "🚀 Setting up Recoder Web Database..."
 echo ""
 
-# Database URL
-DB_URL="postgresql://neondb_owner:npg_e2mFob8SaEOV@ep-silent-mode-adii0v0d-pooler.us-east-1.aws.neon.tech/neondb?sslmode=require"
+# Database URL — must be set in environment
+DB_URL="${DATABASE_URL:?DATABASE_URL environment variable is required}"
 
 echo "📡 Connecting to Neon database..."
 

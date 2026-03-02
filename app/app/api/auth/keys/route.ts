@@ -6,6 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth-helpers';
 import { prisma } from '@/lib/prisma';
+import { logger } from '@/lib/logger';
 
 export async function GET(request: NextRequest) {
   try {
@@ -33,7 +34,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ keys });
   } catch (error) {
-    console.error('Failed to fetch API keys:', error);
+    logger.error('Failed to fetch API keys:', { error: String(error), route: 'auth/keys' });
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

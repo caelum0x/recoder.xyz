@@ -1,7 +1,7 @@
 import {
 	type GitHubActionId,
 	githubActions,
-} from "@giselles-ai/action-registry";
+} from "@recoder/action-registry";
 import {
 	createDiscussionComment,
 	createIssue,
@@ -13,7 +13,7 @@ import {
 	getRepositoryFullname,
 	replyPullRequestReviewComment,
 	updatePullRequest,
-} from "@giselles-ai/github-tool";
+} from "@recoder/github-tool";
 import {
 	type GenerationContext,
 	type GenerationOutput,
@@ -26,11 +26,11 @@ import {
 	type QueuedGeneration,
 	type SlackActionConfiguredState,
 	type WhatsAppActionConfiguredState,
-} from "@giselles-ai/protocol";
+} from "@recoder/protocol";
 import {
 	isJsonContent,
 	jsonContentToText,
-} from "@giselles-ai/text-editor-utils";
+} from "@recoder/text-editor-utils";
 import { useGenerationExecutor } from "../generations/internal/use-generation-executor";
 import type { AppEntryResolver } from "../generations/types";
 import { sendSlackMessage, sendSlackReply } from "../slack/execute-action";

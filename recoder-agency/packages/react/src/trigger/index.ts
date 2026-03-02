@@ -1,4 +1,4 @@
-import type { Trigger } from "@giselles-ai/protocol";
+import type { Trigger } from "@recoder/protocol";
 import { createContext, useContext } from "react";
 
 type TriggerUpdateCallback = (trigger: Trigger) => Promise<void>;

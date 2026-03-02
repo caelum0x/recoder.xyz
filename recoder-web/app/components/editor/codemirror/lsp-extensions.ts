@@ -150,10 +150,10 @@ function createHoverTooltip(pos: number, hover: LSPHover): Tooltip {
         overflow: auto;
         font-family: ui-monospace, 'SF Mono', Menlo, Monaco, monospace;
         white-space: pre-wrap;
-        background: var(--bolt-elements-background-depth-3, #1e1e1e);
-        border: 1px solid var(--bolt-elements-borderColor, #333);
+        background: var(--recoder-elements-background-depth-3, #1e1e1e);
+        border: 1px solid var(--recoder-elements-borderColor, #333);
         border-radius: 6px;
-        color: var(--bolt-elements-textPrimary, #e1e1e1);
+        color: var(--recoder-elements-textPrimary, #e1e1e1);
         box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
         line-height: 1.5;
       `;
@@ -342,7 +342,7 @@ const hoverUnderlineField = StateField.define<DecorationSet>({
 const hoverUnderlineStyles = EditorView.baseTheme({
   '.cm-definition-underline': {
     textDecoration: 'underline',
-    textDecorationColor: 'var(--bolt-elements-textLink, #60a5fa)',
+    textDecorationColor: 'var(--recoder-elements-textLink, #60a5fa)',
     textUnderlineOffset: '2px',
     cursor: 'pointer',
   },
@@ -507,8 +507,8 @@ function showContextMenu(
     left: ${x}px;
     top: ${y}px;
     z-index: 9999;
-    background: var(--bolt-elements-background-depth-3, #1e1e1e);
-    border: 1px solid var(--bolt-elements-borderColor, #333);
+    background: var(--recoder-elements-background-depth-3, #1e1e1e);
+    border: 1px solid var(--recoder-elements-borderColor, #333);
     border-radius: 6px;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
     padding: 4px 0;
@@ -526,15 +526,15 @@ function showContextMenu(
       justify-content: space-between;
       padding: 6px 12px;
       cursor: pointer;
-      color: var(--bolt-elements-textPrimary, #e1e1e1);
+      color: var(--recoder-elements-textPrimary, #e1e1e1);
       transition: background-color 0.1s;
     `;
     item.innerHTML = `
       <span>${label}</span>
-      <span style="color: var(--bolt-elements-textTertiary, #888); font-size: 11px; margin-left: 24px;">${shortcut}</span>
+      <span style="color: var(--recoder-elements-textTertiary, #888); font-size: 11px; margin-left: 24px;">${shortcut}</span>
     `;
     item.addEventListener('mouseenter', () => {
-      item.style.backgroundColor = 'var(--bolt-elements-background-depth-4, #333)';
+      item.style.backgroundColor = 'var(--recoder-elements-background-depth-4, #333)';
     });
     item.addEventListener('mouseleave', () => {
       item.style.backgroundColor = 'transparent';
@@ -557,7 +557,7 @@ function showContextMenu(
   const separator = document.createElement('div');
   separator.style.cssText = `
     height: 1px;
-    background: var(--bolt-elements-borderColor, #333);
+    background: var(--recoder-elements-borderColor, #333);
     margin: 4px 0;
   `;
   menu.appendChild(separator);

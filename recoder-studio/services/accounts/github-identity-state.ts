@@ -1,5 +1,5 @@
 import type { components } from "@octokit/openapi-types";
-import { getUser } from "@/lib/supabase";
+import { getUser } from "@/lib/auth/user";
 import {
 	buildGitHubUserClient,
 	type GitHubUserClient,

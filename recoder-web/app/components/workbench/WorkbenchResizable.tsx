@@ -18,13 +18,13 @@ export function WorkbenchResizable({ editor, terminal, preview }: WorkbenchResiz
   return (
     <div className="h-full w-full flex flex-col">
       {/* Layout Toggle */}
-      <div className="flex items-center gap-2 p-2 border-b border-bolt-elements-borderColor bg-bolt-elements-background-depth-2">
+      <div className="flex items-center gap-2 p-2 border-b border-recoder-elements-borderColor bg-recoder-elements-background-depth-2">
         <button
           onClick={() => setLayout('vertical')}
           className={`px-3 py-1 text-xs rounded ${
             layout === 'vertical'
-              ? 'bg-bolt-elements-item-backgroundActive text-bolt-elements-item-contentActive'
-              : 'hover:bg-bolt-elements-item-backgroundHover'
+              ? 'bg-recoder-elements-item-backgroundActive text-recoder-elements-item-contentActive'
+              : 'hover:bg-recoder-elements-item-backgroundHover'
           }`}
         >
           Vertical Split
@@ -33,8 +33,8 @@ export function WorkbenchResizable({ editor, terminal, preview }: WorkbenchResiz
           onClick={() => setLayout('horizontal')}
           className={`px-3 py-1 text-xs rounded ${
             layout === 'horizontal'
-              ? 'bg-bolt-elements-item-backgroundActive text-bolt-elements-item-contentActive'
-              : 'hover:bg-bolt-elements-item-backgroundHover'
+              ? 'bg-recoder-elements-item-backgroundActive text-recoder-elements-item-contentActive'
+              : 'hover:bg-recoder-elements-item-backgroundHover'
           }`}
         >
           Horizontal Split
@@ -48,7 +48,7 @@ export function WorkbenchResizable({ editor, terminal, preview }: WorkbenchResiz
             leftPanel={
               <div className="h-full flex flex-col">
                 <div className="flex-1 overflow-hidden">{editor}</div>
-                <div className="h-64 border-t border-bolt-elements-borderColor overflow-hidden">
+                <div className="h-64 border-t border-recoder-elements-borderColor overflow-hidden">
                   {terminal}
                 </div>
               </div>
@@ -67,7 +67,7 @@ export function WorkbenchResizable({ editor, terminal, preview }: WorkbenchResiz
               minLeftWidth={30}
               maxLeftWidth={70}
             />
-            <div className="h-64 border-t border-bolt-elements-borderColor overflow-hidden">
+            <div className="h-64 border-t border-recoder-elements-borderColor overflow-hidden">
               {terminal}
             </div>
           </div>

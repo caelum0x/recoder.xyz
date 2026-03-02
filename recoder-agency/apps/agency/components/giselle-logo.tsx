@@ -1,26 +1,20 @@
-import type { FC, SVGProps } from "react";
+import type { FC, ImgHTMLAttributes } from "react";
 
-export const GiselleLogo: FC<SVGProps<SVGSVGElement>> = (props) => {
+type RecoderAgencyLogoProps = ImgHTMLAttributes<HTMLImageElement>;
+
+export const RecoderAgencyLogo: FC<RecoderAgencyLogoProps> = ({
+	className,
+	...props
+}) => {
 	return (
-		<svg
+		<img
 			{...props}
-			width="180"
-			height="40"
-			viewBox="0 0 180 40"
-			fill="none"
-			xmlns="http://www.w3.org/2000/svg"
-		>
-			<title>Recoder Agency</title>
-			<text
-				x="0"
-				y="30"
-				fontFamily="var(--font-dm-sans), system-ui, sans-serif"
-				fontSize="28"
-				fontWeight="700"
-				fill="currentColor"
-			>
-				recoder
-			</text>
-		</svg>
+			src="/logo.png"
+			alt="Recoder Agency Logo"
+			className={className}
+		/>
 	);
 };
+
+// Backward compatibility alias for legacy imports.
+export const GiselleLogo = RecoderAgencyLogo;

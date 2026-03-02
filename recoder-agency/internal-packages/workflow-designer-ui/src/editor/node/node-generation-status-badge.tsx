@@ -1,4 +1,4 @@
-import type { NodeLike } from "@giselles-ai/protocol";
+import type { NodeLike } from "@recoder/protocol";
 import clsx from "clsx/lite";
 import { CheckIcon, SquareIcon } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";

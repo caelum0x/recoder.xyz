@@ -1,9 +1,9 @@
-import type { NodeLike } from "@giselles-ai/protocol";
+import type { NodeLike } from "@recoder/protocol";
 import {
 	isActionNode,
 	isTriggerNode,
 	isVectorStoreNode,
-} from "@giselles-ai/protocol";
+} from "@recoder/protocol";
 import type { ReactElement } from "react";
 import { useGitHubVectorStoreStatus } from "../../lib/use-github-vector-store-status";
 import {
@@ -18,14 +18,15 @@ export function GitHubNodeInfo({
 }: {
 	node: NodeLike;
 }): ReactElement | null {
+	const unknownNode = node as any;
 	const { isOrphaned: isVectorStoreOrphaned, isEmbeddingProfileOrphaned } =
 		useGitHubVectorStoreStatus(node);
 
 	if (isTriggerNode(node, "github")) {
-		return node.content.state.status === "configured" ? (
+		return unknownNode.content?.state?.status === "configured" ? (
 			<div className="px-[16px] relative">
 				<GitHubRepositoryBadgeFromTrigger
-					triggerId={node.content.state.flowTriggerId}
+					triggerId={unknownNode.content.state.flowTriggerId}
 				/>
 			</div>
 		) : (
@@ -34,11 +35,28 @@ export function GitHubNodeInfo({
 	}
 
 	if (isActionNode(node, "github")) {
-		return node.content.command.state.status === "configured" ? (
+		const command = unknownNode.content?.command as
+			| {
+					state?: {
+						status?: string;
+						installationId?: number | string;
+						repositoryNodeId?: string;
+					};
+			  }
+			| undefined;
+		const installationId = Number(command?.state?.installationId);
+		const repositoryNodeId = command?.state?.repositoryNodeId;
+		const isConfiguredRepo =
+			command?.state?.status === "configured" &&
+			Number.isFinite(installationId) &&
+			typeof repositoryNodeId === "string" &&
+			repositoryNodeId.length > 0;
+
+		return isConfiguredRepo ? (
 			<div className="px-[16px] relative">
 				<GitHubRepositoryBadgeFromRepo
-					installationId={node.content.command.state.installationId}
-					repositoryNodeId={node.content.command.state.repositoryNodeId}
+					installationId={installationId}
+					repositoryNodeId={repositoryNodeId}
 				/>
 			</div>
 		) : (
@@ -47,13 +65,13 @@ export function GitHubNodeInfo({
 	}
 
 	if (isVectorStoreNode(node, "github")) {
-		return node.content.source.state.status === "configured" &&
+		return unknownNode.content?.source?.state?.status === "configured" &&
 			!isVectorStoreOrphaned &&
 			!isEmbeddingProfileOrphaned ? (
 			<div className="px-[16px] relative">
 				<GitHubRepositoryBadge
-					owner={node.content.source.state.owner}
-					repo={node.content.source.state.repo}
+					owner={unknownNode.content.source.state.owner}
+					repo={unknownNode.content.source.state.repo}
 					nodeType="vectorStore"
 				/>
 			</div>

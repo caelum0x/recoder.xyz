@@ -8,7 +8,7 @@ import {
 	isEndNode,
 	type NodeId,
 	type NodeLike,
-} from "@giselles-ai/protocol";
+} from "@recoder/protocol";
 import {
 	createContext,
 	useCallback,

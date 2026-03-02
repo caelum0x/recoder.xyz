@@ -1,6 +1,6 @@
 #!/bin/bash
 
-echo "🚀 Starting Bolt.new development server with 504 error prevention..."
+echo "🚀 Starting Recoder Web development server with 504 error prevention..."
 
 # Stop any running instances
 pkill -f "remix vite:dev" 2>/dev/null || true

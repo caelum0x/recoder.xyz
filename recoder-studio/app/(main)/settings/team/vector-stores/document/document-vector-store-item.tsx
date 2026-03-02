@@ -9,9 +9,9 @@ import {
 	DialogFooter,
 	DialogHeader,
 	DialogTitle,
-} from "@giselle-internal/ui/dialog";
-import { useToasts } from "@giselle-internal/ui/toast";
-import { DEFAULT_EMBEDDING_PROFILE_ID } from "@giselles-ai/protocol";
+} from "@recoder-internal/ui/dialog";
+import { useToasts } from "@recoder-internal/ui/toast";
+import { DEFAULT_EMBEDDING_PROFILE_ID } from "@recoder/protocol";
 import * as Tooltip from "@radix-ui/react-tooltip";
 import clsx from "clsx/lite";
 import {

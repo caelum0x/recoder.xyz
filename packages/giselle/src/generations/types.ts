@@ -1,4 +1,4 @@
-import type { FileData, NodeId, OutputId } from "@giselles-ai/protocol";
+import type { FileData, NodeId, OutputId } from "@recoder/protocol";
 import type { DataContent, FilePart, ImagePart, TextPart, ToolSet } from "ai";
 
 export type PreparedToolSet = {

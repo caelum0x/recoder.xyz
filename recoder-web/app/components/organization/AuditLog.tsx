@@ -192,31 +192,31 @@ export const AuditLog = memo(({ organizationId, onBack }: AuditLogProps) => {
   const hasActiveFilters = selectedActionTypes.length > 0 || selectedActorId || startDate || endDate;
 
   return (
-    <div className="flex flex-col h-full overflow-hidden bg-bolt-elements-background-depth-1">
+    <div className="flex flex-col h-full overflow-hidden bg-recoder-elements-background-depth-1">
       {/* Header */}
-      <div className="border-b border-bolt-elements-borderColor bg-bolt-elements-background-depth-2 px-6 py-4 shrink-0">
+      <div className="border-b border-recoder-elements-borderColor bg-recoder-elements-background-depth-2 px-6 py-4 shrink-0">
         <div className="flex items-center gap-4">
           {onBack && (
             <button
               onClick={onBack}
-              className="p-2 text-bolt-elements-textTertiary hover:text-bolt-elements-textPrimary rounded-lg hover:bg-bolt-elements-background-depth-3 transition-colors"
+              className="p-2 text-recoder-elements-textTertiary hover:text-recoder-elements-textPrimary rounded-lg hover:bg-recoder-elements-background-depth-3 transition-colors"
             >
               <span className="i-ph:arrow-left text-lg" />
             </button>
           )}
           <div className="flex-1">
-            <h1 className="text-xl font-semibold text-bolt-elements-textPrimary flex items-center gap-2">
+            <h1 className="text-xl font-semibold text-recoder-elements-textPrimary flex items-center gap-2">
               <span className="i-ph:scroll" />
               Audit Log
             </h1>
-            <p className="text-sm text-bolt-elements-textTertiary mt-0.5">
+            <p className="text-sm text-recoder-elements-textTertiary mt-0.5">
               Track all organization activity for compliance and security
             </p>
           </div>
           <button
             onClick={handleExport}
             disabled={exporting || filteredEntries.length === 0}
-            className="flex items-center gap-2 px-4 py-2 bg-bolt-elements-background-depth-2 hover:bg-bolt-elements-background-depth-3 disabled:opacity-50 text-bolt-elements-textTertiary text-sm font-medium rounded-lg transition-colors border border-bolt-elements-borderColor"
+            className="flex items-center gap-2 px-4 py-2 bg-recoder-elements-background-depth-2 hover:bg-recoder-elements-background-depth-3 disabled:opacity-50 text-recoder-elements-textTertiary text-sm font-medium rounded-lg transition-colors border border-recoder-elements-borderColor"
           >
             {exporting ? (
               <span className="i-ph:spinner animate-spin" />
@@ -229,17 +229,17 @@ export const AuditLog = memo(({ organizationId, onBack }: AuditLogProps) => {
       </div>
 
       {/* Search and Filters Bar */}
-      <div className="px-6 py-3 border-b border-bolt-elements-borderColor bg-bolt-elements-background-depth-2 shrink-0">
+      <div className="px-6 py-3 border-b border-recoder-elements-borderColor bg-recoder-elements-background-depth-2 shrink-0">
         <div className="flex items-center gap-3">
           {/* Search */}
           <div className="relative flex-1 max-w-md">
-            <span className="i-ph:magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-bolt-elements-textTertiary" />
+            <span className="i-ph:magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-recoder-elements-textTertiary" />
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search by actor, target, or action..."
-              className="w-full pl-10 pr-3 py-2 bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor rounded-lg text-sm text-bolt-elements-textPrimary placeholder:text-bolt-elements-textTertiary focus:border-blue-500 focus:outline-none"
+              className="w-full pl-10 pr-3 py-2 bg-recoder-elements-background-depth-2 border border-recoder-elements-borderColor rounded-lg text-sm text-recoder-elements-textPrimary placeholder:text-recoder-elements-textTertiary focus:border-blue-500 focus:outline-none"
             />
           </div>
 
@@ -250,7 +250,7 @@ export const AuditLog = memo(({ organizationId, onBack }: AuditLogProps) => {
               'flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors border',
               showFilters || hasActiveFilters
                 ? 'bg-blue-500/20 border-blue-500/50 text-blue-300'
-                : 'bg-bolt-elements-background-depth-2 border-bolt-elements-borderColor text-bolt-elements-textTertiary hover:border-bolt-elements-borderColorActive'
+                : 'bg-recoder-elements-background-depth-2 border-recoder-elements-borderColor text-recoder-elements-textTertiary hover:border-recoder-elements-borderColorActive'
             )}
           >
             <span className="i-ph:funnel" />
@@ -271,7 +271,7 @@ export const AuditLog = memo(({ organizationId, onBack }: AuditLogProps) => {
           <button
             onClick={() => loadAuditLog()}
             disabled={loading.auditLog}
-            className="p-2 text-bolt-elements-textTertiary hover:text-bolt-elements-textPrimary rounded-lg hover:bg-bolt-elements-background-depth-3 transition-colors"
+            className="p-2 text-recoder-elements-textTertiary hover:text-recoder-elements-textPrimary rounded-lg hover:bg-recoder-elements-background-depth-3 transition-colors"
             title="Refresh"
           >
             <span className={classNames('i-ph:arrows-clockwise', loading.auditLog && 'animate-spin')} />
@@ -280,17 +280,17 @@ export const AuditLog = memo(({ organizationId, onBack }: AuditLogProps) => {
 
         {/* Expanded Filters */}
         {showFilters && (
-          <div className="mt-4 p-4 bg-bolt-elements-background-depth-2 rounded-lg">
+          <div className="mt-4 p-4 bg-recoder-elements-background-depth-2 rounded-lg">
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
               {/* Action Type Filter */}
               <div className="md:col-span-2">
-                <label className="block text-xs font-medium text-bolt-elements-textTertiary mb-2">
+                <label className="block text-xs font-medium text-recoder-elements-textTertiary mb-2">
                   Action Types
                 </label>
                 <div className="flex flex-wrap gap-1.5 max-h-32 overflow-auto">
                   {Object.entries(ACTION_CATEGORIES).map(([category, actions]) => (
                     <div key={category} className="w-full">
-                      <span className="text-xs text-bolt-elements-textTertiary">{category}</span>
+                      <span className="text-xs text-recoder-elements-textTertiary">{category}</span>
                       <div className="flex flex-wrap gap-1 mt-1">
                         {actions.map((action) => (
                           <button
@@ -300,7 +300,7 @@ export const AuditLog = memo(({ organizationId, onBack }: AuditLogProps) => {
                               'px-2 py-1 text-xs rounded transition-colors',
                               selectedActionTypes.includes(action)
                                 ? 'bg-blue-500/30 text-blue-300'
-                                : 'bg-bolt-elements-background-depth-3 text-bolt-elements-textTertiary hover:text-bolt-elements-textSecondary'
+                                : 'bg-recoder-elements-background-depth-3 text-recoder-elements-textTertiary hover:text-recoder-elements-textSecondary'
                             )}
                           >
                             {ACTION_LABELS[action]}
@@ -314,13 +314,13 @@ export const AuditLog = memo(({ organizationId, onBack }: AuditLogProps) => {
 
               {/* Actor Filter */}
               <div>
-                <label className="block text-xs font-medium text-bolt-elements-textTertiary mb-2">
+                <label className="block text-xs font-medium text-recoder-elements-textTertiary mb-2">
                   Actor
                 </label>
                 <select
                   value={selectedActorId}
                   onChange={(e) => setSelectedActorId(e.target.value)}
-                  className="w-full px-3 py-2 bg-bolt-elements-background-depth-3 border border-bolt-elements-borderColor rounded-lg text-sm text-bolt-elements-textPrimary focus:border-blue-500 focus:outline-none"
+                  className="w-full px-3 py-2 bg-recoder-elements-background-depth-3 border border-recoder-elements-borderColor rounded-lg text-sm text-recoder-elements-textPrimary focus:border-blue-500 focus:outline-none"
                 >
                   <option value="">All members</option>
                   {members.map((member) => (
@@ -333,7 +333,7 @@ export const AuditLog = memo(({ organizationId, onBack }: AuditLogProps) => {
 
               {/* Date Range */}
               <div>
-                <label className="block text-xs font-medium text-bolt-elements-textTertiary mb-2">
+                <label className="block text-xs font-medium text-recoder-elements-textTertiary mb-2">
                   Date Range
                 </label>
                 <div className="space-y-2">
@@ -341,14 +341,14 @@ export const AuditLog = memo(({ organizationId, onBack }: AuditLogProps) => {
                     type="date"
                     value={startDate}
                     onChange={(e) => setStartDate(e.target.value)}
-                    className="w-full px-3 py-1.5 bg-bolt-elements-background-depth-3 border border-bolt-elements-borderColor rounded-lg text-sm text-bolt-elements-textPrimary focus:border-blue-500 focus:outline-none"
+                    className="w-full px-3 py-1.5 bg-recoder-elements-background-depth-3 border border-recoder-elements-borderColor rounded-lg text-sm text-recoder-elements-textPrimary focus:border-blue-500 focus:outline-none"
                     placeholder="Start date"
                   />
                   <input
                     type="date"
                     value={endDate}
                     onChange={(e) => setEndDate(e.target.value)}
-                    className="w-full px-3 py-1.5 bg-bolt-elements-background-depth-3 border border-bolt-elements-borderColor rounded-lg text-sm text-bolt-elements-textPrimary focus:border-blue-500 focus:outline-none"
+                    className="w-full px-3 py-1.5 bg-recoder-elements-background-depth-3 border border-recoder-elements-borderColor rounded-lg text-sm text-recoder-elements-textPrimary focus:border-blue-500 focus:outline-none"
                     placeholder="End date"
                   />
                 </div>
@@ -356,10 +356,10 @@ export const AuditLog = memo(({ organizationId, onBack }: AuditLogProps) => {
             </div>
 
             {/* Filter Actions */}
-            <div className="flex items-center justify-end gap-2 mt-4 pt-4 border-t border-bolt-elements-borderColor">
+            <div className="flex items-center justify-end gap-2 mt-4 pt-4 border-t border-recoder-elements-borderColor">
               <button
                 onClick={handleClearFilters}
-                className="px-3 py-1.5 text-sm text-bolt-elements-textTertiary hover:text-bolt-elements-textPrimary"
+                className="px-3 py-1.5 text-sm text-recoder-elements-textTertiary hover:text-recoder-elements-textPrimary"
               >
                 Clear All
               </button>
@@ -382,11 +382,11 @@ export const AuditLog = memo(({ organizationId, onBack }: AuditLogProps) => {
             <AuditLogSkeleton />
           ) : filteredEntries.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full p-8 text-center">
-              <span className="i-ph:scroll text-5xl text-bolt-elements-textTertiary mb-4" />
-              <h2 className="text-lg font-medium text-bolt-elements-textPrimary mb-2">
+              <span className="i-ph:scroll text-5xl text-recoder-elements-textTertiary mb-4" />
+              <h2 className="text-lg font-medium text-recoder-elements-textPrimary mb-2">
                 No audit log entries
               </h2>
-              <p className="text-sm text-bolt-elements-textTertiary max-w-md">
+              <p className="text-sm text-recoder-elements-textTertiary max-w-md">
                 {hasActiveFilters
                   ? 'No entries match your current filters. Try adjusting or clearing filters.'
                   : 'Activity will be logged here as members interact with the organization.'}
@@ -403,26 +403,26 @@ export const AuditLog = memo(({ organizationId, onBack }: AuditLogProps) => {
           ) : (
             <>
               <table className="w-full">
-                <thead className="sticky top-0 bg-bolt-elements-background-depth-2 z-10">
-                  <tr className="border-b border-bolt-elements-borderColor">
-                    <th className="px-6 py-3 text-left text-xs font-medium text-bolt-elements-textTertiary uppercase tracking-wider">
+                <thead className="sticky top-0 bg-recoder-elements-background-depth-2 z-10">
+                  <tr className="border-b border-recoder-elements-borderColor">
+                    <th className="px-6 py-3 text-left text-xs font-medium text-recoder-elements-textTertiary uppercase tracking-wider">
                       Action
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-bolt-elements-textTertiary uppercase tracking-wider">
+                    <th className="px-6 py-3 text-left text-xs font-medium text-recoder-elements-textTertiary uppercase tracking-wider">
                       Actor
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-bolt-elements-textTertiary uppercase tracking-wider">
+                    <th className="px-6 py-3 text-left text-xs font-medium text-recoder-elements-textTertiary uppercase tracking-wider">
                       Target
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-bolt-elements-textTertiary uppercase tracking-wider">
+                    <th className="px-6 py-3 text-left text-xs font-medium text-recoder-elements-textTertiary uppercase tracking-wider">
                       Time
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-bolt-elements-textTertiary uppercase tracking-wider">
+                    <th className="px-6 py-3 text-left text-xs font-medium text-recoder-elements-textTertiary uppercase tracking-wider">
                       IP Address
                     </th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-bolt-elements-borderColor">
+                <tbody className="divide-y divide-recoder-elements-borderColor">
                   {filteredEntries.map((entry) => (
                     <AuditLogRow
                       key={entry.id}
@@ -440,7 +440,7 @@ export const AuditLog = memo(({ organizationId, onBack }: AuditLogProps) => {
                   <button
                     onClick={loadMoreAuditLog}
                     disabled={loading.auditLog}
-                    className="flex items-center gap-2 px-4 py-2 bg-bolt-elements-background-depth-2 hover:bg-bolt-elements-background-depth-3 text-bolt-elements-textTertiary text-sm rounded-lg transition-colors"
+                    className="flex items-center gap-2 px-4 py-2 bg-recoder-elements-background-depth-2 hover:bg-recoder-elements-background-depth-3 text-recoder-elements-textTertiary text-sm rounded-lg transition-colors"
                   >
                     {loading.auditLog ? (
                       <span className="i-ph:spinner animate-spin" />
@@ -457,7 +457,7 @@ export const AuditLog = memo(({ organizationId, onBack }: AuditLogProps) => {
 
         {/* Detail Panel */}
         {selectedEntry && (
-          <div className="w-96 border-l border-bolt-elements-borderColor bg-bolt-elements-background-depth-2 overflow-auto shrink-0">
+          <div className="w-96 border-l border-recoder-elements-borderColor bg-recoder-elements-background-depth-2 overflow-auto shrink-0">
             <AuditLogDetail
               entry={selectedEntry}
               onClose={() => setSelectedEntry(null)}
@@ -467,8 +467,8 @@ export const AuditLog = memo(({ organizationId, onBack }: AuditLogProps) => {
       </div>
 
       {/* Footer Stats */}
-      <div className="px-6 py-2 border-t border-bolt-elements-borderColor bg-bolt-elements-background-depth-2 shrink-0">
-        <div className="flex items-center justify-between text-xs text-bolt-elements-textTertiary">
+      <div className="px-6 py-2 border-t border-recoder-elements-borderColor bg-recoder-elements-background-depth-2 shrink-0">
+        <div className="flex items-center justify-between text-xs text-recoder-elements-textTertiary">
           <span>
             Showing {filteredEntries.length} of {auditLog.length} entries
             {hasActiveFilters && ' (filtered)'}
@@ -498,7 +498,7 @@ const AuditLogRow = memo(({ entry, onClick, isSelected }: AuditLogRowProps) => {
   const actionPrefix = entry.action.split('.')[0];
   const actionSuffix = entry.action.split('.')[1];
   const icon = ACTION_ICONS[actionPrefix] || 'i-ph:info';
-  const color = ACTION_COLORS[actionSuffix] || 'text-bolt-elements-textTertiary';
+  const color = ACTION_COLORS[actionSuffix] || 'text-recoder-elements-textTertiary';
 
   return (
     <tr
@@ -507,7 +507,7 @@ const AuditLogRow = memo(({ entry, onClick, isSelected }: AuditLogRowProps) => {
         'cursor-pointer transition-colors',
         isSelected
           ? 'bg-blue-500/10'
-          : 'hover:bg-bolt-elements-background-depth-2'
+          : 'hover:bg-recoder-elements-background-depth-2'
       )}
     >
       <td className="px-6 py-4 whitespace-nowrap">
@@ -524,28 +524,28 @@ const AuditLogRow = memo(({ entry, onClick, isSelected }: AuditLogRowProps) => {
             {entry.actorName.charAt(0).toUpperCase()}
           </div>
           <div>
-            <div className="text-sm text-bolt-elements-textPrimary">{entry.actorName}</div>
-            <div className="text-xs text-bolt-elements-textTertiary">{entry.actorEmail}</div>
+            <div className="text-sm text-recoder-elements-textPrimary">{entry.actorName}</div>
+            <div className="text-xs text-recoder-elements-textTertiary">{entry.actorEmail}</div>
           </div>
         </div>
       </td>
       <td className="px-6 py-4 whitespace-nowrap">
-        <div className="text-sm text-bolt-elements-textTertiary">
+        <div className="text-sm text-recoder-elements-textTertiary">
           {entry.targetName || entry.targetId || '-'}
         </div>
-        <div className="text-xs text-bolt-elements-textTertiary capitalize">
+        <div className="text-xs text-recoder-elements-textTertiary capitalize">
           {entry.targetType}
         </div>
       </td>
       <td className="px-6 py-4 whitespace-nowrap">
-        <div className="text-sm text-bolt-elements-textTertiary">
+        <div className="text-sm text-recoder-elements-textTertiary">
           {formatTime(entry.timestamp)}
         </div>
-        <div className="text-xs text-bolt-elements-textTertiary">
+        <div className="text-xs text-recoder-elements-textTertiary">
           {formatDate(entry.timestamp)}
         </div>
       </td>
-      <td className="px-6 py-4 whitespace-nowrap text-sm text-bolt-elements-textTertiary">
+      <td className="px-6 py-4 whitespace-nowrap text-sm text-recoder-elements-textTertiary">
         {entry.ipAddress || '-'}
       </td>
     </tr>
@@ -567,18 +567,18 @@ const AuditLogDetail = memo(({ entry, onClose }: AuditLogDetailProps) => {
   const actionPrefix = entry.action.split('.')[0];
   const actionSuffix = entry.action.split('.')[1];
   const icon = ACTION_ICONS[actionPrefix] || 'i-ph:info';
-  const color = ACTION_COLORS[actionSuffix] || 'text-bolt-elements-textTertiary';
+  const color = ACTION_COLORS[actionSuffix] || 'text-recoder-elements-textTertiary';
 
   return (
     <div className="h-full flex flex-col">
       {/* Header */}
-      <div className="px-4 py-3 border-b border-bolt-elements-borderColor flex items-center justify-between shrink-0">
-        <h3 className="text-sm font-semibold text-bolt-elements-textPrimary">
+      <div className="px-4 py-3 border-b border-recoder-elements-borderColor flex items-center justify-between shrink-0">
+        <h3 className="text-sm font-semibold text-recoder-elements-textPrimary">
           Event Details
         </h3>
         <button
           onClick={onClose}
-          className="p-1 text-bolt-elements-textTertiary hover:text-bolt-elements-textPrimary rounded"
+          className="p-1 text-recoder-elements-textTertiary hover:text-recoder-elements-textPrimary rounded"
         >
           <span className="i-ph:x" />
         </button>
@@ -587,7 +587,7 @@ const AuditLogDetail = memo(({ entry, onClose }: AuditLogDetailProps) => {
       {/* Content */}
       <div className="flex-1 overflow-auto p-4 space-y-4">
         {/* Action */}
-        <div className="flex items-center gap-3 p-3 bg-bolt-elements-background-depth-2 rounded-lg">
+        <div className="flex items-center gap-3 p-3 bg-recoder-elements-background-depth-2 rounded-lg">
           <div className={classNames('w-10 h-10 rounded-lg flex items-center justify-center', color, 'bg-opacity-20')}>
             <span className={classNames(icon, 'text-xl')} />
           </div>
@@ -595,7 +595,7 @@ const AuditLogDetail = memo(({ entry, onClose }: AuditLogDetailProps) => {
             <div className={classNames('text-sm font-medium', color)}>
               {ACTION_LABELS[entry.action] || entry.action}
             </div>
-            <div className="text-xs text-bolt-elements-textTertiary">
+            <div className="text-xs text-recoder-elements-textTertiary">
               {formatDateTime(entry.timestamp)}
             </div>
           </div>
@@ -608,8 +608,8 @@ const AuditLogDetail = memo(({ entry, onClose }: AuditLogDetailProps) => {
               {entry.actorName.charAt(0).toUpperCase()}
             </div>
             <div>
-              <div className="text-sm text-bolt-elements-textPrimary">{entry.actorName}</div>
-              <div className="text-xs text-bolt-elements-textTertiary">{entry.actorEmail}</div>
+              <div className="text-sm text-recoder-elements-textPrimary">{entry.actorName}</div>
+              <div className="text-xs text-recoder-elements-textTertiary">{entry.actorEmail}</div>
             </div>
           </div>
         </DetailSection>
@@ -629,8 +629,8 @@ const AuditLogDetail = memo(({ entry, onClose }: AuditLogDetailProps) => {
             <DetailRow label="IP Address" value={entry.ipAddress || 'Not recorded'} />
             {entry.userAgent && (
               <div>
-                <span className="text-xs text-bolt-elements-textTertiary">User Agent</span>
-                <p className="text-xs text-bolt-elements-textTertiary mt-0.5 break-all">
+                <span className="text-xs text-recoder-elements-textTertiary">User Agent</span>
+                <p className="text-xs text-recoder-elements-textTertiary mt-0.5 break-all">
                   {entry.userAgent}
                 </p>
               </div>
@@ -641,8 +641,8 @@ const AuditLogDetail = memo(({ entry, onClose }: AuditLogDetailProps) => {
         {/* Metadata */}
         {Object.keys(entry.metadata).length > 0 && (
           <DetailSection title="Additional Data">
-            <div className="bg-bolt-elements-background-depth-3 rounded-lg p-3 overflow-auto max-h-48">
-              <pre className="text-xs text-bolt-elements-textTertiary whitespace-pre-wrap">
+            <div className="bg-recoder-elements-background-depth-3 rounded-lg p-3 overflow-auto max-h-48">
+              <pre className="text-xs text-recoder-elements-textTertiary whitespace-pre-wrap">
                 {JSON.stringify(entry.metadata, null, 2)}
               </pre>
             </div>
@@ -651,7 +651,7 @@ const AuditLogDetail = memo(({ entry, onClose }: AuditLogDetailProps) => {
 
         {/* Event ID */}
         <DetailSection title="Event ID">
-          <code className="text-xs text-bolt-elements-textTertiary bg-bolt-elements-background-depth-3 px-2 py-1 rounded block break-all">
+          <code className="text-xs text-recoder-elements-textTertiary bg-recoder-elements-background-depth-3 px-2 py-1 rounded block break-all">
             {entry.id}
           </code>
         </DetailSection>
@@ -673,7 +673,7 @@ interface DetailSectionProps {
 
 const DetailSection = memo(({ title, children }: DetailSectionProps) => (
   <div>
-    <h4 className="text-xs font-medium text-bolt-elements-textTertiary uppercase tracking-wider mb-2">
+    <h4 className="text-xs font-medium text-recoder-elements-textTertiary uppercase tracking-wider mb-2">
       {title}
     </h4>
     {children}
@@ -690,9 +690,9 @@ interface DetailRowProps {
 
 const DetailRow = memo(({ label, value, mono }: DetailRowProps) => (
   <div className="flex items-center justify-between">
-    <span className="text-xs text-bolt-elements-textTertiary">{label}</span>
+    <span className="text-xs text-recoder-elements-textTertiary">{label}</span>
     <span className={classNames(
-      'text-sm text-bolt-elements-textTertiary',
+      'text-sm text-recoder-elements-textTertiary',
       mono && 'font-mono text-xs'
     )}>
       {value}
@@ -706,13 +706,13 @@ const AuditLogSkeleton = memo(() => (
   <div className="p-4">
     <div className="space-y-3">
       {Array.from({ length: 8 }).map((_, i) => (
-        <div key={i} className="flex items-center gap-4 p-4 bg-bolt-elements-background-depth-2 rounded-lg animate-pulse">
-          <div className="w-8 h-8 bg-bolt-elements-background-depth-2 rounded" />
+        <div key={i} className="flex items-center gap-4 p-4 bg-recoder-elements-background-depth-2 rounded-lg animate-pulse">
+          <div className="w-8 h-8 bg-recoder-elements-background-depth-2 rounded" />
           <div className="flex-1">
-            <div className="h-4 bg-bolt-elements-background-depth-2 rounded w-48 mb-2" />
-            <div className="h-3 bg-bolt-elements-background-depth-2 rounded w-32" />
+            <div className="h-4 bg-recoder-elements-background-depth-2 rounded w-48 mb-2" />
+            <div className="h-3 bg-recoder-elements-background-depth-2 rounded w-32" />
           </div>
-          <div className="h-4 bg-bolt-elements-background-depth-2 rounded w-24" />
+          <div className="h-4 bg-recoder-elements-background-depth-2 rounded w-24" />
         </div>
       ))}
     </div>

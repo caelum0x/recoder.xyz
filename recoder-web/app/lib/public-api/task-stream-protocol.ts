@@ -3,7 +3,7 @@ import {
   parsePublicTaskStreamFrame,
   type PublicTaskStreamEvent,
   type PublicTaskStreamFrame,
-} from '@giselles-ai/stream/public-task-stream';
+} from '@recoder/stream/public-task-stream';
 
 export type {
   PublicPromptTaskStatus,
@@ -11,7 +11,7 @@ export type {
   PublicTaskStreamData,
   PublicTaskStreamEvent,
   PublicTaskStreamFrame,
-} from '@giselles-ai/stream/public-task-stream';
+} from '@recoder/stream/public-task-stream';
 
 export function parseTaskStreamEvent(raw: string): PublicTaskStreamEvent {
   return parsePublicTaskStreamEvent(raw);

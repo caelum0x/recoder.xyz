@@ -1,4 +1,4 @@
-import type { PostgresTool } from "@giselles-ai/language-model-registry";
+import type { PostgresTool } from "@recoder/language-model-registry";
 import { type ToolSet, tool } from "ai";
 import { Pool } from "pg";
 import * as z from "zod/v4";

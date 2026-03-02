@@ -1,375 +1,727 @@
-# Recoder.xyz Production Docker Compose
-# Complete production deployment with all services
+# =============================================================================
+# Recoder.xyz — Unified Production Docker Compose
+# =============================================================================
+#
+# Replaces the old Traefik-based template and consolidates docker-compose.deploy.yml
+# into a single, clean production file with nginx as the sole public ingress.
+#
+# Usage:
+#   docker compose -f docker-compose.production.yml up -d
+#   docker compose -f docker-compose.production.yml logs -f
+#
+# Build the base workspace image first (one-time):
+#   docker compose -f docker-compose.production.yml --profile build-base build recoder-base
+#
+# Architecture:
+#   nginx (80/443) -> app              (3000)  recoder.xyz / app.recoder.xyz
+#                  -> backend          (8000)  api.recoder.xyz
+#                  -> docker-backend   (3100)  api.recoder.xyz (container orchestration)
+#                  -> recoder-web      (5173)  web.recoder.xyz (Remix IDE)
+#                  -> recoder-agents   (3001)  app.recoder.xyz (Next.js agents dashboard)
+#                  -> openclaw-gateway (18789) internal A2A gateway
+#
+# All internal ports are NOT exposed to the host. Nginx is the sole ingress.
+#
+# Required env vars in .env.production:
+#   REDIS_PASSWORD, POSTGRES_PASSWORD, RECODER_A2A_SHARED_SECRET,
+#   RECODER_A2A_WORKER_TOKEN, OPENCLAW_GATEWAY_TOKEN
+#
+# Optional env vars:
+#   POSTGRES_USER (default: recoder), WORKERS (default: 16),
+#   GRAFANA_ADMIN_USER, GRAFANA_ADMIN_PASSWORD, ALERT_* / SMTP_*
+# =============================================================================
 
-version: '3.8'
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
 
-networks:
-  recoder-network:
-    driver: bridge
-
-volumes:
-  postgres-data:
-  redis-data:
-  nginx-certs:
+x-restart: &restart-policy
+  restart: unless-stopped
 
 services:
-  #====================================
-  # Database Services
-  #====================================
+
+  # ===========================================================================
+  # Infrastructure
+  # ===========================================================================
+
+  redis:
+    image: redis:8-alpine
+    container_name: recoder-redis
+    <<: *restart-policy
+    command: >
+      redis-server
+      --requirepass ${REDIS_PASSWORD}
+      --appendonly yes
+      --appendfsync everysec
+      --maxmemory 256mb
+      --maxmemory-policy volatile-lru
+    volumes:
+      - redis_data:/data
+    networks:
+      - recoder
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    logging: *default-logging
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512M
+
   postgres:
     image: postgres:15-alpine
     container_name: recoder-postgres
+    <<: *restart-policy
     environment:
-      POSTGRES_DB: recoder_production
-      POSTGRES_USER: ${DB_USER:-recoder}
-      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: recoder
+      POSTGRES_USER: ${POSTGRES_USER:-recoder}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     volumes:
-      - postgres-data:/var/lib/postgresql/data
-      - ./backend/src/db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
-    ports:
-      - "5432:5432"
+      - postgres_data:/var/lib/postgresql/data
     networks:
-      - recoder-network
+      - recoder
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-recoder}"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-    restart: unless-stopped
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-recoder} -d recoder"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    logging: *default-logging
+    deploy:
+      resources:
+        limits:
+          cpus: "1"
+          memory: 1G
+        reservations:
+          cpus: "0.25"
+          memory: 256M
 
-  redis:
-    image: redis:7-alpine
-    container_name: recoder-redis
-    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD}
-    volumes:
-      - redis-data:/data
-    ports:
-      - "6379:6379"
-    networks:
-      - recoder-network
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-    restart: unless-stopped
-
-  #====================================
+  # ===========================================================================
   # Application Services
-  #====================================
-  web:
-    build:
-      context: ./recoder-web
-      dockerfile: ../Dockerfile
-      target: web-production
-    container_name: recoder-web
-    environment:
-      - NODE_ENV=production
-      - NEXT_PUBLIC_BASE_URL=${WEB_URL:-https://recoder.xyz}
-      - NEXT_PUBLIC_API_URL=${API_URL:-https://api.recoder.xyz}
-      - NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=${STRIPE_PUBLISHABLE_KEY}
-      - JWT_SECRET=${JWT_SECRET}
-      - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY}
-      - STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET}
-      - DATABASE_URL=postgresql://${DB_USER:-recoder}:${DB_PASSWORD}@postgres:5432/recoder_production
-      - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379
-    ports:
-      - "3000:3000"
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    networks:
-      - recoder-network
-    restart: unless-stopped
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.web.rule=Host(`recoder.xyz`,`www.recoder.xyz`)"
-      - "traefik.http.routers.web.tls.certresolver=letsencrypt"
-      - "traefik.http.services.web.loadbalancer.server.port=3000"
+  # ===========================================================================
 
-  chat:
-    build:
-      context: ./recoder-chat
-      dockerfile: Dockerfile.production
-    container_name: recoder-chat
-    environment:
-      - NODE_ENV=production
-      - NEXTAUTH_URL=${CHAT_URL:-https://chat.recoder.xyz}
-      - NEXTAUTH_SECRET=${NEXTAUTH_SECRET}
-      - NEXT_PUBLIC_API_URL=${API_URL:-https://api.recoder.xyz}
-      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
-      - GROQ_API_KEY=${GROQ_API_KEY}
-      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - DATABASE_URL=postgresql://${DB_USER:-recoder}:${DB_PASSWORD}@postgres:5432/recoder_production
-      - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379
-    ports:
-      - "3003:3000"
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    networks:
-      - recoder-network
-    restart: unless-stopped
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.chat.rule=Host(`chat.recoder.xyz`)"
-      - "traefik.http.routers.chat.tls.certresolver=letsencrypt"
-      - "traefik.http.services.chat.loadbalancer.server.port=3000"
-
-  backend:
+  # Main Next.js site — recoder.xyz / app.recoder.xyz
+  app:
     build:
       context: .
-      target: backend-production
+      dockerfile: app/Dockerfile
+    container_name: recoder-app
+    <<: *restart-policy
+    env_file:
+      - .env.production
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - NEXT_PUBLIC_APP_URL=https://recoder.xyz
+      - NEXT_PUBLIC_RECODER_WEB_URL=https://web.recoder.xyz
+      - BACKEND_URL=http://recoder-docker-backend:3100
+      - REDIS_URL=redis://:${REDIS_PASSWORD}@recoder-redis:6379/0
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - recoder
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    logging: *default-logging
+    deploy:
+      resources:
+        limits:
+          cpus: "2"
+          memory: 2G
+        reservations:
+          cpus: "1"
+          memory: 1G
+    stop_grace_period: 30s
+
+  # FastAPI Python backend — api.recoder.xyz
+  backend:
+    build:
+      context: ./backend
       dockerfile: Dockerfile
-    container_name: recoder-backend
+    platform: linux/amd64
+    container_name: recoder-backend-api
+    <<: *restart-policy
+    env_file:
+      - .env.production
+    environment:
+      - WORKERS=${WORKERS:-16}
+      - REDIS_URL=redis://:${REDIS_PASSWORD}@recoder-redis:6379/0
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - recoder
+    # Reduce DNS lookup latency for third-party AI provider calls
+    dns:
+      - 8.8.8.8
+      - 1.1.1.1
+    dns_search:
+      - .
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:8000/v1/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    logging: *default-logging
+    deploy:
+      resources:
+        limits:
+          cpus: "4"
+          memory: 4G
+        reservations:
+          cpus: "2"
+          memory: 2G
+    stop_grace_period: 30s
+
+  # Express container orchestration — docker.recoder.xyz / api.recoder.xyz (backend_api upstream)
+  docker-backend:
+    build:
+      context: .
+      dockerfile: docker-backend/Dockerfile
+    container_name: recoder-docker-backend
+    <<: *restart-policy
+    command: ["pnpm", "exec", "tsx", "src/server.ts"]
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - backend_data:/app/data
+    env_file:
+      - .env.production
+    environment:
+      - NODE_ENV=production
+      - PORT=3100
+      - REDIS_URL=redis://:${REDIS_PASSWORD}@recoder-redis:6379/0
+      - PUBLIC_PROMPT_TASK_QUEUE_BACKEND=redis
+      # --- A2A inter-service communication ---
+      - RECODER_A2A_SHARED_SECRET=${RECODER_A2A_SHARED_SECRET}
+      - RECODER_A2A_REDIS_URL=redis://:${REDIS_PASSWORD}@recoder-redis:6379/0
+      - RECODER_A2A_ENABLE_CONSUMER=true
+      - RECODER_A2A_CONSUMER_SERVICE=recoder_backend
+      - RECODER_A2A_CONSUME_UNTARGETED=true
+      - RECODER_A2A_PLAN_HANDLER_URL=http://recoder-web:5173/api/a2a/intents/plan
+      - RECODER_A2A_EXECUTE_HANDLER_URL=http://recoder-web:5173/api/a2a/intents/execute
+      - RECODER_A2A_HANDOFF_HANDLER_URL=http://recoder-web:5173/api/a2a/intents/handoff
+      - RECODER_A2A_TOOL_CALL_HANDLER_URL=http://recoder-web:5173/api/a2a/intents/tool_call
+      - RECODER_A2A_DEFAULT_HANDLER_URL=http://recoder-web:5173/api/a2a/intents/execute
+      - RECODER_A2A_WORKER_TOKEN=${RECODER_A2A_WORKER_TOKEN}
+      # A2A gateway identity and security
+      - RECODER_A2A_AGENT_ID=docker-backend
+      - RECODER_A2A_ADMIN_TOKEN=${RECODER_A2A_ADMIN_TOKEN:-}
+      - RECODER_A2A_BRIDGE_TOKEN=${RECODER_A2A_BRIDGE_TOKEN:-}
+      - RECODER_A2A_EGRESS_ALLOWLIST=http://recoder-web:5173,http://openclaw-gateway:18789
+      - RECODER_A2A_ALLOWED_AGENTS=codex,claude_code,recoder-web,docker-backend,openclaw-gateway,recoder-agency,recoder-pm,recoder-studio
+      # Tier-1 connector flags
+      - RECODER_A2A_ENABLE_CODEX=${RECODER_A2A_ENABLE_CODEX:-true}
+      - RECODER_A2A_ENABLE_CLAUDE_CODE=${RECODER_A2A_ENABLE_CLAUDE_CODE:-true}
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - recoder
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:3100/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    logging: *default-logging
+    deploy:
+      resources:
+        limits:
+          cpus: "4"
+          memory: 4G
+        reservations:
+          cpus: "2"
+          memory: 2G
+    stop_grace_period: 45s
+
+  # Remix/Vite IDE — web.recoder.xyz / recoder.xyz
+  recoder-web:
+    build:
+      context: .
+      dockerfile: recoder-web/Dockerfile
+    container_name: recoder-web
+    <<: *restart-policy
+    env_file:
+      - .env.production
+    environment:
+      - NODE_ENV=production
+      - PORT=5173
+      - DOCKER_BACKEND_URL=http://recoder-docker-backend:3100
+      - VITE_DOCKER_BACKEND_URL=http://recoder-docker-backend:3100
+      - MAIN_SITE_URL=https://recoder.xyz
+      - VITE_MAIN_SITE_URL=https://recoder.xyz
+      # A2A
+      - RECODER_A2A_SHARED_SECRET=${RECODER_A2A_SHARED_SECRET}
+      - RECODER_A2A_AGENT_ID=recoder-web
+      - RECODER_A2A_REDIS_URL=redis://:${REDIS_PASSWORD}@recoder-redis:6379/0
+      - RECODER_A2A_PLAN_HANDLER_URL=http://recoder-docker-backend:3100/api/a2a/intent/plan
+      - RECODER_A2A_EXECUTE_HANDLER_URL=http://recoder-docker-backend:3100/api/a2a/intent/execute
+      - RECODER_A2A_HANDOFF_HANDLER_URL=http://recoder-docker-backend:3100/api/a2a/intent/handoff
+      - RECODER_A2A_TOOL_CALL_HANDLER_URL=http://recoder-docker-backend:3100/api/a2a/intent/tool_call
+      - RECODER_A2A_WORKER_TOKEN=${RECODER_A2A_WORKER_TOKEN}
+      - RECODER_A2A_EGRESS_ALLOWLIST=http://recoder-docker-backend:3100
+    depends_on:
+      docker-backend:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - recoder
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:5173/api/health',{redirect:'manual'}).then(r=>process.exit(r.status<400?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    logging: *default-logging
+    deploy:
+      resources:
+        limits:
+          cpus: "2"
+          memory: 2G
+        reservations:
+          cpus: "1"
+          memory: 1G
+    stop_grace_period: 30s
+
+  # Next.js agents dashboard — app.recoder.xyz
+  recoder-agents:
+    build:
+      context: .
+      dockerfile: recoder-agents/Dockerfile
+      args:
+        APP_PORT: 3001
+        PNPM_LOCKFILE_MODE: --no-frozen-lockfile
+    container_name: recoder-agents
+    <<: *restart-policy
+    env_file:
+      - .env.production
     environment:
       - NODE_ENV=production
       - PORT=3001
-      - JWT_SECRET=${JWT_SECRET}
-      - DATABASE_URL=postgresql://${DB_USER:-recoder}:${DB_PASSWORD}@postgres:5432/recoder_production
-      - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379
-      - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY}
-      - STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET}
-      # AI API Keys
-      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}
-      - GROQ_API_KEY=${GROQ_API_KEY}
-      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
-      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
-      # Usage Limits
-      - PREMIUM_TOKEN_LIMIT=400000
-      - PREMIUM_REQUEST_LIMIT=5000
-      - PRO_TOKEN_LIMIT=2000000
-      - PRO_REQUEST_LIMIT=25000
-    ports:
-      - "3001:3001"
+      - NEXT_PUBLIC_APP_URL=https://app.recoder.xyz
+      - NEXT_PUBLIC_API_URL=http://recoder-backend-api:8000
     depends_on:
-      postgres:
+      backend:
         condition: service_healthy
       redis:
         condition: service_healthy
     networks:
-      - recoder-network
-    restart: unless-stopped
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.api.rule=Host(`api.recoder.xyz`)"
-      - "traefik.http.routers.api.tls.certresolver=letsencrypt"
-      - "traefik.http.services.api.loadbalancer.server.port=3001"
+      - recoder
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3001',{redirect:'manual'}).then(r=>process.exit(r.status<400?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    logging: *default-logging
+    deploy:
+      resources:
+        limits:
+          cpus: "2"
+          memory: 2G
+        reservations:
+          cpus: "0.5"
+          memory: 512M
+    stop_grace_period: 30s
 
-  production-engine:
-    build:
-      context: ./production-engine
-      dockerfile: Dockerfile
-    container_name: recoder-production-engine
-    environment:
-      - NODE_ENV=production
-      - PORT=3002
-      - API_BASE_URL=${API_URL:-https://api.recoder.xyz}
-      - JWT_SECRET=${JWT_SECRET}
-      # AI API Keys
-      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}
-      - GROQ_API_KEY=${GROQ_API_KEY}
-      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
-      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - OLLAMA_BASE_URL=http://ollama:11434
-    ports:
-      - "3002:3002"
-    depends_on:
-      - backend
-    networks:
-      - recoder-network
-    restart: unless-stopped
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.engine.rule=Host(`engine.recoder.xyz`)"
-      - "traefik.http.routers.engine.tls.certresolver=letsencrypt"
-      - "traefik.http.services.engine.loadbalancer.server.port=3002"
-
-  cli-service:
+  # Recoder Studio (Giselle-based workflow editor) — studio.recoder.xyz
+  recoder-studio:
     build:
       context: .
-      target: cli-production
-      dockerfile: Dockerfile
-    container_name: recoder-cli-service
+      dockerfile: recoder-studio/Dockerfile
+    container_name: recoder-studio
+    <<: *restart-policy
+    env_file:
+      - .env.production
     environment:
       - NODE_ENV=production
-      - PORT=8080
-      - API_BASE_URL=${API_URL:-https://api.recoder.xyz}
-      - ENGINE_URL=http://production-engine:3002
-      - JWT_SECRET=${JWT_SECRET}
-      # AI API Keys
-      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}
-      - GROQ_API_KEY=${GROQ_API_KEY}
-      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
-      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - OLLAMA_BASE_URL=http://ollama:11434
-    ports:
-      - "8080:8080"
+      - PORT=3005
+      - HOSTNAME=0.0.0.0
+      - NEXT_TELEMETRY_DISABLED=1
+      - BETTER_AUTH_URL=https://recoder.xyz
+      - NEXT_PUBLIC_APP_URL=https://studio.recoder.xyz
+      - NEXT_PUBLIC_SITE_URL=https://studio.recoder.xyz
+      - DATABASE_URL=${DATABASE_URL}
+      - REDIS_URL=redis://:${REDIS_PASSWORD}@recoder-redis:6379/0
     depends_on:
-      - backend
-      - production-engine
+      redis:
+        condition: service_healthy
     networks:
-      - recoder-network
-    restart: unless-stopped
+      - recoder
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3005/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    logging: *default-logging
+    deploy:
+      resources:
+        limits:
+          cpus: "2"
+          memory: 2G
+        reservations:
+          cpus: "0.5"
+          memory: 512M
+    stop_grace_period: 30s
 
-  #====================================
-  # Ollama Local AI Service
-  #====================================
-  ollama:
-    image: ollama/ollama:latest
-    container_name: recoder-ollama
-    ports:
-      - "11434:11434"
-    volumes:
-      - ./data/ollama:/root/.ollama
+  # Recoder Agency (agency workflows) — agency.recoder.xyz
+  recoder-agency:
+    build:
+      context: .
+      dockerfile: recoder-agency/Dockerfile
+    container_name: recoder-agency
+    <<: *restart-policy
+    env_file:
+      - .env.production
     environment:
-      - OLLAMA_HOST=0.0.0.0
+      - NODE_ENV=production
+      - PORT=3007
+      - HOSTNAME=0.0.0.0
+      - NEXT_TELEMETRY_DISABLED=1
+      - BETTER_AUTH_URL=https://recoder.xyz
+      - NEXT_PUBLIC_APP_URL=https://agency.recoder.xyz
+      - NEXT_PUBLIC_SITE_URL=https://agency.recoder.xyz
+      - DATABASE_URL=${DATABASE_URL}
+      - REDIS_URL=redis://:${REDIS_PASSWORD}@recoder-redis:6379/0
+    ports:
+      - "3007:3007"
+    depends_on:
+      redis:
+        condition: service_healthy
     networks:
-      - recoder-network
-    restart: unless-stopped
-    # Pull required models on startup
-    command: >
-      sh -c "
-        ollama serve &
-        sleep 10 &&
-        ollama pull llama3.1:8b &&
-        ollama pull codellama:7b &&
-        ollama pull mistral:7b &&
-        wait
-      "
+      - recoder
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3007/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    logging: *default-logging
+    deploy:
+      resources:
+        limits:
+          cpus: "2"
+          memory: 2G
+        reservations:
+          cpus: "0.5"
+          memory: 512M
+    stop_grace_period: 30s
 
-  #====================================
-  # Reverse Proxy & SSL
-  #====================================
-  traefik:
-    image: traefik:v3.0
-    container_name: recoder-traefik
-    command:
-      - "--api.dashboard=true"
-      - "--providers.docker=true"
-      - "--providers.docker.exposedbydefault=false"
-      - "--entrypoints.web.address=:80"
-      - "--entrypoints.websecure.address=:443"
-      - "--certificatesresolvers.letsencrypt.acme.email=${ACME_EMAIL}"
-      - "--certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json"
-      - "--certificatesresolvers.letsencrypt.acme.httpchallenge=true"
-      - "--certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=web"
-      # Redirect HTTP to HTTPS
-      - "--entrypoints.web.http.redirections.entrypoint.to=websecure"
-      - "--entrypoints.web.http.redirections.entrypoint.scheme=https"
+  # Recoder PM (project management) — pm.recoder.xyz
+  recoder-pm:
+    build:
+      context: .
+      dockerfile: recoder-pm/Dockerfile.api
+    container_name: recoder-pm
+    <<: *restart-policy
+    env_file:
+      - .env.production
+    environment:
+      - NODE_ENV=production
+      - PORT=3004
+      - HOSTNAME=0.0.0.0
+      - DOCKER=1
+      - NEXT_TELEMETRY_DISABLED=1
+      - BETTER_AUTH_URL=https://recoder.xyz
+      - NEXT_PUBLIC_VERCEL_PROJECT_PRODUCTION_URL=pm.recoder.xyz
+      - RECODER_PM_WEB_URL=https://pm.recoder.xyz
+      - RECODER_PM_API_URL=https://pm.recoder.xyz/api
+      - RECODER_PM_PORTAL_URL=https://pm.recoder.xyz/portal
+      - DATABASE_URL=${DATABASE_URL}
+      - REDIS_URL=redis://:${REDIS_PASSWORD}@recoder-redis:6379/0
+      # BYOK: No AI provider keys — users configure at org level
+      - OPENROUTER_API_KEY=
+      - OPENAI_API_KEY=
+      - ANTHROPIC_API_KEY=
+    ports:
+      - "3004:3004"
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - recoder
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3004',{redirect:'manual'}).then(r=>process.exit(r.status<400?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    logging: *default-logging
+    deploy:
+      resources:
+        limits:
+          cpus: "2"
+          memory: 2G
+        reservations:
+          cpus: "0.5"
+          memory: 512M
+    stop_grace_period: 30s
+
+  # OpenClaw A2A Gateway — internal only
+  openclaw-gateway:
+    build: ./openclaw
+    container_name: openclaw-gateway
+    <<: *restart-policy
+    environment:
+      - HOME=/home/node
+      - TERM=xterm-256color
+      - OPENCLAW_GATEWAY_TOKEN=${OPENCLAW_GATEWAY_TOKEN}
+      - NODE_OPTIONS=--max_old_space_size=1536
+    volumes:
+      - openclaw_config:/home/node/.openclaw
+      - openclaw_workspace:/home/node/.openclaw/workspace
+    command: ["node", "dist/index.js", "gateway", "--allow-unconfigured", "--bind", "lan", "--port", "18789"]
+    networks:
+      - recoder
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:18789/health').then(r=>process.exit(r.status<400?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    logging: *default-logging
+    deploy:
+      resources:
+        limits:
+          cpus: "1"
+          memory: 2G
+
+  # ===========================================================================
+  # Reverse Proxy — sole public ingress (ports 80 + 443)
+  # ===========================================================================
+
+  nginx:
+    image: nginx:alpine
+    container_name: recoder-nginx
+    <<: *restart-policy
     ports:
       - "80:80"
       - "443:443"
-      - "8081:8080" # Traefik dashboard
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro
-      - nginx-certs:/letsencrypt
+      - ./nginx/nginx-production.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+      - /var/www/html:/var/www/html:ro
+      - /data/published:/data/published:ro
+    depends_on:
+      app:
+        condition: service_healthy
+      backend:
+        condition: service_healthy
+      docker-backend:
+        condition: service_healthy
+      recoder-web:
+        condition: service_healthy
+      recoder-agents:
+        condition: service_healthy
+      recoder-studio:
+        condition: service_healthy
+      recoder-agency:
+        condition: service_healthy
+      recoder-pm:
+        condition: service_healthy
     networks:
-      - recoder-network
-    restart: unless-stopped
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.dashboard.rule=Host(`admin.recoder.xyz`)"
-      - "traefik.http.routers.dashboard.tls.certresolver=letsencrypt"
-      - "traefik.http.routers.dashboard.service=api@internal"
+      - recoder
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/nginx-health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    logging: *default-logging
+    deploy:
+      resources:
+        limits:
+          cpus: "1"
+          memory: 512M
 
-  #====================================
-  # Monitoring & Analytics
-  #====================================
+  # ===========================================================================
+  # Monitoring Stack
+  # ===========================================================================
+
+  node-exporter:
+    image: prom/node-exporter:latest
+    container_name: recoder-node-exporter
+    <<: *restart-policy
+    command:
+      - "--path.rootfs=/host"
+      - "--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)"
+    volumes:
+      - /:/host:ro,rslave
+    networks:
+      - recoder
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:9100/metrics"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    logging: *default-logging
+    deploy:
+      resources:
+        limits:
+          cpus: "0.2"
+          memory: 128M
+
+  redis-exporter:
+    image: oliver006/redis_exporter:latest
+    container_name: recoder-redis-exporter
+    <<: *restart-policy
+    environment:
+      - REDIS_ADDR=redis://recoder-redis:6379
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - recoder
+    healthcheck:
+      test: ["CMD", "/redis_exporter", "--version"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    logging: *default-logging
+    deploy:
+      resources:
+        limits:
+          cpus: "0.1"
+          memory: 64M
+
   prometheus:
     image: prom/prometheus:latest
     container_name: recoder-prometheus
-    command:
-      - '--config.file=/etc/prometheus/prometheus.yml'
-      - '--storage.tsdb.path=/prometheus'
-      - '--web.console.libraries=/etc/prometheus/console_libraries'
-      - '--web.console.templates=/etc/prometheus/consoles'
-      - '--web.enable-lifecycle'
-    ports:
-      - "9090:9090"
+    <<: *restart-policy
     volumes:
       - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/alert-rules.yml:/etc/prometheus/alert-rules.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--storage.tsdb.retention.time=15d"
+      - "--web.enable-lifecycle"
+    depends_on:
+      alertmanager:
+        condition: service_healthy
+      node-exporter:
+        condition: service_healthy
+      redis-exporter:
+        condition: service_healthy
     networks:
-      - recoder-network
-    restart: unless-stopped
+      - recoder
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:9090/-/healthy"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    logging: *default-logging
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512M
+
+  alertmanager:
+    image: prom/alertmanager:latest
+    container_name: recoder-alertmanager
+    <<: *restart-policy
+    volumes:
+      - ./monitoring/alertmanager.yml:/etc/alertmanager/alertmanager.yml.tpl:ro
+      - ./scripts/alertmanager-entrypoint.sh:/app/alertmanager-entrypoint.sh:ro
+      - alertmanager_data:/alertmanager
+    environment:
+      - ALERT_WEBHOOK_URL=${ALERT_WEBHOOK_URL:-}
+      - ALERT_EMAIL=${ALERT_EMAIL:-}
+      - SMTP_SMARTHOST=${SMTP_SMARTHOST:-}
+      - SMTP_FROM=${SMTP_FROM:-}
+      - SMTP_AUTH_USERNAME=${SMTP_AUTH_USERNAME:-}
+      - SMTP_AUTH_PASSWORD=${SMTP_AUTH_PASSWORD:-}
+    entrypoint: ["/bin/sh", "/app/alertmanager-entrypoint.sh"]
+    networks:
+      - recoder
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:9093/-/healthy"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    logging: *default-logging
+    deploy:
+      resources:
+        limits:
+          cpus: "0.2"
+          memory: 256M
 
   grafana:
-    image: grafana/grafana:latest
+    image: grafana/grafana:11.4-alpine
     container_name: recoder-grafana
+    <<: *restart-policy
     environment:
-      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-admin}
-      - GF_SERVER_DOMAIN=monitor.recoder.xyz
-    ports:
-      - "3002:3000"
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin}
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_SERVER_ROOT_URL=http://localhost:3003
     volumes:
+      - grafana_data:/var/lib/grafana
       - ./monitoring/grafana-datasources.yml:/etc/grafana/provisioning/datasources/datasources.yml:ro
       - ./monitoring/grafana-dashboards.yml:/etc/grafana/provisioning/dashboards/dashboards.yml:ro
       - ./monitoring/dashboards:/var/lib/grafana/dashboards:ro
     depends_on:
-      - prometheus
+      prometheus:
+        condition: service_healthy
     networks:
-      - recoder-network
-    restart: unless-stopped
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.monitor.rule=Host(`monitor.recoder.xyz`)"
-      - "traefik.http.routers.monitor.tls.certresolver=letsencrypt"
+      - recoder
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    logging: *default-logging
+    deploy:
+      resources:
+        limits:
+          cpus: "0.3"
+          memory: 256M
 
-  #====================================
-  # Log Aggregation
-  #====================================
-  loki:
-    image: grafana/loki:latest
-    container_name: recoder-loki
-    ports:
-      - "3100:3100"
-    volumes:
-      - ./monitoring/loki-config.yml:/etc/loki/local-config.yaml:ro
-    networks:
-      - recoder-network
-    restart: unless-stopped
+  # ===========================================================================
+  # Build-only: Base workspace image for user project containers
+  # ===========================================================================
 
-  promtail:
-    image: grafana/promtail:latest
-    container_name: recoder-promtail
-    volumes:
-      - /var/log:/var/log:ro
-      - /var/run/docker.sock:/var/run/docker.sock:ro
-      - ./monitoring/promtail-config.yml:/etc/promtail/config.yml:ro
-    networks:
-      - recoder-network
-    restart: unless-stopped
+  recoder-base:
+    build: ./docker-backend/docker
+    image: recoder-workspace:latest
+    profiles:
+      - build-base
 
-#====================================
-# Health Checks & Backup Scripts
-#====================================
+# =============================================================================
+# Volumes
+# =============================================================================
+volumes:
+  redis_data:
+  postgres_data:
+  backend_data:
+  openclaw_config:
+  openclaw_workspace:
+  prometheus_data:
+  alertmanager_data:
+  grafana_data:
 
-# Run with: docker-compose -f docker-compose.production.yml up -d
-# 
-# Environment variables required:
-# - DB_PASSWORD
-# - REDIS_PASSWORD  
-# - JWT_SECRET
-# - STRIPE_SECRET_KEY
-# - STRIPE_PUBLISHABLE_KEY
-# - STRIPE_WEBHOOK_SECRET
-# - DEEPSEEK_API_KEY
-# - GROQ_API_KEY
-# - ANTHROPIC_API_KEY
-# - GOOGLE_API_KEY
-# - OPENAI_API_KEY
-# - ACME_EMAIL (for SSL certificates)
-#
-# Optional:
-# - WEB_URL (default: https://recoder.xyz)
-# - API_URL (default: https://api.recoder.xyz)
-# - DB_USER (default: recoder)
-# - GRAFANA_PASSWORD (default: admin)
+# =============================================================================
+# Networks — single bridge network for all services
+# =============================================================================
+networks:
+  recoder:
+    name: recoder-network
+    driver: bridge

@@ -1,4 +1,4 @@
-import type { WorkspaceId } from "@giselles-ai/protocol";
+import type { WorkspaceId } from "@recoder/protocol";
 import { eq } from "drizzle-orm";
 import { agents, db, teams } from "@/db";
 import { getUsageLimitsForTeam } from "./usage-limits";

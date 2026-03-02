@@ -376,8 +376,8 @@ const errorHighlightTheme = EditorView.baseTheme({
 
   // Tooltip styles
   '.cm-error-tooltip': {
-    backgroundColor: 'var(--bolt-elements-bg-depth-2, #1e1e1e)',
-    border: '1px solid var(--bolt-elements-borderColor, #333)',
+    backgroundColor: 'var(--recoder-elements-bg-depth-2, #1e1e1e)',
+    border: '1px solid var(--recoder-elements-borderColor, #333)',
     borderRadius: '6px',
     padding: '8px',
     maxWidth: '500px',
@@ -391,7 +391,7 @@ const errorHighlightTheme = EditorView.baseTheme({
     gap: '8px',
     padding: '4px 0',
     '&:not(:last-child)': {
-      borderBottom: '1px solid var(--bolt-elements-borderColor, #333)',
+      borderBottom: '1px solid var(--recoder-elements-borderColor, #333)',
       paddingBottom: '8px',
       marginBottom: '4px',
     },
@@ -426,16 +426,16 @@ const errorHighlightTheme = EditorView.baseTheme({
   },
   '.cm-error-tooltip-message': {
     flex: '1',
-    color: 'var(--bolt-elements-textPrimary, #e5e5e5)',
+    color: 'var(--recoder-elements-textPrimary, #e5e5e5)',
     wordBreak: 'break-word',
   },
   '.cm-error-tooltip-source': {
     flexShrink: '0',
     padding: '2px 6px',
-    backgroundColor: 'var(--bolt-elements-bg-depth-3, #2a2a2a)',
+    backgroundColor: 'var(--recoder-elements-bg-depth-3, #2a2a2a)',
     borderRadius: '4px',
     fontSize: '10px',
-    color: 'var(--bolt-elements-textSecondary, #999)',
+    color: 'var(--recoder-elements-textSecondary, #999)',
     textTransform: 'lowercase',
   },
 });

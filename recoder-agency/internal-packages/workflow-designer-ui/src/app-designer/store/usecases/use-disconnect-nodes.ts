@@ -3,7 +3,7 @@ import {
 	isOperationNode,
 	NodeId,
 	type NodeId as NodeIdType,
-} from "@giselles-ai/protocol";
+} from "@recoder/protocol";
 import { useCallback } from "react";
 import { useAppDesignerStoreApi } from "../app-designer-provider";
 import { useSyncAppConnectionStateIfNeeded } from "./use-sync-app-connection-state-if-needed";

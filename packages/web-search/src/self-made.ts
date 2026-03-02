@@ -39,7 +39,7 @@ export async function scrapeUrl(
 	const res = await fetch(url, {
 		headers: {
 			"User-Agent":
-				"Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko; compatible; Giselle-User/1.0; +support@giselles.ai)",
+				"Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko; compatible; Recoder-User/1.0; +support@recoder.xyz)",
 		},
 	});
 	if (!res.ok) {
@@ -69,12 +69,15 @@ export async function scrapeUrl(
 			// If it's already plain text/markdown, use it directly
 			markdown = content;
 		} else {
-			// If it's HTML, convert it to markdown
-			const Defuddle = (await import("defuddle/node")).Defuddle;
-			const result = await Defuddle(content, url, {
-				markdown: true,
-			});
-			markdown = result.content;
+			// Lightweight fallback conversion that avoids external runtime deps in SSR builds.
+			markdown = content
+				.replace(/<script[\s\S]*?<\/script>/gi, "")
+				.replace(/<style[\s\S]*?<\/style>/gi, "")
+				.replace(/<\/(p|div|section|article|h[1-6]|li|tr|blockquote)>/gi, "\n")
+				.replace(/<br\s*\/?>/gi, "\n")
+				.replace(/<[^>]+>/g, "")
+				.replace(/\n{3,}/g, "\n\n")
+				.trim();
 		}
 	}
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { Button } from "@giselle-internal/ui/button";
+import { Button } from "@recoder-internal/ui/button";
 import {
 	type App,
 	type AppEntryNode,
@@ -8,8 +8,8 @@ import {
 	createUploadingFileData,
 	type GenerationContextInput,
 	type UploadedFileData,
-} from "@giselles-ai/protocol";
-import { useFeatureFlag, useGiselle } from "@giselles-ai/react";
+} from "@recoder/protocol";
+import { useFeatureFlag, useGiselle } from "@recoder/react";
 import { clsx } from "clsx/lite";
 import {
 	LoaderIcon,
@@ -421,7 +421,7 @@ export function AppEntryInputDialog({
 
 function generateApiSampleCode(app: App): string {
 	return `\`\`\`typescript
-import Giselle from "@giselles-ai/sdk";
+import Giselle from "@recoder/sdk";
 
 const client = new Giselle({
   apiKey: process.env.GISELLE_API_KEY,

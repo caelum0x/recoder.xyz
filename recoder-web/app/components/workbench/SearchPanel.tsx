@@ -241,7 +241,7 @@ export const SearchPanel = memo(({ onFileOpen, className = '' }: SearchPanelProp
         return 'i-ph:file-html text-orange-400';
       case 'md':
       case 'mdx':
-        return 'i-ph:file-doc text-bolt-elements-textSecondary';
+        return 'i-ph:file-doc text-recoder-elements-textSecondary';
       case 'py':
         return 'i-ph:file-py text-green-400';
       case 'rs':
@@ -249,19 +249,19 @@ export const SearchPanel = memo(({ onFileOpen, className = '' }: SearchPanelProp
       case 'go':
         return 'i-ph:file text-cyan-400';
       default:
-        return 'i-ph:file text-bolt-elements-textTertiary';
+        return 'i-ph:file text-recoder-elements-textTertiary';
     }
   }, []);
 
   return (
-    <div className={`flex flex-col h-full bg-bolt-elements-background-depth-1 ${className}`}>
+    <div className={`flex flex-col h-full bg-recoder-elements-background-depth-1 ${className}`}>
       {/* Search Input */}
-      <div className="p-2 border-b border-bolt-elements-borderColor">
+      <div className="p-2 border-b border-recoder-elements-borderColor">
         <div className="flex items-center gap-1">
           {/* Toggle Replace */}
           <button
             onClick={() => setShowReplace(!showReplace)}
-            className="p-1 hover:bg-bolt-elements-background-depth-2 rounded transition-colors"
+            className="p-1 hover:bg-recoder-elements-background-depth-2 rounded transition-colors"
             title={showReplace ? 'Hide Replace (Cmd+Shift+H)' : 'Show Replace (Cmd+Shift+H)'}
             aria-expanded={showReplace}
             aria-label={showReplace ? 'Hide replace input' : 'Show replace input'}
@@ -277,13 +277,13 @@ export const SearchPanel = memo(({ onFileOpen, className = '' }: SearchPanelProp
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Search (Cmd+Shift+F)"
-              className="w-full px-2 py-1 pr-8 text-sm text-bolt-elements-textPrimary placeholder:text-bolt-elements-textTertiary bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor rounded focus:outline-none focus:border-blue-500"
+              className="w-full px-2 py-1 pr-8 text-sm text-recoder-elements-textPrimary placeholder:text-recoder-elements-textTertiary bg-recoder-elements-background-depth-2 border border-recoder-elements-borderColor rounded focus:outline-none focus:border-blue-500"
               aria-label="Search in files"
             />
             {query && (
               <button
                 onClick={clearSearch}
-                className="absolute right-6 top-1/2 -translate-y-1/2 p-0.5 hover:bg-bolt-elements-background-depth-3 rounded text-bolt-elements-textTertiary hover:text-bolt-elements-textPrimary transition-colors"
+                className="absolute right-6 top-1/2 -translate-y-1/2 p-0.5 hover:bg-recoder-elements-background-depth-3 rounded text-recoder-elements-textTertiary hover:text-recoder-elements-textPrimary transition-colors"
                 title="Clear search (Escape)"
                 aria-label="Clear search"
               >
@@ -305,13 +305,13 @@ export const SearchPanel = memo(({ onFileOpen, className = '' }: SearchPanelProp
               value={replaceText}
               onChange={(e) => setReplaceText(e.target.value)}
               placeholder="Replace"
-              className="flex-1 px-2 py-1 text-sm text-bolt-elements-textPrimary placeholder:text-bolt-elements-textTertiary bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor rounded focus:outline-none focus:border-blue-500"
+              className="flex-1 px-2 py-1 text-sm text-recoder-elements-textPrimary placeholder:text-recoder-elements-textTertiary bg-recoder-elements-background-depth-2 border border-recoder-elements-borderColor rounded focus:outline-none focus:border-blue-500"
               aria-label="Replace text"
             />
             <button
               onClick={handleReplaceAll}
               disabled={!replaceText || results.length === 0 || isReplacing}
-              className="p-1.5 hover:bg-bolt-elements-background-depth-2 rounded disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="p-1.5 hover:bg-recoder-elements-background-depth-2 rounded disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               title="Replace All (Enter in replace field)"
               aria-label="Replace all occurrences"
             >
@@ -328,36 +328,36 @@ export const SearchPanel = memo(({ onFileOpen, className = '' }: SearchPanelProp
       {/* Results */}
       <div ref={resultsContainerRef} className="flex-1 overflow-auto" role="tree" aria-label="Search results">
         {!containerReady && (
-          <div className="p-4 text-center text-bolt-elements-textTertiary text-sm">
+          <div className="p-4 text-center text-recoder-elements-textTertiary text-sm">
             <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500 mx-auto mb-2"></div>
             Waiting for container to be ready...
           </div>
         )}
 
         {containerReady && results.length === 0 && query.length >= 2 && !isSearching && (
-          <div className="p-4 text-center text-bolt-elements-textTertiary text-sm">
+          <div className="p-4 text-center text-recoder-elements-textTertiary text-sm">
             <span className="i-ph:magnifying-glass text-2xl block mb-2 mx-auto opacity-50" />
             No results found for "{query}"
           </div>
         )}
 
         {containerReady && !query && (
-          <div className="p-4 text-center text-bolt-elements-textTertiary text-sm">
+          <div className="p-4 text-center text-recoder-elements-textTertiary text-sm">
             <span className="i-ph:magnifying-glass text-3xl block mb-3 mx-auto opacity-50" />
             <p className="mb-2">Search across all project files</p>
-            <div className="text-xs text-bolt-elements-textTertiary/70 space-y-1">
+            <div className="text-xs text-recoder-elements-textTertiary/70 space-y-1">
               <p>
-                Press <kbd className="px-1.5 py-0.5 bg-bolt-elements-background-depth-2 rounded text-xs border border-bolt-elements-borderColor">Cmd+Shift+F</kbd> to focus
+                Press <kbd className="px-1.5 py-0.5 bg-recoder-elements-background-depth-2 rounded text-xs border border-recoder-elements-borderColor">Cmd+Shift+F</kbd> to focus
               </p>
               <p>
-                Press <kbd className="px-1.5 py-0.5 bg-bolt-elements-background-depth-2 rounded text-xs border border-bolt-elements-borderColor">Cmd+Shift+H</kbd> for replace
+                Press <kbd className="px-1.5 py-0.5 bg-recoder-elements-background-depth-2 rounded text-xs border border-recoder-elements-borderColor">Cmd+Shift+H</kbd> for replace
               </p>
             </div>
           </div>
         )}
 
         {containerReady && query.length === 1 && (
-          <div className="p-4 text-center text-bolt-elements-textTertiary text-sm">
+          <div className="p-4 text-center text-recoder-elements-textTertiary text-sm">
             Type at least 2 characters to search...
           </div>
         )}
@@ -365,12 +365,12 @@ export const SearchPanel = memo(({ onFileOpen, className = '' }: SearchPanelProp
         {results.length > 0 && (
           <>
             {/* Results Header */}
-            <div className="flex items-center justify-between px-2 py-1.5 text-xs text-bolt-elements-textTertiary border-b border-bolt-elements-borderColor bg-bolt-elements-background-depth-2/50 sticky top-0 z-10">
+            <div className="flex items-center justify-between px-2 py-1.5 text-xs text-recoder-elements-textTertiary border-b border-recoder-elements-borderColor bg-recoder-elements-background-depth-2/50 sticky top-0 z-10">
               <span>{results.length} results in {fileCount} files</span>
               <div className="flex items-center gap-1">
                 <button
                   onClick={expandAll}
-                  className="p-1 hover:bg-bolt-elements-background-depth-2 rounded transition-colors"
+                  className="p-1 hover:bg-recoder-elements-background-depth-2 rounded transition-colors"
                   title="Expand All"
                   aria-label="Expand all file results"
                 >
@@ -378,7 +378,7 @@ export const SearchPanel = memo(({ onFileOpen, className = '' }: SearchPanelProp
                 </button>
                 <button
                   onClick={collapseAll}
-                  className="p-1 hover:bg-bolt-elements-background-depth-2 rounded transition-colors"
+                  className="p-1 hover:bg-recoder-elements-background-depth-2 rounded transition-colors"
                   title="Collapse All"
                   aria-label="Collapse all file results"
                 >
@@ -393,19 +393,19 @@ export const SearchPanel = memo(({ onFileOpen, className = '' }: SearchPanelProp
               return (
                 <div
                   key={file}
-                  className="border-b border-bolt-elements-borderColor/50"
+                  className="border-b border-recoder-elements-borderColor/50"
                   role="treeitem"
                   aria-expanded={!isCollapsed}
                 >
                   {/* File Header */}
                   <div
-                    className="flex items-center gap-2 px-2 py-1.5 bg-bolt-elements-background-depth-2 text-sm cursor-pointer hover:bg-bolt-elements-background-depth-2 transition-colors"
+                    className="flex items-center gap-2 px-2 py-1.5 bg-recoder-elements-background-depth-2 text-sm cursor-pointer hover:bg-recoder-elements-background-depth-2 transition-colors"
                     onClick={() => toggleFileCollapse(file)}
                   >
-                    <span className={`i-ph:caret-${isCollapsed ? 'right' : 'down'} text-xs text-bolt-elements-textTertiary`} />
+                    <span className={`i-ph:caret-${isCollapsed ? 'right' : 'down'} text-xs text-recoder-elements-textTertiary`} />
                     <span className={getFileIcon(file)} />
-                    <span className="font-medium truncate flex-1 text-bolt-elements-textPrimary">{file}</span>
-                    <span className="text-bolt-elements-textTertiary text-xs px-1.5 py-0.5 bg-bolt-elements-background-depth-2 rounded">
+                    <span className="font-medium truncate flex-1 text-recoder-elements-textPrimary">{file}</span>
+                    <span className="text-recoder-elements-textTertiary text-xs px-1.5 py-0.5 bg-recoder-elements-background-depth-2 rounded">
                       {fileResults.length}
                     </span>
                     {showReplace && (
@@ -415,7 +415,7 @@ export const SearchPanel = memo(({ onFileOpen, className = '' }: SearchPanelProp
                           handleReplace(file);
                         }}
                         disabled={!replaceText || isReplacing}
-                        className="p-1 hover:bg-bolt-elements-background-depth-3 rounded disabled:opacity-50 transition-colors"
+                        className="p-1 hover:bg-recoder-elements-background-depth-3 rounded disabled:opacity-50 transition-colors"
                         title="Replace in file"
                         aria-label={`Replace all in ${file}`}
                       >
@@ -431,7 +431,7 @@ export const SearchPanel = memo(({ onFileOpen, className = '' }: SearchPanelProp
                         <div
                           key={`${file}-${result.line}-${idx}`}
                           onClick={() => handleResultClick(result)}
-                          className="flex items-start gap-2 px-4 py-1 hover:bg-bolt-elements-background-depth-3 cursor-pointer text-sm transition-colors group"
+                          className="flex items-start gap-2 px-4 py-1 hover:bg-recoder-elements-background-depth-3 cursor-pointer text-sm transition-colors group"
                           role="treeitem"
                           tabIndex={0}
                           onKeyDown={(e) => {
@@ -441,17 +441,17 @@ export const SearchPanel = memo(({ onFileOpen, className = '' }: SearchPanelProp
                             }
                           }}
                         >
-                          <span className="text-bolt-elements-textTertiary w-8 text-right shrink-0 text-xs font-mono group-hover:text-bolt-elements-textSecondary">
+                          <span className="text-recoder-elements-textTertiary w-8 text-right shrink-0 text-xs font-mono group-hover:text-recoder-elements-textSecondary">
                             {result.line}
                           </span>
                           <span className="truncate text-xs font-mono">
-                            <span className="text-bolt-elements-textTertiary">
+                            <span className="text-recoder-elements-textTertiary">
                               {result.text.substring(0, result.matchStart)}
                             </span>
                             <span className="bg-yellow-500/30 text-yellow-200 px-0.5 rounded">
                               {result.text.substring(result.matchStart, result.matchEnd)}
                             </span>
-                            <span className="text-bolt-elements-textTertiary">
+                            <span className="text-recoder-elements-textTertiary">
                               {result.text.substring(result.matchEnd)}
                             </span>
                           </span>

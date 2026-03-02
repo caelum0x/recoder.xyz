@@ -47,7 +47,7 @@ const TYPE_COLORS: Record<string, string> = {
   backend: 'text-green-400',
   database: 'text-purple-400',
   api: 'text-orange-400',
-  config: 'text-bolt-elements-textTertiary',
+  config: 'text-recoder-elements-textTertiary',
   test: 'text-yellow-400',
   docs: 'text-cyan-400',
 };
@@ -173,43 +173,43 @@ export function ProjectPlanPanel({ files, projectName, onFileSelect }: ProjectPl
   };
 
   return (
-    <div className="h-full flex flex-col bg-bolt-elements-background-depth-1 text-bolt-elements-textPrimary overflow-hidden">
+    <div className="h-full flex flex-col bg-recoder-elements-background-depth-1 text-recoder-elements-textPrimary overflow-hidden">
       {/* Header */}
-      <div className="p-3 border-b border-bolt-elements-borderColor">
+      <div className="p-3 border-b border-recoder-elements-borderColor">
         <h3 className="font-semibold text-sm flex items-center gap-2">
           <Layers className="w-4 h-4 text-orange-500" />
           Project Architecture
         </h3>
         {projectName && (
-          <p className="text-xs text-bolt-elements-textSecondary mt-1">{projectName}</p>
+          <p className="text-xs text-recoder-elements-textSecondary mt-1">{projectName}</p>
         )}
       </div>
 
       <div className="flex-1 overflow-y-auto">
         {/* Stats Section */}
-        <div className="border-b border-bolt-elements-borderColor">
+        <div className="border-b border-recoder-elements-borderColor">
           <button
             onClick={() => toggleSection('stats')}
-            className="w-full p-3 flex items-center justify-between hover:bg-bolt-elements-background-depth-2"
+            className="w-full p-3 flex items-center justify-between hover:bg-recoder-elements-background-depth-2"
           >
-            <span className="text-xs font-medium text-bolt-elements-textSecondary">PROJECT STATS</span>
+            <span className="text-xs font-medium text-recoder-elements-textSecondary">PROJECT STATS</span>
             {expandedSections.has('stats') ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
           </button>
           {expandedSections.has('stats') && (
             <div className="px-3 pb-3 grid grid-cols-2 gap-2">
-              <div className="p-2 bg-bolt-elements-background-depth-2 rounded text-center">
+              <div className="p-2 bg-recoder-elements-background-depth-2 rounded text-center">
                 <div className="text-lg font-bold text-blue-400">{stats.totalFiles}</div>
-                <div className="text-xs text-bolt-elements-textSecondary">Files</div>
+                <div className="text-xs text-recoder-elements-textSecondary">Files</div>
               </div>
-              <div className="p-2 bg-bolt-elements-background-depth-2 rounded text-center">
+              <div className="p-2 bg-recoder-elements-background-depth-2 rounded text-center">
                 <div className="text-lg font-bold text-green-400">{stats.totalFolders}</div>
-                <div className="text-xs text-bolt-elements-textSecondary">Folders</div>
+                <div className="text-xs text-recoder-elements-textSecondary">Folders</div>
               </div>
-              <div className="col-span-2 p-2 bg-bolt-elements-background-depth-2 rounded">
-                <div className="text-xs text-bolt-elements-textSecondary mb-1">Languages</div>
+              <div className="col-span-2 p-2 bg-recoder-elements-background-depth-2 rounded">
+                <div className="text-xs text-recoder-elements-textSecondary mb-1">Languages</div>
                 <div className="flex flex-wrap gap-1">
                   {Object.entries(stats.languages).slice(0, 5).map(([lang, count]) => (
-                    <span key={lang} className="px-1.5 py-0.5 bg-bolt-elements-background-depth-3 rounded text-xs">
+                    <span key={lang} className="px-1.5 py-0.5 bg-recoder-elements-background-depth-3 rounded text-xs">
                       {lang}: {count}
                     </span>
                   ))}
@@ -220,31 +220,31 @@ export function ProjectPlanPanel({ files, projectName, onFileSelect }: ProjectPl
         </div>
 
         {/* Architecture Section */}
-        <div className="border-b border-bolt-elements-borderColor">
+        <div className="border-b border-recoder-elements-borderColor">
           <button
             onClick={() => toggleSection('architecture')}
-            className="w-full p-3 flex items-center justify-between hover:bg-bolt-elements-background-depth-2"
+            className="w-full p-3 flex items-center justify-between hover:bg-recoder-elements-background-depth-2"
           >
-            <span className="text-xs font-medium text-bolt-elements-textSecondary">ARCHITECTURE</span>
+            <span className="text-xs font-medium text-recoder-elements-textSecondary">ARCHITECTURE</span>
             {expandedSections.has('architecture') ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
           </button>
           {expandedSections.has('architecture') && (
             <div className="px-3 pb-3 space-y-2">
               {architecture.length === 0 ? (
-                <p className="text-xs text-bolt-elements-textSecondary italic">No files yet</p>
+                <p className="text-xs text-recoder-elements-textSecondary italic">No files yet</p>
               ) : (
                 architecture.map((component) => {
                   const Icon = TYPE_ICONS[component.type];
                   const isExpanded = selectedComponent === component.name;
                   return (
-                    <div key={component.name} className="bg-bolt-elements-background-depth-2 rounded overflow-hidden">
+                    <div key={component.name} className="bg-recoder-elements-background-depth-2 rounded overflow-hidden">
                       <button
                         onClick={() => setSelectedComponent(isExpanded ? null : component.name)}
-                        className="w-full p-2 flex items-center gap-2 hover:bg-bolt-elements-background-depth-3"
+                        className="w-full p-2 flex items-center gap-2 hover:bg-recoder-elements-background-depth-3"
                       >
                         <Icon className={`w-4 h-4 ${TYPE_COLORS[component.type]}`} />
                         <span className="flex-1 text-left text-sm">{component.name}</span>
-                        <span className="text-xs text-bolt-elements-textSecondary">{component.description}</span>
+                        <span className="text-xs text-recoder-elements-textSecondary">{component.description}</span>
                         {isExpanded ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
                       </button>
                       {isExpanded && (
@@ -253,7 +253,7 @@ export function ProjectPlanPanel({ files, projectName, onFileSelect }: ProjectPl
                             <button
                               key={file}
                               onClick={() => onFileSelect?.(file)}
-                              className="w-full text-left px-2 py-1 text-xs text-bolt-elements-textSecondary hover:text-bolt-elements-textPrimary hover:bg-bolt-elements-background-depth-3 rounded truncate"
+                              className="w-full text-left px-2 py-1 text-xs text-recoder-elements-textSecondary hover:text-recoder-elements-textPrimary hover:bg-recoder-elements-background-depth-3 rounded truncate"
                             >
                               {file}
                             </button>

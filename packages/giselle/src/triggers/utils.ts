@@ -1,5 +1,5 @@
-import { Trigger, type TriggerId } from "@giselles-ai/protocol";
-import type { GiselleStorage } from "@giselles-ai/storage";
+import { Trigger, type TriggerId } from "@recoder/protocol";
+import type { GiselleStorage } from "@recoder/storage";
 import { removeGitHubRepositoryIntegrationIndex } from "../integrations/utils";
 
 function triggerPath(params: { triggerId: TriggerId }) {

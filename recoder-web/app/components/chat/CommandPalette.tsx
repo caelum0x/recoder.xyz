@@ -148,7 +148,7 @@ export function CommandPalette({ isOpen, onClose, onSelect }: CommandPaletteProp
       <div
         className={classNames(
           'relative w-full max-w-2xl',
-          'bg-bolt-elements-background-depth-1 border border-bolt-elements-borderColor',
+          'bg-recoder-elements-background-depth-1 border border-recoder-elements-borderColor',
           'rounded-xl shadow-2xl overflow-hidden',
           'animate-fade-in'
         )}
@@ -156,8 +156,8 @@ export function CommandPalette({ isOpen, onClose, onSelect }: CommandPaletteProp
         onKeyDown={handleKeyDown}
       >
         {/* Search input */}
-        <div className="flex items-center gap-3 px-4 py-3 border-b border-bolt-elements-borderColor">
-          <div className="i-ph-magnifying-glass text-lg text-bolt-elements-textTertiary" />
+        <div className="flex items-center gap-3 px-4 py-3 border-b border-recoder-elements-borderColor">
+          <div className="i-ph-magnifying-glass text-lg text-recoder-elements-textTertiary" />
           <input
             ref={inputRef}
             type="text"
@@ -166,18 +166,18 @@ export function CommandPalette({ isOpen, onClose, onSelect }: CommandPaletteProp
             placeholder="Search commands..."
             className={classNames(
               'flex-1 bg-transparent',
-              'text-bolt-elements-textPrimary placeholder:text-bolt-elements-textTertiary',
+              'text-recoder-elements-textPrimary placeholder:text-recoder-elements-textTertiary',
               'focus:outline-none'
             )}
           />
-          <kbd className="px-2 py-1 text-xs font-mono bg-bolt-elements-background-depth-3 rounded border border-bolt-elements-borderColor text-bolt-elements-textTertiary">
+          <kbd className="px-2 py-1 text-xs font-mono bg-recoder-elements-background-depth-3 rounded border border-recoder-elements-borderColor text-recoder-elements-textTertiary">
             Tab
           </kbd>
-          <span className="text-xs text-bolt-elements-textTertiary">to switch category</span>
+          <span className="text-xs text-recoder-elements-textTertiary">to switch category</span>
         </div>
 
         {/* Category tabs */}
-        <div className="flex items-center gap-1 px-4 py-2 border-b border-bolt-elements-borderColor overflow-x-auto">
+        <div className="flex items-center gap-1 px-4 py-2 border-b border-recoder-elements-borderColor overflow-x-auto">
           {CATEGORIES.map((category) => (
             <button
               key={category.id}
@@ -186,8 +186,8 @@ export function CommandPalette({ isOpen, onClose, onSelect }: CommandPaletteProp
                 'flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm whitespace-nowrap',
                 'transition-colors duration-100',
                 selectedCategory === category.id
-                  ? 'bg-bolt-elements-item-backgroundActive text-bolt-elements-textPrimary'
-                  : 'text-bolt-elements-textSecondary hover:bg-bolt-elements-item-backgroundHover'
+                  ? 'bg-recoder-elements-item-backgroundActive text-recoder-elements-textPrimary'
+                  : 'text-recoder-elements-textSecondary hover:bg-recoder-elements-item-backgroundHover'
               )}
             >
               <div className={classNames(category.icon, 'text-sm')} />
@@ -199,7 +199,7 @@ export function CommandPalette({ isOpen, onClose, onSelect }: CommandPaletteProp
         {/* Command list */}
         <div ref={listRef} className="max-h-80 overflow-y-auto py-2">
           {filteredCommands.length === 0 ? (
-            <div className="px-4 py-8 text-center text-bolt-elements-textTertiary">
+            <div className="px-4 py-8 text-center text-recoder-elements-textTertiary">
               <div className="i-ph-magnifying-glass text-4xl mx-auto mb-2 opacity-50" />
               <p>No commands found</p>
               <p className="text-xs mt-1">Try a different search or category</p>
@@ -217,15 +217,15 @@ export function CommandPalette({ isOpen, onClose, onSelect }: CommandPaletteProp
                   'w-full flex items-center gap-3 px-4 py-3 text-left',
                   'transition-colors duration-100',
                   selectedIndex === index
-                    ? 'bg-bolt-elements-item-backgroundActive'
-                    : 'hover:bg-bolt-elements-item-backgroundHover'
+                    ? 'bg-recoder-elements-item-backgroundActive'
+                    : 'hover:bg-recoder-elements-item-backgroundHover'
                 )}
               >
                 {/* Icon */}
                 <div
                   className={classNames(
                     'flex items-center justify-center w-10 h-10 rounded-lg',
-                    'bg-bolt-elements-background-depth-3',
+                    'bg-recoder-elements-background-depth-3',
                     getCategoryColor(command.category)
                   )}
                 >
@@ -235,26 +235,26 @@ export function CommandPalette({ isOpen, onClose, onSelect }: CommandPaletteProp
                 {/* Command info */}
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
-                    <span className="font-mono text-sm font-medium text-bolt-elements-textPrimary">
+                    <span className="font-mono text-sm font-medium text-recoder-elements-textPrimary">
                       /{command.id}
                     </span>
-                    <span className="text-sm text-bolt-elements-textSecondary">
+                    <span className="text-sm text-recoder-elements-textSecondary">
                       {command.name}
                     </span>
                     {command.type !== 'builtin' && (
-                      <span className="px-1.5 py-0.5 text-[10px] font-medium uppercase bg-bolt-elements-background-depth-3 rounded text-bolt-elements-textTertiary">
+                      <span className="px-1.5 py-0.5 text-[10px] font-medium uppercase bg-recoder-elements-background-depth-3 rounded text-recoder-elements-textTertiary">
                         {command.type}
                       </span>
                     )}
                   </div>
-                  <p className="text-xs text-bolt-elements-textTertiary mt-0.5">
+                  <p className="text-xs text-recoder-elements-textTertiary mt-0.5">
                     {command.description}
                   </p>
                 </div>
 
                 {/* Shortcut */}
                 {command.shortcut && (
-                  <kbd className="flex-shrink-0 px-2 py-1 text-xs font-mono bg-bolt-elements-background-depth-3 rounded border border-bolt-elements-borderColor text-bolt-elements-textTertiary">
+                  <kbd className="flex-shrink-0 px-2 py-1 text-xs font-mono bg-recoder-elements-background-depth-3 rounded border border-recoder-elements-borderColor text-recoder-elements-textTertiary">
                     {command.shortcut}
                   </kbd>
                 )}
@@ -264,18 +264,18 @@ export function CommandPalette({ isOpen, onClose, onSelect }: CommandPaletteProp
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-between px-4 py-2 border-t border-bolt-elements-borderColor text-xs text-bolt-elements-textTertiary">
+        <div className="flex items-center justify-between px-4 py-2 border-t border-recoder-elements-borderColor text-xs text-recoder-elements-textTertiary">
           <div className="flex items-center gap-4">
             <span className="flex items-center gap-1">
-              <kbd className="px-1.5 py-0.5 font-mono bg-bolt-elements-background-depth-3 rounded">↑↓</kbd>
+              <kbd className="px-1.5 py-0.5 font-mono bg-recoder-elements-background-depth-3 rounded">↑↓</kbd>
               Navigate
             </span>
             <span className="flex items-center gap-1">
-              <kbd className="px-1.5 py-0.5 font-mono bg-bolt-elements-background-depth-3 rounded">Enter</kbd>
+              <kbd className="px-1.5 py-0.5 font-mono bg-recoder-elements-background-depth-3 rounded">Enter</kbd>
               Execute
             </span>
             <span className="flex items-center gap-1">
-              <kbd className="px-1.5 py-0.5 font-mono bg-bolt-elements-background-depth-3 rounded">Esc</kbd>
+              <kbd className="px-1.5 py-0.5 font-mono bg-recoder-elements-background-depth-3 rounded">Esc</kbd>
               Close
             </span>
           </div>

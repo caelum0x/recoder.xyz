@@ -9,7 +9,7 @@ import { initializeRevenueCat, shouldUseRevenueCat } from '@/lib/billing';
 import { getSessionAccessToken } from '@/lib/auth/session-token';
 import { authProviderClient } from '@/lib/auth/provider-client';
 
-let useTracking: any = null;
+let useTracking: (() => { canTrack: boolean; isLoading: boolean }) | null = null;
 try {
   const TrackingModule = require('@/contexts/TrackingContext');
   useTracking = TrackingModule.useTracking;
@@ -31,6 +31,16 @@ import { log, setLoggerUserId } from '@/lib/logger';
 
 // Complete any pending auth sessions (required for web)
 WebBrowser.maybeCompleteAuthSession();
+
+function getErrorMessage(err: unknown): string {
+  if (err instanceof Error) return err.message;
+  if (typeof err === 'object' && err !== null && 'message' in err) return String((err as { message: unknown }).message);
+  return String(err);
+}
+
+function hasErrorMessage(err: unknown, substring: string): boolean {
+  return getErrorMessage(err).includes(substring);
+}
 
 export function useAuth() {
   const queryClient = useQueryClient();
@@ -138,9 +148,9 @@ export function useAuth() {
       
       setAuthState((prev) => ({ ...prev, isLoading: false }));
       return { success: true, data };
-    } catch (err: any) {
+    } catch (err: unknown) {
       log.error('❌ Sign in exception:', err);
-      const error = { message: err.message || 'An unexpected error occurred' };
+      const error = { message: getErrorMessage(err) || 'An unexpected error occurred' };
       setError(error);
       setAuthState((prev) => ({ ...prev, isLoading: false }));
       return { success: false, error };
@@ -173,9 +183,9 @@ export function useAuth() {
         
         setAuthState((prev) => ({ ...prev, isLoading: false }));
         return { success: true, data };
-      } catch (err: any) {
+      } catch (err: unknown) {
         log.error('❌ Sign up exception:', err);
-        const error = { message: err.message || 'An unexpected error occurred' };
+        const error = { message: getErrorMessage(err) || 'An unexpected error occurred' };
         setError(error);
         setAuthState((prev) => ({ ...prev, isLoading: false }));
         return { success: false, error };
@@ -237,8 +247,8 @@ export function useAuth() {
           
           setAuthState((prev) => ({ ...prev, isLoading: false }));
           return { success: true, data };
-        } catch (appleErr: any) {
-          if (appleErr.code === 'ERR_REQUEST_CANCELED') {
+        } catch (appleErr: unknown) {
+          if (appleErr instanceof Error && 'code' in appleErr && (appleErr as { code: string }).code === 'ERR_REQUEST_CANCELED') {
             log.log('⚠️ Apple sign in cancelled by user');
             setAuthState((prev) => ({ ...prev, isLoading: false }));
             return { success: false, error: { message: 'Sign in cancelled' } };
@@ -310,7 +320,7 @@ export function useAuth() {
           
           return new Promise<AuthActionResult>((resolve) => {
             let hasResolved = false;
-            let appStateSubscription: any = null;
+            let appStateSubscription: ReturnType<typeof AppState.addEventListener> | null = null;
             
             // Timeout after 2 minutes
             const timeout = setTimeout(() => {
@@ -481,19 +491,19 @@ export function useAuth() {
         setAuthState((prev) => ({ ...prev, isLoading: false }));
         oauthSessionActiveRef.current = false;
         return { success: false, error: { message: 'Authentication failed' } };
-      } catch (sessionErr: any) {
+      } catch (sessionErr: unknown) {
         // Reset session flag on error within try block
         oauthSessionActiveRef.current = false;
         throw sessionErr;
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       log.error('❌ OAuth exception:', err);
       
       // Reset session flag on error
       oauthSessionActiveRef.current = false;
       
       // Handle specific WebBrowser auth session error
-      if (err.message?.includes('invalid state') || err.message?.includes('redirect handler')) {
+      if (hasErrorMessage(err, 'invalid state') || hasErrorMessage(err, 'redirect handler')) {
         log.warn('⚠️ WebBrowser auth session conflict, attempting cleanup...');
         try {
           await WebBrowser.maybeCompleteAuthSession();
@@ -503,7 +513,7 @@ export function useAuth() {
         }
       }
       
-      const error = { message: err.message || 'An unexpected error occurred' };
+      const error = { message: getErrorMessage(err) || 'An unexpected error occurred' };
       setError(error);
       setAuthState((prev) => ({ ...prev, isLoading: false }));
       return { success: false, error };
@@ -556,9 +566,9 @@ export function useAuth() {
       log.log('✅ Magic link email sent');
       setAuthState((prev) => ({ ...prev, isLoading: false }));
       return { success: true };
-    } catch (err: any) {
+    } catch (err: unknown) {
       log.error('❌ Magic link exception:', err);
-      const error = { message: err.message || 'An unexpected error occurred' };
+      const error = { message: getErrorMessage(err) || 'An unexpected error occurred' };
       setError(error);
       setAuthState((prev) => ({ ...prev, isLoading: false }));
       return { success: false, error };
@@ -586,9 +596,9 @@ export function useAuth() {
 
       log.log('✅ Password reset email sent');
       return { success: true };
-    } catch (err: any) {
+    } catch (err: unknown) {
       log.error('❌ Password reset exception:', err);
-      const error = { message: err.message || 'An unexpected error occurred' };
+      const error = { message: getErrorMessage(err) || 'An unexpected error occurred' };
       setError(error);
       return { success: false, error };
     }
@@ -612,9 +622,9 @@ export function useAuth() {
 
       log.log('✅ Password updated successfully');
       return { success: true };
-    } catch (err: any) {
+    } catch (err: unknown) {
       log.error('❌ Password update exception:', err);
-      const error = { message: err.message || 'An unexpected error occurred' };
+      const error = { message: getErrorMessage(err) || 'An unexpected error occurred' };
       setError(error);
       return { success: false, error };
     }
@@ -737,7 +747,7 @@ export function useAuth() {
       setIsSigningOut(false);
       return { success: true };
 
-    } catch (error: any) {
+    } catch (error: unknown) {
       log.error('❌ Sign out exception:', error);
 
       await clearAuthProviderStorage().catch(() => {});

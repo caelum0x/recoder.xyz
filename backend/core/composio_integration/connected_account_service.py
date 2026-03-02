@@ -63,9 +63,9 @@ class ConnectedAccountService:
         initiation_fields: Optional[Dict[str, str]] = None
     ) -> ConnectedAccount:
         try:
-            print("[DEBUG] Auth config id: ", auth_config_id)
-            print("[DEBUG] User id: ", user_id)
-            print("[DEBUG] Initiation fields: ", initiation_fields)
+            logger.debug(f"[DEBUG] Auth config id: {auth_config_id}")
+            logger.debug(f"[DEBUG] User id: {user_id}")
+            logger.debug(f"[DEBUG] Initiation fields: {initiation_fields}")
             
             state_val = {"status": "INITIALIZING"}
             

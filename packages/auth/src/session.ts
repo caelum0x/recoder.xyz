@@ -1,4 +1,6 @@
 import { authDatabase } from "./database";
+import { parseSessionToken } from "./edge";
+export { SESSION_COOKIE_NAMES, parseSessionToken } from "./edge";
 
 /**
  * Core auth user from the shared auth database.
@@ -22,22 +24,6 @@ export type AuthSession = {
   user: AuthCoreUser;
   expiresAt: Date;
 };
-
-/**
- * Cookie names used by better-auth with "recoder" prefix.
- */
-export const SESSION_COOKIE_NAMES = [
-  "recoder.session_token",
-  "__Secure-recoder.session_token",
-] as const;
-
-/**
- * Extract the session token from a raw cookie value.
- * better-auth tokens may have a signature suffix after ".".
- */
-export function parseSessionToken(rawToken: string): string {
-  return rawToken.split(".")[0];
-}
 
 /**
  * Verify a session token by looking it up in the auth database.

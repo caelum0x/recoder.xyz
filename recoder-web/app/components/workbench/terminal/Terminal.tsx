@@ -192,25 +192,25 @@ export const Terminal = memo(
         />
         {contextMenu.show && (
           <div 
-            className="fixed z-50 bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor rounded-md shadow-lg py-1 min-w-[140px]"
+            className="fixed z-50 bg-recoder-elements-background-depth-2 border border-recoder-elements-borderColor rounded-md shadow-lg py-1 min-w-[140px]"
             style={{ left: contextMenu.x, top: contextMenu.y }}
           >
-            <button onClick={handleCopy} className="w-full px-3 py-1.5 text-left text-sm hover:bg-bolt-elements-background-depth-3 flex items-center gap-2">
-              <span className="text-xs text-bolt-elements-textTertiary">⌘C</span>
+            <button onClick={handleCopy} className="w-full px-3 py-1.5 text-left text-sm hover:bg-recoder-elements-background-depth-3 flex items-center gap-2">
+              <span className="text-xs text-recoder-elements-textTertiary">⌘C</span>
               {copied ? (
                 <span className="text-green-400 flex items-center gap-1">
                   <div className="i-ph:check-bold text-xs" /> Copied
                 </span>
               ) : 'Copy'}
             </button>
-            <button onClick={handlePaste} className="w-full px-3 py-1.5 text-left text-sm hover:bg-bolt-elements-background-depth-3 flex items-center gap-2">
-              <span className="text-xs text-bolt-elements-textTertiary">⌘V</span> Paste
+            <button onClick={handlePaste} className="w-full px-3 py-1.5 text-left text-sm hover:bg-recoder-elements-background-depth-3 flex items-center gap-2">
+              <span className="text-xs text-recoder-elements-textTertiary">⌘V</span> Paste
             </button>
-            <div className="border-t border-bolt-elements-borderColor my-1" />
-            <button onClick={handleSelectAll} className="w-full px-3 py-1.5 text-left text-sm hover:bg-bolt-elements-background-depth-3 flex items-center gap-2">
-              <span className="text-xs text-bolt-elements-textTertiary">⌘A</span> Select All
+            <div className="border-t border-recoder-elements-borderColor my-1" />
+            <button onClick={handleSelectAll} className="w-full px-3 py-1.5 text-left text-sm hover:bg-recoder-elements-background-depth-3 flex items-center gap-2">
+              <span className="text-xs text-recoder-elements-textTertiary">⌘A</span> Select All
             </button>
-            <button onClick={handleClear} className="w-full px-3 py-1.5 text-left text-sm hover:bg-bolt-elements-background-depth-3">
+            <button onClick={handleClear} className="w-full px-3 py-1.5 text-left text-sm hover:bg-recoder-elements-background-depth-3">
               Clear
             </button>
           </div>

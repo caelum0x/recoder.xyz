@@ -1,4 +1,30 @@
+import type { Metadata } from 'next';
+import Link from 'next/link';
 import { Sparkles, Zap, Bug, Shield } from 'lucide-react';
+import { SiteHeader } from '@/components/SiteHeader';
+import { SiteFooter } from '@/components/SiteFooter';
+
+export const metadata: Metadata = {
+  title: 'Changelog - Recoder.xyz',
+  description: 'Track the latest updates, new features, improvements, and bug fixes for Recoder.xyz.',
+  openGraph: {
+    title: 'Changelog - Recoder.xyz',
+    description: 'Track the latest updates, new features, improvements, and bug fixes for Recoder.xyz.',
+    url: 'https://recoder.xyz/changelog',
+    siteName: 'Recoder.xyz',
+    images: [{ url: 'https://recoder.xyz/og-image.png', width: 1200, height: 630, alt: 'Recoder Changelog' }],
+    type: 'website',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Changelog - Recoder.xyz',
+    description: 'Track the latest updates, new features, improvements, and bug fixes for Recoder.xyz.',
+    images: ['https://recoder.xyz/og-image.png'],
+  },
+  alternates: {
+    canonical: 'https://recoder.xyz/changelog',
+  },
+};
 
 export default function ChangelogPage() {
   const releases = [
@@ -42,6 +68,8 @@ export default function ChangelogPage() {
 
   return (
     <div className="min-h-screen bg-black text-white">
+      <SiteHeader fixed={false} />
+
       <div className="max-w-4xl mx-auto px-4 py-20">
         <div className="text-center mb-16">
           <h1 className="text-5xl font-bold mb-6">Changelog</h1>
@@ -73,6 +101,8 @@ export default function ChangelogPage() {
           ))}
         </div>
       </div>
+
+      <SiteFooter />
     </div>
   );
 }

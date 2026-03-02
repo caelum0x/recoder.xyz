@@ -3,15 +3,15 @@ import {
 	githubActions,
 	githubActionToInputFields,
 	isGitHubActionId,
-} from "@giselles-ai/action-registry";
-import type { GitHubIntegrationInstallation } from "@giselles-ai/giselle";
+} from "@recoder/action-registry";
+import type { GitHubIntegrationInstallation } from "@recoder/giselle";
 import {
 	type ActionNode,
 	type Input,
 	InputId,
 	OutputId,
-} from "@giselles-ai/protocol";
-import { useIntegration } from "@giselles-ai/react";
+} from "@recoder/protocol";
+import { useIntegration } from "@recoder/react";
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import { useUpdateNodeData } from "../../../app-designer";
 import { GitHubIcon, SpinnerIcon } from "../../../icons";
@@ -114,8 +114,8 @@ export function GitHubActionPropertiesPanel({
 		case "installed":
 			break;
 		default: {
-			const _exhaustiveCheck: never = value.github;
-			throw new Error(`Unhandled status: ${_exhaustiveCheck}`);
+			const status = (value.github as { status?: string } | undefined)?.status;
+			throw new Error(`Unhandled status: ${String(status ?? "unknown")}`);
 		}
 	}
 

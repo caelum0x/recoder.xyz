@@ -34,7 +34,7 @@ export const PADDLE_PLANS: Record<string, SubscriptionPlan> = {
     features: ['5 generations/month', 'Basic templates', 'Community support']
   },
   pro: {
-    planId: 'prod_bolt_pro_monthly',
+    planId: 'prod_recoder_pro_monthly',
     name: 'Pro',
     price: 20,
     currency: 'USD',
@@ -48,7 +48,7 @@ export const PADDLE_PLANS: Record<string, SubscriptionPlan> = {
     ]
   },
   team: {
-    planId: 'prod_bolt_team_monthly',
+    planId: 'prod_recoder_team_monthly',
     name: 'Team',
     price: 50,
     currency: 'USD',
@@ -62,7 +62,7 @@ export const PADDLE_PLANS: Record<string, SubscriptionPlan> = {
     ]
   },
   enterprise: {
-    planId: 'prod_bolt_enterprise_monthly',
+    planId: 'prod_recoder_enterprise_monthly',
     name: 'Enterprise',
     price: 200,
     currency: 'USD',

@@ -10,21 +10,19 @@ import {
   ArrowRight, CheckCircle, Sparkles, TrendingUp,
   BarChart3, FolderOpen, X, Key, AlertCircle,
   MessageCircle, Terminal, Zap, Code2, Bot, Workflow,
-  Database, Server, Cpu, Shield, ExternalLink
+  Database, Server, ExternalLink
 } from 'lucide-react';
 import { RECODER_SERVICES, getServiceUrlClient } from '@/lib/config/platforms';
 
 const serviceIcons: Record<string, React.ElementType> = {
   app: Globe,
-  frontend: Bot,
+  agents: Bot,
   web: Code2,
-  'docker-backend': Server,
-  backend: Cpu,
+  api: Server,
   pm: Database,
   studio: Sparkles,
   agency: Workflow,
   openclaw: Terminal,
-  redis: Shield,
 };
 
 interface ServiceHealthEntry {

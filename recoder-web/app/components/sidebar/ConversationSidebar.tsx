@@ -136,56 +136,56 @@ export function ConversationSidebar({ projectId, onClose, className = '' }: Conv
   );
 
   return (
-    <div className={`flex flex-col h-full bg-bolt-elements-background-depth-2 ${className}`}>
+    <div className={`flex flex-col h-full bg-recoder-elements-background-depth-2 ${className}`}>
       {/* Header */}
-      <div className="flex items-center justify-between p-4 border-b border-bolt-elements-borderColor">
-        <h2 className="text-lg font-semibold text-bolt-elements-textPrimary">Conversations</h2>
+      <div className="flex items-center justify-between p-4 border-b border-recoder-elements-borderColor">
+        <h2 className="text-lg font-semibold text-recoder-elements-textPrimary">Conversations</h2>
         <div className="flex items-center gap-2">
           <IconButton
             icon="i-ph:plus"
             onClick={handleCreateNew}
             title="New conversation"
-            className="text-bolt-elements-textTertiary hover:text-bolt-elements-textPrimary"
+            className="text-recoder-elements-textTertiary hover:text-recoder-elements-textPrimary"
           />
           {onClose && (
             <IconButton
               icon="i-ph:x"
               onClick={onClose}
               title="Close"
-              className="text-bolt-elements-textTertiary hover:text-bolt-elements-textPrimary"
+              className="text-recoder-elements-textTertiary hover:text-recoder-elements-textPrimary"
             />
           )}
         </div>
       </div>
 
       {/* Search */}
-      <div className="p-4 border-b border-bolt-elements-borderColor">
+      <div className="p-4 border-b border-recoder-elements-borderColor">
         <div className="relative">
-          <span className="absolute left-3 top-1/2 -translate-y-1/2 i-ph:magnifying-glass text-bolt-elements-textTertiary" />
+          <span className="absolute left-3 top-1/2 -translate-y-1/2 i-ph:magnifying-glass text-recoder-elements-textTertiary" />
           <input
             ref={searchInputRef}
             type="text"
             placeholder="Search conversations... (Cmd+K)"
             value={query}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor rounded-lg text-bolt-elements-textPrimary placeholder:text-bolt-elements-textTertiary focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full pl-10 pr-4 py-2 bg-recoder-elements-background-depth-2 border border-recoder-elements-borderColor rounded-lg text-recoder-elements-textPrimary placeholder:text-recoder-elements-textTertiary focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
           {query && (
             <button
               onClick={() => setSearchQuery('')}
-              className="absolute right-3 top-1/2 -translate-y-1/2 i-ph:x text-bolt-elements-textTertiary hover:text-bolt-elements-textPrimary"
+              className="absolute right-3 top-1/2 -translate-y-1/2 i-ph:x text-recoder-elements-textTertiary hover:text-recoder-elements-textPrimary"
             />
           )}
         </div>
       </div>
 
       {/* Stats */}
-      <div className="px-4 py-2 flex items-center gap-4 text-xs text-bolt-elements-textTertiary border-b border-bolt-elements-borderColor">
+      <div className="px-4 py-2 flex items-center gap-4 text-xs text-recoder-elements-textTertiary border-b border-recoder-elements-borderColor">
         <span>{stats.total} total</span>
         <span>{stats.favorites} favorites</span>
         <button
           onClick={toggleShowArchived}
-          className={`hover:text-bolt-elements-textSecondary ${archived ? 'text-bolt-elements-textTertiary' : ''}`}
+          className={`hover:text-recoder-elements-textSecondary ${archived ? 'text-recoder-elements-textTertiary' : ''}`}
         >
           {archived ? 'Hide' : 'Show'} {stats.archived} archived
         </button>
@@ -195,7 +195,7 @@ export function ConversationSidebar({ projectId, onClose, className = '' }: Conv
       <div className="flex-1 overflow-y-auto">
         {loading && (
           <div className="flex items-center justify-center p-8">
-            <span className="i-ph:spinner animate-spin text-2xl text-bolt-elements-textTertiary" />
+            <span className="i-ph:spinner animate-spin text-2xl text-recoder-elements-textTertiary" />
           </div>
         )}
 
@@ -206,7 +206,7 @@ export function ConversationSidebar({ projectId, onClose, className = '' }: Conv
         )}
 
         {!loading && !error && sessions.length === 0 && (
-          <div className="p-8 text-center text-bolt-elements-textTertiary">
+          <div className="p-8 text-center text-recoder-elements-textTertiary">
             {query ? 'No conversations match your search' : 'No conversations yet'}
           </div>
         )}
@@ -216,7 +216,7 @@ export function ConversationSidebar({ projectId, onClose, className = '' }: Conv
             {/* Favorites Section */}
             {!query && favorites.length > 0 && (
               <div className="mb-4">
-                <div className="px-4 py-2 text-xs font-medium text-bolt-elements-textTertiary uppercase tracking-wider bg-bolt-elements-background-depth-2 sticky top-0 z-10">
+                <div className="px-4 py-2 text-xs font-medium text-recoder-elements-textTertiary uppercase tracking-wider bg-recoder-elements-background-depth-2 sticky top-0 z-10">
                   Favorites
                 </div>
                 {favorites.map((session) => (
@@ -238,7 +238,7 @@ export function ConversationSidebar({ projectId, onClose, className = '' }: Conv
             {/* Recent or All Sessions */}
             {groupedSessions.map(({ category, items }) => (
               <div key={category} className="mb-4">
-                <div className="px-4 py-2 text-xs font-medium text-bolt-elements-textTertiary uppercase tracking-wider bg-bolt-elements-background-depth-2 sticky top-0 z-10">
+                <div className="px-4 py-2 text-xs font-medium text-recoder-elements-textTertiary uppercase tracking-wider bg-recoder-elements-background-depth-2 sticky top-0 z-10">
                   {category}
                 </div>
                 {items.map((item) => {
@@ -275,7 +275,7 @@ export function ConversationSidebar({ projectId, onClose, className = '' }: Conv
                       <p className="mt-1">This action cannot be undone.</p>
                     </div>
                   </DialogDescription>
-                  <div className="px-5 pb-4 bg-bolt-elements-background-depth-2 flex gap-2 justify-end">
+                  <div className="px-5 pb-4 bg-recoder-elements-background-depth-2 flex gap-2 justify-end">
                     <DialogButton type="secondary" onClick={() => setDialogContent(null)}>
                       Cancel
                     </DialogButton>
@@ -299,7 +299,7 @@ export function ConversationSidebar({ projectId, onClose, className = '' }: Conv
                       <p className="mt-1">You can view archived conversations by toggling the filter.</p>
                     </div>
                   </DialogDescription>
-                  <div className="px-5 pb-4 bg-bolt-elements-background-depth-2 flex gap-2 justify-end">
+                  <div className="px-5 pb-4 bg-recoder-elements-background-depth-2 flex gap-2 justify-end">
                     <DialogButton type="secondary" onClick={() => setDialogContent(null)}>
                       Cancel
                     </DialogButton>
@@ -372,7 +372,7 @@ function ConversationItem({
 
   return (
     <div
-      className={`group relative px-4 py-2 hover:bg-bolt-elements-background-depth-2 transition-colors ${
+      className={`group relative px-4 py-2 hover:bg-recoder-elements-background-depth-2 transition-colors ${
         session.isArchived ? 'opacity-60' : ''
       }`}
       onMouseEnter={() => setHovering(true)}
@@ -388,7 +388,7 @@ function ConversationItem({
           className={`mt-1 flex-shrink-0 ${
             session.isFavorite
               ? 'i-ph:star-fill text-yellow-400'
-              : 'i-ph:star text-bolt-elements-textTertiary hover:text-yellow-400'
+              : 'i-ph:star text-recoder-elements-textTertiary hover:text-yellow-400'
           }`}
           title={session.isFavorite ? 'Remove from favorites' : 'Add to favorites'}
         />
@@ -402,24 +402,24 @@ function ConversationItem({
               onChange={(e) => setEditTitle(e.target.value)}
               onBlur={handleRenameSubmit}
               onKeyDown={handleKeyDown}
-              className="w-full px-2 py-1 bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor rounded text-bolt-elements-textPrimary focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full px-2 py-1 bg-recoder-elements-background-depth-2 border border-recoder-elements-borderColor rounded text-recoder-elements-textPrimary focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           ) : (
             <Link
               to={`/chat/${session.urlId}`}
-              className="block text-bolt-elements-textPrimary hover:text-bolt-elements-textPrimary truncate"
+              className="block text-recoder-elements-textPrimary hover:text-recoder-elements-textPrimary truncate"
             >
               {session.title}
             </Link>
           )}
 
-          <div className="flex items-center gap-2 mt-1 text-xs text-bolt-elements-textTertiary">
+          <div className="flex items-center gap-2 mt-1 text-xs text-recoder-elements-textTertiary">
             <span>{session.messageCount} messages</span>
             {session.source === 'cli' && (
-              <span className="px-1 py-0.5 bg-bolt-elements-background-depth-2 rounded">CLI</span>
+              <span className="px-1 py-0.5 bg-recoder-elements-background-depth-2 rounded">CLI</span>
             )}
             {session.isArchived && (
-              <span className="px-1 py-0.5 bg-bolt-elements-background-depth-2 rounded">Archived</span>
+              <span className="px-1 py-0.5 bg-recoder-elements-background-depth-2 rounded">Archived</span>
             )}
           </div>
         </div>
@@ -438,7 +438,7 @@ function ConversationItem({
                   e.preventDefault();
                   onStartRename();
                 }}
-                className="p-1 i-ph:pencil text-bolt-elements-textTertiary hover:text-bolt-elements-textPrimary"
+                className="p-1 i-ph:pencil text-recoder-elements-textTertiary hover:text-recoder-elements-textPrimary"
                 title="Rename"
               />
               <button
@@ -446,7 +446,7 @@ function ConversationItem({
                   e.preventDefault();
                   onExport();
                 }}
-                className="p-1 i-ph:download text-bolt-elements-textTertiary hover:text-bolt-elements-textPrimary"
+                className="p-1 i-ph:download text-recoder-elements-textTertiary hover:text-recoder-elements-textPrimary"
                 title="Export as Markdown"
               />
               <button
@@ -454,7 +454,7 @@ function ConversationItem({
                   e.preventDefault();
                   onArchive();
                 }}
-                className="p-1 i-ph:archive text-bolt-elements-textTertiary hover:text-bolt-elements-textPrimary"
+                className="p-1 i-ph:archive text-recoder-elements-textTertiary hover:text-recoder-elements-textPrimary"
                 title="Archive"
               />
               <button
@@ -462,7 +462,7 @@ function ConversationItem({
                   e.preventDefault();
                   onDelete();
                 }}
-                className="p-1 i-ph:trash text-bolt-elements-textTertiary hover:text-red-400"
+                className="p-1 i-ph:trash text-recoder-elements-textTertiary hover:text-red-400"
                 title="Delete"
               />
             </motion.div>

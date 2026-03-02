@@ -1,4 +1,4 @@
-import type { FileCategory, FileNode } from "@giselles-ai/protocol";
+import type { FileCategory, FileNode } from "@recoder/protocol";
 import { useDeleteNode, useUpdateNodeData } from "../../../app-designer";
 import { PropertiesPanelContent, PropertiesPanelRoot } from "../ui";
 import { NodePanelHeader } from "../ui/node-panel-header";
@@ -29,7 +29,7 @@ export function FileNodePropertiesPanel({ node }: { node: FileNode }) {
 			<NodePanelHeader
 				node={node}
 				onChangeName={(name) => updateNodeData(node, { name })}
-				docsUrl="https://docs.giselles.ai/en/glossary/file-node"
+				docsUrl="https://docs.recoder.xyz/en/glossary/file-node"
 				onDelete={() => deleteNode(node.id)}
 			/>
 			<PropertiesPanelContent>

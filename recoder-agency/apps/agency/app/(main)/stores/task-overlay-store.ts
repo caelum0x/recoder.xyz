@@ -1,7 +1,7 @@
 import type {
 	GenerationContextInput,
 	WorkspaceId,
-} from "@giselles-ai/protocol";
+} from "@recoder/protocol";
 import { create } from "zustand";
 
 type OverlayAppSummary = {

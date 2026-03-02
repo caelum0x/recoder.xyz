@@ -3,9 +3,9 @@
     "target": "ES2022",
     "module": "commonjs",
     "paths": {
-      "@giselles-ai/stream/public-task-stream": ["../packages/stream/dist/public-task-stream"],
-      "@giselles-ai/vault": ["../packages/vault/dist/index"],
-      "@giselles-ai/vault/node-crypto": ["../packages/vault/dist/node-crypto"]
+      "@recoder/stream/public-task-stream": ["../packages/stream/dist/public-task-stream"],
+      "@recoder/vault": ["../packages/vault/dist/index"],
+      "@recoder/vault/node-crypto": ["../packages/vault/dist/node-crypto"]
     },
     "lib": ["ES2022", "dom"],
     "outDir": "./dist",

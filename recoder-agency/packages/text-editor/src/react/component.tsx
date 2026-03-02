@@ -1,6 +1,6 @@
-import type { NodeLike, Output } from "@giselles-ai/protocol";
-import type { UIConnection } from "@giselles-ai/react";
-import { extensions as baseExtensions } from "@giselles-ai/text-editor-utils";
+import type { NodeLike, Output } from "@recoder/protocol";
+import type { UIConnection } from "@recoder/react";
+import { extensions as baseExtensions } from "@recoder/text-editor-utils";
 import Mention from "@tiptap/extension-mention";
 import Placeholder from "@tiptap/extension-placeholder";
 import {

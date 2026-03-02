@@ -1,4 +1,4 @@
-import type { GitHubEventId } from "@giselles-ai/trigger-registry";
+import type { GitHubEventId } from "@recoder/trigger-registry";
 import {
 	Check,
 	MessageSquareCode,

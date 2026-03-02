@@ -104,12 +104,12 @@ export function SlashCommandMenu({
       <div
         className={classNames(
           'absolute left-0 right-0 z-50',
-          'bg-bolt-elements-background-depth-1 border border-bolt-elements-borderColor',
+          'bg-recoder-elements-background-depth-1 border border-recoder-elements-borderColor',
           'rounded-lg shadow-xl overflow-hidden',
           position === 'above' ? 'bottom-full mb-2' : 'top-full mt-2'
         )}
       >
-        <div className="px-4 py-3 text-sm text-bolt-elements-textSecondary">
+        <div className="px-4 py-3 text-sm text-recoder-elements-textSecondary">
           No commands found
         </div>
       </div>
@@ -121,7 +121,7 @@ export function SlashCommandMenu({
       ref={menuRef}
       className={classNames(
         'absolute left-0 right-0 z-50',
-        'bg-bolt-elements-background-depth-1 border border-bolt-elements-borderColor',
+        'bg-recoder-elements-background-depth-1 border border-recoder-elements-borderColor',
         'rounded-lg shadow-xl overflow-hidden',
         'max-h-64 overflow-y-auto',
         position === 'above' ? 'bottom-full mb-2' : 'top-full mt-2'
@@ -140,8 +140,8 @@ export function SlashCommandMenu({
               'transition-colors duration-100',
               // ALL rows get dark background - selected is lighter, others are darker
               selectedIndex === index
-                ? 'bg-bolt-elements-background-depth-3'
-                : 'bg-bolt-elements-background-depth-1 hover:bg-bolt-elements-background-depth-3'
+                ? 'bg-recoder-elements-background-depth-3'
+                : 'bg-recoder-elements-background-depth-1 hover:bg-recoder-elements-background-depth-3'
             )}
             role="option"
             aria-selected={selectedIndex === index}
@@ -150,11 +150,11 @@ export function SlashCommandMenu({
             <div
               className={classNames(
                 'flex items-center justify-center w-8 h-8 rounded-md',
-                'bg-bolt-elements-background-depth-3',
+                'bg-recoder-elements-background-depth-3',
                 getCategoryColor(command.category)
               )}
             >
-              <div className={classNames(command.icon || getCategoryIcon(command.category), 'text-lg text-bolt-elements-textPrimary')} />
+              <div className={classNames(command.icon || getCategoryIcon(command.category), 'text-lg text-recoder-elements-textPrimary')} />
             </div>
 
             {/* Command info */}
@@ -163,11 +163,11 @@ export function SlashCommandMenu({
                 <span className="font-mono text-sm font-semibold text-orange-400">
                   /{command.id}
                 </span>
-                <span className="text-xs text-bolt-elements-textSecondary">
+                <span className="text-xs text-recoder-elements-textSecondary">
                   {command.name}
                 </span>
               </div>
-              <p className="text-xs text-bolt-elements-textSecondary truncate">
+              <p className="text-xs text-recoder-elements-textSecondary truncate">
                 {command.description}
               </p>
             </div>
@@ -175,7 +175,7 @@ export function SlashCommandMenu({
             {/* Shortcut */}
             {command.shortcut && (
               <div className="flex-shrink-0">
-                <kbd className="px-2 py-1 text-xs font-mono bg-bolt-elements-background-depth-3 rounded border border-bolt-elements-borderColor text-bolt-elements-textSecondary">
+                <kbd className="px-2 py-1 text-xs font-mono bg-recoder-elements-background-depth-3 rounded border border-recoder-elements-borderColor text-recoder-elements-textSecondary">
                   {command.shortcut}
                 </kbd>
               </div>

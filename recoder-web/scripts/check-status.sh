@@ -1,11 +1,12 @@
 #!/bin/bash
 
-# Status Check Script for Bolt.new
+# Status Check Script for Recoder Web
 # Verifies database and shows current state
 
-DB_URL="postgresql://neondb_owner:npg_e2mFob8SaEOV@ep-silent-mode-adii0v0d-pooler.c-2.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require"
+# Database URL — must be set in environment
+DB_URL="${DATABASE_URL:?DATABASE_URL environment variable is required}"
 
-echo "🔍 Bolt.new System Status"
+echo "🔍 Recoder Web System Status"
 echo "=========================="
 echo ""
 

@@ -1056,8 +1056,7 @@ export class E2BSandbox implements SandboxProvider {
 
     try {
       // Dynamic import of E2B SDK
-      // @ts-ignore - E2B SDK is an optional dependency loaded at runtime
-      const { Sandbox } = await import('@e2b/code-interpreter');
+      const { Sandbox } = await (import('@e2b/code-interpreter' /* optional dep */) as Promise<{ Sandbox: any }>);
       this.#sandbox = await Sandbox.create(this.#template, { apiKey: this.#apiKey });
 
       this.#status = 'connected';

@@ -1,5 +1,5 @@
 {
-	"name": "@giselles-ai/data-store-registry",
+	"name": "@recoder/data-store-registry",
 	"version": "0.0.0",
 	"private": true,
 	"main": "./dist/index.js",
@@ -20,7 +20,7 @@
 		}
 	},
 	"devDependencies": {
-		"@giselles-ai/tsconfig": "workspace:*",
+		"@recoder/tsconfig": "workspace:*",
 		"tsup": "catalog:",
 		"vitest": "catalog:"
 	},

@@ -3,6 +3,7 @@ import { join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import createBundleAnalyzer from "@next/bundle-analyzer";
 import type { SentryBuildOptions } from "@sentry/nextjs";
+import type { NextConfig } from "next";
 
 const moduleRequire = createRequire(import.meta.url);
 const projectDir = fileURLToPath(new URL(".", import.meta.url));
@@ -31,10 +32,12 @@ const pdfiumTracingConfig = {
 	},
 };
 
-const nextConfig = {
+const nextConfig: NextConfig = {
+	output: "standalone",
 	turbopack: {
-		root: join(__dirname, "../../"),
+		root: join(projectDir, "../../"),
 	},
+	transpilePackages: ["@recoder/auth"],
 	serverExternalPackages,
 	images: {
 		remotePatterns: [
@@ -51,6 +54,14 @@ const nextConfig = {
 						{
 							protocol: "https" as const,
 							hostname: new URL(process.env.NEXT_PUBLIC_SUPABASE_URL).hostname,
+						},
+					]
+				: []),
+			...(process.env.R2_PUBLIC_BASE_URL
+				? [
+						{
+							protocol: "https" as const,
+							hostname: new URL(process.env.R2_PUBLIC_BASE_URL).hostname,
 						},
 					]
 				: []),
@@ -154,9 +165,9 @@ export default async function () {
 	if (enableSentry) {
 		return await import("@sentry/nextjs").then((mod) =>
 			withAnalyzer(
-				mod.withSentryConfig(nextConfig as any, sentryBuildOptions) as any,
+				mod.withSentryConfig(nextConfig, sentryBuildOptions),
 			),
 		);
 	}
-	return withAnalyzer(nextConfig as any);
+	return withAnalyzer(nextConfig);
 }

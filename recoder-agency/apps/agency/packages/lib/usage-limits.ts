@@ -1,4 +1,4 @@
-import type { UsageLimits } from "@giselles-ai/giselle";
+import type { UsageLimits } from "@recoder/giselle";
 import { eq } from "drizzle-orm";
 import { agentTimeRestrictions, db, teams } from "@/db";
 import {

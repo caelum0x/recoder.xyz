@@ -3,10 +3,10 @@
 import {
 	AppDesignerProvider,
 	Editor,
-} from "@giselle-internal/workflow-designer-ui";
-import type { Integration } from "@giselles-ai/giselle";
-import type { Trigger, Workspace } from "@giselles-ai/protocol";
-import { GiselleClientProvider, WorkspaceProvider } from "@giselles-ai/react";
+} from "@recoder-internal/workflow-designer-ui";
+import type { Integration } from "@recoder/giselle";
+import type { Trigger, Workspace } from "@recoder/protocol";
+import { GiselleClientProvider, WorkspaceProvider } from "@recoder/react";
 import { use, useMemo } from "react";
 import { createInternalGiselleClient } from "@/lib/internal-api/create-giselle-client";
 import type { LoaderData } from "./data-loader";
@@ -84,6 +84,26 @@ export function Page({
 					}}
 				>
 					<div className="flex flex-col h-screen bg-black-900">
+						{!data.byokStatus.hasKeys && (
+							<div className="mx-4 mt-3 rounded-[10px] border border-yellow-500/50 bg-yellow-500/10 px-4 py-3 text-sm text-white">
+								<p className="font-semibold text-yellow-400">
+									API Key Required
+								</p>
+								<p className="text-white/75 mt-1">
+									Recoder.xyz is in BYOK (Bring Your Own Key) beta. Add your AI
+									provider API keys at{" "}
+									<a
+										href="https://recoder.xyz/settings/ai-providers"
+										target="_blank"
+										rel="noopener noreferrer"
+										className="underline text-yellow-300 hover:text-yellow-200"
+									>
+										recoder.xyz/settings/ai-providers
+									</a>{" "}
+									to use AI features.
+								</p>
+							</div>
+						)}
 						<Editor
 							onFlowNameChange={workspaceNameUpdateAction}
 							teamName={data.workspaceTeam.name}

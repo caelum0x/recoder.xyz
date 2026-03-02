@@ -1,4 +1,4 @@
--- Database Schema for Bolt.new Subscription System
+-- Database Schema for Recoder Web Subscription System
 -- Use with Neon, Supabase, or any PostgreSQL database
 
 -- Users table (extend your existing users table or create new)

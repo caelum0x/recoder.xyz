@@ -7,8 +7,8 @@ import type {
 	TriggerNode,
 	VariableNode,
 	VectorStoreNode,
-} from "@giselles-ai/protocol";
-import type { UIConnection } from "@giselles-ai/react";
+} from "@recoder/protocol";
+import type { UIConnection } from "@recoder/react";
 import { useMemo } from "react";
 import { useAppDesignerStore } from "../../../../app-designer";
 import type { ConnectedSource, DatastoreNode } from "./types";
@@ -42,7 +42,7 @@ export function useConnectedSources(node: QueryNode) {
 				continue;
 			}
 			const output = outputNode.outputs.find(
-				(output) => output.id === connection.outputId,
+				(output: { id: string }) => output.id === connection.outputId,
 			);
 			if (output === undefined) {
 				continue;
@@ -107,8 +107,11 @@ export function useConnectedSources(node: QueryNode) {
 							// End Node has no Output so do nothing
 							break;
 						default: {
-							const _exhaustiveCheck: never = outputNode.content.type;
-							throw new Error(`Unhandled node type: ${_exhaustiveCheck}`);
+							const contentType = (outputNode as { content?: { type?: string } })
+								.content?.type;
+							throw new Error(
+								`Unhandled node type: ${String(contentType ?? "unknown")}`,
+							);
 						}
 					}
 					break;
@@ -134,14 +137,17 @@ export function useConnectedSources(node: QueryNode) {
 						case "dataStore":
 							break;
 						default: {
-							const _exhaustiveCheck: never = outputNode.content.type;
-							throw new Error(`Unhandled node type: ${_exhaustiveCheck}`);
+							const contentType = (outputNode as { content?: { type?: string } })
+								.content?.type;
+							throw new Error(
+								`Unhandled node type: ${String(contentType ?? "unknown")}`,
+							);
 						}
 					}
 					break;
 				default: {
-					const _exhaustiveCheck: never = outputNode;
-					throw new Error(`Unhandled node type: ${_exhaustiveCheck}`);
+					const nodeType = (outputNode as { type?: string }).type;
+					throw new Error(`Unhandled node type: ${String(nodeType ?? "unknown")}`);
 				}
 			}
 		}

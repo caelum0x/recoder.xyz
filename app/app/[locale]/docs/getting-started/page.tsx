@@ -3,27 +3,12 @@
 import Link from 'next/link';
 import { ArrowRight, Terminal, Globe, Key, Sparkles, CheckCircle, Code, Zap } from 'lucide-react';
 import { LaunchWebIDEButton } from '@/app/components/LaunchWebIDEButton';
+import { SiteHeader } from '@/components/SiteHeader';
 
 export default function GettingStartedPage() {
   return (
     <div className="min-h-screen bg-black text-white">
-      {/* Header */}
-      <header className="fixed top-0 w-full z-50 border-b border-white/10 bg-black/80 backdrop-blur-xl">
-        <div className="container mx-auto px-6 h-16 flex items-center justify-between">
-          <Link href="/" className="flex items-center space-x-2">
-            <div className="w-8 h-8 bg-gradient-to-br from-orange-500 to-purple-600 rounded-lg"></div>
-            <span className="text-xl font-bold">recoder</span>
-          </Link>
-          <div className="flex items-center space-x-6">
-            <Link href="/docs/faq" className="text-sm text-gray-400 hover:text-white transition-colors">
-              FAQ
-            </Link>
-            <Link href="/" className="px-4 py-2 text-sm bg-orange-500 hover:bg-orange-600 rounded-lg transition-colors">
-              Back to Home
-            </Link>
-          </div>
-        </div>
-      </header>
+      <SiteHeader />
 
       {/* Main Content */}
       <div className="pt-24 pb-20 px-6">

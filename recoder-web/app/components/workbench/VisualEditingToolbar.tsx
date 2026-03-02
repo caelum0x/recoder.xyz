@@ -88,8 +88,8 @@ function StylePopover({ icon, tooltip, children, side = 'bottom' }: StylePopover
       <button
         onClick={() => setIsOpen(!isOpen)}
         className={classNames(
-          'p-1.5 rounded hover:bg-bolt-elements-item-backgroundActive',
-          'text-bolt-elements-textSecondary hover:text-bolt-elements-textPrimary',
+          'p-1.5 rounded hover:bg-recoder-elements-item-backgroundActive',
+          'text-recoder-elements-textSecondary hover:text-recoder-elements-textPrimary',
           'transition-colors'
         )}
         title={tooltip}
@@ -101,8 +101,8 @@ function StylePopover({ icon, tooltip, children, side = 'bottom' }: StylePopover
         <div
           className={classNames(
             'absolute z-50 w-56 p-3',
-            'bg-bolt-elements-background-depth-3 rounded-lg shadow-xl',
-            'border border-bolt-elements-borderColor',
+            'bg-recoder-elements-background-depth-3 rounded-lg shadow-xl',
+            'border border-recoder-elements-borderColor',
             'animate-fadeIn',
             side === 'top' ? 'bottom-full mb-2' : 'top-full mt-2',
             'left-0'
@@ -126,7 +126,7 @@ interface NumberInputProps {
 function NumberInput({ label, value, onChange, placeholder = '0' }: NumberInputProps) {
   return (
     <div className="flex items-center gap-2">
-      <label className="text-xs text-bolt-elements-textSecondary w-16">{label}</label>
+      <label className="text-xs text-recoder-elements-textSecondary w-16">{label}</label>
       <input
         type="text"
         value={value}
@@ -134,8 +134,8 @@ function NumberInput({ label, value, onChange, placeholder = '0' }: NumberInputP
         placeholder={placeholder}
         className={classNames(
           'flex-1 h-7 px-2 text-xs rounded',
-          'bg-bolt-elements-background-depth-2 text-bolt-elements-textPrimary',
-          'border border-bolt-elements-borderColor',
+          'bg-recoder-elements-background-depth-2 text-recoder-elements-textPrimary',
+          'border border-recoder-elements-borderColor',
           'focus:outline-none focus:border-accent-500'
         )}
       />
@@ -165,8 +165,8 @@ function ColorPicker({ value, onChange }: ColorPickerProps) {
         placeholder="#000000"
         className={classNames(
           'flex-1 h-7 px-2 text-xs rounded font-mono',
-          'bg-bolt-elements-background-depth-2 text-bolt-elements-textPrimary',
-          'border border-bolt-elements-borderColor',
+          'bg-recoder-elements-background-depth-2 text-recoder-elements-textPrimary',
+          'border border-recoder-elements-borderColor',
           'focus:outline-none focus:border-accent-500'
         )}
       />
@@ -370,8 +370,8 @@ export const VisualEditingToolbar = memo(({ iframeRef, onEditInChat }: VisualEdi
     <div
       className={classNames(
         'absolute z-50 flex items-center gap-1 p-2',
-        'bg-bolt-elements-background-depth-3 rounded-lg shadow-xl',
-        'border border-bolt-elements-borderColor',
+        'bg-recoder-elements-background-depth-3 rounded-lg shadow-xl',
+        'border border-recoder-elements-borderColor',
         'animate-fadeIn'
       )}
       style={{
@@ -384,7 +384,7 @@ export const VisualEditingToolbar = memo(({ iframeRef, onEditInChat }: VisualEdi
       <button
         onClick={handleDeselect}
         className={classNames(
-          'p-1.5 rounded hover:bg-bolt-elements-item-backgroundActive',
+          'p-1.5 rounded hover:bg-recoder-elements-item-backgroundActive',
           'text-accent-500 hover:text-accent-600',
           'transition-colors'
         )}
@@ -394,7 +394,7 @@ export const VisualEditingToolbar = memo(({ iframeRef, onEditInChat }: VisualEdi
       </button>
 
       {/* Separator */}
-      <div className="w-px h-6 bg-bolt-elements-borderColor mx-1" />
+      <div className="w-px h-6 bg-recoder-elements-borderColor mx-1" />
 
       {/* Component info */}
       <div className="flex items-center gap-2 px-2 min-w-0">
@@ -402,14 +402,14 @@ export const VisualEditingToolbar = memo(({ iframeRef, onEditInChat }: VisualEdi
           {component.name}
         </span>
         {component.lineNumber && (
-          <span className="text-xs text-bolt-elements-textTertiary">
+          <span className="text-xs text-recoder-elements-textTertiary">
             :{component.lineNumber}
           </span>
         )}
       </div>
 
       {/* Separator */}
-      <div className="w-px h-6 bg-bolt-elements-borderColor mx-1" />
+      <div className="w-px h-6 bg-recoder-elements-borderColor mx-1" />
 
       {isDynamic ? (
         // Show warning for dynamically styled components
@@ -484,7 +484,7 @@ export const VisualEditingToolbar = memo(({ iframeRef, onEditInChat }: VisualEdi
                 placeholder="4"
               />
               <div className="flex items-center gap-2">
-                <label className="text-xs text-bolt-elements-textSecondary w-16">Color</label>
+                <label className="text-xs text-recoder-elements-textSecondary w-16">Color</label>
                 <ColorPicker
                   value={border.color}
                   onChange={(v) => handleBorderChange('color', v)}
@@ -525,14 +525,14 @@ export const VisualEditingToolbar = memo(({ iframeRef, onEditInChat }: VisualEdi
                   placeholder="16"
                 />
                 <div className="flex items-center gap-2">
-                  <label className="text-xs text-bolt-elements-textSecondary w-16">Weight</label>
+                  <label className="text-xs text-recoder-elements-textSecondary w-16">Weight</label>
                   <select
                     value={textStyles.fontWeight}
                     onChange={(e) => handleTextStyleChange('fontWeight', e.target.value)}
                     className={classNames(
                       'flex-1 h-7 px-2 text-xs rounded',
-                      'bg-bolt-elements-background-depth-2 text-bolt-elements-textPrimary',
-                      'border border-bolt-elements-borderColor',
+                      'bg-recoder-elements-background-depth-2 text-recoder-elements-textPrimary',
+                      'border border-recoder-elements-borderColor',
                       'focus:outline-none focus:border-accent-500'
                     )}
                   >
@@ -544,14 +544,14 @@ export const VisualEditingToolbar = memo(({ iframeRef, onEditInChat }: VisualEdi
                   </select>
                 </div>
                 <div className="flex items-center gap-2">
-                  <label className="text-xs text-bolt-elements-textSecondary w-16">Family</label>
+                  <label className="text-xs text-recoder-elements-textSecondary w-16">Family</label>
                   <select
                     value={textStyles.fontFamily}
                     onChange={(e) => handleTextStyleChange('fontFamily', e.target.value)}
                     className={classNames(
                       'flex-1 h-7 px-2 text-xs rounded',
-                      'bg-bolt-elements-background-depth-2 text-bolt-elements-textPrimary',
-                      'border border-bolt-elements-borderColor',
+                      'bg-recoder-elements-background-depth-2 text-recoder-elements-textPrimary',
+                      'border border-recoder-elements-borderColor',
                       'focus:outline-none focus:border-accent-500'
                     )}
                   >
@@ -563,7 +563,7 @@ export const VisualEditingToolbar = memo(({ iframeRef, onEditInChat }: VisualEdi
                   </select>
                 </div>
                 <div className="flex items-center gap-2">
-                  <label className="text-xs text-bolt-elements-textSecondary w-16">Color</label>
+                  <label className="text-xs text-recoder-elements-textSecondary w-16">Color</label>
                   <ColorPicker
                     value={textStyles.color}
                     onChange={(v) => handleTextStyleChange('color', v)}
@@ -576,7 +576,7 @@ export const VisualEditingToolbar = memo(({ iframeRef, onEditInChat }: VisualEdi
       )}
 
       {/* Separator */}
-      <div className="w-px h-6 bg-bolt-elements-borderColor mx-1" />
+      <div className="w-px h-6 bg-recoder-elements-borderColor mx-1" />
 
       {/* Save to Source button */}
       {!isDynamic && (
@@ -588,7 +588,7 @@ export const VisualEditingToolbar = memo(({ iframeRef, onEditInChat }: VisualEdi
             'text-xs font-medium transition-colors',
             hasPending && !isSaving
               ? 'bg-green-600 hover:bg-green-700 text-white'
-              : 'bg-bolt-elements-background-depth-2 text-bolt-elements-textTertiary cursor-not-allowed'
+              : 'bg-recoder-elements-background-depth-2 text-recoder-elements-textTertiary cursor-not-allowed'
           )}
           title={isDynamic ? 'Dynamic className — use Edit in Chat' : hasPending ? 'Save style changes to source file' : 'No pending changes'}
         >
@@ -638,7 +638,7 @@ export const VisualEditingToggle = memo(() => {
         'transition-all duration-200',
         enabled
           ? 'bg-accent-500/20 text-accent-500 border border-accent-500/50'
-          : 'bg-bolt-elements-button-secondary-background text-bolt-elements-button-secondary-text border border-bolt-elements-borderColor hover:bg-bolt-elements-button-secondary-backgroundHover'
+          : 'bg-recoder-elements-button-secondary-background text-recoder-elements-button-secondary-text border border-recoder-elements-borderColor hover:bg-recoder-elements-button-secondary-backgroundHover'
       )}
       title={enabled ? 'Disable visual editing' : 'Enable visual editing (click to select components)'}
     >

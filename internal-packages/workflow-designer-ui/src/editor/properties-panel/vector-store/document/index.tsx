@@ -1,17 +1,17 @@
-import { Select } from "@giselle-internal/ui/select";
+import { Select } from "@recoder-internal/ui/select";
 import type {
 	DocumentVectorStoreSource,
 	EmbeddingProfileId,
 	VectorStoreNode,
-} from "@giselles-ai/protocol";
+} from "@recoder/protocol";
 import {
 	EMBEDDING_PROFILES,
 	isEmbeddingProfileId,
-} from "@giselles-ai/protocol";
+} from "@recoder/protocol";
 import {
 	useVectorStore,
 	type VectorStoreContextValue,
-} from "@giselles-ai/react";
+} from "@recoder/react";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useUpdateNodeData } from "../../../../app-designer";

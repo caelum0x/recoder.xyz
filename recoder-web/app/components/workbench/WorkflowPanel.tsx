@@ -55,13 +55,13 @@ type PanelView = 'active' | 'templates' | 'history';
 // ============================================
 
 const STATUS_COLORS: Record<StepStatus, string> = {
-  pending: 'text-bolt-elements-textSecondary bg-bolt-elements-background-depth-3',
+  pending: 'text-recoder-elements-textSecondary bg-recoder-elements-background-depth-3',
   waiting: 'text-yellow-400 bg-yellow-500/20',
   running: 'text-blue-400 bg-blue-500/20',
   completed: 'text-green-400 bg-green-500/20',
   failed: 'text-red-400 bg-red-500/20',
-  cancelled: 'text-bolt-elements-textSecondary bg-bolt-elements-background-depth-3',
-  skipped: 'text-bolt-elements-textTertiary bg-bolt-elements-background-depth-3',
+  cancelled: 'text-recoder-elements-textSecondary bg-recoder-elements-background-depth-3',
+  skipped: 'text-recoder-elements-textTertiary bg-recoder-elements-background-depth-3',
 };
 
 const STATUS_ICONS: Record<StepStatus, string> = {
@@ -75,12 +75,12 @@ const STATUS_ICONS: Record<StepStatus, string> = {
 };
 
 const WORKFLOW_STATUS_COLORS: Record<WorkflowStatus, string> = {
-  idle: 'bg-bolt-elements-textTertiary',
+  idle: 'bg-recoder-elements-textTertiary',
   running: 'bg-blue-500',
   paused: 'bg-yellow-500',
   completed: 'bg-green-500',
   failed: 'bg-red-500',
-  cancelled: 'bg-bolt-elements-textTertiary',
+  cancelled: 'bg-recoder-elements-textTertiary',
 };
 
 const CATEGORY_COLORS: Record<TemplateCategory, string> = {
@@ -150,9 +150,9 @@ export const WorkflowPanel = memo(({ className = '', onClose }: WorkflowPanelPro
   if (!isVisible) return null;
 
   return (
-    <div className={`flex flex-col h-full bg-bolt-elements-background-depth-1 ${className}`}>
+    <div className={`flex flex-col h-full bg-recoder-elements-background-depth-1 ${className}`}>
       {/* Header */}
-      <div className="flex items-center justify-between px-3 py-2 border-b border-bolt-elements-borderColor bg-bolt-elements-background-depth-2">
+      <div className="flex items-center justify-between px-3 py-2 border-b border-recoder-elements-borderColor bg-recoder-elements-background-depth-2">
         <div className="flex items-center gap-2">
           <span className="i-ph:flow-arrow text-orange-500" />
           <span className="font-medium text-sm">Workflows</span>
@@ -197,13 +197,13 @@ export const WorkflowPanel = memo(({ className = '', onClose }: WorkflowPanelPro
       </div>
 
       {/* View Tabs */}
-      <div className="flex border-b border-bolt-elements-borderColor bg-bolt-elements-background-depth-2">
+      <div className="flex border-b border-recoder-elements-borderColor bg-recoder-elements-background-depth-2">
         <button
           onClick={() => setActiveView('active')}
           className={`flex items-center gap-1.5 px-3 py-2 text-xs font-medium transition-colors border-b-2 ${
             activeView === 'active'
               ? 'text-blue-400 border-blue-400'
-              : 'text-bolt-elements-textTertiary border-transparent hover:text-bolt-elements-textPrimary'
+              : 'text-recoder-elements-textTertiary border-transparent hover:text-recoder-elements-textPrimary'
           }`}
         >
           <span className="i-ph:play-circle" />
@@ -217,7 +217,7 @@ export const WorkflowPanel = memo(({ className = '', onClose }: WorkflowPanelPro
           className={`flex items-center gap-1.5 px-3 py-2 text-xs font-medium transition-colors border-b-2 ${
             activeView === 'templates'
               ? 'text-blue-400 border-blue-400'
-              : 'text-bolt-elements-textTertiary border-transparent hover:text-bolt-elements-textPrimary'
+              : 'text-recoder-elements-textTertiary border-transparent hover:text-recoder-elements-textPrimary'
           }`}
         >
           <span className="i-ph:lightning" />
@@ -228,13 +228,13 @@ export const WorkflowPanel = memo(({ className = '', onClose }: WorkflowPanelPro
           className={`flex items-center gap-1.5 px-3 py-2 text-xs font-medium transition-colors border-b-2 ${
             activeView === 'history'
               ? 'text-blue-400 border-blue-400'
-              : 'text-bolt-elements-textTertiary border-transparent hover:text-bolt-elements-textPrimary'
+              : 'text-recoder-elements-textTertiary border-transparent hover:text-recoder-elements-textPrimary'
           }`}
         >
           <span className="i-ph:clock-counter-clockwise" />
           History
           {history.length > 0 && (
-            <span className="ml-1 px-1.5 py-0.5 text-[10px] bg-bolt-elements-background-depth-2 rounded-full">
+            <span className="ml-1 px-1.5 py-0.5 text-[10px] bg-recoder-elements-background-depth-2 rounded-full">
               {history.length}
             </span>
           )}
@@ -306,8 +306,8 @@ const ActiveWorkflowView = memo(({
 }: ActiveWorkflowViewProps) => {
   if (!workflow) {
     return (
-      <div className="flex flex-col items-center justify-center h-full text-bolt-elements-textTertiary p-4">
-        <span className="i-ph:flow-arrow text-4xl mb-3 text-bolt-elements-textTertiary" />
+      <div className="flex flex-col items-center justify-center h-full text-recoder-elements-textTertiary p-4">
+        <span className="i-ph:flow-arrow text-4xl mb-3 text-recoder-elements-textTertiary" />
         <p className="text-sm text-center mb-4">No active workflow</p>
         <button
           onClick={onStartNew}
@@ -324,19 +324,19 @@ const ActiveWorkflowView = memo(({
   return (
     <div className="flex flex-col h-full">
       {/* Workflow Header */}
-      <div className="px-3 py-3 border-b border-bolt-elements-borderColor/50">
+      <div className="px-3 py-3 border-b border-recoder-elements-borderColor/50">
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center gap-2">
             <span className={workflow.definition.icon || 'i-ph:flow-arrow'} />
             <span className="font-medium text-sm">{workflow.definition.name}</span>
           </div>
-          <span className={`px-2 py-0.5 text-xs rounded-full ${STATUS_COLORS[workflow.status as StepStatus] || 'bg-bolt-elements-background-depth-3 text-bolt-elements-textSecondary'}`}>
+          <span className={`px-2 py-0.5 text-xs rounded-full ${STATUS_COLORS[workflow.status as StepStatus] || 'bg-recoder-elements-background-depth-3 text-recoder-elements-textSecondary'}`}>
             {workflow.status}
           </span>
         </div>
 
         {/* Progress Bar */}
-        <div className="relative h-2 bg-bolt-elements-background-depth-2 rounded-full overflow-hidden">
+        <div className="relative h-2 bg-recoder-elements-background-depth-2 rounded-full overflow-hidden">
           <div
             className={`absolute inset-y-0 left-0 transition-all duration-300 ${
               workflow.status === 'failed' ? 'bg-red-500' :
@@ -347,7 +347,7 @@ const ActiveWorkflowView = memo(({
         </div>
 
         {/* Stats */}
-        <div className="flex items-center gap-4 mt-2 text-xs text-bolt-elements-textTertiary">
+        <div className="flex items-center gap-4 mt-2 text-xs text-recoder-elements-textTertiary">
           <span className="flex items-center gap-1">
             <span className="i-ph:check-circle text-green-400" />
             {completedCount} completed
@@ -366,7 +366,7 @@ const ActiveWorkflowView = memo(({
       <div className="flex-1 overflow-auto p-3">
         <div className="relative">
           {/* Vertical line connecting steps */}
-          <div className="absolute left-4 top-4 bottom-4 w-0.5 bg-bolt-elements-borderColor" />
+          <div className="absolute left-4 top-4 bottom-4 w-0.5 bg-recoder-elements-borderColor" />
 
           {/* Steps */}
           <div className="space-y-3">
@@ -418,7 +418,7 @@ const StepCard = memo(({ stepState, isLast, isCurrent }: StepCardProps) => {
           ? 'bg-green-500/5 border-green-500/30'
           : status === 'failed'
           ? 'bg-red-500/5 border-red-500/30'
-          : 'bg-bolt-elements-background-depth-2 border-bolt-elements-borderColor/50'
+          : 'bg-recoder-elements-background-depth-2 border-recoder-elements-borderColor/50'
       }`}>
         <div className="flex items-start justify-between">
           <div className="flex-1 min-w-0">
@@ -426,7 +426,7 @@ const StepCard = memo(({ stepState, isLast, isCurrent }: StepCardProps) => {
               {step.icon && <span className={step.icon} />}
               <span className="font-medium text-sm truncate">{step.name}</span>
             </div>
-            <p className="text-xs text-bolt-elements-textTertiary mt-1 line-clamp-2">
+            <p className="text-xs text-recoder-elements-textTertiary mt-1 line-clamp-2">
               {stepState.message || step.description}
             </p>
           </div>
@@ -453,7 +453,7 @@ const StepCard = memo(({ stepState, isLast, isCurrent }: StepCardProps) => {
 
         {/* Progress bar for running step */}
         {status === 'running' && (
-          <div className="mt-2 h-1 bg-bolt-elements-background-depth-2 rounded-full overflow-hidden">
+          <div className="mt-2 h-1 bg-recoder-elements-background-depth-2 rounded-full overflow-hidden">
             <div
               className="h-full bg-blue-500 transition-all duration-300"
               style={{ width: `${stepState.progress}%` }}
@@ -465,7 +465,7 @@ const StepCard = memo(({ stepState, isLast, isCurrent }: StepCardProps) => {
         {stepState.logs.length > 0 && (
           <button
             onClick={() => setShowLogs(!showLogs)}
-            className="flex items-center gap-1 mt-2 text-xs text-bolt-elements-textTertiary hover:text-bolt-elements-textPrimary"
+            className="flex items-center gap-1 mt-2 text-xs text-recoder-elements-textTertiary hover:text-recoder-elements-textPrimary"
           >
             <span className={showLogs ? 'i-ph:caret-down' : 'i-ph:caret-right'} />
             {stepState.logs.length} log entries
@@ -474,11 +474,11 @@ const StepCard = memo(({ stepState, isLast, isCurrent }: StepCardProps) => {
 
         {/* Logs */}
         {showLogs && stepState.logs.length > 0 && (
-          <div className="mt-2 p-2 bg-bolt-elements-background-depth-2 rounded text-xs font-mono max-h-32 overflow-auto">
+          <div className="mt-2 p-2 bg-recoder-elements-background-depth-2 rounded text-xs font-mono max-h-32 overflow-auto">
             {stepState.logs.map((log, i) => (
               <div key={i} className={`${
                 log.level === 'error' ? 'text-red-400' :
-                log.level === 'warn' ? 'text-yellow-400' : 'text-bolt-elements-textSecondary'
+                log.level === 'warn' ? 'text-yellow-400' : 'text-recoder-elements-textSecondary'
               }`}>
                 [{log.level}] {log.message}
               </div>
@@ -488,7 +488,7 @@ const StepCard = memo(({ stepState, isLast, isCurrent }: StepCardProps) => {
 
         {/* Duration */}
         {stepState.result?.duration && (
-          <div className="mt-2 text-xs text-bolt-elements-textTertiary">
+          <div className="mt-2 text-xs text-recoder-elements-textTertiary">
             Completed in {(stepState.result.duration / 1000).toFixed(1)}s
           </div>
         )}
@@ -535,7 +535,7 @@ const TemplatesGalleryView = memo(({
   return (
     <div className="flex flex-col h-full">
       {/* Category Filter */}
-      <div className="flex items-center gap-2 px-3 py-2 border-b border-bolt-elements-borderColor/50 overflow-x-auto">
+      <div className="flex items-center gap-2 px-3 py-2 border-b border-recoder-elements-borderColor/50 overflow-x-auto">
         {categories.map(cat => (
           <button
             key={cat.value}
@@ -543,7 +543,7 @@ const TemplatesGalleryView = memo(({
             className={`px-2 py-1 text-xs rounded-full whitespace-nowrap transition-colors ${
               categoryFilter === cat.value
                 ? 'bg-blue-500/20 text-blue-400'
-                : 'bg-bolt-elements-background-depth-2 text-bolt-elements-textTertiary hover:text-bolt-elements-textPrimary'
+                : 'bg-recoder-elements-background-depth-2 text-recoder-elements-textTertiary hover:text-recoder-elements-textPrimary'
             }`}
           >
             {cat.label}
@@ -572,7 +572,7 @@ const TemplatesGalleryView = memo(({
             ))}
 
             {templates.length === 0 && (
-              <div className="col-span-full text-center text-bolt-elements-textTertiary py-8">
+              <div className="col-span-full text-center text-recoder-elements-textTertiary py-8">
                 No templates in this category
               </div>
             )}
@@ -600,7 +600,7 @@ const TemplateCard = memo(({ template, onClick, onStart }: TemplateCardProps) =>
 
   return (
     <div
-      className="p-3 rounded-lg border border-bolt-elements-borderColor/50 bg-bolt-elements-background-depth-2 hover:border-bolt-elements-borderColor transition-colors cursor-pointer group"
+      className="p-3 rounded-lg border border-recoder-elements-borderColor/50 bg-recoder-elements-background-depth-2 hover:border-recoder-elements-borderColor transition-colors cursor-pointer group"
       onClick={onClick}
     >
       <div className="flex items-start gap-3">
@@ -619,11 +619,11 @@ const TemplateCard = memo(({ template, onClick, onStart }: TemplateCardProps) =>
               </span>
             )}
           </div>
-          <p className="text-xs text-bolt-elements-textTertiary mt-1 line-clamp-2">
+          <p className="text-xs text-recoder-elements-textTertiary mt-1 line-clamp-2">
             {template.description}
           </p>
           <div className="flex items-center gap-2 mt-2">
-            <span className="text-xs text-bolt-elements-textTertiary">
+            <span className="text-xs text-recoder-elements-textTertiary">
               {stepCount} step{stepCount !== 1 ? 's' : ''}
             </span>
             <span className={`px-1.5 py-0.5 text-[10px] rounded ${CATEGORY_COLORS[template.category]}`}>
@@ -663,10 +663,10 @@ const TemplateDetailView = memo(({ template, onBack, onStart }: TemplateDetailVi
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
-      <div className="px-3 py-3 border-b border-bolt-elements-borderColor/50">
+      <div className="px-3 py-3 border-b border-recoder-elements-borderColor/50">
         <button
           onClick={onBack}
-          className="flex items-center gap-1 text-xs text-bolt-elements-textTertiary hover:text-bolt-elements-textPrimary mb-2"
+          className="flex items-center gap-1 text-xs text-recoder-elements-textTertiary hover:text-recoder-elements-textPrimary mb-2"
         >
           <span className="i-ph:arrow-left" />
           Back to templates
@@ -678,7 +678,7 @@ const TemplateDetailView = memo(({ template, onBack, onStart }: TemplateDetailVi
           </div>
           <div className="flex-1">
             <h2 className="font-semibold">{template.name}</h2>
-            <p className="text-sm text-bolt-elements-textTertiary mt-1">
+            <p className="text-sm text-recoder-elements-textTertiary mt-1">
               {template.description}
             </p>
           </div>
@@ -694,26 +694,26 @@ const TemplateDetailView = memo(({ template, onBack, onStart }: TemplateDetailVi
 
       {/* Steps Preview */}
       <div className="flex-1 overflow-auto p-3">
-        <h3 className="text-xs font-medium text-bolt-elements-textTertiary mb-3">
+        <h3 className="text-xs font-medium text-recoder-elements-textTertiary mb-3">
           WORKFLOW STEPS ({template.definition.steps.length})
         </h3>
 
         <div className="relative">
           {/* Vertical line */}
-          <div className="absolute left-3 top-3 bottom-3 w-0.5 bg-bolt-elements-borderColor" />
+          <div className="absolute left-3 top-3 bottom-3 w-0.5 bg-recoder-elements-borderColor" />
 
           <div className="space-y-3">
             {template.definition.steps.map((step, index) => (
               <div key={step.id} className="relative pl-8">
-                <div className="absolute left-1.5 top-2 w-4 h-4 rounded-full bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor flex items-center justify-center text-xs text-bolt-elements-textTertiary">
+                <div className="absolute left-1.5 top-2 w-4 h-4 rounded-full bg-recoder-elements-background-depth-2 border border-recoder-elements-borderColor flex items-center justify-center text-xs text-recoder-elements-textTertiary">
                   {index + 1}
                 </div>
-                <div className="p-2 rounded-lg bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor/50">
+                <div className="p-2 rounded-lg bg-recoder-elements-background-depth-2 border border-recoder-elements-borderColor/50">
                   <div className="flex items-center gap-2">
                     {step.icon && <span className={step.icon} />}
                     <span className="font-medium text-sm">{step.name}</span>
                   </div>
-                  <p className="text-xs text-bolt-elements-textTertiary mt-1">
+                  <p className="text-xs text-recoder-elements-textTertiary mt-1">
                     {step.description}
                   </p>
                   {step.dependsOn && step.dependsOn.length > 0 && (
@@ -730,12 +730,12 @@ const TemplateDetailView = memo(({ template, onBack, onStart }: TemplateDetailVi
 
       {/* Tags */}
       {template.tags.length > 0 && (
-        <div className="px-3 py-2 border-t border-bolt-elements-borderColor/50">
+        <div className="px-3 py-2 border-t border-recoder-elements-borderColor/50">
           <div className="flex flex-wrap gap-1">
             {template.tags.map(tag => (
               <span
                 key={tag}
-                className="px-2 py-0.5 text-xs bg-bolt-elements-background-depth-2 text-bolt-elements-textTertiary rounded"
+                className="px-2 py-0.5 text-xs bg-recoder-elements-background-depth-2 text-recoder-elements-textTertiary rounded"
               >
                 {tag}
               </span>
@@ -763,8 +763,8 @@ interface HistoryViewProps {
 const HistoryView = memo(({ history, onClear, onRemove, onRerun }: HistoryViewProps) => {
   if (history.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center h-full text-bolt-elements-textTertiary p-4">
-        <span className="i-ph:clock-counter-clockwise text-4xl mb-3 text-bolt-elements-textTertiary" />
+      <div className="flex flex-col items-center justify-center h-full text-recoder-elements-textTertiary p-4">
+        <span className="i-ph:clock-counter-clockwise text-4xl mb-3 text-recoder-elements-textTertiary" />
         <p className="text-sm text-center">No workflow history</p>
         <p className="text-xs text-center mt-1">Completed workflows will appear here</p>
       </div>
@@ -774,8 +774,8 @@ const HistoryView = memo(({ history, onClear, onRemove, onRerun }: HistoryViewPr
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
-      <div className="flex items-center justify-between px-3 py-2 border-b border-bolt-elements-borderColor/50">
-        <span className="text-xs text-bolt-elements-textTertiary">
+      <div className="flex items-center justify-between px-3 py-2 border-b border-recoder-elements-borderColor/50">
+        <span className="text-xs text-recoder-elements-textTertiary">
           {history.length} workflow{history.length !== 1 ? 's' : ''}
         </span>
         <button
@@ -835,7 +835,7 @@ const HistoryEntryCard = memo(({ entry, onRemove, onRerun }: HistoryEntryCardPro
   };
 
   return (
-    <div className="px-3 py-3 border-b border-bolt-elements-borderColor/30 hover:bg-bolt-elements-background-depth-3 transition-colors group">
+    <div className="px-3 py-3 border-b border-recoder-elements-borderColor/30 hover:bg-recoder-elements-background-depth-3 transition-colors group">
       <div className="flex items-start gap-3">
         {/* Status indicator */}
         <div className={`w-2 h-2 rounded-full mt-1.5 ${statusColor}`} />
@@ -847,13 +847,13 @@ const HistoryEntryCard = memo(({ entry, onRemove, onRerun }: HistoryEntryCardPro
             <span className={`px-1.5 py-0.5 text-[10px] rounded ${
               isSuccess ? 'bg-green-500/20 text-green-400' :
               isFailed ? 'bg-red-500/20 text-red-400' :
-              'bg-bolt-elements-background-depth-3 text-bolt-elements-textSecondary'
+              'bg-recoder-elements-background-depth-3 text-recoder-elements-textSecondary'
             }`}>
               {entry.status}
             </span>
           </div>
 
-          <div className="flex items-center gap-3 mt-1 text-xs text-bolt-elements-textTertiary">
+          <div className="flex items-center gap-3 mt-1 text-xs text-recoder-elements-textTertiary">
             <span>{formatDate(entry.startedAt)}</span>
             {entry.duration && (
               <span>{formatDuration(entry.duration)}</span>
@@ -873,7 +873,7 @@ const HistoryEntryCard = memo(({ entry, onRemove, onRerun }: HistoryEntryCardPro
           {onRerun && (
             <button
               onClick={onRerun}
-              className="p-1 text-bolt-elements-textTertiary hover:text-blue-400 transition-colors"
+              className="p-1 text-recoder-elements-textTertiary hover:text-blue-400 transition-colors"
               title="Run again"
             >
               <span className="i-ph:arrow-counter-clockwise" />
@@ -881,7 +881,7 @@ const HistoryEntryCard = memo(({ entry, onRemove, onRerun }: HistoryEntryCardPro
           )}
           <button
             onClick={onRemove}
-            className="p-1 text-bolt-elements-textTertiary hover:text-red-400 transition-colors"
+            className="p-1 text-recoder-elements-textTertiary hover:text-red-400 transition-colors"
             title="Remove"
           >
             <span className="i-ph:x" />

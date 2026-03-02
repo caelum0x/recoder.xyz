@@ -1,4 +1,4 @@
-import type { GiselleLogger } from "@giselles-ai/logger";
+import type { GiselleLogger } from "@recoder/logger";
 import {
 	type Generation,
 	type GenerationId,
@@ -7,7 +7,7 @@ import {
 	type QueuedGeneration,
 	type Sequence,
 	TaskId,
-} from "@giselles-ai/protocol";
+} from "@recoder/protocol";
 import * as z from "zod/v4";
 import {
 	type GenerationMetadata,

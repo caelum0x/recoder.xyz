@@ -249,31 +249,6 @@ async function resolveGitHubAccessToken(
   }
 }
 
-async function loadWithGitHubTool(
-  body: GitHubLoadRequest,
-): Promise<LoadedDocument[]> {
-  const authConfig = {
-    strategy: 'personal-access-token' as const,
-    personalAccessToken: body.accessToken,
-  };
-
-  if (body.sourceType === 'issues') {
-    const mod = await import('../../../packages/github-tool/src/document-loaders/issues/loader');
-    const loader = mod.createGitHubIssuesLoader(
-      { owner: body.owner, repo: body.repo, maxPages: body.maxPages, perPage: body.perPage },
-      authConfig,
-    );
-    return collectDocuments(loader, body.maxDocuments);
-  }
-
-  const mod = await import('../../../packages/github-tool/src/document-loaders/pull-requests/loader');
-  const loader = mod.createGitHubPullRequestsLoader(
-    { owner: body.owner, repo: body.repo, maxPages: body.maxPages, perPage: body.perPage },
-    authConfig,
-  );
-  return collectDocuments(loader, body.maxDocuments);
-}
-
 async function collectDocuments<T extends Record<string, unknown>>(
   loader: {
     loadMetadata: () => AsyncIterable<T>;
@@ -472,32 +447,16 @@ export async function action({ request, context }: ActionFunctionArgs) {
     const ingestion = createIngestionStatus(userId, owner, repo, sourceType);
     ingestionId = ingestion.id;
 
-    let documents: LoadedDocument[] = [];
-    let provider: 'github-tool' | 'octokit-fallback' = 'github-tool';
-
-    try {
-      documents = await withRetry(() => loadWithGitHubTool({
-        owner,
-        repo,
-        accessToken,
-        sourceType,
-        maxDocuments,
-        maxPages,
-        perPage,
-      }));
-    } catch (error) {
-      provider = 'octokit-fallback';
-      documents = await withRetry(() => loadWithFallbackOctokit({
-        owner,
-        repo,
-        accessToken,
-        sourceType,
-        maxDocuments,
-        maxPages,
-        perPage,
-      }));
-      logger.warn('[api.github.documents] github-tool load failed, used fallback:', error);
-    }
+    const provider: 'github-tool' | 'octokit-fallback' = 'octokit-fallback';
+    const documents: LoadedDocument[] = await withRetry(() => loadWithFallbackOctokit({
+      owner,
+      repo,
+      accessToken,
+      sourceType,
+      maxDocuments,
+      maxPages,
+      perPage,
+    }));
 
     updateIngestionStatus(ingestionId, {
       state: 'succeeded',

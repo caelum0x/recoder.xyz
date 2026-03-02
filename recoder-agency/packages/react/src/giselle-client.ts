@@ -1,6 +1,6 @@
 "use client";
 
-import type { Giselle } from "@giselles-ai/giselle";
+import type { Giselle } from "@recoder/giselle";
 import type {
 	FileId,
 	Generation,
@@ -12,7 +12,7 @@ import type {
 	Task,
 	Workspace,
 	WorkspaceId,
-} from "@giselles-ai/protocol";
+} from "@recoder/protocol";
 
 export interface GiselleClient {
 	// bootstrap (used in playground home)

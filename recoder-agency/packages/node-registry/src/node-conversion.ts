@@ -2,16 +2,16 @@ import {
 	AnthropicLanguageModelId,
 	GoogleLanguageModelId,
 	OpenAILanguageModelId,
-} from "@giselles-ai/language-model";
+} from "@recoder/language-model";
 import {
 	getEntry,
 	type LanguageModelId,
-} from "@giselles-ai/language-model-registry";
+} from "@recoder/language-model-registry";
 import {
 	type ContentGenerationNode,
 	SecretId,
 	type TextGenerationNode,
-} from "@giselles-ai/protocol";
+} from "@recoder/protocol";
 
 // Legacy model IDs that are no longer in the current schema but may exist in stored data
 type LegacyAnthropicModelId =

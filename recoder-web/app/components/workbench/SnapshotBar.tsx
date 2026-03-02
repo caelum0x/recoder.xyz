@@ -108,7 +108,7 @@ export const SnapshotBar = memo(function SnapshotBar({ projectId, className = ''
         className={`flex items-center gap-1 px-2 py-1 text-xs rounded transition-colors
                    ${state.hasUnsavedChanges 
                      ? 'bg-yellow-500/20 text-yellow-400 hover:bg-yellow-500/30'
-                     : 'bg-bolt-elements-background-depth-3/50 text-bolt-elements-textSecondary hover:bg-bolt-elements-background-depth-3'}`}
+                     : 'bg-recoder-elements-background-depth-3/50 text-recoder-elements-textSecondary hover:bg-recoder-elements-background-depth-3'}`}
         title={state.hasUnsavedChanges ? 'Save snapshot (unsaved changes)' : 'Create snapshot'}
       >
         {isCreating ? (
@@ -124,8 +124,8 @@ export const SnapshotBar = memo(function SnapshotBar({ projectId, className = ''
       {/* Dropdown toggle */}
       <button
         onClick={toggleDropdown}
-        className="flex items-center gap-1 px-2 py-1 text-xs bg-bolt-elements-background-depth-3/50
-                   hover:bg-bolt-elements-background-depth-3 rounded transition-colors text-bolt-elements-textSecondary"
+        className="flex items-center gap-1 px-2 py-1 text-xs bg-recoder-elements-background-depth-3/50
+                   hover:bg-recoder-elements-background-depth-3 rounded transition-colors text-recoder-elements-textSecondary"
         title="View snapshots"
       >
         <span>{state.snapshots.length}</span>
@@ -136,14 +136,14 @@ export const SnapshotBar = memo(function SnapshotBar({ projectId, className = ''
 
       {/* Dropdown */}
       {showDropdown && (
-        <div className="absolute top-full right-0 mt-1 w-72 bg-bolt-elements-background-depth-3 border border-bolt-elements-borderColor
+        <div className="absolute top-full right-0 mt-1 w-72 bg-recoder-elements-background-depth-3 border border-recoder-elements-borderColor
                         rounded-lg shadow-xl z-50 overflow-hidden">
           {/* Header */}
-          <div className="px-3 py-2 border-b border-bolt-elements-borderColor bg-bolt-elements-background-depth-3/80">
+          <div className="px-3 py-2 border-b border-recoder-elements-borderColor bg-recoder-elements-background-depth-3/80">
             <div className="flex items-center justify-between">
-              <span className="text-sm font-medium text-bolt-elements-textPrimary">Snapshots</span>
+              <span className="text-sm font-medium text-recoder-elements-textPrimary">Snapshots</span>
               {state.currentSnapshot && (
-                <span className="text-xs text-bolt-elements-textTertiary">
+                <span className="text-xs text-recoder-elements-textTertiary">
                   Current: {state.currentSnapshot.id}
                 </span>
               )}
@@ -153,25 +153,25 @@ export const SnapshotBar = memo(function SnapshotBar({ projectId, className = ''
           {/* Snapshot list */}
           <div className="max-h-64 overflow-auto">
             {state.snapshots.length === 0 ? (
-              <div className="p-4 text-center text-bolt-elements-textTertiary text-sm">
+              <div className="p-4 text-center text-recoder-elements-textTertiary text-sm">
                 No snapshots yet
               </div>
             ) : (
               state.snapshots.slice(0, 10).map((snapshot, index) => (
                 <div
                   key={snapshot.id}
-                  className={`flex items-center justify-between px-3 py-2 hover:bg-bolt-elements-background-depth-3/50
-                             border-b border-bolt-elements-borderColor/50 last:border-0 ${
+                  className={`flex items-center justify-between px-3 py-2 hover:bg-recoder-elements-background-depth-3/50
+                             border-b border-recoder-elements-borderColor/50 last:border-0 ${
                                index === 0 ? 'bg-blue-500/10' : ''
                              }`}
                 >
                   <div className="flex items-center gap-2 min-w-0">
-                    <span className="text-xs text-bolt-elements-textTertiary">{getAuthorLabel(snapshot.author)}</span>
+                    <span className="text-xs text-recoder-elements-textTertiary">{getAuthorLabel(snapshot.author)}</span>
                     <div className="min-w-0">
-                      <p className="text-sm text-bolt-elements-textPrimary truncate max-w-36">
+                      <p className="text-sm text-recoder-elements-textPrimary truncate max-w-36">
                         {snapshot.message}
                       </p>
-                      <div className="flex items-center gap-2 text-xs text-bolt-elements-textTertiary">
+                      <div className="flex items-center gap-2 text-xs text-recoder-elements-textTertiary">
                         <span className="font-mono">{snapshot.id}</span>
                         <span>-</span>
                         <span>{formatTime(snapshot.timestamp)}</span>
@@ -189,7 +189,7 @@ export const SnapshotBar = memo(function SnapshotBar({ projectId, className = ''
                       className={`text-xs px-2 py-1 rounded transition-colors whitespace-nowrap ${
                         confirmRestore === snapshot.id
                           ? 'bg-red-500 text-white'
-                          : 'bg-bolt-elements-background-depth-3 hover:bg-bolt-elements-background-depth-3 text-bolt-elements-textSecondary'
+                          : 'bg-recoder-elements-background-depth-3 hover:bg-recoder-elements-background-depth-3 text-recoder-elements-textSecondary'
                       }`}
                     >
                       {confirmRestore === snapshot.id ? 'Confirm?' : 'Restore'}
@@ -202,8 +202,8 @@ export const SnapshotBar = memo(function SnapshotBar({ projectId, className = ''
 
           {/* Footer */}
           {state.snapshots.length > 10 && (
-            <div className="px-3 py-2 border-t border-bolt-elements-borderColor bg-bolt-elements-background-depth-3/80">
-              <span className="text-xs text-bolt-elements-textTertiary">
+            <div className="px-3 py-2 border-t border-recoder-elements-borderColor bg-recoder-elements-background-depth-3/80">
+              <span className="text-xs text-recoder-elements-textTertiary">
                 +{state.snapshots.length - 10} more snapshots
               </span>
             </div>

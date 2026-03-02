@@ -1,4 +1,5 @@
 import { createId } from "@paralleldrive/cuid2";
+import type { WorkspaceId } from "@recoder/protocol";
 import { agents, db, workspaces } from "@/db";
 import type { WorkspaceMetadata } from "@/db/schema";
 import { fetchCurrentUser } from "@/services/accounts";
@@ -11,7 +12,7 @@ interface CreateTeamWorkspaceInput {
 }
 
 type WorkspaceRecord = {
-	id: string;
+	id: WorkspaceId;
 	name: string;
 };
 
@@ -21,12 +22,21 @@ export async function createTeamWorkspace(input: CreateTeamWorkspaceInput = {}) 
 	const createdWorkspace = await giselle.createWorkspace();
 	const workspace = (
 		typeof input.name === "string" && input.name.trim().length > 0
-			? await giselle.updateWorkspace({
-					...createdWorkspace,
-					name: input.name.trim(),
-				})
-			: createdWorkspace
-	) as WorkspaceRecord;
+				? await giselle.updateWorkspace({
+						...createdWorkspace,
+						name: input.name.trim(),
+						ui: {
+							...createdWorkspace.ui,
+							selectedConnectionIds:
+								(
+									createdWorkspace.ui as {
+										selectedConnectionIds?: Array<`cnnc-${string}`>;
+									}
+								).selectedConnectionIds ?? [],
+						},
+					})
+				: createdWorkspace
+		) as WorkspaceRecord;
 
 	// The agents table is deprecated, so we are inserting into the workspaces table.
 	await db.insert(agents).values({

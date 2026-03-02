@@ -41,6 +41,7 @@ export async function browserLaunch(
 ): Promise<BrowserActionResult> {
   try {
     // Dynamic import of puppeteer (only available in Docker container)
+    // @ts-expect-error optional runtime dependency; not required for all builds
     const puppeteer = await import('puppeteer');
 
     // Close existing session if any

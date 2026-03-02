@@ -275,9 +275,9 @@ export function ModelSelector({
           }}
           className={classNames(
             'flex items-center gap-2 px-3 py-2 rounded-lg border transition-colors h-[38px] text-sm',
-            'border-bolt-elements-borderColor bg-bolt-elements-background-depth-2',
-            'hover:bg-bolt-elements-background-depth-3',
-            'text-bolt-elements-textPrimary font-medium whitespace-nowrap'
+            'border-recoder-elements-borderColor bg-recoder-elements-background-depth-2',
+            'hover:bg-recoder-elements-background-depth-3',
+            'text-recoder-elements-textPrimary font-medium whitespace-nowrap'
           )}
         >
           <span>{currentProvider?.name || 'Select Provider'}</span>
@@ -289,21 +289,21 @@ export function ModelSelector({
           <>
             <div className="fixed inset-0 z-[999]" onClick={() => setShowProviderMenu(false)} />
             <div className="absolute bottom-full left-0 mb-1 w-80 rounded-lg shadow-xl z-[1000] overflow-hidden max-h-96 overflow-y-auto"
-              style={{ zIndex: 1000, backgroundColor: 'var(--bolt-elements-bg-depth-1)', borderColor: 'var(--bolt-elements-borderColor)', border: '1px solid var(--bolt-elements-borderColor)' }}>
+              style={{ zIndex: 1000, backgroundColor: 'var(--recoder-elements-bg-depth-1)', borderColor: 'var(--recoder-elements-borderColor)', border: '1px solid var(--recoder-elements-borderColor)' }}>
             {providers.map((provider) => (
               <button
                 key={provider.id}
                 onClick={(e) => handleProviderClick(e, provider.id)}
                 className={classNames(
-                  'w-full flex flex-col gap-1 px-4 py-3 text-left transition-colors text-bolt-elements-textPrimary bg-bolt-elements-background-depth-1',
-                  'hover:bg-bolt-elements-background-depth-2',
-                  provider.id === selectedProvider ? 'bg-bolt-elements-background-depth-2' : 'bg-bolt-elements-background-depth-1'
+                  'w-full flex flex-col gap-1 px-4 py-3 text-left transition-colors text-recoder-elements-textPrimary bg-recoder-elements-background-depth-1',
+                  'hover:bg-recoder-elements-background-depth-2',
+                  provider.id === selectedProvider ? 'bg-recoder-elements-background-depth-2' : 'bg-recoder-elements-background-depth-1'
                 )}
-                style={{ backgroundColor: provider.id === selectedProvider ? 'var(--bolt-elements-bg-depth-3)' : 'var(--bolt-elements-bg-depth-1)' }}
+                style={{ backgroundColor: provider.id === selectedProvider ? 'var(--recoder-elements-bg-depth-3)' : 'var(--recoder-elements-bg-depth-1)' }}
               >
                 <div className="flex items-center justify-between w-full">
                   <div className="flex items-center gap-2">
-                    <span className="text-sm font-medium text-bolt-elements-textPrimary">
+                    <span className="text-sm font-medium text-recoder-elements-textPrimary">
                       {provider.name}
                     </span>
                     {!provider.requiresApiKey && (
@@ -317,24 +317,24 @@ export function ModelSelector({
                   )}
                 </div>
                 {provider.description && (
-                  <span className="text-[10px] text-bolt-elements-textTertiary leading-tight">
+                  <span className="text-[10px] text-recoder-elements-textTertiary leading-tight">
                     {provider.description}
                   </span>
                 )}
               </button>
             ))}
-            <div className="border-t" style={{ borderColor: 'var(--bolt-elements-borderColor)' }}>
+            <div className="border-t" style={{ borderColor: 'var(--recoder-elements-borderColor)' }}>
               <button
                 onClick={(e) => {
                   e.stopPropagation();
                   onSettingsClick();
                   setShowProviderMenu(false);
                 }}
-                className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-bolt-elements-background-depth-2 transition-colors text-bolt-elements-textPrimary bg-bolt-elements-background-depth-1"
-                style={{ backgroundColor: 'var(--bolt-elements-bg-depth-1)' }}
+                className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-recoder-elements-background-depth-2 transition-colors text-recoder-elements-textPrimary bg-recoder-elements-background-depth-1"
+                style={{ backgroundColor: 'var(--recoder-elements-bg-depth-1)' }}
               >
-                <div className="i-ph:gear text-xl text-bolt-elements-textSecondary" />
-                <span className="text-sm text-bolt-elements-textPrimary">Manage API Keys</span>
+                <div className="i-ph:gear text-xl text-recoder-elements-textSecondary" />
+                <span className="text-sm text-recoder-elements-textPrimary">Manage API Keys</span>
               </button>
             </div>
           </div>
@@ -353,9 +353,9 @@ export function ModelSelector({
           }}
           className={classNames(
             'w-full flex items-center justify-between gap-2 px-3 py-2 rounded-lg border transition-colors h-[38px] text-sm',
-            'border-bolt-elements-borderColor bg-bolt-elements-background-depth-2',
-            'hover:bg-bolt-elements-background-depth-3',
-            'text-bolt-elements-textPrimary font-medium whitespace-nowrap'
+            'border-recoder-elements-borderColor bg-recoder-elements-background-depth-2',
+            'hover:bg-recoder-elements-background-depth-3',
+            'text-recoder-elements-textPrimary font-medium whitespace-nowrap'
           )}
         >
           <span className="truncate">{currentModel?.name || 'Select Model'}</span>
@@ -367,27 +367,27 @@ export function ModelSelector({
           <>
             <div className="fixed inset-0 z-[999]" onClick={() => { setShowModelMenu(false); setModelSearchQuery(''); }} />
             <div className="absolute bottom-full left-0 mb-1 w-full max-w-lg rounded-lg shadow-xl z-[1000] max-h-96 overflow-hidden flex flex-col"
-              style={{ zIndex: 1000, backgroundColor: 'var(--bolt-elements-bg-depth-1)', borderColor: 'var(--bolt-elements-borderColor)', border: '1px solid var(--bolt-elements-borderColor)' }}>
+              style={{ zIndex: 1000, backgroundColor: 'var(--recoder-elements-bg-depth-1)', borderColor: 'var(--recoder-elements-borderColor)', border: '1px solid var(--recoder-elements-borderColor)' }}>
 
             {/* Search Input */}
-            <div className="px-3 py-2 border-b sticky top-0" style={{ borderColor: 'var(--bolt-elements-borderColor)', backgroundColor: 'var(--bolt-elements-bg-depth-1)' }}>
+            <div className="px-3 py-2 border-b sticky top-0" style={{ borderColor: 'var(--recoder-elements-borderColor)', backgroundColor: 'var(--recoder-elements-bg-depth-1)' }}>
               <div className="relative">
-                <div className="i-ph:magnifying-glass absolute left-2.5 top-1/2 -translate-y-1/2 text-bolt-elements-textTertiary text-sm" />
+                <div className="i-ph:magnifying-glass absolute left-2.5 top-1/2 -translate-y-1/2 text-recoder-elements-textTertiary text-sm" />
                 <input
                   type="text"
                   value={modelSearchQuery}
                   onChange={(e) => setModelSearchQuery(e.target.value)}
                   placeholder="Search models..."
                   autoFocus
-                  className="w-full pl-8 pr-3 py-1.5 rounded-md text-sm text-bolt-elements-textPrimary placeholder:text-bolt-elements-textTertiary focus:outline-none focus:ring-1 focus:ring-amber-500/50"
-                  style={{ backgroundColor: 'var(--bolt-elements-bg-depth-2)', border: '1px solid var(--bolt-elements-borderColor)' }}
+                  className="w-full pl-8 pr-3 py-1.5 rounded-md text-sm text-recoder-elements-textPrimary placeholder:text-recoder-elements-textTertiary focus:outline-none focus:ring-1 focus:ring-amber-500/50"
+                  style={{ backgroundColor: 'var(--recoder-elements-bg-depth-2)', border: '1px solid var(--recoder-elements-borderColor)' }}
                   onClick={(e) => e.stopPropagation()}
                 />
               </div>
             </div>
 
             {/* Provider Name Header */}
-            <div className="px-4 py-1.5 text-xs font-semibold text-bolt-elements-textSecondary" style={{ backgroundColor: 'var(--bolt-elements-bg-depth-1)' }}>
+            <div className="px-4 py-1.5 text-xs font-semibold text-recoder-elements-textSecondary" style={{ backgroundColor: 'var(--recoder-elements-bg-depth-1)' }}>
               {currentProvider?.name} {dynamicModelsLoaded && selectedProvider === 'openrouter' ? `(${allModels.length} models)` : ''}
             </div>
 
@@ -400,10 +400,10 @@ export function ModelSelector({
                   className={classNames(
                     'w-full px-4 py-2.5 text-left transition-colors flex items-center justify-between group',
                     model.id === selectedModel
-                      ? 'bg-bolt-elements-background-depth-3 text-bolt-elements-textPrimary'
-                      : 'bg-bolt-elements-background-depth-1 text-bolt-elements-textSecondary hover:bg-bolt-elements-background-depth-2 hover:text-bolt-elements-textPrimary'
+                      ? 'bg-recoder-elements-background-depth-3 text-recoder-elements-textPrimary'
+                      : 'bg-recoder-elements-background-depth-1 text-recoder-elements-textSecondary hover:bg-recoder-elements-background-depth-2 hover:text-recoder-elements-textPrimary'
                   )}
-                  style={{ backgroundColor: model.id === selectedModel ? 'var(--bolt-elements-bg-depth-3)' : 'var(--bolt-elements-bg-depth-1)' }}
+                  style={{ backgroundColor: model.id === selectedModel ? 'var(--recoder-elements-bg-depth-3)' : 'var(--recoder-elements-bg-depth-1)' }}
                 >
                   <div className="flex flex-col gap-0.5 flex-1 min-w-0">
                     <div className="flex items-center gap-2">
@@ -415,13 +415,13 @@ export function ModelSelector({
                         </span>
                       )}
                       {isCustomModel(model.id) && (
-                        <span className="text-[9px] px-1 py-0.5 rounded text-bolt-elements-textSecondary" style={{ backgroundColor: 'var(--bolt-elements-bg-depth-2)' }}>
+                        <span className="text-[9px] px-1 py-0.5 rounded text-recoder-elements-textSecondary" style={{ backgroundColor: 'var(--recoder-elements-bg-depth-2)' }}>
                           Custom
                         </span>
                       )}
                     </div>
                     {/* Model metadata row */}
-                    <div className="flex items-center gap-2 text-[10px] text-bolt-elements-textTertiary">
+                    <div className="flex items-center gap-2 text-[10px] text-recoder-elements-textTertiary">
                       {model.contextWindow && (
                         <span title="Context window size">
                           {model.contextWindow >= 1000000
@@ -443,7 +443,7 @@ export function ModelSelector({
                     {isCustomModel(model.id) && (
                       <button
                         onClick={(e) => handleDeleteCustomModel(e, model.id)}
-                        className="p-1 text-bolt-elements-textTertiary hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"
+                        className="p-1 text-recoder-elements-textTertiary hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"
                         title="Remove custom model"
                       >
                         <div className="i-ph:trash text-sm" />
@@ -458,7 +458,7 @@ export function ModelSelector({
 
               {/* Loading indicator for dynamic models */}
               {dynamicModelsLoading && selectedProvider === 'openrouter' && (
-                <div className="px-4 py-3 text-center text-xs text-bolt-elements-textTertiary">
+                <div className="px-4 py-3 text-center text-xs text-recoder-elements-textTertiary">
                   <div className="i-ph:spinner-gap animate-spin inline-block mr-2" />
                   Loading more models...
                 </div>
@@ -466,21 +466,21 @@ export function ModelSelector({
 
               {/* No results */}
               {models.length === 0 && modelSearchQuery && (
-                <div className="px-4 py-6 text-center text-sm text-bolt-elements-textTertiary">
+                <div className="px-4 py-6 text-center text-sm text-recoder-elements-textTertiary">
                   No models match "{modelSearchQuery}"
                 </div>
               )}
             </div>
 
             {/* Add Model Button */}
-            <div className="border-t" style={{ borderColor: 'var(--bolt-elements-borderColor)' }}>
+            <div className="border-t" style={{ borderColor: 'var(--recoder-elements-borderColor)' }}>
               <button
                 onClick={handleAddModel}
-                className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-bolt-elements-background-depth-2 transition-colors text-bolt-elements-textPrimary bg-bolt-elements-background-depth-1"
-                style={{ backgroundColor: 'var(--bolt-elements-bg-depth-1)' }}
+                className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-recoder-elements-background-depth-2 transition-colors text-recoder-elements-textPrimary bg-recoder-elements-background-depth-1"
+                style={{ backgroundColor: 'var(--recoder-elements-bg-depth-1)' }}
               >
                 <div className="i-ph:plus text-xl text-green-400" />
-                <span className="text-sm text-bolt-elements-textPrimary">Add Custom Model</span>
+                <span className="text-sm text-recoder-elements-textPrimary">Add Custom Model</span>
               </button>
             </div>
           </div>
@@ -493,13 +493,13 @@ export function ModelSelector({
         <>
           <div className="fixed inset-0 z-[1001] bg-black/70" onClick={handleCancelAddModel} />
           <div className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-[440px] rounded-xl shadow-2xl z-[1002]"
-            style={{ backgroundColor: 'var(--bolt-elements-bg-depth-1)', border: '1px solid var(--bolt-elements-borderColor)' }}>
+            style={{ backgroundColor: 'var(--recoder-elements-bg-depth-1)', border: '1px solid var(--recoder-elements-borderColor)' }}>
             <div className="p-6">
               <div className="flex items-center justify-between mb-5">
-                <h3 className="text-lg font-semibold text-bolt-elements-textPrimary">Add Custom Model</h3>
+                <h3 className="text-lg font-semibold text-recoder-elements-textPrimary">Add Custom Model</h3>
                 <button
                   onClick={handleCancelAddModel}
-                  className="text-bolt-elements-textTertiary hover:text-bolt-elements-textSecondary transition-colors"
+                  className="text-recoder-elements-textTertiary hover:text-recoder-elements-textSecondary transition-colors"
                 >
                   <div className="i-ph:x text-xl" />
                 </button>
@@ -508,36 +508,36 @@ export function ModelSelector({
               {/* Model Search */}
               {selectedProvider === 'openrouter' && !selectedAddModel && (
                 <div className="mb-4">
-                  <label className="block text-sm font-medium text-bolt-elements-textSecondary mb-2">
+                  <label className="block text-sm font-medium text-recoder-elements-textSecondary mb-2">
                     Search OpenRouter Models
                   </label>
                   <div className="relative">
-                    <div className="i-ph:magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-bolt-elements-textTertiary" />
+                    <div className="i-ph:magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-recoder-elements-textTertiary" />
                     <input
                       type="text"
                       value={addModelSearchQuery}
                       onChange={(e) => setAddModelSearchQuery(e.target.value)}
                       placeholder="Search by name or ID..."
                       autoFocus
-                      className="w-full pl-9 pr-3 py-2.5 rounded-lg text-bolt-elements-textPrimary placeholder:text-bolt-elements-textTertiary focus:outline-none focus:ring-2 focus:ring-amber-500/50 transition-all"
-                      style={{ backgroundColor: 'var(--bolt-elements-bg-depth-2)', border: '1px solid var(--bolt-elements-borderColor)' }}
+                      className="w-full pl-9 pr-3 py-2.5 rounded-lg text-recoder-elements-textPrimary placeholder:text-recoder-elements-textTertiary focus:outline-none focus:ring-2 focus:ring-amber-500/50 transition-all"
+                      style={{ backgroundColor: 'var(--recoder-elements-bg-depth-2)', border: '1px solid var(--recoder-elements-borderColor)' }}
                     />
                   </div>
 
                   {/* Search Results */}
                   {addModelSearchQuery && (
-                    <div className="mt-2 max-h-48 overflow-y-auto rounded-lg" style={{ border: '1px solid var(--bolt-elements-borderColor)' }}>
+                    <div className="mt-2 max-h-48 overflow-y-auto rounded-lg" style={{ border: '1px solid var(--recoder-elements-borderColor)' }}>
                       {addModelResults.length > 0 ? (
                         addModelResults.map((model) => (
                           <button
                             key={model.id}
                             onClick={() => handleSelectAddModel(model)}
-                            className="w-full px-3 py-2 text-left hover:bg-bolt-elements-background-depth-2 transition-colors flex items-center justify-between"
-                            style={{ backgroundColor: 'var(--bolt-elements-bg-depth-1)' }}
+                            className="w-full px-3 py-2 text-left hover:bg-recoder-elements-background-depth-2 transition-colors flex items-center justify-between"
+                            style={{ backgroundColor: 'var(--recoder-elements-bg-depth-1)' }}
                           >
                             <div className="flex-1 min-w-0">
-                              <div className="text-sm font-medium text-bolt-elements-textPrimary truncate">{model.name}</div>
-                              <div className="flex items-center gap-2 text-[10px] text-bolt-elements-textTertiary">
+                              <div className="text-sm font-medium text-recoder-elements-textPrimary truncate">{model.name}</div>
+                              <div className="flex items-center gap-2 text-[10px] text-recoder-elements-textTertiary">
                                 <span className="truncate">{model.id}</span>
                                 {model.contextWindow && (
                                   <span>
@@ -557,7 +557,7 @@ export function ModelSelector({
                           </button>
                         ))
                       ) : (
-                        <div className="px-3 py-4 text-center text-sm text-bolt-elements-textTertiary">
+                        <div className="px-3 py-4 text-center text-sm text-recoder-elements-textTertiary">
                           {dynamicModelsLoading ? 'Loading models...' : 'No models found'}
                         </div>
                       )}
@@ -569,20 +569,20 @@ export function ModelSelector({
               {/* Selected Model Info / Manual Form */}
               <div className="space-y-4">
                 {selectedAddModel && (
-                  <div className="p-3 rounded-lg flex items-start justify-between" style={{ backgroundColor: 'var(--bolt-elements-bg-depth-2)', border: '1px solid var(--bolt-elements-borderColor)' }}>
+                  <div className="p-3 rounded-lg flex items-start justify-between" style={{ backgroundColor: 'var(--recoder-elements-bg-depth-2)', border: '1px solid var(--recoder-elements-borderColor)' }}>
                     <div>
-                      <div className="text-sm font-medium text-bolt-elements-textPrimary">{selectedAddModel.name}</div>
-                      <div className="text-xs text-bolt-elements-textTertiary mt-1">{selectedAddModel.id}</div>
+                      <div className="text-sm font-medium text-recoder-elements-textPrimary">{selectedAddModel.name}</div>
+                      <div className="text-xs text-recoder-elements-textTertiary mt-1">{selectedAddModel.id}</div>
                       <div className="flex items-center gap-2 mt-2 flex-wrap">
                         {selectedAddModel.contextWindow && (
-                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-bolt-elements-background-depth-3 text-bolt-elements-textSecondary">
+                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-recoder-elements-background-depth-3 text-recoder-elements-textSecondary">
                             {selectedAddModel.contextWindow >= 1000000
                               ? `${(selectedAddModel.contextWindow / 1000000).toFixed(1)}M context`
                               : `${(selectedAddModel.contextWindow / 1000).toFixed(0)}K context`}
                           </span>
                         )}
                         {selectedAddModel.costPer1MInput !== undefined && (
-                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-bolt-elements-background-depth-3 text-bolt-elements-textSecondary">
+                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-recoder-elements-background-depth-3 text-recoder-elements-textSecondary">
                             {formatCost(selectedAddModel.costPer1MInput)}/{formatCost(selectedAddModel.costPer1MOutput)} per 1M
                           </span>
                         )}
@@ -593,7 +593,7 @@ export function ModelSelector({
                     </div>
                     <button
                       onClick={() => { setSelectedAddModel(null); setNewModelForm({ name: '', id: '' }); }}
-                      className="text-bolt-elements-textTertiary hover:text-bolt-elements-textSecondary p-1"
+                      className="text-recoder-elements-textTertiary hover:text-recoder-elements-textSecondary p-1"
                     >
                       <div className="i-ph:x text-sm" />
                     </button>
@@ -603,28 +603,28 @@ export function ModelSelector({
                 {!selectedAddModel && (
                   <>
                     <div>
-                      <label className="block text-sm font-medium text-bolt-elements-textSecondary mb-2">Model Name</label>
+                      <label className="block text-sm font-medium text-recoder-elements-textSecondary mb-2">Model Name</label>
                       <input
                         type="text"
                         value={newModelForm.name}
                         onChange={(e) => setNewModelForm({...newModelForm, name: e.target.value})}
-                        className="w-full px-3 py-2.5 rounded-lg text-bolt-elements-textPrimary placeholder:text-bolt-elements-textTertiary focus:outline-none focus:ring-2 focus:ring-amber-500/50 transition-all"
-                        style={{ backgroundColor: 'var(--bolt-elements-bg-depth-2)', border: '1px solid var(--bolt-elements-borderColor)' }}
+                        className="w-full px-3 py-2.5 rounded-lg text-recoder-elements-textPrimary placeholder:text-recoder-elements-textTertiary focus:outline-none focus:ring-2 focus:ring-amber-500/50 transition-all"
+                        style={{ backgroundColor: 'var(--recoder-elements-bg-depth-2)', border: '1px solid var(--recoder-elements-borderColor)' }}
                         placeholder="e.g., GPT-4 Turbo"
                       />
                     </div>
 
                     <div>
-                      <label className="block text-sm font-medium text-bolt-elements-textSecondary mb-2">Model ID</label>
+                      <label className="block text-sm font-medium text-recoder-elements-textSecondary mb-2">Model ID</label>
                       <input
                         type="text"
                         value={newModelForm.id}
                         onChange={(e) => setNewModelForm({...newModelForm, id: e.target.value})}
-                        className="w-full px-3 py-2.5 rounded-lg text-bolt-elements-textPrimary placeholder:text-bolt-elements-textTertiary focus:outline-none focus:ring-2 focus:ring-amber-500/50 transition-all"
-                        style={{ backgroundColor: 'var(--bolt-elements-bg-depth-2)', border: '1px solid var(--bolt-elements-borderColor)' }}
+                        className="w-full px-3 py-2.5 rounded-lg text-recoder-elements-textPrimary placeholder:text-recoder-elements-textTertiary focus:outline-none focus:ring-2 focus:ring-amber-500/50 transition-all"
+                        style={{ backgroundColor: 'var(--recoder-elements-bg-depth-2)', border: '1px solid var(--recoder-elements-borderColor)' }}
                         placeholder="e.g., gpt-4-turbo"
                       />
-                      <p className="text-xs text-bolt-elements-textTertiary mt-1.5">Use the exact model ID from the provider</p>
+                      <p className="text-xs text-recoder-elements-textTertiary mt-1.5">Use the exact model ID from the provider</p>
                     </div>
                   </>
                 )}
@@ -633,7 +633,7 @@ export function ModelSelector({
               <div className="flex justify-end gap-3 mt-6">
                 <button
                   onClick={handleCancelAddModel}
-                  className="px-4 py-2.5 text-bolt-elements-textSecondary rounded-lg hover:bg-bolt-elements-background-depth-2 transition-colors"
+                  className="px-4 py-2.5 text-recoder-elements-textSecondary rounded-lg hover:bg-recoder-elements-background-depth-2 transition-colors"
                 >
                   Cancel
                 </button>
@@ -655,8 +655,8 @@ export function ModelSelector({
         onClick={onSettingsClick}
         className={classNames(
           'p-1.5 rounded-lg bg-transparent transition-colors',
-          'hover:bg-bolt-elements-background-depth-3',
-          'text-bolt-elements-textSecondary hover:text-bolt-elements-textPrimary'
+          'hover:bg-recoder-elements-background-depth-3',
+          'text-recoder-elements-textSecondary hover:text-recoder-elements-textPrimary'
         )}
         title="Manage API Keys"
       >

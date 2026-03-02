@@ -315,26 +315,26 @@ export const EnhancedCodeBlock = memo(function EnhancedCodeBlock({
     <div
       className={classNames(
         'relative group rounded-lg overflow-hidden',
-        'bg-bolt-elements-background-depth-3 border border-bolt-elements-borderColor',
+        'bg-recoder-elements-background-depth-3 border border-recoder-elements-borderColor',
         className
       )}
     >
       {/* Header bar */}
       {showHeader && (
-        <div className="flex items-center justify-between px-3 py-2 bg-bolt-elements-background-depth-4 border-b border-bolt-elements-borderColor">
+        <div className="flex items-center justify-between px-3 py-2 bg-recoder-elements-background-depth-4 border-b border-recoder-elements-borderColor">
           {/* Language label and filename */}
           <div className="flex items-center gap-2">
             {filename ? (
               <>
-                <div className="i-ph:file-code text-bolt-elements-textSecondary" />
-                <span className="text-xs font-medium text-bolt-elements-textPrimary">{filename}</span>
-                <span className="text-xs text-bolt-elements-textTertiary">({languageLabel})</span>
+                <div className="i-ph:file-code text-recoder-elements-textSecondary" />
+                <span className="text-xs font-medium text-recoder-elements-textPrimary">{filename}</span>
+                <span className="text-xs text-recoder-elements-textTertiary">({languageLabel})</span>
               </>
             ) : (
-              <span className="text-xs font-medium text-bolt-elements-textSecondary">{languageLabel}</span>
+              <span className="text-xs font-medium text-recoder-elements-textSecondary">{languageLabel}</span>
             )}
             {isCollapsible && (
-              <span className="text-xs text-bolt-elements-textTertiary">({lineCount} lines)</span>
+              <span className="text-xs text-recoder-elements-textTertiary">({lineCount} lines)</span>
             )}
           </div>
 
@@ -344,7 +344,7 @@ export const EnhancedCodeBlock = memo(function EnhancedCodeBlock({
               {/* Expand/Collapse */}
               {isCollapsible && (
                 <button
-                  className="flex items-center gap-1 px-2 py-1 text-xs rounded hover:bg-bolt-elements-background-depth-2 text-bolt-elements-textSecondary hover:text-bolt-elements-textPrimary transition-colors"
+                  className="flex items-center gap-1 px-2 py-1 text-xs rounded hover:bg-recoder-elements-background-depth-2 text-recoder-elements-textSecondary hover:text-recoder-elements-textPrimary transition-colors"
                   onClick={() => setIsExpanded(!isExpanded)}
                   title={isExpanded ? 'Collapse' : 'Expand'}
                 >
@@ -364,7 +364,7 @@ export const EnhancedCodeBlock = memo(function EnhancedCodeBlock({
                     'flex items-center gap-1 px-2 py-1 text-xs rounded transition-colors',
                     isCopied
                       ? 'bg-green-500/20 text-green-400'
-                      : 'hover:bg-bolt-elements-background-depth-2 text-bolt-elements-textSecondary hover:text-bolt-elements-textPrimary'
+                      : 'hover:bg-recoder-elements-background-depth-2 text-recoder-elements-textSecondary hover:text-recoder-elements-textPrimary'
                   )}
                   onClick={handleCopy}
                   title="Copy code"
@@ -381,7 +381,7 @@ export const EnhancedCodeBlock = memo(function EnhancedCodeBlock({
                     'flex items-center gap-1 px-2 py-1 text-xs rounded transition-colors',
                     isRunning
                       ? 'bg-blue-500/20 text-blue-400'
-                      : 'hover:bg-bolt-elements-background-depth-2 text-bolt-elements-textSecondary hover:text-bolt-elements-textPrimary'
+                      : 'hover:bg-recoder-elements-background-depth-2 text-recoder-elements-textSecondary hover:text-recoder-elements-textPrimary'
                   )}
                   onClick={handleRun}
                   disabled={isRunning}
@@ -399,7 +399,7 @@ export const EnhancedCodeBlock = memo(function EnhancedCodeBlock({
                     'flex items-center gap-1 px-2 py-1 text-xs rounded transition-colors',
                     isApplying
                       ? 'bg-orange-500/20 text-orange-400'
-                      : 'hover:bg-bolt-elements-background-depth-2 text-bolt-elements-textSecondary hover:text-bolt-elements-textPrimary'
+                      : 'hover:bg-recoder-elements-background-depth-2 text-recoder-elements-textSecondary hover:text-recoder-elements-textPrimary'
                   )}
                   onClick={handleApply}
                   disabled={isApplying}
@@ -428,12 +428,12 @@ export const EnhancedCodeBlock = memo(function EnhancedCodeBlock({
               'text-sm',
               '[&_pre]:m-0 [&_pre]:p-4 [&_pre]:bg-transparent',
               '[&_code]:font-mono [&_code]:text-sm',
-              showLineNumbers && '[&_.line]:pl-4 [&_.line]:relative [&_.line]:before:content-[attr(data-line)] [&_.line]:before:absolute [&_.line]:before:left-[-2rem] [&_.line]:before:w-6 [&_.line]:before:text-right [&_.line]:before:text-bolt-elements-textTertiary [&_.line]:before:pr-2'
+              showLineNumbers && '[&_.line]:pl-4 [&_.line]:relative [&_.line]:before:content-[attr(data-line)] [&_.line]:before:absolute [&_.line]:before:left-[-2rem] [&_.line]:before:w-6 [&_.line]:before:text-right [&_.line]:before:text-recoder-elements-textTertiary [&_.line]:before:pr-2'
             )}
             dangerouslySetInnerHTML={{ __html: html }}
           />
         ) : (
-          <pre className="m-0 p-4 text-sm font-mono text-bolt-elements-textPrimary overflow-x-auto">
+          <pre className="m-0 p-4 text-sm font-mono text-recoder-elements-textPrimary overflow-x-auto">
             <code>{code}</code>
           </pre>
         )}
@@ -441,7 +441,7 @@ export const EnhancedCodeBlock = memo(function EnhancedCodeBlock({
 
       {/* Fade overlay for collapsed state */}
       {isCollapsible && !isExpanded && (
-        <div className="absolute bottom-0 left-0 right-0 h-12 bg-gradient-to-t from-bolt-elements-background-depth-3 to-transparent pointer-events-none" />
+        <div className="absolute bottom-0 left-0 right-0 h-12 bg-gradient-to-t from-recoder-elements-background-depth-3 to-transparent pointer-events-none" />
       )}
     </div>
   );
@@ -458,8 +458,8 @@ export const InlineCode = memo(function InlineCode({ children, className }: Inli
     <code
       className={classNames(
         'px-1.5 py-0.5 rounded text-sm font-mono',
-        'bg-bolt-elements-background-depth-3 text-orange-400',
-        'border border-bolt-elements-borderColor',
+        'bg-recoder-elements-background-depth-3 text-orange-400',
+        'border border-recoder-elements-borderColor',
         className
       )}
     >
@@ -515,15 +515,15 @@ export const DiffCodeBlock = memo(function DiffCodeBlock({
       <div
         className={classNames(
           'rounded-lg overflow-hidden',
-          'bg-bolt-elements-background-depth-3 border border-bolt-elements-borderColor'
+          'bg-recoder-elements-background-depth-3 border border-recoder-elements-borderColor'
         )}
       >
-        <div className="flex items-center gap-2 px-3 py-2 bg-bolt-elements-background-depth-4 border-b border-bolt-elements-borderColor">
-          <div className="i-ph:git-diff text-bolt-elements-textSecondary" />
-          <span className="text-xs font-medium text-bolt-elements-textSecondary">Diff View</span>
+        <div className="flex items-center gap-2 px-3 py-2 bg-recoder-elements-background-depth-4 border-b border-recoder-elements-borderColor">
+          <div className="i-ph:git-diff text-recoder-elements-textSecondary" />
+          <span className="text-xs font-medium text-recoder-elements-textSecondary">Diff View</span>
         </div>
         <div
-          className="overflow-auto text-bolt-elements-textPrimary"
+          className="overflow-auto text-recoder-elements-textPrimary"
           dangerouslySetInnerHTML={{ __html: diffHtml }}
         />
       </div>

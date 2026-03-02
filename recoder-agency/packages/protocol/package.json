@@ -1,5 +1,5 @@
 {
-	"name": "@giselles-ai/protocol",
+	"name": "@recoder/protocol",
 	"version": "0.0.0",
 	"private": true,
 	"main": "./dist/index.js",
@@ -22,18 +22,18 @@
 		}
 	},
 	"devDependencies": {
-		"@giselles-ai/tsconfig": "workspace:*",
-		"@giselles-ai/utils": "workspace:*",
+		"@recoder/tsconfig": "workspace:*",
+		"@recoder/utils": "workspace:*",
 		"tsup": "catalog:",
 		"vitest": "catalog:"
 	},
 	"dependencies": {
 		"@ai-sdk/provider": "catalog:",
-		"@giselles-ai/action-registry": "workspace:*",
-		"@giselles-ai/data-store-registry": "workspace:*",
-		"@giselles-ai/language-model": "workspace:^",
-		"@giselles-ai/language-model-registry": "workspace:*",
-		"@giselles-ai/trigger-registry": "workspace:*",
+		"@recoder/action-registry": "workspace:*",
+		"@recoder/data-store-registry": "workspace:*",
+		"@recoder/language-model": "workspace:^",
+		"@recoder/language-model-registry": "workspace:*",
+		"@recoder/trigger-registry": "workspace:*",
 		"@octokit/webhooks": "catalog:",
 		"ai": "catalog:"
 	},

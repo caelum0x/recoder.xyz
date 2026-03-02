@@ -62,8 +62,8 @@ export const DialogButton = memo(({ type, children, onClick }: DialogButtonProps
       case 'secondary':
       default:
         return {
-          backgroundColor: 'var(--bolt-elements-bg-depth-3)',
-          color: 'var(--bolt-elements-textSecondary)',
+          backgroundColor: 'var(--recoder-elements-bg-depth-3)',
+          color: 'var(--recoder-elements-textSecondary)',
         };
     }
   };
@@ -87,8 +87,8 @@ export const DialogTitle = memo(({ className, children, ...props }: RadixDialog.
         className,
       )}
       style={{
-        borderBottom: '1px solid var(--bolt-elements-borderColor)',
-        color: 'var(--bolt-elements-textPrimary)',
+        borderBottom: '1px solid var(--recoder-elements-borderColor)',
+        color: 'var(--recoder-elements-textPrimary)',
       }}
       {...props}
     >
@@ -101,7 +101,7 @@ export const DialogDescription = memo(({ className, children, ...props }: RadixD
   return (
     <RadixDialog.Description
       className={classNames('px-5 py-4 text-md', className)}
-      style={{ color: 'var(--bolt-elements-textSecondary)' }}
+      style={{ color: 'var(--recoder-elements-textSecondary)' }}
       {...props}
     >
       {children}
@@ -144,8 +144,8 @@ export const Dialog = memo(({ className, children, onBackdrop, onClose, 'aria-la
             className,
           )}
           style={{
-            backgroundColor: 'var(--bolt-elements-bg-depth-2)',
-            border: '1px solid var(--bolt-elements-borderColor)',
+            backgroundColor: 'var(--recoder-elements-bg-depth-2)',
+            border: '1px solid var(--recoder-elements-borderColor)',
           }}
           initial="closed"
           animate="open"

@@ -52,7 +52,6 @@ RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
     && npm config set fetch-retry-mintimeout 20000 \
     && npm config set fetch-retry-maxtimeout 120000 \
     && npm config set fetch-timeout 120000 \
-    && npm config set network-timeout 120000 \
     && npm config set prefer-online true
 
 # Install node-pty and ws for PTY server in /opt/pty
@@ -206,7 +205,7 @@ ENV PATH="$PATH:/root/go/bin"
 
 # Rust debugger (LLDB with VSCode DAP support)
 # Install LLDB and the VSCode debug adapter
-RUN apt-get update && apt-get install -y lldb lldb-15 python3-lldb-15 \
+RUN apt-get update && apt-get install -y lldb-15 python3-lldb-15 \
     && rm -rf /var/lib/apt/lists/* \
     && ln -sf /usr/bin/lldb-15 /usr/bin/lldb \
     && ln -sf /usr/bin/lldb-server-15 /usr/bin/lldb-server
@@ -292,8 +291,6 @@ RUN mkdir -p /opt/mcp-servers && cd /opt/mcp-servers \
        @modelcontextprotocol/server-filesystem \
        @modelcontextprotocol/server-memory \
        @modelcontextprotocol/server-sequential-thinking \
-       @modelcontextprotocol/server-fetch \
-       @modelcontextprotocol/server-time \
     && npm cache clean --force
 
 # Add MCP servers to PATH for direct execution

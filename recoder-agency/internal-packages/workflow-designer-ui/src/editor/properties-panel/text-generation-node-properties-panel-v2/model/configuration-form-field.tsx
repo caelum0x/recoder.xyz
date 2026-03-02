@@ -1,7 +1,7 @@
-import { Select } from "@giselle-internal/ui/select";
-import { Toggle } from "@giselle-internal/ui/toggle";
-import type { ConfigurationOption } from "@giselles-ai/language-model-registry";
-import { titleCase } from "@giselles-ai/utils";
+import { Select } from "@recoder-internal/ui/select";
+import { Toggle } from "@recoder-internal/ui/toggle";
+import type { ConfigurationOption } from "@recoder/language-model-registry";
+import { titleCase } from "@recoder/utils";
 import type * as z from "zod/v4";
 import { Slider } from "../../../../ui/slider";
 import { SettingRow } from "../../ui/setting-row";

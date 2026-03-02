@@ -1,6 +1,6 @@
-import { Button } from "@giselle-internal/ui/button";
-import { useToasts } from "@giselle-internal/ui/toast";
-import type { WebPage, WebPageNode, WorkspaceId } from "@giselles-ai/protocol";
+import { Button } from "@recoder-internal/ui/button";
+import { useToasts } from "@recoder-internal/ui/toast";
+import type { WebPage, WebPageNode, WorkspaceId } from "@recoder/protocol";
 import clsx from "clsx/lite";
 import { TrashIcon } from "lucide-react";
 import { Dialog } from "radix-ui";
@@ -200,7 +200,7 @@ export function WebPageNodePropertiesPanel({ node }: { node: WebPageNode }) {
 			<NodePanelHeader
 				node={node}
 				onChangeName={(name) => updateNodeData(node, { name })}
-				docsUrl="https://docs.giselles.ai/en/glossary/webpage-node"
+				docsUrl="https://docs.recoder.xyz/en/glossary/webpage-node"
 				onDelete={() => deleteNode(node.id)}
 			/>
 			<div>

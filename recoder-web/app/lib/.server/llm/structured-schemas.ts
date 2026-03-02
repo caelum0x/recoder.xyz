@@ -8,13 +8,13 @@ const logger = createScopedLogger('StructuredSchemas');
  */
 
 /**
- * Schema for Bolt artifact responses
+ * Schema for Recoder artifact responses
  * Enforces the <recoderArtifact> and <recoderAction> XML structure
  */
 export const RECODER_ARTIFACT_SCHEMA = {
   type: 'json_schema',
   json_schema: {
-    name: 'bolt_artifact_response',
+    name: 'recoder_artifact_response',
     strict: true,
     schema: {
       type: 'object',

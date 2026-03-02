@@ -1,7 +1,7 @@
 "use client";
 
-import type { CreateAndStartTaskInputs } from "@giselles-ai/giselle";
-import type { GenerationContextInput, TaskId } from "@giselles-ai/protocol";
+import type { CreateAndStartTaskInputs } from "@recoder/giselle";
+import type { GenerationContextInput, TaskId } from "@recoder/protocol";
 import { useRouter } from "next/navigation";
 import { useCallback, useState, useTransition } from "react";
 import { useShallow } from "zustand/shallow";

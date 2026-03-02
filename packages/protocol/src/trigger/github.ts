@@ -11,7 +11,7 @@ import {
 	githubPullRequestOpenedEvent,
 	githubPullRequestReadyForReviewEvent,
 	githubPullRequestReviewCommentCreatedEvent,
-} from "@giselles-ai/trigger-registry";
+} from "@recoder/trigger-registry";
 import * as z from "zod/v4";
 
 const Provider = z.literal("github");

@@ -1,6 +1,6 @@
-import { useToasts } from "@giselle-internal/ui/toast";
-import type { Connection, TextGenerationNode } from "@giselles-ai/protocol";
-import { useNodeGenerations } from "@giselles-ai/react";
+import { useToasts } from "@recoder-internal/ui/toast";
+import type { Connection, TextGenerationNode } from "@recoder/protocol";
+import { useNodeGenerations } from "@recoder/react";
 import { useCallback, useMemo } from "react";
 import {
 	useAppDesignerStore,
@@ -99,7 +99,7 @@ export function TextGenerationNodePropertiesPanel({
 			<NodePanelHeader
 				node={node}
 				onChangeName={(name) => updateNodeData(node, { name })}
-				docsUrl="https://docs.giselles.ai/en/glossary/text-node"
+				docsUrl="https://docs.recoder.xyz/en/glossary/text-node"
 				onDelete={() => deleteNode(node.id)}
 			/>
 

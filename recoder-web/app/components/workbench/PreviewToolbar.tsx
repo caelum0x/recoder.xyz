@@ -99,7 +99,7 @@ export const PreviewToolbar = memo(() => {
   }));
 
   return (
-    <div className="bg-bolt-elements-background-depth-2 border-b border-bolt-elements-borderColor flex items-center gap-1 px-2 h-8 min-h-[32px] text-xs select-none">
+    <div className="bg-recoder-elements-background-depth-2 border-b border-recoder-elements-borderColor flex items-center gap-1 px-2 h-8 min-h-[32px] text-xs select-none">
       {/* Quick presets */}
       <div className="flex items-center gap-0.5">
         {QUICK_PRESETS.map((preset) => {
@@ -115,8 +115,8 @@ export const PreviewToolbar = memo(() => {
               className={classNames(
                 'flex items-center justify-center w-6 h-6 rounded transition-colors',
                 isActive
-                  ? 'text-bolt-elements-textPrimary bg-bolt-elements-background-depth-3'
-                  : 'text-bolt-elements-textSecondary hover:text-bolt-elements-textPrimary hover:bg-bolt-elements-background-depth-3',
+                  ? 'text-recoder-elements-textPrimary bg-recoder-elements-background-depth-3'
+                  : 'text-recoder-elements-textSecondary hover:text-recoder-elements-textPrimary hover:bg-recoder-elements-background-depth-3',
               )}
             >
               <div className={classNames(preset.icon, 'text-sm')} aria-hidden="true" />
@@ -126,7 +126,7 @@ export const PreviewToolbar = memo(() => {
       </div>
 
       {/* Separator */}
-      <div className="w-px h-4 bg-bolt-elements-borderColor mx-0.5" />
+      <div className="w-px h-4 bg-recoder-elements-borderColor mx-0.5" />
 
       {/* Device dropdown */}
       <div className="relative" ref={dropdownRef}>
@@ -136,7 +136,7 @@ export const PreviewToolbar = memo(() => {
           aria-haspopup="listbox"
           className={classNames(
             'flex items-center gap-1 h-6 px-2 rounded text-xs transition-colors max-w-[180px]',
-            'text-bolt-elements-textSecondary hover:text-bolt-elements-textPrimary hover:bg-bolt-elements-background-depth-3',
+            'text-recoder-elements-textSecondary hover:text-recoder-elements-textPrimary hover:bg-recoder-elements-background-depth-3',
           )}
         >
           <span className="truncate">{device.name}</span>
@@ -151,13 +151,13 @@ export const PreviewToolbar = memo(() => {
 
         {dropdownOpen && (
           <div
-            className="absolute top-full left-0 mt-1 z-50 w-64 max-h-80 overflow-y-auto rounded-md border border-bolt-elements-borderColor bg-bolt-elements-background-depth-2 shadow-lg py-1"
+            className="absolute top-full left-0 mt-1 z-50 w-64 max-h-80 overflow-y-auto rounded-md border border-recoder-elements-borderColor bg-recoder-elements-background-depth-2 shadow-lg py-1"
             role="listbox"
             aria-label="Select device"
           >
             {groupedDevices.map((group) => (
               <div key={group.label}>
-                <div className="px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-bolt-elements-textSecondary">
+                <div className="px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-recoder-elements-textSecondary">
                   {group.label}
                 </div>
                 {group.devices.map((d) => {
@@ -172,13 +172,13 @@ export const PreviewToolbar = memo(() => {
                       className={classNames(
                         'w-full flex items-center justify-between px-3 py-1.5 text-xs transition-colors',
                         isSelected
-                          ? 'bg-bolt-elements-background-depth-3 text-bolt-elements-textPrimary'
-                          : 'text-bolt-elements-textSecondary hover:bg-bolt-elements-background-depth-3 hover:text-bolt-elements-textPrimary',
+                          ? 'bg-recoder-elements-background-depth-3 text-recoder-elements-textPrimary'
+                          : 'text-recoder-elements-textSecondary hover:bg-recoder-elements-background-depth-3 hover:text-recoder-elements-textPrimary',
                       )}
                     >
                       <span className="truncate">{d.name}</span>
                       {d.width > 0 && (
-                        <span className="text-[10px] text-bolt-elements-textSecondary ml-2 tabular-nums flex-shrink-0">
+                        <span className="text-[10px] text-recoder-elements-textSecondary ml-2 tabular-nums flex-shrink-0">
                           {d.width}&times;{d.height}
                         </span>
                       )}
@@ -192,14 +192,14 @@ export const PreviewToolbar = memo(() => {
       </div>
 
       {/* Separator */}
-      <div className="w-px h-4 bg-bolt-elements-borderColor mx-0.5" />
+      <div className="w-px h-4 bg-recoder-elements-borderColor mx-0.5" />
 
       {/* Orientation toggle */}
       <button
         title={deviceState.orientation === 'portrait' ? 'Switch to landscape' : 'Switch to portrait'}
         aria-label="Toggle orientation"
         onClick={toggleOrientation}
-        className="flex items-center justify-center w-6 h-6 rounded text-bolt-elements-textSecondary hover:text-bolt-elements-textPrimary hover:bg-bolt-elements-background-depth-3 transition-colors"
+        className="flex items-center justify-center w-6 h-6 rounded text-recoder-elements-textSecondary hover:text-recoder-elements-textPrimary hover:bg-recoder-elements-background-depth-3 transition-colors"
       >
         <div
           className={classNames(
@@ -211,7 +211,7 @@ export const PreviewToolbar = memo(() => {
       </button>
 
       {/* Separator */}
-      <div className="w-px h-4 bg-bolt-elements-borderColor mx-0.5" />
+      <div className="w-px h-4 bg-recoder-elements-borderColor mx-0.5" />
 
       {/* Zoom controls */}
       <div className="flex items-center gap-0.5">
@@ -222,8 +222,8 @@ export const PreviewToolbar = memo(() => {
           className={classNames(
             'h-6 px-1.5 rounded text-[10px] font-medium transition-colors',
             deviceState.zoom === 1
-              ? 'text-bolt-elements-textPrimary bg-bolt-elements-background-depth-3'
-              : 'text-bolt-elements-textSecondary hover:text-bolt-elements-textPrimary hover:bg-bolt-elements-background-depth-3',
+              ? 'text-recoder-elements-textPrimary bg-recoder-elements-background-depth-3'
+              : 'text-recoder-elements-textSecondary hover:text-recoder-elements-textPrimary hover:bg-recoder-elements-background-depth-3',
           )}
         >
           Fit
@@ -233,11 +233,11 @@ export const PreviewToolbar = memo(() => {
           aria-label="Zoom out"
           onClick={zoomOut}
           disabled={deviceState.zoom <= 0.25}
-          className="flex items-center justify-center w-5 h-6 rounded text-bolt-elements-textSecondary enabled:hover:text-bolt-elements-textPrimary enabled:hover:bg-bolt-elements-background-depth-3 disabled:opacity-30 transition-colors"
+          className="flex items-center justify-center w-5 h-6 rounded text-recoder-elements-textSecondary enabled:hover:text-recoder-elements-textPrimary enabled:hover:bg-recoder-elements-background-depth-3 disabled:opacity-30 transition-colors"
         >
           <div className="i-ph:minus text-[10px]" aria-hidden="true" />
         </button>
-        <span className="text-[10px] tabular-nums text-bolt-elements-textSecondary w-7 text-center">
+        <span className="text-[10px] tabular-nums text-recoder-elements-textSecondary w-7 text-center">
           {zoomPercent}%
         </span>
         <button
@@ -245,7 +245,7 @@ export const PreviewToolbar = memo(() => {
           aria-label="Zoom in"
           onClick={zoomIn}
           disabled={deviceState.zoom >= 2}
-          className="flex items-center justify-center w-5 h-6 rounded text-bolt-elements-textSecondary enabled:hover:text-bolt-elements-textPrimary enabled:hover:bg-bolt-elements-background-depth-3 disabled:opacity-30 transition-colors"
+          className="flex items-center justify-center w-5 h-6 rounded text-recoder-elements-textSecondary enabled:hover:text-recoder-elements-textPrimary enabled:hover:bg-recoder-elements-background-depth-3 disabled:opacity-30 transition-colors"
         >
           <div className="i-ph:plus text-[10px]" aria-hidden="true" />
         </button>
@@ -254,8 +254,8 @@ export const PreviewToolbar = memo(() => {
       {/* Dimensions display (right side) */}
       {!dims.isResponsive && (
         <>
-          <div className="w-px h-4 bg-bolt-elements-borderColor mx-0.5" />
-          <span className="text-[10px] tabular-nums text-bolt-elements-textSecondary ml-auto">
+          <div className="w-px h-4 bg-recoder-elements-borderColor mx-0.5" />
+          <span className="text-[10px] tabular-nums text-recoder-elements-textSecondary ml-auto">
             {dims.width}&times;{dims.height}
           </span>
         </>

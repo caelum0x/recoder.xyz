@@ -53,10 +53,18 @@ RECODER_SESSION_TOKEN=...   # preferred (internal /api/agent/workflow)
 RECODER_API_KEY=...         # fallback (public /api/v1/agent/workflow)
 RECODER_WORKFLOW_FETCH_RETRIES=2
 RECODER_WORKFLOW_STRICT_CONTRACT=true
+RECODER_A2A_ADMIN_TOKEN=...      # required for /api/a2a/bridge/* admin routes
+RECODER_A2A_BRIDGE_ID=desktop-default
+RECODER_DESKTOP_AGENT_ID=recoder-desktop
 ```
 
 `agent:getWorkflowPlan` now returns backend diagnostics (`backend`, `fallbackReason`) in addition to `source` and `workflow`, matching OpenClaw contract visibility for automation and troubleshooting.
 When strict contract mode is enabled (`RECODER_WORKFLOW_STRICT_CONTRACT=true` or request payload `strict: true`), contract mismatch/missing markers force local fallback with explicit diagnostics.
+
+Delegated-task IPC surface:
+- `window.recoderDesktop.delegateTask(payload)` -> enqueue delegated bridge job
+- `window.recoderDesktop.getDelegatedTaskStatus({ jobId })` -> single status lookup
+- `window.recoderDesktop.pollDelegatedTaskStatus({ jobId, intervalMs, timeoutMs })` -> polling helper
 
 ## Installation
 

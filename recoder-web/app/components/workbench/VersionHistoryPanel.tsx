@@ -46,7 +46,7 @@ interface VersionHistoryPanelProps {
 
 /** Renders a single diff line with syntax coloring */
 function DiffLine({ line, index }: { line: string; index: number }) {
-  let lineClass = 'text-bolt-elements-textSecondary';
+  let lineClass = 'text-recoder-elements-textSecondary';
   if (line.startsWith('+') && !line.startsWith('+++')) {
     lineClass = 'text-green-400 bg-green-500/10';
   } else if (line.startsWith('-') && !line.startsWith('---')) {
@@ -80,7 +80,7 @@ function TabButton({
         'flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-colors',
         active
           ? 'bg-orange-500/20 text-orange-400 border border-orange-500/30'
-          : 'text-bolt-elements-textSecondary hover:text-bolt-elements-textPrimary hover:bg-bolt-elements-background-depth-3 border border-transparent'
+          : 'text-recoder-elements-textSecondary hover:text-recoder-elements-textPrimary hover:bg-recoder-elements-background-depth-3 border border-transparent'
       )}
     >
       <span className={icon} />
@@ -275,7 +275,7 @@ export const VersionHistoryPanel = memo(function VersionHistoryPanel({
       case 'auto':
         return {
           label: 'Auto',
-          className: 'bg-bolt-elements-background-depth-3 text-bolt-elements-textSecondary border-bolt-elements-borderColor',
+          className: 'bg-recoder-elements-background-depth-3 text-recoder-elements-textSecondary border-recoder-elements-borderColor',
           icon: 'i-ph:clock',
         };
       default:
@@ -346,7 +346,7 @@ export const VersionHistoryPanel = memo(function VersionHistoryPanel({
   function renderSnapshotList() {
     if (snapshotLoading && versions.length === 0) {
       return (
-        <div className="flex flex-col items-center justify-center h-full text-bolt-elements-textTertiary">
+        <div className="flex flex-col items-center justify-center h-full text-recoder-elements-textTertiary">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-500 mb-3" />
           <span className="text-sm">Loading snapshots...</span>
         </div>
@@ -364,7 +364,7 @@ export const VersionHistoryPanel = memo(function VersionHistoryPanel({
 
     if (versions.length === 0) {
       return (
-        <div className="p-6 text-center text-bolt-elements-textTertiary">
+        <div className="p-6 text-center text-recoder-elements-textTertiary">
           <span className="i-ph:clock-counter-clockwise text-4xl mb-3 block opacity-50" />
           <p className="text-sm">No snapshots yet</p>
           <p className="text-xs mt-1 opacity-75">
@@ -389,7 +389,7 @@ export const VersionHistoryPanel = memo(function VersionHistoryPanel({
                 'w-full text-left px-4 py-3 transition-colors border-l-2',
                 isSelected
                   ? 'bg-orange-500/10 border-l-orange-500'
-                  : 'border-l-transparent hover:bg-bolt-elements-background-depth-2',
+                  : 'border-l-transparent hover:bg-recoder-elements-background-depth-2',
                 isCurrent && !isSelected && 'bg-blue-500/5'
               )}
             >
@@ -401,11 +401,11 @@ export const VersionHistoryPanel = memo(function VersionHistoryPanel({
                       'w-3 h-3 rounded-full border-2',
                       isCurrent
                         ? 'bg-blue-500 border-blue-400'
-                        : 'bg-bolt-elements-background-depth-2 border-bolt-elements-borderColor'
+                        : 'bg-recoder-elements-background-depth-2 border-recoder-elements-borderColor'
                     )}
                   />
                   {index < versions.length - 1 && (
-                    <div className="w-0.5 h-8 bg-bolt-elements-borderColor mt-1" />
+                    <div className="w-0.5 h-8 bg-recoder-elements-borderColor mt-1" />
                   )}
                 </div>
 
@@ -434,15 +434,15 @@ export const VersionHistoryPanel = memo(function VersionHistoryPanel({
                     )}
                   </div>
 
-                  <p className="text-sm text-bolt-elements-textPrimary truncate font-medium">
+                  <p className="text-sm text-recoder-elements-textPrimary truncate font-medium">
                     {version.message || 'Snapshot'}
                   </p>
 
                   <div className="flex items-center gap-2 mt-1">
-                    <span className="text-xs text-bolt-elements-textTertiary font-mono">
+                    <span className="text-xs text-recoder-elements-textTertiary font-mono">
                       {version.id}
                     </span>
-                    <span className="text-xs text-bolt-elements-textTertiary">
+                    <span className="text-xs text-recoder-elements-textTertiary">
                       {formatTime(version.timestamp)}
                     </span>
                   </div>
@@ -450,7 +450,7 @@ export const VersionHistoryPanel = memo(function VersionHistoryPanel({
                   {(version.filesChanged !== undefined || version.additions !== undefined) && (
                     <div className="flex items-center gap-2 mt-1.5 text-xs">
                       {version.filesChanged !== undefined && (
-                        <span className="text-bolt-elements-textTertiary">
+                        <span className="text-recoder-elements-textTertiary">
                           {version.filesChanged} file{version.filesChanged !== 1 ? 's' : ''}
                         </span>
                       )}
@@ -475,7 +475,7 @@ export const VersionHistoryPanel = memo(function VersionHistoryPanel({
   function renderGitCommitsList() {
     if (gitLoading && gitCommits.length === 0) {
       return (
-        <div className="flex flex-col items-center justify-center h-full text-bolt-elements-textTertiary">
+        <div className="flex flex-col items-center justify-center h-full text-recoder-elements-textTertiary">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-500 mb-3" />
           <span className="text-sm">Loading commits...</span>
         </div>
@@ -493,7 +493,7 @@ export const VersionHistoryPanel = memo(function VersionHistoryPanel({
 
     if (gitCommits.length === 0) {
       return (
-        <div className="p-6 text-center text-bolt-elements-textTertiary">
+        <div className="p-6 text-center text-recoder-elements-textTertiary">
           <span className="i-ph:git-commit text-4xl mb-3 block opacity-50" />
           <p className="text-sm">No git commits yet</p>
           <p className="text-xs mt-1 opacity-75">
@@ -517,7 +517,7 @@ export const VersionHistoryPanel = memo(function VersionHistoryPanel({
                 'w-full text-left px-4 py-3 transition-colors border-l-2',
                 isSelected
                   ? 'bg-orange-500/10 border-l-orange-500'
-                  : 'border-l-transparent hover:bg-bolt-elements-background-depth-2',
+                  : 'border-l-transparent hover:bg-recoder-elements-background-depth-2',
                 isCurrent && !isSelected && 'bg-blue-500/5'
               )}
             >
@@ -529,11 +529,11 @@ export const VersionHistoryPanel = memo(function VersionHistoryPanel({
                       'w-3 h-3 rounded-full border-2',
                       isCurrent
                         ? 'bg-blue-500 border-blue-400'
-                        : 'bg-bolt-elements-background-depth-2 border-bolt-elements-borderColor'
+                        : 'bg-recoder-elements-background-depth-2 border-recoder-elements-borderColor'
                     )}
                   />
                   {index < gitCommits.length - 1 && (
-                    <div className="w-0.5 h-8 bg-bolt-elements-borderColor mt-1" />
+                    <div className="w-0.5 h-8 bg-recoder-elements-borderColor mt-1" />
                   )}
                 </div>
 
@@ -547,21 +547,21 @@ export const VersionHistoryPanel = memo(function VersionHistoryPanel({
                     )}
                   </div>
 
-                  <p className="text-sm text-bolt-elements-textPrimary truncate font-medium">
+                  <p className="text-sm text-recoder-elements-textPrimary truncate font-medium">
                     {commit.message || 'No message'}
                   </p>
 
                   <div className="flex items-center gap-2 mt-1">
-                    <span className="text-xs text-bolt-elements-textTertiary font-mono">
+                    <span className="text-xs text-recoder-elements-textTertiary font-mono">
                       {commit.shortHash}
                     </span>
-                    <span className="text-xs text-bolt-elements-textTertiary">
+                    <span className="text-xs text-recoder-elements-textTertiary">
                       {formatDate(commit.date)}
                     </span>
                   </div>
 
                   {commit.author && (
-                    <div className="flex items-center gap-1 mt-1 text-xs text-bolt-elements-textTertiary">
+                    <div className="flex items-center gap-1 mt-1 text-xs text-recoder-elements-textTertiary">
                       <span className="i-ph:user text-[10px]" />
                       <span>{commit.author}</span>
                     </div>
@@ -579,9 +579,9 @@ export const VersionHistoryPanel = memo(function VersionHistoryPanel({
   function renderSnapshotDetails() {
     if (!selectedVersion) {
       return (
-        <div className="flex-1 flex flex-col items-center justify-center text-bolt-elements-textTertiary p-6">
+        <div className="flex-1 flex flex-col items-center justify-center text-recoder-elements-textTertiary p-6">
           <span className="i-ph:clock-counter-clockwise text-6xl mb-4 opacity-30" />
-          <p className="text-lg font-medium text-bolt-elements-textSecondary">
+          <p className="text-lg font-medium text-recoder-elements-textSecondary">
             Select a snapshot to view details
           </p>
           <p className="text-sm mt-2 text-center max-w-md">
@@ -595,10 +595,10 @@ export const VersionHistoryPanel = memo(function VersionHistoryPanel({
     return (
       <>
         {/* Selected Version Header */}
-        <div className="px-5 py-4 border-b border-bolt-elements-borderColor bg-bolt-elements-background-depth-2 flex items-center justify-between">
+        <div className="px-5 py-4 border-b border-recoder-elements-borderColor bg-recoder-elements-background-depth-2 flex items-center justify-between">
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2 mb-1">
-              <span className="text-lg font-semibold text-bolt-elements-textPrimary truncate">
+              <span className="text-lg font-semibold text-recoder-elements-textPrimary truncate">
                 {selectedVersion.message || 'Snapshot'}
               </span>
               {selectedVersion.isCurrent && (
@@ -607,7 +607,7 @@ export const VersionHistoryPanel = memo(function VersionHistoryPanel({
                 </span>
               )}
             </div>
-            <div className="flex items-center gap-3 text-sm text-bolt-elements-textTertiary">
+            <div className="flex items-center gap-3 text-sm text-recoder-elements-textTertiary">
               <span className="font-mono">{selectedVersion.fullHash || selectedVersion.id}</span>
               <span>{formatTime(selectedVersion.timestamp)}</span>
               <span
@@ -661,25 +661,25 @@ export const VersionHistoryPanel = memo(function VersionHistoryPanel({
         {/* Changed Files */}
         <div className="flex-1 overflow-auto p-4">
           {selectedVersion.isCurrent ? (
-            <div className="h-full flex flex-col items-center justify-center text-bolt-elements-textTertiary">
+            <div className="h-full flex flex-col items-center justify-center text-recoder-elements-textTertiary">
               <span className="i-ph:check-circle text-5xl text-green-500 mb-3" />
-              <p className="text-lg font-medium text-bolt-elements-textSecondary">
+              <p className="text-lg font-medium text-recoder-elements-textSecondary">
                 This is the current version
               </p>
               <p className="text-sm mt-1">Select a previous version to see changes and restore</p>
             </div>
           ) : diffLoading ? (
-            <div className="h-full flex flex-col items-center justify-center text-bolt-elements-textTertiary">
+            <div className="h-full flex flex-col items-center justify-center text-recoder-elements-textTertiary">
               <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-orange-500 mb-3" />
               <span>Loading changes...</span>
             </div>
           ) : selectedDiff ? (
             <div className="space-y-2">
               {/* Summary */}
-              <div className="flex items-center gap-4 px-4 py-3 bg-bolt-elements-background-depth-2 rounded-lg mb-4">
+              <div className="flex items-center gap-4 px-4 py-3 bg-recoder-elements-background-depth-2 rounded-lg mb-4">
                 <div className="flex items-center gap-2">
-                  <span className="i-ph:files text-lg text-bolt-elements-textSecondary" />
-                  <span className="text-sm text-bolt-elements-textPrimary font-medium">
+                  <span className="i-ph:files text-lg text-recoder-elements-textSecondary" />
+                  <span className="text-sm text-recoder-elements-textPrimary font-medium">
                     {selectedDiff.summary.filesChanged} file
                     {selectedDiff.summary.filesChanged !== 1 ? 's' : ''} changed
                   </span>
@@ -705,14 +705,14 @@ export const VersionHistoryPanel = memo(function VersionHistoryPanel({
                 return (
                   <div
                     key={file.path}
-                    className="border border-bolt-elements-borderColor rounded-lg overflow-hidden"
+                    className="border border-recoder-elements-borderColor rounded-lg overflow-hidden"
                   >
                     <button
                       onClick={() => toggleFileDiff(file.path)}
-                      className="w-full px-4 py-3 flex items-center gap-3 bg-bolt-elements-background-depth-2 hover:bg-bolt-elements-background-depth-3 transition-colors"
+                      className="w-full px-4 py-3 flex items-center gap-3 bg-recoder-elements-background-depth-2 hover:bg-recoder-elements-background-depth-3 transition-colors"
                     >
                       <span className={classNames(statusStyle.icon, statusStyle.color)} />
-                      <span className="flex-1 text-left text-sm text-bolt-elements-textPrimary font-mono truncate">
+                      <span className="flex-1 text-left text-sm text-recoder-elements-textPrimary font-mono truncate">
                         {file.path}
                       </span>
                       <div className="flex items-center gap-2 text-xs">
@@ -732,26 +732,26 @@ export const VersionHistoryPanel = memo(function VersionHistoryPanel({
                     </button>
 
                     {isExpanded && (
-                      <div className="border-t border-bolt-elements-borderColor">
+                      <div className="border-t border-recoder-elements-borderColor">
                         {isDiffLoading ? (
-                          <div className="p-4 text-center text-bolt-elements-textTertiary text-sm">
+                          <div className="p-4 text-center text-recoder-elements-textTertiary text-sm">
                             <span className="i-ph:spinner animate-spin mr-2" />
                             Loading diff...
                           </div>
                         ) : fileDiffs[file.path] ? (
-                          <pre className="p-4 text-xs font-mono overflow-auto max-h-96 bg-bolt-elements-background-depth-1">
+                          <pre className="p-4 text-xs font-mono overflow-auto max-h-96 bg-recoder-elements-background-depth-1">
                             {fileDiffs[file.path].split('\n').map((line, i) => (
                               <DiffLine key={i} line={line} index={i} />
                             ))}
                           </pre>
                         ) : file.diff ? (
-                          <pre className="p-4 text-xs font-mono overflow-auto max-h-96 bg-bolt-elements-background-depth-1">
+                          <pre className="p-4 text-xs font-mono overflow-auto max-h-96 bg-recoder-elements-background-depth-1">
                             {file.diff.split('\n').map((line, i) => (
                               <DiffLine key={i} line={line} index={i} />
                             ))}
                           </pre>
                         ) : (
-                          <div className="p-4 text-center text-bolt-elements-textTertiary text-sm">
+                          <div className="p-4 text-center text-recoder-elements-textTertiary text-sm">
                             No diff available
                           </div>
                         )}
@@ -762,7 +762,7 @@ export const VersionHistoryPanel = memo(function VersionHistoryPanel({
               })}
             </div>
           ) : (
-            <div className="h-full flex flex-col items-center justify-center text-bolt-elements-textTertiary">
+            <div className="h-full flex flex-col items-center justify-center text-recoder-elements-textTertiary">
               <span className="i-ph:file-search text-4xl mb-3 opacity-50" />
               <p className="text-sm">No changes to display</p>
             </div>
@@ -776,9 +776,9 @@ export const VersionHistoryPanel = memo(function VersionHistoryPanel({
   function renderCommitDetails() {
     if (!selectedCommit) {
       return (
-        <div className="flex-1 flex flex-col items-center justify-center text-bolt-elements-textTertiary p-6">
+        <div className="flex-1 flex flex-col items-center justify-center text-recoder-elements-textTertiary p-6">
           <span className="i-ph:git-commit text-6xl mb-4 opacity-30" />
-          <p className="text-lg font-medium text-bolt-elements-textSecondary">
+          <p className="text-lg font-medium text-recoder-elements-textSecondary">
             Select a commit to view details
           </p>
           <p className="text-sm mt-2 text-center max-w-md">
@@ -794,10 +794,10 @@ export const VersionHistoryPanel = memo(function VersionHistoryPanel({
     return (
       <>
         {/* Selected Commit Header */}
-        <div className="px-5 py-4 border-b border-bolt-elements-borderColor bg-bolt-elements-background-depth-2 flex items-center justify-between">
+        <div className="px-5 py-4 border-b border-recoder-elements-borderColor bg-recoder-elements-background-depth-2 flex items-center justify-between">
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2 mb-1">
-              <span className="text-lg font-semibold text-bolt-elements-textPrimary truncate">
+              <span className="text-lg font-semibold text-recoder-elements-textPrimary truncate">
                 {selectedCommit.message || 'No message'}
               </span>
               {isCurrent && (
@@ -806,7 +806,7 @@ export const VersionHistoryPanel = memo(function VersionHistoryPanel({
                 </span>
               )}
             </div>
-            <div className="flex items-center gap-3 text-sm text-bolt-elements-textTertiary flex-wrap">
+            <div className="flex items-center gap-3 text-sm text-recoder-elements-textTertiary flex-wrap">
               <span className="font-mono">{selectedCommit.hash}</span>
               <span>{formatDate(selectedCommit.date)}</span>
               {selectedCommit.author && (
@@ -852,9 +852,9 @@ export const VersionHistoryPanel = memo(function VersionHistoryPanel({
         {/* Commit Content */}
         <div className="flex-1 overflow-auto p-4">
           {isCurrent ? (
-            <div className="h-full flex flex-col items-center justify-center text-bolt-elements-textTertiary">
+            <div className="h-full flex flex-col items-center justify-center text-recoder-elements-textTertiary">
               <span className="i-ph:check-circle text-5xl text-green-500 mb-3" />
-              <p className="text-lg font-medium text-bolt-elements-textSecondary">
+              <p className="text-lg font-medium text-recoder-elements-textSecondary">
                 This is the current commit (HEAD)
               </p>
               <p className="text-sm mt-1">
@@ -864,38 +864,38 @@ export const VersionHistoryPanel = memo(function VersionHistoryPanel({
           ) : (
             <div className="space-y-4">
               {/* Commit Info Card */}
-              <div className="bg-bolt-elements-background-depth-2 rounded-lg border border-bolt-elements-borderColor p-4">
-                <h4 className="text-sm font-medium text-bolt-elements-textSecondary mb-3 flex items-center gap-2">
+              <div className="bg-recoder-elements-background-depth-2 rounded-lg border border-recoder-elements-borderColor p-4">
+                <h4 className="text-sm font-medium text-recoder-elements-textSecondary mb-3 flex items-center gap-2">
                   <span className="i-ph:info" />
                   Commit Details
                 </h4>
                 <div className="space-y-2 text-sm">
                   <div className="flex items-start gap-3">
-                    <span className="text-bolt-elements-textTertiary w-16 shrink-0">Hash</span>
-                    <span className="text-bolt-elements-textPrimary font-mono text-xs break-all">
+                    <span className="text-recoder-elements-textTertiary w-16 shrink-0">Hash</span>
+                    <span className="text-recoder-elements-textPrimary font-mono text-xs break-all">
                       {selectedCommit.hash}
                     </span>
                   </div>
                   <div className="flex items-start gap-3">
-                    <span className="text-bolt-elements-textTertiary w-16 shrink-0">Message</span>
-                    <span className="text-bolt-elements-textPrimary">
+                    <span className="text-recoder-elements-textTertiary w-16 shrink-0">Message</span>
+                    <span className="text-recoder-elements-textPrimary">
                       {selectedCommit.message}
                     </span>
                   </div>
                   <div className="flex items-start gap-3">
-                    <span className="text-bolt-elements-textTertiary w-16 shrink-0">Author</span>
-                    <span className="text-bolt-elements-textPrimary">
+                    <span className="text-recoder-elements-textTertiary w-16 shrink-0">Author</span>
+                    <span className="text-recoder-elements-textPrimary">
                       {selectedCommit.author}
                       {selectedCommit.authorEmail && (
-                        <span className="text-bolt-elements-textTertiary ml-1">
+                        <span className="text-recoder-elements-textTertiary ml-1">
                           &lt;{selectedCommit.authorEmail}&gt;
                         </span>
                       )}
                     </span>
                   </div>
                   <div className="flex items-start gap-3">
-                    <span className="text-bolt-elements-textTertiary w-16 shrink-0">Date</span>
-                    <span className="text-bolt-elements-textPrimary">{selectedCommit.date}</span>
+                    <span className="text-recoder-elements-textTertiary w-16 shrink-0">Date</span>
+                    <span className="text-recoder-elements-textPrimary">{selectedCommit.date}</span>
                   </div>
                 </div>
               </div>
@@ -906,12 +906,12 @@ export const VersionHistoryPanel = memo(function VersionHistoryPanel({
                   <span className="i-ph:warning text-yellow-400 text-lg shrink-0 mt-0.5" />
                   <div>
                     <p className="text-sm font-medium text-yellow-400">Restore Warning</p>
-                    <p className="text-xs text-bolt-elements-textTertiary mt-1">
+                    <p className="text-xs text-recoder-elements-textTertiary mt-1">
                       Restoring to this commit will reset all files to their state at this point in
                       history. Any uncommitted changes will be lost. A backup snapshot is created
                       automatically before restoring.
                     </p>
-                    <p className="text-xs text-bolt-elements-textTertiary mt-1">
+                    <p className="text-xs text-recoder-elements-textTertiary mt-1">
                       If a database snapshot was captured at this point, your Neon database will also
                       be restored to that state.
                     </p>
@@ -931,18 +931,18 @@ export const VersionHistoryPanel = memo(function VersionHistoryPanel({
 
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 backdrop-blur-sm">
-      <div className="bg-bolt-elements-background-depth-2 rounded-xl shadow-2xl w-[95%] max-w-5xl max-h-[90vh] overflow-hidden flex flex-col border border-bolt-elements-borderColor">
+      <div className="bg-recoder-elements-background-depth-2 rounded-xl shadow-2xl w-[95%] max-w-5xl max-h-[90vh] overflow-hidden flex flex-col border border-recoder-elements-borderColor">
         {/* Header */}
-        <div className="px-5 py-4 bg-bolt-elements-background-depth-2 border-b border-bolt-elements-borderColor flex items-center justify-between">
+        <div className="px-5 py-4 bg-recoder-elements-background-depth-2 border-b border-recoder-elements-borderColor flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-lg bg-orange-500/20 flex items-center justify-center">
               <span className="i-ph:clock-counter-clockwise text-xl text-orange-400" />
             </div>
             <div>
-              <h2 className="text-lg font-semibold text-bolt-elements-textPrimary">
+              <h2 className="text-lg font-semibold text-recoder-elements-textPrimary">
                 Version History
               </h2>
-              <p className="text-sm text-bolt-elements-textTertiary">
+              <p className="text-sm text-recoder-elements-textTertiary">
                 {itemCount} {activeTab === 'snapshots' ? 'snapshot' : 'commit'}
                 {itemCount !== 1 ? 's' : ''} available
               </p>
@@ -952,7 +952,7 @@ export const VersionHistoryPanel = memo(function VersionHistoryPanel({
             <button
               onClick={handleRefresh}
               disabled={isLoading}
-              className="p-2 hover:bg-bolt-elements-background-depth-3 rounded-lg transition-colors text-bolt-elements-textSecondary hover:text-bolt-elements-textPrimary"
+              className="p-2 hover:bg-recoder-elements-background-depth-3 rounded-lg transition-colors text-recoder-elements-textSecondary hover:text-recoder-elements-textPrimary"
               title="Refresh"
             >
               <span
@@ -964,7 +964,7 @@ export const VersionHistoryPanel = memo(function VersionHistoryPanel({
             </button>
             <button
               onClick={onClose}
-              className="p-2 hover:bg-bolt-elements-background-depth-3 rounded-lg transition-colors text-bolt-elements-textSecondary hover:text-bolt-elements-textPrimary"
+              className="p-2 hover:bg-recoder-elements-background-depth-3 rounded-lg transition-colors text-recoder-elements-textSecondary hover:text-recoder-elements-textPrimary"
             >
               <span className="i-ph:x text-xl" />
             </button>
@@ -974,9 +974,9 @@ export const VersionHistoryPanel = memo(function VersionHistoryPanel({
         {/* Content */}
         <div className="flex-1 overflow-hidden flex">
           {/* Left Sidebar - Version/Commit List */}
-          <div className="w-80 border-r border-bolt-elements-borderColor flex flex-col bg-bolt-elements-background-depth-1">
+          <div className="w-80 border-r border-recoder-elements-borderColor flex flex-col bg-recoder-elements-background-depth-1">
             {/* Tab Switcher */}
-            <div className="px-3 py-3 border-b border-bolt-elements-borderColor bg-bolt-elements-background-depth-2">
+            <div className="px-3 py-3 border-b border-recoder-elements-borderColor bg-recoder-elements-background-depth-2">
               <div className="flex gap-1">
                 <TabButton
                   active={activeTab === 'commits'}
@@ -1006,8 +1006,8 @@ export const VersionHistoryPanel = memo(function VersionHistoryPanel({
         </div>
 
         {/* Footer */}
-        <div className="px-5 py-3 bg-bolt-elements-background-depth-2 border-t border-bolt-elements-borderColor flex items-center justify-between">
-          <p className="text-xs text-bolt-elements-textTertiary">
+        <div className="px-5 py-3 bg-recoder-elements-background-depth-2 border-t border-recoder-elements-borderColor flex items-center justify-between">
+          <p className="text-xs text-recoder-elements-textTertiary">
             <span className="i-ph:info mr-1" />
             {activeTab === 'snapshots'
               ? 'Snapshots are created automatically when AI makes changes to your project'
@@ -1015,7 +1015,7 @@ export const VersionHistoryPanel = memo(function VersionHistoryPanel({
           </p>
           <button
             onClick={onClose}
-            className="px-4 py-2 text-sm text-bolt-elements-textSecondary hover:text-bolt-elements-textPrimary hover:bg-bolt-elements-background-depth-3 rounded-lg transition-colors"
+            className="px-4 py-2 text-sm text-recoder-elements-textSecondary hover:text-recoder-elements-textPrimary hover:bg-recoder-elements-background-depth-3 rounded-lg transition-colors"
           >
             Close
           </button>

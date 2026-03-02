@@ -1,4 +1,4 @@
-import type { GenerationUsage } from "@giselles-ai/protocol";
+import type { GenerationUsage } from "@recoder/protocol";
 import { describe, expect, it } from "vitest";
 import { sanitizeGenerationUsage } from "./sanitize-usage";
 

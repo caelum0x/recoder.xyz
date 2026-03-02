@@ -84,21 +84,21 @@ export const UndoButton = memo(function UndoButton({ className = '' }: UndoButto
         disabled={!state.canUndoAI || state.isUndoing}
         className={`flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium rounded-md transition-all
           ${state.canUndoAI
-            ? 'text-bolt-elements-textSecondary hover:text-bolt-elements-textPrimary'
-            : 'text-bolt-elements-textTertiary cursor-not-allowed opacity-50'
+            ? 'text-recoder-elements-textSecondary hover:text-recoder-elements-textPrimary'
+            : 'text-recoder-elements-textTertiary cursor-not-allowed opacity-50'
           }
           ${state.isUndoing ? 'animate-pulse' : ''}
         `}
         style={{
-          backgroundColor: state.canUndoAI ? 'var(--bolt-elements-bg-depth-3)' : 'var(--bolt-elements-bg-depth-2)',
-          border: state.canUndoAI ? '1px solid var(--bolt-elements-borderColor)' : '1px solid transparent',
+          backgroundColor: state.canUndoAI ? 'var(--recoder-elements-bg-depth-3)' : 'var(--recoder-elements-bg-depth-2)',
+          border: state.canUndoAI ? '1px solid var(--recoder-elements-borderColor)' : '1px solid transparent',
         }}
         title={state.canUndoAI ? `Undo AI changes (${navigator.platform.includes('Mac') ? 'Cmd' : 'Ctrl'}+Z)` : 'No changes to undo'}
       >
         <span className="i-ph:arrow-counter-clockwise text-sm" />
         Undo
         {state.undoInfo && (
-          <span className="text-bolt-elements-textTertiary">
+          <span className="text-recoder-elements-textTertiary">
             ({state.undoInfo.filesCount})
           </span>
         )}
@@ -111,20 +111,20 @@ export const UndoButton = memo(function UndoButton({ className = '' }: UndoButto
       {showDropdown && state.canUndoAI && (
         <div
           className="absolute top-full right-0 mt-1 w-80 rounded-lg shadow-xl z-50 overflow-hidden"
-          style={{ backgroundColor: 'var(--bolt-elements-bg-depth-2)', border: '1px solid var(--bolt-elements-borderColor)' }}
+          style={{ backgroundColor: 'var(--recoder-elements-bg-depth-2)', border: '1px solid var(--recoder-elements-borderColor)' }}
         >
           {/* Header */}
-          <div className="px-4 py-3" style={{ backgroundColor: 'var(--bolt-elements-bg-depth-1)', borderBottom: '1px solid var(--bolt-elements-borderColor)' }}>
+          <div className="px-4 py-3" style={{ backgroundColor: 'var(--recoder-elements-bg-depth-1)', borderBottom: '1px solid var(--recoder-elements-borderColor)' }}>
             <div className="flex items-center justify-between">
-              <h3 className="text-sm font-medium text-bolt-elements-textPrimary">
+              <h3 className="text-sm font-medium text-recoder-elements-textPrimary">
                 Undo AI Changes
               </h3>
-              <span className="text-xs text-bolt-elements-textTertiary">
+              <span className="text-xs text-recoder-elements-textTertiary">
                 {state.undoInfo?.timeAgo}
               </span>
             </div>
             {state.undoInfo && (
-              <p className="text-xs text-bolt-elements-textSecondary mt-1">
+              <p className="text-xs text-recoder-elements-textSecondary mt-1">
                 {state.undoInfo.description}
               </p>
             )}
@@ -134,26 +134,26 @@ export const UndoButton = memo(function UndoButton({ className = '' }: UndoButto
           {!showDiffPreview && (
             <div className="max-h-64 overflow-auto">
               {state.previewFiles.length === 0 ? (
-                <div className="p-4 text-center text-bolt-elements-textSecondary text-sm">
+                <div className="p-4 text-center text-recoder-elements-textSecondary text-sm">
                   Loading preview...
                 </div>
               ) : (
                 state.previewFiles.map((file) => (
                   <div
                     key={file.path}
-                    className="flex items-center justify-between px-4 py-2 hover:bg-bolt-elements-background-depth-3 last:border-0"
-                    style={{ borderBottom: '1px solid var(--bolt-elements-borderColor)' }}
+                    className="flex items-center justify-between px-4 py-2 hover:bg-recoder-elements-background-depth-3 last:border-0"
+                    style={{ borderBottom: '1px solid var(--recoder-elements-borderColor)' }}
                   >
                     <div className="flex items-center gap-2 min-w-0 flex-1">
                       <span className="i-ph:file-code text-blue-400" />
-                      <span className="text-sm text-bolt-elements-textPrimary truncate">
+                      <span className="text-sm text-recoder-elements-textPrimary truncate">
                         {file.path.split('/').pop()}
                       </span>
                     </div>
                     <button
                       onClick={() => handleShowDiff(file)}
-                      className="text-xs px-2 py-1 text-bolt-elements-textSecondary hover:text-bolt-elements-textPrimary rounded transition-colors flex-shrink-0"
-                      style={{ backgroundColor: 'var(--bolt-elements-bg-depth-3)' }}
+                      className="text-xs px-2 py-1 text-recoder-elements-textSecondary hover:text-recoder-elements-textPrimary rounded transition-colors flex-shrink-0"
+                      style={{ backgroundColor: 'var(--recoder-elements-bg-depth-3)' }}
                     >
                       View Diff
                     </button>
@@ -168,16 +168,16 @@ export const UndoButton = memo(function UndoButton({ className = '' }: UndoButto
             <div className="max-h-80 overflow-auto">
               <div
                 className="sticky top-0 px-4 py-2 flex items-center justify-between"
-                style={{ backgroundColor: 'var(--bolt-elements-bg-depth-1)', borderBottom: '1px solid var(--bolt-elements-borderColor)' }}
+                style={{ backgroundColor: 'var(--recoder-elements-bg-depth-1)', borderBottom: '1px solid var(--recoder-elements-borderColor)' }}
               >
                 <button
                   onClick={handleCloseDiff}
-                  className="flex items-center gap-1 text-xs text-bolt-elements-textSecondary hover:text-bolt-elements-textPrimary"
+                  className="flex items-center gap-1 text-xs text-recoder-elements-textSecondary hover:text-recoder-elements-textPrimary"
                 >
                   <span className="i-ph:arrow-left" />
                   Back to files
                 </button>
-                <span className="text-xs text-bolt-elements-textTertiary font-mono">
+                <span className="text-xs text-recoder-elements-textTertiary font-mono">
                   {selectedFile?.path}
                 </span>
               </div>
@@ -193,16 +193,16 @@ export const UndoButton = memo(function UndoButton({ className = '' }: UndoButto
           {!showDiffPreview && (
             <div
               className="px-4 py-3 flex items-center justify-between"
-              style={{ backgroundColor: 'var(--bolt-elements-bg-depth-1)', borderTop: '1px solid var(--bolt-elements-borderColor)' }}
+              style={{ backgroundColor: 'var(--recoder-elements-bg-depth-1)', borderTop: '1px solid var(--recoder-elements-borderColor)' }}
             >
-              <span className="text-xs text-bolt-elements-textTertiary">
+              <span className="text-xs text-recoder-elements-textTertiary">
                 {state.previewFiles.length} file{state.previewFiles.length !== 1 ? 's' : ''} will be reverted
               </span>
               <div className="flex gap-2">
                 <button
                   onClick={() => setShowDropdown(false)}
-                  className="px-3 py-1.5 text-xs font-medium text-bolt-elements-textSecondary hover:text-bolt-elements-textPrimary rounded transition-colors hover:bg-bolt-elements-background-depth-3"
-                  style={{ backgroundColor: 'var(--bolt-elements-bg-depth-3)' }}
+                  className="px-3 py-1.5 text-xs font-medium text-recoder-elements-textSecondary hover:text-recoder-elements-textPrimary rounded transition-colors hover:bg-recoder-elements-background-depth-3"
+                  style={{ backgroundColor: 'var(--recoder-elements-bg-depth-3)' }}
                 >
                   Cancel
                 </button>

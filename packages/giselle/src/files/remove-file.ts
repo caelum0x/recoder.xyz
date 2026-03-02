@@ -1,5 +1,5 @@
-import type { FileId, WorkspaceId } from "@giselles-ai/protocol";
-import type { GiselleStorage } from "@giselles-ai/storage";
+import type { FileId, WorkspaceId } from "@recoder/protocol";
+import type { GiselleStorage } from "@recoder/storage";
 import { filePath } from "./utils";
 
 export async function removeFile(args: {

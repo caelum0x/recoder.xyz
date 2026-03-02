@@ -616,6 +616,13 @@ export default function RootLayout() {
                                   <Stack.Screen name="trigger-detail" />
                                   <Stack.Screen name="worker-config" />
                                   <Stack.Screen
+                                    name="tasks"
+                                    options={{
+                                      animation: 'slide_from_right',
+                                      gestureEnabled: true,
+                                    }}
+                                  />
+                                  <Stack.Screen
                                     name="share/[threadId]"
                                     options={{
                                       animation: 'slide_from_right',

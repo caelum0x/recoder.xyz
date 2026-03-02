@@ -1,6 +1,6 @@
 "use client";
 
-import { GlassSurfaceLayers } from "@giselle-internal/ui/glass-surface";
+import { GlassSurfaceLayers } from "@recoder-internal/ui/glass-surface";
 import clsx from "clsx/lite";
 import { Popover as PopoverPrimitive } from "radix-ui";
 import { type ReactNode, useMemo, useState } from "react";

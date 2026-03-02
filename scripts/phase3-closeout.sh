@@ -17,6 +17,8 @@ EXPECTED_QUEUE_BACKEND="${EXPECTED_QUEUE_BACKEND:-redis}"
 ASSERT_GA_READY="${ASSERT_GA_READY:-true}"
 ALLOW_NON_GA="${ALLOW_NON_GA:-false}"
 RUN_PREFLIGHT="${RUN_PREFLIGHT:-true}"
+PRODUCTION_SCOPE="${PRODUCTION_SCOPE:-core}"
+ASSERT_TIER2_PROMOTABLE="${ASSERT_TIER2_PROMOTABLE:-false}"
 
 usage() {
   cat <<'USAGE'
@@ -30,6 +32,7 @@ Runs full local Phase 3 closeout sequence:
 Key env toggles:
   ASSERT_GA_READY=true|false      default: true
   ALLOW_NON_GA=true|false         default: false
+  ASSERT_TIER2_PROMOTABLE=true|false  default: false
 
 Examples:
   pnpm run phase3:closeout
@@ -73,12 +76,15 @@ BILLING_ACTIONS_ENABLED="$(validate_bool BILLING_ACTIONS_ENABLED "$BILLING_ACTIO
 ASSERT_GA_READY="$(validate_bool ASSERT_GA_READY "$ASSERT_GA_READY")"
 ALLOW_NON_GA="$(validate_bool ALLOW_NON_GA "$ALLOW_NON_GA")"
 RUN_PREFLIGHT="$(validate_bool RUN_PREFLIGHT "$RUN_PREFLIGHT")"
+ASSERT_TIER2_PROMOTABLE="$(validate_bool ASSERT_TIER2_PROMOTABLE "$ASSERT_TIER2_PROMOTABLE")"
 
 echo "== Phase 3 Closeout =="
 echo "mode=$PHASE3_MODE dry_run=$DRY_RUN skip_env=$SKIP_ENV_GATES skip_typecheck=$SKIP_TYPECHECK_GATES"
 echo "a2a_interop=$ENABLE_A2A_INTEROP_SMOKE a2a_worker_status=$A2A_WORKER_STATUS_CHECK"
 echo "assert_ga_ready=$ASSERT_GA_READY allow_non_ga=$ALLOW_NON_GA"
+echo "assert_tier2_promotable=$ASSERT_TIER2_PROMOTABLE"
 echo "run_preflight=$RUN_PREFLIGHT"
+echo "production_scope=$PRODUCTION_SCOPE"
 
 if [[ "$RUN_PREFLIGHT" == "true" ]]; then
   env \
@@ -86,6 +92,7 @@ if [[ "$RUN_PREFLIGHT" == "true" ]]; then
     DRY_RUN="$DRY_RUN" \
     SKIP_ENV_GATES="$SKIP_ENV_GATES" \
     ENABLE_A2A_INTEROP_SMOKE="$ENABLE_A2A_INTEROP_SMOKE" \
+    PRODUCTION_SCOPE="$PRODUCTION_SCOPE" \
     RECODER_WEB_URL="$RECODER_WEB_URL" \
     BACKEND_URL="$BACKEND_URL" \
     BASE_URL="$BASE_URL" \
@@ -99,6 +106,7 @@ env \
   SKIP_TYPECHECK_GATES="$SKIP_TYPECHECK_GATES" \
   ENABLE_A2A_INTEROP_SMOKE="$ENABLE_A2A_INTEROP_SMOKE" \
   A2A_WORKER_STATUS_CHECK="$A2A_WORKER_STATUS_CHECK" \
+  PRODUCTION_SCOPE="$PRODUCTION_SCOPE" \
   BILLING_ACTIONS_ENABLED="$BILLING_ACTIONS_ENABLED" \
   RECODER_WEB_URL="$RECODER_WEB_URL" \
   BACKEND_URL="$BACKEND_URL" \
@@ -113,5 +121,8 @@ else
 fi
 
 pnpm -C "$REPO_ROOT" run phase3:evidence-pack
+pnpm -C "$REPO_ROOT" run phase3:publish-support-status
+bash "$REPO_ROOT/scripts/check-tier1-support-status.sh"
+env ASSERT_TIER2_PROMOTABLE="$ASSERT_TIER2_PROMOTABLE" bash "$REPO_ROOT/scripts/check-tier2-promotion.sh"
 
 echo "Phase 3 closeout complete."

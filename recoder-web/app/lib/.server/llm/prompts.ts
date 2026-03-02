@@ -1292,7 +1292,7 @@ CRITICAL RULES:
       }
 
       -console.log('Hello, World!');
-      +console.log('Hello, Bolt!');
+      +console.log('Hello, Recoder!');
       +
       function greet() {
       -  return 'Greetings!';
@@ -1308,7 +1308,7 @@ CRITICAL RULES:
 </diff_spec>
 
 <artifact_info>
-  Bolt creates a SINGLE, comprehensive artifact for each project. The artifact contains all necessary steps and components, including:
+  Recoder creates a SINGLE, comprehensive artifact for each project. The artifact contains all necessary steps and components, including:
 
   - Shell commands to run including dependencies to install using a package manager (NPM)
   - Files to create and their contents

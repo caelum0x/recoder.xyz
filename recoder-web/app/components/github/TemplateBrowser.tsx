@@ -61,10 +61,10 @@ export function TemplateBrowser({ onSelectTemplate, onClose }: TemplateBrowserPr
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-bolt-elements-background-depth-1 rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] flex flex-col">
+      <div className="bg-recoder-elements-background-depth-1 rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] flex flex-col">
         {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-bolt-elements-borderColor">
-          <h2 className="text-xl font-semibold text-bolt-elements-textPrimary">
+        <div className="flex items-center justify-between p-6 border-b border-recoder-elements-borderColor">
+          <h2 className="text-xl font-semibold text-recoder-elements-textPrimary">
             Browse Templates
           </h2>
           <IconButton onClick={onClose}>
@@ -73,7 +73,7 @@ export function TemplateBrowser({ onSelectTemplate, onClose }: TemplateBrowserPr
         </div>
 
         {/* Search and Filters */}
-        <div className="p-6 border-b border-bolt-elements-borderColor">
+        <div className="p-6 border-b border-recoder-elements-borderColor">
           <div className="flex gap-4 mb-4">
             <div className="flex-1">
               <input
@@ -81,7 +81,7 @@ export function TemplateBrowser({ onSelectTemplate, onClose }: TemplateBrowserPr
                 placeholder="Search templates..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full px-3 py-2 bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor rounded-md text-bolt-elements-textPrimary placeholder-bolt-elements-textTertiary focus:ring-2 focus:ring-bolt-elements-focus focus:border-transparent"
+                className="w-full px-3 py-2 bg-recoder-elements-background-depth-2 border border-recoder-elements-borderColor rounded-md text-recoder-elements-textPrimary placeholder-recoder-elements-textTertiary focus:ring-2 focus:ring-recoder-elements-focus focus:border-transparent"
               />
             </div>
           </div>
@@ -92,8 +92,8 @@ export function TemplateBrowser({ onSelectTemplate, onClose }: TemplateBrowserPr
               onClick={() => setSelectedCategory(null)}
               className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
                 selectedCategory === null
-                  ? 'bg-bolt-elements-item-backgroundAccent text-bolt-elements-item-contentAccent'
-                  : 'bg-bolt-elements-background-depth-2 text-bolt-elements-textSecondary hover:bg-bolt-elements-item-backgroundActive'
+                  ? 'bg-recoder-elements-item-backgroundAccent text-recoder-elements-item-contentAccent'
+                  : 'bg-recoder-elements-background-depth-2 text-recoder-elements-textSecondary hover:bg-recoder-elements-item-backgroundActive'
               }`}
             >
               All
@@ -104,8 +104,8 @@ export function TemplateBrowser({ onSelectTemplate, onClose }: TemplateBrowserPr
                 onClick={() => setSelectedCategory(category.id)}
                 className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors flex items-center gap-2 ${
                   selectedCategory === category.id
-                    ? 'bg-bolt-elements-item-backgroundAccent text-bolt-elements-item-contentAccent'
-                    : 'bg-bolt-elements-background-depth-2 text-bolt-elements-textSecondary hover:bg-bolt-elements-item-backgroundActive'
+                    ? 'bg-recoder-elements-item-backgroundAccent text-recoder-elements-item-contentAccent'
+                    : 'bg-recoder-elements-background-depth-2 text-recoder-elements-textSecondary hover:bg-recoder-elements-item-backgroundActive'
                 }`}
               >
                 <div className={`${category.icon} text-sm`} />
@@ -119,7 +119,7 @@ export function TemplateBrowser({ onSelectTemplate, onClose }: TemplateBrowserPr
         <div className="flex-1 overflow-y-auto p-6">
           {loading ? (
             <div className="flex items-center justify-center h-32">
-              <div className="text-bolt-elements-textSecondary">Loading templates...</div>
+              <div className="text-recoder-elements-textSecondary">Loading templates...</div>
             </div>
           ) : error ? (
             <div className="flex items-center justify-center h-32">
@@ -127,7 +127,7 @@ export function TemplateBrowser({ onSelectTemplate, onClose }: TemplateBrowserPr
             </div>
           ) : templates.length === 0 ? (
             <div className="flex items-center justify-center h-32">
-              <div className="text-bolt-elements-textSecondary">No templates found</div>
+              <div className="text-recoder-elements-textSecondary">No templates found</div>
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -154,11 +154,11 @@ interface TemplateCardProps {
 function TemplateCard({ template, onSelect }: TemplateCardProps) {
   return (
     <div
-      className="bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor rounded-lg p-4 hover:border-bolt-elements-focus transition-colors cursor-pointer"
+      className="bg-recoder-elements-background-depth-2 border border-recoder-elements-borderColor rounded-lg p-4 hover:border-recoder-elements-focus transition-colors cursor-pointer"
       onClick={onSelect}
     >
       <div className="flex items-start justify-between mb-3">
-        <h3 className="font-semibold text-bolt-elements-textPrimary text-sm">
+        <h3 className="font-semibold text-recoder-elements-textPrimary text-sm">
           {template.name}
         </h3>
         <div className="flex gap-1">
@@ -175,7 +175,7 @@ function TemplateCard({ template, onSelect }: TemplateCardProps) {
         </div>
       </div>
 
-      <p className="text-bolt-elements-textSecondary text-xs mb-3 line-clamp-2">
+      <p className="text-recoder-elements-textSecondary text-xs mb-3 line-clamp-2">
         {template.description}
       </p>
 
@@ -183,7 +183,7 @@ function TemplateCard({ template, onSelect }: TemplateCardProps) {
         {template.tags.slice(0, 3).map((tag) => (
           <span
             key={tag}
-            className="bg-bolt-elements-background-depth-3 text-bolt-elements-textTertiary text-xs px-2 py-0.5 rounded"
+            className="bg-recoder-elements-background-depth-3 text-recoder-elements-textTertiary text-xs px-2 py-0.5 rounded"
           >
             {tag}
           </span>
@@ -191,10 +191,10 @@ function TemplateCard({ template, onSelect }: TemplateCardProps) {
       </div>
 
       <div className="flex items-center justify-between">
-        <span className="text-bolt-elements-textTertiary text-xs capitalize">
+        <span className="text-recoder-elements-textTertiary text-xs capitalize">
           {template.category}
         </span>
-        <button className="text-bolt-elements-textPrimary hover:text-bolt-elements-focus transition-colors">
+        <button className="text-recoder-elements-textPrimary hover:text-recoder-elements-focus transition-colors">
           <div className="i-ph:arrow-right text-sm" />
         </button>
       </div>

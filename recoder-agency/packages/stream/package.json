@@ -1,5 +1,5 @@
 {
-	"name": "@giselles-ai/stream",
+	"name": "@recoder/stream",
 	"version": "0.0.0",
 	"private": true,
 	"main": "./dist/index.js",
@@ -19,13 +19,13 @@
 		}
 	},
 	"devDependencies": {
-		"@giselles-ai/tsconfig": "workspace:*",
+		"@recoder/tsconfig": "workspace:*",
 		"tsup": "catalog:"
 	},
 	"peerDependencies": {
 		"zod": "catalog:"
 	},
 	"dependencies": {
-		"@giselles-ai/protocol": "workspace:*"
+		"@recoder/protocol": "workspace:*"
 	}
 }

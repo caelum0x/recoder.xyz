@@ -1,4 +1,4 @@
-import type { Task } from "@giselles-ai/protocol";
+import type { Task } from "@recoder/protocol";
 import type { Patch } from "./patch-object";
 
 // Type-safe patch creators for Task fields

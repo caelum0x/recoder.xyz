@@ -1,7 +1,7 @@
 import {
 	type GitHubEventId,
 	githubEvents,
-} from "@giselles-ai/trigger-registry";
+} from "@recoder/trigger-registry";
 import clsx from "clsx/lite";
 import { getTriggerIcon } from "./icons";
 

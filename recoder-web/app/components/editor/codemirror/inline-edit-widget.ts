@@ -127,8 +127,8 @@ class InlineEditInputWidget extends WidgetType {
       gap: 6px;
       padding: 4px 8px;
       margin: 4px 0;
-      background: var(--bolt-elements-background-depth-3, #1e1e2e);
-      border: 1px solid var(--bolt-elements-borderColor, #45475a);
+      background: var(--recoder-elements-background-depth-3, #1e1e2e);
+      border: 1px solid var(--recoder-elements-borderColor, #45475a);
       border-radius: 6px;
       box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
       z-index: 50;
@@ -146,9 +146,9 @@ class InlineEditInputWidget extends WidgetType {
       flex: 1;
       min-width: 250px;
       padding: 4px 8px;
-      background: var(--bolt-elements-background-depth-1, #11111b);
-      color: var(--bolt-elements-textPrimary, #cdd6f4);
-      border: 1px solid var(--bolt-elements-borderColor, #45475a);
+      background: var(--recoder-elements-background-depth-1, #11111b);
+      color: var(--recoder-elements-textPrimary, #cdd6f4);
+      border: 1px solid var(--recoder-elements-borderColor, #45475a);
       border-radius: 4px;
       font-size: 13px;
       font-family: inherit;
@@ -201,7 +201,7 @@ class InlineReplacementWidget extends WidgetType {
     container.className = 'cm-inline-replacement';
     container.style.cssText = `
       margin: 4px 0;
-      border: 1px solid var(--bolt-elements-borderColor, #45475a);
+      border: 1px solid var(--recoder-elements-borderColor, #45475a);
       border-radius: 6px;
       overflow: hidden;
       font-family: 'SF Mono', 'Fira Code', monospace;
@@ -240,8 +240,8 @@ class InlineReplacementWidget extends WidgetType {
       display: flex;
       gap: 8px;
       padding: 4px 8px;
-      background: var(--bolt-elements-background-depth-3, #1e1e2e);
-      border-top: 1px solid var(--bolt-elements-borderColor, #45475a);
+      background: var(--recoder-elements-background-depth-3, #1e1e2e);
+      border-top: 1px solid var(--recoder-elements-borderColor, #45475a);
     `;
 
     const acceptBtn = document.createElement('button');
@@ -264,9 +264,9 @@ class InlineReplacementWidget extends WidgetType {
     rejectBtn.textContent = 'Reject (Esc)';
     rejectBtn.style.cssText = `
       padding: 3px 10px;
-      background: var(--bolt-elements-background-depth-1, #11111b);
-      color: var(--bolt-elements-textPrimary, #cdd6f4);
-      border: 1px solid var(--bolt-elements-borderColor, #45475a);
+      background: var(--recoder-elements-background-depth-1, #11111b);
+      color: var(--recoder-elements-textPrimary, #cdd6f4);
+      border: 1px solid var(--recoder-elements-borderColor, #45475a);
       border-radius: 4px;
       font-size: 12px;
       cursor: pointer;

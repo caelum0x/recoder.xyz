@@ -1,16 +1,16 @@
-import type { GitHubIntegrationInstallation } from "@giselles-ai/giselle";
+import type { GitHubIntegrationInstallation } from "@recoder/giselle";
 import {
 	type Output,
 	OutputId,
 	type TriggerId,
 	type TriggerNode,
-} from "@giselles-ai/protocol";
-import { useIntegration } from "@giselles-ai/react";
+} from "@recoder/protocol";
+import { useIntegration } from "@recoder/react";
 import {
 	type GitHubEventId,
 	githubEvents,
 	githubEventToInputFields,
-} from "@giselles-ai/trigger-registry";
+} from "@recoder/trigger-registry";
 import clsx from "clsx/lite";
 import { ChevronLeft, InfoIcon } from "lucide-react";
 import type { ReactNode } from "react";
@@ -189,8 +189,8 @@ export function GitHubTriggerPropertiesPanel({ node }: { node: TriggerNode }) {
 		case "installed":
 			break;
 		default: {
-			const _exhaustiveCheck: never = value.github;
-			throw new Error(`Unhandled status: ${_exhaustiveCheck}`);
+			const status = (value.github as { status?: string } | undefined)?.status;
+			throw new Error(`Unhandled status: ${String(status ?? "unknown")}`);
 		}
 	}
 

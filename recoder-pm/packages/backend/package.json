@@ -25,6 +25,7 @@
     "@t3-oss/env-nextjs": "^0.13.8",
     "ai": "^5.0.21",
     "better-auth": "^1.2.0",
+    "posthog-node": "^4.17.1",
     "react": "19.2.1",
     "resend": "^4.0.0",
     "server-only": "^0.0.1",

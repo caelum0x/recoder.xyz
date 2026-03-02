@@ -1,6 +1,6 @@
 "use client";
 
-import { SearchInput } from "@giselle-internal/ui/search-input";
+import { SearchInput } from "@recoder-internal/ui/search-input";
 import { useState } from "react";
 import { DemoSection } from "../components/demo-section";
 import { UiPage } from "../components/ui-page";

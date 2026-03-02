@@ -84,7 +84,7 @@ NEXTAUTH_SECRET=<generate-new>
 SESSION_SYNC_SECRET=<generate-new>
 JWT_SECRET=<generate-new>
 GOOGLE_CLIENT_ID=716966330476-u9b9p6bi7u5oqva2th0j9rg37phl969c
-GOOGLE_CLIENT_SECRET=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
+GOOGLE_CLIENT_SECRET=replace-with-google-oauth-client-secret
 ```
 
 Generate secrets with:
@@ -116,11 +116,11 @@ See `DEPLOY_GUIDE.md` for complete step-by-step instructions.
 ### Google OAuth ✅ CONFIGURED
 **Production** (for recoder.xyz):
 - Client ID: `716966330476-u9b9p6bi7u5oqva2th0j9rg37phl969c`
-- Client Secret: `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`
+- Client Secret: `replace-with-google-oauth-client-secret`
 
 **Localhost** (for development):
 - Client ID: `716966330476-bs6grcbb7oblkeeg4e61t21koqfusi7f`
-- Client Secret: `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`
+- Client Secret: `replace-with-google-oauth-client-secret`
 
 **ACTION REQUIRED**: Add redirect URL in Google Console
 - Go to https://console.cloud.google.com/apis/credentials

@@ -610,7 +610,7 @@ export const CodeMirrorEditor = memo(
           <div className="h-full overflow-auto" ref={containerRef} />
         </div>
         {showMinimap && viewReady && !doc?.isBinary && (
-          <div className="h-full border-l border-bolt-elements-borderColor flex-shrink-0">
+          <div className="h-full border-l border-recoder-elements-borderColor flex-shrink-0">
             <Minimap
               view={viewRef.current}
               theme={theme}

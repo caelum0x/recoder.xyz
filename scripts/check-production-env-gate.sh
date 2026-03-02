@@ -4,6 +4,7 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 AGENCY_ENV="${AGENCY_ENV:-$REPO_ROOT/recoder-agency/.env.docker}"
 PM_ENV="${PM_ENV:-$REPO_ROOT/recoder-pm/.env.docker}"
+PRODUCTION_SCOPE="${PRODUCTION_SCOPE:-core}"
 
 PASS=0
 FAIL=0
@@ -43,10 +44,18 @@ check_required_var() {
 
 echo "== Production Env Gate =="
 echo "repo: $REPO_ROOT"
+echo "scope: $PRODUCTION_SCOPE"
+
+if [[ "$PRODUCTION_SCOPE" != "core" && "$PRODUCTION_SCOPE" != "full" ]]; then
+  echo "Invalid PRODUCTION_SCOPE='$PRODUCTION_SCOPE' (expected core|full)" >&2
+  exit 1
+fi
 
 echo ""
 echo "Agency gate: $AGENCY_ENV"
-if [[ ! -f "$AGENCY_ENV" ]]; then
+if [[ "$PRODUCTION_SCOPE" == "core" ]]; then
+  warn "Agency gate skipped in core scope (deferred surface)"
+elif [[ ! -f "$AGENCY_ENV" ]]; then
   fail "Agency env file not found: $AGENCY_ENV"
 else
   check_required_var "$AGENCY_ENV" "BETTER_AUTH_SECRET" "Agency auth"
@@ -63,7 +72,9 @@ fi
 
 echo ""
 echo "PM gate: $PM_ENV"
-if [[ ! -f "$PM_ENV" ]]; then
+if [[ "$PRODUCTION_SCOPE" == "core" ]]; then
+  warn "PM gate skipped in core scope (deferred surface)"
+elif [[ ! -f "$PM_ENV" ]]; then
   fail "PM env file not found: $PM_ENV"
 else
   check_required_var "$PM_ENV" "BETTER_AUTH_SECRET" "PM auth"

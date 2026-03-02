@@ -9,7 +9,7 @@ $code-font-size: 13px;
 
 .MarkdownContent {
   line-height: 1.6;
-  color: var(--bolt-elements-textPrimary);
+  color: var(--recoder-elements-textPrimary);
 
   > *:not(:last-child) {
     margin-block-end: 16px;
@@ -25,19 +25,19 @@ $code-font-size: 13px;
       margin-block-end: 16px;
       font-weight: 600;
       line-height: 1.25;
-      color: var(--bolt-elements-textPrimary);
+      color: var(--recoder-elements-textPrimary);
     }
   }
 
   h1 {
     font-size: 2em;
-    border-bottom: 1px solid var(--bolt-elements-borderColor);
+    border-bottom: 1px solid var(--recoder-elements-borderColor);
     padding-bottom: 0.3em;
   }
 
   h2 {
     font-size: 1.5em;
-    border-bottom: 1px solid var(--bolt-elements-borderColor);
+    border-bottom: 1px solid var(--recoder-elements-borderColor);
     padding-bottom: 0.3em;
   }
 
@@ -55,7 +55,7 @@ $code-font-size: 13px;
 
   h6 {
     font-size: 0.85em;
-    color: var(--bolt-elements-textTertiary);
+    color: var(--recoder-elements-textTertiary);
   }
 
   p {
@@ -68,7 +68,7 @@ $code-font-size: 13px;
   }
 
   a {
-    color: var(--bolt-elements-messages-linkColor);
+    color: var(--recoder-elements-messages-linkColor);
     text-decoration: none;
     cursor: pointer;
 
@@ -84,8 +84,8 @@ $code-font-size: 13px;
     @include not-inside-actions {
       border-radius: 6px;
       padding: 0.2em 0.4em;
-      background-color: var(--bolt-elements-messages-inlineCode-background);
-      color: var(--bolt-elements-messages-inlineCode-text);
+      background-color: var(--recoder-elements-messages-inlineCode-background);
+      color: var(--recoder-elements-messages-inlineCode-text);
     }
   }
 
@@ -106,15 +106,15 @@ $code-font-size: 13px;
   > div:has(pre) {
     border-radius: 8px;
     overflow: hidden;
-    background-color: var(--bolt-elements-background-depth-2);
+    background-color: var(--recoder-elements-background-depth-2);
     margin-block: 16px;
   }
 
   blockquote {
     margin: 0;
     padding: 0 1em;
-    color: var(--bolt-elements-textTertiary);
-    border-left: 0.25em solid var(--bolt-elements-borderColor);
+    color: var(--recoder-elements-textTertiary);
+    border-left: 0.25em solid var(--recoder-elements-borderColor);
   }
 
   :is(ul, ol) {
@@ -158,7 +158,7 @@ $code-font-size: 13px;
     height: 0.25em;
     padding: 0;
     margin: 24px 0;
-    background-color: var(--bolt-elements-borderColor);
+    background-color: var(--recoder-elements-borderColor);
     border: 0;
   }
 
@@ -169,11 +169,11 @@ $code-font-size: 13px;
 
     :is(th, td) {
       padding: 6px 13px;
-      border: 1px solid var(--bolt-elements-borderColor);
+      border: 1px solid var(--recoder-elements-borderColor);
     }
 
     tr:nth-child(2n) {
-      background-color: var(--bolt-elements-bg-depth-3);
+      background-color: var(--recoder-elements-bg-depth-3);
     }
   }
 }

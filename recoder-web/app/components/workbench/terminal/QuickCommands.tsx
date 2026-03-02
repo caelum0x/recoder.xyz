@@ -74,7 +74,7 @@ export const QuickCommands = memo(({
           onClick={() => handleClick(cmd.command)}
           className={classNames(
             'flex items-center gap-1 px-2 py-1 rounded text-xs transition-colors',
-            'bg-bolt-elements-background-depth-3 border border-bolt-elements-borderColor',
+            'bg-recoder-elements-background-depth-3 border border-recoder-elements-borderColor',
             cmd.color
           )}
           title={cmd.description}

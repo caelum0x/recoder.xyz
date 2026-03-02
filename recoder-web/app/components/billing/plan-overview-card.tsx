@@ -23,7 +23,7 @@ export function PlanOverviewCard({
   return (
     <div
       className={classNames(
-        'border border-bolt-elements-borderColor bg-bolt-elements-background-depth-2 rounded-lg',
+        'border border-recoder-elements-borderColor bg-recoder-elements-background-depth-2 rounded-lg',
         className
       )}
     >
@@ -31,12 +31,12 @@ export function PlanOverviewCard({
         <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
           {/* Left: Title and description */}
           <div className="flex items-center gap-3">
-            <CreditCard className="h-5 w-5 text-bolt-elements-textSecondary" />
+            <CreditCard className="h-5 w-5 text-recoder-elements-textSecondary" />
             <div>
-              <h1 className="text-lg lg:text-xl font-semibold text-bolt-elements-textPrimary">
+              <h1 className="text-lg lg:text-xl font-semibold text-recoder-elements-textPrimary">
                 Billing & Usage
               </h1>
-              <p className="text-sm text-bolt-elements-textSecondary">
+              <p className="text-sm text-recoder-elements-textSecondary">
                 Manage your subscription and usage
               </p>
             </div>
@@ -47,13 +47,13 @@ export function PlanOverviewCard({
             {/* Current plan info */}
             <div className="flex flex-col items-start lg:items-end gap-1">
               <div className="flex items-center gap-2">
-                <span className="text-sm font-medium text-bolt-elements-textPrimary">
+                <span className="text-sm font-medium text-recoder-elements-textPrimary">
                   Current Plan: <span className="text-orange-500">{planName}</span>
                 </span>
               </div>
 
               {periodEnd && (
-                <p className="text-xs text-bolt-elements-textTertiary">
+                <p className="text-xs text-recoder-elements-textTertiary">
                   Billing period ends: {periodEnd.toLocaleDateString()}
                 </p>
               )}

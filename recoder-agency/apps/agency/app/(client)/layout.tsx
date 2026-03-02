@@ -1,4 +1,4 @@
-import { ToastProvider } from "@giselle-internal/ui/toast";
+import { ToastProvider } from "@recoder-internal/ui/toast";
 import { redirect } from "next/navigation";
 import { getClientForUser } from "@/lib/agency/get-client-for-user";
 import { getCurrentUser } from "@/lib/get-current-user";

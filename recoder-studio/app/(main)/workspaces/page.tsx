@@ -1,10 +1,10 @@
-import type { WorkspaceId } from "@giselles-ai/protocol";
+import type { WorkspaceId } from "@recoder/protocol";
 import {
 	isActionNode,
 	isTextGenerationNode,
 	isTriggerNode,
 	isVectorStoreNode,
-} from "@giselles-ai/protocol";
+} from "@recoder/protocol";
 import { RequestError } from "@octokit/request-error";
 import { and, count, desc, eq, inArray, isNotNull } from "drizzle-orm";
 import { Suspense, use } from "react";
@@ -142,19 +142,32 @@ async function agentsQuery(teamDbId: number) {
 							if (typeof provider === "string") {
 								llmProviders.add(provider);
 							}
-						}
-						// GitHub Vector Store
-						if (
-							isVectorStoreNode(node, "github") &&
-							node.content.source.state.status === "configured"
-						) {
-							hasGithubIntegration = true;
-							const { owner, repo } = node.content.source.state;
-							const fullName = `${owner}/${repo}`;
-							if (!repositories.includes(fullName)) {
-								repositories.push(fullName);
 							}
-						}
+							// GitHub Vector Store
+							if (isVectorStoreNode(node, "github")) {
+								const sourceState = (
+									node as {
+										content: {
+											source: {
+												state: {
+													status: string;
+													owner: string;
+													repo: string;
+												};
+											};
+										};
+									}
+								).content.source.state;
+								if (sourceState.status !== "configured") {
+									continue;
+								}
+								hasGithubIntegration = true;
+								const { owner, repo } = sourceState;
+								const fullName = `${owner}/${repo}`;
+								if (!repositories.includes(fullName)) {
+									repositories.push(fullName);
+								}
+							}
 
 						// GitHub Trigger
 						if (
@@ -216,14 +229,26 @@ async function agentsQuery(teamDbId: number) {
 							}
 						}
 
-						// Document Vector Store
-						if (
-							isVectorStoreNode(node, "document") &&
-							node.content.source.state.status === "configured"
-						) {
-							const { documentVectorStoreId } = node.content.source.state;
-							const documentStores =
-								documentStoresByTeam.get(agent.teamDbId) || [];
+							// Document Vector Store
+							if (isVectorStoreNode(node, "document")) {
+								const sourceState = (
+									node as {
+										content: {
+											source: {
+												state: {
+													status: string;
+													documentVectorStoreId: string;
+												};
+											};
+										};
+									}
+								).content.source.state;
+								if (sourceState.status !== "configured") {
+									continue;
+								}
+								const { documentVectorStoreId } = sourceState;
+								const documentStores =
+									documentStoresByTeam.get(agent.teamDbId) || [];
 							const store = documentStores.find(
 								(s) => s.id === documentVectorStoreId,
 							);

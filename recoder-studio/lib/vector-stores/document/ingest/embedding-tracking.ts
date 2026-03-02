@@ -1,10 +1,10 @@
-import { traceEmbedding } from "@giselles-ai/langfuse";
-import type { EmbeddingProfileId } from "@giselles-ai/protocol";
-import type { EmbeddingCompleteCallback } from "@giselles-ai/rag";
+import { traceEmbedding } from "@recoder/langfuse";
+import type { EmbeddingProfileId } from "@recoder/protocol";
+import type { EmbeddingCompleteCallback } from "@recoder/rag";
 import type {
 	DocumentVectorStoreId,
 	DocumentVectorStoreSourceId,
-} from "@giselles-ai/types";
+} from "@recoder/types";
 import type { TeamWithSubscription } from "@/services/teams";
 
 export type DocumentIngestTrigger =

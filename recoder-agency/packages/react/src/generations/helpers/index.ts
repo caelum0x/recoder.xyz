@@ -1,11 +1,11 @@
-import type { GenerationId } from "@giselles-ai/protocol";
+import type { GenerationId } from "@recoder/protocol";
 import {
 	CancelledGeneration,
 	CompletedGeneration,
 	FailedGeneration,
 	type Generation,
 	RunningGeneration,
-} from "@giselles-ai/protocol";
+} from "@recoder/protocol";
 import { z } from "zod/v4";
 
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));

@@ -8,6 +8,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSession } from '@/lib/session-provider';
+import { SiteHeader } from '@/components/SiteHeader';
 import Link from 'next/link';
 import { 
   Terminal,
@@ -119,20 +120,7 @@ export default function SetupProfilePage() {
         />
       </div>
 
-      {/* Header */}
-      <header className="fixed top-1 w-full z-40 border-b border-white/10 bg-black/80 backdrop-blur-xl">
-        <div className="container mx-auto px-6 h-16 flex items-center justify-between">
-          <Link href="/" className="flex items-center space-x-2">
-            <div className="w-8 h-8 bg-gradient-to-br from-orange-500 to-purple-600 rounded-lg flex items-center justify-center">
-              <Terminal className="w-5 h-5 text-white" />
-            </div>
-            <span className="text-xl font-bold">recoder</span>
-          </Link>
-          <div className="text-sm text-gray-400">
-            Step 2 of 5
-          </div>
-        </div>
-      </header>
+      <SiteHeader />
 
       <div className="container mx-auto px-6 py-24 mt-16">
         <div className="max-w-4xl mx-auto">

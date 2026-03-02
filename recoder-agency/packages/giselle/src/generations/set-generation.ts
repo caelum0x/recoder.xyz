@@ -1,4 +1,4 @@
-import type { Generation } from "@giselles-ai/protocol";
+import type { Generation } from "@recoder/protocol";
 import type { GiselleContext } from "../types";
 import { internalSetGeneration } from "./internal/set-generation";
 

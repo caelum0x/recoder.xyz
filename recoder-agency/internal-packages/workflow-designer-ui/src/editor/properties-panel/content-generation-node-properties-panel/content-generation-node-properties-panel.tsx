@@ -1,20 +1,20 @@
-import { DropdownMenu } from "@giselle-internal/ui/dropdown-menu";
-import { Popover } from "@giselle-internal/ui/popover";
+import { DropdownMenu } from "@recoder-internal/ui/dropdown-menu";
+import { Popover } from "@recoder-internal/ui/popover";
 import {
 	getEntry,
 	type LanguageModelId,
 	type LanguageModelTool,
 	languageModelTools,
-} from "@giselles-ai/language-model-registry";
-import { defaultName } from "@giselles-ai/node-registry";
+} from "@recoder/language-model-registry";
+import { defaultName } from "@recoder/node-registry";
 import {
 	type CompletedGeneration,
 	type ContentGenerationNode,
 	type FailedGeneration,
 	type Generation,
 	Node,
-} from "@giselles-ai/protocol";
-import { useNodeGenerations } from "@giselles-ai/react";
+} from "@recoder/protocol";
+import { useNodeGenerations } from "@recoder/react";
 import clsx from "clsx/lite";
 import { PlusIcon, Settings2Icon, XIcon } from "lucide-react";
 import { Tooltip as TooltipPrimitive } from "radix-ui";
@@ -357,7 +357,7 @@ export function ContentGenerationNodePropertiesPanel({
 			<NodePanelHeader
 				node={node}
 				onChangeName={(name) => updateNodeData(node, { name })}
-				docsUrl="https://docs.giselles.ai/en/glossary/text-node"
+				docsUrl="https://docs.recoder.xyz/en/glossary/text-node"
 				onDelete={() => deleteNode(node.id)}
 			/>
 

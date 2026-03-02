@@ -288,17 +288,17 @@ export const DatabaseExplorer = memo(({ className = '' }: DatabaseExplorerProps)
   );
 
   return (
-    <div className={classNames('flex flex-col h-full bg-bolt-elements-background-depth-1', className)}>
+    <div className={classNames('flex flex-col h-full bg-recoder-elements-background-depth-1', className)}>
       {/* Header */}
-      <div className="flex items-center justify-between px-3 py-2 border-b border-bolt-elements-borderColor">
+      <div className="flex items-center justify-between px-3 py-2 border-b border-recoder-elements-borderColor">
         <div className="flex items-center gap-2">
           <span className="i-ph:database text-blue-400" />
-          <span className="font-medium text-bolt-elements-textPrimary text-sm">Database Explorer</span>
+          <span className="font-medium text-recoder-elements-textPrimary text-sm">Database Explorer</span>
         </div>
         <div className="flex items-center gap-1">
           <button
             onClick={() => setShowConnectionModal(true)}
-            className="p-1.5 hover:bg-bolt-elements-background-depth-2 rounded text-green-400"
+            className="p-1.5 hover:bg-recoder-elements-background-depth-2 rounded text-green-400"
             title="New Connection"
           >
             <span className="i-ph:plus-circle" />
@@ -307,7 +307,7 @@ export const DatabaseExplorer = memo(({ className = '' }: DatabaseExplorerProps)
             <button
               onClick={loadSchema}
               disabled={isLoadingSchema}
-              className="p-1.5 hover:bg-bolt-elements-background-depth-2 rounded"
+              className="p-1.5 hover:bg-recoder-elements-background-depth-2 rounded"
               title="Refresh"
             >
               <span className={classNames('i-ph:arrows-clockwise', isLoadingSchema ? 'animate-spin' : '')} />
@@ -318,11 +318,11 @@ export const DatabaseExplorer = memo(({ className = '' }: DatabaseExplorerProps)
 
       {/* Connection Selector */}
       {connections.length > 0 && (
-        <div className="flex items-center gap-2 px-3 py-2 border-b border-bolt-elements-borderColor bg-bolt-elements-background-depth-2">
+        <div className="flex items-center gap-2 px-3 py-2 border-b border-recoder-elements-borderColor bg-recoder-elements-background-depth-2">
           <select
             value={activeConnectionId || ''}
             onChange={(e) => setActiveConnection(e.target.value || null)}
-            className="flex-1 px-2 py-1 text-xs bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor rounded text-bolt-elements-textPrimary"
+            className="flex-1 px-2 py-1 text-xs bg-recoder-elements-background-depth-2 border border-recoder-elements-borderColor rounded text-recoder-elements-textPrimary"
           >
             <option value="">Select Connection</option>
             {connections.map((conn) => (
@@ -334,7 +334,7 @@ export const DatabaseExplorer = memo(({ className = '' }: DatabaseExplorerProps)
           {activeConnectionId && (
             <button
               onClick={() => handleDisconnect(activeConnectionId)}
-              className="p-1 text-red-400 hover:bg-bolt-elements-background-depth-2 rounded"
+              className="p-1 text-red-400 hover:bg-recoder-elements-background-depth-2 rounded"
               title="Disconnect"
             >
               <span className="i-ph:plug" />
@@ -345,12 +345,12 @@ export const DatabaseExplorer = memo(({ className = '' }: DatabaseExplorerProps)
 
       {/* Schema Selector (PostgreSQL) */}
       {activeConnection?.type === 'postgresql' && availableSchemas.length > 1 && (
-        <div className="flex items-center gap-2 px-3 py-2 border-b border-bolt-elements-borderColor">
-          <span className="text-xs text-bolt-elements-textTertiary">Schema:</span>
+        <div className="flex items-center gap-2 px-3 py-2 border-b border-recoder-elements-borderColor">
+          <span className="text-xs text-recoder-elements-textTertiary">Schema:</span>
           <select
             value={selectedSchema}
             onChange={(e) => setSelectedSchema(e.target.value)}
-            className="flex-1 px-2 py-1 text-xs bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor rounded text-bolt-elements-textPrimary"
+            className="flex-1 px-2 py-1 text-xs bg-recoder-elements-background-depth-2 border border-recoder-elements-borderColor rounded text-recoder-elements-textPrimary"
           >
             {availableSchemas.map((schema) => (
               <option key={schema} value={schema}>
@@ -362,7 +362,7 @@ export const DatabaseExplorer = memo(({ className = '' }: DatabaseExplorerProps)
       )}
 
       {/* Tabs */}
-      <div className="flex border-b border-bolt-elements-borderColor">
+      <div className="flex border-b border-recoder-elements-borderColor">
         {(['tables', 'query', 'history'] as const).map((tab) => (
           <button
             key={tab}
@@ -370,8 +370,8 @@ export const DatabaseExplorer = memo(({ className = '' }: DatabaseExplorerProps)
             className={classNames(
               'px-3 py-1.5 text-xs capitalize transition-colors',
               activeTab === tab
-                ? 'text-bolt-elements-textPrimary border-b-2 border-blue-500 bg-bolt-elements-background-depth-2'
-                : 'text-bolt-elements-textTertiary hover:text-bolt-elements-textSecondary'
+                ? 'text-recoder-elements-textPrimary border-b-2 border-blue-500 bg-recoder-elements-background-depth-2'
+                : 'text-recoder-elements-textTertiary hover:text-recoder-elements-textSecondary'
             )}
           >
             {tab}
@@ -382,12 +382,12 @@ export const DatabaseExplorer = memo(({ className = '' }: DatabaseExplorerProps)
       {/* Content */}
       <div className="flex-1 overflow-auto">
         {!containerReady ? (
-          <div className="p-4 text-center text-bolt-elements-textTertiary text-sm">
+          <div className="p-4 text-center text-recoder-elements-textTertiary text-sm">
             <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500 mx-auto mb-2" />
             Waiting for container...
           </div>
         ) : !activeConnectionId ? (
-          <div className="p-4 text-center text-bolt-elements-textTertiary text-sm">
+          <div className="p-4 text-center text-recoder-elements-textTertiary text-sm">
             <span className="i-ph:database text-3xl block mb-2" />
             No database connected
             <button
@@ -456,7 +456,7 @@ const TablesTab = memo(
   ({ tables, views, selectedTable, tableDetails, tablePreview, isLoading, onSelectTable }: TablesTabProps) => {
     if (isLoading && !tables.length) {
       return (
-        <div className="p-4 text-center text-bolt-elements-textTertiary text-sm">
+        <div className="p-4 text-center text-recoder-elements-textTertiary text-sm">
           <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500 mx-auto mb-2" />
           Loading schema...
         </div>
@@ -466,10 +466,10 @@ const TablesTab = memo(
     return (
       <div className="flex h-full">
         {/* Tables List */}
-        <div className="w-48 border-r border-bolt-elements-borderColor overflow-auto">
+        <div className="w-48 border-r border-recoder-elements-borderColor overflow-auto">
           {tables.length > 0 && (
             <div className="p-2">
-              <div className="text-xs text-bolt-elements-textTertiary mb-1">Tables ({tables.length})</div>
+              <div className="text-xs text-recoder-elements-textTertiary mb-1">Tables ({tables.length})</div>
               {tables.map((table) => (
                 <button
                   key={table.name}
@@ -478,21 +478,21 @@ const TablesTab = memo(
                     'w-full px-2 py-1 text-xs text-left rounded transition-colors',
                     selectedTable === table.name
                       ? 'bg-blue-500/20 text-blue-400'
-                      : 'hover:bg-bolt-elements-background-depth-2 text-bolt-elements-textSecondary'
+                      : 'hover:bg-recoder-elements-background-depth-2 text-recoder-elements-textSecondary'
                   )}
                 >
                   <span className="i-ph:table mr-1" />
                   {table.name}
                   {table.rowCount !== undefined && (
-                    <span className="ml-1 text-bolt-elements-textTertiary">({table.rowCount})</span>
+                    <span className="ml-1 text-recoder-elements-textTertiary">({table.rowCount})</span>
                   )}
                 </button>
               ))}
             </div>
           )}
           {views.length > 0 && (
-            <div className="p-2 border-t border-bolt-elements-borderColor">
-              <div className="text-xs text-bolt-elements-textTertiary mb-1">Views ({views.length})</div>
+            <div className="p-2 border-t border-recoder-elements-borderColor">
+              <div className="text-xs text-recoder-elements-textTertiary mb-1">Views ({views.length})</div>
               {views.map((view) => (
                 <button
                   key={view.name}
@@ -501,7 +501,7 @@ const TablesTab = memo(
                     'w-full px-2 py-1 text-xs text-left rounded transition-colors',
                     selectedTable === view.name
                       ? 'bg-blue-500/20 text-blue-400'
-                      : 'hover:bg-bolt-elements-background-depth-2 text-bolt-elements-textSecondary'
+                      : 'hover:bg-recoder-elements-background-depth-2 text-recoder-elements-textSecondary'
                   )}
                 >
                   <span className="i-ph:eye mr-1" />
@@ -516,18 +516,18 @@ const TablesTab = memo(
         <div className="flex-1 overflow-auto">
           {selectedTable && tableDetails ? (
             <div className="p-3">
-              <h3 className="text-sm font-medium text-bolt-elements-textPrimary mb-2">
+              <h3 className="text-sm font-medium text-recoder-elements-textPrimary mb-2">
                 {tableDetails.name}
               </h3>
 
               {/* Columns */}
               <div className="mb-4">
-                <div className="text-xs text-bolt-elements-textTertiary mb-1">
+                <div className="text-xs text-recoder-elements-textTertiary mb-1">
                   Columns ({tableDetails.columns?.length || 0})
                 </div>
-                <div className="border border-bolt-elements-borderColor rounded overflow-hidden">
+                <div className="border border-recoder-elements-borderColor rounded overflow-hidden">
                   <table className="w-full text-xs">
-                    <thead className="bg-bolt-elements-background-depth-2">
+                    <thead className="bg-recoder-elements-background-depth-2">
                       <tr>
                         <th className="px-2 py-1 text-left">Name</th>
                         <th className="px-2 py-1 text-left">Type</th>
@@ -537,7 +537,7 @@ const TablesTab = memo(
                     </thead>
                     <tbody>
                       {tableDetails.columns?.map((col: ColumnInfo) => (
-                        <tr key={col.name} className="border-t border-bolt-elements-borderColor">
+                        <tr key={col.name} className="border-t border-recoder-elements-borderColor">
                           <td className="px-2 py-1 font-mono">{col.name}</td>
                           <td className="px-2 py-1 text-blue-400">{col.type}</td>
                           <td className="px-2 py-1">{col.nullable ? 'YES' : 'NO'}</td>
@@ -555,12 +555,12 @@ const TablesTab = memo(
               {/* Preview Data */}
               {tablePreview && tablePreview.rows.length > 0 && (
                 <div>
-                  <div className="text-xs text-bolt-elements-textTertiary mb-1">
+                  <div className="text-xs text-recoder-elements-textTertiary mb-1">
                     Preview ({tablePreview.rows.length} rows)
                   </div>
-                  <div className="border border-bolt-elements-borderColor rounded overflow-auto max-h-64">
+                  <div className="border border-recoder-elements-borderColor rounded overflow-auto max-h-64">
                     <table className="w-full text-xs">
-                      <thead className="bg-bolt-elements-background-depth-2 sticky top-0">
+                      <thead className="bg-recoder-elements-background-depth-2 sticky top-0">
                         <tr>
                           {tablePreview.columns.map((col) => (
                             <th key={col} className="px-2 py-1 text-left whitespace-nowrap">
@@ -571,7 +571,7 @@ const TablesTab = memo(
                       </thead>
                       <tbody>
                         {tablePreview.rows.map((row, i) => (
-                          <tr key={i} className="border-t border-bolt-elements-borderColor">
+                          <tr key={i} className="border-t border-recoder-elements-borderColor">
                             {tablePreview.columns.map((col) => (
                               <td key={col} className="px-2 py-1 font-mono whitespace-nowrap">
                                 {formatValue(row[col])}
@@ -586,7 +586,7 @@ const TablesTab = memo(
               )}
             </div>
           ) : (
-            <div className="p-4 text-center text-bolt-elements-textTertiary text-sm">
+            <div className="p-4 text-center text-recoder-elements-textTertiary text-sm">
               Select a table to view details
             </div>
           )}
@@ -619,16 +619,16 @@ const QueryTab = memo(({ query, result, isExecuting, onQueryChange, onExecute }:
   return (
     <div className="flex flex-col h-full">
       {/* Query Editor */}
-      <div className="p-3 border-b border-bolt-elements-borderColor">
+      <div className="p-3 border-b border-recoder-elements-borderColor">
         <div className="flex items-center justify-between mb-2">
-          <span className="text-xs text-bolt-elements-textTertiary">SQL Query (Ctrl+Enter to execute)</span>
+          <span className="text-xs text-recoder-elements-textTertiary">SQL Query (Ctrl+Enter to execute)</span>
           <button
             onClick={onExecute}
             disabled={isExecuting || !query.trim()}
             className={classNames(
               'px-3 py-1 text-xs rounded',
               isExecuting || !query.trim()
-                ? 'bg-bolt-elements-background-depth-3 opacity-50 cursor-not-allowed'
+                ? 'bg-recoder-elements-background-depth-3 opacity-50 cursor-not-allowed'
                 : 'bg-blue-600 hover:bg-blue-700 text-white'
             )}
           >
@@ -641,7 +641,7 @@ const QueryTab = memo(({ query, result, isExecuting, onQueryChange, onExecute }:
           onChange={(e) => onQueryChange(e.target.value)}
           onKeyDown={handleKeyDown}
           placeholder="SELECT * FROM users LIMIT 10"
-          className="w-full h-32 px-3 py-2 text-xs font-mono bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor rounded focus:border-blue-500 focus:outline-none text-bolt-elements-textPrimary placeholder:text-bolt-elements-textTertiary resize-none"
+          className="w-full h-32 px-3 py-2 text-xs font-mono bg-recoder-elements-background-depth-2 border border-recoder-elements-borderColor rounded focus:border-blue-500 focus:outline-none text-recoder-elements-textPrimary placeholder:text-recoder-elements-textTertiary resize-none"
         />
       </div>
 
@@ -650,15 +650,15 @@ const QueryTab = memo(({ query, result, isExecuting, onQueryChange, onExecute }:
         {result ? (
           result.success ? (
             <div>
-              <div className="text-xs text-bolt-elements-textTertiary mb-2">
+              <div className="text-xs text-recoder-elements-textTertiary mb-2">
                 {result.rowCount} rows returned
                 {result.executionTime && ` in ${result.executionTime}ms`}
                 {result.truncated && ' (truncated)'}
               </div>
               {result.rows && result.rows.length > 0 ? (
-                <div className="border border-bolt-elements-borderColor rounded overflow-auto">
+                <div className="border border-recoder-elements-borderColor rounded overflow-auto">
                   <table className="w-full text-xs">
-                    <thead className="bg-bolt-elements-background-depth-2 sticky top-0">
+                    <thead className="bg-recoder-elements-background-depth-2 sticky top-0">
                       <tr>
                         {result.fields?.map((field: { name: string }) => (
                           <th key={field.name} className="px-2 py-1 text-left whitespace-nowrap">
@@ -669,7 +669,7 @@ const QueryTab = memo(({ query, result, isExecuting, onQueryChange, onExecute }:
                     </thead>
                     <tbody>
                       {result.rows.map((row: Record<string, unknown>, i: number) => (
-                        <tr key={i} className="border-t border-bolt-elements-borderColor">
+                        <tr key={i} className="border-t border-recoder-elements-borderColor">
                           {result.fields?.map((field: { name: string }) => (
                             <td key={field.name} className="px-2 py-1 font-mono whitespace-nowrap">
                               {formatValue(row[field.name])}
@@ -681,7 +681,7 @@ const QueryTab = memo(({ query, result, isExecuting, onQueryChange, onExecute }:
                   </table>
                 </div>
               ) : (
-                <div className="text-bolt-elements-textSecondary text-sm">Query executed successfully</div>
+                <div className="text-recoder-elements-textSecondary text-sm">Query executed successfully</div>
               )}
             </div>
           ) : (
@@ -691,7 +691,7 @@ const QueryTab = memo(({ query, result, isExecuting, onQueryChange, onExecute }:
             </div>
           )
         ) : (
-          <div className="text-bolt-elements-textTertiary text-sm text-center">
+          <div className="text-recoder-elements-textTertiary text-sm text-center">
             Enter a query and click Execute
           </div>
         )}
@@ -717,7 +717,7 @@ interface HistoryTabProps {
 const HistoryTab = memo(({ queries, onSelectQuery }: HistoryTabProps) => {
   if (queries.length === 0) {
     return (
-      <div className="p-4 text-center text-bolt-elements-textTertiary text-sm">
+      <div className="p-4 text-center text-recoder-elements-textTertiary text-sm">
         <span className="i-ph:clock-counter-clockwise text-2xl block mb-2" />
         No query history
       </div>
@@ -730,17 +730,17 @@ const HistoryTab = memo(({ queries, onSelectQuery }: HistoryTabProps) => {
         <button
           key={entry.id}
           onClick={() => onSelectQuery(entry.query)}
-          className="w-full p-2 mb-1 text-left hover:bg-bolt-elements-background-depth-2 rounded border border-bolt-elements-borderColor"
+          className="w-full p-2 mb-1 text-left hover:bg-recoder-elements-background-depth-2 rounded border border-recoder-elements-borderColor"
         >
           <div className="flex items-center justify-between mb-1">
             <span className={classNames('text-xs', entry.success ? 'text-green-400' : 'text-red-400')}>
               {entry.success ? `${entry.rowCount} rows` : 'Error'}
             </span>
-            <span className="text-xs text-bolt-elements-textTertiary">
+            <span className="text-xs text-recoder-elements-textTertiary">
               {new Date(entry.executedAt).toLocaleTimeString()}
             </span>
           </div>
-          <div className="text-xs font-mono text-bolt-elements-textSecondary truncate">{entry.query}</div>
+          <div className="text-xs font-mono text-recoder-elements-textSecondary truncate">{entry.query}</div>
           {entry.error && <div className="text-xs text-red-400 mt-1 truncate">{entry.error}</div>}
         </button>
       ))}
@@ -836,10 +836,10 @@ const ConnectionModal = memo(({ projectId, onClose, onConnect }: ConnectionModal
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-bolt-elements-background-depth-1 rounded-lg shadow-xl w-96 max-w-full m-4">
-        <div className="flex items-center justify-between px-4 py-3 border-b border-bolt-elements-borderColor">
-          <h3 className="text-sm font-medium text-bolt-elements-textPrimary">Connect to Database</h3>
-          <button onClick={onClose} className="text-bolt-elements-textTertiary hover:text-bolt-elements-textPrimary">
+      <div className="bg-recoder-elements-background-depth-1 rounded-lg shadow-xl w-96 max-w-full m-4">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-recoder-elements-borderColor">
+          <h3 className="text-sm font-medium text-recoder-elements-textPrimary">Connect to Database</h3>
+          <button onClick={onClose} className="text-recoder-elements-textTertiary hover:text-recoder-elements-textPrimary">
             <span className="i-ph:x" />
           </button>
         </div>
@@ -847,11 +847,11 @@ const ConnectionModal = memo(({ projectId, onClose, onConnect }: ConnectionModal
         <div className="p-4 space-y-3">
           {/* Database Type */}
           <div>
-            <label className="block text-xs text-bolt-elements-textTertiary mb-1">Database Type</label>
+            <label className="block text-xs text-recoder-elements-textTertiary mb-1">Database Type</label>
             <select
               value={dbType}
               onChange={(e) => setDbType(e.target.value as DatabaseType)}
-              className="w-full px-3 py-2 text-sm bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor rounded text-bolt-elements-textPrimary"
+              className="w-full px-3 py-2 text-sm bg-recoder-elements-background-depth-2 border border-recoder-elements-borderColor rounded text-recoder-elements-textPrimary"
             >
               <option value="postgresql">PostgreSQL</option>
               <option value="sqlite">SQLite</option>
@@ -863,60 +863,60 @@ const ConnectionModal = memo(({ projectId, onClose, onConnect }: ConnectionModal
               {/* Host & Port */}
               <div className="flex gap-2">
                 <div className="flex-1">
-                  <label className="block text-xs text-bolt-elements-textTertiary mb-1">Host</label>
+                  <label className="block text-xs text-recoder-elements-textTertiary mb-1">Host</label>
                   <input
                     type="text"
                     value={host}
                     onChange={(e) => setHost(e.target.value)}
                     placeholder="localhost"
-                    className="w-full px-3 py-2 text-sm bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor rounded text-bolt-elements-textPrimary"
+                    className="w-full px-3 py-2 text-sm bg-recoder-elements-background-depth-2 border border-recoder-elements-borderColor rounded text-recoder-elements-textPrimary"
                   />
                 </div>
                 <div className="w-20">
-                  <label className="block text-xs text-bolt-elements-textTertiary mb-1">Port</label>
+                  <label className="block text-xs text-recoder-elements-textTertiary mb-1">Port</label>
                   <input
                     type="text"
                     value={port}
                     onChange={(e) => setPort(e.target.value)}
                     placeholder="5432"
-                    className="w-full px-3 py-2 text-sm bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor rounded text-bolt-elements-textPrimary"
+                    className="w-full px-3 py-2 text-sm bg-recoder-elements-background-depth-2 border border-recoder-elements-borderColor rounded text-recoder-elements-textPrimary"
                   />
                 </div>
               </div>
 
               {/* Database */}
               <div>
-                <label className="block text-xs text-bolt-elements-textTertiary mb-1">Database</label>
+                <label className="block text-xs text-recoder-elements-textTertiary mb-1">Database</label>
                 <input
                   type="text"
                   value={database}
                   onChange={(e) => setDatabase(e.target.value)}
                   placeholder="mydb"
-                  className="w-full px-3 py-2 text-sm bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor rounded text-bolt-elements-textPrimary"
+                  className="w-full px-3 py-2 text-sm bg-recoder-elements-background-depth-2 border border-recoder-elements-borderColor rounded text-recoder-elements-textPrimary"
                 />
               </div>
 
               {/* Username */}
               <div>
-                <label className="block text-xs text-bolt-elements-textTertiary mb-1">Username</label>
+                <label className="block text-xs text-recoder-elements-textTertiary mb-1">Username</label>
                 <input
                   type="text"
                   value={user}
                   onChange={(e) => setUser(e.target.value)}
                   placeholder="postgres"
-                  className="w-full px-3 py-2 text-sm bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor rounded text-bolt-elements-textPrimary"
+                  className="w-full px-3 py-2 text-sm bg-recoder-elements-background-depth-2 border border-recoder-elements-borderColor rounded text-recoder-elements-textPrimary"
                 />
               </div>
 
               {/* Password */}
               <div>
-                <label className="block text-xs text-bolt-elements-textTertiary mb-1">Password</label>
+                <label className="block text-xs text-recoder-elements-textTertiary mb-1">Password</label>
                 <input
                   type="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="********"
-                  className="w-full px-3 py-2 text-sm bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor rounded text-bolt-elements-textPrimary"
+                  className="w-full px-3 py-2 text-sm bg-recoder-elements-background-depth-2 border border-recoder-elements-borderColor rounded text-recoder-elements-textPrimary"
                 />
               </div>
 
@@ -929,7 +929,7 @@ const ConnectionModal = memo(({ projectId, onClose, onConnect }: ConnectionModal
                   onChange={(e) => setUseSSL(e.target.checked)}
                   className="w-4 h-4"
                 />
-                <label htmlFor="ssl" className="text-xs text-bolt-elements-textSecondary">
+                <label htmlFor="ssl" className="text-xs text-recoder-elements-textSecondary">
                   Use SSL
                 </label>
               </div>
@@ -938,7 +938,7 @@ const ConnectionModal = memo(({ projectId, onClose, onConnect }: ConnectionModal
             <>
               {/* SQLite Filename */}
               <div>
-                <label className="block text-xs text-bolt-elements-textTertiary mb-1">
+                <label className="block text-xs text-recoder-elements-textTertiary mb-1">
                   Database File (relative to /workspace)
                 </label>
                 <input
@@ -946,7 +946,7 @@ const ConnectionModal = memo(({ projectId, onClose, onConnect }: ConnectionModal
                   value={filename}
                   onChange={(e) => setFilename(e.target.value)}
                   placeholder="data.db"
-                  className="w-full px-3 py-2 text-sm bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor rounded text-bolt-elements-textPrimary"
+                  className="w-full px-3 py-2 text-sm bg-recoder-elements-background-depth-2 border border-recoder-elements-borderColor rounded text-recoder-elements-textPrimary"
                 />
               </div>
             </>
@@ -954,7 +954,7 @@ const ConnectionModal = memo(({ projectId, onClose, onConnect }: ConnectionModal
 
           {/* Connection Name */}
           <div>
-            <label className="block text-xs text-bolt-elements-textTertiary mb-1">
+            <label className="block text-xs text-recoder-elements-textTertiary mb-1">
               Connection Name (optional)
             </label>
             <input
@@ -962,7 +962,7 @@ const ConnectionModal = memo(({ projectId, onClose, onConnect }: ConnectionModal
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="My Database"
-              className="w-full px-3 py-2 text-sm bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor rounded text-bolt-elements-textPrimary"
+              className="w-full px-3 py-2 text-sm bg-recoder-elements-background-depth-2 border border-recoder-elements-borderColor rounded text-recoder-elements-textPrimary"
             />
           </div>
 
@@ -970,10 +970,10 @@ const ConnectionModal = memo(({ projectId, onClose, onConnect }: ConnectionModal
           {error && <div className="text-red-400 text-xs">{error}</div>}
         </div>
 
-        <div className="flex justify-end gap-2 px-4 py-3 border-t border-bolt-elements-borderColor">
+        <div className="flex justify-end gap-2 px-4 py-3 border-t border-recoder-elements-borderColor">
           <button
             onClick={onClose}
-            className="px-3 py-1.5 text-xs bg-bolt-elements-background-depth-3 hover:bg-bolt-elements-background-depth-3/80 rounded text-bolt-elements-textPrimary"
+            className="px-3 py-1.5 text-xs bg-recoder-elements-background-depth-3 hover:bg-recoder-elements-background-depth-3/80 rounded text-recoder-elements-textPrimary"
           >
             Cancel
           </button>

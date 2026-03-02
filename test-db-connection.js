@@ -5,7 +5,7 @@ async function testDbConnection() {
   const prisma = new PrismaClient({
     datasources: {
       db: {
-        url: "postgresql://neondb_owner:npg_LDgwo1PRFh2J@ep-rapid-queen-abgrjesz-pooler.eu-west-2.aws.neon.tech/neondb?sslmode=require&channel_binding=require"
+        url: process.env.DATABASE_URL
       }
     }
   });

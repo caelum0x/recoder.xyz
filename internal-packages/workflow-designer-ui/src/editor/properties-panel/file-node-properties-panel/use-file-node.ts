@@ -1,5 +1,5 @@
-import { useToasts } from "@giselle-internal/ui/toast";
-import type { FileData, FileNode } from "@giselles-ai/protocol";
+import { useToasts } from "@recoder-internal/ui/toast";
+import type { FileData, FileNode } from "@recoder/protocol";
 import { useCallback } from "react";
 import { useRemoveFile, useUploadFile } from "../../../app-designer";
 

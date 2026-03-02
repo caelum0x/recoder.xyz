@@ -10,7 +10,7 @@ import {
 	DialogHeader,
 	DialogTitle,
 	DialogTrigger,
-} from "@giselle-internal/ui/dialog";
+} from "@recoder-internal/ui/dialog";
 import { X } from "lucide-react";
 import { useActionState, useState } from "react";
 import { Alert, AlertDescription } from "../components/alert";

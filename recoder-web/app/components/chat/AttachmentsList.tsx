@@ -55,7 +55,7 @@ export const AttachmentsList = memo(({
     <div className={classNames('px-3', compact ? 'pt-2' : 'pt-3')}>
       {/* Summary header */}
       {showSummary && (
-        <div className="flex items-center justify-between text-xs font-medium text-bolt-elements-textSecondary px-1 mb-2">
+        <div className="flex items-center justify-between text-xs font-medium text-recoder-elements-textSecondary px-1 mb-2">
           <span className="flex items-center gap-1.5">
             <span className="i-ph:paperclip" />
             Attached files ({attachments.length})
@@ -66,12 +66,12 @@ export const AttachmentsList = memo(({
               className={classNames(
                 displayTotalSize > MAX_TOTAL_SIZE * 0.8
                   ? 'text-amber-500'
-                  : 'text-bolt-elements-textTertiary',
+                  : 'text-recoder-elements-textTertiary',
               )}
             >
               {formatFileSize(displayTotalSize)}
             </span>
-            <span className="text-bolt-elements-textTertiary opacity-50">
+            <span className="text-recoder-elements-textTertiary opacity-50">
               / {formatFileSize(MAX_TOTAL_SIZE)}
             </span>
           </span>
@@ -112,10 +112,10 @@ const AttachmentPill = memo(({ attachment, onRemove, compact }: AttachmentPillPr
     <div
       className={classNames(
         'group relative flex items-center gap-2',
-        'bg-bolt-elements-background-depth-2 hover:bg-bolt-elements-background-depth-3',
+        'bg-recoder-elements-background-depth-2 hover:bg-recoder-elements-background-depth-3',
         'backdrop-blur-sm rounded-lg',
         compact ? 'px-2.5 py-1.5 text-xs' : 'px-3 py-2 text-sm',
-        'border border-bolt-elements-borderColor hover:border-bolt-elements-borderColorActive',
+        'border border-recoder-elements-borderColor hover:border-recoder-elements-borderColorActive',
         'transition-all duration-200 ease-out',
         'shadow-sm hover:shadow-md',
       )}
@@ -148,15 +148,15 @@ const AttachmentPill = memo(({ attachment, onRemove, compact }: AttachmentPillPr
                   alt={attachment.file.name}
                   className={classNames(
                     'max-w-[240px] max-h-[240px] object-contain',
-                    'bg-bolt-elements-background-depth-1 p-1.5 rounded-lg',
-                    'shadow-xl border border-bolt-elements-borderColor',
+                    'bg-recoder-elements-background-depth-1 p-1.5 rounded-lg',
+                    'shadow-xl border border-recoder-elements-borderColor',
                   )}
                 />
                 {/* File name tooltip */}
                 <div
                   className={classNames(
                     'absolute -bottom-6 left-0 right-0',
-                    'text-xs text-center text-bolt-elements-textSecondary',
+                    'text-xs text-center text-recoder-elements-textSecondary',
                     'truncate px-2',
                   )}
                 >
@@ -174,13 +174,13 @@ const AttachmentPill = memo(({ attachment, onRemove, compact }: AttachmentPillPr
       <div className="flex flex-col min-w-0 gap-0.5">
         <span
           className={classNames(
-            'text-bolt-elements-textPrimary font-medium truncate',
+            'text-recoder-elements-textPrimary font-medium truncate',
             compact ? 'max-w-24' : 'max-w-32',
           )}
         >
           {attachment.file.name}
         </span>
-        <span className="text-bolt-elements-textTertiary text-[10px]">
+        <span className="text-recoder-elements-textTertiary text-[10px]">
           {formatFileSize(attachment.file.size)}
         </span>
       </div>
@@ -195,7 +195,7 @@ const AttachmentPill = memo(({ attachment, onRemove, compact }: AttachmentPillPr
           'flex items-center justify-center',
           compact ? 'w-4 h-4' : 'w-5 h-5',
           'rounded-full',
-          'text-bolt-elements-textTertiary',
+          'text-recoder-elements-textTertiary',
           'opacity-50 group-hover:opacity-100',
           'hover:bg-red-500/10 hover:text-red-500',
           'transition-all duration-200',
@@ -239,7 +239,7 @@ AttachmentBadge.displayName = 'AttachmentBadge';
  */
 export const AttachmentProgress = memo(({ progress }: { progress: number }) => {
   return (
-    <div className="w-full h-1 bg-bolt-elements-background-depth-3 rounded-full overflow-hidden">
+    <div className="w-full h-1 bg-recoder-elements-background-depth-3 rounded-full overflow-hidden">
       <div
         className={classNames(
           'h-full bg-blue-500 rounded-full',

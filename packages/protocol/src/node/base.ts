@@ -1,4 +1,4 @@
-import { createIdGenerator } from "@giselles-ai/utils";
+import { createIdGenerator } from "@recoder/utils";
 import * as z from "zod/v4";
 
 export const InputId = createIdGenerator("inp");

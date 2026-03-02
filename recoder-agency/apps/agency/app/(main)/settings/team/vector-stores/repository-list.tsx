@@ -1,4 +1,4 @@
-import { EmptyState } from "@giselle-internal/ui/empty-state";
+import { EmptyState } from "@recoder-internal/ui/empty-state";
 import Link from "next/link";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Card } from "@/components/ui/card";

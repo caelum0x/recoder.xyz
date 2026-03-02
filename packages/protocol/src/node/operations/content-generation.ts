@@ -5,7 +5,7 @@ import {
 	type LanguageModelId,
 	type LanguageModelProvider,
 	type LanguageModelToolName,
-} from "@giselles-ai/language-model-registry";
+} from "@recoder/language-model-registry";
 import * as z from "zod/v4";
 
 export const ContentGenerationContent = z.object({

@@ -1,4 +1,4 @@
-import type { RunningGeneration } from "@giselles-ai/protocol";
+import type { RunningGeneration } from "@recoder/protocol";
 import { sql } from "drizzle-orm";
 import { db } from "@/db";
 

@@ -1,5 +1,6 @@
 import { randomUUID } from "crypto";
 import { prisma as defaultPrisma } from "./prisma";
+import { logger } from '@/lib/logger';
 
 type PrismaClient = typeof defaultPrisma;
 
@@ -71,7 +72,7 @@ export function customPrismaAdapter(prisma: PrismaClient) {
           const modelClient = (prisma as any)[prismaModel];
           
           if (!modelClient) {
-            console.error(`Model ${prismaModel} not found in Prisma client`);
+            logger.error('Model not found in Prisma client', { model: String(prismaModel) });
             throw new Error(`Model ${prismaModel} not found`);
           }
           
@@ -83,7 +84,7 @@ export function customPrismaAdapter(prisma: PrismaClient) {
           const result = await modelClient.create({ data });
           return result;
         } catch (error: any) {
-          console.error(`Error creating ${model}:`, error.message);
+          logger.error('Error creating model', { model: String(model), error: String(error.message) });
           throw error;
         }
       },
@@ -102,7 +103,7 @@ export function customPrismaAdapter(prisma: PrismaClient) {
           });
           return result;
         } catch (error: any) {
-          console.error(`Error finding ${model}:`, error.message);
+          logger.error('Error finding model', { model: String(model), error: String(error.message) });
           return null;
         }
       },
@@ -125,7 +126,7 @@ export function customPrismaAdapter(prisma: PrismaClient) {
           const results = await modelClient.findMany(query);
           return results;
         } catch (error: any) {
-          console.error(`Error finding many ${model}:`, error.message);
+          logger.error('Error finding many models', { model: String(model), error: String(error.message) });
           return [];
         }
       },
@@ -153,7 +154,7 @@ export function customPrismaAdapter(prisma: PrismaClient) {
           });
           return result;
         } catch (error: any) {
-          console.error(`Error updating ${model}:`, error.message);
+          logger.error('Error updating model', { model: String(model), error: String(error.message) });
           throw error;
         }
       },
@@ -173,7 +174,7 @@ export function customPrismaAdapter(prisma: PrismaClient) {
           });
           return result;
         } catch (error: any) {
-          console.error(`Error updating many ${model}:`, error.message);
+          logger.error('Error updating many models', { model: String(model), error: String(error.message) });
           throw error;
         }
       },
@@ -192,7 +193,7 @@ export function customPrismaAdapter(prisma: PrismaClient) {
           });
           return result;
         } catch (error: any) {
-          console.error(`Error deleting ${model}:`, error.message);
+          logger.error('Error deleting model', { model: String(model), error: String(error.message) });
           throw error;
         }
       },
@@ -211,7 +212,7 @@ export function customPrismaAdapter(prisma: PrismaClient) {
           });
           return result;
         } catch (error: any) {
-          console.error(`Error deleting many ${model}:`, error.message);
+          logger.error('Error deleting many models', { model: String(model), error: String(error.message) });
           return { count: 0 };
         }
       },
@@ -254,7 +255,7 @@ export function customPrismaAdapter(prisma: PrismaClient) {
             return await callback(txAdapter);
           });
         } catch (error: any) {
-          console.error('Transaction error:', error.message);
+          logger.error('Transaction error', { error: String(error.message) });
           throw error;
         }
       },

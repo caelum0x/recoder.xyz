@@ -46,7 +46,7 @@ function getPhaseInfo(phase: StreamPhase): { label: string; icon: string; color:
     case 'error':
       return { label: 'Error', icon: 'i-ph:warning-circle', color: 'text-red-500' };
     case 'aborted':
-      return { label: 'Stopped', icon: 'i-ph:stop-circle', color: 'text-bolt-elements-textTertiary' };
+      return { label: 'Stopped', icon: 'i-ph:stop-circle', color: 'text-recoder-elements-textTertiary' };
     default:
       return { label: '', icon: '', color: '' };
   }
@@ -76,22 +76,22 @@ export const StreamingIndicator = memo(function StreamingIndicator({
         {thinking ? (
           <>
             <div className="i-svg-spinners:pulse-3 text-blue-500" />
-            <span className="text-bolt-elements-textSecondary">Thinking...</span>
+            <span className="text-recoder-elements-textSecondary">Thinking...</span>
           </>
         ) : state.phase === 'streaming' ? (
           <>
             <div className="i-svg-spinners:bars-scale-middle text-green-500" />
-            {speed && <span className="text-bolt-elements-textSecondary">{speed}</span>}
+            {speed && <span className="text-recoder-elements-textSecondary">{speed}</span>}
           </>
         ) : state.phase === 'completed' ? (
           <>
             <div className={classNames(phaseInfo.icon, phaseInfo.color)} />
-            {tokens && <span className="text-bolt-elements-textTertiary">{tokens}</span>}
+            {tokens && <span className="text-recoder-elements-textTertiary">{tokens}</span>}
           </>
         ) : (
           <>
             <div className={classNames(phaseInfo.icon, phaseInfo.color)} />
-            <span className="text-bolt-elements-textSecondary">{phaseInfo.label}</span>
+            <span className="text-recoder-elements-textSecondary">{phaseInfo.label}</span>
           </>
         )}
       </div>
@@ -102,7 +102,7 @@ export const StreamingIndicator = memo(function StreamingIndicator({
     <div
       className={classNames(
         'flex items-center gap-3 px-3 py-2 rounded-lg',
-        'bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor',
+        'bg-recoder-elements-background-depth-2 border border-recoder-elements-borderColor',
         className
       )}
     >
@@ -122,7 +122,7 @@ export const StreamingIndicator = memo(function StreamingIndicator({
 
       {/* Metrics */}
       {showDetails && state.phase === 'streaming' && (
-        <div className="flex items-center gap-3 text-xs text-bolt-elements-textSecondary border-l border-bolt-elements-borderColor pl-3">
+        <div className="flex items-center gap-3 text-xs text-recoder-elements-textSecondary border-l border-recoder-elements-borderColor pl-3">
           {tokens && (
             <div className="flex items-center gap-1">
               <div className="i-ph:hash text-sm" />
@@ -140,7 +140,7 @@ export const StreamingIndicator = memo(function StreamingIndicator({
 
       {/* Completion metrics */}
       {showDetails && state.phase === 'completed' && (
-        <div className="flex items-center gap-3 text-xs text-bolt-elements-textTertiary border-l border-bolt-elements-borderColor pl-3">
+        <div className="flex items-center gap-3 text-xs text-recoder-elements-textTertiary border-l border-recoder-elements-borderColor pl-3">
           {tokens && (
             <div className="flex items-center gap-1" title="Total tokens generated">
               <div className="i-ph:hash text-sm" />
@@ -186,7 +186,7 @@ export const InlineStreamingStatus = memo(function InlineStreamingStatus() {
   }
 
   return (
-    <div className="inline-flex items-center gap-1.5 text-xs text-bolt-elements-textTertiary ml-2">
+    <div className="inline-flex items-center gap-1.5 text-xs text-recoder-elements-textTertiary ml-2">
       {thinking ? (
         <>
           <div className="i-svg-spinners:pulse-3" />

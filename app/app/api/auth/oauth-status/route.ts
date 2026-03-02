@@ -6,6 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSession } from '@/lib/auth-helpers';
 import { prisma } from '@/lib/prisma';
+import { logger } from '@/lib/logger';
 
 export async function GET(request: NextRequest) {
   try {
@@ -39,7 +40,7 @@ export async function GET(request: NextRequest) {
     });
 
   } catch (error: any) {
-    console.error('[OAuth Status] Error:', error);
+    logger.error('[OAuth Status] Error:', { error: String(error), route: 'auth/oauth-status' });
     return NextResponse.json(
       { success: false, error: 'Failed to get OAuth status' },
       { status: 500 }

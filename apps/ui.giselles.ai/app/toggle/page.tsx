@@ -1,4 +1,4 @@
-import { Toggle } from "@giselle-internal/ui/toggle";
+import { Toggle } from "@recoder-internal/ui/toggle";
 import { DemoSection } from "../components/demo-section";
 import { UiPage } from "../components/ui-page";
 

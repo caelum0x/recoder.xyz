@@ -1,4 +1,4 @@
-export default function () {
+export default function MaintenancePage() {
 	return (
 		<div className="flex min-h-screen flex-col items-center justify-center bg-black-900 text-white-850">
 			<div className="mx-auto max-w-md text-center px-4">

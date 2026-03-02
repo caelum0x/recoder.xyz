@@ -5,6 +5,7 @@ import { headers } from 'next/headers';
 
 import { CLIAuthService } from '@/lib/services/cli-auth.service';
 import { prisma } from '@/lib/prisma';
+import { logger } from '@/lib/logger';
 
 /**
  * POST /api/auth/cli/authorize
@@ -77,7 +78,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(result, { status: 200 });
   } catch (error: any) {
-    console.error('Device authorization error:', error);
+    logger.error('Device authorization error:', { error: String(error), route: 'auth/cli/authorize' });
     return NextResponse.json(
       { error: 'Authorization failed' },
       { status: 400 }
@@ -123,7 +124,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json(info, { status: 200 });
   } catch (error: any) {
-    console.error('Get device code error:', error);
+    logger.error('Get device code error:', { error: String(error), route: 'auth/cli/authorize' });
     return NextResponse.json(
       { error: 'Failed to get device code info' },
       { status: 500 }

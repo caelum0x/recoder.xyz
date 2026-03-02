@@ -10,7 +10,7 @@ export default function GitHubSettings() {
     <div className="p-6 space-y-6">
       <div>
         <h2 className="text-2xl font-bold mb-2">GitHub Integration</h2>
-        <p className="text-bolt-elements-textSecondary">
+        <p className="text-recoder-elements-textSecondary">
           Connect your GitHub account to sync projects and collaborate.
         </p>
       </div>
@@ -22,12 +22,12 @@ export default function GitHubSettings() {
       </div>
 
       {/* Features Section */}
-      <div className="p-4 rounded-lg bg-bolt-elements-background-depth-3 border border-bolt-elements-borderColor">
+      <div className="p-4 rounded-lg bg-recoder-elements-background-depth-3 border border-recoder-elements-borderColor">
         <h4 className="font-semibold mb-2">GitHub Features</h4>
-        <p className="text-sm text-bolt-elements-textSecondary mb-3">
+        <p className="text-sm text-recoder-elements-textSecondary mb-3">
           When connected, you can:
         </p>
-        <ul className="text-sm text-bolt-elements-textSecondary space-y-1 ml-4">
+        <ul className="text-sm text-recoder-elements-textSecondary space-y-1 ml-4">
           <li>• Push changes to GitHub repositories</li>
           <li>• Pull latest code from branches</li>
           <li>• Commit and sync automatically</li>
@@ -37,7 +37,7 @@ export default function GitHubSettings() {
 
       {/* Connect Button */}
       <div className="pt-4">
-        <button className="px-4 py-2 bg-bolt-elements-button-primary-background text-bolt-elements-button-primary-text rounded-lg hover:bg-bolt-elements-button-primary-backgroundHover transition-colors">
+        <button className="px-4 py-2 bg-recoder-elements-button-primary-background text-recoder-elements-button-primary-text rounded-lg hover:bg-recoder-elements-button-primary-backgroundHover transition-colors">
           Connect GitHub Account
         </button>
       </div>

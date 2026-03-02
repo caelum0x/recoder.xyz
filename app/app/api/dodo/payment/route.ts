@@ -6,6 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from "@/lib/auth-helpers";
 import { DodoPaymentsService } from '@/lib/services/dodopayments.service';
+import { logger } from '@/lib/logger';
 
 export async function POST(request: NextRequest) {
   try {
@@ -69,7 +70,7 @@ export async function POST(request: NextRequest) {
       },
     });
   } catch (error) {
-    console.error('Dodo Pay error:', error);
+    logger.error('Dodo Pay error', { route: 'api/dodo/payment', error: error instanceof Error ? error.message : String(error) });
     return NextResponse.json({
       success: false,
       error: 'Failed to create payment session',

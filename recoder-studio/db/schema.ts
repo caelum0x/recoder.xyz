@@ -3,7 +3,7 @@ import type {
 	GitHubIssueState,
 	GitHubIssueStateReason,
 	GitHubRepositoryIssueContentType,
-} from "@giselles-ai/github-tool";
+} from "@recoder/github-tool";
 import type {
 	AppId,
 	DataStoreId,
@@ -13,13 +13,13 @@ import type {
 	TaskId,
 	TriggerId,
 	WorkspaceId,
-} from "@giselles-ai/protocol";
+} from "@recoder/protocol";
 import type {
 	DocumentVectorStoreId,
 	DocumentVectorStoreSourceId,
 	GitHubRepositoryIndexId,
-} from "@giselles-ai/types";
-import { createIdGenerator } from "@giselles-ai/utils";
+} from "@recoder/types";
+import { createIdGenerator } from "@recoder/utils";
 import { relations, sql } from "drizzle-orm";
 import {
 	boolean,
@@ -226,19 +226,19 @@ export const users = pgTable("users", {
 	dbId: serial("db_id").primaryKey(),
 });
 
-export const supabaseUserMappings = pgTable("supabase_user_mappings", {
+export const authUserMappings = pgTable("auth_user_mappings", {
 	userDbId: integer("user_db_id")
 		.unique()
 		.notNull()
 		.references(() => users.dbId),
-	supabaseUserId: text("supabase_user_id").notNull().unique(),
+	authUserId: text("auth_user_id").notNull().unique(),
 });
 
-export const supabaseUserRelations = relations(
-	supabaseUserMappings,
+export const authUserRelations = relations(
+	authUserMappings,
 	({ one }) => ({
 		user: one(users, {
-			fields: [supabaseUserMappings.userDbId],
+			fields: [authUserMappings.userDbId],
 			references: [users.dbId],
 		}),
 	}),

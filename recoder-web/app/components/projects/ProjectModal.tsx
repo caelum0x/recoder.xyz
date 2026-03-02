@@ -91,15 +91,15 @@ export function ProjectModal({ isOpen, onClose, onSubmit, initialData, mode }: P
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor rounded-lg p-6 max-w-md w-full max-h-[90vh] overflow-y-auto">
-        <h2 className="text-xl font-semibold text-bolt-elements-textPrimary mb-6">
+      <div className="bg-recoder-elements-background-depth-2 border border-recoder-elements-borderColor rounded-lg p-6 max-w-md w-full max-h-[90vh] overflow-y-auto">
+        <h2 className="text-xl font-semibold text-recoder-elements-textPrimary mb-6">
           {mode === 'create' ? 'Create New Project' : 'Edit Project'}
         </h2>
 
         <form onSubmit={handleSubmit} className="space-y-6">
           {/* Project Name */}
           <div>
-            <label className="block text-sm font-medium text-bolt-elements-textPrimary mb-2">
+            <label className="block text-sm font-medium text-recoder-elements-textPrimary mb-2">
               Project Name
             </label>
             <input
@@ -107,8 +107,8 @@ export function ProjectModal({ isOpen, onClose, onSubmit, initialData, mode }: P
               value={formData.name}
               onChange={(e) => handleInputChange('name', e.target.value)}
               placeholder="Enter project name..."
-              className={`w-full px-3 py-2 bg-bolt-elements-background-depth-3 border rounded-lg text-bolt-elements-textPrimary placeholder-bolt-elements-textSecondary focus:outline-none focus:ring-2 focus:ring-bolt-elements-focus focus:border-transparent ${
-                errors.name ? 'border-red-500' : 'border-bolt-elements-borderColor'
+              className={`w-full px-3 py-2 bg-recoder-elements-background-depth-3 border rounded-lg text-recoder-elements-textPrimary placeholder-recoder-elements-textSecondary focus:outline-none focus:ring-2 focus:ring-recoder-elements-focus focus:border-transparent ${
+                errors.name ? 'border-red-500' : 'border-recoder-elements-borderColor'
               }`}
             />
             {errors.name && (
@@ -118,7 +118,7 @@ export function ProjectModal({ isOpen, onClose, onSubmit, initialData, mode }: P
 
           {/* Project Description */}
           <div>
-            <label className="block text-sm font-medium text-bolt-elements-textPrimary mb-2">
+            <label className="block text-sm font-medium text-recoder-elements-textPrimary mb-2">
               Description (optional)
             </label>
             <textarea
@@ -126,13 +126,13 @@ export function ProjectModal({ isOpen, onClose, onSubmit, initialData, mode }: P
               onChange={(e) => handleInputChange('description', e.target.value)}
               placeholder="Describe your project..."
               rows={3}
-              className="w-full px-3 py-2 bg-bolt-elements-background-depth-3 border border-bolt-elements-borderColor rounded-lg text-bolt-elements-textPrimary placeholder-bolt-elements-textSecondary focus:outline-none focus:ring-2 focus:ring-bolt-elements-focus focus:border-transparent resize-none"
+              className="w-full px-3 py-2 bg-recoder-elements-background-depth-3 border border-recoder-elements-borderColor rounded-lg text-recoder-elements-textPrimary placeholder-recoder-elements-textSecondary focus:outline-none focus:ring-2 focus:ring-recoder-elements-focus focus:border-transparent resize-none"
             />
           </div>
 
           {/* Icon Selection */}
           <div>
-            <label className="block text-sm font-medium text-bolt-elements-textPrimary mb-3">
+            <label className="block text-sm font-medium text-recoder-elements-textPrimary mb-3">
               Project Icon
             </label>
             <div className="grid grid-cols-8 gap-2">
@@ -143,8 +143,8 @@ export function ProjectModal({ isOpen, onClose, onSubmit, initialData, mode }: P
                   onClick={() => handleInputChange('icon', icon)}
                   className={`w-10 h-10 rounded-lg border-2 transition-all flex items-center justify-center ${
                     formData.icon === icon
-                      ? 'border-bolt-elements-focus bg-bolt-elements-focus/10'
-                      : 'border-bolt-elements-borderColor hover:border-bolt-elements-borderColorActive'
+                      ? 'border-recoder-elements-focus bg-recoder-elements-focus/10'
+                      : 'border-recoder-elements-borderColor hover:border-recoder-elements-borderColorActive'
                   }`}
                 >
                   <div className={`${icon} text-xl`} />
@@ -155,7 +155,7 @@ export function ProjectModal({ isOpen, onClose, onSubmit, initialData, mode }: P
 
           {/* Color Selection */}
           <div>
-            <label className="block text-sm font-medium text-bolt-elements-textPrimary mb-3">
+            <label className="block text-sm font-medium text-recoder-elements-textPrimary mb-3">
               Project Color
             </label>
             <div className="grid grid-cols-5 gap-2">
@@ -167,7 +167,7 @@ export function ProjectModal({ isOpen, onClose, onSubmit, initialData, mode }: P
                   className={`w-12 h-10 rounded-lg border-2 transition-all ${
                     formData.color === color
                       ? 'border-white scale-110'
-                      : 'border-bolt-elements-borderColor hover:scale-105'
+                      : 'border-recoder-elements-borderColor hover:scale-105'
                   }`}
                   style={{ backgroundColor: color }}
                 />
@@ -176,8 +176,8 @@ export function ProjectModal({ isOpen, onClose, onSubmit, initialData, mode }: P
           </div>
 
           {/* Preview */}
-          <div className="p-4 bg-bolt-elements-background-depth-1 rounded-lg border border-bolt-elements-borderColor">
-            <div className="text-sm text-bolt-elements-textSecondary mb-2">Preview:</div>
+          <div className="p-4 bg-recoder-elements-background-depth-1 rounded-lg border border-recoder-elements-borderColor">
+            <div className="text-sm text-recoder-elements-textSecondary mb-2">Preview:</div>
             <div className="flex items-center gap-3">
               <div
                 className="w-10 h-10 rounded-lg flex items-center justify-center text-white"
@@ -186,11 +186,11 @@ export function ProjectModal({ isOpen, onClose, onSubmit, initialData, mode }: P
                 <div className={`${formData.icon} text-xl`} />
               </div>
               <div>
-                <div className="font-medium text-bolt-elements-textPrimary">
+                <div className="font-medium text-recoder-elements-textPrimary">
                   {formData.name || 'Project Name'}
                 </div>
                 {formData.description && (
-                  <div className="text-sm text-bolt-elements-textSecondary">
+                  <div className="text-sm text-recoder-elements-textSecondary">
                     {formData.description}
                   </div>
                 )}
@@ -203,13 +203,13 @@ export function ProjectModal({ isOpen, onClose, onSubmit, initialData, mode }: P
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 text-bolt-elements-textSecondary hover:text-bolt-elements-textPrimary transition-colors"
+              className="px-4 py-2 text-recoder-elements-textSecondary hover:text-recoder-elements-textPrimary transition-colors"
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="px-6 py-2 bg-bolt-elements-button-primary-background hover:bg-bolt-elements-button-primary-backgroundHover text-bolt-elements-button-primary-text rounded-lg transition-all"
+              className="px-6 py-2 bg-recoder-elements-button-primary-background hover:bg-recoder-elements-button-primary-backgroundHover text-recoder-elements-button-primary-text rounded-lg transition-all"
             >
               {mode === 'create' ? 'Create Project' : 'Save Changes'}
             </button>

@@ -11,6 +11,7 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import Response
 from urllib.parse import quote
 from pydantic import BaseModel, Field
+from core.utils.logger import logger
 
 try:
     from docx import Document
@@ -290,7 +291,7 @@ async def convert_document_to_docx(request: ConvertRequest):
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        print(f"❌ Conversion error: {e}")
+        logger.exception(f"DOCX conversion error: {e}")
         raise HTTPException(status_code=500, detail=f"Conversion failed: {str(e)}")
 
 

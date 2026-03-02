@@ -1,6 +1,6 @@
 "use client";
 
-import { GiselleClientProvider } from "@giselles-ai/react";
+import { GiselleClientProvider } from "@recoder/react";
 import { useMemo } from "react";
 import { createInternalGiselleClient } from "@/lib/internal-api/create-giselle-client";
 

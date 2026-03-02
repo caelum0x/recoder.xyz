@@ -1,9 +1,9 @@
-import { Button } from "@giselle-internal/ui/button";
-import { DocsLink } from "@giselle-internal/ui/docs-link";
-import { EmptyState } from "@giselle-internal/ui/empty-state";
-import { Input } from "@giselle-internal/ui/input";
-import { Select } from "@giselle-internal/ui/select";
-import type { ContentGenerationNode } from "@giselles-ai/protocol";
+import { Button } from "@recoder-internal/ui/button";
+import { DocsLink } from "@recoder-internal/ui/docs-link";
+import { EmptyState } from "@recoder-internal/ui/empty-state";
+import { Input } from "@recoder-internal/ui/input";
+import { Select } from "@recoder-internal/ui/select";
+import type { ContentGenerationNode } from "@recoder/protocol";
 import {
 	CheckIcon,
 	MoveUpRightIcon,
@@ -557,7 +557,7 @@ function GitHubToolConfigurationDialogInternal({
 											</p>
 										</div>
 										<DocsLink
-											href={`https://docs.giselles.ai/en/glossary/github-tools#${encodeURIComponent(
+											href={`https://docs.recoder.xyz/en/glossary/github-tools#${encodeURIComponent(
 												tool.toLowerCase(),
 											)}`}
 											target="_blank"

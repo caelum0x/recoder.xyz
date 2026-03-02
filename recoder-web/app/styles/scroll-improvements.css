@@ -9,7 +9,7 @@
   max-height: calc(100vh - 200px);
   scroll-behavior: smooth;
   scrollbar-width: thin;
-  scrollbar-color: var(--bolt-elements-borderColor) transparent;
+  scrollbar-color: var(--recoder-elements-borderColor) transparent;
 }
 
 .chat-messages::-webkit-scrollbar {
@@ -21,12 +21,12 @@
 }
 
 .chat-messages::-webkit-scrollbar-thumb {
-  background-color: var(--bolt-elements-borderColor);
+  background-color: var(--recoder-elements-borderColor);
   border-radius: 4px;
 }
 
 .chat-messages::-webkit-scrollbar-thumb:hover {
-  background-color: var(--bolt-elements-borderColorActive);
+  background-color: var(--recoder-elements-borderColorActive);
 }
 
 /* Editor Scroll */
@@ -59,7 +59,7 @@
 /* Custom scrollbar for workbench */
 .workbench-scroll {
   scrollbar-width: thin;
-  scrollbar-color: var(--bolt-elements-borderColor) var(--bolt-elements-background-depth-1);
+  scrollbar-color: var(--recoder-elements-borderColor) var(--recoder-elements-background-depth-1);
 }
 
 .workbench-scroll::-webkit-scrollbar {
@@ -68,17 +68,17 @@
 }
 
 .workbench-scroll::-webkit-scrollbar-track {
-  background: var(--bolt-elements-background-depth-1);
+  background: var(--recoder-elements-background-depth-1);
 }
 
 .workbench-scroll::-webkit-scrollbar-thumb {
-  background-color: var(--bolt-elements-borderColor);
+  background-color: var(--recoder-elements-borderColor);
   border-radius: 5px;
-  border: 2px solid var(--bolt-elements-background-depth-1);
+  border: 2px solid var(--recoder-elements-background-depth-1);
 }
 
 .workbench-scroll::-webkit-scrollbar-thumb:hover {
-  background-color: var(--bolt-elements-borderColorActive);
+  background-color: var(--recoder-elements-borderColorActive);
 }
 
 /* Prevent scroll conflicts */
@@ -94,7 +94,7 @@
   right: 0;
   bottom: 0;
   z-index: 9999;
-  background: var(--bolt-elements-background-depth-1);
+  background: var(--recoder-elements-background-depth-1);
 }
 
 /* ================================

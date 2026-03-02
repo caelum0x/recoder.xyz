@@ -436,7 +436,7 @@ export const ExpoQRPanel = memo(({ projectId, className }: ExpoQRPanelProps) => 
   if (loading) {
     return (
       <div className={classNames('flex items-center justify-center p-6', className)}>
-        <div className="text-bolt-elements-textTertiary text-sm">
+        <div className="text-recoder-elements-textTertiary text-sm">
           Checking for Expo project...
         </div>
       </div>
@@ -447,8 +447,8 @@ export const ExpoQRPanel = memo(({ projectId, className }: ExpoQRPanelProps) => 
   if (!expoInfo?.isExpo) {
     return (
       <div className={classNames('flex flex-col items-center justify-center p-6 gap-3', className)}>
-        <div className="i-ph:device-mobile-slash text-3xl text-bolt-elements-textTertiary" />
-        <div className="text-bolt-elements-textTertiary text-sm text-center">
+        <div className="i-ph:device-mobile-slash text-3xl text-recoder-elements-textTertiary" />
+        <div className="text-recoder-elements-textTertiary text-sm text-center">
           Not an Expo project. Create a React Native project with Expo to use the QR code preview.
         </div>
       </div>
@@ -459,21 +459,21 @@ export const ExpoQRPanel = memo(({ projectId, className }: ExpoQRPanelProps) => 
   if (!expoInfo.metroRunning) {
     return (
       <div className={classNames('flex flex-col items-center justify-center p-6 gap-4', className)}>
-        <div className="i-ph:device-mobile text-4xl text-bolt-elements-textSecondary" />
-        <div className="text-bolt-elements-textSecondary text-sm text-center font-medium">
+        <div className="i-ph:device-mobile text-4xl text-recoder-elements-textSecondary" />
+        <div className="text-recoder-elements-textSecondary text-sm text-center font-medium">
           Expo project detected
         </div>
-        <div className="text-bolt-elements-textTertiary text-xs text-center">
+        <div className="text-recoder-elements-textTertiary text-xs text-center">
           Start the Metro bundler to generate a QR code for Expo Go.
         </div>
 
         {/* Mode selector */}
         <div className="flex items-center gap-2">
-          <label className="text-bolt-elements-textTertiary text-xs">Mode:</label>
+          <label className="text-recoder-elements-textTertiary text-xs">Mode:</label>
           <select
             value={selectedMode}
             onChange={(e) => setSelectedMode(e.target.value as ExpoMode)}
-            className="bg-bolt-elements-background-depth-3 text-bolt-elements-textPrimary text-xs rounded px-2 py-1 border border-bolt-elements-borderColor outline-none focus:border-bolt-elements-borderColorActive"
+            className="bg-recoder-elements-background-depth-3 text-recoder-elements-textPrimary text-xs rounded px-2 py-1 border border-recoder-elements-borderColor outline-none focus:border-recoder-elements-borderColorActive"
           >
             <option value="lan">LAN (same network)</option>
             <option value="tunnel">Tunnel (any network)</option>
@@ -487,8 +487,8 @@ export const ExpoQRPanel = memo(({ projectId, className }: ExpoQRPanelProps) => 
           className={classNames(
             'px-4 py-2 rounded-md text-sm font-medium transition-colors',
             starting
-              ? 'bg-bolt-elements-button-secondary-background text-bolt-elements-textTertiary cursor-not-allowed'
-              : 'bg-bolt-elements-button-primary-background text-bolt-elements-button-primary-text hover:bg-bolt-elements-button-primary-backgroundHover'
+              ? 'bg-recoder-elements-button-secondary-background text-recoder-elements-textTertiary cursor-not-allowed'
+              : 'bg-recoder-elements-button-primary-background text-recoder-elements-button-primary-text hover:bg-recoder-elements-button-primary-backgroundHover'
           )}
         >
           {starting ? (
@@ -521,7 +521,7 @@ export const ExpoQRPanel = memo(({ projectId, className }: ExpoQRPanelProps) => 
       {/* Header */}
       <div className="flex items-center gap-2">
         <div className="i-ph:device-mobile text-lg text-green-400" />
-        <span className="text-bolt-elements-textPrimary text-sm font-medium">
+        <span className="text-recoder-elements-textPrimary text-sm font-medium">
           Expo Go Preview
         </span>
         {expoInfo.metroBuildStatus === 'building' ? (
@@ -560,19 +560,19 @@ export const ExpoQRPanel = memo(({ projectId, className }: ExpoQRPanelProps) => 
       </div>
 
       {/* Instructions */}
-      <div className="text-bolt-elements-textTertiary text-xs text-center leading-relaxed">
-        Open <strong className="text-bolt-elements-textSecondary">Expo Go</strong> on your phone and scan this QR code to preview your app.
+      <div className="text-recoder-elements-textTertiary text-xs text-center leading-relaxed">
+        Open <strong className="text-recoder-elements-textSecondary">Expo Go</strong> on your phone and scan this QR code to preview your app.
       </div>
 
       {/* Metro URL */}
       <div className="w-full max-w-xs">
-        <div className="flex items-center gap-1 bg-bolt-elements-background-depth-3 rounded-md border border-bolt-elements-borderColor overflow-hidden">
-          <code className="flex-1 text-xs text-bolt-elements-textSecondary px-3 py-2 truncate select-all">
+        <div className="flex items-center gap-1 bg-recoder-elements-background-depth-3 rounded-md border border-recoder-elements-borderColor overflow-hidden">
+          <code className="flex-1 text-xs text-recoder-elements-textSecondary px-3 py-2 truncate select-all">
             {displayUrl}
           </code>
           <button
             onClick={handleCopyUrl}
-            className="flex-shrink-0 px-3 py-2 text-bolt-elements-textTertiary hover:text-bolt-elements-textPrimary transition-colors border-l border-bolt-elements-borderColor"
+            className="flex-shrink-0 px-3 py-2 text-recoder-elements-textTertiary hover:text-recoder-elements-textPrimary transition-colors border-l border-recoder-elements-borderColor"
             title="Copy URL"
           >
             {copied ? (
@@ -590,7 +590,7 @@ export const ExpoQRPanel = memo(({ projectId, className }: ExpoQRPanelProps) => 
           href={expoInfo.webUrl}
           target="_blank"
           rel="noopener noreferrer"
-          className="text-bolt-elements-textTertiary text-xs hover:text-bolt-elements-textSecondary transition-colors flex items-center gap-1"
+          className="text-recoder-elements-textTertiary text-xs hover:text-recoder-elements-textSecondary transition-colors flex items-center gap-1"
         >
           <span className="i-ph:globe text-xs" />
           Open web version
@@ -601,7 +601,7 @@ export const ExpoQRPanel = memo(({ projectId, className }: ExpoQRPanelProps) => 
       <div className="w-full max-w-xs">
         <button
           onClick={() => setShowShareSection(!showShareSection)}
-          className="flex items-center gap-2 w-full text-left text-bolt-elements-textSecondary text-xs font-medium py-2 hover:text-bolt-elements-textPrimary transition-colors"
+          className="flex items-center gap-2 w-full text-left text-recoder-elements-textSecondary text-xs font-medium py-2 hover:text-recoder-elements-textPrimary transition-colors"
         >
           <span className={classNames('i-ph:caret-right text-xs transition-transform', showShareSection && 'rotate-90')} />
           <span className="i-ph:share-network text-sm" />
@@ -622,7 +622,7 @@ export const ExpoQRPanel = memo(({ projectId, className }: ExpoQRPanelProps) => 
               className={classNames(
                 'w-full py-2 rounded text-xs font-medium transition-colors',
                 !expoToken || sharing
-                  ? 'bg-bolt-elements-button-secondary-background text-bolt-elements-textTertiary cursor-not-allowed'
+                  ? 'bg-recoder-elements-button-secondary-background text-recoder-elements-textTertiary cursor-not-allowed'
                   : 'bg-blue-600 text-white hover:bg-blue-500',
               )}
             >
@@ -648,15 +648,15 @@ export const ExpoQRPanel = memo(({ projectId, className }: ExpoQRPanelProps) => 
                     className="block"
                   />
                 </div>
-                <div className="flex items-center gap-1 bg-bolt-elements-background-depth-3 rounded px-2 py-1">
-                  <code className="flex-1 text-[10px] text-bolt-elements-textSecondary truncate select-all">
+                <div className="flex items-center gap-1 bg-recoder-elements-background-depth-3 rounded px-2 py-1">
+                  <code className="flex-1 text-[10px] text-recoder-elements-textSecondary truncate select-all">
                     {shareResult.shareUrl}
                   </code>
                   <button
                     onClick={async () => {
                       try { await navigator.clipboard.writeText(shareResult.shareUrl); } catch {}
                     }}
-                    className="text-bolt-elements-textTertiary hover:text-bolt-elements-textPrimary transition-colors"
+                    className="text-recoder-elements-textTertiary hover:text-recoder-elements-textPrimary transition-colors"
                     title="Copy share URL"
                   >
                     <span className="i-ph:copy text-xs" />
@@ -676,7 +676,7 @@ export const ExpoQRPanel = memo(({ projectId, className }: ExpoQRPanelProps) => 
       <div className="w-full max-w-xs">
         <button
           onClick={() => setShowBuildSection(!showBuildSection)}
-          className="flex items-center gap-2 w-full text-left text-bolt-elements-textSecondary text-xs font-medium py-2 hover:text-bolt-elements-textPrimary transition-colors"
+          className="flex items-center gap-2 w-full text-left text-recoder-elements-textSecondary text-xs font-medium py-2 hover:text-recoder-elements-textPrimary transition-colors"
         >
           <span className={classNames('i-ph:caret-right text-xs transition-transform', showBuildSection && 'rotate-90')} />
           <span className="i-ph:package text-sm" />
@@ -687,13 +687,13 @@ export const ExpoQRPanel = memo(({ projectId, className }: ExpoQRPanelProps) => 
           <div className="flex flex-col gap-3 pt-1 pb-2">
             {/* Expo Token */}
             <div className="flex flex-col gap-1">
-              <label className="text-bolt-elements-textTertiary text-[10px]">Expo Token</label>
+              <label className="text-recoder-elements-textTertiary text-[10px]">Expo Token</label>
               <input
                 type="password"
                 value={expoToken}
                 onChange={(e) => setExpoToken(e.target.value)}
                 placeholder="expo_token_..."
-                className="bg-bolt-elements-background-depth-3 text-bolt-elements-textPrimary text-xs rounded px-3 py-1.5 border border-bolt-elements-borderColor outline-none focus:border-bolt-elements-borderColorActive w-full"
+                className="bg-recoder-elements-background-depth-3 text-recoder-elements-textPrimary text-xs rounded px-3 py-1.5 border border-recoder-elements-borderColor outline-none focus:border-recoder-elements-borderColorActive w-full"
               />
               <a
                 href="https://expo.dev/accounts/[account]/settings/access-tokens"
@@ -713,7 +713,7 @@ export const ExpoQRPanel = memo(({ projectId, className }: ExpoQRPanelProps) => 
                   'flex-1 text-xs py-1.5 rounded font-medium transition-colors',
                   buildPlatform === 'android'
                     ? 'bg-green-600 text-white'
-                    : 'bg-bolt-elements-background-depth-3 text-bolt-elements-textTertiary hover:text-bolt-elements-textSecondary',
+                    : 'bg-recoder-elements-background-depth-3 text-recoder-elements-textTertiary hover:text-recoder-elements-textSecondary',
                 )}
               >
                 Android
@@ -724,7 +724,7 @@ export const ExpoQRPanel = memo(({ projectId, className }: ExpoQRPanelProps) => 
                   'flex-1 text-xs py-1.5 rounded font-medium transition-colors',
                   buildPlatform === 'ios'
                     ? 'bg-blue-600 text-white'
-                    : 'bg-bolt-elements-background-depth-3 text-bolt-elements-textTertiary hover:text-bolt-elements-textSecondary',
+                    : 'bg-recoder-elements-background-depth-3 text-recoder-elements-textTertiary hover:text-recoder-elements-textSecondary',
                 )}
               >
                 iOS
@@ -733,7 +733,7 @@ export const ExpoQRPanel = memo(({ projectId, className }: ExpoQRPanelProps) => 
 
             {/* Build profile selector */}
             <div className="flex flex-col gap-1">
-              <label className="text-bolt-elements-textTertiary text-[10px]">Build Profile</label>
+              <label className="text-recoder-elements-textTertiary text-[10px]">Build Profile</label>
               <div className="flex gap-1">
                 {(['development', 'preview', 'production'] as const).map((p) => (
                   <button
@@ -743,7 +743,7 @@ export const ExpoQRPanel = memo(({ projectId, className }: ExpoQRPanelProps) => 
                       'flex-1 text-[10px] py-1 rounded font-medium transition-colors capitalize',
                       buildProfile === p
                         ? 'bg-purple-600 text-white'
-                        : 'bg-bolt-elements-background-depth-3 text-bolt-elements-textTertiary hover:text-bolt-elements-textSecondary',
+                        : 'bg-recoder-elements-background-depth-3 text-recoder-elements-textTertiary hover:text-recoder-elements-textSecondary',
                     )}
                   >
                     {p === 'development' ? 'Dev' : p}
@@ -759,9 +759,9 @@ export const ExpoQRPanel = memo(({ projectId, className }: ExpoQRPanelProps) => 
                   type="checkbox"
                   checked={autoSubmit}
                   onChange={(e) => setAutoSubmit(e.target.checked)}
-                  className="rounded border-bolt-elements-borderColor"
+                  className="rounded border-recoder-elements-borderColor"
                 />
-                <span className="text-bolt-elements-textSecondary text-[10px]">
+                <span className="text-recoder-elements-textSecondary text-[10px]">
                   Auto-submit to TestFlight after build
                 </span>
               </label>
@@ -774,7 +774,7 @@ export const ExpoQRPanel = memo(({ projectId, className }: ExpoQRPanelProps) => 
               className={classNames(
                 'w-full py-2 rounded text-xs font-medium transition-colors',
                 !expoToken || building
-                  ? 'bg-bolt-elements-button-secondary-background text-bolt-elements-textTertiary cursor-not-allowed'
+                  ? 'bg-recoder-elements-button-secondary-background text-recoder-elements-textTertiary cursor-not-allowed'
                   : 'bg-purple-600 text-white hover:bg-purple-500',
               )}
             >
@@ -790,7 +790,7 @@ export const ExpoQRPanel = memo(({ projectId, className }: ExpoQRPanelProps) => 
 
             {/* Build status */}
             {buildStatus && (
-              <div className="bg-bolt-elements-background-depth-3 rounded p-2.5 border border-bolt-elements-borderColor">
+              <div className="bg-recoder-elements-background-depth-3 rounded p-2.5 border border-recoder-elements-borderColor">
                 <div className="flex items-center gap-2 text-xs">
                   <span
                     className={classNames(
@@ -802,7 +802,7 @@ export const ExpoQRPanel = memo(({ projectId, className }: ExpoQRPanelProps) => 
                       buildStatus.status === 'in-progress' && 'bg-blue-400 animate-pulse',
                     )}
                   />
-                  <span className="text-bolt-elements-textSecondary capitalize">
+                  <span className="text-recoder-elements-textSecondary capitalize">
                     {buildStatus.status.replace('-', ' ')}
                   </span>
                 </div>
@@ -849,7 +849,7 @@ export const ExpoQRPanel = memo(({ projectId, className }: ExpoQRPanelProps) => 
                         buildStatus.submitStatus === 'pending' && 'bg-amber-400 animate-pulse',
                       )}
                     />
-                    <span className="text-bolt-elements-textSecondary text-[10px] capitalize">
+                    <span className="text-recoder-elements-textSecondary text-[10px] capitalize">
                       {buildStatus.submitStatus === 'submitted' ? 'Submitted to App Store' :
                        buildStatus.submitStatus === 'submitting' ? 'Submitting to App Store...' :
                        buildStatus.submitStatus === 'failed' ? 'Submit failed' :
@@ -881,7 +881,7 @@ export const ExpoQRPanel = memo(({ projectId, className }: ExpoQRPanelProps) => 
       <div className="w-full max-w-xs">
         <button
           onClick={() => setShowUpdateSection(!showUpdateSection)}
-          className="flex items-center gap-2 w-full text-left text-bolt-elements-textSecondary text-xs font-medium py-2 hover:text-bolt-elements-textPrimary transition-colors"
+          className="flex items-center gap-2 w-full text-left text-recoder-elements-textSecondary text-xs font-medium py-2 hover:text-recoder-elements-textPrimary transition-colors"
         >
           <span className={classNames('i-ph:caret-right text-xs transition-transform', showUpdateSection && 'rotate-90')} />
           <span className="i-ph:cloud-arrow-up text-sm" />
@@ -899,25 +899,25 @@ export const ExpoQRPanel = memo(({ projectId, className }: ExpoQRPanelProps) => 
 
             {/* Branch input */}
             <div className="flex flex-col gap-1">
-              <label className="text-bolt-elements-textTertiary text-[10px]">Branch</label>
+              <label className="text-recoder-elements-textTertiary text-[10px]">Branch</label>
               <input
                 type="text"
                 value={updateBranch}
                 onChange={(e) => setUpdateBranch(e.target.value)}
                 placeholder="preview"
-                className="bg-bolt-elements-background-depth-3 text-bolt-elements-textPrimary text-xs rounded px-3 py-1.5 border border-bolt-elements-borderColor outline-none focus:border-bolt-elements-borderColorActive w-full"
+                className="bg-recoder-elements-background-depth-3 text-recoder-elements-textPrimary text-xs rounded px-3 py-1.5 border border-recoder-elements-borderColor outline-none focus:border-recoder-elements-borderColorActive w-full"
               />
             </div>
 
             {/* Message input */}
             <div className="flex flex-col gap-1">
-              <label className="text-bolt-elements-textTertiary text-[10px]">Message</label>
+              <label className="text-recoder-elements-textTertiary text-[10px]">Message</label>
               <input
                 type="text"
                 value={updateMessage}
                 onChange={(e) => setUpdateMessage(e.target.value)}
                 placeholder="Describe this update..."
-                className="bg-bolt-elements-background-depth-3 text-bolt-elements-textPrimary text-xs rounded px-3 py-1.5 border border-bolt-elements-borderColor outline-none focus:border-bolt-elements-borderColorActive w-full"
+                className="bg-recoder-elements-background-depth-3 text-recoder-elements-textPrimary text-xs rounded px-3 py-1.5 border border-recoder-elements-borderColor outline-none focus:border-recoder-elements-borderColorActive w-full"
               />
             </div>
 
@@ -928,7 +928,7 @@ export const ExpoQRPanel = memo(({ projectId, className }: ExpoQRPanelProps) => 
               className={classNames(
                 'w-full py-2 rounded text-xs font-medium transition-colors',
                 !expoToken || pushing
-                  ? 'bg-bolt-elements-button-secondary-background text-bolt-elements-textTertiary cursor-not-allowed'
+                  ? 'bg-recoder-elements-button-secondary-background text-recoder-elements-textTertiary cursor-not-allowed'
                   : 'bg-purple-600 text-white hover:bg-purple-500',
               )}
             >
@@ -959,11 +959,11 @@ export const ExpoQRPanel = memo(({ projectId, className }: ExpoQRPanelProps) => 
             {expoToken && (
               <div className="flex flex-col gap-1.5 mt-1">
                 <div className="flex items-center justify-between">
-                  <span className="text-bolt-elements-textTertiary text-[10px] font-medium">Recent Updates</span>
+                  <span className="text-recoder-elements-textTertiary text-[10px] font-medium">Recent Updates</span>
                   <button
                     onClick={handleLoadHistory}
                     disabled={loadingHistory}
-                    className="text-bolt-elements-textTertiary text-[10px] hover:text-bolt-elements-textSecondary transition-colors"
+                    className="text-recoder-elements-textTertiary text-[10px] hover:text-recoder-elements-textSecondary transition-colors"
                   >
                     {loadingHistory ? (
                       <span className="i-svg-spinners:90-ring-with-bg text-[10px]" />
@@ -974,7 +974,7 @@ export const ExpoQRPanel = memo(({ projectId, className }: ExpoQRPanelProps) => 
                 </div>
 
                 {updateHistory && updateHistory.length === 0 && (
-                  <div className="text-bolt-elements-textTertiary text-[10px]">No updates found on this branch.</div>
+                  <div className="text-recoder-elements-textTertiary text-[10px]">No updates found on this branch.</div>
                 )}
 
                 {updateHistory && updateHistory.map((item, idx) => {
@@ -986,19 +986,19 @@ export const ExpoQRPanel = memo(({ projectId, className }: ExpoQRPanelProps) => 
                   return (
                     <div
                       key={id}
-                      className="bg-bolt-elements-background-depth-3 rounded p-2 border border-bolt-elements-borderColor"
+                      className="bg-recoder-elements-background-depth-3 rounded p-2 border border-recoder-elements-borderColor"
                     >
-                      <div className="text-bolt-elements-textSecondary text-[10px] font-medium truncate" title={msg}>
+                      <div className="text-recoder-elements-textSecondary text-[10px] font-medium truncate" title={msg}>
                         "{msg}"
                       </div>
                       <div className="flex items-center gap-2 mt-0.5">
                         {platforms.length > 0 && (
-                          <span className="text-bolt-elements-textTertiary text-[10px]">
+                          <span className="text-recoder-elements-textTertiary text-[10px]">
                             {platforms.join(', ')}
                           </span>
                         )}
                         {createdAt && (
-                          <span className="text-bolt-elements-textTertiary text-[10px]">
+                          <span className="text-recoder-elements-textTertiary text-[10px]">
                             {formatRelativeTime(createdAt)}
                           </span>
                         )}
@@ -1025,7 +1025,7 @@ export const ExpoQRPanel = memo(({ projectId, className }: ExpoQRPanelProps) => 
       <div className="w-full max-w-xs">
         <button
           onClick={() => setShowPublishWizard(!showPublishWizard)}
-          className="flex items-center gap-2 w-full text-left text-bolt-elements-textSecondary text-xs font-medium py-2 hover:text-bolt-elements-textPrimary transition-colors"
+          className="flex items-center gap-2 w-full text-left text-recoder-elements-textSecondary text-xs font-medium py-2 hover:text-recoder-elements-textPrimary transition-colors"
         >
           <span className={classNames('i-ph:caret-right text-xs transition-transform', showPublishWizard && 'rotate-90')} />
           <span className="i-ph:storefront text-sm" />
@@ -1044,7 +1044,7 @@ export const ExpoQRPanel = memo(({ projectId, className }: ExpoQRPanelProps) => 
                     'flex-1 text-[9px] py-1 rounded font-medium transition-colors text-center',
                     wizardStep === idx
                       ? 'bg-purple-600 text-white'
-                      : 'bg-bolt-elements-background-depth-3 text-bolt-elements-textTertiary hover:text-bolt-elements-textSecondary',
+                      : 'bg-recoder-elements-background-depth-3 text-recoder-elements-textTertiary hover:text-recoder-elements-textSecondary',
                   )}
                 >
                   {label}
@@ -1054,7 +1054,7 @@ export const ExpoQRPanel = memo(({ projectId, className }: ExpoQRPanelProps) => 
 
             {loadingConfig ? (
               <div className="flex items-center justify-center py-4">
-                <span className="i-svg-spinners:90-ring-with-bg text-sm text-bolt-elements-textTertiary" />
+                <span className="i-svg-spinners:90-ring-with-bg text-sm text-recoder-elements-textTertiary" />
               </div>
             ) : (
               <>
@@ -1062,24 +1062,24 @@ export const ExpoQRPanel = memo(({ projectId, className }: ExpoQRPanelProps) => 
                 {wizardStep === 0 && (
                   <div className="flex flex-col gap-2">
                     <div className="flex flex-col gap-1">
-                      <label className="text-bolt-elements-textTertiary text-[10px]">App Name</label>
+                      <label className="text-recoder-elements-textTertiary text-[10px]">App Name</label>
                       <input type="text" value={appConfig.name || ''} onChange={(e) => setAppConfig({ ...appConfig, name: e.target.value })}
-                        className="bg-bolt-elements-background-depth-3 text-bolt-elements-textPrimary text-xs rounded px-3 py-1.5 border border-bolt-elements-borderColor outline-none focus:border-bolt-elements-borderColorActive w-full" />
+                        className="bg-recoder-elements-background-depth-3 text-recoder-elements-textPrimary text-xs rounded px-3 py-1.5 border border-recoder-elements-borderColor outline-none focus:border-recoder-elements-borderColorActive w-full" />
                     </div>
                     <div className="flex flex-col gap-1">
-                      <label className="text-bolt-elements-textTertiary text-[10px]">Slug</label>
+                      <label className="text-recoder-elements-textTertiary text-[10px]">Slug</label>
                       <input type="text" value={appConfig.slug || ''} onChange={(e) => setAppConfig({ ...appConfig, slug: e.target.value })}
-                        className="bg-bolt-elements-background-depth-3 text-bolt-elements-textPrimary text-xs rounded px-3 py-1.5 border border-bolt-elements-borderColor outline-none focus:border-bolt-elements-borderColorActive w-full" />
+                        className="bg-recoder-elements-background-depth-3 text-recoder-elements-textPrimary text-xs rounded px-3 py-1.5 border border-recoder-elements-borderColor outline-none focus:border-recoder-elements-borderColorActive w-full" />
                     </div>
                     <div className="flex flex-col gap-1">
-                      <label className="text-bolt-elements-textTertiary text-[10px]">Version</label>
+                      <label className="text-recoder-elements-textTertiary text-[10px]">Version</label>
                       <input type="text" value={appConfig.version || ''} onChange={(e) => setAppConfig({ ...appConfig, version: e.target.value })}
-                        className="bg-bolt-elements-background-depth-3 text-bolt-elements-textPrimary text-xs rounded px-3 py-1.5 border border-bolt-elements-borderColor outline-none focus:border-bolt-elements-borderColorActive w-full" />
+                        className="bg-recoder-elements-background-depth-3 text-recoder-elements-textPrimary text-xs rounded px-3 py-1.5 border border-recoder-elements-borderColor outline-none focus:border-recoder-elements-borderColorActive w-full" />
                     </div>
                     <div className="flex flex-col gap-1">
-                      <label className="text-bolt-elements-textTertiary text-[10px]">Bundle Identifier (iOS)</label>
+                      <label className="text-recoder-elements-textTertiary text-[10px]">Bundle Identifier (iOS)</label>
                       <input type="text" value={appConfig.ios?.bundleIdentifier || ''} onChange={(e) => setAppConfig({ ...appConfig, ios: { ...appConfig.ios, bundleIdentifier: e.target.value } })}
-                        className="bg-bolt-elements-background-depth-3 text-bolt-elements-textPrimary text-xs rounded px-3 py-1.5 border border-bolt-elements-borderColor outline-none focus:border-bolt-elements-borderColorActive w-full"
+                        className="bg-recoder-elements-background-depth-3 text-recoder-elements-textPrimary text-xs rounded px-3 py-1.5 border border-recoder-elements-borderColor outline-none focus:border-recoder-elements-borderColorActive w-full"
                         placeholder="com.yourcompany.yourapp" />
                     </div>
                   </div>
@@ -1089,21 +1089,21 @@ export const ExpoQRPanel = memo(({ projectId, className }: ExpoQRPanelProps) => 
                 {wizardStep === 1 && (
                   <div className="flex flex-col gap-2">
                     <div className="flex flex-col gap-1">
-                      <label className="text-bolt-elements-textTertiary text-[10px]">Icon Path</label>
+                      <label className="text-recoder-elements-textTertiary text-[10px]">Icon Path</label>
                       <input type="text" value={appConfig.icon || ''} onChange={(e) => setAppConfig({ ...appConfig, icon: e.target.value })}
-                        className="bg-bolt-elements-background-depth-3 text-bolt-elements-textPrimary text-xs rounded px-3 py-1.5 border border-bolt-elements-borderColor outline-none focus:border-bolt-elements-borderColorActive w-full"
+                        className="bg-recoder-elements-background-depth-3 text-recoder-elements-textPrimary text-xs rounded px-3 py-1.5 border border-recoder-elements-borderColor outline-none focus:border-recoder-elements-borderColorActive w-full"
                         placeholder="./assets/images/icon.png" />
                     </div>
                     <div className="flex flex-col gap-1">
-                      <label className="text-bolt-elements-textTertiary text-[10px]">Splash Background Color</label>
+                      <label className="text-recoder-elements-textTertiary text-[10px]">Splash Background Color</label>
                       <input type="text" value={appConfig.splash?.backgroundColor || ''} onChange={(e) => setAppConfig({ ...appConfig, splash: { ...appConfig.splash, backgroundColor: e.target.value } })}
-                        className="bg-bolt-elements-background-depth-3 text-bolt-elements-textPrimary text-xs rounded px-3 py-1.5 border border-bolt-elements-borderColor outline-none focus:border-bolt-elements-borderColorActive w-full"
+                        className="bg-recoder-elements-background-depth-3 text-recoder-elements-textPrimary text-xs rounded px-3 py-1.5 border border-recoder-elements-borderColor outline-none focus:border-recoder-elements-borderColorActive w-full"
                         placeholder="#ffffff" />
                     </div>
                     <div className="flex flex-col gap-1">
-                      <label className="text-bolt-elements-textTertiary text-[10px]">Splash Image Path</label>
+                      <label className="text-recoder-elements-textTertiary text-[10px]">Splash Image Path</label>
                       <input type="text" value={appConfig.splash?.image || ''} onChange={(e) => setAppConfig({ ...appConfig, splash: { ...appConfig.splash, image: e.target.value } })}
-                        className="bg-bolt-elements-background-depth-3 text-bolt-elements-textPrimary text-xs rounded px-3 py-1.5 border border-bolt-elements-borderColor outline-none focus:border-bolt-elements-borderColorActive w-full"
+                        className="bg-recoder-elements-background-depth-3 text-recoder-elements-textPrimary text-xs rounded px-3 py-1.5 border border-recoder-elements-borderColor outline-none focus:border-recoder-elements-borderColorActive w-full"
                         placeholder="./assets/images/splash.png" />
                     </div>
                   </div>
@@ -1112,24 +1112,24 @@ export const ExpoQRPanel = memo(({ projectId, className }: ExpoQRPanelProps) => 
                 {/* Step 2: Credentials */}
                 {wizardStep === 2 && (
                   <div className="flex flex-col gap-2">
-                    <div className="text-bolt-elements-textTertiary text-[10px] font-medium">iOS (Apple)</div>
+                    <div className="text-recoder-elements-textTertiary text-[10px] font-medium">iOS (Apple)</div>
                     <div className="flex flex-col gap-1">
-                      <label className="text-bolt-elements-textTertiary text-[10px]">Apple Team ID</label>
+                      <label className="text-recoder-elements-textTertiary text-[10px]">Apple Team ID</label>
                       <input type="text" value={appConfig._appleTeamId || ''} onChange={(e) => setAppConfig({ ...appConfig, _appleTeamId: e.target.value })}
-                        className="bg-bolt-elements-background-depth-3 text-bolt-elements-textPrimary text-xs rounded px-3 py-1.5 border border-bolt-elements-borderColor outline-none focus:border-bolt-elements-borderColorActive w-full"
+                        className="bg-recoder-elements-background-depth-3 text-recoder-elements-textPrimary text-xs rounded px-3 py-1.5 border border-recoder-elements-borderColor outline-none focus:border-recoder-elements-borderColorActive w-full"
                         placeholder="XXXXXXXXXX" />
                     </div>
                     <div className="flex flex-col gap-1">
-                      <label className="text-bolt-elements-textTertiary text-[10px]">ASC App ID</label>
+                      <label className="text-recoder-elements-textTertiary text-[10px]">ASC App ID</label>
                       <input type="text" value={appConfig._ascAppId || ''} onChange={(e) => setAppConfig({ ...appConfig, _ascAppId: e.target.value })}
-                        className="bg-bolt-elements-background-depth-3 text-bolt-elements-textPrimary text-xs rounded px-3 py-1.5 border border-bolt-elements-borderColor outline-none focus:border-bolt-elements-borderColorActive w-full"
+                        className="bg-recoder-elements-background-depth-3 text-recoder-elements-textPrimary text-xs rounded px-3 py-1.5 border border-recoder-elements-borderColor outline-none focus:border-recoder-elements-borderColorActive w-full"
                         placeholder="123456789" />
                     </div>
-                    <div className="text-bolt-elements-textTertiary text-[10px] font-medium mt-2">Android (Google)</div>
+                    <div className="text-recoder-elements-textTertiary text-[10px] font-medium mt-2">Android (Google)</div>
                     <div className="flex flex-col gap-1">
-                      <label className="text-bolt-elements-textTertiary text-[10px]">Service Account Key Path</label>
+                      <label className="text-recoder-elements-textTertiary text-[10px]">Service Account Key Path</label>
                       <input type="text" value={appConfig._googleServiceAccountKey || ''} onChange={(e) => setAppConfig({ ...appConfig, _googleServiceAccountKey: e.target.value })}
-                        className="bg-bolt-elements-background-depth-3 text-bolt-elements-textPrimary text-xs rounded px-3 py-1.5 border border-bolt-elements-borderColor outline-none focus:border-bolt-elements-borderColorActive w-full"
+                        className="bg-recoder-elements-background-depth-3 text-recoder-elements-textPrimary text-xs rounded px-3 py-1.5 border border-recoder-elements-borderColor outline-none focus:border-recoder-elements-borderColorActive w-full"
                         placeholder="./google-services.json" />
                     </div>
                   </div>
@@ -1138,9 +1138,9 @@ export const ExpoQRPanel = memo(({ projectId, className }: ExpoQRPanelProps) => 
                 {/* Step 3: Review & Submit */}
                 {wizardStep === 3 && (
                   <div className="flex flex-col gap-2">
-                    <div className="bg-bolt-elements-background-depth-3 rounded p-2.5 border border-bolt-elements-borderColor text-[10px]">
-                      <div className="text-bolt-elements-textSecondary font-medium mb-1">Summary</div>
-                      <div className="text-bolt-elements-textTertiary space-y-0.5">
+                    <div className="bg-recoder-elements-background-depth-3 rounded p-2.5 border border-recoder-elements-borderColor text-[10px]">
+                      <div className="text-recoder-elements-textSecondary font-medium mb-1">Summary</div>
+                      <div className="text-recoder-elements-textTertiary space-y-0.5">
                         <div>Name: {appConfig.name || '(not set)'}</div>
                         <div>Slug: {appConfig.slug || '(not set)'}</div>
                         <div>Version: {appConfig.version || '(not set)'}</div>
@@ -1170,7 +1170,7 @@ export const ExpoQRPanel = memo(({ projectId, className }: ExpoQRPanelProps) => 
                       className={classNames(
                         'w-full py-2 rounded text-xs font-medium transition-colors',
                         savingConfig
-                          ? 'bg-bolt-elements-button-secondary-background text-bolt-elements-textTertiary cursor-not-allowed'
+                          ? 'bg-recoder-elements-button-secondary-background text-recoder-elements-textTertiary cursor-not-allowed'
                           : 'bg-green-600 text-white hover:bg-green-500',
                       )}
                     >
@@ -1204,7 +1204,7 @@ export const ExpoQRPanel = memo(({ projectId, className }: ExpoQRPanelProps) => 
                 {/* Navigation */}
                 <div className="flex gap-2 mt-1">
                   {wizardStep > 0 && (
-                    <button onClick={() => setWizardStep(wizardStep - 1)} className="flex-1 py-1.5 rounded text-[10px] font-medium bg-bolt-elements-background-depth-3 text-bolt-elements-textSecondary hover:text-bolt-elements-textPrimary transition-colors">
+                    <button onClick={() => setWizardStep(wizardStep - 1)} className="flex-1 py-1.5 rounded text-[10px] font-medium bg-recoder-elements-background-depth-3 text-recoder-elements-textSecondary hover:text-recoder-elements-textPrimary transition-colors">
                       Back
                     </button>
                   )}
@@ -1228,7 +1228,7 @@ export const ExpoQRPanel = memo(({ projectId, className }: ExpoQRPanelProps) => 
       </div>
 
       {/* Mode info */}
-      <div className="text-bolt-elements-textTertiary text-[10px] text-center">
+      <div className="text-recoder-elements-textTertiary text-[10px] text-center">
         Port {expoInfo.expoPort} &middot; {expoInfo.hostname}
       </div>
 
@@ -1251,7 +1251,7 @@ export const ExpoQRPanelConnected = memo(({ className }: { className?: string })
   if (!projectId) {
     return (
       <div className={classNames('flex items-center justify-center p-6', className)}>
-        <div className="text-bolt-elements-textTertiary text-sm">
+        <div className="text-recoder-elements-textTertiary text-sm">
           No project loaded.
         </div>
       </div>

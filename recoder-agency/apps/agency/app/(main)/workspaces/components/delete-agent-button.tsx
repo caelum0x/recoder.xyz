@@ -10,8 +10,8 @@ import {
 	DialogHeader,
 	DialogTitle,
 	DialogTrigger,
-} from "@giselle-internal/ui/dialog";
-import { useToasts } from "@giselle-internal/ui/toast";
+} from "@recoder-internal/ui/dialog";
+import { useToasts } from "@recoder-internal/ui/toast";
 import { LoaderCircleIcon, TrashIcon, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";

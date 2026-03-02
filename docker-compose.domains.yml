@@ -1,3 +1,11 @@
+# DEPRECATED — DO NOT USE FOR PRODUCTION DEPLOYMENTS
+#
+# The actual production compose file is: docker-compose.deploy.yml
+# This file is an earlier multi-domain template that references non-existent
+# services and uses Traefik instead of the nginx reverse proxy deployed on Hetzner.
+#
+# Kept for reference only.
+
 version: '3.8'
 
 networks:

@@ -43,7 +43,7 @@ vi.mock("../../../../_lib/rate-limit", () => {
 	};
 });
 
-import { AppId } from "@giselles-ai/protocol";
+import { AppId } from "@recoder/protocol";
 import { giselle } from "@/app/giselle";
 import { db } from "@/db";
 import { verifyApiSecretForTeam } from "@/lib/api-keys";

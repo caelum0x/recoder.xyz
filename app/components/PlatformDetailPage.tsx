@@ -1,8 +1,10 @@
 'use client';
 
 import Link from 'next/link';
-import { ArrowLeft, ExternalLink, Activity, Globe } from 'lucide-react';
+import { ArrowLeft, ExternalLink, Globe } from 'lucide-react';
 import { getServiceUrlClient, getService, type RecoderService } from '@/lib/config/platforms';
+import { SiteHeader } from '@/components/SiteHeader';
+import { SiteFooter } from '@/components/SiteFooter';
 
 interface PlatformDetailPageProps {
   serviceId: string;
@@ -19,20 +21,7 @@ export function PlatformDetailPage({ serviceId, longDescription, features, useCa
 
   return (
     <div className="min-h-screen bg-black text-white">
-      {/* Header */}
-      <header className="border-b border-white/10 bg-black/80 backdrop-blur-xl">
-        <div className="container mx-auto px-6 h-16 flex items-center justify-between">
-          <Link href="/" className="flex items-center space-x-2">
-            <img src="/logo.png" alt="Recoder" className="w-8 h-8 rounded-lg" />
-            <span className="text-xl font-bold">recoder</span>
-          </Link>
-          <nav className="flex items-center space-x-6">
-            <Link href="/agents" className="text-sm text-gray-400 hover:text-white transition-colors">Agents</Link>
-            <Link href="/plan" className="text-sm text-gray-400 hover:text-white transition-colors">Plan</Link>
-            <Link href="/platform" className="text-sm text-gray-400 hover:text-white transition-colors">Platform</Link>
-          </nav>
-        </div>
-      </header>
+      <SiteHeader />
 
       <div className="container mx-auto max-w-4xl px-6 py-12">
         {/* Back */}
@@ -65,13 +54,6 @@ export function PlatformDetailPage({ serviceId, longDescription, features, useCa
             <Globe className="w-5 h-5" />
             <span>Launch {service.label}</span>
           </a>
-          <Link
-            href="/status"
-            className="inline-flex items-center space-x-2 px-4 py-3 bg-[#222] hover:bg-[#333] rounded-lg text-sm transition-colors"
-          >
-            <Activity className="w-4 h-4" />
-            <span>View Status</span>
-          </Link>
         </div>
 
         {/* Description */}
@@ -113,12 +95,12 @@ export function PlatformDetailPage({ serviceId, longDescription, features, useCa
               <ExternalLink className="w-3.5 h-3.5" />
               <span>Open {service.label}</span>
             </a>
-            <Link href="/status" className="text-sm text-gray-500 hover:text-white transition-colors">System Status</Link>
             <Link href="/agents" className="text-sm text-gray-500 hover:text-white transition-colors">AI Agents</Link>
             <Link href="/plan" className="text-sm text-gray-500 hover:text-white transition-colors">Plans & Pricing</Link>
           </div>
         </div>
       </div>
+      <SiteFooter />
     </div>
   );
 }

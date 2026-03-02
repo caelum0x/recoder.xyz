@@ -11,6 +11,7 @@ RECODER_WEB_URL="${RECODER_WEB_URL:-https://web.recoder.xyz}"
 BACKEND_URL="${BACKEND_URL:-https://docker.recoder.xyz}"
 BASE_URL="${BASE_URL:-https://recoder.xyz}"
 WORKER_ENV_FILE="${A2A_WORKER_ENV_FILE:-$REPO_ROOT/.env.a2a.workers}"
+PRODUCTION_SCOPE="${PRODUCTION_SCOPE:-core}"
 
 normalize_bool() {
   case "$(echo "$1" | tr '[:upper:]' '[:lower:]')" in
@@ -56,11 +57,12 @@ read_env_file_value() {
 
 echo "== Phase 3 Preflight =="
 echo "mode=$PHASE3_MODE dry_run=$DRY_RUN skip_env_gates=$SKIP_ENV_GATES a2a_smoke=$ENABLE_A2A_INTEROP_SMOKE"
+echo "scope=$PRODUCTION_SCOPE"
 
 if [[ "$PHASE3_MODE" == "production" && "$SKIP_ENV_GATES" == "false" ]]; then
   echo ""
   echo "[1/3] Environment gate precheck"
-  if pnpm -C "$REPO_ROOT" run check:prod-env-gate; then
+  if env PRODUCTION_SCOPE="$PRODUCTION_SCOPE" pnpm -C "$REPO_ROOT" run check:prod-env-gate; then
     echo "env precheck: PASS"
   else
     echo "env precheck: FAIL" >&2

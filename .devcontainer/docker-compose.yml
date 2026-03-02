@@ -17,8 +17,10 @@ services:
       - "9090:9090"   # Prometheus
       - "3100:3100"   # Grafana
     environment:
+      # DEV ONLY — these credentials are for local development containers only
       - NODE_ENV=development
-      - DATABASE_URL=postgresql://postgres:password@postgres:5432/recoder_dev
+      - POSTGRES_PASSWORD=password
+      - DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD}@postgres:5432/recoder_dev
       - REDIS_URL=redis://redis:6379
       - NEXTAUTH_URL=http://localhost:3000
       - NEXTAUTH_SECRET=dev-secret-key
@@ -32,6 +34,7 @@ services:
     image: postgres:15-alpine
     restart: unless-stopped
     environment:
+      # DEV ONLY — local development database
       POSTGRES_DB: recoder_dev
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: password
@@ -77,6 +80,7 @@ services:
     ports:
       - "3100:3000"
     environment:
+      # DEV ONLY — local Grafana password
       - GF_SECURITY_ADMIN_PASSWORD=admin123
     volumes:
       - grafana-data:/var/lib/grafana

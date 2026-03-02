@@ -1,4 +1,4 @@
-import type { Input, NodeId } from "@giselles-ai/protocol";
+import type { Input, NodeId } from "@recoder/protocol";
 import { useMemo } from "react";
 import { useAppDesignerStore } from "../../../../app-designer";
 import type { InputWithConnectedOutput } from "./connected-outputs";

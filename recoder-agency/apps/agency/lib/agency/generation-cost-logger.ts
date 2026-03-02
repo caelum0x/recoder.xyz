@@ -1,5 +1,5 @@
-import { calculateDisplayCost } from "@giselles-ai/language-model";
-import type { CompletedGeneration } from "@giselles-ai/protocol";
+import { calculateDisplayCost } from "@recoder/language-model";
+import type { CompletedGeneration } from "@recoder/protocol";
 import { sql } from "drizzle-orm";
 import { db } from "@/db";
 

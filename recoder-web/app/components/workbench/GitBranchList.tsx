@@ -147,12 +147,12 @@ export const GitBranchList = memo(({
         disabled={isLoading}
         className={classNames(
           'flex items-center gap-2 px-3 py-1.5 text-sm rounded transition-colors w-full',
-          'bg-bolt-elements-background-depth-2 hover:bg-bolt-elements-background-depth-3',
-          'border border-bolt-elements-borderColor'
+          'bg-recoder-elements-background-depth-2 hover:bg-recoder-elements-background-depth-3',
+          'border border-recoder-elements-borderColor'
         )}
       >
         <span className="i-ph:git-branch text-purple-400" />
-        <span className="flex-1 text-left truncate text-bolt-elements-textPrimary">
+        <span className="flex-1 text-left truncate text-recoder-elements-textPrimary">
           {currentBranch || 'main'}
         </span>
         <span className={classNames(
@@ -163,10 +163,10 @@ export const GitBranchList = memo(({
 
       {/* Dropdown */}
       {isOpen && (
-        <div className="absolute top-full left-0 right-0 mt-1 z-50 bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor rounded-lg shadow-lg overflow-hidden">
+        <div className="absolute top-full left-0 right-0 mt-1 z-50 bg-recoder-elements-background-depth-2 border border-recoder-elements-borderColor rounded-lg shadow-lg overflow-hidden">
           {/* Create Branch Form */}
           {showCreateForm ? (
-            <div className="p-2 border-b border-bolt-elements-borderColor">
+            <div className="p-2 border-b border-recoder-elements-borderColor">
               <div className="flex gap-2">
                 <input
                   ref={inputRef}
@@ -174,7 +174,7 @@ export const GitBranchList = memo(({
                   value={newBranchName}
                   onChange={(e) => setNewBranchName(e.target.value)}
                   placeholder="New branch name"
-                  className="flex-1 px-2 py-1 text-xs bg-bolt-elements-background-depth-3 border border-bolt-elements-borderColor rounded focus:border-blue-500 focus:outline-none text-bolt-elements-textPrimary placeholder:text-bolt-elements-textTertiary"
+                  className="flex-1 px-2 py-1 text-xs bg-recoder-elements-background-depth-3 border border-recoder-elements-borderColor rounded focus:border-blue-500 focus:outline-none text-recoder-elements-textPrimary placeholder:text-recoder-elements-textTertiary"
                   onKeyDown={(e) => {
                     if (e.key === 'Enter') handleCreate();
                     if (e.key === 'Escape') setShowCreateForm(false);
@@ -189,17 +189,17 @@ export const GitBranchList = memo(({
                 </button>
                 <button
                   onClick={() => setShowCreateForm(false)}
-                  className="px-2 py-1 text-xs bg-bolt-elements-background-depth-3 hover:bg-bolt-elements-background-depth-3 rounded text-bolt-elements-textSecondary"
+                  className="px-2 py-1 text-xs bg-recoder-elements-background-depth-3 hover:bg-recoder-elements-background-depth-3 rounded text-recoder-elements-textSecondary"
                 >
                   Cancel
                 </button>
               </div>
             </div>
           ) : (
-            <div className="p-1 border-b border-bolt-elements-borderColor">
+            <div className="p-1 border-b border-recoder-elements-borderColor">
               <button
                 onClick={() => setShowCreateForm(true)}
-                className="w-full flex items-center gap-2 px-2 py-1.5 text-xs text-left rounded hover:bg-bolt-elements-background-depth-3 text-purple-400"
+                className="w-full flex items-center gap-2 px-2 py-1.5 text-xs text-left rounded hover:bg-recoder-elements-background-depth-3 text-purple-400"
               >
                 <span className="i-ph:plus" />
                 Create new branch
@@ -212,7 +212,7 @@ export const GitBranchList = memo(({
             {/* Local Branches */}
             {localBranches.length > 0 && (
               <>
-                <div className="px-2 py-1 text-xs text-bolt-elements-textTertiary bg-bolt-elements-background-depth-1">
+                <div className="px-2 py-1 text-xs text-recoder-elements-textTertiary bg-recoder-elements-background-depth-1">
                   Local branches
                 </div>
                 {localBranches.map((branch) => (
@@ -238,7 +238,7 @@ export const GitBranchList = memo(({
             {/* Remote Branches */}
             {remoteBranches.length > 0 && (
               <>
-                <div className="px-2 py-1 text-xs text-bolt-elements-textTertiary bg-bolt-elements-background-depth-1">
+                <div className="px-2 py-1 text-xs text-recoder-elements-textTertiary bg-recoder-elements-background-depth-1">
                   Remote branches
                 </div>
                 {remoteBranches.map((branch) => (
@@ -256,20 +256,20 @@ export const GitBranchList = memo(({
             )}
 
             {localBranches.length === 0 && remoteBranches.length === 0 && (
-              <div className="p-4 text-center text-bolt-elements-textTertiary text-xs">
+              <div className="p-4 text-center text-recoder-elements-textTertiary text-xs">
                 No branches found
               </div>
             )}
           </div>
 
           {/* Footer */}
-          <div className="p-1 border-t border-bolt-elements-borderColor">
+          <div className="p-1 border-t border-recoder-elements-borderColor">
             <button
               onClick={() => {
                 onRefresh();
                 setIsOpen(false);
               }}
-              className="w-full flex items-center gap-2 px-2 py-1.5 text-xs text-left rounded hover:bg-bolt-elements-background-depth-3 text-bolt-elements-textTertiary"
+              className="w-full flex items-center gap-2 px-2 py-1.5 text-xs text-left rounded hover:bg-recoder-elements-background-depth-3 text-recoder-elements-textTertiary"
             >
               <span className="i-ph:arrows-clockwise" />
               Refresh branches
@@ -308,11 +308,11 @@ const BranchItem = memo(({ branch, isCurrent, isRenaming, renameValue, renameInp
         isRenaming ? '' : 'cursor-pointer',
         isCurrent
           ? 'bg-purple-500/10 text-purple-400'
-          : 'hover:bg-bolt-elements-background-depth-3 text-bolt-elements-textPrimary'
+          : 'hover:bg-recoder-elements-background-depth-3 text-recoder-elements-textPrimary'
       )}
     >
       {isCurrent && <span className="i-ph:check text-purple-400" />}
-      {branch.remote && <span className="i-ph:cloud text-xs text-bolt-elements-textTertiary" />}
+      {branch.remote && <span className="i-ph:cloud text-xs text-recoder-elements-textTertiary" />}
       {isRenaming ? (
         <input
           ref={renameInputRef}
@@ -324,14 +324,14 @@ const BranchItem = memo(({ branch, isCurrent, isRenaming, renameValue, renameInp
             if (e.key === 'Escape') onRenameCancel?.();
           }}
           onBlur={() => onRenameCancel?.()}
-          className="flex-1 px-1 text-xs bg-bolt-elements-background-depth-3 border border-bolt-elements-borderColor rounded text-bolt-elements-textPrimary"
+          className="flex-1 px-1 text-xs bg-recoder-elements-background-depth-3 border border-recoder-elements-borderColor rounded text-recoder-elements-textPrimary"
           onClick={(e) => e.stopPropagation()}
         />
       ) : (
         <span className="flex-1 text-xs truncate">{branch.name}</span>
       )}
       {branch.lastCommitDate && !isRenaming && (
-        <span className="text-xs text-bolt-elements-textTertiary">
+        <span className="text-xs text-recoder-elements-textTertiary">
           {branch.lastCommitDate}
         </span>
       )}

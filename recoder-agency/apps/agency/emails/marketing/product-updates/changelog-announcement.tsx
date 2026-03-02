@@ -45,7 +45,7 @@ export const ChangelogAnnouncementEmail = ({
 	screenshotUrl,
 	viewChangelogUrl = "https://recoder.xyz/changelog",
 }: ChangelogAnnouncementEmailProps) => {
-	const headerBannerSrc = getEmailAssetUrl("giselletimes.png");
+	const headerBannerSrc = getEmailAssetUrl("recoder-banner.png");
 	return (
 		<Html>
 			<Head>

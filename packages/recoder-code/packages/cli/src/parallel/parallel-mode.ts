@@ -15,7 +15,7 @@ import {
   branchExists,
   createWorktree,
   removeWorktree,
-} from './git-utils';
+} from './git-utils.js';
 
 export const COMMIT_COMPLETION_TIMEOUT = 40000;
 

@@ -128,7 +128,7 @@ Please analyze the project structure, create all files, install dependencies, an
   return (
     <>
       <div className="flex items-center gap-2">
-        <div className="flex items-center rounded-md overflow-hidden border border-bolt-elements-borderColor">
+        <div className="flex items-center rounded-md overflow-hidden border border-recoder-elements-borderColor">
           <Button
             active={showChat}
             disabled={!canHideChat}
@@ -140,7 +140,7 @@ Please analyze the project structure, create all files, install dependencies, an
           >
             <div className="i-bolt:chat text-sm" />
           </Button>
-          <div className="w-[1px] bg-bolt-elements-borderColor" />
+          <div className="w-[1px] bg-recoder-elements-borderColor" />
           <Button
             active={showWorkbench}
             onClick={() => {
@@ -198,14 +198,14 @@ Please analyze the project structure, create all files, install dependencies, an
 
       {showFigmaImport && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="rounded-lg shadow-xl p-6 bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor max-w-md w-full mx-4">
+          <div className="rounded-lg shadow-xl p-6 bg-recoder-elements-background-depth-2 border border-recoder-elements-borderColor max-w-md w-full mx-4">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-semibold text-bolt-elements-textPrimary">
+              <h2 className="text-lg font-semibold text-recoder-elements-textPrimary">
                 Import from Figma
               </h2>
               <button
                 onClick={() => { setShowFigmaImport(false); setFigmaResult(null); setFigmaError(null); }}
-                className="text-bolt-elements-textSecondary hover:text-bolt-elements-textPrimary transition-colors"
+                className="text-recoder-elements-textSecondary hover:text-recoder-elements-textPrimary transition-colors"
               >
                 <div className="i-ph:x text-lg" />
               </button>
@@ -213,24 +213,24 @@ Please analyze the project structure, create all files, install dependencies, an
 
             <div className="flex flex-col gap-4">
               <div className="flex flex-col gap-1">
-                <label className="text-bolt-elements-textSecondary text-sm">Figma File URL</label>
+                <label className="text-recoder-elements-textSecondary text-sm">Figma File URL</label>
                 <input
                   type="text"
                   value={figmaUrl}
                   onChange={(e) => setFigmaUrl(e.target.value)}
                   placeholder="https://www.figma.com/file/..."
-                  className="bg-bolt-elements-background-depth-3 text-bolt-elements-textPrimary text-sm rounded-md px-3 py-2 border border-bolt-elements-borderColor outline-none focus:border-bolt-elements-borderColorActive w-full"
+                  className="bg-recoder-elements-background-depth-3 text-recoder-elements-textPrimary text-sm rounded-md px-3 py-2 border border-recoder-elements-borderColor outline-none focus:border-recoder-elements-borderColorActive w-full"
                 />
               </div>
 
               <div className="flex flex-col gap-1">
-                <label className="text-bolt-elements-textSecondary text-sm">Figma Personal Access Token</label>
+                <label className="text-recoder-elements-textSecondary text-sm">Figma Personal Access Token</label>
                 <input
                   type="password"
                   value={figmaToken}
                   onChange={(e) => { setFigmaToken(e.target.value); localStorage.setItem('figma_token', e.target.value); }}
                   placeholder="figd_..."
-                  className="bg-bolt-elements-background-depth-3 text-bolt-elements-textPrimary text-sm rounded-md px-3 py-2 border border-bolt-elements-borderColor outline-none focus:border-bolt-elements-borderColorActive w-full"
+                  className="bg-recoder-elements-background-depth-3 text-recoder-elements-textPrimary text-sm rounded-md px-3 py-2 border border-recoder-elements-borderColor outline-none focus:border-recoder-elements-borderColorActive w-full"
                 />
                 <a
                   href="https://www.figma.com/developers/api#access-tokens"
@@ -268,7 +268,7 @@ Please analyze the project structure, create all files, install dependencies, an
                 className={classNames(
                   'w-full py-2.5 rounded-md text-sm font-medium transition-colors',
                   !figmaUrl || !figmaToken || figmaImporting
-                    ? 'bg-bolt-elements-button-secondary-background text-bolt-elements-textTertiary cursor-not-allowed'
+                    ? 'bg-recoder-elements-button-secondary-background text-recoder-elements-textTertiary cursor-not-allowed'
                     : 'bg-purple-600 text-white hover:bg-purple-500',
                 )}
               >
@@ -414,11 +414,11 @@ function GoLiveButton() {
       {showPopover && isPublished && publishState.url && (
         <div
           className="absolute right-0 top-full mt-2 w-72 rounded-lg shadow-xl z-50 overflow-hidden"
-          style={{ backgroundColor: 'var(--bolt-elements-bg-depth-1)', border: '1px solid var(--bolt-elements-borderColor)' }}
+          style={{ backgroundColor: 'var(--recoder-elements-bg-depth-1)', border: '1px solid var(--recoder-elements-borderColor)' }}
         >
           <div className="p-3">
             <div className="flex items-center justify-between mb-2">
-              <div className="text-xs font-medium text-bolt-elements-textSecondary">Published URL</div>
+              <div className="text-xs font-medium text-recoder-elements-textSecondary">Published URL</div>
               {!editingSlug && (
                 <button
                   onClick={() => {
@@ -426,7 +426,7 @@ function GoLiveButton() {
                     setSlugError(null);
                     setEditingSlug(true);
                   }}
-                  className="text-[10px] text-bolt-elements-textSecondary hover:text-bolt-elements-textPrimary transition-colors"
+                  className="text-[10px] text-recoder-elements-textSecondary hover:text-recoder-elements-textPrimary transition-colors"
                   title="Edit URL slug"
                 >
                   <div className="i-ph:pencil-simple text-xs" />
@@ -436,8 +436,8 @@ function GoLiveButton() {
 
             {editingSlug ? (
               <div className="mb-3">
-                <div className="flex items-center gap-1 p-2 rounded-md" style={{ backgroundColor: 'var(--bolt-elements-bg-depth-2)' }}>
-                  <span className="text-[10px] text-bolt-elements-textSecondary whitespace-nowrap">web.recoder.xyz/</span>
+                <div className="flex items-center gap-1 p-2 rounded-md" style={{ backgroundColor: 'var(--recoder-elements-bg-depth-2)' }}>
+                  <span className="text-[10px] text-recoder-elements-textSecondary whitespace-nowrap">web.recoder.xyz/</span>
                   <input
                     type="text"
                     value={newSlug}
@@ -445,7 +445,7 @@ function GoLiveButton() {
                       setNewSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''));
                       setSlugError(null);
                     }}
-                    className="flex-1 bg-transparent text-xs text-bolt-elements-textPrimary outline-none border-none min-w-0"
+                    className="flex-1 bg-transparent text-xs text-recoder-elements-textPrimary outline-none border-none min-w-0"
                     placeholder="my-project"
                     autoFocus
                     onKeyDown={(e) => {
@@ -491,24 +491,24 @@ function GoLiveButton() {
                       setEditingSlug(false);
                       setSlugError(null);
                     }}
-                    className="flex-1 flex items-center justify-center gap-1 px-2 py-1.5 rounded-md text-[10px] font-medium text-bolt-elements-textSecondary hover:bg-bolt-elements-background-depth-2 transition-colors"
-                    style={{ border: '1px solid var(--bolt-elements-borderColor)' }}
+                    className="flex-1 flex items-center justify-center gap-1 px-2 py-1.5 rounded-md text-[10px] font-medium text-recoder-elements-textSecondary hover:bg-recoder-elements-background-depth-2 transition-colors"
+                    style={{ border: '1px solid var(--recoder-elements-borderColor)' }}
                   >
                     Cancel
                   </button>
                 </div>
               </div>
             ) : (
-              <div className="flex items-center gap-2 p-2 rounded-md" style={{ backgroundColor: 'var(--bolt-elements-bg-depth-2)' }}>
-                <span className="text-xs text-bolt-elements-textPrimary truncate flex-1">{publishState.url}</span>
+              <div className="flex items-center gap-2 p-2 rounded-md" style={{ backgroundColor: 'var(--recoder-elements-bg-depth-2)' }}>
+                <span className="text-xs text-recoder-elements-textPrimary truncate flex-1">{publishState.url}</span>
               </div>
             )}
 
             <div className="flex gap-2 mt-3">
               <button
                 onClick={handleCopyUrl}
-                className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-md text-xs font-medium transition-colors text-bolt-elements-textPrimary hover:bg-bolt-elements-background-depth-2"
-                style={{ border: '1px solid var(--bolt-elements-borderColor)' }}
+                className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-md text-xs font-medium transition-colors text-recoder-elements-textPrimary hover:bg-recoder-elements-background-depth-2"
+                style={{ border: '1px solid var(--recoder-elements-borderColor)' }}
               >
                 <div className={copied ? 'i-ph:check' : 'i-ph:copy'} />
                 {copied ? 'Copied' : 'Copy URL'}
@@ -517,8 +517,8 @@ function GoLiveButton() {
                 href={publishState.url}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-md text-xs font-medium transition-colors text-bolt-elements-textPrimary hover:bg-bolt-elements-background-depth-2"
-                style={{ border: '1px solid var(--bolt-elements-borderColor)' }}
+                className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-md text-xs font-medium transition-colors text-recoder-elements-textPrimary hover:bg-recoder-elements-background-depth-2"
+                style={{ border: '1px solid var(--recoder-elements-borderColor)' }}
               >
                 <div className="i-ph:arrow-square-out" />
                 Open
@@ -536,7 +536,7 @@ function GoLiveButton() {
               <button
                 onClick={handleUnpublish}
                 className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-md text-xs font-medium text-red-400 hover:bg-red-500/10 transition-colors"
-                style={{ border: '1px solid var(--bolt-elements-borderColor)' }}
+                style={{ border: '1px solid var(--recoder-elements-borderColor)' }}
               >
                 <div className="i-ph:trash" />
                 Unpublish
@@ -544,9 +544,9 @@ function GoLiveButton() {
             </div>
 
             {/* Custom Domains Section */}
-            <div className="mt-3 pt-3 border-t" style={{ borderColor: 'var(--bolt-elements-borderColor)' }}>
+            <div className="mt-3 pt-3 border-t" style={{ borderColor: 'var(--recoder-elements-borderColor)' }}>
               <div className="flex items-center justify-between mb-2">
-                <div className="text-xs font-medium text-bolt-elements-textSecondary">Custom Domains</div>
+                <div className="text-xs font-medium text-recoder-elements-textSecondary">Custom Domains</div>
                 <button
                   onClick={() => {
                     setShowDomainForm(!showDomainForm);
@@ -566,14 +566,14 @@ function GoLiveButton() {
                     <div
                       key={d.domain}
                       className="flex items-center gap-2 p-1.5 rounded-md text-xs"
-                      style={{ backgroundColor: 'var(--bolt-elements-bg-depth-2)' }}
+                      style={{ backgroundColor: 'var(--recoder-elements-bg-depth-2)' }}
                     >
                       <div className={`w-1.5 h-1.5 rounded-full ${
                         d.status === 'active' ? 'bg-green-400' :
                         d.status === 'error' ? 'bg-red-400' :
                         'bg-amber-400 animate-pulse'
                       }`} />
-                      <span className="flex-1 truncate text-bolt-elements-textPrimary">{d.domain}</span>
+                      <span className="flex-1 truncate text-recoder-elements-textPrimary">{d.domain}</span>
                       {d.status === 'active' && d.url && (
                         <a
                           href={d.url}
@@ -624,8 +624,8 @@ function GoLiveButton() {
                       setNewDomain(e.target.value.toLowerCase().trim());
                       setDomainError(null);
                     }}
-                    className="w-full px-2 py-1.5 rounded-md text-xs bg-transparent text-bolt-elements-textPrimary outline-none"
-                    style={{ backgroundColor: 'var(--bolt-elements-bg-depth-2)', border: '1px solid var(--bolt-elements-borderColor)' }}
+                    className="w-full px-2 py-1.5 rounded-md text-xs bg-transparent text-recoder-elements-textPrimary outline-none"
+                    style={{ backgroundColor: 'var(--recoder-elements-bg-depth-2)', border: '1px solid var(--recoder-elements-borderColor)' }}
                     placeholder="example.com"
                     autoFocus
                   />
@@ -633,12 +633,12 @@ function GoLiveButton() {
                     <div className="text-[10px] text-red-400">{domainError}</div>
                   )}
                   {domainInstructions && (
-                    <div className="p-2 rounded-md text-[10px] space-y-1" style={{ backgroundColor: 'var(--bolt-elements-bg-depth-2)' }}>
-                      <div className="font-medium text-bolt-elements-textPrimary">DNS Setup Required:</div>
-                      <div className="text-bolt-elements-textSecondary">
+                    <div className="p-2 rounded-md text-[10px] space-y-1" style={{ backgroundColor: 'var(--recoder-elements-bg-depth-2)' }}>
+                      <div className="font-medium text-recoder-elements-textPrimary">DNS Setup Required:</div>
+                      <div className="text-recoder-elements-textSecondary">
                         Add a <span className="text-blue-400">CNAME</span> record:
                       </div>
-                      <div className="font-mono text-bolt-elements-textPrimary">
+                      <div className="font-mono text-recoder-elements-textPrimary">
                         {domainInstructions.cname?.name} → {domainInstructions.cname?.value}
                       </div>
                     </div>
@@ -671,14 +671,14 @@ function GoLiveButton() {
               )}
 
               {!showDomainForm && (!publishState.customDomains || publishState.customDomains.length === 0) && (
-                <div className="text-[10px] text-bolt-elements-textTertiary">
+                <div className="text-[10px] text-recoder-elements-textTertiary">
                   No custom domains. Add one to use your own domain.
                 </div>
               )}
             </div>
           </div>
           {publishState.publishedAt && (
-            <div className="px-3 py-2 text-[10px] text-bolt-elements-textTertiary border-t" style={{ borderColor: 'var(--bolt-elements-borderColor)' }}>
+            <div className="px-3 py-2 text-[10px] text-recoder-elements-textTertiary border-t" style={{ borderColor: 'var(--recoder-elements-borderColor)' }}>
               Last published: {new Date(publishState.publishedAt).toLocaleString()}
             </div>
           )}
@@ -689,7 +689,7 @@ function GoLiveButton() {
       {publishState.status === 'error' && publishState.error && (
         <div
           className="absolute right-0 top-full mt-2 w-64 p-3 rounded-lg shadow-xl z-50 text-xs text-red-400"
-          style={{ backgroundColor: 'var(--bolt-elements-bg-depth-1)', border: '1px solid var(--bolt-elements-borderColor)' }}
+          style={{ backgroundColor: 'var(--recoder-elements-bg-depth-1)', border: '1px solid var(--recoder-elements-borderColor)' }}
         >
           {publishState.error}
         </div>
@@ -711,7 +711,7 @@ function Button({ active = false, disabled = false, children, onClick, title }: 
     if (disabled) {
       return {
         backgroundColor: 'transparent',
-        color: 'var(--bolt-elements-textTertiary)',
+        color: 'var(--recoder-elements-textTertiary)',
         cursor: 'not-allowed',
       };
     }
@@ -723,13 +723,13 @@ function Button({ active = false, disabled = false, children, onClick, title }: 
     }
     return {
       backgroundColor: 'transparent',
-      color: 'var(--bolt-elements-textSecondary)',
+      color: 'var(--recoder-elements-textSecondary)',
     };
   };
 
   return (
     <button
-      className="flex items-center p-1.5 transition-colors hover:bg-bolt-elements-background-depth-3 hover:text-bolt-elements-textPrimary"
+      className="flex items-center p-1.5 transition-colors hover:bg-recoder-elements-background-depth-3 hover:text-recoder-elements-textPrimary"
       style={getStyles()}
       onClick={onClick}
       title={title}

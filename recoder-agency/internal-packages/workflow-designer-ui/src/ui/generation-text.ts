@@ -1,4 +1,4 @@
-import type { Generation, Message } from "@giselles-ai/protocol";
+import type { Generation, Message } from "@recoder/protocol";
 
 export function getAssistantTextFromGeneration(generation: Generation): string {
 	if (!("messages" in generation) || generation.messages === undefined) {

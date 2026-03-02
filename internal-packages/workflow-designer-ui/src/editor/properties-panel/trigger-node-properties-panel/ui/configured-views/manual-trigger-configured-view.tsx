@@ -1,4 +1,4 @@
-import type { TriggerNode } from "@giselles-ai/protocol";
+import type { TriggerNode } from "@recoder/protocol";
 import { useTrigger } from "../../../../../hooks/use-trigger";
 import { SettingLabel } from "../../../ui/setting-label";
 

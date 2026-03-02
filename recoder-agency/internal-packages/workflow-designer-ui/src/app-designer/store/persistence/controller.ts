@@ -1,4 +1,4 @@
-import type { Workspace } from "@giselles-ai/protocol";
+import type { Workspace } from "@recoder/protocol";
 import type { StoreApi } from "zustand";
 import type { AppDesignerStoreState } from "../app-designer-store";
 

@@ -5,9 +5,14 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { sendVerificationEmail, sendVerificationEmailWithCode } from '@/lib/email';
+import { sendVerificationEmailWithCode } from '@/lib/email';
 import crypto from 'crypto';
 import { logger } from '@/lib/logger';
+import {
+  consumeVerification,
+  createVerificationRecord,
+  findValidVerificationByHashedValue,
+} from '@/lib/auth/verification-store';
 
 export async function GET(request: NextRequest) {
   try {
@@ -21,21 +26,9 @@ export async function GET(request: NextRequest) {
     // Hash the token to match stored hash
     const hashedToken = crypto.createHash('sha256').update(token).digest('hex');
 
-    // Find verification token
-    const verifications = await prisma.verifications.findMany({
-      where: {
-        value: hashedToken,
-        expires_at: {
-          gt: new Date()
-        }
-      }
-    });
+    const verification = await findValidVerificationByHashedValue(hashedToken);
 
-    const verification = verifications.find(v =>
-      v.identifier.startsWith('email-verify:')
-    );
-
-    if (!verification) {
+    if (!verification || !verification.identifier.startsWith('email-verify:')) {
       return NextResponse.redirect(new URL('/auth/signin?error=expired_token', request.url));
     }
 
@@ -71,10 +64,8 @@ export async function GET(request: NextRequest) {
       logger.info('User not in users table (CLI)', { route: 'api/auth/verify-email', email });
     }
 
-    // Delete the verification token
-    await prisma.verifications.delete({
-      where: { id: verification.id }
-    });
+    // Delete the verification token from both compatibility tables
+    await consumeVerification(verification.identifier, hashedToken);
 
     logger.info('Email verified', { route: 'api/auth/verify-email', email });
 
@@ -125,36 +116,14 @@ export async function POST(request: NextRequest) {
 
     // Generate new verification token (for link-based verification)
     const verificationToken = crypto.randomBytes(32).toString('hex');
-    const hashedToken = crypto.createHash('sha256').update(verificationToken).digest('hex');
     const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
 
     // Generate 6-digit code (for code-based verification)
     const verificationCode = crypto.randomInt(100000, 999999).toString();
-    const hashedCode = crypto.createHash('sha256').update(verificationCode).digest('hex');
 
-    // Store token in verifications table (link-based)
-    await prisma.verifications.create({
-      data: {
-        id: crypto.randomUUID(),
-        identifier: `email-verify:${email}`,
-        value: hashedToken,
-        expires_at: expiresAt,
-        created_at: new Date(),
-        updated_at: new Date(),
-      }
-    });
-
-    // Store code in verifications table (code-based)
-    await prisma.verifications.create({
-      data: {
-        id: crypto.randomUUID(),
-        identifier: `email-code:${email}`,
-        value: hashedCode,
-        expires_at: expiresAt,
-        created_at: new Date(),
-        updated_at: new Date(),
-      }
-    });
+    // Store token + code in both verification compatibility tables
+    await createVerificationRecord(`email-verify:${email}`, verificationToken, expiresAt);
+    await createVerificationRecord(`email-code:${email}`, verificationCode, expiresAt);
 
     // Build full verification URL with code
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://recoder.xyz';

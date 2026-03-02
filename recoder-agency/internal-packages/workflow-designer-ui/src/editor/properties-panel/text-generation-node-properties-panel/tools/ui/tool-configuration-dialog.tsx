@@ -1,4 +1,4 @@
-import { Button } from "@giselle-internal/ui/button";
+import { Button } from "@recoder-internal/ui/button";
 import {
 	Dialog,
 	DialogBody,
@@ -8,7 +8,7 @@ import {
 	type DialogSize,
 	DialogTitle,
 	DialogTrigger,
-} from "@giselle-internal/ui/dialog";
+} from "@recoder-internal/ui/dialog";
 import type { ComponentProps, PropsWithChildren } from "react";
 
 export interface ToolConfigurationDialogProps

@@ -1,4 +1,4 @@
-import type { Task } from "@giselles-ai/protocol";
+import type { Task } from "@recoder/protocol";
 import { create } from "zustand";
 
 interface TaskStore {

@@ -147,7 +147,8 @@ interface GoogleResponse {
 }
 
 const APP_API_URL = process.env.APP_API_URL || 'https://recoder.xyz';
-const INTERNAL_SERVICE_KEY = process.env.INTERNAL_SERVICE_KEY || '';
+// Validated at server startup — guaranteed non-empty in production (see server.ts:265)
+const INTERNAL_SERVICE_KEY = process.env.INTERNAL_SERVICE_KEY ?? '';
 const TASK_STREAM_RETRY_MS = 2000;
 const PROMPT_TASK_QUEUE_POLL_MS = Number.parseInt(process.env.PUBLIC_PROMPT_TASK_QUEUE_POLL_MS || '1000', 10);
 const PROMPT_TASK_QUEUE_LEASE_MS = Number.parseInt(process.env.PUBLIC_PROMPT_TASK_QUEUE_LEASE_MS || '180000', 10);

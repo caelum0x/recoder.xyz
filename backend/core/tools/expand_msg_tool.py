@@ -432,6 +432,7 @@ if __name__ == "__main__":
         expand_message_result = await expand_message_tool.expand_message(
             message_id="004ab969-ef9a-4656-8aba-e392345227cd"
         )
-        print("Expand message result:", expand_message_result)
+        from core.utils.logger import logger
+        logger.info(f"Expand message result: {expand_message_result}")
 
     asyncio.run(test_expand_message_tool())

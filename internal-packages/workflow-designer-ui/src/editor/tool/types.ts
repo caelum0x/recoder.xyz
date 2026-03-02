@@ -1,4 +1,4 @@
-import type { Node } from "@giselles-ai/protocol";
+import type { Node } from "@recoder/protocol";
 
 interface ToolBase {
 	category: string;

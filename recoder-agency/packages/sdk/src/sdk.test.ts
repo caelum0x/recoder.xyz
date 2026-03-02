@@ -139,9 +139,9 @@ describe("Giselle SDK (public Runs API)", () => {
 		expect(fetchMock).not.toHaveBeenCalled();
 	});
 
-	it("defaults baseUrl to https://studio.giselles.ai", async () => {
+	it("defaults baseUrl to https://studio.recoder.xyz", async () => {
 		const fetchMock = vi.fn((url: unknown) => {
-			expect(url).toBe("https://studio.giselles.ai/api/apps/app-xxxxx/run");
+			expect(url).toBe("https://studio.recoder.xyz/api/apps/app-xxxxx/run");
 			return Promise.resolve(
 				new Response(JSON.stringify({ taskId: "tsk_123" }), {
 					status: 200,

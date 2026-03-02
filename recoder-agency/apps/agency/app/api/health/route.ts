@@ -15,6 +15,7 @@ export async function GET() {
 		return NextResponse.json(
 			{
 				status: "ok",
+				service: "recoder-agency",
 				timestamp,
 				version,
 				checks: { database: "reachable" },
@@ -25,6 +26,7 @@ export async function GET() {
 		return NextResponse.json(
 			{
 				status: "error",
+				service: "recoder-agency",
 				timestamp,
 				version,
 				checks: { database: "unreachable" },

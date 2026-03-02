@@ -1,20 +1,20 @@
-import { useToasts } from "@giselle-internal/ui/toast";
+import { useToasts } from "@recoder-internal/ui/toast";
 import {
 	falLanguageModels,
 	googleImageLanguageModels,
 	hasTierAccess,
 	openaiImageModels,
 	Tier,
-} from "@giselles-ai/language-model";
+} from "@recoder/language-model";
 import type {
 	ImageGenerationLanguageModelData,
 	ImageGenerationNode,
-} from "@giselles-ai/protocol";
+} from "@recoder/protocol";
 import {
 	isSupportedConnection,
 	useFeatureFlag,
 	useUsageLimits,
-} from "@giselles-ai/react";
+} from "@recoder/react";
 import { useCallback, useMemo } from "react";
 import {
 	useAppDesignerStore,

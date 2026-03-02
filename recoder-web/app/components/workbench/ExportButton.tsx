@@ -105,18 +105,18 @@ export const ExportButton = memo(({ className, showLabel = true, withDropdown = 
           />
 
           {/* Menu */}
-          <div className="absolute right-0 top-full mt-1 z-50 bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor rounded-md shadow-lg overflow-hidden min-w-[180px]">
+          <div className="absolute right-0 top-full mt-1 z-50 bg-recoder-elements-background-depth-2 border border-recoder-elements-borderColor rounded-md shadow-lg overflow-hidden min-w-[180px]">
             <button
               onClick={handleQuickExport}
               disabled={!hasFiles}
-              className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-bolt-elements-textPrimary hover:bg-bolt-elements-background-depth-3 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-recoder-elements-textPrimary hover:bg-recoder-elements-background-depth-3 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <div className="i-ph:download-simple" />
               Quick Export
             </button>
             <button
               onClick={handleOpenModal}
-              className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-bolt-elements-textPrimary hover:bg-bolt-elements-background-depth-3 transition-colors border-t border-bolt-elements-borderColor"
+              className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-recoder-elements-textPrimary hover:bg-recoder-elements-background-depth-3 transition-colors border-t border-recoder-elements-borderColor"
             >
               <div className="i-ph:sliders" />
               Export with Options...
@@ -165,7 +165,7 @@ export const ExportButtonCompact = memo(({ className }: { className?: string }) 
         'p-2 rounded-md transition-colors',
         isExporting
           ? 'text-blue-500 cursor-wait'
-          : 'text-bolt-elements-textSecondary hover:text-bolt-elements-textPrimary hover:bg-bolt-elements-background-depth-3',
+          : 'text-recoder-elements-textSecondary hover:text-recoder-elements-textPrimary hover:bg-recoder-elements-background-depth-3',
         'disabled:opacity-50 disabled:cursor-not-allowed',
         className
       )}

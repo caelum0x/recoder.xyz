@@ -1,136 +1,64 @@
+import { and, eq } from "drizzle-orm";
 import { redirect } from "next/navigation";
 import { deleteOauthCredential, getAuthCallbackUrl } from "@/app/(auth)/lib";
-import { createClient, getUser } from "@/lib/supabase";
+import { db, oauthCredentials } from "@/db";
+import { getCurrentUser } from "@/lib/get-current-user";
 import type { OAuthProvider } from "./oauth-credentials";
 
-type OAuthOptionOverrides = {
-	queryParams?: Record<string, string>;
-	scopes?: string[];
-};
-
-const providerOptionOverrides: Record<OAuthProvider, OAuthOptionOverrides> = {
-	github: {},
-	google: {
-		queryParams: {
-			access_type: "offline",
-			prompt: "consent",
-		},
-		scopes: ["openid", "email", "profile"],
-	},
-};
-
-function buildProviderOptions(provider: OAuthProvider) {
-	const overrides = providerOptionOverrides[provider];
-	const { scopes, ...rest } = overrides;
-	return scopes ? { ...rest, scopes: scopes.join(" ") } : rest;
-}
-
 export async function connectIdentity(provider: OAuthProvider, next: string) {
-	const supabase = await createClient();
+	const user = await getCurrentUser();
 
-	// Manual linking allows the user to link multiple same-provider identities.
-	// But it introduces additional complexity, and not suitable for most use cases.
-	// We should check if the user already has the given provider identity here.
-	// https://supabase.com/docs/guides/auth/auth-identity-linking#manual-linking-beta
-	const supabaseUser = await getUser();
-	if (supabaseUser.identities) {
-		const existingIdentity = supabaseUser.identities.find(
-			(it) => it.provider === provider,
-		);
-		if (existingIdentity) {
-			throw new Error(`Already linked to ${provider}`);
-		}
+	const existing = await db
+		.select({ id: oauthCredentials.id })
+		.from(oauthCredentials)
+		.where(
+			and(
+				eq(oauthCredentials.userId, user.dbId),
+				eq(oauthCredentials.provider, provider),
+			),
+		)
+		.limit(1);
+
+	if (existing.length > 0) {
+		throw new Error(`Already linked to ${provider}`);
 	}
 
-	let data: { provider: string; url: string | null } | null = null;
-	let error: {
-		code?: string;
-		message?: string;
-		name?: string;
-		status?: number;
-	} | null = null;
-	const redirectTo = getAuthCallbackUrl({ next, provider });
-	try {
-		({ data, error } = await supabase.auth.linkIdentity({
-			provider,
-			options: {
-				redirectTo,
-				...buildProviderOptions(provider),
-			},
-		}));
-	} catch (e) {
-		throw new Error(
-			`Failed to initiate ${provider} linkIdentity: ${String(e)}`,
-		);
-	}
-
-	if (error != null) {
-		const { code, message, name, status } = error;
-		throw new Error(`${name} occurred: ${code} (${status}): ${message}`);
-	}
-
-	if (data?.url) redirect(data.url);
-	throw new Error(
-		`OAuth did not return redirect URL. Verify Redirect URLs include: ${redirectTo}`,
-	);
+	const callbackUrl = getAuthCallbackUrl({ next, provider });
+	const baseUrl = process.env.BETTER_AUTH_URL ?? "https://recoder.xyz";
+	const signInUrl = `${baseUrl}/api/auth/sign-in/social?provider=${provider}&callbackURL=${encodeURIComponent(callbackUrl)}`;
+	redirect(signInUrl);
 }
 
 export async function reconnectIdentity(provider: OAuthProvider, next: string) {
-	const supabase = await createClient();
-	let data: { provider: string; url: string | null } | null = null;
-	let error: {
-		code?: string;
-		message?: string;
-		name?: string;
-		status?: number;
-	} | null = null;
-	const redirectTo2 = getAuthCallbackUrl({ next, provider });
-	try {
-		({ data, error } = await supabase.auth.signInWithOAuth({
-			provider,
-			options: {
-				redirectTo: redirectTo2,
-				...buildProviderOptions(provider),
-			},
-		}));
-	} catch (e) {
-		throw new Error(
-			`Failed to initiate ${provider} signInWithOAuth: ${String(e)}`,
-		);
-	}
-
-	if (error != null) {
-		const { code, message, name, status } = error;
-		throw new Error(`${name} occurred: ${code} (${status}): ${message}`);
-	}
-	if (data?.url) redirect(data.url);
-	throw new Error(
-		`OAuth did not return redirect URL. Verify Redirect URLs include: ${redirectTo2}`,
-	);
+	const callbackUrl = getAuthCallbackUrl({ next, provider });
+	const baseUrl = process.env.BETTER_AUTH_URL ?? "https://recoder.xyz";
+	const signInUrl = `${baseUrl}/api/auth/sign-in/social?provider=${provider}&callbackURL=${encodeURIComponent(callbackUrl)}`;
+	redirect(signInUrl);
 }
 
 export async function disconnectIdentity(
 	provider: OAuthProvider,
 	next: string,
 ) {
-	const supabaseUser = await getUser();
-	const supabase = await createClient();
-	if (!supabaseUser.identities) {
-		throw new Error("No identities");
-	}
-	if (supabaseUser.identities.length === 1) {
+	const user = await getCurrentUser();
+
+	const accounts = await db
+		.select({ id: oauthCredentials.id })
+		.from(oauthCredentials)
+		.where(eq(oauthCredentials.userId, user.dbId));
+
+	if (accounts.length <= 1) {
 		throw new Error("Cannot unlink last identity");
 	}
-	const identity = supabaseUser.identities.find(
-		(it) => it.provider === provider,
-	);
-	if (!identity) {
-		throw new Error(`No ${provider} identity`);
-	}
-	const { error } = await supabase.auth.unlinkIdentity(identity);
-	if (error) {
-		throw new Error("Failed to unlink identity", { cause: error });
-	}
+
+	await db
+		.delete(oauthCredentials)
+		.where(
+			and(
+				eq(oauthCredentials.userId, user.dbId),
+				eq(oauthCredentials.provider, provider),
+			),
+		);
 
 	await deleteOauthCredential(provider);
 	redirect(next);

@@ -1,7 +1,10 @@
 // https://supabase.com/docs/guides/auth/redirect-urls
 import type { OAuthProvider } from "@/services/accounts";
 
-const DEFAULT_ORIGIN = "http://localhost:3000";
+const DEFAULT_ORIGIN =
+	process.env.NODE_ENV === "production"
+		? "https://studio.recoder.xyz"
+		: "http://localhost:3000";
 
 /** Returns the site origin from NEXT_PUBLIC_SITE_URL or falls back to localhost */
 export function getSiteOrigin(): string {

@@ -3,15 +3,15 @@ import type {
 	BuildAiGatewayHeadersArgs,
 	GiselleCallbacks as RecoderStudioCallbacks,
 	QueryContext,
-} from "@giselles-ai/giselle";
-import { traceEmbedding } from "@giselles-ai/langfuse";
-import { getRequestId, NextGiselle } from "@giselles-ai/nextjs/internal";
-import { type RunningGeneration, WorkspaceId } from "@giselles-ai/protocol";
-import type { EmbeddingMetrics } from "@giselles-ai/rag";
+} from "@recoder/giselle";
+import { traceEmbedding } from "@recoder/langfuse";
+import { getRequestId, NextGiselle } from "@recoder/nextjs/internal";
+import { type RunningGeneration, WorkspaceId } from "@recoder/protocol";
+import type { EmbeddingMetrics } from "@recoder/rag";
 import {
 	supabaseStorageDriver as experimental_supabaseStorageDriver,
 	supabaseVaultDriver,
-} from "@giselles-ai/supabase-driver";
+} from "@recoder/supabase-driver";
 import { tasks as jobs } from "@trigger.dev/sdk";
 import { eq } from "drizzle-orm";
 import { apps, db, tasks } from "@/db";
@@ -346,13 +346,19 @@ const callbacks: RecoderStudioCallbacks = {
 						team: currentTeam,
 					});
 					break;
+					}
+					default: {
+						const originType = String(
+							(
+								args.generation.context.origin as {
+									type?: unknown;
+								}
+							).type,
+						);
+						throw new Error(`Unhandled origin type: ${originType}`);
+					}
 				}
-				default: {
-					const _exhaustiveCheck: never = args.generation.context.origin;
-					throw new Error(`Unhandled origin type: ${_exhaustiveCheck}`);
-				}
-			}
-		} catch (error) {
+			} catch (error) {
 			console.error("Embedding callback failed:", error);
 		}
 	},
@@ -593,20 +599,25 @@ if (generateContentProcessor === "trigger.dev") {
 							...parsedMetadata,
 						});
 						break;
+						}
+						default: {
+							throw new Error(`Unhandled runtimeEnv: ${String(runtimeEnv)}`);
+						}
 					}
-					default: {
-						const _exhaustiveCheck: never = runtimeEnv;
-						throw new Error(`Unhandled runtimeEnv: ${_exhaustiveCheck}`);
-					}
+					break;
 				}
-				break;
+				default: {
+					const originType = String(
+						(
+							generation.context.origin as {
+								type?: unknown;
+							}
+						).type,
+					);
+					throw new Error(`Unhandled origin type: ${originType}`);
+				}
 			}
-			default: {
-				const _exhaustiveCheck: never = generation.context.origin;
-				throw new Error(`Unhandled origin type: ${_exhaustiveCheck}`);
-			}
-		}
-	});
+		});
 
 	giselle.setRunTaskProcess(async ({ task, generationOriginType }) => {
 		const requestId = getRequestId();
@@ -662,11 +673,12 @@ if (generateContentProcessor === "trigger.dev") {
 					},
 				});
 				break;
+				}
+				default: {
+					throw new Error(
+						`Unhandled origin type: ${String(generationOriginType)}`,
+					);
+				}
 			}
-			default: {
-				const _exhaustiveCheck: never = generationOriginType;
-				throw new Error(`Unhandled origin type: ${_exhaustiveCheck}`);
-			}
-		}
-	});
+		});
 }

@@ -1,17 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { verify } from 'jsonwebtoken';
 import { trackSessionUsage } from '@/lib/session-management';
-
-const JWT_SECRET = process.env.JWT_SECRET!;
+import { getUserIdFromBearerAuthHeader } from '@/lib/auth/jwt-auth';
 
 async function authenticateRequest(request: NextRequest): Promise<string> {
-  const authHeader = request.headers.get('authorization');
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    throw new Error('Missing authorization header');
-  }
-  const token = authHeader.substring(7);
-  const decoded = verify(token, JWT_SECRET) as any;
-  return decoded.userId;
+  return getUserIdFromBearerAuthHeader(request.headers.get('authorization'));
 }
 
 export async function POST(
@@ -45,9 +37,10 @@ export async function POST(
       premiumTokensUsed: result.premiumTokensUsed,
       remainingPremiumTokens: result.remainingPremiumTokens
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Unauthorized';
     return NextResponse.json(
-      { success: false, error: error.message || 'Unauthorized' },
+      { success: false, error: message },
       { status: 401 }
     );
   }

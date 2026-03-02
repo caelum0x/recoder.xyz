@@ -38,7 +38,7 @@ export function QuotaExceededBanner({
       >
         <div className="flex items-center gap-2 flex-1 min-w-0">
           <Zap className="h-4 w-4 text-orange-500 shrink-0" />
-          <p className="text-sm font-medium text-bolt-elements-textPrimary truncate">
+          <p className="text-sm font-medium text-recoder-elements-textPrimary truncate">
             AI quota exceeded
           </p>
         </div>
@@ -67,10 +67,10 @@ export function QuotaExceededBanner({
         </div>
 
         <div className="flex-1 space-y-1">
-          <h3 className="font-semibold text-base text-bolt-elements-textPrimary">
+          <h3 className="font-semibold text-base text-recoder-elements-textPrimary">
             You've reached your AI usage limit
           </h3>
-          <p className="text-sm text-bolt-elements-textSecondary">
+          <p className="text-sm text-recoder-elements-textSecondary">
             Upgrade your plan to continue using AI features or wait for the next billing cycle.
           </p>
 
@@ -86,7 +86,7 @@ export function QuotaExceededBanner({
               size="sm"
               variant="ghost"
               onClick={handleDismiss}
-              className="text-bolt-elements-textSecondary hover:text-bolt-elements-textPrimary"
+              className="text-recoder-elements-textSecondary hover:text-recoder-elements-textPrimary"
             >
               Dismiss
             </Button>
@@ -97,7 +97,7 @@ export function QuotaExceededBanner({
           onClick={handleDismiss}
           className="h-8 w-8 rounded-full flex items-center justify-center hover:bg-orange-500/10 transition-colors"
         >
-          <X className="h-4 w-4 text-bolt-elements-textSecondary" />
+          <X className="h-4 w-4 text-recoder-elements-textSecondary" />
           <span className="sr-only">Dismiss</span>
         </button>
       </div>

@@ -1,8 +1,8 @@
 import {
 	type LanguageModelToolName,
 	languageModelTools,
-} from "@giselles-ai/language-model-registry";
-import { type ContentGenerationNode, SecretId } from "@giselles-ai/protocol";
+} from "@recoder/language-model-registry";
+import { type ContentGenerationNode, SecretId } from "@recoder/protocol";
 import { useCallback, useMemo, useState, useTransition } from "react";
 import z from "zod/v4";
 import {

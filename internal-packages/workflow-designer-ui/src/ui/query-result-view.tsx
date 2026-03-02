@@ -1,8 +1,8 @@
-import type { Generation } from "@giselles-ai/protocol";
+import type { Generation } from "@recoder/protocol";
 import {
 	useVectorStore,
 	type VectorStoreContextValue,
-} from "@giselles-ai/react";
+} from "@recoder/react";
 import clsx from "clsx/lite";
 import {
 	ChevronDownIcon,
@@ -200,6 +200,18 @@ function PRContextDisplay({
 type DocumentVectorStoreSummary = NonNullable<
 	VectorStoreContextValue["documentStores"]
 >[number];
+type QueryResultOutput = Extract<
+	Generation["outputs"][number],
+	{ type: "query-result" }
+>;
+type QueryResultItem = QueryResultOutput["content"][number];
+type QueryResultRecord = {
+	chunkContent: string;
+	chunkIndex: number;
+	score: number;
+	metadata: Record<string, string>;
+	additional?: Record<string, unknown>;
+};
 
 type DataSourceDisplayInfo = {
 	line1: string;
@@ -363,7 +375,7 @@ function QueryResultCard({
 		);
 	}
 
-	const { records } = result;
+	const records = result.records as QueryResultRecord[] | undefined;
 	if (!records) {
 		return (
 			<div className="bg-surface/5 rounded-[8px] p-[16px] border border-border/10">
@@ -534,10 +546,12 @@ function getGenerationQueryResult(generation: Generation) {
 		throw new Error("Generation is not completed");
 	}
 	const queryResultOutputs = generation.outputs.filter(
-		(output) => output.type === "query-result",
+		(
+			output: Generation["outputs"][number],
+		): output is QueryResultOutput => output.type === "query-result",
 	);
 
-	const allResults = [];
+	const allResults: QueryResultItem[] = [];
 	for (const output of queryResultOutputs) {
 		if (output.type === "query-result") {
 			for (const item of output.content) {

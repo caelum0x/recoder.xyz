@@ -1,5 +1,5 @@
-import type { SelectOption } from "@giselle-internal/ui/select";
-import { useToasts } from "@giselle-internal/ui/toast";
+import type { SelectOption } from "@recoder-internal/ui/select";
+import { useToasts } from "@recoder-internal/ui/toast";
 import {
 	createFailedFileData,
 	createUploadedFileData,
@@ -8,8 +8,8 @@ import {
 	type GenerationContextInput,
 	type ParameterItem,
 	type UploadedFileData,
-} from "@giselles-ai/protocol";
-import { APICallError, useGiselle } from "@giselles-ai/react";
+} from "@recoder/protocol";
+import { APICallError, useGiselle } from "@recoder/react";
 import { PlayIcon } from "lucide-react";
 import {
 	createElement,

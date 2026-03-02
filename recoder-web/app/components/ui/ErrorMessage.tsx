@@ -41,7 +41,7 @@ export function ErrorMessage({ error, onAction, onDismiss, className }: ErrorMes
     <div
       className={classNames(
         'p-4 rounded-lg border transition-all duration-200',
-        'bg-bolt-elements-background-depth-2 border-bolt-elements-borderColor',
+        'bg-recoder-elements-background-depth-2 border-recoder-elements-borderColor',
         className
       )}
     >
@@ -52,7 +52,7 @@ export function ErrorMessage({ error, onAction, onDismiss, className }: ErrorMes
           <h3 className={classNames('font-semibold text-sm mb-1', severityColor)}>
             {solution.title}
           </h3>
-          <p className="text-sm text-bolt-elements-textSecondary">
+          <p className="text-sm text-recoder-elements-textSecondary">
             {solution.description}
           </p>
         </div>
@@ -60,7 +60,7 @@ export function ErrorMessage({ error, onAction, onDismiss, className }: ErrorMes
           {/* Expand/Collapse button */}
           <button
             onClick={() => setExpanded(!expanded)}
-            className="text-bolt-elements-textSecondary hover:text-bolt-elements-textPrimary transition-colors"
+            className="text-recoder-elements-textSecondary hover:text-recoder-elements-textPrimary transition-colors"
             title={expanded ? 'Show less' : 'Show more'}
           >
             <div className={classNames('i-ph:caret-down text-lg transition-transform', expanded ? 'rotate-180' : '')} />
@@ -69,7 +69,7 @@ export function ErrorMessage({ error, onAction, onDismiss, className }: ErrorMes
           {onDismiss && (
             <button
               onClick={onDismiss}
-              className="text-bolt-elements-textSecondary hover:text-bolt-elements-textPrimary transition-colors"
+              className="text-recoder-elements-textSecondary hover:text-recoder-elements-textPrimary transition-colors"
               title="Dismiss"
             >
               <div className="i-ph:x text-lg" />
@@ -89,7 +89,7 @@ export function ErrorMessage({ error, onAction, onDismiss, className }: ErrorMes
                 'flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-all',
                 'bg-[#2563eb] hover:bg-[#1d4ed8]',
                 'text-white',
-                'border border-bolt-elements-borderColor',
+                'border border-recoder-elements-borderColor',
                 index === 0 && solution.autoFixable ? 'ring-2 ring-accent-500/50' : ''
               )}
               title={index === 0 && solution.autoFixable ? 'Automatic fix available' : ''}
@@ -106,14 +106,14 @@ export function ErrorMessage({ error, onAction, onDismiss, className }: ErrorMes
 
       {/* Expanded details */}
       {expanded && (
-        <div className="mt-3 pt-3 border-t border-bolt-elements-borderColor animate-fade-in">
+        <div className="mt-3 pt-3 border-t border-recoder-elements-borderColor animate-fade-in">
           <details className="text-xs">
-            <summary className="cursor-pointer text-bolt-elements-textSecondary hover:text-bolt-elements-textPrimary mb-2 font-medium">
+            <summary className="cursor-pointer text-recoder-elements-textSecondary hover:text-recoder-elements-textPrimary mb-2 font-medium">
               View error details
             </summary>
-            <div className="mt-2 p-3 bg-bolt-elements-background-depth-2 rounded border border-bolt-elements-borderColor">
+            <div className="mt-2 p-3 bg-recoder-elements-background-depth-2 rounded border border-recoder-elements-borderColor">
               <div className="flex items-start justify-between gap-2 mb-2">
-                <code className="text-xs text-bolt-elements-textSecondary">Error Type: {error.type}</code>
+                <code className="text-xs text-recoder-elements-textSecondary">Error Type: {error.type}</code>
                 <CopyButton
                   text={error.rawError}
                   size="xs"
@@ -121,15 +121,15 @@ export function ErrorMessage({ error, onAction, onDismiss, className }: ErrorMes
                   tooltip="Copy error"
                 />
               </div>
-              <pre className="text-xs text-bolt-elements-textPrimary overflow-x-auto whitespace-pre-wrap break-words">
+              <pre className="text-xs text-recoder-elements-textPrimary overflow-x-auto whitespace-pre-wrap break-words">
                 {error.rawError}
               </pre>
             </div>
           </details>
 
           {/* Tips */}
-          <div className="mt-3 p-2 bg-bolt-elements-background-depth-1 rounded border border-bolt-elements-borderColor">
-            <p className="text-xs text-bolt-elements-textSecondary">
+          <div className="mt-3 p-2 bg-recoder-elements-background-depth-1 rounded border border-recoder-elements-borderColor">
+            <p className="text-xs text-recoder-elements-textSecondary">
               <strong>Tip:</strong> {getTipForErrorType(error.type)}
             </p>
           </div>

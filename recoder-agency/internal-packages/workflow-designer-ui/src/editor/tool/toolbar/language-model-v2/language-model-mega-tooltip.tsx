@@ -1,9 +1,9 @@
-import { GlassSurfaceLayers } from "@giselle-internal/ui/glass-surface";
+import { GlassSurfaceLayers } from "@recoder-internal/ui/glass-surface";
 import {
 	getEntry,
 	hasTierAccess,
 	type LanguageModelTier,
-} from "@giselles-ai/language-model-registry";
+} from "@recoder/language-model-registry";
 import { ProviderIcon } from "./provider-icon";
 import { useLanguageModelV2ToggleGroupStore } from "./store";
 

@@ -30,6 +30,12 @@
       "~/*": [
         "./*"
       ],
+      "@recoder/auth": [
+        "../packages/auth/src/index.ts"
+      ],
+      "@recoder/auth/*": [
+        "../packages/auth/src/*"
+      ],
       "@recoder/ecosystem-config": [
         "../packages/ecosystem-config/src/index.ts"
       ]

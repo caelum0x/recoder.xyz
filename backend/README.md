@@ -1,11 +1,11 @@
 
 **0. Launching with Docker (Manual)**
 
-You can manually launch all Suna services using Docker Compose from the project root:
+You can manually launch all Recoder services using Docker Compose from the project root:
 
 ```bash
 # From project root directory
-cd /path/to/suna
+cd /path/to/recoder
 ```
 
 **0.1 Start all services**

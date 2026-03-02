@@ -33,7 +33,7 @@
  * connections between the same two nodes are collected.
  */
 
-import type { Workspace } from "@giselles-ai/protocol";
+import type { Workspace } from "@recoder/protocol";
 
 export const multipleConnectionsSameNodesFixture: Workspace = {
 	id: "wrks-JJqRLOtbigJ6Tc58",

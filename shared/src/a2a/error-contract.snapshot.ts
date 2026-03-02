@@ -1,5 +1,20 @@
 import type { InvalidA2AEnvelopeErrorResponse } from './error-contract';
-import invalidEnvelopeErrorSnapshot from './snapshots/invalid-envelope-error.snapshot.json';
 
-export const INVALID_A2A_ENVELOPE_ERROR_SNAPSHOT: InvalidA2AEnvelopeErrorResponse =
-  invalidEnvelopeErrorSnapshot as InvalidA2AEnvelopeErrorResponse;
+export const INVALID_A2A_ENVELOPE_ERROR_SNAPSHOT: InvalidA2AEnvelopeErrorResponse = {
+  ok: false,
+  error: 'Invalid A2A envelope',
+  code: 'INVALID_A2A_ENVELOPE',
+  schemaVersion: 'a2a-envelope-error-v1',
+  issues: [
+    { path: 'envelope.threadId', message: 'must be a non-empty string' },
+    {
+      path: 'envelope.intent',
+      message: 'must be one of plan, execute, review, handoff, status, sync, tool_call, tool_result, error',
+    },
+    { path: 'envelope.from', message: 'must be an object' },
+    { path: 'envelope.to', message: 'must be an object' },
+    { path: 'envelope.from.id', message: 'must be a non-empty string' },
+    { path: 'envelope.to.id', message: 'must be a non-empty string' },
+    { path: 'envelope.payload', message: 'must be an array' },
+  ],
+};

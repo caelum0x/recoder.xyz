@@ -3,11 +3,13 @@
 import Link from 'next/link';
 import { ArrowRight, Bot, Workflow, Code2, Terminal, Sparkles, Globe } from 'lucide-react';
 import { getServiceUrlClient } from '@/lib/config/platforms';
+import { SiteHeader } from '@/components/SiteHeader';
+import { SiteFooter } from '@/components/SiteFooter';
 
 const agentPlatforms = [
   {
-    id: 'frontend',
-    name: 'Suna AI IDE',
+    id: 'agents',
+    name: 'Recoder Agents',
     description: 'Autonomous AI agents that write, debug, and deploy code. Full IDE with agent-powered workflows, file management, and browser automation.',
     icon: Bot,
     color: 'from-blue-500 to-cyan-500',
@@ -23,7 +25,7 @@ const agentPlatforms = [
   },
   {
     id: 'web',
-    name: 'Bolt AI IDE',
+    name: 'Recoder Web IDE',
     description: 'Browser-based AI development environment. Build full-stack applications with AI assistance, real-time preview, and instant deployment.',
     icon: Code2,
     color: 'from-orange-500 to-yellow-500',
@@ -50,20 +52,7 @@ const agentPlatforms = [
 export default function AgentsPage() {
   return (
     <div className="min-h-screen bg-black text-white">
-      {/* Header */}
-      <header className="border-b border-white/10 bg-black/80 backdrop-blur-xl">
-        <div className="container mx-auto px-6 h-16 flex items-center justify-between">
-          <Link href="/" className="flex items-center space-x-2">
-            <img src="/logo.png" alt="Recoder" className="w-8 h-8 rounded-lg" />
-            <span className="text-xl font-bold">recoder</span>
-          </Link>
-          <nav className="flex items-center space-x-6">
-            <Link href="/plan" className="text-sm text-gray-400 hover:text-white transition-colors">Plan</Link>
-            <Link href="/status" className="text-sm text-gray-400 hover:text-white transition-colors">Status</Link>
-            <Link href="/dashboard" className="text-sm text-gray-400 hover:text-white transition-colors">Dashboard</Link>
-          </nav>
-        </div>
-      </header>
+      <SiteHeader fixed={false} />
 
       {/* Hero */}
       <section className="py-20 px-6">
@@ -155,6 +144,7 @@ export default function AgentsPage() {
           </div>
         </div>
       </section>
+      <SiteFooter />
     </div>
   );
 }

@@ -32,7 +32,12 @@ async def update_agent(
     
     # Debug logging for icon fields
     if config.ENV_MODE == EnvMode.STAGING:
-        print(f"[DEBUG] update_agent: Received icon fields - icon_name={agent_data.icon_name}, icon_color={agent_data.icon_color}, icon_background={agent_data.icon_background}")
+        logger.debug(
+            f"[DEBUG] update_agent: Received icon fields - "
+            f"icon_name={agent_data.icon_name}, "
+            f"icon_color={agent_data.icon_color}, "
+            f"icon_background={agent_data.icon_background}"
+        )
     
     try:
         from core.agents import repo as agents_repo
@@ -237,7 +242,12 @@ async def update_agent(
         
         # Debug logging for update_data
         if config.ENV_MODE == EnvMode.STAGING:
-            print(f"[DEBUG] update_agent: Prepared update_data with icon fields - icon_name={update_data.get('icon_name')}, icon_color={update_data.get('icon_color')}, icon_background={update_data.get('icon_background')}")
+            logger.debug(
+                f"[DEBUG] update_agent: Prepared update_data with icon fields - "
+                f"icon_name={update_data.get('icon_name')}, "
+                f"icon_color={update_data.get('icon_color')}, "
+                f"icon_background={update_data.get('icon_background')}"
+            )
         
         current_system_prompt = agent_data.system_prompt if agent_data.system_prompt is not None else current_version_data.get('system_prompt', '')
         current_model = agent_data.model if agent_data.model is not None else current_version_data.get('model')
@@ -299,7 +309,7 @@ async def update_agent(
         
         if update_data:
             try:
-                print(f"[DEBUG] update_agent DB UPDATE: About to update agent {agent_id} with data: {update_data}")
+                logger.debug(f"[DEBUG] update_agent DB UPDATE: About to update agent {agent_id} with data: {update_data}")
                 
                 success = await agents_repo.update_agent(
                     agent_id,
@@ -308,14 +318,14 @@ async def update_agent(
                 )
                 
                 if config.ENV_MODE == EnvMode.STAGING:
-                    print(f"[DEBUG] update_agent DB UPDATE SUCCESS: {success is not None}")
+                    logger.debug(f"[DEBUG] update_agent DB UPDATE SUCCESS: {success is not None}")
                 
                 if not success:
                     raise HTTPException(status_code=500, detail="Failed to update agent - no rows affected")
             except Exception as e:
                 logger.error(f"Error updating agent {agent_id}: {str(e)}")
                 if config.ENV_MODE == EnvMode.STAGING:
-                    print(f"[DEBUG] update_agent DB UPDATE ERROR: {str(e)}")
+                    logger.debug(f"[DEBUG] update_agent DB UPDATE ERROR: {str(e)}")
                 raise HTTPException(status_code=500, detail=f"Failed to update agent: {str(e)}")
         
         updated_agent = await agents_repo.get_agent_by_id(agent_id, user_id)
@@ -574,7 +584,12 @@ async def create_agent(
             await agents_repo.clear_default_agent(user_id)
         
         if config.ENV_MODE == EnvMode.STAGING:
-            print(f"[DEBUG] create_agent: Creating with icon_name={agent_data.icon_name or 'bot'}, icon_color={agent_data.icon_color or '#000000'}, icon_background={agent_data.icon_background or '#F3F4F6'}")
+            logger.debug(
+                f"[DEBUG] create_agent: Creating with "
+                f"icon_name={agent_data.icon_name or 'bot'}, "
+                f"icon_color={agent_data.icon_color or '#000000'}, "
+                f"icon_background={agent_data.icon_background or '#F3F4F6'}"
+            )
         
         # Create agent using direct SQL
         agent = await agents_repo.create_agent(

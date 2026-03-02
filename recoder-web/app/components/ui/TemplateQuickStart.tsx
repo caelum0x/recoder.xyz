@@ -36,7 +36,7 @@ export function TemplateQuickStart({ onSelectTemplate }: TemplateQuickStartProps
   if (loading) {
     return (
       <div className="flex justify-center py-8">
-        <div className="text-bolt-elements-textSecondary">Loading templates...</div>
+        <div className="text-recoder-elements-textSecondary">Loading templates...</div>
       </div>
     );
   }
@@ -47,7 +47,7 @@ export function TemplateQuickStart({ onSelectTemplate }: TemplateQuickStartProps
 
   return (
     <div className="mb-8">
-      <h2 className="text-lg font-semibold text-bolt-elements-textPrimary mb-4">
+      <h2 className="text-lg font-semibold text-recoder-elements-textPrimary mb-4">
         Quick Start Templates
       </h2>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -86,16 +86,16 @@ function TemplateCard({ template, onSelect }: TemplateCardProps) {
   return (
     <button
       onClick={onSelect}
-      className="text-left bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor rounded-lg p-4 hover:border-bolt-elements-focus hover:bg-bolt-elements-background-depth-3 transition-all duration-200 group"
+      className="text-left bg-recoder-elements-background-depth-2 border border-recoder-elements-borderColor rounded-lg p-4 hover:border-recoder-elements-focus hover:bg-recoder-elements-background-depth-3 transition-all duration-200 group"
     >
       <div className="flex items-center gap-3 mb-3">
         <div className={`${getCategoryIcon(template.category)} text-xl`} />
-        <h3 className="font-medium text-bolt-elements-textPrimary group-hover:text-bolt-elements-focus transition-colors">
+        <h3 className="font-medium text-recoder-elements-textPrimary group-hover:text-recoder-elements-focus transition-colors">
           {template.name}
         </h3>
       </div>
 
-      <p className="text-sm text-bolt-elements-textSecondary mb-3 line-clamp-2">
+      <p className="text-sm text-recoder-elements-textSecondary mb-3 line-clamp-2">
         {template.description}
       </p>
 
@@ -103,7 +103,7 @@ function TemplateCard({ template, onSelect }: TemplateCardProps) {
         {template.tags.slice(0, 3).map((tag) => (
           <span
             key={tag}
-            className="text-xs bg-bolt-elements-background-depth-3 text-bolt-elements-textTertiary px-2 py-0.5 rounded"
+            className="text-xs bg-recoder-elements-background-depth-3 text-recoder-elements-textTertiary px-2 py-0.5 rounded"
           >
             {tag}
           </span>

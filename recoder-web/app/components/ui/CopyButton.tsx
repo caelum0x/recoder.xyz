@@ -71,24 +71,24 @@ const SIZE_CLASSES: Record<CopyButtonSize, { button: string; icon: string; text:
 
 const VARIANT_CLASSES: Record<CopyButtonVariant, { base: string; copied: string; hover: string }> = {
   default: {
-    base: 'bg-bolt-elements-background-depth-3 text-bolt-elements-textSecondary border border-bolt-elements-borderColor',
+    base: 'bg-recoder-elements-background-depth-3 text-recoder-elements-textSecondary border border-recoder-elements-borderColor',
     copied: 'bg-green-500/20 text-green-400 border-green-500/30',
-    hover: 'hover:bg-bolt-elements-background-depth-4 hover:text-bolt-elements-textPrimary',
+    hover: 'hover:bg-recoder-elements-background-depth-4 hover:text-recoder-elements-textPrimary',
   },
   ghost: {
-    base: 'bg-transparent text-bolt-elements-textSecondary',
+    base: 'bg-transparent text-recoder-elements-textSecondary',
     copied: 'bg-green-500/20 text-green-400',
-    hover: 'hover:bg-bolt-elements-background-depth-2 hover:text-bolt-elements-textPrimary',
+    hover: 'hover:bg-recoder-elements-background-depth-2 hover:text-recoder-elements-textPrimary',
   },
   outline: {
-    base: 'bg-transparent text-bolt-elements-textSecondary border border-bolt-elements-borderColor',
+    base: 'bg-transparent text-recoder-elements-textSecondary border border-recoder-elements-borderColor',
     copied: 'bg-green-500/20 text-green-400 border-green-500/30',
-    hover: 'hover:bg-bolt-elements-background-depth-2 hover:text-bolt-elements-textPrimary hover:border-bolt-elements-borderColorActive',
+    hover: 'hover:bg-recoder-elements-background-depth-2 hover:text-recoder-elements-textPrimary hover:border-recoder-elements-borderColorActive',
   },
   minimal: {
-    base: 'bg-transparent text-bolt-elements-textTertiary',
+    base: 'bg-transparent text-recoder-elements-textTertiary',
     copied: 'text-green-400',
-    hover: 'hover:text-bolt-elements-textSecondary',
+    hover: 'hover:text-recoder-elements-textSecondary',
   },
 };
 

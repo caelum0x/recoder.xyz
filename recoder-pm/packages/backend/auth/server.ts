@@ -2,9 +2,8 @@ import "server-only";
 import { authDatabase } from "@recoder/auth";
 import {
   type AuthCoreUser,
-  SESSION_COOKIE_NAMES,
-  verifySessionToken,
 } from "@recoder/auth/session";
+import { verifySession } from "@recoder/auth/verify";
 import { cookies } from "next/headers";
 import { database } from "../database";
 import type { AuthProfile, User } from "./index";
@@ -16,15 +15,9 @@ import { toUser } from "./index";
  */
 export const getSessionUser = async (): Promise<User | null> => {
   const cookieStore = await cookies();
-  const rawToken =
-    cookieStore.get(SESSION_COOKIE_NAMES[0])?.value ??
-    cookieStore.get(SESSION_COOKIE_NAMES[1])?.value;
-
-  if (!rawToken) {
-    return null;
-  }
-
-  const session = await verifySessionToken(rawToken);
+  const session = await verifySession(
+    (name) => cookieStore.get(name)?.value ?? null
+  );
 
   if (!session) {
     return null;

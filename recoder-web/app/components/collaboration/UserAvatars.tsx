@@ -55,7 +55,7 @@ export function UserAvatars({
   statuses = {},
   direction = 'left',
   bordered = true,
-  borderColor = 'border-bolt-elements-background-depth-1',
+  borderColor = 'border-recoder-elements-background-depth-1',
   className,
   onAvatarClick,
   onOverflowClick,
@@ -226,7 +226,7 @@ export function SingleAvatar({
   showStatus = false,
   status,
   bordered = false,
-  borderColor = 'border-bolt-elements-background-depth-1',
+  borderColor = 'border-recoder-elements-background-depth-1',
   className,
   onClick,
 }: SingleAvatarProps) {
@@ -272,13 +272,13 @@ function OverflowIndicator({
     <button
       className={classNames(
         'relative flex-shrink-0 rounded-full flex items-center justify-center',
-        'bg-bolt-elements-background-depth-3 text-bolt-elements-textSecondary',
+        'bg-recoder-elements-background-depth-3 text-recoder-elements-textSecondary',
         'font-medium',
         sizeConfig.avatar,
         sizeConfig.text,
         direction === 'right' ? '-mr-2' : sizeConfig.overlap,
         bordered && `border-2 ${borderColor}`,
-        onClick && 'cursor-pointer hover:bg-bolt-elements-background-depth-4 transition-colors'
+        onClick && 'cursor-pointer hover:bg-recoder-elements-background-depth-4 transition-colors'
       )}
       onClick={onClick}
       title={`${count} more collaborator${count > 1 ? 's' : ''}`}
@@ -317,7 +317,7 @@ export function AvatarWithLabel({
     <div
       className={classNames(
         'flex items-center gap-2',
-        onClick && 'cursor-pointer hover:bg-bolt-elements-background-depth-2 rounded-lg p-1.5',
+        onClick && 'cursor-pointer hover:bg-recoder-elements-background-depth-2 rounded-lg p-1.5',
         className
       )}
       onClick={onClick}
@@ -329,11 +329,11 @@ export function AvatarWithLabel({
         status={status}
       />
       <div className="flex-1 min-w-0">
-        <div className="text-sm font-medium text-bolt-elements-textPrimary truncate">
+        <div className="text-sm font-medium text-recoder-elements-textPrimary truncate">
           {user.name}
         </div>
         {subtitle && (
-          <div className="text-xs text-bolt-elements-textSecondary truncate">
+          <div className="text-xs text-recoder-elements-textSecondary truncate">
             {subtitle}
           </div>
         )}

@@ -1,4 +1,4 @@
-import { TaskId } from "@giselles-ai/giselle";
+import { TaskId } from "@recoder/giselle";
 import { logger, schemaTask as schemaJob } from "@trigger.dev/sdk";
 import z from "zod/v4";
 import { giselle } from "@/app/giselle";

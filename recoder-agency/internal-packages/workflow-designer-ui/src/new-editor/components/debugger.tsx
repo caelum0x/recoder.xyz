@@ -1,6 +1,6 @@
 "use client";
 
-import { Input } from "@giselle-internal/ui/input";
+import { Input } from "@recoder-internal/ui/input";
 import {
 	Table,
 	TableBody,
@@ -8,8 +8,8 @@ import {
 	TableHead,
 	TableHeader,
 	TableRow,
-} from "@giselle-internal/ui/table";
-import { isTextGenerationNode, type NodeId } from "@giselles-ai/protocol";
+} from "@recoder-internal/ui/table";
+import { isTextGenerationNode, type NodeId } from "@recoder/protocol";
 import { memo, useCallback } from "react";
 import { shallow } from "zustand/shallow";
 import { selectNode, selectNodeIds } from "../lib/selectors";

@@ -172,11 +172,11 @@ export function NodeCanvas() {
       >
         <Background />
         <Controls
-          className="!bg-bolt-elements-background-depth-2 !border-bolt-elements-borderColor !rounded-lg !shadow-lg"
+          className="!bg-recoder-elements-background-depth-2 !border-recoder-elements-borderColor !rounded-lg !shadow-lg"
           showInteractive={false}
         />
         <MiniMap
-          className="!bg-bolt-elements-background-depth-1 !border-bolt-elements-borderColor !rounded-lg"
+          className="!bg-recoder-elements-background-depth-1 !border-recoder-elements-borderColor !rounded-lg"
           nodeColor={(node) => {
             return '#6366f1';
           }}

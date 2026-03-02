@@ -1,7 +1,91 @@
-const { app, BrowserWindow, clipboard, nativeImage, Menu, Tray, ipcMain, dialog, shell, globalShortcut } = require('electron');
+const { app, BrowserWindow, clipboard, nativeImage, Menu, Tray, ipcMain, dialog, shell, globalShortcut, safeStorage } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
+
+// ============================================================================
+// IPC Rate Limiter — token-bucket per channel
+// ============================================================================
+const ipcRateBuckets = new Map();
+
+const IPC_RATE_LIMITS = {
+  'fs:readFile': { rate: 30, interval: 1000 },
+  'fs:writeFile': { rate: 30, interval: 1000 },
+  'fs:readDir': { rate: 30, interval: 1000 },
+  'fs:exists': { rate: 30, interval: 1000 },
+  'fs:stat': { rate: 30, interval: 1000 },
+  'dialog:openFile': { rate: 5, interval: 1000 },
+  'dialog:openFolder': { rate: 5, interval: 1000 },
+  'dialog:saveFile': { rate: 5, interval: 1000 },
+  'terminal:spawn': { rate: 5, interval: 1000 },
+  'terminal:write': { rate: 60, interval: 1000 },
+  'terminal:resize': { rate: 10, interval: 1000 },
+  'terminal:kill': { rate: 10, interval: 1000 },
+  'agent:delegateTask': { rate: 5, interval: 1000 },
+  'a2a:createTask': { rate: 5, interval: 1000 },
+};
+
+function checkIpcRateLimit(channel) {
+  const limit = IPC_RATE_LIMITS[channel];
+  if (!limit) return true; // no limit configured — allow
+  const now = Date.now();
+  let bucket = ipcRateBuckets.get(channel);
+  if (!bucket) {
+    bucket = { tokens: limit.rate, lastRefill: now };
+    ipcRateBuckets.set(channel, bucket);
+  }
+  const elapsed = now - bucket.lastRefill;
+  if (elapsed >= limit.interval) {
+    bucket.tokens = limit.rate;
+    bucket.lastRefill = now;
+  }
+  if (bucket.tokens > 0) {
+    bucket.tokens--;
+    return true;
+  }
+  return false;
+}
+
+// Wrap ipcMain.handle with rate limiting
+const originalIpcHandle = ipcMain.handle.bind(ipcMain);
+ipcMain.handle = function rateLimitedHandle(channel, handler) {
+  return originalIpcHandle(channel, async (event, ...args) => {
+    if (!checkIpcRateLimit(channel)) {
+      const msg = `IPC rate limit exceeded for channel: ${channel}`;
+      console.warn(`[rate-limit] ${msg}`);
+      appendDesktopLog('rate-limit.log', `${new Date().toISOString()} ${msg}`);
+      throw new Error(msg);
+    }
+    return handler(event, ...args);
+  });
+};
+
+// ============================================================================
+// Path Traversal Protection — restrict IPC file ops to safe directories
+// ============================================================================
+const ALLOWED_FS_BASES = [
+  os.homedir(),                                      // user home
+  os.tmpdir(),                                       // temp dir
+  app.getPath('userData'),                            // app data
+];
+
+/**
+ * Validate that a file path resolves to within an allowed base directory.
+ * Prevents path traversal attacks from the renderer process.
+ */
+function validateFsPath(filePath) {
+  if (typeof filePath !== 'string' || !filePath.trim()) {
+    throw new Error('Invalid file path');
+  }
+  const resolved = path.resolve(filePath);
+  const isAllowed = ALLOWED_FS_BASES.some(base => resolved.startsWith(base + path.sep) || resolved === base);
+  if (!isAllowed) {
+    const msg = `Path access denied: ${resolved} is outside allowed directories`;
+    console.warn(`[fs-guard] ${msg}`);
+    throw new Error('Access denied: path is outside allowed directories');
+  }
+  return resolved;
+}
 
 // Custom protocol scheme for deep linking
 const PROTOCOL_SCHEME = 'recoder';
@@ -42,6 +126,19 @@ const desktopStrictWorkflowContract = ['1', 'true', 'yes', 'on'].includes(
 );
 const WORKFLOW_CONTRACT_VERSION = 'internal-agent-workflow-v1';
 const PUBLIC_WORKFLOW_CONTRACT_VERSION = 'public-agent-workflow-v1';
+const RECODER_A2A_PROTOCOL_VERSION = '0.3.0';
+const RECODER_A2A_ENVELOPE_VERSION = '2026-02-14';
+const desktopA2AAdminToken =
+  process.env.RECODER_A2A_ADMIN_TOKEN
+  || process.env.OPENCLAW_A2A_ADMIN_TOKEN
+  || '';
+const desktopA2ABridgeId =
+  process.env.RECODER_A2A_BRIDGE_ID
+  || process.env.RECODER_A2A_BRIDGE_DEFAULT_ID
+  || 'desktop-default';
+const desktopA2AAgentId =
+  process.env.RECODER_DESKTOP_AGENT_ID
+  || 'recoder-desktop';
 
 const desktopSubagentWorkflowLanes = [
   { laneId: 'A1', title: 'Core app and web runtime', paths: ['/Users/arhansubasi/recoder.xyz/app', '/Users/arhansubasi/recoder.xyz/recoder-web'] },
@@ -72,14 +169,27 @@ async function notifyCrashWebhook(payload) {
   if (!crashWebhookUrl) {
     return;
   }
-  try {
-    await fetch(crashWebhookUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    });
-  } catch (error) {
-    appendDesktopLog('errors.log', `[webhook-error] ${new Date().toISOString()} ${String(error)}`);
+  const maxRetries = 3;
+  const backoffMs = [1000, 3000, 9000]; // exponential: 1s, 3s, 9s
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      const resp = await fetch(crashWebhookUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      if (resp.ok) return; // success
+      // Server error — retry if attempts remain
+      if (attempt < maxRetries) {
+        await new Promise((r) => setTimeout(r, backoffMs[attempt]));
+      }
+    } catch (error) {
+      if (attempt === maxRetries) {
+        appendDesktopLog('errors.log', `[webhook-error] ${new Date().toISOString()} ${String(error)} (failed after ${maxRetries} retries)`);
+      } else {
+        await new Promise((r) => setTimeout(r, backoffMs[attempt]));
+      }
+    }
   }
 }
 
@@ -150,13 +260,27 @@ async function getCookieHeaderForUrl(targetUrl) {
 }
 
 function resolveDesktopRecoderApiKeyFromCache() {
+  const storePath = path.join(os.homedir(), '.openclaw', 'credentials', 'recoder-api-keys.json');
   try {
-    const storePath = path.join(os.homedir(), '.openclaw', 'credentials', 'recoder-api-keys.json');
     if (!fs.existsSync(storePath)) {
       return '';
     }
     const raw = fs.readFileSync(storePath, 'utf-8');
-    const parsed = JSON.parse(raw);
+
+    // Try to decrypt if safeStorage is available and data looks encrypted (base64 envelope)
+    let parsed;
+    try {
+      const envelope = JSON.parse(raw);
+      if (envelope && envelope._encrypted && typeof envelope._data === 'string' && safeStorage.isEncryptionAvailable()) {
+        const decrypted = safeStorage.decryptString(Buffer.from(envelope._data, 'base64'));
+        parsed = JSON.parse(decrypted);
+      } else {
+        parsed = envelope;
+      }
+    } catch {
+      parsed = JSON.parse(raw);
+    }
+
     const keys = parsed && parsed.keys && typeof parsed.keys === 'object'
       ? Object.values(parsed.keys)
       : [];
@@ -169,6 +293,31 @@ function resolveDesktopRecoderApiKeyFromCache() {
     // ignore cache read errors; caller handles fallback
   }
   return '';
+}
+
+/**
+ * Write API keys to disk, encrypting with safeStorage if available.
+ * Falls back to plaintext if OS keychain is unavailable (e.g. headless CI).
+ */
+function writeDesktopRecoderApiKeyCache(keysObj) {
+  const storePath = path.join(os.homedir(), '.openclaw', 'credentials', 'recoder-api-keys.json');
+  const dir = path.dirname(storePath);
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
+  }
+  const jsonStr = JSON.stringify(keysObj, null, 2);
+  try {
+    if (safeStorage.isEncryptionAvailable()) {
+      const encrypted = safeStorage.encryptString(jsonStr);
+      const envelope = JSON.stringify({ _encrypted: true, _data: encrypted.toString('base64') });
+      fs.writeFileSync(storePath, envelope, 'utf-8');
+      return;
+    }
+  } catch (err) {
+    console.warn('[safeStorage] Encryption unavailable, falling back to plaintext:', err.message);
+  }
+  // Fallback: plaintext
+  fs.writeFileSync(storePath, jsonStr, 'utf-8');
 }
 
 function resolveDesktopRecoderApiKeyDetailed() {
@@ -354,6 +503,353 @@ async function fetchDesktopWorkflowFromBackend(payload = {}) {
     warnings,
   };
   throw finalError;
+}
+
+function buildA2AAdminHeaders() {
+  const headers = { 'Content-Type': 'application/json' };
+  if (desktopA2AAdminToken.trim()) {
+    headers.Authorization = `Bearer ${desktopA2AAdminToken.trim()}`;
+  }
+  return headers;
+}
+
+function toIsoNow() {
+  return new Date().toISOString();
+}
+
+function generateLocalMessageId() {
+  return `desktop-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function buildDefaultDelegatedEnvelope(payload = {}) {
+  const threadId = String(payload.threadId || payload.sessionId || 'desktop-thread').trim();
+  const traceId = String(payload.traceId || `trace-${Date.now()}`).trim();
+  const taskText = typeof payload.task === 'string' && payload.task.trim().length > 0
+    ? payload.task.trim()
+    : 'Run delegated task';
+  const intent = typeof payload.intent === 'string' && payload.intent.trim().length > 0
+    ? payload.intent.trim()
+    : 'execute';
+
+  return {
+    envelopeVersion: RECODER_A2A_ENVELOPE_VERSION,
+    protocolVersion: RECODER_A2A_PROTOCOL_VERSION,
+    messageId: generateLocalMessageId(),
+    threadId,
+    createdAt: toIsoNow(),
+    from: {
+      id: desktopA2AAgentId,
+      name: 'Recoder Desktop',
+      platform: 'recoder_desktop',
+    },
+    to: {
+      id: String(payload.agentId || 'recoder-web').trim(),
+      name: String(payload.targetName || payload.agentId || 'Recoder Agent').trim(),
+      platform: String(payload.targetPlatform || 'recoder_web').trim(),
+    },
+    intent,
+    payload: [{ kind: 'text', text: taskText }],
+    metadata: {
+      sourceSurface: 'desktop',
+      ...(payload.metadata && typeof payload.metadata === 'object' ? payload.metadata : {}),
+    },
+    trace: {
+      traceId,
+      ...(payload.parentMessageId ? { parentMessageId: String(payload.parentMessageId) } : {}),
+    },
+  };
+}
+
+async function enqueueDelegatedTask(payload = {}) {
+  const baseUrl = dockerWorkflowApiUrl.replace(/\/+$/, '');
+  const endpoint = `${baseUrl}/api/a2a/bridge/jobs`;
+  const envelope =
+    payload.envelope && typeof payload.envelope === 'object'
+      ? payload.envelope
+      : buildDefaultDelegatedEnvelope(payload);
+  const bridgeId = String(payload.bridgeId || desktopA2ABridgeId).trim() || 'desktop-default';
+  const agentId = String(payload.agentId || envelope?.to?.id || 'recoder-web').trim();
+  const traceId =
+    String(payload.traceId || envelope?.trace?.traceId || envelope?.metadata?.traceId || '').trim()
+    || undefined;
+
+  const response = await fetch(endpoint, {
+    method: 'POST',
+    headers: buildA2AAdminHeaders(),
+    body: JSON.stringify({
+      bridgeId,
+      agentId,
+      envelope,
+      ...(traceId ? { traceId } : {}),
+    }),
+  });
+
+  let body = null;
+  try {
+    body = await response.json();
+  } catch {
+    body = null;
+  }
+
+  if (!response.ok) {
+    const message = body && typeof body.error === 'string'
+      ? body.error
+      : `bridge enqueue failed with status ${response.status}`;
+    throw new Error(message);
+  }
+
+  return {
+    bridgeId,
+    jobId: body?.jobId || null,
+    traceId,
+    envelope,
+    raw: body,
+  };
+}
+
+async function fetchDelegatedTaskStatus(jobId) {
+  const baseUrl = dockerWorkflowApiUrl.replace(/\/+$/, '');
+  const endpoint = `${baseUrl}/api/a2a/bridge/jobs/${encodeURIComponent(jobId)}/result`;
+  const response = await fetch(endpoint, {
+    method: 'GET',
+    headers: buildA2AAdminHeaders(),
+  });
+
+  if (response.status === 404) {
+    return { complete: false, status: 'pending', result: null, raw: null };
+  }
+
+  let body = null;
+  try {
+    body = await response.json();
+  } catch {
+    body = null;
+  }
+
+  if (!response.ok) {
+    const message = body && typeof body.error === 'string'
+      ? body.error
+      : `bridge result lookup failed with status ${response.status}`;
+    throw new Error(message);
+  }
+
+  const result = body?.result || null;
+  const statusCandidate =
+    (result && typeof result.status === 'string' && result.status)
+    || (result && typeof result.state === 'string' && result.state)
+    || (result && typeof result.ok === 'boolean' ? (result.ok ? 'completed' : 'failed') : '')
+    || 'completed';
+  const status = String(statusCandidate).trim().toLowerCase();
+  const terminalStatuses = new Set(['completed', 'failed', 'cancelled', 'stopped', 'error', 'rejected']);
+
+  return {
+    complete: terminalStatuses.has(status),
+    status,
+    result,
+    raw: body,
+  };
+}
+
+async function pollDelegatedTaskStatus(payload = {}) {
+  const jobId = String(payload.jobId || '').trim();
+  if (!jobId) {
+    throw new Error('jobId is required');
+  }
+
+  const timeoutMsRaw = Number.parseInt(String(payload.timeoutMs || '60000'), 10);
+  const intervalMsRaw = Number.parseInt(String(payload.intervalMs || '2000'), 10);
+  const timeoutMs = Number.isFinite(timeoutMsRaw) && timeoutMsRaw > 0 ? timeoutMsRaw : 60000;
+  const intervalMs = Number.isFinite(intervalMsRaw) && intervalMsRaw > 0 ? intervalMsRaw : 2000;
+
+  const startedAt = Date.now();
+  let attempts = 0;
+  while (Date.now() - startedAt <= timeoutMs) {
+    attempts += 1;
+    const status = await fetchDelegatedTaskStatus(jobId);
+    if (status.complete) {
+      return {
+        ...status,
+        jobId,
+        attempts,
+        elapsedMs: Date.now() - startedAt,
+      };
+    }
+    await sleepMs(intervalMs);
+  }
+
+  return {
+    complete: false,
+    status: 'timeout',
+    result: null,
+    raw: null,
+    jobId,
+    attempts,
+    elapsedMs: Date.now() - startedAt,
+  };
+}
+
+// ============================================================================
+// A2A Task Visibility API (SFA-020)
+// ============================================================================
+
+const a2aTaskApiUrl =
+  process.env.RECODER_A2A_TASK_API_URL
+  || process.env.A2A_API_URL
+  || dockerWorkflowApiUrl;
+
+/**
+ * Fetch the list of delegated A2A tasks.
+ * GET /api/a2a/tasks
+ */
+async function fetchA2ATaskList(params = {}) {
+  const baseUrl = a2aTaskApiUrl.replace(/\/+$/, '');
+  const query = new URLSearchParams();
+  if (params.page) query.append('page', String(params.page));
+  if (params.limit) query.append('limit', String(params.limit));
+  if (params.state) query.append('state', String(params.state));
+  const qs = query.toString();
+  const endpoint = `${baseUrl}/api/a2a/tasks${qs ? `?${qs}` : ''}`;
+
+  const response = await fetch(endpoint, {
+    method: 'GET',
+    headers: buildA2AAdminHeaders(),
+  });
+
+  let body = null;
+  try {
+    body = await response.json();
+  } catch {
+    body = null;
+  }
+
+  if (!response.ok) {
+    const message = body && typeof body.error === 'string'
+      ? body.error
+      : `task list fetch failed with status ${response.status}`;
+    throw new Error(message);
+  }
+
+  // Normalise: accept both { tasks: [...] } and raw arrays
+  const tasks = Array.isArray(body)
+    ? body
+    : Array.isArray(body?.tasks)
+      ? body.tasks
+      : [];
+
+  return {
+    tasks,
+    total: body?.total ?? tasks.length,
+    page: body?.page ?? params.page,
+    limit: body?.limit ?? params.limit,
+  };
+}
+
+/**
+ * Fetch a single A2A task by ID.
+ * GET /api/a2a/tasks/:taskId
+ */
+async function fetchA2ATaskDetail(taskId) {
+  const baseUrl = a2aTaskApiUrl.replace(/\/+$/, '');
+  const endpoint = `${baseUrl}/api/a2a/tasks/${encodeURIComponent(taskId)}`;
+
+  const response = await fetch(endpoint, {
+    method: 'GET',
+    headers: buildA2AAdminHeaders(),
+  });
+
+  let body = null;
+  try {
+    body = await response.json();
+  } catch {
+    body = null;
+  }
+
+  if (!response.ok) {
+    const message = body && typeof body.error === 'string'
+      ? body.error
+      : `task detail fetch failed with status ${response.status}`;
+    throw new Error(message);
+  }
+
+  return body;
+}
+
+/**
+ * Poll a task until it reaches a terminal state or the timeout is reached.
+ * Emits desktop_task_status_polled events on each poll.
+ */
+async function pollA2ATaskUntilDone(payload = {}) {
+  const taskId = String(payload.taskId || '').trim();
+  if (!taskId) {
+    throw new Error('taskId is required');
+  }
+
+  const timeoutMsRaw = Number.parseInt(String(payload.timeoutMs || '120000'), 10);
+  const intervalMsRaw = Number.parseInt(String(payload.intervalMs || '3000'), 10);
+  const timeoutMs = Number.isFinite(timeoutMsRaw) && timeoutMsRaw > 0 ? timeoutMsRaw : 120000;
+  const intervalMs = Number.isFinite(intervalMsRaw) && intervalMsRaw > 0 ? intervalMsRaw : 3000;
+
+  const terminalStates = new Set(['completed', 'failed', 'cancelled', 'stopped', 'error', 'rejected']);
+  const startedAt = Date.now();
+  let attempts = 0;
+
+  while (Date.now() - startedAt <= timeoutMs) {
+    attempts += 1;
+    const task = await fetchA2ATaskDetail(taskId);
+
+    const state = String(task?.state || task?.status || 'submitted').trim().toLowerCase();
+
+    // Emit activation event
+    emitDesktopActivationEvent('desktop_task_status_polled', { taskId, state, attempt: attempts });
+
+    if (terminalStates.has(state)) {
+      return {
+        complete: true,
+        state,
+        task,
+        taskId,
+        attempts,
+        elapsedMs: Date.now() - startedAt,
+      };
+    }
+
+    await sleepMs(intervalMs);
+  }
+
+  return {
+    complete: false,
+    state: 'timeout',
+    task: null,
+    taskId,
+    attempts,
+    elapsedMs: Date.now() - startedAt,
+  };
+}
+
+/**
+ * Emit a desktop activation event.
+ * Logs to the structured desktop log; sends to the main window via IPC if available.
+ */
+function emitDesktopActivationEvent(event, data = {}) {
+  const payload = {
+    event,
+    timestamp: new Date().toISOString(),
+    ...data,
+  };
+
+  appendDesktopLog('activation-events.log',
+    `${payload.timestamp} [${event}] ${JSON.stringify(data)}`
+  );
+
+  // Forward to renderer if a window is open
+  try {
+    const win = BrowserWindow.getAllWindows()[0];
+    if (win && !win.isDestroyed()) {
+      win.webContents.send('desktop:activationEvent', payload);
+    }
+  } catch {
+    // Ignore: window may not exist yet
+  }
 }
 
 process.on('uncaughtException', (error) => {
@@ -619,6 +1115,35 @@ function createWindow() {
         { type: 'separator' },
         { role: 'togglefullscreen' }
       ]
+    },
+    {
+      label: 'Tasks',
+      submenu: [
+        {
+          label: 'Open Delegated Tasks',
+          accelerator: 'CmdOrCtrl+Shift+T',
+          click: () => {
+            emitDesktopActivationEvent('desktop_task_panel_opened');
+            // Send IPC to renderer to open the tasks panel
+            webContents.send('a2a:openTasksPanel');
+          },
+        },
+        { type: 'separator' },
+        {
+          label: 'Refresh Tasks',
+          accelerator: 'CmdOrCtrl+Shift+F',
+          click: () => {
+            webContents.send('a2a:refreshTasks');
+          },
+        },
+        {
+          label: 'Create Task...',
+          click: () => {
+            emitDesktopActivationEvent('desktop_task_created_menu');
+            webContents.send('a2a:createTaskDialog');
+          },
+        },
+      ],
     },
     {
       label: 'Window',
@@ -983,7 +1508,8 @@ ipcMain.handle('dialog:saveFile', async (_event, { defaultPath, content }) => {
 
 ipcMain.handle('fs:readFile', async (_event, filePath) => {
   try {
-    return fs.readFileSync(filePath, 'utf-8');
+    const safePath = validateFsPath(filePath);
+    return fs.readFileSync(safePath, 'utf-8');
   } catch (e) {
     return null;
   }
@@ -991,7 +1517,8 @@ ipcMain.handle('fs:readFile', async (_event, filePath) => {
 
 ipcMain.handle('fs:writeFile', async (_event, { filePath, content }) => {
   try {
-    fs.writeFileSync(filePath, content, 'utf-8');
+    const safePath = validateFsPath(filePath);
+    fs.writeFileSync(safePath, content, 'utf-8');
     return true;
   } catch {
     return false;
@@ -1000,12 +1527,13 @@ ipcMain.handle('fs:writeFile', async (_event, { filePath, content }) => {
 
 ipcMain.handle('fs:readDir', async (_event, dirPath) => {
   try {
-    const entries = fs.readdirSync(dirPath, { withFileTypes: true });
+    const safePath = validateFsPath(dirPath);
+    const entries = fs.readdirSync(safePath, { withFileTypes: true });
     return entries.map(e => ({
       name: e.name,
       isDirectory: e.isDirectory(),
       isFile: e.isFile(),
-      path: path.join(dirPath, e.name),
+      path: path.join(safePath, e.name),
     }));
   } catch {
     return [];
@@ -1013,12 +1541,18 @@ ipcMain.handle('fs:readDir', async (_event, dirPath) => {
 });
 
 ipcMain.handle('fs:exists', async (_event, filePath) => {
-  return fs.existsSync(filePath);
+  try {
+    const safePath = validateFsPath(filePath);
+    return fs.existsSync(safePath);
+  } catch {
+    return false;
+  }
 });
 
 ipcMain.handle('fs:stat', async (_event, filePath) => {
   try {
-    const stats = fs.statSync(filePath);
+    const safePath = validateFsPath(filePath);
+    const stats = fs.statSync(safePath);
     return {
       size: stats.size,
       isFile: stats.isFile(),
@@ -1196,6 +1730,124 @@ ipcMain.handle('agent:getWorkflowPlan', async (_event, payload = {}) => {
   }
 });
 
+ipcMain.handle('agent:delegateTask', async (_event, payload = {}) => {
+  try {
+    const delegated = await enqueueDelegatedTask(payload);
+    return {
+      success: true,
+      ...delegated,
+    };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    logRuntimeError('desktopDelegateTaskFailed', error, {
+      endpoint: `${dockerWorkflowApiUrl.replace(/\/+$/, '')}/api/a2a/bridge/jobs`,
+    });
+    return {
+      success: false,
+      error: message,
+    };
+  }
+});
+
+ipcMain.handle('agent:getDelegatedTaskStatus', async (_event, payload = {}) => {
+  try {
+    const jobId = String(payload.jobId || '').trim();
+    if (!jobId) {
+      return { success: false, error: 'jobId is required' };
+    }
+    const status = await fetchDelegatedTaskStatus(jobId);
+    return {
+      success: true,
+      jobId,
+      ...status,
+    };
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+    };
+  }
+});
+
+ipcMain.handle('agent:pollDelegatedTaskStatus', async (_event, payload = {}) => {
+  try {
+    const result = await pollDelegatedTaskStatus(payload);
+    return {
+      success: true,
+      ...result,
+    };
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+    };
+  }
+});
+
+// ── SFA-020: A2A Task Visibility IPC Handlers ──────────────────────────────
+
+ipcMain.handle('a2a:listTasks', async (_event, payload = {}) => {
+  try {
+    emitDesktopActivationEvent('desktop_task_list_requested', {
+      page: payload.page,
+      state: payload.state,
+    });
+    const data = await fetchA2ATaskList(payload);
+    return { success: true, ...data };
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+      tasks: [],
+    };
+  }
+});
+
+ipcMain.handle('a2a:getTask', async (_event, payload = {}) => {
+  try {
+    const taskId = String(payload.taskId || '').trim();
+    if (!taskId) {
+      return { success: false, error: 'taskId is required' };
+    }
+    const task = await fetchA2ATaskDetail(taskId);
+    return { success: true, task };
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+    };
+  }
+});
+
+ipcMain.handle('a2a:pollTask', async (_event, payload = {}) => {
+  try {
+    const result = await pollA2ATaskUntilDone(payload);
+    return { success: true, ...result };
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+    };
+  }
+});
+
+ipcMain.handle('a2a:createTask', async (_event, payload = {}) => {
+  try {
+    emitDesktopActivationEvent('desktop_task_created', {
+      agentId: payload.agentId,
+      intent: payload.intent,
+    });
+    const delegated = await enqueueDelegatedTask(payload);
+    return { success: true, ...delegated };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    logRuntimeError('desktopA2ACreateTaskFailed', error);
+    return { success: false, error: message };
+  }
+});
+
+// ── End SFA-020 IPC Handlers ───────────────────────────────────────────────
+
 ipcMain.handle('app:openExternal', async (_event, url) => {
   try {
     const parsed = new URL(url);
@@ -1317,6 +1969,18 @@ app.whenReady().then(() => {
           const win = BrowserWindow.getAllWindows()[0];
           if (win) {
             win.loadURL(normalizedUrl + 'new');
+            win.show();
+            win.focus();
+          }
+        },
+      },
+      {
+        label: 'Delegated Tasks',
+        click: () => {
+          const win = BrowserWindow.getAllWindows()[0];
+          if (win) {
+            emitDesktopActivationEvent('desktop_task_panel_opened', { source: 'tray' });
+            win.webContents.send('a2a:openTasksPanel');
             win.show();
             win.focus();
           }

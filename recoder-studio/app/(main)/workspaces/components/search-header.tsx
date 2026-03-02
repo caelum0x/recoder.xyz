@@ -1,7 +1,7 @@
 "use client";
 
-import { SearchInput } from "@giselle-internal/ui/search-input";
-import { Select, type SelectOption } from "@giselle-internal/ui/select";
+import { SearchInput } from "@recoder-internal/ui/search-input";
+import { Select, type SelectOption } from "@recoder-internal/ui/select";
 import {
 	ArrowDownAZ,
 	ArrowUpAZ,

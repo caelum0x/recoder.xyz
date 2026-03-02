@@ -1,4 +1,4 @@
-import { App as AppSchema, type App as AppType } from "@giselles-ai/protocol";
+import { App as AppSchema, type App as AppType } from "@recoder/protocol";
 import {
 	ApiError,
 	ConfigurationError,

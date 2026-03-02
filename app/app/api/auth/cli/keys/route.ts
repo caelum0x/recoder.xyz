@@ -5,6 +5,7 @@ import { headers } from 'next/headers';
 
 import { CLIAuthService } from '@/lib/services/cli-auth.service';
 import { prisma } from '@/lib/prisma';
+import { logger } from '@/lib/logger';
 
 /**
  * GET /api/auth/cli/keys
@@ -37,7 +38,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ keys }, { status: 200 });
   } catch (error: any) {
-    console.error('List API keys error:', error);
+    logger.error('List API keys error:', { error: String(error), route: 'auth/cli/keys' });
     return NextResponse.json(
       { error: 'Failed to list API keys' },
       { status: 500 }
@@ -100,7 +101,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(key, { status: 201 });
   } catch (error: any) {
-    console.error('Create API key error:', error);
+    logger.error('Create API key error:', { error: String(error), route: 'auth/cli/keys' });
     return NextResponse.json(
       { error: 'Failed to create API key' },
       { status: 500 }
@@ -149,7 +150,7 @@ export async function DELETE(request: NextRequest) {
 
     return NextResponse.json(result, { status: 200 });
   } catch (error: any) {
-    console.error('Revoke API key error:', error);
+    logger.error('Revoke API key error:', { error: String(error), route: 'auth/cli/keys' });
     return NextResponse.json(
       { error: 'Failed to revoke API key' },
       { status: 500 }

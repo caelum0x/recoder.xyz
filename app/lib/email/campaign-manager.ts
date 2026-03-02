@@ -6,6 +6,7 @@
  */
 
 import { sendEmail } from '../email';
+import { logger } from '@/lib/logger';
 import {
   generateNewsletterEmail,
   generateProductUpdateEmail,
@@ -120,7 +121,7 @@ export async function sendNewsletterCampaign(
     link: string;
   }
 ): Promise<CampaignResult> {
-  console.log(`Starting newsletter campaign: ${edition} to ${recipients.length} recipients`);
+  logger.info('Starting newsletter campaign', { edition, recipientCount: String(recipients.length) });
 
   const result = await sendBatchEmails(recipients, (recipient) =>
     generateNewsletterEmail({
@@ -133,9 +134,7 @@ export async function sendNewsletterCampaign(
     })
   );
 
-  console.log(
-    `Newsletter campaign completed: ${result.sent} sent, ${result.failed} failed`
-  );
+  logger.info('Newsletter campaign completed', { sent: String(result.sent), failed: String(result.failed) });
 
   return result;
 }
@@ -155,7 +154,7 @@ export async function sendProductUpdateCampaign(
   ctaText?: string,
   ctaLink?: string
 ): Promise<CampaignResult> {
-  console.log(`Starting product update campaign: ${updateTitle} to ${recipients.length} recipients`);
+  logger.info('Starting product update campaign', { updateTitle, recipientCount: String(recipients.length) });
 
   const result = await sendBatchEmails(recipients, (recipient) =>
     generateProductUpdateEmail({
@@ -170,9 +169,7 @@ export async function sendProductUpdateCampaign(
     })
   );
 
-  console.log(
-    `Product update campaign completed: ${result.sent} sent, ${result.failed} failed`
-  );
+  logger.info('Product update campaign completed', { sent: String(result.sent), failed: String(result.failed) });
 
   return result;
 }
@@ -192,7 +189,7 @@ export async function sendFeatureAnnouncementCampaign(
   videoUrl?: string,
   docsUrl?: string
 ): Promise<CampaignResult> {
-  console.log(`Starting feature announcement campaign: ${featureName} to ${recipients.length} recipients`);
+  logger.info('Starting feature announcement campaign', { featureName, recipientCount: String(recipients.length) });
 
   const result = await sendBatchEmails(recipients, (recipient) =>
     generateFeatureAnnouncementEmail({
@@ -208,9 +205,7 @@ export async function sendFeatureAnnouncementCampaign(
     })
   );
 
-  console.log(
-    `Feature announcement campaign completed: ${result.sent} sent, ${result.failed} failed`
-  );
+  logger.info('Feature announcement campaign completed', { sent: String(result.sent), failed: String(result.failed) });
 
   return result;
 }
@@ -290,11 +285,11 @@ export async function sendMilestoneEmail(
       throw new Error(result.error?.message || 'Failed to send milestone email');
     }
 
-    console.log(`Milestone email sent to ${recipient.email}: ${milestoneType}`);
+    logger.info('Milestone email sent', { email: recipient.email, milestoneType });
 
     return { success: true };
   } catch (error: any) {
-    console.error(`Failed to send milestone email to ${recipient.email}:`, error.message);
+    logger.error('Failed to send milestone email', { email: recipient.email, error: error.message });
     return { success: false, error };
   }
 }
@@ -334,7 +329,7 @@ export function scheduleCampaign(
 
   scheduledCampaigns.set(id, campaign);
 
-  console.log(`Campaign scheduled: ${id} for ${scheduledFor.toISOString()}`);
+  logger.info('Campaign scheduled', { campaignId: id, scheduledFor: scheduledFor.toISOString() });
 
   return id;
 }
@@ -347,7 +342,7 @@ export async function processScheduledCampaigns(): Promise<void> {
 
   for (const [id, campaign] of scheduledCampaigns.entries()) {
     if (campaign.status === 'scheduled' && campaign.scheduledFor <= now) {
-      console.log(`Processing scheduled campaign: ${id}`);
+      logger.info('Processing scheduled campaign', { campaignId: id });
 
       campaign.status = 'running';
 
@@ -394,9 +389,9 @@ export async function processScheduledCampaigns(): Promise<void> {
         campaign.result = result;
         campaign.status = 'completed';
 
-        console.log(`Campaign completed: ${id}`);
+        logger.info('Campaign completed', { campaignId: id });
       } catch (error: any) {
-        console.error(`Campaign failed: ${id}`, error.message);
+        logger.error('Campaign failed', { campaignId: id, error: error.message });
         campaign.status = 'failed';
       }
     }
@@ -418,7 +413,7 @@ export function cancelCampaign(campaignId: string): boolean {
 
   if (campaign && campaign.status === 'scheduled') {
     scheduledCampaigns.delete(campaignId);
-    console.log(`Campaign cancelled: ${campaignId}`);
+    logger.info('Campaign cancelled', { campaignId });
     return true;
   }
 

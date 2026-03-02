@@ -1,4 +1,4 @@
-import { Task } from "@giselles-ai/protocol";
+import { Task } from "@recoder/protocol";
 import z from "zod/v4";
 
 export const StreamData = z.object({

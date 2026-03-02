@@ -68,7 +68,7 @@ export default function ProfileSettingsPage() {
       {/* Header */}
       <div>
         <h1 className="text-3xl font-bold mb-2">Profile Settings</h1>
-        <p className="text-bolt-elements-textSecondary">
+        <p className="text-recoder-elements-textSecondary">
           Manage your public profile and information
         </p>
       </div>
@@ -86,14 +86,14 @@ export default function ProfileSettingsPage() {
       )}
 
       {/* Avatar Section */}
-      <section className="p-6 rounded-xl border border-bolt-elements-borderColor bg-bolt-elements-background-depth-2">
+      <section className="p-6 rounded-xl border border-recoder-elements-borderColor bg-recoder-elements-background-depth-2">
         <h2 className="text-xl font-bold mb-4">Profile Picture</h2>
         <div className="flex items-center space-x-6">
           <div className="w-24 h-24 rounded-full bg-gradient-to-br from-orange-500 to-purple-600 flex items-center justify-center text-white text-3xl font-bold">
             {settings.display_name ? settings.display_name.charAt(0).toUpperCase() : '?'}
           </div>
           <div>
-            <p className="text-sm text-bolt-elements-textSecondary mb-2">
+            <p className="text-sm text-recoder-elements-textSecondary mb-2">
               Avatar URL (optional)
             </p>
             <input
@@ -101,14 +101,14 @@ export default function ProfileSettingsPage() {
               value={settings.avatar_url}
               onChange={(e) => updateSetting('avatar_url', e.target.value)}
               placeholder="https://example.com/avatar.jpg"
-              className="w-80 px-4 py-2 bg-bolt-elements-background-depth-1 border border-bolt-elements-borderColor rounded-lg focus:outline-none focus:ring-2 focus:ring-bolt-elements-focus"
+              className="w-80 px-4 py-2 bg-recoder-elements-background-depth-1 border border-recoder-elements-borderColor rounded-lg focus:outline-none focus:ring-2 focus:ring-recoder-elements-focus"
             />
           </div>
         </div>
       </section>
 
       {/* Basic Information */}
-      <section className="p-6 rounded-xl border border-bolt-elements-borderColor bg-bolt-elements-background-depth-2">
+      <section className="p-6 rounded-xl border border-recoder-elements-borderColor bg-recoder-elements-background-depth-2">
         <h2 className="text-xl font-bold mb-4">Basic Information</h2>
         <div className="space-y-4">
           {/* Display Name */}
@@ -119,7 +119,7 @@ export default function ProfileSettingsPage() {
               value={settings.display_name}
               onChange={(e) => updateSetting('display_name', e.target.value)}
               placeholder="Your name"
-              className="w-full px-4 py-2 bg-bolt-elements-background-depth-1 border border-bolt-elements-borderColor rounded-lg focus:outline-none focus:ring-2 focus:ring-bolt-elements-focus"
+              className="w-full px-4 py-2 bg-recoder-elements-background-depth-1 border border-recoder-elements-borderColor rounded-lg focus:outline-none focus:ring-2 focus:ring-recoder-elements-focus"
             />
           </div>
 
@@ -131,9 +131,9 @@ export default function ProfileSettingsPage() {
               value={settings.bio}
               onChange={(e) => updateSetting('bio', e.target.value)}
               placeholder="Tell us about yourself..."
-              className="w-full px-4 py-2 bg-bolt-elements-background-depth-1 border border-bolt-elements-borderColor rounded-lg focus:outline-none focus:ring-2 focus:ring-bolt-elements-focus resize-none"
+              className="w-full px-4 py-2 bg-recoder-elements-background-depth-1 border border-recoder-elements-borderColor rounded-lg focus:outline-none focus:ring-2 focus:ring-recoder-elements-focus resize-none"
             />
-            <p className="text-xs text-bolt-elements-textSecondary mt-1">
+            <p className="text-xs text-recoder-elements-textSecondary mt-1">
               {settings.bio.length}/160 characters
             </p>
           </div>
@@ -146,7 +146,7 @@ export default function ProfileSettingsPage() {
               value={settings.company}
               onChange={(e) => updateSetting('company', e.target.value)}
               placeholder="Your company"
-              className="w-full px-4 py-2 bg-bolt-elements-background-depth-1 border border-bolt-elements-borderColor rounded-lg focus:outline-none focus:ring-2 focus:ring-bolt-elements-focus"
+              className="w-full px-4 py-2 bg-recoder-elements-background-depth-1 border border-recoder-elements-borderColor rounded-lg focus:outline-none focus:ring-2 focus:ring-recoder-elements-focus"
             />
           </div>
 
@@ -158,7 +158,7 @@ export default function ProfileSettingsPage() {
               value={settings.website}
               onChange={(e) => updateSetting('website', e.target.value)}
               placeholder="https://yourwebsite.com"
-              className="w-full px-4 py-2 bg-bolt-elements-background-depth-1 border border-bolt-elements-borderColor rounded-lg focus:outline-none focus:ring-2 focus:ring-bolt-elements-focus"
+              className="w-full px-4 py-2 bg-recoder-elements-background-depth-1 border border-recoder-elements-borderColor rounded-lg focus:outline-none focus:ring-2 focus:ring-recoder-elements-focus"
             />
           </div>
 
@@ -170,21 +170,21 @@ export default function ProfileSettingsPage() {
               value={settings.location}
               onChange={(e) => updateSetting('location', e.target.value)}
               placeholder="City, Country"
-              className="w-full px-4 py-2 bg-bolt-elements-background-depth-1 border border-bolt-elements-borderColor rounded-lg focus:outline-none focus:ring-2 focus:ring-bolt-elements-focus"
+              className="w-full px-4 py-2 bg-recoder-elements-background-depth-1 border border-recoder-elements-borderColor rounded-lg focus:outline-none focus:ring-2 focus:ring-recoder-elements-focus"
             />
           </div>
         </div>
       </section>
 
       {/* Social Links */}
-      <section className="p-6 rounded-xl border border-bolt-elements-borderColor bg-bolt-elements-background-depth-2">
+      <section className="p-6 rounded-xl border border-recoder-elements-borderColor bg-recoder-elements-background-depth-2">
         <h2 className="text-xl font-bold mb-4">Social Links</h2>
         <div className="space-y-4">
           {/* GitHub */}
           <div>
             <label className="block text-sm font-medium mb-2">GitHub Username</label>
             <div className="flex items-center">
-              <span className="px-4 py-2 bg-bolt-elements-background-depth-3 border border-r-0 border-bolt-elements-borderColor rounded-l-lg text-bolt-elements-textSecondary">
+              <span className="px-4 py-2 bg-recoder-elements-background-depth-3 border border-r-0 border-recoder-elements-borderColor rounded-l-lg text-recoder-elements-textSecondary">
                 github.com/
               </span>
               <input
@@ -192,7 +192,7 @@ export default function ProfileSettingsPage() {
                 value={settings.github_username}
                 onChange={(e) => updateSetting('github_username', e.target.value)}
                 placeholder="username"
-                className="flex-1 px-4 py-2 bg-bolt-elements-background-depth-1 border border-bolt-elements-borderColor rounded-r-lg focus:outline-none focus:ring-2 focus:ring-bolt-elements-focus"
+                className="flex-1 px-4 py-2 bg-recoder-elements-background-depth-1 border border-recoder-elements-borderColor rounded-r-lg focus:outline-none focus:ring-2 focus:ring-recoder-elements-focus"
               />
             </div>
           </div>
@@ -201,7 +201,7 @@ export default function ProfileSettingsPage() {
           <div>
             <label className="block text-sm font-medium mb-2">Twitter Username</label>
             <div className="flex items-center">
-              <span className="px-4 py-2 bg-bolt-elements-background-depth-3 border border-r-0 border-bolt-elements-borderColor rounded-l-lg text-bolt-elements-textSecondary">
+              <span className="px-4 py-2 bg-recoder-elements-background-depth-3 border border-r-0 border-recoder-elements-borderColor rounded-l-lg text-recoder-elements-textSecondary">
                 twitter.com/
               </span>
               <input
@@ -209,7 +209,7 @@ export default function ProfileSettingsPage() {
                 value={settings.twitter_username}
                 onChange={(e) => updateSetting('twitter_username', e.target.value)}
                 placeholder="username"
-                className="flex-1 px-4 py-2 bg-bolt-elements-background-depth-1 border border-bolt-elements-borderColor rounded-r-lg focus:outline-none focus:ring-2 focus:ring-bolt-elements-focus"
+                className="flex-1 px-4 py-2 bg-recoder-elements-background-depth-1 border border-recoder-elements-borderColor rounded-r-lg focus:outline-none focus:ring-2 focus:ring-recoder-elements-focus"
               />
             </div>
           </div>
@@ -218,7 +218,7 @@ export default function ProfileSettingsPage() {
           <div>
             <label className="block text-sm font-medium mb-2">LinkedIn Username</label>
             <div className="flex items-center">
-              <span className="px-4 py-2 bg-bolt-elements-background-depth-3 border border-r-0 border-bolt-elements-borderColor rounded-l-lg text-bolt-elements-textSecondary">
+              <span className="px-4 py-2 bg-recoder-elements-background-depth-3 border border-r-0 border-recoder-elements-borderColor rounded-l-lg text-recoder-elements-textSecondary">
                 linkedin.com/in/
               </span>
               <input
@@ -226,7 +226,7 @@ export default function ProfileSettingsPage() {
                 value={settings.linkedin_username}
                 onChange={(e) => updateSetting('linkedin_username', e.target.value)}
                 placeholder="username"
-                className="flex-1 px-4 py-2 bg-bolt-elements-background-depth-1 border border-bolt-elements-borderColor rounded-r-lg focus:outline-none focus:ring-2 focus:ring-bolt-elements-focus"
+                className="flex-1 px-4 py-2 bg-recoder-elements-background-depth-1 border border-recoder-elements-borderColor rounded-r-lg focus:outline-none focus:ring-2 focus:ring-recoder-elements-focus"
               />
             </div>
           </div>
@@ -234,19 +234,19 @@ export default function ProfileSettingsPage() {
       </section>
 
       {/* Privacy */}
-      <section className="p-6 rounded-xl border border-bolt-elements-borderColor bg-bolt-elements-background-depth-2">
+      <section className="p-6 rounded-xl border border-recoder-elements-borderColor bg-recoder-elements-background-depth-2">
         <h2 className="text-xl font-bold mb-4">Privacy</h2>
         <div className="flex items-center justify-between">
           <div>
             <div className="font-medium">Public Profile</div>
-            <div className="text-sm text-bolt-elements-textSecondary">
+            <div className="text-sm text-recoder-elements-textSecondary">
               Make your profile visible to everyone
             </div>
           </div>
           <button
             onClick={() => updateSetting('public_profile', !settings.public_profile)}
             className={`relative w-12 h-6 rounded-full transition-colors ${
-              settings.public_profile ? 'bg-bolt-elements-item-contentAccent' : 'bg-gray-600'
+              settings.public_profile ? 'bg-recoder-elements-item-contentAccent' : 'bg-gray-600'
             }`}
           >
             <div
@@ -263,7 +263,7 @@ export default function ProfileSettingsPage() {
         <button
           onClick={handleSave}
           disabled={saving}
-          className="px-6 py-3 bg-bolt-elements-item-contentAccent hover:bg-bolt-elements-item-contentActive rounded-lg font-medium transition-colors disabled:opacity-50"
+          className="px-6 py-3 bg-recoder-elements-item-contentAccent hover:bg-recoder-elements-item-contentActive rounded-lg font-medium transition-colors disabled:opacity-50"
         >
           {saving ? 'Saving...' : 'Save Changes'}
         </button>

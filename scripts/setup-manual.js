@@ -35,7 +35,7 @@ try {
   checkDirectory(path.join(rootDir, 'packages/cli'), 'CLI Package');
   checkDirectory(path.join(rootDir, 'packages/shared'), 'Shared Package');
   checkDirectory(path.join(rootDir, 'backend'), 'Backend');
-  checkDirectory(path.join(rootDir, 'production-engine'), 'Production Engine');
+  checkDirectory(path.join(rootDir, 'docker-backend'), 'Docker Backend');
   console.log('');
 
   console.log('📦 Installing dependencies...\n');
@@ -58,9 +58,9 @@ try {
     runCommand('npm install', path.join(rootDir, 'backend'), 'Installing backend dependencies');
   }
 
-  // Install production engine dependencies
-  if (fs.existsSync(path.join(rootDir, 'production-engine'))) {
-    runCommand('npm install', path.join(rootDir, 'production-engine'), 'Installing production engine dependencies');
+  // Install docker-backend dependencies
+  if (fs.existsSync(path.join(rootDir, 'docker-backend'))) {
+    runCommand('npm install', path.join(rootDir, 'docker-backend'), 'Installing docker-backend dependencies');
   }
 
   console.log('🔧 Setting up environment...\n');
@@ -93,11 +93,11 @@ try {
     }
   }
 
-  if (fs.existsSync(path.join(rootDir, 'production-engine'))) {
+  if (fs.existsSync(path.join(rootDir, 'docker-backend'))) {
     try {
-      runCommand('npm run build', path.join(rootDir, 'production-engine'), 'Building production engine');
+      runCommand('npm run build', path.join(rootDir, 'docker-backend'), 'Building docker-backend');
     } catch {
-      console.log('⚠️ Production engine build not configured, skipping...\n');
+      console.log('⚠️ Docker-backend build not configured, skipping...\n');
     }
   }
 
@@ -125,7 +125,7 @@ try {
   console.log('npm install --ignore-workspace-root-check');
   console.log('cd packages/cli && npm install && cd ../..');
   console.log('cd backend && npm install && cd ..');
-  console.log('cd production-engine && npm install && cd ..');
+  console.log('cd docker-backend && npm install && cd ..');
   console.log('cd packages/cli && npm link');
   process.exit(1);
 }

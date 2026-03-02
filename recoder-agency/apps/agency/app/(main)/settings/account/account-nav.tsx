@@ -1,6 +1,6 @@
 "use client";
 
-import { TabNavigation } from "@giselle-internal/ui/tab-navigation";
+import { TabNavigation } from "@recoder-internal/ui/tab-navigation";
 
 const LINKS = [
 	{ href: "/settings/account", label: "Overview" },

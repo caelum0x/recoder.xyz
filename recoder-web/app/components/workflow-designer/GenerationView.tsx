@@ -16,9 +16,9 @@ function MarkdownContent({ content }: { content: string }) {
       .replace(/"/g, '&quot;');
     return escaped
       // Code blocks
-      .replace(/```(\w+)?\n([\s\S]*?)```/g, '<pre class="bg-bolt-elements-background-depth-2 p-3 rounded-lg my-2 overflow-x-auto"><code>$2</code></pre>')
+      .replace(/```(\w+)?\n([\s\S]*?)```/g, '<pre class="bg-recoder-elements-background-depth-2 p-3 rounded-lg my-2 overflow-x-auto"><code>$2</code></pre>')
       // Inline code
-      .replace(/`([^`]+)`/g, '<code class="bg-bolt-elements-background-depth-2 px-1 rounded text-accent-400">$1</code>')
+      .replace(/`([^`]+)`/g, '<code class="bg-recoder-elements-background-depth-2 px-1 rounded text-accent-400">$1</code>')
       // Bold
       .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
       // Italic
@@ -31,7 +31,7 @@ function MarkdownContent({ content }: { content: string }) {
 
   return (
     <div
-      className="text-sm text-bolt-elements-textSecondary leading-relaxed prose prose-invert max-w-none"
+      className="text-sm text-recoder-elements-textSecondary leading-relaxed prose prose-invert max-w-none"
       dangerouslySetInnerHTML={{ __html: html }}
     />
   );
@@ -56,7 +56,7 @@ function Accordion({
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
-        className="group flex items-center gap-1 text-xs text-bolt-elements-textTertiary hover:text-bolt-elements-textPrimary transition-colors"
+        className="group flex items-center gap-1 text-xs text-recoder-elements-textTertiary hover:text-recoder-elements-textPrimary transition-colors"
       >
         {isOpen ? (
           <ChevronDownIcon className="w-4 h-4" />
@@ -67,7 +67,7 @@ function Accordion({
         <span>{title}</span>
       </button>
       {isOpen && (
-        <div className="ml-5 mt-2 pl-3 border-l border-bolt-elements-borderColor">
+        <div className="ml-5 mt-2 pl-3 border-l border-recoder-elements-borderColor">
           {children}
         </div>
       )}
@@ -104,7 +104,7 @@ function ToolResult({
     <Accordion
       title={
         <span className="flex items-center gap-1">
-          <span className="text-bolt-elements-textSecondary">{toolName}</span>
+          <span className="text-recoder-elements-textSecondary">{toolName}</span>
           {hasOutput && <span className="text-green-400">completed</span>}
           {isRunning && <span className="text-yellow-400">running...</span>}
         </span>
@@ -112,7 +112,7 @@ function ToolResult({
       defaultOpen={isRunning}
     >
       {formattedOutput && (
-        <pre className="text-xs text-bolt-elements-textSecondary bg-bolt-elements-background-depth-2/50 p-2 rounded overflow-x-auto whitespace-pre-wrap">
+        <pre className="text-xs text-recoder-elements-textSecondary bg-recoder-elements-background-depth-2/50 p-2 rounded overflow-x-auto whitespace-pre-wrap">
           {formattedOutput}
         </pre>
       )}
@@ -128,12 +128,12 @@ function ThinkingBlock({ content, isActive }: { content: string; isActive: boole
         isActive ? (
           <span className="text-purple-400 animate-pulse">Thinking...</span>
         ) : (
-          <span className="text-bolt-elements-textTertiary">Thinking Process</span>
+          <span className="text-recoder-elements-textTertiary">Thinking Process</span>
         )
       }
       defaultOpen={isActive}
     >
-      <div className="text-sm italic text-bolt-elements-textTertiary">
+      <div className="text-sm italic text-recoder-elements-textTertiary">
         <MarkdownContent content={content} />
       </div>
     </Accordion>
@@ -171,7 +171,7 @@ function ImageGallery({
             <img
               src={image.pathname}
               alt={image.filename}
-              className="h-32 w-auto rounded-lg object-cover border border-bolt-elements-borderColor group-hover:border-accent-500 transition-colors"
+              className="h-32 w-auto rounded-lg object-cover border border-recoder-elements-borderColor group-hover:border-accent-500 transition-colors"
             />
             <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg flex items-center justify-center">
               <span className="text-xs text-white">Click to enlarge</span>
@@ -192,7 +192,7 @@ function ImageGallery({
             className="max-w-full max-h-full object-contain"
           />
           <button
-            className="absolute top-4 right-4 text-white text-2xl hover:text-bolt-elements-textSecondary"
+            className="absolute top-4 right-4 text-white text-2xl hover:text-recoder-elements-textSecondary"
             onClick={() => setLightboxImage(null)}
           >
             Close
@@ -210,7 +210,7 @@ export function GenerationView({ generation }: { generation: Generation }) {
     return (
       <div className="p-4 bg-red-900/20 border border-red-800 rounded-lg">
         <p className="text-red-400 text-sm">{generation.error?.message || 'Generation failed'}</p>
-        <p className="text-xs text-bolt-elements-textTertiary mt-1">ID: {generation.id}</p>
+        <p className="text-xs text-recoder-elements-textTertiary mt-1">ID: {generation.id}</p>
       </div>
     );
   }
@@ -325,12 +325,12 @@ export function GenerationStatusBadge({
   className?: string;
 }) {
   const statusConfig = {
-    pending: { color: 'bg-bolt-elements-background-depth-3', text: 'Pending' },
+    pending: { color: 'bg-recoder-elements-background-depth-3', text: 'Pending' },
     queued: { color: 'bg-yellow-500', text: 'Queued' },
     running: { color: 'bg-blue-500', text: 'Running' },
     completed: { color: 'bg-green-500', text: 'Completed' },
     failed: { color: 'bg-red-500', text: 'Failed' },
-    cancelled: { color: 'bg-bolt-elements-background-depth-3', text: 'Cancelled' },
+    cancelled: { color: 'bg-recoder-elements-background-depth-3', text: 'Cancelled' },
   };
 
   const config = statusConfig[status] || statusConfig.pending;
@@ -343,7 +343,7 @@ export function GenerationStatusBadge({
       )}
     >
       <span className={classNames('w-1.5 h-1.5 rounded-full', config.color)} />
-      <span className="text-bolt-elements-textSecondary">{config.text}</span>
+      <span className="text-recoder-elements-textSecondary">{config.text}</span>
     </span>
   );
 }

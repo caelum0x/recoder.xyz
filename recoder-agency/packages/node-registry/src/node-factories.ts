@@ -1,10 +1,10 @@
-import type { ActionProvider } from "@giselles-ai/action-registry";
+import type { ActionProvider } from "@recoder/action-registry";
 import {
 	Capability,
 	hasCapability,
 	languageModels,
-} from "@giselles-ai/language-model";
-import { getEntry } from "@giselles-ai/language-model-registry";
+} from "@recoder/language-model";
+import { getEntry } from "@recoder/language-model-registry";
 import {
 	type ActionNode,
 	type AppEntryNode,
@@ -57,11 +57,11 @@ import {
 	type VectorStoreContent,
 	type VectorStoreNode,
 	type WebPageNode,
-} from "@giselles-ai/protocol";
+} from "@recoder/protocol";
 import {
 	isJsonContent,
 	type JSONContent,
-} from "@giselles-ai/text-editor-utils";
+} from "@recoder/text-editor-utils";
 import {
 	actionNodeDefaultName,
 	defaultName,

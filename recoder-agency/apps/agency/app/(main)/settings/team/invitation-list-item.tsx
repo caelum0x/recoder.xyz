@@ -10,8 +10,8 @@ import {
 	DialogHeader,
 	DialogTitle,
 	DialogTrigger,
-} from "@giselle-internal/ui/dialog";
-import { useToasts } from "@giselle-internal/ui/toast";
+} from "@recoder-internal/ui/dialog";
+import { useToasts } from "@recoder-internal/ui/toast";
 import { Copy, Ellipsis, RefreshCw, Trash2 } from "lucide-react";
 import { useState, useTransition } from "react";
 import {

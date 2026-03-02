@@ -1,6 +1,6 @@
 "use client";
 
-import { Select, type SelectOption } from "@giselle-internal/ui/select";
+import { Select, type SelectOption } from "@recoder-internal/ui/select";
 import {
 	Box,
 	Cable,

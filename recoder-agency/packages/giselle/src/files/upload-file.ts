@@ -3,8 +3,8 @@ import type {
 	FileId,
 	UploadedFileData,
 	WorkspaceId,
-} from "@giselles-ai/protocol";
-import type { GiselleStorage } from "@giselles-ai/storage";
+} from "@recoder/protocol";
+import type { GiselleStorage } from "@recoder/storage";
 import { filePath } from "./utils";
 
 export async function uploadFile(args: {

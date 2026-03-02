@@ -1,13 +1,16 @@
 import React from 'react';
+import type { Metadata } from 'next';
 import Link from 'next/link';
+import { SiteHeader } from '@/components/SiteHeader';
+import { SiteFooter } from '@/components/SiteFooter';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { 
-  Mail, 
-  MessageSquare, 
-  Phone, 
+import {
+  Mail,
+  MessageSquare,
+  Phone,
   MapPin,
   Clock,
   Send,
@@ -24,6 +27,35 @@ import {
   Calendar,
   Globe
 } from 'lucide-react';
+
+export const metadata: Metadata = {
+  title: 'Contact Us - Support & Sales | Recoder.xyz',
+  description: 'Get in touch with the Recoder team. 24/7 live chat support, email assistance within 4 hours, phone support for enterprise customers, and offices in San Francisco, New York, London, and Singapore.',
+  openGraph: {
+    title: 'Contact Us - Support & Sales | Recoder.xyz',
+    description: '24/7 live chat, email support within 4 hours, enterprise phone support. Global offices in San Francisco, New York, London, and Singapore.',
+    url: 'https://recoder.xyz/contact',
+    siteName: 'Recoder.xyz',
+    images: [
+      {
+        url: 'https://recoder.xyz/og-image.png',
+        width: 1200,
+        height: 630,
+        alt: 'Contact Recoder - Support & Sales',
+      },
+    ],
+    type: 'website',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Contact Us - Support & Sales | Recoder.xyz',
+    description: '24/7 live chat, email support, and enterprise phone support. Global offices worldwide.',
+    images: ['https://recoder.xyz/og-image.png'],
+  },
+  alternates: {
+    canonical: 'https://recoder.xyz/contact',
+  },
+};
 
 export default function ContactPage() {
   const contactMethods = [
@@ -156,24 +188,7 @@ export default function ContactPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800">
-      {/* Header */}
-      <header className="border-b bg-white/80 backdrop-blur-sm dark:bg-slate-900/80">
-        <div className="container mx-auto px-4 py-4">
-          <div className="flex items-center justify-between">
-            <Link href="/" className="flex items-center space-x-2">
-              <div className="w-8 h-8 bg-gradient-to-r from-blue-500 to-purple-600 rounded-lg flex items-center justify-center">
-                <Mail className="w-5 h-5 text-white" />
-              </div>
-              <span className="text-xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-                Contact Us
-              </span>
-            </Link>
-            <Button asChild>
-              <Link href="/status">System Status</Link>
-            </Button>
-          </div>
-        </div>
-      </header>
+      <SiteHeader fixed={false} />
 
       {/* Hero Section */}
       <section className="py-20 px-4">
@@ -493,10 +508,6 @@ export default function ContactPage() {
               <FileText className="w-4 h-4 inline mr-1" />
               Documentation
             </Link>
-            <Link href="/status" className="hover:opacity-100 transition-opacity">
-              <Globe className="w-4 h-4 inline mr-1" />
-              System Status
-            </Link>
             <Link href="/blog" className="hover:opacity-100 transition-opacity">
               <MessageSquare className="w-4 h-4 inline mr-1" />
               Blog
@@ -504,6 +515,7 @@ export default function ContactPage() {
           </div>
         </div>
       </section>
+      <SiteFooter />
     </div>
   );
 }

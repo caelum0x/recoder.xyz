@@ -1,4 +1,15 @@
 import Redis from 'ioredis';
+import { createAmbEmitter } from './a2a-intent-worker-amb.mjs';
+import { fieldArrayToObject, processBatchOnce } from './a2a-intent-worker-core.mjs';
+import {
+  buildTaskAssignedText,
+  buildRetryScheduledText,
+  buildTaskCompletedText,
+  buildTaskFinishedWithErrorText,
+  buildWorkerExceptionTerminalText,
+  buildWorkflowCompletionText,
+  buildWorkflowStartedText,
+} from './a2a-intent-worker-status.mjs';
 
 const serviceId = process.env.RECODER_A2A_CONSUMER_SERVICE || 'recoder_agency';
 const streamKey = process.env.RECODER_A2A_INTENT_STREAM_KEY || 'recoder:a2a:intents';
@@ -14,6 +25,12 @@ const maxRetries = Math.max(0, Number(process.env.RECODER_A2A_MAX_RETRIES || 2))
 const retryDelayMs = Math.max(0, Number(process.env.RECODER_A2A_RETRY_DELAY_MS || 500));
 const retryBackoffMultiplier = Math.max(1, Number(process.env.RECODER_A2A_RETRY_BACKOFF_MULTIPLIER || 2));
 const retryMaxDelayMs = Math.max(retryDelayMs, Number(process.env.RECODER_A2A_RETRY_MAX_DELAY_MS || 10000));
+const ambDisabled = process.env.RECODER_A2A_AMB_DISABLED === '1';
+const ambBaseUrl = (
+  process.env.RECODER_A2A_AMB_BASE_URL ||
+  process.env.DOCKER_BACKEND_URL ||
+  'http://localhost:7777'
+).replace(/\/$/, '');
 
 if (!redisUrl) {
   console.error('[a2a-worker] Missing RECODER_A2A_REDIS_URL/REDIS_URL');
@@ -21,15 +38,14 @@ if (!redisUrl) {
 }
 
 const redis = new Redis(redisUrl, { maxRetriesPerRequest: null, enableReadyCheck: true });
+const ambEmitter = createAmbEmitter({
+  baseUrl: ambBaseUrl,
+  serviceId,
+  disabled: ambDisabled,
+});
 
 function normalizeService(value) {
   return String(value || '').trim().toLowerCase().replace(/-/g, '_');
-}
-
-function fieldArrayToObject(values) {
-  const out = {};
-  for (let i = 0; i < values.length; i += 2) out[values[i]] = values[i + 1];
-  return out;
 }
 
 function handlerUrlForIntent(intent) {
@@ -66,29 +82,6 @@ async function executeIntent(record, envelope) {
   } catch (error) {
     return { status: 'error', intent, error: error instanceof Error ? error.message : 'handler_failed' };
   }
-}
-
-function normalizeMessages(data) {
-  if (!Array.isArray(data) || data.length === 0) return [];
-  const bucket = data[0];
-  if (!Array.isArray(bucket) || !Array.isArray(bucket[1])) return [];
-  return bucket[1];
-}
-
-async function readBatch() {
-  try {
-    const claimed = await redis.xautoclaim(streamKey, group, consumer, claimMinIdleMs, '0-0', 'COUNT', 10);
-    const entries = Array.isArray(claimed) && Array.isArray(claimed[1]) ? claimed[1] : [];
-    if (entries.length > 0) return entries;
-  } catch (error) {
-    const message = String(error?.message || error || '');
-    if (!message.includes('ERR') && !message.includes('unknown command')) {
-      console.error('[a2a-worker] xautoclaim failed', { message });
-    }
-  }
-
-  const data = await redis.xreadgroup('GROUP', group, consumer, 'COUNT', 10, 'BLOCK', 5000, 'STREAMS', streamKey, '>');
-  return normalizeMessages(data);
 }
 
 async function emitResult(record, envelope, result, entryId) {
@@ -141,6 +134,24 @@ function parseAttempt(record) {
   return Number.isFinite(raw) && raw >= 0 ? Math.floor(raw) : 0;
 }
 
+function workflowIdFromRecord(record, envelope, entryId) {
+  const messageId = String(record.messageId || envelope?.messageId || entryId || '');
+  return `worker_${messageId || Date.now().toString(36)}`;
+}
+
+async function emitAmbEvent(workflowId, intent, text, senderAgentId = 'a2a-worker') {
+  if (ambDisabled) return;
+
+  try {
+    await ambEmitter.emit(workflowId, intent, text, senderAgentId);
+  } catch (error) {
+    console.warn('[a2a-worker] AMB emit failed', {
+      workflowId,
+      message: error instanceof Error ? error.message : String(error),
+    });
+  }
+}
+
 async function requeueForRetry(record, envelope, result, nextAttempt) {
   return redis.xadd(
     streamKey,
@@ -190,66 +201,33 @@ await redis.xgroup('CREATE', streamKey, group, groupStartId, 'MKSTREAM').catch((
 console.log('[a2a-worker] started', { serviceId, streamKey, group, consumer, claimMinIdleMs });
 
 while (running) {
-  const messages = await readBatch();
-  if (!messages.length) continue;
-
-  for (const [entryId, fields] of messages) {
-    const record = fieldArrayToObject(fields);
-    const target = normalizeService(record.targetService);
-    const self = normalizeService(serviceId);
-
-    if (!target && !consumeUntargeted) {
-      await redis.xack(streamKey, group, entryId);
-      continue;
-    }
-    if (target && target !== self) {
-      await redis.xack(streamKey, group, entryId);
-      continue;
-    }
-
-    let envelope = null;
-    try {
-      envelope = record.envelope ? JSON.parse(record.envelope) : null;
-    } catch {
-      envelope = null;
-    }
-
-    try {
-      const result = await executeIntent(record, envelope);
-      const attempt = parseAttempt(record);
-      if (result.status === 'error' && attempt < maxRetries) {
-        const nextAttempt = attempt + 1;
-        const delayMs = retryDelayForAttempt(attempt);
-        if (delayMs > 0) await sleep(delayMs);
-        const retryStreamId = await requeueForRetry(record, envelope, result, nextAttempt);
-        await emitResult(
-          record,
-          envelope,
-          { status: 'retry_scheduled', attempt, nextAttempt, retryStreamId, delayMs, error: result },
-          entryId,
-        );
-      } else {
-        await emitResult(record, envelope, result, entryId);
-      }
-    } catch (error) {
-      const result = { status: 'error', reason: 'worker_exception', error: error instanceof Error ? error.message : 'unknown_error' };
-      const attempt = parseAttempt(record);
-      if (attempt < maxRetries) {
-        const nextAttempt = attempt + 1;
-        const delayMs = retryDelayForAttempt(attempt);
-        if (delayMs > 0) await sleep(delayMs);
-        const retryStreamId = await requeueForRetry(record, envelope, result, nextAttempt);
-        await emitResult(
-          record,
-          envelope,
-          { status: 'retry_scheduled', attempt, nextAttempt, retryStreamId, delayMs, error: result },
-          entryId,
-        );
-      } else {
-        await emitResult(record, envelope, result, entryId);
-      }
-    }
-
-    await redis.xack(streamKey, group, entryId);
-  }
+  const outcome = await processBatchOnce({
+    redis,
+    streamKey,
+    group,
+    consumer,
+    claimMinIdleMs,
+    logError: (message, meta) => console.error(message, meta),
+    serviceId,
+    consumeUntargeted,
+    maxRetries,
+    fieldArrayToObject,
+    normalizeService,
+    executeIntent,
+    emitResult,
+    requeueForRetry,
+    emitAmbEvent,
+    workflowIdFromRecord,
+    parseAttempt,
+    retryDelayForAttempt,
+    sleep,
+    buildWorkflowStartedText,
+    buildTaskAssignedText,
+    buildRetryScheduledText,
+    buildTaskCompletedText,
+    buildTaskFinishedWithErrorText,
+    buildWorkerExceptionTerminalText,
+    buildWorkflowCompletionText,
+  });
+  if (!outcome.processed) continue;
 }

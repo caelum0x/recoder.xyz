@@ -12,8 +12,8 @@ export function DeepThinkToggle({ enabled, onChange }: DeepThinkToggleProps) {
       className={classNames(
         'flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm transition-colors',
         enabled
-          ? 'bg-bolt-elements-button-primary-background text-bolt-elements-button-primary-text'
-          : 'bg-bolt-elements-background-depth-2 text-bolt-elements-textSecondary hover:bg-bolt-elements-background-depth-3'
+          ? 'bg-recoder-elements-button-primary-background text-recoder-elements-button-primary-text'
+          : 'bg-recoder-elements-background-depth-2 text-recoder-elements-textSecondary hover:bg-recoder-elements-background-depth-3'
       )}
       title="Deep Think Mode - Enhanced reasoning for complex problems"
     >

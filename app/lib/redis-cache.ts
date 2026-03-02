@@ -1,11 +1,46 @@
 /**
  * Redis Caching Layer
  * Performance optimization for analytics and usage data
+ * Gracefully degrades when Redis is unavailable
  */
 
 import { Redis } from 'ioredis';
+import { logger } from '@/lib/logger';
 
-const redis = new Redis(process.env.REDIS_URL || 'redis://localhost:6379');
+let redis: Redis | null = null;
+let redisAvailable = false;
+
+try {
+  redis = new Redis(process.env.REDIS_URL || 'redis://localhost:6379', {
+    maxRetriesPerRequest: 1,
+    connectTimeout: 5000,
+    lazyConnect: true,
+  });
+
+  redis.on('connect', () => {
+    redisAvailable = true;
+    logger.info('Redis connected');
+  });
+
+  redis.on('error', (err) => {
+    if (redisAvailable) {
+      logger.warn('Redis connection lost', { error: String(err) });
+    }
+    redisAvailable = false;
+  });
+
+  redis.on('close', () => {
+    redisAvailable = false;
+  });
+
+  // Attempt initial connection
+  redis.connect().catch(() => {
+    logger.warn('Redis not available — caching disabled');
+    redisAvailable = false;
+  });
+} catch {
+  logger.warn('Redis initialization failed — caching disabled');
+}
 
 export class CacheService {
   private static TTL = {
@@ -14,9 +49,14 @@ export class CacheService {
     USER_QUOTA: 30,   // 30 seconds
   };
 
+  static isAvailable(): boolean {
+    return redisAvailable && redis !== null;
+  }
+
   static async get<T>(key: string): Promise<T | null> {
+    if (!this.isAvailable()) return null;
     try {
-      const data = await redis.get(key);
+      const data = await redis!.get(key);
       return data ? JSON.parse(data) : null;
     } catch {
       return null;
@@ -24,16 +64,17 @@ export class CacheService {
   }
 
   static async set(key: string, data: any, ttl: number): Promise<void> {
+    if (!this.isAvailable()) return;
     try {
-      await redis.setex(key, ttl, JSON.stringify(data));
+      await redis!.setex(key, ttl, JSON.stringify(data));
     } catch (error) {
-      console.error('Cache set error:', error);
+      logger.error('Cache set error', { error: String(error) });
     }
   }
 
   static async getOrSet<T>(
-    key: string, 
-    fetcher: () => Promise<T>, 
+    key: string,
+    fetcher: () => Promise<T>,
     ttl: number
   ): Promise<T> {
     const cached = await this.get<T>(key);

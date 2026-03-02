@@ -350,7 +350,7 @@ export const QuickActionsMenu = memo(({ className }: QuickActionsMenuProps) => {
           'bg-gradient-to-br from-purple-600 to-purple-700',
           'hover:from-purple-500 hover:to-purple-600',
           'text-white transition-all duration-200',
-          'focus:outline-none focus:ring-2 focus:ring-purple-400 focus:ring-offset-2 focus:ring-offset-bolt-elements-background-depth-1',
+          'focus:outline-none focus:ring-2 focus:ring-purple-400 focus:ring-offset-2 focus:ring-offset-recoder-elements-background-depth-1',
           state.isOpen && 'rotate-45'
         )}
         whileHover={{ scale: 1.05 }}
@@ -371,17 +371,17 @@ export const QuickActionsMenu = memo(({ className }: QuickActionsMenuProps) => {
             transition={{ duration: 0.15, ease: 'easeOut' }}
             className={classNames(
               'absolute w-72 max-h-96 overflow-hidden',
-              'bg-bolt-elements-background-depth-2 rounded-lg shadow-xl',
-              'border border-bolt-elements-borderColor',
+              'bg-recoder-elements-background-depth-2 rounded-lg shadow-xl',
+              'border border-recoder-elements-borderColor',
               state.position.vertical === 'bottom' ? 'bottom-14 mb-2' : 'top-14 mt-2',
               state.position.horizontal === 'right' ? 'right-0' : 'left-0'
             )}
             onKeyDown={handleMenuKeyDown}
           >
             {/* Search Input */}
-            <div className="p-2 border-b border-bolt-elements-borderColor">
+            <div className="p-2 border-b border-recoder-elements-borderColor">
               <div className="relative">
-                <div className="i-ph:magnifying-glass absolute left-2.5 top-1/2 -translate-y-1/2 text-bolt-elements-textSecondary" />
+                <div className="i-ph:magnifying-glass absolute left-2.5 top-1/2 -translate-y-1/2 text-recoder-elements-textSecondary" />
                 <input
                   type="text"
                   placeholder="Search actions..."
@@ -393,8 +393,8 @@ export const QuickActionsMenu = memo(({ className }: QuickActionsMenuProps) => {
                   autoFocus
                   className={classNames(
                     'w-full pl-8 pr-3 py-1.5 text-sm',
-                    'bg-bolt-elements-background-depth-3 rounded-md',
-                    'text-bolt-elements-textPrimary placeholder:text-bolt-elements-textSecondary',
+                    'bg-recoder-elements-background-depth-3 rounded-md',
+                    'text-recoder-elements-textPrimary placeholder:text-recoder-elements-textSecondary',
                     'border border-transparent focus:border-purple-500 focus:outline-none',
                     'transition-colors'
                   )}
@@ -408,7 +408,7 @@ export const QuickActionsMenu = memo(({ className }: QuickActionsMenuProps) => {
               {filteredActions && (
                 <div className="py-1">
                   {filteredActions.length === 0 ? (
-                    <div className="px-3 py-4 text-center text-sm text-bolt-elements-textSecondary">
+                    <div className="px-3 py-4 text-center text-sm text-recoder-elements-textSecondary">
                       No matching actions
                     </div>
                   ) : (
@@ -430,7 +430,7 @@ export const QuickActionsMenu = memo(({ className }: QuickActionsMenuProps) => {
                   {/* Recent Actions */}
                   {recentActions.length > 0 && (
                     <div className="py-1">
-                      <div className="px-3 py-1.5 text-xs font-medium text-bolt-elements-textSecondary uppercase tracking-wide">
+                      <div className="px-3 py-1.5 text-xs font-medium text-recoder-elements-textSecondary uppercase tracking-wide">
                         Recent
                       </div>
                       {recentActions.map((action) => (
@@ -449,8 +449,8 @@ export const QuickActionsMenu = memo(({ className }: QuickActionsMenuProps) => {
                     if (actions.length === 0) return null;
 
                     return (
-                      <div key={category} className="py-1 border-t border-bolt-elements-borderColor first:border-t-0">
-                        <div className="px-3 py-1.5 text-xs font-medium text-bolt-elements-textSecondary uppercase tracking-wide flex items-center gap-1.5">
+                      <div key={category} className="py-1 border-t border-recoder-elements-borderColor first:border-t-0">
+                        <div className="px-3 py-1.5 text-xs font-medium text-recoder-elements-textSecondary uppercase tracking-wide flex items-center gap-1.5">
                           <div className={CATEGORY_INFO[category].icon} />
                           {CATEGORY_INFO[category].label}
                         </div>
@@ -469,11 +469,11 @@ export const QuickActionsMenu = memo(({ className }: QuickActionsMenuProps) => {
             </div>
 
             {/* Footer with keyboard hint */}
-            <div className="px-3 py-2 border-t border-bolt-elements-borderColor bg-bolt-elements-background-depth-3">
-              <div className="flex items-center justify-between text-xs text-bolt-elements-textSecondary">
+            <div className="px-3 py-2 border-t border-recoder-elements-borderColor bg-recoder-elements-background-depth-3">
+              <div className="flex items-center justify-between text-xs text-recoder-elements-textSecondary">
                 <span>Press Cmd+. to toggle</span>
                 <span className="flex items-center gap-1">
-                  <kbd className="px-1.5 py-0.5 bg-bolt-elements-background-depth-1 rounded text-xs">Esc</kbd>
+                  <kbd className="px-1.5 py-0.5 bg-recoder-elements-background-depth-1 rounded text-xs">Esc</kbd>
                   to close
                 </span>
               </div>
@@ -501,8 +501,8 @@ const ActionItem = memo(({ action, isSelected, onClick }: ActionItemProps) => {
       onClick={onClick}
       className={classNames(
         'w-full flex items-center gap-2 px-3 py-2 text-left transition-colors',
-        'hover:bg-bolt-elements-background-depth-3',
-        isSelected && 'bg-bolt-elements-background-depth-3',
+        'hover:bg-recoder-elements-background-depth-3',
+        isSelected && 'bg-recoder-elements-background-depth-3',
         action.isAI && 'text-purple-400'
       )}
     >
@@ -511,7 +511,7 @@ const ActionItem = memo(({ action, isSelected, onClick }: ActionItemProps) => {
         className={classNames(
           'text-lg shrink-0',
           action.icon,
-          action.isAI ? 'text-purple-400' : 'text-bolt-elements-textSecondary'
+          action.isAI ? 'text-purple-400' : 'text-recoder-elements-textSecondary'
         )}
       />
 
@@ -519,12 +519,12 @@ const ActionItem = memo(({ action, isSelected, onClick }: ActionItemProps) => {
       <div className="flex-1 min-w-0">
         <div className={classNames(
           'text-sm font-medium truncate',
-          action.isAI ? 'text-purple-400' : 'text-bolt-elements-textPrimary'
+          action.isAI ? 'text-purple-400' : 'text-recoder-elements-textPrimary'
         )}>
           {action.label}
         </div>
         {action.description && (
-          <div className="text-xs text-bolt-elements-textSecondary truncate">
+          <div className="text-xs text-recoder-elements-textSecondary truncate">
             {action.description}
           </div>
         )}
@@ -532,7 +532,7 @@ const ActionItem = memo(({ action, isSelected, onClick }: ActionItemProps) => {
 
       {/* Shortcut Hint */}
       {action.shortcutHint && (
-        <kbd className="px-1.5 py-0.5 bg-bolt-elements-background-depth-1 rounded text-xs text-bolt-elements-textSecondary shrink-0">
+        <kbd className="px-1.5 py-0.5 bg-recoder-elements-background-depth-1 rounded text-xs text-recoder-elements-textSecondary shrink-0">
           {action.shortcutHint}
         </kbd>
       )}

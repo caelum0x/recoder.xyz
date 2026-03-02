@@ -1,5 +1,5 @@
 import type { LanguageModelV2Source } from "@ai-sdk/provider";
-import { createIdGenerator } from "@giselles-ai/utils";
+import { createIdGenerator } from "@recoder/utils";
 import type { ProviderMetadata } from "ai";
 import * as z from "zod/v4";
 import { DataStoreId } from "../data-store";

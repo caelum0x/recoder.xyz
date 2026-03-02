@@ -1,7 +1,7 @@
-# Kortix Project - Development Rules
+# Recoder Project - Development Rules
 
 ## Project Overview
-Kortix is a React Native + Expo app built with TypeScript, NativeWind (Tailwind CSS), and a custom design system.
+Recoder is a React Native + Expo app built with TypeScript, NativeWind (Tailwind CSS), and a custom design system.
 
 ## Core Technologies
 - **Framework**: React Native (Expo)

@@ -64,9 +64,9 @@ export function Background() {
   return (
     <div
       ref={containerRef}
-      className="absolute inset-0 bg-bolt-elements-background-depth-1"
+      className="absolute inset-0 bg-recoder-elements-background-depth-1"
       style={{
-        background: 'radial-gradient(ellipse at center, var(--bolt-elements-bg-depth-2) 0%, var(--bolt-elements-bg-depth-1) 50%, var(--bolt-elements-bg-depth-1) 100%)',
+        background: 'radial-gradient(ellipse at center, var(--recoder-elements-bg-depth-2) 0%, var(--recoder-elements-bg-depth-1) 50%, var(--recoder-elements-bg-depth-1) 100%)',
       }}
     >
       <canvas ref={canvasRef} className="absolute inset-0" />

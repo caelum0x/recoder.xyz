@@ -1,15 +1,15 @@
 import {
 	convertContentGenerationToTextGeneration,
 	convertTextGenerationToContentGeneration,
-} from "@giselles-ai/node-registry";
+} from "@recoder/node-registry";
 import {
 	isContentGenerationNode,
 	isTextGenerationNode,
 	Node,
 	Workspace,
 	type WorkspaceId,
-} from "@giselles-ai/protocol";
-import type { GiselleStorage } from "@giselles-ai/storage";
+} from "@recoder/protocol";
+import type { GiselleStorage } from "@recoder/storage";
 import { parseAndMod } from "../data-mod";
 import type { GiselleContext } from "../types";
 

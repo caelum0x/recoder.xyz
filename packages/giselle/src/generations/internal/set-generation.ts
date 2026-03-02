@@ -1,7 +1,7 @@
-import type { GiselleLogger } from "@giselles-ai/logger";
-import type { NodeId } from "@giselles-ai/protocol";
-import { Generation, NodeGenerationIndex } from "@giselles-ai/protocol";
-import type { GiselleStorage } from "@giselles-ai/storage";
+import type { GiselleLogger } from "@recoder/logger";
+import type { NodeId } from "@recoder/protocol";
+import { Generation, NodeGenerationIndex } from "@recoder/protocol";
+import type { GiselleStorage } from "@recoder/storage";
 import {
 	generationPath,
 	getNodeGenerationIndexes,

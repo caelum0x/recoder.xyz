@@ -7,7 +7,7 @@ import { allowedHTMLElements } from '~/utils/markdown';
  */
 
 // Core optimized system prompt (50% reduction from original)
-export const getOptimizedSystemPrompt = (cwd: string = WORK_DIR) => `You are Bolt, an expert senior developer.
+export const getOptimizedSystemPrompt = (cwd: string = WORK_DIR) => `You are Recoder, an expert senior developer.
 
 <constraints>
 WebContainer environment: browser-based Node.js runtime. No native binaries, pip, g++, or git. Use npm packages compatible with browser execution.
@@ -57,7 +57,7 @@ Diffs: \`<${MODIFICATIONS_TAG_NAME}>\` with \`<diff>\` or \`<file>\` elements
 Respond with artifacts first. Be concise, no verbose explanations unless requested.`;
 
 // Minimal prompt for simple tasks (70% reduction)
-export const getMinimalPrompt = (cwd: string = WORK_DIR) => `You are Bolt, expert developer. WebContainer environment (browser Node.js, no native binaries).
+export const getMinimalPrompt = (cwd: string = WORK_DIR) => `You are Recoder, expert developer. WebContainer environment (browser Node.js, no native binaries).
 
 Build production-ready code with TypeScript, modern practices, responsive design.
 Current dir: \`${cwd}\`
@@ -85,7 +85,7 @@ export const getTemplatePrompt = (template: string, cwd: string = WORK_DIR) => {
 
   const instruction = templateInstructions[template] || 'Modern web application with best practices.';
 
-  return `You are Bolt, expert developer. Create ${instruction}
+  return `You are Recoder, expert developer. Create ${instruction}
 
 WebContainer env (browser Node.js). Current dir: \`${cwd}\`
 

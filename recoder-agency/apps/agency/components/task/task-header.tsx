@@ -1,11 +1,11 @@
-import { StatusBadge } from "@giselle-internal/ui/status-badge";
+import { StatusBadge } from "@recoder-internal/ui/status-badge";
 import type {
 	GenerationContextInput,
 	ParameterItem,
 	Task,
 	UploadedFileData,
 	WorkspaceId,
-} from "@giselles-ai/protocol";
+} from "@recoder/protocol";
 import { Check, FilePenLineIcon } from "lucide-react";
 import Link from "next/link";
 import { TaskInputString } from "./task-input-string";

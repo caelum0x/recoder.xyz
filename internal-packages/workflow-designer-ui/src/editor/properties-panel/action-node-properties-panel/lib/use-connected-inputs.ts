@@ -1,4 +1,4 @@
-import type { Input, NodeId } from "@giselles-ai/protocol";
+import type { Input, NodeId } from "@recoder/protocol";
 import { useMemo } from "react";
 import { useAppDesignerStore } from "../../../../app-designer";
 import type { InputWithConnectedOutput } from "./connected-outputs";
@@ -33,7 +33,8 @@ export function useConnectedInputs(nodeId: NodeId, inputs: Input[]) {
 				(node) => node.id === connectedConnection?.outputNode.id,
 			);
 			const connectedOutput = connectedNode?.outputs.find(
-				(output) => output.id === connectedConnection?.outputId,
+				(output: { id: string }) =>
+					output.id === connectedConnection?.outputId,
 			);
 
 			if (
