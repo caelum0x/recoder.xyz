@@ -1,5 +1,5 @@
 {
-	"name": "@giselles-ai/rag",
+	"name": "@recoder/rag",
 	"version": "0.1.0",
 	"description": "Simplified RAG system with type safety",
 	"main": "dist/index.js",
@@ -15,13 +15,13 @@
 		"@ai-sdk/gateway": "catalog:",
 		"@ai-sdk/google": "catalog:",
 		"@ai-sdk/openai": "catalog:",
-		"@giselles-ai/protocol": "workspace:*",
+		"@recoder/protocol": "workspace:*",
 		"ai": "catalog:",
 		"pg": "catalog:",
 		"pgvector": "catalog:"
 	},
 	"devDependencies": {
-		"@giselles-ai/tsconfig": "workspace:^",
+		"@recoder/tsconfig": "workspace:^",
 		"@types/node": "catalog:",
 		"@types/pg": "catalog:",
 		"tsup": "catalog:",

@@ -16,7 +16,7 @@ export async function GET(req: NextRequest) {
     const startDate = new Date();
     startDate.setDate(startDate.getDate() - days);
 
-    const where: any = {
+    const where: { userId: string; createdAt: { gte: Date }; serverId?: string } = {
       userId: user.id,
       createdAt: { gte: startDate },
     };

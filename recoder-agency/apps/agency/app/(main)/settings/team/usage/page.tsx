@@ -1,5 +1,5 @@
-import { DocsLink } from "@giselle-internal/ui/docs-link";
-import { PageHeading } from "@giselle-internal/ui/page-heading";
+import { DocsLink } from "@recoder-internal/ui/docs-link";
+import { PageHeading } from "@recoder-internal/ui/page-heading";
 import { Suspense } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { fetchCurrentTeam, isProPlan } from "@/services/teams";

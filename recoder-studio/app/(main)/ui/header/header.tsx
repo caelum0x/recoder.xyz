@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Suspense } from "react";
 import { RecoderStudioLogo } from "@/components/giselle-logo";
+import { HeaderConnectorIndicator } from "../../interop/components/header-connector-indicator";
 import { AccountMenu, getCurrentUser } from "./account-menu";
 import { AppSwitcher } from "./app-switcher";
 import { getTeamContext, TeamSwitcher } from "./team-switcher";
@@ -55,6 +56,7 @@ export function Header() {
 				>
 					News
 				</Link>
+				<HeaderConnectorIndicator />
 				<div className="flex items-center">
 					<Suspense
 						fallback={

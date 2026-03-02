@@ -8,25 +8,25 @@
 
 @theme {
 	--color-black-950: hsl(0, 0%, 0%);
-	--color-black-900: hsl(229, 100%, 2%);
-	--color-black-850: hsl(231, 62%, 6%);
-	--color-black-820: hsl(207, 27%, 15%);
-	--color-black-800: hsl(231, 47%, 22%);
-	--color-black-600: hsl(222, 17%, 53%);
-	--color-black-400: hsl(222, 21%, 40%);
-	--color-black-350: hsl(207, 11%, 47%);
-	--color-black-300: hsl(222, 21%, 50%);
-	--color-black-200: hsl(209, 17%, 75%);
-	--color-black-250: hsl(222, 57%, 73%);
-	--color-black-100: hsl(234, 91%, 5%);
-	--color-black-80: hsl(218, 58%, 21%);
-	--color-black-70: hsl(222, 21%, 40%);
-	--color-black-50: hsl(222, 21%, 40%);
-	--color-black-40: hsl(207, 12%, 57%);
-	--color-black-30: hsl(207, 19%, 77%);
-	--color-black--30: hsl(192, 73%, 84%);
-	--color-black--50: hsl(210, 58%, 71%);
-	--color-black--70: hsl(202, 52%, 46%);
+	--color-black-900: hsl(0, 0%, 3%);
+	--color-black-850: hsl(0, 0%, 5%);
+	--color-black-820: hsl(0, 0%, 12%);
+	--color-black-800: hsl(0, 0%, 18%);
+	--color-black-600: hsl(0, 0%, 45%);
+	--color-black-400: hsl(0, 0%, 35%);
+	--color-black-350: hsl(0, 0%, 40%);
+	--color-black-300: hsl(0, 0%, 42%);
+	--color-black-200: hsl(0, 0%, 70%);
+	--color-black-250: hsl(25, 20%, 65%);
+	--color-black-100: hsl(0, 0%, 4%);
+	--color-black-80: hsl(0, 0%, 15%);
+	--color-black-70: hsl(0, 0%, 35%);
+	--color-black-50: hsl(0, 0%, 35%);
+	--color-black-40: hsl(0, 0%, 50%);
+	--color-black-30: hsl(0, 0%, 72%);
+	--color-black--30: hsl(25, 80%, 80%);
+	--color-black--50: hsl(25, 60%, 65%);
+	--color-black--70: hsl(25, 70%, 50%);
 
 	--color-white-950: hsl(0 0% 100%);
 	--color-white-900: hsl(220, 60%, 98%);
@@ -59,13 +59,13 @@
 
 	--color-deep-purple-900: hsl(275, 96%, 44%);
 
-	--color-primary-950: var(--color-blue-950);
-	--color-primary-900: var(--color-blue-900);
-	--color-primary-800: var(--color-blue-800);
-	--color-primary-400: var(--color-blue-400);
-	--color-primary-300: var(--color-blue-300);
-	--color-primary-200: var(--color-blue-200);
-	--color-primary-100: var(--color-blue-100);
+	--color-primary-950: hsl(25, 95%, 48%);
+	--color-primary-900: hsl(25, 95%, 53%);
+	--color-primary-800: hsl(25, 90%, 58%);
+	--color-primary-400: hsl(270, 91%, 65%);
+	--color-primary-300: hsl(270, 50%, 58%);
+	--color-primary-200: hsl(25, 60%, 85%);
+	--color-primary-100: hsl(25, 95%, 53%);
 
 	--color-text-node-1: var(--color-node-text-primary);
 	--color-text-node-2: var(--color-node-text-secondary);
@@ -121,8 +121,8 @@
 	--color-data-query-node-1: var(--color-node-data-query-primary);
 	--color-data-query-node-2: var(--color-node-data-query-secondary);
 
-	--color-end-node-1: var(--color-blue-400);
-	--color-end-node-2: var(--color-blue-800);
+	--color-end-node-1: hsl(270, 91%, 65%);
+	--color-end-node-2: hsl(25, 95%, 53%);
 
 	--color-error-900: var(--color-red-900);
 	--error_900: var(--color-red-900);
@@ -331,8 +331,8 @@
 
 	.auth-corner-dot {
 		@apply absolute w-1 h-1 rounded-full;
-		background-color: hsl(192, 73%, 84%);
-		box-shadow: 0 0 16px hsla(192, 73%, 84%, 0.6);
+		background-color: hsl(25, 95%, 53%);
+		box-shadow: 0 0 16px hsla(25, 95%, 53%, 0.6);
 	}
 
 	.auth-corner-dot--top-left {

@@ -66,27 +66,27 @@ export default function MetricBars({
             className="space-y-0"
           >
             <div
-              className={`grid grid-cols-12 gap-2 items-center p-2 -m-2 rounded-lg cursor-pointer transition-all hover:bg-bolt-elements-background-depth-3 ${
-                isExpanded ? 'bg-bolt-elements-background-depth-3' : ''
+              className={`grid grid-cols-12 gap-2 items-center p-2 -m-2 rounded-lg cursor-pointer transition-all hover:bg-recoder-elements-background-depth-3 ${
+                isExpanded ? 'bg-recoder-elements-background-depth-3' : ''
               }`}
               onClick={() => toggleExpanded(metric.label)}
             >
               {/* Bullet and Label - fixed width */}
               <div className="col-span-4 flex items-center gap-2">
                 <div className={`w-1.5 h-1.5 rounded-full ${getBulletColor()}`} />
-                <span className="text-sm font-medium text-bolt-elements-textPrimary truncate">{metric.label}</span>
+                <span className="text-sm font-medium text-recoder-elements-textPrimary truncate">{metric.label}</span>
                 <motion.div
                   animate={{ rotate: isExpanded ? 180 : 0 }}
                   transition={{ duration: 0.2 }}
                   className="ml-auto"
                 >
-                  <ChevronDown className="w-4 h-4 text-bolt-elements-textTertiary" />
+                  <ChevronDown className="w-4 h-4 text-recoder-elements-textTertiary" />
                 </motion.div>
               </div>
 
               {/* Bar container - flexible width */}
               <div className="col-span-7 relative">
-                <div className="relative h-2 bg-bolt-elements-background-depth-3 rounded-full overflow-hidden">
+                <div className="relative h-2 bg-recoder-elements-background-depth-3 rounded-full overflow-hidden">
                   {/* Animated bar */}
                   <motion.div
                     className={`absolute inset-y-0 left-0 ${getBarColor(metric.score)} rounded-full`}
@@ -133,21 +133,21 @@ export default function MetricBars({
                 >
                   <div className="pl-12 pr-3 py-3 space-y-2">
                     <div>
-                      <div className="text-xs font-medium text-bolt-elements-textTertiary mb-1">Status</div>
-                      <div className="text-sm text-bolt-elements-textPrimary">{metric.details}</div>
+                      <div className="text-xs font-medium text-recoder-elements-textTertiary mb-1">Status</div>
+                      <div className="text-sm text-recoder-elements-textPrimary">{metric.details}</div>
                     </div>
                     {metric.recommendation && (
                       <div>
-                        <div className="text-xs font-medium text-bolt-elements-textTertiary mb-1">Recommendation</div>
-                        <div className="text-sm text-bolt-elements-textTertiary">{metric.recommendation}</div>
+                        <div className="text-xs font-medium text-recoder-elements-textTertiary mb-1">Recommendation</div>
+                        <div className="text-sm text-recoder-elements-textTertiary">{metric.recommendation}</div>
                       </div>
                     )}
                     {metric.actionItems && metric.actionItems.length > 0 && (
                       <div>
-                        <div className="text-xs font-medium text-bolt-elements-textTertiary mb-1">Action Items</div>
+                        <div className="text-xs font-medium text-recoder-elements-textTertiary mb-1">Action Items</div>
                         <ul className="space-y-1">
                           {metric.actionItems.map((item: string, i: number) => (
-                            <li key={i} className="flex items-start gap-1.5 text-sm text-bolt-elements-textTertiary">
+                            <li key={i} className="flex items-start gap-1.5 text-sm text-recoder-elements-textTertiary">
                               <span className="text-accent-500 mt-1">-</span>
                               <span>{item}</span>
                             </li>
@@ -169,26 +169,26 @@ export default function MetricBars({
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ delay: 0.5 }}
-          className="mt-5 pt-3 border-t border-bolt-elements-borderColor"
+          className="mt-5 pt-3 border-t border-recoder-elements-borderColor"
         >
           <div className="grid grid-cols-3 gap-4 text-center">
             <div>
               <div className="text-xl font-bold text-accent-500">
                 {metrics.filter(m => m.status === 'pass').length}
               </div>
-              <div className="text-xs text-bolt-elements-textTertiary">Passing</div>
+              <div className="text-xs text-recoder-elements-textTertiary">Passing</div>
             </div>
             <div>
               <div className="text-xl font-bold text-accent-600">
                 {metrics.filter(m => m.status === 'warning').length}
               </div>
-              <div className="text-xs text-bolt-elements-textTertiary">Warning</div>
+              <div className="text-xs text-recoder-elements-textTertiary">Warning</div>
             </div>
             <div>
               <div className="text-xl font-bold text-accent-800">
                 {metrics.filter(m => m.status === 'fail').length}
               </div>
-              <div className="text-xs text-bolt-elements-textTertiary">Failing</div>
+              <div className="text-xs text-recoder-elements-textTertiary">Failing</div>
             </div>
           </div>
         </motion.div>

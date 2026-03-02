@@ -22,7 +22,7 @@ model account {
   password              String?
   createdAt             DateTime  @default(now())
   updatedAt             DateTime
-  user                  user      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user                  users     @relation("LegacyAccountUser", fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model accounts {
@@ -172,6 +172,10 @@ model audit_logs {
   timestamp  DateTime @default(now())
   userId     String?
   users      users?   @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([timestamp])
+  @@index([action, resource])
 }
 
 model backup_access {
@@ -734,6 +738,8 @@ model dodo_charges {
   createdAt          DateTime           @default(now())
   processedAt        DateTime?
   dodo_subscriptions dodo_subscriptions @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+
+  @@index([subscriptionId])
 }
 
 model dodo_subscriptions {
@@ -756,6 +762,10 @@ model dodo_subscriptions {
   dodo_charges       dodo_charges[]
   users              users          @relation(fields: [userId], references: [id], onDelete: Cascade)
   dodo_usage         dodo_usage[]
+
+  @@index([userId])
+  @@index([status])
+  @@index([createdAt])
 }
 
 model dodo_usage {
@@ -1440,6 +1450,20 @@ model push_notifications {
   @@index([userId, status])
 }
 
+model web_push_subscriptions {
+  id        String   @id @default(cuid())
+  userId    String
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  userAgent String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now())
+  users     users    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
 model rag_interactions {
   id              String       @id
   interactionType String
@@ -1840,7 +1864,7 @@ model session {
   ipAddress String?
   userAgent String?
   userId    String
-  user      user     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user      users    @relation("LegacySessionUser", fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model sessions {
@@ -1995,6 +2019,9 @@ model subscriptions {
   invoices           invoices[]
   payment_methods    payment_methods? @relation(fields: [paymentMethodId], references: [id])
   users              users            @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([status])
+  @@index([createdAt])
 }
 
 model sync_states {
@@ -2321,18 +2348,9 @@ model usage_records {
   users         users     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
-model user {
-  id            String    @id
-  name          String
-  email         String    @unique
-  emailVerified Boolean   @default(false)
-  image         String?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @default(now())
-  claudeCodeToken String?
-  account       account[]
-  session       session[]
-}
+// REMOVED: model user {} — unified into 'users' model below.
+// Better Auth now routes through customPrismaAdapter which maps 'user' -> 'users'.
+// The 'account' and 'session' models (Better Auth) now FK to 'users' directly.
 
 model user_api_keys {
   id           String    @id
@@ -2434,6 +2452,16 @@ model users {
   image                                              String?
   password                                           String?
   apiKey                                             String?                   @unique
+  referralCode                                       String?                   @unique
+  referredByCode                                     String?
+  utmSource                                          String?
+  utmMedium                                          String?
+  utmCampaign                                        String?
+  utmTerm                                            String?
+  utmContent                                         String?
+  firstTouchReferrer                                 String?
+  firstTouchLanding                                  String?
+  acquisitionSource                                  String?
   backupCodes                                        String?
   backupCodesTemp                                    String?
   isActive                                           Boolean                   @default(true)
@@ -2466,6 +2494,8 @@ model users {
   DeviceCode                                         DeviceCode[]
   MCPServer                                          MCPServer[]
   MCPToolCall                                        MCPToolCall[]
+  legacy_accounts                                    account[]                 @relation("LegacyAccountUser")
+  legacy_sessions                                    session[]                 @relation("LegacySessionUser")
   accounts                                           accounts[]
   agents                                             agents[]
   ai_generated_projects                              ai_generated_projects[]
@@ -2521,6 +2551,7 @@ model users {
   report_shares                                      report_shares[]
   restore_jobs                                       restore_jobs[]
   scheduled_executions                               scheduled_executions[]
+  security_settings                                  security_settings?
   semantic_queries                                   semantic_queries[]
   sessions                                           sessions[]
   smart_contracts                                    smart_contracts[]
@@ -2539,6 +2570,14 @@ model users {
   user_roles                                         user_roles[]
   visual_scripts                                     visual_scripts[]
   webhooks                                           webhooks[]
+  scheduled_emails                                   scheduled_emails[]
+  newsletter_subscribers                             newsletter_subscribers[]
+  web_push_subscriptions                             web_push_subscriptions[]
+
+  @@index([createdAt])
+  @@index([subscription])
+  @@index([isActive])
+  @@index([lastLoginAt])
 }
 
 model user_quota {
@@ -2595,6 +2634,20 @@ model verifications {
   expires_at DateTime
   created_at DateTime @default(now())
   updated_at DateTime @default(now())
+}
+
+model security_settings {
+  id               String   @id @default(cuid())
+  userId           String   @unique @map("user_id")
+  twoFactorSecret  String?  @map("two_factor_secret")
+  twoFactorEnabled Boolean  @default(false) @map("two_factor_enabled")
+  backupCodes      String?  @map("backup_codes")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+  users            users    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("security_settings")
 }
 
 model visual_scripts {
@@ -2757,6 +2810,46 @@ model chat_github_connections {
 
   @@index([userId])
   @@index([chatId])
+}
+
+model scheduled_emails {
+  id          String    @id @default(cuid())
+  userId      String
+  email       String
+  name        String    @default("")
+  type        String    // 'getting_started', 'feature_deep_dive', 'engagement'
+  scheduledAt DateTime
+  sentAt      DateTime?
+  status      String    @default("pending") // pending, sent, failed
+  attempts    Int       @default(0)
+  error       String?
+  createdAt   DateTime  @default(now())
+  users       users     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([status, scheduledAt])
+  @@index([userId])
+}
+
+model newsletter_subscribers {
+  id               String    @id @default(cuid())
+  email            String    @unique
+  name             String?
+  status           String    @default("active")
+  source           String?
+  unsubscribeToken String?   @unique @map("unsubscribe_token")
+  userId           String?   @map("user_id")
+  metadata         Json      @default("{}")
+  subscribedAt     DateTime  @default(now()) @map("subscribed_at")
+  unsubscribedAt   DateTime? @map("unsubscribed_at")
+  lastEmailSentAt  DateTime? @map("last_email_sent_at")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @default(now()) @map("updated_at")
+  users            users?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([status])
+  @@index([email])
+  @@index([userId])
+  @@map("newsletter_subscribers")
 }
 
 model marketplace_agents {

@@ -1,64 +1,68 @@
 /**
  * Auth Helper Functions for API Routes
- * Provides convenient wrappers for JWT authentication
+ *
+ * Uses `@recoder/auth` shared helpers for cookie extraction so that
+ * cookie names and parsing logic are kept in a single place.
+ * The `user` table (Better Auth web auth) and `users` table (CLI auth)
+ * remain SEPARATE by design.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from './prisma';
 import jwt from 'jsonwebtoken';
 import { cookies } from 'next/headers';
+import { logger } from '@/lib/logger';
+import {
+  extractSessionToken,
+  extractSessionTokenFromHeader,
+  parseSessionToken,
+} from '@recoder/auth/edge';
 
 /**
- * Get session from JWT token
- * @param request - NextRequest object (optional)
- * @returns Session object or null
+ * Get session from Better Auth cookie or JWT token.
+ *
+ * Priority:
+ *   1. Better Auth session cookie (`recoder.session_token`)
+ *   2. Legacy JWT `auth-token` cookie / Bearer header
  */
 export async function getSession(request?: NextRequest) {
   try {
     let token: string | undefined;
-    let betterAuthToken: string | undefined;
-    
+    let betterAuthToken: string | null = null;
+
     if (request) {
-      // Get token from request cookies or Authorization header
-      token = request.cookies.get('auth-token')?.value || 
+      // Get legacy JWT token from request cookies or Authorization header
+      token = request.cookies.get('auth-token')?.value ||
               request.headers.get('authorization')?.replace('Bearer ', '');
-      
-      // Also check for Better Auth session token
-      let rawBetterAuthToken = request.cookies.get('__Secure-recoder.session_token')?.value ||
-                       request.cookies.get('recoder.session_token')?.value;
-      
-      console.error('[auth-helpers] Raw cookie value:', rawBetterAuthToken?.substring(0, 50));
-      console.error('[auth-helpers] Cookie header:', request.headers.get('cookie')?.substring(0, 100));
-      
-      // Better Auth signs cookies with .signature - extract just the token
-      if (rawBetterAuthToken && rawBetterAuthToken.includes('.')) {
-        betterAuthToken = rawBetterAuthToken.split('.')[0];
-        console.error('[auth-helpers] Extracted token from signed cookie:', betterAuthToken?.substring(0, 20));
-      } else {
-        betterAuthToken = rawBetterAuthToken;
+
+      // Extract Better Auth session token using shared helpers
+      const rawToken = extractSessionToken(
+        (name) => request.cookies.get(name)?.value ?? null,
+      );
+
+      if (rawToken) {
+        betterAuthToken = parseSessionToken(rawToken);
       }
-      
+
       // Fallback: parse raw Cookie header (for cross-service calls)
       if (!betterAuthToken) {
         const cookieHeader = request.headers.get('cookie');
-        console.log('[auth-helpers] Fallback parsing, cookie header exists:', !!cookieHeader);
         if (cookieHeader) {
-          const match = cookieHeader.match(/__Secure-recoder\.session_token=([^;]+)/);
-          console.log('[auth-helpers] Regex match:', !!match);
-          if (match) {
-            // URL decode and extract token (before the signature)
-            const decoded = decodeURIComponent(match[1]);
-            betterAuthToken = decoded.split('.')[0];
-            console.log('[auth-helpers] Extracted token:', betterAuthToken?.substring(0, 10) + '...');
-          }
+          betterAuthToken = extractSessionTokenFromHeader(cookieHeader);
         }
       }
     } else {
-      // Get token from server-side cookies
+      // Server-side: read from Next.js cookie store
       const cookieStore = await cookies();
       token = cookieStore.get('auth-token')?.value;
-      betterAuthToken = cookieStore.get('__Secure-recoder.session_token')?.value ||
-                       cookieStore.get('recoder.session_token')?.value;
+
+      const rawToken = extractSessionToken(
+        (name) => cookieStore.get(name)?.value ?? null,
+      );
+
+      if (rawToken) {
+        betterAuthToken = parseSessionToken(rawToken);
+      }
     }
 
     // Try Better Auth first
@@ -90,10 +94,10 @@ export async function getSession(request?: NextRequest) {
             where: { email: session.user.email },
             select: { id: true }
           });
-          
+
           // Use app user ID for API key lookup, fall back to Better Auth ID
           const userIdForKeys = appUser?.id || session.user.id;
-          
+
           // Check if user has any API keys
           const hasApiKey = await prisma.user_api_keys.count({
             where: {
@@ -116,7 +120,7 @@ export async function getSession(request?: NextRequest) {
           };
         }
       } catch (error) {
-        console.error('Better Auth session check failed:', error);
+        logger.error('Better Auth session check failed', { error: String(error) });
       }
     }
 
@@ -126,8 +130,13 @@ export async function getSession(request?: NextRequest) {
     }
 
     // Verify JWT token
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'fallback-secret') as any;
-    
+    const jwtSecret = process.env.JWT_SECRET || process.env.BETTER_AUTH_SECRET;
+    if (!jwtSecret) {
+      console.error('[auth-helpers] JWT_SECRET or BETTER_AUTH_SECRET is not configured');
+      return null;
+    }
+    const decoded = jwt.verify(token, jwtSecret) as any;
+
     // Fetch user from database
     const user = await prisma.users.findUnique({
       where: { id: decoded.userId },
@@ -164,7 +173,7 @@ export async function getSession(request?: NextRequest) {
       expires: new Date(decoded.exp * 1000).toISOString()
     };
   } catch (error) {
-    console.error('Failed to get session:', error);
+    logger.error('Failed to get session', { error: String(error) });
     return null;
   }
 }

@@ -1,5 +1,5 @@
-import type { EmbeddingProfileId, WorkspaceId } from "@giselles-ai/protocol";
-import type { QueryService } from "@giselles-ai/rag";
+import type { EmbeddingProfileId, WorkspaceId } from "@recoder/protocol";
+import type { QueryService } from "@recoder/rag";
 
 export type GithubEmbeddingMetadata = {
 	fileSha: string;

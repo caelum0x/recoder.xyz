@@ -1,4 +1,4 @@
-import { DEFAULT_EMBEDDING_PROFILE_ID } from "@giselles-ai/protocol";
+import { DEFAULT_EMBEDDING_PROFILE_ID } from "@recoder/protocol";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ChunkStore } from "../chunk-store/types";
 import type { ChunkerFunction } from "../chunker/types";
@@ -23,7 +23,7 @@ type GitHubIssueMetadata = {
 };
 
 // Mock the data-type module for EMBEDDING_PROFILES
-vi.mock("@giselles-ai/protocol", () => ({
+vi.mock("@recoder/protocol", () => ({
 	DEFAULT_EMBEDDING_PROFILE_ID: 1,
 	EMBEDDING_PROFILES: {
 		1: {

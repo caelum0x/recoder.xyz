@@ -37,17 +37,17 @@ export function LoadingIndicator({ className }: LoadingIndicatorProps) {
   return (
     <div className={classNames('flex flex-col items-center justify-center gap-4 p-6', className)}>
       {/* Spinning indicator */}
-      <div className="i-svg-spinners:90-ring-with-bg text-4xl text-bolt-elements-loader-progress"></div>
+      <div className="i-svg-spinners:90-ring-with-bg text-4xl text-recoder-elements-loader-progress"></div>
 
       {/* Loading message */}
       <div className="text-center">
-        <p className="text-lg font-medium text-bolt-elements-textPrimary mb-2">
+        <p className="text-lg font-medium text-recoder-elements-textPrimary mb-2">
           {currentMessage.text}
         </p>
       </div>
 
       {/* Progress bar */}
-      <div className="w-64 h-1.5 bg-bolt-elements-background-depth-3 rounded-full overflow-hidden">
+      <div className="w-64 h-1.5 bg-recoder-elements-background-depth-3 rounded-full overflow-hidden">
         <div
           className="h-full bg-gradient-to-r from-accent-500 via-accent-400 to-accent-500 rounded-full transition-all duration-500 ease-out"
           style={{ width: `${Math.min(progress + 10, 95)}%` }}
@@ -55,7 +55,7 @@ export function LoadingIndicator({ className }: LoadingIndicatorProps) {
       </div>
 
       {/* Step indicator */}
-      <div className="text-xs text-bolt-elements-textTertiary">
+      <div className="text-xs text-recoder-elements-textTertiary">
         Step {messageIndex + 1} of {LOADING_MESSAGES.length}
       </div>
     </div>
@@ -65,7 +65,7 @@ export function LoadingIndicator({ className }: LoadingIndicatorProps) {
 // Simple version for inline loading (smaller)
 export function InlineLoadingIndicator({ message = 'Processing...' }: { message?: string }) {
   return (
-    <div className="flex items-center gap-2 text-bolt-elements-textSecondary">
+    <div className="flex items-center gap-2 text-recoder-elements-textSecondary">
       <div className="i-svg-spinners:3-dots-fade text-xl"></div>
       <span className="text-sm">{message}</span>
     </div>

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { nanoid } from 'nanoid';
+import { logger } from '@/lib/logger';
 
 /**
  * POST - Store user info for an auth code (called from cli-callback page)
@@ -44,7 +45,7 @@ export async function POST(request: NextRequest) {
           updatedAt: new Date(),
         }
       });
-      console.log(`Created new CLI user: ${appUser.email}`);
+      logger.info('Created new CLI user', { email: appUser.email, route: 'auth/cli-internal/set-user' });
     }
 
     // Store auth code in database
@@ -78,7 +79,7 @@ export async function POST(request: NextRequest) {
     });
 
   } catch (error) {
-    console.error('Set user error:', error);
+    logger.error('Set user error:', { error: String(error), route: 'auth/cli-internal/set-user' });
     return NextResponse.json({
       success: false,
       error: 'server_error'
@@ -136,7 +137,7 @@ export async function GET(request: NextRequest) {
       }
     });
   } catch (error) {
-    console.error('Get user error:', error);
+    logger.error('Get user error:', { error: String(error), route: 'auth/cli-internal/set-user' });
     return NextResponse.json({
       success: false,
       error: 'server_error'

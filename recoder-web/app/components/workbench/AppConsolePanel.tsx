@@ -80,9 +80,9 @@ const ConsoleEntryItem = memo(({
   return (
     <div
       className={classNames(
-        'relative px-3 py-1.5 group transition-colors border-b border-bolt-elements-borderColor/30',
+        'relative px-3 py-1.5 group transition-colors border-b border-recoder-elements-borderColor/30',
         getLevelBgClass(entry.level),
-        'hover:bg-bolt-elements-item-backgroundActive'
+        'hover:bg-recoder-elements-item-backgroundActive'
       )}
     >
       <div className="flex items-start gap-2">
@@ -91,7 +91,7 @@ const ConsoleEntryItem = memo(({
 
         {/* Timestamp */}
         <span
-          className="text-bolt-elements-textTertiary text-xs font-mono shrink-0 mt-0.5"
+          className="text-recoder-elements-textTertiary text-xs font-mono shrink-0 mt-0.5"
           title={new Date(entry.timestamp).toLocaleString()}
         >
           {formatTimestamp(entry.timestamp)}
@@ -99,7 +99,7 @@ const ConsoleEntryItem = memo(({
 
         {/* Source badge */}
         {entry.sourceName && (
-          <span className="text-[10px] px-1.5 py-0.5 bg-bolt-elements-background-depth-3 text-bolt-elements-textSecondary rounded shrink-0">
+          <span className="text-[10px] px-1.5 py-0.5 bg-recoder-elements-background-depth-3 text-recoder-elements-textSecondary rounded shrink-0">
             {entry.sourceName}
           </span>
         )}
@@ -109,7 +109,7 @@ const ConsoleEntryItem = memo(({
           <span className={classNames(
             'text-[10px] px-1.5 py-0.5 rounded shrink-0',
             entry.type === 'server' ? 'bg-purple-500/20 text-purple-400' :
-            entry.type === 'system' ? 'bg-bolt-elements-background-depth-3 text-bolt-elements-textSecondary' :
+            entry.type === 'system' ? 'bg-recoder-elements-background-depth-3 text-recoder-elements-textSecondary' :
             'bg-blue-500/20 text-blue-400'
           )}>
             {entry.type}
@@ -142,16 +142,16 @@ const ConsoleEntryItem = memo(({
         {/* Send to chat button (on hover) */}
         <button
           onClick={onSendToChat}
-          className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:bg-bolt-elements-background-depth-3 rounded"
+          className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:bg-recoder-elements-background-depth-3 rounded"
           title="Send to chat"
         >
-          <span className="i-ph:chat-circle text-xs text-bolt-elements-textSecondary" />
+          <span className="i-ph:chat-circle text-xs text-recoder-elements-textSecondary" />
         </button>
       </div>
 
       {/* Stack trace for errors */}
       {entry.stack && isExpanded && (
-        <div className="mt-2 ml-6 p-2 bg-bolt-elements-background-depth-3 rounded text-[10px] text-bolt-elements-textSecondary font-mono whitespace-pre-wrap overflow-x-auto">
+        <div className="mt-2 ml-6 p-2 bg-recoder-elements-background-depth-3 rounded text-[10px] text-recoder-elements-textSecondary font-mono whitespace-pre-wrap overflow-x-auto">
           {entry.stack}
         </div>
       )}
@@ -266,8 +266,8 @@ export const AppConsolePanel = memo(({ className = '' }: AppConsolePanelProps) =
 
   if (!projectId) {
     return (
-      <div className={classNames('flex flex-col h-full bg-bolt-elements-background-depth-1', className)}>
-        <div className="flex items-center justify-center h-full text-bolt-elements-textTertiary">
+      <div className={classNames('flex flex-col h-full bg-recoder-elements-background-depth-1', className)}>
+        <div className="flex items-center justify-center h-full text-recoder-elements-textTertiary">
           <p>No project selected</p>
         </div>
       </div>
@@ -275,9 +275,9 @@ export const AppConsolePanel = memo(({ className = '' }: AppConsolePanelProps) =
   }
 
   return (
-    <div className={classNames('flex flex-col h-full min-h-0 bg-bolt-elements-background-depth-1', className)}>
+    <div className={classNames('flex flex-col h-full min-h-0 bg-recoder-elements-background-depth-1', className)}>
       {/* Header with filters */}
-      <div className="flex flex-col border-b border-bolt-elements-borderColor bg-bolt-elements-background-depth-2">
+      <div className="flex flex-col border-b border-recoder-elements-borderColor bg-recoder-elements-background-depth-2">
         {/* Top row: Title and actions */}
         <div className="flex items-center justify-between px-3 py-2">
           <div className="flex items-center gap-3">
@@ -296,7 +296,7 @@ export const AppConsolePanel = memo(({ className = '' }: AppConsolePanelProps) =
                 </span>
               )}
               {totalCount > 0 && errorCount === 0 && warningCount === 0 && (
-                <span className="text-bolt-elements-textSecondary">{totalCount} logs</span>
+                <span className="text-recoder-elements-textSecondary">{totalCount} logs</span>
               )}
             </div>
           </div>
@@ -321,7 +321,7 @@ export const AppConsolePanel = memo(({ className = '' }: AppConsolePanelProps) =
                 'flex items-center gap-1 px-2 py-1 text-xs rounded transition-colors',
                 autoScroll
                   ? 'bg-green-500/20 text-green-400 border border-green-500/30'
-                  : 'bg-bolt-elements-background-depth-3 text-bolt-elements-textTertiary border border-bolt-elements-borderColor'
+                  : 'bg-recoder-elements-background-depth-3 text-recoder-elements-textTertiary border border-recoder-elements-borderColor'
               )}
               title={autoScroll ? 'Auto-scroll enabled (click to pause)' : 'Auto-scroll paused (click to enable)'}
             >
@@ -340,7 +340,7 @@ export const AppConsolePanel = memo(({ className = '' }: AppConsolePanelProps) =
         </div>
 
         {/* Filter row */}
-        <div className="flex items-center gap-2 px-3 py-2 border-t border-bolt-elements-borderColor">
+        <div className="flex items-center gap-2 px-3 py-2 border-t border-recoder-elements-borderColor">
           {/* Level filter buttons */}
           <div className="flex items-center gap-1 text-xs">
             <button
@@ -349,7 +349,7 @@ export const AppConsolePanel = memo(({ className = '' }: AppConsolePanelProps) =
                 'px-2 py-1 rounded transition-colors',
                 levelFilter === 'all'
                   ? 'bg-blue-500/20 text-blue-400'
-                  : 'text-bolt-elements-textTertiary hover:bg-bolt-elements-background-depth-3'
+                  : 'text-recoder-elements-textTertiary hover:bg-recoder-elements-background-depth-3'
               )}
             >
               All
@@ -360,7 +360,7 @@ export const AppConsolePanel = memo(({ className = '' }: AppConsolePanelProps) =
                 'px-2 py-1 rounded transition-colors',
                 levelFilter === 'error'
                   ? 'bg-red-500/20 text-red-400'
-                  : 'text-bolt-elements-textTertiary hover:bg-bolt-elements-background-depth-3'
+                  : 'text-recoder-elements-textTertiary hover:bg-recoder-elements-background-depth-3'
               )}
             >
               Errors
@@ -371,7 +371,7 @@ export const AppConsolePanel = memo(({ className = '' }: AppConsolePanelProps) =
                 'px-2 py-1 rounded transition-colors',
                 levelFilter === 'warn'
                   ? 'bg-yellow-500/20 text-yellow-400'
-                  : 'text-bolt-elements-textTertiary hover:bg-bolt-elements-background-depth-3'
+                  : 'text-recoder-elements-textTertiary hover:bg-recoder-elements-background-depth-3'
               )}
             >
               Warnings
@@ -382,7 +382,7 @@ export const AppConsolePanel = memo(({ className = '' }: AppConsolePanelProps) =
                 'px-2 py-1 rounded transition-colors',
                 levelFilter === 'info'
                   ? 'bg-blue-500/20 text-blue-400'
-                  : 'text-bolt-elements-textTertiary hover:bg-bolt-elements-background-depth-3'
+                  : 'text-recoder-elements-textTertiary hover:bg-recoder-elements-background-depth-3'
               )}
             >
               Info
@@ -390,13 +390,13 @@ export const AppConsolePanel = memo(({ className = '' }: AppConsolePanelProps) =
           </div>
 
           {/* Divider */}
-          <div className="w-px h-4 bg-bolt-elements-borderColor" />
+          <div className="w-px h-4 bg-recoder-elements-borderColor" />
 
           {/* Type filter */}
           <select
             value={typeFilter}
             onChange={(e) => setTypeFilter(e.target.value as 'all' | ConsoleLogType)}
-            className="text-xs px-2 py-1 bg-bolt-elements-background-depth-3 border border-bolt-elements-borderColor rounded text-bolt-elements-textSecondary"
+            className="text-xs px-2 py-1 bg-recoder-elements-background-depth-3 border border-recoder-elements-borderColor rounded text-recoder-elements-textSecondary"
           >
             <option value="all">All Sources</option>
             <option value="client">Client</option>
@@ -410,8 +410,8 @@ export const AppConsolePanel = memo(({ className = '' }: AppConsolePanelProps) =
             className={classNames(
               'flex items-center gap-1 px-2 py-1 text-xs rounded transition-colors',
               systemCollapsed
-                ? 'text-bolt-elements-textTertiary hover:bg-bolt-elements-background-depth-3'
-                : 'bg-bolt-elements-background-depth-3 text-bolt-elements-textSecondary'
+                ? 'text-recoder-elements-textTertiary hover:bg-recoder-elements-background-depth-3'
+                : 'bg-recoder-elements-background-depth-3 text-recoder-elements-textSecondary'
             )}
             title={systemCollapsed ? 'Show system messages' : 'Hide system messages'}
           >
@@ -423,7 +423,7 @@ export const AppConsolePanel = memo(({ className = '' }: AppConsolePanelProps) =
           {hasActiveFilters && (
             <button
               onClick={resetFilters}
-              className="flex items-center gap-1 px-2 py-1 text-xs text-bolt-elements-textTertiary hover:bg-bolt-elements-background-depth-3 rounded transition-colors"
+              className="flex items-center gap-1 px-2 py-1 text-xs text-recoder-elements-textTertiary hover:bg-recoder-elements-background-depth-3 rounded transition-colors"
             >
               <span className="i-ph:x" />
               Clear
@@ -431,7 +431,7 @@ export const AppConsolePanel = memo(({ className = '' }: AppConsolePanelProps) =
           )}
 
           {/* Entry count */}
-          <div className="ml-auto text-xs text-bolt-elements-textTertiary">
+          <div className="ml-auto text-xs text-recoder-elements-textTertiary">
             {entries.length} of {totalCount} logs
           </div>
         </div>
@@ -444,10 +444,10 @@ export const AppConsolePanel = memo(({ className = '' }: AppConsolePanelProps) =
         onScroll={handleScroll}
       >
         {entries.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-full text-bolt-elements-textTertiary">
-            <div className="i-ph:terminal text-4xl mb-3 text-bolt-elements-textTertiary" />
+          <div className="flex flex-col items-center justify-center h-full text-recoder-elements-textTertiary">
+            <div className="i-ph:terminal text-4xl mb-3 text-recoder-elements-textTertiary" />
             <p className="text-sm">No console output</p>
-            <p className="text-xs text-bolt-elements-textTertiary mt-1">Console logs from your app will appear here</p>
+            <p className="text-xs text-recoder-elements-textTertiary mt-1">Console logs from your app will appear here</p>
           </div>
         ) : (
           entries.map((entry) => (

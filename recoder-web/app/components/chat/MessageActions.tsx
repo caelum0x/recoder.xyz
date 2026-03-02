@@ -31,14 +31,14 @@ export const MessageActions = memo(({ content, role, onRegenerate, isStreaming }
         label="Copy"
         copiedLabel="Copied"
         tooltip="Copy message"
-        className="text-bolt-elements-textTertiary hover:text-bolt-elements-textSecondary"
+        className="text-recoder-elements-textTertiary hover:text-recoder-elements-textSecondary"
       />
 
       {/* Regenerate button - only for assistant messages */}
       {role === 'assistant' && onRegenerate && (
         <button
           onClick={onRegenerate}
-          className="flex items-center gap-1 px-2 py-1 text-xs rounded-md hover:bg-bolt-elements-background-depth-2 text-bolt-elements-textTertiary hover:text-bolt-elements-textSecondary transition-colors"
+          className="flex items-center gap-1 px-2 py-1 text-xs rounded-md hover:bg-recoder-elements-background-depth-2 text-recoder-elements-textTertiary hover:text-recoder-elements-textSecondary transition-colors"
           title="Regenerate response"
         >
           <div className="i-ph:arrows-clockwise text-sm" />

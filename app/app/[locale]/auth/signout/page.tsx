@@ -10,6 +10,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { signOut } from '@/lib/auth-client';
 import { Terminal, LogOut, ArrowLeft, CheckCircle, Loader2 } from 'lucide-react';
 import Link from 'next/link';
+import { SiteHeader } from '@/components/SiteHeader';
 
 function SignOutContent() {
   const router = useRouter();
@@ -55,21 +56,7 @@ function SignOutContent() {
 
   return (
     <div className="min-h-screen bg-black text-white">
-      {/* Header */}
-      <header className="fixed top-0 w-full z-50 border-b border-white/10 bg-black/80 backdrop-blur-xl">
-        <div className="container mx-auto px-6 h-16 flex items-center justify-between">
-          <Link href="/" className="flex items-center space-x-2 group text-white hover:text-orange-500 transition-colors">
-            <ArrowLeft className="w-5 h-5" />
-            <span>Back to Home</span>
-          </Link>
-          <Link href="/" className="flex items-center space-x-2">
-            <div className="w-8 h-8 bg-gradient-to-br from-orange-500 to-purple-600 rounded-lg flex items-center justify-center">
-              <Terminal className="w-5 h-5 text-white" />
-            </div>
-            <span className="text-xl font-bold">recoder</span>
-          </Link>
-        </div>
-      </header>
+      <SiteHeader />
 
       <div className="container mx-auto px-6 py-24">
         <div className="max-w-md mx-auto">

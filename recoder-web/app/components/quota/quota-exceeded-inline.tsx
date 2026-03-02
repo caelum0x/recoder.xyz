@@ -35,10 +35,10 @@ export function QuotaExceededInline({
 
       {/* Message */}
       <div className="space-y-2 max-w-md">
-        <h3 className="text-lg font-semibold text-bolt-elements-textPrimary">
+        <h3 className="text-lg font-semibold text-recoder-elements-textPrimary">
           AI Quota Exceeded
         </h3>
-        <p className="text-sm text-bolt-elements-textSecondary">
+        <p className="text-sm text-recoder-elements-textSecondary">
           You've used all your AI credits for this period. Your quota will reset
           in {remainingDays} {remainingDays === 1 ? 'day' : 'days'}.
         </p>
@@ -60,11 +60,11 @@ export function QuotaExceededInline({
       </div>
 
       {/* Help text */}
-      <p className="text-xs text-bolt-elements-textTertiary max-w-md">
+      <p className="text-xs text-recoder-elements-textTertiary max-w-md">
         Need help choosing a plan? Check our{' '}
         <button
           onClick={onLearnMoreClick}
-          className="underline underline-offset-2 hover:text-bolt-elements-textSecondary transition-colors"
+          className="underline underline-offset-2 hover:text-recoder-elements-textSecondary transition-colors"
         >
           pricing guide
         </button>{' '}

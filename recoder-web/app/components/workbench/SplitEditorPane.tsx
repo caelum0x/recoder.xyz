@@ -85,7 +85,7 @@ export const SplitEditorPane = memo(
     }, [onFileSelect]);
 
     return (
-      <div className={classNames('flex flex-col h-full overflow-hidden bg-bolt-elements-background-depth-1', className)}>
+      <div className={classNames('flex flex-col h-full overflow-hidden bg-recoder-elements-background-depth-1', className)}>
         <PanelHeader className="overflow-x-auto shrink-0">
           {activeFileSegments?.length ? (
             <div className="flex items-center flex-1 text-sm">
@@ -112,7 +112,7 @@ export const SplitEditorPane = memo(
               </div>
             </div>
           ) : (
-            <div className="flex items-center flex-1 text-sm text-bolt-elements-textTertiary">
+            <div className="flex items-center flex-1 text-sm text-recoder-elements-textTertiary">
               <span className="i-ph:file-dashed mr-2" />
               No file selected
               {headerActions && (

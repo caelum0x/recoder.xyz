@@ -6,11 +6,11 @@
  * the migration run and branch merge.
  *
  * Usage:
- *   cd apps/studio.giselles.ai
+ *   cd apps/agency
  *   pnpm dlx tsx --env-file=.env.local scripts/20250815-db-patch-add-default-embedding-profiles.ts
  */
 
-import { DEFAULT_EMBEDDING_PROFILE_ID } from "@giselles-ai/protocol";
+import { DEFAULT_EMBEDDING_PROFILE_ID } from "@recoder/protocol";
 import { db } from "@/db";
 
 async function main() {

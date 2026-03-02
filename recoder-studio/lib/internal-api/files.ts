@@ -1,6 +1,6 @@
 "use server";
 
-import { FileId, WorkspaceId } from "@giselles-ai/protocol";
+import { FileId, WorkspaceId } from "@recoder/protocol";
 import { giselle } from "@/app/giselle";
 import { assertWorkspaceAccess } from "@/lib/assert-workspace-access";
 

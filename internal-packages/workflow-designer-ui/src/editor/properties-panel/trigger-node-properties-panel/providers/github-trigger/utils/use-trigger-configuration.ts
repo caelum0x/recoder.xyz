@@ -3,11 +3,11 @@ import {
 	type Output,
 	OutputId,
 	type TriggerNode,
-} from "@giselles-ai/protocol";
+} from "@recoder/protocol";
 import {
 	githubEvents,
 	githubEventToInputFields,
-} from "@giselles-ai/trigger-registry";
+} from "@recoder/trigger-registry";
 import { useCallback, useTransition } from "react";
 import {
 	useAppDesignerStore,
@@ -39,7 +39,11 @@ export const useTriggerConfiguration = ({
 
 	const configureTrigger = useCallback(
 		(event: GitHubEventData, step: InputCallsignStep | InputLabelsStep) => {
-			const githubEvent = githubEvents[event.id];
+			const eventId = String((event as { id?: unknown }).id);
+			if (!(eventId in githubEvents)) {
+				return;
+			}
+			const githubEvent = githubEvents[eventId as keyof typeof githubEvents];
 
 			startTransition(async () => {
 				try {

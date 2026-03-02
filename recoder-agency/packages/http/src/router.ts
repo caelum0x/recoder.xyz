@@ -5,7 +5,7 @@ import {
 	type Giselle,
 	type Patch,
 	StartTaskInputs,
-} from "@giselles-ai/giselle";
+} from "@recoder/giselle";
 import {
 	DataStore,
 	DataStoreId,
@@ -24,7 +24,7 @@ import {
 	TriggerId,
 	Workspace,
 	WorkspaceId,
-} from "@giselles-ai/protocol";
+} from "@recoder/protocol";
 import * as z from "zod/v4";
 import { createHandler, withUsageLimitErrorHandler } from "./create-handler";
 import { JsonResponse } from "./json-response";

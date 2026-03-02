@@ -50,6 +50,10 @@
 		"check-types": {
 			"dependsOn": ["^check-types"]
 		},
+		"test": {
+			"dependsOn": ["^test"],
+			"outputs": []
+		},
 		"dev": {
 			"dependsOn": ["^build"],
 			"cache": false,

@@ -1,4 +1,4 @@
-import type { TriggerId } from "@giselles-ai/protocol";
+import type { TriggerId } from "@recoder/protocol";
 import clsx from "clsx";
 import { Circle } from "lucide-react";
 import { useGitHubTrigger } from "../../../lib/use-github-trigger";

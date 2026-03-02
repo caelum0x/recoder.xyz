@@ -9,16 +9,16 @@
  * It documents the required behavior/invariants and includes a post-change checklist.
  */
 
-import { Button } from "@giselle-internal/ui/button";
-import { DropdownMenu } from "@giselle-internal/ui/dropdown-menu";
-import { defaultName } from "@giselles-ai/node-registry";
+import { Button } from "@recoder-internal/ui/button";
+import { DropdownMenu } from "@recoder-internal/ui/dropdown-menu";
+import { defaultName } from "@recoder/node-registry";
 import type {
 	Connection,
 	EndNode,
 	NodeId,
 	NodeLike,
-} from "@giselles-ai/protocol";
-import { isAppEntryNode } from "@giselles-ai/protocol";
+} from "@recoder/protocol";
+import { isAppEntryNode } from "@recoder/protocol";
 import clsx from "clsx/lite";
 import { PlusIcon, SquareArrowOutUpRightIcon, TrashIcon } from "lucide-react";
 import Link from "next/link";
@@ -129,8 +129,10 @@ export function EndNodePropertiesPanel({ node }: { node: EndNode }) {
 			const outputNodeId = connection.outputNode.id;
 			const outputNode = nodeById.get(outputNodeId);
 			const outputLabel =
-				outputNode?.outputs.find((output) => output.id === connection.outputId)
-					?.label ?? connection.outputId;
+				outputNode?.outputs.find(
+					(output: { id: string; label?: string }) =>
+						output.id === connection.outputId,
+				)?.label ?? connection.outputId;
 
 			if (outputNode === undefined) {
 				continue;
@@ -175,7 +177,7 @@ export function EndNodePropertiesPanel({ node }: { node: EndNode }) {
 			<NodePanelHeader
 				node={node}
 				onChangeName={(name) => updateNodeData(node, { name })}
-				docsUrl="https://docs.giselles.ai/en/glossary/start-end-nodes#end-node"
+				docsUrl="https://docs.recoder.xyz/en/glossary/start-end-nodes#end-node"
 				onDelete={() => deleteNode(node.id)}
 				readonly
 			/>

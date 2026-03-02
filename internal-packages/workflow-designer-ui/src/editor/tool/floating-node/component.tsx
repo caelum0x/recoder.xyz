@@ -1,5 +1,5 @@
-import { createEndNode } from "@giselles-ai/node-registry";
-import { isAppEntryNode, type Node } from "@giselles-ai/protocol";
+import { createEndNode } from "@recoder/node-registry";
+import { isAppEntryNode, type Node } from "@recoder/protocol";
 import { useMemo } from "react";
 import { NodeComponent, PillNode } from "../../node";
 import { useMousePosition } from "./state";

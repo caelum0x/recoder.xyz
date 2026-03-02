@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import { AiInsightsSection } from "./components/ai-insights";
 import { ContradictionsSection } from "./components/contradictions";
 import { DataHealthSection } from "./components/data-health";
@@ -8,6 +9,7 @@ import { InitiativesSection } from "./components/initiatives";
 import { OverviewMetrics } from "./components/overview-metrics";
 import { RoadmapSection } from "./components/roadmap";
 import { SessionRecordingsSection } from "./components/session-recordings";
+import { TrackInsightsView } from "./components/track-insights-view";
 
 const title = "Insights";
 const description = "Trends and insights for your product.";
@@ -19,6 +21,9 @@ export const metadata: Metadata = {
 
 const Insights = () => (
   <div className="divide-y">
+    <Suspense fallback={null}>
+      <TrackInsightsView />
+    </Suspense>
     <section className="space-y-4 p-4 sm:p-8">
       <div className="space-y-2">
         <h1 className="m-0 font-semibold text-4xl tracking-tight">{title}</h1>

@@ -1,0 +1,32 @@
+# Credential and environment files — NEVER publish
+.env
+.env.*
+.env.local
+.env.production
+.env.development
+.dev.vars
+*.vars
+
+# Test files
+**/*.test.js
+**/*.test.ts
+**/*.spec.js
+**/*.spec.ts
+**/tests/
+**/__tests__/
+
+# Session and log data
+**/sessions/
+**/*.log
+
+# Development tooling
+.husky/
+.github/
+.vscode/
+.devcontainer/
+
+# Source maps in development
+**/*.map
+
+# Node modules (should never be published)
+**/node_modules/

@@ -1,9 +1,9 @@
-import type { NodeLike } from "@giselles-ai/protocol";
-import { isVectorStoreNode } from "@giselles-ai/protocol";
+import type { NodeLike } from "@recoder/protocol";
+import { isVectorStoreNode } from "@recoder/protocol";
 import {
 	useVectorStore,
 	type VectorStoreContextValue,
-} from "@giselles-ai/react";
+} from "@recoder/react";
 import type { ReactElement } from "react";
 import { useMemo } from "react";
 import { MarkdownFileIcon } from "../../../icons/markdown-file";

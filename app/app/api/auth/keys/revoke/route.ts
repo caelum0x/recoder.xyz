@@ -10,6 +10,7 @@ import { headers } from 'next/headers';
 
 import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
+import { logger } from '@/lib/logger';
 
 const revokeKeySchema = z.object({
   keyId: z.string(),
@@ -61,7 +62,7 @@ export async function POST(request: NextRequest) {
     });
 
   } catch (error) {
-    console.error('Failed to revoke API key:', error);
+    logger.error('Failed to revoke API key:', { error: String(error), route: 'auth/keys/revoke' });
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

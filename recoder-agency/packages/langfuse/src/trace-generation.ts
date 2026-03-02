@@ -1,8 +1,8 @@
-import { calculateDisplayCost } from "@giselles-ai/language-model";
+import { calculateDisplayCost } from "@recoder/language-model";
 import {
 	getEntry,
 	parseConfiguration,
-} from "@giselles-ai/language-model-registry";
+} from "@recoder/language-model-registry";
 import {
 	type CompletedGeneration,
 	type ContentGenerationNode,
@@ -15,7 +15,7 @@ import {
 	isTextGenerationNode,
 	type OutputFileBlob,
 	type TextGenerationNode,
-} from "@giselles-ai/protocol";
+} from "@recoder/protocol";
 import type { DataContent, ModelMessage } from "ai";
 import { type ApiMediaContentType, Langfuse, LangfuseMedia } from "langfuse";
 

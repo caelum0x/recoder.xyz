@@ -1,4 +1,4 @@
-import { createPostgresQueryService } from "@giselles-ai/rag";
+import { createPostgresQueryService } from "@recoder/rag";
 import { getTableName } from "drizzle-orm";
 import { githubRepositoryPullRequestEmbeddings } from "@/db";
 import { createDatabaseConfig } from "../../database";

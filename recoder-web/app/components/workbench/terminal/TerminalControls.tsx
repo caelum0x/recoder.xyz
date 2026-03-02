@@ -37,7 +37,7 @@ export const TerminalControls = memo(({
     <div className={`flex items-center gap-1 ${className}`}>
       {/* Terminal info */}
       {terminalCount > 1 && (
-        <span className="text-xs text-bolt-elements-textTertiary mr-2">
+        <span className="text-xs text-recoder-elements-textTertiary mr-2">
           Terminal {activeIndex + 1}/{terminalCount}
         </span>
       )}
@@ -68,7 +68,7 @@ export const TerminalControls = memo(({
           flex items-center gap-1 px-2 py-1 rounded text-xs transition-colors
           ${isRunning 
             ? 'bg-red-500/20 text-red-400 hover:bg-red-500/30 border border-red-500/30' 
-            : 'bg-bolt-elements-background-depth-3 text-bolt-elements-textTertiary hover:bg-bolt-elements-background-depth-4 border border-bolt-elements-borderColor'
+            : 'bg-recoder-elements-background-depth-3 text-recoder-elements-textTertiary hover:bg-recoder-elements-background-depth-4 border border-recoder-elements-borderColor'
           }
           ${isKilling ? 'opacity-50 cursor-not-allowed' : ''}
         `}

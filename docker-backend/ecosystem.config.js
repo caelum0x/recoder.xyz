@@ -18,8 +18,8 @@ module.exports = {
         NODE_ENV: 'production',
         PORT: 3100,
       },
-      // Load .env.production in production
-      node_args: '--env-file=.env.production',
+      // Load .env in production
+      node_args: '--env-file=.env',
       // Error logging
       error_file: 'logs/error.log',
       out_file: 'logs/out.log',

@@ -4,7 +4,7 @@ import { TriangleAlertIcon } from "lucide-react";
 import Link from "next/link";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import type { AuthError } from "@/lib/supabase";
+import type { AuthError } from "../login/login";
 import { AuthButton } from "./auth-button";
 
 type FormProps<T extends Record<string, string | undefined>> = {

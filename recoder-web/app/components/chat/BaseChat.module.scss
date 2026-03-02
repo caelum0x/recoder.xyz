@@ -27,31 +27,31 @@
   }
 
   &::-webkit-scrollbar-track {
-    background: var(--bolt-elements-background-depth-3);
+    background: var(--recoder-elements-background-depth-3);
     border-radius: 6px;
-    border: 1px solid var(--bolt-elements-borderColor);
+    border: 1px solid var(--recoder-elements-borderColor);
   }
 
   &::-webkit-scrollbar-thumb {
-    background: linear-gradient(45deg, var(--bolt-elements-borderColor), var(--bolt-elements-textSecondary));
+    background: linear-gradient(45deg, var(--recoder-elements-borderColor), var(--recoder-elements-textSecondary));
     border-radius: 6px;
-    border: 1px solid var(--bolt-elements-borderColor);
+    border: 1px solid var(--recoder-elements-borderColor);
     
     &:hover {
-      background: linear-gradient(45deg, var(--bolt-elements-textSecondary), var(--bolt-elements-textPrimary));
+      background: linear-gradient(45deg, var(--recoder-elements-textSecondary), var(--recoder-elements-textPrimary));
     }
     
     &:active {
-      background: var(--bolt-elements-textPrimary);
+      background: var(--recoder-elements-textPrimary);
     }
   }
 
   &::-webkit-scrollbar-corner {
-    background: var(--bolt-elements-background-depth-3);
+    background: var(--recoder-elements-background-depth-3);
   }
 
   scrollbar-width: thick;
-  scrollbar-color: var(--bolt-elements-textSecondary) var(--bolt-elements-background-depth-3);
+  scrollbar-color: var(--recoder-elements-textSecondary) var(--recoder-elements-background-depth-3);
   
   // Ensure scrolling is visible and functional
   scroll-behavior: smooth;
@@ -89,21 +89,21 @@
   }
 
   &::-webkit-scrollbar-track {
-    background: rgba(var(--bolt-elements-background-depth-3), 0.3);
+    background: rgba(var(--recoder-elements-background-depth-3), 0.3);
     border-radius: 2px;
   }
 
   &::-webkit-scrollbar-thumb {
-    background: var(--bolt-elements-borderColor);
+    background: var(--recoder-elements-borderColor);
     border-radius: 2px;
     
     &:hover {
-      background: var(--bolt-elements-textSecondary);
+      background: var(--recoder-elements-textSecondary);
     }
   }
 
   scrollbar-width: thin;
-  scrollbar-color: var(--bolt-elements-textSecondary) rgba(var(--bolt-elements-background-depth-3), 0.3);
+  scrollbar-color: var(--recoder-elements-textSecondary) rgba(var(--recoder-elements-background-depth-3), 0.3);
   
   // Ensure scrolling is smooth and functional
   scroll-behavior: smooth;

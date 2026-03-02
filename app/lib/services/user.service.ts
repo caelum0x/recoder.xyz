@@ -5,6 +5,7 @@
 
 import { prisma } from '@/lib/prisma';
 import { hashPassword } from '../crypto';
+import { logger } from '@/lib/logger';
 import crypto from 'crypto';
 
 export class UserService {
@@ -41,7 +42,7 @@ export class UserService {
         },
       };
     } catch (error: any) {
-      console.error('Get profile error:', error);
+      logger.error('Get profile error', { error: String(error) });
       throw error;
     }
   }
@@ -86,7 +87,7 @@ export class UserService {
         },
       };
     } catch (error: any) {
-      console.error('Update profile error:', error);
+      logger.error('Update profile error', { error: String(error) });
       throw error;
     }
   }
@@ -115,7 +116,7 @@ export class UserService {
         avatar: user.image,
       };
     } catch (error: any) {
-      console.error('Upload avatar error:', error);
+      logger.error('Upload avatar error', { error: String(error) });
       throw error;
     }
   }
@@ -141,7 +142,7 @@ export class UserService {
       });
 
     } catch (error: any) {
-      console.error('Delete avatar error:', error);
+      logger.error('Delete avatar error', { error: String(error) });
       throw error;
     }
   }
@@ -170,7 +171,7 @@ export class UserService {
         preferences,
       };
     } catch (error: any) {
-      console.error('Get preferences error:', error);
+      logger.error('Get preferences error', { error: String(error) });
       throw error;
     }
   }
@@ -253,7 +254,7 @@ export class UserService {
         preferences,
       };
     } catch (error: any) {
-      console.error('Update preferences error:', error);
+      logger.error('Update preferences error', { error: String(error) });
       throw error;
     }
   }
@@ -302,7 +303,7 @@ export class UserService {
       });
 
     } catch (error: any) {
-      console.error('Delete account error:', error);
+      logger.error('Delete account error', { error: String(error) });
       throw error;
     }
   }
@@ -359,7 +360,7 @@ export class UserService {
         data: user,
       };
     } catch (error: any) {
-      console.error('Export user data error:', error);
+      logger.error('Export user data error', { error: String(error) });
       throw error;
     }
   }
@@ -429,7 +430,7 @@ export class UserService {
         },
       };
     } catch (error: any) {
-      console.error('Get user stats error:', error);
+      logger.error('Get user stats error', { error: String(error) });
       throw error;
     }
   }
@@ -462,7 +463,7 @@ export class UserService {
         })),
       };
     } catch (error: any) {
-      console.error('List sessions error:', error);
+      logger.error('List sessions error', { error: String(error) });
       throw error;
     }
   }
@@ -503,7 +504,7 @@ export class UserService {
       });
 
     } catch (error: any) {
-      console.error('Revoke session error:', error);
+      logger.error('Revoke session error', { error: String(error) });
       throw error;
     }
   }
@@ -561,7 +562,7 @@ export class UserService {
         message: 'Email changed successfully. Please verify your new email.',
       };
     } catch (error: any) {
-      console.error('Change email error:', error);
+      logger.error('Change email error', { error: String(error) });
       throw error;
     }
   }

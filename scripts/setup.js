@@ -12,7 +12,7 @@ class SetupScript {
   }
 
   async run() {
-    console.log(chalk.cyan('🚀 Setting up CodeCraft Development Environment\n'));
+    console.log(chalk.cyan('🚀 Setting up Recoder Development Environment\n'));
 
     try {
       await this.checkPrerequisites();
@@ -112,9 +112,9 @@ class SetupScript {
         this.exec('npm install', { cwd: backendPath });
       }
       
-      // Install production engine dependencies
-      spinner.text = 'Installing production engine dependencies...';
-      const enginePath = path.join(this.rootDir, 'production-engine');
+      // Install docker-backend dependencies
+      spinner.text = 'Installing docker-backend dependencies...';
+      const enginePath = path.join(this.rootDir, 'docker-backend');
       if (await fs.pathExists(enginePath)) {
         this.exec('npm install', { cwd: enginePath });
       }
@@ -127,7 +127,7 @@ class SetupScript {
       console.error(chalk.gray('  cd packages/cli && npm install'));
       console.error(chalk.gray('  cd ../shared && npm install'));
       console.error(chalk.gray('  cd ../../backend && npm install'));
-      console.error(chalk.gray('  cd ../production-engine && npm install'));
+      console.error(chalk.gray('  cd ../docker-backend && npm install'));
       throw error;
     }
   }

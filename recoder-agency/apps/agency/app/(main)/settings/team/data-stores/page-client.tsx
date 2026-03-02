@@ -1,7 +1,7 @@
 "use client";
 
-import { EmptyState } from "@giselle-internal/ui/empty-state";
-import { PageHeading } from "@giselle-internal/ui/page-heading";
+import { EmptyState } from "@recoder-internal/ui/empty-state";
+import { PageHeading } from "@recoder-internal/ui/page-heading";
 import { Pencil, Plus, Trash } from "lucide-react";
 import { useState } from "react";
 import { Card } from "@/components/ui/card";

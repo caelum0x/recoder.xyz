@@ -12,14 +12,14 @@ export function ReasoningSteps({ steps }: ReasoningStepsProps) {
   if (steps.length === 0) return null;
 
   return (
-    <div className="mb-4 border border-bolt-elements-borderColor rounded-lg overflow-hidden bg-bolt-elements-background-depth-2">
+    <div className="mb-4 border border-recoder-elements-borderColor rounded-lg overflow-hidden bg-recoder-elements-background-depth-2">
       <button
         onClick={() => setIsExpanded(!isExpanded)}
-        className="w-full px-4 py-3 flex items-center justify-between hover:bg-bolt-elements-background-depth-3 transition-colors"
+        className="w-full px-4 py-3 flex items-center justify-between hover:bg-recoder-elements-background-depth-3 transition-colors"
       >
         <div className="flex items-center gap-2">
-          <div className="i-ph:brain text-lg text-bolt-elements-textSecondary" />
-          <span className="text-sm font-medium text-bolt-elements-textPrimary">
+          <div className="i-ph:brain text-lg text-recoder-elements-textSecondary" />
+          <span className="text-sm font-medium text-recoder-elements-textPrimary">
             AI Reasoning ({steps.length} steps)
           </span>
         </div>
@@ -33,22 +33,22 @@ export function ReasoningSteps({ steps }: ReasoningStepsProps) {
           {steps.map((step, index) => (
             <div
               key={step.id}
-              className="flex gap-3 p-3 bg-bolt-elements-background-depth-1 rounded"
+              className="flex gap-3 p-3 bg-recoder-elements-background-depth-1 rounded"
             >
-              <div className="flex-shrink-0 w-6 h-6 rounded-full bg-bolt-elements-button-primary-background text-bolt-elements-button-primary-text flex items-center justify-center text-xs font-medium">
+              <div className="flex-shrink-0 w-6 h-6 rounded-full bg-recoder-elements-button-primary-background text-recoder-elements-button-primary-text flex items-center justify-center text-xs font-medium">
                 {index + 1}
               </div>
               <div className="flex-1">
-                <div className="text-sm font-medium text-bolt-elements-textPrimary">
+                <div className="text-sm font-medium text-recoder-elements-textPrimary">
                   {step.title}
                 </div>
                 {step.description && (
-                  <div className="text-xs text-bolt-elements-textSecondary mt-1">
+                  <div className="text-xs text-recoder-elements-textSecondary mt-1">
                     {step.description}
                   </div>
                 )}
                 {step.duration && (
-                  <div className="text-xs text-bolt-elements-textTertiary mt-1">
+                  <div className="text-xs text-recoder-elements-textTertiary mt-1">
                     {step.duration}ms
                   </div>
                 )}

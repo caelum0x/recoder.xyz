@@ -143,29 +143,29 @@ export const ExportModal = memo(({ projectId }: ExportModalProps) => {
         onClick={handleClose}
       >
         <motion.div
-          className="bg-bolt-elements-background-depth-2 rounded-lg shadow-xl w-[600px] max-h-[80vh] flex flex-col border border-bolt-elements-borderColor"
+          className="bg-recoder-elements-background-depth-2 rounded-lg shadow-xl w-[600px] max-h-[80vh] flex flex-col border border-recoder-elements-borderColor"
           initial={{ scale: 0.95, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
           exit={{ scale: 0.95, opacity: 0 }}
           onClick={(e) => e.stopPropagation()}
         >
           {/* Header */}
-          <div className="flex items-center justify-between px-6 py-4 border-b border-bolt-elements-borderColor">
-            <h2 className="text-lg font-semibold text-bolt-elements-textPrimary flex items-center gap-2">
+          <div className="flex items-center justify-between px-6 py-4 border-b border-recoder-elements-borderColor">
+            <h2 className="text-lg font-semibold text-recoder-elements-textPrimary flex items-center gap-2">
               <div className="i-ph:export text-xl" />
               Export Project
             </h2>
             <button
               onClick={handleClose}
               disabled={isExporting}
-              className="p-1 text-bolt-elements-textTertiary hover:text-bolt-elements-textPrimary rounded transition-colors disabled:opacity-50"
+              className="p-1 text-recoder-elements-textTertiary hover:text-recoder-elements-textPrimary rounded transition-colors disabled:opacity-50"
             >
               <div className="i-ph:x text-xl" />
             </button>
           </div>
 
           {/* Tabs */}
-          <div className="flex border-b border-bolt-elements-borderColor">
+          <div className="flex border-b border-recoder-elements-borderColor">
             <TabButton
               active={activeTab === 'options'}
               onClick={() => setActiveTab('options')}
@@ -211,16 +211,16 @@ export const ExportModal = memo(({ projectId }: ExportModalProps) => {
 
           {/* Progress */}
           {progress.status !== 'idle' && progress.status !== 'complete' && (
-            <div className="px-6 py-3 border-t border-bolt-elements-borderColor">
+            <div className="px-6 py-3 border-t border-recoder-elements-borderColor">
               <ProgressIndicator progress={progress} />
             </div>
           )}
 
           {/* Footer */}
-          <div className="flex items-center justify-between px-6 py-4 border-t border-bolt-elements-borderColor">
+          <div className="flex items-center justify-between px-6 py-4 border-t border-recoder-elements-borderColor">
             <button
               onClick={resetExportOptions}
-              className="px-4 py-2 text-sm text-bolt-elements-textTertiary hover:text-bolt-elements-textPrimary transition-colors"
+              className="px-4 py-2 text-sm text-recoder-elements-textTertiary hover:text-recoder-elements-textPrimary transition-colors"
               disabled={isExporting}
             >
               Reset to Defaults
@@ -228,7 +228,7 @@ export const ExportModal = memo(({ projectId }: ExportModalProps) => {
             <div className="flex gap-3">
               <button
                 onClick={handleClose}
-                className="px-4 py-2 text-sm bg-bolt-elements-background-depth-2 hover:bg-bolt-elements-background-depth-3 text-bolt-elements-textPrimary rounded-md transition-colors"
+                className="px-4 py-2 text-sm bg-recoder-elements-background-depth-2 hover:bg-recoder-elements-background-depth-3 text-recoder-elements-textPrimary rounded-md transition-colors"
                 disabled={isExporting}
               >
                 Cancel
@@ -280,7 +280,7 @@ const TabButton = memo(({ active, onClick, icon, label, badge }: TabButtonProps)
       'flex items-center gap-2 px-4 py-3 text-sm font-medium transition-colors relative',
       active
         ? 'text-blue-500 border-b-2 border-blue-500 -mb-px'
-        : 'text-bolt-elements-textTertiary hover:text-bolt-elements-textPrimary'
+        : 'text-recoder-elements-textTertiary hover:text-recoder-elements-textPrimary'
     )}
   >
     <div className={icon} />
@@ -309,21 +309,21 @@ const OptionsTab = memo(({
   <div className="space-y-6">
     {/* Project Name */}
     <div>
-      <label className="block text-sm font-medium text-bolt-elements-textPrimary mb-2">
+      <label className="block text-sm font-medium text-recoder-elements-textPrimary mb-2">
         Project Name
       </label>
       <input
         type="text"
         value={options.projectName}
         onChange={(e) => updateExportOptions({ projectName: e.target.value })}
-        className="w-full px-3 py-2 bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor rounded-md text-bolt-elements-textPrimary placeholder:text-bolt-elements-textTertiary focus:outline-none focus:ring-2 focus:ring-blue-500"
+        className="w-full px-3 py-2 bg-recoder-elements-background-depth-2 border border-recoder-elements-borderColor rounded-md text-recoder-elements-textPrimary placeholder:text-recoder-elements-textTertiary focus:outline-none focus:ring-2 focus:ring-blue-500"
         placeholder="my-project"
       />
     </div>
 
     {/* Presets */}
     <div>
-      <label className="block text-sm font-medium text-bolt-elements-textPrimary mb-2">
+      <label className="block text-sm font-medium text-recoder-elements-textPrimary mb-2">
         Quick Presets
       </label>
       <div className="flex gap-2">
@@ -366,7 +366,7 @@ const OptionsTab = memo(({
 
     {/* Exclude Patterns */}
     <div>
-      <label className="block text-sm font-medium text-bolt-elements-textPrimary mb-2">
+      <label className="block text-sm font-medium text-recoder-elements-textPrimary mb-2">
         Exclude Patterns
       </label>
       <div className="flex gap-2 mb-2">
@@ -375,12 +375,12 @@ const OptionsTab = memo(({
           value={newExcludePattern}
           onChange={(e) => setNewExcludePattern(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && onAddExcludePattern()}
-          className="flex-1 px-3 py-2 bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor rounded-md text-bolt-elements-textPrimary placeholder:text-bolt-elements-textTertiary focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+          className="flex-1 px-3 py-2 bg-recoder-elements-background-depth-2 border border-recoder-elements-borderColor rounded-md text-recoder-elements-textPrimary placeholder:text-recoder-elements-textTertiary focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
           placeholder="e.g., *.test.ts, docs/**"
         />
         <button
           onClick={onAddExcludePattern}
-          className="px-3 py-2 bg-bolt-elements-background-depth-2 hover:bg-bolt-elements-background-depth-3 border border-bolt-elements-borderColor rounded-md text-bolt-elements-textPrimary transition-colors"
+          className="px-3 py-2 bg-recoder-elements-background-depth-2 hover:bg-recoder-elements-background-depth-3 border border-recoder-elements-borderColor rounded-md text-recoder-elements-textPrimary transition-colors"
         >
           <div className="i-ph:plus" />
         </button>
@@ -389,7 +389,7 @@ const OptionsTab = memo(({
         {options.excludePatterns.map((pattern) => (
           <span
             key={pattern}
-            className="inline-flex items-center gap-1 px-2 py-1 bg-bolt-elements-background-depth-2 rounded text-sm text-bolt-elements-textTertiary"
+            className="inline-flex items-center gap-1 px-2 py-1 bg-recoder-elements-background-depth-2 rounded text-sm text-recoder-elements-textTertiary"
           >
             {pattern}
             <button
@@ -425,7 +425,7 @@ const FilesTab = memo(({
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <p className="text-sm text-bolt-elements-textTertiary">
+        <p className="text-sm text-recoder-elements-textTertiary">
           {isSelective
             ? `${selectedFiles.length} of ${files.length} files selected`
             : `All ${files.length} files will be exported (based on filters)`}
@@ -446,9 +446,9 @@ const FilesTab = memo(({
         </div>
       </div>
 
-      <div className="border border-bolt-elements-borderColor rounded-md max-h-72 overflow-y-auto">
+      <div className="border border-recoder-elements-borderColor rounded-md max-h-72 overflow-y-auto">
         {files.length === 0 ? (
-          <div className="p-4 text-center text-bolt-elements-textTertiary">
+          <div className="p-4 text-center text-recoder-elements-textTertiary">
             No files available
           </div>
         ) : (
@@ -460,18 +460,18 @@ const FilesTab = memo(({
               <label
                 key={path}
                 className={classNames(
-                  'flex items-center gap-3 px-3 py-2 cursor-pointer hover:bg-bolt-elements-background-depth-2 transition-colors border-b border-bolt-elements-borderColor last:border-b-0',
-                  isSelected ? 'bg-bolt-elements-background-depth-2' : 'opacity-60'
+                  'flex items-center gap-3 px-3 py-2 cursor-pointer hover:bg-recoder-elements-background-depth-2 transition-colors border-b border-recoder-elements-borderColor last:border-b-0',
+                  isSelected ? 'bg-recoder-elements-background-depth-2' : 'opacity-60'
                 )}
               >
                 <input
                   type="checkbox"
                   checked={isSelected && isSelective}
                   onChange={() => onToggleFile(path)}
-                  className="rounded border-bolt-elements-borderColor text-blue-500 focus:ring-blue-500"
+                  className="rounded border-recoder-elements-borderColor text-blue-500 focus:ring-blue-500"
                 />
-                <div className="i-ph:file text-bolt-elements-textTertiary" />
-                <span className="text-sm text-bolt-elements-textPrimary truncate flex-1">
+                <div className="i-ph:file text-recoder-elements-textTertiary" />
+                <span className="text-sm text-recoder-elements-textPrimary truncate flex-1">
                   {displayPath}
                 </span>
               </label>
@@ -480,7 +480,7 @@ const FilesTab = memo(({
         )}
       </div>
 
-      <p className="text-xs text-bolt-elements-textTertiary">
+      <p className="text-xs text-recoder-elements-textTertiary">
         Tip: Leave all unchecked to export all files (respecting exclude patterns)
       </p>
     </div>
@@ -494,7 +494,7 @@ interface HistoryTabProps {
 const HistoryTab = memo(({ history }: HistoryTabProps) => (
   <div className="space-y-3">
     {history.length === 0 ? (
-      <div className="text-center py-8 text-bolt-elements-textTertiary">
+      <div className="text-center py-8 text-recoder-elements-textTertiary">
         <div className="i-ph:archive text-4xl mx-auto mb-2 opacity-50" />
         <p>No export history yet</p>
       </div>
@@ -502,17 +502,17 @@ const HistoryTab = memo(({ history }: HistoryTabProps) => (
       history.map((entry) => (
         <div
           key={entry.id}
-          className="p-3 bg-bolt-elements-background-depth-2 rounded-md border border-bolt-elements-borderColor"
+          className="p-3 bg-recoder-elements-background-depth-2 rounded-md border border-recoder-elements-borderColor"
         >
           <div className="flex items-center justify-between mb-1">
-            <span className="font-medium text-bolt-elements-textPrimary">
+            <span className="font-medium text-recoder-elements-textPrimary">
               {entry.projectName}.zip
             </span>
-            <span className="text-xs text-bolt-elements-textTertiary">
+            <span className="text-xs text-recoder-elements-textTertiary">
               {formatDate(entry.timestamp)}
             </span>
           </div>
-          <div className="flex items-center gap-4 text-xs text-bolt-elements-textTertiary">
+          <div className="flex items-center gap-4 text-xs text-recoder-elements-textTertiary">
             <span className="flex items-center gap-1">
               <div className="i-ph:files" />
               {entry.fileCount} files
@@ -540,7 +540,7 @@ interface PresetButtonProps {
 const PresetButton = memo(({ label, onClick }: PresetButtonProps) => (
   <button
     onClick={onClick}
-    className="px-3 py-1.5 text-sm bg-bolt-elements-background-depth-2 hover:bg-bolt-elements-background-depth-3 border border-bolt-elements-borderColor rounded-md text-bolt-elements-textPrimary transition-colors"
+    className="px-3 py-1.5 text-sm bg-recoder-elements-background-depth-2 hover:bg-recoder-elements-background-depth-3 border border-recoder-elements-borderColor rounded-md text-recoder-elements-textPrimary transition-colors"
   >
     {label}
   </button>
@@ -559,11 +559,11 @@ const ToggleOption = memo(({ label, description, checked, onChange }: ToggleOpti
       type="checkbox"
       checked={checked}
       onChange={onChange}
-      className="mt-0.5 rounded border-bolt-elements-borderColor text-blue-500 focus:ring-blue-500"
+      className="mt-0.5 rounded border-recoder-elements-borderColor text-blue-500 focus:ring-blue-500"
     />
     <div>
-      <span className="text-sm font-medium text-bolt-elements-textPrimary">{label}</span>
-      <p className="text-xs text-bolt-elements-textTertiary">{description}</p>
+      <span className="text-sm font-medium text-recoder-elements-textPrimary">{label}</span>
+      <p className="text-xs text-recoder-elements-textTertiary">{description}</p>
     </div>
   </label>
 ));
@@ -575,10 +575,10 @@ interface ProgressIndicatorProps {
 const ProgressIndicator = memo(({ progress }: ProgressIndicatorProps) => (
   <div className="space-y-2">
     <div className="flex items-center justify-between text-sm">
-      <span className="text-bolt-elements-textTertiary capitalize">{progress.status}...</span>
-      <span className="text-bolt-elements-textPrimary">{progress.percentage}%</span>
+      <span className="text-recoder-elements-textTertiary capitalize">{progress.status}...</span>
+      <span className="text-recoder-elements-textPrimary">{progress.percentage}%</span>
     </div>
-    <div className="h-2 bg-bolt-elements-background-depth-2 rounded-full overflow-hidden">
+    <div className="h-2 bg-recoder-elements-background-depth-2 rounded-full overflow-hidden">
       <motion.div
         className="h-full bg-blue-500"
         initial={{ width: 0 }}
@@ -587,7 +587,7 @@ const ProgressIndicator = memo(({ progress }: ProgressIndicatorProps) => (
       />
     </div>
     {progress.currentFile && (
-      <p className="text-xs text-bolt-elements-textTertiary truncate">
+      <p className="text-xs text-recoder-elements-textTertiary truncate">
         {progress.currentFile}
       </p>
     )}

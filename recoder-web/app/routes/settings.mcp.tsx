@@ -57,7 +57,7 @@ export default function MCPSettings() {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-bold">MCP Servers</h2>
-          <p className="text-sm text-bolt-elements-textSecondary">
+          <p className="text-sm text-recoder-elements-textSecondary">
             Connect to MCP servers to give AI access to external tools
           </p>
         </div>
@@ -70,14 +70,14 @@ export default function MCPSettings() {
           </button>
           <button
             onClick={() => setShowAdd(!showAdd)}
-            className="px-3 py-1.5 text-sm bg-bolt-elements-background-depth-3 rounded-md hover:bg-bolt-elements-item-backgroundHover"
+            className="px-3 py-1.5 text-sm bg-recoder-elements-background-depth-3 rounded-md hover:bg-recoder-elements-item-backgroundHover"
           >
             {showAdd ? 'Cancel' : '+ Custom'}
           </button>
           <button
             onClick={connectedServers.length > 0 ? disconnect : connect}
             disabled={loading}
-            className="px-3 py-1.5 text-sm bg-bolt-elements-button-primary-background text-bolt-elements-button-primary-text rounded-md disabled:opacity-50"
+            className="px-3 py-1.5 text-sm bg-recoder-elements-button-primary-background text-recoder-elements-button-primary-text rounded-md disabled:opacity-50"
           >
             {loading ? 'Connecting...' : connectedServers.length > 0 ? 'Disconnect All' : 'Connect'}
           </button>
@@ -92,34 +92,34 @@ export default function MCPSettings() {
 
       {/* Add Server Form */}
       {showAdd && (
-        <div className="p-4 bg-bolt-elements-background-depth-2 rounded-lg border border-bolt-elements-borderColor space-y-3">
+        <div className="p-4 bg-recoder-elements-background-depth-2 rounded-lg border border-recoder-elements-borderColor space-y-3">
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs text-bolt-elements-textSecondary mb-1">Name</label>
+              <label className="block text-xs text-recoder-elements-textSecondary mb-1">Name</label>
               <input
                 value={newServer.name}
                 onChange={e => setNewServer(p => ({ ...p, name: e.target.value }))}
                 placeholder="My Server"
-                className="w-full px-3 py-2 text-sm bg-bolt-elements-background-depth-3 border border-bolt-elements-borderColor rounded-md"
+                className="w-full px-3 py-2 text-sm bg-recoder-elements-background-depth-3 border border-recoder-elements-borderColor rounded-md"
               />
             </div>
             <div>
-              <label className="block text-xs text-bolt-elements-textSecondary mb-1">Command</label>
+              <label className="block text-xs text-recoder-elements-textSecondary mb-1">Command</label>
               <input
                 value={newServer.command}
                 onChange={e => setNewServer(p => ({ ...p, command: e.target.value }))}
                 placeholder="npx"
-                className="w-full px-3 py-2 text-sm bg-bolt-elements-background-depth-3 border border-bolt-elements-borderColor rounded-md"
+                className="w-full px-3 py-2 text-sm bg-recoder-elements-background-depth-3 border border-recoder-elements-borderColor rounded-md"
               />
             </div>
           </div>
           <div>
-            <label className="block text-xs text-bolt-elements-textSecondary mb-1">Arguments (space-separated)</label>
+            <label className="block text-xs text-recoder-elements-textSecondary mb-1">Arguments (space-separated)</label>
             <input
               value={newServer.args}
               onChange={e => setNewServer(p => ({ ...p, args: e.target.value }))}
               placeholder="-y @modelcontextprotocol/server-filesystem /workspace"
-              className="w-full px-3 py-2 text-sm font-mono bg-bolt-elements-background-depth-3 border border-bolt-elements-borderColor rounded-md"
+              className="w-full px-3 py-2 text-sm font-mono bg-recoder-elements-background-depth-3 border border-recoder-elements-borderColor rounded-md"
             />
           </div>
           <button
@@ -139,7 +139,7 @@ export default function MCPSettings() {
           const serverTools = tools.filter(t => t.serverId === server.id);
           
           return (
-            <div key={server.id} className={`p-4 rounded-lg border ${server.enabled ? 'bg-bolt-elements-background-depth-2 border-bolt-elements-borderColor' : 'bg-bolt-elements-background-depth-1 border-transparent opacity-60'}`}>
+            <div key={server.id} className={`p-4 rounded-lg border ${server.enabled ? 'bg-recoder-elements-background-depth-2 border-recoder-elements-borderColor' : 'bg-recoder-elements-background-depth-1 border-transparent opacity-60'}`}>
               <div className="flex items-center gap-3">
                 <input
                   type="checkbox"
@@ -157,7 +157,7 @@ export default function MCPSettings() {
                       <span className="px-1.5 py-0.5 text-xs bg-blue-500/20 text-blue-400 rounded">{serverTools.length} tools</span>
                     )}
                   </div>
-                  <code className="text-xs text-bolt-elements-textTertiary">{server.command} {server.args.join(' ')}</code>
+                  <code className="text-xs text-recoder-elements-textTertiary">{server.command} {server.args.join(' ')}</code>
                 </div>
                 <button
                   onClick={() => removeServer(server.id)}
@@ -169,11 +169,11 @@ export default function MCPSettings() {
               
               {/* Show tools when connected */}
               {serverTools.length > 0 && (
-                <div className="mt-3 pt-3 border-t border-bolt-elements-borderColor">
-                  <div className="text-xs text-bolt-elements-textSecondary mb-2">Available Tools:</div>
+                <div className="mt-3 pt-3 border-t border-recoder-elements-borderColor">
+                  <div className="text-xs text-recoder-elements-textSecondary mb-2">Available Tools:</div>
                   <div className="flex flex-wrap gap-1">
                     {serverTools.map(tool => (
-                      <span key={tool.name} className="px-2 py-0.5 text-xs bg-bolt-elements-background-depth-3 rounded" title={tool.description}>
+                      <span key={tool.name} className="px-2 py-0.5 text-xs bg-recoder-elements-background-depth-3 rounded" title={tool.description}>
                         {tool.name}
                       </span>
                     ))}
@@ -188,7 +188,7 @@ export default function MCPSettings() {
       {/* Info */}
       <div className="p-3 bg-blue-500/10 border border-blue-500/20 rounded-lg">
         <div className="text-sm text-blue-400 font-medium">💡 How MCP Works</div>
-        <p className="text-xs text-bolt-elements-textSecondary mt-1">
+        <p className="text-xs text-recoder-elements-textSecondary mt-1">
           MCP servers provide tools that AI can use. Enable servers, click Connect, and the AI will automatically have access to their tools.
         </p>
       </div>
@@ -198,7 +198,7 @@ export default function MCPSettings() {
           href="https://modelcontextprotocol.io/docs"
           target="_blank"
           rel="noopener noreferrer"
-          className="text-sm text-bolt-elements-textSecondary hover:text-bolt-elements-textPrimary underline"
+          className="text-sm text-recoder-elements-textSecondary hover:text-recoder-elements-textPrimary underline"
         >
           Learn more about MCP →
         </a>
@@ -207,7 +207,7 @@ export default function MCPSettings() {
       {/* Marketplace Modal */}
       {showMarketplace && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
-          <div className="w-full max-w-5xl h-[80vh] bg-bolt-elements-background-depth-1 rounded-xl shadow-2xl overflow-hidden">
+          <div className="w-full max-w-5xl h-[80vh] bg-recoder-elements-background-depth-1 rounded-xl shadow-2xl overflow-hidden">
             <MCPMarketplace
               installedServerIds={installedServerIds}
               onInstall={handleMarketplaceInstall}

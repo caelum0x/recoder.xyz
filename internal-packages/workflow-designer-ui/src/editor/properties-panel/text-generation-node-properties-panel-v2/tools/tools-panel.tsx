@@ -1,9 +1,9 @@
 import {
 	getLanguageModelTool,
 	type LanguageModelToolName,
-} from "@giselles-ai/language-model-registry";
-import type { ContentGenerationNode } from "@giselles-ai/protocol";
-import { useFeatureFlag } from "@giselles-ai/react";
+} from "@recoder/language-model-registry";
+import type { ContentGenerationNode } from "@recoder/protocol";
+import { useFeatureFlag } from "@recoder/react";
 import clsx from "clsx/lite";
 import { CheckIcon } from "lucide-react";
 import { type PropsWithChildren, type ReactNode, useMemo } from "react";

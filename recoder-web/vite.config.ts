@@ -25,6 +25,8 @@ export default defineConfig((config) => {
       stringify: true,
     },
     resolve: {
+      // Prefer TS sources over adjacent generated JS files in shared/ to avoid CJS export mismatches.
+      extensions: ['.ts', '.tsx', '.mjs', '.js', '.mts', '.jsx', '.json'],
       // Force single React instance - point to recoder-web's React 18.3.1
       dedupe: ['react', 'react-dom', 'react/jsx-runtime', 'react/jsx-dev-runtime'],
       alias: {
@@ -45,6 +47,7 @@ export default defineConfig((config) => {
         external: [
           /ajv.*\.json$/,
           /@modelcontextprotocol\/sdk/,
+          'defuddle/node',
         ],
         output: {
           manualChunks(id: string) {
@@ -202,6 +205,7 @@ export default defineConfig((config) => {
         'glob',
         'jsdom',
         'defuddle',
+        'defuddle/node',
       ],
       // Don't externalize these in SSR - they need to be bundled
       noExternal: [
@@ -217,7 +221,7 @@ export default defineConfig((config) => {
         'rehype-sanitize',
         'remark-gfm',
         'unist-util-visit',
-        '@giselles-ai/vault',
+        '@recoder/vault',
         'vite-plugin-node-polyfills',
       ],
       resolve: {
@@ -468,7 +472,7 @@ function chrome129IssuePlugin() {
           if (version === 129) {
             res.setHeader('content-type', 'text/html');
             res.end(
-              '<body><h1>Please use Chrome Canary for testing.</h1><p>Chrome 129 has an issue with JavaScript modules & Vite local development, see <a href="https://github.com/stackblitz/bolt.new/issues/86#issuecomment-2395519258">for more information.</a></p><p><b>Note:</b> This only impacts <u>local development</u>. `pnpm run build` and `pnpm run start` will work fine in this browser.</p></body>',
+              '<body><h1>Please use Chrome Canary for testing.</h1><p>Chrome 129 has an issue with JavaScript modules & Vite local development.</p><p><b>Note:</b> This only impacts <u>local development</u>. `pnpm run build` and `pnpm run start` will work fine in this browser.</p></body>',
             );
 
             return;

@@ -97,14 +97,14 @@ export function KeyboardShortcutsDialog({ open, onClose }: KeyboardShortcutsDial
         </DialogTitle>
         
         <DialogDescription>
-          <div className="text-sm text-bolt-elements-textSecondary mb-4">
+          <div className="text-sm text-recoder-elements-textSecondary mb-4">
             Speed up your workflow with these keyboard shortcuts
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {SHORTCUTS.map((section) => (
               <div key={section.category} className="flex flex-col gap-3">
-                <h3 className="font-semibold text-bolt-elements-textPrimary text-sm uppercase tracking-wide">
+                <h3 className="font-semibold text-recoder-elements-textPrimary text-sm uppercase tracking-wide">
                   {section.category}
                 </h3>
                 <div className="flex flex-col gap-2">
@@ -118,9 +118,9 @@ export function KeyboardShortcutsDialog({ open, onClose }: KeyboardShortcutsDial
                     .map((item, index) => (
                       <div
                         key={index}
-                        className="flex items-center justify-between p-2 rounded bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor"
+                        className="flex items-center justify-between p-2 rounded bg-recoder-elements-background-depth-2 border border-recoder-elements-borderColor"
                       >
-                        <span className="text-sm text-bolt-elements-textSecondary">
+                        <span className="text-sm text-recoder-elements-textSecondary">
                           {item.description}
                         </span>
                         <div className="flex items-center gap-1">
@@ -141,11 +141,11 @@ export function KeyboardShortcutsDialog({ open, onClose }: KeyboardShortcutsDial
           </div>
 
           {/* Tips */}
-          <div className="mt-6 p-4 bg-bolt-elements-background-depth-3 rounded-lg border border-bolt-elements-borderColor">
+          <div className="mt-6 p-4 bg-recoder-elements-background-depth-3 rounded-lg border border-recoder-elements-borderColor">
             <div className="flex items-start gap-2">
               <div className="text-lg flex-shrink-0"><div className="i-ph:lightbulb" /></div>
-              <div className="text-sm text-bolt-elements-textSecondary">
-                <strong className="text-bolt-elements-textPrimary">Pro tip:</strong> Select code in the editor and press <kbd className="kdb">Cmd/Ctrl</kbd> + <kbd className="kdb">K</kbd> to edit with AI.
+              <div className="text-sm text-recoder-elements-textSecondary">
+                <strong className="text-recoder-elements-textPrimary">Pro tip:</strong> Select code in the editor and press <kbd className="kdb">Cmd/Ctrl</kbd> + <kbd className="kdb">K</kbd> to edit with AI.
                 Use <kbd className="kdb">@</kbd> in chat to reference files, folders, or symbols.
               </div>
             </div>
@@ -155,7 +155,7 @@ export function KeyboardShortcutsDialog({ open, onClose }: KeyboardShortcutsDial
           <div className="mt-6 flex justify-end">
             <button
               onClick={onClose}
-              className="px-4 py-2 rounded-lg bg-bolt-elements-button-primary-background hover:bg-bolt-elements-button-primary-backgroundHover text-bolt-elements-button-primary-text transition-colors"
+              className="px-4 py-2 rounded-lg bg-recoder-elements-button-primary-background hover:bg-recoder-elements-button-primary-backgroundHover text-recoder-elements-button-primary-text transition-colors"
               aria-label="Close keyboard shortcuts dialog"
             >
               Got it!

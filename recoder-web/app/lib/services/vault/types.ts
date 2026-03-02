@@ -8,4 +8,4 @@ export type {
   CryptoVaultConfig,
   Vault,
   VaultDriver,
-} from '@giselles-ai/vault';
+} from '@recoder/vault';

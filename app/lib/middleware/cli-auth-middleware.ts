@@ -78,7 +78,7 @@ export function withCLIAuth(
             error: 'Premium plan required',
             message: 'This feature requires a premium subscription',
             currentPlan: context.plan,
-            upgradeUrl: `${process.env.NEXTAUTH_URL}/pricing`,
+            upgradeUrl: `${process.env.NEXT_PUBLIC_APP_URL || 'https://recoder.xyz'}/pricing`,
           },
           { status: 403 }
         );

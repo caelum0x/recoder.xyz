@@ -1,4 +1,4 @@
-import { Button } from "@giselle-internal/ui/button";
+import { Button } from "@recoder-internal/ui/button";
 import { SparklesIcon } from "lucide-react";
 import { DemoSection } from "../components/demo-section";
 import { UiPage } from "../components/ui-page";

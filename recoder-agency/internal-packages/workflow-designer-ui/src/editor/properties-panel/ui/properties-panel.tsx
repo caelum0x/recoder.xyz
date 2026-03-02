@@ -1,7 +1,7 @@
 "use client";
 
-import { defaultName } from "@giselles-ai/node-registry";
-import type { NodeLike } from "@giselles-ai/protocol";
+import { defaultName } from "@recoder/node-registry";
+import type { NodeLike } from "@recoder/protocol";
 import clsx from "clsx/lite";
 import type { ReactNode } from "react";
 import { NodeIcon } from "../../../icons/node";

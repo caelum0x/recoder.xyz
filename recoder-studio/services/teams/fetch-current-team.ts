@@ -1,8 +1,8 @@
 import { and, asc, eq } from "drizzle-orm";
 import { cache } from "react";
-import { db, supabaseUserMappings, teamMemberships, teams } from "@/db";
+import { db, authUserMappings, teamMemberships, teams } from "@/db";
 import { getRecoderStudioSession } from "@/lib/recoder-studio-session";
-import { getUser } from "@/lib/supabase";
+import { getUser } from "@/lib/auth/user";
 import type { CurrentTeam, TeamId } from "./types";
 
 /**
@@ -30,7 +30,7 @@ async function fetchCurrentTeam(): Promise<CurrentTeam> {
 const cachedFetchCurrentTeam = cache(fetchCurrentTeam);
 export { cachedFetchCurrentTeam as fetchCurrentTeam };
 
-async function fetchTeam(teamId: TeamId, supabaseUserId: string) {
+async function fetchTeam(teamId: TeamId, authUserId: string) {
 	const result = await db
 		.select({
 			id: teams.id,
@@ -42,15 +42,15 @@ async function fetchTeam(teamId: TeamId, supabaseUserId: string) {
 			activeCustomerId: teams.activeCustomerId,
 		})
 		.from(teams)
-		// join teamMemberships and supabaseUserMappings to check user's membership
+		// join teamMemberships and authUserMappings to check user's membership
 		.innerJoin(teamMemberships, eq(teams.dbId, teamMemberships.teamDbId))
 		.innerJoin(
-			supabaseUserMappings,
-			eq(teamMemberships.userDbId, supabaseUserMappings.userDbId),
+			authUserMappings,
+			eq(teamMemberships.userDbId, authUserMappings.userDbId),
 		)
 		.where(
 			and(
-				eq(supabaseUserMappings.supabaseUserId, supabaseUserId),
+				eq(authUserMappings.authUserId, authUserId),
 				eq(teams.id, teamId),
 			),
 		);
@@ -60,7 +60,7 @@ async function fetchTeam(teamId: TeamId, supabaseUserId: string) {
 	return result[0];
 }
 
-async function fetchFirstTeam(supabaseUserId: string) {
+async function fetchFirstTeam(authUserId: string) {
 	const team = await db
 		.select({
 			id: teams.id,
@@ -74,10 +74,10 @@ async function fetchFirstTeam(supabaseUserId: string) {
 		.from(teams)
 		.innerJoin(teamMemberships, eq(teams.dbId, teamMemberships.teamDbId))
 		.innerJoin(
-			supabaseUserMappings,
-			eq(teamMemberships.userDbId, supabaseUserMappings.userDbId),
+			authUserMappings,
+			eq(teamMemberships.userDbId, authUserMappings.userDbId),
 		)
-		.where(eq(supabaseUserMappings.supabaseUserId, supabaseUserId))
+		.where(eq(authUserMappings.authUserId, authUserId))
 		.orderBy(asc(teams.dbId))
 		.limit(1);
 

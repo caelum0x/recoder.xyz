@@ -1,10 +1,10 @@
-import { defaultName } from "@giselles-ai/node-registry";
+import { defaultName } from "@recoder/node-registry";
 import type {
 	InputId,
 	NodeId,
 	NodeLike,
 	OutputId,
-} from "@giselles-ai/protocol";
+} from "@recoder/protocol";
 import { Handle, type NodeProps, Position } from "@xyflow/react";
 import clsx from "clsx/lite";
 import { useMemo } from "react";

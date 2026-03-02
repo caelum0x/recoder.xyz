@@ -2,12 +2,12 @@ import type {
 	CompletedGeneration,
 	FailedGeneration,
 	Generation,
-} from "@giselles-ai/protocol";
+} from "@recoder/protocol";
 import {
 	isTextGenerationNode,
 	type TextGenerationNode,
-} from "@giselles-ai/protocol";
-import { useNodeGenerations } from "@giselles-ai/react";
+} from "@recoder/protocol";
+import { useNodeGenerations } from "@recoder/react";
 import clsx from "clsx/lite";
 import { ArrowDownIcon, ArrowUpIcon, TimerIcon } from "lucide-react";
 import { useAppDesignerStore } from "../../../app-designer";
@@ -57,16 +57,20 @@ function getGenerationTextContent(generation: Generation): string {
 	}
 
 	// Fallback to extracting from messages if no outputs or not completed
+	type MessagePart = { type?: string; text?: string };
+	type AssistantMessage = { role?: string; parts?: MessagePart[] };
 	const generatedMessages =
 		"messages" in generation
-			? (generation.messages?.filter((m) => m.role === "assistant") ?? [])
+			? (generation.messages?.filter(
+					(m: AssistantMessage) => m.role === "assistant",
+				) ?? [])
 			: [];
 
 	return generatedMessages
-		.map((message) =>
+		.map((message: AssistantMessage) =>
 			message.parts
-				?.filter((part) => part.type === "text")
-				.map((part) => (part.type === "text" ? part.text : ""))
+				?.filter((part: MessagePart) => part.type === "text")
+				.map((part: MessagePart) => (part.type === "text" ? part.text : ""))
 				.join("\n"),
 		)
 		.join("\n");

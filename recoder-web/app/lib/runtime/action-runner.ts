@@ -3478,23 +3478,81 @@ export class ActionRunner {
 
     try {
       const strictWorkflowContract = this.#resolveDelegateStrictContract(action);
-      // Call enterprise tools API for subagent delegation
-      const response = await fetch('/api/enterprise-tools', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          tool: 'delegateSubagent',
-          params: {
-            agentType: action.agentType,
-            task: action.taskDescription,
+      const desktopBridge =
+        typeof window !== 'undefined' && window.recoderDesktop?.isDesktop
+          ? window.recoderDesktop
+          : null;
+
+      let result: EnterpriseToolsResponse;
+      if (desktopBridge?.delegateTask) {
+        const delegated = await desktopBridge.delegateTask({
+          task: action.taskDescription,
+          agentId: `${action.agentType}-agent`,
+          targetName: `${action.agentType} subagent`,
+          targetPlatform: 'custom',
+          threadId: this.#projectId || 'desktop-thread',
+          metadata: {
             context: action.context || '',
-            projectId: this.#projectId || undefined,
             strict: strictWorkflowContract,
+          },
+        });
+
+        if (!delegated?.success) {
+          throw new Error(delegated?.error || 'Desktop delegation failed');
+        }
+
+        let pollStatus = 'queued';
+        let pollSummary = '';
+        if (delegated.jobId && desktopBridge.pollDelegatedTaskStatus) {
+          const polled = await desktopBridge.pollDelegatedTaskStatus({
+            jobId: delegated.jobId,
+            intervalMs: 2000,
+            timeoutMs: 45000,
+          });
+          if (polled?.success) {
+            pollStatus = polled.status || (polled.complete ? 'completed' : 'pending');
+            pollSummary = `\nDesktop bridge status: ${pollStatus} (${polled.attempts || 0} polls)`;
+          } else {
+            pollSummary = `\nDesktop bridge polling failed: ${polled?.error || 'unknown'}`;
           }
-        })
-      });
-      
-      const result = await response.json() as EnterpriseToolsResponse;
+        }
+
+        result = {
+          success: true,
+          output: `Delegated via desktop bridge${delegated.jobId ? ` (job ${delegated.jobId})` : ''}${pollSummary}`,
+          message: `Delegated to ${action.agentType}: ${action.taskDescription}`,
+          source: 'desktop-bridge',
+          backend: {
+            endpoint: 'ipc://agent:delegateTask',
+            contract: 'a2a-bridge-v1',
+            responseContract: null,
+            contractStatus: 'match',
+            strictContract: strictWorkflowContract,
+            authMode: 'desktop-ipc',
+            authSource: 'desktop-preload',
+            attempts: 1,
+            maxAttempts: 1,
+            warnings: pollStatus === 'timeout' ? ['desktop bridge polling timed out'] : [],
+          },
+        };
+      } else {
+        // Call enterprise tools API for subagent delegation
+        const response = await fetch('/api/enterprise-tools', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            tool: 'delegateSubagent',
+            params: {
+              agentType: action.agentType,
+              task: action.taskDescription,
+              context: action.context || '',
+              projectId: this.#projectId || undefined,
+              strict: strictWorkflowContract,
+            }
+          })
+        });
+        result = await response.json() as EnterpriseToolsResponse;
+      }
 
       const laneSummary = result.workflow?.lanes?.length
         ? `\n\nActive lanes:\n${result.workflow.lanes.map((lane) => `- ${lane.laneId}: ${lane.title}`).join('\n')}`

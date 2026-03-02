@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
 import './globals.css';
 import { Providers } from '@/components/providers';
+import UTMCapture from '@/components/UTMCapture';
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -10,18 +11,11 @@ export const metadata: Metadata = {
   description: 'The only platform with seamless Web IDE + Terminal CLI sync. 100% FREE beta with BYOK (Bring Your Own Key). Access Claude, GPT-4, Gemini & 40+ AI models. Start in browser, continue in terminal.',
   icons: {
     icon: [
-      { url: '/favicon.svg', type: 'image/svg+xml' },
-      { url: '/favicon-16x16.png', sizes: '16x16', type: 'image/png' },
-      { url: '/favicon-32x32.png', sizes: '32x32', type: 'image/png' },
-      { url: '/favicon.ico', sizes: 'any' },
-      { url: '/favicon-512x512.png', sizes: '512x512', type: 'image/png' },
+      { url: '/favicon.png', sizes: '32x32', type: 'image/png' },
+      { url: '/icon.png', sizes: '512x512', type: 'image/png' },
     ],
     shortcut: '/favicon.ico',
     apple: '/apple-touch-icon.png',
-    other: [
-      { rel: 'icon', url: '/android-chrome-192x192.png', sizes: '192x192', type: 'image/png' },
-      { rel: 'icon', url: '/favicon-512x512.png', sizes: '512x512', type: 'image/png' },
-    ],
   },
   manifest: '/manifest.json',
   keywords: [
@@ -29,7 +23,7 @@ export const metadata: Metadata = {
     'free AI development',
     'BYOK AI',
     'Claude Code alternative',
-    'Bolt.new alternative',
+    'AI coding alternative',
     'web IDE CLI sync',
     'AI code generator',
     'multi-AI platform',
@@ -81,7 +75,7 @@ export const metadata: Metadata = {
     canonical: 'https://recoder.xyz',
   },
   verification: {
-    google: 'your-google-verification-code',
+    google: '', // Set in Google Search Console -> Settings -> Ownership verification
     // yandex: 'your-yandex-verification-code',
     // other: 'your-other-verification-code',
   },
@@ -111,6 +105,7 @@ export default function RootLayout({
         />
       </head>
       <body className={inter.className}>
+        <UTMCapture />
         <Providers>{children}</Providers>
       </body>
     </html>

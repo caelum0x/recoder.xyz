@@ -6,8 +6,8 @@ import {
 	DialogFooter,
 	DialogHeader,
 	DialogTitle,
-} from "@giselle-internal/ui/dialog";
-import { Input } from "@giselle-internal/ui/input";
+} from "@recoder-internal/ui/dialog";
+import { Input } from "@recoder-internal/ui/input";
 import { X } from "lucide-react";
 import { useState, useTransition } from "react";
 import { Button } from "../../components/button";

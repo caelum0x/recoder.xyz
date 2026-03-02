@@ -1,6 +1,6 @@
 "use client";
 
-import { AppIcon } from "@giselle-internal/ui/app-icon";
+import { AppIcon } from "@recoder-internal/ui/app-icon";
 import clsx from "clsx/lite";
 import { Copy, Trash2 } from "lucide-react";
 import Link from "next/link";

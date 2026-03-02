@@ -1,6 +1,6 @@
 "use client";
 
-import { Button } from "@giselle-internal/ui/button";
+import { Button } from "@recoder-internal/ui/button";
 import {
 	Dialog,
 	DialogBody,
@@ -11,9 +11,9 @@ import {
 	DialogHeader,
 	DialogTitle,
 	DialogTrigger,
-} from "@giselle-internal/ui/dialog";
-import { Input } from "@giselle-internal/ui/input";
-import { TabNavigation } from "@giselle-internal/ui/tab-navigation";
+} from "@recoder-internal/ui/dialog";
+import { Input } from "@recoder-internal/ui/input";
+import { TabNavigation } from "@recoder-internal/ui/tab-navigation";
 import { Play, RotateCcw, Star } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";

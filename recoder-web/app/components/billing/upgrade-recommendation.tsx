@@ -60,17 +60,17 @@ export function UpgradeRecommendation({
   return (
     <div
       className={classNames(
-        'border border-bolt-elements-borderColor bg-bolt-elements-background-depth-2 rounded-lg',
+        'border border-recoder-elements-borderColor bg-recoder-elements-background-depth-2 rounded-lg',
         className
       )}
     >
       <div className="p-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
-            <h3 className="font-medium text-sm text-bolt-elements-textPrimary">
+            <h3 className="font-medium text-sm text-recoder-elements-textPrimary">
               Want More Features?
             </h3>
-            <p className="text-xs text-bolt-elements-textSecondary mt-1">
+            <p className="text-xs text-recoder-elements-textSecondary mt-1">
               Upgrade your plan for more AI credits, storage, and premium features.
             </p>
           </div>

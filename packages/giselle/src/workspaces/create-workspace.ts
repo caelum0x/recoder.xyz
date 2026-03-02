@@ -1,4 +1,4 @@
-import { generateInitialWorkspace, Workspace } from "@giselles-ai/protocol";
+import { generateInitialWorkspace, Workspace } from "@recoder/protocol";
 import type { GiselleContext } from "../types";
 import { setWorkspace } from "./utils";
 

@@ -9,6 +9,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSession } from '@/lib/session-provider';
 import Link from 'next/link';
+import { SiteHeader } from '@/components/SiteHeader';
 import { 
   Terminal,
   Sparkles,
@@ -86,20 +87,7 @@ export default function WelcomePage() {
 
   return (
     <div className="min-h-screen bg-black text-white">
-      {/* Header */}
-      <header className="border-b border-white/10 bg-black/80 backdrop-blur-xl">
-        <div className="container mx-auto px-6 h-16 flex items-center justify-between">
-          <Link href="/" className="flex items-center space-x-2">
-            <div className="w-8 h-8 bg-gradient-to-br from-orange-500 to-purple-600 rounded-lg flex items-center justify-center">
-              <Terminal className="w-5 h-5 text-white" />
-            </div>
-            <span className="text-xl font-bold">recoder</span>
-          </Link>
-          <div className="text-sm text-gray-400">
-            Welcome, {session?.user?.name || session?.user?.email}
-          </div>
-        </div>
-      </header>
+      <SiteHeader fixed={false} />
 
       <div className="container mx-auto px-6 py-24">
         <div className="max-w-4xl mx-auto">

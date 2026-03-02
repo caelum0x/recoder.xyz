@@ -1,4 +1,4 @@
-import { GenerationId } from "@giselles-ai/protocol";
+import { GenerationId } from "@recoder/protocol";
 import type { NextRequest } from "next/server";
 import { giselle } from "@/app/giselle";
 

@@ -7,7 +7,10 @@
   "exports": {
     ".": "./src/index.ts",
     "./client": "./src/client.ts",
+    "./edge": "./src/edge.ts",
     "./session": "./src/session.ts",
+    "./verify": "./src/verify.ts",
+    "./cross-domain": "./src/cross-domain.ts",
     "./keys": "./src/keys.ts"
   },
   "scripts": {
@@ -15,11 +18,11 @@
     "postinstall": "prisma generate --schema=\"./prisma/schema.prisma\" --no-hints"
   },
   "dependencies": {
-    "@prisma/client": "7.1.0",
-    "better-auth": "^1.2.0"
+    "@prisma/client": "6.19.2",
+    "better-auth": "^1.2.0",
+    "prisma": "6.19.2"
   },
   "devDependencies": {
-    "prisma": "7.1.0",
     "typescript": "^5.8.3"
   }
 }

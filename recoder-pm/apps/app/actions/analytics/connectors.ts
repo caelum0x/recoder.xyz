@@ -5,6 +5,7 @@ import { syncAnalyticsConnector as runSync } from "@repo/backend/analytics-conne
 import { currentOrganizationId, currentUser } from "@repo/backend/auth/utils";
 import { parseError } from "@repo/lib/parse-error";
 import { revalidatePath } from "next/cache";
+import { PmEvents, trackPmServerEvent } from "@/lib/analytics";
 import { database } from "@/lib/database";
 
 export type AnalyticsProvider = "MIXPANEL" | "AMPLITUDE" | "POSTHOG";
@@ -88,6 +89,13 @@ export const upsertAnalyticsConnector = async (
       select: { id: true },
     });
 
+    trackPmServerEvent(PmEvents.CONNECTOR_CONFIGURED, {
+      connectorType: "analytics",
+      provider: payload.provider,
+      userId: user.id,
+      organizationId,
+    });
+
     revalidatePath("/settings/integrations/analytics");
 
     return { success: true };
@@ -111,6 +119,12 @@ export const deleteAnalyticsConnector = async (provider: AnalyticsProvider) => {
           provider,
         },
       },
+    });
+
+    trackPmServerEvent(PmEvents.CONNECTOR_REMOVED, {
+      connectorType: "analytics",
+      provider,
+      organizationId,
     });
 
     revalidatePath("/settings/integrations/analytics");
@@ -144,6 +158,13 @@ export const syncAnalyticsConnector = async (provider: AnalyticsProvider) => {
     }
 
     await runSync(connector.id);
+
+    trackPmServerEvent(PmEvents.CONNECTOR_SYNCED, {
+      connectorId: connector.id,
+      connectorType: "analytics",
+      provider,
+      organizationId,
+    });
 
     revalidatePath("/settings/integrations/analytics");
 

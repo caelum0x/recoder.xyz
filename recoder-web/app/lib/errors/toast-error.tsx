@@ -121,7 +121,7 @@ function ErrorToastContent({
     <div className="flex flex-col gap-2">
       <div>
         <div className="font-semibold text-sm mb-1">{solution.title}</div>
-        <div className="text-xs text-bolt-elements-textSecondary">{solution.description}</div>
+        <div className="text-xs text-recoder-elements-textSecondary">{solution.description}</div>
       </div>
       
       {solution.actions.length > 0 && (
@@ -130,7 +130,7 @@ function ErrorToastContent({
             <button
               key={index}
               onClick={() => handleAction(action)}
-              className="px-2 py-1 text-xs rounded bg-bolt-elements-button-secondary-background hover:bg-bolt-elements-button-secondary-backgroundHover text-bolt-elements-button-secondary-text border border-bolt-elements-borderColor transition-colors"
+              className="px-2 py-1 text-xs rounded bg-recoder-elements-button-secondary-background hover:bg-recoder-elements-button-secondary-backgroundHover text-recoder-elements-button-secondary-text border border-recoder-elements-borderColor transition-colors"
             >
               <span className="mr-1">{action.icon}</span>
               {action.label}

@@ -87,6 +87,14 @@ on:
         required: true
         default: "redis"
         type: string
+      assert_tier2_promotable:
+        description: "Require Tier-2 connectors to be promotable (supported|ga|promoted)"
+        required: true
+        default: "false"
+        type: choice
+        options:
+          - "false"
+          - "true"
 
 permissions:
   contents: read
@@ -140,6 +148,14 @@ jobs:
       - name: Build evidence bundle
         run: pnpm run phase3:evidence-pack
 
+      - name: Auto-publish Tier-1 support status
+        run: pnpm run phase3:publish-support-status
+
+      - name: Validate Tier-2 promotion gate
+        env:
+          ASSERT_TIER2_PROMOTABLE: ${{ inputs.assert_tier2_promotable }}
+        run: pnpm run phase3:tier2:gate
+
       - name: Upload gate artifacts
         if: always()
         uses: actions/upload-artifact@v4
@@ -153,5 +169,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: phase3-evidence-${{ github.run_id }}
-          path: logs/phase3-evidence/
+          path: |
+            logs/phase3-evidence/
+            SUPPORTED_CONNECTORS.md
           if-no-files-found: ignore

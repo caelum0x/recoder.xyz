@@ -1,4 +1,4 @@
-import type { Generation, Message } from "@giselles-ai/protocol";
+import type { Generation, Message } from "@recoder/protocol";
 
 export function getAssistantTextFromGeneration(generation: Generation): string {
 	if (!("messages" in generation) || generation.messages === undefined) {
@@ -12,8 +12,13 @@ export function getAssistantTextFromGeneration(generation: Generation): string {
 	return assistantMessages
 		.map((message) =>
 			message.parts
-				?.filter((part) => part.type === "text")
-				.map((part) => part.text)
+				?.filter(
+					(
+						part: { type?: string; text?: string },
+					): part is { type: "text"; text: string } =>
+						part.type === "text" && typeof part.text === "string",
+				)
+				.map((part: { text: string }) => part.text)
 				.join("\n"),
 		)
 		.filter(Boolean)

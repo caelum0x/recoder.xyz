@@ -1,5 +1,5 @@
-import type { DataStoreProvider } from "@giselles-ai/data-store-registry";
-import { type GiselleLogger, noopLogger } from "@giselles-ai/logger";
+import type { DataStoreProvider } from "@recoder/data-store-registry";
+import { type GiselleLogger, noopLogger } from "@recoder/logger";
 import {
 	type DataStore,
 	type DataStoreId,
@@ -18,7 +18,7 @@ import {
 	type TriggerId,
 	type Workspace,
 	type WorkspaceId,
-} from "@giselles-ai/protocol";
+} from "@recoder/protocol";
 import { getApp, saveApp } from "./apps";
 import { deleteApp } from "./apps/delete-app";
 import { getLanguageModelProviders } from "./configurations/get-language-model-providers";

@@ -194,12 +194,12 @@ export const WorkflowNodeComponent = memo(function WorkflowNodeComponent({
           {/* Title and Metadata */}
           <div className="flex-1 min-w-0">
             {/* Metadata Labels */}
-            <div className="flex items-center gap-1 text-[10px] font-mono text-bolt-elements-textTertiary">
+            <div className="flex items-center gap-1 text-[10px] font-mono text-recoder-elements-textTertiary">
               {metadataTexts.map((item, index) => (
                 <span key={item.label} className="flex items-center">
                   {selected ? (
                     <Tooltip text={item.tooltip} variant="dark">
-                      <button type="button" className="hover:text-bolt-elements-textPrimary transition-colors">
+                      <button type="button" className="hover:text-recoder-elements-textPrimary transition-colors">
                         {item.label}
                       </button>
                     </Tooltip>
@@ -207,7 +207,7 @@ export const WorkflowNodeComponent = memo(function WorkflowNodeComponent({
                     <span>{item.label}</span>
                   )}
                   {index < metadataTexts.length - 1 && (
-                    <span className="mx-1 text-bolt-elements-textTertiary">/</span>
+                    <span className="mx-1 text-recoder-elements-textTertiary">/</span>
                   )}
                 </span>
               ))}
@@ -216,7 +216,7 @@ export const WorkflowNodeComponent = memo(function WorkflowNodeComponent({
             {/* Node Name */}
             <EditableText
               className={classNames(
-                'text-sm font-medium text-bolt-elements-textPrimary',
+                'text-sm font-medium text-recoder-elements-textPrimary',
                 !selected && 'pointer-events-none'
               )}
               text={getDefaultNodeName(node)}
@@ -254,13 +254,13 @@ export const WorkflowNodeComponent = memo(function WorkflowNodeComponent({
                     '!transition-all !duration-200',
                     isConnected
                       ? handleColors
-                      : 'bg-bolt-elements-background-depth-2 border-bolt-elements-borderColor hover:border-bolt-elements-borderColor'
+                      : 'bg-recoder-elements-background-depth-2 border-recoder-elements-borderColor hover:border-recoder-elements-borderColor'
                   )}
                 />
                 <span
                   className={classNames(
                     'text-xs pl-4',
-                    isConnected ? 'text-bolt-elements-textPrimary' : 'text-bolt-elements-textTertiary'
+                    isConnected ? 'text-recoder-elements-textPrimary' : 'text-recoder-elements-textTertiary'
                   )}
                 >
                   {input.label}
@@ -284,7 +284,7 @@ export const WorkflowNodeComponent = memo(function WorkflowNodeComponent({
                 <span
                   className={classNames(
                     'text-xs pr-4',
-                    isConnected ? 'text-bolt-elements-textPrimary' : 'text-bolt-elements-textTertiary'
+                    isConnected ? 'text-recoder-elements-textPrimary' : 'text-recoder-elements-textTertiary'
                   )}
                 >
                   {output.label}
@@ -298,7 +298,7 @@ export const WorkflowNodeComponent = memo(function WorkflowNodeComponent({
                     '!transition-all !duration-200',
                     isConnected
                       ? handleColors
-                      : 'bg-bolt-elements-background-depth-2 border-bolt-elements-borderColor hover:border-bolt-elements-borderColor'
+                      : 'bg-recoder-elements-background-depth-2 border-recoder-elements-borderColor hover:border-recoder-elements-borderColor'
                   )}
                 />
               </div>

@@ -1,8 +1,8 @@
 name: 📊 Monitoring & Rollback Capabilities
+# NOTE: Removed auto-trigger on push to main to avoid timing conflicts with deploy.yml.
+# Use workflow_dispatch to manually run monitoring or rollback operations.
 
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
     inputs:
       action:
@@ -210,149 +210,124 @@ jobs:
     name: 🔄 Rollback Deployment
     runs-on: ubuntu-latest
     if: github.event.inputs.action == 'rollback'
-    
+
     environment:
       name: ${{ github.event.inputs.environment }}
-      
+
     steps:
       - name: 📂 Checkout code
         uses: actions/checkout@v4
-        
-      - name: 🔄 Prepare rollback
+        with:
+          fetch-depth: 20  # Need recent history for rollback target
+
+      - name: 🔄 Validate rollback target
         run: |
-          ENV="${{ github.event.inputs.environment }}"
           ROLLBACK_VERSION="${{ github.event.inputs.rollback_version }}"
-          
-          echo "🔄 Preparing rollback for $ENV environment"
-          echo "📦 Target version: $ROLLBACK_VERSION"
-          
+
           if [[ -z "$ROLLBACK_VERSION" ]]; then
-            echo "❌ Rollback version not specified"
+            echo "::error::Rollback version not specified. Provide a git SHA, tag, or short ref."
             exit 1
           fi
-          
-          echo "✅ Rollback preparation complete"
-          
-      - name: 🌐 Rollback web platform
-        run: |
-          ENV="${{ github.event.inputs.environment }}"
-          VERSION="${{ github.event.inputs.rollback_version }}"
-          
-          echo "🌐 Rolling back Web Platform to version $VERSION..."
-          
-          # Simulate rollback process
-          echo "📦 Downloading artifacts for version $VERSION"
-          echo "🔄 Updating deployment configuration"
-          echo "🚀 Deploying previous version"
-          echo "🔍 Verifying rollback success"
-          
-          echo "✅ Web Platform rollback completed"
-          
-      - name: 📋 Rollback PM platform
-        run: |
-          ENV="${{ github.event.inputs.environment }}"
-          VERSION="${{ github.event.inputs.rollback_version }}"
 
-          echo "📋 Rolling back PM Platform to version $VERSION..."
-
-          # Simulate rollback process
-          echo "📦 Downloading artifacts for version $VERSION"
-          echo "🔄 Updating deployment configuration"
-          echo "🚀 Deploying previous version"
-          echo "🔍 Verifying rollback success"
-
-          echo "✅ PM Platform rollback completed"
-          
-      - name: 📱 Rollback mobile apps
-        run: |
-          ENV="${{ github.event.inputs.environment }}"
-          VERSION="${{ github.event.inputs.rollback_version }}"
-          
-          echo "📱 Rolling back Mobile Apps to version $VERSION..."
-          
-          if [[ "$ENV" == "production" ]]; then
-            echo "⚠️ Mobile app rollback requires app store processes"
-            echo "📝 Creating emergency app store submission"
-            echo "🤖 Android: Preparing Google Play rollout halt"
-            echo "🍎 iOS: Preparing App Store Connect rollback"
-          else
-            echo "📱 Rolling back staging mobile builds"
+          # Verify the target commit exists
+          if ! git rev-parse --verify "$ROLLBACK_VERSION^{commit}" >/dev/null 2>&1; then
+            echo "::error::Rollback target '$ROLLBACK_VERSION' is not a valid commit in recent history."
+            echo "Tip: Use a full SHA or ensure the tag/branch exists."
+            exit 1
           fi
-          
-          echo "✅ Mobile Apps rollback initiated"
-          
-      - name: 🖥️ Rollback desktop apps
+
+          FULL_SHA=$(git rev-parse "$ROLLBACK_VERSION")
+          echo "ROLLBACK_SHA=$FULL_SHA" >> $GITHUB_ENV
+          echo "Validated rollback target: $FULL_SHA"
+
+      - name: 🔑 Setup SSH
+        uses: webfactory/ssh-agent@v0.8.0
+        with:
+          ssh-private-key: ${{ secrets.DEPLOY_SSH_KEY }}
+
+      - name: 🌐 Rollback server-side services
+        env:
+          SERVER_HOST: ${{ secrets.DEPLOY_HOST }}
+          SERVER_USER: ${{ secrets.DEPLOY_USER || 'root' }}
+          DEPLOY_DIR: ${{ secrets.DEPLOY_DIR || '/opt/recoder' }}
         run: |
           ENV="${{ github.event.inputs.environment }}"
-          VERSION="${{ github.event.inputs.rollback_version }}"
-          
-          echo "🖥️ Rolling back Desktop Apps to version $VERSION..."
-          
-          echo "📦 Updating GitHub releases"
-          echo "🔄 Reverting auto-update channels"
-          echo "📝 Notifying users of rollback"
-          
-          echo "✅ Desktop Apps rollback completed"
-          
-      - name: 🔌 Rollback browser extension
+          VERSION="${{ env.ROLLBACK_SHA }}"
+
+          echo "Rolling back server-side services to $VERSION on $ENV..."
+
+          ssh -o StrictHostKeyChecking=no "${SERVER_USER}@${SERVER_HOST}" bash -s <<ROLLBACK_SCRIPT
+            set -euo pipefail
+            cd "${DEPLOY_DIR}"
+
+            echo "--- Pre-rollback state ---"
+            git log --oneline -1 HEAD
+
+            echo "--- Checking out rollback target ---"
+            git fetch origin
+            git checkout "$VERSION"
+
+            echo "--- Rebuilding containers ---"
+            docker compose build --no-cache recoder-web recoder-app docker-backend
+
+            echo "--- Rolling restart (one service at a time) ---"
+            for svc in docker-backend recoder-web recoder-app; do
+              echo "Restarting \$svc..."
+              docker compose up -d --no-deps "\$svc"
+              sleep 5
+              if ! docker compose exec "\$svc" wget -q --spider http://localhost:3000/api/health 2>/dev/null && \
+                 ! docker compose exec "\$svc" wget -q --spider http://localhost:3001/health 2>/dev/null; then
+                echo "::warning::Health check for \$svc did not respond (may use different port)"
+              fi
+            done
+
+            echo "--- Post-rollback state ---"
+            git log --oneline -1 HEAD
+            echo "Rollback complete."
+          ROLLBACK_SCRIPT
+
+      - name: 🔍 Post-rollback health verification
+        env:
+          SERVER_HOST: ${{ secrets.DEPLOY_HOST }}
         run: |
           ENV="${{ github.event.inputs.environment }}"
-          VERSION="${{ github.event.inputs.rollback_version }}"
-          
-          echo "🔌 Rolling back Browser Extension to version $VERSION..."
-          
+
           if [[ "$ENV" == "production" ]]; then
-            echo "🌐 Chrome Web Store: Reverting to previous version"
-            echo "🦊 Firefox Add-ons: Reverting to previous version"
+            WEB_URL="https://recoder.xyz"
           else
-            echo "🔌 Rolling back staging extension builds"
+            WEB_URL="https://staging.recoder.xyz"
           fi
-          
-          echo "✅ Browser Extension rollback completed"
-          
-      - name: 🔍 Verify rollback
-        run: |
-          ENV="${{ github.event.inputs.environment }}"
-          VERSION="${{ github.event.inputs.rollback_version }}"
-          
-          echo "🔍 Verifying rollback to version $VERSION..."
-          
-          # Health checks after rollback
-          echo "🏥 Running post-rollback health checks..."
-          echo "✅ Web Platform: Healthy"
-          echo "✅ PM Platform: Healthy"
-          echo "✅ Database: Connected"
-          echo "✅ AI Providers: Operational"
-          
-          # Performance verification
-          echo "📊 Performance verification..."
-          echo "✅ Response times within normal range"
-          echo "✅ Error rates back to normal"
-          echo "✅ AI provider connections stable"
-          
-          echo "🎉 Rollback verification completed successfully!"
-          
+
+          echo "Verifying services after rollback..."
+
+          HEALTH_OK=true
+          for endpoint in "$WEB_URL/api/health"; do
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 "$endpoint" || echo "000")
+            if [[ "$STATUS" == "200" ]]; then
+              echo "OK ($STATUS): $endpoint"
+            else
+              echo "::warning::UNHEALTHY ($STATUS): $endpoint"
+              HEALTH_OK=false
+            fi
+          done
+
+          if [[ "$HEALTH_OK" == "false" ]]; then
+            echo "::warning::Some health checks failed after rollback. Manual investigation may be required."
+          fi
+
       - name: 📊 Rollback summary
+        if: always()
         run: |
-          echo "## 🔄 Rollback Complete" >> $GITHUB_STEP_SUMMARY
+          echo "## Rollback Report" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### 📦 Rollback Details" >> $GITHUB_STEP_SUMMARY
-          echo "- **Environment**: ${{ github.event.inputs.environment }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Target Version**: ${{ github.event.inputs.rollback_version }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Status**: ✅ Completed Successfully" >> $GITHUB_STEP_SUMMARY
+          echo "| Field | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Environment | ${{ github.event.inputs.environment }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Target | ${{ github.event.inputs.rollback_version }} (${{ env.ROLLBACK_SHA }}) |" >> $GITHUB_STEP_SUMMARY
+          echo "| Status | ${{ job.status }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Triggered by | @${{ github.actor }} |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### 🏗️ Platforms Rolled Back" >> $GITHUB_STEP_SUMMARY
-          echo "- ✅ **Web Platform** (recoder-web)" >> $GITHUB_STEP_SUMMARY
-          echo "- ✅ **PM Platform** (recoder-pm)" >> $GITHUB_STEP_SUMMARY
-          echo "- ✅ **Mobile Apps** (iOS/Android)" >> $GITHUB_STEP_SUMMARY
-          echo "- ✅ **Desktop Apps** (Cross-platform)" >> $GITHUB_STEP_SUMMARY
-          echo "- ✅ **Browser Extension** (Chrome/Firefox)" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### 🏥 Post-Rollback Status" >> $GITHUB_STEP_SUMMARY
-          echo "- **Health Checks**: ✅ All systems healthy" >> $GITHUB_STEP_SUMMARY
-          echo "- **Performance**: ✅ Within normal thresholds" >> $GITHUB_STEP_SUMMARY
-          echo "- **AI Providers**: ✅ All operational" >> $GITHUB_STEP_SUMMARY
-          echo "- **User Impact**: ✅ Minimized" >> $GITHUB_STEP_SUMMARY
+          echo "**Note:** Mobile/Desktop/Extension rollbacks require manual app store processes." >> $GITHUB_STEP_SUMMARY
 
   # =============================================
   # COMPREHENSIVE HEALTH CHECKS

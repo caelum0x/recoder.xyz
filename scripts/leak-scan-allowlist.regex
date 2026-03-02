@@ -1,0 +1,9 @@
+^app/Dockerfile:
+^docker-backend/Dockerfile:
+^\.devcontainer/docker-compose\.yml:
+^\.github/workflows/automated-testing\.yml:
+^docker-compose\.ya?ml:
+^docker-compose\.[^/]+\.ya?ml:
+^docker-backend/src/database/README\.md:
+^docker-backend/src/database/__tests__/security\.test\.ts:
+^internal-packages/workflow-designer-ui/.*/postgres-validation\.test\.ts:

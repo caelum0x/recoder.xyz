@@ -6,6 +6,12 @@ import { headers } from 'next/headers';
 
 const BACKEND_URL = process.env.BACKEND_URL || 'http://localhost:3001';
 
+function getAccessToken(session: unknown): string {
+  if (!session || typeof session !== 'object') return '';
+  const token = (session as Record<string, unknown>).accessToken;
+  return typeof token === 'string' ? token : '';
+}
+
 /**
  * GET /api/premium/status
  * Fetch user's premium status including subscription, API keys, and usage
@@ -27,7 +33,7 @@ export async function GET(request: NextRequest) {
     const response = await fetch(`${BACKEND_URL}/api/premium/status`, {
       method: 'GET',
       headers: {
-        'Authorization': `Bearer ${(session as any)?.accessToken || ''}`,
+        'Authorization': `Bearer ${getAccessToken(session)}`,
         'Content-Type': 'application/json',
         'X-User-Email': user.email,
         'X-User-ID': user.id || '',

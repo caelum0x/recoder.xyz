@@ -64,34 +64,34 @@ export function RecoderContext({ onSave, onLoad }: RecoderContextProps) {
   };
 
   return (
-    <div className="flex flex-col h-full bg-bolt-elements-background-depth-1">
-      <div className="p-4 border-b border-bolt-elements-borderColor">
-        <h2 className="text-xl font-semibold text-bolt-elements-textPrimary mb-2">
+    <div className="flex flex-col h-full bg-recoder-elements-background-depth-1">
+      <div className="p-4 border-b border-recoder-elements-borderColor">
+        <h2 className="text-xl font-semibold text-recoder-elements-textPrimary mb-2">
           .recoder/ Project Context
         </h2>
-        <p className="text-sm text-bolt-elements-textSecondary">
+        <p className="text-sm text-recoder-elements-textSecondary">
           Provide project-specific context and guidelines to the AI assistant
         </p>
       </div>
 
       <div className="flex flex-1 overflow-hidden">
         {/* File List */}
-        <div className="w-64 border-r border-bolt-elements-borderColor overflow-y-auto">
+        <div className="w-64 border-r border-recoder-elements-borderColor overflow-y-auto">
           <div className="p-2">
             <button
               onClick={() => setShowTemplates(!showTemplates)}
-              className="w-full px-3 py-2 mb-2 text-sm bg-bolt-elements-button-primary-background text-bolt-elements-button-primary-text rounded hover:bg-bolt-elements-button-primary-backgroundHover"
+              className="w-full px-3 py-2 mb-2 text-sm bg-recoder-elements-button-primary-background text-recoder-elements-button-primary-text rounded hover:bg-recoder-elements-button-primary-backgroundHover"
             >
               📚 Load Template
             </button>
 
             {showTemplates && (
-              <div className="mb-2 p-2 bg-bolt-elements-background-depth-2 rounded">
+              <div className="mb-2 p-2 bg-recoder-elements-background-depth-2 rounded">
                 {templates.map((template) => (
                   <button
                     key={template.name}
                     onClick={() => applyTemplate(template.name)}
-                    className="w-full text-left px-2 py-1 text-sm hover:bg-bolt-elements-background-depth-3 rounded"
+                    className="w-full text-left px-2 py-1 text-sm hover:bg-recoder-elements-background-depth-3 rounded"
                   >
                     {template.name}
                   </button>
@@ -105,8 +105,8 @@ export function RecoderContext({ onSave, onLoad }: RecoderContextProps) {
                 onClick={() => setSelectedFile(file.path)}
                 className={`w-full text-left px-3 py-2 text-sm rounded mb-1 ${
                   selectedFile === file.path
-                    ? 'bg-bolt-elements-item-backgroundAccent text-bolt-elements-item-contentAccent'
-                    : 'hover:bg-bolt-elements-background-depth-2 text-bolt-elements-textPrimary'
+                    ? 'bg-recoder-elements-item-backgroundAccent text-recoder-elements-item-contentAccent'
+                    : 'hover:bg-recoder-elements-background-depth-2 text-recoder-elements-textPrimary'
                 }`}
               >
                 <span className={`mr-2 ${file.iconClass}`} />
@@ -118,14 +118,14 @@ export function RecoderContext({ onSave, onLoad }: RecoderContextProps) {
 
         {/* Editor */}
         <div className="flex-1 flex flex-col">
-          <div className="p-4 border-b border-bolt-elements-borderColor flex justify-between items-center">
-            <h3 className="text-lg font-medium text-bolt-elements-textPrimary">
+          <div className="p-4 border-b border-recoder-elements-borderColor flex justify-between items-center">
+            <h3 className="text-lg font-medium text-recoder-elements-textPrimary">
               {RECODER_FILES.find(f => f.path === selectedFile)?.label}
             </h3>
             <button
               onClick={handleSave}
               disabled={isSaving}
-              className="px-4 py-2 bg-bolt-elements-button-primary-background text-bolt-elements-button-primary-text rounded hover:bg-bolt-elements-button-primary-backgroundHover disabled:opacity-50"
+              className="px-4 py-2 bg-recoder-elements-button-primary-background text-recoder-elements-button-primary-text rounded hover:bg-recoder-elements-button-primary-backgroundHover disabled:opacity-50"
             >
               {isSaving ? 'Saving...' : 'Save'}
             </button>
@@ -134,12 +134,12 @@ export function RecoderContext({ onSave, onLoad }: RecoderContextProps) {
           <textarea
             value={content}
             onChange={(e) => setContent(e.target.value)}
-            className="flex-1 p-4 bg-bolt-elements-background-depth-2 text-bolt-elements-textPrimary font-mono text-sm resize-none focus:outline-none"
+            className="flex-1 p-4 bg-recoder-elements-background-depth-2 text-recoder-elements-textPrimary font-mono text-sm resize-none focus:outline-none"
             placeholder="Enter your project context here..."
           />
 
-          <div className="p-4 border-t border-bolt-elements-borderColor bg-bolt-elements-background-depth-2">
-            <p className="text-xs text-bolt-elements-textSecondary">
+          <div className="p-4 border-t border-recoder-elements-borderColor bg-recoder-elements-background-depth-2">
+            <p className="text-xs text-recoder-elements-textSecondary">
               Tip: This content will be automatically included in AI prompts to provide project-specific context.
             </p>
           </div>

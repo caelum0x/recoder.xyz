@@ -22,14 +22,14 @@ export function SearchAndFilter({
       {/* Search bar */}
       <div className="relative max-w-md">
         <div className="absolute left-3 top-1/2 transform -translate-y-1/2">
-          <div className="i-ph:magnifying-glass text-bolt-elements-textSecondary" />
+          <div className="i-ph:magnifying-glass text-recoder-elements-textSecondary" />
         </div>
         <input
           type="text"
           placeholder="Search projects..."
           value={searchQuery}
           onChange={(e) => onSearchChange(e.target.value)}
-          className="w-full pl-10 pr-4 py-3 bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor rounded-lg text-bolt-elements-textPrimary placeholder-bolt-elements-textSecondary focus:outline-none focus:ring-2 focus:ring-bolt-elements-focus focus:border-transparent"
+          className="w-full pl-10 pr-4 py-3 bg-recoder-elements-background-depth-2 border border-recoder-elements-borderColor rounded-lg text-recoder-elements-textPrimary placeholder-recoder-elements-textSecondary focus:outline-none focus:ring-2 focus:ring-recoder-elements-focus focus:border-transparent"
         />
       </div>
 
@@ -37,11 +37,11 @@ export function SearchAndFilter({
       <div className="flex flex-wrap items-center gap-4">
         {/* Sort dropdown */}
         <div className="flex items-center gap-2">
-          <span className="text-sm text-bolt-elements-textSecondary">Sort by:</span>
+          <span className="text-sm text-recoder-elements-textSecondary">Sort by:</span>
           <select
             value={sortBy}
             onChange={(e) => onSortChange(e.target.value as any)}
-            className="px-3 py-2 bg-bolt-elements-background-depth-1 border border-bolt-elements-borderColor rounded-lg text-bolt-elements-textPrimary text-sm focus:outline-none focus:ring-2 focus:ring-bolt-elements-focus focus:border-transparent"
+            className="px-3 py-2 bg-recoder-elements-background-depth-1 border border-recoder-elements-borderColor rounded-lg text-recoder-elements-textPrimary text-sm focus:outline-none focus:ring-2 focus:ring-recoder-elements-focus focus:border-transparent"
           >
             <option value="updated">Last Updated</option>
             <option value="created">Date Created</option>
@@ -50,18 +50,18 @@ export function SearchAndFilter({
         </div>
 
         {/* Archive toggle */}
-        <label className="flex items-center gap-2 text-sm text-bolt-elements-textSecondary cursor-pointer">
+        <label className="flex items-center gap-2 text-sm text-recoder-elements-textSecondary cursor-pointer">
           <input
             type="checkbox"
             checked={showArchived}
             onChange={(e) => onArchivedToggle(e.target.checked)}
-            className="rounded border-bolt-elements-borderColor bg-bolt-elements-background-depth-2 text-bolt-elements-button-primary-background focus:ring-bolt-elements-focus"
+            className="rounded border-recoder-elements-borderColor bg-recoder-elements-background-depth-2 text-recoder-elements-button-primary-background focus:ring-recoder-elements-focus"
           />
           Show archived
         </label>
 
         {/* Results count */}
-        <div className="ml-auto text-sm text-bolt-elements-textSecondary">
+        <div className="ml-auto text-sm text-recoder-elements-textSecondary">
           {/* This will be handled by the parent component */}
         </div>
       </div>

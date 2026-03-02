@@ -1,6 +1,6 @@
 "use client";
 
-import type { Node } from "@giselles-ai/protocol";
+import type { Node } from "@recoder/protocol";
 import { createContext, type ReactNode, useContext, useState } from "react";
 import type {
 	AddNodeTool,

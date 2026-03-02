@@ -3,7 +3,7 @@ import type {
 	GitHubIssueState,
 	GitHubIssueStateReason,
 	GitHubRepositoryIssueContentType,
-} from "@giselles-ai/github-tool";
+} from "@recoder/github-tool";
 import type {
 	AppId,
 	DataStoreId,
@@ -13,13 +13,13 @@ import type {
 	TaskId,
 	TriggerId,
 	WorkspaceId,
-} from "@giselles-ai/protocol";
+} from "@recoder/protocol";
 import type {
 	DocumentVectorStoreId,
 	DocumentVectorStoreSourceId,
 	GitHubRepositoryIndexId,
-} from "@giselles-ai/types";
-import { createIdGenerator } from "@giselles-ai/utils";
+} from "@recoder/types";
+import { createIdGenerator } from "@recoder/utils";
 import { relations, sql } from "drizzle-orm";
 import {
 	boolean,

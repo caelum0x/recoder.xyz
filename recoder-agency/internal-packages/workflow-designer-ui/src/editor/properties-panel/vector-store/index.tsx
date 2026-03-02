@@ -1,4 +1,4 @@
-import type { VectorStoreNode } from "@giselles-ai/protocol";
+import type { VectorStoreNode } from "@recoder/protocol";
 import { useDeleteNode, useUpdateNodeData } from "../../../app-designer";
 import { PropertiesPanelContent, PropertiesPanelRoot } from "../ui";
 import { NodePanelHeader } from "../ui/node-panel-header";
@@ -20,8 +20,8 @@ export function VectorStoreNodePropertiesPanel({
 				onChangeName={(name) => updateNodeData(node, { name })}
 				docsUrl={
 					node.content.source.provider === "document"
-						? "https://docs.giselles.ai/en/glossary/document-vector-store-node"
-						: "https://docs.giselles.ai/en/glossary/github-vector-store-node"
+						? "https://docs.recoder.xyz/en/glossary/document-vector-store-node"
+						: "https://docs.recoder.xyz/en/glossary/github-vector-store-node"
 				}
 				onDelete={() => deleteNode(node.id)}
 			/>

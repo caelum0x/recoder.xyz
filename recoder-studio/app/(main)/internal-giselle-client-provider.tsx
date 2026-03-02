@@ -1,6 +1,6 @@
 "use client";
 
-import { GiselleClientProvider as RecoderStudioClientProvider } from "@giselles-ai/react";
+import { GiselleClientProvider as RecoderStudioClientProvider } from "@recoder/react";
 import { useMemo } from "react";
 import { createInternalRecoderStudioClient } from "@/lib/internal-api/create-recoder-studio-client";
 

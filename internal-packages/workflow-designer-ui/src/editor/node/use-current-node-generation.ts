@@ -1,8 +1,8 @@
-import type { NodeId } from "@giselles-ai/protocol";
+import type { NodeId } from "@recoder/protocol";
 import {
 	useGenerationRunnerSystem,
 	useGenerationStore,
-} from "@giselles-ai/react";
+} from "@recoder/react";
 import { useCallback } from "react";
 import { useShallow } from "zustand/shallow";
 import { useAppDesignerStore } from "../../app-designer";

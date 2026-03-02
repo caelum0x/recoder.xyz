@@ -289,10 +289,10 @@ export const DependencyPanel = memo(({ files, className = '' }: DependencyPanelP
   // No package manager detected
   if (!detectedManager) {
     return (
-      <div className={`flex flex-col h-full bg-bolt-elements-background-depth-1 ${className}`}>
-        <div className="p-6 text-center text-bolt-elements-textTertiary">
+      <div className={`flex flex-col h-full bg-recoder-elements-background-depth-1 ${className}`}>
+        <div className="p-6 text-center text-recoder-elements-textTertiary">
           <span className="i-ph:package text-4xl block mb-3 opacity-50" />
-          <h3 className="text-sm font-medium text-bolt-elements-textSecondary mb-2">
+          <h3 className="text-sm font-medium text-recoder-elements-textSecondary mb-2">
             No Package Manager Detected
           </h3>
           <p className="text-xs">
@@ -314,20 +314,20 @@ export const DependencyPanel = memo(({ files, className = '' }: DependencyPanelP
   ];
 
   return (
-    <div className={`flex flex-col h-full bg-bolt-elements-background-depth-1 ${className}`}>
+    <div className={`flex flex-col h-full bg-recoder-elements-background-depth-1 ${className}`}>
       {/* Header */}
-      <div className="flex items-center justify-between px-3 py-2 border-b border-bolt-elements-borderColor">
+      <div className="flex items-center justify-between px-3 py-2 border-b border-recoder-elements-borderColor">
         <div className="flex items-center gap-2">
           <span className={classNames(managerInfo.icon, managerInfo.color, 'text-lg')} />
-          <span className="font-medium text-bolt-elements-textPrimary text-sm">Dependencies</span>
-          <span className="text-xs text-bolt-elements-textTertiary">({totalCount})</span>
+          <span className="font-medium text-recoder-elements-textPrimary text-sm">Dependencies</span>
+          <span className="text-xs text-recoder-elements-textTertiary">({totalCount})</span>
         </div>
         <div className="flex items-center gap-1">
           <button
             onClick={() => setShowAddForm(!showAddForm)}
             className={classNames(
               'p-1.5 rounded transition-colors',
-              showAddForm ? 'bg-blue-500/20 text-blue-400' : 'hover:bg-bolt-elements-background-depth-2 text-bolt-elements-textSecondary'
+              showAddForm ? 'bg-blue-500/20 text-blue-400' : 'hover:bg-recoder-elements-background-depth-2 text-recoder-elements-textSecondary'
             )}
             title="Add Package"
           >
@@ -335,7 +335,7 @@ export const DependencyPanel = memo(({ files, className = '' }: DependencyPanelP
           </button>
           <button
             onClick={checkOutdated}
-            className="p-1.5 hover:bg-bolt-elements-background-depth-2 rounded text-bolt-elements-textSecondary"
+            className="p-1.5 hover:bg-recoder-elements-background-depth-2 rounded text-recoder-elements-textSecondary"
             title="Check for Updates"
           >
             <span className="i-ph:arrow-circle-up text-sm" />
@@ -343,7 +343,7 @@ export const DependencyPanel = memo(({ files, className = '' }: DependencyPanelP
           <button
             onClick={loadDependencies}
             disabled={isLoading}
-            className="p-1.5 hover:bg-bolt-elements-background-depth-2 rounded text-bolt-elements-textSecondary"
+            className="p-1.5 hover:bg-recoder-elements-background-depth-2 rounded text-recoder-elements-textSecondary"
             title="Refresh"
           >
             <span className={classNames('i-ph:arrows-clockwise text-sm', isLoading && 'animate-spin')} />
@@ -353,25 +353,25 @@ export const DependencyPanel = memo(({ files, className = '' }: DependencyPanelP
 
       {/* Add Package Form */}
       {showAddForm && (
-        <div className="p-3 border-b border-bolt-elements-borderColor bg-bolt-elements-background-depth-2">
+        <div className="p-3 border-b border-recoder-elements-borderColor bg-recoder-elements-background-depth-2">
           <div className="relative">
-            <span className="i-ph:magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-bolt-elements-textTertiary text-sm" />
+            <span className="i-ph:magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-recoder-elements-textTertiary text-sm" />
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder={`Search ${detectedManager} packages...`}
-              className="w-full pl-9 pr-3 py-2 text-sm bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor rounded-lg focus:border-blue-500 focus:outline-none text-bolt-elements-textPrimary placeholder:text-bolt-elements-textTertiary"
+              className="w-full pl-9 pr-3 py-2 text-sm bg-recoder-elements-background-depth-2 border border-recoder-elements-borderColor rounded-lg focus:border-blue-500 focus:outline-none text-recoder-elements-textPrimary placeholder:text-recoder-elements-textTertiary"
               autoFocus
             />
             {isSearching && (
-              <span className="i-ph:spinner animate-spin absolute right-3 top-1/2 -translate-y-1/2 text-sm text-bolt-elements-textTertiary" />
+              <span className="i-ph:spinner animate-spin absolute right-3 top-1/2 -translate-y-1/2 text-sm text-recoder-elements-textTertiary" />
             )}
           </div>
 
           {/* Search Results */}
           {searchResults.length > 0 && (
-            <div className="mt-2 max-h-56 overflow-auto rounded-lg border border-bolt-elements-borderColor bg-bolt-elements-background-depth-2">
+            <div className="mt-2 max-h-56 overflow-auto rounded-lg border border-recoder-elements-borderColor bg-recoder-elements-background-depth-2">
               {searchResults.map((result) => (
                 <SearchResultItem
                   key={result.name}
@@ -384,13 +384,13 @@ export const DependencyPanel = memo(({ files, className = '' }: DependencyPanelP
           )}
 
           {searchQuery.length >= 2 && searchResults.length === 0 && !isSearching && (
-            <p className="mt-3 text-xs text-bolt-elements-textTertiary text-center">No packages found</p>
+            <p className="mt-3 text-xs text-recoder-elements-textTertiary text-center">No packages found</p>
           )}
         </div>
       )}
 
       {/* Tabs */}
-      <div className="flex border-b border-bolt-elements-borderColor overflow-x-auto">
+      <div className="flex border-b border-recoder-elements-borderColor overflow-x-auto">
         {tabs.map((tab) => (
           <button
             key={tab.id}
@@ -398,13 +398,13 @@ export const DependencyPanel = memo(({ files, className = '' }: DependencyPanelP
             className={classNames(
               'px-3 py-2 text-xs font-medium whitespace-nowrap transition-colors',
               activeTab === tab.id
-                ? 'text-bolt-elements-textPrimary border-b-2 border-blue-500'
-                : 'text-bolt-elements-textTertiary hover:text-bolt-elements-textSecondary'
+                ? 'text-recoder-elements-textPrimary border-b-2 border-blue-500'
+                : 'text-recoder-elements-textTertiary hover:text-recoder-elements-textSecondary'
             )}
           >
             {tab.label}
             {tab.count !== undefined && (
-              <span className="ml-1 text-bolt-elements-textTertiary">({tab.count})</span>
+              <span className="ml-1 text-recoder-elements-textTertiary">({tab.count})</span>
             )}
           </button>
         ))}
@@ -412,15 +412,15 @@ export const DependencyPanel = memo(({ files, className = '' }: DependencyPanelP
 
       {/* Filter Bar */}
       {activeTab !== 'suggestions' && dependencies.length > 0 && (
-        <div className="flex items-center gap-2 px-3 py-2 border-b border-bolt-elements-borderColor">
+        <div className="flex items-center gap-2 px-3 py-2 border-b border-recoder-elements-borderColor">
           <div className="relative flex-1">
-            <span className="i-ph:magnifying-glass absolute left-2 top-1/2 -translate-y-1/2 text-bolt-elements-textTertiary text-xs" />
+            <span className="i-ph:magnifying-glass absolute left-2 top-1/2 -translate-y-1/2 text-recoder-elements-textTertiary text-xs" />
             <input
               type="text"
               value={filters.search}
               onChange={(e) => updateFilters({ search: e.target.value })}
               placeholder="Filter packages..."
-              className="w-full pl-7 pr-3 py-1 text-xs bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor rounded focus:border-blue-500 focus:outline-none text-bolt-elements-textPrimary placeholder:text-bolt-elements-textTertiary"
+              className="w-full pl-7 pr-3 py-1 text-xs bg-recoder-elements-background-depth-2 border border-recoder-elements-borderColor rounded focus:border-blue-500 focus:outline-none text-recoder-elements-textPrimary placeholder:text-recoder-elements-textTertiary"
             />
           </div>
           {outdatedCount > 0 && activeTab !== 'outdated' && (
@@ -451,7 +451,7 @@ export const DependencyPanel = memo(({ files, className = '' }: DependencyPanelP
         ) : filteredDeps.length === 0 ? (
           <EmptyState tab={activeTab} onAddClick={() => setShowAddForm(true)} />
         ) : (
-          <div className="divide-y divide-bolt-elements-borderColor">
+          <div className="divide-y divide-recoder-elements-borderColor">
             {filteredDeps.map((dep) => (
               <DependencyItem
                 key={dep.name}
@@ -500,15 +500,15 @@ const DependencyItem = memo(
   ({ dependency, isInstalling, progress, onUpdate, onRemove, onClick }: DependencyItemProps) => {
     return (
       <div
-        className="flex items-center justify-between px-3 py-2 hover:bg-bolt-elements-background-depth-2 cursor-pointer group"
+        className="flex items-center justify-between px-3 py-2 hover:bg-recoder-elements-background-depth-2 cursor-pointer group"
         onClick={onClick}
       >
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
-            <span className="font-medium text-sm text-bolt-elements-textPrimary truncate">
+            <span className="font-medium text-sm text-recoder-elements-textPrimary truncate">
               {dependency.name}
             </span>
-            <span className="text-xs text-bolt-elements-textTertiary">{dependency.version}</span>
+            <span className="text-xs text-recoder-elements-textTertiary">{dependency.version}</span>
             {dependency.isDev && (
               <span className="px-1 py-0.5 text-[10px] bg-purple-500/20 text-purple-400 rounded">
                 dev
@@ -522,7 +522,7 @@ const DependencyItem = memo(
             )}
           </div>
           {dependency.description && (
-            <p className="text-xs text-bolt-elements-textTertiary truncate mt-0.5">
+            <p className="text-xs text-recoder-elements-textTertiary truncate mt-0.5">
               {dependency.description}
             </p>
           )}
@@ -533,13 +533,13 @@ const DependencyItem = memo(
           onClick={(e) => e.stopPropagation()}
         >
           {isInstalling ? (
-            <span className="i-ph:spinner animate-spin text-sm text-bolt-elements-textTertiary" />
+            <span className="i-ph:spinner animate-spin text-sm text-recoder-elements-textTertiary" />
           ) : (
             <>
               {dependency.isOutdated && (
                 <button
                   onClick={onUpdate}
-                  className="p-1.5 hover:bg-bolt-elements-background-depth-2 rounded text-yellow-400"
+                  className="p-1.5 hover:bg-recoder-elements-background-depth-2 rounded text-yellow-400"
                   title="Update"
                 >
                   <span className="i-ph:arrow-circle-up text-sm" />
@@ -547,7 +547,7 @@ const DependencyItem = memo(
               )}
               <button
                 onClick={onRemove}
-                className="p-1.5 hover:bg-bolt-elements-background-depth-2 rounded text-red-400"
+                className="p-1.5 hover:bg-recoder-elements-background-depth-2 rounded text-red-400"
                 title="Remove"
               >
                 <span className="i-ph:trash text-sm" />
@@ -570,21 +570,21 @@ interface SearchResultItemProps {
 
 const SearchResultItem = memo(({ result, isInstalling, onInstall }: SearchResultItemProps) => {
   return (
-    <div className="flex items-center justify-between px-3 py-2.5 hover:bg-bolt-elements-background-depth-2 border-b border-bolt-elements-borderColor last:border-b-0">
+    <div className="flex items-center justify-between px-3 py-2.5 hover:bg-recoder-elements-background-depth-2 border-b border-recoder-elements-borderColor last:border-b-0">
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
-          <span className="font-medium text-sm text-bolt-elements-textPrimary truncate">
+          <span className="font-medium text-sm text-recoder-elements-textPrimary truncate">
             {result.name}
           </span>
-          <span className="text-xs text-bolt-elements-textTertiary">v{result.version}</span>
+          <span className="text-xs text-recoder-elements-textTertiary">v{result.version}</span>
           {result.downloads && (
-            <span className="text-xs text-bolt-elements-textTertiary">
+            <span className="text-xs text-recoder-elements-textTertiary">
               {formatDownloads(result.downloads)}/wk
             </span>
           )}
         </div>
         {result.description && (
-          <p className="text-xs text-bolt-elements-textTertiary truncate mt-0.5">
+          <p className="text-xs text-recoder-elements-textTertiary truncate mt-0.5">
             {result.description}
           </p>
         )}
@@ -600,7 +600,7 @@ const SearchResultItem = memo(({ result, isInstalling, onInstall }: SearchResult
         <button
           onClick={() => onInstall(result.name, true)}
           disabled={isInstalling}
-          className="px-2 py-1 text-xs bg-bolt-elements-background-depth-3 hover:bg-bolt-elements-background-depth-3 disabled:opacity-50 rounded text-bolt-elements-textPrimary"
+          className="px-2 py-1 text-xs bg-recoder-elements-background-depth-3 hover:bg-recoder-elements-background-depth-3 disabled:opacity-50 rounded text-recoder-elements-textPrimary"
           title="Install as dev dependency"
         >
           Dev
@@ -621,7 +621,7 @@ interface SuggestionsListProps {
 const SuggestionsList = memo(({ suggestions, installingPackages, onInstall }: SuggestionsListProps) => {
   if (suggestions.length === 0) {
     return (
-      <div className="p-6 text-center text-bolt-elements-textTertiary">
+      <div className="p-6 text-center text-recoder-elements-textTertiary">
         <span className="i-ph:lightbulb text-3xl block mb-2 opacity-50" />
         <p className="text-sm">No suggestions available</p>
         <p className="text-xs mt-1">Add more dependencies to get personalized suggestions</p>
@@ -639,24 +639,24 @@ const SuggestionsList = memo(({ suggestions, installingPackages, onInstall }: Su
   }, {} as Record<string, PopularPackage[]>);
 
   return (
-    <div className="divide-y divide-bolt-elements-borderColor">
+    <div className="divide-y divide-recoder-elements-borderColor">
       {Object.entries(byCategory).map(([category, packages]) => (
         <div key={category}>
-          <div className="px-3 py-2 bg-bolt-elements-background-depth-2">
-            <span className="text-xs font-medium text-bolt-elements-textSecondary uppercase tracking-wide">
+          <div className="px-3 py-2 bg-recoder-elements-background-depth-2">
+            <span className="text-xs font-medium text-recoder-elements-textSecondary uppercase tracking-wide">
               {category}
             </span>
           </div>
           {packages.map((pkg) => (
             <div
               key={pkg.name}
-              className="flex items-center justify-between px-3 py-2.5 hover:bg-bolt-elements-background-depth-2"
+              className="flex items-center justify-between px-3 py-2.5 hover:bg-recoder-elements-background-depth-2"
             >
               <div className="flex-1 min-w-0">
-                <span className="font-medium text-sm text-bolt-elements-textPrimary">
+                <span className="font-medium text-sm text-recoder-elements-textPrimary">
                   {pkg.name}
                 </span>
-                <p className="text-xs text-bolt-elements-textTertiary truncate mt-0.5">
+                <p className="text-xs text-recoder-elements-textTertiary truncate mt-0.5">
                   {pkg.description}
                 </p>
               </div>
@@ -694,14 +694,14 @@ const PackageDetailModal = memo(
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={onClose}>
         <div
-          className="bg-bolt-elements-background-depth-2 rounded-lg shadow-xl w-full max-w-md mx-4"
+          className="bg-recoder-elements-background-depth-2 rounded-lg shadow-xl w-full max-w-md mx-4"
           onClick={(e) => e.stopPropagation()}
         >
-          <div className="flex items-center justify-between px-4 py-3 border-b border-bolt-elements-borderColor">
-            <h3 className="font-semibold text-bolt-elements-textPrimary">{dependency.name}</h3>
+          <div className="flex items-center justify-between px-4 py-3 border-b border-recoder-elements-borderColor">
+            <h3 className="font-semibold text-recoder-elements-textPrimary">{dependency.name}</h3>
             <button
               onClick={onClose}
-              className="p-1 hover:bg-bolt-elements-background-depth-2 rounded"
+              className="p-1 hover:bg-recoder-elements-background-depth-2 rounded"
             >
               <span className="i-ph:x text-lg" />
             </button>
@@ -710,20 +710,20 @@ const PackageDetailModal = memo(
           <div className="p-4 space-y-4">
             <div className="flex items-center gap-4">
               <div>
-                <span className="text-xs text-bolt-elements-textTertiary">Version</span>
-                <p className="text-sm font-medium text-bolt-elements-textPrimary">
+                <span className="text-xs text-recoder-elements-textTertiary">Version</span>
+                <p className="text-sm font-medium text-recoder-elements-textPrimary">
                   {dependency.version}
                 </p>
               </div>
               {dependency.latestVersion && (
                 <div>
-                  <span className="text-xs text-bolt-elements-textTertiary">Latest</span>
+                  <span className="text-xs text-recoder-elements-textTertiary">Latest</span>
                   <p className="text-sm font-medium text-yellow-400">{dependency.latestVersion}</p>
                 </div>
               )}
               <div>
-                <span className="text-xs text-bolt-elements-textTertiary">Type</span>
-                <p className="text-sm font-medium text-bolt-elements-textPrimary">
+                <span className="text-xs text-recoder-elements-textTertiary">Type</span>
+                <p className="text-sm font-medium text-recoder-elements-textPrimary">
                   {dependency.isDev ? 'Dev Dependency' : 'Dependency'}
                 </p>
               </div>
@@ -731,8 +731,8 @@ const PackageDetailModal = memo(
 
             {dependency.description && (
               <div>
-                <span className="text-xs text-bolt-elements-textTertiary">Description</span>
-                <p className="text-sm text-bolt-elements-textSecondary mt-1">
+                <span className="text-xs text-recoder-elements-textTertiary">Description</span>
+                <p className="text-sm text-recoder-elements-textSecondary mt-1">
                   {dependency.description}
                 </p>
               </div>
@@ -750,15 +750,15 @@ const PackageDetailModal = memo(
               </a>
             )}
 
-            <div className="p-3 bg-bolt-elements-background-depth-2 rounded-lg">
-              <span className="text-xs text-bolt-elements-textTertiary">Install command</span>
+            <div className="p-3 bg-recoder-elements-background-depth-2 rounded-lg">
+              <span className="text-xs text-recoder-elements-textTertiary">Install command</span>
               <code className="block text-xs text-green-400 mt-1 font-mono">
                 {getInstallCommand(dependency.name, manager as any, dependency.isDev)}
               </code>
             </div>
           </div>
 
-          <div className="flex items-center justify-end gap-2 px-4 py-3 border-t border-bolt-elements-borderColor">
+          <div className="flex items-center justify-end gap-2 px-4 py-3 border-t border-recoder-elements-borderColor">
             {dependency.isOutdated && (
               <button
                 onClick={() => {
@@ -781,7 +781,7 @@ const PackageDetailModal = memo(
             </button>
             <button
               onClick={onClose}
-              className="px-4 py-2 text-sm bg-bolt-elements-background-depth-3 hover:bg-bolt-elements-background-depth-3 rounded text-bolt-elements-textPrimary"
+              className="px-4 py-2 text-sm bg-recoder-elements-background-depth-3 hover:bg-recoder-elements-background-depth-3 rounded text-recoder-elements-textPrimary"
             >
               Close
             </button>
@@ -795,7 +795,7 @@ const PackageDetailModal = memo(
 PackageDetailModal.displayName = 'PackageDetailModal';
 
 const LoadingState = ({ message }: { message: string }) => (
-  <div className="flex flex-col items-center justify-center h-full p-6 text-bolt-elements-textTertiary">
+  <div className="flex flex-col items-center justify-center h-full p-6 text-recoder-elements-textTertiary">
     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mb-3" />
     <span className="text-sm">{message}</span>
   </div>
@@ -823,9 +823,9 @@ const EmptyState = ({ tab, onAddClick }: { tab: DependencyTab; onAddClick: () =>
   const { title, subtitle } = messages[tab];
 
   return (
-    <div className="flex flex-col items-center justify-center h-full p-6 text-center text-bolt-elements-textTertiary">
+    <div className="flex flex-col items-center justify-center h-full p-6 text-center text-recoder-elements-textTertiary">
       <span className="i-ph:package text-3xl mb-3 opacity-50" />
-      <p className="text-sm font-medium text-bolt-elements-textSecondary">{title}</p>
+      <p className="text-sm font-medium text-recoder-elements-textSecondary">{title}</p>
       <p className="text-xs mt-1">{subtitle}</p>
       {tab !== 'outdated' && tab !== 'suggestions' && (
         <button onClick={onAddClick} className="mt-3 text-sm text-blue-400 hover:underline">

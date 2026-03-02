@@ -3,13 +3,14 @@
 import {
 	AppDesignerProvider,
 	Editor,
-} from "@giselle-internal/workflow-designer-ui";
-import type { Integration } from "@giselles-ai/giselle";
-import type { Trigger, Workspace } from "@giselles-ai/protocol";
+} from "@recoder-internal/workflow-designer-ui";
+import type { Integration } from "@recoder/giselle";
+import type { Trigger, Workspace } from "@recoder/protocol";
 import {
 	GiselleClientProvider as RecoderStudioClientProvider,
+	type DataStoreProviderProps,
 	WorkspaceProvider,
-} from "@giselles-ai/react";
+} from "@recoder/react";
 import { use, useMemo } from "react";
 import { getTeamDataStores } from "@/lib/data-stores/actions";
 import { createInternalRecoderStudioClient } from "@/lib/internal-api/create-recoder-studio-client";
@@ -33,6 +34,12 @@ export function Page({
 	const client = useMemo(() => {
 		return createInternalRecoderStudioClient();
 	}, []);
+	const dataStoreConfig: DataStoreProviderProps = {
+		workspaceId: data.data.id,
+		initialDataStores: data.teamDataStores,
+		settingPath: "/settings/team/data-stores",
+		fetchDataStores: () => getTeamDataStores(data.workspaceTeam.dbId),
+	};
 
 	return (
 		<RecoderStudioClientProvider value={client}>
@@ -42,46 +49,41 @@ export function Page({
 				save={workspaceSaveAction}
 				initialWorkspace={data.data}
 			>
-				<WorkspaceProvider
+					<WorkspaceProvider
 					// TODO: Make it reference the same timeout setting as in trigger.config.ts
 					generationTimeout={3600 * 1000}
-					integration={{
-						value: {
-							github: data.gitHubIntegrationState,
-						},
-						refresh: integrationRefreshAction,
-					}}
-					vectorStore={{
-						githubRepositoryIndexes: data.gitHubRepositoryIndexes,
-						documentSettingPath: "/settings/team/vector-stores/document",
-						githubSettingPath: "/settings/team/vector-stores",
-						documentStores: data.documentVectorStores.map((store) => ({
-							id: store.id,
-							name: store.name,
-							embeddingProfileIds: store.embeddingProfileIds,
-							sources: store.sources.map((source) => ({
-								id: source.id,
-								fileName: source.fileName,
-								ingestStatus: source.ingestStatus,
-								ingestErrorCode: source.ingestErrorCode,
+						integration={{
+							value: {
+								github: data.gitHubIntegrationState,
+							},
+							refresh: integrationRefreshAction,
+						}}
+						vectorStore={{
+							githubRepositoryIndexes: data.gitHubRepositoryIndexes,
+							documentSettingPath: "/settings/team/vector-stores/document",
+							githubSettingPath: "/settings/team/vector-stores",
+							documentStores: data.documentVectorStores.map((store) => ({
+								id: store.id,
+								name: store.name,
+								embeddingProfileIds: store.embeddingProfileIds,
+								sources: store.sources.map((source) => ({
+									id: source.id,
+									fileName: source.fileName,
+									ingestStatus: source.ingestStatus,
+									ingestErrorCode: source.ingestErrorCode,
+								})),
+								isOfficial: store.isOfficial,
 							})),
-							isOfficial: store.isOfficial,
-						})),
-					}}
-					usageLimits={data.usageLimits}
-					dataStore={{
-						workspaceId: data.data.id,
-						initialDataStores: data.teamDataStores,
-						settingPath: "/settings/team/data-stores",
-						fetchDataStores: () => getTeamDataStores(data.workspaceTeam.dbId),
-					}}
-					telemetry={{
-						metadata: {
-							teamPlan: data.workspaceTeam.plan,
-							userId: data.currentUser.id,
-							subscriptionId: data.workspaceTeam.activeSubscriptionId ?? "",
-						},
-					}}
+						}}
+						usageLimits={data.usageLimits}
+						dataStore={dataStoreConfig}
+						telemetry={{
+							metadata: {
+								teamPlan: data.workspaceTeam.plan,
+								userId: data.currentUser.id,
+								subscriptionId: data.workspaceTeam.activeSubscriptionId ?? "",
+							},
+						}}
 					featureFlag={data.featureFlags}
 					trigger={{
 						callbacks: {
@@ -89,7 +91,27 @@ export function Page({
 						},
 					}}
 				>
-					<div className="flex flex-col h-screen bg-black-900">
+						<div className="flex flex-col h-screen bg-black-900">
+						{!data.byokStatus.hasKeys && (
+							<div className="mx-4 mt-3 rounded-[10px] border border-yellow-500/50 bg-yellow-500/10 px-4 py-3 text-sm text-white">
+								<p className="font-semibold text-yellow-400">
+									API Key Required
+								</p>
+								<p className="text-white/75 mt-1">
+									Recoder.xyz is in BYOK (Bring Your Own Key) beta. Add your AI
+									provider API keys at{" "}
+									<a
+										href="https://recoder.xyz/settings/ai-providers"
+										target="_blank"
+										rel="noopener noreferrer"
+										className="underline text-yellow-300 hover:text-yellow-200"
+									>
+										recoder.xyz/settings/ai-providers
+									</a>{" "}
+									to use AI features.
+								</p>
+							</div>
+						)}
 						{data.starterTemplate ? (
 							<div className="mx-4 mt-3 rounded-[10px] border border-primary-100/35 bg-primary-100/10 px-3 py-2 text-xs text-text">
 								<p className="text-primary-100 font-medium">
@@ -110,14 +132,14 @@ export function Page({
 								</p>
 							</div>
 						) : null}
-						<Editor
-							onFlowNameChange={workspaceNameUpdateAction}
-							teamName={data.workspaceTeam.name}
-							teamAvatarUrl={data.workspaceTeam.avatarUrl}
-						/>
-					</div>
-				</WorkspaceProvider>
-			</AppDesignerProvider>
-		</RecoderStudioClientProvider>
+							<Editor
+								onFlowNameChange={workspaceNameUpdateAction}
+								teamName={data.workspaceTeam.name}
+								teamAvatarUrl={data.workspaceTeam.avatarUrl}
+							/>
+						</div>
+					</WorkspaceProvider>
+				</AppDesignerProvider>
+			</RecoderStudioClientProvider>
 	);
 }

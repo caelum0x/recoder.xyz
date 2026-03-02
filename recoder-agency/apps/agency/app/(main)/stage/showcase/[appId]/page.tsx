@@ -1,4 +1,4 @@
-import { TriggerId, type WorkspaceId } from "@giselles-ai/protocol";
+import { TriggerId, type WorkspaceId } from "@recoder/protocol";
 import { and, avg, count, desc, eq, sum } from "drizzle-orm";
 import { notFound } from "next/navigation";
 import { giselle } from "@/app/giselle";

@@ -1,4 +1,4 @@
-import type { Sequence, Step, Task } from "@giselles-ai/protocol";
+import type { Sequence, Step, Task } from "@recoder/protocol";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { patchTask } from "../object/patch-object";
 import {

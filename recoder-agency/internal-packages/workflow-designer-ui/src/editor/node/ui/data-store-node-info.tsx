@@ -1,5 +1,5 @@
-import { isDataStoreNode, type NodeLike } from "@giselles-ai/protocol";
-import { useDataStore } from "@giselles-ai/react";
+import { isDataStoreNode, type NodeLike } from "@recoder/protocol";
+import { useDataStore } from "@recoder/react";
 import type { ReactElement } from "react";
 import { RequiresSetupBadge } from "./requires-setup-badge";
 

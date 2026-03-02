@@ -1,6 +1,6 @@
-import { defaultName } from "@giselles-ai/node-registry";
-import type { UIConnection } from "@giselles-ai/react";
-import { createSourceExtensionJSONContent } from "@giselles-ai/text-editor-utils";
+import { defaultName } from "@recoder/node-registry";
+import type { UIConnection } from "@recoder/react";
+import { createSourceExtensionJSONContent } from "@recoder/text-editor-utils";
 import { ReactRenderer } from "@tiptap/react";
 import type { SuggestionOptions } from "@tiptap/suggestion";
 import {

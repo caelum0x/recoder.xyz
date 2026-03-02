@@ -1,3 +1,13 @@
+# DEPRECATED — DO NOT USE FOR PRODUCTION DEPLOYMENTS
+#
+# The actual production compose file is: docker-compose.deploy.yml
+# This file is an earlier template that uses Traefik (not nginx), references
+# non-existent services (recoder-chat, production-engine, ollama), and has
+# hardcoded bcrypt auth hashes that should be environment variables.
+#
+# Kept for reference only.
+#
+# Original description:
 # Recoder.xyz Domain Production Deployment
 # For deployment to recoder.xyz with HTTPS SSL via Let's Encrypt
 

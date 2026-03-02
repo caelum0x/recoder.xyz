@@ -19,6 +19,7 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import Response
 from urllib.parse import quote
 from pydantic import BaseModel, Field
+from core.utils.logger import logger
 
 try:
     from playwright.async_api import async_playwright
@@ -203,7 +204,7 @@ class OptimizedHTMLToPPTXConverter:
             await page.wait_for_timeout(1000)
             
             def handle_console(msg):
-                print(f"BROWSER CONSOLE: {msg.text}")
+                logger.debug(f"BROWSER CONSOLE: {msg.text}")
 
             page.on("console", handle_console)
             
@@ -301,7 +302,7 @@ class OptimizedHTMLToPPTXConverter:
             """)
             
             # Capture icons as visual elements
-            print(f"🔍 Total icon elements found: {len(icon_data) if icon_data else 0}")
+            logger.info(f"Total icon elements found: {len(icon_data) if icon_data else 0}")
             icon_visual_elements = []
             
             for i, data in enumerate(icon_data or []):
@@ -348,7 +349,7 @@ class OptimizedHTMLToPPTXConverter:
                         icon_visual_elements.append(icon_element)
                         
                     except Exception as e:
-                        print(f"Failed to capture icon element {i}: {e}")
+                        logger.warning(f"Failed to capture icon element {i}: {e}")
             
             # Step 2: Now make all text transparent while preserving visual styling
             await page.evaluate(r"""
@@ -534,15 +535,15 @@ class OptimizedHTMLToPPTXConverter:
 """)
             
             # Debug: Log what we found in Python console
-            print(f"🔍 Total visual elements found: {len(visual_data) if visual_data else 0}")
+            logger.info(f"Total visual elements found: {len(visual_data) if visual_data else 0}")
             if visual_data:
                 for i, data in enumerate(visual_data):  # Show first 5
-                    print(f"🔍 Element {i}: {data['tag']} - {data.get('className', 'No class')}")
-                    print(f"   Position: ({data['x']}, {data['y']}) {data['width']}x{data['height']}")
-                    print(f"   Has background: {data.get('hasBackground', False)}")
-                    print(f"   Has border: {data.get('hasBorder', False)}")
-                    print(f"   Has shadow: {data.get('hasShadow', False)}")
-                    print("--- 🔍", data)
+                    logger.debug(f"Element {i}: {data['tag']} - {data.get('className', 'No class')}")
+                    logger.debug(f"Position: ({data['x']}, {data['y']}) {data['width']}x{data['height']}")
+                    logger.debug(f"Has background: {data.get('hasBackground', False)}")
+                    logger.debug(f"Has border: {data.get('hasBorder', False)}")
+                    logger.debug(f"Has shadow: {data.get('hasShadow', False)}")
+                    logger.debug(f"Element detail: {data}")
             
             # Step 3: Capture each visual element as an image
             for i, data in enumerate(visual_data or []):
@@ -647,7 +648,7 @@ class OptimizedHTMLToPPTXConverter:
                         """, data)
                         
                         if not clone_result.get('success'):
-                            print(f"Failed to clone element: {clone_result.get('error')}")
+                            logger.warning(f"Failed to clone element: {clone_result.get('error')}")
                             continue
                         
                         # Wait a moment for styles to apply
@@ -726,7 +727,7 @@ class OptimizedHTMLToPPTXConverter:
                         visual_elements.append(visual_element)
                         
                     except Exception as e:
-                        print(f"Failed to capture visual element {i}: {e}")
+                        logger.warning(f"Failed to capture visual element {i}: {e}")
                         # Ensure we restore backgrounds and visibility even if capture fails
                         try:
                             await page.evaluate("""
@@ -749,7 +750,7 @@ class OptimizedHTMLToPPTXConverter:
             
             # Add the previously captured icon elements to our visual elements collection
             if icon_visual_elements:
-                print(f"Adding {len(icon_visual_elements)} icon elements to visual elements")
+                logger.info(f"Adding {len(icon_visual_elements)} icon elements to visual elements")
                 visual_elements.extend(icon_visual_elements)
             
             # Final cleanup - remove capture IDs and ensure everything is restored
@@ -778,14 +779,14 @@ class OptimizedHTMLToPPTXConverter:
                         containers.forEach(container => container.remove());
                     }
                 """)
-                print(f"🧹 Final cleanup completed: backgrounds restored, capture IDs removed")
+                logger.info("Final cleanup completed: backgrounds restored, capture IDs removed")
             except Exception as e:
-                print(f"Warning: Failed to perform final cleanup: {e}")
+                logger.warning(f"Failed to perform final cleanup: {e}")
             
             return visual_elements
             
         except Exception as e:
-            print(f"Visual element extraction failed: {e}")
+            logger.exception(f"Visual element extraction failed: {e}")
             # Emergency cleanup in case of failure
             try:
                 await page.evaluate(r"""
@@ -1548,18 +1549,15 @@ async def convert_presentation_to_pptx(request: ConvertRequest):
         
     except FileNotFoundError as e:
         error_msg = str(e)
-        print(f"❌ FileNotFoundError: {error_msg}")
+        logger.error(f"FileNotFoundError: {error_msg}")
         raise HTTPException(status_code=404, detail=error_msg)
     except ValueError as e:
         error_msg = str(e)
-        print(f"❌ ValueError: {error_msg}")
+        logger.error(f"ValueError: {error_msg}")
         raise HTTPException(status_code=400, detail=error_msg)
     except Exception as e:
-        import traceback
         error_msg = str(e)
-        error_traceback = traceback.format_exc()
-        print(f"❌ PPTX conversion error: {error_msg}")
-        print(f"❌ Traceback:\n{error_traceback}")
+        logger.exception(f"PPTX conversion error: {error_msg}")
         raise HTTPException(
             status_code=500, 
             detail=f"PPTX conversion failed: {error_msg}"

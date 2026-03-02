@@ -4,6 +4,7 @@
  */
 
 import { prisma } from './prisma';
+import { logger } from '@/lib/logger';
 
 export interface DeviceFlowRequest {
   device_code: string;
@@ -45,7 +46,7 @@ export async function initializeDeviceFlowRequest(deviceCode: string, data: Devi
       user_id: deviceFlow.userId || undefined
     };
   } catch (error) {
-    console.error('Failed to initialize device flow request:', error);
+    logger.error('Failed to initialize device flow request', { error: String(error) });
     throw error;
   }
 }
@@ -77,7 +78,7 @@ export async function getDeviceFlowRequest(deviceCode: string): Promise<DeviceFl
       } : undefined
     };
   } catch (error) {
-    console.error('Failed to get device flow request:', error);
+    logger.error('Failed to get device flow request', { error: String(error) });
     return null;
   }
 }
@@ -114,7 +115,7 @@ export async function updateDeviceFlowRequest(deviceCode: string, updates: Parti
       } : undefined
     };
   } catch (error) {
-    console.error('Failed to update device flow request:', error);
+    logger.error('Failed to update device flow request', { error: String(error) });
     throw error;
   }
 }
@@ -155,7 +156,7 @@ export async function getDeviceFlowRequestByUserCode(userCode: string): Promise<
       } : undefined
     };
   } catch (error) {
-    console.error('Failed to get device flow request by user code:', error);
+    logger.error('Failed to get device flow request by user code', { error: String(error) });
     return null;
   }
 }
@@ -170,10 +171,10 @@ export async function cleanupExpiredDeviceFlows() {
         }
       }
     });
-    console.log(`Cleaned up ${result.count} expired device flows`);
+    logger.info('Cleaned up expired device flows', { count: String(result.count) });
     return result.count;
   } catch (error) {
-    console.error('Failed to cleanup expired device flows:', error);
+    logger.error('Failed to cleanup expired device flows', { error: String(error) });
     return 0;
   }
 }

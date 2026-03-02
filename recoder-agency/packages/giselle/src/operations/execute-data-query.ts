@@ -1,4 +1,4 @@
-import { parseConfiguration } from "@giselles-ai/data-store-registry";
+import { parseConfiguration } from "@recoder/data-store-registry";
 import {
 	type FailedGeneration,
 	GenerationContext,
@@ -14,12 +14,12 @@ import {
 	Secret,
 	SecretId,
 	type TaskId,
-} from "@giselles-ai/protocol";
-import type { GiselleStorage } from "@giselles-ai/storage";
+} from "@recoder/protocol";
+import type { GiselleStorage } from "@recoder/storage";
 import {
 	isJsonContent,
 	jsonContentToPlainText,
-} from "@giselles-ai/text-editor-utils";
+} from "@recoder/text-editor-utils";
 import { Client, type QueryResult } from "pg";
 import { getDataStore } from "../data-stores/get-data-store";
 import { DataQueryError } from "../error";

@@ -75,7 +75,11 @@ export async function POST(request: NextRequest) {
 
     // Update device code status
     const newStatus = action === 'authorize' ? 'authorized' : 'denied';
-    const updateData: any = { 
+    const updateData: {
+      status: 'authorized' | 'denied';
+      updatedAt: Date;
+      userId?: string;
+    } = {
       status: newStatus,
       updatedAt: new Date()
     };

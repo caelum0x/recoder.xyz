@@ -1,6 +1,6 @@
-import type { TaskId } from "@giselles-ai/protocol";
-import { NodeGenerationIndex } from "@giselles-ai/protocol";
-import type { GiselleStorage } from "@giselles-ai/storage";
+import type { TaskId } from "@recoder/protocol";
+import { NodeGenerationIndex } from "@recoder/protocol";
+import type { GiselleStorage } from "@recoder/storage";
 import { taskGenerationIndexesPath } from "../../path";
 
 export async function getTaskGenerationIndexes(args: {

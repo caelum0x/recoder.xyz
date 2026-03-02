@@ -8,7 +8,18 @@ import { auth } from '@/lib/auth-config';
 import { headers } from 'next/headers';
 import * as jwt from 'jsonwebtoken';
 
-const JWT_SECRET = process.env.JWT_SECRET || process.env.NEXTAUTH_SECRET || 'fallback-secret-change-in-production';
+function getJwtSecret(): string {
+  const secret = process.env.JWT_SECRET || process.env.NEXTAUTH_SECRET;
+  if (!secret) {
+    if (process.env.NODE_ENV === 'production') {
+      throw new Error('JWT_SECRET or NEXTAUTH_SECRET must be set in production');
+    }
+    return 'dev-jwt-secret-not-for-production';
+  }
+  return secret;
+}
+
+const JWT_SECRET = getJwtSecret();
 
 export async function GET(request: NextRequest) {
   try {

@@ -1,4 +1,4 @@
-import { StatusBadge } from "@giselle-internal/ui/status-badge";
+import { StatusBadge } from "@recoder-internal/ui/status-badge";
 import {
 	AlertCircle,
 	AlertTriangle,

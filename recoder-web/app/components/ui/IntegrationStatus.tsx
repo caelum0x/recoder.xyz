@@ -45,23 +45,23 @@ export function IntegrationStatus({ type }: StatusIndicatorProps) {
   const icon = type === 'mcp' ? 'i-ph:plugs-connected' : 'i-ph:github-logo';
 
   return (
-    <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor">
+    <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-recoder-elements-background-depth-2 border border-recoder-elements-borderColor">
       <div className={icon} />
       <span className="text-sm font-medium">{label}</span>
       
       {status.loading ? (
-        <div className="i-svg-spinners:90-ring-with-bg text-bolt-elements-loader-progress" />
+        <div className="i-svg-spinners:90-ring-with-bg text-recoder-elements-loader-progress" />
       ) : (
         <div className={`w-2 h-2 rounded-full ${status.connected ? 'bg-green-500' : 'bg-red-500'}`} />
       )}
       
-      <span className="text-xs text-bolt-elements-textSecondary">
+      <span className="text-xs text-recoder-elements-textSecondary">
         {status.message}
       </span>
       
       <button
         onClick={checkStatus}
-        className="ml-2 text-xs text-bolt-elements-textSecondary hover:text-bolt-elements-textPrimary"
+        className="ml-2 text-xs text-recoder-elements-textSecondary hover:text-recoder-elements-textPrimary"
         title="Refresh status"
       >
         <div className="i-ph:arrow-clockwise" />

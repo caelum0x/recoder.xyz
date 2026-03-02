@@ -1,10 +1,10 @@
-import { defaultName } from "@giselles-ai/node-registry";
+import { defaultName } from "@recoder/node-registry";
 import {
 	isImageGenerationNode,
 	isTextGenerationNode,
 	NodeId,
 	type NodeLike,
-} from "@giselles-ai/protocol";
+} from "@recoder/protocol";
 import { Handle, Position, type NodeProps as RFNodeProps } from "@xyflow/react";
 import clsx from "clsx/lite";
 import { useMemo } from "react";
@@ -64,7 +64,6 @@ export function Node({ id, selected }: RFNodeProps) {
 			connectedInputIds={connectedInputIds}
 			connectedOutputIds={connectedOutputIds}
 			metadataTexts={metadataTexts}
-			// @ts-expect-error
 			vectorStoreSourceProvider={node.content.source?.provider}
 			onNameChange={(value) => {
 				if (value === defaultName(node)) {
@@ -347,7 +346,7 @@ function CanvasNode({
 			{!preview && (
 				<div className="flex justify-between">
 					<div className="grid">
-						{node.inputs?.map((input) => {
+						{node.inputs?.map((input: { id: string; label: string }) => {
 							const isInConnected =
 								connectedInputIds?.some(
 									(connectedInputId) => connectedInputId === input.id,
@@ -377,7 +376,7 @@ function CanvasNode({
 					</div>
 
 					<div className="grid">
-						{node.outputs?.map((output) => {
+						{node.outputs?.map((output: { id: string; label?: string }) => {
 							const isConnected = connectedOutputIds?.some(
 								(connectedOutputId) => connectedOutputId === output.id,
 							);

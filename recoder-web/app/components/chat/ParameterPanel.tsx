@@ -45,7 +45,7 @@ function SliderControl({
     <div className="mb-4">
       <div className="flex items-center justify-between mb-1.5">
         <div className="flex items-center gap-1.5">
-          <label className="text-sm font-medium text-bolt-elements-textPrimary">
+          <label className="text-sm font-medium text-recoder-elements-textPrimary">
             {label}
           </label>
           <div
@@ -53,15 +53,15 @@ function SliderControl({
             onMouseEnter={() => setShowTooltip(true)}
             onMouseLeave={() => setShowTooltip(false)}
           >
-            <div className="i-ph:info text-bolt-elements-textTertiary cursor-help text-sm" />
+            <div className="i-ph:info text-recoder-elements-textTertiary cursor-help text-sm" />
             {showTooltip && (
-              <div className="absolute left-0 bottom-full mb-2 w-64 p-2 bg-bolt-elements-background-depth-4 border border-bolt-elements-borderColor rounded-lg shadow-lg text-xs text-bolt-elements-textSecondary z-50">
+              <div className="absolute left-0 bottom-full mb-2 w-64 p-2 bg-recoder-elements-background-depth-4 border border-recoder-elements-borderColor rounded-lg shadow-lg text-xs text-recoder-elements-textSecondary z-50">
                 {tooltip}
               </div>
             )}
           </div>
         </div>
-        <span className="text-sm font-mono text-bolt-elements-textSecondary bg-bolt-elements-background-depth-3 px-2 py-0.5 rounded">
+        <span className="text-sm font-mono text-recoder-elements-textSecondary bg-recoder-elements-background-depth-3 px-2 py-0.5 rounded">
           {formatValue(value)}
         </span>
       </div>
@@ -74,10 +74,10 @@ function SliderControl({
         onChange={(e) => onChange(parseFloat(e.target.value))}
         className="w-full h-2 rounded-full appearance-none cursor-pointer"
         style={{
-          background: `linear-gradient(to right, #f97316 0%, #f97316 ${percentage}%, var(--bolt-elements-bg-depth-3) ${percentage}%, var(--bolt-elements-bg-depth-3) 100%)`,
+          background: `linear-gradient(to right, #f97316 0%, #f97316 ${percentage}%, var(--recoder-elements-bg-depth-3) ${percentage}%, var(--recoder-elements-bg-depth-3) 100%)`,
         }}
       />
-      <div className="flex justify-between text-xs text-bolt-elements-textTertiary mt-1">
+      <div className="flex justify-between text-xs text-recoder-elements-textTertiary mt-1">
         <span>{formatValue(min)}</span>
         <span>{formatValue(max)}</span>
       </div>
@@ -99,7 +99,7 @@ function PresetButton({ preset, isActive, onClick }: PresetButtonProps) {
         'flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200',
         isActive
           ? 'bg-orange-500 text-white shadow-md'
-          : 'bg-bolt-elements-background-depth-3 text-bolt-elements-textSecondary hover:bg-bolt-elements-background-depth-4 hover:text-bolt-elements-textPrimary'
+          : 'bg-recoder-elements-background-depth-3 text-recoder-elements-textSecondary hover:bg-recoder-elements-background-depth-4 hover:text-recoder-elements-textPrimary'
       )}
       title={preset.description}
     >
@@ -126,27 +126,27 @@ export function ParameterPanel() {
   }
 
   return (
-    <div className="absolute right-0 top-full mt-2 w-80 bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor rounded-xl shadow-xl z-50 overflow-hidden">
+    <div className="absolute right-0 top-full mt-2 w-80 bg-recoder-elements-background-depth-2 border border-recoder-elements-borderColor rounded-xl shadow-xl z-50 overflow-hidden">
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-bolt-elements-borderColor bg-bolt-elements-background-depth-3">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-recoder-elements-borderColor bg-recoder-elements-background-depth-3">
         <div className="flex items-center gap-2">
           <div className="i-ph:sliders-horizontal text-orange-500 text-lg" />
-          <h3 className="text-sm font-semibold text-bolt-elements-textPrimary">
+          <h3 className="text-sm font-semibold text-recoder-elements-textPrimary">
             Model Parameters
           </h3>
         </div>
         <button
           onClick={() => toggleParameterPanel()}
-          className="p-1 hover:bg-bolt-elements-background-depth-4 rounded transition-colors"
+          className="p-1 hover:bg-recoder-elements-background-depth-4 rounded transition-colors"
           title="Close"
         >
-          <div className="i-ph:x text-bolt-elements-textSecondary" />
+          <div className="i-ph:x text-recoder-elements-textSecondary" />
         </button>
       </div>
 
       {/* Presets */}
-      <div className="px-4 py-3 border-b border-bolt-elements-borderColor">
-        <div className="text-xs text-bolt-elements-textTertiary mb-2 uppercase tracking-wide">
+      <div className="px-4 py-3 border-b border-recoder-elements-borderColor">
+        <div className="text-xs text-recoder-elements-textTertiary mb-2 uppercase tracking-wide">
           Presets
         </div>
         <div className="flex gap-2">
@@ -236,10 +236,10 @@ export function ParameterPanel() {
       </div>
 
       {/* Footer */}
-      <div className="px-4 py-3 border-t border-bolt-elements-borderColor bg-bolt-elements-background-depth-3">
+      <div className="px-4 py-3 border-t border-recoder-elements-borderColor bg-recoder-elements-background-depth-3">
         <button
           onClick={resetToDefaults}
-          className="w-full px-4 py-2 text-sm font-medium text-bolt-elements-textSecondary hover:text-bolt-elements-textPrimary bg-bolt-elements-background-depth-2 hover:bg-bolt-elements-background-depth-4 rounded-lg transition-colors flex items-center justify-center gap-2"
+          className="w-full px-4 py-2 text-sm font-medium text-recoder-elements-textSecondary hover:text-recoder-elements-textPrimary bg-recoder-elements-background-depth-2 hover:bg-recoder-elements-background-depth-4 rounded-lg transition-colors flex items-center justify-center gap-2"
         >
           <div className="i-ph:arrow-counter-clockwise text-sm" />
           Reset to Defaults
@@ -265,7 +265,7 @@ export function ParameterPanelToggle() {
           'flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all duration-200',
           isOpen
             ? 'bg-orange-500/20 text-orange-400 ring-1 ring-orange-500/50'
-            : 'bg-bolt-elements-background-depth-3 text-bolt-elements-textSecondary hover:bg-bolt-elements-background-depth-4 hover:text-bolt-elements-textPrimary'
+            : 'bg-recoder-elements-background-depth-3 text-recoder-elements-textSecondary hover:bg-recoder-elements-background-depth-4 hover:text-recoder-elements-textPrimary'
         )}
         title="Adjust model parameters"
       >

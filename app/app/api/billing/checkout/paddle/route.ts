@@ -6,6 +6,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from "@/lib/auth-helpers";
 import { auth } from '@/lib/auth-config';
 import { headers } from 'next/headers';
+import { logger } from '@/lib/logger';
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || process.env.BACKEND_URL || 'http://localhost:3001';
 
@@ -39,7 +40,7 @@ export async function POST(request: NextRequest) {
     const data = await response.json();
     return NextResponse.json(data, { status: response.status });
   } catch (error) {
-    console.error('Failed to create Paddle checkout:', error);
+    logger.error('Failed to create Paddle checkout', { route: 'api/billing/checkout/paddle', error: error instanceof Error ? error.message : String(error) });
     return NextResponse.json(
       { success: false, error: 'Failed to create checkout session' },
       { status: 500 }

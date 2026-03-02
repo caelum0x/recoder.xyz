@@ -29,6 +29,7 @@ import {
 	validateProjectStatusTransition,
 } from "@/lib/agency/project-workflow";
 import { maybeRefreshWeeklyDeliveryMetrics } from "@/lib/agency/weekly-delivery-metrics-refresh";
+import { getAMBDispatcher } from "../../../../../../lib/amb-singleton";
 
 const payloadSchema = z.object({
 	provider: z.enum(["slack", "whatsapp", "telegram", "discord"]),
@@ -168,6 +169,12 @@ const helpText =
 	"- `revision: <text>` (optional `project:<id>`)\n" +
 	"- `status` (optional `project:<id>`)\n" +
 	"- `list projects` (or `list projects page 2`)\n";
+
+function isAmbDispatchEnabled(): boolean {
+	if (process.env.NODE_ENV === "test") return false;
+	if (process.env.RECODER_A2A_AMB_DISABLED === "1") return false;
+	return true;
+}
 
 const helpBlocks = [
 	{
@@ -1789,12 +1796,32 @@ export async function POST(request: Request) {
 			}
 
 			// Execute the intent via the agent orchestrator
+			const workflowId = `conv_${conversationDbId}`;
+			const taskId = `msg_${payload.messageId}`;
+			const ambDispatcher = isAmbDispatchEnabled()
+				? getAMBDispatcher()
+				: null;
+			if (ambDispatcher) {
+				void ambDispatcher.onWorkflowStart(
+					workflowId,
+					"agency-gateway",
+					`Intent ${intent.type} from ${payload.provider}`,
+				);
+				void ambDispatcher.onTaskAssigned(
+					workflowId,
+					taskId,
+					"agency-orchestrator",
+					intent.type,
+				);
+			}
+
 			let orchestratorResult: {
 				action: string;
 				replyText: string;
 				projectId?: string;
 				metadata?: Record<string, unknown>;
 			};
+			let orchestratorFailed = false;
 			try {
 				const { openai: openaiProvider } = await import("@ai-sdk/openai");
 				orchestratorResult = await executeIntent({
@@ -1805,13 +1832,30 @@ export async function POST(request: Request) {
 					conversationHistory: history,
 					model: openaiProvider("gpt-4o-mini"),
 				});
+				if (ambDispatcher) {
+					void ambDispatcher.onTaskCompleted(
+						workflowId,
+						taskId,
+						"agency-orchestrator",
+						orchestratorResult.action,
+					);
+				}
 			} catch (orchError) {
 				console.error("Orchestrator execution failed:", orchError);
+				orchestratorFailed = true;
 				orchestratorResult = {
 					action: "orchestrator_error",
 					replyText:
 						"Something went wrong processing your request. Please try again or use `help` for commands.",
 				};
+				if (ambDispatcher) {
+					void ambDispatcher.onTaskFailed(
+						workflowId,
+						taskId,
+						"agency-orchestrator",
+						orchError instanceof Error ? orchError.message : String(orchError),
+					);
+				}
 			}
 
 			const replyText = orchestratorResult.replyText;
@@ -1832,6 +1876,15 @@ export async function POST(request: Request) {
 				projectId: orchestratorResult.projectId ?? null,
 				payload: { intent: intent.type, ...orchestratorResult.metadata },
 			});
+
+			if (ambDispatcher) {
+				void ambDispatcher.onWorkflowCompleted(
+					workflowId,
+					orchestratorFailed
+						? "Workflow finished with orchestrator error"
+						: `Workflow completed with action ${orchestratorResult.action}`,
+				);
+			}
 
 			return Response.json({
 				ok: true,

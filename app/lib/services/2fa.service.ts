@@ -2,6 +2,7 @@ import { authenticator } from 'otplib';
 import crypto from 'crypto';
 import { prisma } from '../prisma';
 import { encryptApiKey, decryptApiKey, verifyPassword } from '../crypto';
+import { logger } from '@/lib/logger';
 
 /**
  * Two-Factor Authentication Service
@@ -146,7 +147,7 @@ export class TwoFactorAuthService {
         message: '2FA enabled successfully. Save your backup codes!',
       };
     } catch (error) {
-      console.error('[2FA] Failed to enable:', error);
+      logger.error('[2FA] Failed to enable', { error: String(error) });
       return { success: false, message: 'Failed to enable 2FA' };
     }
   }
@@ -198,7 +199,7 @@ export class TwoFactorAuthService {
         message: '2FA disabled successfully',
       };
     } catch (error) {
-      console.error('[2FA] Failed to disable:', error);
+      logger.error('[2FA] Failed to disable', { error: String(error) });
       return { success: false, message: 'Failed to disable 2FA' };
     }
   }
@@ -242,7 +243,7 @@ export class TwoFactorAuthService {
         message: 'Scan the QR code with your authenticator app',
       };
     } catch (error) {
-      console.error('[2FA] Failed to setup:', error);
+      logger.error('[2FA] Failed to setup', { error: String(error) });
       return { success: false, message: 'Failed to setup 2FA' };
     }
   }
@@ -286,7 +287,7 @@ export class TwoFactorAuthService {
 
       return { success: false, message: 'Invalid verification code' };
     } catch (error) {
-      console.error('[2FA] Failed to verify login:', error);
+      logger.error('[2FA] Failed to verify login', { error: String(error) });
       return { success: false, message: 'Failed to verify 2FA' };
     }
   }
@@ -329,7 +330,7 @@ export class TwoFactorAuthService {
         remainingCodes: storedCodes.length,
       };
     } catch (error) {
-      console.error('[2FA] Failed to verify backup code:', error);
+      logger.error('[2FA] Failed to verify backup code', { error: String(error) });
       return { success: false, message: 'Failed to verify backup code' };
     }
   }
@@ -368,7 +369,7 @@ export class TwoFactorAuthService {
         message: 'New backup codes generated. Save them securely!',
       };
     } catch (error) {
-      console.error('[2FA] Failed to regenerate backup codes:', error);
+      logger.error('[2FA] Failed to regenerate backup codes', { error: String(error) });
       return { success: false, message: 'Failed to regenerate backup codes' };
     }
   }

@@ -16,7 +16,6 @@ import { NodeSDK } from '@opentelemetry/sdk-node';
 import { SemanticResourceAttributes } from '@opentelemetry/semantic-conventions';
 import { resourceFromAttributes } from '@opentelemetry/resources';
 import {
-  BatchSpanProcessor,
   ConsoleSpanExporter,
 } from '@opentelemetry/sdk-trace-node';
 import {
@@ -154,7 +153,9 @@ export function initializeTelemetry(config: Config): void {
 
   sdk = new NodeSDK({
     resource,
-    spanProcessors: [new BatchSpanProcessor(spanExporter)],
+    // OTel packages in this monorepo currently include mixed major versions.
+    // Use traceExporter directly to avoid cross-version SpanProcessor type clashes.
+    traceExporter: spanExporter as any,
     logRecordProcessors: [new BatchLogRecordProcessor(logExporter)],
     metricReader,
     instrumentations: [new HttpInstrumentation()],

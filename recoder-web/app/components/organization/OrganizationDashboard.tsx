@@ -67,10 +67,10 @@ export const OrganizationDashboard = memo(({
     return (
       <div className="flex flex-col items-center justify-center h-full p-8 text-center">
         <span className="i-ph:warning-circle text-5xl text-red-400 mb-4" />
-        <h2 className="text-xl font-semibold text-bolt-elements-textPrimary mb-2">
+        <h2 className="text-xl font-semibold text-recoder-elements-textPrimary mb-2">
           Failed to load organization
         </h2>
-        <p className="text-bolt-elements-textTertiary mb-4">{error}</p>
+        <p className="text-recoder-elements-textTertiary mb-4">{error}</p>
         <button
           onClick={() => loadOrganization(organizationId)}
           className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
@@ -84,11 +84,11 @@ export const OrganizationDashboard = memo(({
   if (!organization) {
     return (
       <div className="flex flex-col items-center justify-center h-full p-8 text-center">
-        <span className="i-ph:buildings text-5xl text-bolt-elements-textTertiary mb-4" />
-        <h2 className="text-xl font-semibold text-bolt-elements-textPrimary mb-2">
+        <span className="i-ph:buildings text-5xl text-recoder-elements-textTertiary mb-4" />
+        <h2 className="text-xl font-semibold text-recoder-elements-textPrimary mb-2">
           Organization not found
         </h2>
-        <p className="text-bolt-elements-textTertiary">
+        <p className="text-recoder-elements-textTertiary">
           The organization you are looking for does not exist or you do not have access.
         </p>
       </div>
@@ -96,7 +96,7 @@ export const OrganizationDashboard = memo(({
   }
 
   return (
-    <div className="flex flex-col h-full overflow-hidden bg-bolt-elements-background-depth-1">
+    <div className="flex flex-col h-full overflow-hidden bg-recoder-elements-background-depth-1">
       {/* Header */}
       <DashboardHeader
         organization={organization}
@@ -156,7 +156,7 @@ const DashboardHeader = memo(({
   canInvite,
 }: DashboardHeaderProps) => {
   return (
-    <div className="border-b border-bolt-elements-borderColor bg-bolt-elements-background-depth-2">
+    <div className="border-b border-recoder-elements-borderColor bg-recoder-elements-background-depth-2">
       {/* Organization Info */}
       <div className="px-6 py-4">
         <div className="flex items-center gap-4">
@@ -176,17 +176,17 @@ const DashboardHeader = memo(({
           {/* Info */}
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2">
-              <h1 className="text-xl font-semibold text-bolt-elements-textPrimary truncate">
+              <h1 className="text-xl font-semibold text-recoder-elements-textPrimary truncate">
                 {organization.name}
               </h1>
               <PlanBadge plan={organization.plan} />
             </div>
             {organization.description && (
-              <p className="text-sm text-bolt-elements-textTertiary truncate mt-0.5">
+              <p className="text-sm text-recoder-elements-textTertiary truncate mt-0.5">
                 {organization.description}
               </p>
             )}
-            <div className="flex items-center gap-3 mt-1 text-xs text-bolt-elements-textTertiary">
+            <div className="flex items-center gap-3 mt-1 text-xs text-recoder-elements-textTertiary">
               <span className="flex items-center gap-1">
                 <span className="i-ph:users" />
                 {organization.stats.memberCount} members
@@ -393,9 +393,9 @@ const SettingsContent = memo(({
   return (
     <div className="p-6 max-w-4xl">
       {/* General Settings */}
-      <div className="bg-bolt-elements-background-depth-2 rounded-xl border border-bolt-elements-borderColor mb-6">
-        <div className="px-6 py-4 border-b border-bolt-elements-borderColor">
-          <h2 className="text-lg font-semibold text-bolt-elements-textPrimary flex items-center gap-2">
+      <div className="bg-recoder-elements-background-depth-2 rounded-xl border border-recoder-elements-borderColor mb-6">
+        <div className="px-6 py-4 border-b border-recoder-elements-borderColor">
+          <h2 className="text-lg font-semibold text-recoder-elements-textPrimary flex items-center gap-2">
             <span className="i-ph:gear" />
             General Settings
           </h2>
@@ -412,7 +412,7 @@ const SettingsContent = memo(({
                   type="text"
                   value={nameValue}
                   onChange={(e) => setNameValue(e.target.value)}
-                  className="px-3 py-1.5 bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor rounded-lg text-sm text-bolt-elements-textPrimary focus:border-blue-500 focus:outline-none"
+                  className="px-3 py-1.5 bg-recoder-elements-background-depth-2 border border-recoder-elements-borderColor rounded-lg text-sm text-recoder-elements-textPrimary focus:border-blue-500 focus:outline-none"
                   disabled={saving}
                   autoFocus
                 />
@@ -433,18 +433,18 @@ const SettingsContent = memo(({
                     setEditingName(false);
                   }}
                   disabled={saving}
-                  className="px-3 py-1.5 text-bolt-elements-textTertiary hover:text-bolt-elements-textPrimary text-sm"
+                  className="px-3 py-1.5 text-recoder-elements-textTertiary hover:text-recoder-elements-textPrimary text-sm"
                 >
                   Cancel
                 </button>
               </div>
             ) : (
               <div className="flex items-center gap-2">
-                <span className="text-bolt-elements-textPrimary">{organization.name}</span>
+                <span className="text-recoder-elements-textPrimary">{organization.name}</span>
                 {isAdmin && (
                   <button
                     onClick={() => setEditingName(true)}
-                    className="p-1 text-bolt-elements-textTertiary hover:text-bolt-elements-textPrimary rounded"
+                    className="p-1 text-recoder-elements-textTertiary hover:text-recoder-elements-textPrimary rounded"
                   >
                     <span className="i-ph:pencil-simple text-sm" />
                   </button>
@@ -458,7 +458,7 @@ const SettingsContent = memo(({
             label="Organization URL"
             description="Your organization's unique identifier"
           >
-            <code className="px-2 py-1 bg-bolt-elements-background-depth-2 text-bolt-elements-textTertiary text-sm rounded">
+            <code className="px-2 py-1 bg-recoder-elements-background-depth-2 text-recoder-elements-textTertiary text-sm rounded">
               recoder.xyz/org/{organization.slug}
             </code>
           </SettingsRow>
@@ -479,7 +479,7 @@ const SettingsContent = memo(({
                 <span className="i-ph:arrow-square-out text-xs" />
               </a>
             ) : (
-              <span className="text-bolt-elements-textTertiary text-sm">Not set</span>
+              <span className="text-recoder-elements-textTertiary text-sm">Not set</span>
             )}
           </SettingsRow>
         </div>
@@ -487,9 +487,9 @@ const SettingsContent = memo(({
 
       {/* Security Settings */}
       {isAdmin && (
-        <div className="bg-bolt-elements-background-depth-2 rounded-xl border border-bolt-elements-borderColor mb-6">
-          <div className="px-6 py-4 border-b border-bolt-elements-borderColor">
-            <h2 className="text-lg font-semibold text-bolt-elements-textPrimary flex items-center gap-2">
+        <div className="bg-recoder-elements-background-depth-2 rounded-xl border border-recoder-elements-borderColor mb-6">
+          <div className="px-6 py-4 border-b border-recoder-elements-borderColor">
+            <h2 className="text-lg font-semibold text-recoder-elements-textPrimary flex items-center gap-2">
               <span className="i-ph:shield-check" />
               Security Settings
             </h2>
@@ -523,12 +523,12 @@ const SettingsContent = memo(({
                   <span className="px-2 py-0.5 bg-green-500/20 text-green-400 text-xs rounded-full">
                     Enabled
                   </span>
-                  <span className="text-bolt-elements-textTertiary text-sm capitalize">
+                  <span className="text-recoder-elements-textTertiary text-sm capitalize">
                     {organization.settings.ssoProvider}
                   </span>
                 </div>
               ) : (
-                <span className="px-2 py-0.5 bg-bolt-elements-background-depth-3 text-bolt-elements-textTertiary text-xs rounded-full">
+                <span className="px-2 py-0.5 bg-recoder-elements-background-depth-3 text-recoder-elements-textTertiary text-xs rounded-full">
                   Not configured
                 </span>
               )}
@@ -544,14 +544,14 @@ const SettingsContent = memo(({
                   {organization.settings.allowedDomains.map((domain) => (
                     <span
                       key={domain}
-                      className="px-2 py-0.5 bg-bolt-elements-background-depth-2 text-bolt-elements-textTertiary text-xs rounded"
+                      className="px-2 py-0.5 bg-recoder-elements-background-depth-2 text-recoder-elements-textTertiary text-xs rounded"
                     >
                       @{domain}
                     </span>
                   ))}
                 </div>
               ) : (
-                <span className="text-bolt-elements-textTertiary text-sm">All domains allowed</span>
+                <span className="text-recoder-elements-textTertiary text-sm">All domains allowed</span>
               )}
             </SettingsRow>
           </div>
@@ -559,9 +559,9 @@ const SettingsContent = memo(({
       )}
 
       {/* Limits & Usage */}
-      <div className="bg-bolt-elements-background-depth-2 rounded-xl border border-bolt-elements-borderColor mb-6">
-        <div className="px-6 py-4 border-b border-bolt-elements-borderColor">
-          <h2 className="text-lg font-semibold text-bolt-elements-textPrimary flex items-center gap-2">
+      <div className="bg-recoder-elements-background-depth-2 rounded-xl border border-recoder-elements-borderColor mb-6">
+        <div className="px-6 py-4 border-b border-recoder-elements-borderColor">
+          <h2 className="text-lg font-semibold text-recoder-elements-textPrimary flex items-center gap-2">
             <span className="i-ph:chart-line-up" />
             Limits & Usage
           </h2>
@@ -599,8 +599,8 @@ const SettingsContent = memo(({
           <div className="p-6">
             <div className="flex items-center justify-between">
               <div>
-                <h3 className="text-bolt-elements-textPrimary font-medium">Delete Organization</h3>
-                <p className="text-bolt-elements-textTertiary text-sm mt-1">
+                <h3 className="text-recoder-elements-textPrimary font-medium">Delete Organization</h3>
+                <p className="text-recoder-elements-textTertiary text-sm mt-1">
                   Permanently delete this organization and all its data. This action cannot be undone.
                 </p>
               </div>
@@ -637,7 +637,7 @@ const TabButton = memo(({ active, onClick, icon, label }: TabButtonProps) => (
       'flex items-center gap-2 px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px',
       active
         ? 'text-blue-400 border-blue-500'
-        : 'text-bolt-elements-textTertiary hover:text-bolt-elements-textSecondary border-transparent'
+        : 'text-recoder-elements-textTertiary hover:text-recoder-elements-textSecondary border-transparent'
     )}
   >
     <span className={icon} />
@@ -653,7 +653,7 @@ interface PlanBadgeProps {
 
 const PlanBadge = memo(({ plan }: PlanBadgeProps) => {
   const colors = {
-    free: 'bg-bolt-elements-background-depth-3 text-bolt-elements-textTertiary',
+    free: 'bg-recoder-elements-background-depth-3 text-recoder-elements-textTertiary',
     team: 'bg-blue-500/20 text-blue-400',
     enterprise: 'bg-purple-500/20 text-purple-400',
   };
@@ -679,22 +679,22 @@ interface StatCardProps {
 const StatCard = memo(({ icon, iconColor, label, value, subtext, onClick }: StatCardProps) => (
   <div
     className={classNames(
-      'bg-bolt-elements-background-depth-2 rounded-xl border border-bolt-elements-borderColor p-4 transition-colors',
+      'bg-recoder-elements-background-depth-2 rounded-xl border border-recoder-elements-borderColor p-4 transition-colors',
       onClick && 'cursor-pointer hover:border-blue-500/50'
     )}
     onClick={onClick}
   >
     <div className="flex items-center gap-3">
-      <div className={classNames('w-10 h-10 rounded-lg bg-bolt-elements-background-depth-2 flex items-center justify-center', iconColor)}>
+      <div className={classNames('w-10 h-10 rounded-lg bg-recoder-elements-background-depth-2 flex items-center justify-center', iconColor)}>
         <span className={classNames(icon, 'text-xl')} />
       </div>
       <div>
-        <div className="text-2xl font-bold text-bolt-elements-textPrimary">{value}</div>
-        <div className="text-xs text-bolt-elements-textTertiary">{label}</div>
+        <div className="text-2xl font-bold text-recoder-elements-textPrimary">{value}</div>
+        <div className="text-xs text-recoder-elements-textTertiary">{label}</div>
       </div>
     </div>
     {subtext && (
-      <div className="mt-2 text-xs text-bolt-elements-textTertiary">{subtext}</div>
+      <div className="mt-2 text-xs text-recoder-elements-textTertiary">{subtext}</div>
     )}
   </div>
 ));
@@ -708,9 +708,9 @@ interface TeamsListProps {
 }
 
 const TeamsList = memo(({ teams, loading, onViewAll }: TeamsListProps) => (
-  <div className="bg-bolt-elements-background-depth-2 rounded-xl border border-bolt-elements-borderColor">
-    <div className="px-4 py-3 border-b border-bolt-elements-borderColor flex items-center justify-between">
-      <h3 className="text-sm font-semibold text-bolt-elements-textPrimary flex items-center gap-2">
+  <div className="bg-recoder-elements-background-depth-2 rounded-xl border border-recoder-elements-borderColor">
+    <div className="px-4 py-3 border-b border-recoder-elements-borderColor flex items-center justify-between">
+      <h3 className="text-sm font-semibold text-recoder-elements-textPrimary flex items-center gap-2">
         <span className="i-ph:users-three" />
         Teams
       </h3>
@@ -724,27 +724,27 @@ const TeamsList = memo(({ teams, loading, onViewAll }: TeamsListProps) => (
         </button>
       )}
     </div>
-    <div className="divide-y divide-bolt-elements-borderColor">
+    <div className="divide-y divide-recoder-elements-borderColor">
       {loading ? (
         Array.from({ length: 3 }).map((_, i) => (
           <div key={i} className="px-4 py-3 animate-pulse">
             <div className="flex items-center gap-3">
-              <div className="w-8 h-8 bg-bolt-elements-background-depth-2 rounded-lg" />
+              <div className="w-8 h-8 bg-recoder-elements-background-depth-2 rounded-lg" />
               <div className="flex-1">
-                <div className="h-4 bg-bolt-elements-background-depth-2 rounded w-24 mb-1" />
-                <div className="h-3 bg-bolt-elements-background-depth-2 rounded w-16" />
+                <div className="h-4 bg-recoder-elements-background-depth-2 rounded w-24 mb-1" />
+                <div className="h-3 bg-recoder-elements-background-depth-2 rounded w-16" />
               </div>
             </div>
           </div>
         ))
       ) : teams.length === 0 ? (
         <div className="px-4 py-8 text-center">
-          <span className="i-ph:users-three text-3xl text-bolt-elements-textTertiary mb-2 block" />
-          <p className="text-sm text-bolt-elements-textTertiary">No teams yet</p>
+          <span className="i-ph:users-three text-3xl text-recoder-elements-textTertiary mb-2 block" />
+          <p className="text-sm text-recoder-elements-textTertiary">No teams yet</p>
         </div>
       ) : (
         teams.slice(0, 5).map((team) => (
-          <div key={team.id} className="px-4 py-3 hover:bg-bolt-elements-background-depth-2 transition-colors cursor-pointer">
+          <div key={team.id} className="px-4 py-3 hover:bg-recoder-elements-background-depth-2 transition-colors cursor-pointer">
             <div className="flex items-center gap-3">
               <div
                 className="w-8 h-8 rounded-lg flex items-center justify-center text-white text-sm font-bold"
@@ -754,7 +754,7 @@ const TeamsList = memo(({ teams, loading, onViewAll }: TeamsListProps) => (
               </div>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">
-                  <span className="text-sm font-medium text-bolt-elements-textPrimary truncate">
+                  <span className="text-sm font-medium text-recoder-elements-textPrimary truncate">
                     {team.name}
                   </span>
                   {team.isDefault && (
@@ -763,11 +763,11 @@ const TeamsList = memo(({ teams, loading, onViewAll }: TeamsListProps) => (
                     </span>
                   )}
                 </div>
-                <div className="text-xs text-bolt-elements-textTertiary">
+                <div className="text-xs text-recoder-elements-textTertiary">
                   {team.memberCount} members
                 </div>
               </div>
-              <span className="i-ph:caret-right text-bolt-elements-textTertiary" />
+              <span className="i-ph:caret-right text-recoder-elements-textTertiary" />
             </div>
           </div>
         ))
@@ -799,14 +799,14 @@ const ActivityFeed = memo(({ activities, loading, isAdmin, onViewAll }: Activity
       case 'settings_changed':
         return 'i-ph:gear text-orange-400';
       default:
-        return 'i-ph:info text-bolt-elements-textTertiary';
+        return 'i-ph:info text-recoder-elements-textTertiary';
     }
   };
 
   return (
-    <div className="bg-bolt-elements-background-depth-2 rounded-xl border border-bolt-elements-borderColor">
-      <div className="px-4 py-3 border-b border-bolt-elements-borderColor flex items-center justify-between">
-        <h3 className="text-sm font-semibold text-bolt-elements-textPrimary flex items-center gap-2">
+    <div className="bg-recoder-elements-background-depth-2 rounded-xl border border-recoder-elements-borderColor">
+      <div className="px-4 py-3 border-b border-recoder-elements-borderColor flex items-center justify-between">
+        <h3 className="text-sm font-semibold text-recoder-elements-textPrimary flex items-center gap-2">
           <span className="i-ph:clock-counter-clockwise" />
           Recent Activity
         </h3>
@@ -820,23 +820,23 @@ const ActivityFeed = memo(({ activities, loading, isAdmin, onViewAll }: Activity
           </button>
         )}
       </div>
-      <div className="divide-y divide-bolt-elements-borderColor max-h-80 overflow-auto">
+      <div className="divide-y divide-recoder-elements-borderColor max-h-80 overflow-auto">
         {loading ? (
           Array.from({ length: 4 }).map((_, i) => (
             <div key={i} className="px-4 py-3 animate-pulse">
               <div className="flex items-start gap-3">
-                <div className="w-6 h-6 bg-bolt-elements-background-depth-2 rounded-full" />
+                <div className="w-6 h-6 bg-recoder-elements-background-depth-2 rounded-full" />
                 <div className="flex-1">
-                  <div className="h-4 bg-bolt-elements-background-depth-2 rounded w-3/4 mb-1" />
-                  <div className="h-3 bg-bolt-elements-background-depth-2 rounded w-1/4" />
+                  <div className="h-4 bg-recoder-elements-background-depth-2 rounded w-3/4 mb-1" />
+                  <div className="h-3 bg-recoder-elements-background-depth-2 rounded w-1/4" />
                 </div>
               </div>
             </div>
           ))
         ) : activities.length === 0 ? (
           <div className="px-4 py-8 text-center">
-            <span className="i-ph:clock-counter-clockwise text-3xl text-bolt-elements-textTertiary mb-2 block" />
-            <p className="text-sm text-bolt-elements-textTertiary">No recent activity</p>
+            <span className="i-ph:clock-counter-clockwise text-3xl text-recoder-elements-textTertiary mb-2 block" />
+            <p className="text-sm text-recoder-elements-textTertiary">No recent activity</p>
           </div>
         ) : (
           activities.map((activity) => (
@@ -844,12 +844,12 @@ const ActivityFeed = memo(({ activities, loading, isAdmin, onViewAll }: Activity
               <div className="flex items-start gap-3">
                 <span className={classNames(getActivityIcon(activity.type), 'text-lg mt-0.5')} />
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm text-bolt-elements-textPrimary">
+                  <p className="text-sm text-recoder-elements-textPrimary">
                     <span className="font-medium">{activity.actorName}</span>
                     {' '}
-                    <span className="text-bolt-elements-textTertiary">{activity.description}</span>
+                    <span className="text-recoder-elements-textTertiary">{activity.description}</span>
                   </p>
-                  <span className="text-xs text-bolt-elements-textTertiary">
+                  <span className="text-xs text-recoder-elements-textTertiary">
                     {formatRelativeTime(activity.timestamp)}
                   </span>
                 </div>
@@ -872,8 +872,8 @@ interface QuickActionsProps {
 }
 
 const QuickActions = memo(({ isAdmin, onNavigateToTeams, onNavigateToMembers, onNavigateToAuditLog }: QuickActionsProps) => (
-  <div className="bg-bolt-elements-background-depth-2 rounded-xl border border-bolt-elements-borderColor p-4">
-    <h3 className="text-sm font-semibold text-bolt-elements-textPrimary mb-3">Quick Actions</h3>
+  <div className="bg-recoder-elements-background-depth-2 rounded-xl border border-recoder-elements-borderColor p-4">
+    <h3 className="text-sm font-semibold text-recoder-elements-textPrimary mb-3">Quick Actions</h3>
     <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
       <QuickActionButton
         icon="i-ph:users-three"
@@ -913,10 +913,10 @@ interface QuickActionButtonProps {
 const QuickActionButton = memo(({ icon, label, onClick }: QuickActionButtonProps) => (
   <button
     onClick={onClick}
-    className="flex flex-col items-center gap-2 p-3 bg-bolt-elements-background-depth-2 hover:bg-bolt-elements-background-depth-3 rounded-lg transition-colors text-center"
+    className="flex flex-col items-center gap-2 p-3 bg-recoder-elements-background-depth-2 hover:bg-recoder-elements-background-depth-3 rounded-lg transition-colors text-center"
   >
-    <span className={classNames(icon, 'text-xl text-bolt-elements-textTertiary')} />
-    <span className="text-xs text-bolt-elements-textTertiary">{label}</span>
+    <span className={classNames(icon, 'text-xl text-recoder-elements-textTertiary')} />
+    <span className="text-xs text-recoder-elements-textTertiary">{label}</span>
   </button>
 ));
 
@@ -931,9 +931,9 @@ interface SettingsRowProps {
 const SettingsRow = memo(({ label, description, children }: SettingsRowProps) => (
   <div className="flex items-start justify-between gap-4">
     <div>
-      <h4 className="text-sm font-medium text-bolt-elements-textPrimary">{label}</h4>
+      <h4 className="text-sm font-medium text-recoder-elements-textPrimary">{label}</h4>
       {description && (
-        <p className="text-xs text-bolt-elements-textTertiary mt-0.5">{description}</p>
+        <p className="text-xs text-recoder-elements-textTertiary mt-0.5">{description}</p>
       )}
     </div>
     <div className="shrink-0">{children}</div>
@@ -953,9 +953,9 @@ interface SettingsToggleProps {
 const SettingsToggle = memo(({ label, description, checked, onChange, disabled }: SettingsToggleProps) => (
   <div className="flex items-start justify-between gap-4">
     <div>
-      <h4 className="text-sm font-medium text-bolt-elements-textPrimary">{label}</h4>
+      <h4 className="text-sm font-medium text-recoder-elements-textPrimary">{label}</h4>
       {description && (
-        <p className="text-xs text-bolt-elements-textTertiary mt-0.5">{description}</p>
+        <p className="text-xs text-recoder-elements-textTertiary mt-0.5">{description}</p>
       )}
     </div>
     <button
@@ -963,7 +963,7 @@ const SettingsToggle = memo(({ label, description, checked, onChange, disabled }
       disabled={disabled}
       className={classNames(
         'relative w-11 h-6 rounded-full transition-colors',
-        checked ? 'bg-blue-600' : 'bg-bolt-elements-background-depth-3',
+        checked ? 'bg-blue-600' : 'bg-recoder-elements-background-depth-3',
         disabled && 'opacity-50 cursor-not-allowed'
       )}
     >
@@ -991,17 +991,17 @@ const UsageCard = memo(({ label, current, max }: UsageCardProps) => {
   const isFull = percentage >= 100;
 
   return (
-    <div className="p-4 bg-bolt-elements-background-depth-2 rounded-lg">
+    <div className="p-4 bg-recoder-elements-background-depth-2 rounded-lg">
       <div className="flex items-center justify-between mb-2">
-        <span className="text-sm text-bolt-elements-textTertiary">{label}</span>
+        <span className="text-sm text-recoder-elements-textTertiary">{label}</span>
         <span className={classNames(
           'text-sm font-medium',
-          isFull ? 'text-red-400' : isHigh ? 'text-yellow-400' : 'text-bolt-elements-textPrimary'
+          isFull ? 'text-red-400' : isHigh ? 'text-yellow-400' : 'text-recoder-elements-textPrimary'
         )}>
           {current} / {max}
         </span>
       </div>
-      <div className="h-2 bg-bolt-elements-background-depth-3 rounded-full overflow-hidden">
+      <div className="h-2 bg-recoder-elements-background-depth-3 rounded-full overflow-hidden">
         <div
           className={classNames(
             'h-full rounded-full transition-all',
@@ -1017,25 +1017,25 @@ const UsageCard = memo(({ label, current, max }: UsageCardProps) => {
 UsageCard.displayName = 'UsageCard';
 
 const DashboardSkeleton = memo(() => (
-  <div className="flex flex-col h-full overflow-hidden bg-bolt-elements-background-depth-1 animate-pulse">
-    <div className="border-b border-bolt-elements-borderColor bg-bolt-elements-background-depth-2 p-6">
+  <div className="flex flex-col h-full overflow-hidden bg-recoder-elements-background-depth-1 animate-pulse">
+    <div className="border-b border-recoder-elements-borderColor bg-recoder-elements-background-depth-2 p-6">
       <div className="flex items-center gap-4">
-        <div className="w-14 h-14 rounded-xl bg-bolt-elements-background-depth-2" />
+        <div className="w-14 h-14 rounded-xl bg-recoder-elements-background-depth-2" />
         <div className="flex-1">
-          <div className="h-6 bg-bolt-elements-background-depth-2 rounded w-48 mb-2" />
-          <div className="h-4 bg-bolt-elements-background-depth-2 rounded w-32" />
+          <div className="h-6 bg-recoder-elements-background-depth-2 rounded w-48 mb-2" />
+          <div className="h-4 bg-recoder-elements-background-depth-2 rounded w-32" />
         </div>
       </div>
     </div>
     <div className="p-6">
       <div className="grid grid-cols-4 gap-4 mb-6">
         {Array.from({ length: 4 }).map((_, i) => (
-          <div key={i} className="h-24 bg-bolt-elements-background-depth-2 rounded-xl" />
+          <div key={i} className="h-24 bg-recoder-elements-background-depth-2 rounded-xl" />
         ))}
       </div>
       <div className="grid grid-cols-3 gap-6">
-        <div className="col-span-2 h-80 bg-bolt-elements-background-depth-2 rounded-xl" />
-        <div className="h-80 bg-bolt-elements-background-depth-2 rounded-xl" />
+        <div className="col-span-2 h-80 bg-recoder-elements-background-depth-2 rounded-xl" />
+        <div className="h-80 bg-recoder-elements-background-depth-2 rounded-xl" />
       </div>
     </div>
   </div>

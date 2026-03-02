@@ -435,19 +435,19 @@ export function ProjectTemplateSelector({
         {/* Search */}
         <div className="relative">
           <div className="absolute left-3 top-1/2 -translate-y-1/2">
-            <div className="i-ph:magnifying-glass text-bolt-elements-textSecondary" />
+            <div className="i-ph:magnifying-glass text-recoder-elements-textSecondary" />
           </div>
           <input
             type="text"
             placeholder="Search templates by name or technology..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-10 pr-4 py-3 bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor rounded-lg text-bolt-elements-textPrimary placeholder-bolt-elements-textSecondary focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+            className="w-full pl-10 pr-4 py-3 bg-recoder-elements-background-depth-2 border border-recoder-elements-borderColor rounded-lg text-recoder-elements-textPrimary placeholder-recoder-elements-textSecondary focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
           />
           {searchQuery && (
             <button
               onClick={() => setSearchQuery('')}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-bolt-elements-textSecondary hover:text-bolt-elements-textPrimary"
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-recoder-elements-textSecondary hover:text-recoder-elements-textPrimary"
             >
               <div className="i-ph:x" />
             </button>
@@ -463,7 +463,7 @@ export function ProjectTemplateSelector({
               className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-all ${
                 selectedCategory === category.id
                   ? 'bg-orange-500 text-white'
-                  : 'bg-bolt-elements-background-depth-2 text-bolt-elements-textSecondary hover:text-bolt-elements-textPrimary hover:bg-bolt-elements-background-depth-3'
+                  : 'bg-recoder-elements-background-depth-2 text-recoder-elements-textSecondary hover:text-recoder-elements-textPrimary hover:bg-recoder-elements-background-depth-3'
               }`}
             >
               <div className={category.icon} />
@@ -476,7 +476,7 @@ export function ProjectTemplateSelector({
       {/* Popular Templates Section (only show when no filters) */}
       {!searchQuery && selectedCategory === 'all' && (
         <div className="mb-6">
-          <h3 className="text-sm font-medium text-bolt-elements-textSecondary mb-3 flex items-center gap-2">
+          <h3 className="text-sm font-medium text-recoder-elements-textSecondary mb-3 flex items-center gap-2">
             <div className="i-ph:star-fill text-orange-400" />
             Popular Templates
           </h3>
@@ -488,7 +488,7 @@ export function ProjectTemplateSelector({
                 className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm border transition-all ${
                   selectedTemplate?.id === template.id
                     ? 'bg-orange-500/20 border-orange-500 text-orange-400'
-                    : 'bg-bolt-elements-background-depth-2 border-bolt-elements-borderColor text-bolt-elements-textPrimary hover:border-orange-500/50'
+                    : 'bg-recoder-elements-background-depth-2 border-recoder-elements-borderColor text-recoder-elements-textPrimary hover:border-orange-500/50'
                 }`}
               >
                 <div className={template.icon} />
@@ -501,7 +501,7 @@ export function ProjectTemplateSelector({
 
       {/* Results Count */}
       {(searchQuery || selectedCategory !== 'all') && (
-        <div className="mb-4 text-sm text-bolt-elements-textSecondary">
+        <div className="mb-4 text-sm text-recoder-elements-textSecondary">
           Found {filteredTemplates.length} template{filteredTemplates.length !== 1 ? 's' : ''}
           {searchQuery && ` matching "${searchQuery}"`}
         </div>
@@ -517,7 +517,7 @@ export function ProjectTemplateSelector({
               className={`relative p-4 rounded-lg border cursor-pointer transition-all group ${
                 selectedTemplate?.id === template.id
                   ? 'bg-orange-500/10 border-orange-500'
-                  : 'bg-bolt-elements-background-depth-2 border-bolt-elements-borderColor hover:border-orange-500/50 hover:bg-bolt-elements-background-depth-3'
+                  : 'bg-recoder-elements-background-depth-2 border-recoder-elements-borderColor hover:border-orange-500/50 hover:bg-recoder-elements-background-depth-3'
               }`}
             >
               {/* Selection indicator */}
@@ -539,14 +539,14 @@ export function ProjectTemplateSelector({
                 <div
                   className={`w-10 h-10 rounded-lg flex items-center justify-center ${
                     template.id === 'blank'
-                      ? 'bg-bolt-elements-background-depth-1 border-2 border-dashed border-bolt-elements-borderColor'
+                      ? 'bg-recoder-elements-background-depth-1 border-2 border-dashed border-recoder-elements-borderColor'
                       : 'bg-gradient-to-br from-orange-500/20 to-orange-600/20'
                   }`}
                 >
-                  <div className={`${template.icon} text-xl ${template.id === 'blank' ? 'text-bolt-elements-textSecondary' : 'text-orange-400'}`} />
+                  <div className={`${template.icon} text-xl ${template.id === 'blank' ? 'text-recoder-elements-textSecondary' : 'text-orange-400'}`} />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <h3 className="font-medium text-bolt-elements-textPrimary truncate">{template.name}</h3>
+                  <h3 className="font-medium text-recoder-elements-textPrimary truncate">{template.name}</h3>
                   <span className={`inline-block text-xs px-2 py-0.5 rounded mt-1 ${getDifficultyColor(template.difficulty)}`}>
                     {template.difficulty}
                   </span>
@@ -554,7 +554,7 @@ export function ProjectTemplateSelector({
               </div>
 
               {/* Description */}
-              <p className="text-sm text-bolt-elements-textSecondary mb-3 line-clamp-2">
+              <p className="text-sm text-recoder-elements-textSecondary mb-3 line-clamp-2">
                 {template.description}
               </p>
 
@@ -564,13 +564,13 @@ export function ProjectTemplateSelector({
                   {template.technologies.slice(0, 4).map((tech) => (
                     <span
                       key={tech}
-                      className="px-2 py-0.5 bg-bolt-elements-background-depth-1 text-bolt-elements-textSecondary text-xs rounded"
+                      className="px-2 py-0.5 bg-recoder-elements-background-depth-1 text-recoder-elements-textSecondary text-xs rounded"
                     >
                       {tech}
                     </span>
                   ))}
                   {template.technologies.length > 4 && (
-                    <span className="px-2 py-0.5 text-bolt-elements-textSecondary text-xs">
+                    <span className="px-2 py-0.5 text-recoder-elements-textSecondary text-xs">
                       +{template.technologies.length - 4} more
                     </span>
                   )}
@@ -580,7 +580,7 @@ export function ProjectTemplateSelector({
               {/* Expand/Collapse for Features */}
               <button
                 onClick={(e) => toggleExpanded(template.id, e)}
-                className="flex items-center gap-1 text-xs text-bolt-elements-textSecondary hover:text-orange-400 transition-colors"
+                className="flex items-center gap-1 text-xs text-recoder-elements-textSecondary hover:text-orange-400 transition-colors"
               >
                 <div className={`i-ph:caret-${expandedTemplateId === template.id ? 'up' : 'down'}`} />
                 {expandedTemplateId === template.id ? 'Hide features' : 'Show features'}
@@ -588,11 +588,11 @@ export function ProjectTemplateSelector({
 
               {/* Expanded Features */}
               {expandedTemplateId === template.id && (
-                <div className="mt-3 pt-3 border-t border-bolt-elements-borderColor">
-                  <h4 className="text-xs font-medium text-bolt-elements-textSecondary mb-2">Features:</h4>
+                <div className="mt-3 pt-3 border-t border-recoder-elements-borderColor">
+                  <h4 className="text-xs font-medium text-recoder-elements-textSecondary mb-2">Features:</h4>
                   <ul className="space-y-1">
                     {template.features.map((feature, index) => (
-                      <li key={index} className="flex items-center gap-2 text-xs text-bolt-elements-textPrimary">
+                      <li key={index} className="flex items-center gap-2 text-xs text-recoder-elements-textPrimary">
                         <div className="i-ph:check-circle text-green-400" />
                         {feature}
                       </li>
@@ -605,9 +605,9 @@ export function ProjectTemplateSelector({
         </div>
       ) : (
         <div className="text-center py-12">
-          <div className="i-ph:folder-open text-4xl text-bolt-elements-textSecondary mb-4 mx-auto" />
-          <h3 className="text-lg font-medium text-bolt-elements-textPrimary mb-2">No templates found</h3>
-          <p className="text-bolt-elements-textSecondary">
+          <div className="i-ph:folder-open text-4xl text-recoder-elements-textSecondary mb-4 mx-auto" />
+          <h3 className="text-lg font-medium text-recoder-elements-textPrimary mb-2">No templates found</h3>
+          <p className="text-recoder-elements-textSecondary">
             Try adjusting your search or category filter
           </p>
         </div>
@@ -621,16 +621,16 @@ export function ProjectTemplateSelector({
               <div className={`${selectedTemplate.icon} text-2xl text-orange-400`} />
             </div>
             <div className="flex-1">
-              <h3 className="font-medium text-bolt-elements-textPrimary">
+              <h3 className="font-medium text-recoder-elements-textPrimary">
                 Selected: {selectedTemplate.name}
               </h3>
-              <p className="text-sm text-bolt-elements-textSecondary">
+              <p className="text-sm text-recoder-elements-textSecondary">
                 {selectedTemplate.technologies.join(' + ') || 'Empty project'}
               </p>
             </div>
             <button
               onClick={() => onSelect(null)}
-              className="p-2 text-bolt-elements-textSecondary hover:text-bolt-elements-textPrimary transition-colors"
+              className="p-2 text-recoder-elements-textSecondary hover:text-recoder-elements-textPrimary transition-colors"
               title="Clear selection"
             >
               <div className="i-ph:x" />

@@ -67,7 +67,7 @@ echo ""
 echo "🗄️ Test 4: Database Connection"
 echo "-----------------------------"
 echo -n "Testing: Database tables exist... "
-tables=$(psql 'postgresql://neondb_owner:npg_e2mFob8SaEOV@ep-silent-mode-adii0v0d-pooler.c-2.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require' -t -c "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='public' AND table_name IN ('chat_sessions', 'chat_messages', 'deployments');" 2>/dev/null)
+tables=$(psql "${DATABASE_URL:?DATABASE_URL is required}" -t -c "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='public' AND table_name IN ('chat_sessions', 'chat_messages', 'deployments');" 2>/dev/null)
 
 if [ "$tables" = " 3" ]; then
   echo -e "${GREEN}✅ PASS${NC} (All 3 tables exist)"

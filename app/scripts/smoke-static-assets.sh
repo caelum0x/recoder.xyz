@@ -133,8 +133,8 @@ check_service() {
 }
 
 check_service "app (hub)"          "https://recoder.xyz/"
-check_service "frontend (Suna)"    "https://frontend.recoder.xyz/"
-check_service "web (Bolt)"         "https://web.recoder.xyz/"
+check_service "frontend"            "https://frontend.recoder.xyz/"
+check_service "web"                "https://web.recoder.xyz/"
 check_service "docker-backend"     "https://api.recoder.xyz/health"
 check_service "backend (Python)"   "https://backend.recoder.xyz/v1/health"
 check_service "pm"                 "https://pm.recoder.xyz/"
@@ -149,3 +149,18 @@ if [[ "$ECOSYSTEM_FAIL" -gt 0 ]]; then
 fi
 
 echo "== Ecosystem health check complete =="
+
+# ── Optional admin push smoke checks ──
+echo ""
+echo "== Optional Admin Push Smoke =="
+
+if [[ -n "${ADMIN_SECRET:-}" ]]; then
+  if bash "$(dirname "$0")/smoke-admin-push.sh" "$BASE_URL"; then
+    echo "Admin push smoke: PASS"
+  else
+    echo "Admin push smoke: FAIL" >&2
+    exit 1
+  fi
+else
+  echo "Admin push smoke: SKIPPED (set ADMIN_SECRET to enable)"
+fi

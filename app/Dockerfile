@@ -49,6 +49,7 @@ RUN addgroup --system --gid 1001 nodejs && \
 
 COPY --from=base /app/app/public ./public
 COPY --from=base --chown=nextjs:nodejs /app/app/.next/standalone ./
+COPY --from=base --chown=nextjs:nodejs /app/app/.next/static ./.next/static
 COPY --from=base --chown=nextjs:nodejs /app/app/.next/static ./app/.next/static
 # Next standalone output keeps pnpm symlinks pointing to /node_modules/.pnpm.
 # Copy the virtual store so those symlinks resolve at runtime.

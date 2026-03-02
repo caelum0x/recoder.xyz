@@ -1,4 +1,4 @@
-import { PageHeading } from "@giselle-internal/ui/page-heading";
+import { PageHeading } from "@recoder-internal/ui/page-heading";
 import type React from "react";
 
 interface UiPageProps {

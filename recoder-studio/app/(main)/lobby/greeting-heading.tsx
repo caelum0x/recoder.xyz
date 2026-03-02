@@ -1,6 +1,6 @@
 "use client";
 
-import { PageHeading } from "@giselle-internal/ui/page-heading";
+import { PageHeading } from "@recoder-internal/ui/page-heading";
 import { useEffect, useState } from "react";
 
 const LOGIN_COUNT_KEY = "recoder_lobby_login_count";

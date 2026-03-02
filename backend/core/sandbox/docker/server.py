@@ -4,6 +4,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 import uvicorn
 import os
 import subprocess
+import logging
 from pathlib import Path
 from typing import Dict, List, Optional
 
@@ -15,12 +16,13 @@ from html_to_docx_router import router as docx_router
 
 # Ensure we're serving from the /workspace directory
 workspace_dir = "/workspace"
+logger = logging.getLogger(__name__)
 
 class WorkspaceDirMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         # Check if workspace directory exists and recreate if deleted
         if not os.path.exists(workspace_dir):
-            print(f"Workspace directory {workspace_dir} not found, recreating...")
+            logger.info(f"Workspace directory {workspace_dir} not found, recreating...")
             os.makedirs(workspace_dir, exist_ok=True)
         return await call_next(request)
 
@@ -259,7 +261,7 @@ async def list_html_files():
         return HTMLResponse(content=html_content)
         
     except Exception as e:
-        print(f"❌ Error listing HTML files: {e}")
+        logger.exception(f"Error listing HTML files: {e}")
         from fastapi import HTTPException
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -403,6 +405,6 @@ async def serve_file(file_path: str):
 
 # This is needed for the import string approach with uvicorn
 if __name__ == '__main__':
-    print(f"Starting server with auto-reload, serving files from: {workspace_dir}")
+    logger.info(f"Starting server with auto-reload, serving files from: {workspace_dir}")
     # Don't use reload directly in the run call
-    uvicorn.run("server:app", host="0.0.0.0", port=8080, reload=True) 
+    uvicorn.run("server:app", host="0.0.0.0", port=8080, reload=True)

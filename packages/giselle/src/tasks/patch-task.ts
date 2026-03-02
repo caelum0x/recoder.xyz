@@ -1,4 +1,4 @@
-import { Task, type TaskId } from "@giselles-ai/protocol";
+import { Task, type TaskId } from "@recoder/protocol";
 import { taskPath } from "../path";
 import type { GiselleContext } from "../types";
 import {

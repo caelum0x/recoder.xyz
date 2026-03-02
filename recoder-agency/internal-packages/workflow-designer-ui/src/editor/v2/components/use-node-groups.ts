@@ -1,4 +1,4 @@
-import { type GroupedNodes, groupNodes } from "@giselles-ai/workspace-utils";
+import { type GroupedNodes, groupNodes } from "@recoder/workspace-utils";
 import { useMemo } from "react";
 import { useAppDesignerStore } from "../../../app-designer";
 

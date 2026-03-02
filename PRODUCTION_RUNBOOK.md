@@ -91,10 +91,10 @@ Point both to app's Neon Postgres URL:
 
 ```bash
 # recoder-agency/.env.docker
-AUTH_DATABASE_URL=postgresql://neondb_owner:<password>@<host>:5432/neondb?sslmode=require
+AUTH_DATABASE_URL=<AUTH_DATABASE_URL>
 
 # recoder-pm/.env.docker
-AUTH_DATABASE_URL=postgresql://neondb_owner:<password>@<host>:5432/neondb?sslmode=require
+AUTH_DATABASE_URL=<AUTH_DATABASE_URL>
 ```
 
 ### 1.3 Set BETTER_AUTH_URL per app
@@ -278,9 +278,9 @@ S3_SECRET_ACCESS_KEY=<same as MINIO_ROOT_PASSWORD>
 ### 4.3 Set PM database
 
 ```bash
-DATABASE_URL=postgresql://<pm-db-user>:<password>@<host>:5432/<pm-db>?sslmode=require
-POSTGRES_PRISMA_URL=<same URL with ?pgbouncer=true>
-POSTGRES_URL_NON_POOLING=<direct URL without pooler>
+DATABASE_URL=<PM_DATABASE_URL>
+POSTGRES_PRISMA_URL=<PM_DATABASE_URL_WITH_PGBOUNCER>
+POSTGRES_URL_NON_POOLING=<PM_DATABASE_URL_NON_POOLING>
 ```
 
 ### 4.4 Set email

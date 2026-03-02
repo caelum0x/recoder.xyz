@@ -2,6 +2,7 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { spawn } from 'node:child_process';
 import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js';
+import { logger } from '@/lib/logger';
 
 export interface MCPServerConfig {
   id: string;
@@ -54,7 +55,7 @@ export class MCPClient {
       this.clients.set(config.id, client);
       this.transports.set(config.id, transport);
     } catch (error) {
-      console.error(`Failed to connect to MCP server ${config.id}:`, error);
+      logger.error('Failed to connect to MCP server', { serverId: String(config.id), error: String(error) });
       throw new Error(`Failed to connect to MCP server: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
@@ -73,7 +74,7 @@ export class MCPClient {
         inputSchema: tool.inputSchema,
       })) || [];
     } catch (error) {
-      console.error(`Failed to list tools for server ${serverId}:`, error);
+      logger.error('Failed to list tools for server', { serverId: String(serverId), error: String(error) });
       throw new Error(`Failed to list tools: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
@@ -95,7 +96,7 @@ export class MCPClient {
         isError: false,
       };
     } catch (error) {
-      console.error(`Failed to call tool ${name} on server ${serverId}:`, error);
+      logger.error('Failed to call tool on server', { tool: String(name), serverId: String(serverId), error: String(error) });
       return {
         error: error instanceof Error ? error.message : String(error),
         isError: true,
@@ -113,7 +114,7 @@ export class MCPClient {
       const response = await client.listPrompts();
       return response.prompts || [];
     } catch (error) {
-      console.error(`Failed to list prompts for server ${serverId}:`, error);
+      logger.error('Failed to list prompts for server', { serverId: String(serverId), error: String(error) });
       throw new Error(`Failed to list prompts: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
@@ -131,7 +132,7 @@ export class MCPClient {
       });
       return response;
     } catch (error) {
-      console.error(`Failed to get prompt ${name} from server ${serverId}:`, error);
+      logger.error('Failed to get prompt from server', { prompt: String(name), serverId: String(serverId), error: String(error) });
       throw new Error(`Failed to get prompt: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
@@ -144,7 +145,7 @@ export class MCPClient {
       try {
         await client.close();
       } catch (error) {
-        console.error(`Error closing client for server ${serverId}:`, error);
+        logger.error('Error closing client for server', { serverId: String(serverId), error: String(error) });
       }
       this.clients.delete(serverId);
     }
@@ -153,7 +154,7 @@ export class MCPClient {
       try {
         await transport.close();
       } catch (error) {
-        console.error(`Error closing transport for server ${serverId}:`, error);
+        logger.error('Error closing transport for server', { serverId: String(serverId), error: String(error) });
       }
       this.transports.delete(serverId);
     }

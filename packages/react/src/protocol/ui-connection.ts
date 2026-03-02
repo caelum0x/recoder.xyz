@@ -1,4 +1,4 @@
-import { ConnectionId, Input, NodeLike, Output } from "@giselles-ai/protocol";
+import { ConnectionId, Input, NodeLike, Output } from "@recoder/protocol";
 import * as z from "zod/v4";
 
 export const UIConnection = z.object({

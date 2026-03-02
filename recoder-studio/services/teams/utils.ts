@@ -1,4 +1,4 @@
-import { titleCase } from "@giselles-ai/utils";
+import { titleCase } from "@recoder/utils";
 import { createId } from "@paralleldrive/cuid2";
 import type { CurrentTeam, TeamId } from "./types";
 

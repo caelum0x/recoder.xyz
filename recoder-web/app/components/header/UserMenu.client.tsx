@@ -80,7 +80,8 @@ export function UserMenu() {
   }
 
   function goToDashboard() {
-    window.location.href = '/dashboard';
+    const mainSiteUrl = getMainSiteUrl();
+    window.location.href = `${mainSiteUrl}/dashboard`;
   }
 
   const getInitials = (name?: string) => {
@@ -95,7 +96,7 @@ export function UserMenu() {
 
   if (loading) {
     return (
-      <div className="px-3 py-2 text-sm text-bolt-elements-textSecondary">
+      <div className="px-3 py-2 text-sm text-recoder-elements-textSecondary">
         Loading...
       </div>
     );
@@ -116,7 +117,7 @@ export function UserMenu() {
     <div className="relative">
       <button
         onClick={() => setShowMenu(!showMenu)}
-        className="flex items-center space-x-2 px-3 py-2 rounded-lg bg-bolt-elements-background-depth-1 hover:bg-bolt-elements-background-depth-2 transition-colors border border-bolt-elements-borderColor text-bolt-elements-textPrimary"
+        className="flex items-center space-x-2 px-3 py-2 rounded-lg bg-recoder-elements-background-depth-1 hover:bg-recoder-elements-background-depth-2 transition-colors border border-recoder-elements-borderColor text-recoder-elements-textPrimary"
       >
         {userProfile.image && !imageError ? (
           <img
@@ -132,7 +133,7 @@ export function UserMenu() {
             {getInitials(userProfile.name)}
           </div>
         )}
-        <div className="i-ph:caret-down text-bolt-elements-textSecondary" />
+        <div className="i-ph:caret-down text-recoder-elements-textSecondary" />
       </button>
 
       {/* Dropdown Menu */}
@@ -145,41 +146,41 @@ export function UserMenu() {
           />
 
           {/* Menu */}
-          <div className="absolute right-0 mt-2 w-64 rounded-lg border border-bolt-elements-borderColor shadow-2xl z-50 overflow-hidden bg-bolt-elements-background-depth-1 text-bolt-elements-textPrimary">
+          <div className="absolute right-0 mt-2 w-64 rounded-lg border border-recoder-elements-borderColor shadow-2xl z-50 overflow-hidden bg-recoder-elements-background-depth-1 text-recoder-elements-textPrimary">
             {/* User Info */}
-            <div className="p-4 border-b border-bolt-elements-borderColor bg-bolt-elements-background-depth-1">
-              <div className="font-medium truncate text-bolt-elements-textPrimary">
+            <div className="p-4 border-b border-recoder-elements-borderColor bg-recoder-elements-background-depth-1">
+              <div className="font-medium truncate text-recoder-elements-textPrimary">
                 {userProfile.name || 'User'}
               </div>
-              <div className="text-sm truncate text-bolt-elements-textSecondary">
+              <div className="text-sm truncate text-recoder-elements-textSecondary">
                 {userProfile.email}
               </div>
               {userProfile.subscription && (
-                <div className="mt-2 inline-flex px-2 py-0.5 rounded-full text-xs bg-bolt-elements-background-depth-3 text-bolt-elements-textSecondary">
+                <div className="mt-2 inline-flex px-2 py-0.5 rounded-full text-xs bg-recoder-elements-background-depth-3 text-recoder-elements-textSecondary">
                   {userProfile.subscription === 'free' ? 'Free Beta' : userProfile.subscription}
                 </div>
               )}
             </div>
 
             {/* Menu Items */}
-            <div className="p-2 bg-bolt-elements-background-depth-1">
+            <div className="p-2 bg-recoder-elements-background-depth-1">
               <button
                 onClick={goToDashboard}
-                className="w-full flex items-center space-x-3 px-3 py-2 rounded-lg transition-colors text-bolt-elements-textPrimary hover:bg-bolt-elements-background-depth-3"
+                className="w-full flex items-center space-x-3 px-3 py-2 rounded-lg transition-colors text-recoder-elements-textPrimary hover:bg-recoder-elements-background-depth-3"
               >
                 <div className="i-ph:house text-lg" />
                 <span className="text-sm">Dashboard</span>
               </button>
               <button
                 onClick={goToAccount}
-                className="w-full flex items-center space-x-3 px-3 py-2 rounded-lg transition-colors text-bolt-elements-textPrimary hover:bg-bolt-elements-background-depth-3"
+                className="w-full flex items-center space-x-3 px-3 py-2 rounded-lg transition-colors text-recoder-elements-textPrimary hover:bg-recoder-elements-background-depth-3"
               >
                 <div className="i-ph:user text-lg" />
                 <span className="text-sm">Account</span>
               </button>
               <button
                 onClick={goToSettings}
-                className="w-full flex items-center space-x-3 px-3 py-2 rounded-lg transition-colors text-bolt-elements-textPrimary hover:bg-bolt-elements-background-depth-3"
+                className="w-full flex items-center space-x-3 px-3 py-2 rounded-lg transition-colors text-recoder-elements-textPrimary hover:bg-recoder-elements-background-depth-3"
               >
                 <div className="i-ph:gear text-lg" />
                 <span className="text-sm">Settings</span>
@@ -187,10 +188,10 @@ export function UserMenu() {
             </div>
 
             {/* Sign Out */}
-            <div className="p-2 border-t border-bolt-elements-borderColor bg-bolt-elements-background-depth-1">
+            <div className="p-2 border-t border-recoder-elements-borderColor bg-recoder-elements-background-depth-1">
               <button
                 onClick={handleSignOut}
-                className="w-full flex items-center space-x-3 px-3 py-2 rounded-lg transition-colors group text-bolt-elements-textPrimary hover:bg-red-500/10"
+                className="w-full flex items-center space-x-3 px-3 py-2 rounded-lg transition-colors group text-recoder-elements-textPrimary hover:bg-red-500/10"
               >
                 <div className="i-ph:sign-out text-lg group-hover:text-red-500" />
                 <span className="text-sm group-hover:text-red-500">Sign Out</span>

@@ -21,7 +21,7 @@ import { ProviderLogger } from "../../utils/logger"
 
 // OAuth2 Configuration (from Cline implementation)
 const OAUTH_CLIENT_ID = "681255809395-oo8ft2oprdrnp9e3aqf6av3hmdib135j.apps.googleusercontent.com"
-const OAUTH_CLIENT_SECRET = "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"
+const OAUTH_CLIENT_SECRET = process.env.GEMINI_CLI_OAUTH_CLIENT_SECRET || "REPLACE_WITH_GEMINI_CLI_OAUTH_CLIENT_SECRET"
 const OAUTH_REDIRECT_URI = "http://localhost:45289"
 
 // Code Assist API Configuration

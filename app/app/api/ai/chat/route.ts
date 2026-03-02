@@ -146,7 +146,11 @@ export async function POST(request: NextRequest) {
     const token = authHeader.substring(7);
 
     try {
-      const decoded = jwt.verify(token, process.env.NEXTAUTH_SECRET || 'development-secret') as any;
+      const jwtSecret = process.env.BETTER_AUTH_SECRET || process.env.JWT_SECRET;
+      if (!jwtSecret && process.env.NODE_ENV === 'production') {
+        throw new Error('BETTER_AUTH_SECRET or JWT_SECRET must be set in production');
+      }
+      const decoded = jwt.verify(token, jwtSecret || 'dev-jwt-secret-not-for-production') as any;
       userId = decoded.userId || decoded.id;
     } catch (error) {
       return NextResponse.json(

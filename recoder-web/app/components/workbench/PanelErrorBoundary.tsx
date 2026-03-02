@@ -42,10 +42,10 @@ export class PanelErrorBoundary extends Component<Props, State> {
       return (
         <div className="flex flex-col items-center justify-center h-full p-4 text-center">
           <span className="i-ph:warning-circle text-2xl text-red-400 mb-2" />
-          <p className="text-sm text-bolt-elements-textSecondary mb-1">
+          <p className="text-sm text-recoder-elements-textSecondary mb-1">
             {this.props.panelName} encountered an error
           </p>
-          <p className="text-xs text-bolt-elements-textTertiary mb-3 max-w-[200px]">
+          <p className="text-xs text-recoder-elements-textTertiary mb-3 max-w-[200px]">
             {this.state.error?.message || 'An unexpected error occurred'}
           </p>
           <button

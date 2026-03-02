@@ -1,12 +1,12 @@
 /**
  * Shared VaultDriver singleton for docker-backend.
  *
- * Uses `createNodeCryptoDriver` from `@giselles-ai/vault` when
+ * Uses `createNodeCryptoDriver` from `@recoder/vault` when
  * `VAULT_MASTER_KEY` is set, otherwise returns null (caching/encryption disabled).
  */
 
-import { createNodeCryptoDriver, noopVaultDriver } from '@giselles-ai/vault';
-import type { VaultDriver } from '@giselles-ai/vault';
+import { createNodeCryptoDriver, noopVaultDriver } from '@recoder/vault';
+import type { VaultDriver } from '@recoder/vault';
 
 let _driver: VaultDriver | null = null;
 let _initialized = false;

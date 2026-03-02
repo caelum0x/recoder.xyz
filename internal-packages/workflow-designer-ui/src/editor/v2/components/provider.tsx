@@ -1,6 +1,6 @@
 "use client";
 
-import { ToastProvider } from "@giselle-internal/ui/toast";
+import { ToastProvider } from "@recoder-internal/ui/toast";
 import { ReactFlowProvider } from "@xyflow/react";
 import type { ReactNode } from "react";
 import { MousePositionProvider, ToolbarContextProvider } from "../../tool";

@@ -3,7 +3,7 @@ import type {
 	NodeBase,
 	NodeLike,
 	Output,
-} from "@giselles-ai/protocol";
+} from "@recoder/protocol";
 
 export type ConnectedOutputWithDetails<T extends NodeBase = NodeLike> =
 	Output & {

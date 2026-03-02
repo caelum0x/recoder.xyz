@@ -45,8 +45,12 @@ interface YjsDocument {
 
 // App API URL for auth verification
 const APP_API_URL = process.env.APP_API_URL || 'https://recoder.xyz';
-const INTERNAL_SERVICE_KEY = process.env.INTERNAL_SERVICE_KEY || '';
-const REQUIRE_AUTH = process.env.REQUIRE_AUTH === 'true';
+// Validated at server startup — guaranteed non-empty in production (see server.ts:265)
+const INTERNAL_SERVICE_KEY = process.env.INTERNAL_SERVICE_KEY ?? '';
+// In production, auth is always required regardless of REQUIRE_AUTH env var.
+// This prevents accidental anonymous access if the env var is unset.
+const NODE_ENV = process.env.NODE_ENV || 'development';
+const REQUIRE_AUTH = process.env.REQUIRE_AUTH === 'true' || NODE_ENV === 'production';
 
 // Document cache with automatic cleanup
 const documents = new Map<string, YjsDocument>();

@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import {
 	extractPdfText,
 	extractText,
-} from "@giselles-ai/document-preprocessor";
+} from "@recoder/document-preprocessor";
 import { resolveSupportedDocumentFile } from "../utils";
 
 let pdfiumWasmBinaryPromise: Promise<Buffer> | null = null;

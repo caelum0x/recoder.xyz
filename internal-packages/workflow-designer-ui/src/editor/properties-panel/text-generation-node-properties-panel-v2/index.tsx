@@ -1,13 +1,13 @@
-import { useToasts } from "@giselle-internal/ui/toast";
-import type { LanguageModelTier } from "@giselles-ai/language-model-registry";
-import { convertContentGenerationToTextGeneration } from "@giselles-ai/node-registry";
+import { useToasts } from "@recoder-internal/ui/toast";
+import type { LanguageModelTier } from "@recoder/language-model-registry";
+import { convertContentGenerationToTextGeneration } from "@recoder/node-registry";
 import {
 	type Connection,
 	type ContentGenerationNode,
 	Node,
 	type NodeLike,
-} from "@giselles-ai/protocol";
-import { useNodeGenerations, useUsageLimits } from "@giselles-ai/react";
+} from "@recoder/protocol";
+import { useNodeGenerations, useUsageLimits } from "@recoder/react";
 import { useCallback } from "react";
 import {
 	useAppDesignerStore,
@@ -111,7 +111,7 @@ export function TextGenerationNodePropertiesPanelV2({
 			<NodePanelHeader
 				node={node}
 				onChangeName={(name) => updateNodeData(node, { name })}
-				docsUrl="https://docs.giselles.ai/en/glossary/text-node"
+				docsUrl="https://docs.recoder.xyz/en/glossary/text-node"
 				onDelete={() => deleteNode(node.id)}
 			/>
 

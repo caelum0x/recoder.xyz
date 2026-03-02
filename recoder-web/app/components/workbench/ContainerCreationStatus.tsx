@@ -70,12 +70,12 @@ export const ContainerCreationStatus = memo(() => {
   // State: Creating (or retrying)
   if (!containerReady) {
     return (
-      <div className="flex items-center gap-2 px-3 py-1.5 bg-bolt-elements-background-depth-1 border-b border-bolt-elements-borderColor text-xs select-none">
+      <div className="flex items-center gap-2 px-3 py-1.5 bg-recoder-elements-background-depth-1 border-b border-recoder-elements-borderColor text-xs select-none">
         <div
-          className="i-ph:spinner-gap w-3.5 h-3.5 text-bolt-elements-textTertiary flex-shrink-0"
+          className="i-ph:spinner-gap w-3.5 h-3.5 text-recoder-elements-textTertiary flex-shrink-0"
           style={{ animation: 'spin 1s linear infinite' }}
         />
-        <span className="text-bolt-elements-textSecondary">
+        <span className="text-recoder-elements-textSecondary">
           {isRetrying ? 'Retrying environment setup...' : 'Setting up environment...'}
         </span>
       </div>

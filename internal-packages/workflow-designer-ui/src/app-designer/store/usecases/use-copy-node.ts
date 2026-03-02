@@ -1,6 +1,6 @@
-import { nodeFactories } from "@giselles-ai/node-registry";
-import type { Node, NodeLike, NodeUIState } from "@giselles-ai/protocol";
-import { isSupportedConnection } from "@giselles-ai/react";
+import { nodeFactories } from "@recoder/node-registry";
+import type { Node, NodeLike, NodeUIState } from "@recoder/protocol";
+import { isSupportedConnection } from "@recoder/react";
 import { useCallback } from "react";
 import { useAppDesignerStoreApi } from "../app-designer-provider";
 import { useAddConnection } from "./use-add-connection";

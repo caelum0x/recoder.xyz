@@ -40,8 +40,8 @@ export default function MarketplacePage() {
       const marketplaceServers = available.servers.map((s: any) => ({
         ...s,
         author: 'Anthropic',
-        downloads: Math.floor(Math.random() * 10000),
-        rating: 4.5 + Math.random() * 0.5,
+        downloads: 0,
+        rating: 0,
         version: '1.0.0',
         installed: installedIds.has(s.id),
       }));

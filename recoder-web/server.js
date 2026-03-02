@@ -120,6 +120,23 @@ app.use(async (req, res, next) => {
 });
 
 const port = process.env.PORT || 5173;
-app.listen(port, '0.0.0.0', () => {
+const server = app.listen(port, '0.0.0.0', () => {
   console.log('🚀 Server running at http://0.0.0.0:' + port);
 });
+
+// Graceful shutdown — drain in-flight requests on SIGTERM/SIGINT
+function gracefulShutdown(signal) {
+  console.log(`${signal} received, shutting down gracefully...`);
+  server.close(() => {
+    console.log('Server closed, exiting.');
+    process.exit(0);
+  });
+  // Force exit after 30s if connections won't drain
+  setTimeout(() => {
+    console.error('Graceful shutdown timed out, forcing exit.');
+    process.exit(1);
+  }, 30_000);
+}
+
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));

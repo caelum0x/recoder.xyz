@@ -55,11 +55,11 @@ export function GitCollaboratorsPanel() {
   if (!isGitHubRepo) {
     return (
       <div className="flex flex-col h-full items-center justify-center px-6">
-        <div className="i-ph:github-logo text-4xl text-bolt-elements-textTertiary mb-3" />
-        <p className="text-sm text-bolt-elements-textSecondary text-center mb-1">
+        <div className="i-ph:github-logo text-4xl text-recoder-elements-textTertiary mb-3" />
+        <p className="text-sm text-recoder-elements-textSecondary text-center mb-1">
           GitHub Collaborators
         </p>
-        <p className="text-xs text-bolt-elements-textTertiary text-center max-w-[220px]">
+        <p className="text-xs text-recoder-elements-textTertiary text-center max-w-[220px]">
           Push your project to GitHub to manage collaborators. Add a GitHub remote URL first.
         </p>
       </div>
@@ -71,19 +71,19 @@ export function GitCollaboratorsPanel() {
   if (!token) {
     return (
       <div className="flex flex-col h-full">
-        <div className="px-4 py-3 border-b border-bolt-elements-borderColor">
-          <h3 className="text-sm font-medium text-bolt-elements-textPrimary">GitHub Collaborators</h3>
-          <p className="text-xs text-bolt-elements-textSecondary mt-0.5">
+        <div className="px-4 py-3 border-b border-recoder-elements-borderColor">
+          <h3 className="text-sm font-medium text-recoder-elements-textPrimary">GitHub Collaborators</h3>
+          <p className="text-xs text-recoder-elements-textSecondary mt-0.5">
             {repoInfo?.owner}/{repoInfo?.repo}
           </p>
         </div>
         <div className="flex-1 flex flex-col items-center justify-center px-6">
           <div className="w-full max-w-sm space-y-4">
             <div className="text-center">
-              <div className="i-ph:key text-3xl text-bolt-elements-textTertiary mb-2 mx-auto" />
-              <p className="text-sm text-bolt-elements-textSecondary">Enter your GitHub token</p>
-              <p className="text-xs text-bolt-elements-textTertiary mt-1">
-                Needs <code className="bg-bolt-elements-background-depth-3 px-1 rounded">repo</code> scope
+              <div className="i-ph:key text-3xl text-recoder-elements-textTertiary mb-2 mx-auto" />
+              <p className="text-sm text-recoder-elements-textSecondary">Enter your GitHub token</p>
+              <p className="text-xs text-recoder-elements-textTertiary mt-1">
+                Needs <code className="bg-recoder-elements-background-depth-3 px-1 rounded">repo</code> scope
               </p>
             </div>
             <input
@@ -92,12 +92,12 @@ export function GitCollaboratorsPanel() {
               onChange={(e) => setTokenInput(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && handleConnect()}
               placeholder="ghp_xxxx..."
-              className="w-full px-3 py-2 text-sm bg-bolt-elements-background-depth-1 border border-bolt-elements-borderColor rounded-md text-bolt-elements-textPrimary placeholder:text-bolt-elements-textTertiary focus:outline-none focus:border-blue-500"
+              className="w-full px-3 py-2 text-sm bg-recoder-elements-background-depth-1 border border-recoder-elements-borderColor rounded-md text-recoder-elements-textPrimary placeholder:text-recoder-elements-textTertiary focus:outline-none focus:border-blue-500"
             />
             <button
               onClick={handleConnect}
               disabled={!tokenInput.trim()}
-              className="w-full px-4 py-2 text-xs bg-bolt-elements-textPrimary text-bolt-elements-background-depth-1 rounded-md hover:opacity-90 disabled:opacity-50 transition-colors"
+              className="w-full px-4 py-2 text-xs bg-recoder-elements-textPrimary text-recoder-elements-background-depth-1 rounded-md hover:opacity-90 disabled:opacity-50 transition-colors"
             >
               Connect
             </button>
@@ -112,18 +112,18 @@ export function GitCollaboratorsPanel() {
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
-      <div className="px-4 py-3 border-b border-bolt-elements-borderColor">
+      <div className="px-4 py-3 border-b border-recoder-elements-borderColor">
         <div className="flex items-center justify-between">
           <div>
-            <h3 className="text-sm font-medium text-bolt-elements-textPrimary">GitHub Collaborators</h3>
-            <p className="text-xs text-bolt-elements-textSecondary mt-0.5">
+            <h3 className="text-sm font-medium text-recoder-elements-textPrimary">GitHub Collaborators</h3>
+            <p className="text-xs text-recoder-elements-textSecondary mt-0.5">
               {repoInfo?.owner}/{repoInfo?.repo}
             </p>
           </div>
           <div className="flex items-center gap-2">
             <button
               onClick={refresh}
-              className="text-xs text-bolt-elements-textTertiary hover:text-bolt-elements-textPrimary transition-colors"
+              className="text-xs text-recoder-elements-textTertiary hover:text-recoder-elements-textPrimary transition-colors"
               title="Refresh"
             >
               <div className="i-ph:arrows-clockwise text-sm" />
@@ -146,7 +146,7 @@ export function GitCollaboratorsPanel() {
       )}
 
       {/* Invite form */}
-      <div className="px-4 py-2 border-b border-bolt-elements-borderColor">
+      <div className="px-4 py-2 border-b border-recoder-elements-borderColor">
         {showInviteForm ? (
           <div className="space-y-2">
             <input
@@ -156,13 +156,13 @@ export function GitCollaboratorsPanel() {
               onKeyDown={(e) => e.key === 'Enter' && handleInvite()}
               placeholder="GitHub username"
               autoFocus
-              className="w-full px-3 py-1.5 text-sm bg-bolt-elements-background-depth-1 border border-bolt-elements-borderColor rounded-md text-bolt-elements-textPrimary placeholder:text-bolt-elements-textTertiary focus:outline-none focus:border-blue-500"
+              className="w-full px-3 py-1.5 text-sm bg-recoder-elements-background-depth-1 border border-recoder-elements-borderColor rounded-md text-recoder-elements-textPrimary placeholder:text-recoder-elements-textTertiary focus:outline-none focus:border-blue-500"
             />
             <div className="flex items-center gap-2">
               <select
                 value={invitePermission}
                 onChange={(e) => setInvitePermission(e.target.value as PermissionLevel)}
-                className="flex-1 px-2 py-1.5 text-xs bg-bolt-elements-background-depth-1 border border-bolt-elements-borderColor rounded text-bolt-elements-textPrimary"
+                className="flex-1 px-2 py-1.5 text-xs bg-recoder-elements-background-depth-1 border border-recoder-elements-borderColor rounded text-recoder-elements-textPrimary"
               >
                 <option value="pull">Read</option>
                 <option value="triage">Triage</option>
@@ -179,7 +179,7 @@ export function GitCollaboratorsPanel() {
               </button>
               <button
                 onClick={() => { setShowInviteForm(false); setInviteUsername(''); }}
-                className="px-3 py-1.5 text-xs text-bolt-elements-textTertiary hover:text-bolt-elements-textPrimary border border-bolt-elements-borderColor rounded-md transition-colors"
+                className="px-3 py-1.5 text-xs text-recoder-elements-textTertiary hover:text-recoder-elements-textPrimary border border-recoder-elements-borderColor rounded-md transition-colors"
               >
                 Cancel
               </button>
@@ -200,12 +200,12 @@ export function GitCollaboratorsPanel() {
       <div className="flex-1 overflow-auto">
         {isLoading ? (
           <div className="flex items-center justify-center py-8">
-            <div className="i-ph:spinner-gap animate-spin text-xl text-bolt-elements-textTertiary" />
+            <div className="i-ph:spinner-gap animate-spin text-xl text-recoder-elements-textTertiary" />
           </div>
         ) : (
           <>
             {/* Collaborators list */}
-            <div className="divide-y divide-bolt-elements-borderColor">
+            <div className="divide-y divide-recoder-elements-borderColor">
               {collaborators.map((c) => (
                 <div key={c.id} className="px-4 py-2.5 flex items-center gap-3">
                   <img
@@ -214,7 +214,7 @@ export function GitCollaboratorsPanel() {
                     className="w-7 h-7 rounded-full"
                   />
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm text-bolt-elements-textPrimary truncate">{c.login}</p>
+                    <p className="text-sm text-recoder-elements-textPrimary truncate">{c.login}</p>
                   </div>
                   <RoleBadge role={c.role} />
                   {c.role !== 'admin' && (
@@ -228,7 +228,7 @@ export function GitCollaboratorsPanel() {
                         </button>
                         <button
                           onClick={() => setConfirmRemove(null)}
-                          className="px-2 py-0.5 text-[10px] text-bolt-elements-textTertiary border border-bolt-elements-borderColor rounded hover:bg-bolt-elements-background-depth-3 transition-colors"
+                          className="px-2 py-0.5 text-[10px] text-recoder-elements-textTertiary border border-recoder-elements-borderColor rounded hover:bg-recoder-elements-background-depth-3 transition-colors"
                         >
                           Cancel
                         </button>
@@ -236,7 +236,7 @@ export function GitCollaboratorsPanel() {
                     ) : (
                       <button
                         onClick={() => setConfirmRemove(c.login)}
-                        className="text-bolt-elements-textTertiary hover:text-red-400 transition-colors"
+                        className="text-recoder-elements-textTertiary hover:text-red-400 transition-colors"
                         title="Remove"
                       >
                         <div className="i-ph:x text-sm" />
@@ -250,26 +250,26 @@ export function GitCollaboratorsPanel() {
             {/* Pending invitations */}
             {invitations.length > 0 && (
               <>
-                <div className="px-4 py-2 border-t border-bolt-elements-borderColor">
-                  <span className="text-[10px] text-bolt-elements-textSecondary font-medium uppercase tracking-wider">
+                <div className="px-4 py-2 border-t border-recoder-elements-borderColor">
+                  <span className="text-[10px] text-recoder-elements-textSecondary font-medium uppercase tracking-wider">
                     Pending Invitations
                   </span>
                 </div>
-                <div className="divide-y divide-bolt-elements-borderColor/50">
+                <div className="divide-y divide-recoder-elements-borderColor/50">
                   {invitations.map((inv) => (
                     <div key={inv.id} className="px-4 py-2.5 flex items-center gap-3">
                       {inv.avatarUrl ? (
                         <img src={inv.avatarUrl} alt={inv.login} className="w-7 h-7 rounded-full" />
                       ) : (
-                        <div className="w-7 h-7 rounded-full bg-bolt-elements-background-depth-3 flex items-center justify-center">
-                          <div className="i-ph:user text-sm text-bolt-elements-textTertiary" />
+                        <div className="w-7 h-7 rounded-full bg-recoder-elements-background-depth-3 flex items-center justify-center">
+                          <div className="i-ph:user text-sm text-recoder-elements-textTertiary" />
                         </div>
                       )}
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm text-bolt-elements-textSecondary truncate">
+                        <p className="text-sm text-recoder-elements-textSecondary truncate">
                           {inv.login || 'Unknown'}
                         </p>
-                        <p className="text-[10px] text-bolt-elements-textTertiary">
+                        <p className="text-[10px] text-recoder-elements-textTertiary">
                           Invited {formatDate(inv.createdAt)}
                         </p>
                       </div>
@@ -278,7 +278,7 @@ export function GitCollaboratorsPanel() {
                       </span>
                       <button
                         onClick={() => cancelInvitation(inv.id)}
-                        className="text-bolt-elements-textTertiary hover:text-red-400 transition-colors"
+                        className="text-recoder-elements-textTertiary hover:text-red-400 transition-colors"
                         title="Cancel invitation"
                       >
                         <div className="i-ph:x text-sm" />
@@ -291,7 +291,7 @@ export function GitCollaboratorsPanel() {
 
             {collaborators.length === 0 && invitations.length === 0 && (
               <div className="text-center py-8">
-                <p className="text-xs text-bolt-elements-textTertiary">No collaborators yet.</p>
+                <p className="text-xs text-recoder-elements-textTertiary">No collaborators yet.</p>
               </div>
             )}
           </>

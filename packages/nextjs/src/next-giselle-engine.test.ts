@@ -1,10 +1,10 @@
-import type { Giselle } from "@giselles-ai/giselle";
-import { memoryStorageDriver } from "@giselles-ai/storage";
+import type { Giselle } from "@recoder/giselle";
+import { memoryStorageDriver } from "@recoder/storage";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createHttpHandler } from "./next-giselle-engine";
 
 // Mock the module dependencies
-vi.mock("@giselles-ai/http", () => {
+vi.mock("@recoder/http", () => {
 	const mockJsonHandler = vi.fn().mockResolvedValue({ success: true });
 
 	return {

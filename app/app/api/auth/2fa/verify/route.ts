@@ -9,9 +9,17 @@ import { headers } from 'next/headers';
 import { prisma } from '@/lib/prisma';
 import { authenticator } from 'otplib';
 import crypto from 'crypto';
+import { logger } from '@/lib/logger';
+import { rateLimit, rateLimitConfigs } from '@/lib/middleware/rate-limit';
+
+const authRateLimiter = rateLimit(rateLimitConfigs.auth);
 
 export async function POST(request: NextRequest) {
   try {
+    // Rate limit: 5 requests per minute
+    const rateLimitResponse = await authRateLimiter(request);
+    if (rateLimitResponse) return rateLimitResponse;
+
     const session = await auth.api.getSession({
       headers: await headers()
     });
@@ -35,24 +43,24 @@ export async function POST(request: NextRequest) {
     }
 
     // Get user's security settings
-    const settings = await prisma.$queryRaw<any[]>`
-      SELECT * FROM security_settings WHERE user_id = ${userId}
-    `;
+    const settings = await prisma.security_settings.findUnique({
+      where: { userId },
+    });
 
-    if (!settings || settings.length === 0 || !settings[0].two_factor_secret) {
+    if (!settings || !settings.twoFactorSecret) {
       return NextResponse.json(
         { success: false, error: '2FA not set up. Please set up 2FA first.' },
         { status: 400 }
       );
     }
 
-    const secret = settings[0].two_factor_secret;
-    const isAlreadyEnabled = settings[0].two_factor_enabled;
+    const secret = settings.twoFactorSecret;
+    const isAlreadyEnabled = settings.twoFactorEnabled;
 
     // Check if it's a backup code
     if (code.length === 8) {
-      const backupCodes = settings[0].backup_codes ?
-        JSON.parse(settings[0].backup_codes as string) : [];
+      const backupCodes = settings.backupCodes ?
+        JSON.parse(settings.backupCodes as string) : [];
 
       const codeHash = crypto.createHash('sha256').update(code.toUpperCase()).digest('hex');
       const backupCodeIndex = backupCodes.indexOf(codeHash);
@@ -61,12 +69,10 @@ export async function POST(request: NextRequest) {
         // Valid backup code - remove it so it can't be reused
         backupCodes.splice(backupCodeIndex, 1);
 
-        await prisma.$executeRaw`
-          UPDATE security_settings
-          SET backup_codes = ${JSON.stringify(backupCodes)},
-              updated_at = NOW()
-          WHERE user_id = ${userId}
-        `;
+        await prisma.security_settings.update({
+          where: { userId },
+          data: { backupCodes: JSON.stringify(backupCodes) },
+        });
 
         return NextResponse.json({
           success: true,
@@ -92,12 +98,10 @@ export async function POST(request: NextRequest) {
 
     // If 2FA is not yet enabled, enable it now (this is the setup verification)
     if (!isAlreadyEnabled) {
-      await prisma.$executeRaw`
-        UPDATE security_settings
-        SET two_factor_enabled = true,
-            updated_at = NOW()
-        WHERE user_id = ${userId}
-      `;
+      await prisma.security_settings.update({
+        where: { userId },
+        data: { twoFactorEnabled: true },
+      });
 
       return NextResponse.json({
         success: true,
@@ -114,7 +118,7 @@ export async function POST(request: NextRequest) {
     });
 
   } catch (error: any) {
-    console.error('[2FA Verify] Error:', error);
+    logger.error('[2FA Verify] Error:', { error: String(error), route: 'auth/2fa/verify' });
     return NextResponse.json(
       { success: false, error: 'Failed to verify code' },
       { status: 500 }

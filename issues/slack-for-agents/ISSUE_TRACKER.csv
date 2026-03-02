@@ -1,0 +1,23 @@
+id,title,repo,priority,sprint,status,dependencies
+SFA-001,publish canonical TaskEnvelope and AuditEvent schemas,shared,P0,Sprint 1,Done,
+SFA-002,add shared SDK helpers for state mapping and error taxonomy,packages,P0,Sprint 1,Done,SFA-001
+SFA-003,enforce canonical task lifecycle transitions,docker-backend,P0,Sprint 1,Done,SFA-001|SFA-002
+SFA-004,add policy hook middleware for privileged actions,docker-backend,P0,Sprint 1,Done,SFA-003
+SFA-005,remove production build bypasses and restore strict gates,recoder-studio,P0,Sprint 1,Done,
+SFA-006,fix static chunk/media serving and MIME failures,recoder-agency,P0,Sprint 1,Done,
+SFA-007,fix sign-in/sign-up integration and remove placeholder Supabase paths,recoder-frontend,P0,Sprint 1,Done,
+SFA-008,align Better Auth session handling across product surfaces,app,P0,Sprint 1,Done,SFA-007
+SFA-009,define OpenClaw gateway event payload mapping,openclaw,P1,Sprint 2,Done,SFA-001
+SFA-010,implement OpenClaw adapter endpoint with trace propagation,docker-backend,P1,Sprint 2,Done,SFA-009|SFA-003
+SFA-011,persist interop trace fields in logs and response metadata,backend,P1,Sprint 2,Done,SFA-010
+SFA-012,ship MVP interop UI delegate/status/approval timeline,recoder-studio,P1,Sprint 2,Done,SFA-003|SFA-004
+SFA-013,emit standardized interop and funnel analytics events,recoder-pm,P1,Sprint 2,Done,SFA-012
+SFA-014,add CI connector contract gate and support snapshot generation,tools,P1,Sprint 2,Done,SFA-001|SFA-002|SFA-003|SFA-004
+SFA-015,ship platform a2a and openclaw pages with CTA/schema,recoder-web,P1,Sprint 3,Done,SFA-012
+SFA-016,publish multi-agent comparison and use-case pages,recoder-web,P1,Sprint 3,Done,SFA-015
+SFA-017,automate weekly evidence pack job for interop SLOs,tools,P1,Sprint 3,Done,SFA-014
+SFA-018,add CI branding drift scan for legacy names,recoder-skill,P1,Sprint 3,Done,
+SFA-019,add delegated task visibility and activation events,apps/mobile,P1,Sprint 3,Done,SFA-012
+SFA-020,add delegated task trigger and status polling,apps/desktop,P1,Sprint 3,Done,SFA-012
+SFA-021,create Tier-2 connector RFC templates and initial drafts,shared,P2,Tier-2 Backlog,Done,SFA-017
+SFA-022,add Tier-2 connector promotion checklist validator,tools,P2,Tier-2 Backlog,Done,SFA-021

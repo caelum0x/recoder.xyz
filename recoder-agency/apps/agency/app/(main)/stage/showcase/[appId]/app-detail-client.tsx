@@ -1,6 +1,6 @@
 "use client";
 
-import { StatusBadge } from "@giselle-internal/ui/status-badge";
+import { StatusBadge } from "@recoder-internal/ui/status-badge";
 import { Play, Star } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";

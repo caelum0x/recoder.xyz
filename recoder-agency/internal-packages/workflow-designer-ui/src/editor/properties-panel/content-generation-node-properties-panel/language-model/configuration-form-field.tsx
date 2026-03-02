@@ -1,7 +1,7 @@
-import { Input } from "@giselle-internal/ui/input";
-import { Select } from "@giselle-internal/ui/select";
-import type { ConfigurationOption } from "@giselles-ai/language-model-registry";
-import { titleCase } from "@giselles-ai/utils";
+import { Input } from "@recoder-internal/ui/input";
+import { Select } from "@recoder-internal/ui/select";
+import type { ConfigurationOption } from "@recoder/language-model-registry";
+import { titleCase } from "@recoder/utils";
 import clsx from "clsx/lite";
 import { Undo2Icon } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";

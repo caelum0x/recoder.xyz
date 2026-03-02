@@ -2,21 +2,51 @@
 const https = require('https');
 const http = require('http');
 
-// Deployment endpoints to verify
+// Production ecosystem endpoints to verify
 const deployments = [
   {
-    name: 'Recoder Web Platform',
-    url: 'https://recoder-web.netlify.app',
+    name: 'App Hub',
+    url: 'https://recoder.xyz',
     type: 'website'
   },
   {
-    name: 'Backend API',
-    url: 'https://resplendent-marshmallow-7de2b1.netlify.app/.netlify/functions/server/health',
+    name: 'Frontend IDE',
+    url: 'https://frontend.recoder.xyz',
+    type: 'website'
+  },
+  {
+    name: 'Web IDE',
+    url: 'https://web.recoder.xyz',
+    type: 'website'
+  },
+  {
+    name: 'Docker Backend API',
+    url: 'https://api.recoder.xyz/health',
     type: 'api'
   },
   {
-    name: 'Production Engine API',
-    url: 'https://recoder-production-engine.netlify.app/.netlify/functions/server/health',
+    name: 'Python Backend API',
+    url: 'https://backend.recoder.xyz/v1/health',
+    type: 'api'
+  },
+  {
+    name: 'Project Management',
+    url: 'https://pm.recoder.xyz',
+    type: 'website'
+  },
+  {
+    name: 'Workflow Designer (Studio)',
+    url: 'https://studio.recoder.xyz',
+    type: 'website'
+  },
+  {
+    name: 'AI Agents (Agency)',
+    url: 'https://agency.recoder.xyz',
+    type: 'website'
+  },
+  {
+    name: 'OpenClaw (Open-Source Tools)',
+    url: 'https://openclaw.recoder.xyz/health',
     type: 'api'
   }
 ];

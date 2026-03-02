@@ -6,7 +6,7 @@ import type {
 	GitHubIntegrationInvalidCredentialState,
 	GitHubIntegrationNotInstalledState,
 	GitHubIntegrationUnauthorizedState,
-} from "@giselles-ai/giselle";
+} from "@recoder/giselle";
 import { db, type githubIntegrationSettings } from "@/db";
 import { getGitHubIdentityState } from "@/services/accounts";
 import { gitHubAppInstallURL } from "@/services/external/github";

@@ -49,11 +49,11 @@ export function ProposalView() {
   if (!proposalMode && proposals.length === 0) {
     return (
       <div className="flex flex-col h-full items-center justify-center px-6">
-        <div className="i-ph:git-diff text-4xl text-bolt-elements-textTertiary mb-3" />
-        <p className="text-sm text-bolt-elements-textSecondary text-center mb-1">
+        <div className="i-ph:git-diff text-4xl text-recoder-elements-textTertiary mb-3" />
+        <p className="text-sm text-recoder-elements-textSecondary text-center mb-1">
           Proposal Mode
         </p>
-        <p className="text-xs text-bolt-elements-textTertiary text-center mb-4 max-w-[220px]">
+        <p className="text-xs text-recoder-elements-textTertiary text-center mb-4 max-w-[220px]">
           Review AI code changes before they are applied to your project.
         </p>
         <button
@@ -69,10 +69,10 @@ export function ProposalView() {
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
-      <div className="px-4 py-3 border-b border-bolt-elements-borderColor">
+      <div className="px-4 py-3 border-b border-recoder-elements-borderColor">
         <div className="flex items-center justify-between">
           <div>
-            <h3 className="text-sm font-medium text-bolt-elements-textPrimary flex items-center gap-2">
+            <h3 className="text-sm font-medium text-recoder-elements-textPrimary flex items-center gap-2">
               Proposals
               {pendingCount > 0 && (
                 <span className="text-[10px] px-1.5 py-0.5 bg-purple-500/20 text-purple-400 rounded">
@@ -80,7 +80,7 @@ export function ProposalView() {
                 </span>
               )}
             </h3>
-            <p className="text-xs text-bolt-elements-textSecondary mt-0.5">
+            <p className="text-xs text-recoder-elements-textSecondary mt-0.5">
               {proposalMode ? 'Reviewing changes before apply' : 'Proposal mode disabled'}
             </p>
           </div>
@@ -88,7 +88,7 @@ export function ProposalView() {
             {proposals.length > 0 && (
               <button
                 onClick={() => workbenchStore.clearProposals()}
-                className="text-xs text-bolt-elements-textTertiary hover:text-bolt-elements-textSecondary transition-colors"
+                className="text-xs text-recoder-elements-textTertiary hover:text-recoder-elements-textSecondary transition-colors"
               >
                 Clear
               </button>
@@ -96,7 +96,7 @@ export function ProposalView() {
             <button
               onClick={() => workbenchStore.setProposalMode(!proposalMode)}
               className={`relative w-9 h-5 rounded-full transition-colors ${
-                proposalMode ? 'bg-purple-600' : 'bg-bolt-elements-borderColor'
+                proposalMode ? 'bg-purple-600' : 'bg-recoder-elements-borderColor'
               }`}
             >
               <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full transition-transform ${
@@ -111,11 +111,11 @@ export function ProposalView() {
       <div className="flex-1 overflow-auto">
         {proposals.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full px-6">
-            <div className="i-ph:checks text-3xl text-bolt-elements-textTertiary mb-2" />
-            <p className="text-xs text-bolt-elements-textTertiary text-center">
+            <div className="i-ph:checks text-3xl text-recoder-elements-textTertiary mb-2" />
+            <p className="text-xs text-recoder-elements-textTertiary text-center">
               No pending proposals
             </p>
-            <p className="text-[10px] text-bolt-elements-textTertiary text-center mt-1">
+            <p className="text-[10px] text-recoder-elements-textTertiary text-center mt-1">
               AI changes will appear here for review
             </p>
           </div>

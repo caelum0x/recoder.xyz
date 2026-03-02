@@ -52,7 +52,7 @@ export function PlatformSelector({ selected, recommended, onSelect }: PlatformSe
             'hover:shadow-lg transform hover:scale-[1.02]',
             selected === platform.id
               ? 'border-green-500 bg-green-500/10'
-              : 'border-bolt-elements-borderColor bg-bolt-elements-background-depth-2',
+              : 'border-recoder-elements-borderColor bg-recoder-elements-background-depth-2',
             !platform.supported ? 'opacity-50 cursor-not-allowed' : undefined
           )}
         >
@@ -67,7 +67,7 @@ export function PlatformSelector({ selected, recommended, onSelect }: PlatformSe
 
             <div className="flex-1">
               <div className="flex items-center gap-2 mb-1">
-                <h3 className="font-semibold text-bolt-elements-textPrimary">
+                <h3 className="font-semibold text-recoder-elements-textPrimary">
                   {platform.name}
                 </h3>
                 {recommended === platform.id && (
@@ -81,7 +81,7 @@ export function PlatformSelector({ selected, recommended, onSelect }: PlatformSe
                   </span>
                 )}
               </div>
-              <p className="text-sm text-bolt-elements-textSecondary">
+              <p className="text-sm text-recoder-elements-textSecondary">
                 {platform.description}
               </p>
             </div>

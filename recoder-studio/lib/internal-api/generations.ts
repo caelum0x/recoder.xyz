@@ -6,7 +6,7 @@ import type {
 	GenerationOrigin,
 	NodeId,
 	QueuedGeneration,
-} from "@giselles-ai/protocol";
+} from "@recoder/protocol";
 import { giselle } from "@/app/giselle";
 
 export async function getGeneration(input: { generationId: GenerationId }) {

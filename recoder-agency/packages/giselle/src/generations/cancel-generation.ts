@@ -1,4 +1,4 @@
-import type { CancelledGeneration, GenerationId } from "@giselles-ai/protocol";
+import type { CancelledGeneration, GenerationId } from "@recoder/protocol";
 import type { GiselleContext } from "../types";
 import { internalSetGeneration } from "./internal/set-generation";
 import { getGeneration } from "./utils";

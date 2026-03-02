@@ -1,6 +1,6 @@
 "use client";
 
-import type { DataStoreId } from "@giselles-ai/protocol";
+import type { DataStoreId } from "@recoder/protocol";
 import { createContext, useContext } from "react";
 
 export interface DataStoreItem {

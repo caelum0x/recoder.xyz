@@ -1,5 +1,5 @@
-import type { ImageGenerationNode } from "@giselles-ai/protocol";
-import { useNodeGenerations } from "@giselles-ai/react";
+import type { ImageGenerationNode } from "@recoder/protocol";
+import { useNodeGenerations } from "@recoder/react";
 import clsx from "clsx/lite";
 import { Maximize2 } from "lucide-react";
 import { useCallback } from "react";

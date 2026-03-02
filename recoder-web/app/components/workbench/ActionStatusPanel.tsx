@@ -66,7 +66,7 @@ const ActionItem = memo(function ActionItem({
   const showRollback = canRollback && (action.status === 'success' || action.status === 'failed');
 
   return (
-    <div className="flex items-center gap-2 p-2 bg-bolt-elements-background-depth-2 rounded border border-bolt-elements-borderColor">
+    <div className="flex items-center gap-2 p-2 bg-recoder-elements-background-depth-2 rounded border border-recoder-elements-borderColor">
       {/* Status icon */}
       <div className="flex-shrink-0">
         {action.status === 'running' && (
@@ -83,7 +83,7 @@ const ActionItem = memo(function ActionItem({
           </svg>
         )}
         {action.status === 'pending' && (
-          <svg className="w-4 h-4 text-bolt-elements-textSecondary" fill="currentColor" viewBox="0 0 20 20">
+          <svg className="w-4 h-4 text-recoder-elements-textSecondary" fill="currentColor" viewBox="0 0 20 20">
             <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" />
           </svg>
         )}
@@ -92,14 +92,14 @@ const ActionItem = memo(function ActionItem({
       {/* Content */}
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
-          <span className="text-xs font-medium text-bolt-elements-textPrimary truncate">
+          <span className="text-xs font-medium text-recoder-elements-textPrimary truncate">
             {action.type}
           </span>
           <StatusBadge status={action.status} />
         </div>
 
         {action.filePath && (
-          <div className="text-xs text-bolt-elements-textSecondary truncate">
+          <div className="text-xs text-recoder-elements-textSecondary truncate">
             {action.filePath}
           </div>
         )}
@@ -112,7 +112,7 @@ const ActionItem = memo(function ActionItem({
 
         {action.status === 'running' && (
           <div className="mt-1">
-            <div className="w-full bg-bolt-elements-background-depth-3 rounded-full h-1">
+            <div className="w-full bg-recoder-elements-background-depth-3 rounded-full h-1">
               <div
                 className="bg-blue-500 h-1 rounded-full transition-all duration-300"
                 style={{ width: `${action.progress}%` }}
@@ -127,7 +127,7 @@ const ActionItem = memo(function ActionItem({
         {showRetry && (
           <button
             onClick={() => onRetry(action.id)}
-            className="p-1 text-xs text-blue-400 hover:text-blue-300 hover:bg-bolt-elements-background-depth-3 rounded"
+            className="p-1 text-xs text-blue-400 hover:text-blue-300 hover:bg-recoder-elements-background-depth-3 rounded"
             title="Retry"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -139,7 +139,7 @@ const ActionItem = memo(function ActionItem({
         {showRollback && (
           <button
             onClick={() => onRollback(action.id)}
-            className="p-1 text-xs text-yellow-400 hover:text-yellow-300 hover:bg-bolt-elements-background-depth-3 rounded"
+            className="p-1 text-xs text-yellow-400 hover:text-yellow-300 hover:bg-recoder-elements-background-depth-3 rounded"
             title="Undo"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -151,7 +151,7 @@ const ActionItem = memo(function ActionItem({
         {showCancel && (
           <button
             onClick={() => onCancel(action.id)}
-            className="p-1 text-xs text-bolt-elements-textSecondary hover:text-bolt-elements-textSecondary hover:bg-bolt-elements-background-depth-3 rounded"
+            className="p-1 text-xs text-recoder-elements-textSecondary hover:text-recoder-elements-textSecondary hover:bg-recoder-elements-background-depth-3 rounded"
             title="Cancel"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -183,18 +183,18 @@ const ProgressBar = memo(function ProgressBar({
 }: ProgressBarProps) {
   return (
     <div className="space-y-1">
-      <div className="flex justify-between text-xs text-bolt-elements-textSecondary">
+      <div className="flex justify-between text-xs text-recoder-elements-textSecondary">
         <span>{current} / {total} actions</span>
         <span>{progress}%</span>
       </div>
-      <div className="w-full bg-bolt-elements-background-depth-3 rounded-full h-2">
+      <div className="w-full bg-recoder-elements-background-depth-3 rounded-full h-2">
         <div
           className="bg-gradient-to-r from-blue-500 to-green-500 h-2 rounded-full transition-all duration-500"
           style={{ width: `${progress}%` }}
         />
       </div>
       {currentFile && (
-        <div className="text-xs text-bolt-elements-textSecondary truncate">
+        <div className="text-xs text-recoder-elements-textSecondary truncate">
           Processing: {currentFile}
         </div>
       )}
@@ -256,20 +256,20 @@ export const ActionStatusPanel = memo(function ActionStatusPanel({
   const hasMore = actions.length > maxVisibleActions;
 
   return (
-    <div className="bg-bolt-elements-background-depth-1 border border-bolt-elements-borderColor rounded-lg overflow-hidden">
+    <div className="bg-recoder-elements-background-depth-1 border border-recoder-elements-borderColor rounded-lg overflow-hidden">
       {/* Header */}
       <div
-        className="flex items-center justify-between px-3 py-2 bg-bolt-elements-background-depth-2 cursor-pointer"
+        className="flex items-center justify-between px-3 py-2 bg-recoder-elements-background-depth-2 cursor-pointer"
         onClick={onToggleCollapse}
       >
         <div className="flex items-center gap-2">
-          <span className="text-sm font-medium text-bolt-elements-textPrimary">
+          <span className="text-sm font-medium text-recoder-elements-textPrimary">
             Actions
           </span>
           {isRunning && (
             <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse" />
           )}
-          <span className="text-xs text-bolt-elements-textSecondary">
+          <span className="text-xs text-recoder-elements-textSecondary">
             ({stats.pending} pending, {stats.success} done)
           </span>
         </div>
@@ -293,7 +293,7 @@ export const ActionStatusPanel = memo(function ActionStatusPanel({
                 e.stopPropagation();
                 cancelAll();
               }}
-              className="text-xs text-bolt-elements-textSecondary hover:text-bolt-elements-textSecondary"
+              className="text-xs text-recoder-elements-textSecondary hover:text-recoder-elements-textSecondary"
             >
               Cancel all
             </button>
@@ -305,14 +305,14 @@ export const ActionStatusPanel = memo(function ActionStatusPanel({
                 e.stopPropagation();
                 clearDone();
               }}
-              className="text-xs text-bolt-elements-textSecondary hover:text-bolt-elements-textSecondary"
+              className="text-xs text-recoder-elements-textSecondary hover:text-recoder-elements-textSecondary"
             >
               Clear done
             </button>
           )}
 
           <svg
-            className={`w-4 h-4 text-bolt-elements-textSecondary transition-transform ${collapsed ? '' : 'rotate-180'}`}
+            className={`w-4 h-4 text-recoder-elements-textSecondary transition-transform ${collapsed ? '' : 'rotate-180'}`}
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
@@ -353,7 +353,7 @@ export const ActionStatusPanel = memo(function ActionStatusPanel({
           {hasMore && (
             <button
               onClick={() => setShowAll(!showAll)}
-              className="w-full text-center text-xs text-bolt-elements-textSecondary hover:text-bolt-elements-textPrimary py-1"
+              className="w-full text-center text-xs text-recoder-elements-textSecondary hover:text-recoder-elements-textPrimary py-1"
             >
               {showAll
                 ? 'Show less'
@@ -388,12 +388,12 @@ export const CompactActionStatus = memo(function CompactActionStatus({
   return (
     <button
       onClick={onClick}
-      className="flex items-center gap-2 px-2 py-1 bg-bolt-elements-background-depth-2 rounded hover:bg-bolt-elements-background-depth-3 transition-colors"
+      className="flex items-center gap-2 px-2 py-1 bg-recoder-elements-background-depth-2 rounded hover:bg-recoder-elements-background-depth-3 transition-colors"
     >
       {isRunning ? (
         <>
           <div className="w-3 h-3 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
-          <span className="text-xs text-bolt-elements-textSecondary">
+          <span className="text-xs text-recoder-elements-textSecondary">
             {progress.current}/{progress.total}
           </span>
         </>

@@ -3,12 +3,12 @@ import {
 	PdfFileIcon,
 	TextFileIcon,
 	XlsxFileIcon,
-} from "@giselle-internal/workflow-designer-ui";
+} from "@recoder-internal/workflow-designer-ui";
 import type {
 	FileData,
 	UploadedFileData,
 	WorkspaceId,
-} from "@giselles-ai/protocol";
+} from "@recoder/protocol";
 import { AlertCircle, Check, Loader2, Paperclip, X } from "lucide-react";
 import Image from "next/image";
 import type React from "react";

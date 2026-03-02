@@ -129,8 +129,8 @@ export function ChatHistoryList() {
     return (
       <div className="flex items-center justify-center py-12">
         <div className="text-center space-y-3">
-          <div className="i-ph:spinner-gap text-4xl text-bolt-elements-textSecondary animate-spin mx-auto" />
-          <p className="text-bolt-elements-textSecondary">Loading chat history...</p>
+          <div className="i-ph:spinner-gap text-4xl text-recoder-elements-textSecondary animate-spin mx-auto" />
+          <p className="text-recoder-elements-textSecondary">Loading chat history...</p>
         </div>
       </div>
     );
@@ -142,10 +142,10 @@ export function ChatHistoryList() {
         <div className="text-center space-y-3 max-w-md">
           <div className="i-ph:warning-circle text-4xl text-red-400 mx-auto" />
           <p className="text-red-400 font-medium">Failed to load chat history</p>
-          <p className="text-sm text-bolt-elements-textSecondary">{error}</p>
+          <p className="text-sm text-recoder-elements-textSecondary">{error}</p>
           <button
             onClick={loadChatHistory}
-            className="px-4 py-2 bg-bolt-elements-button-primary-background text-bolt-elements-button-primary-text rounded-lg hover:bg-bolt-elements-button-primary-backgroundHover transition-colors"
+            className="px-4 py-2 bg-recoder-elements-button-primary-background text-recoder-elements-button-primary-text rounded-lg hover:bg-recoder-elements-button-primary-backgroundHover transition-colors"
           >
             Retry
           </button>
@@ -157,13 +157,13 @@ export function ChatHistoryList() {
   return (
     <div className="space-y-6">
       {/* Filter Tabs */}
-      <div className="flex gap-2 border-b border-bolt-elements-borderColor pb-4">
+      <div className="flex gap-2 border-b border-recoder-elements-borderColor pb-4">
         <button
           onClick={() => setActiveFilter('all')}
           className={`px-4 py-2 rounded-lg font-medium transition-colors ${
             activeFilter === 'all'
-              ? 'bg-bolt-elements-button-primary-background text-bolt-elements-button-primary-text'
-              : 'text-bolt-elements-textSecondary hover:text-bolt-elements-textPrimary hover:bg-bolt-elements-item-backgroundActive'
+              ? 'bg-recoder-elements-button-primary-background text-recoder-elements-button-primary-text'
+              : 'text-recoder-elements-textSecondary hover:text-recoder-elements-textPrimary hover:bg-recoder-elements-item-backgroundActive'
           }`}
         >
           All ({chats.length})
@@ -172,8 +172,8 @@ export function ChatHistoryList() {
           onClick={() => setActiveFilter('web')}
           className={`px-4 py-2 rounded-lg font-medium transition-colors ${
             activeFilter === 'web'
-              ? 'bg-bolt-elements-button-primary-background text-bolt-elements-button-primary-text'
-              : 'text-bolt-elements-textSecondary hover:text-bolt-elements-textPrimary hover:bg-bolt-elements-item-backgroundActive'
+              ? 'bg-recoder-elements-button-primary-background text-recoder-elements-button-primary-text'
+              : 'text-recoder-elements-textSecondary hover:text-recoder-elements-textPrimary hover:bg-recoder-elements-item-backgroundActive'
           }`}
         >
           <span className="i-ph:globe mr-2" />
@@ -183,8 +183,8 @@ export function ChatHistoryList() {
           onClick={() => setActiveFilter('cli')}
           className={`px-4 py-2 rounded-lg font-medium transition-colors ${
             activeFilter === 'cli'
-              ? 'bg-bolt-elements-button-primary-background text-bolt-elements-button-primary-text'
-              : 'text-bolt-elements-textSecondary hover:text-bolt-elements-textPrimary hover:bg-bolt-elements-item-backgroundActive'
+              ? 'bg-recoder-elements-button-primary-background text-recoder-elements-button-primary-text'
+              : 'text-recoder-elements-textSecondary hover:text-recoder-elements-textPrimary hover:bg-recoder-elements-item-backgroundActive'
           }`}
         >
           <span className="i-ph:terminal mr-2" />
@@ -195,15 +195,15 @@ export function ChatHistoryList() {
       {/* Chat List */}
       {filteredChats.length === 0 ? (
         <div className="text-center py-12 space-y-3">
-          <div className="i-ph:chat-circle-dots text-5xl text-bolt-elements-textSecondary opacity-50 mx-auto" />
-          <p className="text-bolt-elements-textSecondary text-lg">
+          <div className="i-ph:chat-circle-dots text-5xl text-recoder-elements-textSecondary opacity-50 mx-auto" />
+          <p className="text-recoder-elements-textSecondary text-lg">
             {activeFilter === 'all'
               ? 'No chats yet. Start a conversation!'
               : `No ${activeFilter === 'cli' ? 'CLI' : 'web'} chats found.`}
           </p>
           <Link
             to="/"
-            className="inline-block px-6 py-3 bg-bolt-elements-button-primary-background text-bolt-elements-button-primary-text rounded-lg hover:bg-bolt-elements-button-primary-backgroundHover transition-colors"
+            className="inline-block px-6 py-3 bg-recoder-elements-button-primary-background text-recoder-elements-button-primary-text rounded-lg hover:bg-recoder-elements-button-primary-backgroundHover transition-colors"
           >
             Start New Chat
           </Link>
@@ -214,25 +214,25 @@ export function ChatHistoryList() {
             <Link
               key={chat.id}
               to={`/chat/${chat.urlId}`}
-              className="block p-4 rounded-lg border border-bolt-elements-borderColor bg-bolt-elements-background-depth-2 hover:bg-bolt-elements-background-depth-3 hover:border-bolt-elements-borderColor transition-all group"
+              className="block p-4 rounded-lg border border-recoder-elements-borderColor bg-recoder-elements-background-depth-2 hover:bg-recoder-elements-background-depth-3 hover:border-recoder-elements-borderColor transition-all group"
             >
               <div className="flex items-start justify-between gap-4">
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-2">
                     {getSourceBadge(chat.source || 'web')}
-                    <span className="text-xs text-bolt-elements-textSecondary">
+                    <span className="text-xs text-recoder-elements-textSecondary">
                       {formatDate(chat.updatedAt)}
                     </span>
                   </div>
-                  <h3 className="text-bolt-elements-textPrimary font-medium mb-1 truncate group-hover:text-bolt-elements-textPrimary">
+                  <h3 className="text-recoder-elements-textPrimary font-medium mb-1 truncate group-hover:text-recoder-elements-textPrimary">
                     {chat.title || chat.description || 'Untitled Chat'}
                   </h3>
                   {chat.description && chat.title !== chat.description && (
-                    <p className="text-sm text-bolt-elements-textSecondary line-clamp-2">
+                    <p className="text-sm text-recoder-elements-textSecondary line-clamp-2">
                       {chat.description}
                     </p>
                   )}
-                  <div className="flex items-center gap-4 mt-2 text-xs text-bolt-elements-textSecondary">
+                  <div className="flex items-center gap-4 mt-2 text-xs text-recoder-elements-textSecondary">
                     <span className="flex items-center gap-1">
                       <span className="i-ph:chat-circle-dots" />
                       {chat.totalMessages} messages
@@ -252,7 +252,7 @@ export function ChatHistoryList() {
                   </div>
                 </div>
                 <div className="flex-shrink-0">
-                  <span className="i-ph:arrow-right text-bolt-elements-textSecondary group-hover:text-bolt-elements-textPrimary group-hover:translate-x-1 transition-all" />
+                  <span className="i-ph:arrow-right text-recoder-elements-textSecondary group-hover:text-recoder-elements-textPrimary group-hover:translate-x-1 transition-all" />
                 </div>
               </div>
             </Link>
@@ -262,25 +262,25 @@ export function ChatHistoryList() {
 
       {/* Stats Footer */}
       {filteredChats.length > 0 && (
-        <div className="pt-6 border-t border-bolt-elements-borderColor">
+        <div className="pt-6 border-t border-recoder-elements-borderColor">
           <div className="grid grid-cols-3 gap-4 text-center">
-            <div className="p-4 rounded-lg bg-bolt-elements-background-depth-2">
-              <div className="text-2xl font-bold text-bolt-elements-textPrimary">
+            <div className="p-4 rounded-lg bg-recoder-elements-background-depth-2">
+              <div className="text-2xl font-bold text-recoder-elements-textPrimary">
                 {chats.length}
               </div>
-              <div className="text-xs text-bolt-elements-textSecondary mt-1">Total Chats</div>
+              <div className="text-xs text-recoder-elements-textSecondary mt-1">Total Chats</div>
             </div>
-            <div className="p-4 rounded-lg bg-bolt-elements-background-depth-2">
+            <div className="p-4 rounded-lg bg-recoder-elements-background-depth-2">
               <div className="text-2xl font-bold text-blue-400">
                 {chats.filter(c => c.source === 'web').length}
               </div>
-              <div className="text-xs text-bolt-elements-textSecondary mt-1">Web Chats</div>
+              <div className="text-xs text-recoder-elements-textSecondary mt-1">Web Chats</div>
             </div>
-            <div className="p-4 rounded-lg bg-bolt-elements-background-depth-2">
+            <div className="p-4 rounded-lg bg-recoder-elements-background-depth-2">
               <div className="text-2xl font-bold text-purple-400">
                 {chats.filter(c => c.source === 'cli').length}
               </div>
-              <div className="text-xs text-bolt-elements-textSecondary mt-1">CLI Chats</div>
+              <div className="text-xs text-recoder-elements-textSecondary mt-1">CLI Chats</div>
             </div>
           </div>
         </div>

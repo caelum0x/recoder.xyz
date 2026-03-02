@@ -4,7 +4,7 @@ import {
 	type DisconnectedApp,
 	NodeId,
 	WorkspaceId,
-} from "@giselles-ai/protocol";
+} from "@recoder/protocol";
 import { describe, expect, test } from "vitest";
 import { computeAppConnectionChangeEvent } from "./compute-app-connection-change-event";
 

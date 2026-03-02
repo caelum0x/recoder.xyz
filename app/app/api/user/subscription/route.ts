@@ -4,11 +4,18 @@ import { requireAuth } from "@/lib/auth-helpers";
 import { getUserFromToken } from '@/lib/auth-helper';
 import { prisma } from '@/lib/prisma';
 import { userManager } from '@/lib/user-management';
+import { rateLimit, rateLimitConfigs } from '@/lib/middleware/rate-limit';
+import { logger } from '@/lib/logger';
+
+const billingRateLimiter = rateLimit(rateLimitConfigs.billing);
 
 type PlanType = 'free' | 'pro' | 'enterprise';
 
 export async function GET(request: NextRequest) {
   try {
+    const rateLimitResponse = await billingRateLimiter(request);
+    if (rateLimitResponse) return rateLimitResponse;
+
     const user = await getUserFromToken(request);
 
     if (!user) {
@@ -81,7 +88,7 @@ export async function GET(request: NextRequest) {
       ]
     });
   } catch (error) {
-    console.error('Subscription GET error:', error);
+    logger.error('Subscription GET error', { route: 'api/user/subscription', error: error instanceof Error ? error.message : String(error) });
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }
@@ -91,6 +98,9 @@ export async function GET(request: NextRequest) {
 
 export async function PUT(request: NextRequest) {
   try {
+    const rateLimitResponse = await billingRateLimiter(request);
+    if (rateLimitResponse) return rateLimitResponse;
+
     const authResult = await requireAuth(request);
     if (authResult.error) return authResult.response;
     const { user } = authResult;
@@ -162,14 +172,14 @@ export async function PUT(request: NextRequest) {
     }
 
     // No existing subscription — redirect to checkout
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXTAUTH_URL || 'https://recoder.xyz';
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://recoder.xyz';
     return NextResponse.json({
       requiresCheckout: true,
       checkoutUrl: `${baseUrl}/billing/checkout?plan=${plan.toLowerCase()}`,
       message: `To upgrade to ${plan}, please complete the checkout process.`,
     });
   } catch (error) {
-    console.error('Plan change error:', error);
+    logger.error('Plan change error', { route: 'api/user/subscription', error: error instanceof Error ? error.message : String(error) });
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

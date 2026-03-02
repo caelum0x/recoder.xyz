@@ -272,8 +272,8 @@ export class ErrorBoundary extends Component<Props, State> {
           <div className="flex items-center gap-3 p-4 bg-red-500/10 border border-red-500/20 rounded-lg m-4">
             <div className={`${errorCategory.icon} text-xl ${errorCategory.textColor} flex-shrink-0`} />
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-bolt-elements-textPrimary">{errorCategory.title || title}</p>
-              <p className="text-xs text-bolt-elements-textTertiary truncate">{error?.message}</p>
+              <p className="text-sm font-medium text-recoder-elements-textPrimary">{errorCategory.title || title}</p>
+              <p className="text-xs text-recoder-elements-textTertiary truncate">{error?.message}</p>
             </div>
             <button
               onClick={() => this.handleRetry(false)}
@@ -286,7 +286,7 @@ export class ErrorBoundary extends Component<Props, State> {
       }
 
       return (
-        <div className="flex flex-col items-center justify-center min-h-[300px] h-full p-8 bg-bolt-elements-background-depth-1">
+        <div className="flex flex-col items-center justify-center min-h-[300px] h-full p-8 bg-recoder-elements-background-depth-1">
           <div className="max-w-lg w-full">
             {/* Error Icon */}
             <div className="flex justify-center mb-6">
@@ -296,12 +296,12 @@ export class ErrorBoundary extends Component<Props, State> {
             </div>
 
             {/* Title */}
-            <h2 className="text-xl font-semibold text-bolt-elements-textPrimary text-center mb-2">
+            <h2 className="text-xl font-semibold text-recoder-elements-textPrimary text-center mb-2">
               {errorCategory.title || title}
             </h2>
 
             {/* Description */}
-            <p className="text-bolt-elements-textTertiary text-sm text-center mb-2">
+            <p className="text-recoder-elements-textTertiary text-sm text-center mb-2">
               {errorCategory.description || error?.message || 'An unexpected error occurred'}
             </p>
 
@@ -314,12 +314,12 @@ export class ErrorBoundary extends Component<Props, State> {
 
             {/* Recovery Suggestions */}
             {errorCategory.suggestions && errorCategory.suggestions.length > 0 && (
-              <div className="bg-bolt-elements-background-depth-2 rounded-lg p-3 mb-6">
-                <p className="text-xs text-bolt-elements-textTertiary mb-2">Try these steps:</p>
-                <ul className="text-xs text-bolt-elements-textSecondary space-y-1">
+              <div className="bg-recoder-elements-background-depth-2 rounded-lg p-3 mb-6">
+                <p className="text-xs text-recoder-elements-textTertiary mb-2">Try these steps:</p>
+                <ul className="text-xs text-recoder-elements-textSecondary space-y-1">
                   {errorCategory.suggestions.map((suggestion, idx) => (
                     <li key={idx} className="flex items-start gap-2">
-                      <span className="text-bolt-elements-textTertiary">{idx + 1}.</span>
+                      <span className="text-recoder-elements-textTertiary">{idx + 1}.</span>
                       {suggestion}
                     </li>
                   ))}
@@ -349,7 +349,7 @@ export class ErrorBoundary extends Component<Props, State> {
 
               <button
                 onClick={this.handleReload}
-                className="px-4 py-2 bg-bolt-elements-background-depth-3 hover:bg-bolt-elements-background-depth-2 text-bolt-elements-textPrimary rounded-lg transition-colors flex items-center justify-center gap-2"
+                className="px-4 py-2 bg-recoder-elements-background-depth-3 hover:bg-recoder-elements-background-depth-2 text-recoder-elements-textPrimary rounded-lg transition-colors flex items-center justify-center gap-2"
               >
                 <div className="i-ph:arrow-counter-clockwise w-4 h-4" />
                 Reload Page
@@ -362,7 +362,7 @@ export class ErrorBoundary extends Component<Props, State> {
                   className={`px-4 py-2 rounded-lg transition-colors ${
                     action.variant === 'primary'
                       ? 'bg-blue-600 hover:bg-blue-700 text-white'
-                      : 'bg-bolt-elements-background-depth-3 hover:bg-bolt-elements-background-depth-2 text-bolt-elements-textPrimary'
+                      : 'bg-recoder-elements-background-depth-3 hover:bg-recoder-elements-background-depth-2 text-recoder-elements-textPrimary'
                   }`}
                 >
                   {action.label}
@@ -372,10 +372,10 @@ export class ErrorBoundary extends Component<Props, State> {
 
             {/* Error Details (Development) */}
             {showDetails && error && (
-              <div className="mt-6 border-t border-bolt-elements-borderColor pt-4">
+              <div className="mt-6 border-t border-recoder-elements-borderColor pt-4">
                 <button
                   onClick={this.toggleStack}
-                  className="flex items-center gap-2 text-bolt-elements-textTertiary hover:text-bolt-elements-textSecondary text-sm mb-3"
+                  className="flex items-center gap-2 text-recoder-elements-textTertiary hover:text-recoder-elements-textSecondary text-sm mb-3"
                 >
                   <div className={`i-ph:caret-right w-4 h-4 transition-transform ${showStack ? 'rotate-90' : ''}`} />
                   {showStack ? 'Hide' : 'Show'} Error Details
@@ -383,7 +383,7 @@ export class ErrorBoundary extends Component<Props, State> {
 
                 {showStack && (
                   <div className="relative">
-                    <div className="bg-bolt-elements-background-depth-1 rounded-lg p-4 overflow-auto max-h-64 text-xs font-mono text-bolt-elements-textSecondary">
+                    <div className="bg-recoder-elements-background-depth-1 rounded-lg p-4 overflow-auto max-h-64 text-xs font-mono text-recoder-elements-textSecondary">
                       <div className="text-red-400 mb-2 font-semibold">{error.name}: {error.message}</div>
                       {error.stack && (
                         <pre className="whitespace-pre-wrap break-words opacity-70">
@@ -401,7 +401,7 @@ export class ErrorBoundary extends Component<Props, State> {
                     </div>
                     <button
                       onClick={this.copyError}
-                      className="absolute top-2 right-2 p-2 bg-bolt-elements-background-depth-2 hover:bg-bolt-elements-background-depth-3 rounded text-bolt-elements-textTertiary hover:text-bolt-elements-textPrimary transition-colors"
+                      className="absolute top-2 right-2 p-2 bg-recoder-elements-background-depth-2 hover:bg-recoder-elements-background-depth-3 rounded text-recoder-elements-textTertiary hover:text-recoder-elements-textPrimary transition-colors"
                       title="Copy error details"
                     >
                       <div className="i-ph:copy w-4 h-4" />
@@ -423,7 +423,7 @@ export class ErrorBoundary extends Component<Props, State> {
               </button>
               <button
                 onClick={this.copyError}
-                className="text-sm text-bolt-elements-textTertiary hover:text-bolt-elements-textSecondary inline-flex items-center gap-1"
+                className="text-sm text-recoder-elements-textTertiary hover:text-recoder-elements-textSecondary inline-flex items-center gap-1"
               >
                 <div className="i-ph:copy w-4 h-4" />
                 Copy Error
@@ -772,9 +772,9 @@ export function LoadingError({
 }) {
   return (
     <div className="flex flex-col items-center justify-center p-8 text-center">
-      <div className="i-ph:cloud-slash text-4xl text-bolt-elements-textTertiary mb-4" />
-      <h3 className="text-lg font-medium text-bolt-elements-textPrimary mb-2">{title}</h3>
-      <p className="text-sm text-bolt-elements-textTertiary mb-4">
+      <div className="i-ph:cloud-slash text-4xl text-recoder-elements-textTertiary mb-4" />
+      <h3 className="text-lg font-medium text-recoder-elements-textPrimary mb-2">{title}</h3>
+      <p className="text-sm text-recoder-elements-textTertiary mb-4">
         {typeof error === 'string' ? error : error?.message || 'Please try again later.'}
       </p>
       {onRetry && (

@@ -785,12 +785,12 @@ if __name__ == "__main__":
     async def test_web_search():
         """Test function for the web search tool"""
         # This test function is not compatible with the sandbox version
-        print("Test function needs to be updated for sandbox version")
+        logging.info("Test function needs to be updated for sandbox version")
     
     async def test_scrape_webpage():
         """Test function for the webpage scrape tool"""
         # This test function is not compatible with the sandbox version
-        print("Test function needs to be updated for sandbox version")
+        logging.info("Test function needs to be updated for sandbox version")
     
     async def run_tests():
         """Run all test functions"""

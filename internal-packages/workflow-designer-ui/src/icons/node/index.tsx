@@ -1,4 +1,4 @@
-import { getImageGenerationModelProvider } from "@giselles-ai/language-model";
+import { getImageGenerationModelProvider } from "@recoder/language-model";
 import {
 	isActionNode,
 	isContentGenerationNode,
@@ -8,7 +8,7 @@ import {
 	isTriggerNode,
 	isVectorStoreNode,
 	type NodeLike,
-} from "@giselles-ai/protocol";
+} from "@recoder/protocol";
 import { DatabaseZapIcon, FlagIcon, PlayIcon, ZapIcon } from "lucide-react";
 import type { SVGProps } from "react";
 import { AnthropicIcon } from "../anthropic";
@@ -82,9 +82,9 @@ export function NodeIcon({
 							}
 							return <GoogleIcon {...props} data-content-type-icon />;
 						default: {
-							const _exhaustiveCheck: never =
-								node.content.languageModel.provider;
-							throw new Error(`Unhandled LLMProvider: ${_exhaustiveCheck}`);
+							throw new Error(
+								`Unhandled LLMProvider: ${String(node.content.languageModel.provider)}`,
+							);
 						}
 					}
 
@@ -109,8 +109,9 @@ export function NodeIcon({
 						case "perplexity":
 							return <PerplexityIcon {...props} data-content-type-icon />;
 						default: {
-							const _exhaustiveCheck: never = node.content.llm;
-							throw new Error(`Unhandled LLMProvider: ${_exhaustiveCheck}`);
+							throw new Error(
+								`Unhandled LLMProvider: ${String(node.content.llm.provider)}`,
+							);
 						}
 					}
 				case "imageGeneration": {
@@ -139,9 +140,8 @@ export function NodeIcon({
 										<StableDiffusionIcon {...props} data-content-type-icon />
 									);
 								default: {
-									const _exhaustiveCheck: never = imageModelProvider;
 									throw new Error(
-										`Unhandled ImageModelProvider: ${_exhaustiveCheck}`,
+										`Unhandled ImageModelProvider: ${String(imageModelProvider)}`,
 									);
 								}
 							}
@@ -156,8 +156,9 @@ export function NodeIcon({
 							}
 							return <GoogleIcon {...props} data-content-type-icon />;
 						default: {
-							const _exhaustiveCheck: never = node.content.llm;
-							throw new Error(`Unhandled LLMProvider: ${_exhaustiveCheck}`);
+							throw new Error(
+								`Unhandled LLMProvider: ${String(node.content.llm.provider)}`,
+							);
 						}
 					}
 				}
@@ -173,9 +174,8 @@ export function NodeIcon({
 						case "manual":
 							return <ZapIcon {...props} data-content-type-icon />;
 						default: {
-							const _exhaustiveCheck: never = node.content;
 							throw new Error(
-								`Unhandled TriggerProviderType: ${_exhaustiveCheck}`,
+								`Unhandled TriggerProviderType: ${String(node.content.provider)}`,
 							);
 						}
 					}
@@ -188,9 +188,8 @@ export function NodeIcon({
 						case "github":
 							return <GitHubIcon {...props} data-content-type-icon />;
 						default: {
-							const _exhaustiveCheck: never = node.content.command.provider;
 							throw new Error(
-								`Unhandled TriggerProviderType: ${_exhaustiveCheck}`,
+								`Unhandled TriggerProviderType: ${String(node.content.command.provider)}`,
 							);
 						}
 					}
@@ -204,8 +203,7 @@ export function NodeIcon({
 				case "end":
 					return <FlagIcon {...props} data-content-type-icon />;
 				default: {
-					const _exhaustiveCheck: never = node.content.type;
-					throw new Error(`Unhandled node type: ${_exhaustiveCheck}`);
+					throw new Error(`Unhandled node type: ${String(node.content.type)}`);
 				}
 			}
 		}
@@ -225,8 +223,9 @@ export function NodeIcon({
 						case "image":
 							return <PictureIcon {...props} data-content-type-icon />;
 						default: {
-							const _exhaustiveCheck: never = node.content.category;
-							throw new Error(`Unhandled node type: ${_exhaustiveCheck}`);
+							throw new Error(
+								`Unhandled node type: ${String(node.content.category)}`,
+							);
 						}
 					}
 				case "webPage":
@@ -249,13 +248,11 @@ export function NodeIcon({
 				case "dataStore":
 					return <DataStoreIcon {...props} data-content-type-icon />;
 				default: {
-					const _exhaustiveCheck: never = node.content.type;
-					throw new Error(`Unhandled node type: ${_exhaustiveCheck}`);
+					throw new Error(`Unhandled node type: ${String(node.content.type)}`);
 				}
 			}
 		default: {
-			const _exhaustiveCheck: never = node;
-			throw new Error(`Unhandled node type: ${_exhaustiveCheck}`);
+			throw new Error(`Unhandled node type: ${String((node as { type?: string }).type)}`);
 		}
 	}
 }

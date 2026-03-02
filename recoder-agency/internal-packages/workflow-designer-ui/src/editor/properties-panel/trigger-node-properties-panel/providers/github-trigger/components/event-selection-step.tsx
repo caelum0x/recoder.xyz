@@ -1,7 +1,7 @@
 import {
 	type GitHubEventId,
 	githubEventEntries,
-} from "@giselles-ai/trigger-registry";
+} from "@recoder/trigger-registry";
 import { SettingLabel } from "../../../../ui/setting-label";
 import { getTriggerIcon } from "./icons";
 

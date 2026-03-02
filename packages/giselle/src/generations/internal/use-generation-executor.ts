@@ -1,5 +1,5 @@
-import { parseConfiguration } from "@giselles-ai/data-store-registry";
-import { isClonedFileDataPayload } from "@giselles-ai/node-registry";
+import { parseConfiguration } from "@recoder/data-store-registry";
+import { isClonedFileDataPayload } from "@recoder/node-registry";
 import type {
 	FailedGeneration,
 	FileId,
@@ -8,7 +8,7 @@ import type {
 	OutputId,
 	TaskId,
 	WorkspaceId,
-} from "@giselles-ai/protocol";
+} from "@recoder/protocol";
 import {
 	AppParameterId,
 	type CompletedGeneration,
@@ -24,7 +24,7 @@ import {
 	type QueuedGeneration,
 	type RunningGeneration,
 	SecretId,
-} from "@giselles-ai/protocol";
+} from "@recoder/protocol";
 import type {
 	DataContent,
 	FilePart,

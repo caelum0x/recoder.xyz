@@ -62,6 +62,11 @@ export const WS_RATE_LIMITS: Record<string, WsRateLimitConfig> = {
     windowMs: 10_000,
     onExceeded: 'drop',
   },
+  'agent-bridge': {
+    maxMessages: 60,
+    windowMs: 10_000,
+    onExceeded: 'warn',
+  },
 };
 
 // ==================== WsRateLimiter ====================

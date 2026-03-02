@@ -1,4 +1,4 @@
-import { type GiselleContext, UsageLimitError } from "@giselles-ai/giselle";
+import { type GiselleContext, UsageLimitError } from "@recoder/giselle";
 import type * as z from "zod/v4";
 
 /**

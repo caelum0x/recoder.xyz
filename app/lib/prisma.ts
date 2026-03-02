@@ -12,12 +12,14 @@ import * as crypto from 'crypto';
 import { PrismaClient } from './prisma-client';
 
 const globalForPrisma = globalThis as unknown as {
-  prisma: PrismaClient | undefined;
+  prisma: any;
 };
 
-export const prisma: PrismaClient =
+const PrismaClientCtor = PrismaClient as any;
+
+export const prisma: any =
   globalForPrisma.prisma ??
-  new PrismaClient({
+  new PrismaClientCtor({
     datasourceUrl: process.env.DATABASE_URL,
     log:
       process.env.NODE_ENV === 'development'

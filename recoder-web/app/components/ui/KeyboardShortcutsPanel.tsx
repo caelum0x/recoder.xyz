@@ -230,11 +230,11 @@ const ShortcutKey = memo(({ keys }: ShortcutKeyProps) => (
   <div className="flex items-center gap-1">
     {keys.map((key, index) => (
       <span key={index} className="flex items-center">
-        <kbd className="inline-flex items-center justify-center min-w-[24px] px-2 py-1 text-xs font-medium rounded bg-bolt-elements-background-depth-2 text-bolt-elements-textSecondary border border-bolt-elements-borderColor">
+        <kbd className="inline-flex items-center justify-center min-w-[24px] px-2 py-1 text-xs font-medium rounded bg-recoder-elements-background-depth-2 text-recoder-elements-textSecondary border border-recoder-elements-borderColor">
           {key}
         </kbd>
         {index < keys.length - 1 && (
-          <span className="text-bolt-elements-textTertiary mx-0.5">+</span>
+          <span className="text-recoder-elements-textTertiary mx-0.5">+</span>
         )}
       </span>
     ))}
@@ -334,20 +334,20 @@ export const KeyboardShortcutsPanel = memo(() => {
         aria-label="Keyboard shortcuts"
       >
         <div
-          className="w-full max-w-4xl max-h-[85vh] rounded-xl shadow-2xl pointer-events-auto flex flex-col overflow-hidden bg-bolt-elements-background-depth-1 border border-bolt-elements-borderColor"
+          className="w-full max-w-4xl max-h-[85vh] rounded-xl shadow-2xl pointer-events-auto flex flex-col overflow-hidden bg-recoder-elements-background-depth-1 border border-recoder-elements-borderColor"
           onClick={(e) => e.stopPropagation()}
         >
           {/* Header */}
-          <div className="flex items-center justify-between px-6 py-4 border-b border-bolt-elements-borderColor">
+          <div className="flex items-center justify-between px-6 py-4 border-b border-recoder-elements-borderColor">
             <div className="flex items-center gap-3">
-              <div className="i-ph:keyboard text-2xl text-bolt-elements-textPrimary" />
-              <h2 className="text-lg font-semibold text-bolt-elements-textPrimary">
+              <div className="i-ph:keyboard text-2xl text-recoder-elements-textPrimary" />
+              <h2 className="text-lg font-semibold text-recoder-elements-textPrimary">
                 Keyboard Shortcuts
               </h2>
             </div>
             <button
               onClick={closeShortcutsPanel}
-              className="p-2 rounded-lg text-bolt-elements-textSecondary hover:text-bolt-elements-textPrimary hover:bg-bolt-elements-background-depth-2 transition-colors"
+              className="p-2 rounded-lg text-recoder-elements-textSecondary hover:text-recoder-elements-textPrimary hover:bg-recoder-elements-background-depth-2 transition-colors"
               aria-label="Close"
             >
               <div className="i-ph:x text-xl" />
@@ -355,12 +355,12 @@ export const KeyboardShortcutsPanel = memo(() => {
           </div>
 
           {/* Search and Filter Bar */}
-          <div className="px-6 py-4 border-b border-bolt-elements-borderColor">
+          <div className="px-6 py-4 border-b border-recoder-elements-borderColor">
             <div className="flex flex-col sm:flex-row gap-4">
               {/* Search Input */}
               <div className="relative flex-1">
                 <div className="absolute left-3 top-1/2 -translate-y-1/2">
-                  <div className="i-ph:magnifying-glass text-bolt-elements-textTertiary" />
+                  <div className="i-ph:magnifying-glass text-recoder-elements-textTertiary" />
                 </div>
                 <input
                   ref={searchInputRef}
@@ -368,15 +368,15 @@ export const KeyboardShortcutsPanel = memo(() => {
                   placeholder="Search shortcuts..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2.5 rounded-lg bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor text-bolt-elements-textPrimary placeholder:text-bolt-elements-textTertiary focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors"
+                  className="w-full pl-10 pr-4 py-2.5 rounded-lg bg-recoder-elements-background-depth-2 border border-recoder-elements-borderColor text-recoder-elements-textPrimary placeholder:text-recoder-elements-textTertiary focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors"
                 />
                 {searchQuery && (
                   <button
                     onClick={() => setSearchQuery('')}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 p-1 rounded hover:bg-bolt-elements-background-depth-2"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 p-1 rounded hover:bg-recoder-elements-background-depth-2"
                     aria-label="Clear search"
                   >
-                    <div className="i-ph:x text-bolt-elements-textTertiary text-sm" />
+                    <div className="i-ph:x text-recoder-elements-textTertiary text-sm" />
                   </button>
                 )}
               </div>
@@ -389,7 +389,7 @@ export const KeyboardShortcutsPanel = memo(() => {
                     'px-3 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors',
                     selectedCategory === 'all'
                       ? 'bg-blue-600 text-white'
-                      : 'bg-bolt-elements-background-depth-2 text-bolt-elements-textSecondary hover:text-bolt-elements-textPrimary hover:bg-bolt-elements-background-depth-3'
+                      : 'bg-recoder-elements-background-depth-2 text-recoder-elements-textSecondary hover:text-recoder-elements-textPrimary hover:bg-recoder-elements-background-depth-3'
                   )}
                 >
                   All
@@ -402,7 +402,7 @@ export const KeyboardShortcutsPanel = memo(() => {
                       'px-3 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors flex items-center gap-1.5',
                       selectedCategory === category
                         ? 'bg-blue-600 text-white'
-                        : 'bg-bolt-elements-background-depth-2 text-bolt-elements-textSecondary hover:text-bolt-elements-textPrimary hover:bg-bolt-elements-background-depth-3'
+                        : 'bg-recoder-elements-background-depth-2 text-recoder-elements-textSecondary hover:text-recoder-elements-textPrimary hover:bg-recoder-elements-background-depth-3'
                     )}
                   >
                     <div className={classNames(CATEGORY_ICONS[category], 'text-base')} />
@@ -416,7 +416,7 @@ export const KeyboardShortcutsPanel = memo(() => {
           {/* Content */}
           <div className="flex-1 overflow-y-auto px-6 py-4">
             {totalShortcuts === 0 ? (
-              <div className="flex flex-col items-center justify-center py-12 text-bolt-elements-textTertiary">
+              <div className="flex flex-col items-center justify-center py-12 text-recoder-elements-textTertiary">
                 <div className="i-ph:magnifying-glass text-4xl mb-4" />
                 <p className="text-lg">No shortcuts found</p>
                 <p className="text-sm mt-1">Try a different search term</p>
@@ -425,12 +425,12 @@ export const KeyboardShortcutsPanel = memo(() => {
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 {(Object.entries(filteredShortcuts) as [CategoryName, typeof ALL_SHORTCUTS[CategoryName]][]).map(([category, shortcuts]) => (
                   <div key={category} className="space-y-3">
-                    <div className="flex items-center gap-2 sticky top-0 bg-bolt-elements-background-depth-1 py-1">
-                      <div className={classNames(CATEGORY_ICONS[category], 'text-lg text-bolt-elements-textSecondary')} />
-                      <h3 className="text-sm font-semibold text-bolt-elements-textPrimary uppercase tracking-wide">
+                    <div className="flex items-center gap-2 sticky top-0 bg-recoder-elements-background-depth-1 py-1">
+                      <div className={classNames(CATEGORY_ICONS[category], 'text-lg text-recoder-elements-textSecondary')} />
+                      <h3 className="text-sm font-semibold text-recoder-elements-textPrimary uppercase tracking-wide">
                         {category}
                       </h3>
-                      <span className="text-xs text-bolt-elements-textTertiary">
+                      <span className="text-xs text-recoder-elements-textTertiary">
                         ({shortcuts.length})
                       </span>
                     </div>
@@ -438,9 +438,9 @@ export const KeyboardShortcutsPanel = memo(() => {
                       {shortcuts.map((shortcut) => (
                         <div
                           key={shortcut.id}
-                          className="flex items-center justify-between p-3 rounded-lg bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor hover:border-bolt-elements-borderColorActive transition-colors"
+                          className="flex items-center justify-between p-3 rounded-lg bg-recoder-elements-background-depth-2 border border-recoder-elements-borderColor hover:border-recoder-elements-borderColorActive transition-colors"
                         >
-                          <span className="text-sm text-bolt-elements-textSecondary flex-1 mr-4">
+                          <span className="text-sm text-recoder-elements-textSecondary flex-1 mr-4">
                             {shortcut.description}
                           </span>
                           <ShortcutKey keys={isMac ? shortcut.macKeys : shortcut.winKeys} />
@@ -454,13 +454,13 @@ export const KeyboardShortcutsPanel = memo(() => {
           </div>
 
           {/* Footer */}
-          <div className="px-6 py-4 border-t border-bolt-elements-borderColor bg-bolt-elements-background-depth-2">
+          <div className="px-6 py-4 border-t border-recoder-elements-borderColor bg-recoder-elements-background-depth-2">
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2 text-sm text-bolt-elements-textTertiary">
+              <div className="flex items-center gap-2 text-sm text-recoder-elements-textTertiary">
                 <div className="i-ph:lightbulb text-lg" />
                 <span>
                   Showing {isMac ? 'Mac' : 'Windows/Linux'} shortcuts.
-                  Press <kbd className="px-1.5 py-0.5 rounded bg-bolt-elements-background-depth-2 text-bolt-elements-textSecondary border border-bolt-elements-borderColor text-xs mx-1">Esc</kbd> to close.
+                  Press <kbd className="px-1.5 py-0.5 rounded bg-recoder-elements-background-depth-2 text-recoder-elements-textSecondary border border-recoder-elements-borderColor text-xs mx-1">Esc</kbd> to close.
                 </span>
               </div>
               <button

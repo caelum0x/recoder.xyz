@@ -24,14 +24,14 @@ function levelStyles(level: SummaryLevel): string {
   if (level === 'healthy') return 'bg-green-100 text-green-800 border-green-300';
   if (level === 'degraded') return 'bg-yellow-100 text-yellow-800 border-yellow-300';
   if (level === 'down') return 'bg-red-100 text-red-800 border-red-300';
-  return 'bg-bolt-elements-background-depth-3 text-bolt-elements-textSecondary border-bolt-elements-borderColor';
+  return 'bg-recoder-elements-background-depth-3 text-recoder-elements-textSecondary border-recoder-elements-borderColor';
 }
 
 function dotStyles(level: SummaryLevel): string {
   if (level === 'healthy') return 'bg-green-500';
   if (level === 'degraded') return 'bg-yellow-500';
   if (level === 'down') return 'bg-red-500';
-  return 'bg-bolt-elements-textTertiary';
+  return 'bg-recoder-elements-textTertiary';
 }
 
 export function AdminHealthSummary({ onClick }: { onClick?: () => void }) {

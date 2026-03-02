@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Image from "next/image";
 import "./globals.css";
 import { GoogleTagManager } from "@next/third-parties/google";
 import { SpeedInsights } from "@vercel/speed-insights/next";
@@ -30,14 +31,11 @@ export const metadata: Metadata = {
 	description,
 	icons: {
 		icon: [
-			{ url: "/favicon.png", sizes: "32x32" },
-			{
-				url: "/favicon-light.png",
-				sizes: "32x32",
-				media: "(prefers-color-scheme: dark)",
-			},
+			{ url: "/favicon.png", sizes: "32x32", type: "image/png" },
+			{ url: "/icon.png", sizes: "512x512", type: "image/png" },
 		],
-		shortcut: "/favicon.png",
+		shortcut: "/favicon.ico",
+		apple: "/apple-touch-icon.png",
 	},
 	openGraph: {
 		title,
@@ -70,6 +68,13 @@ export default function RootLayout({
 			{process.env.GTM_ID && <GoogleTagManager gtmId={process.env.GTM_ID} />}
 			<PHProvider>
 				<body>
+					<a
+						href="/"
+						aria-label="Recoder Home"
+						style={{ position: "fixed", left: 12, top: 12, zIndex: 9999 }}
+					>
+						<Image src="/favicon.png" alt="Recoder logo" width={36} height={36} />
+					</a>
 					<ThemeProvider
 						attribute="class"
 						defaultTheme="dark"

@@ -2,15 +2,18 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import crypto from 'crypto';
 import { logger } from '@/lib/logger';
+import { sendPaymentFailedEmail, sendSubscriptionCancelledEmail } from '@/lib/email';
+import { rateLimit, rateLimitConfigs } from '@/lib/middleware/rate-limit';
 
+const webhookRateLimiter = rateLimit(rateLimitConfigs.webhook);
 const DODO_WEBHOOK_SECRET = process.env.DODO_WEBHOOK_SECRET || '';
 
 function verifyDodoSignature(payload: string, signature: string): boolean {
   if (!DODO_WEBHOOK_SECRET) return false;
-  
+
   const hmac = crypto.createHmac('sha256', DODO_WEBHOOK_SECRET);
   const expectedSignature = hmac.update(payload).digest('hex');
-  
+
   return crypto.timingSafeEqual(
     Buffer.from(signature),
     Buffer.from(expectedSignature)
@@ -19,6 +22,9 @@ function verifyDodoSignature(payload: string, signature: string): boolean {
 
 export async function POST(request: NextRequest) {
   try {
+    const rateLimitResponse = await webhookRateLimiter(request);
+    if (rateLimitResponse) return rateLimitResponse;
+
     const signature = request.headers.get('x-dodo-signature') || '';
     const payload = await request.text();
     
@@ -103,7 +109,7 @@ async function handlePaymentSucceeded(data: any) {
 }
 
 async function handlePaymentFailed(data: any) {
-  const { user_id, amount, reason, subscription_id } = data;
+  const { user_id, amount, reason, subscription_id, next_retry_date } = data;
 
   await prisma.users.update({
     where: { id: user_id },
@@ -122,6 +128,27 @@ async function handlePaymentFailed(data: any) {
       ipAddress: '0.0.0.0',
     }
   });
+
+  // Send payment failed email to the user
+  try {
+    const user = await prisma.users.findUnique({
+      where: { id: user_id },
+      select: { email: true, name: true, plan: true }
+    });
+    if (user?.email) {
+      const retryDate = next_retry_date
+        ? new Date(next_retry_date * 1000).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
+        : undefined;
+      await sendPaymentFailedEmail(
+        user.email,
+        user.name || 'there',
+        user.plan || 'Pro',
+        retryDate
+      );
+    }
+  } catch (emailError) {
+    logger.error('Failed to send payment failed email', { route: 'api/webhooks/dodo', userId: user_id, error: emailError instanceof Error ? emailError.message : String(emailError) });
+  }
 
   logger.info('Payment failed', { route: 'api/webhooks/dodo', userId: user_id, reason });
 }
@@ -180,7 +207,7 @@ async function handleSubscriptionUpdated(data: any) {
 }
 
 async function handleSubscriptionCancelled(data: any) {
-  const { user_id, subscription_id, cancellation_date } = data;
+  const { user_id, subscription_id, cancellation_date, current_period_end } = data;
 
   await prisma.users.update({
     where: { id: user_id },
@@ -200,6 +227,26 @@ async function handleSubscriptionCancelled(data: any) {
       ipAddress: '0.0.0.0',
     }
   });
+
+  // Send subscription cancelled email to the user
+  try {
+    const user = await prisma.users.findUnique({
+      where: { id: user_id },
+      select: { email: true, name: true, plan: true, subscriptionEndDate: true }
+    });
+    if (user?.email) {
+      const endTimestamp = current_period_end || cancellation_date;
+      const endDate = new Date(endTimestamp * 1000).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+      await sendSubscriptionCancelledEmail(
+        user.email,
+        user.name || 'there',
+        endDate,
+        user.plan || 'Pro'
+      );
+    }
+  } catch (emailError) {
+    logger.error('Failed to send subscription cancelled email', { route: 'api/webhooks/dodo', userId: user_id, error: emailError instanceof Error ? emailError.message : String(emailError) });
+  }
 
   logger.info('Subscription cancelled', { route: 'api/webhooks/dodo', userId: user_id });
 }

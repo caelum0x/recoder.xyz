@@ -1,4 +1,4 @@
-import type { Integration } from "@giselles-ai/giselle";
+import type { Integration } from "@recoder/giselle";
 import {
 	createContext,
 	type PropsWithChildren,

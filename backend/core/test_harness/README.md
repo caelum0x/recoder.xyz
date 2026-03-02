@@ -1,6 +1,6 @@
 # E2E Test Harness
 
-Comprehensive API-based E2E testing system for benchmarking the Kortix agent system.
+Comprehensive API-based E2E testing system for benchmarking the Recoder agent system.
 
 ## Features
 
@@ -26,7 +26,7 @@ uv run python -m core.services.db  # ensure tables exist
 python api.py
 ```
 
-**Note**: The test harness automatically creates a test user (`testuser@kortix.ai`) if it doesn't exist. No manual user setup required!
+**Note**: The test harness automatically creates a test user (`testuser@recoder.xyz`) if it doesn't exist. No manual user setup required!
 
 ### 3. Run a Test
 
@@ -214,7 +214,7 @@ The `mock_llm.py` module provides deterministic responses. Customize `_determine
 - All endpoints require `X-Admin-Api-Key` header
 - Uses existing admin authentication system
 - No public access to test harness
-- Test user (`testuser@kortix.ai`) is automatically created with minimal permissions
+- Test user (`testuser@recoder.xyz`) is automatically created with minimal permissions
 
 ## Performance
 

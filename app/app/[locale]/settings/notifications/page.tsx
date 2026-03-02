@@ -7,6 +7,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { registerPushNotifications, unregisterPushNotifications } from '@/lib/push-client';
 import { 
   ArrowLeft,
   Terminal,
@@ -20,6 +21,7 @@ import {
   Loader2,
   CheckCircle
 } from 'lucide-react';
+import { SiteHeader } from '@/components/SiteHeader';
 
 interface NotificationSetting {
   id: string;
@@ -37,6 +39,18 @@ export default function NotificationSettingsPage() {
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState('');
+  const [pushSupported, setPushSupported] = useState(false);
+  const [pushEnabled, setPushEnabled] = useState(false);
+  const [pushLoading, setPushLoading] = useState(false);
+  const [pushMessage, setPushMessage] = useState('');
+  const [canUseAdminPushTest, setCanUseAdminPushTest] = useState(false);
+  const [adminPushLoading, setAdminPushLoading] = useState(false);
+  const [adminPushMessage, setAdminPushMessage] = useState('');
+  const [adminPushSubscriptionCount, setAdminPushSubscriptionCount] = useState<number | null>(null);
+  const [adminPushTitle, setAdminPushTitle] = useState('Recoder test notification');
+  const [adminPushBody, setAdminPushBody] = useState('This is a push test from settings.');
+  const [adminPushUrl, setAdminPushUrl] = useState('/dashboard');
+  const [adminPushMaxTargets, setAdminPushMaxTargets] = useState(25);
 
   const [notifications, setNotifications] = useState<NotificationSetting[]>([
     {
@@ -99,7 +113,113 @@ export default function NotificationSettingsPage() {
   // Load notification settings on mount
   useEffect(() => {
     loadNotificationSettings();
+    void loadPushState();
+    void loadAdminPushStatus();
   }, []);
+
+  async function loadPushState() {
+    const supported =
+      typeof window !== 'undefined' &&
+      'serviceWorker' in navigator &&
+      'PushManager' in window &&
+      'Notification' in window;
+
+    setPushSupported(supported);
+    if (!supported) {
+      setPushEnabled(false);
+      return;
+    }
+
+    try {
+      const registration = await navigator.serviceWorker.getRegistration('/service-worker.js');
+      const subscription = registration ? await registration.pushManager.getSubscription() : null;
+      setPushEnabled(Boolean(subscription) && Notification.permission === 'granted');
+    } catch {
+      setPushEnabled(false);
+    }
+  }
+
+  async function handlePushToggle() {
+    if (!pushSupported || pushLoading) return;
+
+    setPushLoading(true);
+    setPushMessage('');
+    try {
+      const result = pushEnabled
+        ? await unregisterPushNotifications()
+        : await registerPushNotifications();
+      setPushMessage(result.message);
+      if (result.ok) {
+        setPushEnabled(!pushEnabled);
+      }
+    } catch {
+      setPushMessage('Failed to update push notification preference');
+    } finally {
+      setPushLoading(false);
+    }
+  }
+
+  async function loadAdminPushStatus() {
+    try {
+      const response = await fetch('/api/push/test');
+      if (response.status === 401 || response.status === 403) {
+        setCanUseAdminPushTest(false);
+        return;
+      }
+
+      const data = await response.json();
+      if (response.ok && data.success) {
+        setCanUseAdminPushTest(true);
+        setAdminPushSubscriptionCount(
+          typeof data.subscriptionCount === 'number' ? data.subscriptionCount : null
+        );
+      } else {
+        setCanUseAdminPushTest(false);
+      }
+    } catch {
+      setCanUseAdminPushTest(false);
+    }
+  }
+
+  async function runAdminPushTest(dryRun: boolean) {
+    setAdminPushLoading(true);
+    setAdminPushMessage('');
+
+    try {
+      const response = await fetch('/api/push/test', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          dryRun,
+          transport: 'direct',
+          title: adminPushTitle,
+          body: adminPushBody,
+          url: adminPushUrl,
+          maxTargets: adminPushMaxTargets,
+        }),
+      });
+
+      const data = await response.json();
+      if (!response.ok || !data.success) {
+        setAdminPushMessage(data.error || 'Failed to execute admin push test');
+        return;
+      }
+
+      if (dryRun) {
+        const count = Array.isArray(data.subscriptions) ? data.subscriptions.length : 0;
+        setAdminPushMessage(`Dry run successful. Matched ${count} subscriptions.`);
+      } else {
+        setAdminPushMessage(
+          `Direct send complete. Delivered: ${data.delivered ?? 0}, Failed: ${data.failed ?? 0}, Pruned: ${data.prunedStaleSubscriptions ?? 0}.`
+        );
+      }
+      await loadAdminPushStatus();
+    } catch {
+      setAdminPushMessage('Network error while running admin push test');
+    } finally {
+      setAdminPushLoading(false);
+    }
+  }
 
   async function loadNotificationSettings() {
     try {
@@ -237,21 +357,7 @@ export default function NotificationSettingsPage() {
 
   return (
     <div className="min-h-screen bg-black text-white">
-      {/* Header */}
-      <header className="fixed top-0 w-full z-50 border-b border-white/10 bg-black/80 backdrop-blur-xl">
-        <div className="container mx-auto px-6 h-16 flex items-center justify-between">
-          <Link href="/settings" className="flex items-center space-x-2 group text-white hover:text-orange-500 transition-colors">
-            <ArrowLeft className="w-5 h-5" />
-            <span>Back to Settings</span>
-          </Link>
-          <Link href="/" className="flex items-center space-x-2">
-            <div className="w-8 h-8 bg-gradient-to-br from-orange-500 to-purple-600 rounded-lg flex items-center justify-center">
-              <Terminal className="w-5 h-5 text-white" />
-            </div>
-            <span className="text-xl font-bold">recoder</span>
-          </Link>
-        </div>
-      </header>
+      <SiteHeader />
 
       <div className="container mx-auto px-6 py-24">
         <div className="max-w-3xl mx-auto">
@@ -385,6 +491,118 @@ export default function NotificationSettingsPage() {
                 )}
               </div>
             </div>
+
+            {/* Web Push */}
+            <div className="p-6 rounded-2xl border border-white/10 bg-black/50 backdrop-blur-xl">
+              <h2 className="text-lg font-bold mb-4">Web Push</h2>
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="font-medium">Browser Push Notifications</div>
+                  <div className="text-sm text-gray-400">
+                    Enable or disable push alerts on this browser/device
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={handlePushToggle}
+                  disabled={!pushSupported || pushLoading}
+                  className={`relative w-12 h-6 rounded-full transition-colors disabled:opacity-50 ${
+                    pushEnabled ? 'bg-orange-500' : 'bg-gray-700'
+                  }`}
+                >
+                  <div
+                    className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-transform ${
+                      pushEnabled ? 'translate-x-7' : 'translate-x-1'
+                    }`}
+                  />
+                </button>
+              </div>
+              {!pushSupported && (
+                <p className="mt-3 text-xs text-yellow-400">
+                  Push notifications are not supported in this browser.
+                </p>
+              )}
+              {pushMessage && (
+                <p className="mt-3 text-xs text-gray-400">{pushMessage}</p>
+              )}
+            </div>
+
+            {canUseAdminPushTest && (
+              <div className="p-6 rounded-2xl border border-white/10 bg-black/50 backdrop-blur-xl">
+                <h2 className="text-lg font-bold mb-2">Admin Push Testing</h2>
+                <p className="text-sm text-gray-400 mb-4">
+                  Run dry-run and direct test sends against active web push subscriptions.
+                  {typeof adminPushSubscriptionCount === 'number'
+                    ? ` Active subscriptions: ${adminPushSubscriptionCount}.`
+                    : ''}
+                </p>
+
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <label className="block text-sm font-medium text-gray-300">Title</label>
+                    <input
+                      value={adminPushTitle}
+                      onChange={(e) => setAdminPushTitle(e.target.value)}
+                      className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 text-white"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="block text-sm font-medium text-gray-300">Body</label>
+                    <input
+                      value={adminPushBody}
+                      onChange={(e) => setAdminPushBody(e.target.value)}
+                      className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 text-white"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="block text-sm font-medium text-gray-300">URL</label>
+                    <input
+                      value={adminPushUrl}
+                      onChange={(e) => setAdminPushUrl(e.target.value)}
+                      className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 text-white"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="block text-sm font-medium text-gray-300">Max Targets</label>
+                    <input
+                      type="number"
+                      min={1}
+                      max={100}
+                      value={adminPushMaxTargets}
+                      onChange={(e) => {
+                        const next = Number(e.target.value);
+                        if (Number.isNaN(next)) return;
+                        setAdminPushMaxTargets(Math.min(100, Math.max(1, next)));
+                      }}
+                      className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 text-white"
+                    />
+                  </div>
+
+                  <div className="flex gap-3">
+                    <button
+                      type="button"
+                      onClick={() => runAdminPushTest(true)}
+                      disabled={adminPushLoading}
+                      className="px-4 py-2 bg-white/10 hover:bg-white/20 border border-white/10 rounded-lg text-sm font-medium disabled:opacity-50"
+                    >
+                      Dry Run
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => runAdminPushTest(false)}
+                      disabled={adminPushLoading}
+                      className="px-4 py-2 bg-orange-500 hover:bg-orange-600 rounded-lg text-sm font-medium disabled:opacity-50"
+                    >
+                      Send Direct Test
+                    </button>
+                  </div>
+
+                  {adminPushMessage && (
+                    <p className="text-xs text-gray-300">{adminPushMessage}</p>
+                  )}
+                </div>
+              </div>
+            )}
 
             {/* Do Not Disturb */}
             <div className="p-6 rounded-2xl border border-white/10 bg-black/50 backdrop-blur-xl">

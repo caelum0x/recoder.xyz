@@ -1,1 +1,0 @@
-ALTER TABLE "subscriptions" ADD COLUMN "customer_id" text;

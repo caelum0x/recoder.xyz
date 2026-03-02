@@ -1,0 +1,61 @@
+name: Phase3 Weekly Evidence Pack
+
+on:
+  schedule:
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
+
+jobs:
+  weekly-evidence:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      actions: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup PNPM
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --no-frozen-lockfile
+
+      - name: Run phase3 gates (local-dev mode)
+        run: pnpm run phase3:gates:dev
+
+      - name: Generate connector support status
+        run: pnpm run phase3:connectors-status
+
+      - name: Build weekly evidence bundle
+        run: pnpm run phase3:evidence-pack
+
+      - name: Auto-publish Tier-1 support status
+        run: pnpm run phase3:publish-support-status
+
+      - name: Verify evidence artifacts exist
+        run: |
+          test -d logs/phase3-evidence
+          ls -lah logs/phase3-evidence
+
+      - name: Upload evidence artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase3-weekly-evidence
+          if-no-files-found: error
+          retention-days: 21
+          path: |
+            logs/phase3-gates/**
+            logs/release-evidence/**
+            logs/phase3-evidence/**
+            SUPPORTED_CONNECTORS.md

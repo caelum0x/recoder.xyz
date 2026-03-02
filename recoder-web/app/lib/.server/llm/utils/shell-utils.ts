@@ -7,7 +7,6 @@
 import type { AnyToolInvocation } from '../index.js';
 import type { Config } from '../config/config.js';
 import os from 'node:os';
-// @ts-ignore - shell-quote types not available
 import { quote } from 'shell-quote';
 import { doesToolInvocationMatch } from './tool-utils.js';
 import { isShellCommandReadOnly } from './shellReadOnlyChecker.js';

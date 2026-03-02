@@ -1,4 +1,4 @@
-import type { WorkspaceId } from "@giselles-ai/protocol";
+import type { WorkspaceId } from "@recoder/protocol";
 import { getCurrentUser } from "@/lib/get-current-user";
 import { getWorkspaceTeam } from "@/lib/workspaces/get-workspace-team";
 import { isMemberOfTeam } from "@/services/teams";

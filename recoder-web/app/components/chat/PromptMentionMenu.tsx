@@ -232,9 +232,9 @@ export function PromptMentionMenu({ filter, projectId, onSelect, onClose, positi
     return (
       <div
         ref={menuRef}
-        className={`absolute ${position === 'above' ? 'bottom-full mb-1' : 'top-full mt-1'} left-4 right-4 z-50 bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor rounded-lg shadow-lg overflow-hidden`}
+        className={`absolute ${position === 'above' ? 'bottom-full mb-1' : 'top-full mt-1'} left-4 right-4 z-50 bg-recoder-elements-background-depth-2 border border-recoder-elements-borderColor rounded-lg shadow-lg overflow-hidden`}
       >
-        <div className="px-3 py-2 text-xs text-bolt-elements-textTertiary">
+        <div className="px-3 py-2 text-xs text-recoder-elements-textTertiary">
           {filter ? `No matches for "@${filter}"` : 'Type to search files, folders, symbols, or prompts'}
         </div>
         <div className="px-3 pb-2 flex gap-1 flex-wrap">
@@ -254,10 +254,10 @@ export function PromptMentionMenu({ filter, projectId, onSelect, onClose, positi
   return (
     <div
       ref={menuRef}
-      className={`absolute ${position === 'above' ? 'bottom-full mb-1' : 'top-full mt-1'} left-4 right-4 z-50 bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor rounded-lg shadow-lg overflow-hidden`}
+      className={`absolute ${position === 'above' ? 'bottom-full mb-1' : 'top-full mt-1'} left-4 right-4 z-50 bg-recoder-elements-background-depth-2 border border-recoder-elements-borderColor rounded-lg shadow-lg overflow-hidden`}
     >
-      <div className="px-3 py-1.5 border-b border-bolt-elements-borderColor/50 flex items-center gap-2">
-        <span className="text-[10px] text-bolt-elements-textSecondary font-medium uppercase tracking-wider">
+      <div className="px-3 py-1.5 border-b border-recoder-elements-borderColor/50 flex items-center gap-2">
+        <span className="text-[10px] text-recoder-elements-textSecondary font-medium uppercase tracking-wider">
           Insert Reference
         </span>
         <div className="flex gap-1 ml-auto">
@@ -278,7 +278,7 @@ export function PromptMentionMenu({ filter, projectId, onSelect, onClose, positi
             <div key={`${item.type}-${item.id}`}>
               {showHeader && (
                 <div className="px-3 pt-2 pb-1">
-                  <span className="text-[9px] text-bolt-elements-textTertiary font-medium uppercase tracking-wider">
+                  <span className="text-[9px] text-recoder-elements-textTertiary font-medium uppercase tracking-wider">
                     {item.type === 'file' ? 'Files' : item.type === 'folder' ? 'Folders' : item.type === 'symbol' ? 'Symbols' : 'Prompts'}
                   </span>
                 </div>
@@ -288,8 +288,8 @@ export function PromptMentionMenu({ filter, projectId, onSelect, onClose, positi
                 onClick={() => onSelect(item)}
                 className={`w-full text-left px-3 py-1.5 flex items-center gap-2 transition-colors ${
                   idx === selectedIndex
-                    ? 'bg-bolt-elements-background-depth-3 text-bolt-elements-textPrimary'
-                    : 'text-bolt-elements-textSecondary hover:bg-bolt-elements-background-depth-1'
+                    ? 'bg-recoder-elements-background-depth-3 text-recoder-elements-textPrimary'
+                    : 'text-recoder-elements-textSecondary hover:bg-recoder-elements-background-depth-1'
                 }`}
               >
                 <span className={`${config.icon} text-sm shrink-0`} />
@@ -298,7 +298,7 @@ export function PromptMentionMenu({ filter, projectId, onSelect, onClose, positi
                 </span>
                 <span className="text-xs font-medium truncate">{item.label}</span>
                 {item.description && item.description !== item.label && (
-                  <span className="text-[10px] text-bolt-elements-textTertiary truncate ml-auto">
+                  <span className="text-[10px] text-recoder-elements-textTertiary truncate ml-auto">
                     {item.description}
                   </span>
                 )}

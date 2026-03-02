@@ -1,4 +1,4 @@
-import type { Generation, RunningGeneration } from "@giselles-ai/protocol";
+import type { Generation, RunningGeneration } from "@recoder/protocol";
 import { createUIMessageStream, readUIMessageStream, type UIMessage } from "ai";
 import { useCallback, useEffect, useRef } from "react";
 import { useGiselle } from "../use-giselle";

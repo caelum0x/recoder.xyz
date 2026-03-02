@@ -48,7 +48,7 @@ function getStartersPath(): string {
     return `${process.cwd()}/starters`;
   }
   // Fallback for different environments
-  return '/Users/arhansubasi/bolt.new/starters';
+  return '/opt/recoder-web/starters';
 }
 
 export function loadStarterTemplates(startersPath: string = getStartersPath()): StarterTemplate[] {

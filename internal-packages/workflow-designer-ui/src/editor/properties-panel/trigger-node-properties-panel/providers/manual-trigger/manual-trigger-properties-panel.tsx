@@ -1,14 +1,14 @@
-import { Button } from "@giselle-internal/ui/button";
-import { Select } from "@giselle-internal/ui/select";
-import { Toggle } from "@giselle-internal/ui/toggle";
+import { Button } from "@recoder-internal/ui/button";
+import { Select } from "@recoder-internal/ui/select";
+import { Toggle } from "@recoder-internal/ui/toggle";
 import {
 	ManualTriggerParameter,
 	ManualTriggerParameterId,
 	type Output,
 	OutputId,
 	type TriggerNode,
-} from "@giselles-ai/protocol";
-import { useFeatureFlag, useTrigger } from "@giselles-ai/react";
+} from "@recoder/protocol";
+import { useFeatureFlag, useTrigger } from "@recoder/react";
 import { TrashIcon } from "lucide-react";
 import {
 	type FormEventHandler,

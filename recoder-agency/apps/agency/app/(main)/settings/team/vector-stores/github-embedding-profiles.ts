@@ -1,4 +1,4 @@
-import { EMBEDDING_PROFILES } from "@giselles-ai/protocol";
+import { EMBEDDING_PROFILES } from "@recoder/protocol";
 
 // GitHub Vector Store UI embedding profiles
 // - Cohere is intentionally excluded (hidden in the UI)

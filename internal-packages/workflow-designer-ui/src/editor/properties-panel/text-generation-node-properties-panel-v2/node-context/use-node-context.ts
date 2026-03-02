@@ -1,11 +1,11 @@
-import { defaultName } from "@giselles-ai/node-registry";
+import { defaultName } from "@recoder/node-registry";
 import type {
 	ContentGenerationNode,
 	NodeId,
 	NodeLike,
 	OutputId,
-} from "@giselles-ai/protocol";
-import { isSupportedConnection, type UIConnection } from "@giselles-ai/react";
+} from "@recoder/protocol";
+import { isSupportedConnection, type UIConnection } from "@recoder/react";
 import { useCallback, useMemo } from "react";
 import { useShallow } from "zustand/shallow";
 import {
@@ -33,7 +33,7 @@ export function useNodeContext(node: ContentGenerationNode) {
 				continue;
 			}
 			const output = outputNode.outputs.find(
-				(output) => output.id === connection.outputId,
+				(output: { id: string }) => output.id === connection.outputId,
 			);
 			if (output === undefined) {
 				continue;
@@ -43,7 +43,7 @@ export function useNodeContext(node: ContentGenerationNode) {
 				continue;
 			}
 			const input = inputNode.inputs.find(
-				(input) => input.id === connection.inputId,
+				(input: { id: string }) => input.id === connection.inputId,
 			);
 			if (input === undefined) {
 				continue;

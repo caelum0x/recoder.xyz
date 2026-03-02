@@ -1,5 +1,5 @@
 {
-	"name": "@giselles-ai/vault",
+	"name": "@recoder/vault",
 	"version": "0.0.0",
 	"private": true,
 	"main": "./dist/index.js",
@@ -30,7 +30,7 @@
 		}
 	},
 	"devDependencies": {
-		"@giselles-ai/tsconfig": "workspace:*",
+		"@recoder/tsconfig": "workspace:*",
 		"tsup": "^8.0.0",
 		"vitest": "^2.0.1"
 	},

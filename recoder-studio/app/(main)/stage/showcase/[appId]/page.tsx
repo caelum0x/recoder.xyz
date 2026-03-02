@@ -1,4 +1,4 @@
-import { TriggerId, type WorkspaceId } from "@giselles-ai/protocol";
+import { TriggerId, type WorkspaceId } from "@recoder/protocol";
 import { and, avg, count, desc, eq, sum } from "drizzle-orm";
 import { notFound } from "next/navigation";
 import { giselle } from "@/app/giselle";
@@ -7,12 +7,12 @@ import {
 	agentActivities,
 	agents,
 	db,
-	supabaseUserMappings,
+	authUserMappings,
 	teams,
 	users,
 } from "@/db";
 import { stageV2Flag } from "@/flags";
-import { getUser } from "@/lib/supabase";
+import { getUser } from "@/lib/auth/user";
 
 import { AppDetailClient } from "./app-detail-client";
 
@@ -85,9 +85,9 @@ async function getAppDetails(unsafeAppId: string) {
 		// Get current user
 		const supabaseUser = await getUser();
 		const [currentUserMapping] = await db
-			.select({ userDbId: supabaseUserMappings.userDbId })
-			.from(supabaseUserMappings)
-			.where(eq(supabaseUserMappings.supabaseUserId, supabaseUser.id));
+			.select({ userDbId: authUserMappings.userDbId })
+			.from(authUserMappings)
+			.where(eq(authUserMappings.authUserId, supabaseUser.id));
 
 		if (!currentUserMapping) {
 			throw new Error("User mapping not found");

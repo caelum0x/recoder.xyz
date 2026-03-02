@@ -9,6 +9,16 @@ import {
 } from '@/lib/contracts/account-contracts';
 import nodeCrypto from 'crypto';
 
+function getPreferenceValue(
+  value: unknown,
+  key: 'timezone' | 'language'
+): string | undefined {
+  if (!value || typeof value !== 'object') return undefined;
+  const record = value as Record<string, unknown>;
+  const entry = record[key];
+  return typeof entry === 'string' ? entry : undefined;
+}
+
 export async function GET(request: NextRequest) {
   try {
     const authResult = await requireAuth(request);
@@ -50,8 +60,8 @@ export async function GET(request: NextRequest) {
       data: {
         user: {
           ...user,
-          timezone: (preferences?.developerPreferences as any)?.timezone || 'America/New_York',
-          language: (preferences?.languagePreferences as any)?.language || 'en'
+          timezone: getPreferenceValue(preferences?.developerPreferences, 'timezone') || 'America/New_York',
+          language: getPreferenceValue(preferences?.languagePreferences, 'language') || 'en'
         }
       }
     }));
@@ -87,7 +97,7 @@ export async function PUT(request: NextRequest) {
     }
 
     // Update user basic info
-    const updateData: any = {};
+    const updateData: { name?: string; organization?: string } = {};
     if (name !== undefined) updateData.name = name;
     if (organization !== undefined) updateData.organization = organization;
 
@@ -170,7 +180,7 @@ export async function PUT(request: NextRequest) {
       });
 
       // Build verification URL
-      const baseUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXTAUTH_URL || 'https://recoder.xyz';
+      const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://recoder.xyz';
       const verificationUrl = `${baseUrl}/api/user/account/verify-email-change?token=${verificationToken}`;
 
       // Send verification email to the NEW email address

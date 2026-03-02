@@ -1,5 +1,5 @@
-import type { QueryNode } from "@giselles-ai/protocol";
-import { useNodeGenerations } from "@giselles-ai/react";
+import type { QueryNode } from "@recoder/protocol";
+import { useNodeGenerations } from "@recoder/react";
 import clsx from "clsx/lite";
 import { useAppDesignerStore } from "../../../app-designer";
 import { StackBlicksIcon } from "../../../icons";

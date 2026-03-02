@@ -15,9 +15,9 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
     const variantClasses = {
       default: "bg-orange-500 text-white hover:bg-orange-600",
       destructive: "bg-red-600 text-white hover:bg-red-700",
-      outline: "border border-bolt-elements-borderColor bg-transparent hover:bg-bolt-elements-background-depth-3 text-bolt-elements-textPrimary",
-      secondary: "bg-bolt-elements-background-depth-1 text-bolt-elements-textPrimary hover:bg-bolt-elements-background-depth-2",
-      ghost: "hover:bg-bolt-elements-background-depth-3 text-bolt-elements-textPrimary",
+      outline: "border border-recoder-elements-borderColor bg-transparent hover:bg-recoder-elements-background-depth-3 text-recoder-elements-textPrimary",
+      secondary: "bg-recoder-elements-background-depth-1 text-recoder-elements-textPrimary hover:bg-recoder-elements-background-depth-2",
+      ghost: "hover:bg-recoder-elements-background-depth-3 text-recoder-elements-textPrimary",
       link: "text-orange-500 underline-offset-4 hover:underline",
     };
     

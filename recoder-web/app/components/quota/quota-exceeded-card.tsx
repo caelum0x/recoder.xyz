@@ -32,7 +32,7 @@ export function QuotaExceededCard({
   return (
     <div
       className={classNames(
-        'relative overflow-hidden border border-orange-500/30 bg-gradient-to-br from-orange-500/5 via-accent-500/5 to-bolt-elements-background-depth-2 rounded-lg',
+        'relative overflow-hidden border border-orange-500/30 bg-gradient-to-br from-orange-500/5 via-accent-500/5 to-recoder-elements-background-depth-2 rounded-lg',
         className
       )}
     >
@@ -50,10 +50,10 @@ export function QuotaExceededCard({
               </div>
             </div>
             <div>
-              <h2 className="text-xl font-semibold text-bolt-elements-textPrimary">
+              <h2 className="text-xl font-semibold text-recoder-elements-textPrimary">
                 AI Quota Exceeded
               </h2>
-              <p className="text-sm text-bolt-elements-textSecondary mt-1">
+              <p className="text-sm text-recoder-elements-textSecondary mt-1">
                 You've used all your AI credits for this billing period
               </p>
             </div>
@@ -69,20 +69,20 @@ export function QuotaExceededCard({
         {/* Usage Progress */}
         <div className="space-y-3">
           <div className="flex items-center justify-between text-sm">
-            <span className="text-bolt-elements-textSecondary">
+            <span className="text-recoder-elements-textSecondary">
               Usage this period
             </span>
             <span className="font-medium text-red-500">
               {currentUsage.toLocaleString()} / {totalQuota.toLocaleString()} credits
             </span>
           </div>
-          <div className="w-full bg-bolt-elements-background-depth-3 rounded-full h-2">
+          <div className="w-full bg-recoder-elements-background-depth-3 rounded-full h-2">
             <div
               className="h-2 rounded-full bg-gradient-to-r from-orange-500 to-red-500 transition-all duration-300"
               style={{ width: `${Math.min(usagePercentage, 100)}%` }}
             />
           </div>
-          <div className="flex items-center gap-2 text-xs text-bolt-elements-textTertiary">
+          <div className="flex items-center gap-2 text-xs text-recoder-elements-textTertiary">
             <Clock className="h-3 w-3" />
             <span>
               Resets in {daysUntilReset} {daysUntilReset === 1 ? 'day' : 'days'}
@@ -93,7 +93,7 @@ export function QuotaExceededCard({
         {/* Options Alert */}
         <div className="flex items-start gap-3 p-3 rounded-lg border border-accent-500/20 bg-accent-500/5">
           <AlertCircle className="h-4 w-4 text-accent-500 mt-0.5 shrink-0" />
-          <p className="text-sm text-bolt-elements-textSecondary">
+          <p className="text-sm text-recoder-elements-textSecondary">
             To continue using AI features, you can either upgrade your plan for
             more credits or wait for your quota to reset next billing cycle.
           </p>
@@ -101,19 +101,19 @@ export function QuotaExceededCard({
 
         {/* Alternative Actions */}
         <div className="grid gap-3 sm:grid-cols-2">
-          <div className="p-4 rounded-lg border border-bolt-elements-borderColor bg-bolt-elements-background-depth-3 space-y-2">
-            <h4 className="font-medium text-sm text-bolt-elements-textPrimary">
+          <div className="p-4 rounded-lg border border-recoder-elements-borderColor bg-recoder-elements-background-depth-3 space-y-2">
+            <h4 className="font-medium text-sm text-recoder-elements-textPrimary">
               Need more credits?
             </h4>
-            <p className="text-xs text-bolt-elements-textSecondary">
+            <p className="text-xs text-recoder-elements-textSecondary">
               Upgrade to a higher plan for increased limits and premium features
             </p>
           </div>
-          <div className="p-4 rounded-lg border border-bolt-elements-borderColor bg-bolt-elements-background-depth-3 space-y-2">
-            <h4 className="font-medium text-sm text-bolt-elements-textPrimary">
+          <div className="p-4 rounded-lg border border-recoder-elements-borderColor bg-recoder-elements-background-depth-3 space-y-2">
+            <h4 className="font-medium text-sm text-recoder-elements-textPrimary">
               On a budget?
             </h4>
-            <p className="text-xs text-bolt-elements-textSecondary">
+            <p className="text-xs text-recoder-elements-textSecondary">
               Your quota will automatically reset at the start of your next
               billing cycle
             </p>
@@ -122,7 +122,7 @@ export function QuotaExceededCard({
       </div>
 
       {/* Footer */}
-      <div className="relative flex flex-col sm:flex-row gap-3 px-6 py-4 border-t border-bolt-elements-borderColor bg-bolt-elements-background-depth-3/50">
+      <div className="relative flex flex-col sm:flex-row gap-3 px-6 py-4 border-t border-recoder-elements-borderColor bg-recoder-elements-background-depth-3/50">
         <Button
           onClick={onUpgradeClick}
           className="flex-1 sm:flex-initial bg-gradient-to-r from-orange-500 to-accent-500 hover:from-orange-600 hover:to-accent-600 text-white shadow-md hover:shadow-lg transition-all duration-200"

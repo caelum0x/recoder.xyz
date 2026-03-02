@@ -203,7 +203,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
         ref={ref}
         className={classNames(
           styles.BaseChat,
-          'relative flex h-full w-full overflow-hidden bg-bolt-elements-background-depth-1',
+          'relative flex h-full w-full overflow-hidden bg-recoder-elements-background-depth-1',
         )}
         data-chat-visible={showChat}
       >
@@ -219,19 +219,19 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                         <span className="i-ph:folder mr-1" /> {projectName}
                       </span>
                     </div>
-                    <h1 className="text-5xl text-center font-bold text-bolt-elements-textPrimary mb-2">
+                    <h1 className="text-5xl text-center font-bold text-recoder-elements-textPrimary mb-2">
                       Continue building
                     </h1>
-                    <p className="mb-4 text-center text-bolt-elements-textSecondary">
+                    <p className="mb-4 text-center text-recoder-elements-textSecondary">
                       What would you like to add to this project?
                     </p>
                   </>
                 ) : (
                   <>
-                    <h1 className="text-5xl text-center font-bold text-bolt-elements-textPrimary mb-2">
+                    <h1 className="text-5xl text-center font-bold text-recoder-elements-textPrimary mb-2">
                       Where ideas begin
                     </h1>
-                    <p className="mb-4 text-center text-bolt-elements-textSecondary">
+                    <p className="mb-4 text-center text-recoder-elements-textSecondary">
                       Bring ideas to life in seconds or get help on existing projects.
                     </p>
                   </>
@@ -261,7 +261,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
               >
                 <FileDropZone
                   className={classNames(
-                    'shadow-sm border border-bolt-elements-borderColor bg-bolt-elements-prompt-background backdrop-filter backdrop-blur-[8px] rounded-lg',
+                    'shadow-sm border border-recoder-elements-borderColor bg-recoder-elements-prompt-background backdrop-filter backdrop-blur-[8px] rounded-lg',
                     'transition-all duration-200',
                   )}
                 >
@@ -279,7 +279,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                   {/* Model and Mode Selection - Above textarea */}
                   <ClientOnly>
                     {() => (
-                      <div className="p-3 border-b border-bolt-elements-borderColor">
+                      <div className="p-3 border-b border-recoder-elements-borderColor">
                         <div className="flex items-center justify-between gap-4">
                           <div className="flex items-center gap-3">
                             <ModelProfileSelector />
@@ -313,7 +313,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
 
                   {/* Edit intent preview - shows affected files */}
                   {editIntentPreview && (
-                    <div className="px-3 py-2 border-b border-bolt-elements-borderColor/50">
+                    <div className="px-3 py-2 border-b border-recoder-elements-borderColor/50">
                       {editIntentPreview}
                     </div>
                   )}
@@ -350,7 +350,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                       className={classNames(
                         'w-full pl-4 pt-4 pr-20 pb-4',
                         'focus:outline-none resize-none',
-                        'text-lg text-bolt-elements-textPrimary placeholder-bolt-elements-textTertiary',
+                        'text-lg text-recoder-elements-textPrimary placeholder-recoder-elements-textTertiary',
                         'bg-transparent',
                         'transition-[height] duration-100 ease-out',
                       )}
@@ -462,7 +462,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                       <IconButton
                         title="Attach files (images, documents)"
                         onClick={handleAttachmentClick}
-                        className="text-bolt-elements-textSecondary hover:text-bolt-elements-textPrimary"
+                        className="text-recoder-elements-textSecondary hover:text-recoder-elements-textPrimary"
                       >
                         <div className="i-ph:paperclip text-xl" />
                         {attachments.length > 0 ? (

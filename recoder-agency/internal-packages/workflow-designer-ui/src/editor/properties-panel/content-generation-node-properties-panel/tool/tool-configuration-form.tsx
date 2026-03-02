@@ -1,10 +1,10 @@
-import { Input } from "@giselle-internal/ui/input";
-import { Select } from "@giselle-internal/ui/select";
+import { Input } from "@recoder-internal/ui/input";
+import { Select } from "@recoder-internal/ui/select";
 import type {
 	LanguageModelTool,
 	LanguageModelToolConfigurationOption,
-} from "@giselles-ai/language-model-registry";
-import { titleCase } from "@giselles-ai/utils";
+} from "@recoder/language-model-registry";
+import { titleCase } from "@recoder/utils";
 import clsx from "clsx/lite";
 import { Switch } from "radix-ui";
 import { useCallback, useEffect, useState } from "react";

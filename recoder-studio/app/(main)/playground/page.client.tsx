@@ -1,13 +1,13 @@
 "use client";
 
-import { AppIcon } from "@giselle-internal/ui/app-icon";
-import type { CreateAndStartTaskInputs } from "@giselles-ai/giselle";
+import { AppIcon } from "@recoder-internal/ui/app-icon";
+import type { CreateAndStartTaskInputs } from "@recoder/giselle";
 import type {
 	AppId,
 	GenerationContextInput,
 	ParametersInput,
 	TaskId,
-} from "@giselles-ai/protocol";
+} from "@recoder/protocol";
 import clsx from "clsx";
 import { PlayIcon, Search, Sparkles } from "lucide-react";
 import { useRouter } from "next/navigation";

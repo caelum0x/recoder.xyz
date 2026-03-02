@@ -29,12 +29,12 @@ const FILE_ICON_MAP: Record<string, string> = {
   json: 'i-ph:file-duotone text-yellow-300',
   yaml: 'i-ph:file-duotone text-red-400',
   yml: 'i-ph:file-duotone text-red-400',
-  toml: 'i-ph:file-duotone text-bolt-elements-textSecondary',
+  toml: 'i-ph:file-duotone text-recoder-elements-textSecondary',
   xml: 'i-ph:file-duotone text-orange-300',
   // Documentation
-  md: 'i-ph:file-md-duotone text-bolt-elements-textSecondary',
+  md: 'i-ph:file-md-duotone text-recoder-elements-textSecondary',
   mdx: 'i-ph:file-md-duotone text-yellow-400',
-  txt: 'i-ph:file-text-duotone text-bolt-elements-textSecondary',
+  txt: 'i-ph:file-text-duotone text-recoder-elements-textSecondary',
   // Images
   png: 'i-ph:file-image-duotone text-purple-400',
   jpg: 'i-ph:file-image-duotone text-purple-400',
@@ -62,7 +62,7 @@ const FILE_ICON_MAP: Record<string, string> = {
   eslintrc: 'i-ph:gear-duotone text-purple-400',
   prettierrc: 'i-ph:gear-duotone text-pink-400',
   // Lock files
-  lock: 'i-ph:lock-duotone text-bolt-elements-textTertiary',
+  lock: 'i-ph:lock-duotone text-recoder-elements-textTertiary',
   // Shell
   sh: 'i-ph:terminal-duotone text-green-400',
   bash: 'i-ph:terminal-duotone text-green-400',
@@ -74,7 +74,7 @@ const FILE_ICON_MAP: Record<string, string> = {
 // Special file name mappings (exact match)
 const SPECIAL_FILE_ICONS: Record<string, string> = {
   'package.json': 'i-ph:package-duotone text-green-400',
-  'package-lock.json': 'i-ph:lock-duotone text-bolt-elements-textTertiary',
+  'package-lock.json': 'i-ph:lock-duotone text-recoder-elements-textTertiary',
   'yarn.lock': 'i-ph:lock-duotone text-blue-400',
   'pnpm-lock.yaml': 'i-ph:lock-duotone text-orange-400',
   'tsconfig.json': 'i-ph:gear-duotone text-blue-400',
@@ -82,8 +82,8 @@ const SPECIAL_FILE_ICONS: Record<string, string> = {
   'tailwind.config.ts': 'i-ph:gear-duotone text-cyan-400',
   'vite.config.js': 'i-ph:lightning-duotone text-purple-400',
   'vite.config.ts': 'i-ph:lightning-duotone text-purple-400',
-  'next.config.js': 'i-ph:gear-duotone text-bolt-elements-textSecondary',
-  'next.config.mjs': 'i-ph:gear-duotone text-bolt-elements-textSecondary',
+  'next.config.js': 'i-ph:gear-duotone text-recoder-elements-textSecondary',
+  'next.config.mjs': 'i-ph:gear-duotone text-recoder-elements-textSecondary',
   '.gitignore': 'i-ph:git-branch-duotone text-orange-400',
   '.env': 'i-ph:gear-duotone text-yellow-500',
   '.env.local': 'i-ph:gear-duotone text-yellow-500',
@@ -211,8 +211,8 @@ export const Breadcrumbs = memo<BreadcrumbsProps>(({ files, pathSegments = [], o
                 <span
                   ref={(ref) => { segmentRefs.current[index] = ref; }}
                   className={classNames('flex items-center gap-1 cursor-pointer shrink-0 text-sm', {
-                    'text-bolt-elements-textTertiary hover:text-bolt-elements-textPrimary': !isActive,
-                    'text-bolt-elements-textPrimary underline': isActive,
+                    'text-recoder-elements-textTertiary hover:text-recoder-elements-textPrimary': !isActive,
+                    'text-recoder-elements-textPrimary underline': isActive,
                     'pr-1': isLast,
                   })}
                   onClick={() => handleSegmentClick(index)}
@@ -227,7 +227,7 @@ export const Breadcrumbs = memo<BreadcrumbsProps>(({ files, pathSegments = [], o
                   )}
                 </span>
               </DropdownMenu.Trigger>
-              {index > 0 && !isLast && <span className="i-ph:caret-right inline-block mx-0.5 text-bolt-elements-textTertiary" />}
+              {index > 0 && !isLast && <span className="i-ph:caret-right inline-block mx-0.5 text-recoder-elements-textTertiary" />}
               <AnimatePresence>
                 {isActive && (
                   <DropdownMenu.Portal>
@@ -246,7 +246,7 @@ export const Breadcrumbs = memo<BreadcrumbsProps>(({ files, pathSegments = [], o
                         variants={contextMenuVariants}
                       >
                         <div className="rounded-lg overflow-hidden">
-                          <div className="max-h-[50vh] min-w-[300px] overflow-scroll bg-bolt-elements-background-depth-1 border border-bolt-elements-borderColor shadow-sm rounded-lg">
+                          <div className="max-h-[50vh] min-w-[300px] overflow-scroll bg-recoder-elements-background-depth-1 border border-recoder-elements-borderColor shadow-sm rounded-lg">
                             <FileTree
                               files={files}
                               hideRoot
@@ -258,7 +258,7 @@ export const Breadcrumbs = memo<BreadcrumbsProps>(({ files, pathSegments = [], o
                             />
                           </div>
                         </div>
-                        <DropdownMenu.Arrow className="fill-bolt-elements-borderColor" />
+                        <DropdownMenu.Arrow className="fill-recoder-elements-borderColor" />
                       </motion.div>
                     </DropdownMenu.Content>
                   </DropdownMenu.Portal>

@@ -1,4 +1,4 @@
-import { PageHeading } from "@giselle-internal/ui/page-heading";
+import { PageHeading } from "@recoder-internal/ui/page-heading";
 import type { ReactNode } from "react";
 import { AccountSettingsNav } from "./account-nav";
 import { AccountDocsLink } from "./components/account-docs-link";

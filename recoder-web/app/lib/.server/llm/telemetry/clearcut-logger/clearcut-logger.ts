@@ -183,8 +183,7 @@ export class ClearcutLogger {
 
   /** For testing purposes only. */
   static clearInstance(): void {
-    // @ts-ignore - ClearcutLogger is a singleton, but we need to clear it for tests.
-    ClearcutLogger.instance = undefined;
+    (ClearcutLogger as { instance: ClearcutLogger | undefined }).instance = undefined;
   }
 
   enqueueLogEvent(event: LogEvent): void {

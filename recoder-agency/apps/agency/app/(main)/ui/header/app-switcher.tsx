@@ -1,6 +1,6 @@
 "use client";
 
-import { PopoverContent } from "@giselle-internal/ui/popover";
+import { PopoverContent } from "@recoder-internal/ui/popover";
 import { ArrowUpRight } from "lucide-react";
 import { Popover } from "radix-ui";
 
@@ -13,13 +13,13 @@ const apps = [
 	},
 	{
 		label: "Frontend",
-		description: "Suna AI IDE",
+		description: "AI Agent IDE",
 		href: "https://frontend.recoder.xyz",
 		current: false,
 	},
 	{
 		label: "Web",
-		description: "Bolt AI IDE",
+		description: "Web AI IDE",
 		href: "https://web.recoder.xyz",
 		current: false,
 	},

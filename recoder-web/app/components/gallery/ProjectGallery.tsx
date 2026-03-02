@@ -34,7 +34,7 @@ export function ProjectGallery() {
 
   if (loading) {
     return (
-      <div className="text-center py-8 text-bolt-elements-textSecondary">
+      <div className="text-center py-8 text-recoder-elements-textSecondary">
         Loading projects...
       </div>
     );
@@ -43,16 +43,16 @@ export function ProjectGallery() {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h3 className="text-lg font-semibold text-bolt-elements-textPrimary">
+        <h3 className="text-lg font-semibold text-recoder-elements-textPrimary">
           Community Projects
         </h3>
-        <span className="text-sm text-bolt-elements-textSecondary">
+        <span className="text-sm text-recoder-elements-textSecondary">
           {projects.length} projects
         </span>
       </div>
 
       {projects.length === 0 ? (
-        <div className="text-center py-12 text-bolt-elements-textSecondary">
+        <div className="text-center py-12 text-recoder-elements-textSecondary">
           No projects shared yet. Be the first to share!
         </div>
       ) : (
@@ -60,26 +60,26 @@ export function ProjectGallery() {
           {projects.map((project) => (
             <div
               key={project.id}
-              className="p-4 bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor rounded-lg hover:border-bolt-elements-button-primary-background transition-colors"
+              className="p-4 bg-recoder-elements-background-depth-2 border border-recoder-elements-borderColor rounded-lg hover:border-recoder-elements-button-primary-background transition-colors"
             >
               <div className="flex items-start justify-between mb-2">
                 <div className="flex-1">
-                  <h4 className="font-semibold text-bolt-elements-textPrimary">
+                  <h4 className="font-semibold text-recoder-elements-textPrimary">
                     {project.project_name}
                   </h4>
-                  <p className="text-sm text-bolt-elements-textSecondary">
+                  <p className="text-sm text-recoder-elements-textSecondary">
                     by @{project.username}
                   </p>
                 </div>
               </div>
 
               {project.description && (
-                <p className="text-sm text-bolt-elements-textSecondary mb-3 line-clamp-2">
+                <p className="text-sm text-recoder-elements-textSecondary mb-3 line-clamp-2">
                   {project.description}
                 </p>
               )}
 
-              <div className="flex items-center gap-4 text-xs text-bolt-elements-textTertiary">
+              <div className="flex items-center gap-4 text-xs text-recoder-elements-textTertiary">
                 <div className="flex items-center gap-1">
                   <div className="i-ph:heart" />
                   <span>{project.likes_count}</span>

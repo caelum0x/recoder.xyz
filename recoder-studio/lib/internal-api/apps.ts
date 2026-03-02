@@ -1,6 +1,6 @@
 "use server";
 
-import type { AppId } from "@giselles-ai/protocol";
+import type { AppId } from "@recoder/protocol";
 import { giselle } from "@/app/giselle";
 import { assertWorkspaceAccess } from "@/lib/assert-workspace-access";
 

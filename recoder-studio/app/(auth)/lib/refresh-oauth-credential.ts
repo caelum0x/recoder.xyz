@@ -1,6 +1,6 @@
 import { and, eq } from "drizzle-orm";
-import { db, oauthCredentials, supabaseUserMappings } from "@/db";
-import { getUser } from "@/lib/supabase";
+import { db, oauthCredentials, authUserMappings } from "@/db";
+import { getUser } from "@/lib/auth/user";
 import { encryptToken } from "@/lib/token-encryption";
 
 export async function refreshOauthCredential(
@@ -13,9 +13,9 @@ export async function refreshOauthCredential(
 ) {
 	const supabaseUser = await getUser();
 	const [res] = await db
-		.select({ userDbId: supabaseUserMappings.userDbId })
-		.from(supabaseUserMappings)
-		.where(eq(supabaseUserMappings.supabaseUserId, supabaseUser.id));
+		.select({ userDbId: authUserMappings.userDbId })
+		.from(authUserMappings)
+		.where(eq(authUserMappings.authUserId, supabaseUser.id));
 
 	await db
 		.update(oauthCredentials)

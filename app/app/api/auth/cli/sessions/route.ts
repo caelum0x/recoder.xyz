@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from "@/lib/auth-helpers";
 import { auth } from '@/lib/auth-config';
 import { headers } from 'next/headers';
+import { logger } from '@/lib/logger';
 
 import { CLIAuthService } from '@/lib/services/cli-auth.service';
 import { prisma } from '@/lib/prisma';
@@ -55,7 +56,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json(payload, { status: 200 });
   } catch (error: any) {
-    console.error('List sessions error:', error);
+    logger.error('List sessions error:', { error: String(error), route: 'auth/cli/sessions' });
     const payload = assertCliSessionErrorResponse({
       contract: APP_CLI_SESSION_CONTRACT,
       error: 'Failed to list sessions',
@@ -124,7 +125,7 @@ export async function DELETE(request: NextRequest) {
 
     return NextResponse.json(payload, { status: 200 });
   } catch (error: any) {
-    console.error('Revoke session error:', error);
+    logger.error('Revoke session error:', { error: String(error), route: 'auth/cli/sessions' });
     const payload = assertCliSessionErrorResponse({
       contract: APP_CLI_SESSION_CONTRACT,
       error: 'Failed to revoke session',

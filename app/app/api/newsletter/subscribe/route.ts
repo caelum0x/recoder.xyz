@@ -3,35 +3,51 @@
  *
  * Allows users to subscribe to marketing emails
  * CAN-SPAM compliant with double opt-in support
+ *
+ * Uses dedicated newsletter_subscribers table via Prisma client.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import crypto from 'crypto';
+import { extractAttribution } from '@/lib/attribution';
+import { logger } from '@/lib/logger';
+import { z } from 'zod';
+
+const subscribeSchema = z.object({
+  email: z.string().email('Valid email address is required').max(255).toLowerCase().trim(),
+  name: z.string().max(100).trim().optional(),
+  source: z.string().max(50).optional().default('website'),
+});
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
-    const { email, name, source = 'website' } = body;
-
-    // Validate email format
-    if (!email || !isValidEmail(email)) {
+    const rawBody = await request.json();
+    const parsed = subscribeSchema.safeParse(rawBody);
+    if (!parsed.success) {
       return NextResponse.json(
-        { success: false, error: 'Valid email address is required' },
+        { success: false, error: parsed.error.issues[0]?.message || 'Invalid input' },
         { status: 400 }
       );
     }
+    const { email, name, source } = parsed.data;
+    const attribution = extractAttribution(request, rawBody);
 
-    // Check if user exists
-    const existingUser = await prisma.users.findUnique({
+    // Check for existing subscriber
+    const existingSubscriber = await prisma.newsletter_subscribers.findUnique({
       where: { email },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        status: true,
+        unsubscribeToken: true,
+        subscribedAt: true,
+      },
     });
 
-    if (existingUser) {
-      // User exists - update their preferences if they've unsubscribed
-      // In the future, we can add a marketingEmailsEnabled field to the users table
-      // For now, we'll just acknowledge their subscription
-
+    // Already actively subscribed
+    if (existingSubscriber && existingSubscriber.status === 'active') {
       return NextResponse.json({
         success: true,
         message: 'You are already subscribed to our newsletter!',
@@ -40,35 +56,58 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // For non-users, we'll create a lightweight newsletter_subscribers record
-    // Since the table doesn't exist yet in the schema, we'll use a workaround
-    // by creating a user record with a special flag or using metadata
-
-    // Option: Store in user_preferences table or create minimal user record
-    // For now, let's create a minimal user record with emailVerified: false
-    // This allows them to receive newsletters but they haven't fully signed up
-
     const subscriberName = name || email.split('@')[0];
-    const unsubscribeToken = crypto.randomBytes(32).toString('hex');
+    const unsubscribeToken =
+      existingSubscriber?.unsubscribeToken ?? crypto.randomBytes(32).toString('hex');
 
-    // Create a newsletter-only user record
-    const subscriber = await prisma.users.create({
-      data: {
-        id: crypto.randomUUID(),
-        email,
-        name: subscriberName,
-        emailVerified: false, // Not fully verified yet
-        subscription: 'free',
-        role: 'user',
-        isActive: false, // Not an active user, just newsletter subscriber
-        updatedAt: new Date(),
-        // Store unsubscribe token in a safe field (we'll use apiKey as temp storage)
-        // In production, add a dedicated newsletterUnsubscribeToken field
-        apiKey: `newsletter_${unsubscribeToken}`,
-      },
+    // Link to registered user if one exists with this email
+    const user = await prisma.users.findUnique({
+      where: { email },
+      select: { id: true },
     });
 
-    console.log(`Newsletter subscription created for ${email} from ${source}`);
+    const metadata = {
+      utmSource: attribution.utmSource,
+      utmMedium: attribution.utmMedium,
+      utmCampaign: attribution.utmCampaign,
+      referredByCode: attribution.referredByCode,
+      acquisitionSource: attribution.acquisitionSource,
+    };
+
+    let subscriber;
+
+    if (existingSubscriber) {
+      // Previously unsubscribed -- reactivate
+      subscriber = await prisma.newsletter_subscribers.update({
+        where: { email },
+        data: {
+          name: subscriberName,
+          status: 'active',
+          source,
+          userId: user?.id ?? null,
+          metadata,
+          unsubscribedAt: null,
+          updatedAt: new Date(),
+        },
+        select: { id: true, email: true, name: true },
+      });
+    } else {
+      // Brand-new subscriber
+      subscriber = await prisma.newsletter_subscribers.create({
+        data: {
+          email,
+          name: subscriberName,
+          status: 'active',
+          source,
+          unsubscribeToken,
+          userId: user?.id ?? undefined,
+          metadata,
+        },
+        select: { id: true, email: true, name: true },
+      });
+    }
+
+    logger.info('Newsletter subscription created', { route: 'api/newsletter/subscribe', email, source });
 
     return NextResponse.json({
       success: true,
@@ -80,16 +119,14 @@ export async function POST(request: NextRequest) {
         name: subscriber.name,
       },
     });
-
   } catch (error: any) {
     console.error('Newsletter subscription error:', error);
 
-    // Handle unique constraint violation (duplicate email)
+    // Handle unique constraint violation (race condition on duplicate email)
     if (error.code === 'P2002') {
       return NextResponse.json({
         success: true,
         message: 'You are already subscribed to our newsletter!',
-        email: (await request.json()).email,
         alreadySubscribed: true,
       });
     }
@@ -114,17 +151,17 @@ export async function GET(request: NextRequest) {
     }
 
     // Check subscription status
-    const user = await prisma.users.findUnique({
+    const subscriber = await prisma.newsletter_subscribers.findUnique({
       where: { email },
       select: {
         email: true,
         name: true,
-        isActive: true,
-        createdAt: true,
+        status: true,
+        subscribedAt: true,
       },
     });
 
-    if (!user) {
+    if (!subscriber || subscriber.status !== 'active') {
       return NextResponse.json({
         success: true,
         subscribed: false,
@@ -135,11 +172,10 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       success: true,
       subscribed: true,
-      email: user.email,
-      name: user.name,
-      subscribedSince: user.createdAt,
+      email: subscriber.email,
+      name: subscriber.name,
+      subscribedSince: subscriber.subscribedAt,
     });
-
   } catch (error: any) {
     console.error('Newsletter status check error:', error);
     return NextResponse.json(

@@ -129,10 +129,10 @@ export const ThreadIndicator = memo(function ThreadIndicator({
       className={classNames(
         'flex items-center gap-1.5 px-2 py-1 rounded-md text-xs',
         'transition-colors duration-150',
-        'hover:bg-bolt-elements-background-depth-3',
+        'hover:bg-recoder-elements-background-depth-3',
         isExpanded
           ? 'text-blue-400 bg-blue-500/10'
-          : 'text-bolt-elements-textSecondary'
+          : 'text-recoder-elements-textSecondary'
       )}
     >
       <div className={classNames(
@@ -160,9 +160,9 @@ export const ReplyButton = memo(function ReplyButton({
       onClick={onReply}
       className={classNames(
         'flex items-center gap-1 px-2 py-1 rounded-md text-xs',
-        'text-bolt-elements-textTertiary',
-        'hover:text-bolt-elements-textSecondary',
-        'hover:bg-bolt-elements-background-depth-3',
+        'text-recoder-elements-textTertiary',
+        'hover:text-recoder-elements-textSecondary',
+        'hover:bg-recoder-elements-background-depth-3',
         'transition-colors duration-150',
         className
       )}
@@ -193,13 +193,13 @@ export const ThreadLine = memo(function ThreadLine({
           key={i}
           className={classNames(
             'w-6 relative',
-            i < depth - 1 && 'border-l border-bolt-elements-borderColor ml-3'
+            i < depth - 1 && 'border-l border-recoder-elements-borderColor ml-3'
           )}
         >
           {i === depth - 1 && (
             <div
               className={classNames(
-                'absolute left-0 top-6 w-4 border-l border-b border-bolt-elements-borderColor ml-3',
+                'absolute left-0 top-6 w-4 border-l border-b border-recoder-elements-borderColor ml-3',
                 isLast ? 'h-0 rounded-bl' : 'h-full'
               )}
             />
@@ -237,12 +237,12 @@ export const ThreadMessageItem = memo(function ThreadMessageItem({
           'relative p-3 rounded-lg',
           'transition-colors duration-150',
           isUser
-            ? 'bg-bolt-elements-messages-background ml-auto max-w-[80%]'
-            : 'bg-bolt-elements-background-depth-2'
+            ? 'bg-recoder-elements-messages-background ml-auto max-w-[80%]'
+            : 'bg-recoder-elements-background-depth-2'
         )}
       >
         {/* Message header */}
-        <div className="flex items-center gap-2 mb-1 text-xs text-bolt-elements-textTertiary">
+        <div className="flex items-center gap-2 mb-1 text-xs text-recoder-elements-textTertiary">
           <span className={isUser ? 'text-blue-400' : 'text-orange-400'}>
             {isUser ? 'You' : 'Assistant'}
           </span>
@@ -252,7 +252,7 @@ export const ThreadMessageItem = memo(function ThreadMessageItem({
         </div>
 
         {/* Message content */}
-        <div className="text-bolt-elements-textPrimary text-sm">
+        <div className="text-recoder-elements-textPrimary text-sm">
           {message.content}
         </div>
 
@@ -331,20 +331,20 @@ export const ThreadView = memo(function ThreadView({
   const rootMessages = messageTree.get(null) || [];
 
   return (
-    <div className="flex flex-col h-full bg-bolt-elements-background-depth-1 rounded-lg border border-bolt-elements-borderColor">
+    <div className="flex flex-col h-full bg-recoder-elements-background-depth-1 rounded-lg border border-recoder-elements-borderColor">
       {/* Thread header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-bolt-elements-borderColor">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-recoder-elements-borderColor">
         <div className="flex items-center gap-2">
-          <div className="i-ph:chat-circle-dots text-bolt-elements-textSecondary" />
-          <span className="font-medium text-bolt-elements-textPrimary">Thread</span>
-          <span className="text-xs text-bolt-elements-textTertiary">
+          <div className="i-ph:chat-circle-dots text-recoder-elements-textSecondary" />
+          <span className="font-medium text-recoder-elements-textPrimary">Thread</span>
+          <span className="text-xs text-recoder-elements-textTertiary">
             {thread.messages.length} messages
           </span>
         </div>
         {onClose && (
           <button
             onClick={onClose}
-            className="p-1 rounded hover:bg-bolt-elements-background-depth-3 text-bolt-elements-textSecondary"
+            className="p-1 rounded hover:bg-recoder-elements-background-depth-3 text-recoder-elements-textSecondary"
           >
             <div className="i-ph:x text-lg" />
           </button>
@@ -379,7 +379,7 @@ export const ThreadPanel = memo(function ThreadPanel({
   if (!activeThreadId) return null;
 
   return (
-    <div className={classNames('w-80 border-l border-bolt-elements-borderColor', className)}>
+    <div className={classNames('w-80 border-l border-recoder-elements-borderColor', className)}>
       <ThreadView
         threadId={activeThreadId}
         onClose={handleClose}

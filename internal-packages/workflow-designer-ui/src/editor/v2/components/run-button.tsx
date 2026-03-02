@@ -1,31 +1,31 @@
-import { Button } from "@giselle-internal/ui/button";
+import { Button } from "@recoder-internal/ui/button";
 import {
 	Dialog,
 	DialogContent,
 	DialogTitle,
 	DialogTrigger,
-} from "@giselle-internal/ui/dialog";
+} from "@recoder-internal/ui/dialog";
 import {
 	DropdownMenu,
 	type MenuGroup,
 	type MenuItem,
-} from "@giselle-internal/ui/dropdown-menu";
-import { useToasts } from "@giselle-internal/ui/toast";
-import type { CreateAndStartTaskInputs } from "@giselles-ai/giselle";
-import { defaultName } from "@giselles-ai/node-registry";
+} from "@recoder-internal/ui/dropdown-menu";
+import { useToasts } from "@recoder-internal/ui/toast";
+import type { CreateAndStartTaskInputs } from "@recoder/giselle";
+import { defaultName } from "@recoder/node-registry";
 import type {
 	AppEntryNode,
 	ConnectionId,
 	NodeId,
 	TriggerNode,
-} from "@giselles-ai/protocol";
+} from "@recoder/protocol";
 import {
 	isAppEntryNode,
 	isImageGenerationNode,
 	isTextGenerationNode,
 	isTriggerNode,
-} from "@giselles-ai/protocol";
-import { useTaskSystem } from "@giselles-ai/react";
+} from "@recoder/protocol";
+import { useTaskSystem } from "@recoder/react";
 import clsx from "clsx/lite";
 import { PlayIcon, UngroupIcon } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
@@ -279,8 +279,9 @@ function MultipleRunsDropdown({
 						});
 						break;
 					default: {
-						const _exhaustiveCheck: never = starterRun.node.content;
-						throw new Error(`Unhandled type: ${_exhaustiveCheck}`);
+						throw new Error(
+							`Unhandled type: ${String((starterRun.node as { content?: { type?: string } }).content?.type ?? "unknown")}`,
+						);
 					}
 				}
 			}
@@ -460,8 +461,9 @@ export function RunButton() {
 					});
 					break;
 				default: {
-					const _exhaustiveCheck: never = group.node.content;
-					throw new Error(`Unhandled node type: ${_exhaustiveCheck}`);
+					throw new Error(
+						`Unhandled node type: ${String((group.node as { content?: { type?: string } }).content?.type ?? "unknown")}`,
+					);
 				}
 			}
 		}

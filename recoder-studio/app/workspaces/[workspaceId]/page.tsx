@@ -1,5 +1,5 @@
-import { Background } from "@giselle-internal/workflow-designer-ui";
-import { type Workspace, WorkspaceId } from "@giselles-ai/protocol";
+import { Background } from "@recoder-internal/workflow-designer-ui";
+import { type Workspace, WorkspaceId } from "@recoder/protocol";
 import { eq } from "drizzle-orm";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
@@ -19,7 +19,7 @@ function Loader() {
 	);
 }
 
-export default async function ({
+export default async function WorkspacePage({
 	params,
 }: {
 	params: Promise<{

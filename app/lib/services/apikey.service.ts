@@ -5,6 +5,7 @@
 
 import { prisma } from '@/lib/prisma';
 import { generateSecureToken, encryptApiKey, decryptApiKey } from '../crypto';
+import { logger } from '@/lib/logger';
 import crypto from 'crypto';
 
 export class ApiKeyService {
@@ -64,7 +65,7 @@ export class ApiKeyService {
         warning: 'Save this key securely. It will not be shown again.',
       };
     } catch (error: any) {
-      console.error('Create API key error:', error);
+      logger.error('Create API key error', { error: String(error) });
       throw error;
     }
   }
@@ -97,7 +98,7 @@ export class ApiKeyService {
         })),
       };
     } catch (error: any) {
-      console.error('List API keys error:', error);
+      logger.error('List API keys error', { error: String(error) });
       throw error;
     }
   }
@@ -134,7 +135,7 @@ export class ApiKeyService {
         },
       };
     } catch (error: any) {
-      console.error('Get API key error:', error);
+      logger.error('Get API key error', { error: String(error) });
       throw error;
     }
   }
@@ -178,7 +179,7 @@ export class ApiKeyService {
         message: 'API key revoked successfully',
       };
     } catch (error: any) {
-      console.error('Revoke API key error:', error);
+      logger.error('Revoke API key error', { error: String(error) });
       throw error;
     }
   }
@@ -226,7 +227,7 @@ export class ApiKeyService {
         message: 'API key rotated successfully. Old key has been revoked.',
       };
     } catch (error: any) {
-      console.error('Rotate API key error:', error);
+      logger.error('Rotate API key error', { error: String(error) });
       throw error;
     }
   }
@@ -284,7 +285,7 @@ export class ApiKeyService {
         user: key.users,
       };
     } catch (error: any) {
-      console.error('Validate API key error:', error);
+      logger.error('Validate API key error', { error: String(error) });
       return { valid: false, error: 'Validation failed' };
     }
   }
@@ -317,7 +318,7 @@ export class ApiKeyService {
         usage,
       };
     } catch (error: any) {
-      console.error('Get key usage error:', error);
+      logger.error('Get key usage error', { error: String(error) });
       throw error;
     }
   }
@@ -361,7 +362,7 @@ export class ApiKeyService {
         message: 'Permissions updated successfully',
       };
     } catch (error: any) {
-      console.error('Update key permissions error:', error);
+      logger.error('Update key permissions error', { error: String(error) });
       throw error;
     }
   }
@@ -391,7 +392,7 @@ export class ApiKeyService {
         message: 'Rate limit updated successfully',
       };
     } catch (error: any) {
-      console.error('Set key rate limit error:', error);
+      logger.error('Set key rate limit error', { error: String(error) });
       throw error;
     }
   }
@@ -428,7 +429,7 @@ export class ApiKeyService {
         message: 'API key updated successfully',
       };
     } catch (error: any) {
-      console.error('Update key metadata error:', error);
+      logger.error('Update key metadata error', { error: String(error) });
       throw error;
     }
   }

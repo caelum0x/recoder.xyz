@@ -1,7 +1,6 @@
 /**
  * Usage Service - API Key Routing and Management
- * Determines which API key to use based on user tier
- * Handles free (user's key) vs premium (platform keys) routing
+ * BYOK-only beta: ALL users must provide their own API key.
  */
 
 import { prisma } from './prisma';
@@ -10,9 +9,8 @@ import crypto from 'crypto';
 
 export interface ApiKeyInfo {
   apiKey: string;
-  source: 'user' | 'platform';
+  source: 'user';
   tier: string;
-  keyId?: string;
 }
 
 export interface QuotaStatus {
@@ -26,22 +24,15 @@ export interface QuotaStatus {
 }
 
 /**
- * Get appropriate API key for user based on their tier
- * Free users: Use their own OpenRouter key
- * Premium users (Pro/Enterprise): Use platform's rotating keys
- *
- * @param userId The user's ID
- * @returns API key information or null if none available
+ * Get API key for user — BYOK-only beta: all users must provide their own key.
  */
 export async function getApiKeyForUser(userId: string): Promise<ApiKeyInfo | null> {
   const user = await prisma.users.findUnique({
     where: { id: userId },
     select: {
       subscriptionPlan: true,
-      subscriptionStatus: true,
       openRouterApiKey: true,
       hasOwnApiKey: true,
-      apiKeyEncrypted: true,
     },
   });
 
@@ -49,96 +40,15 @@ export async function getApiKeyForUser(userId: string): Promise<ApiKeyInfo | nul
     throw new Error('User not found');
   }
 
-  // Free users must use their own API key
-  if (user.subscriptionPlan === 'free') {
-    if (!user.hasOwnApiKey || !user.openRouterApiKey) {
-      return null; // User needs to add their API key
-    }
-
-    return {
-      apiKey: user.openRouterApiKey,
-      source: 'user',
-      tier: 'free',
-    };
+  if (!user.hasOwnApiKey || !user.openRouterApiKey) {
+    return null; // User needs to add their API key
   }
 
-  // Premium users (Pro/Enterprise) use platform keys
-  if (
-    (user.subscriptionPlan === 'pro' || user.subscriptionPlan === 'enterprise') &&
-    user.subscriptionStatus === 'active'
-  ) {
-    // Get platform key for their tier
-    const platformKey = await getPlatformApiKey(user.subscriptionPlan);
-
-    if (!platformKey) {
-      // Fallback to user's key if they have one
-      if (user.hasOwnApiKey && user.openRouterApiKey) {
-        return {
-          apiKey: user.openRouterApiKey,
-          source: 'user',
-          tier: user.subscriptionPlan,
-        };
-      }
-
-      throw new Error('No platform API key available for premium tier');
-    }
-
-    return {
-      apiKey: platformKey.keyEncrypted,
-      source: 'platform',
-      tier: user.subscriptionPlan,
-      keyId: platformKey.id,
-    };
-  }
-
-  // Inactive subscription - try to use user's key if available
-  if (user.hasOwnApiKey && user.openRouterApiKey) {
-    return {
-      apiKey: user.openRouterApiKey,
-      source: 'user',
-      tier: user.subscriptionPlan,
-    };
-  }
-
-  return null;
-}
-
-/**
- * Get platform API key for a specific tier
- * Implements simple round-robin selection and updates last used time
- *
- * @param tier The subscription tier (pro or enterprise)
- * @returns Platform API key or null
- */
-async function getPlatformApiKey(tier: string): Promise<any | null> {
-  // Get all active keys, ordered by least recently used
-  // Note: tier field doesn't exist in platform_api_keys schema
-  const keys = await prisma.platform_api_keys.findMany({
-    where: {
-      isActive: true,
-    },
-    orderBy: {
-      lastUsedAt: 'asc', // Least recently used first
-    },
-    take: 1,
-  });
-
-  if (keys.length === 0) {
-    return null;
-  }
-
-  const selectedKey = keys[0];
-
-  // Update last used timestamp
-  await prisma.platform_api_keys.update({
-    where: { id: selectedKey.id },
-    data: {
-      lastUsedAt: new Date(),
-      quotaUsed: { increment: 1 },
-    },
-  });
-
-  return selectedKey;
+  return {
+    apiKey: user.openRouterApiKey,
+    source: 'user',
+    tier: user.subscriptionPlan,
+  };
 }
 
 /**
@@ -328,7 +238,7 @@ export async function getUsageSummary(userId: string): Promise<{
       cost: 0,
       periodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
       tier: user.subscriptionPlan,
-      hasApiKey: user.hasOwnApiKey || user.subscriptionPlan !== 'free',
+      hasApiKey: !!user.hasOwnApiKey,
     };
   }
 
@@ -356,6 +266,6 @@ export async function getUsageSummary(userId: string): Promise<{
     cost: 0,
     periodEnd: quota.periodEnd,
     tier: user.subscriptionPlan,
-    hasApiKey: user.hasOwnApiKey || user.subscriptionPlan !== 'free',
+    hasApiKey: !!user.hasOwnApiKey,
   };
 }

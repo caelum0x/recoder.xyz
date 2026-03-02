@@ -3,17 +3,17 @@ import {
 	Giselle,
 	type GiselleConfig,
 	type GiselleContext,
-} from "@giselles-ai/giselle";
+} from "@recoder/giselle";
 import {
 	GitHubWebhookUnauthorizedError,
 	verifyRequest as verifyRequestAsGitHubWebook,
-} from "@giselles-ai/github-tool";
+} from "@recoder/github-tool";
 import {
 	formDataRoutes,
 	isFormDataRoutePath,
 	isJsonRoutePath,
 	jsonRoutes,
-} from "@giselles-ai/http";
+} from "@recoder/http";
 import { after } from "next/server";
 import { ZodError } from "zod";
 import { type RequestContext, requestContextStore } from "./context";
@@ -125,7 +125,10 @@ export function createHttpHandler({
 
 			if (config.useAfterFunction) {
 				if (config.telemetry?.isEnabled && config.telemetry?.waitForFlushFn) {
-					after(config.telemetry.waitForFlushFn);
+					const waitForFlushFn = config.telemetry.waitForFlushFn;
+					after(async () => {
+						await waitForFlushFn();
+					});
 				}
 
 				// Flush generation index patches after response
@@ -187,7 +190,19 @@ export function createHttpHandler({
 }
 
 export function NextGiselle(config: NextGiselleConfig) {
-	const giselle = Giselle({ ...config, waitUntil: after });
+	const waitUntil: NonNullable<GiselleConfig["waitUntil"]> = (task) => {
+		if (typeof task === "function") {
+			after(async () => {
+				await task();
+			});
+			return;
+		}
+		after(async () => {
+			await task;
+		});
+	};
+
+	const giselle = Giselle({ ...config, waitUntil });
 	const httpHandler = createHttpHandler({
 		giselle,
 		config,

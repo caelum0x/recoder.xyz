@@ -65,31 +65,31 @@ export const FileHistoryPanel = memo(function FileHistoryPanel({
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-bolt-elements-background-depth-2 rounded-lg shadow-xl w-[90%] max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
+      <div className="bg-recoder-elements-background-depth-2 rounded-lg shadow-xl w-[90%] max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
         {/* Header */}
-        <div className="px-4 py-3 bg-bolt-elements-background-depth-3 border-b border-bolt-elements-borderColor flex items-center justify-between">
+        <div className="px-4 py-3 bg-recoder-elements-background-depth-3 border-b border-recoder-elements-borderColor flex items-center justify-between">
           <div>
-            <h2 className="text-lg font-medium text-bolt-elements-textPrimary">
+            <h2 className="text-lg font-medium text-recoder-elements-textPrimary">
               File History
             </h2>
-            <p className="text-sm text-bolt-elements-textSecondary font-mono">
+            <p className="text-sm text-recoder-elements-textSecondary font-mono">
               {filePath}
             </p>
           </div>
           <button
             onClick={onClose}
-            className="p-2 hover:bg-bolt-elements-background-depth-4 rounded-lg transition-colors"
+            className="p-2 hover:bg-recoder-elements-background-depth-4 rounded-lg transition-colors"
           >
-            <span className="i-ph:x text-xl text-bolt-elements-textSecondary" />
+            <span className="i-ph:x text-xl text-recoder-elements-textSecondary" />
           </button>
         </div>
 
         {/* Content */}
         <div className="flex-1 overflow-hidden flex">
           {/* Version List */}
-          <div className="w-64 border-r border-bolt-elements-borderColor overflow-auto">
+          <div className="w-64 border-r border-recoder-elements-borderColor overflow-auto">
             {history.length === 0 ? (
-              <div className="p-4 text-center text-bolt-elements-textSecondary">
+              <div className="p-4 text-center text-recoder-elements-textSecondary">
                 No history available
               </div>
             ) : (
@@ -101,7 +101,7 @@ export const FileHistoryPanel = memo(function FileHistoryPanel({
                     className={`w-full text-left px-3 py-2 rounded-lg transition-colors ${
                       selectedVersion === index
                         ? 'bg-blue-500/20 border border-blue-500/50'
-                        : 'hover:bg-bolt-elements-background-depth-3'
+                        : 'hover:bg-recoder-elements-background-depth-3'
                     }`}
                   >
                     <div className="flex items-center gap-2">
@@ -111,11 +111,11 @@ export const FileHistoryPanel = memo(function FileHistoryPanel({
                         }`}
                         title={state.aiGenerated ? 'AI change' : 'Manual change'}
                       />
-                      <span className="text-sm text-bolt-elements-textPrimary truncate">
+                      <span className="text-sm text-recoder-elements-textPrimary truncate">
                         {state.description || 'Change'}
                       </span>
                     </div>
-                    <p className="text-xs text-bolt-elements-textTertiary mt-0.5 ml-4">
+                    <p className="text-xs text-recoder-elements-textTertiary mt-0.5 ml-4">
                       {formatTime(state.timestamp)}
                     </p>
                   </button>
@@ -127,18 +127,18 @@ export const FileHistoryPanel = memo(function FileHistoryPanel({
           {/* Diff Preview */}
           <div className="flex-1 overflow-auto">
             {!showDiff || !diff ? (
-              <div className="h-full flex items-center justify-center text-bolt-elements-textSecondary">
+              <div className="h-full flex items-center justify-center text-recoder-elements-textSecondary">
                 Select a version to see changes
               </div>
             ) : (
               <div className="p-4">
                 <div className="mb-4 flex items-center justify-between">
                   <div>
-                    <p className="text-sm text-bolt-elements-textSecondary">
+                    <p className="text-sm text-recoder-elements-textSecondary">
                       Showing changes: Current -&gt; Version {selectedVersion! + 1}
                     </p>
                     {selectedState && (
-                      <p className="text-xs text-bolt-elements-textTertiary">
+                      <p className="text-xs text-recoder-elements-textTertiary">
                         {selectedState.aiGenerated ? 'AI generated' : 'Manual edit'} - {formatTime(selectedState.timestamp)}
                       </p>
                     )}

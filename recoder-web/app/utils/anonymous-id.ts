@@ -13,7 +13,7 @@ export function getOrCreateAnonymousId(): string {
     return '';
   }
 
-  const key = 'bolt_anonymous_id';
+  const key = 'recoder_anonymous_id';
   let id = localStorage.getItem(key);
 
   if (!id) {
@@ -34,7 +34,7 @@ export function getAnonymousId(): string | null {
     return null;
   }
 
-  return localStorage.getItem('bolt_anonymous_id');
+  return localStorage.getItem('recoder_anonymous_id');
 }
 
 /**
@@ -45,7 +45,7 @@ export function clearAnonymousId(): void {
     return;
   }
 
-  localStorage.removeItem('bolt_anonymous_id');
+  localStorage.removeItem('recoder_anonymous_id');
   logger.info('🗑️ Cleared anonymous ID');
 }
 

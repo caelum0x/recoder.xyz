@@ -36,16 +36,16 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
       <button
         className={classNames(
           'rounded-lg font-medium inline-flex items-center justify-center gap-2 transition-colors',
-          'focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-bolt-elements-background-depth-1',
+          'focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-recoder-elements-background-depth-1',
           // Variants
           {
             'bg-accent-500 text-white hover:bg-accent-600 focus:ring-accent-500':
               variant === 'primary',
-            'bg-bolt-elements-background-depth-3 text-bolt-elements-textPrimary hover:bg-bolt-elements-background-depth-3 focus:ring-gray-500':
+            'bg-recoder-elements-background-depth-3 text-recoder-elements-textPrimary hover:bg-recoder-elements-background-depth-3 focus:ring-gray-500':
               variant === 'secondary',
-            'bg-transparent text-bolt-elements-textPrimary border border-bolt-elements-borderColor hover:bg-bolt-elements-background-depth-3 focus:ring-gray-500':
+            'bg-transparent text-recoder-elements-textPrimary border border-recoder-elements-borderColor hover:bg-recoder-elements-background-depth-3 focus:ring-gray-500':
               variant === 'outline',
-            'bg-transparent text-bolt-elements-textSecondary hover:bg-bolt-elements-background-depth-3 hover:text-bolt-elements-textPrimary focus:ring-gray-500':
+            'bg-transparent text-recoder-elements-textSecondary hover:bg-recoder-elements-background-depth-3 hover:text-recoder-elements-textPrimary focus:ring-gray-500':
               variant === 'ghost',
             'bg-red-600 text-white hover:bg-red-700 focus:ring-red-500':
               variant === 'danger',

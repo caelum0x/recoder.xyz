@@ -1,4 +1,4 @@
-import type { GitHubQueryContext } from "@giselles-ai/giselle";
+import type { GitHubQueryContext } from "@recoder/giselle";
 import { and, eq } from "drizzle-orm";
 import { agents, db, githubRepositoryIndex, teams } from "@/db";
 import {

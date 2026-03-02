@@ -240,29 +240,29 @@ Please create all these files in the project and set up the database configurati
   };
 
   return (
-    <div className="flex flex-col h-full bg-bolt-elements-background-depth-1 relative">
+    <div className="flex flex-col h-full bg-recoder-elements-background-depth-1 relative">
       {/* Close Button - Shows when result exists */}
       {result && (
         <button
           onClick={handleClose}
-          className="absolute top-4 right-4 z-50 p-2.5 bg-bolt-elements-background-depth-2 hover:bg-bolt-elements-background-depth-2 border-2 border-bolt-elements-borderColor hover:border-red-500 rounded-lg transition-all shadow-xl group"
+          className="absolute top-4 right-4 z-50 p-2.5 bg-recoder-elements-background-depth-2 hover:bg-recoder-elements-background-depth-2 border-2 border-recoder-elements-borderColor hover:border-red-500 rounded-lg transition-all shadow-xl group"
           title="Close schema view"
         >
-          <span className="i-ph:x w-5 h-5 text-bolt-elements-textPrimary group-hover:text-red-500" />
+          <span className="i-ph:x w-5 h-5 text-recoder-elements-textPrimary group-hover:text-red-500" />
         </button>
       )}
 
       {/* Header */}
-      <div className="border-b border-bolt-elements-borderColor p-6">
+      <div className="border-b border-recoder-elements-borderColor p-6">
         <div className="flex items-center gap-3 mb-2">
           <div className="p-2 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg">
             <span className="i-ph:database w-6 h-6 text-white" />
           </div>
           <div>
-            <h1 className="text-2xl font-bold text-bolt-elements-textPrimary">
+            <h1 className="text-2xl font-bold text-recoder-elements-textPrimary">
               Database Schema Generator
             </h1>
-            <p className="text-sm text-bolt-elements-textTertiary">
+            <p className="text-sm text-recoder-elements-textTertiary">
               Generate complete database schemas from natural language descriptions
             </p>
           </div>
@@ -272,28 +272,28 @@ Please create all these files in the project and set up the database configurati
       <div className="flex-1 overflow-auto">
         <div className="max-w-7xl mx-auto p-6 space-y-6">
           {/* Input Section */}
-          <div className="bg-bolt-elements-background-depth-2 rounded-lg border border-bolt-elements-borderColor p-6 space-y-4">
+          <div className="bg-recoder-elements-background-depth-2 rounded-lg border border-recoder-elements-borderColor p-6 space-y-4">
             <div>
-              <label className="block text-sm font-medium text-bolt-elements-textPrimary mb-2">
+              <label className="block text-sm font-medium text-recoder-elements-textPrimary mb-2">
                 Describe your database
               </label>
               <textarea
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 placeholder="e.g., Create a blog with users, posts, and comments. Users can write multiple posts, and each post can have many comments."
-                className="w-full h-32 px-4 py-3 bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor rounded-lg text-bolt-elements-textPrimary placeholder-bolt-elements-textTertiary focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                className="w-full h-32 px-4 py-3 bg-recoder-elements-background-depth-2 border border-recoder-elements-borderColor rounded-lg text-recoder-elements-textPrimary placeholder-recoder-elements-textTertiary focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
               />
             </div>
 
             <div className="flex items-center gap-4">
               <div className="flex-1">
-                <label className="block text-sm font-medium text-bolt-elements-textPrimary mb-2">
+                <label className="block text-sm font-medium text-recoder-elements-textPrimary mb-2">
                   Database Type
                 </label>
                 <select
                   value={dbType}
                   onChange={(e) => setDbType(e.target.value as any)}
-                  className="w-full px-4 py-2 bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor rounded-lg text-bolt-elements-textPrimary focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-4 py-2 bg-recoder-elements-background-depth-2 border border-recoder-elements-borderColor rounded-lg text-recoder-elements-textPrimary focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
                   <option value="sqlite">SQLite</option>
                   <option value="postgresql">PostgreSQL</option>
@@ -325,7 +325,7 @@ Please create all these files in the project and set up the database configurati
             {/* Examples */}
             {examples.length > 0 && !result && (
               <div>
-                <label className="block text-sm font-medium text-bolt-elements-textPrimary mb-2">
+                <label className="block text-sm font-medium text-recoder-elements-textPrimary mb-2">
                   Quick Examples
                 </label>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
@@ -333,12 +333,12 @@ Please create all these files in the project and set up the database configurati
                     <button
                       key={index}
                       onClick={() => handleExampleClick(example)}
-                      className="text-left px-4 py-2 bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor rounded-lg hover:border-blue-500 transition-colors"
+                      className="text-left px-4 py-2 bg-recoder-elements-background-depth-2 border border-recoder-elements-borderColor rounded-lg hover:border-blue-500 transition-colors"
                     >
-                      <div className="text-sm font-medium text-bolt-elements-textPrimary">
+                      <div className="text-sm font-medium text-recoder-elements-textPrimary">
                         {example.name}
                       </div>
-                      <div className="text-xs text-bolt-elements-textTertiary mt-1">
+                      <div className="text-xs text-recoder-elements-textTertiary mt-1">
                         {example.category}
                       </div>
                     </button>
@@ -360,35 +360,35 @@ Please create all these files in the project and set up the database configurati
             <>
               {/* Summary Cards */}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <div className="bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor rounded-lg p-4">
-                  <div className="text-2xl font-bold text-bolt-elements-textPrimary">
+                <div className="bg-recoder-elements-background-depth-2 border border-recoder-elements-borderColor rounded-lg p-4">
+                  <div className="text-2xl font-bold text-recoder-elements-textPrimary">
                     {result.summary.entityCount}
                   </div>
-                  <div className="text-sm text-bolt-elements-textTertiary">Entities</div>
+                  <div className="text-sm text-recoder-elements-textTertiary">Entities</div>
                 </div>
-                <div className="bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor rounded-lg p-4">
-                  <div className="text-2xl font-bold text-bolt-elements-textPrimary">
+                <div className="bg-recoder-elements-background-depth-2 border border-recoder-elements-borderColor rounded-lg p-4">
+                  <div className="text-2xl font-bold text-recoder-elements-textPrimary">
                     {result.summary.totalFields}
                   </div>
-                  <div className="text-sm text-bolt-elements-textTertiary">Total Fields</div>
+                  <div className="text-sm text-recoder-elements-textTertiary">Total Fields</div>
                 </div>
-                <div className="bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor rounded-lg p-4">
-                  <div className="text-2xl font-bold text-bolt-elements-textPrimary">
+                <div className="bg-recoder-elements-background-depth-2 border border-recoder-elements-borderColor rounded-lg p-4">
+                  <div className="text-2xl font-bold text-recoder-elements-textPrimary">
                     {result.summary.relationshipCount}
                   </div>
-                  <div className="text-sm text-bolt-elements-textTertiary">Relationships</div>
+                  <div className="text-sm text-recoder-elements-textTertiary">Relationships</div>
                 </div>
-                <div className="bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor rounded-lg p-4">
-                  <div className="text-2xl font-bold text-bolt-elements-textPrimary">
+                <div className="bg-recoder-elements-background-depth-2 border border-recoder-elements-borderColor rounded-lg p-4">
+                  <div className="text-2xl font-bold text-recoder-elements-textPrimary">
                     {result.summary.indexCount}
                   </div>
-                  <div className="text-sm text-bolt-elements-textTertiary">Indexes</div>
+                  <div className="text-sm text-recoder-elements-textTertiary">Indexes</div>
                 </div>
               </div>
 
               {/* Entities List */}
-              <div className="bg-bolt-elements-background-depth-2 rounded-lg border border-bolt-elements-borderColor p-6">
-                <h2 className="text-lg font-semibold text-bolt-elements-textPrimary mb-4 flex items-center gap-2">
+              <div className="bg-recoder-elements-background-depth-2 rounded-lg border border-recoder-elements-borderColor p-6">
+                <h2 className="text-lg font-semibold text-recoder-elements-textPrimary mb-4 flex items-center gap-2">
                   <span className="i-ph:table w-5 h-5" />
                   Generated Entities
                 </h2>
@@ -396,18 +396,18 @@ Please create all these files in the project and set up the database configurati
                   {result.entities.map((entity, index) => (
                     <div
                       key={index}
-                      className="bg-bolt-elements-background-depth-2 rounded-lg p-4 border border-bolt-elements-borderColor"
+                      className="bg-recoder-elements-background-depth-2 rounded-lg p-4 border border-recoder-elements-borderColor"
                     >
                       <div className="flex items-center justify-between mb-3">
                         <div>
-                          <h3 className="font-semibold text-bolt-elements-textPrimary">
+                          <h3 className="font-semibold text-recoder-elements-textPrimary">
                             {entity.name}
                           </h3>
-                          <p className="text-sm text-bolt-elements-textTertiary">
+                          <p className="text-sm text-recoder-elements-textTertiary">
                             Table: {entity.tableName}
                           </p>
                         </div>
-                        <div className="text-sm text-bolt-elements-textTertiary">
+                        <div className="text-sm text-recoder-elements-textTertiary">
                           {entity.fields.length} fields • {entity.relationships.length} relationships
                         </div>
                       </div>
@@ -415,11 +415,11 @@ Please create all these files in the project and set up the database configurati
                         {entity.fields.slice(0, 6).map((field, fIndex) => (
                           <div
                             key={fIndex}
-                            className="flex items-center gap-2 text-bolt-elements-textTertiary"
+                            className="flex items-center gap-2 text-recoder-elements-textTertiary"
                           >
-                            <span className="text-bolt-elements-textTertiary">•</span>
+                            <span className="text-recoder-elements-textTertiary">•</span>
                             <span className="font-mono text-xs">{field.name}</span>
-                            <span className="text-bolt-elements-textTertiary">:</span>
+                            <span className="text-recoder-elements-textTertiary">:</span>
                             <span className="text-blue-400">{field.type}</span>
                             {field.primaryKey && (
                               <span className="text-xs bg-purple-500/20 text-purple-400 px-1 rounded">
@@ -434,7 +434,7 @@ Please create all these files in the project and set up the database configurati
                           </div>
                         ))}
                         {entity.fields.length > 6 && (
-                          <div className="text-bolt-elements-textTertiary text-xs">
+                          <div className="text-recoder-elements-textTertiary text-xs">
                             +{entity.fields.length - 6} more fields...
                           </div>
                         )}
@@ -445,15 +445,15 @@ Please create all these files in the project and set up the database configurati
               </div>
 
               {/* Code Output */}
-              <div className="bg-bolt-elements-background-depth-2 rounded-lg border border-bolt-elements-borderColor overflow-hidden">
+              <div className="bg-recoder-elements-background-depth-2 rounded-lg border border-recoder-elements-borderColor overflow-hidden">
                 {/* Tabs */}
-                <div className="flex items-center gap-1 border-b border-bolt-elements-borderColor p-2">
+                <div className="flex items-center gap-1 border-b border-recoder-elements-borderColor p-2">
                   <button
                     onClick={() => setActiveTab('sql')}
                     className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
                       activeTab === 'sql'
-                        ? 'bg-bolt-elements-background-depth-2 text-bolt-elements-textPrimary'
-                        : 'text-bolt-elements-textTertiary hover:text-bolt-elements-textPrimary'
+                        ? 'bg-recoder-elements-background-depth-2 text-recoder-elements-textPrimary'
+                        : 'text-recoder-elements-textTertiary hover:text-recoder-elements-textPrimary'
                     }`}
                   >
                     <span className="i-ph:file-code w-4 h-4 inline mr-2" />
@@ -463,8 +463,8 @@ Please create all these files in the project and set up the database configurati
                     onClick={() => setActiveTab('typescript')}
                     className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
                       activeTab === 'typescript'
-                        ? 'bg-bolt-elements-background-depth-2 text-bolt-elements-textPrimary'
-                        : 'text-bolt-elements-textTertiary hover:text-bolt-elements-textPrimary'
+                        ? 'bg-recoder-elements-background-depth-2 text-recoder-elements-textPrimary'
+                        : 'text-recoder-elements-textTertiary hover:text-recoder-elements-textPrimary'
                     }`}
                   >
                     <span className="i-ph:file-code w-4 h-4 inline mr-2" />
@@ -475,8 +475,8 @@ Please create all these files in the project and set up the database configurati
                       onClick={() => setActiveTab('prisma')}
                       className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
                         activeTab === 'prisma'
-                          ? 'bg-bolt-elements-background-depth-2 text-bolt-elements-textPrimary'
-                          : 'text-bolt-elements-textTertiary hover:text-bolt-elements-textPrimary'
+                          ? 'bg-recoder-elements-background-depth-2 text-recoder-elements-textPrimary'
+                          : 'text-recoder-elements-textTertiary hover:text-recoder-elements-textPrimary'
                       }`}
                     >
                       <span className="i-ph:file-code w-4 h-4 inline mr-2" />
@@ -487,8 +487,8 @@ Please create all these files in the project and set up the database configurati
                     onClick={() => setActiveTab('seed')}
                     className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
                       activeTab === 'seed'
-                        ? 'bg-bolt-elements-background-depth-2 text-bolt-elements-textPrimary'
-                        : 'text-bolt-elements-textTertiary hover:text-bolt-elements-textPrimary'
+                        ? 'bg-recoder-elements-background-depth-2 text-recoder-elements-textPrimary'
+                        : 'text-recoder-elements-textTertiary hover:text-recoder-elements-textPrimary'
                     }`}
                   >
                     <span className="i-ph:database w-4 h-4 inline mr-2" />
@@ -498,7 +498,7 @@ Please create all these files in the project and set up the database configurati
                   <div className="ml-auto flex items-center gap-2">
                     <button
                       onClick={() => handleCopy(getCurrentContent())}
-                      className="px-3 py-2 text-sm text-bolt-elements-textTertiary hover:text-bolt-elements-textPrimary transition-colors"
+                      className="px-3 py-2 text-sm text-recoder-elements-textTertiary hover:text-recoder-elements-textPrimary transition-colors"
                     >
                       {copied ? (
                         <span className="i-ph:check w-4 h-4" />
@@ -508,7 +508,7 @@ Please create all these files in the project and set up the database configurati
                     </button>
                     <button
                       onClick={() => downloadFile(getCurrentFilename(), getCurrentContent())}
-                      className="px-3 py-2 text-sm text-bolt-elements-textTertiary hover:text-bolt-elements-textPrimary transition-colors"
+                      className="px-3 py-2 text-sm text-recoder-elements-textTertiary hover:text-recoder-elements-textPrimary transition-colors"
                       title="Download file"
                     >
                       <span className="i-ph:download-simple w-4 h-4" />
@@ -525,8 +525,8 @@ Please create all these files in the project and set up the database configurati
                 </div>
 
                 {/* Code Content */}
-                <div className="p-4 bg-bolt-elements-background-depth-2">
-                  <pre className="text-sm text-bolt-elements-textPrimary overflow-x-auto">
+                <div className="p-4 bg-recoder-elements-background-depth-2">
+                  <pre className="text-sm text-recoder-elements-textPrimary overflow-x-auto">
                     <code>{getCurrentContent()}</code>
                   </pre>
                 </div>

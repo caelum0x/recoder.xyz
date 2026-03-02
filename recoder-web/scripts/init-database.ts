@@ -13,7 +13,7 @@ dotenv.config({ path: '.dev.vars' });
 dotenv.config({ path: '.env' });
 
 async function initDatabase() {
-  console.log('🚀 Initializing Bolt.new Database...\n');
+  console.log('🚀 Initializing Recoder Web Database...\n');
 
   const DATABASE_URL = process.env.DATABASE_URL;
   

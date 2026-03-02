@@ -3,7 +3,7 @@ import type {
 	GenerationId,
 	TaskId,
 	WorkspaceId,
-} from "@giselles-ai/protocol";
+} from "@recoder/protocol";
 
 export function taskGenerationIndexesPath(taskId: TaskId) {
 	return `generations/byTask/${taskId}.json` as const;

@@ -1,8 +1,40 @@
+import type { Metadata } from 'next';
 import Link from 'next/link';
-import { 
-  Terminal, Globe, Cpu, Shield, Zap, Code2, 
-  GitBranch, Database, Cloud, Lock, Sparkles, ArrowRight 
+import { SiteHeader } from '@/components/SiteHeader';
+import { SiteFooter } from '@/components/SiteFooter';
+import {
+  Terminal, Globe, Cpu, Shield, Zap, Code2,
+  GitBranch, Database, Cloud, Lock, Sparkles, ArrowRight
 } from 'lucide-react';
+
+export const metadata: Metadata = {
+  title: 'Features - AI-Powered Development Tools | Recoder.xyz',
+  description: 'Explore Recoder features: CLI tool, Web IDE, 40+ AI models, BYOK support, real-time code generation, Git integration, multi-language support, database management, and cloud deployment to AWS, Vercel, Docker, and Kubernetes.',
+  openGraph: {
+    title: 'Features - AI-Powered Development Tools | Recoder.xyz',
+    description: 'CLI tool, Web IDE, 40+ AI models, BYOK support, production-ready code generation, Git integration, and cloud deployment.',
+    url: 'https://recoder.xyz/features',
+    siteName: 'Recoder.xyz',
+    images: [
+      {
+        url: 'https://recoder.xyz/og-image.png',
+        width: 1200,
+        height: 630,
+        alt: 'Recoder Features - AI-Powered Development Tools',
+      },
+    ],
+    type: 'website',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Features - AI-Powered Development Tools',
+    description: 'CLI, Web IDE, 40+ AI models, BYOK, real-time code generation, Git integration, and cloud deployment.',
+    images: ['https://recoder.xyz/og-image.png'],
+  },
+  alternates: {
+    canonical: 'https://recoder.xyz/features',
+  },
+};
 
 export default function FeaturesPage() {
   const features = [
@@ -70,6 +102,7 @@ export default function FeaturesPage() {
 
   return (
     <div className="min-h-screen bg-black text-white">
+      <SiteHeader />
       <div className="max-w-6xl mx-auto px-4 py-20">
         <div className="text-center mb-16">
           <div className="inline-flex items-center space-x-2 px-4 py-2 bg-orange-500/10 border border-orange-500/20 rounded-full mb-6">
@@ -104,6 +137,7 @@ export default function FeaturesPage() {
           </Link>
         </div>
       </div>
+      <SiteFooter />
     </div>
   );
 }

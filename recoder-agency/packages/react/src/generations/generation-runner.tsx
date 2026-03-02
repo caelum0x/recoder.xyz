@@ -6,7 +6,7 @@ import {
 	isQueuedGeneration,
 	isTextGenerationNode,
 	type RunningGeneration,
-} from "@giselles-ai/protocol";
+} from "@recoder/protocol";
 import { useCallback, useEffect, useRef } from "react";
 import { useGiselle } from "../use-giselle";
 import { useGenerationRunnerSystem } from "./contexts/generation-runner-system";

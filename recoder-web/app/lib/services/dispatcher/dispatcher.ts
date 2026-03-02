@@ -409,9 +409,8 @@ async function forwardRequestToProductionUrl(
     method: request.method,
     headers,
     body: requestBody,
-    // @ts-ignore - duplex is needed for streaming
     duplex: 'half',
-  })
+  } as RequestInit)
 
   return fetch(forwardRequest)
 }

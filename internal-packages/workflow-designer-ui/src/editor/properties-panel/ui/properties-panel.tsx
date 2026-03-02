@@ -1,7 +1,7 @@
 "use client";
 
-import { defaultName } from "@giselles-ai/node-registry";
-import type { NodeLike } from "@giselles-ai/protocol";
+import { defaultName } from "@recoder/node-registry";
+import type { NodeLike } from "@recoder/protocol";
 import clsx from "clsx/lite";
 import type { ReactNode } from "react";
 import { NodeIcon } from "../../../icons/node";
@@ -29,8 +29,7 @@ function getNodeIconColor(node: NodeLike): string {
 			case "end":
 				return "text-inverse";
 			default: {
-				const _exhaustiveCheck: never = node.content.type;
-				throw new Error(`Unhandled node type: ${_exhaustiveCheck}`);
+				throw new Error(`Unhandled node type: ${String(node.content.type)}`);
 			}
 		}
 	}
@@ -44,8 +43,7 @@ function getNodeIconColor(node: NodeLike): string {
 			case "dataStore":
 				return "text-background";
 			default: {
-				const _exhaustiveCheck: never = node.content.type;
-				throw new Error(`Unhandled node type: ${_exhaustiveCheck}`);
+				throw new Error(`Unhandled node type: ${String(node.content.type)}`);
 			}
 		}
 	}
@@ -84,8 +82,7 @@ function getNodeIconBackground(node: NodeLike): string {
 			case "dataQuery":
 				return "bg-data-query-node-1";
 			default: {
-				const _exhaustiveCheck: never = node.content.type;
-				throw new Error(`Unhandled node type: ${_exhaustiveCheck}`);
+				throw new Error(`Unhandled node type: ${String(node.content.type)}`);
 			}
 		}
 	}
@@ -104,8 +101,7 @@ function getNodeIconBackground(node: NodeLike): string {
 			case "dataStore":
 				return "bg-data-store-node-1";
 			default: {
-				const _exhaustiveCheck: never = node.content.type;
-				throw new Error(`Unhandled node type: ${_exhaustiveCheck}`);
+				throw new Error(`Unhandled node type: ${String(node.content.type)}`);
 			}
 		}
 	}

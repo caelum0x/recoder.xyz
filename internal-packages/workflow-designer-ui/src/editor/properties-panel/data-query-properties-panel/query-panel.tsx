@@ -1,6 +1,6 @@
-import { defaultName } from "@giselles-ai/node-registry";
-import type { DataQueryNode } from "@giselles-ai/protocol";
-import { TextEditor } from "@giselles-ai/text-editor/react-internal";
+import { defaultName } from "@recoder/node-registry";
+import type { DataQueryNode } from "@recoder/protocol";
+import { TextEditor } from "@recoder/text-editor/react-internal";
 import { X } from "lucide-react";
 import {
 	useAppDesignerStore,

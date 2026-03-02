@@ -71,10 +71,10 @@ export function PromptLibraryPanel() {
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-bolt-elements-borderColor">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-recoder-elements-borderColor">
         <div>
-          <h3 className="text-sm font-medium text-bolt-elements-textPrimary">Prompt Library</h3>
-          <p className="text-xs text-bolt-elements-textSecondary mt-0.5">
+          <h3 className="text-sm font-medium text-recoder-elements-textPrimary">Prompt Library</h3>
+          <p className="text-xs text-recoder-elements-textSecondary mt-0.5">
             Save reusable prompts. Use @prompt in chat to reference them.
           </p>
         </div>
@@ -90,36 +90,36 @@ export function PromptLibraryPanel() {
 
       {/* Form */}
       {showForm && (
-        <div className="px-4 py-3 border-b border-bolt-elements-borderColor bg-bolt-elements-background-depth-3">
+        <div className="px-4 py-3 border-b border-recoder-elements-borderColor bg-recoder-elements-background-depth-3">
           <div className="space-y-3">
             <div>
-              <label className="block text-xs font-medium text-bolt-elements-textSecondary mb-1">Title</label>
+              <label className="block text-xs font-medium text-recoder-elements-textSecondary mb-1">Title</label>
               <input
                 type="text"
                 value={formTitle}
                 onChange={(e) => setFormTitle(e.target.value)}
                 placeholder="e.g. React Component Generator"
-                className="w-full px-3 py-1.5 text-sm bg-bolt-elements-background-depth-1 border border-bolt-elements-borderColor rounded-md text-bolt-elements-textPrimary placeholder:text-bolt-elements-textTertiary focus:outline-none focus:border-purple-500"
+                className="w-full px-3 py-1.5 text-sm bg-recoder-elements-background-depth-1 border border-recoder-elements-borderColor rounded-md text-recoder-elements-textPrimary placeholder:text-recoder-elements-textTertiary focus:outline-none focus:border-purple-500"
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-bolt-elements-textSecondary mb-1">Description (optional)</label>
+              <label className="block text-xs font-medium text-recoder-elements-textSecondary mb-1">Description (optional)</label>
               <input
                 type="text"
                 value={formDescription}
                 onChange={(e) => setFormDescription(e.target.value)}
                 placeholder="Brief description of what this prompt does"
-                className="w-full px-3 py-1.5 text-sm bg-bolt-elements-background-depth-1 border border-bolt-elements-borderColor rounded-md text-bolt-elements-textPrimary placeholder:text-bolt-elements-textTertiary focus:outline-none focus:border-purple-500"
+                className="w-full px-3 py-1.5 text-sm bg-recoder-elements-background-depth-1 border border-recoder-elements-borderColor rounded-md text-recoder-elements-textPrimary placeholder:text-recoder-elements-textTertiary focus:outline-none focus:border-purple-500"
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-bolt-elements-textSecondary mb-1">Content</label>
+              <label className="block text-xs font-medium text-recoder-elements-textSecondary mb-1">Content</label>
               <textarea
                 value={formContent}
                 onChange={(e) => setFormContent(e.target.value)}
                 placeholder="The prompt content that will be injected when referenced..."
                 rows={6}
-                className="w-full px-3 py-2 text-sm bg-bolt-elements-background-depth-1 border border-bolt-elements-borderColor rounded-md text-bolt-elements-textPrimary placeholder:text-bolt-elements-textTertiary focus:outline-none focus:border-purple-500 resize-y min-h-[100px]"
+                className="w-full px-3 py-2 text-sm bg-recoder-elements-background-depth-1 border border-recoder-elements-borderColor rounded-md text-recoder-elements-textPrimary placeholder:text-recoder-elements-textTertiary focus:outline-none focus:border-purple-500 resize-y min-h-[100px]"
               />
             </div>
             <div className="flex items-center gap-2">
@@ -132,7 +132,7 @@ export function PromptLibraryPanel() {
               </button>
               <button
                 onClick={resetForm}
-                className="px-3 py-1.5 text-xs text-bolt-elements-textSecondary hover:text-bolt-elements-textPrimary transition-colors"
+                className="px-3 py-1.5 text-xs text-recoder-elements-textSecondary hover:text-recoder-elements-textPrimary transition-colors"
               >
                 Cancel
               </button>
@@ -145,9 +145,9 @@ export function PromptLibraryPanel() {
       <div className="flex-1 overflow-auto">
         {prompts.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full text-center px-4">
-            <div className="i-ph:note-pencil text-4xl text-bolt-elements-textTertiary mb-3" />
-            <p className="text-sm text-bolt-elements-textSecondary mb-1">No prompts yet</p>
-            <p className="text-xs text-bolt-elements-textTertiary mb-3">
+            <div className="i-ph:note-pencil text-4xl text-recoder-elements-textTertiary mb-3" />
+            <p className="text-sm text-recoder-elements-textSecondary mb-1">No prompts yet</p>
+            <p className="text-xs text-recoder-elements-textTertiary mb-3">
               Create reusable prompts to speed up your workflow.
             </p>
             {!showForm && (
@@ -160,18 +160,18 @@ export function PromptLibraryPanel() {
             )}
           </div>
         ) : (
-          <div className="divide-y divide-bolt-elements-borderColor">
+          <div className="divide-y divide-recoder-elements-borderColor">
             {prompts.map((prompt) => (
               <div
                 key={prompt.id}
-                className={`px-4 py-3 hover:bg-bolt-elements-background-depth-3 transition-colors ${
-                  editingPrompt?.id === prompt.id ? 'bg-bolt-elements-background-depth-3' : ''
+                className={`px-4 py-3 hover:bg-recoder-elements-background-depth-3 transition-colors ${
+                  editingPrompt?.id === prompt.id ? 'bg-recoder-elements-background-depth-3' : ''
                 }`}
               >
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
-                      <h4 className="text-sm font-medium text-bolt-elements-textPrimary truncate">
+                      <h4 className="text-sm font-medium text-recoder-elements-textPrimary truncate">
                         {prompt.title}
                       </h4>
                       <span className="text-[10px] px-1.5 py-0.5 bg-purple-500/20 text-purple-400 rounded font-mono shrink-0">
@@ -179,18 +179,18 @@ export function PromptLibraryPanel() {
                       </span>
                     </div>
                     {prompt.description && (
-                      <p className="text-xs text-bolt-elements-textSecondary mt-0.5 truncate">
+                      <p className="text-xs text-recoder-elements-textSecondary mt-0.5 truncate">
                         {prompt.description}
                       </p>
                     )}
-                    <p className="text-xs text-bolt-elements-textTertiary mt-1 line-clamp-2 font-mono">
+                    <p className="text-xs text-recoder-elements-textTertiary mt-1 line-clamp-2 font-mono">
                       {prompt.content.slice(0, 150)}{prompt.content.length > 150 ? '...' : ''}
                     </p>
                   </div>
                   <div className="flex items-center gap-1 shrink-0">
                     <button
                       onClick={() => startEdit(prompt)}
-                      className="p-1 text-bolt-elements-textSecondary hover:text-bolt-elements-textPrimary transition-colors"
+                      className="p-1 text-recoder-elements-textSecondary hover:text-recoder-elements-textPrimary transition-colors"
                       title="Edit"
                     >
                       <div className="i-ph:pencil-simple text-sm" />
@@ -205,7 +205,7 @@ export function PromptLibraryPanel() {
                         </button>
                         <button
                           onClick={() => setDeleteConfirm(null)}
-                          className="px-2 py-0.5 text-[10px] text-bolt-elements-textSecondary hover:text-bolt-elements-textPrimary transition-colors"
+                          className="px-2 py-0.5 text-[10px] text-recoder-elements-textSecondary hover:text-recoder-elements-textPrimary transition-colors"
                         >
                           Cancel
                         </button>
@@ -213,7 +213,7 @@ export function PromptLibraryPanel() {
                     ) : (
                       <button
                         onClick={() => setDeleteConfirm(prompt.id)}
-                        className="p-1 text-bolt-elements-textSecondary hover:text-red-400 transition-colors"
+                        className="p-1 text-recoder-elements-textSecondary hover:text-red-400 transition-colors"
                         title="Delete"
                       >
                         <div className="i-ph:trash text-sm" />

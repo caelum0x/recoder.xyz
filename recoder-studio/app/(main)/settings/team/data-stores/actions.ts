@@ -1,7 +1,7 @@
 "use server";
 
-import { parseConfiguration } from "@giselles-ai/data-store-registry";
-import { type DataStoreId, SecretId } from "@giselles-ai/protocol";
+import { parseConfiguration } from "@recoder/data-store-registry";
+import { type DataStoreId, SecretId } from "@recoder/protocol";
 import { and, eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { giselle } from "@/app/giselle";

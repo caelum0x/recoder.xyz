@@ -102,7 +102,6 @@ jobs:
 
       - name: Run tests
         run: pnpm run test --passWithNoTests
-        continue-on-error: true
 
   eas-build:
     name: EAS Build (Production)

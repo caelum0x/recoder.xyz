@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from "@/lib/auth-helpers";
 import { auth } from '@/lib/auth-config';
 import { headers } from 'next/headers';
+import { logger } from '@/lib/logger';
 
 import { prisma } from '@/lib/prisma';
 
@@ -66,7 +67,7 @@ export async function GET(
       },
     });
   } catch (error) {
-    console.error('Error fetching invoice:', error);
+    logger.error('Error fetching invoice', { route: 'api/billing/invoices/[id]', error: error instanceof Error ? error.message : String(error) });
     return NextResponse.json(
       { success: false, error: 'Failed to fetch invoice' },
       { status: 500 }

@@ -1,9 +1,9 @@
 /**
- * Ambient type declaration for @giselles-ai/rag
+ * Ambient type declaration for @recoder/rag
  * The package source exists at packages/rag but dist/ is not built.
  * These minimal types satisfy the github-tool imports.
  */
-declare module '@giselles-ai/rag' {
+declare module '@recoder/rag' {
   export interface Document<TMetadata extends Record<string, unknown> = Record<string, never>> {
     content: string;
     metadata: TMetadata;

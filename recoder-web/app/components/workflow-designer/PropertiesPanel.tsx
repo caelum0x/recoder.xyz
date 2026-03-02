@@ -54,7 +54,7 @@ function getNodeIconBackground(node: WorkflowNode): string {
     case 'output':
       return 'bg-rose-500';
     default:
-      return 'bg-bolt-elements-background-depth-3';
+      return 'bg-recoder-elements-background-depth-3';
   }
 }
 
@@ -73,7 +73,7 @@ function PropertiesPanelHeader({
       className={classNames(
         PANEL_SPACING.HEADER.HEIGHT,
         'flex justify-between items-center px-4 shrink-0',
-        'border-b border-bolt-elements-borderColor'
+        'border-b border-recoder-elements-borderColor'
       )}
     >
       <div className={`flex flex-1 min-w-0 ${PANEL_SPACING.HEADER.ICON_GAP} items-center`}>
@@ -91,7 +91,7 @@ function PropertiesPanelHeader({
         </div>
         <div className="flex-1 min-w-0">
           <EditableText
-            className="block w-full rounded-lg bg-bolt-elements-background-depth-2/50 hover:bg-bolt-elements-background-depth-3"
+            className="block w-full rounded-lg bg-recoder-elements-background-depth-2/50 hover:bg-recoder-elements-background-depth-3"
             inputClassName="px-2 py-1"
             buttonClassName="px-2 py-1"
             onValueChange={(value) => {
@@ -137,7 +137,7 @@ function PropertySection({
 }) {
   return (
     <div className="space-y-2">
-      <h3 className="text-xs font-medium text-bolt-elements-textTertiary uppercase tracking-wider">
+      <h3 className="text-xs font-medium text-recoder-elements-textTertiary uppercase tracking-wider">
         {title}
       </h3>
       <div className="space-y-3">{children}</div>
@@ -159,17 +159,17 @@ function PropertyRow({
 }) {
   return (
     <div className="flex flex-col gap-1">
-      <label className="text-xs text-bolt-elements-textTertiary">{label}</label>
+      <label className="text-xs text-recoder-elements-textTertiary">{label}</label>
       {editable ? (
         <input
           type="text"
           value={value || ''}
           onChange={(e) => onChange?.(e.target.value)}
-          className="px-3 py-2 bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor rounded-lg text-sm text-bolt-elements-textPrimary
+          className="px-3 py-2 bg-recoder-elements-background-depth-2 border border-recoder-elements-borderColor rounded-lg text-sm text-recoder-elements-textPrimary
                      focus:outline-none focus:ring-2 focus:ring-accent-500/50 focus:border-accent-500"
         />
       ) : (
-        <span className="text-sm text-bolt-elements-textPrimary">{value || '-'}</span>
+        <span className="text-sm text-recoder-elements-textPrimary">{value || '-'}</span>
       )}
     </div>
   );
@@ -191,13 +191,13 @@ function PropertyTextArea({
 }) {
   return (
     <div className="flex flex-col gap-1">
-      <label className="text-xs text-bolt-elements-textTertiary">{label}</label>
+      <label className="text-xs text-recoder-elements-textTertiary">{label}</label>
       <textarea
         value={value || ''}
         onChange={(e) => onChange?.(e.target.value)}
         placeholder={placeholder}
         rows={rows}
-        className="px-3 py-2 bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor rounded-lg text-sm text-bolt-elements-textPrimary
+        className="px-3 py-2 bg-recoder-elements-background-depth-2 border border-recoder-elements-borderColor rounded-lg text-sm text-recoder-elements-textPrimary
                    resize-none focus:outline-none focus:ring-2 focus:ring-accent-500/50 focus:border-accent-500"
       />
     </div>
@@ -251,8 +251,8 @@ export function PropertiesPanel() {
   return (
     <aside
       className={classNames(
-        'w-[360px] shrink-0 border-l border-bolt-elements-borderColor h-full overflow-hidden',
-        'bg-bolt-elements-background-depth-1/95 backdrop-blur-sm flex flex-col'
+        'w-[360px] shrink-0 border-l border-recoder-elements-borderColor h-full overflow-hidden',
+        'bg-recoder-elements-background-depth-1/95 backdrop-blur-sm flex flex-col'
       )}
       aria-label="Properties Panel"
     >
@@ -363,7 +363,7 @@ export function PropertiesPanel() {
             {node.inputs.map((input) => (
               <div key={input.id} className="flex items-center gap-2 text-sm">
                 <span className="w-2 h-2 rounded-full bg-emerald-500" />
-                <span className="text-bolt-elements-textPrimary">{input.label}</span>
+                <span className="text-recoder-elements-textPrimary">{input.label}</span>
                 {input.isRequired && (
                   <span className="text-xs text-red-400">(required)</span>
                 )}
@@ -378,7 +378,7 @@ export function PropertiesPanel() {
             {node.outputs.map((output) => (
               <div key={output.id} className="flex items-center gap-2 text-sm">
                 <span className="w-2 h-2 rounded-full bg-purple-500" />
-                <span className="text-bolt-elements-textPrimary">{output.label}</span>
+                <span className="text-recoder-elements-textPrimary">{output.label}</span>
               </div>
             ))}
           </PropertySection>

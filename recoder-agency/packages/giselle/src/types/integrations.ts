@@ -1,7 +1,7 @@
 import type {
 	GitHubInstallationAppAuth,
 	GitHubPersonalAccessTokenAuth,
-} from "@giselles-ai/github-tool";
+} from "@recoder/github-tool";
 
 interface GitHubInstallationAppAuthResolver {
 	installationIdForRepo: (repositoryNodeId: string) => Promise<number> | number;

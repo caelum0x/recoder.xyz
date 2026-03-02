@@ -1,8 +1,8 @@
 "use client";
 
-import { AppIcon } from "@giselle-internal/ui/app-icon";
-import type { Trigger } from "@giselles-ai/protocol";
-import { useGiselle as useRecoderStudio } from "@giselles-ai/react";
+import { AppIcon } from "@recoder-internal/ui/app-icon";
+import type { Trigger } from "@recoder/protocol";
+import { useGiselle as useRecoderStudio } from "@recoder/react";
 import { X } from "lucide-react";
 import {
 	useActionState,

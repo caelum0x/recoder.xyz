@@ -1,6 +1,6 @@
 "use client";
 
-import { GlassSurfaceLayers } from "@giselle-internal/ui/glass-surface";
+import { GlassSurfaceLayers } from "@recoder-internal/ui/glass-surface";
 import * as DropdownMenuPrimitive from "@radix-ui/react-dropdown-menu";
 import {
 	CheckIcon,

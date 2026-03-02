@@ -17,6 +17,7 @@ import { createOctokit } from "@repo/github";
 import { parseError } from "@repo/lib/parse-error";
 import { type Issue, LinearClient } from "@repo/linear";
 import { revalidatePath } from "next/cache";
+import { PmEvents, trackPmServerEvent, createPmTraceId } from "@/lib/analytics";
 import { database } from "@/lib/database";
 
 const updateJira = async (
@@ -227,15 +228,41 @@ export const updateFeature = async (
       },
     });
 
+    const traceId = createPmTraceId();
+
+    trackPmServerEvent(PmEvents.FEATURE_UPDATED, {
+      featureId,
+      userId: user.id,
+      traceId,
+    });
+
     if (feature.connection?.type === "LINEAR") {
+      trackPmServerEvent(PmEvents.FEATURE_DELEGATED, {
+        featureId,
+        userId: user.id,
+        traceId,
+        statusId: feature.connection.type,
+      });
       await updateLinear(feature.connection, data);
     }
 
     if (feature.connection?.type === "GITHUB") {
+      trackPmServerEvent(PmEvents.FEATURE_DELEGATED, {
+        featureId,
+        userId: user.id,
+        traceId,
+        statusId: feature.connection.type,
+      });
       await updateGitHub(feature.connection, data);
     }
 
     if (feature.connection?.type === "JIRA") {
+      trackPmServerEvent(PmEvents.FEATURE_DELEGATED, {
+        featureId,
+        userId: user.id,
+        traceId,
+        statusId: feature.connection.type,
+      });
       await updateJira(feature.connection, data);
     }
 

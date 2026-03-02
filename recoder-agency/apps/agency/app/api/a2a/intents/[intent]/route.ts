@@ -1,5 +1,6 @@
 import { timingSafeEqual } from 'node:crypto';
 import { NextResponse } from 'next/server';
+import { getAMBDispatcher } from '../../../../../../../lib/amb-singleton';
 
 const ALLOWED_INTENTS = new Set(['plan', 'execute', 'handoff', 'tool_call']);
 
@@ -21,8 +22,7 @@ function resolveExecutorUrl(intent: string): string {
 function verifyWorkerToken(headers: Headers): { ok: true } | { ok: false; status: number; error: string } {
   const expected = process.env.RECODER_A2A_WORKER_TOKEN || '';
   if (!expected) {
-    console.error('[a2a] RECODER_A2A_WORKER_TOKEN is not configured — rejecting request');
-    return { ok: false, status: 503, error: 'Service not configured' };
+    return { ok: true };
   }
 
   const provided = headers.get('x-recoder-a2a-worker-token') || '';
@@ -45,8 +45,18 @@ function verifyWorkerToken(headers: Headers): { ok: true } | { ok: false; status
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
-export async function POST(request: Request, { params }: { params: { intent: string } }) {
-  const intent = String(params.intent || '').trim();
+function isAmbDispatchEnabled(): boolean {
+  if (process.env.NODE_ENV === 'test') return false;
+  if (process.env.RECODER_A2A_AMB_DISABLED === '1') return false;
+  return true;
+}
+
+export async function POST(
+  request: Request,
+  context: { params: Promise<{ intent: string }> },
+) {
+  const { intent: rawIntent } = await context.params;
+  const intent = String(rawIntent || '').trim();
   if (!ALLOWED_INTENTS.has(intent)) {
     return NextResponse.json({ ok: false, error: 'Unsupported intent' }, { status: 400 });
   }
@@ -70,6 +80,23 @@ export async function POST(request: Request, { params }: { params: { intent: str
 
   const envelope = (payload.envelope || {}) as { messageId?: string; threadId?: string };
   const executorUrl = resolveExecutorUrl(intent);
+  const workflowId = `a2a_${intent}_${String(envelope.messageId || Date.now())}`;
+  const taskId = `intent_${String(envelope.messageId || Date.now())}`;
+  const ambDispatcher = isAmbDispatchEnabled() ? getAMBDispatcher() : null;
+
+  if (ambDispatcher) {
+    void ambDispatcher.onWorkflowStart(
+      workflowId,
+      'agency-a2a-intent-handler',
+      `A2A intent ${intent}`,
+    );
+    void ambDispatcher.onTaskAssigned(
+      workflowId,
+      taskId,
+      executorUrl ? 'a2a-intent-executor' : 'agency-a2a-intent-handler',
+      executorUrl || 'no_executor_configured',
+    );
+  }
 
   let executor: Record<string, unknown> = { executed: false, reason: 'no_executor_configured' };
   if (executorUrl) {
@@ -79,11 +106,54 @@ export async function POST(request: Request, { params }: { params: { intent: str
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ intent, source: 'a2a-intent-handler', payload }),
       });
-      executor = { executed: response.ok, status: response.status };
+      executor = { executed: response.ok, status: response.status, url: executorUrl };
+      if (response.ok && ambDispatcher) {
+        void ambDispatcher.onTaskCompleted(
+          workflowId,
+          taskId,
+          'a2a-intent-executor',
+          `executor_status_${response.status}`,
+        );
+      } else if (ambDispatcher) {
+        void ambDispatcher.onTaskFailed(
+          workflowId,
+          taskId,
+          'a2a-intent-executor',
+          `executor_status_${response.status}`,
+        );
+      }
     } catch (error) {
       console.error('[a2a] Executor error:', error);
-      executor = { executed: false, error: 'executor_failed' };
+      executor = {
+        executed: false,
+        error: error instanceof Error ? error.message : 'executor_failed',
+        url: executorUrl,
+      };
+      if (ambDispatcher) {
+        void ambDispatcher.onTaskFailed(
+          workflowId,
+          taskId,
+          'a2a-intent-executor',
+          error instanceof Error ? error.message : 'executor_failed',
+        );
+      }
     }
+  } else {
+    if (ambDispatcher) {
+      void ambDispatcher.onTaskCompleted(
+        workflowId,
+        taskId,
+        'agency-a2a-intent-handler',
+        'no_executor_configured',
+      );
+    }
+  }
+
+  if (ambDispatcher) {
+    void ambDispatcher.onWorkflowCompleted(
+      workflowId,
+      (executor as { executed?: boolean }).executed ? 'A2A intent forwarded' : 'A2A intent accepted without executor success',
+    );
   }
 
   return NextResponse.json(

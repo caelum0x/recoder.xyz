@@ -142,6 +142,10 @@ echo "All 4 secrets validated."
 
 echo "=== Phase 2: Sync code to server ==="
 
+# Tag current state on the remote server for rollback before overwriting
+echo "Creating pre-deploy git tag on server..."
+ssh_cmd "cd ${REMOTE_DIR} && git tag -f \"pre-deploy-\$(date +%Y%m%d-%H%M%S)\" || true" 2>/dev/null || true
+
 rsync -az --timeout=120 --progress \
   --exclude='node_modules' --exclude='.git' \
   --exclude='.next' --exclude='.turbo' --exclude='coverage' \
@@ -153,7 +157,7 @@ rsync -az --timeout=120 --progress \
   --exclude='apps/mobile' \
   --include='packages/*/dist/***' --include='shared/dist/***' \
   --exclude='recoder-web/dist' \
-  --exclude='production-engine/dist' --exclude='app/dist' \
+  --exclude='app/dist' \
   -e "ssh ${SSH_OPTS}" \
   ./ "${SERVER}:${REMOTE_DIR}/"
 
@@ -352,6 +356,10 @@ while [ "$ELAPSED" -lt "$MAX_WAIT" ]; do
     echo ""
     echo "Build completed! Fetching full log..."
     ssh_cmd "cat /root/deploy-build.log" 2>/dev/null || true
+    # Check build log for error messages
+    if ssh $SSH_OPTS "${SERVER}" "grep -qi 'error\|fatal\|failed' /root/deploy-build.log 2>/dev/null"; then
+      echo "WARNING: Build log contains error messages - review /root/deploy-build.log"
+    fi
     break
   fi
 
@@ -374,27 +382,50 @@ cd /root/recoder.xyz
 echo ""
 echo "=== Verification ==="
 
-echo -n "docker-backend (:3100): "
-curl -sf http://localhost:3100/health && echo " OK" || echo " FAIL"
+FAILED_SERVICES=""
+PASSED_SERVICES=""
 
-echo -n "recoder-web (:5173): "
-curl -sf -o /dev/null -w "%{http_code}" http://localhost:5173 && echo " OK" || echo " FAIL"
+check_service() {
+  local name="$1"
+  shift
+  echo -n "${name}: "
+  if "$@" >/dev/null 2>&1; then
+    echo "OK"
+    PASSED_SERVICES="${PASSED_SERVICES} ${name}"
+  else
+    echo "FAIL"
+    FAILED_SERVICES="${FAILED_SERVICES} ${name}"
+  fi
+}
 
-echo -n "recoder-frontend (:3001): "
-curl -sf -o /dev/null -w "%{http_code}" http://localhost:3001 && echo " OK" || echo " FAIL"
-
-echo -n "openclaw-gateway (:18789): "
-curl -sf -o /dev/null -w "%{http_code}" http://localhost:18789/health && echo " OK" || echo " FAIL"
-
-echo -n "recoder-studio (:3005): "
-curl -sf -o /dev/null -w "%{http_code}" http://localhost:3005/login && echo " OK" || echo " FAIL"
+check_service "docker-backend(:3100)" curl -sf http://localhost:3100/health
+check_service "recoder-web(:5173)" curl -sf -o /dev/null -w "%{http_code}" http://localhost:5173
+check_service "recoder-frontend(:3001)" curl -sf -o /dev/null -w "%{http_code}" http://localhost:3001
+check_service "openclaw-gateway(:18789)" curl -sf -o /dev/null -w "%{http_code}" http://localhost:18789/health
+check_service "recoder-studio(:3005)" curl -sf -o /dev/null -w "%{http_code}" http://localhost:3005/login
 
 echo -n "A2A runtime: "
 curl -sf http://localhost:5173/api/a2a/runtime | head -c 200
 echo ""
 
 echo -n "Redis ping: "
-docker compose -f docker-compose.deploy.yml exec -T redis redis-cli -a "$(grep REDIS_PASSWORD .env | cut -d= -f2)" ping 2>/dev/null
+if docker compose -f docker-compose.deploy.yml exec -T redis redis-cli -a "$(grep REDIS_PASSWORD .env | cut -d= -f2)" ping 2>/dev/null | grep -q PONG; then
+  echo "OK"
+  PASSED_SERVICES="${PASSED_SERVICES} Redis"
+else
+  echo "FAIL"
+  FAILED_SERVICES="${FAILED_SERVICES} Redis"
+fi
+
+echo ""
+echo "=== Health Check Summary ==="
+echo "PASSED:${PASSED_SERVICES:-" (none)"}"
+echo "FAILED:${FAILED_SERVICES:-" (none)"}"
+
+if [ -n "$FAILED_SERVICES" ]; then
+  echo "DEPLOY INCOMPLETE: Some services are unhealthy"
+  exit 1
+fi
 ENDSSH
 
 echo "=== Phase 6: Ensure recoder-studio is running ==="

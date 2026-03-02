@@ -273,13 +273,13 @@ export const ConsolePanel = memo(({ className = '' }: ConsolePanelProps) => {
         {/* Input */}
         <div className="flex">
           <span className="text-green-400 select-none">{command.isMultiline ? multilinePrompt : prompt}</span>
-          <span className="text-bolt-elements-textPrimary whitespace-pre-wrap break-all">{command.input}</span>
+          <span className="text-recoder-elements-textPrimary whitespace-pre-wrap break-all">{command.input}</span>
         </div>
         {/* Output */}
         {command.output && (
           <div
             className={`whitespace-pre-wrap break-all pl-4 ${
-              command.isError ? 'text-red-400' : 'text-bolt-elements-textSecondary'
+              command.isError ? 'text-red-400' : 'text-recoder-elements-textSecondary'
             }`}
           >
             {command.output}
@@ -301,8 +301,8 @@ export const ConsolePanel = memo(({ className = '' }: ConsolePanelProps) => {
 
   if (!containerReady) {
     return (
-      <div className={`flex flex-col h-full bg-bolt-elements-background-depth-1 ${className}`}>
-        <div className="flex items-center justify-center h-full text-bolt-elements-textTertiary">
+      <div className={`flex flex-col h-full bg-recoder-elements-background-depth-1 ${className}`}>
+        <div className="flex items-center justify-center h-full text-recoder-elements-textTertiary">
           <div className="text-center">
             <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500 mx-auto mb-2" />
             <p className="text-sm">Waiting for container...</p>
@@ -313,15 +313,15 @@ export const ConsolePanel = memo(({ className = '' }: ConsolePanelProps) => {
   }
 
   return (
-    <div className={`flex flex-col h-full min-h-0 bg-bolt-elements-background-depth-1 ${className}`}>
+    <div className={`flex flex-col h-full min-h-0 bg-recoder-elements-background-depth-1 ${className}`}>
       {/* Header */}
-      <div className="flex items-center justify-between px-3 py-2 border-b border-bolt-elements-borderColor bg-bolt-elements-background-depth-2">
+      <div className="flex items-center justify-between px-3 py-2 border-b border-recoder-elements-borderColor bg-recoder-elements-background-depth-2">
         <div className="flex items-center gap-2">
           {/* Language Selector */}
           <div className="relative" ref={languageMenuRef}>
             <button
               onClick={() => setShowLanguageMenu(!showLanguageMenu)}
-              className="flex items-center gap-2 px-2 py-1 text-sm rounded hover:bg-bolt-elements-background-depth-3 transition-colors"
+              className="flex items-center gap-2 px-2 py-1 text-sm rounded hover:bg-recoder-elements-background-depth-3 transition-colors"
               disabled={isCheckingLanguages}
             >
               {session ? (
@@ -341,20 +341,20 @@ export const ConsolePanel = memo(({ className = '' }: ConsolePanelProps) => {
 
             {/* Language Dropdown */}
             {showLanguageMenu && (
-              <div className="absolute top-full left-0 mt-1 w-48 bg-bolt-elements-background-depth-3 border border-bolt-elements-borderColor rounded-lg shadow-lg z-50 py-1">
+              <div className="absolute top-full left-0 mt-1 w-48 bg-recoder-elements-background-depth-3 border border-recoder-elements-borderColor rounded-lg shadow-lg z-50 py-1">
                 {availableLanguages.map((lang) => (
                   <button
                     key={lang.id}
                     onClick={() => handleStartSession(lang.id)}
                     disabled={!lang.available || isLoading}
-                    className={`w-full flex items-center gap-2 px-3 py-2 text-sm text-left hover:bg-bolt-elements-background-depth-4 transition-colors ${
+                    className={`w-full flex items-center gap-2 px-3 py-2 text-sm text-left hover:bg-recoder-elements-background-depth-4 transition-colors ${
                       !lang.available ? 'opacity-50 cursor-not-allowed' : ''
                     } ${session?.language === lang.id ? 'bg-blue-500/20' : ''}`}
                   >
                     <span className={lang.icon} />
                     <span className="flex-1">{lang.name}</span>
                     {!lang.available && (
-                      <span className="text-xs text-bolt-elements-textTertiary">Not available</span>
+                      <span className="text-xs text-recoder-elements-textTertiary">Not available</span>
                     )}
                     {session?.language === lang.id && (
                       <span className="w-2 h-2 rounded-full bg-green-500" />
@@ -367,7 +367,7 @@ export const ConsolePanel = memo(({ className = '' }: ConsolePanelProps) => {
 
           {/* Status */}
           {isLoading && (
-            <span className="i-ph:spinner animate-spin text-sm text-bolt-elements-textTertiary" />
+            <span className="i-ph:spinner animate-spin text-sm text-recoder-elements-textTertiary" />
           )}
         </div>
 
@@ -412,7 +412,7 @@ export const ConsolePanel = memo(({ className = '' }: ConsolePanelProps) => {
           className="flex-1 overflow-auto p-3 font-mono text-xs"
         >
           {!session ? (
-            <div className="flex flex-col items-center justify-center h-full text-bolt-elements-textTertiary">
+            <div className="flex flex-col items-center justify-center h-full text-recoder-elements-textTertiary">
               <span className="i-ph:terminal text-4xl mb-3" />
               <p className="text-sm mb-2">Interactive Console</p>
               <p className="text-xs text-center max-w-xs">
@@ -424,7 +424,7 @@ export const ConsolePanel = memo(({ className = '' }: ConsolePanelProps) => {
                   <button
                     key={lang.id}
                     onClick={() => handleStartSession(lang.id)}
-                    className="flex items-center gap-1 px-3 py-1.5 bg-bolt-elements-background-depth-3 hover:bg-bolt-elements-background-depth-4 rounded text-sm transition-colors"
+                    className="flex items-center gap-1 px-3 py-1.5 bg-recoder-elements-background-depth-3 hover:bg-recoder-elements-background-depth-4 rounded text-sm transition-colors"
                     style={{ borderLeft: `3px solid ${lang.color}` }}
                   >
                     <span className={lang.icon} />
@@ -443,7 +443,7 @@ export const ConsolePanel = memo(({ className = '' }: ConsolePanelProps) => {
                 <div className="text-yellow-400/70 text-xs mb-1">
                   <span className="i-ph:dots-three-vertical mr-1" />
                   Multi-line mode (Shift+Enter to add line, Enter to execute, Esc to cancel)
-                  <pre className="mt-1 pl-4 text-bolt-elements-textSecondary">{multilineBuffer}</pre>
+                  <pre className="mt-1 pl-4 text-recoder-elements-textSecondary">{multilineBuffer}</pre>
                 </div>
               )}
             </>
@@ -452,15 +452,15 @@ export const ConsolePanel = memo(({ className = '' }: ConsolePanelProps) => {
 
         {/* Variables Panel (collapsible) */}
         {session && variables.length > 0 && (
-          <div className="w-40 border-l border-bolt-elements-borderColor bg-bolt-elements-background-depth-2 overflow-auto">
-            <div className="px-2 py-1.5 text-xs font-medium text-bolt-elements-textTertiary border-b border-bolt-elements-borderColor">
+          <div className="w-40 border-l border-recoder-elements-borderColor bg-recoder-elements-background-depth-2 overflow-auto">
+            <div className="px-2 py-1.5 text-xs font-medium text-recoder-elements-textTertiary border-b border-recoder-elements-borderColor">
               Variables
             </div>
             <div className="p-2 space-y-1">
               {variables.map((varName) => (
                 <div
                   key={varName}
-                  className="px-2 py-1 text-xs bg-bolt-elements-background-depth-3 rounded font-mono truncate"
+                  className="px-2 py-1 text-xs bg-recoder-elements-background-depth-3 rounded font-mono truncate"
                   title={varName}
                 >
                   {varName}
@@ -473,7 +473,7 @@ export const ConsolePanel = memo(({ className = '' }: ConsolePanelProps) => {
 
       {/* Input Area */}
       {session && (
-        <div className="flex items-start gap-2 px-3 py-2 border-t border-bolt-elements-borderColor bg-bolt-elements-background-depth-2">
+        <div className="flex items-start gap-2 px-3 py-2 border-t border-recoder-elements-borderColor bg-recoder-elements-background-depth-2">
           <span className="text-green-400 font-mono text-xs select-none pt-1">
             {getCurrentPrompt()}
           </span>
@@ -484,7 +484,7 @@ export const ConsolePanel = memo(({ className = '' }: ConsolePanelProps) => {
             onKeyDown={handleKeyDown}
             placeholder="Enter code..."
             disabled={isLoading}
-            className="flex-1 bg-transparent border-none outline-none resize-none font-mono text-xs text-bolt-elements-textPrimary placeholder:text-bolt-elements-textTertiary min-h-[20px] max-h-[100px]"
+            className="flex-1 bg-transparent border-none outline-none resize-none font-mono text-xs text-recoder-elements-textPrimary placeholder:text-recoder-elements-textTertiary min-h-[20px] max-h-[100px]"
             rows={1}
             style={{
               height: 'auto',
@@ -509,11 +509,11 @@ export const ConsolePanel = memo(({ className = '' }: ConsolePanelProps) => {
 
       {/* Keyboard Shortcuts Help */}
       {session && (
-        <div className="px-3 py-1 text-xs text-bolt-elements-textTertiary border-t border-bolt-elements-borderColor bg-bolt-elements-background-depth-2 flex gap-4">
-          <span><kbd className="px-1 bg-bolt-elements-background-depth-3 rounded">Enter</kbd> Execute</span>
-          <span><kbd className="px-1 bg-bolt-elements-background-depth-3 rounded">Shift+Enter</kbd> Multi-line</span>
-          <span><kbd className="px-1 bg-bolt-elements-background-depth-3 rounded">Up/Down</kbd> History</span>
-          <span><kbd className="px-1 bg-bolt-elements-background-depth-3 rounded">Ctrl+L</kbd> Clear</span>
+        <div className="px-3 py-1 text-xs text-recoder-elements-textTertiary border-t border-recoder-elements-borderColor bg-recoder-elements-background-depth-2 flex gap-4">
+          <span><kbd className="px-1 bg-recoder-elements-background-depth-3 rounded">Enter</kbd> Execute</span>
+          <span><kbd className="px-1 bg-recoder-elements-background-depth-3 rounded">Shift+Enter</kbd> Multi-line</span>
+          <span><kbd className="px-1 bg-recoder-elements-background-depth-3 rounded">Up/Down</kbd> History</span>
+          <span><kbd className="px-1 bg-recoder-elements-background-depth-3 rounded">Ctrl+L</kbd> Clear</span>
         </div>
       )}
     </div>

@@ -45,7 +45,7 @@ export function ProjectCard({ project, onEdit, onDelete }: ProjectCardProps) {
     <div className="relative">
       <div
         onClick={handleCardClick}
-        className="group p-6 bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor rounded-lg hover:border-bolt-elements-borderColorActive transition-all cursor-pointer hover:bg-bolt-elements-background-depth-3"
+        className="group p-6 bg-recoder-elements-background-depth-2 border border-recoder-elements-borderColor rounded-lg hover:border-recoder-elements-borderColorActive transition-all cursor-pointer hover:bg-recoder-elements-background-depth-3"
       >
         {/* Project icon and menu button */}
         <div className="flex items-start justify-between mb-4">
@@ -62,17 +62,17 @@ export function ProjectCard({ project, onEdit, onDelete }: ProjectCardProps) {
                 e.stopPropagation();
                 setShowMenu(!showMenu);
               }}
-              className="p-1 text-bolt-elements-textSecondary hover:text-bolt-elements-textPrimary opacity-0 group-hover:opacity-100 transition-all rounded"
+              className="p-1 text-recoder-elements-textSecondary hover:text-recoder-elements-textPrimary opacity-0 group-hover:opacity-100 transition-all rounded"
             >
               <div className="i-ph:dots-three-vertical text-lg" />
             </button>
 
             {/* Context menu */}
             {showMenu && (
-              <div className="absolute right-0 top-8 w-32 bg-bolt-elements-background-depth-1 border border-bolt-elements-borderColor rounded-lg shadow-lg z-10">
+              <div className="absolute right-0 top-8 w-32 bg-recoder-elements-background-depth-1 border border-recoder-elements-borderColor rounded-lg shadow-lg z-10">
                 <button
                   onClick={handleEdit}
-                  className="w-full px-3 py-2 text-left text-sm text-bolt-elements-textPrimary hover:bg-bolt-elements-background-depth-3 rounded-t-lg transition-colors flex items-center gap-2"
+                  className="w-full px-3 py-2 text-left text-sm text-recoder-elements-textPrimary hover:bg-recoder-elements-background-depth-3 rounded-t-lg transition-colors flex items-center gap-2"
                 >
                   <div className="i-ph:pencil text-sm" />
                   Edit
@@ -91,18 +91,18 @@ export function ProjectCard({ project, onEdit, onDelete }: ProjectCardProps) {
 
         {/* Project details */}
         <div className="space-y-3">
-          <h3 className="font-semibold text-bolt-elements-textPrimary group-hover:text-bolt-elements-textPrimary transition-colors">
+          <h3 className="font-semibold text-recoder-elements-textPrimary group-hover:text-recoder-elements-textPrimary transition-colors">
             {project.name}
           </h3>
           
           {project.description && (
-            <p className="text-sm text-bolt-elements-textSecondary line-clamp-2">
+            <p className="text-sm text-recoder-elements-textSecondary line-clamp-2">
               {project.description}
             </p>
           )}
 
           {/* Stats */}
-          <div className="flex items-center gap-4 text-xs text-bolt-elements-textSecondary">
+          <div className="flex items-center gap-4 text-xs text-recoder-elements-textSecondary">
             <div className="flex items-center gap-1">
               <div className="i-ph:chat-circle text-sm" />
               <span>{project.chatCount || 0} chats</span>
@@ -114,7 +114,7 @@ export function ProjectCard({ project, onEdit, onDelete }: ProjectCardProps) {
           </div>
 
           {/* Last updated */}
-          <div className="text-xs text-bolt-elements-textSecondary">
+          <div className="text-xs text-recoder-elements-textSecondary">
             Updated {formatDate(project.updatedAt)}
           </div>
         </div>
@@ -123,17 +123,17 @@ export function ProjectCard({ project, onEdit, onDelete }: ProjectCardProps) {
       {/* Delete confirmation modal */}
       {showDeleteConfirm && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor rounded-lg p-6 max-w-sm w-full mx-4">
-            <h3 className="text-lg font-semibold text-bolt-elements-textPrimary mb-3">
+          <div className="bg-recoder-elements-background-depth-2 border border-recoder-elements-borderColor rounded-lg p-6 max-w-sm w-full mx-4">
+            <h3 className="text-lg font-semibold text-recoder-elements-textPrimary mb-3">
               Delete Project
             </h3>
-            <p className="text-bolt-elements-textSecondary mb-6">
+            <p className="text-recoder-elements-textSecondary mb-6">
               Are you sure you want to delete "{project.name}"? This action cannot be undone.
             </p>
             <div className="flex gap-3 justify-end">
               <button
                 onClick={() => setShowDeleteConfirm(false)}
-                className="px-4 py-2 text-bolt-elements-textSecondary hover:text-bolt-elements-textPrimary transition-colors"
+                className="px-4 py-2 text-recoder-elements-textSecondary hover:text-recoder-elements-textPrimary transition-colors"
               >
                 Cancel
               </button>

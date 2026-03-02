@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { scrapeUrl } from "./self-made";
 
 const TEST_URL = "https://example.com/";
-const TEST_TXT_URL = "https://docs.giselles.ai/llms-full.txt";
+const TEST_TXT_URL = "https://docs.recoder.xyz/llms-full.txt";
 
 // Mock URLs for testing edge cases (these won't be called in actual tests)
 const TEST_UPPERCASE_TXT_URL = "https://example.com/TEST.TXT";
@@ -65,7 +65,7 @@ describe("scrapeUrl (invalid URL)", () => {
 			expect(result.markdown.length).toBeGreaterThan(0);
 
 			// Check that URLs are not escaped in the markdown content
-			expect(result.markdown).toContain("https://docs.giselles.ai/");
+			expect(result.markdown).toContain("https://docs.recoder.xyz/");
 			expect(result.markdown).not.toContain("\\/");
 
 			// Check that markdown headers are not escaped

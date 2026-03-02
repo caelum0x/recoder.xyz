@@ -1,4 +1,4 @@
-import { getUser } from "@/lib/supabase";
+import { getUser } from "@/lib/auth/user";
 import {
 	buildGoogleUserClient,
 	type GoogleUserClient,

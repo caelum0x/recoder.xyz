@@ -1,5 +1,5 @@
-import { Button } from "@giselle-internal/ui/button";
-import { useIntegration } from "@giselles-ai/react";
+import { Button } from "@recoder-internal/ui/button";
+import { useIntegration } from "@recoder/react";
 import { ExternalLink } from "lucide-react";
 import { useCallback, useEffect, useTransition } from "react";
 import { SourceLinkIcon, SpinnerIcon } from "../../../../../../icons";

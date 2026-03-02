@@ -1,5 +1,7 @@
+import crypto from 'crypto';
 import { prisma } from '../prisma';
 import { NextRequest } from 'next/server';
+import { logger } from '@/lib/logger';
 
 /**
  * Audit Logging Service
@@ -47,7 +49,7 @@ export class AuditService {
       });
     } catch (error) {
       // Log error but don't throw - audit logging shouldn't break the app
-      console.error('Failed to create audit log:', error);
+      logger.error('Failed to create audit log', { error: String(error) });
     }
   }
 

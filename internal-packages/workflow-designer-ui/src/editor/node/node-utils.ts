@@ -7,7 +7,7 @@ import {
 	isVectorStoreNode,
 	type NodeId,
 	type NodeLike,
-} from "@giselles-ai/protocol";
+} from "@recoder/protocol";
 import { useEffect, useRef, useTransition } from "react";
 import { useCurrentNodeGeneration } from "./use-current-node-generation";
 
@@ -34,23 +34,30 @@ export function getCompletionLabel(node: NodeLike): string {
 }
 
 export function nodeRequiresSetup(node: NodeLike): boolean {
-	if (isTriggerNode(node, "github")) {
-		return node.content.state.status !== "configured";
+	if (isTriggerNode(node as any, "github")) {
+		const triggerNode = node as any;
+		return triggerNode.content?.state?.status !== "configured";
 	}
-	if (isActionNode(node, "github")) {
-		return node.content.command.state.status !== "configured";
+	if (isActionNode(node as any, "github")) {
+		const actionNode = node as any;
+		const command = actionNode.content?.command as
+			| { state?: { status?: string } }
+			| undefined;
+		return command?.state?.status !== "configured";
 	}
-	if (isVectorStoreNode(node)) {
-		switch (node.content.source.provider) {
+	if (isVectorStoreNode(node as any)) {
+		const vectorStoreNode = node as any;
+		switch (vectorStoreNode.content?.source?.provider) {
 			case "github":
 			case "document":
-				return node.content.source.state.status !== "configured";
+				return vectorStoreNode.content?.source?.state?.status !== "configured";
 			default:
 				return false;
 		}
 	}
-	if (isDataStoreNode(node)) {
-		return node.content.state.status !== "configured";
+	if (isDataStoreNode(node as any)) {
+		const dataStoreNode = node as any;
+		return dataStoreNode.content?.state?.status !== "configured";
 	}
 	return false;
 }

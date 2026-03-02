@@ -127,23 +127,23 @@ export const TeamManagement = memo(({ organizationId, onBack }: TeamManagementPr
   }
 
   return (
-    <div className="flex flex-col h-full overflow-hidden bg-bolt-elements-background-depth-1">
+    <div className="flex flex-col h-full overflow-hidden bg-recoder-elements-background-depth-1">
       {/* Header */}
-      <div className="border-b border-bolt-elements-borderColor bg-bolt-elements-background-depth-2 px-6 py-4">
+      <div className="border-b border-recoder-elements-borderColor bg-recoder-elements-background-depth-2 px-6 py-4">
         <div className="flex items-center gap-4">
           {onBack && (
             <button
               onClick={onBack}
-              className="p-2 text-bolt-elements-textTertiary hover:text-bolt-elements-textPrimary rounded-lg hover:bg-bolt-elements-background-depth-3 transition-colors"
+              className="p-2 text-recoder-elements-textTertiary hover:text-recoder-elements-textPrimary rounded-lg hover:bg-recoder-elements-background-depth-3 transition-colors"
             >
               <span className="i-ph:arrow-left text-lg" />
             </button>
           )}
           <div className="flex-1">
-            <h1 className="text-xl font-semibold text-bolt-elements-textPrimary">
+            <h1 className="text-xl font-semibold text-recoder-elements-textPrimary">
               Team Management
             </h1>
-            <p className="text-sm text-bolt-elements-textTertiary mt-0.5">
+            <p className="text-sm text-recoder-elements-textTertiary mt-0.5">
               Create and manage teams, assign members and permissions
             </p>
           </div>
@@ -162,14 +162,14 @@ export const TeamManagement = memo(({ organizationId, onBack }: TeamManagementPr
       {/* Content */}
       <div className="flex flex-1 overflow-hidden">
         {/* Teams List Sidebar */}
-        <div className="w-80 border-r border-bolt-elements-borderColor flex flex-col">
-          <div className="p-3 border-b border-bolt-elements-borderColor">
+        <div className="w-80 border-r border-recoder-elements-borderColor flex flex-col">
+          <div className="p-3 border-b border-recoder-elements-borderColor">
             <div className="relative">
-              <span className="i-ph:magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-bolt-elements-textTertiary" />
+              <span className="i-ph:magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-recoder-elements-textTertiary" />
               <input
                 type="text"
                 placeholder="Search teams..."
-                className="w-full pl-9 pr-3 py-2 bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor rounded-lg text-sm text-bolt-elements-textPrimary placeholder:text-bolt-elements-textTertiary focus:border-blue-500 focus:outline-none"
+                className="w-full pl-9 pr-3 py-2 bg-recoder-elements-background-depth-2 border border-recoder-elements-borderColor rounded-lg text-sm text-recoder-elements-textPrimary placeholder:text-recoder-elements-textTertiary focus:border-blue-500 focus:outline-none"
               />
             </div>
           </div>
@@ -179,10 +179,10 @@ export const TeamManagement = memo(({ organizationId, onBack }: TeamManagementPr
                 {Array.from({ length: 4 }).map((_, i) => (
                   <div key={i} className="mb-2 animate-pulse">
                     <div className="flex items-center gap-3 p-3 rounded-lg">
-                      <div className="w-10 h-10 bg-bolt-elements-background-depth-2 rounded-lg" />
+                      <div className="w-10 h-10 bg-recoder-elements-background-depth-2 rounded-lg" />
                       <div className="flex-1">
-                        <div className="h-4 bg-bolt-elements-background-depth-2 rounded w-24 mb-1" />
-                        <div className="h-3 bg-bolt-elements-background-depth-2 rounded w-16" />
+                        <div className="h-4 bg-recoder-elements-background-depth-2 rounded w-24 mb-1" />
+                        <div className="h-3 bg-recoder-elements-background-depth-2 rounded w-16" />
                       </div>
                     </div>
                   </div>
@@ -190,9 +190,9 @@ export const TeamManagement = memo(({ organizationId, onBack }: TeamManagementPr
               </div>
             ) : teams.length === 0 ? (
               <div className="p-8 text-center">
-                <span className="i-ph:users-three text-4xl text-bolt-elements-textTertiary mb-3 block" />
-                <h3 className="text-bolt-elements-textPrimary font-medium mb-1">No teams yet</h3>
-                <p className="text-sm text-bolt-elements-textTertiary mb-4">
+                <span className="i-ph:users-three text-4xl text-recoder-elements-textTertiary mb-3 block" />
+                <h3 className="text-recoder-elements-textPrimary font-medium mb-1">No teams yet</h3>
+                <p className="text-sm text-recoder-elements-textTertiary mb-4">
                   Create your first team to organize members
                 </p>
                 {canCreateTeams && (
@@ -244,11 +244,11 @@ export const TeamManagement = memo(({ organizationId, onBack }: TeamManagementPr
             />
           ) : (
             <div className="flex flex-col items-center justify-center h-full p-8 text-center">
-              <span className="i-ph:users-three text-5xl text-bolt-elements-textTertiary mb-4" />
-              <h2 className="text-lg font-medium text-bolt-elements-textPrimary mb-2">
+              <span className="i-ph:users-three text-5xl text-recoder-elements-textTertiary mb-4" />
+              <h2 className="text-lg font-medium text-recoder-elements-textPrimary mb-2">
                 Select a team
               </h2>
-              <p className="text-sm text-bolt-elements-textTertiary">
+              <p className="text-sm text-recoder-elements-textTertiary">
                 Choose a team from the sidebar to view details and manage members
               </p>
             </div>
@@ -306,7 +306,7 @@ const TeamListItem = memo(({ team, isSelected, onClick }: TeamListItemProps) => 
       'w-full flex items-center gap-3 p-3 rounded-lg text-left transition-colors',
       isSelected
         ? 'bg-blue-500/20 border border-blue-500/50'
-        : 'hover:bg-bolt-elements-background-depth-2 border border-transparent'
+        : 'hover:bg-recoder-elements-background-depth-2 border border-transparent'
     )}
   >
     <div
@@ -319,7 +319,7 @@ const TeamListItem = memo(({ team, isSelected, onClick }: TeamListItemProps) => 
       <div className="flex items-center gap-2">
         <span className={classNames(
           'text-sm font-medium truncate',
-          isSelected ? 'text-blue-400' : 'text-bolt-elements-textPrimary'
+          isSelected ? 'text-blue-400' : 'text-recoder-elements-textPrimary'
         )}>
           {team.name}
         </span>
@@ -329,7 +329,7 @@ const TeamListItem = memo(({ team, isSelected, onClick }: TeamListItemProps) => 
           </span>
         )}
       </div>
-      <div className="flex items-center gap-2 text-xs text-bolt-elements-textTertiary mt-0.5">
+      <div className="flex items-center gap-2 text-xs text-recoder-elements-textTertiary mt-0.5">
         <span>{team.memberCount} members</span>
         <span>-</span>
         <span>{team.projectCount} projects</span>
@@ -396,7 +396,7 @@ const TeamDetail = memo(({
   return (
     <div className="h-full flex flex-col">
       {/* Team Header */}
-      <div className="p-6 border-b border-bolt-elements-borderColor">
+      <div className="p-6 border-b border-recoder-elements-borderColor">
         <div className="flex items-start gap-4">
           <div
             className="w-14 h-14 rounded-xl flex items-center justify-center text-white text-2xl font-bold shrink-0"
@@ -411,7 +411,7 @@ const TeamDetail = memo(({
                   type="text"
                   value={nameValue}
                   onChange={(e) => setNameValue(e.target.value)}
-                  className="px-3 py-1.5 bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor rounded-lg text-lg font-semibold text-bolt-elements-textPrimary focus:border-blue-500 focus:outline-none"
+                  className="px-3 py-1.5 bg-recoder-elements-background-depth-2 border border-recoder-elements-borderColor rounded-lg text-lg font-semibold text-recoder-elements-textPrimary focus:border-blue-500 focus:outline-none"
                   disabled={saving}
                   autoFocus
                 />
@@ -432,14 +432,14 @@ const TeamDetail = memo(({
                     setEditingName(false);
                   }}
                   disabled={saving}
-                  className="p-1.5 text-bolt-elements-textTertiary hover:text-bolt-elements-textPrimary"
+                  className="p-1.5 text-recoder-elements-textTertiary hover:text-recoder-elements-textPrimary"
                 >
                   <span className="i-ph:x" />
                 </button>
               </div>
             ) : (
               <div className="flex items-center gap-2">
-                <h2 className="text-xl font-semibold text-bolt-elements-textPrimary">
+                <h2 className="text-xl font-semibold text-recoder-elements-textPrimary">
                   {team.name}
                 </h2>
                 {team.isDefault && (
@@ -450,7 +450,7 @@ const TeamDetail = memo(({
                 {canManage && (
                   <button
                     onClick={() => setEditingName(true)}
-                    className="p-1 text-bolt-elements-textTertiary hover:text-bolt-elements-textPrimary rounded"
+                    className="p-1 text-recoder-elements-textTertiary hover:text-recoder-elements-textPrimary rounded"
                   >
                     <span className="i-ph:pencil-simple text-sm" />
                   </button>
@@ -458,9 +458,9 @@ const TeamDetail = memo(({
               </div>
             )}
             {team.description && (
-              <p className="text-sm text-bolt-elements-textTertiary mt-1">{team.description}</p>
+              <p className="text-sm text-recoder-elements-textTertiary mt-1">{team.description}</p>
             )}
-            <div className="flex items-center gap-4 mt-2 text-xs text-bolt-elements-textTertiary">
+            <div className="flex items-center gap-4 mt-2 text-xs text-recoder-elements-textTertiary">
               <span>{team.memberCount} members</span>
               <span>{team.projectCount} projects</span>
               <span>Created {new Date(team.createdAt).toLocaleDateString()}</span>
@@ -490,7 +490,7 @@ const TeamDetail = memo(({
       </div>
 
       {/* Tabs */}
-      <div className="px-6 border-b border-bolt-elements-borderColor">
+      <div className="px-6 border-b border-recoder-elements-borderColor">
         <div className="flex gap-1">
           <TabButton
             active={activeTab === 'members'}
@@ -566,11 +566,11 @@ const MembersTab = memo(({
       <div className="p-6">
         {Array.from({ length: 4 }).map((_, i) => (
           <div key={i} className="mb-3 animate-pulse">
-            <div className="flex items-center gap-3 p-3 bg-bolt-elements-background-depth-2 rounded-lg">
-              <div className="w-10 h-10 bg-bolt-elements-background-depth-2 rounded-full" />
+            <div className="flex items-center gap-3 p-3 bg-recoder-elements-background-depth-2 rounded-lg">
+              <div className="w-10 h-10 bg-recoder-elements-background-depth-2 rounded-full" />
               <div className="flex-1">
-                <div className="h-4 bg-bolt-elements-background-depth-2 rounded w-32 mb-1" />
-                <div className="h-3 bg-bolt-elements-background-depth-2 rounded w-24" />
+                <div className="h-4 bg-recoder-elements-background-depth-2 rounded w-32 mb-1" />
+                <div className="h-3 bg-recoder-elements-background-depth-2 rounded w-24" />
               </div>
             </div>
           </div>
@@ -582,9 +582,9 @@ const MembersTab = memo(({
   if (members.length === 0) {
     return (
       <div className="p-8 text-center">
-        <span className="i-ph:users text-4xl text-bolt-elements-textTertiary mb-3 block" />
-        <h3 className="text-bolt-elements-textPrimary font-medium mb-1">No members yet</h3>
-        <p className="text-sm text-bolt-elements-textTertiary">
+        <span className="i-ph:users text-4xl text-recoder-elements-textTertiary mb-3 block" />
+        <h3 className="text-recoder-elements-textPrimary font-medium mb-1">No members yet</h3>
+        <p className="text-sm text-recoder-elements-textTertiary">
           Add members to this team to collaborate on projects
         </p>
       </div>
@@ -604,7 +604,7 @@ const MembersTab = memo(({
           return (
             <div
               key={member.id}
-              className="flex items-center gap-3 p-3 bg-bolt-elements-background-depth-2 rounded-lg"
+              className="flex items-center gap-3 p-3 bg-recoder-elements-background-depth-2 rounded-lg"
             >
               {/* Avatar */}
               <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-medium shrink-0">
@@ -622,7 +622,7 @@ const MembersTab = memo(({
               {/* Info */}
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">
-                  <span className="text-sm font-medium text-bolt-elements-textPrimary truncate">
+                  <span className="text-sm font-medium text-recoder-elements-textPrimary truncate">
                     {member.name}
                   </span>
                   {orgMember?.role === 'owner' && (
@@ -631,7 +631,7 @@ const MembersTab = memo(({
                     </span>
                   )}
                 </div>
-                <span className="text-xs text-bolt-elements-textTertiary">{member.email}</span>
+                <span className="text-xs text-recoder-elements-textTertiary">{member.email}</span>
               </div>
 
               {/* Role */}
@@ -639,7 +639,7 @@ const MembersTab = memo(({
                 <select
                   value={member.role}
                   onChange={(e) => onChangeRole(member.id, e.target.value as TeamRole)}
-                  className="px-2 py-1 bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor rounded text-sm text-bolt-elements-textPrimary focus:border-blue-500 focus:outline-none"
+                  className="px-2 py-1 bg-recoder-elements-background-depth-2 border border-recoder-elements-borderColor rounded text-sm text-recoder-elements-textPrimary focus:border-blue-500 focus:outline-none"
                 >
                   <option value="lead">Lead</option>
                   <option value="member">Member</option>
@@ -653,7 +653,7 @@ const MembersTab = memo(({
               {canManage && (
                 <button
                   onClick={() => onRemoveMember(member.id)}
-                  className="p-1.5 text-bolt-elements-textTertiary hover:text-red-400 rounded transition-colors"
+                  className="p-1.5 text-recoder-elements-textTertiary hover:text-red-400 rounded transition-colors"
                   title="Remove from team"
                 >
                   <span className="i-ph:x" />
@@ -688,24 +688,24 @@ const PermissionsTab = memo(() => {
 
   return (
     <div className="p-6">
-      <div className="bg-bolt-elements-background-depth-2 rounded-xl border border-bolt-elements-borderColor overflow-hidden">
+      <div className="bg-recoder-elements-background-depth-2 rounded-xl border border-recoder-elements-borderColor overflow-hidden">
         <table className="w-full">
           <thead>
-            <tr className="border-b border-bolt-elements-borderColor">
-              <th className="px-4 py-3 text-left text-sm font-medium text-bolt-elements-textTertiary">
+            <tr className="border-b border-recoder-elements-borderColor">
+              <th className="px-4 py-3 text-left text-sm font-medium text-recoder-elements-textTertiary">
                 Permission
               </th>
               {roles.map((role) => (
-                <th key={role} className="px-4 py-3 text-center text-sm font-medium text-bolt-elements-textTertiary capitalize">
+                <th key={role} className="px-4 py-3 text-center text-sm font-medium text-recoder-elements-textTertiary capitalize">
                   {role}
                 </th>
               ))}
             </tr>
           </thead>
-          <tbody className="divide-y divide-bolt-elements-borderColor">
+          <tbody className="divide-y divide-recoder-elements-borderColor">
             {permissions.map((permission) => (
-              <tr key={permission} className="hover:bg-bolt-elements-background-depth-2 transition-colors">
-                <td className="px-4 py-3 text-sm text-bolt-elements-textPrimary">
+              <tr key={permission} className="hover:bg-recoder-elements-background-depth-2 transition-colors">
+                <td className="px-4 py-3 text-sm text-recoder-elements-textPrimary">
                   {permissionLabels[permission] || permission}
                 </td>
                 {roles.map((role) => (
@@ -713,7 +713,7 @@ const PermissionsTab = memo(() => {
                     {TEAM_PERMISSIONS[role][permission] ? (
                       <span className="i-ph:check-circle-fill text-lg text-green-400" />
                     ) : (
-                      <span className="i-ph:x-circle text-lg text-bolt-elements-textTertiary" />
+                      <span className="i-ph:x-circle text-lg text-recoder-elements-textTertiary" />
                     )}
                   </td>
                 ))}
@@ -773,7 +773,7 @@ const SettingsTab = memo(({ team, onUpdateTeam }: SettingsTabProps) => {
       <div className="space-y-6">
         {/* Description */}
         <div>
-          <label className="block text-sm font-medium text-bolt-elements-textPrimary mb-2">
+          <label className="block text-sm font-medium text-recoder-elements-textPrimary mb-2">
             Description
           </label>
           <textarea
@@ -781,13 +781,13 @@ const SettingsTab = memo(({ team, onUpdateTeam }: SettingsTabProps) => {
             onChange={(e) => setDescription(e.target.value)}
             placeholder="What is this team for?"
             rows={3}
-            className="w-full px-3 py-2 bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor rounded-lg text-sm text-bolt-elements-textPrimary placeholder:text-bolt-elements-textTertiary focus:border-blue-500 focus:outline-none resize-none"
+            className="w-full px-3 py-2 bg-recoder-elements-background-depth-2 border border-recoder-elements-borderColor rounded-lg text-sm text-recoder-elements-textPrimary placeholder:text-recoder-elements-textTertiary focus:border-blue-500 focus:outline-none resize-none"
           />
         </div>
 
         {/* Color */}
         <div>
-          <label className="block text-sm font-medium text-bolt-elements-textPrimary mb-2">
+          <label className="block text-sm font-medium text-recoder-elements-textPrimary mb-2">
             Team Color
           </label>
           <div className="flex flex-wrap gap-2">
@@ -797,7 +797,7 @@ const SettingsTab = memo(({ team, onUpdateTeam }: SettingsTabProps) => {
                 onClick={() => setColor(c)}
                 className={classNames(
                   'w-8 h-8 rounded-lg transition-transform',
-                  color === c && 'ring-2 ring-white ring-offset-2 ring-offset-bolt-elements-background-depth-1 scale-110'
+                  color === c && 'ring-2 ring-white ring-offset-2 ring-offset-recoder-elements-background-depth-1 scale-110'
                 )}
                 style={{ backgroundColor: c }}
               />
@@ -806,7 +806,7 @@ const SettingsTab = memo(({ team, onUpdateTeam }: SettingsTabProps) => {
         </div>
 
         {/* Save Button */}
-        <div className="pt-4 border-t border-bolt-elements-borderColor">
+        <div className="pt-4 border-t border-recoder-elements-borderColor">
           <button
             onClick={handleSave}
             disabled={saving}
@@ -862,15 +862,15 @@ const CreateTeamModal = memo(({ onClose, onCreate }: CreateTeamModalProps) => {
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50" onClick={onClose}>
       <div
-        className="bg-bolt-elements-background-depth-2 rounded-xl border border-bolt-elements-borderColor w-full max-w-md shadow-2xl"
+        className="bg-recoder-elements-background-depth-2 rounded-xl border border-recoder-elements-borderColor w-full max-w-md shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="px-6 py-4 border-b border-bolt-elements-borderColor">
-          <h2 className="text-lg font-semibold text-bolt-elements-textPrimary">Create Team</h2>
+        <div className="px-6 py-4 border-b border-recoder-elements-borderColor">
+          <h2 className="text-lg font-semibold text-recoder-elements-textPrimary">Create Team</h2>
         </div>
         <div className="p-6 space-y-4">
           <div>
-            <label className="block text-sm font-medium text-bolt-elements-textPrimary mb-1.5">
+            <label className="block text-sm font-medium text-recoder-elements-textPrimary mb-1.5">
               Team Name
             </label>
             <input
@@ -878,12 +878,12 @@ const CreateTeamModal = memo(({ onClose, onCreate }: CreateTeamModalProps) => {
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="e.g., Engineering, Design, Marketing"
-              className="w-full px-3 py-2 bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor rounded-lg text-sm text-bolt-elements-textPrimary placeholder:text-bolt-elements-textTertiary focus:border-blue-500 focus:outline-none"
+              className="w-full px-3 py-2 bg-recoder-elements-background-depth-2 border border-recoder-elements-borderColor rounded-lg text-sm text-recoder-elements-textPrimary placeholder:text-recoder-elements-textTertiary focus:border-blue-500 focus:outline-none"
               autoFocus
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-bolt-elements-textPrimary mb-1.5">
+            <label className="block text-sm font-medium text-recoder-elements-textPrimary mb-1.5">
               Description (optional)
             </label>
             <textarea
@@ -891,11 +891,11 @@ const CreateTeamModal = memo(({ onClose, onCreate }: CreateTeamModalProps) => {
               onChange={(e) => setDescription(e.target.value)}
               placeholder="What is this team for?"
               rows={2}
-              className="w-full px-3 py-2 bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor rounded-lg text-sm text-bolt-elements-textPrimary placeholder:text-bolt-elements-textTertiary focus:border-blue-500 focus:outline-none resize-none"
+              className="w-full px-3 py-2 bg-recoder-elements-background-depth-2 border border-recoder-elements-borderColor rounded-lg text-sm text-recoder-elements-textPrimary placeholder:text-recoder-elements-textTertiary focus:border-blue-500 focus:outline-none resize-none"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-bolt-elements-textPrimary mb-1.5">
+            <label className="block text-sm font-medium text-recoder-elements-textPrimary mb-1.5">
               Color
             </label>
             <div className="flex flex-wrap gap-2">
@@ -905,7 +905,7 @@ const CreateTeamModal = memo(({ onClose, onCreate }: CreateTeamModalProps) => {
                   onClick={() => setColor(c)}
                   className={classNames(
                     'w-8 h-8 rounded-lg transition-transform',
-                    color === c && 'ring-2 ring-white ring-offset-2 ring-offset-bolt-elements-background-depth-2 scale-110'
+                    color === c && 'ring-2 ring-white ring-offset-2 ring-offset-recoder-elements-background-depth-2 scale-110'
                   )}
                   style={{ backgroundColor: c }}
                 />
@@ -913,10 +913,10 @@ const CreateTeamModal = memo(({ onClose, onCreate }: CreateTeamModalProps) => {
             </div>
           </div>
         </div>
-        <div className="px-6 py-4 border-t border-bolt-elements-borderColor flex justify-end gap-2">
+        <div className="px-6 py-4 border-t border-recoder-elements-borderColor flex justify-end gap-2">
           <button
             onClick={onClose}
-            className="px-4 py-2 text-bolt-elements-textTertiary hover:text-bolt-elements-textPrimary text-sm"
+            className="px-4 py-2 text-recoder-elements-textTertiary hover:text-recoder-elements-textPrimary text-sm"
           >
             Cancel
           </button>
@@ -949,7 +949,7 @@ interface DeleteTeamModalProps {
 const DeleteTeamModal = memo(({ teamName, onClose, onConfirm }: DeleteTeamModalProps) => (
   <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50" onClick={onClose}>
     <div
-      className="bg-bolt-elements-background-depth-2 rounded-xl border border-bolt-elements-borderColor w-full max-w-md shadow-2xl"
+      className="bg-recoder-elements-background-depth-2 rounded-xl border border-recoder-elements-borderColor w-full max-w-md shadow-2xl"
       onClick={(e) => e.stopPropagation()}
     >
       <div className="p-6">
@@ -958,18 +958,18 @@ const DeleteTeamModal = memo(({ teamName, onClose, onConfirm }: DeleteTeamModalP
             <span className="i-ph:warning text-2xl text-red-400" />
           </div>
           <div>
-            <h2 className="text-lg font-semibold text-bolt-elements-textPrimary">Delete Team</h2>
-            <p className="text-sm text-bolt-elements-textTertiary">This action cannot be undone</p>
+            <h2 className="text-lg font-semibold text-recoder-elements-textPrimary">Delete Team</h2>
+            <p className="text-sm text-recoder-elements-textTertiary">This action cannot be undone</p>
           </div>
         </div>
-        <p className="text-bolt-elements-textTertiary mb-4">
+        <p className="text-recoder-elements-textTertiary mb-4">
           Are you sure you want to delete <strong>{teamName}</strong>? All team members will be removed and any associated projects will need to be reassigned.
         </p>
       </div>
-      <div className="px-6 py-4 border-t border-bolt-elements-borderColor flex justify-end gap-2">
+      <div className="px-6 py-4 border-t border-recoder-elements-borderColor flex justify-end gap-2">
         <button
           onClick={onClose}
-          className="px-4 py-2 text-bolt-elements-textTertiary hover:text-bolt-elements-textPrimary text-sm"
+          className="px-4 py-2 text-recoder-elements-textTertiary hover:text-recoder-elements-textPrimary text-sm"
         >
           Cancel
         </button>
@@ -1014,17 +1014,17 @@ const AddMemberModal = memo(({
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50" onClick={onClose}>
       <div
-        className="bg-bolt-elements-background-depth-2 rounded-xl border border-bolt-elements-borderColor w-full max-w-md shadow-2xl"
+        className="bg-recoder-elements-background-depth-2 rounded-xl border border-recoder-elements-borderColor w-full max-w-md shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="px-6 py-4 border-b border-bolt-elements-borderColor">
-          <h2 className="text-lg font-semibold text-bolt-elements-textPrimary">
+        <div className="px-6 py-4 border-b border-recoder-elements-borderColor">
+          <h2 className="text-lg font-semibold text-recoder-elements-textPrimary">
             Add Member to {teamName}
           </h2>
         </div>
         <div className="p-6 space-y-4">
           <div>
-            <label className="block text-sm font-medium text-bolt-elements-textPrimary mb-1.5">
+            <label className="block text-sm font-medium text-recoder-elements-textPrimary mb-1.5">
               Search Members
             </label>
             <input
@@ -1032,18 +1032,18 @@ const AddMemberModal = memo(({
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search by name or email..."
-              className="w-full px-3 py-2 bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor rounded-lg text-sm text-bolt-elements-textPrimary placeholder:text-bolt-elements-textTertiary focus:border-blue-500 focus:outline-none"
+              className="w-full px-3 py-2 bg-recoder-elements-background-depth-2 border border-recoder-elements-borderColor rounded-lg text-sm text-recoder-elements-textPrimary placeholder:text-recoder-elements-textTertiary focus:border-blue-500 focus:outline-none"
               autoFocus
             />
           </div>
 
-          <div className="max-h-48 overflow-auto border border-bolt-elements-borderColor rounded-lg">
+          <div className="max-h-48 overflow-auto border border-recoder-elements-borderColor rounded-lg">
             {availableMembers.length === 0 ? (
-              <div className="p-4 text-center text-sm text-bolt-elements-textTertiary">
+              <div className="p-4 text-center text-sm text-recoder-elements-textTertiary">
                 No available members found
               </div>
             ) : (
-              <div className="divide-y divide-bolt-elements-borderColor">
+              <div className="divide-y divide-recoder-elements-borderColor">
                 {availableMembers.map((member) => (
                   <button
                     key={member.id}
@@ -1052,17 +1052,17 @@ const AddMemberModal = memo(({
                       'w-full flex items-center gap-3 p-3 text-left transition-colors',
                       selectedUserId === member.userId
                         ? 'bg-blue-500/20'
-                        : 'hover:bg-bolt-elements-background-depth-2'
+                        : 'hover:bg-recoder-elements-background-depth-2'
                     )}
                   >
                     <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white text-sm font-medium">
                       {member.name.charAt(0).toUpperCase()}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <div className="text-sm font-medium text-bolt-elements-textPrimary truncate">
+                      <div className="text-sm font-medium text-recoder-elements-textPrimary truncate">
                         {member.name}
                       </div>
-                      <div className="text-xs text-bolt-elements-textTertiary truncate">
+                      <div className="text-xs text-recoder-elements-textTertiary truncate">
                         {member.email}
                       </div>
                     </div>
@@ -1076,13 +1076,13 @@ const AddMemberModal = memo(({
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-bolt-elements-textPrimary mb-1.5">
+            <label className="block text-sm font-medium text-recoder-elements-textPrimary mb-1.5">
               Role
             </label>
             <select
               value={role}
               onChange={(e) => setRole(e.target.value as TeamRole)}
-              className="w-full px-3 py-2 bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor rounded-lg text-sm text-bolt-elements-textPrimary focus:border-blue-500 focus:outline-none"
+              className="w-full px-3 py-2 bg-recoder-elements-background-depth-2 border border-recoder-elements-borderColor rounded-lg text-sm text-recoder-elements-textPrimary focus:border-blue-500 focus:outline-none"
             >
               <option value="lead">Lead - Can manage team</option>
               <option value="member">Member - Can work on projects</option>
@@ -1090,10 +1090,10 @@ const AddMemberModal = memo(({
             </select>
           </div>
         </div>
-        <div className="px-6 py-4 border-t border-bolt-elements-borderColor flex justify-end gap-2">
+        <div className="px-6 py-4 border-t border-recoder-elements-borderColor flex justify-end gap-2">
           <button
             onClick={onClose}
-            className="px-4 py-2 text-bolt-elements-textTertiary hover:text-bolt-elements-textPrimary text-sm"
+            className="px-4 py-2 text-recoder-elements-textTertiary hover:text-recoder-elements-textPrimary text-sm"
           >
             Cancel
           </button>
@@ -1130,7 +1130,7 @@ const TabButton = memo(({ active, onClick, label }: TabButtonProps) => (
       'px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px',
       active
         ? 'text-blue-400 border-blue-500'
-        : 'text-bolt-elements-textTertiary hover:text-bolt-elements-textSecondary border-transparent'
+        : 'text-recoder-elements-textTertiary hover:text-recoder-elements-textSecondary border-transparent'
     )}
   >
     {label}
@@ -1147,7 +1147,7 @@ const RoleBadge = memo(({ role }: RoleBadgeProps) => {
   const colors: Record<TeamRole, string> = {
     lead: 'bg-purple-500/20 text-purple-400',
     member: 'bg-blue-500/20 text-blue-400',
-    viewer: 'bg-bolt-elements-background-depth-3 text-bolt-elements-textTertiary',
+    viewer: 'bg-recoder-elements-background-depth-3 text-recoder-elements-textTertiary',
   };
 
   return (
@@ -1160,25 +1160,25 @@ const RoleBadge = memo(({ role }: RoleBadgeProps) => {
 RoleBadge.displayName = 'RoleBadge';
 
 const TeamManagementSkeleton = memo(() => (
-  <div className="flex flex-col h-full overflow-hidden bg-bolt-elements-background-depth-1 animate-pulse">
-    <div className="border-b border-bolt-elements-borderColor bg-bolt-elements-background-depth-2 px-6 py-4">
+  <div className="flex flex-col h-full overflow-hidden bg-recoder-elements-background-depth-1 animate-pulse">
+    <div className="border-b border-recoder-elements-borderColor bg-recoder-elements-background-depth-2 px-6 py-4">
       <div className="flex items-center gap-4">
-        <div className="w-10 h-10 bg-bolt-elements-background-depth-2 rounded" />
+        <div className="w-10 h-10 bg-recoder-elements-background-depth-2 rounded" />
         <div className="flex-1">
-          <div className="h-6 bg-bolt-elements-background-depth-2 rounded w-48 mb-2" />
-          <div className="h-4 bg-bolt-elements-background-depth-2 rounded w-64" />
+          <div className="h-6 bg-recoder-elements-background-depth-2 rounded w-48 mb-2" />
+          <div className="h-4 bg-recoder-elements-background-depth-2 rounded w-64" />
         </div>
       </div>
     </div>
     <div className="flex flex-1">
-      <div className="w-80 border-r border-bolt-elements-borderColor p-4">
-        <div className="h-10 bg-bolt-elements-background-depth-2 rounded-lg mb-4" />
+      <div className="w-80 border-r border-recoder-elements-borderColor p-4">
+        <div className="h-10 bg-recoder-elements-background-depth-2 rounded-lg mb-4" />
         {Array.from({ length: 4 }).map((_, i) => (
-          <div key={i} className="h-16 bg-bolt-elements-background-depth-2 rounded-lg mb-2" />
+          <div key={i} className="h-16 bg-recoder-elements-background-depth-2 rounded-lg mb-2" />
         ))}
       </div>
       <div className="flex-1 p-8">
-        <div className="h-32 bg-bolt-elements-background-depth-2 rounded-xl" />
+        <div className="h-32 bg-recoder-elements-background-depth-2 rounded-xl" />
       </div>
     </div>
   </div>

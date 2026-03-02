@@ -12,6 +12,13 @@ import { headers } from 'next/headers';
 import { assertAuthSessionGetResponse } from '@/lib/contracts/auth-session-contracts';
 import { logger } from '@/lib/logger';
 
+function getOptionalStringField(value: unknown, key: string): string | undefined {
+  if (!value || typeof value !== 'object') return undefined;
+  const record = value as Record<string, unknown>;
+  const field = record[key];
+  return typeof field === 'string' ? field : undefined;
+}
+
 export async function GET(request: NextRequest) {
   try {
     // Use Better Auth to get session
@@ -32,8 +39,8 @@ export async function GET(request: NextRequest) {
         email: session.user.email,
         name: session.user.name,
         image: session.user.image,
-        subscriptionPlan: (session.user as any).subscriptionPlan || 'free',
-        subscriptionStatus: (session.user as any).subscriptionStatus || 'active',
+        subscriptionPlan: getOptionalStringField(session.user, 'subscriptionPlan') || 'free',
+        subscriptionStatus: getOptionalStringField(session.user, 'subscriptionStatus') || 'active',
       },
       session: {
         id: session.session.id,

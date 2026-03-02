@@ -10,8 +10,8 @@ import type {
 	TextGenerationNode,
 	TextNode,
 	TriggerNode,
-} from "@giselles-ai/protocol";
-import type { UIConnection } from "@giselles-ai/react";
+} from "@recoder/protocol";
+import type { UIConnection } from "@recoder/react";
 import { useMemo } from "react";
 import { useAppDesignerStore } from "../../../../app-designer";
 

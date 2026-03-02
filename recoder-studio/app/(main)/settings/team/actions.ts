@@ -9,7 +9,7 @@ import {
 	agents,
 	db,
 	invitations,
-	supabaseUserMappings,
+	authUserMappings,
 	type TeamRole,
 	teamMemberships,
 	teams,
@@ -17,7 +17,7 @@ import {
 	users,
 } from "@/db";
 import { updateRecoderStudioSession } from "@/lib/recoder-studio-session";
-import { getUser } from "@/lib/supabase";
+import { getUser } from "@/lib/auth/user";
 
 import { fetchCurrentUser } from "@/services/accounts";
 import { fetchCurrentTeam, isProPlan } from "@/services/teams";
@@ -62,12 +62,12 @@ export async function updateTeamName(teamId: TeamId, formData: FormData) {
 				.for("update")
 				.innerJoin(teamMemberships, eq(teams.dbId, teamMemberships.teamDbId))
 				.innerJoin(
-					supabaseUserMappings,
-					eq(teamMemberships.userDbId, supabaseUserMappings.userDbId),
+					authUserMappings,
+					eq(teamMemberships.userDbId, authUserMappings.userDbId),
 				)
 				.where(
 					and(
-						eq(supabaseUserMappings.supabaseUserId, user.id),
+						eq(authUserMappings.authUserId, user.id),
 						eq(teams.id, teamId),
 					),
 				);
@@ -120,12 +120,12 @@ export async function updateTeamAvatar(teamId: TeamId, formData: FormData) {
 			.from(teams)
 			.innerJoin(teamMemberships, eq(teams.dbId, teamMemberships.teamDbId))
 			.innerJoin(
-				supabaseUserMappings,
-				eq(teamMemberships.userDbId, supabaseUserMappings.userDbId),
+				authUserMappings,
+				eq(teamMemberships.userDbId, authUserMappings.userDbId),
 			)
 			.where(
 				and(
-					eq(supabaseUserMappings.supabaseUserId, user.id),
+					eq(authUserMappings.authUserId, user.id),
 					eq(teams.id, teamId),
 				),
 			);
@@ -240,10 +240,10 @@ export async function updateTeamMemberRole(formData: FormData) {
 			.select({ id: users.id })
 			.from(users)
 			.innerJoin(
-				supabaseUserMappings,
-				eq(users.dbId, supabaseUserMappings.userDbId),
+				authUserMappings,
+				eq(users.dbId, authUserMappings.userDbId),
 			)
-			.where(eq(supabaseUserMappings.supabaseUserId, supabaseUser.id))
+			.where(eq(authUserMappings.authUserId, supabaseUser.id))
 			.limit(1);
 
 		const isUpdatingSelf = currentUser[0].id === userId;
@@ -330,10 +330,10 @@ export async function deleteTeamMember(formData: FormData) {
 			.select({ id: users.id, dbId: users.dbId })
 			.from(users)
 			.innerJoin(
-				supabaseUserMappings,
-				eq(users.dbId, supabaseUserMappings.userDbId),
+				authUserMappings,
+				eq(users.dbId, authUserMappings.userDbId),
 			)
-			.where(eq(supabaseUserMappings.supabaseUserId, supabaseUser.id))
+			.where(eq(authUserMappings.authUserId, supabaseUser.id))
 			.limit(1);
 
 		const isDeletingSelf = currentUser.id === userId;
@@ -439,12 +439,12 @@ export async function getCurrentUserRole() {
 			})
 			.from(teamMemberships)
 			.innerJoin(
-				supabaseUserMappings,
-				eq(teamMemberships.userDbId, supabaseUserMappings.userDbId),
+				authUserMappings,
+				eq(teamMemberships.userDbId, authUserMappings.userDbId),
 			)
 			.where(
 				and(
-					eq(supabaseUserMappings.supabaseUserId, supabaseUser.id),
+					eq(authUserMappings.authUserId, supabaseUser.id),
 					eq(teamMemberships.teamDbId, currentTeam.dbId),
 				),
 			)
@@ -556,12 +556,12 @@ export async function deleteTeam(
 			.from(teams)
 			.innerJoin(teamMemberships, eq(teams.dbId, teamMemberships.teamDbId))
 			.innerJoin(
-				supabaseUserMappings,
-				eq(teamMemberships.userDbId, supabaseUserMappings.userDbId),
+				authUserMappings,
+				eq(teamMemberships.userDbId, authUserMappings.userDbId),
 			)
 			.where(
 				and(
-					eq(supabaseUserMappings.supabaseUserId, supabaseUser.id),
+					eq(authUserMappings.authUserId, supabaseUser.id),
 					ne(teams.dbId, currentTeam.dbId),
 				),
 			)

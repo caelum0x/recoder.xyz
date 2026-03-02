@@ -103,7 +103,7 @@ export function SystemMonitor() {
   if (!health) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="text-bolt-elements-textTertiary">Loading system status...</div>
+        <div className="text-recoder-elements-textTertiary">Loading system status...</div>
       </div>
     );
   }
@@ -116,12 +116,12 @@ export function SystemMonitor() {
   }[overallStatus];
 
   return (
-    <div className="p-6 bg-bolt-elements-background-depth-1 min-h-screen">
+    <div className="p-6 bg-recoder-elements-background-depth-1 min-h-screen">
       {/* Header */}
       <div className="mb-6 flex justify-between items-center">
         <div>
-          <h1 className="text-3xl font-bold text-bolt-elements-textPrimary">System Monitor</h1>
-          <p className="text-bolt-elements-textTertiary mt-2">Real-time health and performance metrics</p>
+          <h1 className="text-3xl font-bold text-recoder-elements-textPrimary">System Monitor</h1>
+          <p className="text-recoder-elements-textTertiary mt-2">Real-time health and performance metrics</p>
         </div>
         <div className="flex items-center gap-4">
           <label className="flex items-center gap-2 text-sm">
@@ -150,7 +150,7 @@ export function SystemMonitor() {
       }`}>
         <div className="flex items-center justify-between">
           <div>
-            <div className="text-sm font-medium text-bolt-elements-textTertiary mb-1">System Status</div>
+            <div className="text-sm font-medium text-recoder-elements-textTertiary mb-1">System Status</div>
             <div className="text-3xl font-bold capitalize" style={{
               color: statusColor === 'green' ? '#059669' :
                      statusColor === 'yellow' ? '#D97706' : '#DC2626'
@@ -162,7 +162,7 @@ export function SystemMonitor() {
             statusColor === 'green' ? 'bg-green-500' :
             statusColor === 'yellow' ? 'bg-yellow-500' : 'bg-red-500'
           }`}>
-            <div className="w-12 h-12 bg-bolt-elements-background-depth-1 rounded-full" />
+            <div className="w-12 h-12 bg-recoder-elements-background-depth-1 rounded-full" />
           </div>
         </div>
       </div>
@@ -235,12 +235,12 @@ export function SystemMonitor() {
       </div>
 
       {/* Cost Metrics */}
-      <div className="bg-bolt-elements-background-depth-2 rounded-lg border border-bolt-elements-borderColor p-6 mb-6">
+      <div className="bg-recoder-elements-background-depth-2 rounded-lg border border-recoder-elements-borderColor p-6 mb-6">
         <h2 className="text-xl font-semibold mb-4">Cost Metrics</h2>
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
           <div>
-            <div className="text-sm text-bolt-elements-textTertiary mb-1">Current Hour</div>
-            <div className="text-2xl font-bold text-bolt-elements-textPrimary">
+            <div className="text-sm text-recoder-elements-textTertiary mb-1">Current Hour</div>
+            <div className="text-2xl font-bold text-recoder-elements-textPrimary">
               ${health.costMetrics.currentHourCost.toFixed(4)}
             </div>
             <div className="text-sm text-green-600">
@@ -248,19 +248,19 @@ export function SystemMonitor() {
             </div>
           </div>
           <div>
-            <div className="text-sm text-bolt-elements-textTertiary mb-1">Projected Daily</div>
-            <div className="text-2xl font-bold text-bolt-elements-textPrimary">
+            <div className="text-sm text-recoder-elements-textTertiary mb-1">Projected Daily</div>
+            <div className="text-2xl font-bold text-recoder-elements-textPrimary">
               ${health.costMetrics.projectedDailyCost.toFixed(2)}
             </div>
           </div>
           <div>
-            <div className="text-sm text-bolt-elements-textTertiary mb-1">Projected Monthly</div>
-            <div className="text-2xl font-bold text-bolt-elements-textPrimary">
+            <div className="text-sm text-recoder-elements-textTertiary mb-1">Projected Monthly</div>
+            <div className="text-2xl font-bold text-recoder-elements-textPrimary">
               ${health.costMetrics.projectedMonthlyCost.toFixed(2)}
             </div>
           </div>
           <div>
-            <div className="text-sm text-bolt-elements-textTertiary mb-1">Efficiency</div>
+            <div className="text-sm text-recoder-elements-textTertiary mb-1">Efficiency</div>
             <div className="text-2xl font-bold text-green-600">
               {health.costMetrics.currentHourSavings > 0
                 ? ((health.costMetrics.currentHourSavings / (health.costMetrics.currentHourCost + health.costMetrics.currentHourSavings)) * 100).toFixed(1)
@@ -271,12 +271,12 @@ export function SystemMonitor() {
       </div>
 
       {/* System Logs */}
-      <div className="bg-bolt-elements-background-depth-2 rounded-lg border border-bolt-elements-borderColor p-6">
+      <div className="bg-recoder-elements-background-depth-2 rounded-lg border border-recoder-elements-borderColor p-6">
         <h2 className="text-xl font-semibold mb-4">System Logs</h2>
-        <div className="bg-bolt-elements-background-depth-1 rounded-lg p-4 font-mono text-sm h-64 overflow-y-auto">
+        <div className="bg-recoder-elements-background-depth-1 rounded-lg p-4 font-mono text-sm h-64 overflow-y-auto">
           {logs.map((log, index) => (
             <div key={index} className="mb-1">
-              <span className="text-bolt-elements-textTertiary">[{log.time}]</span>{' '}
+              <span className="text-recoder-elements-textTertiary">[{log.time}]</span>{' '}
               <span className={
                 log.level === 'error' ? 'text-red-400' :
                 log.level === 'warn' ? 'text-yellow-400' :
@@ -284,7 +284,7 @@ export function SystemMonitor() {
               }>
                 {log.level.toUpperCase()}
               </span>{' '}
-              <span className="text-bolt-elements-textSecondary">{log.message}</span>
+              <span className="text-recoder-elements-textSecondary">{log.message}</span>
             </div>
           ))}
         </div>
@@ -296,9 +296,9 @@ export function SystemMonitor() {
 function PublicApiReadinessCard({ readiness }: { readiness: PublicApiReadiness | null }) {
   if (!readiness) {
     return (
-      <div className="bg-bolt-elements-background-depth-2 rounded-lg border border-bolt-elements-borderColor p-6 mb-6">
+      <div className="bg-recoder-elements-background-depth-2 rounded-lg border border-recoder-elements-borderColor p-6 mb-6">
         <h2 className="text-xl font-semibold mb-2">Public API / BYOK Readiness</h2>
-        <div className="text-sm text-bolt-elements-textTertiary">Loading readiness...</div>
+        <div className="text-sm text-recoder-elements-textTertiary">Loading readiness...</div>
       </div>
     );
   }
@@ -330,17 +330,17 @@ function PublicApiReadinessCard({ readiness }: { readiness: PublicApiReadiness |
       )}
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
-        <div className="bg-bolt-elements-background-depth-1 rounded p-3">
-          <div className="text-bolt-elements-textTertiary mb-1">Queue Configured</div>
-          <div className="font-semibold text-bolt-elements-textPrimary">{queueConfigured}</div>
+        <div className="bg-recoder-elements-background-depth-1 rounded p-3">
+          <div className="text-recoder-elements-textTertiary mb-1">Queue Configured</div>
+          <div className="font-semibold text-recoder-elements-textPrimary">{queueConfigured}</div>
         </div>
-        <div className="bg-bolt-elements-background-depth-1 rounded p-3">
-          <div className="text-bolt-elements-textTertiary mb-1">Queue Selected</div>
-          <div className="font-semibold text-bolt-elements-textPrimary">{queueSelected}</div>
+        <div className="bg-recoder-elements-background-depth-1 rounded p-3">
+          <div className="text-recoder-elements-textTertiary mb-1">Queue Selected</div>
+          <div className="font-semibold text-recoder-elements-textPrimary">{queueSelected}</div>
         </div>
-        <div className="bg-bolt-elements-background-depth-1 rounded p-3">
-          <div className="text-bolt-elements-textTertiary mb-1">Redis URL</div>
-          <div className="font-semibold text-bolt-elements-textPrimary">{typeof hasRedisUrl === 'boolean' ? String(hasRedisUrl) : 'unknown'}</div>
+        <div className="bg-recoder-elements-background-depth-1 rounded p-3">
+          <div className="text-recoder-elements-textTertiary mb-1">Redis URL</div>
+          <div className="font-semibold text-recoder-elements-textPrimary">{typeof hasRedisUrl === 'boolean' ? String(hasRedisUrl) : 'unknown'}</div>
         </div>
       </div>
 
@@ -379,9 +379,9 @@ function ComponentCard({
   }[status] || 'gray';
 
   return (
-    <div className="bg-bolt-elements-background-depth-2 rounded-lg border border-bolt-elements-borderColor p-4">
+    <div className="bg-recoder-elements-background-depth-2 rounded-lg border border-recoder-elements-borderColor p-4">
       <div className="flex items-center justify-between mb-2">
-        <h3 className="font-semibold text-bolt-elements-textPrimary">{name}</h3>
+        <h3 className="font-semibold text-recoder-elements-textPrimary">{name}</h3>
         <div className={`w-3 h-3 rounded-full ${
           statusColor === 'green' ? 'bg-green-500' :
           statusColor === 'yellow' ? 'bg-yellow-500' : 'bg-red-500'
@@ -393,9 +393,9 @@ function ComponentCard({
       }`}>
         {status}
       </div>
-      {message && <div className="text-xs text-bolt-elements-textTertiary mb-2">{message}</div>}
+      {message && <div className="text-xs text-recoder-elements-textTertiary mb-2">{message}</div>}
       {metrics && (
-        <div className="text-xs text-bolt-elements-textTertiary space-y-1">
+        <div className="text-xs text-recoder-elements-textTertiary space-y-1">
           {Object.entries(metrics).map(([key, value]) => (
             <div key={key}>
               {key}: {String(value)}
@@ -425,8 +425,8 @@ function PerformanceCard({
   const color = isGood ? 'green' : 'yellow';
 
   return (
-    <div className="bg-bolt-elements-background-depth-2 rounded-lg border border-bolt-elements-borderColor p-4">
-      <div className="text-sm text-bolt-elements-textTertiary mb-1">{label}</div>
+    <div className="bg-recoder-elements-background-depth-2 rounded-lg border border-recoder-elements-borderColor p-4">
+      <div className="text-sm text-recoder-elements-textTertiary mb-1">{label}</div>
       <div className={`text-2xl font-bold ${
         color === 'green' ? 'text-green-600' : 'text-yellow-600'
       }`}>

@@ -70,7 +70,7 @@ export function Canvas({ elements, selectedId, onSelect, onMove }: CanvasProps) 
 
   return (
     <div
-      className="relative w-full h-full bg-bolt-elements-background-depth-1 border border-bolt-elements-borderColor"
+      className="relative w-full h-full bg-recoder-elements-background-depth-1 border border-recoder-elements-borderColor"
       onMouseMove={handleMouseMove}
       onMouseUp={handleMouseUp}
       onMouseLeave={handleMouseUp}

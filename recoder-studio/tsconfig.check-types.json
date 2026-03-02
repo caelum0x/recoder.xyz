@@ -5,8 +5,13 @@
 		"plugins": [],
 		"paths": {
 			"@/*": ["./*"],
+			"@recoder/*": ["./packages/*", "../packages/*/src"],
+			"@recoder-internal/*": ["../internal-packages/*"],
 			"@recoder/ecosystem-config": [
-				"../../packages/ecosystem-config/src/index.ts"
+				"../packages/ecosystem-config/src/index.ts"
+			],
+			"@recoder/icons/*": [
+				"../internal-packages/workflow-designer-ui/src/icons/*"
 			]
 		},
 		"typeRoots": ["./types", "./node_modules/@types"]

@@ -8,15 +8,17 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSession } from '@/lib/session-provider';
+import { SiteHeader } from '@/components/SiteHeader';
 import Link from 'next/link';
-import { 
+import {
   Terminal,
   Check,
   ArrowRight,
   ArrowLeft,
   Zap,
   Star,
-  Crown
+  Crown,
+  Clock
 } from 'lucide-react';
 
 export default function ChoosePlanPage() {
@@ -131,32 +133,22 @@ export default function ChoosePlanPage() {
   };
 
   const handleContinue = async () => {
-    if (isCreatingCheckout) return;
-
     setCheckoutError(null);
 
     // Save selected plan to session
     sessionStorage.setItem('onboarding_plan', selectedPlan);
-    
-    // If free plan, go to API key setup
-    // If paid plan, go to checkout/payment
-    if (selectedPlan === 'free') {
-      router.push('/onboarding/setup-api-key');
-    } else {
-      setIsCreatingCheckout(true);
-      try {
-        await createCheckoutSession(selectedPlan);
-      } catch (error) {
-        const message =
-          error instanceof Error
-            ? error.message
-            : 'Unable to start checkout. You can continue onboarding and configure billing later.';
-        setCheckoutError(message);
-        router.push('/onboarding/complete');
-      } finally {
-        setIsCreatingCheckout(false);
-      }
+
+    // During beta, all plans route to API key setup (paid plans not yet available)
+    if (selectedPlan !== 'free') {
+      setCheckoutError('Paid plans are coming soon! During the free beta, all features are available with BYOK.');
+      // Still allow them to continue after seeing the message
+      setTimeout(() => {
+        router.push('/onboarding/setup-api-key');
+      }, 2000);
+      return;
     }
+
+    router.push('/onboarding/setup-api-key');
   };
 
   if (loading || isPending) {
@@ -180,20 +172,7 @@ export default function ChoosePlanPage() {
         />
       </div>
 
-      {/* Header */}
-      <header className="fixed top-1 w-full z-40 border-b border-white/10 bg-black/80 backdrop-blur-xl">
-        <div className="container mx-auto px-6 h-16 flex items-center justify-between">
-          <Link href="/" className="flex items-center space-x-2">
-            <div className="w-8 h-8 bg-gradient-to-br from-orange-500 to-purple-600 rounded-lg flex items-center justify-center">
-              <Terminal className="w-5 h-5 text-white" />
-            </div>
-            <span className="text-xl font-bold">recoder</span>
-          </Link>
-          <div className="text-sm text-gray-400">
-            Step 3 of 5
-          </div>
-        </div>
-      </header>
+      <SiteHeader />
 
       <div className="container mx-auto px-6 py-24 mt-16">
         <div className="max-w-6xl mx-auto">
@@ -246,7 +225,15 @@ export default function ChoosePlanPage() {
                   } ${plan.popular ? 'md:scale-110' : ''}`}
                   onClick={() => setSelectedPlan(plan.id)}
                 >
-                  {plan.popular && (
+                  {plan.id !== 'free' && (
+                    <div className="absolute -top-4 right-4">
+                      <div className="px-3 py-1 rounded-full bg-gray-700 text-gray-300 text-xs font-medium flex items-center space-x-1">
+                        <Clock className="w-3 h-3" />
+                        <span>Coming Soon</span>
+                      </div>
+                    </div>
+                  )}
+                  {plan.popular && plan.id === 'free' && (
                     <div className="absolute -top-4 left-1/2 transform -translate-x-1/2">
                       <div className="px-4 py-1 rounded-full bg-gradient-to-r from-orange-500 to-purple-600 text-sm font-medium">
                         Most Popular
@@ -308,8 +295,8 @@ export default function ChoosePlanPage() {
 
           {/* Additional Info */}
           <div className="text-center text-sm text-gray-400 mb-8">
-            <p>All plans include access to 50+ AI models and multiple platforms.</p>
-            <p>You can upgrade, downgrade, or cancel anytime.</p>
+            <p>All features are free during the beta with your own API key (BYOK).</p>
+            <p>Paid plans with platform-provided credits are coming soon.</p>
           </div>
 
           {/* Navigation */}
@@ -324,10 +311,9 @@ export default function ChoosePlanPage() {
 
             <button
               onClick={handleContinue}
-              disabled={isCreatingCheckout}
-              className="px-8 py-3 bg-gradient-to-r from-orange-500 to-purple-600 hover:from-orange-600 hover:to-purple-700 rounded-xl font-medium transition-all flex items-center space-x-2 disabled:opacity-70 disabled:cursor-not-allowed"
+              className="px-8 py-3 bg-gradient-to-r from-orange-500 to-purple-600 hover:from-orange-600 hover:to-purple-700 rounded-xl font-medium transition-all flex items-center space-x-2"
             >
-              <span>{isCreatingCheckout ? 'Starting checkout...' : 'Continue'}</span>
+              <span>Continue</span>
               <ArrowRight className="w-4 h-4" />
             </button>
           </div>

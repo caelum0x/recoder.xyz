@@ -3,8 +3,10 @@
  * Centralized client for making requests to the Express backend
  */
 
-const BACKEND_URL = process.env.BACKEND_URL || 'http://localhost:3001';
-const BACKEND_API_KEY = process.env.BACKEND_API_KEY || 'dev-internal-key';
+import { logger } from '@/lib/logger';
+
+const BACKEND_URL = process.env.BACKEND_URL || (process.env.NODE_ENV === 'production' ? 'https://docker.recoder.xyz' : 'http://localhost:3001');
+const BACKEND_API_KEY = process.env.BACKEND_API_KEY || (process.env.NODE_ENV === 'production' ? '' : 'dev-internal-key');
 
 interface RequestOptions {
   method?: string;
@@ -70,7 +72,7 @@ export class BackendClient {
 
       return await response.json();
     } catch (error: any) {
-      console.error(`Backend request failed: ${endpoint}`, error);
+      logger.error('Backend request failed', { endpoint: String(endpoint), error: String(error) });
       throw error;
     }
   }

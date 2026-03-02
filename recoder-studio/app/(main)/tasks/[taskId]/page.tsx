@@ -1,5 +1,5 @@
 import "./mobile-scroll.css";
-import { TaskId } from "@giselles-ai/protocol";
+import { TaskId } from "@recoder/protocol";
 import { notFound } from "next/navigation";
 import { TaskLayout } from "@/components/task/task-layout";
 import { logger } from "@/lib/logger";
@@ -10,7 +10,7 @@ import { getTaskAppId, getTaskData } from "./ui/task-data";
 import { TaskOverlayReset } from "./ui/task-overlay-reset";
 import { TaskStageInput } from "./ui/task-stage-input.client";
 
-export default async function ({
+export default async function TaskPage({
 	params,
 }: {
 	params: Promise<{ taskId: string }>;

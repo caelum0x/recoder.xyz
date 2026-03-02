@@ -12,7 +12,10 @@ export const GET = async (): Promise<Response> => {
     checks.database = "ok";
   } catch (_error) {
     checks.database = "error";
-    return NextResponse.json({ status: "error", checks }, { status: 500 });
+    return NextResponse.json(
+      { status: "error", service: "recoder-pm-api", timestamp: new Date().toISOString(), checks },
+      { status: 500 },
+    );
   }
 
   try {
@@ -21,8 +24,16 @@ export const GET = async (): Promise<Response> => {
     checks.redis = "ok";
   } catch (_error) {
     checks.redis = "error";
-    return NextResponse.json({ status: "error", checks }, { status: 500 });
+    return NextResponse.json(
+      { status: "error", service: "recoder-pm-api", timestamp: new Date().toISOString(), checks },
+      { status: 500 },
+    );
   }
 
-  return NextResponse.json({ status: "ok", checks });
+  return NextResponse.json({
+    status: "ok",
+    service: "recoder-pm-api",
+    timestamp: new Date().toISOString(),
+    checks,
+  });
 };

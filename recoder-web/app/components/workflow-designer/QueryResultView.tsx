@@ -10,18 +10,18 @@ function ScoreIndicator({ score }: { score: number }) {
   const getScoreColor = (s: number) => {
     if (s > 0.8) return 'bg-green-500';
     if (s > 0.5) return 'bg-yellow-500';
-    return 'bg-bolt-elements-background-depth-3';
+    return 'bg-recoder-elements-background-depth-3';
   };
 
   const getScoreTextColor = (s: number) => {
     if (s > 0.8) return 'text-green-400';
     if (s > 0.5) return 'text-yellow-400';
-    return 'text-bolt-elements-textTertiary';
+    return 'text-recoder-elements-textTertiary';
   };
 
   return (
     <div className="flex items-center gap-2">
-      <div className="w-16 h-1 bg-bolt-elements-background-depth-3 rounded-full overflow-hidden">
+      <div className="w-16 h-1 bg-recoder-elements-background-depth-3 rounded-full overflow-hidden">
         <div
           className={classNames('h-full rounded-full transition-all', getScoreColor(score))}
           style={{ width: `${score * 100}%` }}
@@ -50,7 +50,7 @@ function ContentPreview({
 
   return (
     <div className="space-y-2">
-      <pre className="text-xs text-bolt-elements-textSecondary whitespace-pre-wrap font-mono leading-relaxed">
+      <pre className="text-xs text-recoder-elements-textSecondary whitespace-pre-wrap font-mono leading-relaxed">
         {displayContent}
       </pre>
       {shouldShowToggle && (
@@ -129,8 +129,8 @@ function DataSourceTab({
       className={classNames(
         'flex items-center gap-2 px-4 py-2 border-b-2 min-w-fit flex-shrink-0 transition-colors',
         isActive
-          ? 'text-bolt-elements-textPrimary border-accent-500'
-          : 'text-bolt-elements-textTertiary border-transparent hover:text-bolt-elements-textSecondary'
+          ? 'text-recoder-elements-textPrimary border-accent-500'
+          : 'text-recoder-elements-textTertiary border-transparent hover:text-recoder-elements-textSecondary'
       )}
     >
       <QueryIcon className="w-4 h-4 flex-shrink-0" />
@@ -141,7 +141,7 @@ function DataSourceTab({
       <div
         className={classNames(
           'flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-medium',
-          isActive ? 'bg-accent-500/20 text-accent-400' : 'bg-bolt-elements-background-depth-2 text-bolt-elements-textTertiary'
+          isActive ? 'bg-accent-500/20 text-accent-400' : 'bg-recoder-elements-background-depth-2 text-recoder-elements-textTertiary'
         )}
       >
         {recordCount}
@@ -168,16 +168,16 @@ function QueryResultCard({ result }: { result: QueryResult }) {
 
   if (result.type !== 'vector-store') {
     return (
-      <div className="bg-bolt-elements-background-depth-2/50 rounded-lg p-4 border border-bolt-elements-borderColor">
-        <p className="text-bolt-elements-textTertiary text-sm">Unsupported result type: {result.type}</p>
+      <div className="bg-recoder-elements-background-depth-2/50 rounded-lg p-4 border border-recoder-elements-borderColor">
+        <p className="text-recoder-elements-textTertiary text-sm">Unsupported result type: {result.type}</p>
       </div>
     );
   }
 
   if (!result.records || result.records.length === 0) {
     return (
-      <div className="bg-bolt-elements-background-depth-2/50 rounded-lg p-4 border border-bolt-elements-borderColor text-center">
-        <p className="text-bolt-elements-textTertiary text-sm">No records found</p>
+      <div className="bg-recoder-elements-background-depth-2/50 rounded-lg p-4 border border-recoder-elements-borderColor text-center">
+        <p className="text-recoder-elements-textTertiary text-sm">No records found</p>
       </div>
     );
   }
@@ -187,16 +187,16 @@ function QueryResultCard({ result }: { result: QueryResult }) {
       {result.records.map((record, recordIndex) => (
         <div
           key={`record-${recordIndex}-${record.chunkIndex}`}
-          className="bg-bolt-elements-background-depth-2/50 rounded-lg p-4 space-y-3 border border-bolt-elements-borderColor"
+          className="bg-recoder-elements-background-depth-2/50 rounded-lg p-4 space-y-3 border border-recoder-elements-borderColor"
         >
           {/* Record header */}
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-xs font-semibold text-bolt-elements-textPrimary">
+              <span className="text-xs font-semibold text-recoder-elements-textPrimary">
                 Chunk #{record.chunkIndex}
               </span>
               {record.metadata.documentKey && (
-                <span className="text-xs text-bolt-elements-textTertiary">
+                <span className="text-xs text-recoder-elements-textTertiary">
                   File: {record.metadata.documentKey}
                 </span>
               )}
@@ -213,9 +213,9 @@ function QueryResultCard({ result }: { result: QueryResult }) {
 
           {/* Metadata (collapsible) */}
           {Object.keys(record.metadata).length > 0 && (
-            <details className="text-xs text-bolt-elements-textTertiary">
-              <summary className="cursor-pointer hover:text-bolt-elements-textSecondary">Metadata</summary>
-              <div className="mt-2 pl-3 space-y-1 border-l border-bolt-elements-borderColor">
+            <details className="text-xs text-recoder-elements-textTertiary">
+              <summary className="cursor-pointer hover:text-recoder-elements-textSecondary">Metadata</summary>
+              <div className="mt-2 pl-3 space-y-1 border-l border-recoder-elements-borderColor">
                 {Object.entries(record.metadata).map(([key, value]) => {
                   if (key === 'documentVectorStoreSourceDbId') return null;
                   return (
@@ -239,7 +239,7 @@ function LoadingSpinner() {
   return (
     <div className="flex items-center gap-2 py-4">
       <SpinnerIcon className="w-5 h-5 text-accent-400" />
-      <span className="text-sm text-bolt-elements-textTertiary">Loading results...</span>
+      <span className="text-sm text-recoder-elements-textTertiary">Loading results...</span>
     </div>
   );
 }
@@ -288,8 +288,8 @@ export function QueryResultView({ generation }: { generation: Generation }) {
 
   if (queryResults.length === 0) {
     return (
-      <div className="p-4 bg-bolt-elements-background-depth-2/50 rounded-lg border border-bolt-elements-borderColor text-center">
-        <p className="text-bolt-elements-textTertiary text-sm">No results found.</p>
+      <div className="p-4 bg-recoder-elements-background-depth-2/50 rounded-lg border border-recoder-elements-borderColor text-center">
+        <p className="text-recoder-elements-textTertiary text-sm">No results found.</p>
       </div>
     );
   }
@@ -305,14 +305,14 @@ export function QueryResultView({ generation }: { generation: Generation }) {
       {/* Header */}
       <div className="flex items-center gap-3 py-2">
         <QueryIcon className="w-5 h-5 text-accent-400" />
-        <p className="text-sm text-bolt-elements-textSecondary">
+        <p className="text-sm text-recoder-elements-textSecondary">
           Found {totalRecords} result{totalRecords !== 1 ? 's' : ''} in {queryResults.length} data
           source{queryResults.length !== 1 ? 's' : ''}
         </p>
       </div>
 
       {/* Tab Navigation */}
-      <div className="overflow-x-auto border-b border-bolt-elements-borderColor">
+      <div className="overflow-x-auto border-b border-recoder-elements-borderColor">
         <div className="flex gap-0 flex-nowrap">
           {queryResults.map((result, index) => (
             <DataSourceTab

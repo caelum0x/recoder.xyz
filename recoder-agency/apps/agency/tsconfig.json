@@ -20,10 +20,10 @@
 		],
 		"paths": {
 			"@/*": ["./*"],
-			"@giselles-ai/*": ["./packages/*"],
+			"@recoder/*": ["./packages/*"],
 			"@recoder/shared": ["../../../shared/src/index.ts"],
 			"@recoder/shared/*": ["../../../shared/src/*"],
-			"@giselles-ai/icons/*": [
+			"@recoder/icons/*": [
 				"../../internal-packages/workflow-designer-ui/src/icons/*"
 			]
 		},

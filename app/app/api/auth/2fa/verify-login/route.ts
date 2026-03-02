@@ -9,9 +9,17 @@ import { authenticator } from 'otplib';
 import crypto from 'crypto';
 import { nanoid } from 'nanoid';
 import { getApiKeyStatus } from '@/lib/api-key-resolver';
+import { logger } from '@/lib/logger';
+import { rateLimit, rateLimitConfigs } from '@/lib/middleware/rate-limit';
+
+const authRateLimiter = rateLimit(rateLimitConfigs.auth);
 
 export async function POST(request: NextRequest) {
   try {
+    // Rate limit: 5 requests per minute
+    const rateLimitResponse = await authRateLimiter(request);
+    if (rateLimitResponse) return rateLimitResponse;
+
     const body = await request.json();
     const { userId, code, email, password } = body;
 
@@ -38,24 +46,24 @@ export async function POST(request: NextRequest) {
     }
 
     // Get security settings
-    const settings = await prisma.$queryRaw<any[]>`
-      SELECT * FROM security_settings WHERE user_id = ${userId}
-    `;
+    const settings = await prisma.security_settings.findUnique({
+      where: { userId },
+    });
 
-    if (!settings || settings.length === 0 || !settings[0].two_factor_enabled) {
+    if (!settings || !settings.twoFactorEnabled) {
       return NextResponse.json(
         { success: false, error: '2FA is not enabled for this user' },
         { status: 400 }
       );
     }
 
-    const secret = settings[0].two_factor_secret;
+    const secret = settings.twoFactorSecret;
     let isValid = false;
 
     // Check if it's a backup code (8 characters)
     if (code.length === 8) {
-      const backupCodes = settings[0].backup_codes ?
-        JSON.parse(settings[0].backup_codes as string) : [];
+      const backupCodes = settings.backupCodes ?
+        JSON.parse(settings.backupCodes as string) : [];
 
       const codeHash = crypto.createHash('sha256').update(code.toUpperCase()).digest('hex');
       const backupCodeIndex = backupCodes.indexOf(codeHash);
@@ -64,12 +72,10 @@ export async function POST(request: NextRequest) {
         isValid = true;
         // Remove used backup code
         backupCodes.splice(backupCodeIndex, 1);
-        await prisma.$executeRaw`
-          UPDATE security_settings
-          SET backup_codes = ${JSON.stringify(backupCodes)},
-              updated_at = NOW()
-          WHERE user_id = ${userId}
-        `;
+        await prisma.security_settings.update({
+          where: { userId },
+          data: { backupCodes: JSON.stringify(backupCodes) },
+        });
       }
     } else if (code.length === 6) {
       // Verify TOTP code
@@ -141,7 +147,7 @@ export async function POST(request: NextRequest) {
     });
 
   } catch (error: any) {
-    console.error('[2FA Login Verify] Error:', error);
+    logger.error('[2FA Login Verify] Error:', { error: String(error), route: 'auth/2fa/verify-login' });
     return NextResponse.json(
       { success: false, error: 'Failed to verify 2FA code' },
       { status: 500 }

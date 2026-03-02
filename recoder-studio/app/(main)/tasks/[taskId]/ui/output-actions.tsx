@@ -1,6 +1,6 @@
 "use client";
 
-import type { Generation } from "@giselles-ai/protocol";
+import type { Generation } from "@recoder/protocol";
 import { CheckCircle, Copy, Download } from "lucide-react";
 import { useEffect, useState } from "react";
 import { getAssistantTextFromGeneration } from "../../../../../../../internal-packages/workflow-designer-ui/src/ui/generation-text";

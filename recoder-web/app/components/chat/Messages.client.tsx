@@ -78,8 +78,8 @@ export const Messages = React.forwardRef<HTMLDivElement, MessagesProps>((props: 
               <div
                 key={index}
                 className={classNames('group flex gap-4 p-6 w-full rounded-[calc(0.75rem-1px)]', {
-                  'bg-bolt-elements-messages-background': isUserMessage || !isStreaming || (isStreaming && !isLast),
-                  'bg-gradient-to-b from-bolt-elements-messages-background from-30% to-transparent pointer-events-none':
+                  'bg-recoder-elements-messages-background': isUserMessage || !isStreaming || (isStreaming && !isLast),
+                  'bg-gradient-to-b from-recoder-elements-messages-background from-30% to-transparent pointer-events-none':
                     isStreaming && isLast,
                   'mt-4': !isFirst,
                 })}

@@ -1,4 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server";
+import { extractSessionToken, parseSessionToken } from "@recoder/auth/edge";
 
 const DEFAULT_BODY_LIMIT = 1 * 1024 * 1024; // 1 MB
 const UPLOAD_BODY_LIMIT = 5 * 1024 * 1024; // 5 MB
@@ -52,10 +53,10 @@ export async function proxy(request: NextRequest) {
 	}
 
 	// Auth check for non-API routes
-	const rawToken =
-		request.cookies.get("recoder.session_token")?.value ??
-		request.cookies.get("__Secure-recoder.session_token")?.value;
-	const sessionToken = rawToken?.split(".")[0] ?? null;
+	const rawToken = extractSessionToken(
+		(name) => request.cookies.get(name)?.value ?? null,
+	);
+	const sessionToken = rawToken ? parseSessionToken(rawToken) : null;
 
 	if (!sessionToken) {
 		const url = request.nextUrl.clone();

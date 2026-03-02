@@ -1,8 +1,8 @@
-import { traceEmbedding } from "@giselles-ai/langfuse";
+import { traceEmbedding } from "@recoder/langfuse";
 import type {
 	EmbeddingCompleteCallback,
 	EmbeddingMetrics,
-} from "@giselles-ai/rag";
+} from "@recoder/rag";
 import type { TeamWithSubscription } from "@/services/teams";
 import type { IngestTrigger } from "./process-repository";
 

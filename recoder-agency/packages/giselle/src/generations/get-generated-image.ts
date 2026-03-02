@@ -1,4 +1,4 @@
-import type { GenerationId } from "@giselles-ai/protocol";
+import type { GenerationId } from "@recoder/protocol";
 import type { GiselleContext } from "../types";
 import {
 	detectImageType,

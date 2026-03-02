@@ -5,8 +5,8 @@ import {
 	type GenerationOutput,
 	isTriggerNode,
 	type QueuedGeneration,
-} from "@giselles-ai/protocol";
-import { githubEvents } from "@giselles-ai/trigger-registry";
+} from "@recoder/protocol";
+import { githubEvents } from "@recoder/trigger-registry";
 import { internalSetGeneration } from "../generations/internal/set-generation";
 import { resolveTrigger as resolveGitHubTrigger } from "../github/trigger-utils";
 import type { GiselleContext } from "../types";

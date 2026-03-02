@@ -35,29 +35,29 @@ export function InvitationTable({
 
   return (
     <>
-      <div className="border border-bolt-elements-borderColor bg-bolt-elements-background-depth-2 rounded-lg overflow-hidden">
+      <div className="border border-recoder-elements-borderColor bg-recoder-elements-background-depth-2 rounded-lg overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead>
-              <tr className="border-b border-bolt-elements-borderColor bg-bolt-elements-background-depth-3/50">
-                <th className="px-4 py-3 text-left text-xs font-medium text-bolt-elements-textSecondary uppercase tracking-wider">
+              <tr className="border-b border-recoder-elements-borderColor bg-recoder-elements-background-depth-3/50">
+                <th className="px-4 py-3 text-left text-xs font-medium text-recoder-elements-textSecondary uppercase tracking-wider">
                   Email
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-bolt-elements-textSecondary uppercase tracking-wider hidden md:table-cell">
+                <th className="px-4 py-3 text-left text-xs font-medium text-recoder-elements-textSecondary uppercase tracking-wider hidden md:table-cell">
                   Role
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-bolt-elements-textSecondary uppercase tracking-wider hidden md:table-cell">
+                <th className="px-4 py-3 text-left text-xs font-medium text-recoder-elements-textSecondary uppercase tracking-wider hidden md:table-cell">
                   Status
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-bolt-elements-textSecondary uppercase tracking-wider hidden md:table-cell">
+                <th className="px-4 py-3 text-left text-xs font-medium text-recoder-elements-textSecondary uppercase tracking-wider hidden md:table-cell">
                   Expires
                 </th>
-                <th className="px-4 py-3 text-right text-xs font-medium text-bolt-elements-textSecondary uppercase tracking-wider">
+                <th className="px-4 py-3 text-right text-xs font-medium text-recoder-elements-textSecondary uppercase tracking-wider">
                   Actions
                 </th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-bolt-elements-borderColor">
+            <tbody className="divide-y divide-recoder-elements-borderColor">
               {isLoading ? (
                 // Loading state
                 Array(2)
@@ -65,29 +65,29 @@ export function InvitationTable({
                   .map((_, index) => (
                     <tr key={`inv-skeleton-${index}`}>
                       <td className="px-4 py-4">
-                        <div className="h-5 w-40 bg-bolt-elements-background-depth-3 rounded animate-pulse" />
+                        <div className="h-5 w-40 bg-recoder-elements-background-depth-3 rounded animate-pulse" />
                       </td>
                       <td className="px-4 py-4 hidden md:table-cell">
-                        <div className="h-5 w-16 bg-bolt-elements-background-depth-3 rounded animate-pulse" />
+                        <div className="h-5 w-16 bg-recoder-elements-background-depth-3 rounded animate-pulse" />
                       </td>
                       <td className="px-4 py-4 hidden md:table-cell">
-                        <div className="h-5 w-16 bg-bolt-elements-background-depth-3 rounded animate-pulse" />
+                        <div className="h-5 w-16 bg-recoder-elements-background-depth-3 rounded animate-pulse" />
                       </td>
                       <td className="px-4 py-4 hidden md:table-cell">
-                        <div className="h-4 w-24 bg-bolt-elements-background-depth-3 rounded animate-pulse" />
+                        <div className="h-4 w-24 bg-recoder-elements-background-depth-3 rounded animate-pulse" />
                       </td>
                       <td className="px-4 py-4 text-right">
-                        <div className="h-9 w-9 bg-bolt-elements-background-depth-3 rounded ml-auto animate-pulse" />
+                        <div className="h-9 w-9 bg-recoder-elements-background-depth-3 rounded ml-auto animate-pulse" />
                       </td>
                     </tr>
                   ))
               ) : invitations.length === 0 ? (
                 <tr>
                   <td colSpan={5} className="px-4 py-12 text-center">
-                    <div className="flex flex-col items-center gap-2 text-bolt-elements-textSecondary">
+                    <div className="flex flex-col items-center gap-2 text-recoder-elements-textSecondary">
                       <CheckCircleIcon className="h-8 w-8 opacity-40" />
                       <p>No pending invitations</p>
-                      <p className="text-sm text-bolt-elements-textTertiary">
+                      <p className="text-sm text-recoder-elements-textTertiary">
                         All invitations have been processed
                       </p>
                     </div>
@@ -102,13 +102,13 @@ export function InvitationTable({
                     <tr
                       key={invitation.id}
                       className={classNames(
-                        'group hover:bg-bolt-elements-background-depth-3/30 transition-colors',
+                        'group hover:bg-recoder-elements-background-depth-3/30 transition-colors',
                         (invitationStatus === 'canceled' || invitationStatus === 'expired') && 'opacity-60'
                       )}
                     >
                       <td className="px-4 py-4">
                         <div>
-                          <div className="font-medium text-bolt-elements-textPrimary">
+                          <div className="font-medium text-recoder-elements-textPrimary">
                             {invitation.email}
                           </div>
                           <div className="md:hidden mt-1 flex flex-wrap gap-1.5">
@@ -123,7 +123,7 @@ export function InvitationTable({
                       <td className="px-4 py-4 hidden md:table-cell">
                         <InvitationStatusBadge status={invitationStatus} />
                       </td>
-                      <td className="px-4 py-4 hidden md:table-cell text-bolt-elements-textSecondary text-sm">
+                      <td className="px-4 py-4 hidden md:table-cell text-recoder-elements-textSecondary text-sm">
                         {formatDate(invitation.expiresAt)}
                       </td>
                       <td className="px-4 py-4 text-right">
@@ -167,24 +167,24 @@ export function InvitationTable({
                   <strong>{invitationToCancel?.email}</strong>?
                 </p>
 
-                <div className="bg-bolt-elements-background-depth-3 p-4 rounded-md space-y-2">
+                <div className="bg-recoder-elements-background-depth-3 p-4 rounded-md space-y-2">
                   <div>
-                    <div className="text-sm text-bolt-elements-textSecondary">
+                    <div className="text-sm text-recoder-elements-textSecondary">
                       Email
                     </div>
-                    <div className="text-bolt-elements-textPrimary mt-1">
+                    <div className="text-recoder-elements-textPrimary mt-1">
                       {invitationToCancel?.email}
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className="text-sm text-bolt-elements-textSecondary">
+                    <span className="text-sm text-recoder-elements-textSecondary">
                       Role:
                     </span>
                     {invitationToCancel && <RoleBadge role={invitationToCancel.role} />}
                   </div>
                   {invitationToCancel && (
                     <div className="flex items-center gap-2">
-                      <span className="text-sm text-bolt-elements-textSecondary">
+                      <span className="text-sm text-recoder-elements-textSecondary">
                         Status:
                       </span>
                       <InvitationStatusBadge

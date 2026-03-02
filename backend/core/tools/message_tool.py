@@ -219,6 +219,6 @@ if __name__ == "__main__":
             text="Would you like to proceed with the next phase?",
             attachments="summary.pdf"
         )
-        print("Question result:", ask_result)
+        logger.info(f"Question result: {ask_result}")
 
     asyncio.run(test_message_tool())

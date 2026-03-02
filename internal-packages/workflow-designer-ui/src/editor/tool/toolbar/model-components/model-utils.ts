@@ -4,16 +4,16 @@ import {
 	hasTierAccess,
 	type LanguageModel,
 	type Tier,
-} from "@giselles-ai/language-model";
+} from "@recoder/language-model";
 import {
 	createImageGenerationNode,
 	createTextGenerationNode,
-} from "@giselles-ai/node-registry";
+} from "@recoder/node-registry";
 import {
 	isImageGenerationLanguageModelData,
 	isTextGenerationLanguageModelData,
 	type Node,
-} from "@giselles-ai/protocol";
+} from "@recoder/protocol";
 import type { AddNodeTool } from "../../types";
 
 export function filterModelsByCategory(

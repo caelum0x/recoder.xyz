@@ -1,8 +1,8 @@
-import type { Trigger, TriggerNode } from "@giselles-ai/protocol";
+import type { Trigger, TriggerNode } from "@recoder/protocol";
 import {
 	githubEvents,
 	githubEventToInputFields,
-} from "@giselles-ai/trigger-registry";
+} from "@recoder/trigger-registry";
 
 export function buttonLabel(node: TriggerNode) {
 	switch (node.content.provider) {

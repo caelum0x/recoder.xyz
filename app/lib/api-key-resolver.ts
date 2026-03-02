@@ -1,19 +1,17 @@
 /**
  * API Key Resolution Logic
- * Determines which API key to use based on user's plan
- * - Free users: Must provide their own OpenRouter API key
- * - Pro/Enterprise: Use platform's API key pool
+ * BYOK-only beta: ALL users must provide their own API key.
+ * No platform key pool is available during beta.
  */
 
 import { prisma } from './prisma';
 import { decryptApiKey } from './crypto';
-import { getPlanLimits } from './plan-config';
+import { logger } from '@/lib/logger';
 
 export interface ResolvedApiKey {
   apiKey: string;
-  source: 'user' | 'platform';
+  source: 'user';
   provider: string;
-  keyId?: string;
 }
 
 export class ApiKeyResolverError extends Error {
@@ -28,23 +26,18 @@ export class ApiKeyResolverError extends Error {
 }
 
 /**
- * Resolve which API key to use for a user
- * @param userId The user's ID
- * @param provider The AI provider (default: 'openrouter')
- * @returns The API key to use and its source
+ * Resolve which API key to use for a user.
+ * In BYOK-only beta, all users must provide their own key.
  */
 export async function resolveApiKey(
   userId: string,
   provider: string = 'openrouter'
 ): Promise<ResolvedApiKey> {
-  // Get user and their plan
   const user = await prisma.users.findUnique({
     where: { id: userId },
     select: {
       id: true,
       email: true,
-      subscriptionPlan: true,
-      subscriptionStatus: true,
       openRouterApiKey: true,
       hasOwnApiKey: true,
       apiKeyEncrypted: true,
@@ -59,140 +52,32 @@ export async function resolveApiKey(
     );
   }
 
-  // Check subscription status
-  if (user.subscriptionStatus !== 'active') {
+  // BYOK-only beta: ALL users must provide their own API key
+  if (!user.openRouterApiKey || !user.hasOwnApiKey) {
     throw new ApiKeyResolverError(
-      'Subscription is not active. Please update your payment method.',
-      'PLAN_UPGRADE_REQUIRED',
-      true
+      'Recoder.xyz requires your own API key during beta. Please add one at https://recoder.xyz/settings/ai-providers',
+      'NO_API_KEY',
+      false
     );
   }
 
-  const planLimits = getPlanLimits(user.subscriptionPlan);
-
-  // FREE USERS: Must provide their own API key
-  if (planLimits.requiresOwnApiKey) {
-    if (!user.openRouterApiKey || !user.hasOwnApiKey) {
-      throw new ApiKeyResolverError(
-        'Free plan requires your own OpenRouter API key. Please add one at https://recoder.xyz/settings/api-keys',
-        'NO_API_KEY',
-        true
-      );
-    }
-
-    // Decrypt user's API key
-    let apiKey: string;
-    try {
-      apiKey = user.apiKeyEncrypted 
-        ? decryptApiKey(user.openRouterApiKey)
-        : user.openRouterApiKey;
-    } catch (error) {
-      throw new ApiKeyResolverError(
-        'Failed to decrypt API key. Please re-add your key.',
-        'INVALID_API_KEY',
-        false
-      );
-    }
-
-    return {
-      apiKey,
-      source: 'user',
-      provider: 'openrouter',
-    };
-  }
-
-  // PRO/ENTERPRISE: Use platform's API key pool
-  const platformKey = await getPlatformApiKey(provider);
-  
-  return {
-    apiKey: platformKey.apiKey,
-    source: 'platform',
-    provider,
-    keyId: platformKey.keyId,
-  };
-}
-
-/**
- * Get a platform API key from the pool with load balancing
- * @param provider The AI provider
- * @returns Decrypted API key
- */
-async function getPlatformApiKey(provider: string = 'openrouter'): Promise<{
-  apiKey: string;
-  keyId: string;
-}> {
-  // Get all active platform keys for the provider
-  const keys = await prisma.platform_api_keys.findMany({
-    where: {
-      provider,
-      isActive: true,
-    },
-    orderBy: [
-      { quotaUsed: 'asc' },  // Less used keys first
-      { lastUsedAt: 'asc' }, // Least recently used first
-    ],
-  });
-
-  if (keys.length === 0) {
-    // Fallback to environment variable
-    const envKey = process.env.OPENROUTER_API_KEY;
-    if (envKey) {
-      console.warn('⚠️  Using environment OPENROUTER_API_KEY as fallback');
-      return {
-        apiKey: envKey,
-        keyId: 'env_fallback',
-      };
-    }
-
+  let apiKey: string;
+  try {
+    apiKey = user.apiKeyEncrypted
+      ? decryptApiKey(user.openRouterApiKey)
+      : user.openRouterApiKey;
+  } catch (error) {
     throw new ApiKeyResolverError(
-      'No platform API keys available. Please contact support.',
+      'Failed to decrypt API key. Please re-add your key.',
       'INVALID_API_KEY',
       false
     );
   }
 
-  // Select key with load balancing (lowest usage)
-  const selectedKey = keys[0];
-
-  // Simple quota check - if quotaUsed is very high, try next key
-  if (selectedKey.quotaUsed && selectedKey.quotaUsed >= 10000) {
-    // Try next key
-    const nextKey = keys.find(k => (k.quotaUsed || 0) < 10000);
-    if (!nextKey) {
-      throw new ApiKeyResolverError(
-        'All platform API keys have reached their quota. Please try again later.',
-        'QUOTA_EXCEEDED',
-        false
-      );
-    }
-    
-    // Update last used time
-    await prisma.platform_api_keys.update({
-      where: { id: nextKey.id },
-      data: { 
-        lastUsedAt: new Date(),
-        quotaUsed: { increment: 1 },
-      },
-    });
-
-    return {
-      apiKey: decryptApiKey(nextKey.keyEncrypted),
-      keyId: nextKey.id,
-    };
-  }
-
-  // Update usage and last used time
-  await prisma.platform_api_keys.update({
-    where: { id: selectedKey.id },
-    data: { 
-      lastUsedAt: new Date(),
-      quotaUsed: { increment: 1 },
-    },
-  });
-
   return {
-    apiKey: decryptApiKey(selectedKey.keyEncrypted),
-    keyId: selectedKey.id,
+    apiKey,
+    source: 'user',
+    provider: 'openrouter',
   };
 }
 
@@ -251,42 +136,37 @@ export async function validateUserApiKey(
 }
 
 /**
- * Check if user needs to provide an API key
- * @param userId The user's ID
- * @returns True if user needs to add their API key
+ * Check if user needs to provide an API key.
+ * In BYOK-only beta, all users need a key.
  */
 export async function needsApiKey(userId: string): Promise<boolean> {
   const user = await prisma.users.findUnique({
     where: { id: userId },
     select: {
-      subscriptionPlan: true,
       hasOwnApiKey: true,
     },
   });
 
   if (!user) {
-    return false;
+    return true;
   }
 
-  const planLimits = getPlanLimits(user.subscriptionPlan);
-  return planLimits.requiresOwnApiKey && !user.hasOwnApiKey;
+  return !user.hasOwnApiKey;
 }
 
 /**
- * Get API key status for a user
- * @param userId The user's ID
- * @returns Status information
+ * Get API key status for a user.
+ * In BYOK-only beta, all users must bring their own key.
  */
 export async function getApiKeyStatus(userId: string): Promise<{
   hasApiKey: boolean;
-  source: 'user' | 'platform' | 'none';
+  source: 'user' | 'none';
   requiresApiKey: boolean;
   keyMasked?: string;
 }> {
   const user = await prisma.users.findUnique({
     where: { id: userId },
     select: {
-      subscriptionPlan: true,
       hasOwnApiKey: true,
       openRouterApiKey: true,
     },
@@ -300,23 +180,13 @@ export async function getApiKeyStatus(userId: string): Promise<{
     };
   }
 
-  const planLimits = getPlanLimits(user.subscriptionPlan);
-  
-  if (planLimits.requiresOwnApiKey) {
-    const hasKey = user.hasOwnApiKey && !!user.openRouterApiKey;
-    return {
-      hasApiKey: hasKey,
-      source: hasKey ? 'user' : 'none',
-      requiresApiKey: true,
-      keyMasked: hasKey && user.openRouterApiKey 
-        ? `sk-or-...${user.openRouterApiKey.slice(-4)}` 
-        : undefined,
-    };
-  }
-
+  const hasKey = user.hasOwnApiKey && !!user.openRouterApiKey;
   return {
-    hasApiKey: true,
-    source: 'platform',
-    requiresApiKey: false,
+    hasApiKey: hasKey,
+    source: hasKey ? 'user' : 'none',
+    requiresApiKey: true,
+    keyMasked: hasKey && user.openRouterApiKey
+      ? `sk-or-...${user.openRouterApiKey.slice(-4)}`
+      : undefined,
   };
 }

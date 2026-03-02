@@ -3,7 +3,7 @@ import type {
 	AppParameter,
 	NodeId,
 	WorkspaceId,
-} from "@giselles-ai/protocol";
+} from "@recoder/protocol";
 
 export interface StageApp {
 	id: AppId;

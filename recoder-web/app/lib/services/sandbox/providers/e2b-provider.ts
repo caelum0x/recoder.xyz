@@ -78,8 +78,7 @@ export class E2BSandboxProvider extends BaseSandboxProvider {
 
     // Dynamically import E2B SDK
     try {
-      // @ts-ignore - e2b is an optional dependency
-      const e2bModule = await import('e2b') as E2BModuleType;
+      const e2bModule = await (import('e2b' /* optional dep */) as Promise<E2BModuleType>);
       this.E2B = e2bModule.default;
     } catch (error) {
       logger.warn('E2B SDK not available. E2B provider will not work.');

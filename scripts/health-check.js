@@ -24,7 +24,7 @@ class HealthCheck {
   }
 
   async run() {
-    console.log(chalk.cyan('🏥 CodeCraft Health Check\n'));
+    console.log(chalk.cyan('🏥 Recoder Health Check\n'));
 
     const results = {
       services: [],

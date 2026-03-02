@@ -1,8 +1,8 @@
 "use client";
 
-import { Button } from "@giselle-internal/ui/button";
-import { Popover } from "@giselle-internal/ui/popover";
-import { StatusBadge } from "@giselle-internal/ui/status-badge";
+import { Button } from "@recoder-internal/ui/button";
+import { Popover } from "@recoder-internal/ui/popover";
+import { StatusBadge } from "@recoder-internal/ui/status-badge";
 import {
 	Table,
 	TableBody,
@@ -10,7 +10,7 @@ import {
 	TableHead,
 	TableHeader,
 	TableRow,
-} from "@giselle-internal/ui/table";
+} from "@recoder-internal/ui/table";
 
 import clsx from "clsx/lite";
 import {

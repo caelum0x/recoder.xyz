@@ -1,4 +1,4 @@
-import { Tier } from "@giselles-ai/language-model";
+import { Tier } from "@recoder/language-model";
 import type { TeamPlan } from "@/db/schema";
 
 const LANGUAGE_MODEL_TIERS: Record<TeamPlan, Tier> = {

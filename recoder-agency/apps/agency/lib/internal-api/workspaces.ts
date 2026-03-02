@@ -1,6 +1,6 @@
 "use server";
 
-import type { WorkspaceId } from "@giselles-ai/protocol";
+import type { WorkspaceId } from "@recoder/protocol";
 import { giselle } from "@/app/giselle";
 
 export async function createWorkspace() {

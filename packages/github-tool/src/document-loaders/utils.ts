@@ -1,4 +1,4 @@
-import { DocumentLoaderError } from "@giselles-ai/rag";
+import { DocumentLoaderError } from "@recoder/rag";
 import { RequestError } from "@octokit/request-error";
 import type { GitHubAuthConfig } from "../types";
 

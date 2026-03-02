@@ -1,4 +1,4 @@
-import type { TaskId } from "@giselles-ai/protocol";
+import type { TaskId } from "@recoder/protocol";
 import { getTask } from "../tasks";
 import type { GiselleContext } from "../types";
 import { getTaskGenerationIndexes as internal_getTaskGenerationIndexes } from "./internal/get-task-generation-indexes";

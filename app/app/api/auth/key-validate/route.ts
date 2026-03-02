@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { PlatformApiKeyService } from '@/lib/services/platform-api-key.service';
 import { z } from 'zod';
+import { logger } from '@/lib/logger';
 
 const validateSchema = z.object({
   apiKey: z.string().startsWith('sk-recoder-', 'Invalid API key format'),
@@ -48,7 +49,7 @@ export async function POST(req: NextRequest) {
       keyInfo: result.keyInfo,
     });
   } catch (error: any) {
-    console.error('Error validating API key:', error);
+    logger.error('Error validating API key:', { error: String(error), route: 'auth/key-validate' });
     return NextResponse.json(
       {
         valid: false,
@@ -110,7 +111,7 @@ export async function GET(req: NextRequest) {
       keyInfo: result.keyInfo,
     });
   } catch (error: any) {
-    console.error('Error validating API key:', error);
+    logger.error('Error validating API key:', { error: String(error), route: 'auth/key-validate' });
     return NextResponse.json(
       {
         valid: false,

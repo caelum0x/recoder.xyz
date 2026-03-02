@@ -4,7 +4,7 @@ import {
 	type ImageGenerationLanguageModelData,
 	type ImageGenerationLanguageModelProvider,
 	OpenAIImageLanguageModelData,
-} from "@giselles-ai/protocol";
+} from "@recoder/protocol";
 
 export function createDefaultModelData(
 	provider: ImageGenerationLanguageModelProvider,
@@ -40,8 +40,7 @@ export function createDefaultModelData(
 				},
 			});
 		default: {
-			const _exhaustiveCheck: never = provider;
-			throw new Error(`Unhandled provider: ${_exhaustiveCheck}`);
+			throw new Error(`Unhandled provider: ${String(provider)}`);
 		}
 	}
 }
@@ -67,10 +66,7 @@ export function updateModelId(
 				id: newModelId,
 			});
 		default: {
-			const _exhaustiveCheck: never = currentModel;
-			throw new Error(
-				`Unhandled provider: ${JSON.stringify(_exhaustiveCheck)}`,
-			);
+			throw new Error(`Unhandled provider: ${JSON.stringify(currentModel)}`);
 		}
 	}
 }

@@ -242,15 +242,15 @@ export const CodeBlockMessage = memo(function CodeBlockMessage({ block, classNam
   return (
     <div
       className={classNames(
-        'my-4 bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor rounded-lg overflow-hidden',
+        'my-4 bg-recoder-elements-background-depth-2 border border-recoder-elements-borderColor rounded-lg overflow-hidden',
         className
       )}
     >
       {/* Header */}
-      <div className="flex items-center justify-between px-3 py-2 bg-bolt-elements-background-depth-2 border-b border-bolt-elements-borderColor">
+      <div className="flex items-center justify-between px-3 py-2 bg-recoder-elements-background-depth-2 border-b border-recoder-elements-borderColor">
         <div className="flex items-center gap-2">
-          <div className="i-ph:code text-bolt-elements-textSecondary" />
-          <span className="text-sm font-medium text-bolt-elements-textSecondary">{languageLabel}</span>
+          <div className="i-ph:code text-recoder-elements-textSecondary" />
+          <span className="text-sm font-medium text-recoder-elements-textSecondary">{languageLabel}</span>
         </div>
         <CopyButton
           text={block.content}
@@ -265,7 +265,7 @@ export const CodeBlockMessage = memo(function CodeBlockMessage({ block, classNam
       {/* Code content */}
       <div className="p-3 overflow-x-auto">
         <div
-          className="text-sm [&_pre]:m-0 [&_pre]:bg-transparent [&_code]:text-bolt-elements-textSecondary"
+          className="text-sm [&_pre]:m-0 [&_pre]:bg-transparent [&_code]:text-recoder-elements-textSecondary"
           dangerouslySetInnerHTML={{ __html: html ?? `<pre><code>${(block.content || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</code></pre>` }}
         />
       </div>
@@ -280,15 +280,15 @@ export const ConsoleBlock = memo(function ConsoleBlock({ block, className }: Blo
   return (
     <div
       className={classNames(
-        'my-4 bg-bolt-elements-background-depth-3 border border-bolt-elements-borderColor rounded-lg overflow-hidden',
+        'my-4 bg-recoder-elements-background-depth-3 border border-recoder-elements-borderColor rounded-lg overflow-hidden',
         className
       )}
     >
       {/* Header */}
-      <div className="flex items-center justify-between px-3 py-2 bg-bolt-elements-background-depth-3 border-b border-bolt-elements-borderColor">
+      <div className="flex items-center justify-between px-3 py-2 bg-recoder-elements-background-depth-3 border-b border-recoder-elements-borderColor">
         <div className="flex items-center gap-2">
-          <div className="i-ph:terminal text-bolt-elements-textSecondary" />
-          <span className="text-sm font-medium text-bolt-elements-textSecondary">Console Output</span>
+          <div className="i-ph:terminal text-recoder-elements-textSecondary" />
+          <span className="text-sm font-medium text-recoder-elements-textSecondary">Console Output</span>
         </div>
         <CopyButton text={block.content} size="sm" variant="ghost" />
       </div>
@@ -333,7 +333,7 @@ export const DiffBlock = memo(function DiffBlock({ block, className }: BlockProp
   const formattedDiff = useMemo(() => {
     const lines = block.content.split('\n');
     return lines.map((line, index) => {
-      let lineClass = 'text-bolt-elements-textSecondary';
+      let lineClass = 'text-recoder-elements-textSecondary';
       let bgClass = '';
 
       if (line.startsWith('+') && !line.startsWith('+++')) {
@@ -346,7 +346,7 @@ export const DiffBlock = memo(function DiffBlock({ block, className }: BlockProp
         lineClass = 'text-cyan-400';
         bgClass = 'bg-cyan-500/10';
       } else if (line.startsWith('diff ') || line.startsWith('index ')) {
-        lineClass = 'text-bolt-elements-textTertiary';
+        lineClass = 'text-recoder-elements-textTertiary';
       } else if (line.startsWith('+++') || line.startsWith('---')) {
         lineClass = 'text-yellow-400';
       }

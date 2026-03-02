@@ -6,6 +6,8 @@ import {
   Terminal, Copy, Check, ArrowRight, Zap, Shield, Globe,
   Sparkles, Code2, Rocket, Download, Repeat, Package, Lock
 } from 'lucide-react';
+import { SiteHeader } from '@/components/SiteHeader';
+import { SiteFooter } from '@/components/SiteFooter';
 
 export default function CLIPage() {
   const [copiedStep, setCopiedStep] = useState<number | null>(null);
@@ -147,32 +149,7 @@ export default function CLIPage() {
 
   return (
     <div className="min-h-screen bg-black text-white">
-      {/* Header */}
-      <header className="fixed top-0 w-full z-50 border-b border-white/10 bg-black/80 backdrop-blur-xl">
-        <div className="container mx-auto px-6 h-16 flex items-center justify-between">
-          <Link href="/" className="flex items-center space-x-2 group">
-            <div className="w-8 h-8 bg-gradient-to-br from-orange-500 to-purple-600 rounded-lg flex items-center justify-center transition-transform group-hover:scale-110">
-              <Terminal className="w-5 h-5 text-white" />
-            </div>
-            <span className="text-xl font-bold">recoder</span>
-          </Link>
-
-          <nav className="flex items-center space-x-8">
-            <Link href="/projects" className="text-sm text-gray-400 hover:text-white transition-colors">
-              My Projects
-            </Link>
-            <Link href="/settings/ai-providers" className="text-sm text-gray-400 hover:text-white transition-colors">
-              API Keys
-            </Link>
-            <Link
-              href="/auth/signin"
-              className="px-4 py-2 text-sm bg-orange-500 hover:bg-orange-600 rounded-lg transition-colors"
-            >
-              Sign In
-            </Link>
-          </nav>
-        </div>
-      </header>
+      <SiteHeader />
 
       {/* Hero */}
       <section className="pt-32 pb-20 px-6">
@@ -427,28 +404,7 @@ export default function CLIPage() {
         </div>
       </section>
 
-      {/* Footer */}
-      <footer className="border-t border-white/10 py-12 px-6">
-        <div className="container mx-auto max-w-6xl">
-          <div className="flex flex-col md:flex-row items-center justify-between space-y-4 md:space-y-0">
-            <div className="flex items-center space-x-2">
-              <div className="w-6 h-6 bg-gradient-to-br from-orange-500 to-purple-600 rounded-lg"></div>
-              <span className="font-bold">recoder</span>
-            </div>
-
-            <div className="flex items-center space-x-8 text-sm text-gray-500">
-              <Link href="/projects" className="hover:text-white transition-colors">My Projects</Link>
-              <Link href="/settings/ai-providers" className="hover:text-white transition-colors">API Keys</Link>
-              <Link href="/dashboard" className="hover:text-white transition-colors">Dashboard</Link>
-              <a href="https://github.com/recoder-xyz" target="_blank" rel="noopener noreferrer" className="hover:text-white transition-colors">GitHub</a>
-            </div>
-
-            <div className="text-sm text-gray-500">
-              © 2024–2026 Recoder.xyz
-            </div>
-          </div>
-        </div>
-      </footer>
+      <SiteFooter />
     </div>
   );
 }

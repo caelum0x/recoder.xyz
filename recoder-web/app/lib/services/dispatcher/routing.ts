@@ -127,9 +127,8 @@ export function createWorkerRequest(originalRequest: Request, routeInfo: RouteIn
     method: originalRequest.method,
     headers: new Headers(originalRequest.headers),
     body: originalRequest.body,
-    // @ts-ignore - duplex is needed for streaming bodies
     duplex: 'half',
-  })
+  } as RequestInit)
 
   // Add routing metadata headers
   newRequest.headers.set('X-Original-URL', originalRequest.url)

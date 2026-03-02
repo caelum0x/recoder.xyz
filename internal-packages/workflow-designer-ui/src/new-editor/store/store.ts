@@ -5,7 +5,7 @@ import type {
 	NodeLike,
 	Workspace,
 	WorkspaceId,
-} from "@giselles-ai/protocol";
+} from "@recoder/protocol";
 import { createStore } from "zustand";
 import { combine } from "zustand/middleware";
 

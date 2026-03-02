@@ -54,8 +54,8 @@ export class CLIAuthService {
     return {
       device_code: deviceCode,
       user_code: userCode,
-      verification_uri: `${process.env.NEXTAUTH_URL}/cli/auth`,
-      verification_uri_complete: `${process.env.NEXTAUTH_URL}/cli/auth?code=${userCode}`,
+      verification_uri: `${process.env.NEXT_PUBLIC_APP_URL}/cli/auth`,
+      verification_uri_complete: `${process.env.NEXT_PUBLIC_APP_URL}/cli/auth?code=${userCode}`,
       expires_in: DEVICE_CODE_EXPIRY_MINUTES * 60,
       interval: 5, // Poll every 5 seconds
     };

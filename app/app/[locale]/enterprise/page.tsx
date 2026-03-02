@@ -1,242 +1,225 @@
-'use client';
-
-import { 
-  Building2, Shield, Cloud, Users, Zap, CheckCircle, 
-  ArrowRight, Phone, Mail, Calendar, Award, Lock,
-  Headphones, Globe, Settings, BarChart3
+import Link from 'next/link';
+import { SiteHeader } from '@/components/SiteHeader';
+import { SiteFooter } from '@/components/SiteFooter';
+import {
+  Shield,
+  Server,
+  FileCheck,
+  Headphones,
+  Cpu,
+  Users,
+  Clock,
+  Plug,
+  ArrowRight,
+  Building2,
+  CheckCircle,
+  Zap,
+  Phone,
+  Calendar,
 } from 'lucide-react';
 
-// Simple button component
-const Button = ({ children, className = '', size = 'md', ...props }: any) => {
-  const sizeClasses = {
-    sm: 'px-3 py-2 text-sm',
-    md: 'px-4 py-2',
-    lg: 'px-6 py-3 text-lg'
-  };
-  
-  return (
-    <button 
-      className={`inline-flex items-center justify-center rounded-lg font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 ${sizeClasses[size]} ${className}`}
-      {...props}
-    >
-      {children}
-    </button>
-  );
-};
+const ENTERPRISE_FEATURES = [
+  {
+    icon: Shield,
+    title: 'SSO & SAML',
+    description:
+      'Single sign-on integration with any identity provider. SAML 2.0, OIDC, and SCIM provisioning for seamless team onboarding.',
+  },
+  {
+    icon: Server,
+    title: 'Self-Hosted Option',
+    description:
+      'Deploy on your own infrastructure with full control. AWS, Azure, GCP, or on-premises with dedicated VPC environments.',
+  },
+  {
+    icon: FileCheck,
+    title: 'SOC 2 & GDPR Compliance',
+    description:
+      'Enterprise security and data governance. SOC 2 Type II certified, ISO 27001 compliant, GDPR ready, and HIPAA eligible.',
+  },
+  {
+    icon: Headphones,
+    title: 'Dedicated Support',
+    description:
+      'Priority support with SLA guarantees. Dedicated customer success manager, 24/7 phone and video support, custom onboarding.',
+  },
+  {
+    icon: Cpu,
+    title: 'Custom AI Models',
+    description:
+      'Bring your own models or use 40+ included models. GPT-4, Claude, Gemini, Llama, Mistral, and more with custom fine-tuning support.',
+  },
+  {
+    icon: Users,
+    title: 'Team Management',
+    description:
+      'Role-based access control, granular permissions, comprehensive audit logs, usage analytics, and bulk user management.',
+  },
+  {
+    icon: Clock,
+    title: '99.99% Uptime SLA',
+    description:
+      'Enterprise reliability guarantee backed by SLA. Redundant infrastructure, automatic failover, and disaster recovery built in.',
+  },
+  {
+    icon: Plug,
+    title: 'Custom Integrations',
+    description:
+      'Full API access, webhooks, CI/CD pipeline integration. Connect to GitHub, GitLab, Jira, Slack, and your internal tools.',
+  },
+];
+
+const SCALE_STATS = [
+  { value: 'Unlimited', label: 'Team Seats', description: 'No per-seat limits on any plan' },
+  { value: 'Unlimited', label: 'Projects', description: 'Create as many as you need' },
+  { value: '40+', label: 'AI Models', description: 'Or bring your own models' },
+];
+
+const COMPLIANCE_ITEMS = [
+  { name: 'SOC 2 Type II', status: 'Certified' },
+  { name: 'ISO 27001', status: 'Compliant' },
+  { name: 'GDPR', status: 'Compliant' },
+  { name: 'HIPAA', status: 'Eligible' },
+  { name: 'AES-256 Encryption', status: 'At Rest & In Transit' },
+  { name: 'Penetration Testing', status: 'Quarterly' },
+];
+
+const HOW_IT_WORKS_STEPS = [
+  {
+    step: 1,
+    title: 'Talk to Sales',
+    description:
+      'Share your requirements with our enterprise team. We will understand your security, compliance, and deployment needs.',
+  },
+  {
+    step: 2,
+    title: 'Custom Setup',
+    description:
+      'We configure SSO, deploy to your infrastructure, set up custom models, and integrate with your existing tools.',
+  },
+  {
+    step: 3,
+    title: 'Deploy & Scale',
+    description:
+      'Your team starts building with AI immediately. We provide ongoing support, training, and optimization.',
+  },
+];
+
 
 export default function EnterprisePage() {
-  const enterpriseFeatures = [
-    {
-      icon: Shield,
-      title: "Advanced Security",
-      description: "Enterprise-grade security with SSO, SAML, SCIM provisioning, and compliance certifications.",
-      features: [
-        "Single Sign-On (SSO) integration",
-        "SAML 2.0 authentication",
-        "SCIM user provisioning",
-        "SOC 2 Type II certified",
-        "ISO 27001 compliance",
-        "Advanced audit logging"
-      ]
-    },
-    {
-      icon: Cloud,
-      title: "Private Cloud Deployment",
-      description: "Deploy Recoder.xyz on your own infrastructure with dedicated cloud instances.",
-      features: [
-        "AWS, Azure, GCP deployment",
-        "Dedicated VPC environments",
-        "Custom domain configuration",
-        "Private Docker registries",
-        "On-premises deployment",
-        "Hybrid cloud solutions"
-      ]
-    },
-    {
-      icon: Users,
-      title: "Team Management",
-      description: "Comprehensive team management with granular permissions and role-based access.",
-      features: [
-        "Unlimited team members",
-        "Role-based access control",
-        "Department organization",
-        "Custom user roles",
-        "Team analytics & insights",
-        "Bulk user management"
-      ]
-    },
-    {
-      icon: Settings,
-      title: "Custom Integrations",
-      description: "Deep integrations with your existing enterprise tools and workflows.",
-      features: [
-        "Custom API endpoints",
-        "Webhook integrations",
-        "Enterprise connectors",
-        "Legacy system support",
-        "Custom authentication",
-        "Data migration services"
-      ]
-    }
-  ];
-
-  const pricingTiers = [
-    {
-      name: "Professional",
-      price: "$49",
-      period: "per user/month",
-      description: "For growing teams that need advanced collaboration features",
-      features: [
-        "Up to 100 team members",
-        "Priority support",
-        "Advanced analytics",
-        "Team collaboration tools",
-        "API access",
-        "99.9% uptime SLA"
-      ],
-      cta: "Start Free Trial",
-      popular: false
-    },
-    {
-      name: "Enterprise",
-      price: "$99",
-      period: "per user/month",
-      description: "For large organizations with complex requirements",
-      features: [
-        "Unlimited team members",
-        "24/7 dedicated support",
-        "Advanced security features",
-        "Custom integrations",
-        "On-premises deployment",
-        "99.99% uptime SLA"
-      ],
-      cta: "Contact Sales",
-      popular: true
-    },
-    {
-      name: "Enterprise Plus",
-      price: "Custom",
-      period: "contact for pricing",
-      description: "For enterprises requiring white-label solutions",
-      features: [
-        "White-label solution",
-        "Custom development",
-        "Dedicated infrastructure",
-        "Custom SLA agreements",
-        "Compliance consulting",
-        "Migration assistance"
-      ],
-      cta: "Schedule Demo",
-      popular: false
-    }
-  ];
-
-  const clientLogos = [
-    { name: "Microsoft", logo: "/enterprise/microsoft-logo.png" },
-    { name: "Amazon", logo: "/enterprise/amazon-logo.png" },
-    { name: "Google", logo: "/enterprise/google-logo.png" },
-    { name: "IBM", logo: "/enterprise/ibm-logo.png" },
-    { name: "Oracle", logo: "/enterprise/oracle-logo.png" },
-    { name: "Salesforce", logo: "/enterprise/salesforce-logo.png" }
-  ];
-
-  const caseStudies = [
-    {
-      company: "TechCorp Global",
-      industry: "Technology",
-      employees: "50,000+",
-      results: [
-        "65% faster development cycles",
-        "$2.5M annual cost savings",
-        "99.9% developer satisfaction"
-      ],
-      quote: "Recoder.xyz transformed our development workflow across 200+ teams worldwide.",
-      logo: "/enterprise/techcorp-logo.png"
-    },
-    {
-      company: "FinanceSecure Inc",
-      industry: "Financial Services",
-      employees: "15,000+",
-      results: [
-        "100% compliance achievement",
-        "40% reduction in security incidents",
-        "85% faster code reviews"
-      ],
-      quote: "The security features and compliance tools exceed our strict financial industry requirements.",
-      logo: "/enterprise/financesecure-logo.png"
-    }
-  ];
-
-  const supportOptions = [
-    {
-      icon: Headphones,
-      title: "24/7 Dedicated Support",
-      description: "Round-the-clock support from our enterprise team",
-      features: [
-        "Dedicated customer success manager",
-        "Priority support queue",
-        "Phone and video support",
-        "Custom SLA agreements"
-      ]
-    },
-    {
-      icon: Users,
-      title: "Professional Services",
-      description: "Expert services to ensure successful deployment",
-      features: [
-        "Implementation consulting",
-        "Custom integration development",
-        "Training and onboarding",
-        "Migration assistance"
-      ]
-    },
-    {
-      icon: BarChart3,
-      title: "Success Analytics",
-      description: "Comprehensive insights into your team's usage",
-      features: [
-        "Usage analytics dashboard",
-        "Performance metrics",
-        "ROI reporting",
-        "Custom reporting"
-      ]
-    }
-  ];
-
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-white dark:from-gray-900 dark:to-gray-800">
+    <div className="min-h-screen bg-black text-white">
+      <SiteHeader fixed={false} />
+
       {/* Hero Section */}
-      <section className="py-20 px-4 sm:px-6 lg:px-8">
-        <div className="max-w-7xl mx-auto text-center">
-          <h1 className="text-5xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent mb-6">
-            Enterprise Solutions
+      <section className="pt-24 pb-16 px-6">
+        <div className="container mx-auto max-w-5xl text-center">
+          <div className="inline-flex items-center space-x-2 px-4 py-2 bg-purple-500/10 border border-purple-500/20 rounded-full mb-8">
+            <Building2 className="w-4 h-4 text-purple-400" />
+            <span className="text-sm text-purple-300">Enterprise</span>
+          </div>
+          <h1 className="text-5xl md:text-7xl font-bold mb-6 tracking-tight">
+            Enterprise-grade{' '}
+            <br className="hidden md:block" />
+            <span className="bg-gradient-to-r from-orange-500 via-purple-500 to-orange-500 bg-clip-text text-transparent">
+              AI development
+            </span>
           </h1>
-          <p className="text-xl text-gray-600 dark:text-gray-300 max-w-3xl mx-auto mb-12">
-            Scale your development teams with enterprise-grade security, custom deployments, and dedicated support. 
-            Built for the world's largest organizations.
+          <p className="text-xl md:text-2xl text-gray-400 max-w-3xl mx-auto leading-relaxed">
+            Secure, scalable, compliant. The AI development platform built for
+            organizations that demand the highest standards.
           </p>
-          <div className="flex flex-col sm:flex-row gap-4 justify-center mb-16">
-            <Button size="lg" className="bg-blue-600 hover:bg-blue-700 text-white">
-              <Calendar className="mr-2 h-5 w-5" />
-              Schedule Demo
-            </Button>
-            <Button size="lg" className="bg-gray-600 hover:bg-gray-700 text-white">
-              <Phone className="mr-2 h-5 w-5" />
-              Contact Sales
-            </Button>
+
+          {/* Trust indicators */}
+          <div className="flex flex-wrap justify-center gap-6 mt-10">
+            {['SOC 2 Type II', 'ISO 27001', 'GDPR Compliant', '99.99% Uptime'].map((item) => (
+              <div
+                key={item}
+                className="flex items-center space-x-2 px-4 py-2 bg-white/5 border border-white/10 rounded-full"
+              >
+                <CheckCircle className="w-4 h-4 text-green-400" />
+                <span className="text-sm font-medium text-gray-300">{item}</span>
+              </div>
+            ))}
           </div>
 
-          {/* Trusted by logos */}
-          <div className="mb-16">
-            <p className="text-gray-500 dark:text-gray-400 mb-8">Trusted by industry leaders</p>
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-8 items-center opacity-60">
-              {clientLogos.map((client, index) => (
-                <div key={index} className="flex items-center justify-center">
-                  <div className="bg-gray-200 dark:bg-gray-700 rounded-lg p-4 w-24 h-16 flex items-center justify-center">
-                    <span className="text-gray-600 dark:text-gray-300 text-sm font-medium">
-                      {client.name}
-                    </span>
+          {/* Hero CTAs */}
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mt-12">
+            <Link
+              href="/contact"
+              className="px-8 py-4 text-lg font-semibold bg-gradient-to-r from-orange-500 to-purple-600 hover:from-orange-600 hover:to-purple-700 rounded-xl transition-all transform hover:scale-105 flex items-center space-x-2 shadow-lg shadow-orange-500/25"
+            >
+              <Phone className="w-5 h-5" />
+              <span>Contact Sales</span>
+            </Link>
+            <Link
+              href="/contact"
+              className="px-8 py-4 text-lg font-semibold border border-white/20 hover:border-white/40 rounded-xl transition-all hover:bg-white/5 flex items-center space-x-2"
+            >
+              <Calendar className="w-5 h-5" />
+              <span>Book a Demo</span>
+            </Link>
+          </div>
+        </div>
+      </section>
+
+      {/* Enterprise Features Grid */}
+      <section className="py-20 px-6">
+        <div className="container mx-auto max-w-7xl">
+          <div className="text-center mb-16">
+            <div className="inline-flex items-center space-x-2 px-4 py-2 bg-orange-500/10 border border-orange-500/20 rounded-full mb-6">
+              <Zap className="w-4 h-4 text-orange-400" />
+              <span className="text-sm text-orange-300">Enterprise Features</span>
+            </div>
+            <h2 className="text-3xl md:text-4xl font-bold mb-4">
+              Everything your organization needs
+            </h2>
+            <p className="text-lg text-gray-400 max-w-2xl mx-auto">
+              Purpose-built for teams that require security, compliance, and control
+              without compromising on developer experience.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            {ENTERPRISE_FEATURES.map((feature) => (
+              <div
+                key={feature.title}
+                className="group relative flex flex-col rounded-2xl border border-white/10 bg-white/[0.02] p-6 transition-all hover:border-white/20 hover:bg-white/[0.04]"
+              >
+                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-orange-500/20 to-purple-500/20 border border-white/10 flex items-center justify-center mb-4 group-hover:border-orange-500/30 transition-colors">
+                  <feature.icon className="w-6 h-6 text-orange-400" />
+                </div>
+                <h3 className="text-lg font-bold mb-2">{feature.title}</h3>
+                <p className="text-sm text-gray-400 leading-relaxed">{feature.description}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Scale Section */}
+      <section className="py-20 px-6">
+        <div className="container mx-auto max-w-5xl">
+          <div className="relative rounded-3xl border border-white/10 bg-gradient-to-br from-orange-500/5 via-purple-500/5 to-transparent p-12 overflow-hidden">
+            {/* Background glow */}
+            <div className="absolute inset-0 bg-gradient-to-r from-orange-500/10 via-transparent to-purple-500/10 blur-3xl pointer-events-none" />
+
+            <div className="relative text-center mb-12">
+              <h2 className="text-3xl md:text-4xl font-bold mb-4">Built for teams of any size</h2>
+              <p className="text-lg text-gray-400 max-w-2xl mx-auto">
+                From 10-person startups to 50,000-employee enterprises. No artificial limits,
+                no per-seat pricing games.
+              </p>
+            </div>
+
+            <div className="relative grid grid-cols-1 md:grid-cols-3 gap-8">
+              {SCALE_STATS.map((stat) => (
+                <div key={stat.label} className="text-center">
+                  <div className="text-5xl font-bold bg-gradient-to-r from-orange-500 to-purple-500 bg-clip-text text-transparent mb-2">
+                    {stat.value}
                   </div>
+                  <div className="text-lg font-semibold text-white mb-1">{stat.label}</div>
+                  <div className="text-sm text-gray-500">{stat.description}</div>
                 </div>
               ))}
             </div>
@@ -244,205 +227,132 @@ export default function EnterprisePage() {
         </div>
       </section>
 
-      {/* Enterprise Features */}
-      <section className="py-16 px-4 sm:px-6 lg:px-8 bg-white dark:bg-gray-800">
-        <div className="max-w-7xl mx-auto">
-          <h2 className="text-3xl font-bold text-gray-900 dark:text-white text-center mb-12">
-            Enterprise-Grade Features
-          </h2>
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
-            {enterpriseFeatures.map((feature, index) => (
-              <div key={index} className="bg-gray-50 dark:bg-gray-700 rounded-xl p-8">
-                <div className="flex items-center mb-6">
-                  <feature.icon className="h-12 w-12 text-blue-600 mr-4" />
+      {/* Security & Compliance Section */}
+      <section className="py-20 px-6">
+        <div className="container mx-auto max-w-5xl">
+          <div className="text-center mb-16">
+            <div className="inline-flex items-center space-x-2 px-4 py-2 bg-green-500/10 border border-green-500/20 rounded-full mb-6">
+              <Shield className="w-4 h-4 text-green-400" />
+              <span className="text-sm text-green-300">Security & Compliance</span>
+            </div>
+            <h2 className="text-3xl md:text-4xl font-bold mb-4">
+              Security you can trust
+            </h2>
+            <p className="text-lg text-gray-400 max-w-2xl mx-auto">
+              Industry-leading certifications and security practices. Your code and data
+              are protected at every layer.
+            </p>
+          </div>
+
+          <div className="rounded-2xl border border-white/10 bg-white/[0.02] overflow-hidden">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
+              {COMPLIANCE_ITEMS.map((item, index) => (
+                <div
+                  key={item.name}
+                  className={`flex items-center gap-4 p-6 ${
+                    index < COMPLIANCE_ITEMS.length - (COMPLIANCE_ITEMS.length % 3 || 3)
+                      ? 'border-b border-white/10'
+                      : ''
+                  } ${(index + 1) % 3 !== 0 ? 'lg:border-r lg:border-white/10' : ''}`}
+                >
+                  <CheckCircle className="w-5 h-5 text-green-400 shrink-0" />
                   <div>
-                    <h3 className="text-xl font-bold text-gray-900 dark:text-white">{feature.title}</h3>
-                    <p className="text-gray-600 dark:text-gray-300 mt-2">{feature.description}</p>
+                    <div className="font-semibold text-white">{item.name}</div>
+                    <div className="text-sm text-gray-500">{item.status}</div>
                   </div>
                 </div>
-                <ul className="space-y-3">
-                  {feature.features.map((item, itemIndex) => (
-                    <li key={itemIndex} className="flex items-start">
-                      <CheckCircle className="h-5 w-5 text-green-500 mr-3 mt-0.5 flex-shrink-0" />
-                      <span className="text-gray-600 dark:text-gray-300">{item}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ))}
+              ))}
+            </div>
+          </div>
+
+          <div className="mt-8 text-center">
+            <Link
+              href="/security"
+              className="inline-flex items-center gap-2 text-sm text-orange-400 hover:text-orange-300 transition-colors"
+            >
+              View full Security Center
+              <ArrowRight className="w-4 h-4" />
+            </Link>
           </div>
         </div>
       </section>
 
-      {/* Pricing */}
-      <section className="py-16 px-4 sm:px-6 lg:px-8">
-        <div className="max-w-7xl mx-auto">
-          <h2 className="text-3xl font-bold text-gray-900 dark:text-white text-center mb-12">
-            Enterprise Pricing
-          </h2>
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            {pricingTiers.map((tier, index) => (
-              <div key={index} className={`bg-white dark:bg-gray-800 rounded-xl shadow-lg p-8 ${tier.popular ? 'ring-2 ring-blue-500 scale-105' : ''}`}>
-                {tier.popular && (
-                  <div className="text-center mb-4">
-                    <span className="bg-blue-600 text-white px-3 py-1 rounded-full text-sm font-medium">
-                      Most Popular
-                    </span>
-                  </div>
+      {/* How It Works */}
+      <section className="py-20 px-6">
+        <div className="container mx-auto max-w-5xl">
+          <div className="text-center mb-16">
+            <h2 className="text-3xl md:text-4xl font-bold mb-4">How it works</h2>
+            <p className="text-lg text-gray-400 max-w-2xl mx-auto">
+              Get your entire organization onboarded in days, not months.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+            {HOW_IT_WORKS_STEPS.map((step) => (
+              <div key={step.step} className="relative">
+                {/* Connector line */}
+                {step.step < 3 && (
+                  <div className="hidden md:block absolute top-8 left-[calc(50%+2rem)] w-[calc(100%-4rem)] h-px bg-gradient-to-r from-orange-500/40 to-purple-500/40" />
                 )}
-                <div className="text-center mb-6">
-                  <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">{tier.name}</h3>
-                  <div className="mb-2">
-                    <span className="text-4xl font-bold text-gray-900 dark:text-white">{tier.price}</span>
-                    <span className="text-gray-600 dark:text-gray-400 ml-1">/{tier.period}</span>
+                <div className="text-center">
+                  <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-orange-500 to-purple-600 text-2xl font-bold mb-6 shadow-lg shadow-orange-500/25">
+                    {step.step}
                   </div>
-                  <p className="text-gray-600 dark:text-gray-300">{tier.description}</p>
+                  <h3 className="text-xl font-bold mb-3">{step.title}</h3>
+                  <p className="text-gray-400 leading-relaxed">{step.description}</p>
                 </div>
-                <ul className="space-y-3 mb-8">
-                  {tier.features.map((feature, featureIndex) => (
-                    <li key={featureIndex} className="flex items-start">
-                      <CheckCircle className="h-5 w-5 text-green-500 mr-3 mt-0.5 flex-shrink-0" />
-                      <span className="text-gray-600 dark:text-gray-300">{feature}</span>
-                    </li>
-                  ))}
-                </ul>
-                <Button className={`w-full ${tier.popular ? 'bg-blue-600 hover:bg-blue-700 text-white' : 'bg-gray-100 hover:bg-gray-200 text-gray-900 dark:bg-gray-700 dark:hover:bg-gray-600 dark:text-white'}`}>
-                  {tier.cta}
-                  <ArrowRight className="ml-2 h-4 w-4" />
-                </Button>
               </div>
             ))}
           </div>
         </div>
       </section>
 
-      {/* Case Studies */}
-      <section className="py-16 px-4 sm:px-6 lg:px-8 bg-gray-50 dark:bg-gray-900">
-        <div className="max-w-7xl mx-auto">
-          <h2 className="text-3xl font-bold text-gray-900 dark:text-white text-center mb-12">
-            Enterprise Success Stories
-          </h2>
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            {caseStudies.map((study, index) => (
-              <div key={index} className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-8">
-                <div className="flex items-center mb-6">
-                  <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center mr-4">
-                    <Building2 className="h-8 w-8 text-white" />
-                  </div>
-                  <div>
-                    <h3 className="text-xl font-bold text-gray-900 dark:text-white">{study.company}</h3>
-                    <p className="text-gray-600 dark:text-gray-400">{study.industry} • {study.employees} employees</p>
-                  </div>
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-                  {study.results.map((result, resultIndex) => (
-                    <div key={resultIndex} className="text-center p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
-                      <div className="text-lg font-bold text-blue-600 dark:text-blue-400">{result}</div>
-                    </div>
-                  ))}
-                </div>
-                <blockquote className="text-gray-600 dark:text-gray-300 italic">
-                  "{study.quote}"
-                </blockquote>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
+      {/* Bottom CTA */}
+      <section className="py-24 px-6">
+        <div className="container mx-auto max-w-4xl">
+          <div className="relative rounded-3xl border border-orange-500/20 bg-gradient-to-br from-orange-500/10 via-purple-500/10 to-transparent p-12 text-center overflow-hidden">
+            {/* Background glow */}
+            <div className="absolute inset-0 bg-gradient-to-r from-orange-500/5 via-purple-500/10 to-orange-500/5 blur-3xl pointer-events-none" />
 
-      {/* Support Options */}
-      <section className="py-16 px-4 sm:px-6 lg:px-8">
-        <div className="max-w-7xl mx-auto">
-          <h2 className="text-3xl font-bold text-gray-900 dark:text-white text-center mb-12">
-            Enterprise Support & Services
-          </h2>
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            {supportOptions.map((option, index) => (
-              <div key={index} className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-8 text-center">
-                <div className="bg-gradient-to-br from-purple-500 to-blue-600 rounded-full w-16 h-16 flex items-center justify-center mx-auto mb-6">
-                  <option.icon className="h-8 w-8 text-white" />
-                </div>
-                <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-4">{option.title}</h3>
-                <p className="text-gray-600 dark:text-gray-300 mb-6">{option.description}</p>
-                <ul className="space-y-2 text-left">
-                  {option.features.map((feature, featureIndex) => (
-                    <li key={featureIndex} className="flex items-start">
-                      <CheckCircle className="h-4 w-4 text-green-500 mr-2 mt-1 flex-shrink-0" />
-                      <span className="text-gray-600 dark:text-gray-300 text-sm">{feature}</span>
-                    </li>
-                  ))}
-                </ul>
+            <div className="relative">
+              <h2 className="text-3xl md:text-4xl font-bold mb-4">
+                Ready to bring AI development to your organization?
+              </h2>
+              <p className="text-lg text-gray-400 mb-10 max-w-2xl mx-auto">
+                Recoder is currently in beta with enterprise features on the roadmap.
+                Contact us to discuss your organization&apos;s needs.
+              </p>
+              <div className="flex flex-col sm:flex-row gap-4 justify-center">
+                <Link
+                  href="/contact"
+                  className="px-8 py-4 text-lg font-semibold bg-gradient-to-r from-orange-500 to-purple-600 hover:from-orange-600 hover:to-purple-700 rounded-xl transition-all transform hover:scale-105 flex items-center justify-center space-x-2 shadow-lg shadow-orange-500/25"
+                >
+                  <Phone className="w-5 h-5" />
+                  <span>Contact Sales</span>
+                </Link>
+                <Link
+                  href="/contact"
+                  className="px-8 py-4 text-lg font-semibold border border-white/20 hover:border-white/40 rounded-xl transition-all hover:bg-white/5 flex items-center justify-center space-x-2"
+                >
+                  <Calendar className="w-5 h-5" />
+                  <span>Book a Demo</span>
+                </Link>
               </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* Security & Compliance */}
-      <section className="py-16 px-4 sm:px-6 lg:px-8 bg-gray-50 dark:bg-gray-900">
-        <div className="max-w-7xl mx-auto text-center">
-          <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-8">
-            Security & Compliance First
-          </h2>
-          <p className="text-xl text-gray-600 dark:text-gray-300 mb-12 max-w-3xl mx-auto">
-            Built with enterprise security from the ground up. We maintain the highest standards 
-            of security and compliance to protect your code and data.
-          </p>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
-            <div className="text-center">
-              <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-lg">
-                <Shield className="h-12 w-12 text-green-600 mx-auto mb-3" />
-                <h3 className="font-bold text-gray-900 dark:text-white mb-1">SOC 2 Type II</h3>
-                <p className="text-gray-600 dark:text-gray-400 text-sm">Certified</p>
-              </div>
-            </div>
-            <div className="text-center">
-              <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-lg">
-                <Lock className="h-12 w-12 text-blue-600 mx-auto mb-3" />
-                <h3 className="font-bold text-gray-900 dark:text-white mb-1">ISO 27001</h3>
-                <p className="text-gray-600 dark:text-gray-400 text-sm">Compliant</p>
-              </div>
-            </div>
-            <div className="text-center">
-              <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-lg">
-                <Globe className="h-12 w-12 text-purple-600 mx-auto mb-3" />
-                <h3 className="font-bold text-gray-900 dark:text-white mb-1">GDPR</h3>
-                <p className="text-gray-600 dark:text-gray-400 text-sm">Ready</p>
-              </div>
-            </div>
-            <div className="text-center">
-              <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-lg">
-                <Award className="h-12 w-12 text-orange-600 mx-auto mb-3" />
-                <h3 className="font-bold text-gray-900 dark:text-white mb-1">HIPAA</h3>
-                <p className="text-gray-600 dark:text-gray-400 text-sm">Compliant</p>
-              </div>
+              <p className="text-sm text-gray-500 mt-6">
+                Or email us directly at{' '}
+                <a
+                  href="mailto:enterprise@recoder.xyz"
+                  className="text-orange-400 hover:text-orange-300 transition-colors"
+                >
+                  enterprise@recoder.xyz
+                </a>
+              </p>
             </div>
           </div>
         </div>
       </section>
 
-      {/* CTA Section */}
-      <section className="py-16 px-4 sm:px-6 lg:px-8 bg-gradient-to-r from-blue-600 to-purple-600">
-        <div className="max-w-4xl mx-auto text-center">
-          <h2 className="text-3xl font-bold text-white mb-6">Ready to Transform Your Enterprise Development?</h2>
-          <p className="text-xl text-blue-100 mb-8">
-            Join the world's leading companies using Recoder.xyz to accelerate their development teams.
-          </p>
-          <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Button size="lg" className="bg-white text-blue-600 hover:bg-gray-100">
-              <Calendar className="mr-2 h-5 w-5" />
-              Schedule Enterprise Demo
-            </Button>
-            <Button size="lg" className="bg-blue-500 hover:bg-blue-400 text-white">
-              <Mail className="mr-2 h-5 w-5" />
-              Contact Enterprise Sales
-            </Button>
-          </div>
-          <div className="mt-8 text-blue-100">
-            <p>Questions? Call our enterprise team: <strong>1-800-RECODER</strong></p>
-          </div>
-        </div>
-      </section>
+      <SiteFooter />
     </div>
   );
 }

@@ -1,7 +1,7 @@
 "use client";
 
-import { DropdownMenu } from "@giselle-internal/ui/dropdown-menu";
-import { useFeatureFlag } from "@giselles-ai/react";
+import { DropdownMenu } from "@recoder-internal/ui/dropdown-menu";
+import { useFeatureFlag } from "@recoder/react";
 import Avatar from "boring-avatars";
 import clsx from "clsx/lite";
 import { ChevronDownIcon } from "lucide-react";
@@ -120,7 +120,7 @@ export function V2Header({
 							fallbackValue="Untitled"
 							onChange={handleUpdateName}
 							value={name}
-							className="text-[#6B8FF0] font-medium"
+							className="text-[#f97316] font-medium"
 						/>
 					</div>
 					{/* dropdown menu */}
@@ -160,7 +160,7 @@ export function V2Header({
 									type="button"
 									className="ml-[4px] p-0 border-none bg-transparent w-auto h-auto hover:bg-transparent focus:bg-transparent outline-none"
 								>
-									<ChevronDownIcon className="size-[16px] text-[#6B8FF0] hover:text-inverse" />
+									<ChevronDownIcon className="size-[16px] text-[#f97316] hover:text-inverse" />
 								</button>
 							}
 							renderItem={(item) =>

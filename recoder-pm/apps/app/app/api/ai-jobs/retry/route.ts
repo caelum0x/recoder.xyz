@@ -1,9 +1,10 @@
 import { currentOrganizationId } from "@repo/backend/auth/utils";
-import { AI_JOB_NAMES, enqueueAiJob } from "@repo/queue/jobs";
+import { emitInteropAiJobEvent } from "@repo/backend/interop-analytics";
+import { AI_JOB_NAMES, enqueueAiJob, type AiJobName } from "@repo/queue/jobs";
 import { NextResponse } from "next/server";
 import { database } from "@/lib/database";
 
-const jobNameByType: Record<string, string> = {
+const jobNameByType: Record<string, AiJobName> = {
   FEEDBACK_SENTIMENT: AI_JOB_NAMES.FEEDBACK_SENTIMENT,
   FEEDBACK_ANALYSIS: AI_JOB_NAMES.FEEDBACK_ANALYSIS,
   FEATURE_RICE: AI_JOB_NAMES.FEATURE_RICE,
@@ -36,6 +37,7 @@ export const POST = async (request: Request): Promise<Response> => {
     select: {
       id: true,
       type: true,
+      entityId: true,
       payload: true,
     },
   });
@@ -63,6 +65,16 @@ export const POST = async (request: Request): Promise<Response> => {
       startedAt: null,
       finishedAt: null,
     },
+  });
+
+  emitInteropAiJobEvent("TASK_QUEUED", {
+    id: job.id,
+    type: job.type,
+    organizationId,
+    entityId: job.entityId ?? null,
+    payload: job.payload,
+    status: "QUEUED",
+    error: null,
   });
 
   await enqueueAiJob(

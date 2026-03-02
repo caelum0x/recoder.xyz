@@ -225,7 +225,7 @@ export function NodeToolbar() {
       {Object.entries(groupedItems).map(([category, items]) => (
         <div key={category} className="mb-2">
           <div className="px-2 py-1">
-            <span className="text-[9px] font-medium text-bolt-elements-textTertiary uppercase tracking-wider">
+            <span className="text-[9px] font-medium text-recoder-elements-textTertiary uppercase tracking-wider">
               {CATEGORY_LABELS[category] || category}
             </span>
           </div>
@@ -239,11 +239,11 @@ export function NodeToolbar() {
                     className={classNames(
                       'w-full aspect-square flex items-center justify-center rounded-lg',
                       'transition-all duration-150',
-                      'hover:bg-bolt-elements-background-depth-3 hover:scale-105 active:scale-95',
+                      'hover:bg-recoder-elements-background-depth-3 hover:scale-105 active:scale-95',
                       'focus:outline-none focus:ring-2 focus:ring-accent-500/50'
                     )}
                   >
-                    <Icon className="w-5 h-5 text-bolt-elements-textTertiary hover:text-bolt-elements-textPrimary transition-colors" />
+                    <Icon className="w-5 h-5 text-recoder-elements-textTertiary hover:text-recoder-elements-textPrimary transition-colors" />
                   </button>
                 </Tooltip>
               );

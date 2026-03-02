@@ -1,6 +1,6 @@
 "use client";
 
-import { Button } from "@giselle-internal/ui/button";
+import { Button } from "@recoder-internal/ui/button";
 import {
 	Dialog,
 	DialogBody,
@@ -11,8 +11,8 @@ import {
 	DialogHeader,
 	DialogTitle,
 	DialogTrigger,
-} from "@giselle-internal/ui/dialog";
-import { Select } from "@giselle-internal/ui/select";
+} from "@recoder-internal/ui/dialog";
+import { Select } from "@recoder-internal/ui/select";
 import * as Tooltip from "@radix-ui/react-tooltip";
 import { Plus, X } from "lucide-react";
 import { useEffect, useState } from "react";

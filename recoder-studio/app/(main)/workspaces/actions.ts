@@ -1,8 +1,8 @@
 "use server";
 
-import type { WorkspaceId } from "@giselles-ai/protocol";
-import { AppId, isAppEntryNode, isTriggerNode } from "@giselles-ai/protocol";
-import type { AgentId } from "@giselles-ai/types";
+import type { WorkspaceId } from "@recoder/protocol";
+import { AppId, isAppEntryNode, isTriggerNode } from "@recoder/protocol";
+import type { AgentId } from "@recoder/types";
 import { createId } from "@paralleldrive/cuid2";
 import { eq } from "drizzle-orm";
 import { giselle } from "@/app/giselle";
@@ -89,9 +89,9 @@ export async function copyAgent(
 					return node;
 				}
 
-				const sourceApp = await giselle.getApp({
-					appId: node.content.appId,
-				});
+					const sourceApp = await giselle.getApp({
+						appId: node.content.appId as AppId,
+					});
 
 				const newAppId = AppId.generate();
 				await giselle.saveApp({

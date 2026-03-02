@@ -1,4 +1,4 @@
-import type { LanguageModel } from "@giselles-ai/language-model";
+import type { LanguageModel } from "@recoder/language-model";
 import clsx from "clsx/lite";
 import type { ToggleGroup } from "radix-ui";
 import {

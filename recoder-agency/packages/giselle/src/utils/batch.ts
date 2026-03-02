@@ -1,4 +1,4 @@
-import type { GiselleLogger } from "@giselles-ai/logger";
+import type { GiselleLogger } from "@recoder/logger";
 
 export function batchWriter<T>({
 	process,

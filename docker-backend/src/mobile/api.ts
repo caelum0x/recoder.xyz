@@ -1269,7 +1269,8 @@ export function createMobileApiRouter(deps: MobileApiDependencies): Router {
     let resolvedApiKey = apiKey;
     if (!resolvedApiKey) {
       const appApiUrl = process.env.APP_API_URL || process.env.MAIN_SITE_URL || 'http://localhost:3000';
-      const serviceKey = process.env.INTERNAL_SERVICE_KEY || '';
+      // Validated at server startup — guaranteed non-empty in production (see server.ts:265)
+      const serviceKey = process.env.INTERNAL_SERVICE_KEY ?? '';
       if (serviceKey) {
         try {
           const { fetchUserByokProviderKeys } = await import('../public-api/byok-provider-keys.js');

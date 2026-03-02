@@ -1,5 +1,5 @@
-import type { NodeId } from "@giselles-ai/protocol";
-import { useNodeGenerations } from "@giselles-ai/react";
+import type { NodeId } from "@recoder/protocol";
+import { useNodeGenerations } from "@recoder/react";
 import { BaseEdge, type EdgeProps, getBezierPath } from "@xyflow/react";
 import clsx from "clsx/lite";
 import type { PropsWithChildren } from "react";

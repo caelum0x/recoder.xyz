@@ -5,7 +5,7 @@ import {
 	isActionNode,
 	type NodeLike,
 	type OutputId,
-} from "@giselles-ai/protocol";
+} from "@recoder/protocol";
 import { useCallback } from "react";
 import { useAddConnection } from "./use-add-connection";
 import { useUpdateNodeData } from "./use-update-node-data";

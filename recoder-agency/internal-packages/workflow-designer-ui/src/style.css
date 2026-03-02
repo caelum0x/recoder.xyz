@@ -230,7 +230,7 @@
 		background: transparent;
 	}
 	.thin-scrollbar::-webkit-scrollbar-thumb {
-		background: #6b8ff0;
+		background: #f97316;
 		border-radius: 2px;
 	}
 	.thin-scrollbar::-webkit-scrollbar-thumb:hover {

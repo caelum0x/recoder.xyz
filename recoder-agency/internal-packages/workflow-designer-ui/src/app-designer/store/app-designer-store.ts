@@ -1,5 +1,5 @@
-import type { LanguageModelProvider } from "@giselles-ai/language-model";
-import type { Workspace } from "@giselles-ai/protocol";
+import type { LanguageModelProvider } from "@recoder/language-model";
+import type { Workspace } from "@recoder/protocol";
 import { createStore, type StoreApi } from "zustand";
 import { type AppSlice, createAppSlice } from "./slices/app-slice";
 import { createUiSlice, type UiSlice } from "./slices/ui-slice";

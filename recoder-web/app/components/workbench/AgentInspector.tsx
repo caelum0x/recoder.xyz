@@ -79,8 +79,8 @@ function getStatusColor(status: ExecutionStepStatus): string {
     case 'complete': return 'text-green-400';
     case 'error': return 'text-red-400';
     case 'aborted': return 'text-yellow-400';
-    case 'pending': return 'text-bolt-elements-textSecondary';
-    default: return 'text-bolt-elements-textSecondary';
+    case 'pending': return 'text-recoder-elements-textSecondary';
+    default: return 'text-recoder-elements-textSecondary';
   }
 }
 
@@ -90,8 +90,8 @@ function getStatusBgColor(status: ExecutionStepStatus): string {
     case 'complete': return 'bg-green-500/20';
     case 'error': return 'bg-red-500/20';
     case 'aborted': return 'bg-yellow-500/20';
-    case 'pending': return 'bg-bolt-elements-background-depth-3';
-    default: return 'bg-bolt-elements-background-depth-3';
+    case 'pending': return 'bg-recoder-elements-background-depth-3';
+    default: return 'bg-recoder-elements-background-depth-3';
   }
 }
 
@@ -143,8 +143,8 @@ export const AgentInspector = memo(({ className = '', onNavigateToFile }: AgentI
 
   if (!config.enabled) {
     return (
-      <div className={`flex flex-col h-full bg-bolt-elements-background-depth-1 ${className}`}>
-        <div className="flex items-center justify-center h-full text-bolt-elements-textTertiary">
+      <div className={`flex flex-col h-full bg-recoder-elements-background-depth-1 ${className}`}>
+        <div className="flex items-center justify-center h-full text-recoder-elements-textTertiary">
           <div className="text-center p-4">
             <span className="i-ph:eye-slash text-4xl mb-3 block" />
             <p className="text-sm mb-3">Agent Inspector is disabled</p>
@@ -161,7 +161,7 @@ export const AgentInspector = memo(({ className = '', onNavigateToFile }: AgentI
   }
 
   return (
-    <div className={`flex flex-col h-full min-h-0 bg-bolt-elements-background-depth-1 ${className}`}>
+    <div className={`flex flex-col h-full min-h-0 bg-recoder-elements-background-depth-1 ${className}`}>
       {/* Header */}
       <InspectorHeader
         currentSession={currentSession}
@@ -227,7 +227,7 @@ export const AgentInspector = memo(({ className = '', onNavigateToFile }: AgentI
 
       {/* No Session Message */}
       {!currentSession && viewMode === 'timeline' && steps.length === 0 && (
-        <div className="absolute inset-0 flex items-center justify-center text-bolt-elements-textTertiary pointer-events-none">
+        <div className="absolute inset-0 flex items-center justify-center text-recoder-elements-textTertiary pointer-events-none">
           <div className="text-center p-4">
             <span className="i-ph:magnifying-glass text-4xl mb-3 block opacity-50" />
             <p className="text-sm">No active session</p>
@@ -267,10 +267,10 @@ const InspectorHeader = memo(({
   onExport,
 }: InspectorHeaderProps) => {
   return (
-    <div className="flex items-center justify-between px-3 py-2 border-b border-bolt-elements-borderColor bg-bolt-elements-background-depth-2">
+    <div className="flex items-center justify-between px-3 py-2 border-b border-recoder-elements-borderColor bg-recoder-elements-background-depth-2">
       <div className="flex items-center gap-2">
         <span className="i-ph:magnifying-glass text-blue-400" />
-        <span className="text-sm font-medium text-bolt-elements-textPrimary">Agent Inspector</span>
+        <span className="text-sm font-medium text-recoder-elements-textPrimary">Agent Inspector</span>
 
         {/* Status indicator */}
         {currentSession && (
@@ -291,7 +291,7 @@ const InspectorHeader = memo(({
 
       <div className="flex items-center gap-1">
         {/* View Mode Tabs */}
-        <div className="flex bg-bolt-elements-background-depth-2 rounded-lg p-0.5 mr-2">
+        <div className="flex bg-recoder-elements-background-depth-2 rounded-lg p-0.5 mr-2">
           {(['timeline', 'history', 'settings'] as ViewMode[]).map((mode) => (
             <button
               key={mode}
@@ -299,7 +299,7 @@ const InspectorHeader = memo(({
               className={`px-2 py-1 text-xs rounded transition-colors ${
                 viewMode === mode
                   ? 'bg-blue-500/20 text-blue-400'
-                  : 'text-bolt-elements-textTertiary hover:text-bolt-elements-textPrimary'
+                  : 'text-recoder-elements-textTertiary hover:text-recoder-elements-textPrimary'
               }`}
             >
               {mode === 'timeline' && <span className="i-ph:timeline mr-1" />}
@@ -316,7 +316,7 @@ const InspectorHeader = memo(({
             {isPaused ? (
               <button
                 onClick={onResume}
-                className="p-1.5 text-bolt-elements-textTertiary hover:text-green-400 transition-colors"
+                className="p-1.5 text-recoder-elements-textTertiary hover:text-green-400 transition-colors"
                 title="Resume Inspection"
               >
                 <span className="i-ph:play" />
@@ -324,7 +324,7 @@ const InspectorHeader = memo(({
             ) : (
               <button
                 onClick={onPause}
-                className="p-1.5 text-bolt-elements-textTertiary hover:text-yellow-400 transition-colors"
+                className="p-1.5 text-recoder-elements-textTertiary hover:text-yellow-400 transition-colors"
                 title="Pause Inspection"
               >
                 <span className="i-ph:pause" />
@@ -333,7 +333,7 @@ const InspectorHeader = memo(({
 
             <button
               onClick={onExport}
-              className="p-1.5 text-bolt-elements-textTertiary hover:text-blue-400 transition-colors"
+              className="p-1.5 text-recoder-elements-textTertiary hover:text-blue-400 transition-colors"
               title="Export Session"
             >
               <span className="i-ph:download-simple" />
@@ -343,7 +343,7 @@ const InspectorHeader = memo(({
 
         <button
           onClick={() => setInspectorEnabled(false)}
-          className="p-1.5 text-bolt-elements-textTertiary hover:text-red-400 transition-colors"
+          className="p-1.5 text-recoder-elements-textTertiary hover:text-red-400 transition-colors"
           title="Disable Inspector"
         >
           <span className="i-ph:eye-slash" />
@@ -375,19 +375,19 @@ const SessionStatsBar = memo(({
   showTokens,
 }: SessionStatsBarProps) => {
   return (
-    <div className="flex items-center gap-4 px-3 py-1.5 border-b border-bolt-elements-borderColor/50 bg-bolt-elements-background-depth-2/50 text-xs">
-      <div className="flex items-center gap-1 text-bolt-elements-textTertiary">
+    <div className="flex items-center gap-4 px-3 py-1.5 border-b border-recoder-elements-borderColor/50 bg-recoder-elements-background-depth-2/50 text-xs">
+      <div className="flex items-center gap-1 text-recoder-elements-textTertiary">
         <span className="i-ph:timer" />
         <span>{formatDuration(duration)}</span>
       </div>
 
-      <div className="flex items-center gap-1 text-bolt-elements-textTertiary">
+      <div className="flex items-center gap-1 text-recoder-elements-textTertiary">
         <span className="i-ph:list-numbers" />
         <span>{stepCount} steps</span>
       </div>
 
       {showTokens && tokens > 0 && (
-        <div className="flex items-center gap-1 text-bolt-elements-textTertiary">
+        <div className="flex items-center gap-1 text-recoder-elements-textTertiary">
           <span className="i-ph:coin" />
           <span>{formatTokens(tokens)} tokens</span>
         </div>
@@ -449,21 +449,21 @@ const TimelineView = memo(forwardRef<HTMLDivElement, TimelineViewProps>(
     return (
       <div className="flex flex-col h-full">
         {/* Toolbar */}
-        <div className="flex items-center justify-between px-3 py-1.5 border-b border-bolt-elements-borderColor/50">
-          <span className="text-xs text-bolt-elements-textTertiary">
+        <div className="flex items-center justify-between px-3 py-1.5 border-b border-recoder-elements-borderColor/50">
+          <span className="text-xs text-recoder-elements-textTertiary">
             {steps.length} step{steps.length !== 1 ? 's' : ''}
           </span>
           <div className="flex items-center gap-1">
             <button
               onClick={onExpandAll}
-              className="px-2 py-0.5 text-[10px] text-bolt-elements-textTertiary hover:text-bolt-elements-textPrimary transition-colors"
+              className="px-2 py-0.5 text-[10px] text-recoder-elements-textTertiary hover:text-recoder-elements-textPrimary transition-colors"
             >
               Expand All
             </button>
-            <span className="text-bolt-elements-borderColor">|</span>
+            <span className="text-recoder-elements-borderColor">|</span>
             <button
               onClick={onCollapseAll}
-              className="px-2 py-0.5 text-[10px] text-bolt-elements-textTertiary hover:text-bolt-elements-textPrimary transition-colors"
+              className="px-2 py-0.5 text-[10px] text-recoder-elements-textTertiary hover:text-recoder-elements-textPrimary transition-colors"
             >
               Collapse All
             </button>
@@ -492,13 +492,13 @@ const TimelineView = memo(forwardRef<HTMLDivElement, TimelineViewProps>(
 
           {/* Streaming indicator */}
           {isStreaming && (
-            <div className="px-3 py-2 border-b border-bolt-elements-borderColor/30">
+            <div className="px-3 py-2 border-b border-recoder-elements-borderColor/30">
               <div className="flex items-center gap-2 text-blue-400">
                 <span className="i-ph:spinner animate-spin" />
                 <span className="text-xs">Receiving response...</span>
               </div>
               {streamingContent && (
-                <div className="mt-2 text-xs text-bolt-elements-textTertiary font-mono truncate">
+                <div className="mt-2 text-xs text-recoder-elements-textTertiary font-mono truncate">
                   {streamingContent.slice(-100)}...
                 </div>
               )}
@@ -547,8 +547,8 @@ const TimelineStep = memo(({
 
   return (
     <div
-      className={`border-b border-bolt-elements-borderColor/30 transition-colors ${
-        isSelected ? 'bg-blue-500/10' : 'hover:bg-bolt-elements-background-depth-3'
+      className={`border-b border-recoder-elements-borderColor/30 transition-colors ${
+        isSelected ? 'bg-blue-500/10' : 'hover:bg-recoder-elements-background-depth-3'
       }`}
     >
       {/* Step Header */}
@@ -558,7 +558,7 @@ const TimelineStep = memo(({
       >
         {/* Timeline connector */}
         <div className="flex flex-col items-center w-4 shrink-0">
-          <div className={`w-0.5 h-2 ${index === 0 ? 'bg-transparent' : 'bg-bolt-elements-borderColor'}`} />
+          <div className={`w-0.5 h-2 ${index === 0 ? 'bg-transparent' : 'bg-recoder-elements-borderColor'}`} />
           <div className={`w-3 h-3 rounded-full ${getStatusBgColor(step.status)} flex items-center justify-center`}>
             {step.status === 'running' ? (
               <span className="i-ph:spinner animate-spin text-[8px]" />
@@ -566,7 +566,7 @@ const TimelineStep = memo(({
               <span className={`${getStepTypeIcon(step.type)} text-[10px] ${getStepTypeColor(step.type)}`} />
             )}
           </div>
-          <div className="w-0.5 flex-1 bg-bolt-elements-borderColor" />
+          <div className="w-0.5 flex-1 bg-recoder-elements-borderColor" />
         </div>
 
         {/* Expand/Collapse */}
@@ -576,7 +576,7 @@ const TimelineStep = memo(({
               e.stopPropagation();
               onToggle();
             }}
-            className="p-0.5 text-bolt-elements-textTertiary hover:text-bolt-elements-textPrimary"
+            className="p-0.5 text-recoder-elements-textTertiary hover:text-recoder-elements-textPrimary"
           >
             <span className={isExpanded ? 'i-ph:caret-down' : 'i-ph:caret-right'} />
           </button>
@@ -593,14 +593,14 @@ const TimelineStep = memo(({
             )}
           </div>
           {step.description && (
-            <div className="text-[11px] text-bolt-elements-textTertiary truncate">
+            <div className="text-[11px] text-recoder-elements-textTertiary truncate">
               {step.description}
             </div>
           )}
         </div>
 
         {/* Metrics */}
-        <div className="flex items-center gap-3 shrink-0 text-[10px] text-bolt-elements-textTertiary">
+        <div className="flex items-center gap-3 shrink-0 text-[10px] text-recoder-elements-textTertiary">
           {showTimings && step.duration !== undefined && (
             <span title="Duration">
               {formatDuration(step.duration)}
@@ -641,7 +641,7 @@ const StepDetails = memo(({ step, onNavigateToFile }: StepDetailsProps) => {
 
   return (
     <div className="px-3 pb-3 pl-9">
-      <div className="bg-bolt-elements-background-depth-2 rounded-lg p-3 text-xs">
+      <div className="bg-recoder-elements-background-depth-2 rounded-lg p-3 text-xs">
         {/* File path */}
         {step.data?.filePath && (
           <div className="flex items-center gap-2 mb-2">
@@ -653,7 +653,7 @@ const StepDetails = memo(({ step, onNavigateToFile }: StepDetailsProps) => {
               {step.data.filePath}
             </button>
             {step.data.lineCount !== undefined && (
-              <span className="text-bolt-elements-textTertiary">
+              <span className="text-recoder-elements-textTertiary">
                 ({step.data.lineCount} lines)
               </span>
             )}
@@ -663,7 +663,7 @@ const StepDetails = memo(({ step, onNavigateToFile }: StepDetailsProps) => {
         {/* Command */}
         {step.data?.command && (
           <div className="mb-2">
-            <div className="text-bolt-elements-textTertiary mb-1">Command:</div>
+            <div className="text-recoder-elements-textTertiary mb-1">Command:</div>
             <code className="block bg-black/30 rounded px-2 py-1 text-yellow-400 font-mono">
               {step.data.command}
             </code>
@@ -673,7 +673,7 @@ const StepDetails = memo(({ step, onNavigateToFile }: StepDetailsProps) => {
         {/* Output */}
         {step.data?.output && (
           <div className="mb-2">
-            <div className="text-bolt-elements-textTertiary mb-1">Output:</div>
+            <div className="text-recoder-elements-textTertiary mb-1">Output:</div>
             <pre className="bg-black/30 rounded px-2 py-1 text-green-400 font-mono overflow-x-auto max-h-40 overflow-y-auto whitespace-pre-wrap">
               {showFull ? step.data.output : step.data.output.slice(0, 500)}
               {!showFull && step.data.output.length > 500 && '...'}
@@ -692,8 +692,8 @@ const StepDetails = memo(({ step, onNavigateToFile }: StepDetailsProps) => {
         {/* File content */}
         {step.data?.fileContent && (
           <div className="mb-2">
-            <div className="text-bolt-elements-textTertiary mb-1">Content:</div>
-            <pre className="bg-black/30 rounded px-2 py-1 text-bolt-elements-textSecondary font-mono overflow-x-auto max-h-60 overflow-y-auto whitespace-pre-wrap">
+            <div className="text-recoder-elements-textTertiary mb-1">Content:</div>
+            <pre className="bg-black/30 rounded px-2 py-1 text-recoder-elements-textSecondary font-mono overflow-x-auto max-h-60 overflow-y-auto whitespace-pre-wrap">
               {showFull ? step.data.fileContent : step.data.fileContent.slice(0, 1000)}
               {!showFull && step.data.fileContent.length > 1000 && '...'}
             </pre>
@@ -711,13 +711,13 @@ const StepDetails = memo(({ step, onNavigateToFile }: StepDetailsProps) => {
         {/* AI Response */}
         {step.data?.response && (
           <div className="mb-2">
-            <div className="flex items-center gap-2 text-bolt-elements-textTertiary mb-1">
+            <div className="flex items-center gap-2 text-recoder-elements-textTertiary mb-1">
               <span>Response:</span>
               {step.data.truncated && (
                 <span className="text-yellow-400 text-[10px]">(truncated)</span>
               )}
             </div>
-            <pre className="bg-black/30 rounded px-2 py-1 text-bolt-elements-textSecondary font-mono overflow-x-auto max-h-40 overflow-y-auto whitespace-pre-wrap">
+            <pre className="bg-black/30 rounded px-2 py-1 text-recoder-elements-textSecondary font-mono overflow-x-auto max-h-40 overflow-y-auto whitespace-pre-wrap">
               {showFull ? step.data.response : step.data.response.slice(0, 500)}
               {!showFull && step.data.response.length > 500 && '...'}
             </pre>
@@ -741,7 +741,7 @@ const StepDetails = memo(({ step, onNavigateToFile }: StepDetailsProps) => {
             </pre>
             {step.data.errorStack && (
               <details className="mt-2">
-                <summary className="text-bolt-elements-textTertiary cursor-pointer hover:text-bolt-elements-textPrimary">
+                <summary className="text-recoder-elements-textTertiary cursor-pointer hover:text-recoder-elements-textPrimary">
                   Stack trace
                 </summary>
                 <pre className="bg-black/30 rounded px-2 py-1 text-red-400/70 font-mono text-[10px] overflow-x-auto whitespace-pre-wrap mt-1">
@@ -774,7 +774,7 @@ const StepDetails = memo(({ step, onNavigateToFile }: StepDetailsProps) => {
 
         {/* Token breakdown */}
         {step.tokenUsage && (
-          <div className="flex items-center gap-4 text-bolt-elements-textTertiary pt-2 border-t border-bolt-elements-borderColor/30 mt-2">
+          <div className="flex items-center gap-4 text-recoder-elements-textTertiary pt-2 border-t border-recoder-elements-borderColor/30 mt-2">
             <span>Tokens:</span>
             <span>In: {formatTokens(step.tokenUsage.input)}</span>
             <span>Out: {formatTokens(step.tokenUsage.output)}</span>
@@ -801,7 +801,7 @@ interface DetailsViewProps {
 const DetailsView = memo(({ step, onNavigateToFile, onClose }: DetailsViewProps) => {
   if (!step) {
     return (
-      <div className="flex items-center justify-center h-full text-bolt-elements-textTertiary">
+      <div className="flex items-center justify-center h-full text-recoder-elements-textTertiary">
         <div className="text-center p-4">
           <span className="i-ph:cursor-click text-3xl mb-2 block opacity-50" />
           <p className="text-sm">Select a step to view details</p>
@@ -812,14 +812,14 @@ const DetailsView = memo(({ step, onNavigateToFile, onClose }: DetailsViewProps)
 
   return (
     <div className="flex flex-col h-full">
-      <div className="flex items-center justify-between px-3 py-2 border-b border-bolt-elements-borderColor">
+      <div className="flex items-center justify-between px-3 py-2 border-b border-recoder-elements-borderColor">
         <div className="flex items-center gap-2">
           <span className={`${getStepTypeIcon(step.type)} ${getStepTypeColor(step.type)}`} />
-          <span className="text-sm font-medium text-bolt-elements-textPrimary">{step.title}</span>
+          <span className="text-sm font-medium text-recoder-elements-textPrimary">{step.title}</span>
         </div>
         <button
           onClick={onClose}
-          className="p-1 text-bolt-elements-textTertiary hover:text-bolt-elements-textPrimary"
+          className="p-1 text-recoder-elements-textTertiary hover:text-recoder-elements-textPrimary"
         >
           <span className="i-ph:x" />
         </button>
@@ -846,7 +846,7 @@ interface HistoryViewProps {
 const HistoryView = memo(({ sessions, onClear }: HistoryViewProps) => {
   if (sessions.length === 0) {
     return (
-      <div className="flex items-center justify-center h-full text-bolt-elements-textTertiary">
+      <div className="flex items-center justify-center h-full text-recoder-elements-textTertiary">
         <div className="text-center p-4">
           <span className="i-ph:clock-counter-clockwise text-3xl mb-2 block opacity-50" />
           <p className="text-sm">No session history</p>
@@ -857,8 +857,8 @@ const HistoryView = memo(({ sessions, onClear }: HistoryViewProps) => {
 
   return (
     <div className="flex flex-col h-full">
-      <div className="flex items-center justify-between px-3 py-2 border-b border-bolt-elements-borderColor/50">
-        <span className="text-xs text-bolt-elements-textTertiary">
+      <div className="flex items-center justify-between px-3 py-2 border-b border-recoder-elements-borderColor/50">
+        <span className="text-xs text-recoder-elements-textTertiary">
           {sessions.length} session{sessions.length !== 1 ? 's' : ''}
         </span>
         <button
@@ -873,7 +873,7 @@ const HistoryView = memo(({ sessions, onClear }: HistoryViewProps) => {
         {sessions.map((session) => (
           <div
             key={session.id}
-            className="px-3 py-3 border-b border-bolt-elements-borderColor/30 hover:bg-bolt-elements-background-depth-3"
+            className="px-3 py-3 border-b border-recoder-elements-borderColor/30 hover:bg-recoder-elements-background-depth-3"
           >
             <div className="flex items-center justify-between mb-1">
               <span className={`text-xs font-medium ${
@@ -881,17 +881,17 @@ const HistoryView = memo(({ sessions, onClear }: HistoryViewProps) => {
               }`}>
                 {session.status === 'error' ? 'Failed' : 'Completed'}
               </span>
-              <span className="text-[10px] text-bolt-elements-textTertiary">
+              <span className="text-[10px] text-recoder-elements-textTertiary">
                 {new Date(session.startTime).toLocaleString()}
               </span>
             </div>
 
-            <div className="text-xs text-bolt-elements-textPrimary truncate mb-2">
+            <div className="text-xs text-recoder-elements-textPrimary truncate mb-2">
               {session.userMessage.slice(0, 100)}
               {session.userMessage.length > 100 && '...'}
             </div>
 
-            <div className="flex items-center gap-4 text-[10px] text-bolt-elements-textTertiary">
+            <div className="flex items-center gap-4 text-[10px] text-recoder-elements-textTertiary">
               <span>{formatDuration(session.endTime ? session.endTime - session.startTime : 0)}</span>
               <span>{Object.values(session.stepCounts).reduce((a, b) => a + (b || 0), 0)} steps</span>
               <span>{formatTokens(session.totalTokens.total)} tokens</span>
@@ -920,74 +920,74 @@ const SettingsView = memo(() => {
 
   return (
     <div className="flex-1 overflow-auto p-4">
-      <h3 className="text-sm font-medium text-bolt-elements-textPrimary mb-4">Inspector Settings</h3>
+      <h3 className="text-sm font-medium text-recoder-elements-textPrimary mb-4">Inspector Settings</h3>
 
       <div className="space-y-4">
         {/* Capture Settings */}
         <div>
-          <h4 className="text-xs font-medium text-bolt-elements-textSecondary mb-2">Capture Settings</h4>
+          <h4 className="text-xs font-medium text-recoder-elements-textSecondary mb-2">Capture Settings</h4>
           <div className="space-y-2">
             <label className="flex items-center gap-2">
               <input
                 type="checkbox"
                 checked={config.captureFileContents}
                 onChange={(e) => inspectorConfigStore.setKey('captureFileContents', e.target.checked)}
-                className="rounded border-bolt-elements-borderColor bg-bolt-elements-background-depth-2"
+                className="rounded border-recoder-elements-borderColor bg-recoder-elements-background-depth-2"
               />
-              <span className="text-xs text-bolt-elements-textPrimary">Capture file contents</span>
+              <span className="text-xs text-recoder-elements-textPrimary">Capture file contents</span>
             </label>
             <label className="flex items-center gap-2">
               <input
                 type="checkbox"
                 checked={config.captureShellOutput}
                 onChange={(e) => inspectorConfigStore.setKey('captureShellOutput', e.target.checked)}
-                className="rounded border-bolt-elements-borderColor bg-bolt-elements-background-depth-2"
+                className="rounded border-recoder-elements-borderColor bg-recoder-elements-background-depth-2"
               />
-              <span className="text-xs text-bolt-elements-textPrimary">Capture shell output</span>
+              <span className="text-xs text-recoder-elements-textPrimary">Capture shell output</span>
             </label>
           </div>
         </div>
 
         {/* Display Settings */}
         <div>
-          <h4 className="text-xs font-medium text-bolt-elements-textSecondary mb-2">Display Settings</h4>
+          <h4 className="text-xs font-medium text-recoder-elements-textSecondary mb-2">Display Settings</h4>
           <div className="space-y-2">
             <label className="flex items-center gap-2">
               <input
                 type="checkbox"
                 checked={config.showTimings}
                 onChange={(e) => inspectorConfigStore.setKey('showTimings', e.target.checked)}
-                className="rounded border-bolt-elements-borderColor bg-bolt-elements-background-depth-2"
+                className="rounded border-recoder-elements-borderColor bg-recoder-elements-background-depth-2"
               />
-              <span className="text-xs text-bolt-elements-textPrimary">Show timing metrics</span>
+              <span className="text-xs text-recoder-elements-textPrimary">Show timing metrics</span>
             </label>
             <label className="flex items-center gap-2">
               <input
                 type="checkbox"
                 checked={config.showTokens}
                 onChange={(e) => inspectorConfigStore.setKey('showTokens', e.target.checked)}
-                className="rounded border-bolt-elements-borderColor bg-bolt-elements-background-depth-2"
+                className="rounded border-recoder-elements-borderColor bg-recoder-elements-background-depth-2"
               />
-              <span className="text-xs text-bolt-elements-textPrimary">Show token usage</span>
+              <span className="text-xs text-recoder-elements-textPrimary">Show token usage</span>
             </label>
             <label className="flex items-center gap-2">
               <input
                 type="checkbox"
                 checked={config.autoExpand}
                 onChange={(e) => inspectorConfigStore.setKey('autoExpand', e.target.checked)}
-                className="rounded border-bolt-elements-borderColor bg-bolt-elements-background-depth-2"
+                className="rounded border-recoder-elements-borderColor bg-recoder-elements-background-depth-2"
               />
-              <span className="text-xs text-bolt-elements-textPrimary">Auto-expand new steps</span>
+              <span className="text-xs text-recoder-elements-textPrimary">Auto-expand new steps</span>
             </label>
           </div>
         </div>
 
         {/* Limits */}
         <div>
-          <h4 className="text-xs font-medium text-bolt-elements-textSecondary mb-2">Limits</h4>
+          <h4 className="text-xs font-medium text-recoder-elements-textSecondary mb-2">Limits</h4>
           <div className="space-y-3">
             <div>
-              <label className="text-xs text-bolt-elements-textTertiary mb-1 block">
+              <label className="text-xs text-recoder-elements-textTertiary mb-1 block">
                 Max sessions in history: {config.maxSessions}
               </label>
               <input
@@ -1000,7 +1000,7 @@ const SettingsView = memo(() => {
               />
             </div>
             <div>
-              <label className="text-xs text-bolt-elements-textTertiary mb-1 block">
+              <label className="text-xs text-recoder-elements-textTertiary mb-1 block">
                 Max steps per session: {config.maxStepsPerSession}
               </label>
               <input

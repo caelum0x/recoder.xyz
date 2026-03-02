@@ -38,7 +38,7 @@ export interface EnterpriseToolsResponse {
     lanes?: Array<{ laneId: string; title: string }>;
     nextActions?: string[];
   };
-  source?: 'docker-backend' | 'local-fallback';
+  source?: 'docker-backend' | 'local-fallback' | 'desktop-bridge';
   fallbackReason?: string;
   backend?: {
     endpoint?: string;

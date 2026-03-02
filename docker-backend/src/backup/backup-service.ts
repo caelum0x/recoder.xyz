@@ -102,10 +102,10 @@ export interface BackupStats {
 
 const DEFAULT_CONFIG: BackupConfig = {
   backupDir: process.env.BACKUP_DIR || './data/backups',
-  maxBackups: 100,
-  hourlyEnabled: true,
-  dailyEnabled: true,
-  weeklyEnabled: true,
+  maxBackups: 10,
+  hourlyEnabled: process.env.BACKUP_HOURLY === 'true',
+  dailyEnabled: process.env.BACKUP_DAILY === 'true',
+  weeklyEnabled: process.env.BACKUP_WEEKLY === 'true',
   compress: true,
   encrypt: false,
 };
@@ -461,10 +461,10 @@ class BackupService {
       throw new Error(`No data found for scope: ${job.scope}`);
     }
 
-    // Create tar archive
+    // Create tar archive (exclude backup dir to prevent recursive growth)
     const tarFlags = this.config.compress ? '-czf' : '-cf';
     const pathsArg = existingPaths.map((p) => `"${p}"`).join(' ');
-    await execAsync(`tar ${tarFlags} "${backupPath}" ${pathsArg}`);
+    await execAsync(`tar ${tarFlags} "${backupPath}" --exclude="${this.config.backupDir}" ${pathsArg}`);
 
     // Encrypt if configured
     if (this.config.encrypt && this.config.encryptionKey) {

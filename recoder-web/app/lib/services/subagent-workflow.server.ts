@@ -51,7 +51,7 @@ const DEFAULT_REPO_PATHS = [
   '/Users/arhansubasi/recoder.xyz/apps/desktop',
   '/Users/arhansubasi/recoder.xyz/apps/frontend',
   '/Users/arhansubasi/recoder.xyz/apps/mobile',
-  '/Users/arhansubasi/recoder.xyz/apps/studio.giselles.ai',
+  '/Users/arhansubasi/recoder.xyz/recoder-studio',
   '/Users/arhansubasi/recoder.xyz/apps/ui.giselles.ai',
   '/Users/arhansubasi/recoder.xyz/backend',
   '/Users/arhansubasi/recoder.xyz/docker-backend',
@@ -99,11 +99,11 @@ const LANE_CATALOG: SubagentLane[] = [
     laneId: 'A4',
     title: 'Studio and UI apps',
     paths: [
-      '/Users/arhansubasi/recoder.xyz/apps/studio.giselles.ai',
+      '/Users/arhansubasi/recoder.xyz/recoder-studio',
       '/Users/arhansubasi/recoder.xyz/apps/ui.giselles.ai',
     ],
     validationCommands: [
-      'pnpm -C /Users/arhansubasi/recoder.xyz/apps/studio.giselles.ai test',
+      'pnpm -C /Users/arhansubasi/recoder.xyz/recoder-studio test',
       'pnpm -C /Users/arhansubasi/recoder.xyz/apps/ui.giselles.ai run typecheck',
     ],
   },

@@ -1,4 +1,4 @@
-import { PopoverContent } from "@giselle-internal/ui/popover";
+import { PopoverContent } from "@recoder-internal/ui/popover";
 import { clsx } from "clsx/lite";
 import { ChevronRightIcon, ExternalLinkIcon } from "lucide-react";
 import Link from "next/link";

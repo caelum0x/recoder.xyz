@@ -1,7 +1,7 @@
 {
   "name": "scripts",
   "version": "1.0.0",
-  "description": "Build and deployment scripts for CodeCraft monorepo",
+  "description": "Build and deployment scripts for Recoder monorepo",
   "private": true,
   "scripts": {
     "health-check": "node health-check.js",
@@ -21,6 +21,6 @@
   "devDependencies": {
     "@types/node": "^20.10.0"
   },
-  "author": "CodeCraft Team",
+  "author": "Recoder Team",
   "license": "MIT"
 }

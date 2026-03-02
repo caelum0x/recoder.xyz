@@ -10,6 +10,7 @@ import { headers } from 'next/headers';
 
 import { prismaHelpers } from '@/lib/prisma';
 import { z } from 'zod';
+import { logger } from '@/lib/logger';
 
 const generateKeySchema = z.object({
   name: z.string().min(1).max(100),
@@ -53,7 +54,7 @@ export async function POST(request: NextRequest) {
     });
 
   } catch (error) {
-    console.error('Failed to generate API key:', error);
+    logger.error('Failed to generate API key:', { error: String(error), route: 'auth/keys/generate' });
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

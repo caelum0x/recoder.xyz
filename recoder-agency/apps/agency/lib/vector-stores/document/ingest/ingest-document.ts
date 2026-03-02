@@ -1,11 +1,11 @@
 import type {
 	EmbeddingDimensions,
 	EmbeddingProfileId,
-} from "@giselles-ai/protocol";
+} from "@recoder/protocol";
 import type {
 	DocumentVectorStoreId,
 	DocumentVectorStoreSourceId,
-} from "@giselles-ai/types";
+} from "@recoder/types";
 import { createClient } from "@supabase/supabase-js";
 import { and, eq, lt, or } from "drizzle-orm";
 import { db, documentVectorStoreSources } from "@/db";

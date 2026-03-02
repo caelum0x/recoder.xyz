@@ -2,6 +2,7 @@ import { authDatabase } from "@repo/backend/auth-database";
 import { database } from "@repo/backend/database";
 import { redirect } from "next/navigation";
 import type { NextRequest } from "next/server";
+import { getSessionCookieAttributes } from "@recoder/auth/cross-domain";
 
 function sanitizeRedirectPath(raw: string | null): string {
   if (!raw) {
@@ -26,18 +27,6 @@ function sanitizeRedirectPath(raw: string | null): string {
   return trimmed;
 }
 
-function getSessionCookieNameAndFlags() {
-  const isProd = process.env.NODE_ENV === "production";
-  return {
-    cookieName: isProd
-      ? "__Secure-recoder.session_token"
-      : "recoder.session_token",
-    cookieDomain: isProd ? "; Domain=.recoder.xyz" : "",
-    cookieSecure: isProd ? "; Secure" : "",
-    sameSite: isProd ? "None" : "Lax",
-  };
-}
-
 function getRequestIp(request: NextRequest): string | null {
   return (
     request.headers.get("x-forwarded-for") ?? request.headers.get("x-real-ip")
@@ -48,13 +37,15 @@ function buildAuthRedirectResponse(
   path: string,
   sessionToken: string
 ): Response {
-  const { cookieName, cookieDomain, cookieSecure, sameSite } =
-    getSessionCookieNameAndFlags();
+  const attrs = getSessionCookieAttributes();
+  const sameSiteStr = attrs.sameSite.charAt(0).toUpperCase() + attrs.sameSite.slice(1);
+  const domainPart = attrs.domain ? `; Domain=${attrs.domain}` : "";
+  const securePart = attrs.secure ? "; Secure" : "";
   return new Response(null, {
     status: 302,
     headers: {
       Location: path,
-      "Set-Cookie": `${cookieName}=${sessionToken}; Path=/; HttpOnly; SameSite=${sameSite}; Max-Age=${60 * 60 * 24 * 7}${cookieSecure}${cookieDomain}`,
+      "Set-Cookie": `${attrs.cookieName}=${sessionToken}; Path=${attrs.path}; HttpOnly; SameSite=${sameSiteStr}; Max-Age=${60 * 60 * 24 * 7}${securePart}${domainPart}`,
     },
   });
 }

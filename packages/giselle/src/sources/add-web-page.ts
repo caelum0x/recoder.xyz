@@ -3,8 +3,8 @@ import {
 	type FetchingWebPage,
 	FileId,
 	type WorkspaceId,
-} from "@giselles-ai/protocol";
-import { webSearch } from "@giselles-ai/web-search";
+} from "@recoder/protocol";
+import { webSearch } from "@recoder/web-search";
 import { filePath } from "../files/utils";
 import type { GiselleContext } from "../types";
 

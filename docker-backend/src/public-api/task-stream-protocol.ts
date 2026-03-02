@@ -1,13 +1,13 @@
-import { serializePublicTaskStreamEvent } from '@giselles-ai/stream/public-task-stream';
+import { serializePublicTaskStreamEvent } from '@recoder/stream/public-task-stream';
 
 export type {
   PublicPromptTaskStatus,
   PublicPromptTaskSnapshot,
   PublicTaskStreamData,
   PublicTaskStreamEvent,
-} from '@giselles-ai/stream/public-task-stream';
+} from '@recoder/stream/public-task-stream';
 
-import type { PublicTaskStreamEvent } from '@giselles-ai/stream/public-task-stream';
+import type { PublicTaskStreamEvent } from '@recoder/stream/public-task-stream';
 
 export function serializeTaskStreamEvent(
   event: PublicTaskStreamEvent,

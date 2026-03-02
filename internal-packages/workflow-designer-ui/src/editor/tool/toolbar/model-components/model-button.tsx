@@ -1,5 +1,5 @@
-import type { LanguageModel, Tier } from "@giselles-ai/language-model";
-import type { Node } from "@giselles-ai/protocol";
+import type { LanguageModel, Tier } from "@recoder/language-model";
+import type { Node } from "@recoder/protocol";
 import clsx from "clsx/lite";
 import type { AddNodeTool } from "../../types";
 import { ProTag } from "../components";

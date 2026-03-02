@@ -1,0 +1,196 @@
+name: Weekly Evidence Pack
+
+# SFA-017: Generates a weekly evidence pack tracking connector health, latency,
+# policy metrics, and release readiness. Uploads as a CI artifact and posts a
+# summary to GitHub Actions for team review.
+
+on:
+  schedule:
+    # Every Monday at 07:00 UTC (after the weekly SLO review window opens)
+    - cron: '0 7 * * 1'
+  workflow_dispatch:
+    inputs:
+      period_days:
+        description: 'Look-back period in days'
+        required: false
+        default: '7'
+
+env:
+  NODE_VERSION: '20'
+
+concurrency:
+  group: weekly-evidence-pack
+  cancel-in-progress: false
+
+jobs:
+  evidence-pack:
+    name: Generate Evidence Pack
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      actions: read
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --no-frozen-lockfile
+
+      - name: Refresh connector contract snapshot
+        run: node tools/a2a-interop/js/generate-connector-snapshot.mjs
+
+      - name: Generate evidence pack
+        id: evidence
+        run: |
+          PERIOD=${{ github.event.inputs.period_days || '7' }}
+          TIMESTAMP=$(date -u +%Y%m%dT%H%M%SZ)
+          OUTPUT_PATH="logs/evidence-packs/${TIMESTAMP}-evidence-pack.json"
+
+          # Run the generator (allow non-zero exit for FAIL verdict)
+          set +e
+          node tools/a2a-interop/js/generate-evidence-pack.mjs \
+            --period-days "$PERIOD" \
+            --output "$OUTPUT_PATH" 2>&1
+          EXIT_CODE=$?
+          set -e
+
+          echo "output_path=${OUTPUT_PATH}" >> "$GITHUB_OUTPUT"
+          echo "exit_code=${EXIT_CODE}" >> "$GITHUB_OUTPUT"
+          echo "timestamp=${TIMESTAMP}" >> "$GITHUB_OUTPUT"
+
+      - name: Verify evidence pack exists
+        run: |
+          OUTPUT_PATH="${{ steps.evidence.outputs.output_path }}"
+          if [ ! -f "$OUTPUT_PATH" ]; then
+            echo "ERROR: Evidence pack was not generated at $OUTPUT_PATH"
+            exit 1
+          fi
+          echo "Evidence pack generated at: $OUTPUT_PATH"
+          echo "File size: $(wc -c < "$OUTPUT_PATH") bytes"
+
+      - name: Upload evidence pack artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: evidence-pack-${{ steps.evidence.outputs.timestamp }}
+          path: |
+            ${{ steps.evidence.outputs.output_path }}
+            shared/src/a2a/snapshots/connector-contract.snapshot.json
+          retention-days: 90
+          if-no-files-found: error
+
+      - name: Post summary to GitHub Actions
+        if: always()
+        run: |
+          OUTPUT_PATH="${{ steps.evidence.outputs.output_path }}"
+          EXIT_CODE="${{ steps.evidence.outputs.exit_code }}"
+
+          echo "## Weekly Evidence Pack (SFA-017)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          if [ ! -f "$OUTPUT_PATH" ]; then
+            echo "Evidence pack was not generated." >> $GITHUB_STEP_SUMMARY
+            exit 0
+          fi
+
+          # Extract key fields from the JSON
+          PERIOD_START=$(node -pe "JSON.parse(require('fs').readFileSync('$OUTPUT_PATH','utf8')).period.start")
+          PERIOD_END=$(node -pe "JSON.parse(require('fs').readFileSync('$OUTPUT_PATH','utf8')).period.end")
+          PERIOD_DAYS=$(node -pe "JSON.parse(require('fs').readFileSync('$OUTPUT_PATH','utf8')).period.days")
+          VERDICT=$(node -pe "JSON.parse(require('fs').readFileSync('$OUTPUT_PATH','utf8')).release_readiness.verdict")
+          BLOCKER_COUNT=$(node -pe "JSON.parse(require('fs').readFileSync('$OUTPUT_PATH','utf8')).release_readiness.blocker_count")
+          SLO_PASSED=$(node -pe "JSON.parse(require('fs').readFileSync('$OUTPUT_PATH','utf8')).slo_compliance.evaluation.checks_passed")
+          SLO_TOTAL=$(node -pe "JSON.parse(require('fs').readFileSync('$OUTPUT_PATH','utf8')).slo_compliance.evaluation.checks_total")
+          TOTAL_RUNS=$(node -pe "JSON.parse(require('fs').readFileSync('$OUTPUT_PATH','utf8')).connector_health.task_metrics.total_runs")
+          PASSED_RUNS=$(node -pe "JSON.parse(require('fs').readFileSync('$OUTPUT_PATH','utf8')).connector_health.task_metrics.passed")
+          FAILED_RUNS=$(node -pe "JSON.parse(require('fs').readFileSync('$OUTPUT_PATH','utf8')).connector_health.task_metrics.failed")
+          POLICY_CHECKS=$(node -pe "JSON.parse(require('fs').readFileSync('$OUTPUT_PATH','utf8')).policy_summary.total_checks")
+          POLICY_APPROVALS=$(node -pe "JSON.parse(require('fs').readFileSync('$OUTPUT_PATH','utf8')).policy_summary.total_approvals")
+          POLICY_DENIALS=$(node -pe "JSON.parse(require('fs').readFileSync('$OUTPUT_PATH','utf8')).policy_summary.total_denials")
+          APPROVAL_RATE=$(node -pe "(JSON.parse(require('fs').readFileSync('$OUTPUT_PATH','utf8')).policy_summary.approval_rate * 100).toFixed(1)")
+          ENVELOPE_VER=$(node -pe "JSON.parse(require('fs').readFileSync('$OUTPUT_PATH','utf8')).schema_version.task_envelope")
+          AUDIT_VER=$(node -pe "JSON.parse(require('fs').readFileSync('$OUTPUT_PATH','utf8')).schema_version.audit_event")
+
+          # Verdict badge
+          if [ "$VERDICT" = "PASS" ]; then
+            echo "**Release Readiness: PASS**" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "**Release Readiness: FAIL** ($BLOCKER_COUNT blocker(s))" >> $GITHUB_STEP_SUMMARY
+          fi
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          # Period info
+          echo "**Period:** ${PERIOD_START} to ${PERIOD_END} (${PERIOD_DAYS} days)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          # Overview table
+          echo "### Overview" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Metric | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|--------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| TaskEnvelope version | ${ENVELOPE_VER} |" >> $GITHUB_STEP_SUMMARY
+          echo "| AuditEvent version | ${AUDIT_VER} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Total gate runs | ${TOTAL_RUNS} (${PASSED_RUNS} passed, ${FAILED_RUNS} failed) |" >> $GITHUB_STEP_SUMMARY
+          echo "| SLO checks | ${SLO_PASSED}/${SLO_TOTAL} passed |" >> $GITHUB_STEP_SUMMARY
+          echo "| Policy checks | ${POLICY_CHECKS} (${POLICY_APPROVALS} approved, ${POLICY_DENIALS} denied) |" >> $GITHUB_STEP_SUMMARY
+          echo "| Approval rate | ${APPROVAL_RATE}% |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          # Connector health table
+          echo "### Connector Health" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Connector | Tier | Status | Success Rate | SLO |" >> $GITHUB_STEP_SUMMARY
+          echo "|-----------|------|--------|-------------|-----|" >> $GITHUB_STEP_SUMMARY
+
+          CONNECTOR_COUNT=$(node -pe "JSON.parse(require('fs').readFileSync('$OUTPUT_PATH','utf8')).connector_health.connectors.length")
+          for i in $(seq 0 $(( CONNECTOR_COUNT - 1 ))); do
+            CID=$(node -pe "JSON.parse(require('fs').readFileSync('$OUTPUT_PATH','utf8')).connector_health.connectors[$i].connector_id")
+            CTIER=$(node -pe "JSON.parse(require('fs').readFileSync('$OUTPUT_PATH','utf8')).connector_health.connectors[$i].tier")
+            CSTATUS=$(node -pe "JSON.parse(require('fs').readFileSync('$OUTPUT_PATH','utf8')).connector_health.connectors[$i].latest_status")
+            CRATE=$(node -pe "(JSON.parse(require('fs').readFileSync('$OUTPUT_PATH','utf8')).connector_health.connectors[$i].success_rate * 100).toFixed(1)")
+            CSLO=$(node -pe "JSON.parse(require('fs').readFileSync('$OUTPUT_PATH','utf8')).connector_health.connectors[$i].meets_slo ? 'MET' : 'NOT MET'")
+            echo "| ${CID} | ${CTIER} | ${CSTATUS} | ${CRATE}% | ${CSLO} |" >> $GITHUB_STEP_SUMMARY
+          done
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          # Latency table
+          echo "### Latency (per connector)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Connector | p50 | p95 | p99 | Samples | SLO |" >> $GITHUB_STEP_SUMMARY
+          echo "|-----------|-----|-----|-----|---------|-----|" >> $GITHUB_STEP_SUMMARY
+
+          LATENCY_COUNT=$(node -pe "JSON.parse(require('fs').readFileSync('$OUTPUT_PATH','utf8')).latency_stats.per_connector.length")
+          for i in $(seq 0 $(( LATENCY_COUNT - 1 ))); do
+            LID=$(node -pe "JSON.parse(require('fs').readFileSync('$OUTPUT_PATH','utf8')).latency_stats.per_connector[$i].connector_id")
+            LP50=$(node -pe "JSON.parse(require('fs').readFileSync('$OUTPUT_PATH','utf8')).latency_stats.per_connector[$i].p50_ms")
+            LP95=$(node -pe "JSON.parse(require('fs').readFileSync('$OUTPUT_PATH','utf8')).latency_stats.per_connector[$i].p95_ms")
+            LP99=$(node -pe "JSON.parse(require('fs').readFileSync('$OUTPUT_PATH','utf8')).latency_stats.per_connector[$i].p99_ms")
+            LSAMPLES=$(node -pe "JSON.parse(require('fs').readFileSync('$OUTPUT_PATH','utf8')).latency_stats.per_connector[$i].sample_count")
+            LSLO=$(node -pe "JSON.parse(require('fs').readFileSync('$OUTPUT_PATH','utf8')).latency_stats.per_connector[$i].meets_slo ? 'MET' : 'NOT MET'")
+            echo "| ${LID} | ${LP50}ms | ${LP95}ms | ${LP99}ms | ${LSAMPLES} | ${LSLO} |" >> $GITHUB_STEP_SUMMARY
+          done
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          # Blockers
+          if [ "$BLOCKER_COUNT" != "0" ]; then
+            echo "### Blockers" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            for i in $(seq 0 $(( BLOCKER_COUNT - 1 ))); do
+              BLOCKER=$(node -pe "JSON.parse(require('fs').readFileSync('$OUTPUT_PATH','utf8')).release_readiness.blockers[$i]")
+              echo "- ${BLOCKER}" >> $GITHUB_STEP_SUMMARY
+            done
+          fi

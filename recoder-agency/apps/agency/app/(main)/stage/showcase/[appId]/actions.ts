@@ -4,8 +4,8 @@ import type {
 	ParameterItem,
 	Trigger,
 	WorkspaceId,
-} from "@giselles-ai/protocol";
-import { isTriggerNode } from "@giselles-ai/protocol";
+} from "@recoder/protocol";
+import { isTriggerNode } from "@recoder/protocol";
 import { revalidatePath } from "next/cache";
 import { giselle } from "@/app/giselle";
 import { acts as actsSchema, db } from "@/db";

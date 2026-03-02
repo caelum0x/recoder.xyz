@@ -93,20 +93,20 @@ export function VercelPanel() {
   if (!isConnected) {
     return (
       <div className="flex flex-col h-full">
-        <div className="px-4 py-3 border-b border-bolt-elements-borderColor">
-          <h3 className="text-sm font-medium text-bolt-elements-textPrimary">Vercel</h3>
-          <p className="text-xs text-bolt-elements-textSecondary mt-0.5">
+        <div className="px-4 py-3 border-b border-recoder-elements-borderColor">
+          <h3 className="text-sm font-medium text-recoder-elements-textPrimary">Vercel</h3>
+          <p className="text-xs text-recoder-elements-textSecondary mt-0.5">
             Deploy your project to Vercel with one click.
           </p>
         </div>
         <div className="flex-1 flex flex-col items-center justify-center px-6">
           <div className="w-full max-w-sm space-y-4">
             <div className="text-center">
-              <div className="i-ph:rocket-launch text-4xl text-bolt-elements-textTertiary mb-2 mx-auto" />
-              <p className="text-sm text-bolt-elements-textSecondary">Connect your Vercel account</p>
+              <div className="i-ph:rocket-launch text-4xl text-recoder-elements-textTertiary mb-2 mx-auto" />
+              <p className="text-sm text-recoder-elements-textSecondary">Connect your Vercel account</p>
             </div>
             <div>
-              <label className="block text-xs font-medium text-bolt-elements-textSecondary mb-1">
+              <label className="block text-xs font-medium text-recoder-elements-textSecondary mb-1">
                 Access Token
               </label>
               <input
@@ -115,7 +115,7 @@ export function VercelPanel() {
                 onChange={(e) => setTokenInput(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && handleConnect()}
                 placeholder="Enter your Vercel access token"
-                className="w-full px-3 py-2 text-sm bg-bolt-elements-background-depth-1 border border-bolt-elements-borderColor rounded-md text-bolt-elements-textPrimary placeholder:text-bolt-elements-textTertiary focus:outline-none focus:border-blue-500"
+                className="w-full px-3 py-2 text-sm bg-recoder-elements-background-depth-1 border border-recoder-elements-borderColor rounded-md text-recoder-elements-textPrimary placeholder:text-recoder-elements-textTertiary focus:outline-none focus:border-blue-500"
               />
             </div>
             {error && (
@@ -128,7 +128,7 @@ export function VercelPanel() {
             >
               {isLoading ? 'Connecting...' : 'Connect Vercel'}
             </button>
-            <p className="text-xs text-bolt-elements-textTertiary text-center">
+            <p className="text-xs text-recoder-elements-textTertiary text-center">
               Get your token from{' '}
               <a
                 href="https://vercel.com/account/tokens"
@@ -150,12 +150,12 @@ export function VercelPanel() {
   if (!linkedProject) {
     return (
       <div className="flex flex-col h-full">
-        <div className="px-4 py-3 border-b border-bolt-elements-borderColor">
+        <div className="px-4 py-3 border-b border-recoder-elements-borderColor">
           <div className="flex items-center justify-between">
             <div>
-              <h3 className="text-sm font-medium text-bolt-elements-textPrimary">Vercel</h3>
-              <p className="text-xs text-bolt-elements-textSecondary mt-0.5">
-                Connected as <span className="text-bolt-elements-textPrimary">{username}</span>
+              <h3 className="text-sm font-medium text-recoder-elements-textPrimary">Vercel</h3>
+              <p className="text-xs text-recoder-elements-textSecondary mt-0.5">
+                Connected as <span className="text-recoder-elements-textPrimary">{username}</span>
               </p>
             </div>
             <button
@@ -169,11 +169,11 @@ export function VercelPanel() {
 
         {/* Team selector */}
         {teams.length > 0 && (
-          <div className="px-4 py-2 border-b border-bolt-elements-borderColor">
+          <div className="px-4 py-2 border-b border-recoder-elements-borderColor">
             <select
               value={selectedTeamId || ''}
               onChange={(e) => setSelectedTeamId(e.target.value || null)}
-              className="w-full px-2 py-1.5 text-xs bg-bolt-elements-background-depth-1 border border-bolt-elements-borderColor rounded text-bolt-elements-textPrimary"
+              className="w-full px-2 py-1.5 text-xs bg-recoder-elements-background-depth-1 border border-recoder-elements-borderColor rounded text-recoder-elements-textPrimary"
             >
               <option value="">Personal Account</option>
               {teams.map((team) => (
@@ -185,8 +185,8 @@ export function VercelPanel() {
 
         {/* Project list or create */}
         <div className="flex-1 overflow-auto">
-          <div className="px-4 py-2 flex items-center justify-between border-b border-bolt-elements-borderColor/50">
-            <span className="text-xs font-medium text-bolt-elements-textSecondary uppercase tracking-wider">
+          <div className="px-4 py-2 flex items-center justify-between border-b border-recoder-elements-borderColor/50">
+            <span className="text-xs font-medium text-recoder-elements-textSecondary uppercase tracking-wider">
               Link a Vercel Project
             </span>
             <button
@@ -198,14 +198,14 @@ export function VercelPanel() {
           </div>
 
           {showCreateProject && (
-            <div className="px-4 py-3 border-b border-bolt-elements-borderColor bg-bolt-elements-background-depth-3">
+            <div className="px-4 py-3 border-b border-recoder-elements-borderColor bg-recoder-elements-background-depth-3">
               <div className="space-y-2">
                 <input
                   type="text"
                   value={newProjectName}
                   onChange={(e) => setNewProjectName(e.target.value)}
                   placeholder="Project name"
-                  className="w-full px-3 py-1.5 text-sm bg-bolt-elements-background-depth-1 border border-bolt-elements-borderColor rounded-md text-bolt-elements-textPrimary placeholder:text-bolt-elements-textTertiary focus:outline-none focus:border-blue-500"
+                  className="w-full px-3 py-1.5 text-sm bg-recoder-elements-background-depth-1 border border-recoder-elements-borderColor rounded-md text-recoder-elements-textPrimary placeholder:text-recoder-elements-textTertiary focus:outline-none focus:border-blue-500"
                 />
                 <div className="flex items-center gap-2">
                   <button
@@ -217,7 +217,7 @@ export function VercelPanel() {
                   </button>
                   <button
                     onClick={handleDetectFramework}
-                    className="px-3 py-1.5 text-xs text-bolt-elements-textSecondary hover:text-bolt-elements-textPrimary border border-bolt-elements-borderColor rounded-md transition-colors"
+                    className="px-3 py-1.5 text-xs text-recoder-elements-textSecondary hover:text-recoder-elements-textPrimary border border-recoder-elements-borderColor rounded-md transition-colors"
                   >
                     Detect Framework
                   </button>
@@ -237,23 +237,23 @@ export function VercelPanel() {
 
           {isLoading ? (
             <div className="flex items-center justify-center py-8">
-              <div className="i-ph:spinner-gap animate-spin text-xl text-bolt-elements-textTertiary" />
+              <div className="i-ph:spinner-gap animate-spin text-xl text-recoder-elements-textTertiary" />
             </div>
           ) : projects.length === 0 ? (
             <div className="text-center py-8">
-              <p className="text-xs text-bolt-elements-textTertiary">No projects found.</p>
+              <p className="text-xs text-recoder-elements-textTertiary">No projects found.</p>
             </div>
           ) : (
-            <div className="divide-y divide-bolt-elements-borderColor">
+            <div className="divide-y divide-recoder-elements-borderColor">
               {projects.map((project) => (
                 <div
                   key={project.id}
-                  className="px-4 py-2.5 flex items-center justify-between hover:bg-bolt-elements-background-depth-3 transition-colors"
+                  className="px-4 py-2.5 flex items-center justify-between hover:bg-recoder-elements-background-depth-3 transition-colors"
                 >
                   <div>
-                    <p className="text-sm text-bolt-elements-textPrimary">{project.name}</p>
+                    <p className="text-sm text-recoder-elements-textPrimary">{project.name}</p>
                     {project.framework && (
-                      <p className="text-xs text-bolt-elements-textTertiary">{project.framework}</p>
+                      <p className="text-xs text-recoder-elements-textTertiary">{project.framework}</p>
                     )}
                   </div>
                   <button
@@ -275,12 +275,12 @@ export function VercelPanel() {
 
   return (
     <div className="flex flex-col h-full">
-      <div className="px-4 py-3 border-b border-bolt-elements-borderColor">
+      <div className="px-4 py-3 border-b border-recoder-elements-borderColor">
         <div className="flex items-center justify-between">
           <div>
-            <h3 className="text-sm font-medium text-bolt-elements-textPrimary">Vercel</h3>
-            <p className="text-xs text-bolt-elements-textSecondary mt-0.5">
-              Connected as <span className="text-bolt-elements-textPrimary">{username}</span>
+            <h3 className="text-sm font-medium text-recoder-elements-textPrimary">Vercel</h3>
+            <p className="text-xs text-recoder-elements-textSecondary mt-0.5">
+              Connected as <span className="text-recoder-elements-textPrimary">{username}</span>
             </p>
           </div>
           <button
@@ -293,11 +293,11 @@ export function VercelPanel() {
       </div>
 
       {/* Linked project info */}
-      <div className="px-4 py-3 border-b border-bolt-elements-borderColor bg-bolt-elements-background-depth-3">
+      <div className="px-4 py-3 border-b border-recoder-elements-borderColor bg-recoder-elements-background-depth-3">
         <div className="flex items-center justify-between">
           <div>
             <div className="flex items-center gap-2">
-              <span className="text-sm font-medium text-bolt-elements-textPrimary">
+              <span className="text-sm font-medium text-recoder-elements-textPrimary">
                 {linkedProject.vercelProjectName}
               </span>
               <span className="text-[10px] px-1.5 py-0.5 bg-green-500/20 text-green-400 rounded">Linked</span>
@@ -315,7 +315,7 @@ export function VercelPanel() {
           </div>
           <button
             onClick={unlinkProject}
-            className="text-xs text-bolt-elements-textTertiary hover:text-red-400 transition-colors"
+            className="text-xs text-recoder-elements-textTertiary hover:text-red-400 transition-colors"
           >
             Unlink
           </button>
@@ -323,15 +323,15 @@ export function VercelPanel() {
       </div>
 
       {/* Deploy section */}
-      <div className="px-4 py-3 border-b border-bolt-elements-borderColor">
+      <div className="px-4 py-3 border-b border-recoder-elements-borderColor">
         <div className="flex items-center gap-2">
           <div className="flex-1">
-            <label className="block text-xs text-bolt-elements-textSecondary mb-1">Build directory</label>
+            <label className="block text-xs text-recoder-elements-textSecondary mb-1">Build directory</label>
             <input
               type="text"
               value={buildDir}
               onChange={(e) => setBuildDir(e.target.value)}
-              className="w-full px-2 py-1 text-xs bg-bolt-elements-background-depth-1 border border-bolt-elements-borderColor rounded text-bolt-elements-textPrimary focus:outline-none focus:border-blue-500"
+              className="w-full px-2 py-1 text-xs bg-recoder-elements-background-depth-1 border border-recoder-elements-borderColor rounded text-recoder-elements-textPrimary focus:outline-none focus:border-blue-500"
             />
           </div>
           <button
@@ -357,13 +357,13 @@ export function VercelPanel() {
 
       {/* Deployments list */}
       <div className="flex-1 overflow-auto">
-        <div className="px-4 py-2 flex items-center justify-between border-b border-bolt-elements-borderColor/50">
-          <span className="text-xs font-medium text-bolt-elements-textSecondary uppercase tracking-wider">
+        <div className="px-4 py-2 flex items-center justify-between border-b border-recoder-elements-borderColor/50">
+          <span className="text-xs font-medium text-recoder-elements-textSecondary uppercase tracking-wider">
             Recent Deployments
           </span>
           <button
             onClick={loadDeployments}
-            className="text-xs text-bolt-elements-textTertiary hover:text-bolt-elements-textPrimary transition-colors"
+            className="text-xs text-recoder-elements-textTertiary hover:text-recoder-elements-textPrimary transition-colors"
             title="Refresh"
           >
             <div className="i-ph:arrows-clockwise text-sm" />
@@ -371,10 +371,10 @@ export function VercelPanel() {
         </div>
         {deployments.length === 0 ? (
           <div className="text-center py-8">
-            <p className="text-xs text-bolt-elements-textTertiary">No deployments yet.</p>
+            <p className="text-xs text-recoder-elements-textTertiary">No deployments yet.</p>
           </div>
         ) : (
-          <div className="divide-y divide-bolt-elements-borderColor">
+          <div className="divide-y divide-recoder-elements-borderColor">
             {deployments.map((d) => (
               <div key={d.uid} className="px-4 py-2.5">
                 <div className="flex items-center justify-between">
@@ -397,7 +397,7 @@ export function VercelPanel() {
                         {d.target}
                       </span>
                     )}
-                    <span className="text-[10px] text-bolt-elements-textTertiary">
+                    <span className="text-[10px] text-recoder-elements-textTertiary">
                       {formatTime(d.createdAt)}
                     </span>
                   </div>

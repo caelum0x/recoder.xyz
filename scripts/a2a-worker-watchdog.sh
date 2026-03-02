@@ -1,29 +1,39 @@
 #!/usr/bin/env bash
+# =============================================================================
+# A2A Worker Liveness Watchdog
+#
+# Install as cron job:
+#   */5 * * * * /path/to/scripts/a2a-worker-watchdog.sh
+#
+# Checks each A2A worker is alive. Restarts dead workers, kills duplicates.
+# =============================================================================
 set -euo pipefail
 
-# A2A Worker Watchdog
-# Checks each worker is alive, restarts dead ones, kills duplicates.
-# Designed for cron: */5 * * * * /path/to/scripts/a2a-worker-watchdog.sh
-#
-# Install:
-#   crontab -e
-#   */5 * * * * /opt/recoder/scripts/a2a-worker-watchdog.sh >> /var/log/recoder/worker-watchdog.log 2>&1
-
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+LOG_DIR="${A2A_WATCHDOG_LOG_DIR:-/var/log/recoder}"
+LOG_FILE="${A2A_WATCHDOG_LOG_FILE:-$LOG_DIR/worker-watchdog.log}"
+LOCK_FILE="${A2A_WATCHDOG_LOCK_FILE:-/tmp/a2a-worker-watchdog.lock}"
 WORKER_SCRIPT="$ROOT_DIR/scripts/a2a-workers-hetzner.sh"
-RUN_DIR="${A2A_WORKER_RUN_DIR:-$ROOT_DIR/.run/a2a-workers}"
-LOG_DIR="${A2A_WORKER_LOG_DIR:-$ROOT_DIR/logs/a2a-workers}"
-WATCHDOG_LOG="${WATCHDOG_LOG:-$LOG_DIR/watchdog.log}"
+LOG_MAX_BYTES="${A2A_WATCHDOG_LOG_MAX_BYTES:-10485760}"  # 10MB
 
-mkdir -p "$LOG_DIR" "$RUN_DIR"
+mkdir -p "$LOG_DIR"
 
-TS="$(date '+%Y-%m-%d %H:%M:%S')"
+if command -v flock >/dev/null 2>&1; then
+  exec 9>"$LOCK_FILE"
+  if ! flock -n 9; then
+    exit 0
+  fi
+fi
 
-log() {
-  echo "[$TS] $*" >> "$WATCHDOG_LOG"
-}
+timestamp() { date -u +"%Y-%m-%dT%H:%M:%SZ"; }
+log() { echo "[$(timestamp)] $*" | tee -a "$LOG_FILE"; }
 
-# Workers: name, grep pattern (must match a2a-workers-hetzner.sh)
+if [[ ! -x "$WORKER_SCRIPT" ]]; then
+  log "ERROR watchdog cannot execute worker script: $WORKER_SCRIPT"
+  exit 1
+fi
+
+# name|pgrep pattern used by the worker script
 WORKERS=(
   "recoder-web|pnpm -C recoder-web a2a:worker"
   "recoder-agency|pnpm -C recoder-agency/apps/agency a2a:worker"
@@ -31,71 +41,67 @@ WORKERS=(
   "docker-backend|pnpm -C docker-backend a2a:worker"
 )
 
-DEAD_WORKERS=()
+any_stopped=0
+any_duplicate_fixed=0
 
 for entry in "${WORKERS[@]}"; do
-  IFS='|' read -r name pattern <<< "$entry"
-  pid_file="$RUN_DIR/$name.pid"
-  alive=false
+  name="${entry%%|*}"
+  pattern="${entry##*|}"
 
-  # Check PID file first
-  if [[ -f "$pid_file" ]]; then
-    pid="$(cat "$pid_file")"
-    if kill -0 "$pid" 2>/dev/null; then
-      alive=true
-    else
-      # Stale PID file — clean up
-      rm -f "$pid_file"
-    fi
+  pids=()
+  while IFS= read -r pid; do
+    [[ -n "$pid" ]] && pids+=("$pid")
+  done < <(pgrep -f "$pattern" 2>/dev/null || true)
+  count="${#pids[@]}"
+
+  if (( count == 0 )); then
+    log "WARN $name is stopped"
+    any_stopped=1
+    continue
   fi
 
-  # Fallback: check by process pattern
-  if ! $alive && pgrep -f "$pattern" >/dev/null 2>&1; then
-    alive=true
-    # Fix missing PID file
-    new_pid="$(pgrep -f "$pattern" | head -n1)"
-    echo "$new_pid" > "$pid_file"
-    log "WARN $name: recovered PID file (pid=$new_pid)"
-  fi
-
-  if ! $alive; then
-    log "DEAD $name: not running"
-    DEAD_WORKERS+=("$name")
-  fi
-
-  # Kill duplicates: keep the oldest process, kill the rest
-  pids="$(pgrep -f "$pattern" 2>/dev/null || true)"
-  pid_count="$(echo "$pids" | grep -c . 2>/dev/null || echo 0)"
-  if [[ "$pid_count" -gt 1 ]]; then
-    oldest="$(echo "$pids" | head -n1)"
-    log "WARN $name: $pid_count processes found, keeping oldest (pid=$oldest)"
-    echo "$pids" | tail -n +2 | while read -r dup_pid; do
-      log "KILL $name: duplicate pid=$dup_pid"
-      kill "$dup_pid" 2>/dev/null || true
+  if (( count > 1 )); then
+    oldest="${pids[0]}"
+    for pid in "${pids[@]:1}"; do
+      if [[ "$pid" -lt "$oldest" ]]; then
+        oldest="$pid"
+      fi
     done
-    # Ensure PID file points to the oldest
-    echo "$oldest" > "$pid_file"
+
+    for pid in "${pids[@]}"; do
+      if [[ "$pid" != "$oldest" ]]; then
+        kill "$pid" 2>/dev/null || true
+        sleep 1
+        kill -9 "$pid" 2>/dev/null || true
+      fi
+    done
+
+    log "WARN $name had $count processes; kept pid=$oldest and removed duplicates"
+    any_duplicate_fixed=1
+  else
+    log "OK $name pid=${pids[0]}"
   fi
 done
 
-# Restart dead workers
-if [[ ${#DEAD_WORKERS[@]} -gt 0 ]]; then
-  log "RESTART: restarting ${#DEAD_WORKERS[@]} dead worker(s): ${DEAD_WORKERS[*]}"
-
-  # Use the existing worker script to restart all workers.
-  # It's safe to call start — it skips workers that are already running.
-  if [[ -x "$WORKER_SCRIPT" ]]; then
-    "$WORKER_SCRIPT" start >> "$WATCHDOG_LOG" 2>&1 || {
-      log "ERROR: worker restart failed (exit=$?)"
-    }
-    log "RESTART: complete"
+if (( any_stopped == 1 )); then
+  log "ACTION restarting all A2A workers (at least one worker was stopped)"
+  if "$WORKER_SCRIPT" restart >>"$LOG_FILE" 2>&1; then
+    log "OK worker restart completed"
   else
-    log "ERROR: worker script not found or not executable: $WORKER_SCRIPT"
+    log "ERROR worker restart failed"
+    exit 1
   fi
+elif (( any_duplicate_fixed == 1 )); then
+  log "OK duplicate cleanup applied; no restart required"
 else
-  # Only log heartbeat every 6th run (~30 min) to avoid log spam
-  MINUTE="$(date '+%M')"
-  if [[ "$((MINUTE % 30))" -lt 5 ]]; then
-    log "OK: all ${#WORKERS[@]} workers healthy"
+  log "OK all workers healthy"
+fi
+
+# --- Log rotation ---
+if [[ -f "$LOG_FILE" ]]; then
+  size=$(stat -f%z "$LOG_FILE" 2>/dev/null || stat -c%s "$LOG_FILE" 2>/dev/null || echo 0)
+  if (( size > LOG_MAX_BYTES )); then
+    mv "$LOG_FILE" "${LOG_FILE}.old"
+    log "LOG rotated (previous was ${size} bytes)"
   fi
 fi

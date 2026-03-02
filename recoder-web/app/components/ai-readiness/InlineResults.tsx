@@ -95,7 +95,7 @@ export default function InlineResults({
         >
           {/* Progress Bar */}
           <div className="relative">
-            <div className="h-0.5 bg-bolt-elements-background-depth-3 rounded-full overflow-hidden">
+            <div className="h-0.5 bg-recoder-elements-background-depth-3 rounded-full overflow-hidden">
               <motion.div
                 className="h-full bg-gradient-to-r from-accent-500 to-accent-400"
                 initial={{ width: '0%' }}
@@ -127,7 +127,7 @@ export default function InlineResults({
             key={analysisStep}
             initial={{ opacity: 0, x: -10 }}
             animate={{ opacity: 1, x: 0 }}
-            className="flex items-center gap-2 text-sm text-bolt-elements-textTertiary"
+            className="flex items-center gap-2 text-sm text-recoder-elements-textTertiary"
           >
             <motion.div
               animate={{ rotate: 360 }}
@@ -140,7 +140,7 @@ export default function InlineResults({
 
           {/* ASCII Animation */}
           <motion.div
-            className="font-mono text-xs text-bolt-elements-textSecondary overflow-hidden h-8 relative"
+            className="font-mono text-xs text-recoder-elements-textSecondary overflow-hidden h-8 relative"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ delay: 0.2 }}
@@ -200,7 +200,7 @@ export default function InlineResults({
                   padding: '4px'
                 }}
               >
-                <div className="w-full h-full bg-bolt-elements-background-depth-1 rounded-full flex flex-col items-center justify-center">
+                <div className="w-full h-full bg-recoder-elements-background-depth-1 rounded-full flex flex-col items-center justify-center">
                   <motion.div
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
@@ -214,7 +214,7 @@ export default function InlineResults({
                     initial={{ opacity: 0, y: 5 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: 0.7 }}
-                    className="text-xs text-bolt-elements-textTertiary"
+                    className="text-xs text-recoder-elements-textTertiary"
                   >
                     AI Ready
                   </motion.div>
@@ -295,10 +295,10 @@ export default function InlineResults({
 
                 {/* Content */}
                 <div className="space-y-1">
-                  <div className="text-sm font-medium text-bolt-elements-textPrimary">
+                  <div className="text-sm font-medium text-recoder-elements-textPrimary">
                     {item.label}
                   </div>
-                  <div className="text-xs text-bolt-elements-textTertiary">
+                  <div className="text-xs text-recoder-elements-textTertiary">
                     {item.description}
                   </div>
                   <div className={`
@@ -321,8 +321,8 @@ export default function InlineResults({
           >
             <AlertCircle className="w-4 h-4 text-accent-500 mt-0.5" />
             <div className="flex-1">
-              <div className="text-sm font-medium text-bolt-elements-textPrimary mb-1">Quick Tip</div>
-              <div className="text-xs text-bolt-elements-textTertiary">
+              <div className="text-sm font-medium text-recoder-elements-textPrimary mb-1">Quick Tip</div>
+              <div className="text-xs text-recoder-elements-textTertiary">
                 {data.semanticHTML
                   ? 'Your site has good semantic HTML structure for AI understanding.'
                   : 'Add semantic HTML5 elements to improve AI comprehension of your content.'}
@@ -339,7 +339,7 @@ export default function InlineResults({
           >
             <button
               onClick={onReset}
-              className="flex-1 px-4 py-2.5 bg-bolt-elements-background-depth-2 hover:bg-bolt-elements-background-depth-3 rounded-lg text-sm font-medium transition-all"
+              className="flex-1 px-4 py-2.5 bg-recoder-elements-background-depth-2 hover:bg-recoder-elements-background-depth-3 rounded-lg text-sm font-medium transition-all"
             >
               Try Another
             </button>

@@ -1,6 +1,6 @@
 "use client";
 
-import type { Generation } from "@giselles-ai/protocol";
+import type { Generation } from "@recoder/protocol";
 import type { UIMessage } from "ai";
 import { ChevronRightIcon } from "lucide-react";
 import { Accordion } from "radix-ui";

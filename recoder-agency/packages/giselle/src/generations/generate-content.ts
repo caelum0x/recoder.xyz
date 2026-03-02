@@ -3,12 +3,12 @@ import { createGateway } from "@ai-sdk/gateway";
 import { google } from "@ai-sdk/google";
 import { type OpenAIResponsesProviderOptions, openai } from "@ai-sdk/openai";
 import type { SharedV2ProviderMetadata } from "@ai-sdk/provider";
-import { githubTools, octokit } from "@giselles-ai/github-tool";
+import { githubTools, octokit } from "@recoder/github-tool";
 import {
 	Capability,
 	hasCapability,
 	languageModels,
-} from "@giselles-ai/language-model";
+} from "@recoder/language-model";
 import type {
 	CompletedGeneration,
 	FailedGeneration,
@@ -16,13 +16,13 @@ import type {
 	GenerationUsage,
 	OutputFileBlob,
 	RunningGeneration,
-} from "@giselles-ai/protocol";
+} from "@recoder/protocol";
 import {
 	isContentGenerationNode,
 	isTextGenerationNode,
 	type Output,
 	type TextGenerationLanguageModelData,
-} from "@giselles-ai/protocol";
+} from "@recoder/protocol";
 import {
 	AISDKError,
 	type AsyncIterableStream,

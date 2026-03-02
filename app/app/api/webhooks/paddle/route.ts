@@ -3,16 +3,45 @@ import { prisma } from '@/lib/prisma';
 import crypto from 'crypto';
 import { serialize } from 'php-serialize';
 import { logger } from '@/lib/logger';
+import { sendPaymentFailedEmail, sendSubscriptionCancelledEmail } from '@/lib/email';
+import { rateLimit, rateLimitConfigs } from '@/lib/middleware/rate-limit';
 
-const PADDLE_PUBLIC_KEY = process.env.PADDLE_PUBLIC_KEY || '';
+const webhookRateLimiter = rateLimit(rateLimitConfigs.webhook);
+const PADDLE_PUBLIC_KEY = process.env.PADDLE_PUBLIC_KEY;
+if (!PADDLE_PUBLIC_KEY && process.env.NODE_ENV === 'production') {
+  console.error('[paddle-webhook] PADDLE_PUBLIC_KEY is not configured — webhook verification will reject all requests');
+}
 
-function verifyPaddleSignature(body: any): boolean {
+type JsonObject = Record<string, unknown>;
+
+function getString(value: unknown): string {
+  return typeof value === 'string' ? value : '';
+}
+
+function parsePassthrough(data: JsonObject): { userId: string; plan?: string } | null {
+  const passthrough = getString(data.passthrough);
+  if (!passthrough) return null;
+  try {
+    const parsed = JSON.parse(passthrough);
+    if (!parsed || typeof parsed !== 'object') return null;
+    const record = parsed as Record<string, unknown>;
+    const userId = getString(record.user_id);
+    if (!userId) return null;
+    const plan = getString(record.plan) || undefined;
+    return { userId, plan };
+  } catch {
+    return null;
+  }
+}
+
+function verifyPaddleSignature(body: JsonObject): boolean {
   if (!PADDLE_PUBLIC_KEY) return false;
 
-  const signature = body.p_signature;
+  const signature = getString(body.p_signature);
+  if (!signature) return false;
   const keys = Object.keys(body).filter(key => key !== 'p_signature').sort();
   
-  const data: any = {};
+  const data: JsonObject = {};
   keys.forEach(key => {
     data[key] = body[key];
   });
@@ -33,8 +62,11 @@ function verifyPaddleSignature(body: any): boolean {
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
-    
+    const rateLimitResponse = await webhookRateLimiter(request);
+    if (rateLimitResponse) return rateLimitResponse;
+
+    const body = (await request.json()) as JsonObject;
+
     if (!verifyPaddleSignature(body)) {
       logger.error('Invalid Paddle webhook signature', { route: 'api/webhooks/paddle' });
       return NextResponse.json({ error: 'Invalid signature' }, { status: 401 });
@@ -87,23 +119,20 @@ export async function POST(request: NextRequest) {
   }
 }
 
-async function handlePaymentSucceeded(data: any) {
+async function handlePaymentSucceeded(data: JsonObject) {
   const { passthrough, sale_gross, currency, order_id, receipt_url } = data;
-  let userId: string;
-
-  try {
-    const passthroughData = JSON.parse(passthrough);
-    userId = passthroughData.user_id;
-  } catch {
+  const parsed = parsePassthrough(data);
+  if (!parsed) {
     logger.error('Invalid passthrough data in Paddle webhook', { route: 'api/webhooks/paddle' });
     return;
   }
+  const userId = parsed.userId;
 
   await prisma.users.update({
     where: { id: userId },
     data: {
       lastPaymentDate: new Date(),
-      lastPaymentAmount: parseFloat(sale_gross),
+      lastPaymentAmount: parseFloat(getString(sale_gross)),
       paymentStatus: 'active'
     }
   });
@@ -115,40 +144,36 @@ async function handlePaymentSucceeded(data: any) {
       action: 'payment_succeeded',
       resource: 'billing',
       metadata: {
-        amount: sale_gross,
-        currency,
-        order_id,
-        receipt_url,
+        amount: getString(sale_gross),
+        currency: getString(currency),
+        order_id: getString(order_id),
+        receipt_url: getString(receipt_url),
         provider: 'paddle'
       },
       ipAddress: '0.0.0.0',
     }
   });
 
-  logger.info('Paddle payment succeeded', { route: 'api/webhooks/paddle', userId, amount: sale_gross, currency });
+  logger.info('Paddle payment succeeded', { route: 'api/webhooks/paddle', userId, amount: getString(sale_gross), currency: getString(currency) });
 }
 
-async function handleSubscriptionCreated(data: any) {
+async function handleSubscriptionCreated(data: JsonObject) {
   const { passthrough, subscription_id, subscription_plan_id, status, next_bill_date } = data;
-  let userId: string;
-  let planName: string = 'pro';
-
-  try {
-    const passthroughData = JSON.parse(passthrough);
-    userId = passthroughData.user_id;
-    planName = passthroughData.plan || 'pro';
-  } catch {
+  const parsed = parsePassthrough(data);
+  if (!parsed) {
     logger.error('Invalid passthrough data in Paddle webhook', { route: 'api/webhooks/paddle' });
     return;
   }
+  const userId = parsed.userId;
+  const planName = parsed.plan || 'pro';
 
   await prisma.users.update({
     where: { id: userId },
     data: {
       plan: planName,
-      subscriptionId: subscription_id,
-      subscriptionStatus: status,
-      subscriptionEndDate: new Date(next_bill_date)
+      subscriptionId: getString(subscription_id),
+      subscriptionStatus: getString(status),
+      subscriptionEndDate: new Date(getString(next_bill_date))
     }
   });
 
@@ -159,8 +184,8 @@ async function handleSubscriptionCreated(data: any) {
       action: 'subscription_created',
       resource: 'billing',
       metadata: {
-        subscription_id,
-        subscription_plan_id,
+        subscription_id: getString(subscription_id),
+        subscription_plan_id: getString(subscription_plan_id),
         plan: planName,
         provider: 'paddle'
       },
@@ -171,26 +196,22 @@ async function handleSubscriptionCreated(data: any) {
   logger.info('Paddle subscription created', { route: 'api/webhooks/paddle', userId, plan: planName });
 }
 
-async function handleSubscriptionUpdated(data: any) {
+async function handleSubscriptionUpdated(data: JsonObject) {
   const { passthrough, subscription_id, subscription_plan_id, status, next_bill_date } = data;
-  let userId: string;
-  let planName: string = 'pro';
-
-  try {
-    const passthroughData = JSON.parse(passthrough);
-    userId = passthroughData.user_id;
-    planName = passthroughData.plan || 'pro';
-  } catch {
+  const parsed = parsePassthrough(data);
+  if (!parsed) {
     logger.error('Invalid passthrough data in Paddle webhook', { route: 'api/webhooks/paddle' });
     return;
   }
+  const userId = parsed.userId;
+  const planName = parsed.plan || 'pro';
 
   await prisma.users.update({
     where: { id: userId },
     data: {
       plan: planName,
-      subscriptionStatus: status,
-      subscriptionEndDate: new Date(next_bill_date)
+      subscriptionStatus: getString(status),
+      subscriptionEndDate: new Date(getString(next_bill_date))
     }
   });
 
@@ -201,8 +222,8 @@ async function handleSubscriptionUpdated(data: any) {
       action: 'subscription_updated',
       resource: 'billing',
       metadata: {
-        subscription_id,
-        subscription_plan_id,
+        subscription_id: getString(subscription_id),
+        subscription_plan_id: getString(subscription_plan_id),
         plan: planName,
         provider: 'paddle'
       },
@@ -213,23 +234,21 @@ async function handleSubscriptionUpdated(data: any) {
   logger.info('Paddle subscription updated', { route: 'api/webhooks/paddle', userId, plan: planName });
 }
 
-async function handleSubscriptionCancelled(data: any) {
+async function handleSubscriptionCancelled(data: JsonObject) {
   const { passthrough, subscription_id, cancellation_effective_date } = data;
-  let userId: string;
-
-  try {
-    const passthroughData = JSON.parse(passthrough);
-    userId = passthroughData.user_id;
-  } catch {
+  const parsed = parsePassthrough(data);
+  if (!parsed) {
     logger.error('Invalid passthrough data in Paddle webhook', { route: 'api/webhooks/paddle' });
     return;
   }
+  const userId = parsed.userId;
+  const planName = parsed.plan || 'Pro';
 
   await prisma.users.update({
     where: { id: userId },
     data: {
       subscriptionStatus: 'cancelled',
-      subscriptionCancelledAt: new Date(cancellation_effective_date)
+      subscriptionCancelledAt: new Date(getString(cancellation_effective_date))
     }
   });
 
@@ -240,35 +259,56 @@ async function handleSubscriptionCancelled(data: any) {
       action: 'subscription_cancelled',
       resource: 'billing',
       metadata: {
-        subscription_id,
-        cancellation_date: cancellation_effective_date,
+        subscription_id: getString(subscription_id),
+        cancellation_date: getString(cancellation_effective_date),
         provider: 'paddle'
       },
       ipAddress: '0.0.0.0',
     }
   });
 
+  // Send subscription cancelled email to the user
+  try {
+    const user = await prisma.users.findUnique({
+      where: { id: userId },
+      select: { email: true, name: true, plan: true, subscriptionEndDate: true }
+    });
+    if (user?.email) {
+      const cancellationDate = getString(cancellation_effective_date);
+      const endDate = cancellationDate
+        ? new Date(cancellationDate).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
+        : user.subscriptionEndDate
+          ? user.subscriptionEndDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
+          : 'the end of your billing period';
+      await sendSubscriptionCancelledEmail(
+        user.email,
+        user.name || 'there',
+        endDate,
+        user.plan || planName
+      );
+    }
+  } catch (emailError) {
+    logger.error('Failed to send subscription cancelled email', { route: 'api/webhooks/paddle', userId, error: emailError instanceof Error ? emailError.message : String(emailError) });
+  }
+
   logger.info('Paddle subscription cancelled', { route: 'api/webhooks/paddle', userId });
 }
 
-async function handleSubscriptionPaymentSucceeded(data: any) {
+async function handleSubscriptionPaymentSucceeded(data: JsonObject) {
   const { passthrough, subscription_id, sale_gross, next_bill_date, receipt_url } = data;
-  let userId: string;
-
-  try {
-    const passthroughData = JSON.parse(passthrough);
-    userId = passthroughData.user_id;
-  } catch {
+  const parsed = parsePassthrough(data);
+  if (!parsed) {
     logger.error('Invalid passthrough data in Paddle webhook', { route: 'api/webhooks/paddle' });
     return;
   }
+  const userId = parsed.userId;
 
   await prisma.users.update({
     where: { id: userId },
     data: {
-      subscriptionEndDate: new Date(next_bill_date),
+      subscriptionEndDate: new Date(getString(next_bill_date)),
       lastPaymentDate: new Date(),
-      lastPaymentAmount: parseFloat(sale_gross),
+      lastPaymentAmount: parseFloat(getString(sale_gross)),
       paymentStatus: 'active'
     }
   });
@@ -280,29 +320,26 @@ async function handleSubscriptionPaymentSucceeded(data: any) {
       action: 'subscription_payment_succeeded',
       resource: 'billing',
       metadata: {
-        subscription_id,
-        amount: sale_gross,
-        receipt_url,
+        subscription_id: getString(subscription_id),
+        amount: getString(sale_gross),
+        receipt_url: getString(receipt_url),
         provider: 'paddle'
       },
       ipAddress: '0.0.0.0',
     }
   });
 
-  logger.info('Paddle subscription payment succeeded', { route: 'api/webhooks/paddle', userId, amount: sale_gross });
+  logger.info('Paddle subscription payment succeeded', { route: 'api/webhooks/paddle', userId, amount: getString(sale_gross) });
 }
 
-async function handleSubscriptionPaymentFailed(data: any) {
-  const { passthrough, subscription_id, amount, hard_failure } = data;
-  let userId: string;
-
-  try {
-    const passthroughData = JSON.parse(passthrough);
-    userId = passthroughData.user_id;
-  } catch {
+async function handleSubscriptionPaymentFailed(data: JsonObject) {
+  const { passthrough, subscription_id, amount, hard_failure, next_retry_date } = data;
+  const parsed = parsePassthrough(data);
+  if (!parsed) {
     logger.error('Invalid passthrough data in Paddle webhook', { route: 'api/webhooks/paddle' });
     return;
   }
+  const userId = parsed.userId;
 
   await prisma.users.update({
     where: { id: userId },
@@ -318,29 +355,48 @@ async function handleSubscriptionPaymentFailed(data: any) {
       action: 'subscription_payment_failed',
       resource: 'billing',
       metadata: {
-        subscription_id,
-        amount,
-        hard_failure,
+        subscription_id: getString(subscription_id),
+        amount: getString(amount),
+        hard_failure: getString(hard_failure),
         provider: 'paddle'
       },
       ipAddress: '0.0.0.0',
     }
   });
 
+  // Send payment failed email to the user
+  try {
+    const user = await prisma.users.findUnique({
+      where: { id: userId },
+      select: { email: true, name: true, plan: true }
+    });
+    if (user?.email) {
+      const retryDateValue = getString(next_retry_date);
+      const retryDate = retryDateValue
+        ? new Date(retryDateValue).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
+        : undefined;
+      await sendPaymentFailedEmail(
+        user.email,
+        user.name || 'there',
+        user.plan || 'Pro',
+        retryDate
+      );
+    }
+  } catch (emailError) {
+    logger.error('Failed to send payment failed email', { route: 'api/webhooks/paddle', userId, error: emailError instanceof Error ? emailError.message : String(emailError) });
+  }
+
   logger.info('Paddle subscription payment failed', { route: 'api/webhooks/paddle', userId });
 }
 
-async function handleSubscriptionPaymentRefunded(data: any) {
+async function handleSubscriptionPaymentRefunded(data: JsonObject) {
   const { passthrough, subscription_id, amount, refund_reason } = data;
-  let userId: string;
-
-  try {
-    const passthroughData = JSON.parse(passthrough);
-    userId = passthroughData.user_id;
-  } catch {
+  const parsed = parsePassthrough(data);
+  if (!parsed) {
     logger.error('Invalid passthrough data in Paddle webhook', { route: 'api/webhooks/paddle' });
     return;
   }
+  const userId = parsed.userId;
 
   await prisma.audit_logs.create({
     data: {
@@ -349,14 +405,14 @@ async function handleSubscriptionPaymentRefunded(data: any) {
       action: 'subscription_payment_refunded',
       resource: 'billing',
       metadata: {
-        subscription_id,
-        amount,
-        refund_reason,
+        subscription_id: getString(subscription_id),
+        amount: getString(amount),
+        refund_reason: getString(refund_reason),
         provider: 'paddle'
       },
       ipAddress: '0.0.0.0',
     }
   });
 
-  logger.info('Paddle payment refunded', { route: 'api/webhooks/paddle', userId, amount });
+  logger.info('Paddle payment refunded', { route: 'api/webhooks/paddle', userId, amount: getString(amount) });
 }

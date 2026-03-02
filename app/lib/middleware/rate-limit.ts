@@ -192,6 +192,18 @@ export const rateLimitConfigs = {
     maxRequests: 10, // Will be overridden per user
   },
 
+  // Billing/payment endpoints - strict
+  billing: {
+    windowMs: 60 * 1000, // 1 minute
+    maxRequests: 5,
+  },
+
+  // Webhook endpoints - moderate (payment providers may retry)
+  webhook: {
+    windowMs: 60 * 1000, // 1 minute
+    maxRequests: 30,
+  },
+
   // Public endpoints - lenient
   public: {
     windowMs: 60 * 1000, // 1 minute

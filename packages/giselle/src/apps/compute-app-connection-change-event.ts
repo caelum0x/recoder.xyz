@@ -1,4 +1,4 @@
-import type { App } from "@giselles-ai/protocol";
+import type { App } from "@recoder/protocol";
 import type { AppConnectionChangeEvent } from "./types";
 
 export function computeAppConnectionChangeEvent(args: {

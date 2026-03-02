@@ -1,4 +1,4 @@
-import type { WorkspaceId } from "@giselles-ai/protocol";
+import type { WorkspaceId } from "@recoder/protocol";
 import type { GiselleContext } from "../types";
 import { getWorkspace as getWorkspaceInternal } from "./utils";
 

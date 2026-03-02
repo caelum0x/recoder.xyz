@@ -1,20 +1,33 @@
+import type { Metadata } from 'next';
 import Link from 'next/link';
+import { SiteHeader } from '@/components/SiteHeader';
+
+export const metadata: Metadata = {
+  title: 'Terms of Service - Recoder.xyz',
+  description: 'Terms of Service for Recoder.xyz. Covers the BYOK model, beta status, user responsibilities, and intellectual property.',
+  openGraph: {
+    title: 'Terms of Service - Recoder.xyz',
+    description: 'Terms of Service for Recoder.xyz. Covers the BYOK model, beta status, user responsibilities, and intellectual property.',
+    url: 'https://recoder.xyz/legal/terms',
+    siteName: 'Recoder.xyz',
+    images: [{ url: 'https://recoder.xyz/og-image.png', width: 1200, height: 630, alt: 'Recoder Terms of Service' }],
+    type: 'website',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Terms of Service - Recoder.xyz',
+    description: 'Terms of Service for Recoder.xyz. Covers the BYOK model, beta status, and user responsibilities.',
+    images: ['https://recoder.xyz/og-image.png'],
+  },
+  alternates: {
+    canonical: 'https://recoder.xyz/legal/terms',
+  },
+};
 
 export default function TermsOfServicePage() {
   return (
     <div className="min-h-screen bg-black text-white">
-      {/* Header */}
-      <header className="fixed top-0 w-full z-50 border-b border-white/10 bg-black/80 backdrop-blur-xl">
-        <div className="container mx-auto px-6 h-16 flex items-center justify-between">
-          <Link href="/" className="flex items-center space-x-2">
-            <div className="w-8 h-8 bg-gradient-to-br from-orange-500 to-purple-600 rounded-lg"></div>
-            <span className="text-xl font-bold">recoder</span>
-          </Link>
-          <Link href="/" className="px-4 py-2 text-sm bg-orange-500 hover:bg-orange-600 rounded-lg transition-colors">
-            Back to Home
-          </Link>
-        </div>
-      </header>
+      <SiteHeader />
 
       {/* Main Content */}
       <div className="pt-24 pb-20 px-6">

@@ -1,4 +1,4 @@
-import type { TelemetrySettings } from "@giselles-ai/giselle";
+import type { TelemetrySettings } from "@recoder/giselle";
 import { createContext, type ReactNode, useContext } from "react";
 
 export const TelemetryContext = createContext<TelemetrySettings | undefined>(

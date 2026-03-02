@@ -1,11 +1,11 @@
 #!/bin/bash
 
-# CodeCraft - Build All Script
+# Recoder - Build All Script
 # Builds all packages and services in the correct order
 
 set -e  # Exit on any error
 
-echo "🚀 CodeCraft - Building All Components"
+echo "🚀 Recoder - Building All Components"
 echo "=================================="
 
 # Colors for output
@@ -126,7 +126,7 @@ print_status "Building from: $PROJECT_ROOT"
 if [ "$CLEAN_BUILD" = "true" ]; then
     print_status "Cleaning previous builds..."
     rm -rf packages/*/dist packages/*/out packages/*/build
-    rm -rf backend/dist production-engine/dist
+    rm -rf backend/dist docker-backend/dist
     print_success "Clean completed"
 fi
 
@@ -144,16 +144,13 @@ build_package "Shared Package" "packages/shared"
 # 2. Build CLI package
 build_package "CLI Package" "packages/cli"
 
-# 3. Build VSCode extension
-build_package "VSCode Extension" "packages/vscode-extension"
-
-# 4. Build backend
+# 3. Build backend
 build_package "Backend API" "backend"
 
-# 5. Build production engine
-build_package "Production Engine" "production-engine"
+# 4. Build docker backend
+build_package "Docker Backend" "docker-backend"
 
-# 6. Build web dashboard (if exists)
+# 5. Build web dashboard (if exists)
 if [ -d "packages/web" ]; then
     build_package "Web Dashboard" "packages/web"
 fi
@@ -166,7 +163,7 @@ if [ "$SKIP_TESTS" != "true" ]; then
     test_package "Shared Package" "packages/shared"
     test_package "CLI Package" "packages/cli"
     test_package "Backend API" "backend"
-    test_package "Production Engine" "production-engine"
+    test_package "Docker Backend" "docker-backend"
 fi
 
 # Build examples if requested
@@ -243,9 +240,8 @@ echo ""
 echo "Built components:"
 echo "  ✅ Shared Package"
 echo "  ✅ CLI Package"
-echo "  ✅ VSCode Extension"
 echo "  ✅ Backend API"
-echo "  ✅ Production Engine"
+echo "  ✅ Docker Backend"
 
 if [ "$BUILD_EXAMPLES" = "true" ]; then
     echo "  ✅ Examples"
@@ -270,4 +266,4 @@ if [ -n "$START_TIME" ]; then
 fi
 
 echo ""
-print_success "CodeCraft is ready for development! 🚀"
+print_success "Recoder is ready for development! 🚀"

@@ -5,10 +5,10 @@
 
 import { neon } from '@neondatabase/serverless';
 
-const DATABASE_URL = 'postgresql://neondb_owner:npg_REDACTED@ep-silent-mode-adii0v0d-pooler.c-2.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require';
+const DATABASE_URL = 'postgresql://<DB_USER>:<DB_PASSWORD>@<DB_HOST>/<DB_NAME>?sslmode=require&channel_binding=require';
 
 async function verifyDatabase() {
-  console.log('🔍 Verifying Bolt.new Database...\n');
+  console.log('🔍 Verifying Recoder Web Database...\n');
 
   const sql = neon(DATABASE_URL);
 

@@ -1,13 +1,13 @@
 import { and, eq } from "drizzle-orm";
-import { db, oauthCredentials, supabaseUserMappings } from "@/db";
-import { getUser } from "@/lib/supabase";
+import { db, oauthCredentials, authUserMappings } from "@/db";
+import { getUser } from "@/lib/auth/user";
 
 export async function deleteOauthCredential(provider: string) {
 	const supabaseUser = await getUser();
 	const [res] = await db
-		.select({ userDbId: supabaseUserMappings.userDbId })
-		.from(supabaseUserMappings)
-		.where(eq(supabaseUserMappings.supabaseUserId, supabaseUser.id));
+		.select({ userDbId: authUserMappings.userDbId })
+		.from(authUserMappings)
+		.where(eq(authUserMappings.authUserId, supabaseUser.id));
 
 	await db
 		.delete(oauthCredentials)

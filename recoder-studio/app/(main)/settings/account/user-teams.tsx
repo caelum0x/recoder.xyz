@@ -1,6 +1,6 @@
 "use client";
 
-import { useToasts } from "@giselle-internal/ui/toast";
+import { useToasts } from "@recoder-internal/ui/toast";
 import { MoreHorizontal, Search } from "lucide-react";
 import { useActionState, useCallback, useState } from "react";
 import { FreeTag } from "@/components/free-tag";
