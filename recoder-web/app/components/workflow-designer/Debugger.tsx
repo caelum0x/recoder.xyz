@@ -16,26 +16,26 @@ export function DebugViewer() {
   );
 
   return (
-    <div className="bg-bolt-elements-background-depth-1 border border-bolt-elements-borderColor rounded-lg overflow-hidden">
-      <div className="px-4 py-2 bg-bolt-elements-background-depth-2 border-b border-bolt-elements-borderColor">
-        <h3 className="text-sm font-medium text-bolt-elements-textPrimary">Node Debug Viewer</h3>
+    <div className="bg-recoder-elements-background-depth-1 border border-recoder-elements-borderColor rounded-lg overflow-hidden">
+      <div className="px-4 py-2 bg-recoder-elements-background-depth-2 border-b border-recoder-elements-borderColor">
+        <h3 className="text-sm font-medium text-recoder-elements-textPrimary">Node Debug Viewer</h3>
       </div>
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-b border-bolt-elements-borderColor">
-              <th className="px-4 py-2 text-left text-xs font-medium text-bolt-elements-textTertiary uppercase tracking-wider">
+            <tr className="border-b border-recoder-elements-borderColor">
+              <th className="px-4 py-2 text-left text-xs font-medium text-recoder-elements-textTertiary uppercase tracking-wider">
                 Name
               </th>
-              <th className="px-4 py-2 text-left text-xs font-medium text-bolt-elements-textTertiary uppercase tracking-wider">
+              <th className="px-4 py-2 text-left text-xs font-medium text-recoder-elements-textTertiary uppercase tracking-wider">
                 Type
               </th>
-              <th className="px-4 py-2 text-left text-xs font-medium text-bolt-elements-textTertiary uppercase tracking-wider">
+              <th className="px-4 py-2 text-left text-xs font-medium text-recoder-elements-textTertiary uppercase tracking-wider">
                 Content
               </th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-bolt-elements-borderColor">
+          <tbody className="divide-y divide-recoder-elements-borderColor">
             {nodeIds.map((id) => (
               <ViewerRow key={id} id={id} />
             ))}
@@ -59,34 +59,34 @@ const ViewerRow = memo(function ViewerRow({ id }: { id: NodeId }) {
 
   return (
     <>
-      <tr className="hover:bg-bolt-elements-background-depth-3 cursor-pointer" onClick={() => setIsExpanded(!isExpanded)}>
+      <tr className="hover:bg-recoder-elements-background-depth-3 cursor-pointer" onClick={() => setIsExpanded(!isExpanded)}>
         <td className="px-4 py-2 whitespace-nowrap">
           <div className="flex items-center gap-2">
             {contentPreview.length > 50 ? (
               isExpanded ? (
-                <ChevronDownIcon className="w-4 h-4 text-bolt-elements-textTertiary" />
+                <ChevronDownIcon className="w-4 h-4 text-recoder-elements-textTertiary" />
               ) : (
-                <ChevronRightIcon className="w-4 h-4 text-bolt-elements-textTertiary" />
+                <ChevronRightIcon className="w-4 h-4 text-recoder-elements-textTertiary" />
               )
             ) : (
               <span className="w-4" />
             )}
-            <NodeIcon node={node} className="w-4 h-4 text-bolt-elements-textTertiary" />
-            <span className="text-bolt-elements-textPrimary">{getDefaultNodeName(node)}</span>
+            <NodeIcon node={node} className="w-4 h-4 text-recoder-elements-textTertiary" />
+            <span className="text-recoder-elements-textPrimary">{getDefaultNodeName(node)}</span>
           </div>
         </td>
-        <td className="px-4 py-2 whitespace-nowrap text-bolt-elements-textTertiary">
+        <td className="px-4 py-2 whitespace-nowrap text-recoder-elements-textTertiary">
           {node.content.type}
         </td>
-        <td className="px-4 py-2 text-bolt-elements-textTertiary max-w-xs truncate">
+        <td className="px-4 py-2 text-recoder-elements-textTertiary max-w-xs truncate">
           {isExpanded ? '' : contentPreview.substring(0, 50)}
           {!isExpanded && contentPreview.length > 50 && '...'}
         </td>
       </tr>
       {isExpanded && contentPreview.length > 50 && (
-        <tr className="bg-bolt-elements-background-depth-2/30">
+        <tr className="bg-recoder-elements-background-depth-2/30">
           <td colSpan={3} className="px-4 py-3">
-            <pre className="text-xs text-bolt-elements-textSecondary whitespace-pre-wrap font-mono">
+            <pre className="text-xs text-recoder-elements-textSecondary whitespace-pre-wrap font-mono">
               {contentPreview}
             </pre>
           </td>
@@ -114,26 +114,26 @@ export function DebugForm() {
   );
 
   return (
-    <div className="bg-bolt-elements-background-depth-1 border border-bolt-elements-borderColor rounded-lg overflow-hidden">
-      <div className="px-4 py-2 bg-bolt-elements-background-depth-2 border-b border-bolt-elements-borderColor">
-        <h3 className="text-sm font-medium text-bolt-elements-textPrimary">Node Editor</h3>
+    <div className="bg-recoder-elements-background-depth-1 border border-recoder-elements-borderColor rounded-lg overflow-hidden">
+      <div className="px-4 py-2 bg-recoder-elements-background-depth-2 border-b border-recoder-elements-borderColor">
+        <h3 className="text-sm font-medium text-recoder-elements-textPrimary">Node Editor</h3>
       </div>
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-b border-bolt-elements-borderColor">
-              <th className="px-4 py-2 text-left text-xs font-medium text-bolt-elements-textTertiary uppercase tracking-wider">
+            <tr className="border-b border-recoder-elements-borderColor">
+              <th className="px-4 py-2 text-left text-xs font-medium text-recoder-elements-textTertiary uppercase tracking-wider">
                 Name
               </th>
-              <th className="px-4 py-2 text-left text-xs font-medium text-bolt-elements-textTertiary uppercase tracking-wider">
+              <th className="px-4 py-2 text-left text-xs font-medium text-recoder-elements-textTertiary uppercase tracking-wider">
                 Type
               </th>
-              <th className="px-4 py-2 text-left text-xs font-medium text-bolt-elements-textTertiary uppercase tracking-wider">
+              <th className="px-4 py-2 text-left text-xs font-medium text-recoder-elements-textTertiary uppercase tracking-wider">
                 Actions
               </th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-bolt-elements-borderColor">
+          <tbody className="divide-y divide-recoder-elements-borderColor">
             {nodeIds.map((id) => (
               <FormRow key={id} id={id} />
             ))}
@@ -173,18 +173,18 @@ const FormRow = memo(function FormRow({ id }: { id: NodeId }) {
   if (!node) return null;
 
   return (
-    <tr className="hover:bg-bolt-elements-background-depth-3">
+    <tr className="hover:bg-recoder-elements-background-depth-3">
       <td className="px-4 py-2">
         <input
           type="text"
           value={node.name || ''}
           onChange={handleChangeName}
           placeholder={getDefaultNodeName(node)}
-          className="w-full px-2 py-1 bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor rounded text-sm text-bolt-elements-textPrimary
-                     placeholder:text-bolt-elements-textTertiary focus:outline-none focus:ring-1 focus:ring-accent-500"
+          className="w-full px-2 py-1 bg-recoder-elements-background-depth-2 border border-recoder-elements-borderColor rounded text-sm text-recoder-elements-textPrimary
+                     placeholder:text-recoder-elements-textTertiary focus:outline-none focus:ring-1 focus:ring-accent-500"
         />
       </td>
-      <td className="px-4 py-2 whitespace-nowrap text-bolt-elements-textTertiary">
+      <td className="px-4 py-2 whitespace-nowrap text-recoder-elements-textTertiary">
         {node.content.type}
       </td>
       <td className="px-4 py-2 whitespace-nowrap">
@@ -214,14 +214,14 @@ export function DebuggerPanel() {
   return (
     <div className="flex flex-col h-full">
       {/* Tab Navigation */}
-      <div className="flex border-b border-bolt-elements-borderColor">
+      <div className="flex border-b border-recoder-elements-borderColor">
         <button
           onClick={() => setActiveTab('viewer')}
           className={classNames(
             'px-4 py-2 text-sm font-medium transition-colors',
             activeTab === 'viewer'
-              ? 'text-bolt-elements-textPrimary border-b-2 border-accent-500'
-              : 'text-bolt-elements-textTertiary hover:text-bolt-elements-textPrimary'
+              ? 'text-recoder-elements-textPrimary border-b-2 border-accent-500'
+              : 'text-recoder-elements-textTertiary hover:text-recoder-elements-textPrimary'
           )}
         >
           Viewer
@@ -231,8 +231,8 @@ export function DebuggerPanel() {
           className={classNames(
             'px-4 py-2 text-sm font-medium transition-colors',
             activeTab === 'editor'
-              ? 'text-bolt-elements-textPrimary border-b-2 border-accent-500'
-              : 'text-bolt-elements-textTertiary hover:text-bolt-elements-textPrimary'
+              ? 'text-recoder-elements-textPrimary border-b-2 border-accent-500'
+              : 'text-recoder-elements-textTertiary hover:text-recoder-elements-textPrimary'
           )}
         >
           Editor

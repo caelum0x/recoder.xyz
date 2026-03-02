@@ -59,6 +59,13 @@ scrape_configs:
     metrics_path: /api/metrics/prometheus
     scrape_interval: 30s
 
+  # A2A SLO metrics (connector success rates, circuit breakers, latency)
+  - job_name: 'docker-backend-a2a'
+    static_configs:
+      - targets: ['localhost:3100']
+    metrics_path: /api/a2a/metrics/prometheus
+    scrape_interval: 30s
+
   - job_name: 'recoder-web'
     static_configs:
       - targets: ['localhost:5173']

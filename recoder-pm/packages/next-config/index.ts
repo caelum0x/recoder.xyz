@@ -34,13 +34,39 @@ export const config: NextConfig = {
     return [
       {
         source: "/(.*)",
-        headers: createSecureHeaders({
-          // HSTS Preload: https://hstspreload.org/
-          forceHTTPSRedirect: [
-            true,
-            { maxAge: 63_072_000, includeSubDomains: true, preload: true },
-          ],
-        }),
+        headers: [
+          ...createSecureHeaders({
+            // HSTS Preload: https://hstspreload.org/
+            forceHTTPSRedirect: [
+              true,
+              { maxAge: 63_072_000, includeSubDomains: true, preload: true },
+            ],
+          }),
+          {
+            key: "X-Frame-Options",
+            value: "DENY",
+          },
+          {
+            key: "X-Content-Type-Options",
+            value: "nosniff",
+          },
+          {
+            key: "Referrer-Policy",
+            value: "strict-origin-when-cross-origin",
+          },
+          {
+            key: "X-XSS-Protection",
+            value: "1; mode=block",
+          },
+          {
+            key: "Permissions-Policy",
+            value: "camera=(), microphone=(), geolocation=()",
+          },
+          {
+            key: "Content-Security-Policy",
+            value: "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.googletagmanager.com https://www.google-analytics.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' https://www.google-analytics.com https://region1.google-analytics.com https://*.recoder.xyz wss://*.recoder.xyz https://*.posthog.com https://*.i.posthog.com; frame-ancestors 'none';",
+          },
+        ],
       },
     ];
   },

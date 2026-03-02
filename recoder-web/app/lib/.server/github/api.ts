@@ -12,7 +12,7 @@ export class GitHubService {
   private async fetchGitHub(url: string): Promise<Response> {
     const headers: Record<string, string> = {
       'Accept': 'application/vnd.github.v3+json',
-      'User-Agent': 'Bolt-App/1.0'
+      'User-Agent': 'Recoder-App/1.0'
     };
 
     if (this.apiToken) {

@@ -1,0 +1,114 @@
+name: Connector Contract Tests
+
+# SFA-014: CI gate for connector contract tests.
+# Runs the canonical A2A schema contract tests and generates a support
+# snapshot on every PR to main. Fails the PR if contract tests fail.
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'shared/src/a2a/**'
+      - 'shared/package.json'
+      - 'shared/vitest.config.ts'
+      - 'packages/a2a-sdk/**'
+      - 'packages/a2a-sdk/package.json'
+      - 'tools/a2a-interop/**'
+      - '.github/workflows/connector-contract-tests.yml'
+  workflow_dispatch:
+
+env:
+  NODE_VERSION: '20'
+
+concurrency:
+  group: connector-contracts-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  contract-tests:
+    name: A2A Connector Contract Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: latest
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'pnpm'
+          cache-dependency-path: |
+            pnpm-lock.yaml
+            shared/package.json
+            packages/a2a-sdk/package.json
+
+      - name: Install shared dependencies
+        working-directory: ./shared
+        run: pnpm install --no-frozen-lockfile
+
+      - name: Install a2a-sdk dependencies
+        working-directory: ./packages/a2a-sdk
+        run: pnpm install --no-frozen-lockfile
+
+      - name: Run a2a-sdk type checks
+        working-directory: ./packages/a2a-sdk
+        run: pnpm run check-types
+
+      - name: Run a2a-sdk tests
+        working-directory: ./packages/a2a-sdk
+        run: pnpm run test
+
+      - name: Run connector contract tests
+        working-directory: ./shared
+        run: pnpm run test:contracts
+
+      - name: Generate connector contract snapshot
+        run: node tools/a2a-interop/js/generate-connector-snapshot.mjs
+
+      - name: Verify snapshot was generated
+        run: |
+          if [ ! -f shared/src/a2a/snapshots/connector-contract.snapshot.json ]; then
+            echo "ERROR: Snapshot file was not generated"
+            exit 1
+          fi
+          echo "Snapshot generated successfully:"
+          cat shared/src/a2a/snapshots/connector-contract.snapshot.json | head -30
+
+      - name: Upload snapshot artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: connector-contract-snapshot
+          path: shared/src/a2a/snapshots/connector-contract.snapshot.json
+          retention-days: 30
+
+      - name: Post summary
+        if: always()
+        run: |
+          echo "## Connector Contract Tests" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          if [ -f shared/src/a2a/snapshots/connector-contract.snapshot.json ]; then
+            ENVELOPE_VER=$(node -pe "JSON.parse(require('fs').readFileSync('shared/src/a2a/snapshots/connector-contract.snapshot.json','utf8')).schema_versions.task_envelope")
+            AUDIT_VER=$(node -pe "JSON.parse(require('fs').readFileSync('shared/src/a2a/snapshots/connector-contract.snapshot.json','utf8')).schema_versions.audit_event")
+            STATE_COUNT=$(node -pe "JSON.parse(require('fs').readFileSync('shared/src/a2a/snapshots/connector-contract.snapshot.json','utf8')).task_states.all.length")
+            ERROR_COUNT=$(node -pe "JSON.parse(require('fs').readFileSync('shared/src/a2a/snapshots/connector-contract.snapshot.json','utf8')).error_taxonomy.codes.length")
+            EVENT_COUNT=$(node -pe "JSON.parse(require('fs').readFileSync('shared/src/a2a/snapshots/connector-contract.snapshot.json','utf8')).audit_events.event_types.length")
+            METHOD_COUNT=$(node -pe "JSON.parse(require('fs').readFileSync('shared/src/a2a/snapshots/connector-contract.snapshot.json','utf8')).connector_contract_methods.length")
+
+            echo "| Metric | Value |" >> $GITHUB_STEP_SUMMARY
+            echo "|--------|-------|" >> $GITHUB_STEP_SUMMARY
+            echo "| TaskEnvelope version | ${ENVELOPE_VER} |" >> $GITHUB_STEP_SUMMARY
+            echo "| AuditEvent version | ${AUDIT_VER} |" >> $GITHUB_STEP_SUMMARY
+            echo "| Task states | ${STATE_COUNT} |" >> $GITHUB_STEP_SUMMARY
+            echo "| Error codes | ${ERROR_COUNT} |" >> $GITHUB_STEP_SUMMARY
+            echo "| Audit event types | ${EVENT_COUNT} |" >> $GITHUB_STEP_SUMMARY
+            echo "| Contract methods | ${METHOD_COUNT} |" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "Snapshot was not generated." >> $GITHUB_STEP_SUMMARY
+          fi

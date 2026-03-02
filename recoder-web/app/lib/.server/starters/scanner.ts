@@ -218,7 +218,7 @@ function shouldSkipPath(path: string): boolean {
 }
 
 function generateDescription(name: string, packageInfo: any): string {
-  const baseName = name.replace(/^(bolt-|gsap-)/, '');
+  const baseName = name.replace(/^(recoder-|bolt-|gsap-)/, '');
 
   // Custom descriptions for specific starters
   const customDescriptions: Record<string, string> = {
@@ -297,7 +297,7 @@ function generateTags(name: string, packageInfo: any, category: string): string[
   // Add specific tags based on name
   if (name.includes('shadcn')) tags.add('shadcn');
   if (name.includes('gsap')) tags.add('gsap');
-  if (name.includes('bolt')) tags.add('bolt');
+  if (name.includes('recoder')) tags.add('recoder');
   if (name.includes('ts') || packageInfo.devDependencies?.typescript) tags.add('typescript');
 
   // Add tags based on dependencies
@@ -312,7 +312,7 @@ function generateTags(name: string, packageInfo: any, category: string): string[
 
 function formatName(name: string): string {
   return name
-    .replace(/^bolt-/, '')
+    .replace(/^(recoder-|bolt-)/, '')
     .replace(/^gsap-/, 'GSAP ')
     .replace(/-/g, ' ')
     .replace(/\b\w/g, l => l.toUpperCase());

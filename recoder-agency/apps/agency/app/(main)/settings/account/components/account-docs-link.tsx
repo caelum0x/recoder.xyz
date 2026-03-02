@@ -1,6 +1,6 @@
 "use client";
 
-import { DocsLink } from "@giselle-internal/ui/docs-link";
+import { DocsLink } from "@recoder-internal/ui/docs-link";
 import { usePathname } from "next/navigation";
 
 const DOCS_LINKS = {

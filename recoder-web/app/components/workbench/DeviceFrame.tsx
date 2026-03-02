@@ -35,7 +35,7 @@ export const DeviceFrame = memo(function DeviceFrame({
         style={{
           width: `${width}px`,
           height: `${height}px`,
-          border: '1px solid var(--bolt-elements-borderColor)',
+          border: '1px solid var(--recoder-elements-borderColor)',
           borderRadius: '4px',
           overflow: 'hidden',
           position: 'relative',
@@ -91,7 +91,7 @@ export const DeviceFrame = memo(function DeviceFrame({
           style={{
             width: `${width}px`,
             height: `${height}px`,
-            border: '1px solid var(--bolt-elements-borderColor)',
+            border: '1px solid var(--recoder-elements-borderColor)',
             borderRadius: '4px',
             overflow: 'hidden',
             position: 'relative',

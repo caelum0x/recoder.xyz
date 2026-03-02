@@ -1,14 +1,14 @@
 import type {
 	EmbeddingDimensions,
 	EmbeddingProfileId,
-} from "@giselles-ai/protocol";
+} from "@recoder/protocol";
 import type {
 	DocumentVectorStoreId,
 	DocumentVectorStoreSourceId,
-} from "@giselles-ai/types";
-import { createClient } from "@supabase/supabase-js";
+} from "@recoder/types";
 import { and, eq, lt, or } from "drizzle-orm";
 import { db, documentVectorStoreSources } from "@/db";
+import { storageDownloadObject } from "@/lib/storage/r2";
 import type { TeamWithSubscription } from "@/services/teams";
 import { fetchTeamByDbId } from "@/services/teams/fetch-team";
 import { buildAiGatewayHeaders } from "../../shared/ai-gateway-headers";
@@ -25,15 +25,6 @@ import {
 } from "./embedding-tracking";
 import { extractTextFromDocument } from "./extract-text";
 import { generateEmbeddings } from "./generate-embeddings";
-
-const supabaseUrl = process.env.SUPABASE_URL;
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_KEY;
-
-if (!supabaseUrl || !supabaseServiceKey) {
-	throw new Error("Missing Supabase credentials");
-}
-
-const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
 interface IngestDocumentOptions {
 	embeddingProfileIds: EmbeddingProfileId[];
@@ -122,7 +113,7 @@ async function resolveEmbeddingTelemetryContext(
  * Ingest a document source by extracting, chunking, and embedding text content
  * This function:
  * 1. Validates the source exists and is in the correct state
- * 2. Downloads the file from Supabase storage
+ * 2. Downloads the file from object storage
  * 3. Extracts text content from supported document files (TXT, MD, PDF)
  * 4. Chunks the text into smaller pieces for embedding
  * 5. Generates embeddings for each chunk using specified embedding profiles
@@ -198,23 +189,18 @@ export async function ingestDocument(
 		);
 		signal?.throwIfAborted();
 
-		// Download file from storage
-		const { data: fileData, error: downloadError } = await supabase.storage
-			.from(source.storageBucket)
-			.download(source.storageKey);
-
-		if (downloadError || !fileData) {
-			throw Object.assign(
-				new Error(`Failed to download file: ${downloadError?.message}`),
-				{ code: "file-not-found" as IngestErrorCode },
-			);
+		// Download file from object storage
+		const buffer = await storageDownloadObject(
+			source.storageBucket,
+			source.storageKey,
+		);
+		if (!buffer) {
+			throw Object.assign(new Error("Failed to download file"), {
+				code: "file-not-found" as IngestErrorCode,
+			});
 		}
 
 		signal?.throwIfAborted();
-
-		// Convert blob to buffer
-		const arrayBuffer = await fileData.arrayBuffer();
-		const buffer = Buffer.from(arrayBuffer);
 
 		// Extract text content
 		let text: string;

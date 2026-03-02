@@ -1,13 +1,21 @@
 /**
  * Newsletter Unsubscribe API Route
  *
- * Allows users to unsubscribe from marketing emails
- * CAN-SPAM compliant - must honor unsubscribe requests within 10 business days
+ * Allows users to unsubscribe from marketing emails.
+ * Uses the `newsletter_subscribers` table exclusively.
+ * CAN-SPAM compliant - must honor unsubscribe requests within 10 business days.
+ *
+ * Records are never deleted; status is set to 'unsubscribed' and
+ * `unsubscribedAt` is stamped. Main user accounts are never affected.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 
+// ---------------------------------------------------------------------------
+// POST /api/newsletter/unsubscribe
+// Body: { email?: string; token?: string }
+// ---------------------------------------------------------------------------
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
@@ -20,78 +28,54 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Find user by email or token
-    let user;
-    if (token) {
-      // Token-based unsubscribe (more secure)
-      user = await prisma.users.findFirst({
-        where: {
-          apiKey: {
-            startsWith: 'newsletter_',
-            endsWith: token,
-          },
-        },
-      });
+    // Find subscriber by token or email using typed Prisma client
+    let subscriber = token
+      ? await prisma.newsletter_subscribers.findUnique({
+          where: { unsubscribeToken: token },
+          select: { id: true, email: true, status: true },
+        })
+      : null;
 
-      if (!user) {
-        // Try to find by token in apiKey field
-        user = await prisma.users.findFirst({
-          where: {
-            apiKey: `newsletter_${token}`,
-          },
-        });
-      }
-    } else if (email) {
-      // Email-based unsubscribe
-      user = await prisma.users.findUnique({
+    if (!subscriber && email) {
+      subscriber = await prisma.newsletter_subscribers.findUnique({
         where: { email },
+        select: { id: true, email: true, status: true },
       });
     }
 
-    if (!user) {
+    if (!subscriber) {
       return NextResponse.json(
         { success: false, error: 'Subscription not found' },
         { status: 404 }
       );
     }
 
-    // Mark as unsubscribed
-    // For newsletter-only subscribers (isActive: false), we can delete them
-    // For active users, we should add a marketingEmailsEnabled field (future enhancement)
-
-    if (!user.isActive && user.apiKey?.startsWith('newsletter_')) {
-      // Delete newsletter-only subscriber
-      await prisma.users.delete({
-        where: { id: user.id },
-      });
-
-      console.log(`Newsletter subscriber deleted: ${user.email}`);
-
+    // Already unsubscribed – return success without re-updating
+    if (subscriber.status === 'unsubscribed') {
       return NextResponse.json({
         success: true,
-        message: 'Successfully unsubscribed from newsletter',
-        email: user.email,
-        deleted: true,
-      });
-    } else {
-      // For active users, we'll keep the account but note unsubscription
-      // In the future, add a marketingEmailsEnabled: false field
-      // For now, we'll use the role field or a metadata approach
-
-      // Option 1: Add to a separate unsubscribed list (using metadata)
-      // Option 2: Create a user_preferences table entry
-      // For now, let's just log it and return success
-
-      console.log(`User unsubscribed from marketing emails: ${user.email}`);
-
-      return NextResponse.json({
-        success: true,
-        message: 'Successfully unsubscribed from marketing emails. You will still receive important account notifications.',
-        email: user.email,
+        message: 'Already unsubscribed from newsletter',
+        email: subscriber.email,
         accountPreserved: true,
       });
     }
 
+    // Mark as unsubscribed (soft-delete only, record is preserved)
+    await prisma.newsletter_subscribers.update({
+      where: { id: subscriber.id },
+      data: {
+        status: 'unsubscribed',
+        unsubscribedAt: new Date(),
+        updatedAt: new Date(),
+      },
+    });
+
+    return NextResponse.json({
+      success: true,
+      message: 'Successfully unsubscribed from newsletter',
+      email: subscriber.email,
+      accountPreserved: true,
+    });
   } catch (error: any) {
     console.error('Newsletter unsubscribe error:', error);
     return NextResponse.json(
@@ -101,6 +85,10 @@ export async function POST(request: NextRequest) {
   }
 }
 
+// ---------------------------------------------------------------------------
+// GET /api/newsletter/unsubscribe?email=...&token=...
+// Returns confirmation page data so the frontend can render a preview.
+// ---------------------------------------------------------------------------
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
@@ -114,35 +102,35 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Find user
-    let user;
-    if (token) {
-      user = await prisma.users.findFirst({
-        where: {
-          apiKey: `newsletter_${token}`,
-        },
-      });
-    } else if (email) {
-      user = await prisma.users.findUnique({
+    // Find subscriber by token or email
+    let subscriber = token
+      ? await prisma.newsletter_subscribers.findUnique({
+          where: { unsubscribeToken: token },
+          select: { email: true, name: true, status: true, userId: true },
+        })
+      : null;
+
+    if (!subscriber && email) {
+      subscriber = await prisma.newsletter_subscribers.findUnique({
         where: { email },
+        select: { email: true, name: true, status: true, userId: true },
       });
     }
 
-    if (!user) {
+    if (!subscriber) {
       return NextResponse.json(
         { success: false, error: 'Subscription not found' },
         { status: 404 }
       );
     }
 
-    // Return unsubscribe confirmation page data
     return NextResponse.json({
       success: true,
-      email: user.email,
-      name: user.name,
-      isNewsletterOnly: !user.isActive && user.apiKey?.startsWith('newsletter_'),
+      email: subscriber.email,
+      name: subscriber.name,
+      isNewsletterOnly: !subscriber.userId,
+      status: subscriber.status,
     });
-
   } catch (error: any) {
     console.error('Newsletter unsubscribe GET error:', error);
     return NextResponse.json(
@@ -152,10 +140,10 @@ export async function GET(request: NextRequest) {
   }
 }
 
-/**
- * Bulk unsubscribe endpoint (admin only)
- * Useful for processing unsubscribe lists from email providers
- */
+// ---------------------------------------------------------------------------
+// DELETE /api/newsletter/unsubscribe  (admin-only bulk unsubscribe)
+// Body: { emails: string[] }
+// ---------------------------------------------------------------------------
 export async function DELETE(request: NextRequest) {
   try {
     const { requireAuth } = await import('@/lib/auth-helpers');
@@ -180,23 +168,26 @@ export async function DELETE(request: NextRequest) {
       );
     }
 
-    // Delete newsletter-only subscribers
-    const deleteResult = await prisma.users.deleteMany({
+    // Bulk mark as unsubscribed in newsletter_subscribers only
+    const updateResult = await prisma.newsletter_subscribers.updateMany({
       where: {
         email: { in: emails },
-        isActive: false,
-        apiKey: { startsWith: 'newsletter_' },
+        status: { not: 'unsubscribed' },
+      },
+      data: {
+        status: 'unsubscribed',
+        unsubscribedAt: new Date(),
+        updatedAt: new Date(),
       },
     });
 
-    console.log(`Bulk unsubscribe: ${deleteResult.count} newsletter subscribers removed`);
+    console.log(`Bulk unsubscribe: ${updateResult.count} newsletter subscribers updated`);
 
     return NextResponse.json({
       success: true,
-      message: `Successfully unsubscribed ${deleteResult.count} email(s)`,
-      count: deleteResult.count,
+      message: `Successfully unsubscribed ${updateResult.count} email(s)`,
+      count: updateResult.count,
     });
-
   } catch (error: any) {
     console.error('Bulk unsubscribe error:', error);
     return NextResponse.json(

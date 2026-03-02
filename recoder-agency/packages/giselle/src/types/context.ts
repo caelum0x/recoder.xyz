@@ -1,13 +1,13 @@
-import type { LanguageModelProvider } from "@giselles-ai/language-model";
-import type { GiselleLogger } from "@giselles-ai/logger";
+import type { LanguageModelProvider } from "@recoder/language-model";
+import type { GiselleLogger } from "@recoder/logger";
 import type {
 	GenerationOrigin,
 	RunningGeneration,
 	Task,
 	WorkspaceId,
-} from "@giselles-ai/protocol";
-import type { GiselleStorage } from "@giselles-ai/storage";
-import type { Vault } from "@giselles-ai/vault";
+} from "@recoder/protocol";
+import type { GiselleStorage } from "@recoder/storage";
+import type { Vault } from "@recoder/vault";
 import type { GenerationMetadata } from "../generations";
 import type { TelemetrySettings } from "../telemetry";
 import type { GiselleCallbacks } from "./callbacks";

@@ -114,8 +114,8 @@ export const CondenseIndicator = memo(
         <div
           className={classNames(
             'flex items-center gap-2 px-3 py-1.5 rounded-lg transition-colors',
-            'bg-bolt-elements-background-depth-2',
-            'border border-bolt-elements-borderColor',
+            'bg-recoder-elements-background-depth-2',
+            'border border-recoder-elements-borderColor',
             showWarning && 'border-yellow-500/50',
             state === 'error' && 'border-red-500/50'
           )}
@@ -125,7 +125,7 @@ export const CondenseIndicator = memo(
 
           {/* Progress bar */}
           <div className="flex-1 min-w-20">
-            <div className="h-1.5 bg-bolt-elements-background-depth-3 rounded-full overflow-hidden">
+            <div className="h-1.5 bg-recoder-elements-background-depth-3 rounded-full overflow-hidden">
               <div
                 className={classNames(
                   'h-full rounded-full transition-all duration-300',
@@ -145,7 +145,7 @@ export const CondenseIndicator = memo(
                 ? 'text-red-400'
                 : showWarning
                   ? 'text-yellow-400'
-                  : 'text-bolt-elements-textSecondary'
+                  : 'text-recoder-elements-textSecondary'
             )}
           >
             {tokenUsagePercent}%
@@ -157,8 +157,8 @@ export const CondenseIndicator = memo(
               onClick={onManualCondense}
               className={classNames(
                 'p-1 rounded transition-colors',
-                'hover:bg-bolt-elements-background-depth-3',
-                'text-bolt-elements-textSecondary hover:text-bolt-elements-textPrimary'
+                'hover:bg-recoder-elements-background-depth-3',
+                'text-recoder-elements-textSecondary hover:text-recoder-elements-textPrimary'
               )}
               title="Condense context now"
             >
@@ -173,13 +173,13 @@ export const CondenseIndicator = memo(
             className={classNames(
               'absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-50',
               'px-3 py-2 rounded-lg shadow-lg',
-              'bg-bolt-elements-background-depth-3',
-              'border border-bolt-elements-borderColor',
+              'bg-recoder-elements-background-depth-3',
+              'border border-recoder-elements-borderColor',
               'text-xs whitespace-nowrap'
             )}
           >
-            <div className="text-bolt-elements-textPrimary font-medium mb-1">Context Usage</div>
-            <div className="text-bolt-elements-textSecondary">{getStatusText()}</div>
+            <div className="text-recoder-elements-textPrimary font-medium mb-1">Context Usage</div>
+            <div className="text-recoder-elements-textSecondary">{getStatusText()}</div>
             {showWarning && state === 'idle' && (
               <div className="text-yellow-400 mt-1">Condensation will trigger at {threshold}%</div>
             )}
@@ -190,7 +190,7 @@ export const CondenseIndicator = memo(
                 'absolute top-full left-1/2 -translate-x-1/2',
                 'w-0 h-0 border-l-4 border-r-4 border-t-4',
                 'border-l-transparent border-r-transparent',
-                'border-t-bolt-elements-borderColor'
+                'border-t-recoder-elements-borderColor'
               )}
             />
           </div>

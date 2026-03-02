@@ -3,7 +3,7 @@ import {
 	GoogleLanguageModelData,
 	OpenAILanguageModelData,
 	type TextGenerationLanguageModelData,
-} from "@giselles-ai/protocol";
+} from "@recoder/protocol";
 
 type Provider = "openai" | "anthropic" | "google";
 
@@ -59,8 +59,7 @@ export function createDefaultModelData(
 				},
 			});
 		default: {
-			const _exhaustiveCheck: never = provider;
-			throw new Error(`Unhandled provider: ${_exhaustiveCheck}`);
+			throw new Error(`Unhandled provider: ${String(provider)}`);
 		}
 	}
 }
@@ -104,10 +103,7 @@ export function updateModelId(
 				},
 			});
 		default: {
-			const _exhaustiveCheck: never = currentModel;
-			throw new Error(
-				`Unhandled provider: ${JSON.stringify(_exhaustiveCheck)}`,
-			);
+			throw new Error(`Unhandled provider: ${JSON.stringify(currentModel)}`);
 		}
 	}
 }

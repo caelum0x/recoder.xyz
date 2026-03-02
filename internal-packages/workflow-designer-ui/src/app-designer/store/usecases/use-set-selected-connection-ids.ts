@@ -1,4 +1,4 @@
-import { ConnectionId } from "@giselles-ai/protocol";
+import { ConnectionId } from "@recoder/protocol";
 import { useCallback } from "react";
 import { useWorkspaceActions } from "../hooks";
 

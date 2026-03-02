@@ -1,5 +1,5 @@
-import type { TextGenerationNode, ToolSet } from "@giselles-ai/protocol";
-import { useFeatureFlag } from "@giselles-ai/react";
+import type { TextGenerationNode, ToolSet } from "@recoder/protocol";
+import { useFeatureFlag } from "@recoder/react";
 import clsx from "clsx/lite";
 import { CheckIcon } from "lucide-react";
 import { type PropsWithChildren, type ReactNode, useMemo } from "react";

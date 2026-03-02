@@ -1,5 +1,5 @@
 {
-	"name": "@giselles-ai/web-search",
+	"name": "@recoder/web-search",
 	"version": "0.0.0",
 	"private": true,
 	"main": "./dist/index.js",
@@ -22,7 +22,7 @@
 		}
 	},
 	"devDependencies": {
-		"@giselles-ai/tsconfig": "workspace:^",
+		"@recoder/tsconfig": "workspace:^",
 		"@types/node": "catalog:",
 		"tsup": "catalog:",
 		"vitest": "catalog:"

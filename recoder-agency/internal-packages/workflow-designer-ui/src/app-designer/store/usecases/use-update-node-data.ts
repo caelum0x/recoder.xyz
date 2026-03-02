@@ -1,4 +1,4 @@
-import type { NodeLike } from "@giselles-ai/protocol";
+import type { NodeLike } from "@recoder/protocol";
 import { useCallback } from "react";
 import { useWorkspaceActions } from "../hooks";
 

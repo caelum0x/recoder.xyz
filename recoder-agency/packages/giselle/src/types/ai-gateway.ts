@@ -1,4 +1,4 @@
-import type { RunningGeneration } from "@giselles-ai/protocol";
+import type { RunningGeneration } from "@recoder/protocol";
 import type { GenerationMetadata } from "../generations";
 
 export type AiGatewayHeaders = {

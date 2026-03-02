@@ -1,4 +1,5 @@
 import * as mcpService from '../services/mcp.service';
+import { logger } from '@/lib/logger';
 
 export async function getMCPTools(userId: string) {
   const servers = await mcpService.getUserServers(userId);
@@ -12,7 +13,7 @@ export async function getMCPTools(userId: string) {
         serverId: server.serverId,
       })));
     } catch (error) {
-      console.error(`Failed to load tools from ${server.name}:`, error);
+      logger.error('Failed to load tools from server', { serverName: String(server.name), error: String(error) });
     }
   }
 

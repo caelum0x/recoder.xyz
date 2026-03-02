@@ -361,3 +361,107 @@ export function parseRecoderA2AEnvelope(
   assertRecoderA2AEnvelope(value, options);
   return value;
 }
+
+// ---------------------------------------------------------------------------
+// Workspace types
+// ---------------------------------------------------------------------------
+
+export type OrchestrationPattern = 'direct' | 'fan-out' | 'pipeline' | 'competitive';
+
+export interface WorkspaceSettings {
+  /** Enable autonomous @mention routing between agents. */
+  autoRouting: boolean;
+  /** Require human approval before delegations execute. */
+  approvalRequired: boolean;
+  /** Create git worktrees for parallel agent work. */
+  worktreeIsolation: boolean;
+  /** Max concurrent tasks across all agents in this workspace. */
+  maxConcurrentTasks: number;
+  /** Default orchestration pattern for multi-dispatch. */
+  defaultOrchestrationPattern: OrchestrationPattern;
+}
+
+export interface A2AWorkspace {
+  workspaceId: string;
+  name: string;
+  projectId: string;
+  ownerId: string;
+  memberAgentIds: string[];
+  defaultChannelId: string;
+  settings: WorkspaceSettings;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// ---------------------------------------------------------------------------
+// Multi-dispatch types
+// ---------------------------------------------------------------------------
+
+export type AggregationStrategy = 'first-wins' | 'merge-all' | 'best-score' | 'manual';
+
+export interface MultiDispatchRequest {
+  prompt: string;
+  agentIds?: string[];
+  autoRoute?: boolean;
+  orchestrationPattern?: OrchestrationPattern;
+  aggregationStrategy?: AggregationStrategy;
+  priority?: 'critical' | 'high' | 'normal' | 'low';
+  worktreeIsolation?: boolean;
+}
+
+export type DispatchStatus = 'pending' | 'running' | 'completed' | 'failed' | 'cancelled';
+
+export interface DispatchRecord {
+  dispatchId: string;
+  workspaceId: string;
+  prompt: string;
+  orchestrationPattern: OrchestrationPattern;
+  aggregationStrategy: AggregationStrategy;
+  taskIds: string[];
+  agentIds: string[];
+  channelThreadId?: string;
+  status: DispatchStatus;
+  results: Record<string, unknown>[];
+  /** Worktree info per task when worktree isolation is enabled (taskId -> WorktreeInfo). */
+  worktrees?: Record<string, WorktreeInfo>;
+  /** Per-agent routing reasons when auto-routing was used (agentId -> reason string). */
+  routingReasons?: Record<string, string>;
+  createdAt: string;
+  completedAt?: string;
+}
+
+// ---------------------------------------------------------------------------
+// Worktree types
+// ---------------------------------------------------------------------------
+
+export type WorktreeStatus = 'active' | 'merged' | 'conflict' | 'removed';
+
+export interface WorktreeInfo {
+  taskId: string;
+  agentId: string;
+  worktreePath: string;
+  branchName: string;
+  baseBranch: string;
+  status: WorktreeStatus;
+  createdAt: string;
+}
+
+// ---------------------------------------------------------------------------
+// Approval types
+// ---------------------------------------------------------------------------
+
+export type ApprovalStatus = 'pending' | 'granted' | 'rejected' | 'expired' | 'escalated';
+
+export interface ApprovalRequest {
+  approvalId: string;
+  workspaceId: string;
+  requestingAgentId: string;
+  targetAgentId: string;
+  action: string;
+  details: Record<string, unknown>;
+  status: ApprovalStatus;
+  createdAt: string;
+  resolvedAt?: string;
+  resolvedBy?: string;
+  timeoutMs: number;
+}

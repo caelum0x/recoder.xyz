@@ -1,4 +1,4 @@
-import type { DatabaseConfig } from "@giselles-ai/rag";
+import type { DatabaseConfig } from "@recoder/rag";
 
 /**
  * Create database configuration for PostgreSQL connection

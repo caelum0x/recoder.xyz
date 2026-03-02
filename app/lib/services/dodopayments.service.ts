@@ -13,11 +13,15 @@
 import DodoPayments from 'dodopayments';
 import { prisma } from '../prisma';
 import crypto from 'crypto';
+import { logger } from '@/lib/logger';
 
-// Initialize Dodo Payments client
-const dodoClient = new DodoPayments({
-  bearerToken: process.env.DODO_PAYMENTS_API_KEY!,
-});
+function getDodoClient(): DodoPayments {
+  const bearerToken = process.env.DODO_PAYMENTS_API_KEY;
+  if (!bearerToken) {
+    throw new Error('DODO_PAYMENTS_API_KEY is not configured');
+  }
+  return new DodoPayments({ bearerToken });
+}
 
 export class DodoPaymentsService {
   /**
@@ -39,7 +43,7 @@ export class DodoPaymentsService {
         throw new Error('User not found');
       }
 
-      const session = await dodoClient.checkoutSessions.create({
+      const session = await getDodoClient().checkoutSessions.create({
         product_cart: [{ product_id: productId, quantity: 1 }],
         subscription_data: trialDays ? { trial_period_days: trialDays } : undefined,
         customer: {
@@ -54,7 +58,7 @@ export class DodoPaymentsService {
         checkoutUrl: session.checkout_url,
       };
     } catch (error: any) {
-      console.error('Dodo Payments checkout error:', error);
+      logger.error('Dodo Payments checkout error', { error: String(error) });
       throw new Error(`Failed to create checkout: ${error.message}`);
     }
   }
@@ -106,12 +110,12 @@ export class DodoPaymentsService {
           break;
 
         default:
-          console.log(`Unhandled webhook event: ${eventType}`);
+          logger.warn('Unhandled webhook event', { eventType });
       }
 
       return { success: true };
     } catch (error: any) {
-      console.error('Webhook handling error:', error);
+      logger.error('Webhook handling error', { error: String(error) });
       throw error;
     }
   }
@@ -128,7 +132,7 @@ export class DodoPaymentsService {
     });
 
     if (!user) {
-      console.error(`User not found for customer: ${customer_id}`);
+      logger.error('User not found for customer', { customerId: customer_id });
       return;
     }
 
@@ -163,7 +167,7 @@ export class DodoPaymentsService {
       },
     });
 
-    console.log(`✅ Subscription activated for user ${user.id}`);
+    logger.info('Subscription activated for user', { userId: user.id });
   }
 
   /**
@@ -177,7 +181,7 @@ export class DodoPaymentsService {
     });
 
     if (!subscription) {
-      console.error(`Subscription not found: ${subscription_id}`);
+      logger.error('Subscription not found', { subscriptionId: subscription_id });
       return;
     }
 
@@ -194,7 +198,7 @@ export class DodoPaymentsService {
       data: { subscriptionStatus: 'on_hold' },
     });
 
-    console.log(`⚠️ Subscription on hold: ${subscription_id}`);
+    logger.warn('Subscription on hold', { subscriptionId: subscription_id });
   }
 
   /**
@@ -223,7 +227,7 @@ export class DodoPaymentsService {
       data: { subscriptionStatus: 'cancelled' },
     });
 
-    console.log(`❌ Subscription cancelled: ${subscription_id}`);
+    logger.info('Subscription cancelled', { subscriptionId: subscription_id });
   }
 
   /**
@@ -251,7 +255,7 @@ export class DodoPaymentsService {
       data: { subscriptionPlan: this.mapPlanIdToPlanName(product_id) },
     });
 
-    console.log(`🔄 Plan changed: ${subscription_id} → ${product_id}`);
+    logger.info('Plan changed', { subscriptionId: subscription_id, productId: product_id });
   }
 
   /**
@@ -275,7 +279,7 @@ export class DodoPaymentsService {
       },
     });
 
-    console.log(`🔄 Subscription renewed: ${subscription_id}`);
+    logger.info('Subscription renewed', { subscriptionId: subscription_id });
   }
 
   /**
@@ -305,7 +309,7 @@ export class DodoPaymentsService {
       },
     });
 
-    console.log(`💰 Payment succeeded: ${payment_id}`);
+    logger.info('Payment succeeded', { paymentId: payment_id });
   }
 
   /**
@@ -334,7 +338,7 @@ export class DodoPaymentsService {
       },
     });
 
-    console.log(`❌ Payment failed: ${payment_id}`);
+    logger.error('Payment failed', { paymentId: payment_id });
   }
 
   /**
@@ -353,7 +357,7 @@ export class DodoPaymentsService {
         throw new Error('Subscription not found');
       }
 
-      const response = await dodoClient.subscriptions.updatePaymentMethod(
+      const response = await getDodoClient().subscriptions.updatePaymentMethod(
         subscription.providerId!,
         {
           type: paymentMethodType,
@@ -364,7 +368,7 @@ export class DodoPaymentsService {
 
       return response;
     } catch (error: any) {
-      console.error('Update payment method error:', error);
+      logger.error('Update payment method error', { error: String(error) });
       throw error;
     }
   }
@@ -428,7 +432,7 @@ export class DodoPaymentsService {
 
       return result;
     } catch (error: any) {
-      console.error('Change plan error:', error);
+      logger.error('Change plan error', { error: String(error) });
       throw error;
     }
   }
@@ -498,7 +502,7 @@ export class DodoPaymentsService {
 
       return { success: true };
     } catch (error: any) {
-      console.error('Cancel subscription error:', error);
+      logger.error('Cancel subscription error', { error: String(error) });
       throw error;
     }
   }
@@ -565,7 +569,7 @@ export class DodoPaymentsService {
 
       return dodoSubscription;
     } catch (error: any) {
-      console.error('Create on-demand subscription error:', error);
+      logger.error('Create on-demand subscription error', { error: String(error) });
       throw error;
     }
   }
@@ -612,7 +616,7 @@ export class DodoPaymentsService {
 
       return await response.json();
     } catch (error: any) {
-      console.error('Charge on-demand subscription error:', error);
+      logger.error('Charge on-demand subscription error', { error: String(error) });
       throw error;
     }
   }

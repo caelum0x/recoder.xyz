@@ -3,7 +3,7 @@ import {
 	hasTierAccess,
 	type LanguageModelId,
 	type LanguageModelTier,
-} from "@giselles-ai/language-model-registry";
+} from "@recoder/language-model-registry";
 import clsx from "clsx/lite";
 import { ProTag } from "../components";
 import { ProviderIcon } from "./provider-icon";

@@ -30,7 +30,7 @@ export function RoleBadge({ role }: { role: string }) {
         <span
           className={classNames(
             baseClasses,
-            'bg-bolt-elements-background-depth-3 text-bolt-elements-textSecondary border border-bolt-elements-borderColor'
+            'bg-recoder-elements-background-depth-3 text-recoder-elements-textSecondary border border-recoder-elements-borderColor'
           )}
         >
           <UserIcon className="h-3 w-3" />

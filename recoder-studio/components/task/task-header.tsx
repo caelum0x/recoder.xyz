@@ -1,11 +1,11 @@
-import { StatusBadge } from "@giselle-internal/ui/status-badge";
+import { StatusBadge } from "@recoder-internal/ui/status-badge";
 import type {
 	GenerationContextInput,
 	ParameterItem,
 	Task,
 	UploadedFileData,
 	WorkspaceId,
-} from "@giselles-ai/protocol";
+} from "@recoder/protocol";
 import { Check, FilePenLineIcon } from "lucide-react";
 import Link from "next/link";
 import { TaskInputString } from "./task-input-string";
@@ -205,7 +205,7 @@ function TaskInputItem({ item }: { item: ParameterItem }) {
 							{item.value.length}/{item.value.length} ready
 						</span>
 					</div>
-					{item.value.map((file) => (
+					{item.value.map((file: UploadedFileData) => (
 						<TaskInputItemFile key={file.id} file={file} />
 					))}
 				</div>
@@ -298,7 +298,7 @@ export function TaskHeader({
 						{input == null ? (
 							<p>No task input</p>
 						) : input.type === "parameters" ? (
-							input.items.map((item) => (
+							input.items.map((item: ParameterItem) => (
 								<TaskInputItem key={item.name} item={item} />
 							))
 						) : input.type === "github-webhook-event" ? (

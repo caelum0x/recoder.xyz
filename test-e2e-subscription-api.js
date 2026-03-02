@@ -25,7 +25,7 @@ const CONFIG = {
     password: 'TestPassword123!',
     name: 'E2E Test User'
   },
-  databaseUrl: process.env.DATABASE_URL || 'postgresql://neondb_owner:npg_LDgwo1PRFh2J@ep-rapid-queen-abgrjesz-pooler.eu-west-2.aws.neon.tech/neondb?sslmode=require'
+  databaseUrl: process.env.DATABASE_URL
 };
 
 class E2ESubscriptionTest {

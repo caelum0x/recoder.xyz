@@ -1,5 +1,5 @@
 import { createGateway } from "@ai-sdk/gateway";
-import type { EmbeddingProfile } from "@giselles-ai/protocol";
+import type { EmbeddingProfile } from "@recoder/protocol";
 import { createAiSdkEmbedder, type EmbedderConfig } from "./ai-sdk-embedder";
 import type { EmbedderFunction } from "./types";
 

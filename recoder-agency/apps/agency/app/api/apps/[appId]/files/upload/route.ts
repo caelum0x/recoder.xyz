@@ -2,7 +2,7 @@ import {
 	AppId,
 	createUploadedFileData,
 	createUploadingFileData,
-} from "@giselles-ai/protocol";
+} from "@recoder/protocol";
 import { eq } from "drizzle-orm";
 import type { NextRequest } from "next/server";
 import { giselle } from "@/app/giselle";

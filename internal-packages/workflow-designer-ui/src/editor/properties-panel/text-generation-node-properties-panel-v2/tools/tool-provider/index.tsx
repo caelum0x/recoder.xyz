@@ -1,5 +1,5 @@
-import type { LanguageModelToolName } from "@giselles-ai/language-model-registry";
-import type { ContentGenerationNode } from "@giselles-ai/protocol";
+import type { LanguageModelToolName } from "@recoder/language-model-registry";
+import type { ContentGenerationNode } from "@recoder/protocol";
 import { DatabaseIcon, GlobeIcon } from "lucide-react";
 import type { ReactNode } from "react";
 import { GitHubIcon } from "../../../../../icons";

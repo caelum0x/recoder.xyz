@@ -1,0 +1,37 @@
+name: Branding Drift Scan
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  branding-scan:
+    name: Legacy Branding Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run branding drift scanner
+        run: |
+          chmod +x tools/branding-drift-scanner/scan.sh
+          tools/branding-drift-scanner/scan.sh --verbose
+
+      - name: Write summary
+        if: always()
+        run: |
+          echo "## Branding Drift Scan" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Result: ${{ job.status }}" >> "$GITHUB_STEP_SUMMARY"
+          if [ "${{ job.status }}" = "failure" ]; then
+            echo "- **Legacy branding terms were found.** Please replace them with Recoder branding before merging." >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "### Scanned Terms" >> "$GITHUB_STEP_SUMMARY"
+            echo "- \`kortix\`" >> "$GITHUB_STEP_SUMMARY"
+            echo "- \`suna\`" >> "$GITHUB_STEP_SUMMARY"
+            echo "- \`bolt.new\` / \`bolt-elements\`" >> "$GITHUB_STEP_SUMMARY"
+            echo "- \`codecraft\`" >> "$GITHUB_STEP_SUMMARY"
+            echo "- \`giselle.ai\`" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "- No legacy branding drift detected." >> "$GITHUB_STEP_SUMMARY"
+          fi

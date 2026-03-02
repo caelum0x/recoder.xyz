@@ -6,7 +6,7 @@
 
 import type { VaultDriver, EncryptOptions, StoredSecret, SecretMetadata } from './types';
 import { generateSecretId } from './crypto-utils';
-import { noopVaultDriver as giselleNoopVaultDriver } from '@giselles-ai/vault';
+import { noopVaultDriver as giselleNoopVaultDriver } from '@recoder/vault';
 
 /**
  * In-memory storage for secrets (stores plaintext)

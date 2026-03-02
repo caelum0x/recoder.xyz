@@ -1,5 +1,5 @@
-import { Button } from "@giselle-internal/ui/button";
-import { EmptyState } from "@giselle-internal/ui/empty-state";
+import { Button } from "@recoder-internal/ui/button";
+import { EmptyState } from "@recoder-internal/ui/empty-state";
 import {
 	Table,
 	TableBody,
@@ -7,7 +7,7 @@ import {
 	TableHead,
 	TableHeader,
 	TableRow,
-} from "@giselle-internal/ui/table";
+} from "@recoder-internal/ui/table";
 import { LoaderIcon, RefreshCcwIcon } from "lucide-react";
 import useSWR from "swr";
 import { useAppDesignerStore } from "../../app-designer";

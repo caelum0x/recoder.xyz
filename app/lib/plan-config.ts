@@ -65,7 +65,7 @@ export const PLAN_LIMITS: Record<PlanType, PlanLimits> = {
   
   pro: {
     sessionsPerDay: 6, // 6 sessions per day
-    requiresOwnApiKey: false, // Platform provides API keys
+    requiresOwnApiKey: true, // BYOK-only beta: all users must provide own keys
     features: [
       'cli_access',
       'web_interface',
@@ -89,7 +89,7 @@ export const PLAN_LIMITS: Record<PlanType, PlanLimits> = {
   
   enterprise: {
     sessionsPerDay: 20, // 20 sessions per day
-    requiresOwnApiKey: false, // Platform provides API keys
+    requiresOwnApiKey: true, // BYOK-only beta: all users must provide own keys
     features: [
       'everything',
       'unlimited_sessions',
@@ -227,7 +227,7 @@ export const PLAN_PRICING = {
       'Premium models included',
       '100K tokens/day for premium models',
       'Free models unlimited',
-      'No API key required',
+      'BYOK: Bring your own API key',
       'Priority support',
       'Code export',
       'Analytics dashboard'
@@ -244,7 +244,7 @@ export const PLAN_PRICING = {
       'Premium models included',
       '500K tokens/day for premium models',
       'Free models unlimited',
-      'No API key required',
+      'BYOK: Bring your own API key',
       'Dedicated support',
       'SLA guarantee',
       'Advanced security',

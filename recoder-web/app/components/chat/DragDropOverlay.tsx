@@ -68,13 +68,13 @@ export const DragDropOverlay = memo(({
   const getTextColor = () => {
     if (isInvalid) return 'text-red-600 dark:text-red-400';
     if (isValid) return 'text-green-600 dark:text-green-400';
-    return 'text-bolt-elements-textPrimary';
+    return 'text-recoder-elements-textPrimary';
   };
 
   const getSubTextColor = () => {
     if (isInvalid) return 'text-red-500/70 dark:text-red-400/70';
     if (isValid) return 'text-green-500/70 dark:text-green-400/70';
-    return 'text-bolt-elements-textSecondary';
+    return 'text-recoder-elements-textSecondary';
   };
 
   const defaultMessage = isInvalid ? 'Unsupported file type' : 'Drop files to attach';
@@ -109,8 +109,8 @@ export const DragDropOverlay = memo(({
       {/* Content card */}
       <div
         className={classNames(
-          'relative bg-bolt-elements-background-depth-1 px-8 py-6 rounded-xl',
-          'shadow-lg border border-bolt-elements-borderColor',
+          'relative bg-recoder-elements-background-depth-1 px-8 py-6 rounded-xl',
+          'shadow-lg border border-recoder-elements-borderColor',
           'text-center transform',
           'animate-bounce-subtle',
         )}
@@ -155,7 +155,7 @@ export const DragDropOverlay = memo(({
 
         {/* Size limits info */}
         {!isInvalid && (
-          <p className="text-xs text-bolt-elements-textTertiary mt-2 opacity-70">
+          <p className="text-xs text-recoder-elements-textTertiary mt-2 opacity-70">
             Max {formatFileSize(MAX_FILE_SIZE)} per file, {formatFileSize(MAX_TOTAL_SIZE)} total
           </p>
         )}

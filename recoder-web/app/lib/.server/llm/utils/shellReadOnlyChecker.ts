@@ -4,7 +4,6 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-// @ts-ignore - shell-quote types not available
 import { parse } from 'shell-quote';
 import {
   detectCommandSubstitution,

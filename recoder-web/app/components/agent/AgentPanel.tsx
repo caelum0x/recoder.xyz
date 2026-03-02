@@ -31,15 +31,15 @@ export const AgentPanel = memo(() => {
   const wasInterrupted = session.phase === 'interrupted';
 
   return (
-    <div className="flex flex-col h-full bg-bolt-elements-background-depth-1 border-l border-bolt-elements-borderColor">
+    <div className="flex flex-col h-full bg-recoder-elements-background-depth-1 border-l border-recoder-elements-borderColor">
       {/* Header */}
-      <div className="flex items-center gap-2 px-3 py-2.5 border-b border-bolt-elements-borderColor">
+      <div className="flex items-center gap-2 px-3 py-2.5 border-b border-recoder-elements-borderColor">
         <div className="i-ph:robot text-lg text-purple-400" />
         <div className="flex-1 min-w-0">
-          <h3 className="text-xs font-medium text-bolt-elements-textPrimary truncate">
+          <h3 className="text-xs font-medium text-recoder-elements-textPrimary truncate">
             Agent Mode
           </h3>
-          <p className="text-[10px] text-bolt-elements-textTertiary truncate">
+          <p className="text-[10px] text-recoder-elements-textTertiary truncate">
             {session.prompt.slice(0, 60)}{session.prompt.length > 60 ? '...' : ''}
           </p>
         </div>
@@ -52,7 +52,7 @@ export const AgentPanel = memo(() => {
             isReviewable && 'bg-green-500/15 text-green-400',
             hasError && 'bg-red-500/15 text-red-400',
             wasInterrupted && 'bg-yellow-500/15 text-yellow-400',
-            session.phase === 'idle' && 'bg-bolt-elements-background-depth-3 text-bolt-elements-textTertiary',
+            session.phase === 'idle' && 'bg-recoder-elements-background-depth-3 text-recoder-elements-textTertiary',
           )}
         >
           {session.phase === 'reviewing' ? 'Review' :
@@ -64,20 +64,20 @@ export const AgentPanel = memo(() => {
       {/* Scrollable content */}
       <div className="flex-1 overflow-y-auto">
         {/* Timeline */}
-        <div className="border-b border-bolt-elements-borderColor">
+        <div className="border-b border-recoder-elements-borderColor">
           <AgentTimeline steps={session.steps} currentPhase={session.phase} />
         </div>
 
         {/* Plan (when available) */}
         {session.plan && (
-          <div className="border-b border-bolt-elements-borderColor px-3 py-2">
+          <div className="border-b border-recoder-elements-borderColor px-3 py-2">
             <div className="flex items-center gap-1.5 mb-1.5">
-              <div className="i-ph:list-checks text-sm text-bolt-elements-textSecondary" />
-              <h4 className="text-xs font-medium text-bolt-elements-textPrimary">
+              <div className="i-ph:list-checks text-sm text-recoder-elements-textSecondary" />
+              <h4 className="text-xs font-medium text-recoder-elements-textPrimary">
                 {session.plan.title}
               </h4>
             </div>
-            <p className="text-[10px] text-bolt-elements-textTertiary mb-2">
+            <p className="text-[10px] text-recoder-elements-textTertiary mb-2">
               {session.plan.summary}
             </p>
             <div className="flex flex-col gap-0.5">
@@ -88,14 +88,14 @@ export const AgentPanel = memo(() => {
                       'text-[10px] mt-0.5',
                       step.status === 'complete' ? 'i-ph:check text-green-400' :
                       step.status === 'error' ? 'i-ph:x text-red-400' :
-                      'i-ph:dot-outline text-bolt-elements-textTertiary',
+                      'i-ph:dot-outline text-recoder-elements-textTertiary',
                     )}
                   />
                   <span
                     className={classNames(
                       'text-[10px]',
-                      step.status === 'complete' ? 'text-bolt-elements-textSecondary line-through' :
-                      'text-bolt-elements-textTertiary',
+                      step.status === 'complete' ? 'text-recoder-elements-textSecondary line-through' :
+                      'text-recoder-elements-textTertiary',
                     )}
                   >
                     {step.description}
@@ -108,8 +108,8 @@ export const AgentPanel = memo(() => {
 
         {/* Streaming text (during active phases) */}
         {isRunning && session.streamingText && (
-          <div className="px-3 py-2 border-b border-bolt-elements-borderColor">
-            <p className="text-[10px] text-bolt-elements-textTertiary font-mono whitespace-pre-wrap">
+          <div className="px-3 py-2 border-b border-recoder-elements-borderColor">
+            <p className="text-[10px] text-recoder-elements-textTertiary font-mono whitespace-pre-wrap">
               {session.streamingText}
             </p>
           </div>
@@ -117,16 +117,16 @@ export const AgentPanel = memo(() => {
 
         {/* Shell commands (during execution) */}
         {session.shellCommands.length > 0 && (
-          <div className="border-b border-bolt-elements-borderColor px-3 py-2">
+          <div className="border-b border-recoder-elements-borderColor px-3 py-2">
             <div className="flex items-center gap-1.5 mb-1.5">
-              <div className="i-ph:terminal text-sm text-bolt-elements-textSecondary" />
-              <h4 className="text-xs font-medium text-bolt-elements-textPrimary">
+              <div className="i-ph:terminal text-sm text-recoder-elements-textSecondary" />
+              <h4 className="text-xs font-medium text-recoder-elements-textPrimary">
                 Commands ({session.shellCommands.length})
               </h4>
             </div>
             <div className="flex flex-col gap-1">
               {session.shellCommands.map((cmd) => (
-                <div key={cmd.id} className="bg-bolt-elements-background-depth-3 rounded px-2 py-1.5">
+                <div key={cmd.id} className="bg-recoder-elements-background-depth-3 rounded px-2 py-1.5">
                   <div className="flex items-center gap-1.5">
                     {cmd.status === 'running' ? (
                       <div className="i-ph:circle-notch animate-spin text-[10px] text-purple-400" />
@@ -135,12 +135,12 @@ export const AgentPanel = memo(() => {
                     ) : (
                       <div className="i-ph:x text-[10px] text-red-400" />
                     )}
-                    <code className="text-[10px] text-bolt-elements-textPrimary font-mono truncate">
+                    <code className="text-[10px] text-recoder-elements-textPrimary font-mono truncate">
                       $ {cmd.command}
                     </code>
                   </div>
                   {cmd.output && (
-                    <pre className="text-[9px] text-bolt-elements-textTertiary font-mono mt-1 max-h-20 overflow-auto whitespace-pre-wrap">
+                    <pre className="text-[9px] text-recoder-elements-textTertiary font-mono mt-1 max-h-20 overflow-auto whitespace-pre-wrap">
                       {cmd.output.slice(0, 500)}
                     </pre>
                   )}
@@ -152,7 +152,7 @@ export const AgentPanel = memo(() => {
 
         {/* Verification errors */}
         {session.verificationErrors.length > 0 && (
-          <div className="border-b border-bolt-elements-borderColor px-3 py-2">
+          <div className="border-b border-recoder-elements-borderColor px-3 py-2">
             <div className="flex items-center gap-1.5 mb-1.5">
               <div className="i-ph:warning text-sm text-yellow-400" />
               <h4 className="text-xs font-medium text-yellow-400">
@@ -166,7 +166,7 @@ export const AgentPanel = memo(() => {
                 </p>
               ))}
               {session.verificationErrors.length > 5 && (
-                <p className="text-[10px] text-bolt-elements-textTertiary">
+                <p className="text-[10px] text-recoder-elements-textTertiary">
                   +{session.verificationErrors.length - 5} more errors
                 </p>
               )}
@@ -177,9 +177,9 @@ export const AgentPanel = memo(() => {
         {/* Diff review (when in review phase) */}
         {(isReviewable || wasInterrupted) && session.fileChanges.length > 0 && (
           <div>
-            <div className="flex items-center gap-1.5 px-3 py-2 border-b border-bolt-elements-borderColor">
-              <div className="i-ph:git-diff text-sm text-bolt-elements-textSecondary" />
-              <h4 className="text-xs font-medium text-bolt-elements-textPrimary">
+            <div className="flex items-center gap-1.5 px-3 py-2 border-b border-recoder-elements-borderColor">
+              <div className="i-ph:git-diff text-sm text-recoder-elements-textSecondary" />
+              <h4 className="text-xs font-medium text-recoder-elements-textPrimary">
                 File Changes ({session.fileChanges.length})
               </h4>
             </div>
@@ -190,7 +190,7 @@ export const AgentPanel = memo(() => {
         {/* Stats (when complete) */}
         {(session.phase === 'complete' || session.phase === 'reviewing') && (
           <div className="px-3 py-2">
-            <div className="flex items-center gap-3 text-[10px] text-bolt-elements-textTertiary">
+            <div className="flex items-center gap-3 text-[10px] text-recoder-elements-textTertiary">
               {stats.filesCreated > 0 && (
                 <span className="text-green-400">{stats.filesCreated} created</span>
               )}

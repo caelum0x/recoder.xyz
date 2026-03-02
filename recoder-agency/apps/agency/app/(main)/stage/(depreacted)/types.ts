@@ -1,4 +1,4 @@
-import type { Trigger, TriggerId } from "@giselles-ai/protocol";
+import type { Trigger, TriggerId } from "@recoder/protocol";
 import type { InferSelectModel } from "drizzle-orm";
 import type { teams } from "@/db";
 

@@ -1,5 +1,5 @@
 {
-	"name": "@giselles-ai/logger",
+	"name": "@recoder/logger",
 	"version": "0.0.0",
 	"private": true,
 	"main": "./dist/index.js",
@@ -21,7 +21,7 @@
 		}
 	},
 	"devDependencies": {
-		"@giselles-ai/tsconfig": "workspace:*",
+		"@recoder/tsconfig": "workspace:*",
 		"tsup": "catalog:"
 	},
 	"peerDependencies": {

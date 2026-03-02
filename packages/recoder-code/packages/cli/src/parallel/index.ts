@@ -20,7 +20,7 @@ export {
   type ParallelModeInput,
   type ParallelModeParams,
   type ParallelModeResult,
-} from './parallel-mode';
+} from './parallel-mode.js';
 
 export {
   getGitInfo,
@@ -32,4 +32,4 @@ export {
   removeWorktree,
   listWorktrees,
   type GitInfo,
-} from './git-utils';
+} from './git-utils.js';

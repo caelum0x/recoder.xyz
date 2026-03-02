@@ -1,6 +1,6 @@
 "use client";
 
-import { GlassSurfaceLayers } from "@giselle-internal/ui/glass-surface";
+import { GlassSurfaceLayers } from "@recoder-internal/ui/glass-surface";
 import {
 	getEntry,
 	hasTierAccess,
@@ -10,7 +10,7 @@ import {
 	type LanguageModelProvider,
 	type LanguageModelTier,
 	languageModels as registryLanguageModels,
-} from "@giselles-ai/language-model-registry";
+} from "@recoder/language-model-registry";
 import clsx from "clsx/lite";
 import { Popover as PopoverPrimitive, ToggleGroup } from "radix-ui";
 import { useCallback, useMemo, useState } from "react";

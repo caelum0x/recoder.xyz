@@ -1,5 +1,5 @@
-import { defaultName } from "@giselles-ai/node-registry";
-import type { NodeLike, Output } from "@giselles-ai/protocol";
+import { defaultName } from "@recoder/node-registry";
+import type { NodeLike, Output } from "@recoder/protocol";
 import type { SuggestionProps } from "@tiptap/suggestion";
 import clsx from "clsx/lite";
 import {

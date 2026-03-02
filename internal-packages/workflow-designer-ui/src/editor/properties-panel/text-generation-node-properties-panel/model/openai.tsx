@@ -1,12 +1,12 @@
-import { Select } from "@giselle-internal/ui/select";
-import { Toggle } from "@giselle-internal/ui/toggle";
+import { Select } from "@recoder-internal/ui/select";
+import { Toggle } from "@recoder-internal/ui/toggle";
 import {
 	Capability,
 	hasCapability,
 	openaiLanguageModels,
-} from "@giselles-ai/language-model";
-import { OpenAILanguageModelData, type ToolSet } from "@giselles-ai/protocol";
-import { useUsageLimits } from "@giselles-ai/react";
+} from "@recoder/language-model";
+import { OpenAILanguageModelData, type ToolSet } from "@recoder/protocol";
+import { useUsageLimits } from "@recoder/react";
 import { useMemo } from "react";
 import { SettingRow } from "../../ui/setting-row";
 import {

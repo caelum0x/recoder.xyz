@@ -1,4 +1,4 @@
--- Sample Data for Bolt.new Database
+-- Sample Data for Recoder Web Database
 -- Creates test users and subscriptions for development
 
 -- Create sample users (using UUID function)

@@ -6,7 +6,13 @@
     "build": "POLAR_ACCESS_TOKEN=${POLAR_ACCESS_TOKEN:-build-time-placeholder} POLAR_WEBHOOK_SECRET=${POLAR_WEBHOOK_SECRET:-build-time-placeholder} POLAR_PRODUCT_PRO_ID=${POLAR_PRODUCT_PRO_ID:-build-time-placeholder} POLAR_PRODUCT_ENTERPRISE_ID=${POLAR_PRODUCT_ENTERPRISE_ID:-build-time-placeholder} next build",
     "analyze": "ANALYZE=true pnpm build",
     "worker": "tsx worker.ts",
-    "test:a2a": "tsx --test tests/a2a-envelope.test.ts tests/a2a-intents.test.ts",
+    "test": "pnpm run test:a2a && pnpm run test:gateway && pnpm run test:dispatch && pnpm run test:analytics && pnpm run test:agent-card",
+    "test:a2a": "node --import tsx --test tests/a2a-envelope.test.ts tests/a2a-intents.test.ts tests/a2a-parse.test.ts",
+    "test:gateway": "node --import tsx --test tests/a2a-gateway.test.ts",
+    "test:dispatch": "node --import tsx --test tests/a2a-dispatch.test.ts",
+    "test:analytics": "node --import tsx --test tests/analytics-tracker.test.ts",
+    "test:agent-card": "node --import tsx --test tests/agent-card.test.ts",
+    "test:new": "node --import tsx --test tests/a2a-gateway.test.ts tests/a2a-dispatch.test.ts tests/analytics-tracker.test.ts tests/agent-card.test.ts",
     "a2a:worker": "node scripts/a2a-intent-worker.mjs"
   },
   "dependencies": {

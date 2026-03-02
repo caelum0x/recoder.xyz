@@ -1,13 +1,13 @@
 import type {
 	CreateTaskInputs,
 	TaskExecutorOptions,
-} from "@giselles-ai/giselle";
+} from "@recoder/giselle";
 import {
 	isCancelledGeneration,
 	type NodeGenerationIndex,
 	type TaskId,
 	type WorkspaceId,
-} from "@giselles-ai/protocol";
+} from "@recoder/protocol";
 import { useCallback, useEffect } from "react";
 import useSWR from "swr";
 import { useShallow } from "zustand/shallow";

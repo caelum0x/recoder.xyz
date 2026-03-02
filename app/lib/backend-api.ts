@@ -3,6 +3,8 @@
  * Handles authenticated requests to the backend API
  */
 
+import { logger } from '@/lib/logger';
+
 const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || process.env.BACKEND_URL || 'http://localhost:3001';
 
 export interface ApiResponse<T = any> {
@@ -255,7 +257,7 @@ class BackendApiClient {
 
       return result.subscription || null;
     } catch (error) {
-      console.error('Error getting current subscription:', error);
+      logger.error('Error getting current subscription', { error: String(error) });
       return null;
     }
   }

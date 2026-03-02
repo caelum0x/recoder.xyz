@@ -35,18 +35,18 @@ function UsageBar({ type }: { type: UsageType }) {
   return (
     <div className="space-y-1">
       <div className="flex items-center justify-between text-sm">
-        <span className="text-bolt-elements-textSecondary">{formatUsageType(type)}</span>
-        <span className="text-bolt-elements-textPrimary font-medium">
+        <span className="text-recoder-elements-textSecondary">{formatUsageType(type)}</span>
+        <span className="text-recoder-elements-textPrimary font-medium">
           {formatUsageValue(type, current)}
         </span>
       </div>
-      <div className="w-full h-2 bg-bolt-elements-background-depth-3 rounded-full overflow-hidden">
+      <div className="w-full h-2 bg-recoder-elements-background-depth-3 rounded-full overflow-hidden">
         <div
           className={`h-full rounded-full transition-all duration-300 ${barColor}`}
           style={{ width: `${Math.min(percentage, 100)}%` }}
         />
       </div>
-      <div className="text-xs text-bolt-elements-textTertiary text-right">
+      <div className="text-xs text-recoder-elements-textTertiary text-right">
         {percentage.toFixed(0)}% used
       </div>
     </div>
@@ -59,9 +59,9 @@ export function UsageStats() {
   const alerts = useStore(usageAlerts);
 
   return (
-    <div className="bg-bolt-elements-background-depth-2 rounded-lg p-4 border border-bolt-elements-borderColor">
+    <div className="bg-recoder-elements-background-depth-2 rounded-lg p-4 border border-recoder-elements-borderColor">
       <div className="flex items-center justify-between mb-4">
-        <h3 className="text-lg font-medium text-bolt-elements-textPrimary">Usage</h3>
+        <h3 className="text-lg font-medium text-recoder-elements-textPrimary">Usage</h3>
         {atCritical && (
           <span className="px-2 py-0.5 text-xs bg-red-500/20 text-red-400 rounded-full">
             Critical

@@ -145,7 +145,7 @@ export async function startA2AIntentWorker(input?: { serviceId?: string }): Prom
     envelope: unknown,
     result: Record<string, unknown>,
     nextAttempt: number,
-  ): Promise<string> {
+  ): Promise<string | null> {
     return redis.xadd(
       streamKey,
       '*',

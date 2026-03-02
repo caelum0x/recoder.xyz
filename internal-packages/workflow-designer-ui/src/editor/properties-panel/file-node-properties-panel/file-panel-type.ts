@@ -1,4 +1,4 @@
-import type { FileNode } from "@giselles-ai/protocol";
+import type { FileNode } from "@recoder/protocol";
 
 export type FileTypeConfig = {
 	accept: string[];

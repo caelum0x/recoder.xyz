@@ -4,7 +4,7 @@ import {
 	isTextNode,
 	isTriggerNode,
 	isVectorStoreNode,
-} from "@giselles-ai/protocol";
+} from "@recoder/protocol";
 import { useMemo } from "react";
 import type { Source } from "./types";
 import { filterSources } from "./utils";

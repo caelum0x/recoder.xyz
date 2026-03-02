@@ -95,18 +95,18 @@ export const SettingsPanel = memo(() => {
       {/* Modal */}
       <div className="fixed inset-0 z-[101] flex items-center justify-center p-4 pointer-events-none">
         <div
-          className="w-full max-w-3xl max-h-[80vh] rounded-xl shadow-2xl pointer-events-auto flex flex-col overflow-hidden bg-bolt-elements-background-depth-1 border border-bolt-elements-borderColor"
+          className="w-full max-w-3xl max-h-[80vh] rounded-xl shadow-2xl pointer-events-auto flex flex-col overflow-hidden bg-recoder-elements-background-depth-1 border border-recoder-elements-borderColor"
           onClick={(e) => e.stopPropagation()}
         >
           {/* Header */}
-          <div className="flex items-center justify-between p-4 border-b border-bolt-elements-borderColor">
-            <h2 className="text-lg font-semibold text-bolt-elements-textPrimary flex items-center gap-2">
+          <div className="flex items-center justify-between p-4 border-b border-recoder-elements-borderColor">
+            <h2 className="text-lg font-semibold text-recoder-elements-textPrimary flex items-center gap-2">
               <div className="i-ph:gear text-xl" />
               Settings
             </h2>
             <button
               onClick={closeSettingsPanel}
-              className="p-1.5 rounded-lg text-bolt-elements-textSecondary hover:text-bolt-elements-textPrimary bg-bolt-elements-background-depth-2 hover:bg-bolt-elements-background-depth-3 transition-colors"
+              className="p-1.5 rounded-lg text-recoder-elements-textSecondary hover:text-recoder-elements-textPrimary bg-recoder-elements-background-depth-2 hover:bg-recoder-elements-background-depth-3 transition-colors"
             >
               <div className="i-ph:x text-xl" />
             </button>
@@ -115,7 +115,7 @@ export const SettingsPanel = memo(() => {
           {/* Content */}
           <div className="flex flex-1 overflow-hidden">
             {/* Sidebar */}
-            <div className="w-48 border-r border-bolt-elements-borderColor flex-shrink-0 py-2 bg-bolt-elements-background-depth-2">
+            <div className="w-48 border-r border-recoder-elements-borderColor flex-shrink-0 py-2 bg-recoder-elements-background-depth-2">
               {tabs.map((tab) => (
                 <button
                   key={tab.id}
@@ -123,8 +123,8 @@ export const SettingsPanel = memo(() => {
                   className={classNames(
                     'w-full flex items-center gap-2 px-4 py-2.5 text-sm transition-colors text-left',
                     activeTab === tab.id
-                      ? 'bg-bolt-elements-background-depth-3 text-bolt-elements-textPrimary'
-                      : 'text-bolt-elements-textSecondary hover:text-bolt-elements-textPrimary hover:bg-bolt-elements-background-depth-3'
+                      ? 'bg-recoder-elements-background-depth-3 text-recoder-elements-textPrimary'
+                      : 'text-recoder-elements-textSecondary hover:text-recoder-elements-textPrimary hover:bg-recoder-elements-background-depth-3'
                   )}
                 >
                   <div className={classNames(tab.icon, 'text-lg')} />
@@ -134,7 +134,7 @@ export const SettingsPanel = memo(() => {
             </div>
 
             {/* Main Content */}
-            <div className="flex-1 overflow-y-auto p-6 bg-bolt-elements-background-depth-1">
+            <div className="flex-1 overflow-y-auto p-6 bg-recoder-elements-background-depth-1">
               {activeTab === 'appearance' && (
                 <AppearanceSettings theme={theme} />
               )}
@@ -163,7 +163,7 @@ function AppearanceSettings({ theme }: { theme: 'light' | 'dark' }) {
   return (
     <div className="space-y-6">
       <div>
-        <h3 className="text-base font-medium text-bolt-elements-textPrimary mb-4">Theme</h3>
+        <h3 className="text-base font-medium text-recoder-elements-textPrimary mb-4">Theme</h3>
         <div className="flex gap-3">
           <button
             onClick={() => theme !== 'light' && toggleTheme()}
@@ -171,11 +171,11 @@ function AppearanceSettings({ theme }: { theme: 'light' | 'dark' }) {
               'flex-1 p-4 rounded-lg border-2 transition-all flex flex-col items-center gap-2',
               theme === 'light'
                 ? 'border-amber-500 bg-amber-500/10'
-                : 'border-bolt-elements-borderColor hover:border-bolt-elements-borderColor bg-black/20'
+                : 'border-recoder-elements-borderColor hover:border-recoder-elements-borderColor bg-black/20'
             )}
           >
             <div className="i-ph:sun text-2xl text-yellow-400" />
-            <span className="text-sm text-bolt-elements-textPrimary">Light</span>
+            <span className="text-sm text-recoder-elements-textPrimary">Light</span>
           </button>
           <button
             onClick={() => theme !== 'dark' && toggleTheme()}
@@ -183,17 +183,17 @@ function AppearanceSettings({ theme }: { theme: 'light' | 'dark' }) {
               'flex-1 p-4 rounded-lg border-2 transition-all flex flex-col items-center gap-2',
               theme === 'dark'
                 ? 'border-amber-500 bg-amber-500/10'
-                : 'border-bolt-elements-borderColor hover:border-bolt-elements-borderColor bg-black/20'
+                : 'border-recoder-elements-borderColor hover:border-recoder-elements-borderColor bg-black/20'
             )}
           >
             <div className="i-ph:moon-stars text-2xl text-blue-400" />
-            <span className="text-sm text-bolt-elements-textPrimary">Dark</span>
+            <span className="text-sm text-recoder-elements-textPrimary">Dark</span>
           </button>
         </div>
       </div>
 
-      <div className="pt-4 border-t border-bolt-elements-borderColor">
-        <p className="text-sm text-bolt-elements-textTertiary">
+      <div className="pt-4 border-t border-recoder-elements-borderColor">
+        <p className="text-sm text-recoder-elements-textTertiary">
           More appearance options coming soon, including custom accent colors and font preferences.
         </p>
       </div>
@@ -213,10 +213,10 @@ function EditorSettings({ preferences }: { preferences: typeof DEFAULT_EDITOR_PR
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h3 className="text-base font-medium text-bolt-elements-textPrimary">Editor Preferences</h3>
+        <h3 className="text-base font-medium text-recoder-elements-textPrimary">Editor Preferences</h3>
         <button
           onClick={handleResetAll}
-          className="text-xs text-bolt-elements-textSecondary hover:text-bolt-elements-textPrimary transition-colors px-2 py-1 rounded hover:bg-bolt-elements-background-depth-3"
+          className="text-xs text-recoder-elements-textSecondary hover:text-recoder-elements-textPrimary transition-colors px-2 py-1 rounded hover:bg-recoder-elements-background-depth-3"
         >
           Reset to defaults
         </button>
@@ -252,7 +252,7 @@ function EditorSettings({ preferences }: { preferences: typeof DEFAULT_EDITOR_PR
             onChange={(e) => updateEditorPreferences({ fontSize: parseInt(e.target.value) })}
             className="w-24 accent-amber-500"
           />
-          <span className="text-sm text-bolt-elements-textPrimary w-8">{preferences.fontSize}px</span>
+          <span className="text-sm text-recoder-elements-textPrimary w-8">{preferences.fontSize}px</span>
         </div>
       </SettingRow>
 
@@ -264,7 +264,7 @@ function EditorSettings({ preferences }: { preferences: typeof DEFAULT_EDITOR_PR
         <select
           value={preferences.tabSize}
           onChange={(e) => updateEditorPreferences({ tabSize: parseInt(e.target.value) })}
-          className="px-3 py-1.5 rounded-lg bg-black/40 border border-bolt-elements-borderColor text-bolt-elements-textPrimary text-sm focus:outline-none focus:border-amber-500"
+          className="px-3 py-1.5 rounded-lg bg-black/40 border border-recoder-elements-borderColor text-recoder-elements-textPrimary text-sm focus:outline-none focus:border-amber-500"
         >
           <option value={2}>2 spaces</option>
           <option value={4}>4 spaces</option>
@@ -350,8 +350,8 @@ function EditorSettings({ preferences }: { preferences: typeof DEFAULT_EDITOR_PR
       </SettingRow>
 
       {/* Divider for Advanced Settings */}
-      <div className="pt-4 border-t border-bolt-elements-borderColor">
-        <h4 className="text-sm font-medium text-bolt-elements-textSecondary mb-4">Advanced Settings</h4>
+      <div className="pt-4 border-t border-recoder-elements-borderColor">
+        <h4 className="text-sm font-medium text-recoder-elements-textSecondary mb-4">Advanced Settings</h4>
       </div>
 
       {/* Show Diagnostics */}
@@ -384,7 +384,7 @@ function EditorSettings({ preferences }: { preferences: typeof DEFAULT_EDITOR_PR
         <select
           value={editorConfig.cursorBlinking}
           onChange={(e) => updateEditorConfig({ cursorBlinking: e.target.value as typeof editorConfig.cursorBlinking })}
-          className="px-3 py-1.5 rounded-lg bg-black/40 border border-bolt-elements-borderColor text-bolt-elements-textPrimary text-sm focus:outline-none focus:border-amber-500"
+          className="px-3 py-1.5 rounded-lg bg-black/40 border border-recoder-elements-borderColor text-recoder-elements-textPrimary text-sm focus:outline-none focus:border-amber-500"
         >
           {CURSOR_BLINKING_OPTIONS.map((option) => (
             <option key={option.value} value={option.value}>
@@ -402,7 +402,7 @@ function EditorSettings({ preferences }: { preferences: typeof DEFAULT_EDITOR_PR
         <select
           value={editorConfig.scrollbarStyle}
           onChange={(e) => updateEditorConfig({ scrollbarStyle: e.target.value as typeof editorConfig.scrollbarStyle })}
-          className="px-3 py-1.5 rounded-lg bg-black/40 border border-bolt-elements-borderColor text-bolt-elements-textPrimary text-sm focus:outline-none focus:border-amber-500"
+          className="px-3 py-1.5 rounded-lg bg-black/40 border border-recoder-elements-borderColor text-recoder-elements-textPrimary text-sm focus:outline-none focus:border-amber-500"
         >
           {SCROLLBAR_STYLE_OPTIONS.map((option) => (
             <option key={option.value} value={option.value}>
@@ -427,7 +427,7 @@ function EditorSettings({ preferences }: { preferences: typeof DEFAULT_EDITOR_PR
               onChange={(e) => updateEditorConfig({ scrollbarSize: parseInt(e.target.value) })}
               className="w-24 accent-amber-500"
             />
-            <span className="text-sm text-bolt-elements-textPrimary w-8">{editorConfig.scrollbarSize}px</span>
+            <span className="text-sm text-recoder-elements-textPrimary w-8">{editorConfig.scrollbarSize}px</span>
           </div>
         </SettingRow>
       )}
@@ -440,7 +440,7 @@ function EditorSettings({ preferences }: { preferences: typeof DEFAULT_EDITOR_PR
         <select
           value={editorConfig.renderWhitespace}
           onChange={(e) => updateEditorConfig({ renderWhitespace: e.target.value as typeof editorConfig.renderWhitespace })}
-          className="px-3 py-1.5 rounded-lg bg-black/40 border border-bolt-elements-borderColor text-bolt-elements-textPrimary text-sm focus:outline-none focus:border-amber-500"
+          className="px-3 py-1.5 rounded-lg bg-black/40 border border-recoder-elements-borderColor text-recoder-elements-textPrimary text-sm focus:outline-none focus:border-amber-500"
         >
           {WHITESPACE_RENDER_OPTIONS.map((option) => (
             <option key={option.value} value={option.value}>
@@ -480,10 +480,10 @@ function TerminalSettings({ preferences }: { preferences: typeof DEFAULT_TERMINA
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h3 className="text-base font-medium text-bolt-elements-textPrimary">Terminal Preferences</h3>
+        <h3 className="text-base font-medium text-recoder-elements-textPrimary">Terminal Preferences</h3>
         <button
           onClick={resetTerminalPreferences}
-          className="text-xs text-bolt-elements-textSecondary hover:text-bolt-elements-textPrimary transition-colors px-2 py-1 rounded hover:bg-bolt-elements-background-depth-3"
+          className="text-xs text-recoder-elements-textSecondary hover:text-recoder-elements-textPrimary transition-colors px-2 py-1 rounded hover:bg-recoder-elements-background-depth-3"
         >
           Reset to defaults
         </button>
@@ -503,7 +503,7 @@ function TerminalSettings({ preferences }: { preferences: typeof DEFAULT_TERMINA
             onChange={(e) => updateTerminalPreferences({ fontSize: parseInt(e.target.value) })}
             className="w-24 accent-amber-500"
           />
-          <span className="text-sm text-bolt-elements-textPrimary w-8">{preferences.fontSize}px</span>
+          <span className="text-sm text-recoder-elements-textPrimary w-8">{preferences.fontSize}px</span>
         </div>
       </SettingRow>
 
@@ -515,7 +515,7 @@ function TerminalSettings({ preferences }: { preferences: typeof DEFAULT_TERMINA
         <select
           value={preferences.fontFamily}
           onChange={(e) => updateTerminalPreferences({ fontFamily: e.target.value })}
-          className="px-3 py-1.5 rounded-lg bg-black/40 border border-bolt-elements-borderColor text-bolt-elements-textPrimary text-sm focus:outline-none focus:border-amber-500"
+          className="px-3 py-1.5 rounded-lg bg-black/40 border border-recoder-elements-borderColor text-recoder-elements-textPrimary text-sm focus:outline-none focus:border-amber-500"
         >
           {FONT_FAMILIES.map((font) => (
             <option key={font.value} value={font.value}>
@@ -544,7 +544,7 @@ function TerminalSettings({ preferences }: { preferences: typeof DEFAULT_TERMINA
         <select
           value={preferences.scrollback}
           onChange={(e) => updateTerminalPreferences({ scrollback: parseInt(e.target.value) })}
-          className="px-3 py-1.5 rounded-lg bg-black/40 border border-bolt-elements-borderColor text-bolt-elements-textPrimary text-sm focus:outline-none focus:border-amber-500"
+          className="px-3 py-1.5 rounded-lg bg-black/40 border border-recoder-elements-borderColor text-recoder-elements-textPrimary text-sm focus:outline-none focus:border-amber-500"
         >
           <option value={1000}>1,000 lines</option>
           <option value={5000}>5,000 lines</option>
@@ -561,10 +561,10 @@ function AISettings({ preferences }: { preferences: typeof DEFAULT_AI_PREFERENCE
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h3 className="text-base font-medium text-bolt-elements-textPrimary">AI Preferences</h3>
+        <h3 className="text-base font-medium text-recoder-elements-textPrimary">AI Preferences</h3>
         <button
           onClick={resetAIPreferences}
-          className="text-xs text-bolt-elements-textSecondary hover:text-bolt-elements-textPrimary transition-colors px-2 py-1 rounded hover:bg-bolt-elements-background-depth-3"
+          className="text-xs text-recoder-elements-textSecondary hover:text-recoder-elements-textPrimary transition-colors px-2 py-1 rounded hover:bg-recoder-elements-background-depth-3"
         >
           Reset to defaults
         </button>
@@ -584,7 +584,7 @@ function AISettings({ preferences }: { preferences: typeof DEFAULT_AI_PREFERENCE
             onChange={(e) => updateAIPreferences({ temperature: parseInt(e.target.value) / 100 })}
             className="w-24 accent-amber-500"
           />
-          <span className="text-sm text-bolt-elements-textPrimary w-10">{preferences.temperature.toFixed(2)}</span>
+          <span className="text-sm text-recoder-elements-textPrimary w-10">{preferences.temperature.toFixed(2)}</span>
         </div>
       </SettingRow>
 
@@ -596,7 +596,7 @@ function AISettings({ preferences }: { preferences: typeof DEFAULT_AI_PREFERENCE
         <select
           value={preferences.maxTokens}
           onChange={(e) => updateAIPreferences({ maxTokens: parseInt(e.target.value) })}
-          className="px-3 py-1.5 rounded-lg bg-black/40 border border-bolt-elements-borderColor text-bolt-elements-textPrimary text-sm focus:outline-none focus:border-amber-500"
+          className="px-3 py-1.5 rounded-lg bg-black/40 border border-recoder-elements-borderColor text-recoder-elements-textPrimary text-sm focus:outline-none focus:border-amber-500"
         >
           <option value={1024}>1,024 tokens</option>
           <option value={2048}>2,048 tokens</option>
@@ -617,8 +617,8 @@ function AISettings({ preferences }: { preferences: typeof DEFAULT_AI_PREFERENCE
         />
       </SettingRow>
 
-      <div className="pt-4 border-t border-bolt-elements-borderColor">
-        <p className="text-sm text-bolt-elements-textTertiary">
+      <div className="pt-4 border-t border-recoder-elements-borderColor">
+        <p className="text-sm text-recoder-elements-textTertiary">
           Model selection is available in the chat interface. These settings apply to all models.
         </p>
       </div>
@@ -630,26 +630,26 @@ function AISettings({ preferences }: { preferences: typeof DEFAULT_AI_PREFERENCE
 function ShortcutsReference() {
   return (
     <div className="space-y-6">
-      <h3 className="text-base font-medium text-bolt-elements-textPrimary">Keyboard Shortcuts</h3>
+      <h3 className="text-base font-medium text-recoder-elements-textPrimary">Keyboard Shortcuts</h3>
 
       {KEYBOARD_SHORTCUTS.map((category) => (
         <div key={category.category}>
-          <h4 className="text-sm font-medium text-bolt-elements-textSecondary mb-2">{category.category}</h4>
+          <h4 className="text-sm font-medium text-recoder-elements-textSecondary mb-2">{category.category}</h4>
           <div className="space-y-1">
             {category.shortcuts.map((shortcut, idx) => (
               <div
                 key={idx}
-                className="flex items-center justify-between py-2 px-3 rounded-lg hover:bg-bolt-elements-background-depth-2"
+                className="flex items-center justify-between py-2 px-3 rounded-lg hover:bg-recoder-elements-background-depth-2"
               >
-                <span className="text-sm text-bolt-elements-textSecondary">{shortcut.description}</span>
+                <span className="text-sm text-recoder-elements-textSecondary">{shortcut.description}</span>
                 <div className="flex items-center gap-1">
                   {shortcut.keys.map((key, keyIdx) => (
                     <span key={keyIdx}>
-                      <kbd className="px-2 py-1 text-xs rounded bg-bolt-elements-background-depth-3 text-bolt-elements-textSecondary border border-bolt-elements-borderColor">
+                      <kbd className="px-2 py-1 text-xs rounded bg-recoder-elements-background-depth-3 text-recoder-elements-textSecondary border border-recoder-elements-borderColor">
                         {key}
                       </kbd>
                       {keyIdx < shortcut.keys.length - 1 && (
-                        <span className="text-bolt-elements-textTertiary mx-0.5">+</span>
+                        <span className="text-recoder-elements-textTertiary mx-0.5">+</span>
                       )}
                     </span>
                   ))}
@@ -660,8 +660,8 @@ function ShortcutsReference() {
         </div>
       ))}
 
-      <div className="pt-4 border-t border-bolt-elements-borderColor">
-        <p className="text-sm text-bolt-elements-textTertiary">
+      <div className="pt-4 border-t border-recoder-elements-borderColor">
+        <p className="text-sm text-recoder-elements-textTertiary">
           Some shortcuts may vary based on your operating system. "Cmd" is for Mac, "Ctrl" is for Windows/Linux.
         </p>
       </div>
@@ -680,10 +680,10 @@ function SettingRow({
   children: React.ReactNode;
 }) {
   return (
-    <div className="flex items-center justify-between py-3 border-b border-bolt-elements-borderColor">
+    <div className="flex items-center justify-between py-3 border-b border-recoder-elements-borderColor">
       <div className="flex-1 mr-4">
-        <div className="text-sm font-medium text-bolt-elements-textPrimary">{label}</div>
-        <div className="text-xs text-bolt-elements-textTertiary mt-0.5">{description}</div>
+        <div className="text-sm font-medium text-recoder-elements-textPrimary">{label}</div>
+        <div className="text-xs text-recoder-elements-textTertiary mt-0.5">{description}</div>
       </div>
       {children}
     </div>
@@ -702,7 +702,7 @@ function Toggle({
       onClick={() => onChange(!enabled)}
       className={classNames(
         'relative w-11 h-6 rounded-full transition-colors',
-        enabled ? 'bg-amber-500' : 'bg-bolt-elements-background-depth-3'
+        enabled ? 'bg-amber-500' : 'bg-recoder-elements-background-depth-3'
       )}
     >
       <span

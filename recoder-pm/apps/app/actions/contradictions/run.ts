@@ -16,7 +16,11 @@ export const runContradictions = async () => {
     const aiJob = await createAiJob({
       type: "CONTRADICTIONS",
       organizationId,
-      payload: { organizationId },
+      payload: {
+        organizationId,
+        connectorId: "recoder-pm-ai",
+        traceId: crypto.randomUUID(),
+      },
     });
 
     await enqueueAiJob(

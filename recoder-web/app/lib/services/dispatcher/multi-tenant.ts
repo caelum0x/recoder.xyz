@@ -585,9 +585,8 @@ async function forwardToProductionUrl(
     method: request.method,
     headers,
     body: hasBody ? request.body : null,
-    // @ts-ignore
     duplex: 'half',
-  })
+  } as RequestInit)
 
   return fetch(forwardRequest)
 }

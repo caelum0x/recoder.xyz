@@ -1,0 +1,62 @@
+name: Tier-2 Promotion Validator
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'shared/src/a2a/rfcs/tier2/**'
+      - 'tools/a2a-interop/js/validate-tier2-promotion.mjs'
+      - 'tools/a2a-interop/js/__tests__/validate-tier2-promotion.test.mjs'
+      - 'tools/a2a-interop/README.md'
+      - 'scripts/check-tier2-promotion.sh'
+      - 'package.json'
+      - '.github/workflows/tier2-promotion-validator.yml'
+  workflow_dispatch:
+    inputs:
+      connector:
+        description: 'Tier-2 connector id (cursor|windsurf|replit|vscode-copilot|jetbrains)'
+        required: false
+        default: ''
+      assert_promotable:
+        description: 'Require promotable status in latest evidence artifacts'
+        type: boolean
+        required: false
+        default: false
+
+jobs:
+  validate-tier2:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Run validator test suite
+        run: node --test tools/a2a-interop/js/__tests__/validate-tier2-promotion.test.mjs
+
+      - name: Run checklist validation (PR mode)
+        if: github.event_name == 'pull_request'
+        run: node tools/a2a-interop/js/validate-tier2-promotion.mjs --all
+
+      - name: Run manual validation (workflow_dispatch)
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          CONNECTOR_INPUT="${{ github.event.inputs.connector }}"
+          ASSERT_PROMOTABLE="${{ github.event.inputs.assert_promotable }}"
+          if [ -n "$CONNECTOR_INPUT" ]; then
+            if [ "$ASSERT_PROMOTABLE" = "true" ]; then
+              node tools/a2a-interop/js/validate-tier2-promotion.mjs --connector "$CONNECTOR_INPUT" --assert-promotable
+            else
+              node tools/a2a-interop/js/validate-tier2-promotion.mjs --connector "$CONNECTOR_INPUT"
+            fi
+          else
+            if [ "$ASSERT_PROMOTABLE" = "true" ]; then
+              node tools/a2a-interop/js/validate-tier2-promotion.mjs --all --assert-promotable
+            else
+              node tools/a2a-interop/js/validate-tier2-promotion.mjs --all
+            fi
+          fi

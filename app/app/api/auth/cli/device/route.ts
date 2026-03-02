@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { CLIAuthService } from '@/lib/services/cli-auth.service';
+import { logger } from '@/lib/logger';
 
 /**
  * POST /api/auth/cli/device
@@ -29,7 +30,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(result, { status: 200 });
   } catch (error: any) {
-    console.error('Device code generation error:', error);
+    logger.error('Device code generation error:', { error: String(error), route: 'auth/cli/device' });
     return NextResponse.json(
       { error: 'Failed to generate device code' },
       { status: 500 }

@@ -1,4 +1,4 @@
-import { GenerationId, isRunningGeneration } from "@giselles-ai/protocol";
+import { GenerationId, isRunningGeneration } from "@recoder/protocol";
 import { logger, schemaTask as schemaJob } from "@trigger.dev/sdk";
 import type { ModelMessage } from "ai";
 import { z } from "zod/v4";

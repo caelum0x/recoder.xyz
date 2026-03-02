@@ -7,7 +7,7 @@ import {
 	TableHead,
 	TableHeader,
 	TableRow,
-} from "@giselle-internal/ui/table";
+} from "@recoder-internal/ui/table";
 import { DemoSection } from "../components/demo-section";
 import { UiPage } from "../components/ui-page";
 

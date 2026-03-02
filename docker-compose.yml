@@ -146,7 +146,7 @@ services:
     build:
       context: ./packages/web
       dockerfile: Dockerfile
-    container_name: codecraft-web
+    container_name: recoder-web
     ports:
       - "3000:3000"
     environment:
@@ -170,7 +170,7 @@ services:
   # Monitoring with Prometheus
   prometheus:
     image: prom/prometheus:latest
-    container_name: codecraft-prometheus
+    container_name: recoder-prometheus
     ports:
       - "9090:9090"
     volumes:
@@ -192,7 +192,7 @@ services:
   # Grafana Dashboard
   grafana:
     image: grafana/grafana:latest
-    container_name: codecraft-grafana
+    container_name: recoder-grafana
     ports:
       - "3003:3000"
     environment:
@@ -212,7 +212,7 @@ services:
   # IPFS Node for NFT/Blockchain examples
   ipfs:
     image: ipfs/go-ipfs:latest
-    container_name: codecraft-ipfs
+    container_name: recoder-ipfs
     ports:
       - "4001:4001"
       - "5001:5001"
@@ -228,7 +228,7 @@ services:
   # Solana Test Validator (for blockchain examples)
   solana-validator:
     image: solanalabs/solana:stable
-    container_name: codecraft-solana-validator
+    container_name: recoder-solana-validator
     ports:
       - "8899:8899"
       - "8900:8900"
@@ -251,7 +251,7 @@ services:
   # Local SMTP server for testing emails
   mailhog:
     image: mailhog/mailhog:latest
-    container_name: codecraft-mailhog
+    container_name: recoder-mailhog
     ports:
       - "1025:1025"  # SMTP
       - "8025:8025"  # Web UI

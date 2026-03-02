@@ -78,17 +78,17 @@ function HeaderActions({
   };
 
   return (
-    <div className="h-12 shrink-0 border-b border-bolt-elements-borderColor bg-bolt-elements-background-depth-2 flex items-center justify-end px-3 relative">
+    <div className="h-12 shrink-0 border-b border-recoder-elements-borderColor bg-recoder-elements-background-depth-2 flex items-center justify-end px-3 relative">
       <div className="flex items-center gap-2">
         <button
           onClick={() => setShowOptions((v) => !v)}
           disabled={!onDuplicateWorkflow || isDuplicating}
           className={classNames(
             'px-2 py-1.5 rounded-md text-xs font-medium transition-colors',
-            'border border-bolt-elements-borderColor',
+            'border border-recoder-elements-borderColor',
             (!onDuplicateWorkflow || isDuplicating)
-              ? 'opacity-60 cursor-not-allowed bg-bolt-elements-background-depth-1 text-bolt-elements-textTertiary'
-              : 'bg-bolt-elements-background-depth-1 text-bolt-elements-textSecondary hover:bg-bolt-elements-background-depth-3',
+              ? 'opacity-60 cursor-not-allowed bg-recoder-elements-background-depth-1 text-recoder-elements-textTertiary'
+              : 'bg-recoder-elements-background-depth-1 text-recoder-elements-textSecondary hover:bg-recoder-elements-background-depth-3',
           )}
           title="Duplicate options"
         >
@@ -99,19 +99,19 @@ function HeaderActions({
           disabled={!onDuplicateWorkflow || isDuplicating}
           className={classNames(
             'px-3 py-1.5 rounded-md text-xs font-medium transition-colors',
-            'border border-bolt-elements-borderColor',
+            'border border-recoder-elements-borderColor',
             (!onDuplicateWorkflow || isDuplicating)
-              ? 'opacity-60 cursor-not-allowed bg-bolt-elements-background-depth-1 text-bolt-elements-textTertiary'
-              : 'bg-bolt-elements-background-depth-1 text-bolt-elements-textSecondary hover:bg-bolt-elements-background-depth-3',
+              ? 'opacity-60 cursor-not-allowed bg-recoder-elements-background-depth-1 text-recoder-elements-textTertiary'
+              : 'bg-recoder-elements-background-depth-1 text-recoder-elements-textSecondary hover:bg-recoder-elements-background-depth-3',
           )}
         >
           {isDuplicating ? 'Duplicating...' : 'Duplicate Workflow'}
         </button>
       </div>
       {showOptions && (
-        <div className="absolute right-3 top-11 z-10 min-w-56 rounded-md border border-bolt-elements-borderColor bg-bolt-elements-background-depth-1 p-3 shadow-xl">
-          <div className="text-xs font-medium text-bolt-elements-textSecondary mb-2">Copy options</div>
-          <label className="flex items-center gap-2 text-xs text-bolt-elements-textSecondary mb-2">
+        <div className="absolute right-3 top-11 z-10 min-w-56 rounded-md border border-recoder-elements-borderColor bg-recoder-elements-background-depth-1 p-3 shadow-xl">
+          <div className="text-xs font-medium text-recoder-elements-textSecondary mb-2">Copy options</div>
+          <label className="flex items-center gap-2 text-xs text-recoder-elements-textSecondary mb-2">
             <input
               type="checkbox"
               checked={includeTriggers}
@@ -119,7 +119,7 @@ function HeaderActions({
             />
             Include triggers
           </label>
-          <label className="flex items-center gap-2 text-xs text-bolt-elements-textSecondary">
+          <label className="flex items-center gap-2 text-xs text-recoder-elements-textSecondary">
             <input
               type="checkbox"
               checked={includeSecrets}
@@ -153,7 +153,7 @@ export function Editor({
     <EditorStoreProvider workflow={currentWorkflow}>
       <div
         className={classNames(
-          'flex flex-col h-full w-full overflow-hidden bg-bolt-elements-background-depth-1',
+          'flex flex-col h-full w-full overflow-hidden bg-recoder-elements-background-depth-1',
           className
         )}
       >
@@ -164,7 +164,7 @@ export function Editor({
         <div className="flex-1 flex min-h-0">
           {/* Toolbar (Left sidebar) */}
           {showToolbar && !isReadOnly && (
-            <div className="w-16 shrink-0 border-r border-bolt-elements-borderColor bg-bolt-elements-background-depth-1">
+            <div className="w-16 shrink-0 border-r border-recoder-elements-borderColor bg-recoder-elements-background-depth-1">
               <NodeToolbar />
             </div>
           )}
@@ -181,7 +181,7 @@ export function Editor({
                 'transition-all duration-200 shadow-lg',
                 isDebuggerOpen
                   ? 'bg-accent-500 text-white'
-                  : 'bg-bolt-elements-background-depth-2 text-bolt-elements-textSecondary hover:bg-bolt-elements-background-depth-3'
+                  : 'bg-recoder-elements-background-depth-2 text-recoder-elements-textSecondary hover:bg-recoder-elements-background-depth-3'
               )}
             >
               {isDebuggerOpen ? 'Hide Debug' : 'Debug'}
@@ -194,7 +194,7 @@ export function Editor({
 
         {/* Debug Panel (Bottom) */}
         {isDebuggerOpen && (
-          <div className="h-64 shrink-0 border-t border-bolt-elements-borderColor bg-bolt-elements-background-depth-1 overflow-hidden">
+          <div className="h-64 shrink-0 border-t border-recoder-elements-borderColor bg-recoder-elements-background-depth-1 overflow-hidden">
             <DebuggerPanel />
           </div>
         )}

@@ -16,7 +16,7 @@ export interface SessionData {
 
 export class SessionSyncManager {
   private static instance: SessionSyncManager;
-  private readonly SYNC_SECRET = process.env.SESSION_SYNC_SECRET || process.env.NEXTAUTH_SECRET || process.env.JWT_SECRET;
+  private readonly SYNC_SECRET = process.env.SESSION_SYNC_SECRET || process.env.BETTER_AUTH_SECRET || process.env.NEXTAUTH_SECRET || process.env.JWT_SECRET;
   private readonly SYNC_COOKIE_NAME = 'recoder-session-sync';
   private readonly COOKIE_MAX_AGE = 30 * 24 * 60 * 60; // 30 days
 
@@ -30,7 +30,7 @@ export class SessionSyncManager {
   // Generate cross-domain sync token
   generateSyncToken(sessionData: SessionData): string {
     if (!this.SYNC_SECRET) {
-      throw new Error('JWT secret not configured. Please set SESSION_SYNC_SECRET, NEXTAUTH_SECRET, or JWT_SECRET in environment variables.');
+      throw new Error('JWT secret not configured. Please set SESSION_SYNC_SECRET, BETTER_AUTH_SECRET, or JWT_SECRET in environment variables.');
     }
 
     const payload = {
@@ -47,8 +47,8 @@ export class SessionSyncManager {
   // Generate sync URLs for cross-platform access
   generateSyncUrls(syncToken: string): string[] {
     const domains = [
-      'web.recoder.xyz',        // Bolt AI IDE
-      'frontend.recoder.xyz',   // Suna AI IDE
+      'web.recoder.xyz',        // Recoder Web IDE
+      'frontend.recoder.xyz',   // Recoder Frontend IDE
       'studio.recoder.xyz',     // Visual workflow designer
       'agency.recoder.xyz',     // AI agent workflows
       'pm.recoder.xyz',         // Project management

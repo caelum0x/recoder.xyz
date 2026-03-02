@@ -1,6 +1,6 @@
 "use client";
 
-import type { NodeLike } from "@giselles-ai/protocol";
+import type { NodeLike } from "@recoder/protocol";
 import { Trash2 as TrashIcon } from "lucide-react";
 import { IconBox } from "./icon-box";
 import { PropertiesPanelHeader } from "./properties-panel";

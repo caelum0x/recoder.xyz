@@ -2,8 +2,8 @@ import {
 	getEntry,
 	type LanguageModelId,
 	type LanguageModelTier,
-} from "@giselles-ai/language-model-registry";
-import type { ContentGenerationNode } from "@giselles-ai/protocol";
+} from "@recoder/language-model-registry";
+import type { ContentGenerationNode } from "@recoder/protocol";
 import { useCallback, useMemo } from "react";
 import { ModelPickerV2 } from "../../../../ui/model-picker-v2";
 import { SettingDetail, SettingLabel } from "../../ui/setting-label";

@@ -3,7 +3,7 @@ import type {
 	AppId,
 	ConnectedApp,
 	DisconnectedApp,
-} from "@giselles-ai/protocol";
+} from "@recoder/protocol";
 
 export type OnAppCreate = (args: { app: App }) => void | Promise<void>;
 

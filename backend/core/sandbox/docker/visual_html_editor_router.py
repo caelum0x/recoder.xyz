@@ -15,6 +15,7 @@ from fastapi.responses import HTMLResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from bs4 import BeautifulSoup, NavigableString, Comment
+from core.utils.logger import logger
 
 # Create router
 router = APIRouter(prefix="/api/html", tags=["visual-editor"])
@@ -150,7 +151,7 @@ async def get_editable_elements(file_path: str):
         return {"elements": elements}
         
     except Exception as e:
-        print(f"Error getting editable elements: {e}")
+        logger.exception(f"Error getting editable elements: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -176,7 +177,10 @@ async def edit_text(request: EditTextRequest):
         if not target_element:
             raise HTTPException(status_code=404, detail=f"Element with ID {element_id} not found")
         
-        print(f"🎯 Found element: {target_element.name} with ID {element_id} - '{target_element.get_text()[:50]}...'")
+        logger.debug(
+            f"Found element: {target_element.name} with ID {element_id} - "
+            f"'{target_element.get_text()[:50]}...'"
+        )
         
         # Simple replacement - whether it's a regular element or a wrapped text node
         if target_element.string:
@@ -190,11 +194,11 @@ async def edit_text(request: EditTextRequest):
         with open(full_path, 'w', encoding='utf-8') as f:
             f.write(str(soup))
         
-        print(f"✅ Successfully updated text in {request.file_path}: '{request.new_text}'")
+        logger.info(f"Successfully updated text in {request.file_path}")
         return {"success": True, "message": "Text updated successfully"}
         
     except Exception as e:
-        print(f"❌ Error editing text: {e}")
+        logger.exception(f"Error editing text: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -234,7 +238,10 @@ async def delete_element(request: DeleteElementRequest):
         else:
             raise HTTPException(status_code=400, detail="Invalid element selector")
         
-        print(f"🗑️ Deleting element: {target_element.name} - '{target_element.get_text()[:50]}...'")
+        logger.debug(
+            f"Deleting element: {target_element.name} - "
+            f"'{target_element.get_text()[:50]}...'"
+        )
         
         # Remove element
         target_element.decompose()
@@ -243,11 +250,11 @@ async def delete_element(request: DeleteElementRequest):
         with open(full_path, 'w', encoding='utf-8') as f:
             f.write(str(soup))
         
-        print(f"🗑️ Successfully deleted element from {request.file_path}")
+        logger.info(f"Successfully deleted element from {request.file_path}")
         return {"success": True, "message": "Element deleted successfully"}
         
     except Exception as e:
-        print(f"❌ Error deleting element: {e}")
+        logger.exception(f"Error deleting element: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -302,11 +309,11 @@ async def save_content(request: SaveContentRequest):
         with open(full_path, 'w', encoding='utf-8') as f:
             f.write(str(soup))
         
-        print(f"💾 Successfully saved content to {request.file_path}")
+        logger.info(f"Successfully saved content to {request.file_path}")
         return {"success": True, "message": "Content saved successfully"}
         
     except Exception as e:
-        print(f"❌ Error saving content: {e}")
+        logger.exception(f"Error saving content: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -330,7 +337,7 @@ async def proxy_images(file_path: str, image_path: str):
         return FileResponse(actual_image_path)
         
     except Exception as e:
-        print(f"❌ Error serving image: {e}")
+        logger.exception(f"Error serving image: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -351,7 +358,7 @@ async def get_html_editor(file_path: str):
         return HTMLResponse(content=editor_html)
         
     except Exception as e:
-        print(f"❌ Error serving editor: {e}")
+        logger.exception(f"Error serving editor: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

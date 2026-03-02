@@ -68,7 +68,7 @@ export const StatusBar = memo(({ onProblemsClick, onLanguageClick, className = '
       case 'error':
         return { icon: 'i-ph:cloud-x', color: 'text-red-400', text: 'Sync Error' };
       default:
-        return { icon: 'i-ph:cloud', color: 'text-bolt-elements-textTertiary', text: 'Unknown' };
+        return { icon: 'i-ph:cloud', color: 'text-recoder-elements-textTertiary', text: 'Unknown' };
     }
   };
 
@@ -77,7 +77,7 @@ export const StatusBar = memo(({ onProblemsClick, onLanguageClick, className = '
   return (
     <div
       className={classNames(
-        'flex items-center justify-between px-2 py-0.5 bg-bolt-elements-background-depth-2 border-t border-bolt-elements-borderColor text-xs text-bolt-elements-textSecondary select-none',
+        'flex items-center justify-between px-2 py-0.5 bg-recoder-elements-background-depth-2 border-t border-recoder-elements-borderColor text-xs text-recoder-elements-textSecondary select-none',
         className
       )}
     >
@@ -86,7 +86,7 @@ export const StatusBar = memo(({ onProblemsClick, onLanguageClick, className = '
         {/* Git Branch */}
         {isGitInitialized && gitBranch && (
           <button
-            className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-transparent hover:bg-bolt-elements-background-depth-3 hover:text-bolt-elements-textPrimary transition-colors"
+            className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-transparent hover:bg-recoder-elements-background-depth-3 hover:text-recoder-elements-textPrimary transition-colors"
             title={`Git branch: ${gitBranch}`}
           >
             <span className="i-ph:git-branch text-purple-400" />
@@ -97,7 +97,7 @@ export const StatusBar = memo(({ onProblemsClick, onLanguageClick, className = '
         {/* Sync Status */}
         <button
           className={classNames(
-            'flex items-center gap-1 px-1.5 py-0.5 rounded bg-transparent hover:bg-bolt-elements-background-depth-3 transition-colors',
+            'flex items-center gap-1 px-1.5 py-0.5 rounded bg-transparent hover:bg-recoder-elements-background-depth-3 transition-colors',
             syncDisplay.color
           )}
           title={syncDisplay.text}
@@ -110,15 +110,15 @@ export const StatusBar = memo(({ onProblemsClick, onLanguageClick, className = '
         <button
           onClick={onProblemsClick}
           className={classNames(
-            'flex items-center gap-2 px-1.5 py-0.5 rounded bg-transparent hover:bg-bolt-elements-background-depth-3 transition-colors',
-            errorCount > 0 ? 'hover:text-bolt-elements-textPrimary' : ''
+            'flex items-center gap-2 px-1.5 py-0.5 rounded bg-transparent hover:bg-recoder-elements-background-depth-3 transition-colors',
+            errorCount > 0 ? 'hover:text-recoder-elements-textPrimary' : ''
           )}
           title={`${criticalErrorCount} error(s), ${warningCount} warning(s)`}
         >
           {/* Errors */}
           <span className={classNames(
             'flex items-center gap-0.5',
-            criticalErrorCount > 0 ? 'text-red-400' : 'text-bolt-elements-textTertiary'
+            criticalErrorCount > 0 ? 'text-red-400' : 'text-recoder-elements-textTertiary'
           )}>
             <span className="i-ph:x-circle" />
             <span>{criticalErrorCount}</span>
@@ -127,7 +127,7 @@ export const StatusBar = memo(({ onProblemsClick, onLanguageClick, className = '
           {/* Warnings */}
           <span className={classNames(
             'flex items-center gap-0.5',
-            warningCount > 0 ? 'text-yellow-400' : 'text-bolt-elements-textTertiary'
+            warningCount > 0 ? 'text-yellow-400' : 'text-recoder-elements-textTertiary'
           )}>
             <span className="i-ph:warning" />
             <span>{warningCount}</span>
@@ -139,7 +139,7 @@ export const StatusBar = memo(({ onProblemsClick, onLanguageClick, className = '
       <div className="flex items-center gap-2">
         {/* Line:Column */}
         <button
-          className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-transparent hover:bg-bolt-elements-background-depth-3 hover:text-bolt-elements-textPrimary transition-colors font-mono"
+          className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-transparent hover:bg-recoder-elements-background-depth-3 hover:text-recoder-elements-textPrimary transition-colors font-mono"
           title={cursorPosition.selection
             ? `${cursorPosition.selection.selectedLines} lines, ${cursorPosition.selection.selectedChars} characters selected`
             : 'Go to Line'
@@ -160,7 +160,7 @@ export const StatusBar = memo(({ onProblemsClick, onLanguageClick, className = '
               setShowIndentPicker(!showIndentPicker);
               setShowEolPicker(false);
             }}
-            className="px-1.5 py-0.5 rounded bg-transparent hover:bg-bolt-elements-background-depth-3 hover:text-bolt-elements-textPrimary transition-colors"
+            className="px-1.5 py-0.5 rounded bg-transparent hover:bg-recoder-elements-background-depth-3 hover:text-recoder-elements-textPrimary transition-colors"
             title={`${fileMetadata.language} · Click for editor info`}
           >
             {fileMetadata.language}
@@ -173,15 +173,15 @@ export const StatusBar = memo(({ onProblemsClick, onLanguageClick, className = '
                 className="fixed inset-0 z-40"
                 onClick={() => setShowIndentPicker(false)}
               />
-              <div className="absolute bottom-full right-0 mb-1 py-1 bg-bolt-elements-background-depth-1 border border-bolt-elements-borderColor rounded-lg shadow-lg z-50 min-w-[180px]">
+              <div className="absolute bottom-full right-0 mb-1 py-1 bg-recoder-elements-background-depth-1 border border-recoder-elements-borderColor rounded-lg shadow-lg z-50 min-w-[180px]">
                 {/* Indent section */}
-                <div className="px-2 py-1 text-[10px] text-bolt-elements-textTertiary uppercase tracking-wider">
+                <div className="px-2 py-1 text-[10px] text-recoder-elements-textTertiary uppercase tracking-wider">
                   Indent Using
                 </div>
                 <button
                   onClick={() => handleIndentChange('Spaces', 2)}
                   className={classNames(
-                    'w-full px-3 py-1.5 text-left hover:bg-bolt-elements-background-depth-3 transition-colors text-bolt-elements-textSecondary hover:text-bolt-elements-textPrimary',
+                    'w-full px-3 py-1.5 text-left hover:bg-recoder-elements-background-depth-3 transition-colors text-recoder-elements-textSecondary hover:text-recoder-elements-textPrimary',
                     fileMetadata.indentType === 'Spaces' && fileMetadata.indentSize === 2 ? 'text-blue-400' : ''
                   )}
                 >
@@ -190,7 +190,7 @@ export const StatusBar = memo(({ onProblemsClick, onLanguageClick, className = '
                 <button
                   onClick={() => handleIndentChange('Spaces', 4)}
                   className={classNames(
-                    'w-full px-3 py-1.5 text-left hover:bg-bolt-elements-background-depth-3 transition-colors text-bolt-elements-textSecondary hover:text-bolt-elements-textPrimary',
+                    'w-full px-3 py-1.5 text-left hover:bg-recoder-elements-background-depth-3 transition-colors text-recoder-elements-textSecondary hover:text-recoder-elements-textPrimary',
                     fileMetadata.indentType === 'Spaces' && fileMetadata.indentSize === 4 ? 'text-blue-400' : ''
                   )}
                 >
@@ -199,7 +199,7 @@ export const StatusBar = memo(({ onProblemsClick, onLanguageClick, className = '
                 <button
                   onClick={() => handleIndentChange('Tabs', 1)}
                   className={classNames(
-                    'w-full px-3 py-1.5 text-left hover:bg-bolt-elements-background-depth-3 transition-colors text-bolt-elements-textSecondary hover:text-bolt-elements-textPrimary',
+                    'w-full px-3 py-1.5 text-left hover:bg-recoder-elements-background-depth-3 transition-colors text-recoder-elements-textSecondary hover:text-recoder-elements-textPrimary',
                     fileMetadata.indentType === 'Tabs' ? 'text-blue-400' : ''
                   )}
                 >
@@ -207,24 +207,24 @@ export const StatusBar = memo(({ onProblemsClick, onLanguageClick, className = '
                 </button>
 
                 {/* Encoding section */}
-                <div className="border-t border-bolt-elements-borderColor mt-1 pt-1">
-                  <div className="px-2 py-1 text-[10px] text-bolt-elements-textTertiary uppercase tracking-wider">
+                <div className="border-t border-recoder-elements-borderColor mt-1 pt-1">
+                  <div className="px-2 py-1 text-[10px] text-recoder-elements-textTertiary uppercase tracking-wider">
                     Encoding
                   </div>
-                  <div className="px-3 py-1.5 text-bolt-elements-textSecondary text-sm">
+                  <div className="px-3 py-1.5 text-recoder-elements-textSecondary text-sm">
                     {fileMetadata.encoding}
                   </div>
                 </div>
 
                 {/* EOL section */}
-                <div className="border-t border-bolt-elements-borderColor mt-1 pt-1">
-                  <div className="px-2 py-1 text-[10px] text-bolt-elements-textTertiary uppercase tracking-wider">
+                <div className="border-t border-recoder-elements-borderColor mt-1 pt-1">
+                  <div className="px-2 py-1 text-[10px] text-recoder-elements-textTertiary uppercase tracking-wider">
                     Line Ending
                   </div>
                   <button
                     onClick={() => handleEolChange('LF')}
                     className={classNames(
-                      'w-full px-3 py-1.5 text-left hover:bg-bolt-elements-background-depth-3 transition-colors text-bolt-elements-textSecondary hover:text-bolt-elements-textPrimary',
+                      'w-full px-3 py-1.5 text-left hover:bg-recoder-elements-background-depth-3 transition-colors text-recoder-elements-textSecondary hover:text-recoder-elements-textPrimary',
                       fileMetadata.eol === 'LF' ? 'text-blue-400' : ''
                     )}
                   >
@@ -233,7 +233,7 @@ export const StatusBar = memo(({ onProblemsClick, onLanguageClick, className = '
                   <button
                     onClick={() => handleEolChange('CRLF')}
                     className={classNames(
-                      'w-full px-3 py-1.5 text-left hover:bg-bolt-elements-background-depth-3 transition-colors text-bolt-elements-textSecondary hover:text-bolt-elements-textPrimary',
+                      'w-full px-3 py-1.5 text-left hover:bg-recoder-elements-background-depth-3 transition-colors text-recoder-elements-textSecondary hover:text-recoder-elements-textPrimary',
                       fileMetadata.eol === 'CRLF' ? 'text-blue-400' : ''
                     )}
                   >

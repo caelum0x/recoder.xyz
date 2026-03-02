@@ -2,7 +2,7 @@ import type {
 	Generation,
 	GenerationOrigin,
 	NodeId,
-} from "@giselles-ai/protocol";
+} from "@recoder/protocol";
 import { useCallback, useEffect, useMemo } from "react";
 import useSWR from "swr";
 import { useShallow } from "zustand/shallow";

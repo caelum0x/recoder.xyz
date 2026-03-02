@@ -1,4 +1,4 @@
-import { AppId } from "@giselles-ai/protocol";
+import { AppId } from "@recoder/protocol";
 import * as z from "zod/v4";
 import { appPath } from "../path";
 import { createGiselleFunction } from "../utils/create-giselle-function";

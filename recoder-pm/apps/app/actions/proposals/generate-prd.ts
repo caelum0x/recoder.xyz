@@ -13,7 +13,12 @@ export const generateProposalPrdAction = async (proposalId: string) => {
       throw new Error("Not authenticated");
     }
 
-    const payload = { proposalId, organizationId };
+    const payload = {
+      proposalId,
+      organizationId,
+      connectorId: "recoder-pm-ai",
+      traceId: crypto.randomUUID(),
+    };
 
     const aiJob = await createAiJob({
       type: "PROPOSAL_PRD",

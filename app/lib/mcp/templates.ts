@@ -1,4 +1,5 @@
 import type { MCPServerConfig } from './client';
+import { logger } from '@/lib/logger';
 
 export interface MCPServerTemplate {
   id: string;
@@ -70,7 +71,7 @@ export async function applyTemplate(
       await installServer(userId, serverId);
       installed.push(serverId);
     } catch (error) {
-      console.error(`Failed to install ${serverId}:`, error);
+      logger.error('Failed to install server', { serverId: String(serverId), error: String(error) });
       failed.push(serverId);
     }
   }

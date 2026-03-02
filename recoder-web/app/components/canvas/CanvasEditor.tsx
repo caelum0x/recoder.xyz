@@ -53,7 +53,7 @@ export function CanvasEditor() {
           />
         </div>
         
-        <div className="w-64 border-l border-bolt-elements-borderColor bg-bolt-elements-background-depth-2 overflow-auto">
+        <div className="w-64 border-l border-recoder-elements-borderColor bg-recoder-elements-background-depth-2 overflow-auto">
           <PropertyPanel
             element={selectedElement}
             onUpdate={handleUpdateStyles}

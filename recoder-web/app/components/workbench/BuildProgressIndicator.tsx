@@ -132,10 +132,10 @@ export function BuildProgressIndicator() {
           }}
         >
           <div
-            className="flex items-center gap-2 px-3 py-1.5 rounded-b-lg border border-t-0 border-bolt-elements-borderColor shadow-sm pointer-events-auto"
+            className="flex items-center gap-2 px-3 py-1.5 rounded-b-lg border border-t-0 border-recoder-elements-borderColor shadow-sm pointer-events-auto"
             style={{
               maxHeight: '32px',
-              backgroundColor: 'var(--bolt-elements-background-depth-2)',
+              backgroundColor: 'var(--recoder-elements-background-depth-2)',
             }}
           >
             {/* Phase icon */}
@@ -152,7 +152,7 @@ export function BuildProgressIndicator() {
 
             {/* Progress bar (indeterminate for non-ready phases) */}
             {derivedPhase !== 'ready' && (
-              <div className="flex-1 h-1 rounded-full overflow-hidden bg-bolt-elements-background-depth-3 min-w-[60px] max-w-[200px]">
+              <div className="flex-1 h-1 rounded-full overflow-hidden bg-recoder-elements-background-depth-3 min-w-[60px] max-w-[200px]">
                 <motion.div
                   className={`h-full rounded-full ${getProgressBarColor(derivedPhase)}`}
                   initial={{ x: '-100%' }}
@@ -169,7 +169,7 @@ export function BuildProgressIndicator() {
 
             {/* File count badge (during creation) */}
             {derivedPhase === 'creating' && buildStatus.filesCreated && buildStatus.filesCreated > 0 && (
-              <span className="text-[10px] text-bolt-elements-textTertiary tabular-nums">
+              <span className="text-[10px] text-recoder-elements-textTertiary tabular-nums">
                 {buildStatus.filesCreated} file{buildStatus.filesCreated !== 1 ? 's' : ''}
               </span>
             )}
@@ -221,7 +221,7 @@ function getPhaseTextColor(phase: Phase): string {
     case 'ready':
       return 'text-green-400';
     default:
-      return 'text-bolt-elements-textSecondary';
+      return 'text-recoder-elements-textSecondary';
   }
 }
 
@@ -234,6 +234,6 @@ function getProgressBarColor(phase: Phase): string {
     case 'starting':
       return 'bg-purple-400';
     default:
-      return 'bg-bolt-elements-textTertiary';
+      return 'bg-recoder-elements-textTertiary';
   }
 }

@@ -1,7 +1,7 @@
 import {
 	EMBEDDING_PROFILES,
 	type EmbeddingProfileId,
-} from "@giselles-ai/protocol";
+} from "@recoder/protocol";
 import type { ChunkStore } from "../chunk-store/types";
 import { createDefaultChunker } from "../chunker";
 import type { ChunkerFunction } from "../chunker/types";

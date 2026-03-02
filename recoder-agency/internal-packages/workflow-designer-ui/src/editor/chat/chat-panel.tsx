@@ -40,7 +40,7 @@ const renderMessageWithUrls = (content: string) => {
 					target="_blank"
 					rel="noopener noreferrer"
 					title={displayUrl}
-					className="underline text-[#6B8FF0] hover:text-[#5A7EE8] transition-colors duration-200 break-all"
+					className="underline text-[#f97316] hover:text-[#ea580c] transition-colors duration-200 break-all"
 				>
 					{displayUrl}
 				</a>
@@ -61,9 +61,9 @@ export function ChatPanel() {
 	// Demo message patterns
 	const demoMessages = [
 		// Long message
-		"Thanks for your question! I'll help you with that. For more information about nodes, check out our documentation at https://docs.giselles.ai/en/glossary/node or visit our GitHub repository at https://github.com/giselles-ai/giselle for examples. You can also explore different node types, configure their settings, and connect them to build powerful workflows. Feel free to experiment with the visual editor and don't hesitate to ask if you need guidance!",
+		"Thanks for your question! I'll help you with that. For more information about nodes, check out our documentation at https://docs.recoder.xyz/en/glossary/node or visit our GitHub repository at https://github.com/recoder-xyz/recoder for examples. You can also explore different node types, configure their settings, and connect them to build powerful workflows. Feel free to experiment with the visual editor and don't hesitate to ask if you need guidance!",
 		// Short message
-		"Got it! Check our docs at https://docs.giselles.ai/en/glossary/node for more info.",
+		"Got it! Check our docs at https://docs.recoder.xyz/en/glossary/node for more info.",
 		// Greeting message
 		"Hello! 👋 I'm here to help you with your workflow. What would you like to know about nodes and connections?",
 	];

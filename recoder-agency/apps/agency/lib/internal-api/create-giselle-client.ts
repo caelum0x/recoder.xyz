@@ -1,6 +1,6 @@
 "use client";
 
-import type { GiselleClient } from "@giselles-ai/react";
+import type { GiselleClient } from "@recoder/react";
 import * as internalApi from "@/lib/internal-api";
 
 export function createInternalGiselleClient(): GiselleClient {

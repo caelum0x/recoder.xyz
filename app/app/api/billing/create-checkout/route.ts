@@ -7,10 +7,16 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from "@/lib/auth-helpers";
 import { auth } from '@/lib/auth-config';
 import { headers } from 'next/headers';
+import { rateLimit, rateLimitConfigs } from '@/lib/middleware/rate-limit';
+import { logger } from '@/lib/logger';
 
+const billingRateLimiter = rateLimit(rateLimitConfigs.billing);
 
 export async function POST(request: NextRequest) {
   try {
+    const rateLimitResponse = await billingRateLimiter(request);
+    if (rateLimitResponse) return rateLimitResponse;
+
     const authResult = await requireAuth();
     if (authResult.error) return authResult.response;
     const { user } = authResult;
@@ -48,7 +54,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const baseUrl = process.env.NEXTAUTH_URL || 'https://recoder.xyz';
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://recoder.xyz';
 
     if (paymentMethod === 'paddle') {
       // Paddle integration
@@ -56,7 +62,7 @@ export async function POST(request: NextRequest) {
       const paddleAuthCode = process.env.PADDLE_AUTH_CODE;
 
       if (!paddleVendorId || !paddleAuthCode) {
-        console.warn('Paddle credentials not configured');
+        logger.warn('Paddle credentials not configured', { route: 'api/billing/create-checkout' });
         return NextResponse.json(
           { error: 'Payment provider not configured. Please contact support.' },
           { status: 503 }
@@ -99,7 +105,7 @@ export async function POST(request: NextRequest) {
       const dodoApiKey = process.env.DODO_API_KEY;
 
       if (!dodoApiKey) {
-        console.warn('DODO Payments credentials not configured');
+        logger.warn('DODO Payments credentials not configured', { route: 'api/billing/create-checkout' });
         return NextResponse.json(
           { error: 'Payment provider not configured. Please contact support.' },
           { status: 503 }
@@ -149,7 +155,7 @@ export async function POST(request: NextRequest) {
       );
     }
   } catch (error) {
-    console.error('Checkout creation error:', error);
+    logger.error('Checkout creation error', { route: 'api/billing/create-checkout', error: error instanceof Error ? error.message : String(error) });
     return NextResponse.json(
       { error: 'Failed to create checkout session' },
       { status: 500 }

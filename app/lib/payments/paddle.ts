@@ -3,6 +3,8 @@
  * Handles subscriptions and one-time payments
  */
 
+import { logger } from '@/lib/logger';
+
 export interface PaddleConfig {
   vendorId: string;
   environment: 'sandbox' | 'production';
@@ -94,7 +96,7 @@ export class PaddleService {
    */
   openCheckout(productId: string, email?: string, userId?: string) {
     if (typeof window === 'undefined' || !window.Paddle) {
-      console.error('Paddle not initialized');
+      logger.error('Paddle not initialized');
       return;
     }
 
@@ -103,12 +105,12 @@ export class PaddleService {
       email: email,
       passthrough: JSON.stringify({ userId }),
       successCallback: (data: any) => {
-        console.log('Payment successful:', data);
+        logger.info('Payment successful', { checkoutId: data?.checkout?.id });
         // Redirect to success page
         window.location.href = `/dashboard?payment=success&checkout_id=${data.checkout.id}`;
       },
       closeCallback: () => {
-        console.log('Checkout closed');
+        logger.info('Checkout closed');
       }
     });
   }

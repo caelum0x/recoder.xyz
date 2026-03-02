@@ -179,26 +179,26 @@ export default function MCPServerManager() {
       case 'connected':
         return <CheckCircle className="w-4 h-4 text-green-500" />;
       case 'disconnected':
-        return <PowerOff className="w-4 h-4 text-bolt-elements-textTertiary" />;
+        return <PowerOff className="w-4 h-4 text-recoder-elements-textTertiary" />;
       case 'error':
         return <AlertCircle className="w-4 h-4 text-red-500" />;
     }
   };
 
   return (
-    <div className="flex flex-col h-full bg-bolt-elements-background-depth-1">
+    <div className="flex flex-col h-full bg-recoder-elements-background-depth-1">
       {/* Header */}
-      <div className="border-b border-bolt-elements-borderColor p-6">
+      <div className="border-b border-recoder-elements-borderColor p-6">
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center gap-3">
             <div className="p-2 bg-gradient-to-br from-purple-500 to-pink-600 rounded-lg">
               <Server className="w-6 h-6 text-white" />
             </div>
             <div>
-              <h1 className="text-2xl font-bold text-bolt-elements-textPrimary">
+              <h1 className="text-2xl font-bold text-recoder-elements-textPrimary">
                 MCP Server Manager
               </h1>
-              <p className="text-sm text-bolt-elements-textSecondary">
+              <p className="text-sm text-recoder-elements-textSecondary">
                 Connect and manage Model Context Protocol servers
               </p>
             </div>
@@ -216,15 +216,15 @@ export default function MCPServerManager() {
       <div className="flex-1 overflow-auto p-6">
         {/* Add Server Form */}
         {showAddForm && (
-          <div className="bg-bolt-elements-background-depth-2 rounded-lg border border-bolt-elements-borderColor p-6 mb-6">
-            <h2 className="text-lg font-semibold text-bolt-elements-textPrimary mb-4">
+          <div className="bg-recoder-elements-background-depth-2 rounded-lg border border-recoder-elements-borderColor p-6 mb-6">
+            <h2 className="text-lg font-semibold text-recoder-elements-textPrimary mb-4">
               {selectedPreset ? `Add ${selectedPreset.name}` : 'Add Custom Server'}
             </h2>
 
             {/* Preset Selection */}
             {!selectedPreset && (
               <div className="mb-6">
-                <label className="block text-sm font-medium text-bolt-elements-textPrimary mb-2">
+                <label className="block text-sm font-medium text-recoder-elements-textPrimary mb-2">
                   Quick Start (Presets)
                 </label>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -232,21 +232,21 @@ export default function MCPServerManager() {
                     <button
                       key={preset.name}
                       onClick={() => handlePresetSelect(preset)}
-                      className="text-left p-4 bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor rounded-lg hover:border-blue-500 transition-colors"
+                      className="text-left p-4 bg-recoder-elements-background-depth-2 border border-recoder-elements-borderColor rounded-lg hover:border-blue-500 transition-colors"
                     >
-                      <div className="font-medium text-bolt-elements-textPrimary mb-1">
+                      <div className="font-medium text-recoder-elements-textPrimary mb-1">
                         {preset.name}
                       </div>
-                      <div className="text-xs text-bolt-elements-textSecondary">
+                      <div className="text-xs text-recoder-elements-textSecondary">
                         {preset.description}
                       </div>
                     </button>
                   ))}
                 </div>
                 <div className="my-4 flex items-center gap-2">
-                  <div className="flex-1 h-px" style={{ backgroundColor: 'var(--bolt-elements-bg-depth-3)' }}></div>
-                  <span className="text-sm text-bolt-elements-textTertiary">or custom</span>
-                  <div className="flex-1 h-px" style={{ backgroundColor: 'var(--bolt-elements-bg-depth-3)' }}></div>
+                  <div className="flex-1 h-px" style={{ backgroundColor: 'var(--recoder-elements-bg-depth-3)' }}></div>
+                  <span className="text-sm text-recoder-elements-textTertiary">or custom</span>
+                  <div className="flex-1 h-px" style={{ backgroundColor: 'var(--recoder-elements-bg-depth-3)' }}></div>
                 </div>
               </div>
             )}
@@ -254,7 +254,7 @@ export default function MCPServerManager() {
             {/* Form Fields */}
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-bolt-elements-textPrimary mb-2">
+                <label className="block text-sm font-medium text-recoder-elements-textPrimary mb-2">
                   Server Name *
                 </label>
                 <input
@@ -262,13 +262,13 @@ export default function MCPServerManager() {
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                   placeholder="My MCP Server"
-                  className="w-full px-4 py-2 bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor rounded-lg text-bolt-elements-textPrimary focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-4 py-2 bg-recoder-elements-background-depth-2 border border-recoder-elements-borderColor rounded-lg text-recoder-elements-textPrimary focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-bolt-elements-textPrimary mb-2">
+                  <label className="block text-sm font-medium text-recoder-elements-textPrimary mb-2">
                     Command *
                   </label>
                   <input
@@ -276,18 +276,18 @@ export default function MCPServerManager() {
                     value={formData.command}
                     onChange={(e) => setFormData({ ...formData, command: e.target.value })}
                     placeholder="npx"
-                    className="w-full px-4 py-2 bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor rounded-lg text-bolt-elements-textPrimary focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-4 py-2 bg-recoder-elements-background-depth-2 border border-recoder-elements-borderColor rounded-lg text-recoder-elements-textPrimary focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-bolt-elements-textPrimary mb-2">
+                  <label className="block text-sm font-medium text-recoder-elements-textPrimary mb-2">
                     Type
                   </label>
                   <select
                     value={formData.type}
                     onChange={(e) => setFormData({ ...formData, type: e.target.value as 'filesystem' | 'git' | 'database' | 'custom' })}
-                    className="w-full px-4 py-2 bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor rounded-lg text-bolt-elements-textPrimary focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-4 py-2 bg-recoder-elements-background-depth-2 border border-recoder-elements-borderColor rounded-lg text-recoder-elements-textPrimary focus:outline-none focus:ring-2 focus:ring-blue-500"
                   >
                     <option value="custom">Custom</option>
                     <option value="filesystem">Filesystem</option>
@@ -298,7 +298,7 @@ export default function MCPServerManager() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-bolt-elements-textPrimary mb-2">
+                <label className="block text-sm font-medium text-recoder-elements-textPrimary mb-2">
                   Arguments (space-separated)
                 </label>
                 <input
@@ -306,12 +306,12 @@ export default function MCPServerManager() {
                   value={formData.args}
                   onChange={(e) => setFormData({ ...formData, args: e.target.value })}
                   placeholder="-y @modelcontextprotocol/server-filesystem ./"
-                  className="w-full px-4 py-2 bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor rounded-lg text-bolt-elements-textPrimary focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-4 py-2 bg-recoder-elements-background-depth-2 border border-recoder-elements-borderColor rounded-lg text-recoder-elements-textPrimary focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-bolt-elements-textPrimary mb-2">
+                <label className="block text-sm font-medium text-recoder-elements-textPrimary mb-2">
                   Environment Variables (JSON)
                 </label>
                 <textarea
@@ -319,7 +319,7 @@ export default function MCPServerManager() {
                   onChange={(e) => setFormData({ ...formData, env: e.target.value })}
                   placeholder='{"KEY": "value"}'
                   rows={3}
-                  className="w-full px-4 py-2 bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor rounded-lg text-bolt-elements-textPrimary focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono text-sm resize-none"
+                  className="w-full px-4 py-2 bg-recoder-elements-background-depth-2 border border-recoder-elements-borderColor rounded-lg text-recoder-elements-textPrimary focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono text-sm resize-none"
                 />
               </div>
 
@@ -329,7 +329,7 @@ export default function MCPServerManager() {
                     setShowAddForm(false);
                     setSelectedPreset(null);
                   }}
-                  className="px-4 py-2 bg-bolt-elements-background-depth-2 text-bolt-elements-textPrimary rounded-lg hover:bg-bolt-elements-background-depth-3 transition-colors"
+                  className="px-4 py-2 bg-recoder-elements-background-depth-2 text-recoder-elements-textPrimary rounded-lg hover:bg-recoder-elements-background-depth-3 transition-colors"
                 >
                   Cancel
                 </button>
@@ -348,15 +348,15 @@ export default function MCPServerManager() {
 
         {/* Server List */}
         <div className="space-y-4">
-          <h2 className="text-lg font-semibold text-bolt-elements-textPrimary">
+          <h2 className="text-lg font-semibold text-recoder-elements-textPrimary">
             Connected Servers ({servers.length})
           </h2>
 
           {servers.length === 0 ? (
-            <div className="text-center py-12 bg-bolt-elements-background-depth-2 rounded-lg border border-bolt-elements-borderColor border-dashed">
-              <Server className="w-12 h-12 text-bolt-elements-textTertiary mx-auto mb-3" />
-              <p className="text-bolt-elements-textSecondary">No MCP servers configured</p>
-              <p className="text-sm text-bolt-elements-textTertiary mt-1">
+            <div className="text-center py-12 bg-recoder-elements-background-depth-2 rounded-lg border border-recoder-elements-borderColor border-dashed">
+              <Server className="w-12 h-12 text-recoder-elements-textTertiary mx-auto mb-3" />
+              <p className="text-recoder-elements-textSecondary">No MCP servers configured</p>
+              <p className="text-sm text-recoder-elements-textTertiary mt-1">
                 Add a server to get started
               </p>
             </div>
@@ -364,30 +364,30 @@ export default function MCPServerManager() {
             servers.map((server) => (
               <div
                 key={server.id}
-                className="bg-bolt-elements-background-depth-2 rounded-lg border border-bolt-elements-borderColor p-4 hover:border-bolt-elements-borderColor-hover transition-colors"
+                className="bg-recoder-elements-background-depth-2 rounded-lg border border-recoder-elements-borderColor p-4 hover:border-recoder-elements-borderColor-hover transition-colors"
               >
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3 flex-1">
                     {getStatusIcon(server.status)}
                     <div className="flex-1">
                       <div className="flex items-center gap-2">
-                        <h3 className="font-medium text-bolt-elements-textPrimary">
+                        <h3 className="font-medium text-recoder-elements-textPrimary">
                           {server.name}
                         </h3>
-                        <span className="px-2 py-0.5 text-xs bg-bolt-elements-background-depth-2 text-bolt-elements-textSecondary rounded">
+                        <span className="px-2 py-0.5 text-xs bg-recoder-elements-background-depth-2 text-recoder-elements-textSecondary rounded">
                           {server.type}
                         </span>
                       </div>
-                      <p className="text-sm text-bolt-elements-textSecondary mt-1">
+                      <p className="text-sm text-recoder-elements-textSecondary mt-1">
                         <span className="font-mono">{server.command}</span>
                         {server.args && server.args.length > 0 && (
-                          <span className="ml-2 text-bolt-elements-textTertiary">
+                          <span className="ml-2 text-recoder-elements-textTertiary">
                             {server.args.join(' ')}
                           </span>
                         )}
                       </p>
                       {server.lastConnected && (
-                        <p className="text-xs text-bolt-elements-textTertiary mt-1">
+                        <p className="text-xs text-recoder-elements-textTertiary mt-1">
                           Last connected: {new Date(server.lastConnected).toLocaleString()}
                         </p>
                       )}
@@ -437,7 +437,7 @@ export default function MCPServerManager() {
             <Settings className="w-5 h-5 text-blue-400 mt-0.5" />
             <div>
               <h3 className="font-medium text-blue-400 mb-1">About MCP Servers</h3>
-              <p className="text-sm text-bolt-elements-textSecondary">
+              <p className="text-sm text-recoder-elements-textSecondary">
                 Model Context Protocol (MCP) servers provide additional capabilities to the AI assistant,
                 such as file system access, git operations, database queries, and more. Connect servers
                 to extend functionality.

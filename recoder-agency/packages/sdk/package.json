@@ -1,12 +1,12 @@
 {
-	"name": "@giselles-ai/sdk",
+	"name": "@recoder/sdk",
 	"version": "0.0.0",
 	"private": true,
 	"main": "./dist/index.js",
 	"module": "./dist/index.mjs",
 	"types": "./dist/index.d.ts",
 	"dependencies": {
-		"@giselles-ai/protocol": "workspace:*"
+		"@recoder/protocol": "workspace:*"
 	},
 	"scripts": {
 		"build": "tsup",
@@ -26,7 +26,7 @@
 		}
 	},
 	"devDependencies": {
-		"@giselles-ai/tsconfig": "workspace:*",
+		"@recoder/tsconfig": "workspace:*",
 		"tsup": "catalog:",
 		"vitest": "catalog:"
 	}

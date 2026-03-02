@@ -9,6 +9,7 @@ import { requireAuth } from "@/lib/auth-helpers";
 import { auth } from '@/lib/auth-config';
 import { headers } from 'next/headers';
 import { z } from 'zod';
+import { logger } from '@/lib/logger';
 
 import { 
   getDeviceFlowRequestByUserCode, 
@@ -26,7 +27,7 @@ const authorizeDeviceSchema = z.object({
  */
 export async function POST(request: NextRequest) {
   try {
-    // Get real user session from NextAuth
+    // Get authenticated user session
     const authResult = await requireAuth();
     if (authResult.error) return authResult.response;
     const { user } = authResult;
@@ -122,7 +123,7 @@ export async function POST(request: NextRequest) {
     }
 
   } catch (error: any) {
-    console.error('Device authorization error:', error);
+    logger.error('Device authorization error:', { error: String(error), route: 'auth/cli-internal/authorize-device' });
     return NextResponse.json({
       success: false,
       error: 'server_error',
@@ -209,7 +210,7 @@ export async function GET(request: NextRequest) {
     }
 
   } catch (error: any) {
-    console.error('Device status check error:', error);
+    logger.error('Device status check error:', { error: String(error), route: 'auth/cli-internal/authorize-device' });
     return NextResponse.json({
       success: false,
       error: 'server_error',

@@ -1,10 +1,10 @@
-import { Button } from "@giselle-internal/ui/button";
+import { Button } from "@recoder-internal/ui/button";
 import {
 	Dialog,
 	DialogContent,
 	DialogTitle,
 	DialogTrigger,
-} from "@giselle-internal/ui/dialog";
+} from "@recoder-internal/ui/dialog";
 import { type AgentActivity, AgentUsageTable } from "./agent-usage-table";
 
 type AgentUsageDialogProps = {

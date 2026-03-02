@@ -1,12 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { withCLIAuth } from '@/lib/middleware/cli-auth-middleware';
 import { prisma } from '@/lib/prisma';
-import { decryptApiKey } from '@/lib/crypto';
+import { resolveApiKey, ApiKeyResolverError } from '@/lib/api-key-resolver';
 
 /**
  * POST /api/cli/proxy
- * Proxy AI requests through recoder.xyz for premium users
- * This allows premium users to use platform API keys
+ * Proxy AI requests through recoder.xyz using the user's own API key (BYOK beta).
  */
 export const POST = withCLIAuth(
   async (request: NextRequest, context) => {
@@ -43,29 +42,22 @@ export const POST = withCLIAuth(
         }
       }
 
-      // Get platform API key from pool
-      const platformKey = await prisma.platform_api_keys.findFirst({
-        where: {
-          provider: 'openrouter',
-          isActive: true,
-        },
-        orderBy: {
-          quotaUsed: 'asc', // Use least-used key
-        },
-      });
-
-      if (!platformKey) {
-        return NextResponse.json(
-          {
-            error: 'No API keys available',
-            message: 'Platform API keys are temporarily unavailable',
-          },
-          { status: 503 }
-        );
+      // BYOK: resolve the user's own API key
+      let resolved;
+      try {
+        resolved = await resolveApiKey(context.userId);
+      } catch (error) {
+        if (error instanceof ApiKeyResolverError) {
+          return NextResponse.json(
+            {
+              error: error.code,
+              message: error.message,
+            },
+            { status: 403 }
+          );
+        }
+        throw error;
       }
-
-      // Decrypt platform key
-      const apiKey = decryptApiKey(platformKey.keyEncrypted);
 
       // Make request to OpenRouter
       const startTime = Date.now();
@@ -73,8 +65,8 @@ export const POST = withCLIAuth(
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${apiKey}`,
-          'HTTP-Referer': process.env.NEXTAUTH_URL || 'https://recoder.xyz',
+          'Authorization': `Bearer ${resolved.apiKey}`,
+          'HTTP-Referer': process.env.NEXT_PUBLIC_APP_URL || 'https://recoder.xyz',
           'X-Title': 'Recoder CLI',
         },
         body: JSON.stringify({
@@ -97,7 +89,6 @@ export const POST = withCLIAuth(
 
       // Track usage
       const tokensUsed = data.usage?.total_tokens || 0;
-      const cost = data.usage?.total_cost || 0;
 
       await prisma.usage_records.create({
         data: {
@@ -110,7 +101,7 @@ export const POST = withCLIAuth(
           tokensUsed,
           inputTokens: data.usage?.prompt_tokens || 0,
           outputTokens: data.usage?.completion_tokens || 0,
-          cost,
+          cost: data.usage?.total_cost || 0,
           duration,
           success: true,
           platform: 'cli',
@@ -128,15 +119,6 @@ export const POST = withCLIAuth(
         });
       }
 
-      // Update platform key usage
-      await prisma.platform_api_keys.update({
-        where: { id: platformKey.id },
-        data: {
-          quotaUsed: { increment: tokensUsed },
-          lastUsedAt: new Date(),
-        },
-      });
-
       return NextResponse.json({
         response: data.choices[0].message.content,
         model: data.model,
@@ -151,5 +133,4 @@ export const POST = withCLIAuth(
       );
     }
   },
-  { requirePremium: true } // Only premium users can use proxy
 );

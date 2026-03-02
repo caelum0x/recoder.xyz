@@ -59,8 +59,8 @@ export const AgentDiffReview = memo(({ fileChanges }: AgentDiffReviewProps) => {
   if (fileChanges.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-8 px-4">
-        <div className="i-ph:files text-3xl text-bolt-elements-textTertiary mb-2" />
-        <p className="text-xs text-bolt-elements-textTertiary">No file changes</p>
+        <div className="i-ph:files text-3xl text-recoder-elements-textTertiary mb-2" />
+        <p className="text-xs text-recoder-elements-textTertiary">No file changes</p>
       </div>
     );
   }
@@ -68,36 +68,36 @@ export const AgentDiffReview = memo(({ fileChanges }: AgentDiffReviewProps) => {
   return (
     <div className="flex flex-col">
       {/* Header with select all */}
-      <div className="flex items-center justify-between px-3 py-2 border-b border-bolt-elements-borderColor">
+      <div className="flex items-center justify-between px-3 py-2 border-b border-recoder-elements-borderColor">
         <label className="flex items-center gap-2 cursor-pointer">
           <input
             type="checkbox"
             checked={selectedCount === totalCount}
             onChange={handleToggleAll}
-            className="rounded border-bolt-elements-borderColor"
+            className="rounded border-recoder-elements-borderColor"
           />
-          <span className="text-xs text-bolt-elements-textSecondary">
+          <span className="text-xs text-recoder-elements-textSecondary">
             {selectedCount}/{totalCount} files selected
           </span>
         </label>
       </div>
 
       {/* File list */}
-      <div className="flex flex-col divide-y divide-bolt-elements-borderColor">
+      <div className="flex flex-col divide-y divide-recoder-elements-borderColor">
         {fileChanges.map((file) => (
           <div key={file.path}>
             {/* File row */}
             <div
               className={classNames(
-                'flex items-center gap-2 px-3 py-2 cursor-pointer hover:bg-bolt-elements-background-depth-2 transition-colors',
-                expandedFile === file.path && 'bg-bolt-elements-background-depth-2',
+                'flex items-center gap-2 px-3 py-2 cursor-pointer hover:bg-recoder-elements-background-depth-2 transition-colors',
+                expandedFile === file.path && 'bg-recoder-elements-background-depth-2',
               )}
             >
               <input
                 type="checkbox"
                 checked={file.selected}
                 onChange={() => handleToggleFile(file.path)}
-                className="rounded border-bolt-elements-borderColor flex-shrink-0"
+                className="rounded border-recoder-elements-borderColor flex-shrink-0"
                 onClick={(e) => e.stopPropagation()}
               />
 
@@ -108,7 +108,7 @@ export const AgentDiffReview = memo(({ fileChanges }: AgentDiffReviewProps) => {
                 <div className={classNames('text-sm flex-shrink-0', getFileIcon(file.type))} />
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-1.5">
-                    <span className="text-xs font-medium text-bolt-elements-textPrimary truncate">
+                    <span className="text-xs font-medium text-recoder-elements-textPrimary truncate">
                       {getFileName(file.path)}
                     </span>
                     <span
@@ -122,14 +122,14 @@ export const AgentDiffReview = memo(({ fileChanges }: AgentDiffReviewProps) => {
                       {getFileLabel(file.type)}
                     </span>
                   </div>
-                  <p className="text-[10px] text-bolt-elements-textTertiary truncate">
+                  <p className="text-[10px] text-recoder-elements-textTertiary truncate">
                     {getFileDir(file.path)}
                   </p>
                 </div>
 
                 <div
                   className={classNames(
-                    'i-ph:caret-down text-bolt-elements-textTertiary transition-transform text-sm flex-shrink-0',
+                    'i-ph:caret-down text-recoder-elements-textTertiary transition-transform text-sm flex-shrink-0',
                     expandedFile === file.path && 'rotate-180',
                   )}
                 />
@@ -138,7 +138,7 @@ export const AgentDiffReview = memo(({ fileChanges }: AgentDiffReviewProps) => {
 
             {/* Expanded diff view */}
             {expandedFile === file.path && file.type !== 'delete' && (
-              <div className="border-t border-bolt-elements-borderColor max-h-[400px] overflow-auto">
+              <div className="border-t border-recoder-elements-borderColor max-h-[400px] overflow-auto">
                 <DiffViewer
                   filePath={file.path}
                   original={file.oldContent || ''}
@@ -152,7 +152,7 @@ export const AgentDiffReview = memo(({ fileChanges }: AgentDiffReviewProps) => {
             {/* Summary */}
             {file.summary && expandedFile !== file.path && (
               <div className="px-10 pb-1.5">
-                <p className="text-[10px] text-bolt-elements-textTertiary italic">
+                <p className="text-[10px] text-recoder-elements-textTertiary italic">
                   {file.summary}
                 </p>
               </div>

@@ -7,7 +7,7 @@ import {
 	type NodeId,
 	type TriggerNode,
 	type Workspace,
-} from "@giselles-ai/protocol";
+} from "@recoder/protocol";
 import { sliceGraphFromNode } from "./slice-graph-from-node";
 
 interface NodeGroup {

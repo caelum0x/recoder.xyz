@@ -6,7 +6,7 @@ import type {
 	Step,
 	Task,
 	TaskId,
-} from "@giselles-ai/protocol";
+} from "@recoder/protocol";
 import { patches } from "../object/patch-creators";
 import type { Patch } from "../object/patch-object";
 

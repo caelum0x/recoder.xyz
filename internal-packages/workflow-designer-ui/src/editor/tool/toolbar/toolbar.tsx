@@ -1,13 +1,13 @@
 "use client";
 
-import { GlassSurfaceLayers } from "@giselle-internal/ui/glass-surface";
+import { GlassSurfaceLayers } from "@recoder-internal/ui/glass-surface";
 import {
 	Capability,
 	hasCapability,
 	type LanguageModel,
 	languageModels,
 	Tier,
-} from "@giselles-ai/language-model";
+} from "@recoder/language-model";
 import {
 	createActionNode,
 	createAppEntryNode,
@@ -21,9 +21,9 @@ import {
 	createTextNode,
 	createTriggerNode,
 	createWebPageNode,
-} from "@giselles-ai/node-registry";
-import { FileCategory } from "@giselles-ai/protocol";
-import { useFeatureFlag, useUsageLimits } from "@giselles-ai/react";
+} from "@recoder/node-registry";
+import { FileCategory } from "@recoder/protocol";
+import { useFeatureFlag, useUsageLimits } from "@recoder/react";
 import clsx from "clsx/lite";
 import {
 	CableIcon,

@@ -4,6 +4,7 @@
  */
 
 import { prisma } from '@/lib/prisma';
+import { logger } from '@/lib/logger';
 import crypto from 'crypto';
 
 export class AnalyticsService {
@@ -53,7 +54,7 @@ export class AnalyticsService {
 
       return { success: true, usage };
     } catch (error: any) {
-      console.error('Track usage error:', error);
+      logger.error('Track usage error', { error: String(error) });
       throw error;
     }
   }
@@ -146,7 +147,7 @@ export class AnalyticsService {
         },
       };
     } catch (error: any) {
-      console.error('Get dashboard metrics error:', error);
+      logger.error('Get dashboard metrics error', { error: String(error) });
       throw error;
     }
   }
@@ -177,7 +178,7 @@ export class AnalyticsService {
 
       return { success: true, usage: grouped };
     } catch (error: any) {
-      console.error('Get usage history error:', error);
+      logger.error('Get usage history error', { error: String(error) });
       throw error;
     }
   }
@@ -214,7 +215,7 @@ export class AnalyticsService {
         })),
       };
     } catch (error: any) {
-      console.error('Get usage by model error:', error);
+      logger.error('Get usage by model error', { error: String(error) });
       throw error;
     }
   }
@@ -256,7 +257,7 @@ export class AnalyticsService {
         totalCost: totalCost._sum.cost || 0,
       };
     } catch (error: any) {
-      console.error('Get usage by cost error:', error);
+      logger.error('Get usage by cost error', { error: String(error) });
       throw error;
     }
   }
@@ -286,7 +287,7 @@ export class AnalyticsService {
         format: 'json',
       };
     } catch (error: any) {
-      console.error('Export usage data error:', error);
+      logger.error('Export usage data error', { error: String(error) });
       throw error;
     }
   }
@@ -326,7 +327,7 @@ export class AnalyticsService {
 
       return { success: true, report: summary };
     } catch (error: any) {
-      console.error('Generate report error:', error);
+      logger.error('Generate report error', { error: String(error) });
       throw error;
     }
   }
@@ -361,7 +362,7 @@ export class AnalyticsService {
         },
       };
     } catch (error: any) {
-      console.error('Get quota status error:', error);
+      logger.error('Get quota status error', { error: String(error) });
       throw error;
     }
   }
@@ -407,7 +408,7 @@ export class AnalyticsService {
         },
       };
     } catch (error: any) {
-      console.error('Predict usage error:', error);
+      logger.error('Predict usage error', { error: String(error) });
       throw error;
     }
   }
@@ -448,7 +449,7 @@ export class AnalyticsService {
         });
       }
     } catch (error) {
-      console.error('Update quota usage error:', error);
+      logger.error('Update quota usage error', { error: String(error) });
     }
   }
 

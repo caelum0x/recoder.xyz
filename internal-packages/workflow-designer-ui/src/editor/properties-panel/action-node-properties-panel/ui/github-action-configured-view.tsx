@@ -1,7 +1,7 @@
-import { Button } from "@giselle-internal/ui/button";
-import { DropdownMenu } from "@giselle-internal/ui/dropdown-menu";
-import { githubActions } from "@giselles-ai/action-registry";
-import { defaultName } from "@giselles-ai/node-registry";
+import { Button } from "@recoder-internal/ui/button";
+import { DropdownMenu } from "@recoder-internal/ui/dropdown-menu";
+import { githubActions } from "@recoder/action-registry";
+import { defaultName } from "@recoder/node-registry";
 import type {
 	ActionNode,
 	ConnectionId,
@@ -11,8 +11,8 @@ import type {
 	NodeId,
 	NodeLike,
 	OutputId,
-} from "@giselles-ai/protocol";
-import { isSupportedConnection } from "@giselles-ai/react";
+} from "@recoder/protocol";
+import { isSupportedConnection } from "@recoder/react";
 import clsx from "clsx/lite";
 import { PlusIcon, TriangleAlert, XIcon } from "lucide-react";
 import { useCallback, useMemo } from "react";

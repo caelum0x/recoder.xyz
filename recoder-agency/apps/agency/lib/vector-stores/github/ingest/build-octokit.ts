@@ -1,4 +1,4 @@
-import { type GitHubAuthConfig, octokit } from "@giselles-ai/github-tool";
+import { type GitHubAuthConfig, octokit } from "@recoder/github-tool";
 
 /**
  * Build GitHub App Octokit client with installation authentication

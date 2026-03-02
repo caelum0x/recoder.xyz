@@ -1,6 +1,6 @@
 "use client";
 
-import { Button } from "@giselle-internal/ui/button";
+import { Button } from "@recoder-internal/ui/button";
 import {
 	Dialog,
 	DialogBody,
@@ -10,8 +10,8 @@ import {
 	DialogFooter,
 	DialogHeader,
 	DialogTitle,
-} from "@giselle-internal/ui/dialog";
-import { Toggle } from "@giselle-internal/ui/toggle";
+} from "@recoder-internal/ui/dialog";
+import { Toggle } from "@recoder-internal/ui/toggle";
 import { CircleDot, Code, GitPullRequest, X } from "lucide-react";
 import { useEffect, useState, useTransition } from "react";
 import type {

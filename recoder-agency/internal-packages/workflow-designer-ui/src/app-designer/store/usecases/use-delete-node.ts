@@ -1,4 +1,4 @@
-import { NodeId } from "@giselles-ai/protocol";
+import { NodeId } from "@recoder/protocol";
 import { useCallback } from "react";
 import { useDeleteNodes } from "./use-delete-nodes";
 

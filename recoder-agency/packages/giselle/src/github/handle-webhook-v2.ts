@@ -13,7 +13,7 @@ import {
 	updatePullRequestReviewComment,
 	type WebhookEvent,
 	type WebhookEventName,
-} from "@giselles-ai/github-tool";
+} from "@recoder/github-tool";
 import type { OnGenerationComplete, OnGenerationError } from "../generations";
 import { getGitHubRepositoryIntegrationIndex } from "../integrations/utils";
 import { createAndStartTask, type OnTaskCreate } from "../tasks";

@@ -1,5 +1,5 @@
-import { NodeIcon } from "@giselle-internal/workflow-designer-ui";
-import type { OperationNode } from "@giselles-ai/protocol";
+import { NodeIcon } from "@recoder-internal/workflow-designer-ui";
+import type { OperationNode } from "@recoder/protocol";
 import {
 	CircleDashedIcon,
 	CircleSlashIcon,

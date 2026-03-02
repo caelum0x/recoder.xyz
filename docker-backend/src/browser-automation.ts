@@ -4,15 +4,16 @@
  * Note: puppeteer is lazily imported so the server can start without it installed.
  */
 
-type Browser = import('puppeteer').Browser;
-type Page = import('puppeteer').Page;
+type Browser = any;
+type Page = any;
 
-let _puppeteer: typeof import('puppeteer') | undefined;
+let _puppeteer: any | undefined;
 async function getPuppeteer() {
   if (!_puppeteer) {
-    _puppeteer = await import('puppeteer');
+    const dynamicImport = new Function('m', 'return import(m)') as (m: string) => Promise<any>;
+    _puppeteer = await dynamicImport('puppeteer');
   }
-  return _puppeteer.default;
+  return _puppeteer.default || _puppeteer;
 }
 
 export interface BrowserActionResult {
@@ -101,7 +102,7 @@ export async function browserLaunch(
     );
 
     // Capture console logs
-    page.on('console', (msg) => {
+    page.on('console', (msg: any) => {
       const type = msg.type();
       const text = msg.text();
       consoleLogs.push(`[${type}] ${text}`);

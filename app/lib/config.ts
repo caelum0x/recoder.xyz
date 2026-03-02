@@ -24,7 +24,7 @@ export const config = {
     api: process.env.NEXT_PUBLIC_API_URL ||
          (process.env.NODE_ENV === 'production' ? 'https://api.recoder.xyz' : 'http://localhost:3100'),
 
-    // Suna frontend IDE
+    // Recoder frontend IDE
     frontend: process.env.RECODER_FRONTEND_URL ||
          (process.env.NODE_ENV === 'production' ? 'https://frontend.recoder.xyz' : 'http://localhost:3001'),
 
@@ -87,9 +87,9 @@ export const config = {
       environment: (process.env.NEXT_PUBLIC_PADDLE_ENVIRONMENT || 
                    (process.env.NODE_ENV === 'production' ? 'production' : 'sandbox')) as 'sandbox' | 'production',
       products: {
-        weekly: process.env.PADDLE_PRODUCT_WEEKLY || 'prod_weekly_temp',
-        monthly: process.env.PADDLE_PRODUCT_MONTHLY || 'prod_monthly_temp',
-        pro: process.env.PADDLE_PRODUCT_PRO || 'prod_pro_temp',
+        weekly: process.env.PADDLE_PRODUCT_WEEKLY || '',
+        monthly: process.env.PADDLE_PRODUCT_MONTHLY || '',
+        pro: process.env.PADDLE_PRODUCT_PRO || '',
       },
     },
     dodo: {
@@ -104,7 +104,8 @@ export const config = {
   // Security
   security: {
     jwtSecret: process.env.JWT_SECRET,
-    nextAuthSecret: process.env.NEXTAUTH_SECRET,
+    /** @deprecated Prefer BETTER_AUTH_SECRET or JWT_SECRET. Falls back to NEXTAUTH_SECRET for backward compat. */
+    authSecret: process.env.BETTER_AUTH_SECRET || process.env.NEXTAUTH_SECRET,
     sessionSyncSecret: process.env.SESSION_SYNC_SECRET,
     apiKeyEncryptionSecret: process.env.API_KEY_ENCRYPTION_SECRET,
   },
@@ -299,8 +300,8 @@ export function validateConfig(): { valid: boolean; errors: string[] } {
     if (!config.security.jwtSecret) {
       errors.push('JWT_SECRET is required in production');
     }
-    if (!config.security.nextAuthSecret) {
-      errors.push('NEXTAUTH_SECRET is required in production');
+    if (!config.security.authSecret) {
+      errors.push('BETTER_AUTH_SECRET (or NEXTAUTH_SECRET) is required in production');
     }
     if (!config.security.apiKeyEncryptionSecret) {
       errors.push('API_KEY_ENCRYPTION_SECRET is required in production');
@@ -310,6 +311,12 @@ export function validateConfig(): { valid: boolean; errors: string[] } {
     }
     if (!config.oauth.google.clientId || !config.oauth.google.clientSecret) {
       errors.push('Google OAuth credentials required in production');
+    }
+    if (!process.env.BACKEND_API_KEY) {
+      errors.push('BACKEND_API_KEY is required in production (service-to-service auth)');
+    }
+    if (!process.env.SESSION_SYNC_SECRET && !config.security.authSecret) {
+      errors.push('SESSION_SYNC_SECRET or BETTER_AUTH_SECRET is required for cross-domain auth');
     }
   }
 

@@ -104,32 +104,32 @@ export default function MCPToolsPanel() {
       case 'error':
         return <XCircle className="w-4 h-4 text-red-500" />;
       default:
-        return <div className="w-4 h-4 rounded-full bg-bolt-elements-background-depth-3" />;
+        return <div className="w-4 h-4 rounded-full bg-recoder-elements-background-depth-3" />;
     }
   };
 
   return (
-    <div className="flex flex-col h-full bg-bolt-elements-background-depth-1 overflow-hidden">
+    <div className="flex flex-col h-full bg-recoder-elements-background-depth-1 overflow-hidden">
       {/* Header */}
-      <div className="flex items-center justify-between p-4 border-b border-bolt-elements-borderColor">
+      <div className="flex items-center justify-between p-4 border-b border-recoder-elements-borderColor">
         <div className="flex items-center gap-2">
-          <Wrench className="w-5 h-5 text-bolt-elements-textPrimary" />
-          <h2 className="text-lg font-semibold text-bolt-elements-textPrimary">MCP Tools</h2>
+          <Wrench className="w-5 h-5 text-recoder-elements-textPrimary" />
+          <h2 className="text-lg font-semibold text-recoder-elements-textPrimary">MCP Tools</h2>
         </div>
         <button
           onClick={loadMCPData}
           disabled={loading}
-          className="p-2 hover:bg-bolt-elements-background-depth-2 rounded-lg transition-colors"
+          className="p-2 hover:bg-recoder-elements-background-depth-2 rounded-lg transition-colors"
           title="Refresh tools and servers"
         >
-          <RefreshCw className={`w-4 h-4 text-bolt-elements-textSecondary ${loading ? 'animate-spin' : ''}`} />
+          <RefreshCw className={`w-4 h-4 text-recoder-elements-textSecondary ${loading ? 'animate-spin' : ''}`} />
         </button>
       </div>
 
       <div className="flex-1 overflow-y-auto">
         {/* Servers Section */}
-        <div className="p-4 border-b border-bolt-elements-borderColor">
-          <h3 className="text-sm font-medium text-bolt-elements-textPrimary mb-3 flex items-center gap-2">
+        <div className="p-4 border-b border-recoder-elements-borderColor">
+          <h3 className="text-sm font-medium text-recoder-elements-textPrimary mb-3 flex items-center gap-2">
             <Server className="w-4 h-4" />
             Connected Servers ({servers.length})
           </h3>
@@ -137,15 +137,15 @@ export default function MCPToolsPanel() {
             {servers.map((server) => (
               <div
                 key={server.id}
-                className="flex items-center justify-between p-3 bg-bolt-elements-background-depth-2 rounded-lg border border-bolt-elements-borderColor"
+                className="flex items-center justify-between p-3 bg-recoder-elements-background-depth-2 rounded-lg border border-recoder-elements-borderColor"
               >
                 <div className="flex items-center gap-3">
                   {getServerStatus(server)}
                   <div>
-                    <div className="text-sm font-medium text-bolt-elements-textPrimary">
+                    <div className="text-sm font-medium text-recoder-elements-textPrimary">
                       {server.name}
                     </div>
-                    <div className="text-xs text-bolt-elements-textSecondary">
+                    <div className="text-xs text-recoder-elements-textSecondary">
                       {server.toolCount} tools available
                     </div>
                   </div>
@@ -153,7 +153,7 @@ export default function MCPToolsPanel() {
                 <div className={`text-xs px-2 py-1 rounded ${
                   server.enabled 
                     ? 'bg-green-500/20 text-green-400' 
-                    : 'bg-bolt-elements-background-depth-3 text-bolt-elements-textTertiary'
+                    : 'bg-recoder-elements-background-depth-3 text-recoder-elements-textTertiary'
                 }`}>
                   {server.enabled ? 'Enabled' : 'Disabled'}
                 </div>
@@ -164,59 +164,59 @@ export default function MCPToolsPanel() {
 
         {/* Tools Section */}
         <div className="p-4">
-          <h3 className="text-sm font-medium text-bolt-elements-textPrimary mb-3">
+          <h3 className="text-sm font-medium text-recoder-elements-textPrimary mb-3">
             Available Tools ({tools.length})
           </h3>
           <div className="space-y-2">
             {loading ? (
-              <div className="flex items-center justify-center py-8 text-bolt-elements-textSecondary">
+              <div className="flex items-center justify-center py-8 text-recoder-elements-textSecondary">
                 <Loader2 className="w-6 h-6 animate-spin" />
                 <span className="ml-2">Loading tools...</span>
               </div>
             ) : tools.length === 0 ? (
-              <div className="text-center py-8 text-bolt-elements-textSecondary">
+              <div className="text-center py-8 text-recoder-elements-textSecondary">
                 No tools available
               </div>
             ) : (
               tools.map((tool) => (
                 <div
                   key={`${tool.serverId}-${tool.name}`}
-                  className="p-3 bg-bolt-elements-background-depth-2 rounded-lg border border-bolt-elements-borderColor hover:border-bolt-elements-borderColorActive transition-colors"
+                  className="p-3 bg-recoder-elements-background-depth-2 rounded-lg border border-recoder-elements-borderColor hover:border-recoder-elements-borderColorActive transition-colors"
                 >
                   <div className="flex items-start justify-between mb-2">
                     <div className="flex-1">
-                      <div className="text-sm font-medium text-bolt-elements-textPrimary font-mono">
+                      <div className="text-sm font-medium text-recoder-elements-textPrimary font-mono">
                         {tool.name}
                       </div>
-                      <div className="text-xs text-bolt-elements-textSecondary mt-1">
+                      <div className="text-xs text-recoder-elements-textSecondary mt-1">
                         {tool.description}
                       </div>
-                      <div className="text-xs text-bolt-elements-textTertiary mt-1">
+                      <div className="text-xs text-recoder-elements-textTertiary mt-1">
                         Server: {tool.serverId}
                       </div>
                     </div>
                     <button
                       onClick={() => setSelectedTool(selectedTool?.name === tool.name ? null : tool)}
-                      className="p-2 hover:bg-bolt-elements-background-depth-3 rounded transition-colors"
+                      className="p-2 hover:bg-recoder-elements-background-depth-3 rounded transition-colors"
                       title="Execute tool"
                     >
                       {executing === tool.name ? (
                         <Loader2 className="w-4 h-4 animate-spin text-blue-500" />
                       ) : (
-                        <Play className="w-4 h-4 text-bolt-elements-textSecondary" />
+                        <Play className="w-4 h-4 text-recoder-elements-textSecondary" />
                       )}
                     </button>
                   </div>
 
                   {/* Tool Parameters */}
                   {selectedTool?.name === tool.name && tool.parameters && tool.parameters.length > 0 && (
-                    <div className="mt-3 pt-3 border-t border-bolt-elements-borderColor space-y-2">
-                      <div className="text-xs font-medium text-bolt-elements-textPrimary mb-2">
+                    <div className="mt-3 pt-3 border-t border-recoder-elements-borderColor space-y-2">
+                      <div className="text-xs font-medium text-recoder-elements-textPrimary mb-2">
                         Parameters:
                       </div>
                       {tool.parameters.map((param) => (
                         <div key={param.name}>
-                          <label className="block text-xs text-bolt-elements-textSecondary mb-1">
+                          <label className="block text-xs text-recoder-elements-textSecondary mb-1">
                             {param.name}
                             {param.required && <span className="text-red-400 ml-1">*</span>}
                           </label>
@@ -230,7 +230,7 @@ export default function MCPToolsPanel() {
                                 : e.target.value
                             })}
                             placeholder={param.description}
-                            className="w-full px-2 py-1 text-xs bg-bolt-elements-background-depth-3 border border-bolt-elements-borderColor rounded text-bolt-elements-textPrimary focus:outline-none focus:ring-1 focus:ring-blue-500"
+                            className="w-full px-2 py-1 text-xs bg-recoder-elements-background-depth-3 border border-recoder-elements-borderColor rounded text-recoder-elements-textPrimary focus:outline-none focus:ring-1 focus:ring-blue-500"
                           />
                         </div>
                       ))}
@@ -251,8 +251,8 @@ export default function MCPToolsPanel() {
       </div>
 
       {/* Status Footer */}
-      <div className="p-3 border-t border-bolt-elements-borderColor bg-bolt-elements-background-depth-2">
-        <div className="flex items-center justify-between text-xs text-bolt-elements-textSecondary">
+      <div className="p-3 border-t border-recoder-elements-borderColor bg-recoder-elements-background-depth-2">
+        <div className="flex items-center justify-between text-xs text-recoder-elements-textSecondary">
           <span>{servers.filter(s => s.enabled).length} servers active</span>
           <span>{tools.length} tools available</span>
         </div>

@@ -1,5 +1,5 @@
-import type { TextNode } from "@giselles-ai/protocol";
-import { TextEditor } from "@giselles-ai/text-editor/react";
+import type { TextNode } from "@recoder/protocol";
+import { TextEditor } from "@recoder/text-editor/react";
 import { useRef } from "react";
 import {
 	useDeleteNode,
@@ -21,7 +21,7 @@ export function TextNodePropertiesPanel({ node }: { node: TextNode }) {
 			<NodePanelHeader
 				node={node}
 				onChangeName={(name) => updateNodeData(node, { name })}
-				docsUrl="https://docs.giselles.ai/en/glossary/text-node"
+				docsUrl="https://docs.recoder.xyz/en/glossary/text-node"
 				onDelete={() => deleteNode(node.id)}
 			/>
 			<PropertiesPanelContent>

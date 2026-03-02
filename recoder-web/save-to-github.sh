@@ -1,7 +1,7 @@
 #!/bin/bash
-# Script to save your bolt.new fork to your own GitHub repository
+# Script to save your recoder-web fork to your own GitHub repository
 
-echo "🔧 Save Your Bolt.new Fork to GitHub"
+echo "🔧 Save Your Recoder Web Fork to GitHub"
 echo "===================================="
 echo ""
 
@@ -54,10 +54,10 @@ echo "     git remote add origin https://github.com/YOUR_USERNAME/YOUR_REPO.git"
 echo "     git push -u origin main"
 echo ""
 echo "Option 2 - Fork and push to your fork:"
-echo "  1. Fork bolt.new on GitHub to your account"
+echo "  1. Fork recoder-web on GitHub to your account"
 echo "  2. Run these commands:"
 echo ""
-echo "     git remote set-url origin https://github.com/YOUR_USERNAME/bolt.new.git"
+echo "     git remote set-url origin https://github.com/YOUR_USERNAME/recoder-web.git"
 echo "     git push origin main"
 echo ""
 echo "Option 3 - Create a backup branch:"

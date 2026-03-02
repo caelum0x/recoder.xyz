@@ -45,7 +45,7 @@ export const NewFeatureReleaseEmail = ({
 	}),
 	viewUpdateUrl = "https://agency.recoder.xyz",
 }: NewFeatureReleaseEmailProps) => {
-	const headerBannerSrc = getEmailAssetUrl("giselletimes.png");
+	const headerBannerSrc = getEmailAssetUrl("recoder-banner.png");
 	const featureImageSrc = getEmailAssetUrl("new-feature-release-sample.jpg");
 	return (
 		<Html>

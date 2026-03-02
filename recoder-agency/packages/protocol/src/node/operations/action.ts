@@ -2,7 +2,7 @@ import type {
 	GitHubActionId,
 	SlackActionId,
 	WhatsAppActionId,
-} from "@giselles-ai/action-registry";
+} from "@recoder/action-registry";
 import * as z from "zod/v4";
 
 const GitHubActionUnconfiguredState = z.object({

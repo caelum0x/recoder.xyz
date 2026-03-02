@@ -218,7 +218,7 @@ export default function RadarChart({
       {/* Legend */}
       {showLegend && (
         <div className="mt-4 flex justify-center">
-          <div className="inline-flex flex-row gap-4 text-xs text-bolt-elements-textTertiary bg-bolt-elements-background-depth-2 px-4 py-2 rounded-md shadow-sm border border-bolt-elements-borderColor">
+          <div className="inline-flex flex-row gap-4 text-xs text-recoder-elements-textTertiary bg-recoder-elements-background-depth-2 px-4 py-2 rounded-md shadow-sm border border-recoder-elements-borderColor">
             <div className="flex items-center gap-2">
               <div className="w-3 h-3 rounded-full bg-accent-500" />
               <span className="whitespace-nowrap">80-100%</span>

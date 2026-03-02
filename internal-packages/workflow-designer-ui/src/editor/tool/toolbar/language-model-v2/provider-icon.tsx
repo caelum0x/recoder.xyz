@@ -1,7 +1,7 @@
 import {
 	getEntry,
 	type LanguageModelId,
-} from "@giselles-ai/language-model-registry";
+} from "@recoder/language-model-registry";
 import { AnthropicIcon, GoogleWhiteIcon, OpenaiIcon } from "../components";
 
 interface ProviderIconProps {

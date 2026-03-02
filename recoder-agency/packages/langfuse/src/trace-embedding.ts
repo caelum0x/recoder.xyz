@@ -1,5 +1,5 @@
-import { calculateEmbeddingDisplayCost } from "@giselles-ai/language-model";
-import type { EmbeddingMetrics } from "@giselles-ai/rag";
+import { calculateEmbeddingDisplayCost } from "@recoder/language-model";
+import type { EmbeddingMetrics } from "@recoder/rag";
 import { Langfuse } from "langfuse";
 
 function buildTags(args: {

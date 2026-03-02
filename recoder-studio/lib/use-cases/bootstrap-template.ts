@@ -4,14 +4,14 @@ import {
 	createGitHubVectorStoreNode,
 	createTextGenerationNode,
 	createTextNode,
-} from "@giselles-ai/node-registry";
-import type { Workspace, WorkspaceId } from "@giselles-ai/protocol";
+} from "@recoder/node-registry";
+import type { Workspace, WorkspaceId } from "@recoder/protocol";
 import type {
 	AiStudioBlueprintSourceKind,
 	AiStudioUseCase,
 } from "@recoder/ecosystem-config";
 import { resolveWorkflowRequiredSources } from "@recoder/ecosystem-config";
-import { openaiLanguageModels } from "@giselles-ai/language-model";
+import { openaiLanguageModels } from "@recoder/language-model";
 import { giselle } from "@/app/giselle";
 
 function starterBriefText(useCase: AiStudioUseCase): string {

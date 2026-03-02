@@ -1,5 +1,5 @@
 import "./mobile-scroll.css";
-import { TaskId } from "@giselles-ai/protocol";
+import { TaskId } from "@recoder/protocol";
 import { notFound } from "next/navigation";
 import { TaskLayout } from "@/components/task/task-layout";
 import { logger } from "@/lib/logger";

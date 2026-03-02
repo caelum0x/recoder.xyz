@@ -1,6 +1,6 @@
 "use client";
 
-import { Button } from "@giselle-internal/ui/button";
+import { Button } from "@recoder-internal/ui/button";
 import {
 	Dialog,
 	DialogBody,
@@ -9,7 +9,7 @@ import {
 	DialogFooter,
 	DialogHeader,
 	DialogTitle,
-} from "@giselle-internal/ui/dialog";
+} from "@recoder-internal/ui/dialog";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import { Edit3, Play, Plus, Star, Trash2 } from "lucide-react";
 

@@ -178,16 +178,16 @@ export const DiffViewer = memo(({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm">
-      <div className="bg-bolt-elements-background-depth-1 border border-bolt-elements-borderColor rounded-xl shadow-2xl w-[95vw] max-w-7xl h-[90vh] flex flex-col">
+      <div className="bg-recoder-elements-background-depth-1 border border-recoder-elements-borderColor rounded-xl shadow-2xl w-[95vw] max-w-7xl h-[90vh] flex flex-col">
         {/* Header */}
-        <div className="flex items-center justify-between px-4 py-3 border-b border-bolt-elements-borderColor bg-bolt-elements-background-depth-2">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-recoder-elements-borderColor bg-recoder-elements-background-depth-2">
           <div className="flex items-center gap-3">
             <span className="i-ph:git-diff text-purple-400 text-xl" />
             <div>
-              <h2 className="text-sm font-medium text-bolt-elements-textPrimary">
+              <h2 className="text-sm font-medium text-recoder-elements-textPrimary">
                 {title || fileName}
               </h2>
-              <p className="text-xs text-bolt-elements-textTertiary font-mono">
+              <p className="text-xs text-recoder-elements-textTertiary font-mono">
                 {filePath}
               </p>
             </div>
@@ -209,17 +209,17 @@ export const DiffViewer = memo(({
               <div className="flex items-center gap-1 mr-2">
                 <button
                   onClick={goToPrevHunk}
-                  className="p-1.5 hover:bg-bolt-elements-background-depth-2 rounded transition-colors text-bolt-elements-textSecondary hover:text-bolt-elements-textPrimary"
+                  className="p-1.5 hover:bg-recoder-elements-background-depth-2 rounded transition-colors text-recoder-elements-textSecondary hover:text-recoder-elements-textPrimary"
                   title="Previous change (p)"
                 >
                   <span className="i-ph:caret-up text-lg" />
                 </button>
-                <span className="text-xs text-bolt-elements-textTertiary min-w-[3rem] text-center">
+                <span className="text-xs text-recoder-elements-textTertiary min-w-[3rem] text-center">
                   {currentHunkIndex + 1} / {hunks.length}
                 </span>
                 <button
                   onClick={goToNextHunk}
-                  className="p-1.5 hover:bg-bolt-elements-background-depth-2 rounded transition-colors text-bolt-elements-textSecondary hover:text-bolt-elements-textPrimary"
+                  className="p-1.5 hover:bg-recoder-elements-background-depth-2 rounded transition-colors text-recoder-elements-textSecondary hover:text-recoder-elements-textPrimary"
                   title="Next change (n)"
                 >
                   <span className="i-ph:caret-down text-lg" />
@@ -231,7 +231,7 @@ export const DiffViewer = memo(({
             <div className="flex items-center gap-1 mr-2">
               <button
                 onClick={expandContext}
-                className="px-2 py-1 text-xs hover:bg-bolt-elements-background-depth-2 rounded transition-colors text-bolt-elements-textSecondary hover:text-bolt-elements-textPrimary flex items-center gap-1"
+                className="px-2 py-1 text-xs hover:bg-recoder-elements-background-depth-2 rounded transition-colors text-recoder-elements-textSecondary hover:text-recoder-elements-textPrimary flex items-center gap-1"
                 title="Show more context"
               >
                 <span className="i-ph:arrows-out-simple" />
@@ -240,7 +240,7 @@ export const DiffViewer = memo(({
               {contextLines > DEFAULT_CONTEXT_LINES && (
                 <button
                   onClick={resetContext}
-                  className="px-2 py-1 text-xs hover:bg-bolt-elements-background-depth-2 rounded transition-colors text-bolt-elements-textSecondary hover:text-bolt-elements-textPrimary flex items-center gap-1"
+                  className="px-2 py-1 text-xs hover:bg-recoder-elements-background-depth-2 rounded transition-colors text-recoder-elements-textSecondary hover:text-recoder-elements-textPrimary flex items-center gap-1"
                   title="Reset context"
                 >
                   <span className="i-ph:arrows-in-simple" />
@@ -256,7 +256,7 @@ export const DiffViewer = memo(({
                 'px-2.5 py-1.5 text-xs rounded transition-colors flex items-center gap-1.5',
                 copied
                   ? 'bg-green-500/20 text-green-400'
-                  : 'hover:bg-bolt-elements-background-depth-2 text-bolt-elements-textSecondary hover:text-bolt-elements-textPrimary'
+                  : 'hover:bg-recoder-elements-background-depth-2 text-recoder-elements-textSecondary hover:text-recoder-elements-textPrimary'
               )}
               title="Copy diff to clipboard"
             >
@@ -265,14 +265,14 @@ export const DiffViewer = memo(({
             </button>
 
             {/* View mode toggle */}
-            <div className="flex bg-bolt-elements-background-depth-2 rounded-lg overflow-hidden border border-bolt-elements-borderColor">
+            <div className="flex bg-recoder-elements-background-depth-2 rounded-lg overflow-hidden border border-recoder-elements-borderColor">
               <button
                 onClick={() => setViewMode('split')}
                 className={classNames(
                   'px-3 py-1.5 text-xs transition-colors flex items-center gap-1',
                   viewMode === 'split'
                     ? 'bg-purple-600 text-white'
-                    : 'text-bolt-elements-textTertiary hover:text-bolt-elements-textPrimary'
+                    : 'text-recoder-elements-textTertiary hover:text-recoder-elements-textPrimary'
                 )}
               >
                 <span className="i-ph:columns" />
@@ -284,7 +284,7 @@ export const DiffViewer = memo(({
                   'px-3 py-1.5 text-xs transition-colors flex items-center gap-1',
                   viewMode === 'unified'
                     ? 'bg-purple-600 text-white'
-                    : 'text-bolt-elements-textTertiary hover:text-bolt-elements-textPrimary'
+                    : 'text-recoder-elements-textTertiary hover:text-recoder-elements-textPrimary'
                 )}
               >
                 <span className="i-ph:list" />
@@ -295,7 +295,7 @@ export const DiffViewer = memo(({
             {/* Close button */}
             <button
               onClick={onClose}
-              className="p-1.5 hover:bg-bolt-elements-background-depth-2 rounded transition-colors text-bolt-elements-textSecondary hover:text-bolt-elements-textPrimary ml-2"
+              className="p-1.5 hover:bg-recoder-elements-background-depth-2 rounded transition-colors text-recoder-elements-textSecondary hover:text-recoder-elements-textPrimary ml-2"
               title="Close (Esc)"
             >
               <span className="i-ph:x text-lg" />
@@ -326,10 +326,10 @@ export const DiffViewer = memo(({
 
         {/* Footer with actions */}
         {showActions && (onAccept || onReject) && (
-          <div className="flex items-center justify-between px-4 py-3 border-t border-bolt-elements-borderColor bg-bolt-elements-background-depth-2">
-            <div className="text-xs text-bolt-elements-textTertiary">
+          <div className="flex items-center justify-between px-4 py-3 border-t border-recoder-elements-borderColor bg-recoder-elements-background-depth-2">
+            <div className="text-xs text-recoder-elements-textTertiary">
               <span className="i-ph:keyboard mr-1" />
-              Press <kbd className="px-1.5 py-0.5 bg-bolt-elements-background-depth-2 rounded text-bolt-elements-textSecondary">n</kbd> / <kbd className="px-1.5 py-0.5 bg-bolt-elements-background-depth-2 rounded text-bolt-elements-textSecondary">p</kbd> to navigate changes
+              Press <kbd className="px-1.5 py-0.5 bg-recoder-elements-background-depth-2 rounded text-recoder-elements-textSecondary">n</kbd> / <kbd className="px-1.5 py-0.5 bg-recoder-elements-background-depth-2 rounded text-recoder-elements-textSecondary">p</kbd> to navigate changes
             </div>
             <div className="flex items-center gap-2">
               {onReject && (
@@ -444,8 +444,8 @@ const SplitView = memo(({
   return (
     <div className="flex h-full">
       {/* Left (original) */}
-      <div className="flex-1 border-r border-bolt-elements-borderColor overflow-auto">
-        <div className="sticky top-0 z-10 bg-bolt-elements-background-depth-2 px-3 py-2 text-xs text-bolt-elements-textTertiary border-b border-bolt-elements-borderColor flex items-center gap-2">
+      <div className="flex-1 border-r border-recoder-elements-borderColor overflow-auto">
+        <div className="sticky top-0 z-10 bg-recoder-elements-background-depth-2 px-3 py-2 text-xs text-recoder-elements-textTertiary border-b border-recoder-elements-borderColor flex items-center gap-2">
           <span className="i-ph:file-minus text-red-400" />
           Original
         </div>
@@ -456,11 +456,11 @@ const SplitView = memo(({
               ref={row.isHunkStart && row.hunkId !== undefined ? (el) => setHunkRef(row.hunkId!, el) : undefined}
               className={classNames('flex', {
                 'bg-red-500/10': row.left.type === 'removed',
-                'bg-bolt-elements-background-depth-2/30': row.left.type === 'empty',
+                'bg-recoder-elements-background-depth-2/30': row.left.type === 'empty',
                 'ring-1 ring-inset ring-purple-500/50': currentHunk && row.hunkId === currentHunk.id,
               })}
             >
-              <span className="w-12 px-2 py-0.5 text-right text-bolt-elements-textTertiary bg-bolt-elements-background-depth-2 select-none border-r border-bolt-elements-borderColor flex-shrink-0">
+              <span className="w-12 px-2 py-0.5 text-right text-recoder-elements-textTertiary bg-recoder-elements-background-depth-2 select-none border-r border-recoder-elements-borderColor flex-shrink-0">
                 {row.left.num || ''}
               </span>
               <span className="w-6 flex-shrink-0 text-center select-none py-0.5">
@@ -468,7 +468,7 @@ const SplitView = memo(({
               </span>
               <pre className={classNames(
                 'flex-1 px-2 py-0.5 whitespace-pre overflow-x-auto',
-                row.left.type === 'removed' ? 'text-red-300' : 'text-bolt-elements-textSecondary'
+                row.left.type === 'removed' ? 'text-red-300' : 'text-recoder-elements-textSecondary'
               )}>
                 {row.left.content}
               </pre>
@@ -479,7 +479,7 @@ const SplitView = memo(({
 
       {/* Right (modified) */}
       <div className="flex-1 overflow-auto">
-        <div className="sticky top-0 z-10 bg-bolt-elements-background-depth-2 px-3 py-2 text-xs text-bolt-elements-textTertiary border-b border-bolt-elements-borderColor flex items-center gap-2">
+        <div className="sticky top-0 z-10 bg-recoder-elements-background-depth-2 px-3 py-2 text-xs text-recoder-elements-textTertiary border-b border-recoder-elements-borderColor flex items-center gap-2">
           <span className="i-ph:file-plus text-green-400" />
           Modified
         </div>
@@ -489,11 +489,11 @@ const SplitView = memo(({
               key={`right-${i}`}
               className={classNames('flex', {
                 'bg-green-500/10': row.right.type === 'added',
-                'bg-bolt-elements-background-depth-2/30': row.right.type === 'empty',
+                'bg-recoder-elements-background-depth-2/30': row.right.type === 'empty',
                 'ring-1 ring-inset ring-purple-500/50': currentHunk && row.hunkId === currentHunk.id,
               })}
             >
-              <span className="w-12 px-2 py-0.5 text-right text-bolt-elements-textTertiary bg-bolt-elements-background-depth-2 select-none border-r border-bolt-elements-borderColor flex-shrink-0">
+              <span className="w-12 px-2 py-0.5 text-right text-recoder-elements-textTertiary bg-recoder-elements-background-depth-2 select-none border-r border-recoder-elements-borderColor flex-shrink-0">
                 {row.right.num || ''}
               </span>
               <span className="w-6 flex-shrink-0 text-center select-none py-0.5">
@@ -501,7 +501,7 @@ const SplitView = memo(({
               </span>
               <pre className={classNames(
                 'flex-1 px-2 py-0.5 whitespace-pre overflow-x-auto',
-                row.right.type === 'added' ? 'text-green-300' : 'text-bolt-elements-textSecondary'
+                row.right.type === 'added' ? 'text-green-300' : 'text-recoder-elements-textSecondary'
               )}>
                 {row.right.content}
               </pre>
@@ -543,15 +543,15 @@ const UnifiedView = memo(({
   return (
     <div className="font-mono text-xs">
       {/* Header labels */}
-      <div className="sticky top-0 z-10 flex bg-bolt-elements-background-depth-2 border-b border-bolt-elements-borderColor">
-        <span className="w-12 px-2 py-2 text-center text-bolt-elements-textTertiary text-xs border-r border-bolt-elements-borderColor">
+      <div className="sticky top-0 z-10 flex bg-recoder-elements-background-depth-2 border-b border-recoder-elements-borderColor">
+        <span className="w-12 px-2 py-2 text-center text-recoder-elements-textTertiary text-xs border-r border-recoder-elements-borderColor">
           Old
         </span>
-        <span className="w-12 px-2 py-2 text-center text-bolt-elements-textTertiary text-xs border-r border-bolt-elements-borderColor">
+        <span className="w-12 px-2 py-2 text-center text-recoder-elements-textTertiary text-xs border-r border-recoder-elements-borderColor">
           New
         </span>
         <span className="w-6" />
-        <span className="flex-1 px-3 py-2 text-bolt-elements-textTertiary text-xs">
+        <span className="flex-1 px-3 py-2 text-recoder-elements-textTertiary text-xs">
           Content
         </span>
       </div>
@@ -571,10 +571,10 @@ const UnifiedView = memo(({
               'ring-1 ring-inset ring-purple-500/50': currentHunk && hunkId === currentHunk.id,
             })}
           >
-            <span className="w-12 px-2 py-0.5 text-right text-bolt-elements-textTertiary bg-bolt-elements-background-depth-2 select-none border-r border-bolt-elements-borderColor flex-shrink-0">
+            <span className="w-12 px-2 py-0.5 text-right text-recoder-elements-textTertiary bg-recoder-elements-background-depth-2 select-none border-r border-recoder-elements-borderColor flex-shrink-0">
               {line.oldLineNumber || ''}
             </span>
-            <span className="w-12 px-2 py-0.5 text-right text-bolt-elements-textTertiary bg-bolt-elements-background-depth-2 select-none border-r border-bolt-elements-borderColor flex-shrink-0">
+            <span className="w-12 px-2 py-0.5 text-right text-recoder-elements-textTertiary bg-recoder-elements-background-depth-2 select-none border-r border-recoder-elements-borderColor flex-shrink-0">
               {line.newLineNumber || ''}
             </span>
             <span className="w-6 px-1 py-0.5 text-center select-none flex-shrink-0">
@@ -585,7 +585,7 @@ const UnifiedView = memo(({
               className={classNames('flex-1 px-2 py-0.5 whitespace-pre overflow-x-auto', {
                 'text-green-300': line.type === 'added',
                 'text-red-300': line.type === 'removed',
-                'text-bolt-elements-textSecondary': line.type === 'unchanged',
+                'text-recoder-elements-textSecondary': line.type === 'unchanged',
               })}
             >
               {line.content}
@@ -733,11 +733,11 @@ export const InlineDiffViewer = memo(({
   }, [diffLines]);
 
   return (
-    <div className={classNames('border border-bolt-elements-borderColor rounded-lg overflow-hidden', className)}>
+    <div className={classNames('border border-recoder-elements-borderColor rounded-lg overflow-hidden', className)}>
       {/* Stats header */}
-      <div className="px-3 py-2 bg-bolt-elements-background-depth-2 border-b border-bolt-elements-borderColor flex items-center gap-3 text-xs">
+      <div className="px-3 py-2 bg-recoder-elements-background-depth-2 border-b border-recoder-elements-borderColor flex items-center gap-3 text-xs">
         <span className="i-ph:git-diff text-purple-400" />
-        <span className="text-bolt-elements-textSecondary">Changes:</span>
+        <span className="text-recoder-elements-textSecondary">Changes:</span>
         <span className="text-green-400">+{stats.added}</span>
         <span className="text-red-400">-{stats.removed}</span>
       </div>
@@ -752,10 +752,10 @@ export const InlineDiffViewer = memo(({
               'bg-red-500/10': line.type === 'removed',
             })}
           >
-            <span className="w-10 px-2 py-0.5 text-right text-bolt-elements-textTertiary bg-bolt-elements-background-depth-2 select-none border-r border-bolt-elements-borderColor flex-shrink-0">
+            <span className="w-10 px-2 py-0.5 text-right text-recoder-elements-textTertiary bg-recoder-elements-background-depth-2 select-none border-r border-recoder-elements-borderColor flex-shrink-0">
               {line.oldLineNumber || ''}
             </span>
-            <span className="w-10 px-2 py-0.5 text-right text-bolt-elements-textTertiary bg-bolt-elements-background-depth-2 select-none border-r border-bolt-elements-borderColor flex-shrink-0">
+            <span className="w-10 px-2 py-0.5 text-right text-recoder-elements-textTertiary bg-recoder-elements-background-depth-2 select-none border-r border-recoder-elements-borderColor flex-shrink-0">
               {line.newLineNumber || ''}
             </span>
             <span className="w-5 px-1 py-0.5 text-center select-none flex-shrink-0">
@@ -766,7 +766,7 @@ export const InlineDiffViewer = memo(({
               className={classNames('flex-1 px-2 py-0.5 whitespace-pre overflow-x-auto', {
                 'text-green-300': line.type === 'added',
                 'text-red-300': line.type === 'removed',
-                'text-bolt-elements-textSecondary': line.type === 'unchanged',
+                'text-recoder-elements-textSecondary': line.type === 'unchanged',
               })}
             >
               {line.content}

@@ -37,9 +37,9 @@ export const PanelLoading = memo(({
         'animate-spin rounded-full h-6 w-6 border-b-2 mb-2',
         colorClasses[color]
       )} />
-      <span className="text-bolt-elements-textTertiary">{message}</span>
+      <span className="text-recoder-elements-textTertiary">{message}</span>
       {submessage && (
-        <span className="text-bolt-elements-textTertiary/70 text-xs mt-1">{submessage}</span>
+        <span className="text-recoder-elements-textTertiary/70 text-xs mt-1">{submessage}</span>
       )}
     </div>
   );
@@ -70,10 +70,10 @@ export const PanelEmpty = memo(({
 }: PanelEmptyProps) => {
   return (
     <div className={classNames('flex flex-col h-full justify-center items-center text-sm p-4', className)}>
-      <span className={classNames(icon, 'text-2xl mb-2 text-bolt-elements-textTertiary')} />
-      <span className="text-bolt-elements-textSecondary font-medium">{title}</span>
+      <span className={classNames(icon, 'text-2xl mb-2 text-recoder-elements-textTertiary')} />
+      <span className="text-recoder-elements-textSecondary font-medium">{title}</span>
       {description && (
-        <span className="text-bolt-elements-textTertiary text-xs mt-1 text-center max-w-xs">{description}</span>
+        <span className="text-recoder-elements-textTertiary text-xs mt-1 text-center max-w-xs">{description}</span>
       )}
       {action && (
         <button
@@ -110,7 +110,7 @@ export const PanelError = memo(({
   return (
     <div className={classNames('flex flex-col h-full justify-center items-center text-sm p-4', className)}>
       <span className={classNames(icon, 'text-2xl mb-2 text-red-400')} />
-      <span className="text-bolt-elements-textSecondary font-medium">{title}</span>
+      <span className="text-recoder-elements-textSecondary font-medium">{title}</span>
       <span className="text-red-400/80 text-xs mt-1 text-center max-w-xs">{error}</span>
       {retry && (
         <button
@@ -141,8 +141,8 @@ export const ContainerWaiting = memo(({
   return (
     <div className={classNames('flex flex-col h-full justify-center items-center text-sm', className)}>
       <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500 mb-2" />
-      <span className="text-bolt-elements-textTertiary">{message}</span>
-      <span className="text-bolt-elements-textTertiary/70 text-xs mt-1">
+      <span className="text-recoder-elements-textTertiary">{message}</span>
+      <span className="text-recoder-elements-textTertiary/70 text-xs mt-1">
         Starting development environment...
       </span>
     </div>

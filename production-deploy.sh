@@ -2,6 +2,17 @@
 
 # 🚀 Recoder.xyz Production Deployment Script
 # This script fixes remaining issues and deploys the system
+# DEPRECATED: this script generates legacy compose config.
+# Use deploy.yml workflow + docker-compose.deploy.yml instead.
+# Override only for forensic/legacy use:
+#   ALLOW_LEGACY_DEPLOY=1 bash production-deploy.sh
+
+if [[ "${ALLOW_LEGACY_DEPLOY:-0}" != "1" ]]; then
+  echo "ERROR: production-deploy.sh is deprecated and blocked by default."
+  echo "Use deploy.yml and docker-compose.deploy.yml instead."
+  echo "If you explicitly need this legacy path, run with ALLOW_LEGACY_DEPLOY=1."
+  exit 1
+fi
 
 set -e
 

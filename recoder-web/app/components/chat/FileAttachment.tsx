@@ -236,8 +236,8 @@ export const AttachmentItem = memo(function AttachmentItem({
     <div
       className={classNames(
         'relative flex items-center gap-2 rounded-lg border transition-colors',
-        'bg-bolt-elements-background-depth-2 border-bolt-elements-borderColor',
-        'hover:border-bolt-elements-borderColorActive group',
+        'bg-recoder-elements-background-depth-2 border-recoder-elements-borderColor',
+        'hover:border-recoder-elements-borderColorActive group',
         compact ? 'px-2 py-1' : 'px-3 py-2'
       )}
     >
@@ -254,7 +254,7 @@ export const AttachmentItem = memo(function AttachmentItem({
             <img
               src={attachment.preview}
               alt={attachment.name}
-              className="max-w-[200px] max-h-[200px] object-contain rounded-lg shadow-lg border border-bolt-elements-borderColor bg-bolt-elements-background-depth-1 p-1"
+              className="max-w-[200px] max-h-[200px] object-contain rounded-lg shadow-lg border border-recoder-elements-borderColor bg-recoder-elements-background-depth-1 p-1"
             />
           </div>
         </div>
@@ -262,7 +262,7 @@ export const AttachmentItem = memo(function AttachmentItem({
         <div
           className={classNames(
             getFileIcon(attachment.type),
-            'text-bolt-elements-textSecondary',
+            'text-recoder-elements-textSecondary',
             compact ? 'text-base' : 'text-xl'
           )}
         />
@@ -272,7 +272,7 @@ export const AttachmentItem = memo(function AttachmentItem({
       <div className="flex-1 min-w-0">
         <div
           className={classNames(
-            'truncate text-bolt-elements-textPrimary',
+            'truncate text-recoder-elements-textPrimary',
             compact ? 'text-xs' : 'text-sm'
           )}
           title={attachment.name}
@@ -280,7 +280,7 @@ export const AttachmentItem = memo(function AttachmentItem({
           {attachment.name}
         </div>
         {!compact && (
-          <div className="text-xs text-bolt-elements-textTertiary">
+          <div className="text-xs text-recoder-elements-textTertiary">
             {formatFileSize(attachment.size)}
           </div>
         )}
@@ -301,8 +301,8 @@ export const AttachmentItem = memo(function AttachmentItem({
         onClick={() => onRemove(attachment.id)}
         className={classNames(
           'p-1 rounded-full transition-colors',
-          'text-bolt-elements-textTertiary hover:text-bolt-elements-textPrimary',
-          'hover:bg-bolt-elements-background-depth-3',
+          'text-recoder-elements-textTertiary hover:text-recoder-elements-textPrimary',
+          'hover:bg-recoder-elements-background-depth-3',
           'opacity-0 group-hover:opacity-100'
         )}
         title="Remove attachment"
@@ -340,7 +340,7 @@ export const AttachmentsList = memo(function AttachmentsList({
 
       {/* Total size indicator */}
       {state.attachments.length > 1 && !compact && (
-        <div className="flex items-center text-xs text-bolt-elements-textTertiary">
+        <div className="flex items-center text-xs text-recoder-elements-textTertiary">
           <div className="i-ph:files mr-1" />
           {state.attachments.length} files ({formatFileSize(state.totalSize)})
         </div>
@@ -458,7 +458,7 @@ export const FileInputButton = memo(function FileInputButton({
         onClick={handleClick}
         className={classNames(
           'flex items-center gap-1 transition-colors',
-          'text-bolt-elements-textSecondary hover:text-bolt-elements-textPrimary',
+          'text-recoder-elements-textSecondary hover:text-recoder-elements-textPrimary',
           className
         )}
         title="Attach files"
@@ -525,7 +525,7 @@ export const FileAttachment = memo(function FileAttachment({
           {state.attachments.length > 0 && !compact && (
             <button
               onClick={attachmentActions.clearAttachments}
-              className="text-xs text-bolt-elements-textTertiary hover:text-red-400 transition-colors"
+              className="text-xs text-recoder-elements-textTertiary hover:text-red-400 transition-colors"
             >
               Clear all
             </button>

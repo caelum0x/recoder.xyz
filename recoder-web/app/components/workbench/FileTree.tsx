@@ -31,12 +31,12 @@ const FILE_ICON_MAP: Record<string, string> = {
   json: 'i-ph:file-duotone text-yellow-300',
   yaml: 'i-ph:file-duotone text-red-400',
   yml: 'i-ph:file-duotone text-red-400',
-  toml: 'i-ph:file-duotone text-bolt-elements-textSecondary',
+  toml: 'i-ph:file-duotone text-recoder-elements-textSecondary',
   xml: 'i-ph:file-duotone text-orange-300',
   // Documentation
-  md: 'i-ph:file-md-duotone text-bolt-elements-textSecondary',
+  md: 'i-ph:file-md-duotone text-recoder-elements-textSecondary',
   mdx: 'i-ph:file-md-duotone text-yellow-400',
-  txt: 'i-ph:file-text-duotone text-bolt-elements-textSecondary',
+  txt: 'i-ph:file-text-duotone text-recoder-elements-textSecondary',
   // Images
   png: 'i-ph:file-image-duotone text-purple-400',
   jpg: 'i-ph:file-image-duotone text-purple-400',
@@ -64,7 +64,7 @@ const FILE_ICON_MAP: Record<string, string> = {
   eslintrc: 'i-ph:gear-duotone text-purple-400',
   prettierrc: 'i-ph:gear-duotone text-pink-400',
   // Lock files
-  lock: 'i-ph:lock-duotone text-bolt-elements-textTertiary',
+  lock: 'i-ph:lock-duotone text-recoder-elements-textTertiary',
   // Shell
   sh: 'i-ph:terminal-duotone text-green-400',
   bash: 'i-ph:terminal-duotone text-green-400',
@@ -76,7 +76,7 @@ const FILE_ICON_MAP: Record<string, string> = {
 // Special file name mappings (exact match)
 const SPECIAL_FILE_ICONS: Record<string, string> = {
   'package.json': 'i-ph:package-duotone text-green-400',
-  'package-lock.json': 'i-ph:lock-duotone text-bolt-elements-textTertiary',
+  'package-lock.json': 'i-ph:lock-duotone text-recoder-elements-textTertiary',
   'yarn.lock': 'i-ph:lock-duotone text-blue-400',
   'pnpm-lock.yaml': 'i-ph:lock-duotone text-orange-400',
   'tsconfig.json': 'i-ph:gear-duotone text-blue-400',
@@ -84,8 +84,8 @@ const SPECIAL_FILE_ICONS: Record<string, string> = {
   'tailwind.config.ts': 'i-ph:gear-duotone text-cyan-400',
   'vite.config.js': 'i-ph:lightning-duotone text-purple-400',
   'vite.config.ts': 'i-ph:lightning-duotone text-purple-400',
-  'next.config.js': 'i-ph:gear-duotone text-bolt-elements-textSecondary',
-  'next.config.mjs': 'i-ph:gear-duotone text-bolt-elements-textSecondary',
+  'next.config.js': 'i-ph:gear-duotone text-recoder-elements-textSecondary',
+  'next.config.mjs': 'i-ph:gear-duotone text-recoder-elements-textSecondary',
   '.gitignore': 'i-ph:git-branch-duotone text-orange-400',
   '.env': 'i-ph:gear-duotone text-yellow-500',
   '.env.local': 'i-ph:gear-duotone text-yellow-500',
@@ -175,7 +175,7 @@ const highlightMatch = (text: string, query: string): React.ReactNode => {
   return (
     <>
       {text.slice(0, index)}
-      <mark className="rounded-sm bg-bolt-elements-item-backgroundAccent/30 px-0.5 text-bolt-elements-textPrimary">
+      <mark className="rounded-sm bg-recoder-elements-item-backgroundAccent/30 px-0.5 text-recoder-elements-textPrimary">
         {text.slice(index, end)}
       </mark>
       {text.slice(end)}
@@ -614,7 +614,7 @@ export const FileTree = memo(
                       }}
                       onBlur={submitRename}
                       autoFocus
-                      className="w-full px-1 py-0.5 text-sm text-bolt-elements-textPrimary bg-bolt-elements-background-depth-3 border border-blue-500 rounded outline-none"
+                      className="w-full px-1 py-0.5 text-sm text-recoder-elements-textPrimary bg-recoder-elements-background-depth-3 border border-blue-500 rounded outline-none"
                     />
                   </div>
                 );
@@ -656,7 +656,7 @@ export const FileTree = memo(
                       }}
                       onBlur={submitRename}
                       autoFocus
-                      className="w-full px-1 py-0.5 text-sm text-bolt-elements-textPrimary bg-bolt-elements-background-depth-3 border border-blue-500 rounded outline-none"
+                      className="w-full px-1 py-0.5 text-sm text-recoder-elements-textPrimary bg-recoder-elements-background-depth-3 border border-blue-500 rounded outline-none"
                     />
                   </div>
                 );
@@ -708,7 +708,7 @@ export const FileTree = memo(
                 onBlur={submitNewItem}
                 autoFocus
                 placeholder={creatingIn.type === 'file' ? 'filename.ts' : 'folder-name'}
-                className="flex-1 px-1 py-0.5 text-sm text-bolt-elements-textPrimary bg-bolt-elements-background-depth-3 border border-blue-500 rounded outline-none placeholder:text-bolt-elements-textSecondary"
+                className="flex-1 px-1 py-0.5 text-sm text-recoder-elements-textPrimary bg-recoder-elements-background-depth-3 border border-blue-500 rounded outline-none placeholder:text-recoder-elements-textSecondary"
               />
             </div>
           </div>
@@ -717,48 +717,48 @@ export const FileTree = memo(
         {/* Context Menu */}
         {contextMenu && (
           <div
-            className="fixed z-50 bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor rounded shadow-lg py-1 min-w-[160px]"
+            className="fixed z-50 bg-recoder-elements-background-depth-2 border border-recoder-elements-borderColor rounded shadow-lg py-1 min-w-[160px]"
             style={{ left: contextMenu.x, top: contextMenu.y }}
             onClick={(e) => e.stopPropagation()}
           >
             <button
               onClick={handleNewFile}
-              className="w-full px-3 py-1.5 text-left text-sm hover:bg-bolt-elements-background-depth-3 flex items-center gap-2"
+              className="w-full px-3 py-1.5 text-left text-sm hover:bg-recoder-elements-background-depth-3 flex items-center gap-2"
             >
               <span className="i-ph:file-plus" /> New File
             </button>
             <button
               onClick={handleNewFolder}
-              className="w-full px-3 py-1.5 text-left text-sm hover:bg-bolt-elements-background-depth-3 flex items-center gap-2"
+              className="w-full px-3 py-1.5 text-left text-sm hover:bg-recoder-elements-background-depth-3 flex items-center gap-2"
             >
               <span className="i-ph:folder-plus" /> New Folder
             </button>
-            <div className="border-t border-bolt-elements-borderColor my-1" />
+            <div className="border-t border-recoder-elements-borderColor my-1" />
             <button
               onClick={handleRename}
-              className="w-full px-3 py-1.5 text-left text-sm hover:bg-bolt-elements-background-depth-3 flex items-center gap-2"
+              className="w-full px-3 py-1.5 text-left text-sm hover:bg-recoder-elements-background-depth-3 flex items-center gap-2"
             >
               <span className="i-ph:pencil" /> Rename
-              <span className="ml-auto text-xs text-bolt-elements-textTertiary">F2</span>
+              <span className="ml-auto text-xs text-recoder-elements-textTertiary">F2</span>
             </button>
             {onFileMove && (
               <button
                 onClick={handleMove}
-                className="w-full px-3 py-1.5 text-left text-sm hover:bg-bolt-elements-background-depth-3 flex items-center gap-2"
+                className="w-full px-3 py-1.5 text-left text-sm hover:bg-recoder-elements-background-depth-3 flex items-center gap-2"
               >
                 <span className="i-ph:arrows-out-cardinal" /> Move to...
               </button>
             )}
             <button
               onClick={handleCopy}
-              className="w-full px-3 py-1.5 text-left text-sm hover:bg-bolt-elements-background-depth-3 flex items-center gap-2"
+              className="w-full px-3 py-1.5 text-left text-sm hover:bg-recoder-elements-background-depth-3 flex items-center gap-2"
             >
               <span className="i-ph:copy" /> Copy Path
             </button>
             {contextMenu.type === 'file' && (
               <button
                 onClick={handleToggleContext}
-                className={`w-full px-3 py-1.5 text-left text-sm hover:bg-bolt-elements-background-depth-3 flex items-center gap-2 ${
+                className={`w-full px-3 py-1.5 text-left text-sm hover:bg-recoder-elements-background-depth-3 flex items-center gap-2 ${
                   isInContext(contextMenu.path) ? 'text-blue-400' : ''
                 }`}
               >
@@ -766,10 +766,10 @@ export const FileTree = memo(
                 {isInContext(contextMenu.path) ? 'Remove from Context' : 'Add to Context'}
               </button>
             )}
-            <div className="border-t border-bolt-elements-borderColor my-1" />
+            <div className="border-t border-recoder-elements-borderColor my-1" />
             <button
               onClick={handleDelete}
-              className="w-full px-3 py-1.5 text-left text-sm hover:bg-bolt-elements-background-depth-3 text-red-400 flex items-center gap-2"
+              className="w-full px-3 py-1.5 text-left text-sm hover:bg-recoder-elements-background-depth-3 text-red-400 flex items-center gap-2"
             >
               <span className="i-ph:trash" /> Delete
             </button>
@@ -834,7 +834,7 @@ const FOLDER_ICONS: Record<string, string> = {
   '__tests__': 'text-green-400',
   'test': 'text-green-400',
   'spec': 'text-green-400',
-  'config': 'text-bolt-elements-textSecondary',
+  'config': 'text-recoder-elements-textSecondary',
   'types': 'text-blue-300',
   'interfaces': 'text-blue-300',
   'models': 'text-orange-400',
@@ -876,10 +876,10 @@ function Folder({
   return (
     <NodeButton
       className={classNames('group transition-all duration-150', {
-        'bg-transparent text-bolt-elements-item-contentDefault hover:text-bolt-elements-item-contentActive hover:bg-bolt-elements-item-backgroundActive':
+        'bg-transparent text-recoder-elements-item-contentDefault hover:text-recoder-elements-item-contentActive hover:bg-recoder-elements-item-backgroundActive':
           !selected && !focused && !isDropTarget,
-        'bg-bolt-elements-item-backgroundAccent text-bolt-elements-item-contentAccent': selected,
-        'bg-bolt-elements-item-backgroundActive/50 ring-1 ring-bolt-elements-borderColor ring-inset': focused && !selected && !isDropTarget,
+        'bg-recoder-elements-item-backgroundAccent text-recoder-elements-item-contentAccent': selected,
+        'bg-recoder-elements-item-backgroundActive/50 ring-1 ring-recoder-elements-borderColor ring-inset': focused && !selected && !isDropTarget,
         'opacity-50': isDragging,
         'bg-blue-500/20 ring-2 ring-blue-500 ring-inset': isDropTarget,
       })}
@@ -947,14 +947,14 @@ function File({
   return (
     <NodeButton
       className={classNames('group transition-opacity duration-150', {
-        'bg-transparent hover:bg-bolt-elements-item-backgroundActive text-bolt-elements-item-contentDefault': !selected && !focused,
-        'bg-bolt-elements-item-backgroundAccent text-bolt-elements-item-contentAccent': selected,
-        'bg-bolt-elements-item-backgroundActive/50 ring-1 ring-bolt-elements-borderColor ring-inset': focused && !selected,
+        'bg-transparent hover:bg-recoder-elements-item-backgroundActive text-recoder-elements-item-contentDefault': !selected && !focused,
+        'bg-recoder-elements-item-backgroundAccent text-recoder-elements-item-contentAccent': selected,
+        'bg-recoder-elements-item-backgroundActive/50 ring-1 ring-recoder-elements-borderColor ring-inset': focused && !selected,
         'opacity-50': isDragging,
       })}
       depth={depth}
       iconClasses={classNames(fileIconClass, 'scale-98', {
-        'group-hover:text-bolt-elements-item-contentActive': !selected && !fileIconClass.includes('text-'),
+        'group-hover:text-recoder-elements-item-contentActive': !selected && !fileIconClass.includes('text-'),
         'text-red-500': errorCount > 0,
       })}
       onClick={onClick}
@@ -965,7 +965,7 @@ function File({
     >
       <div
         className={classNames('flex items-center', {
-          'group-hover:text-bolt-elements-item-contentActive': !selected,
+          'group-hover:text-recoder-elements-item-contentActive': !selected,
         })}
       >
         <div className={classNames('flex-1 truncate pr-2', { 'text-red-400': errorCount > 0 })}>

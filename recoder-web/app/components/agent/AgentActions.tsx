@@ -31,7 +31,7 @@ export const AgentActions = memo(({
   // Running state - show interrupt button
   if (isRunning) {
     return (
-      <div className="flex items-center gap-2 px-3 py-2 border-t border-bolt-elements-borderColor bg-bolt-elements-background-depth-1">
+      <div className="flex items-center gap-2 px-3 py-2 border-t border-recoder-elements-borderColor bg-recoder-elements-background-depth-1">
         <button
           onClick={onInterrupt}
           className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md bg-red-500/10 text-red-400 hover:bg-red-500/20 transition-colors"
@@ -39,7 +39,7 @@ export const AgentActions = memo(({
           <div className="i-ph:stop-circle text-sm" />
           Interrupt
         </button>
-        <span className="text-[10px] text-bolt-elements-textTertiary ml-auto">
+        <span className="text-[10px] text-recoder-elements-textTertiary ml-auto">
           Agent is working...
         </span>
       </div>
@@ -49,10 +49,10 @@ export const AgentActions = memo(({
   // Error/interrupted state - show dismiss
   if (phase === 'error' || phase === 'interrupted') {
     return (
-      <div className="flex items-center gap-2 px-3 py-2 border-t border-bolt-elements-borderColor bg-bolt-elements-background-depth-1">
+      <div className="flex items-center gap-2 px-3 py-2 border-t border-recoder-elements-borderColor bg-recoder-elements-background-depth-1">
         <button
           onClick={onDismiss}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md bg-bolt-elements-background-depth-3 text-bolt-elements-textSecondary hover:bg-bolt-elements-background-depth-4 transition-colors"
+          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md bg-recoder-elements-background-depth-3 text-recoder-elements-textSecondary hover:bg-recoder-elements-background-depth-4 transition-colors"
         >
           Dismiss
         </button>
@@ -72,7 +72,7 @@ export const AgentActions = memo(({
   // Review state - show accept/reject
   if (isReviewable) {
     return (
-      <div className="flex items-center gap-2 px-3 py-2 border-t border-bolt-elements-borderColor bg-bolt-elements-background-depth-1">
+      <div className="flex items-center gap-2 px-3 py-2 border-t border-recoder-elements-borderColor bg-recoder-elements-background-depth-1">
         {/* Reject / Undo */}
         <button
           onClick={onReject}
@@ -92,7 +92,7 @@ export const AgentActions = memo(({
             'flex items-center gap-1.5 px-4 py-1.5 text-xs font-medium rounded-md transition-colors',
             selectedCount > 0
               ? 'bg-green-600 text-white hover:bg-green-700'
-              : 'bg-bolt-elements-background-depth-3 text-bolt-elements-textTertiary cursor-not-allowed',
+              : 'bg-recoder-elements-background-depth-3 text-recoder-elements-textTertiary cursor-not-allowed',
           )}
         >
           <div className="i-ph:check text-sm" />

@@ -24,21 +24,21 @@ export interface DodoPayPlan {
 
 export const DODOPAY_PLANS: Record<string, DodoPayPlan> = {
   pro: {
-    planId: 'dodo_bolt_pro',
+    planId: 'dodo_recoder_pro',
     name: 'Pro',
     price: 20,
     currency: 'USD',
     interval: 'month'
   },
   team: {
-    planId: 'dodo_bolt_team',
+    planId: 'dodo_recoder_team',
     name: 'Team',
     price: 50,
     currency: 'USD',
     interval: 'month'
   },
   enterprise: {
-    planId: 'dodo_bolt_enterprise',
+    planId: 'dodo_recoder_enterprise',
     name: 'Enterprise',
     price: 200,
     currency: 'USD',

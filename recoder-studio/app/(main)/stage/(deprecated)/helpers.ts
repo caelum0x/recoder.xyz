@@ -4,11 +4,11 @@ import type {
 	Trigger,
 	UploadedFileData,
 	WorkspaceId,
-} from "@giselles-ai/protocol";
+} from "@recoder/protocol";
 import {
 	createUploadedFileData,
 	createUploadingFileData,
-} from "@giselles-ai/protocol";
+} from "@recoder/protocol";
 import type { FormInput, FormValues, ValidationErrors } from "./types";
 
 /**
@@ -28,16 +28,20 @@ export function createInputsFromTrigger(
 			return [];
 		}
 		case "manual": {
-			return trigger.configuration.event.parameters.map((parameter) => ({
-				name: parameter.id,
-				label: parameter.name,
-				type: parameter.type,
-				required: parameter.required,
-			}));
+			return trigger.configuration.event.parameters.map(
+				(parameter: (typeof trigger.configuration.event.parameters)[number]) => ({
+					name: parameter.id,
+					label: parameter.name,
+					type: parameter.type,
+					required: parameter.required,
+				}),
+			);
 		}
 		default: {
-			const _exhaustiveCheck: never = trigger.configuration;
-			throw new Error(`Unhandled provider: ${_exhaustiveCheck}`);
+			const provider = String(
+				(trigger.configuration as { provider?: unknown }).provider,
+			);
+			throw new Error(`Unhandled provider: ${provider}`);
 		}
 	}
 }

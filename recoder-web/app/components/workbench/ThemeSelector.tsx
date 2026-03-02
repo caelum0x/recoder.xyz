@@ -53,7 +53,7 @@ export function ThemeSelector() {
     <div className="relative" ref={dropdownRef}>
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center gap-1.5 px-2 py-1 rounded-md text-xs text-bolt-elements-textSecondary hover:text-bolt-elements-textPrimary hover:bg-bolt-elements-background-depth-1 transition-colors"
+        className="flex items-center gap-1.5 px-2 py-1 rounded-md text-xs text-recoder-elements-textSecondary hover:text-recoder-elements-textPrimary hover:bg-recoder-elements-background-depth-1 transition-colors"
         title="Design Theme"
       >
         <div className="i-ph:palette text-sm text-purple-500" />
@@ -62,31 +62,31 @@ export function ThemeSelector() {
       </button>
 
       {isOpen && (
-        <div className="absolute top-full left-0 mt-1 w-56 rounded-lg border border-bolt-elements-borderColor bg-bolt-elements-background-depth-2 shadow-lg z-50 overflow-hidden">
+        <div className="absolute top-full left-0 mt-1 w-56 rounded-lg border border-recoder-elements-borderColor bg-recoder-elements-background-depth-2 shadow-lg z-50 overflow-hidden">
           <div className="max-h-64 overflow-auto py-1">
             {/* No theme */}
             <button
               onClick={() => handleSelect(null)}
-              className={`w-full text-left px-3 py-1.5 text-xs hover:bg-bolt-elements-background-depth-1 transition-colors ${
-                !projectThemeId ? 'text-purple-500 font-medium' : 'text-bolt-elements-textSecondary'
+              className={`w-full text-left px-3 py-1.5 text-xs hover:bg-recoder-elements-background-depth-1 transition-colors ${
+                !projectThemeId ? 'text-purple-500 font-medium' : 'text-recoder-elements-textSecondary'
               }`}
             >
               No Theme
             </button>
 
             {/* Divider */}
-            <div className="border-t border-bolt-elements-borderColor my-1" />
+            <div className="border-t border-recoder-elements-borderColor my-1" />
 
             {/* Built-in themes */}
-            <div className="px-3 py-1 text-[10px] text-bolt-elements-textSecondary font-medium uppercase tracking-wider">
+            <div className="px-3 py-1 text-[10px] text-recoder-elements-textSecondary font-medium uppercase tracking-wider">
               Built-in
             </div>
             {builtinThemes.map((theme) => (
               <button
                 key={theme.id}
                 onClick={() => handleSelect(theme.id)}
-                className={`w-full text-left px-3 py-1.5 text-xs hover:bg-bolt-elements-background-depth-1 transition-colors ${
-                  projectThemeId === theme.id ? 'text-purple-500 font-medium' : 'text-bolt-elements-textPrimary'
+                className={`w-full text-left px-3 py-1.5 text-xs hover:bg-recoder-elements-background-depth-1 transition-colors ${
+                  projectThemeId === theme.id ? 'text-purple-500 font-medium' : 'text-recoder-elements-textPrimary'
                 }`}
               >
                 {theme.name}
@@ -96,16 +96,16 @@ export function ThemeSelector() {
             {/* Custom themes */}
             {customThemes.length > 0 && (
               <>
-                <div className="border-t border-bolt-elements-borderColor my-1" />
-                <div className="px-3 py-1 text-[10px] text-bolt-elements-textSecondary font-medium uppercase tracking-wider">
+                <div className="border-t border-recoder-elements-borderColor my-1" />
+                <div className="px-3 py-1 text-[10px] text-recoder-elements-textSecondary font-medium uppercase tracking-wider">
                   Custom
                 </div>
                 {customThemes.map((theme) => (
                   <button
                     key={theme.id}
                     onClick={() => handleSelect(theme.id)}
-                    className={`w-full text-left px-3 py-1.5 text-xs hover:bg-bolt-elements-background-depth-1 transition-colors ${
-                      projectThemeId === theme.id ? 'text-purple-500 font-medium' : 'text-bolt-elements-textPrimary'
+                    className={`w-full text-left px-3 py-1.5 text-xs hover:bg-recoder-elements-background-depth-1 transition-colors ${
+                      projectThemeId === theme.id ? 'text-purple-500 font-medium' : 'text-recoder-elements-textPrimary'
                     }`}
                   >
                     {theme.name}

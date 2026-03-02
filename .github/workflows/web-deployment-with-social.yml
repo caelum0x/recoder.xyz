@@ -1,15 +1,18 @@
-name: 🚀 Web Platform Deployment with Social Media Integration
+name: Social Media Deployment Announcement (Manual)
+
+# This workflow announces deployments on social media.
+# It does NOT deploy — production deployment is handled by deploy.yml (Hetzner SSH).
+# Use this after a successful deploy to announce the release.
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'recoder-web/**'
-      - '.github/workflows/web-deployment-with-social.yml'
   workflow_dispatch:
     inputs:
+      version:
+        description: 'Version to announce (e.g., v2026.02.27-abc1234)'
+        required: true
+        type: string
       environment:
-        description: 'Environment to deploy'
+        description: 'Environment that was deployed'
         required: true
         default: 'production'
         type: choice
@@ -19,237 +22,75 @@ on:
 
 env:
   NODE_VERSION: '20'
-  PNPM_VERSION: '9'
-  
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  # ===== BUILD AND TEST =====
-  test-and-build:
-    name: 🏗️ Build & Test
+  # ===== GENERATE ANNOUNCEMENT CONTEXT =====
+  prepare-announcement:
+    name: Prepare Announcement
     runs-on: ubuntu-latest
     outputs:
-      build-id: ${{ steps.build-info.outputs.build-id }}
-      version: ${{ steps.version.outputs.version }}
-      
-    defaults:
-      run:
-        working-directory: ./recoder-web
-        
-    steps:
-      - name: 📥 Checkout
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0 # Need full history for version detection
-          
-      - name: 📦 Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          
-      - name: 📦 Setup pnpm
-        uses: pnpm/action-setup@v2
-        with:
-          version: ${{ env.PNPM_VERSION }}
-          
-      - name: 📦 Install dependencies
-        run: pnpm install --frozen-lockfile
-        
-      - name: 🔍 TypeScript check
-        run: pnpm run type-check || echo "Type check failed but continuing..."
-        
-      - name: 🔍 Lint check
-        run: pnpm run lint || echo "Lint check failed but continuing..."
-        
-      - name: 🧪 Run tests
-        run: pnpm run test || echo "Tests failed but continuing..."
-        env:
-          NODE_ENV: test
-          
-      - name: 🏗️ Build application
-        run: pnpm run build
-        env:
-          NODE_ENV: production
-          SKIP_ENV_VALIDATION: true
-          NEXT_TELEMETRY_DISABLED: 1
-          
-      - name: 📊 Generate version and build info
-        id: version
-        run: |
-          if [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
-            VERSION="v$(date +%Y.%m.%d)-$(echo ${{ github.sha }} | cut -c1-7)"
-          else
-            VERSION="dev-$(echo ${{ github.sha }} | cut -c1-7)"
-          fi
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "Version: $VERSION"
-          
-      - name: 📊 Generate build info
-        id: build-info
-        run: |
-          BUILD_ID=$(date +%Y%m%d-%H%M%S)-${GITHUB_SHA:0:7}
-          echo "build-id=$BUILD_ID" >> $GITHUB_OUTPUT
-          echo "Build ID: $BUILD_ID"
-          
-      - name: 📦 Upload build artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: web-build-${{ steps.build-info.outputs.build-id }}
-          path: |
-            recoder-web/.next/
-            recoder-web/package.json
-            recoder-web/next.config.ts
-            recoder-web/public/
-          retention-days: 7
+      changes: ${{ steps.context.outputs.changes }}
+      files-changed: ${{ steps.context.outputs.files-changed }}
 
-  # ===== SECURITY SCAN =====
-  security-scan:
-    name: 🔒 Security Analysis
-    runs-on: ubuntu-latest
-    needs: [test-and-build]
-    continue-on-error: true
-    
     steps:
-      - name: 📥 Checkout
+      - name: Checkout
         uses: actions/checkout@v4
-        
-      - name: 🔍 Run Trivy vulnerability scanner
-        uses: aquasecurity/trivy-action@master
         with:
-          scan-type: 'fs'
-          scan-ref: './recoder-web'
-          format: 'sarif'
-          output: 'trivy-results.sarif'
-          
-      - name: 📊 Upload Trivy scan results
-        uses: github/codeql-action/upload-sarif@v2
-        if: always()
-        with:
-          sarif_file: 'trivy-results.sarif'
+          fetch-depth: 10
 
-  # ===== DEPLOY =====
-  deploy:
-    name: 🚀 Deploy to ${{ inputs.environment || 'production' }}
-    runs-on: ubuntu-latest
-    needs: [test-and-build, security-scan]
-    environment: 
-      name: web-${{ inputs.environment || 'production' }}
-      url: ${{ inputs.environment == 'staging' && 'https://staging-web.recoder.xyz' || 'https://recoder.xyz' }}
-      
-    outputs:
-      deployment-url: ${{ steps.deploy.outputs.preview-url || steps.deploy.outputs.url }}
-      deployment-status: ${{ steps.deploy.conclusion }}
-      
-    steps:
-      - name: 📥 Checkout
-        uses: actions/checkout@v4
-        
-      - name: 📦 Download build artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: web-build-${{ needs.test-and-build.outputs.build-id }}
-          path: ./recoder-web
-          
-      - name: 🚀 Deploy to Vercel
-        id: deploy
-        uses: amondnet/vercel-action@v25
-        with:
-          vercel-token: ${{ secrets.VERCEL_TOKEN }}
-          vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}
-          vercel-project-id: ${{ secrets.VERCEL_WEB_PROJECT_ID }}
-          vercel-args: ${{ (inputs.environment == 'production' || github.ref == 'refs/heads/main') && '--prod' || '' }}
-          working-directory: ./recoder-web
-          scope: ${{ secrets.VERCEL_ORG_ID }}
-          
-      - name: ⏱️ Wait for deployment
-        run: sleep 30
-        
-      - name: 🔍 Health check
-        id: health-check
-        run: |
-          HEALTH_URL="${{ steps.deploy.outputs.preview-url || steps.deploy.outputs.url }}/api/health"
-          echo "Checking health at: $HEALTH_URL"
-          
-          for i in {1..5}; do
-            if curl -f "$HEALTH_URL" > /dev/null 2>&1; then
-              echo "Health check passed on attempt $i"
-              echo "status=healthy" >> $GITHUB_OUTPUT
-              break
-            else
-              echo "Health check failed on attempt $i, waiting..."
-              sleep 10
-              if [ $i -eq 5 ]; then
-                echo "status=unhealthy" >> $GITHUB_OUTPUT
-                exit 1
-              fi
-            fi
-          done
-          
-      - name: ⚡ Performance check
-        run: |
-          URL="${{ steps.deploy.outputs.preview-url || steps.deploy.outputs.url }}"
-          response_time=$(curl -o /dev/null -s -w '%{time_total}' "$URL")
-          echo "Response time: ${response_time}s"
-          
-          # Allow up to 3 seconds for performance
-          if (( $(echo "$response_time > 3.0" | bc -l 2>/dev/null || echo 0) )); then
-            echo "⚠️ Warning: Response time is slow (${response_time}s) but not failing deployment"
-          fi
-
-  # ===== SOCIAL MEDIA DEPLOYMENT ANNOUNCEMENT =====
-  social-media-announcement:
-    name: 📱 Social Media Announcement
-    runs-on: ubuntu-latest
-    needs: [test-and-build, deploy]
-    if: success() && (github.ref == 'refs/heads/main' || inputs.environment == 'production')
-    
-    steps:
-      - name: 📥 Checkout
-        uses: actions/checkout@v4
-        
-      - name: 📦 Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          
-      - name: 📦 Install CLI dependencies
-        working-directory: ./packages/cli
-        run: |
-          npm install --production
-          
-      - name: 🎯 Generate deployment context
+      - name: Generate deployment context
         id: context
         run: |
-          # Extract commit messages for changes summary
-          CHANGES=$(git log --oneline -5 --pretty=format:"• %s" | head -3)
-          
+          # Extract recent commit messages for changes summary
+          CHANGES=$(git log --oneline -5 --pretty=format:"- %s" | head -3)
+
           # Count files changed
-          FILES_CHANGED=$(git diff --name-only HEAD~1 HEAD | wc -l)
-          
-          # Get deployment environment
-          ENV="${{ inputs.environment || 'production' }}"
-          
+          FILES_CHANGED=$(git diff --name-only HEAD~1 HEAD 2>/dev/null | wc -l || echo "0")
+
           echo "changes<<EOF" >> $GITHUB_OUTPUT
           echo "$CHANGES" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
-          
+
           echo "files-changed=$FILES_CHANGED" >> $GITHUB_OUTPUT
-          echo "environment=$ENV" >> $GITHUB_OUTPUT
-          
-      - name: 📢 Execute Social Media Deployment
+
+  # ===== SOCIAL MEDIA ANNOUNCEMENT =====
+  social-media-announcement:
+    name: Required - Social Media Announcement
+    runs-on: ubuntu-latest
+    needs: [prepare-announcement]
+    if: inputs.environment == 'production'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Execute Social Media Announcement via CLI
         working-directory: ./packages/cli
         run: |
-          # Use the real CLI social-deploy command
-          npx tsx src/index.ts social-deploy announce \
-            --project "Recoder Web Platform" \
-            --version "${{ needs.test-and-build.outputs.version }}" \
-            --environment "${{ steps.context.outputs.environment }}" \
-            --url "${{ needs.deploy.outputs.deployment-url }}" \
-            --changes "Platform updates" "Enhanced AI features" "Performance improvements"
+          # Install deps and run social-deploy
+          npm install --production
+
+          if [ -f src/index.js ]; then
+            node src/index.js social-deploy announce \
+              --project "Recoder Platform" \
+              --version "${{ inputs.version }}" \
+              --environment "${{ inputs.environment }}" \
+              --url "https://recoder.xyz" \
+              --changes "Platform updates" "Enhanced AI features" "Performance improvements"
+          else
+            echo "CLI entry point not found: packages/cli/src/index.js" >&2
+            exit 1
+          fi
         env:
-          # Social Media API Keys (add these to GitHub Secrets)
           TWITTER_API_KEY: ${{ secrets.TWITTER_API_KEY }}
           TWITTER_ACCESS_TOKEN: ${{ secrets.TWITTER_ACCESS_TOKEN }}
           LINKEDIN_CLIENT_ID: ${{ secrets.LINKEDIN_CLIENT_ID }}
@@ -258,155 +99,40 @@ jobs:
           LINKEDIN_PERSON_ID: ${{ secrets.LINKEDIN_PERSON_ID }}
           MASTODON_INSTANCE_URL: ${{ secrets.MASTODON_INSTANCE_URL }}
           MASTODON_ACCESS_TOKEN: ${{ secrets.MASTODON_ACCESS_TOKEN }}
-          # AI API Keys for content generation
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
-          
-      - name: 📊 Social Media Report
+
+      - name: Social Media Report
         if: always()
         run: |
-          echo "## 📱 Social Media Deployment Summary" >> $GITHUB_STEP_SUMMARY
+          echo "## Social Media Deployment Summary" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Deployment Details:**" >> $GITHUB_STEP_SUMMARY
-          echo "- Project: Recoder Web Platform" >> $GITHUB_STEP_SUMMARY
-          echo "- Version: ${{ needs.test-and-build.outputs.version }}" >> $GITHUB_STEP_SUMMARY
-          echo "- Environment: ${{ steps.context.outputs.environment }}" >> $GITHUB_STEP_SUMMARY
-          echo "- URL: ${{ needs.deploy.outputs.deployment-url }}" >> $GITHUB_STEP_SUMMARY
-          echo "- Files Changed: ${{ steps.context.outputs.files-changed }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Version:** ${{ inputs.version }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Environment:** ${{ inputs.environment }}" >> $GITHUB_STEP_SUMMARY
+          echo "**URL:** https://recoder.xyz" >> $GITHUB_STEP_SUMMARY
+          echo "**Files Changed:** ${{ needs.prepare-announcement.outputs.files-changed }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Recent Changes:**" >> $GITHUB_STEP_SUMMARY
-          echo "${{ steps.context.outputs.changes }}" >> $GITHUB_STEP_SUMMARY
-
-  # ===== MONITORING SETUP =====
-  post-deployment-monitoring:
-    name: 📊 Setup Monitoring
-    runs-on: ubuntu-latest
-    needs: [deploy, social-media-announcement]
-    if: success()
-    
-    steps:
-      - name: 🔍 Setup Uptime Monitoring
-        run: |
-          echo "Setting up uptime monitoring for ${{ needs.deploy.outputs.deployment-url }}"
-          
-          # Here you could integrate with monitoring services like:
-          # - UptimeRobot
-          # - Pingdom
-          # - DataDog
-          # - New Relic
-          
-          # Example webhook to monitoring service
-          curl -X POST "https://api.uptimerobot.com/v2/newMonitor" \
-            -H "Content-Type: application/x-www-form-urlencoded" \
-            -d "api_key=${{ secrets.UPTIMEROBOT_API_KEY }}&format=json&type=1&url=${{ needs.deploy.outputs.deployment-url }}&friendly_name=Recoder-Web-${{ needs.test-and-build.outputs.version }}" \
-            || echo "Monitoring setup skipped (API key not configured)"
-            
-      - name: 📈 Performance Baseline
-        run: |
-          echo "Recording performance baseline for version ${{ needs.test-and-build.outputs.version }}"
-          
-          # Record deployment metrics
-          curl -X POST "${{ secrets.METRICS_WEBHOOK_URL }}" \
-            -H "Content-Type: application/json" \
-            -d '{
-              "event": "deployment_completed",
-              "platform": "web",
-              "version": "${{ needs.test-and-build.outputs.version }}",
-              "url": "${{ needs.deploy.outputs.deployment-url }}",
-              "timestamp": "'$(date -u +%Y-%m-%dT%H:%M:%SZ)'",
-              "build_id": "${{ needs.test-and-build.outputs.build-id }}",
-              "environment": "${{ inputs.environment || 'production' }}"
-            }' \
-            || echo "Metrics recording skipped (webhook not configured)"
+          echo "${{ needs.prepare-announcement.outputs.changes }}" >> $GITHUB_STEP_SUMMARY
 
   # ===== NOTIFICATION =====
   notify:
-    name: 📢 Team Notifications
+    name: Advisory - Notify Team
     runs-on: ubuntu-latest
-    needs: [test-and-build, deploy, social-media-announcement, post-deployment-monitoring]
+    needs: [prepare-announcement, social-media-announcement]
     if: always()
-    
-    steps:      
-      - name: 📢 Slack Success Notification
-        if: needs.deploy.result == 'success'
-        uses: 8398a7/action-slack@v3
-        with:
-          status: success
-          channel: '#deployments'
-          fields: repo,message,commit,author,action,eventName,ref,workflow
-          text: |
-            🚀 *Recoder Web Platform Deployed Successfully!*
-            
-            **Environment:** ${{ inputs.environment || 'Production' }}
-            **Version:** ${{ needs.test-and-build.outputs.version }}
-            **URL:** ${{ needs.deploy.outputs.deployment-url }}
-            **Build ID:** ${{ needs.test-and-build.outputs.build-id }}
-            
-            ✅ Social media announcement sent
-            ✅ Monitoring configured
-            ✅ Health checks passed
-        env:
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
-          
-      - name: 📢 Slack Failure Notification  
-        if: failure()
-        uses: 8398a7/action-slack@v3
-        with:
-          status: failure
-          channel: '#deployments'
-          fields: repo,message,commit,author,action,eventName,ref,workflow
-          text: |
-            🚨 *Recoder Web Platform Deployment Failed*
-            
-            **Environment:** ${{ inputs.environment || 'Production' }}
-            **Version:** ${{ needs.test-and-build.outputs.version }}
-            **Build ID:** ${{ needs.test-and-build.outputs.build-id }}
-            
-            Please check the workflow logs and resolve issues.
-        env:
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
-          
-      - name: 📧 Email notification for production
-        if: (inputs.environment == 'production' || github.ref == 'refs/heads/main') && needs.deploy.result == 'success'
-        run: |
-          # Send email notification using GitHub's built-in mailer or external service
-          echo "Production deployment of Recoder Web Platform v${{ needs.test-and-build.outputs.version }} completed successfully!" | \
-          mail -s "🚀 Recoder Web Platform v${{ needs.test-and-build.outputs.version }} Deployed" \
-            "${{ secrets.NOTIFICATION_EMAIL }}" || \
-          echo "Email notification skipped (no email service configured)"
 
-  # ===== ROLLBACK PREPARATION =====
-  prepare-rollback:
-    name: 🔄 Prepare Rollback
-    runs-on: ubuntu-latest
-    needs: [test-and-build, deploy]
-    if: success()
-    
     steps:
-      - name: 💾 Store deployment info for rollback
+      - name: Slack Notification
+        if: needs.social-media-announcement.result == 'success'
+        continue-on-error: true
         run: |
-          # Store deployment information that can be used for rollback
-          echo "Storing deployment info for potential rollback"
-          
-          # This would typically store in a database or artifact repository
-          cat << EOF > deployment-info.json
-          {
-            "version": "${{ needs.test-and-build.outputs.version }}",
-            "build_id": "${{ needs.test-and-build.outputs.build-id }}",
-            "deployment_url": "${{ needs.deploy.outputs.deployment-url }}",
-            "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
-            "commit_sha": "${{ github.sha }}",
-            "environment": "${{ inputs.environment || 'production' }}",
-            "workflow_run_id": "${{ github.run_id }}"
-          }
-          EOF
-          
-          echo "Deployment info stored for rollback capability"
-          cat deployment-info.json
-          
-      - name: 📦 Upload rollback info
-        uses: actions/upload-artifact@v4
-        with:
-          name: rollback-info-${{ needs.test-and-build.outputs.build-id }}
-          path: deployment-info.json
-          retention-days: 30
+          if [ -z "${{ secrets.SLACK_WEBHOOK_URL }}" ]; then
+            echo "Slack webhook not configured, skipping"
+            exit 0
+          fi
+          curl -X POST "${{ secrets.SLACK_WEBHOOK_URL }}" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "text": "Recoder ${{ inputs.version }} deployment announced on social media",
+              "channel": "#deployments"
+            }'

@@ -3,11 +3,11 @@ import {
 	type Output,
 	OutputId,
 	type TriggerNode,
-} from "@giselles-ai/protocol";
+} from "@recoder/protocol";
 import {
 	githubEvents,
 	githubEventToInputFields,
-} from "@giselles-ai/trigger-registry";
+} from "@recoder/trigger-registry";
 import { useCallback, useTransition } from "react";
 import {
 	useAppDesignerStore,

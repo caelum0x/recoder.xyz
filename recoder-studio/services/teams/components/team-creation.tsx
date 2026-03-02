@@ -1,5 +1,5 @@
 import invariant from "tiny-invariant";
-import { getUser } from "@/lib/supabase";
+import { getUser } from "@/lib/auth/user";
 import { isEmailFromRoute06 } from "@/lib/utils";
 import { formatStripePrice, getCachedPrice } from "@/services/external/stripe";
 import { fetchUserTeams } from "../fetch-user-teams";

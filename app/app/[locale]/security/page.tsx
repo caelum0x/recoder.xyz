@@ -1,13 +1,16 @@
 import React from 'react';
+import type { Metadata } from 'next';
 import Link from 'next/link';
+import { SiteHeader } from '@/components/SiteHeader';
+import { SiteFooter } from '@/components/SiteFooter';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { 
-  Shield, 
-  Lock, 
-  Key, 
-  FileCheck, 
+import {
+  Shield,
+  Lock,
+  Key,
+  FileCheck,
   AlertTriangle,
   CheckCircle,
   Users,
@@ -22,6 +25,35 @@ import {
   Server,
   Cloud
 } from 'lucide-react';
+
+export const metadata: Metadata = {
+  title: 'Security & Compliance - Enterprise-Grade Protection | Recoder.xyz',
+  description: 'Enterprise-grade security for AI-powered development. SOC 2 Type II certified, ISO 27001 compliant, GDPR ready. Features end-to-end AES-256 encryption, multi-factor authentication, SSO integration, and 99.99% uptime guarantee.',
+  openGraph: {
+    title: 'Security & Compliance - Enterprise-Grade Protection | Recoder.xyz',
+    description: 'SOC 2 Type II, ISO 27001, GDPR compliant. AES-256 encryption, MFA, SSO, and 99.99% uptime for AI development.',
+    url: 'https://recoder.xyz/security',
+    siteName: 'Recoder.xyz',
+    images: [
+      {
+        url: 'https://recoder.xyz/og-image.png',
+        width: 1200,
+        height: 630,
+        alt: 'Recoder Security & Compliance Center',
+      },
+    ],
+    type: 'website',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Security & Compliance - Enterprise-Grade Protection',
+    description: 'SOC 2 Type II, ISO 27001, GDPR compliant. End-to-end encryption and 99.99% uptime.',
+    images: ['https://recoder.xyz/og-image.png'],
+  },
+  alternates: {
+    canonical: 'https://recoder.xyz/security',
+  },
+};
 
 export default function SecurityCenterPage() {
   const securityFeatures = [
@@ -171,24 +203,7 @@ export default function SecurityCenterPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800">
-      {/* Header */}
-      <header className="border-b bg-white/80 backdrop-blur-sm dark:bg-slate-900/80">
-        <div className="container mx-auto px-4 py-4">
-          <div className="flex items-center justify-between">
-            <Link href="/" className="flex items-center space-x-2">
-              <div className="w-8 h-8 bg-gradient-to-r from-blue-500 to-purple-600 rounded-lg flex items-center justify-center">
-                <Shield className="w-5 h-5 text-white" />
-              </div>
-              <span className="text-xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-                Recoder Security Center
-              </span>
-            </Link>
-            <Button asChild>
-              <Link href="/contact">Contact Security Team</Link>
-            </Button>
-          </div>
-        </div>
-      </header>
+      <SiteHeader fixed={false} />
 
       {/* Hero Section */}
       <section className="py-20 px-4">
@@ -399,6 +414,7 @@ export default function SecurityCenterPage() {
           </Card>
         </div>
       </section>
+      <SiteFooter />
     </div>
   );
 }

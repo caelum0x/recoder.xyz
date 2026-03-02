@@ -1,5 +1,5 @@
-import type { WorkspaceId } from "@giselles-ai/protocol";
-import { Task, TaskIndexObject } from "@giselles-ai/protocol";
+import type { WorkspaceId } from "@recoder/protocol";
+import { Task, TaskIndexObject } from "@recoder/protocol";
 import { taskPath, workspaceTaskPath } from "../path";
 import type { GiselleContext } from "../types";
 import { getWorkspaceIndex } from "../utils/workspace-index";

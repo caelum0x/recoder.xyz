@@ -4,7 +4,7 @@ import {
 	type Trigger,
 	type TriggerId,
 	type TriggerNode,
-} from "@giselles-ai/protocol";
+} from "@recoder/protocol";
 import {
 	addGitHubRepositoryIntegrationIndex,
 	removeGitHubRepositoryIntegrationIndex,

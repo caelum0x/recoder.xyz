@@ -11,6 +11,7 @@
 		"dev": "tsx watch src/server.ts",
 		"build": "tsup",
 		"start": "node dist/server.js",
+		"test": "node --import tsx --test src/*.test.ts",
 		"format": "biome check --write .",
 		"check-types": "tsc --noEmit"
 	},

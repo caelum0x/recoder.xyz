@@ -73,7 +73,12 @@ import { moltbookAuthRouter } from './public-api/routes/auth-moltbook.js';
 import { appKeysRouter } from './public-api/routes/app-keys.js';
 import { domainRouter } from './public-api/routes/domains.js';
 import { a2aRouter, getDockerBackendAgentCard } from './a2a-gateway.js';
+import { openclawAdapterRouter } from './a2a-openclaw-adapter.js';
+import { taskLifecycleRouter, collaborationRouter, heartbeatRouter, getHeartbeatTracker, agentRegistryRouter, sseStreamRouter, wireA2AEventBridge, connectorHealthRouter, claudeConnectorRouter, codexConnectorRouter, cursorConnectorRouter, windsurfConnectorRouter, replitConnectorRouter, contextBridgeRouter, a2aOpenApiRouter, a2aSloMetricsRouter, getA2ASloMetrics, restAdapterRouter, gitAdapterRouter, orchestrationRouter, workflowMessagingRouter, adminRouter, getIntegrationWiringService } from './a2a/index.js';
+import { patternRouter } from './a2a/patterns/index.js';
+import { approvalRouter } from './policy/index.js';
 import { startA2AIntentWorker } from './a2a-intent-worker.js';
+import { wireAutonomousRouting } from './a2a/autonomous-routing.service.js';
 import {
   fetchUserByokProviderKeys,
   buildInternalServiceHeaders,
@@ -1226,7 +1231,8 @@ const docker = new Docker();
 
 // App API URL for fetching user tokens
 const APP_API_URL = process.env.APP_API_URL || 'https://recoder.xyz';
-const INTERNAL_SERVICE_KEY = process.env.INTERNAL_SERVICE_KEY || '';
+// Validated at startup (line 265) — guaranteed non-empty in production
+const INTERNAL_SERVICE_KEY = process.env.INTERNAL_SERVICE_KEY ?? '';
 
 // Fetch user's Claude Code OAuth token from app API
 async function fetchClaudeCodeToken(userId: string): Promise<string | null> {
@@ -1660,7 +1666,24 @@ async function ensureContainerRunning(
 
 // Health check
 app.get('/health', (_, res) => {
-  res.json({ status: 'ok', containers: containers.size });
+  // A2A subsystem health
+  let a2aStatus: Record<string, unknown> = { enabled: false };
+  try {
+    const sloSummary = getA2ASloMetrics().getSummary();
+    const heartbeat = getHeartbeatTracker();
+    a2aStatus = {
+      enabled: true,
+      agents: heartbeat.getAllRecords().length,
+      slo: {
+        connectors: sloSummary.connectors,
+        approvals: sloSummary.approvals,
+      },
+    };
+  } catch {
+    a2aStatus = { enabled: false, error: 'not_initialized' };
+  }
+
+  res.json({ status: 'ok', containers: containers.size, a2a: a2aStatus });
 });
 
 // Public API prompt queue health/config endpoint for deploy smoke checks.
@@ -2020,6 +2043,7 @@ app.get('/api/metrics', metricsAuth, (_, res) => {
   const wsStats = wsKeepalive.getStats();
   const cacheStats = fileCache.getStats();
   const portStats = getPortStats();
+  const a2aSloSummary = getA2ASloMetrics().getSummary();
 
   // Compile comprehensive metrics response
   const metrics = {
@@ -2090,6 +2114,12 @@ app.get('/api/metrics', metricsAuth, (_, res) => {
 
     // Errors
     errors: metricsSummary.errors,
+
+    // A2A SLO metrics (Phase 15)
+    a2a: {
+      connectors: a2aSloSummary.connectors,
+      approvals: a2aSloSummary.approvals,
+    },
   };
 
   res.json(metrics);
@@ -2176,6 +2206,10 @@ app.get('/api/metrics/prometheus', metricsAuth, (_, res) => {
   lines.push('# HELP recoder_ports_range_max Maximum port in allocation range');
   lines.push('# TYPE recoder_ports_range_max gauge');
   lines.push(`recoder_ports_range_max ${portStats.portRange.max}`);
+
+  // A2A SLO metrics
+  lines.push('');
+  lines.push(getA2ASloMetrics().getPrometheusFormat());
 
   res.set('Content-Type', 'text/plain; version=0.0.4; charset=utf-8');
   res.send(lines.join('\n'));
@@ -10360,7 +10394,11 @@ app.post(
     const { requestContract, task, paths, lanes, continuous, retryMax, retryBackoffMs } = parseSubagentWorkflowRequest(req.body);
     const contractValidation = validateSubagentWorkflowRequestContract(requestContract, PUBLIC_WORKFLOW_CONTRACT);
     if (!contractValidation.ok) {
-      return res.status(400).json(contractValidation.error);
+      sendError(res, ErrorCode.VALIDATION_ERROR, {
+        message: contractValidation.error?.error || 'Invalid workflow request contract',
+        details: contractValidation.error,
+      });
+      return;
     }
     const workflow = buildSubagentWorkflowPlan({
       task,
@@ -10371,11 +10409,7 @@ app.post(
       retryBackoffMs,
     });
 
-    sendSuccess(
-      res,
-      buildPublicWorkflowResponseData({ workflow, requestContract }),
-      req.requestId || 'unknown',
-    );
+    sendSuccess(res, buildPublicWorkflowResponseData({ workflow, requestContract }));
   }),
 );
 
@@ -10526,22 +10560,20 @@ app.post(
   asyncApiHandler(async (req: AuthenticatedApiRequest, res: express.Response) => {
     const { laneId } = req.params;
     if (!isKnownSubagentLaneId(laneId)) {
-      return res.status(400).json({ error: 'Invalid lane id.' });
+      sendError(res, ErrorCode.VALIDATION_ERROR, { message: 'Invalid lane id.' });
+      return;
     }
     const parsed = parseLaneStatusBody(req.body);
     if (!parsed.status) {
-      return res.status(400).json({ error: 'Invalid status. Must be running, completed, or failed.' });
+      sendError(res, ErrorCode.VALIDATION_ERROR, { message: 'Invalid status. Must be running, completed, or failed.' });
+      return;
     }
     upsertLaneStatus(laneId, parsed);
-    sendSuccess(
-      res,
-      {
-        acknowledged: true,
-        laneId,
-        contract: PUBLIC_WORKFLOW_HEALTH_CONTRACT,
-      },
-      req.requestId || 'unknown',
-    );
+    sendSuccess(res, {
+      acknowledged: true,
+      laneId,
+      contract: PUBLIC_WORKFLOW_HEALTH_CONTRACT,
+    });
   }),
 );
 
@@ -10557,7 +10589,7 @@ app.get(
       contract: PUBLIC_WORKFLOW_HEALTH_CONTRACT,
       ...(workflowRunId ? { workflowRunId } : {}),
       ...snapshot,
-    }, req.requestId || 'unknown');
+    });
   }),
 );
 
@@ -10572,7 +10604,7 @@ app.post(
     sendSuccess(res, {
       contract: PUBLIC_WORKFLOW_CONTRACT,
       cleared,
-    }, req.requestId || 'unknown');
+    });
   }),
 );
 
@@ -11899,6 +11931,70 @@ app.ws('/build-errors/:projectId', async (ws: WebSocket, req: express.Request) =
   ws.on('error', (err) => {
     logger.error({ err, projectId }, 'BuildErrors: error');
   });
+});
+
+// ==================== AGENT BRIDGE WEBSOCKET ====================
+// WebSocket endpoint for local agents (recoder-code CLI) to connect to
+// the A2A workspace system in real-time.
+import { getAgentBridgeService } from './a2a/agent-bridge.service.js';
+
+app.ws('/agent-bridge', async (ws: WebSocket, req: express.Request) => {
+  // Authenticate WebSocket connection
+  const authSession = await authenticateWebSocket(ws, req);
+  if (!authSession) return;
+
+  // Register for keepalive (ping/pong every 30s, timeout after 60s)
+  wsKeepalive.register(ws as any, 'agent-bridge', 'agent-bridge', authSession.userId);
+
+  // Rate limiting for agent bridge messages
+  const agentBridgeRateLimiter = getWsRateLimiter('agent-bridge');
+  agentBridgeRateLimiter.track(ws as any);
+
+  const bridge = getAgentBridgeService();
+
+  // Extract registration data from query params (initial connection)
+  const agentId = (req.query.agentId as string) || `local_${authSession.userId}_${Date.now()}`;
+  const capabilities = req.query.capabilities
+    ? (req.query.capabilities as string).split(',')
+    : [];
+  const workspaceIds = req.query.workspaceIds
+    ? (req.query.workspaceIds as string).split(',')
+    : [];
+
+  // Register the agent
+  const agent = bridge.registerAgent(ws as any, agentId, authSession.userId, capabilities, workspaceIds);
+
+  // Send registration confirmation
+  ws.send(JSON.stringify({
+    type: 'registered',
+    agentId: agent.agentId,
+    workspaces: agent.workspaceIds,
+  }));
+
+  // Handle incoming messages
+  ws.on('message', (data) => {
+    if (!agentBridgeRateLimiter.allowMessage(ws as any)) {
+      logger.warn({ agentId }, 'AgentBridge: message dropped (rate limited)');
+      return;
+    }
+    try {
+      bridge.handleMessage(ws as any, data.toString());
+    } catch (err) {
+      logger.error({ err, agentId }, 'AgentBridge: error handling message');
+    }
+  });
+
+  // Handle disconnect
+  ws.on('close', () => {
+    bridge.unregisterBySocket(ws as any);
+    logger.info({ agentId, userId: authSession.userId }, 'AgentBridge: agent disconnected');
+  });
+
+  ws.on('error', (err) => {
+    logger.error({ err, agentId }, 'AgentBridge: connection error');
+  });
+
+  logger.info({ agentId, userId: authSession.userId }, 'AgentBridge: agent connected');
 });
 
 // ==================== MOBILE API ENDPOINTS ====================
@@ -13290,6 +13386,41 @@ app.use('/api/v1/identity', identityRouter);
 // App key management endpoints (requires API key auth)
 app.use('/api/v1/app-keys', appKeysRouter);
 app.use('/api/a2a', a2aRouter);
+app.use('/api/a2a/tasks', taskLifecycleRouter);
+app.use('/api/a2a/channels', collaborationRouter);
+app.use('/api/a2a', heartbeatRouter);
+app.use('/api/a2a/agents', agentRegistryRouter);
+app.use('/api/a2a/approvals', approvalRouter);
+app.use('/api/a2a/openclaw', openclawAdapterRouter);
+app.use('/api/a2a', sseStreamRouter);
+app.use('/api/a2a/connectors/claude', claudeConnectorRouter);
+app.use('/api/a2a/connectors/codex', codexConnectorRouter);
+app.use('/api/a2a/connectors/cursor', cursorConnectorRouter);
+app.use('/api/a2a/connectors/windsurf', windsurfConnectorRouter);
+app.use('/api/a2a/connectors/replit', replitConnectorRouter);
+app.use('/api/a2a/adapters/rest', restAdapterRouter);
+app.use('/api/a2a/adapters/git', gitAdapterRouter);
+app.use('/api/a2a/context', contextBridgeRouter);
+app.use('/api/a2a', connectorHealthRouter);
+app.use('/api/a2a/patterns', patternRouter);
+app.use('/api/a2a', a2aOpenApiRouter);
+app.use('/api/a2a', a2aSloMetricsRouter);
+app.use('/api/a2a/orchestration', orchestrationRouter);
+app.use('/api/a2a', workflowMessagingRouter);
+app.use('/api/a2a/admin', adminRouter);
+
+// Wire the A2A event bridge (TaskLifecycleService audit -> SSE event bus)
+wireA2AEventBridge();
+
+// Wire cross-subsystem integration (delegation→queue, queue→messaging, etc.)
+getIntegrationWiringService().wireAll();
+
+// Wire autonomous @mention routing (collaboration mentions → delegation handoff)
+wireAutonomousRouting();
+logger.info('autonomous @mention routing wired');
+
+// Start heartbeat tracker background sweep
+getHeartbeatTracker().start();
 
 const agentCardBaseUrl = process.env.DOCKER_BACKEND_PUBLIC_URL || process.env.RECODER_DOCKER_BACKEND_URL || 'https://docker.recoder.xyz';
 app.get('/.well-known/agent-card.json', (_req, res) => {

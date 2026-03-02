@@ -6,7 +6,6 @@
 
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import { FileSearchFactory, AbortError, filter } from './fileSearch.js';
-// @ts-ignore - Test utility types may not resolve properly
 import { createTmpDir, cleanupTmpDir } from './test-utils.js';
 
 describe('FileSearch', () => {

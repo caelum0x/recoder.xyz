@@ -1,8 +1,8 @@
-import type { Trigger, TriggerNode } from "@giselles-ai/protocol";
+import type { Trigger, TriggerNode } from "@recoder/protocol";
 import {
 	githubEvents,
 	githubEventToInputFields,
-} from "@giselles-ai/trigger-registry";
+} from "@recoder/trigger-registry";
 
 export function buttonLabel(node: TriggerNode) {
 	switch (node.content.provider) {
@@ -10,9 +10,13 @@ export function buttonLabel(node: TriggerNode) {
 			return "Start Manual Flow";
 		case "github":
 			return "Test with Dummy Data";
+		case "whatsapp":
+		case "slack":
+			return "Run Trigger";
 		default: {
-			const _exhaustiveCheck: never = node.content.provider;
-			throw new Error(`Unhandled trigger provider type: ${_exhaustiveCheck}`);
+			throw new Error(
+				`Unhandled trigger provider type: ${String(node.content.provider)}`,
+			);
 		}
 	}
 }
@@ -33,7 +37,11 @@ export function createInputsFromTrigger(
 
 	switch (trigger.configuration.provider) {
 		case "github": {
-			const githubEvent = githubEvents[trigger.configuration.event.id];
+			const eventId = String((trigger.configuration.event as { id?: unknown }).id);
+			if (!(eventId in githubEvents)) {
+				return [];
+			}
+			const githubEvent = githubEvents[eventId as keyof typeof githubEvents];
 			return githubEventToInputFields(githubEvent).map((item) => ({
 				name: item.key,
 				label: item.label,
@@ -42,16 +50,24 @@ export function createInputsFromTrigger(
 			}));
 		}
 		case "manual": {
-			return trigger.configuration.event.parameters.map((parameter) => ({
-				name: parameter.id,
-				label: parameter.name,
-				type: parameter.type,
-				required: parameter.required,
-			}));
+			return trigger.configuration.event.parameters.map(
+				(parameter: {
+					id: string;
+					name: string;
+					type: "text" | "multiline-text" | "number";
+					required: boolean;
+				}) => ({
+					name: parameter.id,
+					label: parameter.name,
+					type: parameter.type,
+					required: parameter.required,
+				}),
+			);
 		}
 		default: {
-			const _exhaustiveCheck: never = trigger.configuration;
-			throw new Error(`Unhandled provider: ${_exhaustiveCheck}`);
+			throw new Error(
+				`Unhandled provider: ${String((trigger.configuration as { provider?: string }).provider ?? "unknown")}`,
+			);
 		}
 	}
 }
@@ -91,8 +107,7 @@ export function parseFormInputs(inputs: FormInput[], formData: FormData) {
 				break;
 			}
 			default: {
-				const _exhaustiveCheck: never = input.type;
-				throw new Error(`Unhandled input type: ${_exhaustiveCheck}`);
+				throw new Error(`Unhandled input type: ${String(input.type)}`);
 			}
 		}
 	}

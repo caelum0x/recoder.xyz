@@ -1,12 +1,12 @@
 "use server";
 
-import { DataQueryError } from "@giselles-ai/giselle";
+import { DataQueryError } from "@recoder/giselle";
 import {
 	isQueuedGeneration,
 	type QueuedGeneration,
 	type Trigger,
 	type TriggerId,
-} from "@giselles-ai/protocol";
+} from "@recoder/protocol";
 import { giselle } from "@/app/giselle";
 import { assertWorkspaceAccess } from "@/lib/assert-workspace-access";
 import { getGitHubIdentityState } from "@/services/accounts";

@@ -5,10 +5,14 @@
 
 import { neon } from '@neondatabase/serverless';
 
-const DATABASE_URL = 'postgresql://neondb_owner:npg_e2mFob8SaEOV@ep-silent-mode-adii0v0d-pooler.c-2.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require';
+const DATABASE_URL = process.env.DATABASE_URL;
+if (!DATABASE_URL) {
+  console.error('❌ DATABASE_URL environment variable is required');
+  process.exit(1);
+}
 
 async function seedDatabase() {
-  console.log('🌱 Seeding Bolt.new Database...\n');
+  console.log('🌱 Seeding Recoder Web Database...\n');
 
   const sql = neon(DATABASE_URL);
 

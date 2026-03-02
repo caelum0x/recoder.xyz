@@ -249,9 +249,9 @@ const FILE_ICONS: Record<string, string> = {
   json: 'i-ph:file text-yellow-300',
   html: 'i-ph:file-html text-orange-400',
   css: 'i-ph:file-css text-blue-300',
-  md: 'i-ph:file-md text-bolt-elements-textTertiary',
+  md: 'i-ph:file-md text-recoder-elements-textTertiary',
   py: 'i-ph:file-py text-yellow-400',
-  default: 'i-ph:file text-bolt-elements-textTertiary',
+  default: 'i-ph:file text-recoder-elements-textTertiary',
 };
 
 function getFileIcon(filename: string): string {
@@ -561,13 +561,13 @@ export const CommandPalette = memo(({ files, recentFiles = [], className }: Comm
           transition={{ duration: 0.15, ease: 'easeOut' }}
           className={classNames(
             'relative w-full max-w-2xl mx-4',
-            'bg-bolt-elements-background-depth-2 rounded-xl shadow-2xl',
-            'border border-bolt-elements-borderColor overflow-hidden',
+            'bg-recoder-elements-background-depth-2 rounded-xl shadow-2xl',
+            'border border-recoder-elements-borderColor overflow-hidden',
             className
           )}
         >
           {/* Input */}
-          <div className="flex items-center gap-3 px-4 py-3 border-b border-bolt-elements-borderColor">
+          <div className="flex items-center gap-3 px-4 py-3 border-b border-recoder-elements-borderColor">
             {/* Mode indicator */}
             <div className={classNames(
               'w-6 h-6 rounded flex items-center justify-center text-sm',
@@ -591,15 +591,15 @@ export const CommandPalette = memo(({ files, recentFiles = [], className }: Comm
               onChange={(e) => commandPaletteQuery.set(e.target.value)}
               onKeyDown={handleKeyDown}
               placeholder={placeholder}
-              className="flex-1 bg-transparent outline-none text-bolt-elements-textPrimary placeholder:text-bolt-elements-textTertiary text-base"
+              className="flex-1 bg-transparent outline-none text-recoder-elements-textPrimary placeholder:text-recoder-elements-textTertiary text-base"
               autoComplete="off"
               autoCorrect="off"
               spellCheck={false}
             />
 
             {/* Keyboard hints */}
-            <div className="flex items-center gap-2 text-xs text-bolt-elements-textTertiary">
-              <kbd className="px-1.5 py-0.5 bg-bolt-elements-background-depth-2 rounded border border-bolt-elements-borderColor">
+            <div className="flex items-center gap-2 text-xs text-recoder-elements-textTertiary">
+              <kbd className="px-1.5 py-0.5 bg-recoder-elements-background-depth-2 rounded border border-recoder-elements-borderColor">
                 Tab
               </kbd>
               <span>switch mode</span>
@@ -612,12 +612,12 @@ export const CommandPalette = memo(({ files, recentFiles = [], className }: Comm
             {mode === 'files' && (
               <>
                 {fileResults.length === 0 && query && (
-                  <div className="px-4 py-8 text-center text-bolt-elements-textTertiary">
+                  <div className="px-4 py-8 text-center text-recoder-elements-textTertiary">
                     No files found
                   </div>
                 )}
                 {fileResults.length === 0 && !query && (
-                  <div className="px-4 py-8 text-center text-bolt-elements-textTertiary">
+                  <div className="px-4 py-8 text-center text-recoder-elements-textTertiary">
                     Type to search files
                   </div>
                 )}
@@ -630,13 +630,13 @@ export const CommandPalette = memo(({ files, recentFiles = [], className }: Comm
                       'w-full px-4 py-2.5 flex items-center gap-3 text-left transition-colors',
                       index === selectedIndex
                         ? 'bg-blue-500/20'
-                        : 'hover:bg-bolt-elements-background-depth-3'
+                        : 'hover:bg-recoder-elements-background-depth-3'
                     )}
                   >
                     <div className={classNames('text-lg', getFileIcon(file.name))} />
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
-                        <span className="text-sm text-bolt-elements-textPrimary truncate">
+                        <span className="text-sm text-recoder-elements-textPrimary truncate">
                           {file.name}
                         </span>
                         {file.isRecent && (
@@ -645,7 +645,7 @@ export const CommandPalette = memo(({ files, recentFiles = [], className }: Comm
                           </span>
                         )}
                       </div>
-                      <div className="text-xs text-bolt-elements-textTertiary truncate">
+                      <div className="text-xs text-recoder-elements-textTertiary truncate">
                         {file.directory}
                       </div>
                     </div>
@@ -658,7 +658,7 @@ export const CommandPalette = memo(({ files, recentFiles = [], className }: Comm
             {mode === 'commands' && (
               <>
                 {commandResults.length === 0 && (
-                  <div className="px-4 py-8 text-center text-bolt-elements-textTertiary">
+                  <div className="px-4 py-8 text-center text-recoder-elements-textTertiary">
                     No commands found
                   </div>
                 )}
@@ -671,31 +671,31 @@ export const CommandPalette = memo(({ files, recentFiles = [], className }: Comm
                       'w-full px-4 py-2.5 flex items-center gap-3 text-left transition-colors',
                       index === selectedIndex
                         ? 'bg-blue-500/20'
-                        : 'hover:bg-bolt-elements-background-depth-3'
+                        : 'hover:bg-recoder-elements-background-depth-3'
                     )}
                   >
                     {cmd.icon && (
-                      <div className={classNames('text-lg text-bolt-elements-textTertiary', cmd.icon)} />
+                      <div className={classNames('text-lg text-recoder-elements-textTertiary', cmd.icon)} />
                     )}
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
                         {cmd.category && (
-                          <span className="text-xs text-bolt-elements-textTertiary">
+                          <span className="text-xs text-recoder-elements-textTertiary">
                             {cmd.category}:
                           </span>
                         )}
-                        <span className="text-sm text-bolt-elements-textPrimary">
+                        <span className="text-sm text-recoder-elements-textPrimary">
                           {cmd.label}
                         </span>
                       </div>
                       {cmd.description && (
-                        <div className="text-xs text-bolt-elements-textTertiary truncate">
+                        <div className="text-xs text-recoder-elements-textTertiary truncate">
                           {cmd.description}
                         </div>
                       )}
                     </div>
                     {cmd.shortcut && (
-                      <kbd className="px-1.5 py-0.5 text-xs bg-bolt-elements-background-depth-2 rounded border border-bolt-elements-borderColor text-bolt-elements-textTertiary">
+                      <kbd className="px-1.5 py-0.5 text-xs bg-recoder-elements-background-depth-2 rounded border border-recoder-elements-borderColor text-recoder-elements-textTertiary">
                         {cmd.shortcut}
                       </kbd>
                     )}
@@ -707,13 +707,13 @@ export const CommandPalette = memo(({ files, recentFiles = [], className }: Comm
             {/* Line mode */}
             {mode === 'lines' && (
               <div className="px-4 py-8 text-center">
-                <div className="text-bolt-elements-textTertiary mb-2">
+                <div className="text-recoder-elements-textTertiary mb-2">
                   Go to line
                 </div>
-                <div className="text-3xl font-mono text-bolt-elements-textPrimary">
+                <div className="text-3xl font-mono text-recoder-elements-textPrimary">
                   {query.slice(1) || '1'}
                 </div>
-                <div className="text-xs text-bolt-elements-textTertiary mt-2">
+                <div className="text-xs text-recoder-elements-textTertiary mt-2">
                   Press Enter to navigate
                 </div>
               </div>
@@ -723,7 +723,7 @@ export const CommandPalette = memo(({ files, recentFiles = [], className }: Comm
             {mode === 'symbols' && (
               <>
                 {symbolResults.length === 0 ? (
-                  <div className="px-4 py-8 text-center text-bolt-elements-textTertiary">
+                  <div className="px-4 py-8 text-center text-recoder-elements-textTertiary">
                     {query.length > 1 ? 'No symbols found' : 'Type to search symbols...'}
                   </div>
                 ) : (
@@ -754,8 +754,8 @@ export const CommandPalette = memo(({ files, recentFiles = [], className }: Comm
                         className={classNames(
                           'w-full flex items-center gap-3 px-4 py-2 text-left transition-colors',
                           index === selectedIndex
-                            ? 'bg-purple-500/20 text-bolt-elements-textPrimary'
-                            : 'hover:bg-bolt-elements-background-depth-2 text-bolt-elements-textSecondary'
+                            ? 'bg-purple-500/20 text-recoder-elements-textPrimary'
+                            : 'hover:bg-recoder-elements-background-depth-2 text-recoder-elements-textSecondary'
                         )}
                         onClick={() => handleSelect(index)}
                         onMouseEnter={() => setSelectedIndex(index)}
@@ -764,10 +764,10 @@ export const CommandPalette = memo(({ files, recentFiles = [], className }: Comm
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2">
                             <span className="font-mono text-sm truncate">{sym.name}</span>
-                            <span className="text-xs text-bolt-elements-textTertiary">{sym.kind}</span>
+                            <span className="text-xs text-recoder-elements-textTertiary">{sym.kind}</span>
                           </div>
                           {sym.file && (
-                            <div className="text-xs text-bolt-elements-textTertiary truncate">
+                            <div className="text-xs text-recoder-elements-textTertiary truncate">
                               {sym.file}:{sym.line}
                             </div>
                           )}
@@ -781,38 +781,38 @@ export const CommandPalette = memo(({ files, recentFiles = [], className }: Comm
           </div>
 
           {/* Footer */}
-          <div className="px-4 py-2 border-t border-bolt-elements-borderColor bg-bolt-elements-background-depth-2">
-            <div className="flex items-center justify-between text-xs text-bolt-elements-textTertiary">
+          <div className="px-4 py-2 border-t border-recoder-elements-borderColor bg-recoder-elements-background-depth-2">
+            <div className="flex items-center justify-between text-xs text-recoder-elements-textTertiary">
               <div className="flex items-center gap-4">
                 <span className="flex items-center gap-1">
-                  <kbd className="px-1.5 py-0.5 bg-bolt-elements-background-depth-2 rounded border border-bolt-elements-borderColor">
+                  <kbd className="px-1.5 py-0.5 bg-recoder-elements-background-depth-2 rounded border border-recoder-elements-borderColor">
                     ↑↓
                   </kbd>
                   Navigate
                 </span>
                 <span className="flex items-center gap-1">
-                  <kbd className="px-1.5 py-0.5 bg-bolt-elements-background-depth-2 rounded border border-bolt-elements-borderColor">
+                  <kbd className="px-1.5 py-0.5 bg-recoder-elements-background-depth-2 rounded border border-recoder-elements-borderColor">
                     Enter
                   </kbd>
                   Select
                 </span>
                 <span className="flex items-center gap-1">
-                  <kbd className="px-1.5 py-0.5 bg-bolt-elements-background-depth-2 rounded border border-bolt-elements-borderColor">
+                  <kbd className="px-1.5 py-0.5 bg-recoder-elements-background-depth-2 rounded border border-recoder-elements-borderColor">
                     Esc
                   </kbd>
                   Close
                 </span>
               </div>
               <div className="flex items-center gap-2">
-                <span className="px-1.5 py-0.5 rounded bg-bolt-elements-background-depth-2">
+                <span className="px-1.5 py-0.5 rounded bg-recoder-elements-background-depth-2">
                   &gt;
                 </span>
                 <span>commands</span>
-                <span className="px-1.5 py-0.5 rounded bg-bolt-elements-background-depth-2">
+                <span className="px-1.5 py-0.5 rounded bg-recoder-elements-background-depth-2">
                   :
                 </span>
                 <span>line</span>
-                <span className="px-1.5 py-0.5 rounded bg-bolt-elements-background-depth-2">
+                <span className="px-1.5 py-0.5 rounded bg-recoder-elements-background-depth-2">
                   @
                 </span>
                 <span>symbols</span>

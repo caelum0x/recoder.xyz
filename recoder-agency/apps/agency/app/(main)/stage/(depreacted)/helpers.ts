@@ -4,11 +4,11 @@ import type {
 	Trigger,
 	UploadedFileData,
 	WorkspaceId,
-} from "@giselles-ai/protocol";
+} from "@recoder/protocol";
 import {
 	createUploadedFileData,
 	createUploadingFileData,
-} from "@giselles-ai/protocol";
+} from "@recoder/protocol";
 import type { FormInput, FormValues, ValidationErrors } from "./types";
 
 /**

@@ -5,14 +5,14 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import {
 	db,
-	supabaseUserMappings,
+	authUserMappings,
 	type TeamRole,
 	type UserId,
 	users,
 } from "@/db";
 import { updateRecoderStudioSession } from "@/lib/recoder-studio-session";
 import { logger } from "@/lib/logger";
-import { getUser } from "@/lib/supabase";
+import { getUser } from "@/lib/auth/user";
 import {
 	connectIdentity,
 	disconnectIdentity,
@@ -95,10 +95,10 @@ export async function getAccountInfo() {
 			})
 			.from(users)
 			.innerJoin(
-				supabaseUserMappings,
-				eq(users.dbId, supabaseUserMappings.userDbId),
+				authUserMappings,
+				eq(users.dbId, authUserMappings.userDbId),
 			)
-			.where(eq(supabaseUserMappings.supabaseUserId, supabaseUser.id));
+			.where(eq(authUserMappings.authUserId, supabaseUser.id));
 
 		return user;
 	} catch (error) {
@@ -118,9 +118,9 @@ export async function updateDisplayName(formData: FormData) {
 		const displayName = formData.get("displayName") as string;
 
 		const userDbIdSubquery = db
-			.select({ userDbId: supabaseUserMappings.userDbId })
-			.from(supabaseUserMappings)
-			.where(eq(supabaseUserMappings.supabaseUserId, supabaseUser.id));
+			.select({ userDbId: authUserMappings.userDbId })
+			.from(authUserMappings)
+			.where(eq(authUserMappings.authUserId, supabaseUser.id));
 
 		await db
 			.update(users)
@@ -203,10 +203,10 @@ export async function updateAvatar(formData: FormData) {
 			.select({ avatarUrl: users.avatarUrl })
 			.from(users)
 			.innerJoin(
-				supabaseUserMappings,
-				eq(users.dbId, supabaseUserMappings.userDbId),
+				authUserMappings,
+				eq(users.dbId, authUserMappings.userDbId),
 			)
-			.where(eq(supabaseUserMappings.supabaseUserId, supabaseUser.id));
+			.where(eq(authUserMappings.authUserId, supabaseUser.id));
 
 		const avatarUrl = await uploadAvatar(
 			file,
@@ -216,9 +216,9 @@ export async function updateAvatar(formData: FormData) {
 			validation.ext,
 		);
 		const userDbIdSubquery = db
-			.select({ userDbId: supabaseUserMappings.userDbId })
-			.from(supabaseUserMappings)
-			.where(eq(supabaseUserMappings.supabaseUserId, supabaseUser.id));
+			.select({ userDbId: authUserMappings.userDbId })
+			.from(authUserMappings)
+			.where(eq(authUserMappings.authUserId, supabaseUser.id));
 
 		await db
 			.update(users)

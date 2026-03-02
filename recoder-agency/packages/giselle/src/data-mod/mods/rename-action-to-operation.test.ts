@@ -1,4 +1,4 @@
-import { Generation } from "@giselles-ai/protocol";
+import { Generation } from "@recoder/protocol";
 import type { $ZodIssue } from "@zod/core";
 import { expect, test } from "vitest";
 import generationJson from "./fixtures/rename-action-to-operation/generation1.json";

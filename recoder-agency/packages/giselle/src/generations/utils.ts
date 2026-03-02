@@ -1,4 +1,4 @@
-import { hasTierAccess, languageModels } from "@giselles-ai/language-model";
+import { hasTierAccess, languageModels } from "@recoder/language-model";
 import {
 	type CompletedGeneration,
 	type ContentGenerationNode,
@@ -21,12 +21,12 @@ import {
 	type TextGenerationNode,
 	type WebPageContent,
 	type WorkspaceId,
-} from "@giselles-ai/protocol";
-import type { GiselleStorage } from "@giselles-ai/storage";
+} from "@recoder/protocol";
+import type { GiselleStorage } from "@recoder/storage";
 import {
 	isJsonContent,
 	jsonContentToText,
-} from "@giselles-ai/text-editor-utils";
+} from "@recoder/text-editor-utils";
 import type { DataContent, FilePart, ImagePart, ModelMessage } from "ai";
 import type { GiselleContext } from "../types";
 import type { AppEntryResolver } from "./types";

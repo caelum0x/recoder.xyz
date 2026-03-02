@@ -1,4 +1,4 @@
-import type { GitHubEventId } from "@giselles-ai/trigger-registry";
+import type { GitHubEventId } from "@recoder/trigger-registry";
 import clsx from "clsx/lite";
 import { InfoIcon, PlusIcon, XIcon } from "lucide-react";
 import { type FormEvent, useState } from "react";

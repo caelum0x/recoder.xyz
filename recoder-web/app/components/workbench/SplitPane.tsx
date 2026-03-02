@@ -221,7 +221,7 @@ export const SplitPane = memo(({
       <div
         className={classNames(
           'relative flex items-center justify-center shrink-0',
-          'bg-bolt-elements-borderColor transition-colors duration-150',
+          'bg-recoder-elements-borderColor transition-colors duration-150',
           isHorizontal ? 'cursor-col-resize' : 'cursor-row-resize',
           (isDragging || isHovering) && 'bg-blue-500',
           handleClassName
@@ -245,7 +245,7 @@ export const SplitPane = memo(({
         {handleContent || (
           <div
             className={classNames(
-              'rounded-full bg-bolt-elements-textTertiary/30 transition-all duration-150',
+              'rounded-full bg-recoder-elements-textTertiary/30 transition-all duration-150',
               isHorizontal ? 'h-8 w-1' : 'w-8 h-1',
               (isDragging || isHovering) && 'bg-white/80 scale-110'
             )}
@@ -267,9 +267,9 @@ export const SplitPane = memo(({
                   onFirstCollapseChange?.(!firstCollapsed);
                 }}
                 className={classNames(
-                  'w-5 h-5 rounded bg-bolt-elements-background-depth-3 border border-bolt-elements-borderColor',
-                  'flex items-center justify-center text-xs text-bolt-elements-textSecondary',
-                  'hover:bg-bolt-elements-background-depth-4 hover:text-bolt-elements-textPrimary',
+                  'w-5 h-5 rounded bg-recoder-elements-background-depth-3 border border-recoder-elements-borderColor',
+                  'flex items-center justify-center text-xs text-recoder-elements-textSecondary',
+                  'hover:bg-recoder-elements-background-depth-4 hover:text-recoder-elements-textPrimary',
                   'transition-colors'
                 )}
                 title={firstCollapsed ? 'Expand first pane' : 'Collapse first pane'}
@@ -288,9 +288,9 @@ export const SplitPane = memo(({
                   onSecondCollapseChange?.(!secondCollapsed);
                 }}
                 className={classNames(
-                  'w-5 h-5 rounded bg-bolt-elements-background-depth-3 border border-bolt-elements-borderColor',
-                  'flex items-center justify-center text-xs text-bolt-elements-textSecondary',
-                  'hover:bg-bolt-elements-background-depth-4 hover:text-bolt-elements-textPrimary',
+                  'w-5 h-5 rounded bg-recoder-elements-background-depth-3 border border-recoder-elements-borderColor',
+                  'flex items-center justify-center text-xs text-recoder-elements-textSecondary',
+                  'hover:bg-recoder-elements-background-depth-4 hover:text-recoder-elements-textPrimary',
                   'transition-colors'
                 )}
                 title={secondCollapsed ? 'Expand second pane' : 'Collapse second pane'}

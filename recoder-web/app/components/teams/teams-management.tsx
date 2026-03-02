@@ -221,10 +221,10 @@ export function TeamsManagement({
     <div className="p-4 sm:p-6">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-bold text-bolt-elements-textPrimary">
+          <h1 className="text-2xl sm:text-3xl font-bold text-recoder-elements-textPrimary">
             Team Management
           </h1>
-          <p className="text-bolt-elements-textSecondary mt-1">
+          <p className="text-recoder-elements-textSecondary mt-1">
             Manage your team members and invitations
           </p>
         </div>
@@ -245,14 +245,14 @@ export function TeamsManagement({
 
       {/* Organization Card */}
       <div className="mb-8">
-        <div className="border border-bolt-elements-borderColor bg-bolt-elements-background-depth-2 rounded-lg overflow-hidden">
-          <div className="p-6 bg-bolt-elements-background-depth-3/30">
+        <div className="border border-recoder-elements-borderColor bg-recoder-elements-background-depth-2 rounded-lg overflow-hidden">
+          <div className="p-6 bg-recoder-elements-background-depth-3/30">
             <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-2">
               <div>
-                <h2 className="text-lg sm:text-xl font-semibold text-bolt-elements-textPrimary">
+                <h2 className="text-lg sm:text-xl font-semibold text-recoder-elements-textPrimary">
                   Current Organization
                 </h2>
-                <p className="text-bolt-elements-textSecondary">
+                <p className="text-recoder-elements-textSecondary">
                   {organizationName}
                 </p>
               </div>
@@ -266,14 +266,14 @@ export function TeamsManagement({
 
       {/* Tabs */}
       <div className="space-y-4">
-        <div className="flex border-b border-bolt-elements-borderColor">
+        <div className="flex border-b border-recoder-elements-borderColor">
           <button
             onClick={() => setActiveTab('members')}
             className={classNames(
               'px-4 py-2 text-sm font-medium border-b-2 transition-colors',
               activeTab === 'members'
                 ? 'border-orange-500 text-orange-500'
-                : 'border-transparent text-bolt-elements-textSecondary hover:text-bolt-elements-textPrimary'
+                : 'border-transparent text-recoder-elements-textSecondary hover:text-recoder-elements-textPrimary'
             )}
           >
             Members ({members.length})
@@ -284,7 +284,7 @@ export function TeamsManagement({
               'px-4 py-2 text-sm font-medium border-b-2 transition-colors',
               activeTab === 'invitations'
                 ? 'border-orange-500 text-orange-500'
-                : 'border-transparent text-bolt-elements-textSecondary hover:text-bolt-elements-textPrimary'
+                : 'border-transparent text-recoder-elements-textSecondary hover:text-recoder-elements-textPrimary'
             )}
           >
             Invitations ({invitations.length})

@@ -5,7 +5,7 @@ import {
 	type TriggerNode,
 	Workspace,
 	type WorkspaceId,
-} from "@giselles-ai/protocol";
+} from "@recoder/protocol";
 import { getTrigger, setTrigger } from "../triggers/utils";
 import type { GiselleContext } from "../types";
 import { copyFiles, getWorkspace, setWorkspace } from "./utils";

@@ -3,20 +3,20 @@ import type {
 	BuildAiGatewayHeadersArgs,
 	GiselleCallbacks,
 	QueryContext,
-} from "@giselles-ai/giselle";
-import { traceEmbedding } from "@giselles-ai/langfuse";
-import { getRequestId, NextGiselle } from "@giselles-ai/nextjs/internal";
+} from "@recoder/giselle";
+import { traceEmbedding } from "@recoder/langfuse";
+import { getRequestId, NextGiselle } from "@recoder/nextjs/internal";
 import {
 	type CompletedGeneration,
 	type Generation,
 	type RunningGeneration,
 	WorkspaceId,
-} from "@giselles-ai/protocol";
-import type { EmbeddingMetrics } from "@giselles-ai/rag";
+} from "@recoder/protocol";
+import type { EmbeddingMetrics } from "@recoder/rag";
 import {
 	supabaseStorageDriver as experimental_supabaseStorageDriver,
 	supabaseVaultDriver,
-} from "@giselles-ai/supabase-driver";
+} from "@recoder/supabase-driver";
 import { tasks as jobs } from "@trigger.dev/sdk";
 import { eq, sql } from "drizzle-orm";
 import { apps, db, tasks } from "@/db";

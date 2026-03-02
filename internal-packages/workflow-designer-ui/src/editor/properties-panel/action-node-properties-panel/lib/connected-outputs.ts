@@ -3,7 +3,7 @@ import type {
 	Input,
 	NodeLike,
 	Output,
-} from "@giselles-ai/protocol";
+} from "@recoder/protocol";
 
 export type InputWithConnectedOutput = Input & {
 	connectedOutput?: Output & { node: NodeLike } & {

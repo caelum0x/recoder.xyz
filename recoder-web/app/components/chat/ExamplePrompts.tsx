@@ -74,10 +74,10 @@ export function ExamplePrompts({ onSelectPrompt }: ExamplePromptsProps) {
   return (
     <div className="w-full max-w-6xl mx-auto mb-12">
       <div className="text-center mb-8">
-        <h2 className="text-2xl font-bold text-bolt-elements-textPrimary mb-2">
+        <h2 className="text-2xl font-bold text-recoder-elements-textPrimary mb-2">
           What would you like to build today?
         </h2>
-        <p className="text-bolt-elements-textSecondary">
+        <p className="text-recoder-elements-textSecondary">
           From simple UIs to complete full-stack applications with backends and databases
         </p>
       </div>
@@ -86,12 +86,12 @@ export function ExamplePrompts({ onSelectPrompt }: ExamplePromptsProps) {
         {EXAMPLE_PROMPTS.map((category) => (
           <div
             key={category.category}
-            className="flex flex-col bg-bolt-elements-background-depth-2 rounded-lg border border-bolt-elements-borderColor overflow-hidden hover:border-bolt-elements-borderColorActive transition-colors"
+            className="flex flex-col bg-recoder-elements-background-depth-2 rounded-lg border border-recoder-elements-borderColor overflow-hidden hover:border-recoder-elements-borderColorActive transition-colors"
           >
             {/* Category Header */}
-            <div className="p-4 border-b border-bolt-elements-borderColor bg-bolt-elements-background-depth-3">
-              <h3 className="text-lg font-semibold text-bolt-elements-textPrimary mb-1">{category.category}</h3>
-              <p className="text-xs text-bolt-elements-textSecondary">{category.description}</p>
+            <div className="p-4 border-b border-recoder-elements-borderColor bg-recoder-elements-background-depth-3">
+              <h3 className="text-lg font-semibold text-recoder-elements-textPrimary mb-1">{category.category}</h3>
+              <p className="text-xs text-recoder-elements-textSecondary">{category.description}</p>
             </div>
 
             {/* Prompts */}
@@ -102,18 +102,18 @@ export function ExamplePrompts({ onSelectPrompt }: ExamplePromptsProps) {
                   onClick={() => onSelectPrompt(example.prompt)}
                   className={classNames(
                     'group relative flex flex-col items-start gap-2 p-3 rounded-lg',
-                    'bg-bolt-elements-background-depth-1 hover:bg-bolt-elements-item-backgroundAccent',
-                    'border border-transparent hover:border-bolt-elements-borderColorActive',
+                    'bg-recoder-elements-background-depth-1 hover:bg-recoder-elements-item-backgroundAccent',
+                    'border border-transparent hover:border-recoder-elements-borderColorActive',
                     'transition-all duration-200 text-left',
                   )}
                 >
                   {/* Title */}
-                  <span className="font-medium text-sm text-bolt-elements-textPrimary group-hover:text-bolt-elements-item-contentAccent">
+                  <span className="font-medium text-sm text-recoder-elements-textPrimary group-hover:text-recoder-elements-item-contentAccent">
                     {example.title}
                   </span>
 
                   {/* Description (truncated) */}
-                  <p className="text-xs text-bolt-elements-textSecondary line-clamp-2 group-hover:text-bolt-elements-textPrimary transition-colors">
+                  <p className="text-xs text-recoder-elements-textSecondary line-clamp-2 group-hover:text-recoder-elements-textPrimary transition-colors">
                     {example.prompt}
                   </p>
 
@@ -131,7 +131,7 @@ export function ExamplePrompts({ onSelectPrompt }: ExamplePromptsProps) {
 
                   {/* Hover arrow */}
                   <div className="absolute right-3 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <div className="i-ph:arrow-right text-bolt-elements-item-contentAccent text-lg" />
+                    <div className="i-ph:arrow-right text-recoder-elements-item-contentAccent text-lg" />
                   </div>
                 </button>
               ))}
@@ -141,9 +141,9 @@ export function ExamplePrompts({ onSelectPrompt }: ExamplePromptsProps) {
       </div>
 
       {/* Tips section */}
-      <div className="mt-8 p-4 bg-bolt-elements-background-depth-2 rounded-lg border border-bolt-elements-borderColor">
-        <h4 className="font-semibold text-bolt-elements-textPrimary mb-2">Pro Tips</h4>
-        <ul className="text-sm text-bolt-elements-textSecondary space-y-1">
+      <div className="mt-8 p-4 bg-recoder-elements-background-depth-2 rounded-lg border border-recoder-elements-borderColor">
+        <h4 className="font-semibold text-recoder-elements-textPrimary mb-2">Pro Tips</h4>
+        <ul className="text-sm text-recoder-elements-textSecondary space-y-1">
           <li>Be specific: Mention the tech stack, database, and features you want</li>
           <li>Complex projects use advanced models for best quality</li>
           <li>Simple tasks use fast models for quick results</li>
@@ -171,9 +171,9 @@ export function QuickPrompts({ onSelectPrompt }: ExamplePromptsProps) {
           onClick={() => onSelectPrompt(prompt)}
           className={classNames(
             'px-4 py-2 rounded-full',
-            'bg-bolt-elements-background-depth-2 hover:bg-bolt-elements-item-backgroundAccent',
-            'border border-bolt-elements-borderColor hover:border-bolt-elements-borderColorActive',
-            'text-sm text-bolt-elements-textSecondary hover:text-bolt-elements-textPrimary',
+            'bg-recoder-elements-background-depth-2 hover:bg-recoder-elements-item-backgroundAccent',
+            'border border-recoder-elements-borderColor hover:border-recoder-elements-borderColorActive',
+            'text-sm text-recoder-elements-textSecondary hover:text-recoder-elements-textPrimary',
             'transition-all duration-200',
           )}
         >

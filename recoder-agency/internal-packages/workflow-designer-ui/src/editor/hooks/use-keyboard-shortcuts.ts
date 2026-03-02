@@ -1,6 +1,6 @@
-import { createAppEntryNode } from "@giselles-ai/node-registry";
-import { isAppEntryNode, isEndNode } from "@giselles-ai/protocol";
-import { useFeatureFlag } from "@giselles-ai/react";
+import { createAppEntryNode } from "@recoder/node-registry";
+import { isAppEntryNode, isEndNode } from "@recoder/protocol";
+import { useFeatureFlag } from "@recoder/react";
 import { useKeyPress } from "@xyflow/react";
 import { useCallback, useEffect, useRef } from "react";
 import { useAppDesignerStore } from "../../app-designer";

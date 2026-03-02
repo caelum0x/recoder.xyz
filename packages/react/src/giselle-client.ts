@@ -1,6 +1,6 @@
 "use client";
 
-import type { Giselle } from "@giselles-ai/giselle";
+import type { Giselle } from "@recoder/giselle";
 import type {
 	FileId,
 	Generation,
@@ -11,7 +11,7 @@ import type {
 	QueuedGeneration,
 	Task,
 	WorkspaceId,
-} from "@giselles-ai/protocol";
+} from "@recoder/protocol";
 
 export interface GiselleClient {
 	// apps

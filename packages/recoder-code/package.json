@@ -34,7 +34,7 @@
     "production:check": "npm run lint && npm run typecheck && npm run security:audit",
     "production:bundle": "npm run production:check && npm run build:production",
     "production:deploy": "npm run production:bundle && npm publish --access public",
-    "postinstall": "node -e \"console.log('\\\\n🚀 Recoder Code v2.4.2 installed successfully!\\\\n\\\\n✅ Quick Start: recoder-code\\\\n🔧 Setup Wizard: recoder-code --setup\\\\n🤖 40+ AI Models with Tool Calling Support\\\\n💡 Get Free API Key: https://openrouter.ai/keys\\\\n📚 Documentation: https://recoder.xyz\\\\n')\"",
+    "postinstall": "node -e \"console.log('\\\\n🚀 Recoder Code v2.4.5 installed successfully!\\\\n\\\\n✅ Quick Start: recoder-code\\\\n🔧 Setup Wizard: recoder-code --setup\\\\n🤖 40+ AI Models with Tool Calling Support\\\\n💡 Get Free API Key: https://openrouter.ai/keys\\\\n📚 Documentation: https://recoder.xyz\\\\n')\"",
     "prepare": "echo 'Package prepared for distribution'",
     "prepublishOnly": "npm run prepare && npm run security:audit"
   },
@@ -63,7 +63,7 @@
     "typeorm": "^0.3.27",
     "ws": "^8.18.0",
     "zod": "^3.25.76",
-    "recoder-code-cli": "^2.4.2"
+    "recoder-code-core": "^2.4.2"
   },
   "optionalDependencies": {
     "@google-cloud/speech": "^7.2.0",

@@ -1,4 +1,4 @@
-import type { FileContent, FileData, FileNode } from "@giselles-ai/protocol";
+import type { FileContent, FileData, FileNode } from "@recoder/protocol";
 import { useCallback } from "react";
 import { useAppDesignerStoreApi } from "../app-designer-provider";
 import { useGiselle } from "../giselle-client-provider";

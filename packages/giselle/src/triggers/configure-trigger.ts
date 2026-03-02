@@ -3,7 +3,7 @@ import {
 	Trigger,
 	TriggerId,
 	type TriggerNode,
-} from "@giselles-ai/protocol";
+} from "@recoder/protocol";
 import type * as z from "zod/v4";
 import { addGitHubRepositoryIntegrationIndex } from "../integrations/utils";
 import type { GiselleContext } from "../types";

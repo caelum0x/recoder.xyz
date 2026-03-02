@@ -47,7 +47,7 @@ export function TokenDisplay({
   const getColorClass = () => {
     if (isOverLimit) return 'text-red-500';
     if (isNearLimit) return 'text-yellow-500';
-    return 'text-bolt-elements-textTertiary';
+    return 'text-recoder-elements-textTertiary';
   };
 
   const getProgressBarColor = () => {
@@ -85,23 +85,23 @@ export function TokenDisplay({
 
       {/* Expanded breakdown */}
       {isExpanded && (
-        <div className="bg-bolt-elements-background-depth-3 rounded-md p-2 text-xs space-y-2">
+        <div className="bg-recoder-elements-background-depth-3 rounded-md p-2 text-xs space-y-2">
           {/* Token breakdown */}
           <div className="grid grid-cols-[auto_1fr_auto] gap-x-2 gap-y-1 items-center">
             <div className="i-ph:text-aa text-blue-400" />
-            <span className="text-bolt-elements-textSecondary">Input</span>
-            <span className="text-bolt-elements-textPrimary font-mono">
+            <span className="text-recoder-elements-textSecondary">Input</span>
+            <span className="text-recoder-elements-textPrimary font-mono">
               {formatTokenCount(inputTokens)}
             </span>
 
             <div className="i-ph:chat-dots text-green-400" />
-            <span className="text-bolt-elements-textSecondary">Context</span>
-            <span className="text-bolt-elements-textPrimary font-mono">
+            <span className="text-recoder-elements-textSecondary">Context</span>
+            <span className="text-recoder-elements-textPrimary font-mono">
               {formatTokenCount(contextTokens)}
             </span>
 
-            <div className="i-ph:equals text-bolt-elements-textTertiary" />
-            <span className="text-bolt-elements-textSecondary font-medium">Total</span>
+            <div className="i-ph:equals text-recoder-elements-textTertiary" />
+            <span className="text-recoder-elements-textSecondary font-medium">Total</span>
             <span className={`font-mono font-medium ${getColorClass()}`}>
               {formatTokenCount(totalTokens)}
             </span>
@@ -110,13 +110,13 @@ export function TokenDisplay({
           {/* Progress bar */}
           {showProgressBar && (
             <div className="space-y-1">
-              <div className="flex justify-between text-[10px] text-bolt-elements-textTertiary">
+              <div className="flex justify-between text-[10px] text-recoder-elements-textTertiary">
                 <span>Context Usage</span>
                 <span>
                   {Math.round(percentUsed)}% of {formatTokenCount(contextWindow)}
                 </span>
               </div>
-              <div className="w-full h-1.5 bg-bolt-elements-background-depth-4 rounded-full overflow-hidden">
+              <div className="w-full h-1.5 bg-recoder-elements-background-depth-4 rounded-full overflow-hidden">
                 <div
                   className={`h-full transition-all duration-300 ${getProgressBarColor()}`}
                   style={{ width: `${Math.min(percentUsed, 100)}%` }}
@@ -156,7 +156,7 @@ export function InlineTokenCount({ input }: { input: string }) {
   }
 
   return (
-    <span className="text-xs text-bolt-elements-textTertiary font-mono">
+    <span className="text-xs text-recoder-elements-textTertiary font-mono">
       ~{formatTokenCount(inputTokens)}
     </span>
   );
@@ -190,14 +190,14 @@ export function ContextUsageBar({
 
   return (
     <div className="w-full space-y-1">
-      <div className="flex justify-between text-xs text-bolt-elements-textTertiary">
+      <div className="flex justify-between text-xs text-recoder-elements-textTertiary">
         <span className="flex items-center gap-1">
           <div className="i-ph:coins" />
           {formatTokenCount(totalTokens)} tokens
         </span>
         <span>{Math.round(percentUsed)}%</span>
       </div>
-      <div className="w-full h-1 bg-bolt-elements-background-depth-4 rounded-full overflow-hidden">
+      <div className="w-full h-1 bg-recoder-elements-background-depth-4 rounded-full overflow-hidden">
         <div
           className={`h-full transition-all duration-300 ${getProgressBarColor()}`}
           style={{ width: `${Math.min(percentUsed, 100)}%` }}

@@ -1,15 +1,15 @@
-import { Select } from "@giselle-internal/ui/select";
+import { Select } from "@recoder-internal/ui/select";
 import type {
 	EmbeddingProfileId,
 	GitHubVectorStoreSource,
 	VectorStoreNode,
-} from "@giselles-ai/protocol";
+} from "@recoder/protocol";
 import {
 	DEFAULT_EMBEDDING_PROFILE_ID,
 	EMBEDDING_PROFILES,
 	isEmbeddingProfileId,
-} from "@giselles-ai/protocol";
-import { useVectorStore } from "@giselles-ai/react";
+} from "@recoder/protocol";
+import { useVectorStore } from "@recoder/react";
 import { Info } from "lucide-react";
 import Link from "next/link";
 import { useMemo, useState } from "react";

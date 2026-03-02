@@ -181,35 +181,35 @@ export const MoveDialog = memo(function MoveDialog({
       onClick={onCancel}
     >
       <div
-        className="w-full max-w-md max-h-[70vh] flex flex-col bg-bolt-elements-background-depth-1 border border-bolt-elements-borderColor rounded-lg shadow-xl"
+        className="w-full max-w-md max-h-[70vh] flex flex-col bg-recoder-elements-background-depth-1 border border-recoder-elements-borderColor rounded-lg shadow-xl"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-4 py-3 border-b border-bolt-elements-borderColor">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-recoder-elements-borderColor">
           <div className="flex items-center gap-2">
             <span className="i-ph:folder-open-duotone text-lg text-blue-400" />
-            <h2 className="text-lg font-medium text-bolt-elements-textPrimary">
+            <h2 className="text-lg font-medium text-recoder-elements-textPrimary">
               Move "{itemName}"
             </h2>
           </div>
           <button
             onClick={onCancel}
-            className="p-1 rounded hover:bg-bolt-elements-background-depth-2 text-bolt-elements-textSecondary"
+            className="p-1 rounded hover:bg-recoder-elements-background-depth-2 text-recoder-elements-textSecondary"
           >
             <span className="i-ph:x text-lg" />
           </button>
         </div>
 
         {/* Search */}
-        <div className="px-4 py-2 border-b border-bolt-elements-borderColor">
+        <div className="px-4 py-2 border-b border-recoder-elements-borderColor">
           <div className="relative">
-            <span className="absolute left-2 top-1/2 -translate-y-1/2 i-ph:magnifying-glass text-bolt-elements-textSecondary" />
+            <span className="absolute left-2 top-1/2 -translate-y-1/2 i-ph:magnifying-glass text-recoder-elements-textSecondary" />
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search folders..."
-              className="w-full pl-8 pr-3 py-2 text-sm bg-bolt-elements-background-depth-3 border border-bolt-elements-borderColor rounded outline-none focus:border-blue-500 text-bolt-elements-textPrimary placeholder:text-bolt-elements-textSecondary"
+              className="w-full pl-8 pr-3 py-2 text-sm bg-recoder-elements-background-depth-3 border border-recoder-elements-borderColor rounded outline-none focus:border-blue-500 text-recoder-elements-textPrimary placeholder:text-recoder-elements-textSecondary"
               autoFocus
             />
           </div>
@@ -231,9 +231,9 @@ export const MoveDialog = memo(function MoveDialog({
                   'flex items-center gap-1 px-2 py-1.5 rounded cursor-pointer transition-colors',
                   {
                     'bg-blue-500/20 text-blue-400': isSelected,
-                    'hover:bg-bolt-elements-background-depth-2': !isSelected,
-                    'text-bolt-elements-textPrimary': !isSelected && !isCurrent,
-                    'text-bolt-elements-textSecondary italic': isCurrent,
+                    'hover:bg-recoder-elements-background-depth-2': !isSelected,
+                    'text-recoder-elements-textPrimary': !isSelected && !isCurrent,
+                    'text-recoder-elements-textSecondary italic': isCurrent,
                   }
                 )}
                 style={{ paddingLeft: `${8 + depth * 16}px` }}
@@ -247,7 +247,7 @@ export const MoveDialog = memo(function MoveDialog({
                       e.stopPropagation();
                       toggleFolder(path);
                     }}
-                    className="p-0.5 hover:bg-bolt-elements-background-depth-3 rounded"
+                    className="p-0.5 hover:bg-recoder-elements-background-depth-3 rounded"
                   >
                     <span
                       className={classNames('text-sm transition-transform', {
@@ -275,7 +275,7 @@ export const MoveDialog = memo(function MoveDialog({
 
                 {/* Current Location Indicator */}
                 {isCurrent && (
-                  <span className="text-xs text-bolt-elements-textTertiary">(current)</span>
+                  <span className="text-xs text-recoder-elements-textTertiary">(current)</span>
                 )}
 
                 {/* Selected Indicator */}
@@ -287,27 +287,27 @@ export const MoveDialog = memo(function MoveDialog({
           })}
 
           {filteredFolders.length === 0 && (
-            <div className="text-center py-8 text-bolt-elements-textSecondary text-sm">
+            <div className="text-center py-8 text-recoder-elements-textSecondary text-sm">
               No folders found
             </div>
           )}
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-between px-4 py-3 border-t border-bolt-elements-borderColor">
-          <div className="text-xs text-bolt-elements-textSecondary truncate max-w-[60%]">
+        <div className="flex items-center justify-between px-4 py-3 border-t border-recoder-elements-borderColor">
+          <div className="text-xs text-recoder-elements-textSecondary truncate max-w-[60%]">
             {selectedFolder === sourceParentFolder ? (
               <span className="text-yellow-500">Select a different folder</span>
             ) : (
               <>
-                Move to: <span className="text-bolt-elements-textPrimary">{selectedFolder}</span>
+                Move to: <span className="text-recoder-elements-textPrimary">{selectedFolder}</span>
               </>
             )}
           </div>
           <div className="flex gap-2">
             <button
               onClick={onCancel}
-              className="px-3 py-1.5 text-sm rounded bg-bolt-elements-background-depth-3 text-bolt-elements-textSecondary hover:bg-bolt-elements-background-depth-4 hover:text-bolt-elements-textPrimary transition-colors"
+              className="px-3 py-1.5 text-sm rounded bg-recoder-elements-background-depth-3 text-recoder-elements-textSecondary hover:bg-recoder-elements-background-depth-4 hover:text-recoder-elements-textPrimary transition-colors"
             >
               Cancel
             </button>
@@ -318,7 +318,7 @@ export const MoveDialog = memo(function MoveDialog({
                 'px-3 py-1.5 text-sm rounded transition-colors',
                 {
                   'bg-blue-600 text-white hover:bg-blue-700': canMove,
-                  'bg-bolt-elements-background-depth-3 text-bolt-elements-textTertiary cursor-not-allowed': !canMove,
+                  'bg-recoder-elements-background-depth-3 text-recoder-elements-textTertiary cursor-not-allowed': !canMove,
                 }
               )}
             >

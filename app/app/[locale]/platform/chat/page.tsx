@@ -7,6 +7,8 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { SiteHeader } from '@/components/SiteHeader';
+import { SiteFooter } from '@/components/SiteFooter';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { 
@@ -141,21 +143,7 @@ export default function ChatPlatformPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800">
-      {/* Header */}
-      <header className="border-b bg-white/80 backdrop-blur-sm dark:bg-slate-900/80">
-        <div className="container mx-auto px-4 py-4">
-          <div className="flex items-center justify-between">
-            <Link href="/" className="flex items-center space-x-2">
-              <ArrowLeft className="w-5 h-5" />
-              <span>Back to Home</span>
-            </Link>
-            <div className="flex items-center space-x-2">
-              <MessageSquare className="w-8 h-8 text-blue-600" />
-              <span className="text-xl font-bold">Recoder Chat</span>
-            </div>
-          </div>
-        </div>
-      </header>
+      <SiteHeader fixed={false} />
 
       <div className="container mx-auto px-4 py-12">
         <div className="max-w-md mx-auto">
@@ -256,6 +244,7 @@ export default function ChatPlatformPage() {
           </Card>
         </div>
       </div>
+      <SiteFooter />
     </div>
   );
 }

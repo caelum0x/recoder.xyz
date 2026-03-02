@@ -1,6 +1,6 @@
 "use client";
 
-import type { GiselleClient } from "@giselles-ai/react";
+import type { GiselleClient } from "@recoder/react";
 import { createContext, useContext } from "react";
 
 const GiselleClientContext = createContext<GiselleClient | null>(null);
@@ -19,7 +19,7 @@ export function GiselleClientProvider({
 /**
  * Returns the Giselle API client injected at the app-designer root.
  *
- * Note: this intentionally uses the same name as `@giselles-ai/react`'s hook,
+ * Note: this intentionally uses the same name as `@recoder/react`'s hook,
  * but is scoped to `app-designer/store`.
  */
 export function useGiselle(): GiselleClient {

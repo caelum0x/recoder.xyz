@@ -2,12 +2,12 @@ import type {
 	CompletedGeneration,
 	FailedGeneration,
 	Generation,
-} from "@giselles-ai/protocol";
+} from "@recoder/protocol";
 import {
 	isTextGenerationNode,
 	type TextGenerationNode,
-} from "@giselles-ai/protocol";
-import { useNodeGenerations } from "@giselles-ai/react";
+} from "@recoder/protocol";
+import { useNodeGenerations } from "@recoder/react";
 import clsx from "clsx/lite";
 import { ArrowDownIcon, ArrowUpIcon, TimerIcon } from "lucide-react";
 import { useAppDesignerStore } from "../../../app-designer";

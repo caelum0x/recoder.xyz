@@ -15,6 +15,7 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import Response
 from urllib.parse import quote
 from pydantic import BaseModel, Field
+from core.utils.logger import logger
 
 try:
     from playwright.async_api import async_playwright
@@ -81,7 +82,7 @@ class PresentationToPDFAPI:
                 
                 if file_path:
                     html_path = Path(f"/workspace/{file_path}")
-                    print(f"Using path: {html_path}")
+                    logger.debug(f"Using path: {html_path}")
                     
                     # Verify the path exists
                     if html_path.exists():
@@ -91,9 +92,9 @@ class PresentationToPDFAPI:
                             'filename': filename,
                             'path': html_path
                         })
-                        print(f"Added slide {slide_num}: {html_path}")
+                        logger.info(f"Added slide {slide_num}: {html_path}")
                     else:
-                        print(f"Warning: HTML file does not exist: {html_path}")
+                        logger.warning(f"HTML file does not exist: {html_path}")
             
             # Sort slides by number
             self.slides_info.sort(key=lambda x: x['number'])
@@ -119,11 +120,11 @@ class PresentationToPDFAPI:
             page = None
             try:
                 if attempt > 0:
-                    print(f"  ⟳ Retry {attempt}/{max_retries - 1} for slide {slide_num}...")
+                    logger.warning(f"Retry {attempt}/{max_retries - 1} for slide {slide_num}...")
                     # Wait before retry to let browser stabilize
                     await asyncio.sleep(2.0 * attempt)
                 else:
-                    print(f"Rendering slide {slide_num}: {slide_info['title']}")
+                    logger.info(f"Rendering slide {slide_num}: {slide_info['title']}")
                 
                 # Create new page with exact presentation dimensions
                 page = await browser.new_page()
@@ -182,7 +183,7 @@ class PresentationToPDFAPI:
                     prefer_css_page_size=False
                 )
                 
-                print(f"  ✓ Slide {slide_num} rendered")
+                logger.info(f"Slide {slide_num} rendered")
                 return temp_pdf_path
                 
             except Exception as e:
@@ -196,7 +197,7 @@ class PresentationToPDFAPI:
                 ])
                 
                 if is_retryable and attempt < max_retries - 1:
-                    print(f"  ⚠ Slide {slide_num} failed (attempt {attempt + 1}): {e}")
+                    logger.warning(f"Slide {slide_num} failed (attempt {attempt + 1}): {e}")
                     continue
                 else:
                     # Non-retryable error or exhausted retries
@@ -212,7 +213,7 @@ class PresentationToPDFAPI:
     
     def combine_pdfs(self, pdf_paths: List[Path], output_path: Path) -> None:
         """Combine multiple PDF files into a single PDF."""
-        print(f"Combining {len(pdf_paths)} PDFs...")
+        logger.info(f"Combining {len(pdf_paths)} PDFs...")
         
         pdf_writer = PdfWriter()
         
@@ -228,14 +229,14 @@ class PresentationToPDFAPI:
             with open(output_path, 'wb') as output_file:
                 pdf_writer.write(output_file)
             
-            print(f"✅ PDF created: {output_path}")
+            logger.info(f"PDF created: {output_path}")
             
         except Exception as e:
             raise RuntimeError(f"Error combining PDFs: {e}")
     
     async def convert_to_pdf(self, store_locally: bool = True) -> tuple:
         """Main conversion method with controlled concurrent processing."""
-        print("🚀 Starting HTML to PDF conversion...")
+        logger.info("Starting HTML to PDF conversion...")
         
         # Load metadata
         self.load_metadata()
@@ -246,7 +247,7 @@ class PresentationToPDFAPI:
             
             # Launch browser
             async with async_playwright() as p:
-                print("🌐 Launching browser...")
+                logger.info("Launching browser...")
                 browser = await p.chromium.launch(
                     headless=True,
                     args=[
@@ -270,7 +271,7 @@ class PresentationToPDFAPI:
                         async with semaphore:
                             return await self.render_slide_to_pdf(browser, slide_info, temp_path)
                     
-                    print(f"📄 Processing {len(self.slides_info)} slides (max {max_concurrent} concurrent)...")
+                    logger.info(f"Processing {len(self.slides_info)} slides (max {max_concurrent} concurrent)...")
                     
                     tasks = [
                         render_with_limit(slide_info)
@@ -316,17 +317,17 @@ async def convert_presentation_to_pdf(request: ConvertRequest):
     - JSON response with download URL (if download=false, default)
     """
     try:
-        print(f"📥 Received conversion request for: {request.presentation_path}")
-        print(f"📥 Download flag: {request.download}")
+        logger.info(f"Received conversion request for: {request.presentation_path}")
+        logger.info(f"Download flag: {request.download}")
         
         # Validate presentation path exists before creating converter
         presentation_path_obj = Path(request.presentation_path)
         if not presentation_path_obj.exists():
             error_msg = f"Presentation path does not exist: {request.presentation_path}"
-            print(f"❌ {error_msg}")
+            logger.error(error_msg)
             raise FileNotFoundError(error_msg)
         
-        print(f"✅ Presentation path exists: {presentation_path_obj}")
+        logger.info(f"Presentation path exists: {presentation_path_obj}")
         
         # Create converter
         converter = PresentationToPDFAPI(request.presentation_path)
@@ -335,7 +336,7 @@ async def convert_presentation_to_pdf(request: ConvertRequest):
         if request.download:
             pdf_content, total_slides, presentation_name = await converter.convert_to_pdf(store_locally=False)
             
-            print(f"✨ Direct download conversion completed for: {presentation_name}")
+            logger.info(f"Direct download conversion completed for: {presentation_name}")
             
             encoded_filename = quote(f"{presentation_name}.pdf", safe="")
             return Response(
@@ -347,7 +348,7 @@ async def convert_presentation_to_pdf(request: ConvertRequest):
         # Otherwise, store locally and return JSON with download URL
         pdf_path, total_slides = await converter.convert_to_pdf(store_locally=True)
         
-        print(f"✨ Conversion completed: {pdf_path}")
+        logger.info(f"Conversion completed: {pdf_path}")
         
         # Return workspace-relative path for file system access
         pdf_url = f"/workspace/downloads/{pdf_path.name}"
@@ -362,18 +363,15 @@ async def convert_presentation_to_pdf(request: ConvertRequest):
         
     except FileNotFoundError as e:
         error_msg = str(e)
-        print(f"❌ FileNotFoundError: {error_msg}")
+        logger.error(f"FileNotFoundError: {error_msg}")
         raise HTTPException(status_code=404, detail=error_msg)
     except ValueError as e:
         error_msg = str(e)
-        print(f"❌ ValueError: {error_msg}")
+        logger.error(f"ValueError: {error_msg}")
         raise HTTPException(status_code=400, detail=error_msg)
     except Exception as e:
-        import traceback
         error_msg = str(e)
-        error_traceback = traceback.format_exc()
-        print(f"❌ Conversion error: {error_msg}")
-        print(f"❌ Traceback:\n{error_traceback}")
+        logger.exception(f"Conversion error: {error_msg}")
         raise HTTPException(
             status_code=500, 
             detail=f"Conversion failed: {error_msg}"
@@ -431,7 +429,7 @@ async def convert_html_to_pdf(request: HtmlToPdfRequest):
         else:
             raise HTTPException(status_code=400, detail="Either 'content' or 'file_path' must be provided")
 
-        print(f"[HTML to PDF] Converting: {file_name}, Content length: {len(html_content)}")
+        logger.info(f"[HTML to PDF] Converting: {file_name}, Content length: {len(html_content)}")
 
         # Ensure content is a complete HTML document
         if '<!DOCTYPE' not in html_content.upper() and '<html' not in html_content.lower():
@@ -505,7 +503,7 @@ async def convert_html_to_pdf(request: HtmlToPdfRequest):
             finally:
                 await browser.close()
 
-        print(f"[HTML to PDF] Success: {file_name}.pdf ({len(pdf_bytes)} bytes)")
+        logger.info(f"[HTML to PDF] Success: {file_name}.pdf ({len(pdf_bytes)} bytes)")
 
         # Return PDF directly
         encoded_filename = quote(f"{file_name}.pdf", safe="")
@@ -518,8 +516,6 @@ async def convert_html_to_pdf(request: HtmlToPdfRequest):
     except HTTPException:
         raise
     except Exception as e:
-        import traceback
         error_msg = str(e)
-        print(f"❌ HTML to PDF error: {error_msg}")
-        print(f"❌ Traceback:\n{traceback.format_exc()}")
+        logger.exception(f"HTML to PDF error: {error_msg}")
         raise HTTPException(status_code=500, detail=f"PDF conversion failed: {error_msg}")

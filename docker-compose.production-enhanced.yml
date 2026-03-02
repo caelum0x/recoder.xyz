@@ -1,3 +1,11 @@
+# DEPRECATED — DO NOT USE FOR PRODUCTION DEPLOYMENTS
+#
+# The actual production compose file is: docker-compose.deploy.yml
+# This file is an aspirational template with monitoring, auto-scaling, and security
+# features that are not yet deployed. Uses Traefik instead of the nginx reverse proxy
+# that's actually running on Hetzner.
+#
+# Original description:
 # Enhanced Production Docker Compose Configuration for Recoder.xyz
 # Complete production-ready setup with SSL, monitoring, auto-scaling, and security
 

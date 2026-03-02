@@ -106,15 +106,15 @@ export const CodeBlock = memo(
         {/* Header bar with language label and actions */}
         <div className={classNames(
           styles.CodeBlockHeader,
-          'flex items-center justify-between px-3 py-2 bg-bolt-elements-background-depth-3 rounded-t-md border-b border-bolt-elements-borderColor'
+          'flex items-center justify-between px-3 py-2 bg-recoder-elements-background-depth-3 rounded-t-md border-b border-recoder-elements-borderColor'
         )}>
           {/* Language label */}
           <div className="flex items-center gap-2">
-            <span className="text-xs font-medium text-bolt-elements-textSecondary">
+            <span className="text-xs font-medium text-recoder-elements-textSecondary">
               {languageLabel}
             </span>
             {isCollapsible && (
-              <span className="text-xs text-bolt-elements-textTertiary">
+              <span className="text-xs text-recoder-elements-textTertiary">
                 ({lineCount} lines)
               </span>
             )}
@@ -125,7 +125,7 @@ export const CodeBlock = memo(
             {/* Expand/Collapse button for long code */}
             {isCollapsible && (
               <button
-                className="flex items-center gap-1 px-2 py-1 text-xs rounded hover:bg-bolt-elements-background-depth-2 text-bolt-elements-textSecondary hover:text-bolt-elements-textPrimary transition-colors"
+                className="flex items-center gap-1 px-2 py-1 text-xs rounded hover:bg-recoder-elements-background-depth-2 text-recoder-elements-textSecondary hover:text-recoder-elements-textPrimary transition-colors"
                 onClick={() => setIsExpanded(!isExpanded)}
                 title={isExpanded ? 'Collapse code' : 'Expand code'}
               >
@@ -171,7 +171,7 @@ export const CodeBlock = memo(
         {/* Fade overlay for collapsed state */}
         {isCollapsible && !isExpanded && (
           <div
-            className="absolute bottom-0 left-0 right-0 h-16 bg-gradient-to-t from-bolt-elements-background-depth-2 to-transparent pointer-events-none rounded-b-md"
+            className="absolute bottom-0 left-0 right-0 h-16 bg-gradient-to-t from-recoder-elements-background-depth-2 to-transparent pointer-events-none rounded-b-md"
           />
         )}
       </div>

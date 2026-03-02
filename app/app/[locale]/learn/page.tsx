@@ -1,12 +1,15 @@
+import type { Metadata } from 'next';
 import React from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
+import { SiteHeader } from '@/components/SiteHeader';
+import { SiteFooter } from '@/components/SiteFooter';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { 
-  BookOpen, 
-  Video, 
+import {
+  BookOpen,
+  Video,
   Trophy,
   Users,
   Clock,
@@ -27,6 +30,28 @@ import {
   Headphones,
   Monitor
 } from 'lucide-react';
+
+export const metadata: Metadata = {
+  title: 'Learn - Recoder.xyz',
+  description: 'Master AI-powered development with courses, certifications, and hands-on workshops. From beginner to expert.',
+  openGraph: {
+    title: 'Learn - Recoder.xyz',
+    description: 'Master AI-powered development with courses, certifications, and hands-on workshops. From beginner to expert.',
+    url: 'https://recoder.xyz/learn',
+    siteName: 'Recoder.xyz',
+    images: [{ url: 'https://recoder.xyz/og-image.png', width: 1200, height: 630, alt: 'Recoder Learning Center' }],
+    type: 'website',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Learn - Recoder.xyz',
+    description: 'Master AI-powered development with courses, certifications, and hands-on workshops.',
+    images: ['https://recoder.xyz/og-image.png'],
+  },
+  alternates: {
+    canonical: 'https://recoder.xyz/learn',
+  },
+};
 
 export default function LearningCenterPage() {
   const learningPaths = [
@@ -237,29 +262,7 @@ export default function LearningCenterPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800">
-      {/* Header */}
-      <header className="border-b bg-white/80 backdrop-blur-sm dark:bg-slate-900/80">
-        <div className="container mx-auto px-4 py-4">
-          <div className="flex items-center justify-between">
-            <Link href="/" className="flex items-center space-x-2">
-              <div className="w-8 h-8 bg-gradient-to-r from-blue-500 to-purple-600 rounded-lg flex items-center justify-center">
-                <BookOpen className="w-5 h-5 text-white" />
-              </div>
-              <span className="text-xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-                Learning Center
-              </span>
-            </Link>
-            <div className="flex items-center space-x-4">
-              <Button variant="outline" asChild>
-                <Link href="/learn/my-progress">My Progress</Link>
-              </Button>
-              <Button asChild>
-                <Link href="/auth/signin">Get Started</Link>
-              </Button>
-            </div>
-          </div>
-        </div>
-      </header>
+      <SiteHeader fixed={false} />
 
       {/* Hero Section */}
       <section className="py-20 px-4">
@@ -538,8 +541,8 @@ export default function LearningCenterPage() {
             <CardContent className="p-12">
               <h2 className="text-3xl font-bold mb-4">Ready to Start Learning?</h2>
               <p className="text-lg opacity-90 mb-8">
-                Join thousands of developers who are already building the future with AI. 
-                Start your learning journey today with our free courses.
+                Start building with AI-powered tools today.
+                Our free courses cover everything from setup to advanced workflows.
               </p>
               <div className="flex flex-col sm:flex-row gap-4 justify-center">
                 <Button variant="secondary" size="lg" asChild>
@@ -558,6 +561,7 @@ export default function LearningCenterPage() {
           </Card>
         </div>
       </section>
+      <SiteFooter />
     </div>
   );
 }

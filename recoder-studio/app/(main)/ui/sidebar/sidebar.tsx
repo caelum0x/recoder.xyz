@@ -8,7 +8,7 @@ import { Accordion } from "radix-ui";
 import { fetchCurrentTeam } from "@/services/teams";
 import { isInternalPlan } from "@/services/teams/utils";
 import { RECODER_ECOSYSTEM_URLS } from "@recoder/ecosystem-config";
-import { stageV2Flag } from "../../../../flags";
+import { getStudioInteropRolloutConfig, stageV2Flag } from "../../../../flags";
 import { CreateAppButton } from "./create-app-button";
 import { SidebarLink } from "./sidebar-link";
 
@@ -59,7 +59,10 @@ function SidebarItem({ part }: { part: SidebarPart }) {
 	}
 }
 
-function createStagePart(isStageV2Enabled: boolean): SidebarPart {
+function createStagePart(
+	isStageV2Enabled: boolean,
+	isInteropEnabled: boolean,
+): SidebarPart {
 	const links: SidebarLink[] = [
 		{
 			id: "workflow-ops",
@@ -89,6 +92,16 @@ function createStagePart(isStageV2Enabled: boolean): SidebarPart {
 			href: "/tasks",
 			activeMatchPattern: "/tasks*",
 		},
+		...(isInteropEnabled
+			? [
+					{
+						id: "interop",
+						label: "Interop",
+						href: "/interop",
+						activeMatchPattern: "/interop*",
+					},
+				]
+			: []),
 	];
 
 	return {
@@ -229,10 +242,15 @@ function createEcosystemPart(): SidebarPart {
 }
 
 export async function Sidebar() {
-	const [isStageV2Enabled, team] = await Promise.all([
+	const [isStageV2Enabled, interopRollout, team] = await Promise.all([
 		stageV2Flag(),
+		getStudioInteropRolloutConfig(),
 		fetchCurrentTeam(),
 	]);
+	const isInteropEnabled =
+		interopRollout.mvpFlag &&
+		!interopRollout.killSwitch &&
+		interopRollout.stage !== "off";
 	const isApiPublishingEnabled = isInternalPlan(team);
 	const canAccessDataStore = isInternalPlan(team);
 	const baseSidebarParts = createBaseSidebarParts(
@@ -240,7 +258,7 @@ export async function Sidebar() {
 		canAccessDataStore,
 	);
 	const sidebarParts = [
-		createStagePart(isStageV2Enabled),
+		createStagePart(isStageV2Enabled, isInteropEnabled),
 		...baseSidebarParts,
 		{ type: "divider", id: "divider-ecosystem" } as const,
 		createEcosystemPart(),

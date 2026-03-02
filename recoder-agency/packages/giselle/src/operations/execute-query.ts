@@ -17,13 +17,13 @@ import {
 	type RunningGeneration,
 	type VectorStoreNode,
 	type WorkspaceId,
-} from "@giselles-ai/protocol";
-import type { EmbeddingMetrics } from "@giselles-ai/rag";
-import type { GiselleStorage } from "@giselles-ai/storage";
+} from "@recoder/protocol";
+import type { EmbeddingMetrics } from "@recoder/rag";
+import type { GiselleStorage } from "@recoder/storage";
 import {
 	isJsonContent,
 	jsonContentToText,
-} from "@giselles-ai/text-editor-utils";
+} from "@recoder/text-editor-utils";
 import type { GenerationMetadata } from "../generations";
 import { useGenerationExecutor } from "../generations/internal/use-generation-executor";
 import {

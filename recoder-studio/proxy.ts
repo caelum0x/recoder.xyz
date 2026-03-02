@@ -1,24 +1,38 @@
-import { get } from "@vercel/edge-config";
 import { NextResponse } from "next/server";
-import { supabaseMiddleware } from "./lib/supabase";
+import type { NextRequest } from "next/server";
+import { extractSessionToken } from "@recoder/auth/edge";
 
-export const proxy = supabaseMiddleware(async (user, request) => {
-	const maintenance = await get("maintenance");
-	if (maintenance) {
-		request.nextUrl.pathname = "/maintenance";
-
-		// Rewrite to the url
-		return NextResponse.rewrite(request.nextUrl);
+export async function proxy(request: NextRequest) {
+	try {
+		const { get } = await import("@vercel/edge-config");
+		const maintenance = await get("maintenance");
+		if (maintenance) {
+			request.nextUrl.pathname = "/maintenance";
+			return NextResponse.rewrite(request.nextUrl);
+		}
+	} catch {
+		// Edge Config not available (non-Vercel deployment)
 	}
-	if (user == null) {
-		// no user, potentially respond by redirecting the user to the login page
+
+	if (request.nextUrl.pathname.startsWith("/api/")) {
+		return NextResponse.next();
+	}
+
+	const rawToken = extractSessionToken(
+		(name) => request.cookies.get(name)?.value ?? null,
+	);
+	const sessionToken = rawToken?.split(".")[0] ?? null;
+
+	if (!sessionToken) {
 		const url = request.nextUrl.clone();
 		const returnUrl = request.nextUrl.pathname + request.nextUrl.search;
 		url.pathname = "/login";
 		url.searchParams.set("returnUrl", returnUrl);
 		return NextResponse.redirect(url);
 	}
-});
+
+	return NextResponse.next({ request });
+}
 
 export const config = {
 	matcher: [

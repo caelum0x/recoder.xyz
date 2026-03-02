@@ -4,7 +4,7 @@ import {
 	googleImageLanguageModels,
 	openaiLanguageModels,
 	perplexityLanguageModels,
-} from "@giselles-ai/language-model";
+} from "@recoder/language-model";
 import type {
 	ActionNode,
 	AppEntryNode,
@@ -23,8 +23,8 @@ import type {
 	VariableNode,
 	VectorStoreNode,
 	WebPageNode,
-} from "@giselles-ai/protocol";
-import { NodeId } from "@giselles-ai/protocol";
+} from "@recoder/protocol";
+import { NodeId } from "@recoder/protocol";
 import { describe, expect, test } from "vitest";
 
 import { isSupportedConnection } from "./is-supported-connection";

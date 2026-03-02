@@ -20,7 +20,7 @@
 	--color-surface-background: #2f343e;
 	/* v4 utility alias */
 	--color-surface: var(--color-surface-background);
-	--color-background: #00020b;
+	--color-background: #0d0d0d;
 
 	/* element */
 	--color-element-background: #2e343e;
@@ -49,7 +49,7 @@
 	/* global accent (water blue) */
 	--color-accent: var(--color-primary-100, #0087f6);
 	--color-accent-muted: color-mix(in srgb, var(--color-accent) 60%, transparent);
-	--color-accent-foreground: var(--color-background, #00020b);
+	--color-accent-foreground: var(--color-background, #0d0d0d);
 	/* blue palette */
 	--color-blue-light: #b8e8f4;
 	--color-blue-pale: #c3dcf8;
@@ -68,7 +68,7 @@
 	--width-logo: 70px;
 
 	/* interactive */
-	--color-icon-hover: #6b8ff0;
+	--color-icon-hover: #f97316;
 	--color-destructive-hover-bg: rgba(255, 61, 113, 0.1);
 	/* focused outline color */
 	--color-focused: var(--color-info-500);
@@ -77,11 +77,11 @@
 	--color-panel-background: #2f343e;
 
 	/* stage */
-	--color-stage-background: #030610;
+	--color-stage-background: #0a0a0a;
 	--color-stage-form-background: #101520;
 	--color-stage-sidebar-text: #7084ac;
 	--color-stage-sidebar-text-hover: #f7f9fd;
-	--color-stage-accent: #6b8ff0;
+	--color-stage-accent: #f97316;
 	/* radial overlay for stage canvases (grid background overlay) */
 	--stage-radial-overlay: radial-gradient(
 		45% 45% at 50% 50%,
@@ -90,26 +90,26 @@
 	);
 
 	/* auth */
-	--color-auth-background: hsl(234, 91%, 5%);
-	--color-auth-ambient-light: hsl(218, 58%, 21%);
-	--color-auth-logo-watermark: hsl(207, 19%, 77%);
+	--color-auth-background: hsl(0, 0%, 4%);
+	--color-auth-ambient-light: hsl(25, 40%, 15%);
+	--color-auth-logo-watermark: hsl(0, 0%, 55%);
 	--color-auth-text-dark: hsl(0, 0%, 0%);
 	--color-auth-bg-dark: hsl(0, 0%, 0%);
 	/* v4 utility aliases for auth (used only on auth pages) */
-	--color-auth: hsl(234, 91%, 5%);
-	--color-auth-ambient: hsl(218, 58%, 21%);
-	--color-auth-watermark: hsl(207, 19%, 77%);
+	--color-auth: hsl(0, 0%, 4%);
+	--color-auth-ambient: hsl(25, 40%, 15%);
+	--color-auth-watermark: hsl(0, 0%, 55%);
 	--color-auth-dark: hsl(0, 0%, 0%);
 	/* inverse for inputs like bg-inverse/10 */
 	--color-inverse: #ffffff;
 	--shadow-stage-form:
 		0 4px 12px rgba(0, 0, 0, 0.15), 0 2px 6px rgba(0, 0, 0, 0.1),
-		0 0 20px rgba(59, 130, 246, 0.15), 0 0 40px rgba(59, 130, 246, 0.1),
-		inset 0 -1px 0 rgba(59, 130, 246, 0.2);
+		0 0 20px rgba(249, 115, 22, 0.15), 0 0 40px rgba(249, 115, 22, 0.1),
+		inset 0 -1px 0 rgba(249, 115, 22, 0.2);
 
 	/* editor */
 	--color-editor-foreground: #acb2be;
-	--color-editor-background: #00020b;
+	--color-editor-background: #0d0d0d;
 	--color-editor-gutter-background: #282c33;
 	--color-editor-subheader-background: #2f343e;
 	--color-editor-active-line-background: #2f343e;
@@ -151,9 +151,9 @@
 	--color-border-muted: var(--color-border);
 
 	/* chat bubbles */
-	--color-chat-bubble-accent-bg: rgba(107, 143, 240, 0.2);
-	--color-chat-bubble-accent-border: rgba(107, 143, 240, 0.8);
-	--color-chat-bubble-user-bg: #4a6fd8;
+	--color-chat-bubble-accent-bg: rgba(249, 115, 22, 0.2);
+	--color-chat-bubble-accent-border: rgba(249, 115, 22, 0.8);
+	--color-chat-bubble-user-bg: #f97316;
 
 	/* RGB values for transparency */
 	--color-error-rgb: 255, 61, 113;
@@ -191,8 +191,8 @@
 
 	/* glass button */
 	--shadow-glass:
-		0 8px 20px rgba(107, 143, 240, 0.2),
-		0 3px 10px rgba(107, 143, 240, 0.15),
+		0 8px 20px rgba(249, 115, 22, 0.2),
+		0 3px 10px rgba(249, 115, 22, 0.15),
 		inset 0 1px 0 rgba(255, 255, 255, 0.25),
 		inset 0 -1px 0 rgba(0, 0, 0, 0.15), 0 0 0 1px rgba(255, 255, 255, 0.08);
 	--color-glass-border: var(--color-white);
@@ -201,8 +201,8 @@
 	--glass-button-bg: linear-gradient(
 		135deg,
 		rgba(255, 255, 255, 0.15) 0%,
-		rgba(107, 143, 240, 0.1) 50%,
-		rgba(107, 143, 240, 0.2) 100%
+		rgba(249, 115, 22, 0.1) 50%,
+		rgba(249, 115, 22, 0.2) 100%
 	);
 	--glass-button-bg-hover: linear-gradient(
 		to top,
@@ -264,7 +264,7 @@
 	}
 
 	.stage-running-icon {
-		box-shadow: 0 0 22px rgba(0, 135, 246, 0.8);
+		box-shadow: 0 0 22px rgba(249, 115, 22, 0.8);
 		animation: stage-running-icon-pulse 2.2s ease-in-out infinite;
 	}
 }
@@ -272,15 +272,15 @@
 @keyframes stage-running-icon-pulse {
 	0% {
 		transform: scale(1);
-		box-shadow: 0 0 18px rgba(0, 135, 246, 0.7);
+		box-shadow: 0 0 18px rgba(249, 115, 22, 0.7);
 	}
 	50% {
 		transform: scale(1.03);
-		box-shadow: 0 0 26px rgba(0, 135, 246, 0.95);
+		box-shadow: 0 0 26px rgba(249, 115, 22, 0.95);
 	}
 	100% {
 		transform: scale(1);
-		box-shadow: 0 0 18px rgba(0, 135, 246, 0.7);
+		box-shadow: 0 0 18px rgba(249, 115, 22, 0.7);
 	}
 }
 

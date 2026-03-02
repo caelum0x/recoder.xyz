@@ -14,7 +14,7 @@ class BuildScript {
   }
 
   async run() {
-    console.log(chalk.cyan('🏗️  Building CodeCraft Monorepo\n'));
+    console.log(chalk.cyan('🏗️  Building Recoder Monorepo\n'));
 
     try {
       // Clean previous builds

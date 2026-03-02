@@ -547,6 +547,13 @@
       "when": 1768273634864,
       "tag": "0077_curvy_rawhide_kid",
       "breakpoints": true
+    },
+    {
+      "idx": 78,
+      "version": "7",
+      "when": 1771997142452,
+      "tag": "0078_rename_supabase_user_mappings_to_auth_user_mappings",
+      "breakpoints": true
     }
   ]
 }

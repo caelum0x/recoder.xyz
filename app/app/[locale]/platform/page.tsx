@@ -1,55 +1,37 @@
 'use client';
 
 import Link from 'next/link';
-import { ArrowRight, Globe, Bot, Code2, Server, Cpu, Database, Sparkles, Workflow, Terminal, Shield } from 'lucide-react';
+import { ArrowRight, Globe, Bot, Code2, Database, Sparkles, Workflow, Terminal } from 'lucide-react';
 import { RECODER_SERVICES, getServiceUrlClient } from '@/lib/config/platforms';
+import { SiteHeader } from '@/components/SiteHeader';
+import { SiteFooter } from '@/components/SiteFooter';
 
 const serviceIcons: Record<string, React.ElementType> = {
   app: Globe,
-  frontend: Bot,
+  agents: Bot,
   web: Code2,
-  'docker-backend': Server,
-  backend: Cpu,
   pm: Database,
   studio: Sparkles,
   agency: Workflow,
   openclaw: Terminal,
-  redis: Shield,
 };
 
 const serviceColors: Record<string, string> = {
   app: 'from-orange-500 to-red-500',
-  frontend: 'from-blue-500 to-cyan-500',
+  agents: 'from-blue-500 to-cyan-500',
   web: 'from-orange-500 to-yellow-500',
-  'docker-backend': 'from-gray-500 to-slate-500',
-  backend: 'from-green-500 to-teal-500',
   pm: 'from-blue-500 to-indigo-500',
   studio: 'from-indigo-500 to-violet-500',
   agency: 'from-purple-500 to-pink-500',
   openclaw: 'from-green-500 to-emerald-500',
-  redis: 'from-red-500 to-orange-500',
 };
 
 export default function PlatformPage() {
   const userFacing = RECODER_SERVICES.filter(s => s.showInSwitcher);
-  const infrastructure = RECODER_SERVICES.filter(s => s.internal);
 
   return (
     <div className="min-h-screen bg-black text-white">
-      {/* Header */}
-      <header className="border-b border-white/10 bg-black/80 backdrop-blur-xl">
-        <div className="container mx-auto px-6 h-16 flex items-center justify-between">
-          <Link href="/" className="flex items-center space-x-2">
-            <img src="/logo.png" alt="Recoder" className="w-8 h-8 rounded-lg" />
-            <span className="text-xl font-bold">recoder</span>
-          </Link>
-          <nav className="flex items-center space-x-6">
-            <Link href="/agents" className="text-sm text-gray-400 hover:text-white transition-colors">Agents</Link>
-            <Link href="/plan" className="text-sm text-gray-400 hover:text-white transition-colors">Plan</Link>
-            <Link href="/status" className="text-sm text-gray-400 hover:text-white transition-colors">Status</Link>
-          </nav>
-        </div>
-      </header>
+      <SiteHeader fixed={false} />
 
       {/* Hero */}
       <section className="py-16 px-6">
@@ -58,7 +40,7 @@ export default function PlatformPage() {
             <span className="bg-gradient-to-r from-orange-500 to-purple-600 bg-clip-text text-transparent">Platform</span> Services
           </h1>
           <p className="text-lg text-gray-400 max-w-2xl mx-auto">
-            10 deployed services powering the Recoder AI development ecosystem.
+            {userFacing.length} services powering the Recoder AI development ecosystem.
           </p>
         </div>
       </section>
@@ -108,28 +90,7 @@ export default function PlatformPage() {
         </div>
       </section>
 
-      {/* Infrastructure */}
-      <section className="pb-16 px-6">
-        <div className="container mx-auto max-w-5xl">
-          <h2 className="text-xl font-semibold mb-6">Infrastructure</h2>
-          <div className="grid gap-4 md:grid-cols-3">
-            {infrastructure.map((service) => {
-              const Icon = serviceIcons[service.id] || Server;
-              return (
-                <div key={service.id} className="bg-[#0a0a0a] border border-white/5 rounded-lg p-4">
-                  <div className="flex items-center space-x-3">
-                    <Icon className="w-5 h-5 text-gray-600" />
-                    <div>
-                      <div className="text-sm font-medium text-gray-400">{service.label}</div>
-                      <div className="text-xs text-gray-600">{service.description} &middot; Port {service.port}</div>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      </section>
+      <SiteFooter />
     </div>
   );
 }

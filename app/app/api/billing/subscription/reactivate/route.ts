@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from "@/lib/auth-helpers";
 import { auth } from '@/lib/auth-config';
 import { headers } from 'next/headers';
+import { logger } from '@/lib/logger';
 
 import { prisma } from '@/lib/prisma';
 
@@ -70,7 +71,7 @@ export async function POST(req: NextRequest) {
       message: 'Subscription reactivated successfully',
     });
   } catch (error) {
-    console.error('Error reactivating subscription:', error);
+    logger.error('Error reactivating subscription', { route: 'api/billing/subscription/reactivate', error: error instanceof Error ? error.message : String(error) });
     return NextResponse.json(
       { success: false, error: 'Failed to reactivate subscription' },
       { status: 500 }

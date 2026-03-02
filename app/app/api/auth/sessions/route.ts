@@ -10,6 +10,7 @@ import { headers } from 'next/headers';
 import { prisma } from '@/lib/prisma';
 import { UAParser } from 'ua-parser-js';
 import { assertAuthSessionsListResponse } from '@/lib/contracts/auth-session-contracts';
+import { logger } from '@/lib/logger';
 
 export async function GET(request: NextRequest) {
   try {
@@ -64,7 +65,7 @@ export async function GET(request: NextRequest) {
     }));
 
   } catch (error: any) {
-    console.error('[Sessions GET] Error:', error);
+    logger.error('[Sessions GET] Error:', { error: String(error), route: 'auth/sessions' });
     return NextResponse.json(
       assertAuthSessionsListResponse({ success: false, error: 'Failed to fetch sessions' }),
       { status: 500 }
@@ -129,7 +130,7 @@ export async function DELETE(request: NextRequest) {
     }));
 
   } catch (error: any) {
-    console.error('[Sessions DELETE] Error:', error);
+    logger.error('[Sessions DELETE] Error:', { error: String(error), route: 'auth/sessions' });
     return NextResponse.json(
       assertAuthSessionsListResponse({ success: false, error: 'Failed to revoke session' }),
       { status: 500 }

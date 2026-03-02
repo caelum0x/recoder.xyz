@@ -7,6 +7,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { CLIAuthService } from '@/lib/services/cli-auth.service';
+import { logger } from '@/lib/logger';
 
 export async function GET(req: NextRequest) {
   try {
@@ -36,7 +37,7 @@ export async function GET(req: NextRequest) {
       sessionId: result.sessionId,
     });
   } catch (error: any) {
-    console.error('Token validation error:', error);
+    logger.error('Token validation error:', { error: String(error), route: 'auth/cli/validate' });
     return NextResponse.json(
       { valid: false, error: 'Invalid token' },
       { status: 401 }

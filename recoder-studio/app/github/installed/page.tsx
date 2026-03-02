@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 
-export default function () {
+export default function GitHubInstalledPage() {
 	useEffect(() => {
 		// Send a message to the opener window
 		if (window.opener && !window.opener.closed) {

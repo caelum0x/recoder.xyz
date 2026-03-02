@@ -1,6 +1,6 @@
 "use client";
 
-import { isAppEntryNode, isEndNode, type NodeId } from "@giselles-ai/protocol";
+import { isAppEntryNode, isEndNode, type NodeId } from "@recoder/protocol";
 import {
 	type Connection,
 	type Edge,
@@ -17,8 +17,8 @@ import {
 	Panel as XYFlowPanel,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
-import { useToasts } from "@giselle-internal/ui/toast";
-import { isSupportedConnection } from "@giselles-ai/react";
+import { useToasts } from "@recoder-internal/ui/toast";
+import { isSupportedConnection } from "@recoder/react";
 import clsx from "clsx/lite";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";

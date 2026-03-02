@@ -1,6 +1,6 @@
-import type { Octokit } from "@giselles-ai/github-tool";
-import type { Tool } from "@giselles-ai/language-model-registry";
-import { hasSchema } from "@giselles-ai/language-model-registry";
+import type { Octokit } from "@recoder/github-tool";
+import type { Tool } from "@recoder/language-model-registry";
+import { hasSchema } from "@recoder/language-model-registry";
 import type { ToolSet } from "ai";
 import { tool as defineTool } from "ai";
 import type { GiselleContext } from "../../../types";

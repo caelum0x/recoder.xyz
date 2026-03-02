@@ -1,4 +1,4 @@
-import type { LanguageModelTool } from "@giselles-ai/language-model-registry";
+import type { LanguageModelTool } from "@recoder/language-model-registry";
 
 /**
  * Applies default values to configuration for optional fields that are not set

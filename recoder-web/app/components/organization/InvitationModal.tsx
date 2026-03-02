@@ -139,29 +139,29 @@ export const InvitationModal = memo(({ isOpen, onClose, teams = [] }: Invitation
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50" onClick={onClose}>
       <div
-        className="bg-bolt-elements-background-depth-2 rounded-xl border border-bolt-elements-borderColor w-full max-w-2xl shadow-2xl max-h-[90vh] flex flex-col"
+        className="bg-recoder-elements-background-depth-2 rounded-xl border border-recoder-elements-borderColor w-full max-w-2xl shadow-2xl max-h-[90vh] flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="px-6 py-4 border-b border-bolt-elements-borderColor flex items-center justify-between shrink-0">
+        <div className="px-6 py-4 border-b border-recoder-elements-borderColor flex items-center justify-between shrink-0">
           <div>
-            <h2 className="text-lg font-semibold text-bolt-elements-textPrimary">
+            <h2 className="text-lg font-semibold text-recoder-elements-textPrimary">
               Invite Members
             </h2>
-            <p className="text-sm text-bolt-elements-textTertiary mt-0.5">
+            <p className="text-sm text-recoder-elements-textTertiary mt-0.5">
               Invite people to join your organization
             </p>
           </div>
           <button
             onClick={onClose}
-            className="p-2 text-bolt-elements-textTertiary hover:text-bolt-elements-textPrimary rounded-lg hover:bg-bolt-elements-background-depth-2 transition-colors"
+            className="p-2 text-recoder-elements-textTertiary hover:text-recoder-elements-textPrimary rounded-lg hover:bg-recoder-elements-background-depth-2 transition-colors"
           >
             <span className="i-ph:x text-lg" />
           </button>
         </div>
 
         {/* Tabs */}
-        <div className="px-6 border-b border-bolt-elements-borderColor shrink-0">
+        <div className="px-6 border-b border-recoder-elements-borderColor shrink-0">
           <div className="flex gap-1">
             <TabButton
               active={activeTab === 'invite'}
@@ -262,7 +262,7 @@ const InviteForm = memo(({
       {/* Email Input */}
       <div>
         <div className="flex items-center justify-between mb-1.5">
-          <label className="text-sm font-medium text-bolt-elements-textPrimary">
+          <label className="text-sm font-medium text-recoder-elements-textPrimary">
             Email Address
           </label>
           <button
@@ -281,21 +281,21 @@ const InviteForm = memo(({
               onChange={(e) => setBulkEmails(e.target.value)}
               placeholder="Enter multiple email addresses separated by commas, semicolons, or new lines..."
               rows={4}
-              className="w-full px-3 py-2 bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor rounded-lg text-sm text-bolt-elements-textPrimary placeholder:text-bolt-elements-textTertiary focus:border-blue-500 focus:outline-none resize-none"
+              className="w-full px-3 py-2 bg-recoder-elements-background-depth-2 border border-recoder-elements-borderColor rounded-lg text-sm text-recoder-elements-textPrimary placeholder:text-recoder-elements-textTertiary focus:border-blue-500 focus:outline-none resize-none"
             />
-            <p className="text-xs text-bolt-elements-textTertiary mt-1">
+            <p className="text-xs text-recoder-elements-textTertiary mt-1">
               {getBulkEmailCount(bulkEmails)} valid email(s) detected
             </p>
           </div>
         ) : (
           <div className="relative">
-            <span className="i-ph:envelope absolute left-3 top-1/2 -translate-y-1/2 text-bolt-elements-textTertiary" />
+            <span className="i-ph:envelope absolute left-3 top-1/2 -translate-y-1/2 text-recoder-elements-textTertiary" />
             <input
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="colleague@company.com"
-              className="w-full pl-10 pr-3 py-2.5 bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor rounded-lg text-sm text-bolt-elements-textPrimary placeholder:text-bolt-elements-textTertiary focus:border-blue-500 focus:outline-none"
+              className="w-full pl-10 pr-3 py-2.5 bg-recoder-elements-background-depth-2 border border-recoder-elements-borderColor rounded-lg text-sm text-recoder-elements-textPrimary placeholder:text-recoder-elements-textTertiary focus:border-blue-500 focus:outline-none"
               autoFocus
             />
           </div>
@@ -304,7 +304,7 @@ const InviteForm = memo(({
 
       {/* Role Selection */}
       <div>
-        <label className="text-sm font-medium text-bolt-elements-textPrimary mb-2 block">
+        <label className="text-sm font-medium text-recoder-elements-textPrimary mb-2 block">
           Role
         </label>
         <div className="grid grid-cols-3 gap-2">
@@ -338,7 +338,7 @@ const InviteForm = memo(({
       {/* Team Selection */}
       {teams.length > 0 && (
         <div>
-          <label className="text-sm font-medium text-bolt-elements-textPrimary mb-2 block">
+          <label className="text-sm font-medium text-recoder-elements-textPrimary mb-2 block">
             Add to Teams (optional)
           </label>
           <div className="flex flex-wrap gap-2">
@@ -350,7 +350,7 @@ const InviteForm = memo(({
                   'flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm transition-colors border',
                   selectedTeams.includes(team.id)
                     ? 'bg-blue-500/20 border-blue-500/50 text-blue-300'
-                    : 'bg-bolt-elements-background-depth-2 border-bolt-elements-borderColor text-bolt-elements-textTertiary hover:border-bolt-elements-borderColorActive'
+                    : 'bg-recoder-elements-background-depth-2 border-recoder-elements-borderColor text-recoder-elements-textTertiary hover:border-recoder-elements-borderColorActive'
                 )}
               >
                 <div
@@ -370,7 +370,7 @@ const InviteForm = memo(({
       {/* Custom Message */}
       {!showBulkInput && (
         <div>
-          <label className="text-sm font-medium text-bolt-elements-textPrimary mb-1.5 block">
+          <label className="text-sm font-medium text-recoder-elements-textPrimary mb-1.5 block">
             Personal Message (optional)
           </label>
           <textarea
@@ -378,7 +378,7 @@ const InviteForm = memo(({
             onChange={(e) => setMessage(e.target.value)}
             placeholder="Add a personal note to the invitation email..."
             rows={2}
-            className="w-full px-3 py-2 bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor rounded-lg text-sm text-bolt-elements-textPrimary placeholder:text-bolt-elements-textTertiary focus:border-blue-500 focus:outline-none resize-none"
+            className="w-full px-3 py-2 bg-recoder-elements-background-depth-2 border border-recoder-elements-borderColor rounded-lg text-sm text-recoder-elements-textPrimary placeholder:text-recoder-elements-textTertiary focus:border-blue-500 focus:outline-none resize-none"
           />
         </div>
       )}
@@ -437,14 +437,14 @@ const RoleOption = memo(({ role, currentRole, onSelect, icon, title, description
         'flex flex-col items-center gap-1 p-3 rounded-lg border transition-colors',
         isSelected
           ? 'bg-blue-500/20 border-blue-500/50 text-blue-300'
-          : 'bg-bolt-elements-background-depth-2 border-bolt-elements-borderColor text-bolt-elements-textTertiary hover:border-bolt-elements-borderColorActive'
+          : 'bg-recoder-elements-background-depth-2 border-recoder-elements-borderColor text-recoder-elements-textTertiary hover:border-recoder-elements-borderColorActive'
       )}
     >
       <span className={classNames(icon, 'text-xl', isSelected && 'text-blue-400')} />
       <span className={classNames('text-sm font-medium', isSelected && 'text-blue-300')}>
         {title}
       </span>
-      <span className="text-xs text-bolt-elements-textTertiary">{description}</span>
+      <span className="text-xs text-recoder-elements-textTertiary">{description}</span>
     </button>
   );
 });
@@ -470,16 +470,16 @@ const RolePermissionsInfo = memo(({ role }: RolePermissionsInfoProps) => {
   const rolePermissions = permissions[role] || permissions.member;
 
   return (
-    <div className="p-3 bg-bolt-elements-background-depth-2 rounded-lg">
+    <div className="p-3 bg-recoder-elements-background-depth-2 rounded-lg">
       <div className="flex items-center gap-2 mb-2">
         <span className="i-ph:info text-blue-400" />
-        <span className="text-sm font-medium text-bolt-elements-textPrimary capitalize">
+        <span className="text-sm font-medium text-recoder-elements-textPrimary capitalize">
           {role} Permissions
         </span>
       </div>
       <ul className="space-y-1">
         {rolePermissions.map((permission, index) => (
-          <li key={index} className="flex items-center gap-2 text-xs text-bolt-elements-textTertiary">
+          <li key={index} className="flex items-center gap-2 text-xs text-recoder-elements-textTertiary">
             <span className="i-ph:check-circle text-green-400" />
             {permission}
           </li>
@@ -515,11 +515,11 @@ const PendingInvitations = memo(({
       <div className="p-6">
         {Array.from({ length: 3 }).map((_, i) => (
           <div key={i} className="mb-3 animate-pulse">
-            <div className="flex items-center gap-3 p-4 bg-bolt-elements-background-depth-2 rounded-lg">
-              <div className="w-10 h-10 bg-bolt-elements-background-depth-3 rounded-full" />
+            <div className="flex items-center gap-3 p-4 bg-recoder-elements-background-depth-2 rounded-lg">
+              <div className="w-10 h-10 bg-recoder-elements-background-depth-3 rounded-full" />
               <div className="flex-1">
-                <div className="h-4 bg-bolt-elements-background-depth-3 rounded w-48 mb-1" />
-                <div className="h-3 bg-bolt-elements-background-depth-3 rounded w-32" />
+                <div className="h-4 bg-recoder-elements-background-depth-3 rounded w-48 mb-1" />
+                <div className="h-3 bg-recoder-elements-background-depth-3 rounded w-32" />
               </div>
             </div>
           </div>
@@ -531,9 +531,9 @@ const PendingInvitations = memo(({
   if (invitations.length === 0) {
     return (
       <div className="p-8 text-center">
-        <span className="i-ph:envelope-open text-4xl text-bolt-elements-textTertiary mb-3 block" />
-        <h3 className="text-bolt-elements-textPrimary font-medium mb-1">No pending invitations</h3>
-        <p className="text-sm text-bolt-elements-textTertiary">
+        <span className="i-ph:envelope-open text-4xl text-recoder-elements-textTertiary mb-3 block" />
+        <h3 className="text-recoder-elements-textPrimary font-medium mb-1">No pending invitations</h3>
+        <p className="text-sm text-recoder-elements-textTertiary">
           Invitations you send will appear here until they are accepted
         </p>
       </div>
@@ -544,7 +544,7 @@ const PendingInvitations = memo(({
     <div className="p-4">
       {/* Header */}
       <div className="flex items-center justify-between mb-3 px-2">
-        <span className="text-sm text-bolt-elements-textTertiary">
+        <span className="text-sm text-recoder-elements-textTertiary">
           {invitations.length} pending invitation(s)
         </span>
         <button
@@ -590,7 +590,7 @@ const InvitationItem = memo(({ invitation, onResend, onRevoke }: InvitationItemP
 
   return (
     <div
-      className="flex items-center gap-3 p-4 bg-bolt-elements-background-depth-2 rounded-lg group"
+      className="flex items-center gap-3 p-4 bg-recoder-elements-background-depth-2 rounded-lg group"
       onMouseEnter={() => setShowActions(true)}
       onMouseLeave={() => setShowActions(false)}
     >
@@ -602,7 +602,7 @@ const InvitationItem = memo(({ invitation, onResend, onRevoke }: InvitationItemP
       {/* Info */}
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
-          <span className="text-sm font-medium text-bolt-elements-textPrimary truncate">
+          <span className="text-sm font-medium text-recoder-elements-textPrimary truncate">
             {invitation.email}
           </span>
           <RoleBadge role={invitation.role} />
@@ -612,7 +612,7 @@ const InvitationItem = memo(({ invitation, onResend, onRevoke }: InvitationItemP
             </span>
           )}
         </div>
-        <div className="flex items-center gap-2 text-xs text-bolt-elements-textTertiary mt-0.5">
+        <div className="flex items-center gap-2 text-xs text-recoder-elements-textTertiary mt-0.5">
           <span>Invited by {invitation.invitedByName}</span>
           <span>-</span>
           <span>{formatDate(invitation.createdAt)}</span>
@@ -625,11 +625,11 @@ const InvitationItem = memo(({ invitation, onResend, onRevoke }: InvitationItemP
         </div>
         {invitation.teams.length > 0 && (
           <div className="flex items-center gap-1 mt-1">
-            <span className="text-xs text-bolt-elements-textTertiary">Teams:</span>
+            <span className="text-xs text-recoder-elements-textTertiary">Teams:</span>
             {invitation.teams.map((teamId) => (
               <span
                 key={teamId}
-                className="px-1.5 py-0.5 bg-bolt-elements-background-depth-3 text-bolt-elements-textTertiary text-xs rounded"
+                className="px-1.5 py-0.5 bg-recoder-elements-background-depth-3 text-recoder-elements-textTertiary text-xs rounded"
               >
                 {teamId}
               </span>
@@ -645,14 +645,14 @@ const InvitationItem = memo(({ invitation, onResend, onRevoke }: InvitationItemP
       )}>
         <button
           onClick={onResend}
-          className="p-2 text-bolt-elements-textTertiary hover:text-blue-400 hover:bg-blue-500/10 rounded-lg transition-colors"
+          className="p-2 text-recoder-elements-textTertiary hover:text-blue-400 hover:bg-blue-500/10 rounded-lg transition-colors"
           title="Resend invitation"
         >
           <span className="i-ph:paper-plane-tilt" />
         </button>
         <button
           onClick={onRevoke}
-          className="p-2 text-bolt-elements-textTertiary hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"
+          className="p-2 text-recoder-elements-textTertiary hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"
           title="Revoke invitation"
         >
           <span className="i-ph:x" />
@@ -682,7 +682,7 @@ const TabButton = memo(({ active, onClick, label, icon }: TabButtonProps) => (
       'flex items-center gap-2 px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px',
       active
         ? 'text-blue-400 border-blue-500'
-        : 'text-bolt-elements-textTertiary hover:text-bolt-elements-textSecondary border-transparent'
+        : 'text-recoder-elements-textTertiary hover:text-recoder-elements-textSecondary border-transparent'
     )}
   >
     <span className={icon} />
@@ -701,7 +701,7 @@ const RoleBadge = memo(({ role }: RoleBadgeProps) => {
     owner: 'bg-yellow-500/20 text-yellow-400',
     admin: 'bg-purple-500/20 text-purple-400',
     member: 'bg-blue-500/20 text-blue-400',
-    viewer: 'bg-bolt-elements-background-depth-3 text-bolt-elements-textTertiary',
+    viewer: 'bg-recoder-elements-background-depth-3 text-recoder-elements-textTertiary',
   };
 
   return (

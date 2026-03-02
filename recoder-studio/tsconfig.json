@@ -20,13 +20,13 @@
 		],
 		"paths": {
 			"@/*": ["./*"],
-			"@giselles-ai/*": ["./packages/*", "../../packages/*/src"],
-			"@giselle-internal/*": ["../../internal-packages/*"],
+			"@recoder/*": ["./packages/*", "../packages/*/src"],
+			"@recoder-internal/*": ["../internal-packages/*"],
 			"@recoder/ecosystem-config": [
-				"../../packages/ecosystem-config/src/index.ts"
+				"../packages/ecosystem-config/src/index.ts"
 			],
-			"@giselles-ai/icons/*": [
-				"../../internal-packages/workflow-designer-ui/src/icons/*"
+			"@recoder/icons/*": [
+				"../internal-packages/workflow-designer-ui/src/icons/*"
 			]
 		},
 		"target": "ES2017"

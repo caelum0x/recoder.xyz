@@ -1,4 +1,4 @@
-import { type Input, InputId, type NodeId } from "@giselles-ai/protocol";
+import { type Input, InputId, type NodeId } from "@recoder/protocol";
 import { useCallback } from "react";
 import { useAppDesignerStore, useWorkspaceActions } from "../hooks";
 import { useAddConnection } from "./use-add-connection";

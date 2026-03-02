@@ -14,7 +14,7 @@ import {
 	isRunningGeneration,
 	type QueuedGeneration,
 	type RunningGeneration,
-} from "@giselles-ai/protocol";
+} from "@recoder/protocol";
 import type { UIMessage } from "ai";
 import { useCallback, useMemo, useRef } from "react";
 import { useShallow } from "zustand/shallow";

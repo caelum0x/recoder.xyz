@@ -29,7 +29,7 @@
   // }
   
   // Clear localStorage (except important keys)
-  const preserve = ['bolt_theme', 'anonymousId'];
+  const preserve = ['recoder_theme', 'anonymousId'];
   const toRemove = [];
   for (let i = 0; i < localStorage.length; i++) {
     const key = localStorage.key(i);

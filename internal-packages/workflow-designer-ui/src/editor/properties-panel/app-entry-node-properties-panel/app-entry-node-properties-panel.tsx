@@ -1,4 +1,4 @@
-import type { App, AppEntryNode } from "@giselles-ai/protocol";
+import type { App, AppEntryNode } from "@recoder/protocol";
 import clsx from "clsx/lite";
 import { useState } from "react";
 import useSWR from "swr";
@@ -29,7 +29,7 @@ export function AppEntryNodePropertiesPanel({ node }: { node: AppEntryNode }) {
 			<NodePanelHeader
 				node={node}
 				onChangeName={(name) => updateNodeData(node, { name })}
-				docsUrl="https://docs.giselles.ai/en/glossary/start-end-nodes#start-node"
+				docsUrl="https://docs.recoder.xyz/en/glossary/start-end-nodes#start-node"
 				onDelete={() => deleteNode(node.id)}
 				readonly
 			/>

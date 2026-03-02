@@ -1,7 +1,7 @@
 import {
 	isTriggerProvider,
 	type TriggerProvider,
-} from "@giselles-ai/trigger-registry";
+} from "@recoder/trigger-registry";
 import * as z from "zod/v4";
 import { TriggerId } from "../../trigger";
 

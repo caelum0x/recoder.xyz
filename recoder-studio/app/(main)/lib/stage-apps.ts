@@ -1,4 +1,4 @@
-import { isTextGenerationNode, isVectorStoreNode } from "@giselles-ai/protocol";
+import { isTextGenerationNode, isVectorStoreNode } from "@recoder/protocol";
 import { giselle } from "@/app/giselle";
 import { apps as appsDefinition, db } from "@/db";
 import { getCurrentUser } from "@/lib/get-current-user";
@@ -141,11 +141,20 @@ async function getAppsBySampleFlag(
 					}
 				}
 				// GitHub Vector Store
-				if (
-					isVectorStoreNode(node, "github") &&
-					node.content.source.state.status === "configured"
-				) {
-					const { owner, repo } = node.content.source.state;
+				if (isVectorStoreNode(node, "github")) {
+					const sourceState = (
+						node as {
+							content: {
+								source: {
+									state: { status: string; owner: string; repo: string };
+								};
+							};
+						}
+					).content.source.state;
+					if (sourceState.status !== "configured") {
+						continue;
+					}
+					const { owner, repo } = sourceState;
 					const fullName = `${owner}/${repo}`;
 					if (!githubRepositories.includes(fullName)) {
 						githubRepositories.push(fullName);
@@ -153,11 +162,20 @@ async function getAppsBySampleFlag(
 				}
 
 				// Document Vector Store
-				if (
-					isVectorStoreNode(node, "document") &&
-					node.content.source.state.status === "configured"
-				) {
-					const { documentVectorStoreId } = node.content.source.state;
+				if (isVectorStoreNode(node, "document")) {
+					const sourceState = (
+						node as {
+							content: {
+								source: {
+									state: { status: string; documentVectorStoreId: string };
+								};
+							};
+						}
+					).content.source.state;
+					if (sourceState.status !== "configured") {
+						continue;
+					}
+					const { documentVectorStoreId } = sourceState;
 					const documentStores = documentStoresByTeam.get(teamDbId) || [];
 					const store = documentStores.find(
 						(s) => s.id === documentVectorStoreId,

@@ -24,12 +24,12 @@ const FILE_ICON_MAP: Record<string, string> = {
   json: 'i-ph:file-duotone text-yellow-300',
   yaml: 'i-ph:file-duotone text-red-400',
   yml: 'i-ph:file-duotone text-red-400',
-  toml: 'i-ph:file-duotone text-bolt-elements-textSecondary',
+  toml: 'i-ph:file-duotone text-recoder-elements-textSecondary',
   xml: 'i-ph:file-duotone text-orange-300',
   // Documentation
-  md: 'i-ph:file-md-duotone text-bolt-elements-textSecondary',
+  md: 'i-ph:file-md-duotone text-recoder-elements-textSecondary',
   mdx: 'i-ph:file-md-duotone text-yellow-400',
-  txt: 'i-ph:file-text-duotone text-bolt-elements-textSecondary',
+  txt: 'i-ph:file-text-duotone text-recoder-elements-textSecondary',
   // Images
   png: 'i-ph:file-image-duotone text-purple-400',
   jpg: 'i-ph:file-image-duotone text-purple-400',
@@ -57,7 +57,7 @@ const FILE_ICON_MAP: Record<string, string> = {
   eslintrc: 'i-ph:gear-duotone text-purple-400',
   prettierrc: 'i-ph:gear-duotone text-pink-400',
   // Lock files
-  lock: 'i-ph:lock-duotone text-bolt-elements-textTertiary',
+  lock: 'i-ph:lock-duotone text-recoder-elements-textTertiary',
   // Shell
   sh: 'i-ph:terminal-duotone text-green-400',
   bash: 'i-ph:terminal-duotone text-green-400',
@@ -69,7 +69,7 @@ const FILE_ICON_MAP: Record<string, string> = {
 // Special file name mappings (exact match)
 const SPECIAL_FILE_ICONS: Record<string, string> = {
   'package.json': 'i-ph:package-duotone text-green-400',
-  'package-lock.json': 'i-ph:lock-duotone text-bolt-elements-textTertiary',
+  'package-lock.json': 'i-ph:lock-duotone text-recoder-elements-textTertiary',
   'yarn.lock': 'i-ph:lock-duotone text-blue-400',
   'pnpm-lock.yaml': 'i-ph:lock-duotone text-orange-400',
   'tsconfig.json': 'i-ph:gear-duotone text-blue-400',
@@ -77,8 +77,8 @@ const SPECIAL_FILE_ICONS: Record<string, string> = {
   'tailwind.config.ts': 'i-ph:gear-duotone text-cyan-400',
   'vite.config.js': 'i-ph:lightning-duotone text-purple-400',
   'vite.config.ts': 'i-ph:lightning-duotone text-purple-400',
-  'next.config.js': 'i-ph:gear-duotone text-bolt-elements-textSecondary',
-  'next.config.mjs': 'i-ph:gear-duotone text-bolt-elements-textSecondary',
+  'next.config.js': 'i-ph:gear-duotone text-recoder-elements-textSecondary',
+  'next.config.mjs': 'i-ph:gear-duotone text-recoder-elements-textSecondary',
   '.gitignore': 'i-ph:git-branch-duotone text-orange-400',
   '.env': 'i-ph:gear-duotone text-yellow-500',
   '.env.local': 'i-ph:gear-duotone text-yellow-500',
@@ -299,10 +299,10 @@ export const EditorTabs = memo(({ unsavedFiles, onRevealInTree, onOpenNewFile }:
   if (openTabs.length === 0) {
     return (
       <div
-        className="flex items-center bg-bolt-elements-background-depth-2 border-b border-bolt-elements-borderColor h-9 px-2"
+        className="flex items-center bg-recoder-elements-background-depth-2 border-b border-recoder-elements-borderColor h-9 px-2"
         onDoubleClick={onOpenNewFile}
       >
-        <span className="text-bolt-elements-textTertiary text-xs italic">
+        <span className="text-recoder-elements-textTertiary text-xs italic">
           No open files - double-click to open
         </span>
       </div>
@@ -323,12 +323,12 @@ export const EditorTabs = memo(({ unsavedFiles, onRevealInTree, onOpenNewFile }:
   const isPinnedTab = (filePath: string) => pinnedTabs.has(filePath);
 
   return (
-    <div className="relative flex items-center bg-bolt-elements-background-depth-2 border-b border-bolt-elements-borderColor">
+    <div className="relative flex items-center bg-recoder-elements-background-depth-2 border-b border-recoder-elements-borderColor">
       {/* Scroll left button */}
       {canScrollLeft && (
         <button
           onClick={scrollLeft}
-          className="flex-shrink-0 flex items-center justify-center w-6 h-full hover:bg-bolt-elements-background-depth-3 text-bolt-elements-textSecondary hover:text-bolt-elements-textPrimary transition-colors z-10 border-r border-bolt-elements-borderColor"
+          className="flex-shrink-0 flex items-center justify-center w-6 h-full hover:bg-recoder-elements-background-depth-3 text-recoder-elements-textSecondary hover:text-recoder-elements-textPrimary transition-colors z-10 border-r border-recoder-elements-borderColor"
           title="Scroll tabs left"
         >
           <div className="i-ph:caret-left text-sm" />
@@ -367,11 +367,11 @@ export const EditorTabs = memo(({ unsavedFiles, onRevealInTree, onOpenNewFile }:
               onDrop={(e) => handleDrop(e, tabIndex)}
               onDragEnd={handleDragEnd}
               className={classNames(
-                'group flex items-center gap-1.5 px-3 py-1.5 text-sm cursor-pointer border-r border-bolt-elements-borderColor',
-                'hover:bg-bolt-elements-background-depth-3 transition-colors select-none',
+                'group flex items-center gap-1.5 px-3 py-1.5 text-sm cursor-pointer border-r border-recoder-elements-borderColor',
+                'hover:bg-recoder-elements-background-depth-3 transition-colors select-none',
                 {
-                  'bg-bolt-elements-background-depth-1 text-bolt-elements-textPrimary': isActive,
-                  'text-bolt-elements-textSecondary': !isActive,
+                  'bg-recoder-elements-background-depth-1 text-recoder-elements-textPrimary': isActive,
+                  'text-recoder-elements-textSecondary': !isActive,
                   'opacity-50': isDragging,
                   'border-l-2 border-l-blue-500': isDragOver,
                   'border-l-2 border-l-amber-500': isPinned,
@@ -404,7 +404,7 @@ export const EditorTabs = memo(({ unsavedFiles, onRevealInTree, onOpenNewFile }:
               <button
                 onClick={(e) => handleTabClose(e, filePath)}
                 className={classNames(
-                  'flex items-center justify-center w-4 h-4 bg-transparent border-none hover:bg-bolt-elements-background-depth-4 rounded transition-all',
+                  'flex items-center justify-center w-4 h-4 bg-transparent border-none hover:bg-recoder-elements-background-depth-4 rounded transition-all',
                   {
                     'opacity-0 group-hover:opacity-100': !isActive && !isPinned,
                     'opacity-100': isActive && !isPinned,
@@ -427,7 +427,7 @@ export const EditorTabs = memo(({ unsavedFiles, onRevealInTree, onOpenNewFile }:
       {canScrollRight && (
         <button
           onClick={scrollRight}
-          className="flex-shrink-0 flex items-center justify-center w-6 h-full hover:bg-bolt-elements-background-depth-3 text-bolt-elements-textSecondary hover:text-bolt-elements-textPrimary transition-colors z-10 border-l border-bolt-elements-borderColor"
+          className="flex-shrink-0 flex items-center justify-center w-6 h-full hover:bg-recoder-elements-background-depth-3 text-recoder-elements-textSecondary hover:text-recoder-elements-textPrimary transition-colors z-10 border-l border-recoder-elements-borderColor"
           title="Scroll tabs right"
         >
           <div className="i-ph:caret-right text-sm" />
@@ -535,7 +535,7 @@ const TabContextMenu = memo(({
   return (
     <div
       ref={menuRef}
-      className="fixed z-50 min-w-[180px] py-1 bg-bolt-elements-background-depth-3 border border-bolt-elements-borderColor rounded-lg shadow-lg"
+      className="fixed z-50 min-w-[180px] py-1 bg-recoder-elements-background-depth-3 border border-recoder-elements-borderColor rounded-lg shadow-lg"
       style={{ left: position.x, top: position.y }}
       onClick={(e) => e.stopPropagation()}
     >
@@ -544,7 +544,7 @@ const TabContextMenu = memo(({
           return (
             <div
               key={`divider-${index}`}
-              className="my-1 border-t border-bolt-elements-borderColor"
+              className="my-1 border-t border-recoder-elements-borderColor"
             />
           );
         }
@@ -553,7 +553,7 @@ const TabContextMenu = memo(({
           <button
             key={item.label}
             onClick={item.onClick}
-            className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-bolt-elements-textSecondary hover:bg-bolt-elements-background-depth-4 hover:text-bolt-elements-textPrimary transition-colors text-left"
+            className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-recoder-elements-textSecondary hover:bg-recoder-elements-background-depth-4 hover:text-recoder-elements-textPrimary transition-colors text-left"
           >
             <span className={classNames(item.icon, 'text-base')} />
             {item.label}

@@ -868,11 +868,11 @@ export const Preview = memo(() => {
       {isPortDropdownOpen && (
         <div className="z-iframe-overlay w-full h-full absolute" onClick={() => setIsPortDropdownOpen(false)} />
       )}
-      <div className="bg-bolt-elements-background-depth-2 p-2 flex items-center gap-1.5">
+      <div className="bg-recoder-elements-background-depth-2 p-2 flex items-center gap-1.5">
         <button
           onClick={reloadPreview}
           title={reloadState === 'pending' ? 'Changes detected...' : reloadState === 'reloading' ? 'Reloading...' : 'Reload preview'}
-          className={`flex items-center text-bolt-elements-textSecondary bg-transparent enabled:hover:text-bolt-elements-textPrimary rounded-md p-1 enabled:hover:bg-bolt-elements-background-depth-3 ${
+          className={`flex items-center text-recoder-elements-textSecondary bg-transparent enabled:hover:text-recoder-elements-textPrimary rounded-md p-1 enabled:hover:bg-recoder-elements-background-depth-3 ${
             reloadState !== 'idle' ? 'text-blue-400' : ''
           }`}
         >
@@ -885,7 +885,7 @@ export const Preview = memo(() => {
           <button
             onClick={forceRefreshPreview}
             title="Force refresh (clear and reload)"
-            className="flex items-center gap-1 text-xs px-2 py-1 rounded-md bg-bolt-elements-button-primary-background text-bolt-elements-button-primary-text hover:bg-bolt-elements-button-primary-backgroundHover transition-colors whitespace-nowrap"
+            className="flex items-center gap-1 text-xs px-2 py-1 rounded-md bg-recoder-elements-button-primary-background text-recoder-elements-button-primary-text hover:bg-recoder-elements-button-primary-backgroundHover transition-colors whitespace-nowrap"
           >
             <div className="i-ph:arrow-counter-clockwise text-sm" />
             Force Refresh
@@ -899,7 +899,7 @@ export const Preview = memo(() => {
             title="Restart development server"
             className={`flex items-center gap-1 text-xs px-2 py-1 rounded-md transition-colors whitespace-nowrap ${
               isRestartingDevServer
-                ? 'bg-bolt-elements-background-depth-3 text-bolt-elements-textTertiary cursor-not-allowed'
+                ? 'bg-recoder-elements-background-depth-3 text-recoder-elements-textTertiary cursor-not-allowed'
                 : 'bg-orange-600 text-white hover:bg-orange-500'
             }`}
           >
@@ -917,8 +917,8 @@ export const Preview = memo(() => {
           </button>
         )}
         <div
-          className="flex items-center gap-1 flex-grow bg-bolt-elements-preview-addressBar-background border border-bolt-elements-borderColor text-bolt-elements-preview-addressBar-text rounded-full px-3 py-1 text-sm hover:bg-bolt-elements-preview-addressBar-backgroundHover hover:focus-within:bg-bolt-elements-preview-addressBar-backgroundActive focus-within:bg-bolt-elements-preview-addressBar-backgroundActive
-        focus-within-border-bolt-elements-borderColorActive focus-within:text-bolt-elements-preview-addressBar-textActive"
+          className="flex items-center gap-1 flex-grow bg-recoder-elements-preview-addressBar-background border border-recoder-elements-borderColor text-recoder-elements-preview-addressBar-text rounded-full px-3 py-1 text-sm hover:bg-recoder-elements-preview-addressBar-backgroundHover hover:focus-within:bg-recoder-elements-preview-addressBar-backgroundActive focus-within:bg-recoder-elements-preview-addressBar-backgroundActive
+        focus-within-border-recoder-elements-borderColorActive focus-within:text-recoder-elements-preview-addressBar-textActive"
         >
           <input
             ref={inputRef}
@@ -973,13 +973,13 @@ export const Preview = memo(() => {
       <PreviewToolbar />
       {/* ── Expo / Web mode switcher (only for Expo projects) ── */}
       {projectType === 'expo' && (
-        <div className="flex items-center gap-0 bg-bolt-elements-background-depth-2 border-t border-bolt-elements-borderColor px-2">
+        <div className="flex items-center gap-0 bg-recoder-elements-background-depth-2 border-t border-recoder-elements-borderColor px-2">
           <button
             onClick={() => setPreviewMode('web')}
             className={`px-3 py-1.5 text-xs font-medium transition-colors border-b-2 ${
               previewMode === 'web'
-                ? 'text-bolt-elements-textPrimary border-bolt-elements-button-primary-background'
-                : 'text-bolt-elements-textTertiary border-transparent hover:text-bolt-elements-textSecondary'
+                ? 'text-recoder-elements-textPrimary border-recoder-elements-button-primary-background'
+                : 'text-recoder-elements-textTertiary border-transparent hover:text-recoder-elements-textSecondary'
             }`}
           >
             Web Preview
@@ -988,8 +988,8 @@ export const Preview = memo(() => {
             onClick={() => setPreviewMode('expo-go')}
             className={`px-3 py-1.5 text-xs font-medium transition-colors border-b-2 ${
               previewMode === 'expo-go'
-                ? 'text-bolt-elements-textPrimary border-bolt-elements-button-primary-background'
-                : 'text-bolt-elements-textTertiary border-transparent hover:text-bolt-elements-textSecondary'
+                ? 'text-recoder-elements-textPrimary border-recoder-elements-button-primary-background'
+                : 'text-recoder-elements-textTertiary border-transparent hover:text-recoder-elements-textSecondary'
             }`}
           >
             Expo Go
@@ -998,8 +998,8 @@ export const Preview = memo(() => {
             onClick={() => setPreviewMode('device-cloud')}
             className={`px-3 py-1.5 text-xs font-medium transition-colors border-b-2 ${
               previewMode === 'device-cloud'
-                ? 'text-bolt-elements-textPrimary border-bolt-elements-button-primary-background'
-                : 'text-bolt-elements-textTertiary border-transparent hover:text-bolt-elements-textSecondary'
+                ? 'text-recoder-elements-textPrimary border-recoder-elements-button-primary-background'
+                : 'text-recoder-elements-textTertiary border-transparent hover:text-recoder-elements-textSecondary'
             }`}
           >
             Device Cloud
@@ -1008,27 +1008,27 @@ export const Preview = memo(() => {
             onClick={() => setPreviewMode('canvas')}
             className={`px-3 py-1.5 text-xs font-medium transition-colors border-b-2 ${
               previewMode === 'canvas'
-                ? 'text-bolt-elements-textPrimary border-bolt-elements-button-primary-background'
-                : 'text-bolt-elements-textTertiary border-transparent hover:text-bolt-elements-textSecondary'
+                ? 'text-recoder-elements-textPrimary border-recoder-elements-button-primary-background'
+                : 'text-recoder-elements-textTertiary border-transparent hover:text-recoder-elements-textSecondary'
             }`}
           >
             Canvas
           </button>
         </div>
       )}
-      <div className="flex-1 border-t border-bolt-elements-borderColor overflow-hidden relative">
+      <div className="flex-1 border-t border-recoder-elements-borderColor overflow-hidden relative">
         {/* ── Expo Go mode ── */}
         {projectType === 'expo' && previewMode === 'expo-go' && projectId ? (
-          <div className="w-full h-full overflow-auto bg-bolt-elements-background-depth-1">
+          <div className="w-full h-full overflow-auto bg-recoder-elements-background-depth-1">
             <Suspense fallback={null}><ExpoQRPanel projectId={projectId} className="h-full" /></Suspense>
           </div>
         ) : projectType === 'expo' && previewMode === 'device-cloud' && projectId ? (
           /* ── Device Cloud (Appetize.io) mode ── */
-          <div className="w-full h-full overflow-auto bg-bolt-elements-background-depth-1">
+          <div className="w-full h-full overflow-auto bg-recoder-elements-background-depth-1">
             <div className="flex flex-col items-center p-4 gap-4">
               <div className="flex items-center gap-2">
                 <div className="i-ph:device-mobile text-lg text-cyan-400" />
-                <span className="text-bolt-elements-textPrimary text-sm font-medium">Device Cloud Testing</span>
+                <span className="text-recoder-elements-textPrimary text-sm font-medium">Device Cloud Testing</span>
               </div>
 
               {appetizeKey ? (
@@ -1044,18 +1044,18 @@ export const Preview = memo(() => {
                 </div>
               ) : (
                 <div className="flex flex-col gap-3 w-full max-w-xs">
-                  <div className="text-bolt-elements-textTertiary text-xs text-center">
+                  <div className="text-recoder-elements-textTertiary text-xs text-center">
                     Test your app on a real device emulator via Appetize.io
                   </div>
 
                   <div className="flex flex-col gap-1">
-                    <label className="text-bolt-elements-textTertiary text-[10px]">Appetize API Token</label>
+                    <label className="text-recoder-elements-textTertiary text-[10px]">Appetize API Token</label>
                     <input
                       type="password"
                       value={appetizeToken}
                       onChange={(e) => { setAppetizeToken(e.target.value); localStorage.setItem('appetize_token', e.target.value); }}
                       placeholder="tok_..."
-                      className="bg-bolt-elements-background-depth-3 text-bolt-elements-textPrimary text-xs rounded px-3 py-1.5 border border-bolt-elements-borderColor outline-none focus:border-bolt-elements-borderColorActive w-full"
+                      className="bg-recoder-elements-background-depth-3 text-recoder-elements-textPrimary text-xs rounded px-3 py-1.5 border border-recoder-elements-borderColor outline-none focus:border-recoder-elements-borderColorActive w-full"
                     />
                     <a href="https://appetize.io/docs#api-token" target="_blank" rel="noopener noreferrer" className="text-cyan-400 text-[10px] hover:text-cyan-300 transition-colors">
                       Get API token from appetize.io
@@ -1085,7 +1085,7 @@ export const Preview = memo(() => {
                     disabled={!appetizeToken || uploadingToAppetize}
                     className={`w-full py-2 rounded text-xs font-medium transition-colors ${
                       !appetizeToken || uploadingToAppetize
-                        ? 'bg-bolt-elements-button-secondary-background text-bolt-elements-textTertiary cursor-not-allowed'
+                        ? 'bg-recoder-elements-button-secondary-background text-recoder-elements-textTertiary cursor-not-allowed'
                         : 'bg-cyan-600 text-white hover:bg-cyan-500'
                     }`}
                   >
@@ -1103,7 +1103,7 @@ export const Preview = memo(() => {
                     href="https://www.browserstack.com/app-live"
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-bolt-elements-textTertiary text-[10px] hover:text-bolt-elements-textSecondary transition-colors text-center"
+                    className="text-recoder-elements-textTertiary text-[10px] hover:text-recoder-elements-textSecondary transition-colors text-center"
                   >
                     Or use BrowserStack App Live
                   </a>
@@ -1113,7 +1113,7 @@ export const Preview = memo(() => {
           </div>
         ) : projectType === 'expo' && previewMode === 'canvas' && projectId ? (
           /* ── Canvas (OpenClaw) mode ── */
-          <div className="w-full h-full overflow-auto bg-bolt-elements-background-depth-1">
+          <div className="w-full h-full overflow-auto bg-recoder-elements-background-depth-1">
             {canvasConnected && canvasUrl ? (
               <iframe
                 src={canvasUrl}
@@ -1124,14 +1124,14 @@ export const Preview = memo(() => {
               />
             ) : (
               <div className="flex flex-col items-center justify-center h-full gap-4 p-6">
-                <div className="i-ph:paint-brush text-4xl text-bolt-elements-textTertiary" />
-                <div className="text-bolt-elements-textSecondary text-sm font-medium">OpenClaw Canvas</div>
-                <div className="text-bolt-elements-textTertiary text-xs text-center max-w-xs">
+                <div className="i-ph:paint-brush text-4xl text-recoder-elements-textTertiary" />
+                <div className="text-recoder-elements-textSecondary text-sm font-medium">OpenClaw Canvas</div>
+                <div className="text-recoder-elements-textTertiary text-xs text-center max-w-xs">
                   {canvasConnected === false
                     ? 'OpenClaw Canvas is not running. Start the Canvas service to use the visual design tool.'
                     : 'Checking Canvas connection...'}
                 </div>
-                <div className="text-bolt-elements-textTertiary text-[10px] text-center">
+                <div className="text-recoder-elements-textTertiary text-[10px] text-center">
                   Canvas elements can be exported as React Native components.
                 </div>
               </div>
@@ -1139,17 +1139,17 @@ export const Preview = memo(() => {
           </div>
         ) : previewError ? (
         /* ── Error card ── */
-          <div className="flex w-full h-full justify-center items-center bg-bolt-elements-background-depth-1">
-            <div className="max-w-md w-full mx-4 rounded-lg border border-bolt-elements-borderColor bg-bolt-elements-background-depth-2 p-6 shadow-sm">
+          <div className="flex w-full h-full justify-center items-center bg-recoder-elements-background-depth-1">
+            <div className="max-w-md w-full mx-4 rounded-lg border border-recoder-elements-borderColor bg-recoder-elements-background-depth-2 p-6 shadow-sm">
               <div className="flex items-center gap-3 mb-4">
                 <div className="i-ph:warning text-2xl text-red-400 flex-shrink-0" />
-                <h3 className="text-bolt-elements-textPrimary text-base font-medium">Preview Error</h3>
+                <h3 className="text-recoder-elements-textPrimary text-base font-medium">Preview Error</h3>
               </div>
-              <p className="text-bolt-elements-textSecondary text-sm mb-5 leading-relaxed">{previewError}</p>
+              <p className="text-recoder-elements-textSecondary text-sm mb-5 leading-relaxed">{previewError}</p>
               <div className="flex flex-wrap items-center gap-3">
                 <button
                   onClick={retryPreview}
-                  className="flex items-center gap-1.5 px-4 py-2 rounded-md text-sm font-medium bg-bolt-elements-button-primary-background text-bolt-elements-button-primary-text hover:bg-bolt-elements-button-primary-backgroundHover transition-colors"
+                  className="flex items-center gap-1.5 px-4 py-2 rounded-md text-sm font-medium bg-recoder-elements-button-primary-background text-recoder-elements-button-primary-text hover:bg-recoder-elements-button-primary-backgroundHover transition-colors"
                 >
                   <div className="i-ph:arrow-clockwise text-sm" />
                   Retry
@@ -1160,7 +1160,7 @@ export const Preview = memo(() => {
                     disabled={isRestartingDevServer}
                     className={`flex items-center gap-1.5 px-4 py-2 rounded-md text-sm font-medium transition-colors ${
                       isRestartingDevServer
-                        ? 'bg-bolt-elements-background-depth-3 text-bolt-elements-textTertiary cursor-not-allowed'
+                        ? 'bg-recoder-elements-background-depth-3 text-recoder-elements-textTertiary cursor-not-allowed'
                         : 'bg-orange-600 text-white hover:bg-orange-500'
                     }`}
                   >
@@ -1179,7 +1179,7 @@ export const Preview = memo(() => {
                 )}
                 <button
                   onClick={() => workbenchStore.toggleTerminal(true)}
-                  className="flex items-center gap-1.5 px-4 py-2 rounded-md text-sm font-medium text-bolt-elements-textSecondary hover:text-bolt-elements-textPrimary hover:bg-bolt-elements-background-depth-3 transition-colors"
+                  className="flex items-center gap-1.5 px-4 py-2 rounded-md text-sm font-medium text-recoder-elements-textSecondary hover:text-recoder-elements-textPrimary hover:bg-recoder-elements-background-depth-3 transition-colors"
                 >
                   <div className="i-ph:terminal-window text-sm" />
                   View Console
@@ -1200,7 +1200,7 @@ export const Preview = memo(() => {
                   width: '100%',
                   height: '100%',
                   overflow: 'hidden',
-                  backgroundColor: 'var(--bolt-elements-background-depth-3, #1a1a1a)',
+                  backgroundColor: 'var(--recoder-elements-background-depth-3, #1a1a1a)',
                 }}
               >
                 <div
@@ -1242,26 +1242,26 @@ export const Preview = memo(() => {
 
             {/* ── Loading timeout overlay ── */}
             {hasTimedOut && !isIframeLoaded && (
-              <div className="absolute inset-0 flex items-center justify-center bg-bolt-elements-background-depth-1/90 z-10">
-                <div className="max-w-sm w-full mx-4 rounded-lg border border-bolt-elements-borderColor bg-bolt-elements-background-depth-2 p-6 shadow-sm text-center">
-                  <div className="i-ph:clock-countdown text-3xl text-bolt-elements-textTertiary mx-auto mb-3" />
-                  <h3 className="text-bolt-elements-textPrimary text-base font-medium mb-1">
+              <div className="absolute inset-0 flex items-center justify-center bg-recoder-elements-background-depth-1/90 z-10">
+                <div className="max-w-sm w-full mx-4 rounded-lg border border-recoder-elements-borderColor bg-recoder-elements-background-depth-2 p-6 shadow-sm text-center">
+                  <div className="i-ph:clock-countdown text-3xl text-recoder-elements-textTertiary mx-auto mb-3" />
+                  <h3 className="text-recoder-elements-textPrimary text-base font-medium mb-1">
                     Preview is taking longer than expected
                   </h3>
-                  <p className="text-bolt-elements-textTertiary text-sm mb-4">
+                  <p className="text-recoder-elements-textTertiary text-sm mb-4">
                     The development server may still be starting up.
                   </p>
                   <div className="flex items-center justify-center gap-3">
                     <button
                       onClick={retryPreview}
-                      className="flex items-center gap-1.5 px-4 py-2 rounded-md text-sm font-medium bg-bolt-elements-button-primary-background text-bolt-elements-button-primary-text hover:bg-bolt-elements-button-primary-backgroundHover transition-colors"
+                      className="flex items-center gap-1.5 px-4 py-2 rounded-md text-sm font-medium bg-recoder-elements-button-primary-background text-recoder-elements-button-primary-text hover:bg-recoder-elements-button-primary-backgroundHover transition-colors"
                     >
                       <div className="i-ph:arrow-clockwise text-sm" />
                       Retry
                     </button>
                     <button
                       onClick={() => workbenchStore.toggleTerminal(true)}
-                      className="flex items-center gap-1.5 px-4 py-2 rounded-md text-sm font-medium text-bolt-elements-textSecondary hover:text-bolt-elements-textPrimary hover:bg-bolt-elements-background-depth-3 transition-colors"
+                      className="flex items-center gap-1.5 px-4 py-2 rounded-md text-sm font-medium text-recoder-elements-textSecondary hover:text-recoder-elements-textPrimary hover:bg-recoder-elements-background-depth-3 transition-colors"
                     >
                       <div className="i-ph:terminal-window text-sm" />
                       View Console
@@ -1314,16 +1314,16 @@ export const Preview = memo(() => {
           </>
         ) : (
           /* ── No preview yet: environment setup state ── */
-          <div className="flex w-full h-full justify-center items-center bg-bolt-elements-background-depth-1">
+          <div className="flex w-full h-full justify-center items-center bg-recoder-elements-background-depth-1">
             <div className="text-center p-6">
               <div
-                className="i-ph:spinner-gap text-3xl text-bolt-elements-textTertiary mx-auto mb-3"
+                className="i-ph:spinner-gap text-3xl text-recoder-elements-textTertiary mx-auto mb-3"
                 style={{ animation: 'spin 1s linear infinite' }}
               />
-              <div className="text-bolt-elements-textSecondary text-base mb-1">
+              <div className="text-recoder-elements-textSecondary text-base mb-1">
                 Setting up development environment...
               </div>
-              <div className="text-bolt-elements-textTertiary text-sm">
+              <div className="text-recoder-elements-textTertiary text-sm">
                 This may take a moment while packages are installed
               </div>
             </div>

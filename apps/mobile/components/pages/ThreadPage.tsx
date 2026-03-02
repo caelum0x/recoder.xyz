@@ -31,10 +31,11 @@ import { useThread } from '@/lib/chat';
 import { useBillingContext } from '@/contexts/BillingContext';
 import { Text } from '@/components/ui/text';
 import { Icon } from '@/components/ui/icon';
-import { MessageCircle, ArrowDown, AlertCircle, RefreshCw } from 'lucide-react-native';
+import { MessageCircle, ArrowDown, AlertCircle, RefreshCw, Network } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import { AgentLoader } from '../chat/AgentLoader';
 import { log } from '@/lib/logger';
+import { emitInteropEvent } from '@/lib/interop/events';
 
 interface ThreadPageProps {
   onMenuPress?: () => void;
@@ -44,6 +45,127 @@ interface ThreadPageProps {
     workerId: string,
     view?: 'instructions' | 'tools' | 'integrations' | 'triggers'
   ) => void;
+}
+
+interface DelegatedTaskState {
+  key: string;
+  taskId?: string;
+  status: string;
+  connector?: string;
+  source: string;
+  traceId?: string;
+  updatedAt?: string;
+  isStreaming: boolean;
+}
+
+function toObject(value: unknown): Record<string, any> {
+  if (!value) return {};
+  if (typeof value === 'object') return value as Record<string, any>;
+  if (typeof value === 'string') {
+    try {
+      const parsed = JSON.parse(value);
+      return parsed && typeof parsed === 'object' ? parsed : {};
+    } catch {
+      return {};
+    }
+  }
+  return {};
+}
+
+function isDelegatedFunction(functionName: string): boolean {
+  const normalized = functionName.toLowerCase();
+  const delegatedHints = ['delegate', 'delegated', 'a2a', 'openclaw', 'dispatch', 'handoff', 'subagent'];
+  return delegatedHints.some((hint) => normalized.includes(hint));
+}
+
+function normalizeDelegatedStatus(status: string | undefined, fallbackStreaming: boolean): string {
+  if (!status || status.trim().length === 0) {
+    return fallbackStreaming ? 'running' : 'completed';
+  }
+  return status.trim().toLowerCase().replace(/\s+/g, '_');
+}
+
+function extractDelegatedTaskFromToolMessages(messages: any[]): DelegatedTaskState | null {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const message = messages[i];
+    if (message?.type !== 'tool') continue;
+
+    const parsed = parseToolMessage(message);
+    if (!parsed || !isDelegatedFunction(parsed.functionName)) continue;
+
+    const output = toObject(parsed.result?.output);
+    const args = parsed.arguments || {};
+    const taskId = args.task_id || args.taskId || output.task_id || output.taskId;
+    const traceId = args.trace_id || args.traceId || output.trace_id || output.traceId;
+    const connector = args.connector || args.provider || output.connector || output.provider;
+    const rawStatus = args.status || args.state || output.status || output.state;
+    const status = normalizeDelegatedStatus(rawStatus, false);
+
+    return {
+      key: `tool:${parsed.toolCallId || taskId || parsed.functionName}:${status}`,
+      taskId,
+      status,
+      connector,
+      source: parsed.functionName,
+      traceId,
+      updatedAt: parsed.timestamp || message.created_at,
+      isStreaming: false,
+    };
+  }
+  return null;
+}
+
+function extractDelegatedTaskFromStreamingMessage(streamingToolCall: any): DelegatedTaskState | null {
+  if (!streamingToolCall?.metadata) return null;
+  const metadata = toObject(streamingToolCall.metadata);
+  const toolCalls = Array.isArray(metadata.tool_calls) ? metadata.tool_calls : [];
+
+  for (let i = toolCalls.length - 1; i >= 0; i--) {
+    const toolCall = toolCalls[i] || {};
+    const functionName = String(toolCall.function_name || toolCall.name || '');
+    if (!functionName || !isDelegatedFunction(functionName)) continue;
+
+    const args = toObject(toolCall.arguments);
+    const result = toObject(toolCall.tool_result);
+    const taskId = args.task_id || args.taskId || result.task_id || result.taskId;
+    const traceId = args.trace_id || args.traceId || result.trace_id || result.traceId;
+    const connector = args.connector || args.provider || result.connector || result.provider;
+    const rawStatus = args.status || args.state || result.status || result.state;
+    const status = normalizeDelegatedStatus(rawStatus, true);
+
+    return {
+      key: `stream:${toolCall.tool_call_id || taskId || functionName}:${status}`,
+      taskId,
+      status,
+      connector,
+      source: functionName,
+      traceId,
+      updatedAt: streamingToolCall.created_at,
+      isStreaming: true,
+    };
+  }
+  return null;
+}
+
+function DelegatedTaskBanner({ delegatedTask }: { delegatedTask: DelegatedTaskState }) {
+  return (
+    <View className="mb-3 rounded-2xl border border-primary/30 bg-primary/10 px-4 py-3">
+      <View className="mb-1 flex-row items-center gap-2">
+        <Icon as={Network} size={14} className="text-primary" />
+        <Text className="font-roobert-medium text-xs uppercase tracking-wide text-primary">
+          Delegated Task
+        </Text>
+      </View>
+      <Text className="font-roobert-medium text-sm text-foreground">
+        {delegatedTask.taskId ? `Task ${delegatedTask.taskId}` : delegatedTask.source}
+      </Text>
+      <Text className="mt-0.5 text-xs text-muted-foreground">
+        {delegatedTask.status}
+        {delegatedTask.connector ? ` · ${delegatedTask.connector}` : ''}
+        {delegatedTask.isStreaming ? ' · live' : ''}
+      </Text>
+    </View>
+  );
 }
 
 // Error banner shown when stream fails
@@ -423,6 +545,11 @@ export function ThreadPage({
   const streamingToolCall = chat.streamingToolCall || null;
   const isLoading = chat.isLoading;
   const hasMessages = messages.length > 0 || streamingContent.length > 0;
+  const delegatedTask = React.useMemo(() => {
+    const streamingDelegatedTask = extractDelegatedTaskFromStreamingMessage(streamingToolCall);
+    if (streamingDelegatedTask) return streamingDelegatedTask;
+    return extractDelegatedTaskFromToolMessages(messages);
+  }, [messages, streamingToolCall]);
   const scrollViewRef = React.useRef<ScrollView>(null);
 
   // Track the active tool data for the snack bar
@@ -431,6 +558,9 @@ export function ThreadPage({
   const lastToolCallIdRef = React.useRef<string | null>(null);
   // Track previous streaming tool call ID to avoid processing same tool repeatedly
   const prevStreamingToolCallIdRef = React.useRef<string | null>(null);
+  const lastDelegatedVisibleKeyRef = React.useRef<string | null>(null);
+  const lastDelegatedStatusKeyRef = React.useRef<string | null>(null);
+  const lastDelegatedActivationKeyRef = React.useRef<string | null>(null);
 
   // Check if voice player is active (for scroll button positioning)
   const voiceState = useVoicePlayerStore((s) => s.state);
@@ -445,6 +575,62 @@ export function ThreadPage({
 
   // Billing context for upgrade snack visibility
   const { hasFreeTier, subscriptionData, isLoading: billingLoading } = useBillingContext();
+
+  React.useEffect(() => {
+    const threadId = chat.activeThread?.id;
+    if (!threadId || !delegatedTask) return;
+
+    const visibleKey = `${threadId}:${delegatedTask.key}`;
+    if (lastDelegatedVisibleKeyRef.current !== visibleKey) {
+      lastDelegatedVisibleKeyRef.current = visibleKey;
+      emitInteropEvent({
+        event: 'delegated_task_visible',
+        threadId,
+        taskId: delegatedTask.taskId,
+        status: delegatedTask.status,
+        connector: delegatedTask.connector,
+        source: delegatedTask.source,
+        traceId: delegatedTask.traceId,
+        isStreaming: delegatedTask.isStreaming,
+        timestamp: delegatedTask.updatedAt,
+      });
+    }
+
+    const statusKey = `${threadId}:${delegatedTask.taskId || delegatedTask.source}:${delegatedTask.status}`;
+    if (lastDelegatedStatusKeyRef.current !== statusKey) {
+      lastDelegatedStatusKeyRef.current = statusKey;
+      emitInteropEvent({
+        event: 'delegated_task_status_changed',
+        threadId,
+        taskId: delegatedTask.taskId,
+        status: delegatedTask.status,
+        connector: delegatedTask.connector,
+        source: delegatedTask.source,
+        traceId: delegatedTask.traceId,
+        isStreaming: delegatedTask.isStreaming,
+        timestamp: delegatedTask.updatedAt,
+      });
+    }
+
+    const activationStatuses = ['queued', 'running', 'in_progress', 'accepted', 'started'];
+    if (activationStatuses.includes(delegatedTask.status)) {
+      const activationKey = `${threadId}:${delegatedTask.taskId || delegatedTask.source}:${delegatedTask.status}`;
+      if (lastDelegatedActivationKeyRef.current !== activationKey) {
+        lastDelegatedActivationKeyRef.current = activationKey;
+        emitInteropEvent({
+          event: 'delegated_task_activation',
+          threadId,
+          taskId: delegatedTask.taskId,
+          status: delegatedTask.status,
+          connector: delegatedTask.connector,
+          source: delegatedTask.source,
+          traceId: delegatedTask.traceId,
+          isStreaming: delegatedTask.isStreaming,
+          timestamp: delegatedTask.updatedAt,
+        });
+      }
+    }
+  }, [chat.activeThread?.id, delegatedTask]);
 
   // Determine if upgrade snack is visible (same logic as ChatInputSection)
   // Only visible when: no activeToolData, user has free tier, subscription loaded, not dismissed
@@ -540,6 +726,9 @@ export function ThreadPage({
     setActiveToolData(null);
     setDismissedToolCallId(null);
     lastToolCallIdRef.current = null;
+    lastDelegatedVisibleKeyRef.current = null;
+    lastDelegatedStatusKeyRef.current = null;
+    lastDelegatedActivationKeyRef.current = null;
     // Close voice player when switching threads
     voiceClose();
   }, [chat.activeThread?.id, voiceClose]);
@@ -957,6 +1146,7 @@ export function ThreadPage({
             }>
             {isMounted && (
               <>
+                {delegatedTask && <DelegatedTaskBanner delegatedTask={delegatedTask} />}
                 <ThreadContent
                   messages={messages}
                   streamingTextContent={streamingContent}

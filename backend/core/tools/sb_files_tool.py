@@ -129,14 +129,14 @@ class SandboxFilesTool(SandboxToolsBase):
                         "modified": file_info.mod_time
                     }
                 except Exception as e:
-                    print(f"Error reading file {rel_path}: {e}")
+                    logger.warning(f"Error reading file {rel_path}: {e}")
                 except UnicodeDecodeError:
-                    print(f"Skipping binary file: {rel_path}")
+                    logger.debug(f"Skipping binary file: {rel_path}")
 
             return files_state
         
         except Exception as e:
-            print(f"Error getting workspace state: {str(e)}")
+            logger.error(f"Error getting workspace state: {str(e)}")
             return {}
 
     # def _get_preview_url(self, file_path: str) -> Optional[str]:

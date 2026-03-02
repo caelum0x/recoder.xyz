@@ -1,5 +1,5 @@
-import type { GitHubEventData } from "@giselles-ai/protocol";
-import type { GitHubEventId } from "@giselles-ai/trigger-registry";
+import type { GitHubEventData } from "@recoder/protocol";
+import type { GitHubEventId } from "@recoder/trigger-registry";
 
 /**
  * Creates a GitHubFlowTriggerEvent based on the event ID and optional callsign/labels

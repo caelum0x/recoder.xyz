@@ -6,12 +6,25 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { nanoid } from 'nanoid';
-import { sign, verify } from 'jsonwebtoken';
+import { sign, verify, type JwtPayload } from 'jsonwebtoken';
 import { auth } from '@/lib/auth-config';
 import { headers } from 'next/headers';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'recoder_jwt_secret_key_for_token_generation_minimum_32_characters_long';
 const CLI_CLIENT_ID = process.env.CLI_CLIENT_ID || 'recoder-code';
+
+type CliJwtPayload = JwtPayload & {
+  userId?: string;
+  type?: 'access' | 'refresh';
+  scopes?: string[];
+};
+
+type JsonRecord = Record<string, unknown>;
+
+function getString(body: JsonRecord, key: string): string {
+  const value = body[key];
+  return typeof value === 'string' ? value : '';
+}
 
 /**
  * Generate JWT access token
@@ -111,8 +124,10 @@ export async function GET(request: NextRequest) {
  * Handle various CLI auth actions
  */
 export async function POST(request: NextRequest) {
-  const body = await request.json();
-  const { action } = body;
+  const rawBody: unknown = await request.json();
+  const body: JsonRecord =
+    rawBody !== null && typeof rawBody === 'object' ? (rawBody as JsonRecord) : {};
+  const action = getString(body, 'action');
 
   switch (action) {
     case 'exchange_code':
@@ -144,12 +159,14 @@ export async function POST(request: NextRequest) {
 /**
  * Exchange authorization code for tokens
  */
-async function handleCodeExchange(body: any) {
-  const { code, client_id, redirect_uri } = body;
+async function handleCodeExchange(body: JsonRecord) {
+  const code = getString(body, 'code');
+  const client_id = getString(body, 'client_id');
+  const redirect_uri = getString(body, 'redirect_uri') || null;
 
-  if (client_id !== CLI_CLIENT_ID) {
+  if (!code || client_id !== CLI_CLIENT_ID) {
     return NextResponse.json(
-      { success: false, error: 'Invalid client_id' },
+      { success: false, error: 'Invalid request' },
       { status: 400 }
     );
   }
@@ -223,8 +240,9 @@ async function handleCodeExchange(body: any) {
 /**
  * Initialize device flow
  */
-async function handleDeviceFlowInit(body: any) {
-  const { client_id, scope } = body;
+async function handleDeviceFlowInit(body: JsonRecord) {
+  const client_id = getString(body, 'client_id');
+  const scope = getString(body, 'scope') || null;
 
   if (client_id !== CLI_CLIENT_ID) {
     return NextResponse.json(
@@ -259,7 +277,7 @@ async function handleDeviceFlowInit(body: any) {
     );
   }
 
-  const baseUrl = process.env.NEXTAUTH_URL || process.env.NEXT_PUBLIC_SITE_URL || 'https://recoder.xyz';
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXT_PUBLIC_SITE_URL || 'https://recoder.xyz';
 
   return NextResponse.json({
     success: true,
@@ -275,12 +293,13 @@ async function handleDeviceFlowInit(body: any) {
 /**
  * Poll for device authorization
  */
-async function handleDeviceToken(body: any) {
-  const { device_code, client_id } = body;
+async function handleDeviceToken(body: JsonRecord) {
+  const device_code = getString(body, 'device_code');
+  const client_id = getString(body, 'client_id');
 
-  if (client_id !== CLI_CLIENT_ID) {
+  if (!device_code || client_id !== CLI_CLIENT_ID) {
     return NextResponse.json(
-      { success: false, error: 'Invalid client_id' },
+      { success: false, error: 'Invalid request' },
       { status: 400 }
     );
   }
@@ -391,14 +410,24 @@ async function handleDeviceToken(body: any) {
 /**
  * Validate API key or access token
  */
-async function handleTokenValidation(body: any) {
-  const { token } = body;
+async function handleTokenValidation(body: JsonRecord) {
+  const token = getString(body, 'token');
+  if (!token) {
+    return NextResponse.json(
+      { success: false, error: 'Invalid token' },
+      { status: 401 }
+    );
+  }
 
   // Try as access token first
   try {
-    const decoded = verify(token, JWT_SECRET) as any;
+    const decoded = verify(token, JWT_SECRET) as CliJwtPayload | string;
     
-    if (decoded.type === 'access') {
+    if (
+      typeof decoded !== 'string' &&
+      decoded.type === 'access' &&
+      typeof decoded.userId === 'string'
+    ) {
       const user = await prisma.users.findUnique({
         where: { id: decoded.userId }
       });
@@ -493,20 +522,25 @@ async function handleTokenValidation(body: any) {
 /**
  * Refresh access token
  */
-async function handleTokenRefresh(body: any) {
-  const { refresh_token, client_id } = body;
+async function handleTokenRefresh(body: JsonRecord) {
+  const refresh_token = getString(body, 'refresh_token');
+  const client_id = getString(body, 'client_id');
 
-  if (client_id !== CLI_CLIENT_ID) {
+  if (!refresh_token || client_id !== CLI_CLIENT_ID) {
     return NextResponse.json(
-      { success: false, error: 'Invalid client_id' },
+      { success: false, error: 'Invalid request' },
       { status: 400 }
     );
   }
 
   try {
-    const decoded = verify(refresh_token, JWT_SECRET) as any;
+    const decoded = verify(refresh_token, JWT_SECRET) as CliJwtPayload | string;
     
-    if (decoded.type !== 'refresh') {
+    if (
+      typeof decoded === 'string' ||
+      decoded.type !== 'refresh' ||
+      typeof decoded.userId !== 'string'
+    ) {
       throw new Error('Invalid token type');
     }
 
@@ -546,8 +580,14 @@ async function handleTokenRefresh(body: any) {
 /**
  * Revoke token (logout)
  */
-async function handleTokenRevoke(body: any) {
-  const { token } = body;
+async function handleTokenRevoke(body: JsonRecord) {
+  const token = getString(body, 'token');
+  if (!token) {
+    return NextResponse.json(
+      { success: false, error: 'Invalid token' },
+      { status: 400 }
+    );
+  }
 
   // Revoke CLI session
   await prisma.cli_sessions.updateMany({

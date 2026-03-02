@@ -1,7 +1,7 @@
 "use server";
 
-import type { CreateAndStartTaskInputs } from "@giselles-ai/giselle";
-import type { WorkspaceId } from "@giselles-ai/protocol";
+import type { CreateAndStartTaskInputs } from "@recoder/giselle";
+import type { WorkspaceId } from "@recoder/protocol";
 import { giselle } from "@/app/giselle";
 import { db } from "@/db";
 import { fetchCurrentUser } from "@/services/accounts";

@@ -1,7 +1,7 @@
 import {
 	GitHubWebhookUnauthorizedError,
 	verifyRequest,
-} from "@giselles-ai/github-tool";
+} from "@recoder/github-tool";
 import { giselle, githubWebhookCallbacks } from "@/app/giselle";
 import { runAfter } from "@/lib/next-after";
 

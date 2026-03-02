@@ -10,6 +10,7 @@ import { prisma } from '@/lib/prisma';
 import { authenticator } from 'otplib';
 import QRCode from 'qrcode';
 import crypto from 'crypto';
+import { logger } from '@/lib/logger';
 
 export async function POST(request: NextRequest) {
   try {
@@ -50,44 +51,20 @@ export async function POST(request: NextRequest) {
       crypto.createHash('sha256').update(code).digest('hex')
     );
 
-    // Check if security settings exist for user
-    const existingSettings = await prisma.$queryRaw<any[]>`
-      SELECT * FROM security_settings WHERE user_id = ${userId}
-    `;
-
-    if (existingSettings && existingSettings.length > 0) {
-      // Update existing settings with new secret (but don't enable yet)
-      await prisma.$executeRaw`
-        UPDATE security_settings
-        SET
-          two_factor_secret = ${secret},
-          backup_codes = ${JSON.stringify(hashedBackupCodes)},
-          updated_at = NOW()
-        WHERE user_id = ${userId}
-      `;
-    } else {
-      // Create new security settings
-      await prisma.$executeRaw`
-        INSERT INTO security_settings (
-          user_id,
-          two_factor_enabled,
-          two_factor_secret,
-          backup_codes,
-          session_timeout,
-          created_at,
-          updated_at
-        )
-        VALUES (
-          ${userId},
-          false,
-          ${secret},
-          ${JSON.stringify(hashedBackupCodes)},
-          30,
-          NOW(),
-          NOW()
-        )
-      `;
-    }
+    // Upsert security settings with new secret (but don't enable yet)
+    await prisma.security_settings.upsert({
+      where: { userId },
+      update: {
+        twoFactorSecret: secret,
+        backupCodes: JSON.stringify(hashedBackupCodes),
+      },
+      create: {
+        userId,
+        twoFactorEnabled: false,
+        twoFactorSecret: secret,
+        backupCodes: JSON.stringify(hashedBackupCodes),
+      },
+    });
 
     return NextResponse.json({
       success: true,
@@ -98,7 +75,7 @@ export async function POST(request: NextRequest) {
     });
 
   } catch (error: any) {
-    console.error('[2FA Setup] Error:', error);
+    logger.error('[2FA Setup] Error:', { error: String(error), route: 'auth/2fa/setup' });
     return NextResponse.json(
       { success: false, error: 'Failed to setup 2FA' },
       { status: 500 }

@@ -4,7 +4,7 @@ import {
 	type ImageGenerationLanguageModelData,
 	type ImageGenerationLanguageModelProvider,
 	OpenAIImageLanguageModelData,
-} from "@giselles-ai/protocol";
+} from "@recoder/protocol";
 
 export function createDefaultModelData(
 	provider: ImageGenerationLanguageModelProvider,

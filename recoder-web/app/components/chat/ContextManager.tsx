@@ -56,12 +56,12 @@ const EXTENSION_COLORS: Record<string, string> = {
   css: 'bg-blue-400/20 text-blue-300 border-blue-400/30',
   scss: 'bg-pink-500/20 text-pink-400 border-pink-500/30',
   html: 'bg-orange-500/20 text-orange-400 border-orange-500/30',
-  md: 'bg-bolt-elements-background-depth-2 text-bolt-elements-textSecondary border-bolt-elements-borderColor',
+  md: 'bg-recoder-elements-background-depth-2 text-recoder-elements-textSecondary border-recoder-elements-borderColor',
   py: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30',
 };
 
 function getExtensionColor(extension: string): string {
-  return EXTENSION_COLORS[extension.toLowerCase()] || 'bg-bolt-elements-background-depth-2 text-bolt-elements-textSecondary border-bolt-elements-borderColor';
+  return EXTENSION_COLORS[extension.toLowerCase()] || 'bg-recoder-elements-background-depth-2 text-recoder-elements-textSecondary border-recoder-elements-borderColor';
 }
 
 // Source badge colors
@@ -108,12 +108,12 @@ const TokenBudgetIndicator = memo(function TokenBudgetIndicator() {
   return (
     <div className="flex flex-col gap-1">
       <div className="flex items-center justify-between text-xs">
-        <span className="text-bolt-elements-textSecondary">Token Budget</span>
-        <span className={exceeded ? 'text-red-400' : approaching ? 'text-yellow-400' : 'text-bolt-elements-textSecondary'}>
+        <span className="text-recoder-elements-textSecondary">Token Budget</span>
+        <span className={exceeded ? 'text-red-400' : approaching ? 'text-yellow-400' : 'text-recoder-elements-textSecondary'}>
           {formatTokenCount(totalTokens)} / {formatTokenCount(settings.tokenBudget)}
         </span>
       </div>
-      <div className="h-1.5 bg-bolt-elements-background-depth-2 rounded-full overflow-hidden">
+      <div className="h-1.5 bg-recoder-elements-background-depth-2 rounded-full overflow-hidden">
         <div
           className={`h-full ${barColor} transition-all duration-300`}
           style={{ width: `${Math.min(100, usagePercent)}%` }}
@@ -144,8 +144,8 @@ const FileItem = memo(function FileItem({
     <div
       className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-colors ${
         file.included
-          ? 'bg-bolt-elements-background-depth-2'
-          : 'bg-bolt-elements-background-depth-2 opacity-50'
+          ? 'bg-recoder-elements-background-depth-2'
+          : 'bg-recoder-elements-background-depth-2 opacity-50'
       }`}
     >
       {/* Checkbox */}
@@ -154,7 +154,7 @@ const FileItem = memo(function FileItem({
         className={`w-4 h-4 rounded border flex items-center justify-center flex-shrink-0 ${
           file.included
             ? 'bg-blue-500 border-blue-500'
-            : 'border-bolt-elements-borderColor hover:border-blue-400'
+            : 'border-recoder-elements-borderColor hover:border-blue-400'
         }`}
       >
         {file.included && <div className="i-ph:check text-white text-xs" />}
@@ -166,11 +166,11 @@ const FileItem = memo(function FileItem({
           <div className="i-ph:file-duotone" />
         </div>
         <div className="flex-1 min-w-0">
-          <div className="text-sm text-bolt-elements-textPrimary truncate" title={file.path}>
+          <div className="text-sm text-recoder-elements-textPrimary truncate" title={file.path}>
             {file.name}
           </div>
           <div className="flex items-center gap-2">
-            <span className="text-xs text-bolt-elements-textTertiary truncate">
+            <span className="text-xs text-recoder-elements-textTertiary truncate">
               {file.path.split('/').slice(0, -1).join('/')}
             </span>
           </div>
@@ -185,7 +185,7 @@ const FileItem = memo(function FileItem({
       )}
 
       {/* Token count */}
-      <span className="text-xs text-bolt-elements-textTertiary whitespace-nowrap">
+      <span className="text-xs text-recoder-elements-textTertiary whitespace-nowrap">
         ~{formatTokenCount(file.tokenEstimate)}
       </span>
 
@@ -193,7 +193,7 @@ const FileItem = memo(function FileItem({
       {file.source === 'manual' && (
         <button
           onClick={() => onRemove(file.path)}
-          className="p-1 rounded hover:bg-bolt-elements-background-depth-3 text-bolt-elements-textTertiary hover:text-red-400"
+          className="p-1 rounded hover:bg-recoder-elements-background-depth-3 text-recoder-elements-textTertiary hover:text-red-400"
           title="Remove from context"
         >
           <div className="i-ph:x text-sm" />
@@ -276,29 +276,29 @@ const FilePickerModal = memo(function FilePickerModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-      <div className="bg-bolt-elements-background-depth-2 rounded-lg shadow-xl border border-bolt-elements-borderColor w-full max-w-lg max-h-[80vh] flex flex-col">
+      <div className="bg-recoder-elements-background-depth-2 rounded-lg shadow-xl border border-recoder-elements-borderColor w-full max-w-lg max-h-[80vh] flex flex-col">
         {/* Header */}
-        <div className="p-4 border-b border-bolt-elements-borderColor">
+        <div className="p-4 border-b border-recoder-elements-borderColor">
           <div className="flex items-center justify-between mb-3">
-            <h3 className="text-lg font-semibold text-bolt-elements-textPrimary">
+            <h3 className="text-lg font-semibold text-recoder-elements-textPrimary">
               Add Files to Context
             </h3>
             <button
               onClick={onClose}
-              className="p-1 rounded hover:bg-bolt-elements-background-depth-2 text-bolt-elements-textSecondary"
+              className="p-1 rounded hover:bg-recoder-elements-background-depth-2 text-recoder-elements-textSecondary"
             >
               <div className="i-ph:x text-xl" />
             </button>
           </div>
           <div className="relative">
-            <div className="i-ph:magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-bolt-elements-textSecondary" />
+            <div className="i-ph:magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-recoder-elements-textSecondary" />
             <input
               ref={searchRef}
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search files..."
-              className="w-full pl-9 pr-4 py-2 bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor rounded-lg text-bolt-elements-textPrimary placeholder:text-bolt-elements-textTertiary focus:outline-none focus:border-bolt-elements-borderColorActive"
+              className="w-full pl-9 pr-4 py-2 bg-recoder-elements-background-depth-2 border border-recoder-elements-borderColor rounded-lg text-recoder-elements-textPrimary placeholder:text-recoder-elements-textTertiary focus:outline-none focus:border-recoder-elements-borderColorActive"
             />
           </div>
         </div>
@@ -306,7 +306,7 @@ const FilePickerModal = memo(function FilePickerModal({
         {/* File list */}
         <div className="flex-1 overflow-y-auto p-2">
           {filteredFiles.length === 0 ? (
-            <div className="text-center py-8 text-bolt-elements-textSecondary">
+            <div className="text-center py-8 text-recoder-elements-textSecondary">
               <div className="i-ph:folder-open text-4xl mx-auto mb-2 opacity-50" />
               <p>{search ? 'No files match your search' : 'No files available'}</p>
             </div>
@@ -325,26 +325,26 @@ const FilePickerModal = memo(function FilePickerModal({
                     className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg transition-colors text-left ${
                       isSelected
                         ? 'bg-blue-500/20 border border-blue-500/30'
-                        : 'hover:bg-bolt-elements-background-depth-2 border border-transparent'
+                        : 'hover:bg-recoder-elements-background-depth-2 border border-transparent'
                     }`}
                   >
                     <div className={`w-4 h-4 rounded border flex items-center justify-center ${
                       isSelected
                         ? 'bg-blue-500 border-blue-500'
-                        : 'border-bolt-elements-borderColor'
+                        : 'border-recoder-elements-borderColor'
                     }`}>
                       {isSelected && <div className="i-ph:check text-white text-xs" />}
                     </div>
-                    <div className="i-ph:file-duotone text-bolt-elements-textSecondary" />
+                    <div className="i-ph:file-duotone text-recoder-elements-textSecondary" />
                     <div className="flex-1 min-w-0">
-                      <div className="text-sm text-bolt-elements-textPrimary truncate">{name}</div>
-                      <div className="text-xs text-bolt-elements-textTertiary truncate">{dir}</div>
+                      <div className="text-sm text-recoder-elements-textPrimary truncate">{name}</div>
+                      <div className="text-xs text-recoder-elements-textTertiary truncate">{dir}</div>
                     </div>
                     {estimating === path && (
-                      <div className="i-ph:spinner-gap animate-spin text-bolt-elements-textTertiary" />
+                      <div className="i-ph:spinner-gap animate-spin text-recoder-elements-textTertiary" />
                     )}
                     {tokenEst !== undefined && (
-                      <span className="text-xs text-bolt-elements-textTertiary">
+                      <span className="text-xs text-recoder-elements-textTertiary">
                         ~{formatTokenCount(tokenEst)}
                       </span>
                     )}
@@ -356,14 +356,14 @@ const FilePickerModal = memo(function FilePickerModal({
         </div>
 
         {/* Footer */}
-        <div className="p-4 border-t border-bolt-elements-borderColor flex items-center justify-between">
-          <div className="text-sm text-bolt-elements-textSecondary">
+        <div className="p-4 border-t border-recoder-elements-borderColor flex items-center justify-between">
+          <div className="text-sm text-recoder-elements-textSecondary">
             {selected.size} file{selected.size !== 1 ? 's' : ''} selected
           </div>
           <div className="flex gap-2">
             <button
               onClick={onClose}
-              className="px-4 py-2 text-sm rounded-lg border border-bolt-elements-borderColor text-bolt-elements-textSecondary hover:bg-bolt-elements-background-depth-2"
+              className="px-4 py-2 text-sm rounded-lg border border-recoder-elements-borderColor text-recoder-elements-textSecondary hover:bg-recoder-elements-background-depth-2"
             >
               Cancel
             </button>
@@ -395,16 +395,16 @@ const ContextPreviewModal = memo(function ContextPreviewModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-      <div className="bg-bolt-elements-background-depth-2 rounded-lg shadow-xl border border-bolt-elements-borderColor w-full max-w-3xl max-h-[85vh] flex flex-col">
+      <div className="bg-recoder-elements-background-depth-2 rounded-lg shadow-xl border border-recoder-elements-borderColor w-full max-w-3xl max-h-[85vh] flex flex-col">
         {/* Header */}
-        <div className="p-4 border-b border-bolt-elements-borderColor">
+        <div className="p-4 border-b border-recoder-elements-borderColor">
           <div className="flex items-center justify-between">
-            <h3 className="text-lg font-semibold text-bolt-elements-textPrimary">
+            <h3 className="text-lg font-semibold text-recoder-elements-textPrimary">
               Context Preview
             </h3>
             <button
               onClick={onClose}
-              className="p-1 rounded hover:bg-bolt-elements-background-depth-2 text-bolt-elements-textSecondary"
+              className="p-1 rounded hover:bg-recoder-elements-background-depth-2 text-recoder-elements-textSecondary"
             >
               <div className="i-ph:x text-xl" />
             </button>
@@ -413,12 +413,12 @@ const ContextPreviewModal = memo(function ContextPreviewModal({
           {/* Stats */}
           <div className="mt-3 flex flex-wrap gap-4 text-sm">
             <div className="flex items-center gap-2">
-              <div className="i-ph:files-duotone text-bolt-elements-textSecondary" />
-              <span className="text-bolt-elements-textPrimary">{preview.files.length} files</span>
+              <div className="i-ph:files-duotone text-recoder-elements-textSecondary" />
+              <span className="text-recoder-elements-textPrimary">{preview.files.length} files</span>
             </div>
             <div className="flex items-center gap-2">
-              <div className="i-ph:hash text-bolt-elements-textSecondary" />
-              <span className={preview.budgetExceeded ? 'text-red-400' : 'text-bolt-elements-textPrimary'}>
+              <div className="i-ph:hash text-recoder-elements-textSecondary" />
+              <span className={preview.budgetExceeded ? 'text-red-400' : 'text-recoder-elements-textPrimary'}>
                 ~{formatTokenCount(preview.totalTokens)} tokens
               </span>
             </div>
@@ -462,13 +462,13 @@ const ContextPreviewModal = memo(function ContextPreviewModal({
 
         {/* Content */}
         <div className="flex-1 overflow-y-auto p-4">
-          <pre className="text-xs text-bolt-elements-textSecondary whitespace-pre-wrap font-mono bg-bolt-elements-background-depth-2 p-4 rounded-lg overflow-x-auto">
+          <pre className="text-xs text-recoder-elements-textSecondary whitespace-pre-wrap font-mono bg-recoder-elements-background-depth-2 p-4 rounded-lg overflow-x-auto">
             {preview.previewText}
           </pre>
         </div>
 
         {/* Footer */}
-        <div className="p-4 border-t border-bolt-elements-borderColor flex justify-end">
+        <div className="p-4 border-t border-recoder-elements-borderColor flex justify-end">
           <button
             onClick={onClose}
             className="px-4 py-2 text-sm rounded-lg bg-blue-500 text-white hover:bg-blue-600"
@@ -498,15 +498,15 @@ const SettingsPanel = memo(function SettingsPanel({
   }, [projectId]);
 
   return (
-    <div className="p-3 border-b border-bolt-elements-borderColor bg-bolt-elements-background-depth-2 space-y-3">
+    <div className="p-3 border-b border-recoder-elements-borderColor bg-recoder-elements-background-depth-2 space-y-3">
       {/* Auto-context toggle */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <span className="text-sm text-bolt-elements-textPrimary">Auto-context</span>
+          <span className="text-sm text-recoder-elements-textPrimary">Auto-context</span>
           <button
             onClick={() => toggleAutoContext()}
             className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
-              settings.autoContextEnabled ? 'bg-blue-500' : 'bg-bolt-elements-background-depth-3'
+              settings.autoContextEnabled ? 'bg-blue-500' : 'bg-recoder-elements-background-depth-3'
             }`}
           >
             <span
@@ -521,7 +521,7 @@ const SettingsPanel = memo(function SettingsPanel({
           <button
             onClick={handleRefresh}
             disabled={loading || !projectId}
-            className="flex items-center gap-1 text-xs text-bolt-elements-textSecondary hover:text-bolt-elements-textPrimary disabled:opacity-50"
+            className="flex items-center gap-1 text-xs text-recoder-elements-textSecondary hover:text-recoder-elements-textPrimary disabled:opacity-50"
           >
             <div className={`i-ph:arrows-clockwise ${loading ? 'animate-spin' : ''}`} />
             Refresh
@@ -532,7 +532,7 @@ const SettingsPanel = memo(function SettingsPanel({
       {/* Auto-context mode */}
       {settings.autoContextEnabled && (
         <div className="flex items-center gap-2">
-          <span className="text-xs text-bolt-elements-textSecondary">Mode:</span>
+          <span className="text-xs text-recoder-elements-textSecondary">Mode:</span>
           <div className="flex gap-1">
             {(['imports', 'related', 'smart'] as AutoContextMode[]).map((mode) => (
               <button
@@ -541,7 +541,7 @@ const SettingsPanel = memo(function SettingsPanel({
                 className={`px-2 py-1 text-xs rounded ${
                   settings.autoContextMode === mode
                     ? 'bg-blue-500 text-white'
-                    : 'bg-bolt-elements-background-depth-2 text-bolt-elements-textSecondary hover:bg-bolt-elements-background-depth-3'
+                    : 'bg-recoder-elements-background-depth-2 text-recoder-elements-textSecondary hover:bg-recoder-elements-background-depth-3'
                 }`}
               >
                 {mode.charAt(0).toUpperCase() + mode.slice(1)}
@@ -554,8 +554,8 @@ const SettingsPanel = memo(function SettingsPanel({
       {/* Token budget slider */}
       <div className="space-y-1">
         <div className="flex items-center justify-between text-xs">
-          <span className="text-bolt-elements-textSecondary">Max tokens:</span>
-          <span className="text-bolt-elements-textPrimary">{formatTokenCount(settings.tokenBudget)}</span>
+          <span className="text-recoder-elements-textSecondary">Max tokens:</span>
+          <span className="text-recoder-elements-textPrimary">{formatTokenCount(settings.tokenBudget)}</span>
         </div>
         <input
           type="range"
@@ -564,7 +564,7 @@ const SettingsPanel = memo(function SettingsPanel({
           step="5000"
           value={settings.tokenBudget}
           onChange={(e) => setTokenBudget(parseInt(e.target.value))}
-          className="w-full h-1.5 bg-bolt-elements-background-depth-2 rounded-lg appearance-none cursor-pointer accent-blue-500"
+          className="w-full h-1.5 bg-recoder-elements-background-depth-2 rounded-lg appearance-none cursor-pointer accent-blue-500"
         />
       </div>
 
@@ -671,20 +671,20 @@ export const ContextManager = memo(function ContextManager({
 
   return (
     <>
-      <div className={`bg-bolt-elements-background-depth-1 border border-bolt-elements-borderColor rounded-lg overflow-hidden ${className}`}>
+      <div className={`bg-recoder-elements-background-depth-1 border border-recoder-elements-borderColor rounded-lg overflow-hidden ${className}`}>
         {/* Header */}
-        <div className="flex items-center justify-between p-3 border-b border-bolt-elements-borderColor">
+        <div className="flex items-center justify-between p-3 border-b border-recoder-elements-borderColor">
           <div className="flex items-center gap-2">
-            <div className="i-ph:brain text-bolt-elements-textSecondary" />
-            <h3 className="text-sm font-medium text-bolt-elements-textPrimary">AI Context</h3>
+            <div className="i-ph:brain text-recoder-elements-textSecondary" />
+            <h3 className="text-sm font-medium text-recoder-elements-textPrimary">AI Context</h3>
             {loading && <div className="i-ph:spinner-gap animate-spin text-blue-400 text-sm" />}
           </div>
 
           <div className="flex items-center gap-1">
             <button
               onClick={() => setIsSettingsOpen(!isSettingsOpen)}
-              className={`p-1.5 rounded hover:bg-bolt-elements-background-depth-2 ${
-                isSettingsOpen ? 'text-blue-400' : 'text-bolt-elements-textSecondary'
+              className={`p-1.5 rounded hover:bg-recoder-elements-background-depth-2 ${
+                isSettingsOpen ? 'text-blue-400' : 'text-recoder-elements-textSecondary'
               }`}
               title="Settings"
             >
@@ -692,14 +692,14 @@ export const ContextManager = memo(function ContextManager({
             </button>
             <button
               onClick={() => toggleContextPreview()}
-              className="p-1.5 rounded hover:bg-bolt-elements-background-depth-2 text-bolt-elements-textSecondary"
+              className="p-1.5 rounded hover:bg-recoder-elements-background-depth-2 text-recoder-elements-textSecondary"
               title="Preview context"
             >
               <div className="i-ph:eye text-sm" />
             </button>
             <button
               onClick={() => clearAllContext()}
-              className="p-1.5 rounded hover:bg-bolt-elements-background-depth-2 text-bolt-elements-textSecondary hover:text-red-400"
+              className="p-1.5 rounded hover:bg-recoder-elements-background-depth-2 text-recoder-elements-textSecondary hover:text-red-400"
               title="Clear all context"
             >
               <div className="i-ph:trash text-sm" />
@@ -711,14 +711,14 @@ export const ContextManager = memo(function ContextManager({
         {isSettingsOpen && <SettingsPanel projectId={projectId} />}
 
         {/* Token budget indicator */}
-        <div className="p-3 border-b border-bolt-elements-borderColor">
+        <div className="p-3 border-b border-recoder-elements-borderColor">
           <TokenBudgetIndicator />
         </div>
 
         {/* File list */}
         <div className="max-h-64 overflow-y-auto">
           {allContextFiles.length === 0 ? (
-            <div className="p-4 text-center text-bolt-elements-textSecondary">
+            <div className="p-4 text-center text-recoder-elements-textSecondary">
               <div className="i-ph:files-duotone text-3xl mx-auto mb-2 opacity-50" />
               <p className="text-sm">No files in context</p>
               <p className="text-xs mt-1">
@@ -742,10 +742,10 @@ export const ContextManager = memo(function ContextManager({
         </div>
 
         {/* Footer */}
-        <div className="p-3 border-t border-bolt-elements-borderColor">
+        <div className="p-3 border-t border-recoder-elements-borderColor">
           <button
             onClick={() => setIsPickerOpen(true)}
-            className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg border border-dashed border-bolt-elements-borderColor text-sm text-bolt-elements-textSecondary hover:border-bolt-elements-borderColor hover:text-bolt-elements-textPrimary"
+            className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg border border-dashed border-recoder-elements-borderColor text-sm text-recoder-elements-textSecondary hover:border-recoder-elements-borderColor hover:text-recoder-elements-textPrimary"
           >
             <div className="i-ph:plus" />
             Add Files

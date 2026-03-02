@@ -12,9 +12,9 @@ import type {
 	updatePullRequestReviewComment,
 	WebhookEvent,
 	WebhookEventName,
-} from "@giselles-ai/github-tool";
-import { findDiscussionReplyTargetId } from "@giselles-ai/github-tool";
-import type { Trigger } from "@giselles-ai/protocol";
+} from "@recoder/github-tool";
+import { findDiscussionReplyTargetId } from "@recoder/github-tool";
+import type { Trigger } from "@recoder/protocol";
 import type { OnGenerationComplete, OnGenerationError } from "../generations";
 import type { createAndStartTask, OnTaskCreate } from "../tasks";
 import type { GiselleContext } from "../types";

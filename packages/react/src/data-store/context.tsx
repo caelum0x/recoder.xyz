@@ -1,6 +1,6 @@
 "use client";
 
-import type { DataStoreId, WorkspaceId } from "@giselles-ai/protocol";
+import type { DataStoreId, WorkspaceId } from "@recoder/protocol";
 import type { PropsWithChildren } from "react";
 import { createContext, useContext } from "react";
 import useSWR from "swr";

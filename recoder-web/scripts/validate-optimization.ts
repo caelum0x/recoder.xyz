@@ -3,7 +3,7 @@
  * Cost Optimization Validation Script
  *
  * This script demonstrates the cost savings and performance improvements
- * achieved by the optimization systems implemented for Bolt.new
+ * achieved by the optimization systems implemented for Recoder Web
  */
 
 import { llmAnalytics, formatCurrency } from '../app/lib/.server/llm/analytics';
@@ -24,7 +24,7 @@ interface OptimizationMetrics {
 
 class OptimizationValidator {
   async validateOptimizations(): Promise<OptimizationMetrics> {
-    console.log('🚀 Starting Bolt.new Optimization Validation...\n');
+    console.log('🚀 Starting Recoder Web Optimization Validation...\n');
 
     // Simulate realistic usage patterns
     await this.simulateUsage();

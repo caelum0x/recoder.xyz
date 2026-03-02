@@ -1,10 +1,10 @@
-import { createEndNode } from "@giselles-ai/node-registry";
+import { createEndNode } from "@recoder/node-registry";
 import {
 	isAppEntryNode,
 	isEndNode,
 	type NodeLike,
 	type NodeUIState,
-} from "@giselles-ai/protocol";
+} from "@recoder/protocol";
 import { useCallback } from "react";
 import { useAppDesignerStoreApi } from "../app-designer-provider";
 import { useAddNode } from "./use-add-node";

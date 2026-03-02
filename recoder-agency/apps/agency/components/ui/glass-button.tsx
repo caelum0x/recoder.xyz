@@ -39,7 +39,7 @@ const GlassButton = React.forwardRef<HTMLButtonElement, GlassButtonProps>(
 					ref={ref}
 					style={{
 						boxShadow:
-							"0 8px 20px rgba(107, 143, 240, 0.2), 0 3px 10px rgba(107, 143, 240, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.25), inset 0 -1px 0 rgba(0, 0, 0, 0.15), 0 0 0 1px rgba(255, 255, 255, 0.08)",
+							"0 8px 20px rgba(249, 115, 22, 0.2), 0 3px 10px rgba(249, 115, 22, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.25), inset 0 -1px 0 rgba(0, 0, 0, 0.15), 0 0 0 1px rgba(255, 255, 255, 0.08)",
 						background:
 							"linear-gradient(135deg, rgba(255,255,255,0.1) 0%, rgba(107,143,240,0.15) 50%, rgba(107,143,240,0.25) 100%)",
 					}}
@@ -56,7 +56,7 @@ const GlassButton = React.forwardRef<HTMLButtonElement, GlassButtonProps>(
 				ref={ref}
 				style={{
 					boxShadow:
-						"0 8px 20px rgba(107, 143, 240, 0.2), 0 3px 10px rgba(107, 143, 240, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.25), inset 0 -1px 0 rgba(0, 0, 0, 0.15), 0 0 0 1px rgba(255, 255, 255, 0.08)",
+						"0 8px 20px rgba(249, 115, 22, 0.2), 0 3px 10px rgba(249, 115, 22, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.25), inset 0 -1px 0 rgba(0, 0, 0, 0.15), 0 0 0 1px rgba(255, 255, 255, 0.08)",
 					background:
 						"linear-gradient(135deg, rgba(255,255,255,0.1) 0%, rgba(107,143,240,0.15) 50%, rgba(107,143,240,0.25) 100%)",
 				}}
@@ -65,7 +65,7 @@ const GlassButton = React.forwardRef<HTMLButtonElement, GlassButtonProps>(
 				{/* Outer glow */}
 				<div
 					className="absolute inset-0 rounded-lg blur-[2px] -z-10"
-					style={{ backgroundColor: "#6B8FF0", opacity: 0.08 }}
+					style={{ backgroundColor: "#f97316", opacity: 0.08 }}
 				/>
 
 				{/* Main glass background */}

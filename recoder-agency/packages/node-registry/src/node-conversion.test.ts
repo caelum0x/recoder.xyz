@@ -1,4 +1,4 @@
-import type { TextGenerationNode } from "@giselles-ai/protocol";
+import type { TextGenerationNode } from "@recoder/protocol";
 import { describe, expect, it } from "vitest";
 import {
 	anthropicClaudeOpus45,

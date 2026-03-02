@@ -71,16 +71,16 @@ export default function SettingsLayout() {
   ];
 
   return (
-    <div className="h-screen flex bg-bolt-elements-background-depth-1 text-bolt-elements-textPrimary">
+    <div className="h-screen flex bg-recoder-elements-background-depth-1 text-recoder-elements-textPrimary">
       {/* Settings Sidebar */}
       <aside
         className={`${
           isSidebarOpen ? 'w-64' : 'w-0'
-        } transition-all duration-200 border-r border-bolt-elements-borderColor bg-bolt-elements-background-depth-2 overflow-hidden`}
+        } transition-all duration-200 border-r border-recoder-elements-borderColor bg-recoder-elements-background-depth-2 overflow-hidden`}
       >
-        <div className="p-4 border-b border-bolt-elements-borderColor">
+        <div className="p-4 border-b border-recoder-elements-borderColor">
           <h1 className="text-xl font-bold">Settings</h1>
-          <p className="text-sm text-bolt-elements-textSecondary mt-1">
+          <p className="text-sm text-recoder-elements-textSecondary mt-1">
             Configure your IDE preferences
           </p>
         </div>
@@ -88,7 +88,7 @@ export default function SettingsLayout() {
         <nav className="p-4 space-y-6">
           {settingsSections.map((section) => (
             <div key={section.title}>
-              <h2 className="text-xs font-semibold text-bolt-elements-textSecondary uppercase tracking-wider mb-2">
+              <h2 className="text-xs font-semibold text-recoder-elements-textSecondary uppercase tracking-wider mb-2">
                 {section.title}
               </h2>
               <div className="space-y-1">
@@ -100,8 +100,8 @@ export default function SettingsLayout() {
                       to={item.path}
                       className={`flex items-center space-x-3 px-3 py-2 rounded-lg transition-colors ${
                         isActive
-                          ? 'bg-bolt-elements-item-backgroundActive text-bolt-elements-item-contentActive'
-                          : 'hover:bg-bolt-elements-item-backgroundHover text-bolt-elements-textPrimary'
+                          ? 'bg-recoder-elements-item-backgroundActive text-recoder-elements-item-contentActive'
+                          : 'hover:bg-recoder-elements-item-backgroundHover text-recoder-elements-textPrimary'
                       }`}
                     >
                       <span className="text-lg">{item.icon}</span>
@@ -117,7 +117,7 @@ export default function SettingsLayout() {
         <div className="absolute bottom-4 left-4">
           <Link
             to="/"
-            className="flex items-center space-x-2 text-sm text-bolt-elements-textSecondary hover:text-bolt-elements-textPrimary transition-colors"
+            className="flex items-center space-x-2 text-sm text-recoder-elements-textSecondary hover:text-recoder-elements-textPrimary transition-colors"
           >
             <span>←</span>
             <span>Back to IDE</span>
@@ -135,7 +135,7 @@ export default function SettingsLayout() {
       {/* Toggle Sidebar Button */}
       <button
         onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-        className="fixed bottom-4 left-4 p-2 bg-bolt-elements-background-depth-3 border border-bolt-elements-borderColor rounded-lg hover:bg-bolt-elements-item-backgroundHover transition-colors z-10"
+        className="fixed bottom-4 left-4 p-2 bg-recoder-elements-background-depth-3 border border-recoder-elements-borderColor rounded-lg hover:bg-recoder-elements-item-backgroundHover transition-colors z-10"
         title={isSidebarOpen ? 'Hide sidebar' : 'Show sidebar'}
       >
         {isSidebarOpen ? '◀' : '▶'}

@@ -117,7 +117,7 @@ const Avatar = memo(({ user, size = 'md', showTooltip = true }: AvatarProps) => 
 
       {/* Active indicator (pulsing dot) */}
       <div
-        className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-green-500 border-2 border-bolt-elements-background-depth-1"
+        className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-green-500 border-2 border-recoder-elements-background-depth-1"
         style={{
           animation: 'pulse 2s ease-in-out infinite',
         }}
@@ -125,10 +125,10 @@ const Avatar = memo(({ user, size = 'md', showTooltip = true }: AvatarProps) => 
 
       {/* Tooltip */}
       {showTooltip && (
-        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-bolt-elements-background-depth-3 text-bolt-elements-textPrimary text-xs rounded shadow-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-50">
+        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-recoder-elements-background-depth-3 text-recoder-elements-textPrimary text-xs rounded shadow-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-50">
           <div className="font-medium">{user.user.name}</div>
           {user.currentFile && (
-            <div className="text-bolt-elements-textSecondary text-[10px]">
+            <div className="text-recoder-elements-textSecondary text-[10px]">
               {user.currentFile.split('/').pop()}
             </div>
           )}
@@ -137,7 +137,7 @@ const Avatar = memo(({ user, size = 'md', showTooltip = true }: AvatarProps) => 
             style={{
               borderLeft: '4px solid transparent',
               borderRight: '4px solid transparent',
-              borderTop: '4px solid var(--bolt-elements-background-depth-3)',
+              borderTop: '4px solid var(--recoder-elements-background-depth-3)',
             }}
           />
         </div>
@@ -192,7 +192,7 @@ const UserNotification = memo(({
         {event.user.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)}
       </div>
       <span className="font-medium">{event.user.name}</span>
-      <span className="text-bolt-elements-textSecondary">
+      <span className="text-recoder-elements-textSecondary">
         {event.type === 'joined' ? 'joined' : 'left'}
       </span>
     </div>
@@ -411,14 +411,14 @@ export const CollaboratorAvatars = memo(({
           />
 
           {/* Status tooltip */}
-          <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-bolt-elements-background-depth-3 text-bolt-elements-textPrimary text-xs rounded shadow-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-50">
+          <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-recoder-elements-background-depth-3 text-recoder-elements-textPrimary text-xs rounded shadow-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-50">
             {getConnectionStatusText()}
             <div
               className="absolute top-full left-1/2 -translate-x-1/2 -mt-1"
               style={{
                 borderLeft: '4px solid transparent',
                 borderRight: '4px solid transparent',
-                borderTop: '4px solid var(--bolt-elements-background-depth-3)',
+                borderTop: '4px solid var(--recoder-elements-background-depth-3)',
               }}
             />
           </div>
@@ -444,7 +444,7 @@ export const CollaboratorAvatars = memo(({
               className={classNames(
                 sizeClasses[size],
                 overlapOffset[size],
-                'rounded-full flex items-center justify-center font-medium bg-bolt-elements-background-depth-3 text-bolt-elements-textSecondary border-2 border-bolt-elements-background-depth-1'
+                'rounded-full flex items-center justify-center font-medium bg-recoder-elements-background-depth-3 text-recoder-elements-textSecondary border-2 border-recoder-elements-background-depth-1'
               )}
               style={{ zIndex: 0 }}
             >
@@ -456,7 +456,7 @@ export const CollaboratorAvatars = memo(({
 
       {/* Empty state */}
       {users.length === 0 && (
-        <span className="text-xs text-bolt-elements-textSecondary">
+        <span className="text-xs text-recoder-elements-textSecondary">
           {scope === 'file' ? 'No one else editing' : 'Only you'}
         </span>
       )}

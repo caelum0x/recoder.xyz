@@ -20,6 +20,13 @@ import psutil
 from pydantic import BaseModel
 import uuid
 
+from core.utils.trace_context import (
+    build_trace_context_from_headers,
+    set_trace_context,
+    get_trace_context,
+    TraceContext,
+)
+
 
 from core.versioning.api import router as versioning_router
 from core.agents.api import router as agent_runs_router
@@ -276,31 +283,100 @@ app = FastAPI(
 # Configure OpenAPI docs with API Key and Bearer token auth
 configure_openapi(app)
 
+
+# ---------------------------------------------------------------------------
+# SFA-011: Exception handlers that embed trace fields in error response JSON
+# ---------------------------------------------------------------------------
+
+@app.exception_handler(HTTPException)
+async def traced_http_exception_handler(request: Request, exc: HTTPException):
+    """Return HTTPException errors with interop trace metadata."""
+    trace_ctx: TraceContext | None = get_trace_context()
+    # Build the body — preserve the original `detail` structure
+    body: dict = {"detail": exc.detail}
+    if trace_ctx:
+        body["_meta"] = trace_ctx.as_response_meta()
+
+    headers: dict[str, str] = {}
+    if trace_ctx:
+        headers = trace_ctx.as_response_headers()
+    # Merge any headers the exception itself carries (e.g. WWW-Authenticate)
+    if exc.headers:
+        headers.update(exc.headers)
+
+    return JSONResponse(
+        status_code=exc.status_code,
+        content=body,
+        headers=headers,
+    )
+
+
+@app.exception_handler(Exception)
+async def traced_unhandled_exception_handler(request: Request, exc: Exception):
+    """Catch-all for unhandled exceptions — return 500 with trace metadata."""
+    trace_ctx: TraceContext | None = get_trace_context()
+    try:
+        error_str = str(exc)
+    except Exception:
+        error_str = f"Error of type {type(exc).__name__}"
+    logger.error(f"Unhandled exception: {error_str}", exc_info=exc)
+
+    body: dict = {"detail": "Internal server error"}
+    if trace_ctx:
+        body["_meta"] = trace_ctx.as_response_meta()
+
+    headers: dict[str, str] = {}
+    if trace_ctx:
+        headers = trace_ctx.as_response_headers()
+
+    return JSONResponse(
+        status_code=500,
+        content=body,
+        headers=headers,
+    )
+
+
 @app.middleware("http")
 async def log_requests_middleware(request: Request, call_next):
     structlog.contextvars.clear_contextvars()
 
-    request_id = str(uuid.uuid4())
+    # --- SFA-011: Build trace context from W3C traceparent, X-Trace-Id, etc. ---
+    trace_ctx = build_trace_context_from_headers(
+        headers={k.lower(): v for k, v in request.headers.items()},
+        query_params=dict(request.query_params),
+    )
+    set_trace_context(trace_ctx)
+
     start_time = time.time()
     client_ip = request.client.host if request.client else "unknown"
     method = request.method
     path = request.url.path
     query_params = str(request.query_params)
 
+    # Make interop metadata available to route handlers via request.state
+    request.state.trace_id = trace_ctx.trace_id
+    request.state.request_id = trace_ctx.request_id
+    request.state.connector_id = trace_ctx.connector_id
+    request.state.trace_context = trace_ctx
+
+    # Bind all interop fields + request metadata into structlog context
     structlog.contextvars.bind_contextvars(
-        request_id=request_id,
+        **trace_ctx.as_log_fields(),
         client_ip=client_ip,
         method=method,
         path=path,
-        query_params=query_params
+        query_params=query_params,
     )
 
     # Log the incoming request
     logger.debug(f"Request started: {method} {path} from {client_ip} | Query: {query_params}")
-    
+
     try:
         response = await call_next(request)
         process_time = time.time() - start_time
+        # SFA-011: propagate interop metadata in response headers for cross-service tracing.
+        for hdr_name, hdr_value in trace_ctx.as_response_headers().items():
+            response.headers[hdr_name] = hdr_value
         logger.debug(f"Request completed: {method} {path} | Status: {response.status_code} | Time: {process_time:.2f}s")
         return response
     except Exception as e:
@@ -339,7 +415,20 @@ app.add_middleware(
     allow_origin_regex=allow_origin_regex,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allow_headers=["Content-Type", "Authorization", "X-Project-Id", "X-MCP-URL", "X-MCP-Type", "X-MCP-Headers", "X-API-Key"],
+    allow_headers=[
+        "Content-Type",
+        "Authorization",
+        "X-Project-Id",
+        "X-MCP-URL",
+        "X-MCP-Type",
+        "X-MCP-Headers",
+        "X-API-Key",
+        "X-Trace-Id",
+        "X-Connector-Id",
+        "X-Request-Id",
+        "traceparent",
+        "tracestate",
+    ],
 )
 
 # Create a main API router

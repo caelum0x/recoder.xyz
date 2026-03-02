@@ -84,12 +84,10 @@ export default function WorkflowOpsPage() {
 	const [canaryAudience, setCanaryAudience] = useState<"all" | "internal" | "beta">(
 		"beta",
 	);
-
-	if (!flagshipUseCase) {
-		return null;
-	}
-
-	const readiness = getUseCaseReadiness(flagshipUseCase.id);
+	const flagshipUseCaseId = flagshipUseCase?.id ?? FLAGSHIP_USE_CASE_ID;
+	const readiness = flagshipUseCase
+		? getUseCaseReadiness(flagshipUseCaseId)
+		: undefined;
 
 	const startUseCase = async (useCaseId: AiStudioUseCaseId, source: string) => {
 		if (bootstrappingUseCaseId) return;
@@ -150,7 +148,7 @@ export default function WorkflowOpsPage() {
 	};
 
 	const handleStartFlagship = async () => {
-		await startUseCase(flagshipUseCase.id, "workflow_ops");
+		await startUseCase(flagshipUseCaseId, "workflow_ops");
 	};
 
 	const runSimulation = async (useCaseId: AiStudioUseCaseId, source: string) => {
@@ -191,7 +189,7 @@ export default function WorkflowOpsPage() {
 		const refreshDeployment = async () => {
 			try {
 				const response = await fetch(
-					`/api/use-cases/deploy?useCaseId=${encodeURIComponent(flagshipUseCase.id)}`,
+					`/api/use-cases/deploy?useCaseId=${encodeURIComponent(flagshipUseCaseId)}`,
 				);
 				if (!response.ok) {
 					return;
@@ -216,7 +214,7 @@ export default function WorkflowOpsPage() {
 			}
 		};
 		void refreshDeployment();
-	}, [flagshipUseCase.id]);
+	}, [flagshipUseCaseId]);
 
 	const deployAction = async (
 		action: "create_draft" | "promote_canary" | "promote_live" | "rollback",
@@ -225,7 +223,7 @@ export default function WorkflowOpsPage() {
 		setDeploymentError(null);
 		setIsDeploying(true);
 		posthog?.capture("use_case_deployment_requested", {
-			useCaseId: flagshipUseCase.id,
+			useCaseId: flagshipUseCaseId,
 			action,
 			source: "workflow_ops",
 		});
@@ -234,7 +232,7 @@ export default function WorkflowOpsPage() {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
 				body: JSON.stringify({
-					useCaseId: flagshipUseCase.id,
+					useCaseId: flagshipUseCaseId,
 					action,
 					canaryPolicy:
 						action === "promote_canary"
@@ -273,7 +271,7 @@ export default function WorkflowOpsPage() {
 				setSimulationError(null);
 			}
 			posthog?.capture("use_case_deployment_succeeded", {
-				useCaseId: flagshipUseCase.id,
+				useCaseId: flagshipUseCaseId,
 				action,
 				stage: data.deployment.stage,
 				source: "workflow_ops",
@@ -286,7 +284,7 @@ export default function WorkflowOpsPage() {
 					: "Deployment update failed. Bootstrap a workspace first.",
 			);
 			posthog?.capture("use_case_deployment_failed", {
-				useCaseId: flagshipUseCase.id,
+				useCaseId: flagshipUseCaseId,
 				action,
 				source: "workflow_ops",
 			});
@@ -294,6 +292,10 @@ export default function WorkflowOpsPage() {
 			setIsDeploying(false);
 		}
 	};
+
+	if (!flagshipUseCase) {
+		return null;
+	}
 
 	return (
 		<div className="px-6 py-6 md:px-10 md:py-8 text-text">

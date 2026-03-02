@@ -52,10 +52,10 @@ export const STARTER_TEMPLATES: TemplateInfo[] = [
   },
   {
     id: 'recoder-vite-react-ts',
-    name: 'Bolt Vite React TypeScript',
+    name: 'Recoder Vite React TypeScript',
     path: '/starters/recoder-vite-react-ts',
-    description: 'Optimized Vite + React + TypeScript starter for Bolt',
-    keywords: ['vite', 'react', 'typescript', 'bolt', 'fast'],
+    description: 'Optimized Vite + React + TypeScript starter for Recoder',
+    keywords: ['vite', 'react', 'typescript', 'recoder', 'fast'],
     framework: 'vite',
     category: 'frontend',
     complexity: 'simple',

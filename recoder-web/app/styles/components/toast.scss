@@ -1,20 +1,20 @@
 .Toastify__toast {
   --at-apply: shadow-md;
 
-  background-color: var(--bolt-elements-bg-depth-2);
-  color: var(--bolt-elements-textPrimary);
-  border: 1px solid var(--bolt-elements-borderColor);
+  background-color: var(--recoder-elements-bg-depth-2);
+  color: var(--recoder-elements-textPrimary);
+  border: 1px solid var(--recoder-elements-borderColor);
   border-radius: 8px;
   padding: 12px 16px;
   min-height: auto;
 
   // Toast type-specific border colors
   &--success {
-    border-left: 3px solid var(--bolt-elements-icon-success);
+    border-left: 3px solid var(--recoder-elements-icon-success);
   }
 
   &--error {
-    border-left: 3px solid var(--bolt-elements-icon-error);
+    border-left: 3px solid var(--recoder-elements-icon-error);
   }
 
   &--warning {
@@ -39,14 +39,14 @@
 }
 
 .Toastify__close-button {
-  color: var(--bolt-elements-item-contentDefault);
+  color: var(--recoder-elements-item-contentDefault);
   opacity: 1;
   transition: color 0.15s ease;
   padding: 4px;
   margin: -4px -4px -4px 8px;
 
   &:hover {
-    color: var(--bolt-elements-item-contentActive);
+    color: var(--recoder-elements-item-contentActive);
   }
 
   & > svg {
@@ -60,11 +60,11 @@
 }
 
 .Toastify__progress-bar--success {
-  background: var(--bolt-elements-icon-success);
+  background: var(--recoder-elements-icon-success);
 }
 
 .Toastify__progress-bar--error {
-  background: var(--bolt-elements-icon-error);
+  background: var(--recoder-elements-icon-error);
 }
 
 .Toastify__progress-bar--warning {

@@ -3,16 +3,17 @@
 import Link from 'next/link';
 import { Terminal, Globe, ArrowRight, Github, Sparkles, Copy, Check, Code, Zap, Shield, Cpu } from 'lucide-react';
 import { useState } from 'react';
-import { useSession } from '@/lib/session-provider';
 import { getRecoderWebUrlClient, getServiceUrlClient } from '@/lib/config/platforms';
-import { LaunchWebIDEButton } from '@/app/components/LaunchWebIDEButton';
-import { LanguageSwitcher } from '@/components/LanguageSwitcher';
+import { SiteHeader } from '@/components/SiteHeader';
+import { SiteFooter } from '@/components/SiteFooter';
 import { useTranslations } from 'next-intl';
+import { useSession } from '@/lib/session-provider';
+import { LaunchWebIDEButton } from '@/app/components/LaunchWebIDEButton';
 
 export default function HomePage() {
   const [copied, setCopied] = useState(false);
-  const { data: session } = useSession();
   const t = useTranslations();
+  const { data: session } = useSession();
 
   const copyToClipboard = () => {
     navigator.clipboard.writeText('npm install -g recoder-code');
@@ -22,61 +23,7 @@ export default function HomePage() {
 
   return (
     <div className="min-h-screen bg-black text-white">
-      {/* Minimal Header */}
-      <header className="fixed top-0 w-full z-50 border-b border-white/10 bg-black/80 backdrop-blur-xl">
-        <div className="container mx-auto px-6 h-16 flex items-center justify-between">
-          <Link href="/" className="flex items-center space-x-2 group">
-            <img
-              src="/logo.png"
-              alt="Recoder"
-              className="w-8 h-8 rounded-lg transition-transform group-hover:scale-110"
-            />
-            <span className="text-xl font-bold">recoder</span>
-          </Link>
-
-          <nav className="flex items-center space-x-6">
-            <Link href="/agents" className="text-sm text-gray-400 hover:text-white transition-colors">
-              Agents
-            </Link>
-            <Link href="/plan" className="text-sm text-gray-400 hover:text-white transition-colors">
-              Plan
-            </Link>
-            <Link href="/platform" className="text-sm text-gray-400 hover:text-white transition-colors">
-              Platform
-            </Link>
-            <Link href="/docs/getting-started" className="text-sm text-gray-400 hover:text-white transition-colors">
-              {t('common.gettingStarted')}
-            </Link>
-            <Link href="/docs/faq" className="text-sm text-gray-400 hover:text-white transition-colors">
-              {t('common.faq')}
-            </Link>
-            {session?.user ? (
-              <>
-                <Link href="/dashboard" className="text-sm text-gray-400 hover:text-white transition-colors">
-                  {t('common.dashboard')}
-                </Link>
-                <LaunchWebIDEButton className="px-4 py-2 text-sm bg-gradient-to-r from-orange-500 to-purple-600 hover:from-orange-600 hover:to-purple-700 rounded-lg transition-colors flex items-center space-x-2" />
-              </>
-            ) : (
-              <>
-                <Link
-                  href="/auth/signin"
-                  className="px-4 py-2 text-sm text-gray-300 hover:text-white border border-white/20 hover:border-white/40 rounded-lg transition-colors"
-                >
-                  {t('common.signIn')}
-                </Link>
-                <Link
-                  href="/auth/signup"
-                  className="px-4 py-2 text-sm bg-orange-500 hover:bg-orange-600 rounded-lg transition-colors"
-                >
-                  Sign Up
-                </Link>
-              </>
-            )}
-            <LanguageSwitcher />
-          </nav>
-        </div>
-      </header>
+      <SiteHeader />
 
       {/* Hero Section - FREE BETA */}
       <section className="pt-32 pb-20 px-6">
@@ -743,14 +690,13 @@ export default function HomePage() {
           </div>
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
             {([
-              { id: 'frontend', name: 'Suna AI IDE', tag: 'Agents' },
-              { id: 'web', name: 'Bolt AI IDE', tag: 'Web IDE' },
+              { id: 'agents', name: 'Recoder Agents', tag: 'Agents' },
+              { id: 'web', name: 'Recoder Web IDE', tag: 'Web IDE' },
               { id: 'studio', name: 'Studio', tag: 'Workflows' },
               { id: 'agency', name: 'Agency', tag: 'Multi-Agent' },
               { id: 'pm', name: 'PM', tag: 'Projects' },
               { id: 'openclaw', name: 'OpenClaw', tag: 'Open Source' },
-              { id: 'docker-backend', name: 'API Gateway', tag: 'Backend' },
-              { id: 'backend', name: 'AI Backend', tag: 'FastAPI' },
+              { id: 'api', name: 'Recoder API', tag: 'API' },
             ] as const).map((svc) => (
               <a
                 key={svc.id}
@@ -778,10 +724,6 @@ export default function HomePage() {
             </Link>
             <Link href="/plan" className="text-sm text-purple-400 hover:text-purple-300 transition-colors flex items-center space-x-1">
               <span>Plans & Pricing</span>
-              <ArrowRight className="w-3 h-3" />
-            </Link>
-            <Link href="/status" className="text-sm text-gray-400 hover:text-white transition-colors flex items-center space-x-1">
-              <span>System Status</span>
               <ArrowRight className="w-3 h-3" />
             </Link>
           </div>
@@ -840,33 +782,7 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* Minimal Footer */}
-      <footer className="border-t border-white/10 py-12 px-6">
-        <div className="container mx-auto max-w-6xl">
-          <div className="flex flex-col md:flex-row items-center justify-between space-y-4 md:space-y-0">
-            <div className="flex items-center space-x-2">
-              <div className="w-6 h-6 bg-gradient-to-br from-orange-500 to-purple-600 rounded-lg"></div>
-              <span className="font-bold">recoder</span>
-            </div>
-
-            <div className="flex items-center flex-wrap gap-x-6 gap-y-2 text-sm text-gray-500">
-              <Link href="/agents" className="hover:text-white transition-colors">Agents</Link>
-              <Link href="/plan" className="hover:text-white transition-colors">Plan</Link>
-              <Link href="/platform" className="hover:text-white transition-colors">Platform</Link>
-              <Link href="/status" className="hover:text-white transition-colors">Status</Link>
-              <Link href="/docs" className="hover:text-white transition-colors">Docs</Link>
-              <Link href="/cli" className="hover:text-white transition-colors">CLI</Link>
-              <Link href="/legal/privacy" className="hover:text-white transition-colors">Privacy</Link>
-              <Link href="/legal/terms" className="hover:text-white transition-colors">Terms</Link>
-              <Link href="https://github.com/recoderxyz" target="_blank" rel="noopener noreferrer" className="hover:text-white transition-colors">GitHub</Link>
-            </div>
-
-            <div className="text-sm text-gray-500">
-              © 2024–2026 Recoder.xyz
-            </div>
-          </div>
-        </div>
-      </footer>
+      <SiteFooter />
 
       <style jsx>{`
         @keyframes fade-in {

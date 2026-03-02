@@ -9,7 +9,6 @@ import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import * as cache from './crawlCache.js';
 import { crawl } from './crawler.js';
-// @ts-ignore - Test utility types may not resolve properly
 import { createTmpDir, cleanupTmpDir } from './test-utils.js';
 import type { Ignore } from './ignore.js';
 import { loadIgnoreRules } from './ignore.js';

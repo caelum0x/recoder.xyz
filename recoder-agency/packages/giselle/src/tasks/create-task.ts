@@ -1,4 +1,4 @@
-import { defaultName } from "@giselles-ai/node-registry";
+import { defaultName } from "@recoder/node-registry";
 import {
 	type AppId,
 	ConnectionId,
@@ -22,8 +22,8 @@ import {
 	type TaskStarter,
 	Workspace,
 	WorkspaceId,
-} from "@giselles-ai/protocol";
-import { findNodeGroupByNodeId } from "@giselles-ai/workspace-utils";
+} from "@recoder/protocol";
+import { findNodeGroupByNodeId } from "@recoder/workspace-utils";
 import * as z from "zod/v4";
 import { setGeneration } from "../generations";
 import { taskPath, workspaceTaskPath } from "../path";

@@ -1,6 +1,6 @@
-import { type App, AppId, NodeId, WorkspaceId } from "@giselles-ai/protocol";
-import { memoryStorageDriver } from "@giselles-ai/storage";
-import { noopVaultDriver } from "@giselles-ai/vault";
+import { type App, AppId, NodeId, WorkspaceId } from "@recoder/protocol";
+import { memoryStorageDriver } from "@recoder/storage";
+import { noopVaultDriver } from "@recoder/vault";
 import { expect, test, vi } from "vitest";
 import { Giselle } from "../giselle";
 

@@ -9,24 +9,47 @@ import { prisma } from '@/lib/prisma';
 import { hashPassword } from '@/lib/crypto';
 import { getPlanLimits } from '@/lib/plan-config';
 import { sendVerificationEmail } from '@/lib/email';
+import { scheduleOnboardingEmails } from '@/lib/services/onboarding-email.service';
 import { nanoid } from 'nanoid';
 import crypto from 'crypto';
 import { logger } from '@/lib/logger';
+import { rateLimit, rateLimitConfigs } from '@/lib/middleware/rate-limit';
+import { extractAttribution } from '@/lib/attribution';
+import { generateReferralCode } from '@/lib/referral';
+import { createVerificationRecord } from '@/lib/auth/verification-store';
+import { validatePassword } from '@/lib/password-validation';
+import { z } from 'zod';
 
-interface RegisterRequest {
-  email: string;
-  password: string;
-  name: string;
-  plan?: 'free' | 'pro' | 'enterprise';
-}
+const authRateLimiter = rateLimit(rateLimitConfigs.auth);
+
+const registerSchema = z.object({
+  email: z.string().email('Invalid email format').max(255).toLowerCase().trim(),
+  password: z.string().min(8, 'Password must be at least 8 characters').max(256),
+  name: z.string().min(1, 'Name is required').max(100).trim(),
+  plan: z.enum(['free', 'pro', 'enterprise']).optional(),
+});
 
 export async function POST(request: NextRequest) {
   try {
-    const body: RegisterRequest = await request.json();
+    // Rate limit: 5 requests per minute
+    const rateLimitResponse = await authRateLimiter(request);
+    if (rateLimitResponse) return rateLimitResponse;
 
-    if (!body.email || !body.password || !body.name) {
+    const rawBody = await request.json();
+    const parsed = registerSchema.safeParse(rawBody);
+    if (!parsed.success) {
       return NextResponse.json(
-        { error: 'Missing required fields' },
+        { error: parsed.error.issues[0]?.message || 'Invalid input' },
+        { status: 400 }
+      );
+    }
+    const body = parsed.data;
+
+    // Validate password strength
+    const validation = validatePassword(body.password);
+    if (!validation.valid) {
+      return NextResponse.json(
+        { error: validation.errors[0] || 'Password is too weak', errors: validation.errors },
         { status: 400 }
       );
     }
@@ -46,6 +69,8 @@ export async function POST(request: NextRequest) {
     // Hash password
     const passwordHash = await hashPassword(body.password);
 
+    const attribution = extractAttribution(request, body as unknown as Record<string, unknown>);
+
     // Determine plan
     const plan = body.plan || 'free';
 
@@ -58,6 +83,16 @@ export async function POST(request: NextRequest) {
         password: passwordHash,
         subscription: plan,
         emailVerified: false,
+        referralCode: generateReferralCode(body.email),
+        referredByCode: attribution.referredByCode ?? undefined,
+        utmSource: attribution.utmSource ?? undefined,
+        utmMedium: attribution.utmMedium ?? undefined,
+        utmCampaign: attribution.utmCampaign ?? undefined,
+        utmTerm: attribution.utmTerm ?? undefined,
+        utmContent: attribution.utmContent ?? undefined,
+        firstTouchReferrer: attribution.firstTouchReferrer ?? undefined,
+        firstTouchLanding: attribution.firstTouchLanding ?? undefined,
+        acquisitionSource: attribution.acquisitionSource,
         updatedAt: new Date(),
       },
     });
@@ -91,20 +126,10 @@ export async function POST(request: NextRequest) {
 
     // Generate verification token
     const verificationToken = crypto.randomBytes(32).toString('hex');
-    const hashedToken = crypto.createHash('sha256').update(verificationToken).digest('hex');
     const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
 
-    // Store verification token
-    await prisma.verifications.create({
-      data: {
-        id: crypto.randomUUID(),
-        identifier: `email-verify:${user.email}`,
-        value: hashedToken,
-        expires_at: expiresAt,
-        created_at: new Date(),
-        updated_at: new Date(),
-      }
-    });
+    // Store verification token in both compatibility tables
+    await createVerificationRecord(`email-verify:${user.email}`, verificationToken, expiresAt);
 
     // Build verification URL
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://recoder.xyz';
@@ -115,7 +140,12 @@ export async function POST(request: NextRequest) {
       logger.error('Failed to send verification email', { route: 'api/auth/register', error: err instanceof Error ? err.message : String(err) })
     );
 
-    logger.info('Verification email sent', { route: 'api/auth/register', email: user.email });
+    // Schedule onboarding email sequence (welcome + day 1/3/7 emails)
+    scheduleOnboardingEmails(user.id, user.email, user.name).catch(err =>
+      logger.error('Failed to schedule onboarding emails', { route: 'api/auth/register', error: err instanceof Error ? err.message : String(err) })
+    );
+
+    logger.info('Registration complete, verification and onboarding emails scheduled', { route: 'api/auth/register', email: user.email });
 
     return NextResponse.json({
       success: true,

@@ -13,7 +13,7 @@ import {
 	isTriggerNode,
 	isVectorStoreNode,
 	isWebPageNode,
-} from "@giselles-ai/protocol";
+} from "@recoder/protocol";
 import clsx from "clsx/lite";
 import { useShallow } from "zustand/shallow";
 import {

@@ -109,8 +109,8 @@ export const TerminalTabs = memo(({
             className={classNames(
               'group flex items-center gap-1.5 px-2 py-1 rounded cursor-pointer transition-colors min-w-[60px] max-w-[140px]',
               {
-                'bg-bolt-elements-item-backgroundActive text-bolt-elements-textPrimary': isActive,
-                'text-bolt-elements-textSecondary hover:bg-bolt-elements-item-backgroundActive/50': !isActive,
+                'bg-recoder-elements-item-backgroundActive text-recoder-elements-textPrimary': isActive,
+                'text-recoder-elements-textSecondary hover:bg-recoder-elements-item-backgroundActive/50': !isActive,
               }
             )}
             onClick={() => !isEditing && onSelect(index)}
@@ -127,7 +127,7 @@ export const TerminalTabs = memo(({
                 onChange={(e) => setEditValue(e.target.value)}
                 onBlur={() => handleRenameSubmit(index)}
                 onKeyDown={(e) => handleKeyDown(e, index)}
-                className="bg-transparent border-none outline-none text-xs w-full min-w-[40px] text-bolt-elements-textPrimary"
+                className="bg-transparent border-none outline-none text-xs w-full min-w-[40px] text-recoder-elements-textPrimary"
                 maxLength={20}
               />
             ) : (
@@ -142,7 +142,7 @@ export const TerminalTabs = memo(({
               <button
                 onClick={(e) => handleCloseClick(e, index)}
                 className={classNames(
-                  'flex-shrink-0 p-0.5 rounded hover:bg-bolt-elements-background-depth-3 transition-opacity',
+                  'flex-shrink-0 p-0.5 rounded hover:bg-recoder-elements-background-depth-3 transition-opacity',
                   {
                     'opacity-100': isActive,
                     'opacity-0 group-hover:opacity-100': !isActive,

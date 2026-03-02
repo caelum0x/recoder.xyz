@@ -7,6 +7,7 @@
 import { prisma } from '@/lib/prisma';
 import { hashPassword, verifyPassword, generateSecureToken } from '../crypto';
 import { sendWelcomeEmail, sendVerificationEmail, sendPasswordResetEmail } from '../email';
+import { logger } from '@/lib/logger';
 import crypto from 'crypto';
 
 export class AuthService {
@@ -92,12 +93,12 @@ export class AuthService {
 
       // Send verification email
       await sendVerificationEmail(user.email, verificationToken).catch((err) =>
-        console.error('Failed to send verification email:', err)
+        logger.error('Failed to send verification email', { error: String(err) })
       );
 
       // Send welcome email
       await sendWelcomeEmail(user.email, user.name).catch((err) =>
-        console.error('Failed to send welcome email:', err)
+        logger.error('Failed to send welcome email', { error: String(err) })
       );
 
       // Log registration
@@ -123,7 +124,7 @@ export class AuthService {
         message: 'Registration successful! Please check your email to verify your account.',
       };
     } catch (error: any) {
-      console.error('Registration error:', error);
+      logger.error('Registration error', { error: String(error) });
       throw error;
     }
   }
@@ -223,7 +224,7 @@ export class AuthService {
         expiresAt,
       };
     } catch (error: any) {
-      console.error('Login error:', error);
+      logger.error('Login error', { error: String(error) });
       throw error;
     }
   }
@@ -259,7 +260,7 @@ export class AuthService {
 
       return { success: true, message: 'Logged out successfully' };
     } catch (error: any) {
-      console.error('Logout error:', error);
+      logger.error('Logout error', { error: String(error) });
       throw error;
     }
   }
@@ -325,7 +326,7 @@ export class AuthService {
         },
       };
     } catch (error: any) {
-      console.error('Email verification error:', error);
+      logger.error('Email verification error', { error: String(error) });
       throw error;
     }
   }
@@ -366,7 +367,7 @@ export class AuthService {
 
       return { success: true, message: 'Verification email sent' };
     } catch (error: any) {
-      console.error('Send verification email error:', error);
+      logger.error('Send verification email error', { error: String(error) });
       throw error;
     }
   }
@@ -416,7 +417,7 @@ export class AuthService {
         },
       };
     } catch (error: any) {
-      console.error('Session validation error:', error);
+      logger.error('Session validation error', { error: String(error) });
       return { valid: false, error: error.message };
     }
   }
@@ -447,7 +448,7 @@ export class AuthService {
 
       return { success: true, expiresAt: newExpiresAt };
     } catch (error: any) {
-      console.error('Refresh session error:', error);
+      logger.error('Refresh session error', { error: String(error) });
       throw error;
     }
   }
@@ -512,7 +513,7 @@ export class AuthService {
 
         // Send welcome email
         await sendWelcomeEmail(user.email, user.name).catch((err) =>
-          console.error('Failed to send welcome email:', err)
+          logger.error('Failed to send welcome email', { error: String(err) })
         );
 
         // Log new user from OAuth
@@ -563,7 +564,7 @@ export class AuthService {
         },
       };
     } catch (error: any) {
-      console.error('OAuth callback error:', error);
+      logger.error('OAuth callback error', { error: String(error) });
       throw error;
     }
   }
@@ -600,7 +601,7 @@ export class AuthService {
 
       return { success: true, message: `${provider} account linked successfully` };
     } catch (error: any) {
-      console.error('Link OAuth account error:', error);
+      logger.error('Link OAuth account error', { error: String(error) });
       throw error;
     }
   }

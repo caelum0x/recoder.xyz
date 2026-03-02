@@ -10,8 +10,8 @@ import {
 	DialogHeader,
 	DialogTitle,
 	DialogTrigger,
-} from "@giselle-internal/ui/dialog";
-import { DEFAULT_EMBEDDING_PROFILE_ID } from "@giselles-ai/protocol";
+} from "@recoder-internal/ui/dialog";
+import { DEFAULT_EMBEDDING_PROFILE_ID } from "@recoder/protocol";
 import * as Tooltip from "@radix-ui/react-tooltip";
 import { Plus, X } from "lucide-react";
 import {

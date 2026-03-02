@@ -1,7 +1,7 @@
 import { fal } from "@ai-sdk/fal";
 import { google } from "@ai-sdk/google";
 import { openai } from "@ai-sdk/openai";
-import type { GeneratedImageData } from "@giselles-ai/language-model";
+import type { GeneratedImageData } from "@recoder/language-model";
 import {
 	type FailedGeneration,
 	type FalLanguageModelData,
@@ -15,7 +15,7 @@ import {
 	type OpenAIImageLanguageModelData,
 	type QueuedGeneration,
 	type RunningGeneration,
-} from "@giselles-ai/protocol";
+} from "@recoder/protocol";
 import {
 	experimental_generateImage as generateImageAiSdk,
 	generateText,

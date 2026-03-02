@@ -7,7 +7,7 @@ import {
 	DialogContent,
 	DialogHeader,
 	DialogTitle,
-} from "@giselle-internal/ui/dialog";
+} from "@recoder-internal/ui/dialog";
 import { AlertCircle, PlusIcon } from "lucide-react";
 import { useState } from "react";
 import { useFormStatus } from "react-dom";

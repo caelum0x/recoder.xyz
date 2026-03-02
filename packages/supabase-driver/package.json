@@ -1,5 +1,5 @@
 {
-	"name": "@giselles-ai/supabase-driver",
+	"name": "@recoder/supabase-driver",
 	"version": "0.0.0",
 	"private": true,
 	"main": "./dist/index.js",
@@ -22,13 +22,13 @@
 		}
 	},
 	"devDependencies": {
-		"@giselles-ai/tsconfig": "workspace:^",
+		"@recoder/tsconfig": "workspace:^",
 		"tsup": "catalog:"
 	},
 	"dependencies": {
 		"@aws-sdk/client-s3": "catalog:",
-		"@giselles-ai/storage": "workspace:*",
-		"@giselles-ai/vault": "workspace:*",
+		"@recoder/storage": "workspace:*",
+		"@recoder/vault": "workspace:*",
 		"@supabase/supabase-js": "catalog:"
 	},
 	"peerDependencies": {

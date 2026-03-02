@@ -1,5 +1,5 @@
-import { GlassSurfaceLayers } from "@giselle-internal/ui/glass-surface";
-import type { SelectOption } from "@giselle-internal/ui/select";
+import { GlassSurfaceLayers } from "@recoder-internal/ui/glass-surface";
+import type { SelectOption } from "@recoder-internal/ui/select";
 import clsx from "clsx/lite";
 import { Ellipsis } from "lucide-react";
 import { DropdownMenu } from "radix-ui";

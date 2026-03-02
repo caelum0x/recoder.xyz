@@ -136,13 +136,13 @@ export const GitPanel = memo(({ files, onFileSelect, onShowDiff }: GitPanelProps
   // Not a git repo
   if (git.isGitRepo === false) {
     return (
-      <div className="flex flex-col h-full text-sm bg-bolt-elements-background-depth-1">
+      <div className="flex flex-col h-full text-sm bg-recoder-elements-background-depth-1">
         <div className="p-4 text-center">
           <span className="i-ph:git-branch text-4xl text-purple-400 mb-3 block" />
-          <h3 className="text-bolt-elements-textPrimary font-medium mb-2">
+          <h3 className="text-recoder-elements-textPrimary font-medium mb-2">
             No Git Repository
           </h3>
-          <p className="text-bolt-elements-textTertiary text-xs mb-4">
+          <p className="text-recoder-elements-textTertiary text-xs mb-4">
             Initialize a git repository to track changes
           </p>
           <button
@@ -167,9 +167,9 @@ export const GitPanel = memo(({ files, onFileSelect, onShowDiff }: GitPanelProps
   // Loading state
   if (!containerReady || git.isGitRepo === null) {
     return (
-      <div className="flex flex-col h-full justify-center items-center text-sm bg-bolt-elements-background-depth-1">
+      <div className="flex flex-col h-full justify-center items-center text-sm bg-recoder-elements-background-depth-1">
         <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-purple-500 mb-2" />
-        <span className="text-bolt-elements-textTertiary">
+        <span className="text-recoder-elements-textTertiary">
           {!containerReady ? 'Waiting for container...' : 'Loading git status...'}
         </span>
       </div>
@@ -181,9 +181,9 @@ export const GitPanel = memo(({ files, onFileSelect, onShowDiff }: GitPanelProps
   const hasConflicts = (git.status?.conflicts?.length || 0) > 0;
 
   return (
-    <div className="flex flex-col h-full text-sm bg-bolt-elements-background-depth-1">
+    <div className="flex flex-col h-full text-sm bg-recoder-elements-background-depth-1">
       {/* Header with Branch Selector */}
-      <div className="px-3 py-2 border-b border-bolt-elements-borderColor">
+      <div className="px-3 py-2 border-b border-recoder-elements-borderColor">
         <GitBranchList
           branches={git.branches}
           currentBranch={git.status?.branch || 'main'}
@@ -198,7 +198,7 @@ export const GitPanel = memo(({ files, onFileSelect, onShowDiff }: GitPanelProps
 
         {/* Ahead/Behind indicator */}
         {(git.status?.ahead || git.status?.behind) ? (
-          <div className="flex items-center gap-2 mt-2 text-xs text-bolt-elements-textTertiary">
+          <div className="flex items-center gap-2 mt-2 text-xs text-recoder-elements-textTertiary">
             {git.status.ahead > 0 && (
               <span className="flex items-center gap-1">
                 <span className="i-ph:arrow-up" />
@@ -216,14 +216,14 @@ export const GitPanel = memo(({ files, onFileSelect, onShowDiff }: GitPanelProps
       </div>
 
       {/* Tab Bar */}
-      <div className="flex border-b border-bolt-elements-borderColor">
+      <div className="flex border-b border-recoder-elements-borderColor">
         <button
           onClick={() => setActiveTab('changes')}
           className={classNames(
             'flex-1 px-3 py-2 text-xs font-medium transition-colors',
             activeTab === 'changes'
-              ? 'text-bolt-elements-textPrimary border-b-2 border-purple-500'
-              : 'text-bolt-elements-textTertiary hover:text-bolt-elements-textSecondary'
+              ? 'text-recoder-elements-textPrimary border-b-2 border-purple-500'
+              : 'text-recoder-elements-textTertiary hover:text-recoder-elements-textSecondary'
           )}
         >
           Changes
@@ -238,8 +238,8 @@ export const GitPanel = memo(({ files, onFileSelect, onShowDiff }: GitPanelProps
           className={classNames(
             'flex-1 px-3 py-2 text-xs font-medium transition-colors',
             activeTab === 'history'
-              ? 'text-bolt-elements-textPrimary border-b-2 border-purple-500'
-              : 'text-bolt-elements-textTertiary hover:text-bolt-elements-textSecondary'
+              ? 'text-recoder-elements-textPrimary border-b-2 border-purple-500'
+              : 'text-recoder-elements-textTertiary hover:text-recoder-elements-textSecondary'
           )}
         >
           History
@@ -247,7 +247,7 @@ export const GitPanel = memo(({ files, onFileSelect, onShowDiff }: GitPanelProps
         <button
           onClick={git.refreshStatus}
           disabled={git.isLoading}
-          className="px-2 py-2 text-bolt-elements-textTertiary hover:text-bolt-elements-textPrimary"
+          className="px-2 py-2 text-recoder-elements-textTertiary hover:text-recoder-elements-textPrimary"
           title="Refresh"
         >
           <span className={classNames('i-ph:arrows-clockwise', git.isLoading ? 'animate-spin' : '')} />
@@ -316,19 +316,19 @@ export const GitPanel = memo(({ files, onFileSelect, onShowDiff }: GitPanelProps
           )}
 
           {/* Commit input */}
-          <div className="px-3 py-2 border-b border-bolt-elements-borderColor">
+          <div className="px-3 py-2 border-b border-recoder-elements-borderColor">
             <textarea
               value={commitMessage}
               onChange={(e) => setCommitMessage(e.target.value)}
               placeholder="Commit message"
               rows={2}
-              className="w-full px-2 py-1.5 text-xs bg-bolt-elements-background-depth-3 border border-bolt-elements-borderColor rounded focus:border-purple-500 focus:outline-none text-bolt-elements-textPrimary placeholder:text-bolt-elements-textTertiary resize-none"
+              className="w-full px-2 py-1.5 text-xs bg-recoder-elements-background-depth-3 border border-recoder-elements-borderColor rounded focus:border-purple-500 focus:outline-none text-recoder-elements-textPrimary placeholder:text-recoder-elements-textTertiary resize-none"
             />
             <div className="flex gap-1 mt-2">
               <button
                 onClick={handleCommit}
                 disabled={git.isLoading || stagedCount === 0 || !commitMessage.trim()}
-                className="flex-1 px-2 py-1.5 text-xs bg-purple-600 hover:bg-purple-700 disabled:bg-bolt-elements-background-depth-3 disabled:opacity-50 rounded text-white"
+                className="flex-1 px-2 py-1.5 text-xs bg-purple-600 hover:bg-purple-700 disabled:bg-recoder-elements-background-depth-3 disabled:opacity-50 rounded text-white"
               >
                 {git.isLoading ? (
                   <span className="i-ph:spinner animate-spin" />
@@ -342,7 +342,7 @@ export const GitPanel = memo(({ files, onFileSelect, onShowDiff }: GitPanelProps
               <button
                 onClick={handlePull}
                 disabled={git.isLoading}
-                className="flex-1 px-2 py-1 text-xs bg-bolt-elements-background-depth-3 hover:bg-bolt-elements-background-depth-2 text-bolt-elements-textSecondary rounded border border-bolt-elements-borderColor disabled:opacity-50"
+                className="flex-1 px-2 py-1 text-xs bg-recoder-elements-background-depth-3 hover:bg-recoder-elements-background-depth-2 text-recoder-elements-textSecondary rounded border border-recoder-elements-borderColor disabled:opacity-50"
                 title="Pull from remote"
               >
                 <span className="i-ph:arrow-down mr-1" />
@@ -351,7 +351,7 @@ export const GitPanel = memo(({ files, onFileSelect, onShowDiff }: GitPanelProps
               <button
                 onClick={handlePush}
                 disabled={git.isLoading}
-                className="flex-1 px-2 py-1 text-xs bg-bolt-elements-background-depth-3 hover:bg-bolt-elements-background-depth-2 text-bolt-elements-textSecondary rounded border border-bolt-elements-borderColor disabled:opacity-50"
+                className="flex-1 px-2 py-1 text-xs bg-recoder-elements-background-depth-3 hover:bg-recoder-elements-background-depth-2 text-recoder-elements-textSecondary rounded border border-recoder-elements-borderColor disabled:opacity-50"
                 title="Push to remote"
               >
                 <span className="i-ph:arrow-up mr-1" />
@@ -374,14 +374,14 @@ export const GitPanel = memo(({ files, onFileSelect, onShowDiff }: GitPanelProps
 
           {/* Staged Changes */}
           {stagedCount > 0 && (
-            <div className="border-b border-bolt-elements-borderColor">
-              <div className="flex items-center justify-between px-3 py-1.5 bg-bolt-elements-background-depth-2">
+            <div className="border-b border-recoder-elements-borderColor">
+              <div className="flex items-center justify-between px-3 py-1.5 bg-recoder-elements-background-depth-2">
                 <span className="text-xs font-medium text-green-400">
                   Staged Changes ({stagedCount})
                 </span>
                 <button
                   onClick={() => git.unstageAll()}
-                  className="text-xs text-bolt-elements-textTertiary hover:text-bolt-elements-textPrimary"
+                  className="text-xs text-recoder-elements-textTertiary hover:text-recoder-elements-textPrimary"
                 >
                   Unstage All
                 </button>
@@ -403,15 +403,15 @@ export const GitPanel = memo(({ files, onFileSelect, onShowDiff }: GitPanelProps
 
           {/* Unstaged Changes */}
           <div className="flex-1 overflow-auto">
-            <div className="flex items-center justify-between px-3 py-1.5 bg-bolt-elements-background-depth-2 sticky top-0">
-              <span className="text-xs font-medium text-bolt-elements-textSecondary">
+            <div className="flex items-center justify-between px-3 py-1.5 bg-recoder-elements-background-depth-2 sticky top-0">
+              <span className="text-xs font-medium text-recoder-elements-textSecondary">
                 Changes ({unstagedCount})
               </span>
               {unstagedCount > 0 && (
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => git.stageAll()}
-                    className="text-xs text-bolt-elements-textTertiary hover:text-bolt-elements-textPrimary"
+                    className="text-xs text-recoder-elements-textTertiary hover:text-recoder-elements-textPrimary"
                   >
                     Stage All
                   </button>
@@ -431,7 +431,7 @@ export const GitPanel = memo(({ files, onFileSelect, onShowDiff }: GitPanelProps
             </div>
 
             {unstagedCount === 0 ? (
-              <div className="px-3 py-4 text-center text-bolt-elements-textTertiary text-xs">
+              <div className="px-3 py-4 text-center text-recoder-elements-textTertiary text-xs">
                 <span className="i-ph:check-circle text-green-500 text-lg block mb-1" />
                 {stagedCount === 0 ? 'No changes' : 'All changes staged'}
               </div>
@@ -477,15 +477,15 @@ export const GitPanel = memo(({ files, onFileSelect, onShowDiff }: GitPanelProps
 
       {/* GitHub Config Panel (inline) */}
       {showGitHubConfig && (
-        <div className="border-t border-bolt-elements-borderColor p-3 bg-bolt-elements-background-depth-2">
+        <div className="border-t border-recoder-elements-borderColor p-3 bg-recoder-elements-background-depth-2">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-xs font-medium text-bolt-elements-textPrimary">
+            <span className="text-xs font-medium text-recoder-elements-textPrimary">
               <span className="i-ph:github-logo mr-1" />
               GitHub Remote
             </span>
             <button
               onClick={() => setShowGitHubConfig(false)}
-              className="text-xs text-bolt-elements-textTertiary hover:text-bolt-elements-textPrimary"
+              className="text-xs text-recoder-elements-textTertiary hover:text-recoder-elements-textPrimary"
             >
               <span className="i-ph:x" />
             </button>
@@ -500,7 +500,7 @@ export const GitPanel = memo(({ files, onFileSelect, onShowDiff }: GitPanelProps
               setGitHubConfig(config);
               localStorage.setItem('recoder-git-config', JSON.stringify(config));
             }}
-            className="w-full px-2 py-1 text-xs bg-bolt-elements-background-depth-3 border border-bolt-elements-borderColor rounded mb-1 text-bolt-elements-textPrimary placeholder:text-bolt-elements-textTertiary"
+            className="w-full px-2 py-1 text-xs bg-recoder-elements-background-depth-3 border border-recoder-elements-borderColor rounded mb-1 text-recoder-elements-textPrimary placeholder:text-recoder-elements-textTertiary"
           />
           <input
             type="password"
@@ -511,7 +511,7 @@ export const GitPanel = memo(({ files, onFileSelect, onShowDiff }: GitPanelProps
               setGitHubConfig(config);
               localStorage.setItem('recoder-git-config', JSON.stringify(config));
             }}
-            className="w-full px-2 py-1 text-xs bg-bolt-elements-background-depth-3 border border-bolt-elements-borderColor rounded mb-2 text-bolt-elements-textPrimary placeholder:text-bolt-elements-textTertiary"
+            className="w-full px-2 py-1 text-xs bg-recoder-elements-background-depth-3 border border-recoder-elements-borderColor rounded mb-2 text-recoder-elements-textPrimary placeholder:text-recoder-elements-textTertiary"
           />
           <button
             onClick={async () => {
@@ -568,18 +568,18 @@ const FileItem = memo(({ path, status, staged, untracked, onToggleStage, onSelec
   };
 
   return (
-    <div className="flex items-center gap-1 px-3 py-1 hover:bg-bolt-elements-background-depth-3 group">
+    <div className="flex items-center gap-1 px-3 py-1 hover:bg-recoder-elements-background-depth-3 group">
       <button
         onClick={onToggleStage}
         className={classNames(
-          'p-0.5 rounded hover:bg-bolt-elements-background-depth-4',
-          staged ? 'text-green-400' : 'text-bolt-elements-textTertiary'
+          'p-0.5 rounded hover:bg-recoder-elements-background-depth-4',
+          staged ? 'text-green-400' : 'text-recoder-elements-textTertiary'
         )}
         title={staged ? 'Unstage' : 'Stage'}
       >
         <span className={staged ? 'i-ph:minus' : 'i-ph:plus'} />
       </button>
-      <span className={classNames('text-xs', statusColors[status] || 'text-bolt-elements-textTertiary')}>
+      <span className={classNames('text-xs', statusColors[status] || 'text-recoder-elements-textTertiary')}>
         <span className={statusIcons[status] || 'i-ph:file'} />
       </span>
       {untracked && (
@@ -587,11 +587,11 @@ const FileItem = memo(({ path, status, staged, untracked, onToggleStage, onSelec
       )}
       <button
         onClick={onSelect}
-        className="flex-1 text-left truncate text-xs text-bolt-elements-textPrimary hover:underline"
+        className="flex-1 text-left truncate text-xs text-recoder-elements-textPrimary hover:underline"
         title={path}
       >
         {fileName}
-        {dirPath && <span className="text-bolt-elements-textTertiary ml-1">{dirPath}</span>}
+        {dirPath && <span className="text-recoder-elements-textTertiary ml-1">{dirPath}</span>}
       </button>
       {!staged && onDiscard && (
         <button

@@ -1,10 +1,11 @@
+import type { Metadata } from 'next';
 import Link from 'next/link';
-import { 
-  BookOpen, 
-  Terminal, 
-  Globe, 
-  MessageSquare, 
-  Code2, 
+import {
+  BookOpen,
+  Terminal,
+  Globe,
+  MessageSquare,
+  Code2,
   Rocket,
   ArrowRight,
   FileText,
@@ -12,6 +13,30 @@ import {
   Github,
   Sparkles
 } from 'lucide-react';
+import { SiteHeader } from '@/components/SiteHeader';
+import { SiteFooter } from '@/components/SiteFooter';
+
+export const metadata: Metadata = {
+  title: 'Documentation - Recoder.xyz',
+  description: 'Comprehensive documentation for Recoder.xyz. Guides for the CLI, Web IDE, AI providers, API reference, and more.',
+  openGraph: {
+    title: 'Documentation - Recoder.xyz',
+    description: 'Comprehensive documentation for Recoder.xyz. Guides for the CLI, Web IDE, AI providers, API reference, and more.',
+    url: 'https://recoder.xyz/docs',
+    siteName: 'Recoder.xyz',
+    images: [{ url: 'https://recoder.xyz/og-image.png', width: 1200, height: 630, alt: 'Recoder Documentation' }],
+    type: 'website',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Documentation - Recoder.xyz',
+    description: 'Comprehensive documentation for Recoder.xyz. Guides for the CLI, Web IDE, AI providers, and API reference.',
+    images: ['https://recoder.xyz/og-image.png'],
+  },
+  alternates: {
+    canonical: 'https://recoder.xyz/docs',
+  },
+};
 
 export default function DocsPage() {
   const docSections = [
@@ -92,32 +117,7 @@ export default function DocsPage() {
 
   return (
     <div className="min-h-screen bg-black text-white">
-      {/* Header */}
-      <header className="fixed top-0 w-full z-50 border-b border-white/10 bg-black/80 backdrop-blur-xl">
-        <div className="container mx-auto px-6 h-16 flex items-center justify-between">
-          <Link href="/" className="flex items-center space-x-2 group">
-            <div className="w-8 h-8 bg-gradient-to-br from-orange-500 to-purple-600 rounded-lg flex items-center justify-center transition-transform group-hover:scale-110">
-              <Terminal className="w-5 h-5 text-white" />
-            </div>
-            <span className="text-xl font-bold">recoder</span>
-          </Link>
-          
-          <nav className="flex items-center space-x-8">
-            <Link href="/docs" className="text-sm text-white">
-              Docs
-            </Link>
-            <Link href="/pricing" className="text-sm text-gray-400 hover:text-white transition-colors">
-              Pricing
-            </Link>
-            <Link 
-              href="/auth/signin" 
-              className="px-4 py-2 text-sm bg-orange-500 hover:bg-orange-600 rounded-lg transition-colors"
-            >
-              Sign In
-            </Link>
-          </nav>
-        </div>
-      </header>
+      <SiteHeader />
 
       {/* Hero */}
       <section className="pt-32 pb-16 px-6">
@@ -261,28 +261,7 @@ export default function DocsPage() {
         </div>
       </section>
 
-      {/* Footer */}
-      <footer className="border-t border-white/10 py-12 px-6">
-        <div className="container mx-auto max-w-6xl">
-          <div className="flex flex-col md:flex-row items-center justify-between space-y-4 md:space-y-0">
-            <div className="flex items-center space-x-2">
-              <div className="w-6 h-6 bg-gradient-to-br from-orange-500 to-purple-600 rounded-lg"></div>
-              <span className="font-bold">recoder</span>
-            </div>
-            
-            <div className="flex items-center space-x-8 text-sm text-gray-500">
-              <Link href="/docs" className="hover:text-white transition-colors">Docs</Link>
-              <Link href="/pricing" className="hover:text-white transition-colors">Pricing</Link>
-              <a href="https://twitter.com/recoderxyz" target="_blank" rel="noopener noreferrer" className="hover:text-white transition-colors">Twitter</a>
-              <a href="mailto:recoderxyz@gmail.com" className="hover:text-white transition-colors">Support</a>
-            </div>
-            
-            <div className="text-sm text-gray-500">
-              © 2024–2026 Recoder.xyz
-            </div>
-          </div>
-        </div>
-      </footer>
+      <SiteFooter />
     </div>
   );
 }

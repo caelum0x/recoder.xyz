@@ -298,8 +298,8 @@ function createBreakpointGutter(options: BreakpointGutterOptions): Extension {
     EditorView.baseTheme({
       '.cm-breakpoint-gutter': {
         width: '20px',
-        backgroundColor: 'var(--bolt-elements-background-depth-2)',
-        borderRight: '1px solid var(--bolt-elements-borderColor)',
+        backgroundColor: 'var(--recoder-elements-background-depth-2)',
+        borderRight: '1px solid var(--recoder-elements-borderColor)',
       },
       '.cm-breakpoint-gutter .cm-gutterElement': {
         padding: '0',
@@ -560,29 +560,29 @@ export const ConditionalBreakpointDialog = memo(({
     <div
       ref={dialogRef}
       style={dialogStyle}
-      className="w-80 bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor rounded-lg shadow-xl"
+      className="w-80 bg-recoder-elements-background-depth-2 border border-recoder-elements-borderColor rounded-lg shadow-xl"
     >
       {/* Header */}
-      <div className="flex items-center justify-between px-3 py-2 border-b border-bolt-elements-borderColor">
-        <div className="text-xs text-bolt-elements-textSecondary">
+      <div className="flex items-center justify-between px-3 py-2 border-b border-recoder-elements-borderColor">
+        <div className="text-xs text-recoder-elements-textSecondary">
           {existingBreakpoint ? 'Edit' : 'Add'} breakpoint at line {line}
         </div>
         <button
           onClick={onClose}
-          className="text-bolt-elements-textTertiary hover:text-bolt-elements-textPrimary"
+          className="text-recoder-elements-textTertiary hover:text-recoder-elements-textPrimary"
         >
           <span className="i-ph:x text-sm" />
         </button>
       </div>
 
       {/* Tabs */}
-      <div className="flex border-b border-bolt-elements-borderColor">
+      <div className="flex border-b border-recoder-elements-borderColor">
         <button
           onClick={() => setActiveTab('condition')}
           className={`flex-1 px-3 py-2 text-xs font-medium transition-colors ${
             activeTab === 'condition'
               ? 'text-blue-400 border-b-2 border-blue-400'
-              : 'text-bolt-elements-textTertiary hover:text-bolt-elements-textPrimary'
+              : 'text-recoder-elements-textTertiary hover:text-recoder-elements-textPrimary'
           }`}
         >
           Expression
@@ -592,7 +592,7 @@ export const ConditionalBreakpointDialog = memo(({
           className={`flex-1 px-3 py-2 text-xs font-medium transition-colors ${
             activeTab === 'hitCount'
               ? 'text-blue-400 border-b-2 border-blue-400'
-              : 'text-bolt-elements-textTertiary hover:text-bolt-elements-textPrimary'
+              : 'text-recoder-elements-textTertiary hover:text-recoder-elements-textPrimary'
           }`}
         >
           Hit Count
@@ -602,7 +602,7 @@ export const ConditionalBreakpointDialog = memo(({
           className={`flex-1 px-3 py-2 text-xs font-medium transition-colors ${
             activeTab === 'logMessage'
               ? 'text-blue-400 border-b-2 border-blue-400'
-              : 'text-bolt-elements-textTertiary hover:text-bolt-elements-textPrimary'
+              : 'text-recoder-elements-textTertiary hover:text-recoder-elements-textPrimary'
           }`}
         >
           Log Message
@@ -613,7 +613,7 @@ export const ConditionalBreakpointDialog = memo(({
       <div className="p-3">
         {activeTab === 'condition' && (
           <div>
-            <label className="block text-xs text-bolt-elements-textSecondary mb-1">
+            <label className="block text-xs text-recoder-elements-textSecondary mb-1">
               Break when expression is truthy
             </label>
             <input
@@ -623,14 +623,14 @@ export const ConditionalBreakpointDialog = memo(({
               onKeyDown={handleKeyDown}
               placeholder="e.g., x > 10 && y !== undefined"
               autoFocus
-              className="w-full px-2 py-1.5 text-xs font-mono bg-bolt-elements-background-depth-3 border border-bolt-elements-borderColor rounded focus:outline-none focus:border-blue-500"
+              className="w-full px-2 py-1.5 text-xs font-mono bg-recoder-elements-background-depth-3 border border-recoder-elements-borderColor rounded focus:outline-none focus:border-blue-500"
             />
           </div>
         )}
 
         {activeTab === 'hitCount' && (
           <div>
-            <label className="block text-xs text-bolt-elements-textSecondary mb-1">
+            <label className="block text-xs text-recoder-elements-textSecondary mb-1">
               Break when hit count condition is met
             </label>
             <input
@@ -640,9 +640,9 @@ export const ConditionalBreakpointDialog = memo(({
               onKeyDown={handleKeyDown}
               placeholder="e.g., >= 5, == 10, % 3"
               autoFocus
-              className="w-full px-2 py-1.5 text-xs font-mono bg-bolt-elements-background-depth-3 border border-bolt-elements-borderColor rounded focus:outline-none focus:border-blue-500"
+              className="w-full px-2 py-1.5 text-xs font-mono bg-recoder-elements-background-depth-3 border border-recoder-elements-borderColor rounded focus:outline-none focus:border-blue-500"
             />
-            <p className="text-[10px] text-bolt-elements-textTertiary mt-1">
+            <p className="text-[10px] text-recoder-elements-textTertiary mt-1">
               Operators: {'>'}, {'<'}, {'>='}. {'<='}, ==, !=, %
             </p>
           </div>
@@ -650,7 +650,7 @@ export const ConditionalBreakpointDialog = memo(({
 
         {activeTab === 'logMessage' && (
           <div>
-            <label className="block text-xs text-bolt-elements-textSecondary mb-1">
+            <label className="block text-xs text-recoder-elements-textSecondary mb-1">
               Log message (does not break)
             </label>
             <input
@@ -660,9 +660,9 @@ export const ConditionalBreakpointDialog = memo(({
               onKeyDown={handleKeyDown}
               placeholder="e.g., Value: {x}, Status: {status}"
               autoFocus
-              className="w-full px-2 py-1.5 text-xs font-mono bg-bolt-elements-background-depth-3 border border-bolt-elements-borderColor rounded focus:outline-none focus:border-blue-500"
+              className="w-full px-2 py-1.5 text-xs font-mono bg-recoder-elements-background-depth-3 border border-recoder-elements-borderColor rounded focus:outline-none focus:border-blue-500"
             />
-            <p className="text-[10px] text-bolt-elements-textTertiary mt-1">
+            <p className="text-[10px] text-recoder-elements-textTertiary mt-1">
               Use {'{expression}'} to evaluate and log values
             </p>
           </div>
@@ -670,10 +670,10 @@ export const ConditionalBreakpointDialog = memo(({
       </div>
 
       {/* Footer */}
-      <div className="flex justify-end gap-2 px-3 py-2 border-t border-bolt-elements-borderColor">
+      <div className="flex justify-end gap-2 px-3 py-2 border-t border-recoder-elements-borderColor">
         <button
           onClick={onClose}
-          className="px-3 py-1.5 text-xs text-bolt-elements-textSecondary hover:text-bolt-elements-textPrimary transition-colors"
+          className="px-3 py-1.5 text-xs text-recoder-elements-textSecondary hover:text-recoder-elements-textPrimary transition-colors"
         >
           Cancel
         </button>

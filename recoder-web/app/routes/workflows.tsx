@@ -11,11 +11,11 @@ export const meta: MetaFunction = () => {
 
 export default function Workflows() {
   return (
-    <div className="h-screen w-full flex flex-col bg-bolt-elements-background-depth-1">
+    <div className="h-screen w-full flex flex-col bg-recoder-elements-background-depth-1">
       <ClientOnly
         fallback={
           <div className="flex-1 flex items-center justify-center">
-            <p className="text-bolt-elements-textSecondary">Loading workflow designer...</p>
+            <p className="text-recoder-elements-textSecondary">Loading workflow designer...</p>
           </div>
         }
       >

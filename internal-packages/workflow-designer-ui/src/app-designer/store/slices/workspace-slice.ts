@@ -8,7 +8,7 @@ import {
 	type NodeUIState,
 	type Viewport,
 	type Workspace,
-} from "@giselles-ai/protocol";
+} from "@recoder/protocol";
 import type { StateCreator } from "zustand";
 import type { AppDesignerStoreState } from "../app-designer-store";
 

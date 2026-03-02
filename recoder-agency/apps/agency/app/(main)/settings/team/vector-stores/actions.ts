@@ -4,7 +4,7 @@ import {
 	DEFAULT_EMBEDDING_PROFILE_ID,
 	type EmbeddingProfileId,
 	isEmbeddingProfileId,
-} from "@giselles-ai/protocol";
+} from "@recoder/protocol";
 import { createId } from "@paralleldrive/cuid2";
 import { createClient } from "@supabase/supabase-js";
 import { and, eq, inArray, sql } from "drizzle-orm";

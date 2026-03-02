@@ -34,9 +34,11 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
   if (env.INTERNAL_SERVICE_KEY) process.env.INTERNAL_SERVICE_KEY = env.INTERNAL_SERVICE_KEY;
 
   // Allow public routes (but still try to get user if authenticated)
-  const publicPaths = ['/api/', '/health'];
+  const publicPaths = ['/api/', '/health', '/platform/'];
   if (publicPaths.some(path => url.pathname.startsWith(path))) {
-    return json({ user: null });
+    // Still try to get user session for personalization, but don't require it
+    const session = await verifySession(request).catch(() => null);
+    return json({ user: session?.user ?? null });
   }
 
   // For /projects, try to get user but don't require authentication
@@ -68,27 +70,19 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
 export const links: LinksFunction = () => [
   {
     rel: 'icon',
-    href: '/favicon-16x16.png',
-    type: 'image/png',
-    sizes: '16x16',
-  },
-  {
-    rel: 'icon',
-    href: '/favicon-32x32.png',
+    href: '/favicon.png',
     type: 'image/png',
     sizes: '32x32',
   },
   {
     rel: 'icon',
-    href: '/favicon-192x192.png',
-    type: 'image/png',
-    sizes: '192x192',
-  },
-  {
-    rel: 'icon',
-    href: '/favicon-512x512.png',
+    href: '/icon.png',
     type: 'image/png',
     sizes: '512x512',
+  },
+  {
+    rel: 'shortcut icon',
+    href: '/favicon.ico',
   },
   {
     rel: 'apple-touch-icon',
@@ -122,7 +116,7 @@ const inlineThemeCode = stripIndents`
   setTutorialKitTheme();
 
   function setTutorialKitTheme() {
-    let theme = localStorage.getItem('bolt_theme');
+    let theme = localStorage.getItem('recoder_theme');
 
     if (!theme) {
       theme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
@@ -155,7 +149,7 @@ export function ErrorBoundary() {
         <title>Error - recoder.xyz</title>
         <Links />
       </head>
-      <body className="bg-bolt-elements-background-depth-1">
+      <body className="bg-recoder-elements-background-depth-1">
         <div className="min-h-screen flex items-center justify-center p-8">
           <div className="max-w-md w-full text-center">
             <div className="w-16 h-16 mx-auto mb-6 rounded-full bg-red-500/10 flex items-center justify-center">
@@ -207,6 +201,13 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
   return (
     <>
+      <a
+        href="/"
+        aria-label="Recoder Home"
+        style={{ position: 'fixed', left: 12, top: 12, zIndex: 9999 }}
+      >
+        <img src="/icon.png" alt="Recoder logo" width={36} height={36} />
+      </a>
       {children}
       <ScrollRestoration />
       <Scripts />

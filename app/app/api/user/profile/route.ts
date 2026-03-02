@@ -102,7 +102,7 @@ export async function PUT(request: NextRequest) {
       .reduce((obj, key) => {
         obj[key] = updates[key];
         return obj;
-      }, {} as any);
+      }, {} as Record<string, unknown>);
 
     const success = await userManager.updateUserProfile(user.id, validUpdates);
     

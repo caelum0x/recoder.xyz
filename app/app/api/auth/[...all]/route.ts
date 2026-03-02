@@ -1,22 +1,19 @@
 import { auth } from "@/lib/auth-config";
 import { toNextJsHandler } from "better-auth/next-js";
 import { NextRequest, NextResponse } from "next/server";
+import { SURFACE_ORIGINS } from "@recoder/auth/edge";
 
-// CORS configuration for auth endpoints
-const corsHeaders = {
-  'Access-Control-Allow-Origin': 'https://recoder.xyz',
-  'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Requested-With',
-  'Access-Control-Allow-Credentials': 'true',
-};
-
-// Get allowed origins for CORS
+/**
+ * Allowed CORS origins for auth endpoints.
+ * Uses the canonical list from @recoder/auth so all surfaces are included.
+ */
 const getAllowedOrigins = () => [
-  'https://recoder.xyz',
-  'https://www.recoder.xyz',
-  'https://web.recoder.xyz',
+  ...Object.values(SURFACE_ORIGINS),
   'http://localhost:3000',
   'http://localhost:3001',
+  'http://localhost:3004',
+  'http://localhost:3005',
+  'http://localhost:3007',
 ];
 
 // Handle CORS preflight requests
@@ -26,7 +23,7 @@ export async function OPTIONS(request: NextRequest) {
 
   const headers: Record<string, string> = {
     'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Requested-With, Cookie',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Requested-With, Cookie, X-Better-Auth-CSRF',
     'Access-Control-Allow-Credentials': 'true',
     'Access-Control-Max-Age': '86400',
   };

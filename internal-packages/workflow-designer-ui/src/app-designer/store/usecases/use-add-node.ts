@@ -1,4 +1,4 @@
-import type { NodeLike, NodeUIState } from "@giselles-ai/protocol";
+import type { NodeLike, NodeUIState } from "@recoder/protocol";
 import { useCallback } from "react";
 import { useWorkspaceActions } from "../hooks";
 import { useAutoConfigureAppEntryNode } from "./use-auto-configure-app-entry-node";

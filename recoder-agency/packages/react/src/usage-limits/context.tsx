@@ -1,4 +1,4 @@
-import type { UsageLimits } from "@giselles-ai/giselle";
+import type { UsageLimits } from "@recoder/giselle";
 import { createContext, type ReactNode, useContext } from "react";
 
 export const UsageLimitsContext = createContext<UsageLimits | undefined>(

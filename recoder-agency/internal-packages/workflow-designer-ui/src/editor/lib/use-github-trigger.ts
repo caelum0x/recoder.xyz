@@ -1,5 +1,5 @@
-import type { Trigger, TriggerId } from "@giselles-ai/protocol";
-import { useGiselle } from "@giselles-ai/react";
+import type { Trigger, TriggerId } from "@recoder/protocol";
+import { useGiselle } from "@recoder/react";
 import { useCallback, useMemo } from "react";
 import useSWR from "swr";
 

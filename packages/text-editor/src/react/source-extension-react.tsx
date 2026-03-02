@@ -1,6 +1,6 @@
-import { defaultName } from "@giselles-ai/node-registry";
-import { NodeLike } from "@giselles-ai/protocol";
-import { SourceExtension } from "@giselles-ai/text-editor-utils";
+import { defaultName } from "@recoder/node-registry";
+import { NodeLike } from "@recoder/protocol";
+import { SourceExtension } from "@recoder/text-editor-utils";
 import {
 	type NodeViewProps,
 	NodeViewWrapper,
@@ -12,7 +12,10 @@ import { useMemo } from "react";
 const Component = (props: NodeViewProps) => {
 	const node = useMemo(() => {
 		// Try storage first (updated by lifecycle hooks), then fallback to options
-		let nodes = props.editor.storage.Source?.nodes;
+		const sourceStorage = props.editor.storage as {
+			Source?: SourceExtensionReactStorage;
+		};
+		let nodes = sourceStorage.Source?.nodes;
 
 		if (!nodes || nodes.length === 0) {
 			// Fallback to extension options
@@ -28,7 +31,7 @@ const Component = (props: NodeViewProps) => {
 
 		const parsedNodes = NodeLike.array().parse(nodes);
 		const foundNode = parsedNodes.find(
-			(node) => node.id === props.node.attrs.node.id,
+			(node: NodeLike) => node.id === props.node.attrs.node.id,
 		);
 
 		return foundNode;
@@ -36,7 +39,10 @@ const Component = (props: NodeViewProps) => {
 
 	const output = useMemo(
 		() =>
-			node?.outputs.find((output) => output.id === props.node.attrs.outputId),
+			node?.outputs.find(
+				(output: NodeLike["outputs"][number]) =>
+					output.id === props.node.attrs.outputId,
+			),
 		[node, props.node.attrs.outputId],
 	);
 	if (node === undefined || output === undefined) {
@@ -110,7 +116,7 @@ export const SourceExtensionReact = SourceExtension.extend<
 	},
 
 	addNodeView() {
-		return ReactNodeViewRenderer(Component);
+		return ReactNodeViewRenderer(Component) as never;
 	},
 
 	parseHTML() {
@@ -147,6 +153,8 @@ function findRelatedNode(
 	return options.nodes.find(
 		(node) =>
 			node.id === nodeId &&
-			node.outputs.some((output) => output.id === outputId),
+			node.outputs.some(
+				(output: NodeLike["outputs"][number]) => output.id === outputId,
+			),
 	);
 }

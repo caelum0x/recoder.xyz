@@ -48,8 +48,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Probe byok readiness endpoint (non-blocking)
-        continue-on-error: true
+      - name: Advisory - Probe byok readiness endpoint
         run: |
           URL="${RECODER_WEB_URL%/}/api/health/byok-readiness"
           BODY="$(mktemp)"

@@ -65,9 +65,9 @@ export default function MCPButton() {
         onClick={() => setIsOpen(!isOpen)}
         className={classNames(
           'flex items-center gap-2 px-3 py-2 rounded-lg border transition-colors font-medium whitespace-nowrap h-[38px] text-sm',
-          'border-bolt-elements-borderColor bg-bolt-elements-background-depth-2',
-          'hover:bg-bolt-elements-background-depth-3',
-          'text-bolt-elements-textPrimary',
+          'border-recoder-elements-borderColor bg-recoder-elements-background-depth-2',
+          'hover:bg-recoder-elements-background-depth-3',
+          'text-recoder-elements-textPrimary',
           {
             'bg-blue-500/20 text-blue-400 border-blue-500/30': servers.length > 0,
           }
@@ -87,39 +87,39 @@ export default function MCPButton() {
         <>
           <div className="fixed inset-0 z-[999]" onClick={() => setIsOpen(false)} />
           <div className="absolute bottom-full right-0 mb-2 w-80 rounded-lg shadow-lg z-[1000] max-h-96 overflow-auto"
-            style={{ zIndex: 1000, backgroundColor: 'var(--bolt-elements-bg-depth-1)', borderColor: 'var(--bolt-elements-bg-depth-1)', border: '1px solid var(--bolt-elements-bg-depth-1)' }}>
-            <div className="p-4 border-b border-bolt-elements-borderColor">
+            style={{ zIndex: 1000, backgroundColor: 'var(--recoder-elements-bg-depth-1)', borderColor: 'var(--recoder-elements-bg-depth-1)', border: '1px solid var(--recoder-elements-bg-depth-1)' }}>
+            <div className="p-4 border-b border-recoder-elements-borderColor">
               <div className="flex items-center justify-between mb-2">
-                <h3 className="font-semibold text-bolt-elements-textPrimary">MCP Tools</h3>
+                <h3 className="font-semibold text-recoder-elements-textPrimary">MCP Tools</h3>
                 <button
                   onClick={() => setIsOpen(false)}
-                  className="text-bolt-elements-textSecondary hover:text-bolt-elements-textPrimary"
+                  className="text-recoder-elements-textSecondary hover:text-recoder-elements-textPrimary"
                 >
                   <div className="i-ph:x text-xl" />
                 </button>
               </div>
-              <p className="text-xs text-bolt-elements-textSecondary">
+              <p className="text-xs text-recoder-elements-textSecondary">
                 Extend AI with external tools and data sources
               </p>
             </div>
 
             {servers.length > 0 && (
-              <div className="p-4 border-b border-bolt-elements-borderColor">
-                <h4 className="text-sm font-medium text-bolt-elements-textPrimary mb-2">Active Servers</h4>
+              <div className="p-4 border-b border-recoder-elements-borderColor">
+                <h4 className="text-sm font-medium text-recoder-elements-textPrimary mb-2">Active Servers</h4>
                 <div className="space-y-2">
                   {servers.map((server) => (
                     <div
                       key={server.id}
-                      className="flex items-center justify-between p-2 bg-bolt-elements-background-depth-3 rounded"
+                      className="flex items-center justify-between p-2 bg-recoder-elements-background-depth-3 rounded"
                     >
                       <div className="flex items-center gap-2">
                         <div className="w-2 h-2 bg-green-500 rounded-full" />
-                        <span className="text-sm text-bolt-elements-textPrimary">{server.name}</span>
+                        <span className="text-sm text-recoder-elements-textPrimary">{server.name}</span>
                       </div>
                       <button
                         onClick={() => removeServer(server.serverId)}
                         disabled={loading}
-                        className="text-xs text-bolt-elements-textSecondary hover:text-red-400"
+                        className="text-xs text-recoder-elements-textSecondary hover:text-red-400"
                       >
                         Remove
                       </button>
@@ -130,23 +130,23 @@ export default function MCPButton() {
             )}
 
             <div className="p-4">
-              <h4 className="text-sm font-medium text-bolt-elements-textPrimary mb-2">Available Servers</h4>
+              <h4 className="text-sm font-medium text-recoder-elements-textPrimary mb-2">Available Servers</h4>
               <div className="space-y-2">
                 {defaultServers.map((def) => {
                   const isAdded = servers.some((s) => s.serverId === def.id);
                   return (
                     <div
                       key={def.id}
-                      className="flex items-center justify-between p-2 bg-bolt-elements-background-depth-3 rounded"
+                      className="flex items-center justify-between p-2 bg-recoder-elements-background-depth-3 rounded"
                     >
-                      <span className="text-sm text-bolt-elements-textPrimary">{def.name}</span>
+                      <span className="text-sm text-recoder-elements-textPrimary">{def.name}</span>
                       {isAdded ? (
                         <span className="text-xs text-green-400">Added</span>
                       ) : (
                         <button
                           onClick={() => addServer(def)}
                           disabled={loading}
-                          className="text-xs px-2 py-1 bg-bolt-elements-background-depth-3 text-bolt-elements-textPrimary rounded hover:bg-bolt-elements-background-depth-3 disabled:opacity-50"
+                          className="text-xs px-2 py-1 bg-recoder-elements-background-depth-3 text-recoder-elements-textPrimary rounded hover:bg-recoder-elements-background-depth-3 disabled:opacity-50"
                         >
                           Add
                         </button>

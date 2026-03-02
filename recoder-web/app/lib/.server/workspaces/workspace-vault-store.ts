@@ -1,4 +1,4 @@
-import { parseMasterKey, encryptV1, decryptV1, isVaultV1 } from '@giselles-ai/vault/node-crypto';
+import { parseMasterKey, encryptV1, decryptV1, isVaultV1 } from '@recoder/vault/node-crypto';
 
 export interface WorkspaceSecret {
   id: string;

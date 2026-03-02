@@ -18,17 +18,17 @@ export function TodoChecklist({ items, onToggle }: TodoChecklistProps) {
   const progress = items.length > 0 ? (completedCount / items.length) * 100 : 0;
 
   return (
-    <div className="border border-bolt-elements-borderColor rounded-lg overflow-hidden bg-bolt-elements-background-depth-2">
-      <div className="px-4 py-3 bg-bolt-elements-background-depth-3">
+    <div className="border border-recoder-elements-borderColor rounded-lg overflow-hidden bg-recoder-elements-background-depth-2">
+      <div className="px-4 py-3 bg-recoder-elements-background-depth-3">
         <div className="flex items-center justify-between mb-2">
-          <span className="text-sm font-medium text-bolt-elements-textPrimary">
+          <span className="text-sm font-medium text-recoder-elements-textPrimary">
             Task Progress
           </span>
-          <span className="text-sm text-bolt-elements-textSecondary">
+          <span className="text-sm text-recoder-elements-textSecondary">
             {completedCount}/{items.length}
           </span>
         </div>
-        <div className="w-full h-2 bg-bolt-elements-background-depth-1 rounded-full overflow-hidden">
+        <div className="w-full h-2 bg-recoder-elements-background-depth-1 rounded-full overflow-hidden">
           <div
             className="h-full bg-green-500 transition-all duration-300"
             style={{ width: `${progress}%` }}
@@ -41,7 +41,7 @@ export function TodoChecklist({ items, onToggle }: TodoChecklistProps) {
           <button
             key={item.id}
             onClick={() => onToggle?.(item.id)}
-            className="w-full flex items-center gap-3 p-2 rounded hover:bg-bolt-elements-background-depth-3 transition-colors text-left"
+            className="w-full flex items-center gap-3 p-2 rounded hover:bg-recoder-elements-background-depth-3 transition-colors text-left"
           >
             <div
               className={classNames(
@@ -50,7 +50,7 @@ export function TodoChecklist({ items, onToggle }: TodoChecklistProps) {
                   ? 'bg-green-500 border-green-500'
                   : item.inProgress
                     ? 'bg-blue-500/20 border-blue-500'
-                    : 'border-bolt-elements-borderColor'
+                    : 'border-recoder-elements-borderColor'
               )}
             >
               {item.completed && <div className="i-ph:check text-white text-sm" />}
@@ -62,8 +62,8 @@ export function TodoChecklist({ items, onToggle }: TodoChecklistProps) {
               className={classNames(
                 'text-sm',
                 item.completed
-                  ? 'line-through text-bolt-elements-textTertiary'
-                  : 'text-bolt-elements-textPrimary'
+                  ? 'line-through text-recoder-elements-textTertiary'
+                  : 'text-recoder-elements-textPrimary'
               )}
             >
               {item.text}

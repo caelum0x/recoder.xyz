@@ -7,7 +7,7 @@ import {
 	isVectorStoreNode,
 	type NodeId,
 	type NodeLike,
-} from "@giselles-ai/protocol";
+} from "@recoder/protocol";
 import { useEffect, useRef, useTransition } from "react";
 import { useCurrentNodeGeneration } from "./use-current-node-generation";
 

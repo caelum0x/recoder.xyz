@@ -1,21 +1,21 @@
-import type { WebhookEvent } from "@giselles-ai/github-tool";
+import type { WebhookEvent } from "@recoder/github-tool";
 import {
 	type Output,
 	OutputId,
 	type Trigger,
 	TriggerId,
-} from "@giselles-ai/protocol";
+} from "@recoder/protocol";
 import {
 	type GitHubEventId,
 	githubEvents,
-} from "@giselles-ai/trigger-registry";
+} from "@recoder/trigger-registry";
 import { describe, expect, test, vi } from "vitest";
 import { resolveTrigger } from "./trigger-utils";
 
-vi.mock("@giselles-ai/github-tool", async () => {
+vi.mock("@recoder/github-tool", async () => {
 	const actual = await vi.importActual<
-		typeof import("@giselles-ai/github-tool")
-	>("@giselles-ai/github-tool");
+		typeof import("@recoder/github-tool")
+	>("@recoder/github-tool");
 	return {
 		...actual,
 		getPullRequestDiff: vi.fn().mockResolvedValue("diff"),

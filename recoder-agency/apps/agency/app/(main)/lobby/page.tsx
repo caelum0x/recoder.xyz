@@ -1,4 +1,4 @@
-import { SearchInput } from "@giselle-internal/ui/search-input";
+import { SearchInput } from "@recoder-internal/ui/search-input";
 import { getAccountInfo } from "../settings/account/actions";
 import { TextBanner } from "./components/text-banner";
 import { LobbyClient } from "./lobby-client";

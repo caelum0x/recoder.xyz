@@ -1,6 +1,7 @@
 import { prisma } from '../prisma';
 import { getLatestVersion, hasUpdateAvailable, getChangelog } from './versioning';
 import type { MCPServerConfig } from './client';
+import { logger } from '@/lib/logger';
 
 export interface UpdateResult {
   serverId: string;
@@ -124,7 +125,7 @@ export async function disableAutoUpdate(userId: string, serverId: string): Promi
 
 // Background job to check and apply updates
 export async function runAutoUpdateJob(): Promise<void> {
-  console.log('Running auto-update job...');
+  logger.info('Running auto-update job');
 
   const servers = await prisma.mCPServer.findMany({
     where: { enabled: true },
@@ -136,10 +137,10 @@ export async function runAutoUpdateJob(): Promise<void> {
       try {
         const result = await updateServer(server.userId, server.serverId);
         if (result.success) {
-          console.log(`Updated ${server.serverId} to ${result.newVersion}`);
+          logger.info('Updated MCP server', { serverId: server.serverId, newVersion: result.newVersion });
         }
       } catch (error) {
-        console.error(`Failed to auto-update ${server.serverId}:`, error);
+        logger.error('Failed to auto-update MCP server', { serverId: server.serverId, error: String(error) });
       }
     }
   }

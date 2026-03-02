@@ -63,9 +63,9 @@ export function SaveToProject({ chatId }: SaveToProjectProps) {
         onClick={() => setShowDropdown(!showDropdown)}
         className="flex items-center gap-2 px-3 py-1.5 text-sm rounded-lg transition-colors"
         style={{
-          backgroundColor: 'var(--bolt-elements-bg-depth-2)',
-          color: 'var(--bolt-elements-textPrimary)',
-          border: '1px solid var(--bolt-elements-bg-depth-3)',
+          backgroundColor: 'var(--recoder-elements-bg-depth-2)',
+          color: 'var(--recoder-elements-textPrimary)',
+          border: '1px solid var(--recoder-elements-bg-depth-3)',
         }}
         title="Save to project"
       >
@@ -79,21 +79,21 @@ export function SaveToProject({ chatId }: SaveToProjectProps) {
           <div
             className="absolute top-full right-0 mt-2 w-64 rounded-lg shadow-lg z-50 max-h-80 overflow-y-auto"
             style={{
-              backgroundColor: 'var(--bolt-elements-bg-depth-2)',
-              border: '1px solid var(--bolt-elements-bg-depth-3)',
+              backgroundColor: 'var(--recoder-elements-bg-depth-2)',
+              border: '1px solid var(--recoder-elements-bg-depth-3)',
             }}
           >
             <div className="p-2">
               <div
                 className="text-xs font-semibold px-2 py-1"
-                style={{ color: 'var(--bolt-elements-textSecondary)' }}
+                style={{ color: 'var(--recoder-elements-textSecondary)' }}
               >
                 Select Project
               </div>
               {projects.length === 0 ? (
                 <div
                   className="px-2 py-4 text-sm text-center"
-                  style={{ color: 'var(--bolt-elements-textSecondary)' }}
+                  style={{ color: 'var(--recoder-elements-textSecondary)' }}
                 >
                   No projects yet. Create one first.
                 </div>
@@ -103,8 +103,8 @@ export function SaveToProject({ chatId }: SaveToProjectProps) {
                     key={project.id}
                     onClick={() => saveToProject(project.id)}
                     disabled={saving}
-                    className="w-full flex items-center gap-2 px-2 py-2 text-sm rounded transition-colors disabled:opacity-50 hover:bg-bolt-elements-background-depth-3"
-                    style={{ color: 'var(--bolt-elements-textPrimary)' }}
+                    className="w-full flex items-center gap-2 px-2 py-2 text-sm rounded transition-colors disabled:opacity-50 hover:bg-recoder-elements-background-depth-3"
+                    style={{ color: 'var(--recoder-elements-textPrimary)' }}
                   >
                     <span className="text-base">{project.icon}</span>
                     <span className="flex-1 text-left truncate">{project.name}</span>

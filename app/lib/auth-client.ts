@@ -1,31 +1,38 @@
+/**
+ * Client-side Better Auth hooks for the main app surface.
+ *
+ * Auth API calls always target the primary auth host (recoder.xyz)
+ * because that is where the Better Auth handler lives. Subdomain
+ * surfaces share the session cookie via `.recoder.xyz` domain
+ * and make their own calls to the same origin.
+ */
+
 import { createAuthClient } from "better-auth/react"
 
-// Determine the correct base URL for authentication
-const getAuthBaseURL = () => {
-  // Check if we're in the browser
-  if (typeof window !== 'undefined') {
-    // In production, use the current origin (works for recoder.xyz, web.recoder.xyz, etc.)
-    const origin = window.location.origin;
+const AUTH_ORIGIN = "https://recoder.xyz";
 
-    // If on a subdomain like web.recoder.xyz, route to main domain for auth
-    if (origin.includes('web.recoder.xyz')) {
-      return 'https://recoder.xyz';
+const getAuthBaseURL = () => {
+  if (typeof window !== 'undefined') {
+    const { hostname, origin } = window.location;
+
+    // Local development
+    if (hostname === 'localhost' || hostname === '127.0.0.1') {
+      return origin;
     }
 
-    // For production domains, use the origin
-    if (origin.includes('recoder.xyz')) {
-      return origin;
+    // All *.recoder.xyz surfaces route auth calls to the primary origin
+    if (hostname.endsWith('.recoder.xyz') || hostname === 'recoder.xyz') {
+      return AUTH_ORIGIN;
     }
   }
 
-  // Fall back to env variable or localhost for SSR/development
   return process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
 };
 
 export const authClient = createAuthClient({
   baseURL: getAuthBaseURL(),
   fetchOptions: {
-    credentials: 'include', // Ensure cookies are sent with cross-origin requests
+    credentials: 'include',
   },
 })
 

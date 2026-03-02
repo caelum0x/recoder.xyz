@@ -1,6 +1,6 @@
-import { defaultName } from "@giselles-ai/node-registry";
-import { NodeLike } from "@giselles-ai/protocol";
-import { SourceExtension } from "@giselles-ai/text-editor-utils";
+import { defaultName } from "@recoder/node-registry";
+import { NodeLike } from "@recoder/protocol";
+import { SourceExtension } from "@recoder/text-editor-utils";
 import {
 	type NodeViewProps,
 	NodeViewWrapper,

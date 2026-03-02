@@ -157,8 +157,8 @@ export const ContainerStatus = memo(({
         }}
         className={classNames(
           'flex items-center gap-2 px-2 py-1 rounded-md transition-colors',
-          'hover:bg-bolt-elements-background-depth-2',
-          'focus:outline-none focus:ring-1 focus:ring-bolt-elements-borderColor'
+          'hover:bg-recoder-elements-background-depth-2',
+          'focus:outline-none focus:ring-1 focus:ring-recoder-elements-borderColor'
         )}
         title="Container status"
         aria-label="Show container status details"
@@ -179,14 +179,14 @@ export const ContainerStatus = memo(({
 
         {/* Optional label */}
         {showLabel && (
-          <span className="text-xs text-bolt-elements-textSecondary">
+          <span className="text-xs text-recoder-elements-textSecondary">
             {getStateText(state)}
           </span>
         )}
 
         {/* Resource usage (when running) */}
         {isRunning && memUsage && (
-          <span className="text-xs text-bolt-elements-textTertiary">
+          <span className="text-xs text-recoder-elements-textTertiary">
             {status.resources?.cpuPercent.toFixed(0)}% | {memUsage.percent}%
           </span>
         )}
@@ -197,19 +197,19 @@ export const ContainerStatus = memo(({
         <div
           className={classNames(
             'absolute right-0 mt-2 w-72 z-50',
-            'bg-bolt-elements-background-depth-2 rounded-lg shadow-lg',
-            'border border-bolt-elements-borderColor',
+            'bg-recoder-elements-background-depth-2 rounded-lg shadow-lg',
+            'border border-recoder-elements-borderColor',
             'overflow-hidden'
           )}
         >
           {/* Header */}
-          <div className="px-3 py-2 border-b border-bolt-elements-borderColor flex items-center justify-between">
-            <h3 className="text-sm font-medium text-bolt-elements-textPrimary">
+          <div className="px-3 py-2 border-b border-recoder-elements-borderColor flex items-center justify-between">
+            <h3 className="text-sm font-medium text-recoder-elements-textPrimary">
               Container Status
             </h3>
             <div className="flex items-center gap-1.5">
               <div className={classNames('w-2 h-2 rounded-full', stateColorClass)} />
-              <span className="text-xs text-bolt-elements-textSecondary">
+              <span className="text-xs text-recoder-elements-textSecondary">
                 {getStateText(state)}
               </span>
             </div>
@@ -242,7 +242,7 @@ export const ContainerStatus = memo(({
           </div>
 
           {/* Actions */}
-          <div className="px-3 py-2 border-t border-bolt-elements-borderColor bg-bolt-elements-background-depth-2 flex items-center gap-2">
+          <div className="px-3 py-2 border-t border-recoder-elements-borderColor bg-recoder-elements-background-depth-2 flex items-center gap-2">
             {canStart && (
               <ActionButton
                 onClick={handleStart}
@@ -284,7 +284,7 @@ export const ContainerStatus = memo(({
               onClick={handleViewLogs}
               icon="i-ph:terminal-window"
               label="Logs"
-              className="bg-bolt-elements-background-depth-3 hover:bg-bolt-elements-background-depth-3"
+              className="bg-recoder-elements-background-depth-3 hover:bg-recoder-elements-background-depth-3"
             />
           </div>
         </div>
@@ -317,19 +317,19 @@ const HealthStatusRow = memo(({ health, message }: HealthStatusRowProps) => {
       case 'unhealthy':
         return 'text-red-400';
       default:
-        return 'text-bolt-elements-textSecondary';
+        return 'text-recoder-elements-textSecondary';
     }
   })();
 
   return (
     <div className="flex items-center justify-between">
-      <span className="text-xs text-bolt-elements-textSecondary">Health</span>
+      <span className="text-xs text-recoder-elements-textSecondary">Health</span>
       <div className="flex items-center gap-1.5">
         <span className={classNames('text-xs', healthColorClass)}>
           {getHealthText(health)}
         </span>
         {message && (
-          <span className="text-xs text-bolt-elements-textTertiary">
+          <span className="text-xs text-recoder-elements-textTertiary">
             ({message})
           </span>
         )}
@@ -347,15 +347,15 @@ interface ResourceUsageSectionProps {
 const ResourceUsageSection = memo(({ cpuPercent, memUsage }: ResourceUsageSectionProps) => {
   return (
     <div className="space-y-2">
-      <div className="text-xs text-bolt-elements-textSecondary mb-1">Resources</div>
+      <div className="text-xs text-recoder-elements-textSecondary mb-1">Resources</div>
 
       {/* CPU */}
       <div className="space-y-1">
         <div className="flex items-center justify-between text-xs">
-          <span className="text-bolt-elements-textTertiary">CPU</span>
-          <span className="text-bolt-elements-textSecondary">{cpuPercent.toFixed(1)}%</span>
+          <span className="text-recoder-elements-textTertiary">CPU</span>
+          <span className="text-recoder-elements-textSecondary">{cpuPercent.toFixed(1)}%</span>
         </div>
-        <div className="h-1.5 bg-bolt-elements-background-depth-2 rounded-full overflow-hidden">
+        <div className="h-1.5 bg-recoder-elements-background-depth-2 rounded-full overflow-hidden">
           <div
             className={classNames(
               'h-full rounded-full transition-all',
@@ -370,12 +370,12 @@ const ResourceUsageSection = memo(({ cpuPercent, memUsage }: ResourceUsageSectio
       {memUsage && (
         <div className="space-y-1">
           <div className="flex items-center justify-between text-xs">
-            <span className="text-bolt-elements-textTertiary">Memory</span>
-            <span className="text-bolt-elements-textSecondary">
+            <span className="text-recoder-elements-textTertiary">Memory</span>
+            <span className="text-recoder-elements-textSecondary">
               {memUsage.used} / {memUsage.limit}
             </span>
           </div>
-          <div className="h-1.5 bg-bolt-elements-background-depth-2 rounded-full overflow-hidden">
+          <div className="h-1.5 bg-recoder-elements-background-depth-2 rounded-full overflow-hidden">
             <div
               className={classNames(
                 'h-full rounded-full transition-all',
@@ -407,13 +407,13 @@ interface PortMappingsSectionProps {
 const PortMappingsSection = memo(({ ports }: PortMappingsSectionProps) => {
   return (
     <div className="space-y-1">
-      <div className="text-xs text-bolt-elements-textSecondary mb-1">Ports</div>
+      <div className="text-xs text-recoder-elements-textSecondary mb-1">Ports</div>
       {ports.map((port, index) => (
         <div
           key={index}
-          className="flex items-center justify-between text-xs bg-bolt-elements-background-depth-2 px-2 py-1 rounded"
+          className="flex items-center justify-between text-xs bg-recoder-elements-background-depth-2 px-2 py-1 rounded"
         >
-          <span className="text-bolt-elements-textTertiary">
+          <span className="text-recoder-elements-textTertiary">
             :{port.containerPort}
           </span>
           <a
@@ -490,36 +490,36 @@ const LogsModal = memo(({ logs, onClose }: LogsModalProps) => {
       <div
         className={classNames(
           'w-full max-w-2xl max-h-[80vh] m-4',
-          'bg-bolt-elements-background-depth-2 rounded-lg shadow-xl',
-          'border border-bolt-elements-borderColor',
+          'bg-recoder-elements-background-depth-2 rounded-lg shadow-xl',
+          'border border-recoder-elements-borderColor',
           'flex flex-col overflow-hidden'
         )}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="px-4 py-3 border-b border-bolt-elements-borderColor flex items-center justify-between">
-          <h3 className="text-sm font-medium text-bolt-elements-textPrimary">
+        <div className="px-4 py-3 border-b border-recoder-elements-borderColor flex items-center justify-between">
+          <h3 className="text-sm font-medium text-recoder-elements-textPrimary">
             Container Logs
           </h3>
           <button
             onClick={onClose}
-            className="p-1 rounded hover:bg-bolt-elements-background-depth-2 transition-colors"
+            className="p-1 rounded hover:bg-recoder-elements-background-depth-2 transition-colors"
           >
-            <div className="i-ph:x w-4 h-4 text-bolt-elements-textSecondary" />
+            <div className="i-ph:x w-4 h-4 text-recoder-elements-textSecondary" />
           </button>
         </div>
 
         {/* Logs content */}
         <div className="flex-1 overflow-auto p-4 font-mono text-xs">
           {logs.length === 0 ? (
-            <div className="text-bolt-elements-textTertiary text-center py-4">
+            <div className="text-recoder-elements-textTertiary text-center py-4">
               No logs available
             </div>
           ) : (
             <div className="space-y-1">
               {logs.map((log, index) => (
                 <div key={index} className="flex gap-2">
-                  <span className="text-bolt-elements-textTertiary whitespace-nowrap">
+                  <span className="text-recoder-elements-textTertiary whitespace-nowrap">
                     {formatLogTime(log.timestamp)}
                   </span>
                   <span
@@ -528,7 +528,7 @@ const LogsModal = memo(({ logs, onClose }: LogsModalProps) => {
                         ? 'text-red-400'
                         : log.level === 'warn'
                           ? 'text-yellow-400'
-                          : 'text-bolt-elements-textSecondary'
+                          : 'text-recoder-elements-textSecondary'
                     )}
                   >
                     {log.message}
@@ -541,10 +541,10 @@ const LogsModal = memo(({ logs, onClose }: LogsModalProps) => {
         </div>
 
         {/* Footer */}
-        <div className="px-4 py-2 border-t border-bolt-elements-borderColor bg-bolt-elements-background-depth-2 flex justify-end">
+        <div className="px-4 py-2 border-t border-recoder-elements-borderColor bg-recoder-elements-background-depth-2 flex justify-end">
           <button
             onClick={onClose}
-            className="px-3 py-1.5 text-xs bg-bolt-elements-background-depth-1 hover:bg-bolt-elements-background-depth-2 rounded transition-colors"
+            className="px-3 py-1.5 text-xs bg-recoder-elements-background-depth-1 hover:bg-recoder-elements-background-depth-2 rounded transition-colors"
           >
             Close
           </button>
@@ -583,7 +583,7 @@ const CompactContainerStatus = memo(({
           ? 'bg-yellow-500/10 text-yellow-400'
           : state === 'exited' || state === 'dead'
             ? 'bg-red-500/10 text-red-400'
-            : 'bg-bolt-elements-background-depth-3 text-bolt-elements-textSecondary',
+            : 'bg-recoder-elements-background-depth-3 text-recoder-elements-textSecondary',
         className
       )}
       title={`Container: ${getStateText(state)}, Health: ${getHealthText(health)}`}

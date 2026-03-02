@@ -1,6 +1,6 @@
-import type { NodeLike, Output } from "@giselles-ai/protocol";
-import type { UIConnection } from "@giselles-ai/react";
-import { extensions as baseExtensions } from "@giselles-ai/text-editor-utils";
+import type { NodeLike, Output } from "@recoder/protocol";
+import type { UIConnection } from "@recoder/react";
+import { extensions as baseExtensions } from "@recoder/text-editor-utils";
 import Mention from "@tiptap/extension-mention";
 import Placeholder from "@tiptap/extension-placeholder";
 import {
@@ -46,33 +46,33 @@ function Toolbar({ tools }: { tools?: (editor: Editor) => ReactNode }) {
 					editor.isActive("strike") ? "strike" : null,
 				].filter((item) => item !== null)}
 			>
-				<ToolbarPrimitive.ToggleItem
-					value="bold"
-					aria-label="Bold"
-					data-toolbar-item
-					onClick={() => editor.chain().focus().toggleBold().run()}
-					disabled={!editor.can().chain().focus().toggleBold().run()}
-				>
-					<BoldIcon className="w-[12px]" />
-				</ToolbarPrimitive.ToggleItem>
-				<ToolbarPrimitive.ToggleItem
-					value="italic"
-					aria-label="Italic"
-					data-toolbar-item
-					onClick={() => editor.chain().focus().toggleItalic().run()}
-					disabled={!editor.can().chain().focus().toggleItalic().run()}
-				>
-					<ItalicIcon className="w-[12px]" />
-				</ToolbarPrimitive.ToggleItem>
-				<ToolbarPrimitive.ToggleItem
-					value="strike"
-					aria-label="Strike"
-					data-toolbar-item
-					onClick={() => editor.chain().focus().toggleStrike().run()}
-					disabled={!editor.can().chain().focus().toggleStrike().run()}
-				>
-					<StrikethroughIcon className="w-[12px]" />
-				</ToolbarPrimitive.ToggleItem>
+					<ToolbarPrimitive.ToggleItem
+						value="bold"
+						aria-label="Bold"
+						data-toolbar-item
+						onClick={() => editor.chain().focus().toggleMark("bold").run()}
+						disabled={!editor.can().chain().focus().toggleMark("bold").run()}
+					>
+						<BoldIcon className="w-[12px]" />
+					</ToolbarPrimitive.ToggleItem>
+					<ToolbarPrimitive.ToggleItem
+						value="italic"
+						aria-label="Italic"
+						data-toolbar-item
+						onClick={() => editor.chain().focus().toggleMark("italic").run()}
+						disabled={!editor.can().chain().focus().toggleMark("italic").run()}
+					>
+						<ItalicIcon className="w-[12px]" />
+					</ToolbarPrimitive.ToggleItem>
+					<ToolbarPrimitive.ToggleItem
+						value="strike"
+						aria-label="Strike"
+						data-toolbar-item
+						onClick={() => editor.chain().focus().toggleMark("strike").run()}
+						disabled={!editor.can().chain().focus().toggleMark("strike").run()}
+					>
+						<StrikethroughIcon className="w-[12px]" />
+					</ToolbarPrimitive.ToggleItem>
 			</ToolbarPrimitive.ToggleGroup>
 			<ToolbarPrimitive.Separator data-toolbar-separator />
 			<ToolbarPrimitive.ToggleGroup
@@ -87,35 +87,49 @@ function Toolbar({ tools }: { tools?: (editor: Editor) => ReactNode }) {
 							: ""
 				}
 			>
-				<ToolbarPrimitive.ToggleItem
-					value="orderedList"
-					aria-label="Ordered list"
-					data-toolbar-item
-					onClick={() => {
-						if (editor.isActive("bulletList")) {
-							editor.chain().focus().toggleBulletList().run();
+					<ToolbarPrimitive.ToggleItem
+						value="orderedList"
+						aria-label="Ordered list"
+						data-toolbar-item
+						onClick={() => {
+							if (editor.isActive("bulletList")) {
+								editor.chain().focus().toggleList("bulletList", "listItem").run();
+							}
+							editor.chain().focus().toggleList("orderedList", "listItem").run();
+						}}
+						disabled={
+							!editor
+								.can()
+								.chain()
+								.focus()
+								.toggleList("orderedList", "listItem")
+								.run()
 						}
-						editor.chain().focus().toggleOrderedList().run();
-					}}
-					disabled={!editor.can().chain().focus().toggleOrderedList().run()}
-				>
-					<ListOrdered className="w-[18px]" />
-				</ToolbarPrimitive.ToggleItem>
+					>
+						<ListOrdered className="w-[18px]" />
+					</ToolbarPrimitive.ToggleItem>
 
-				<ToolbarPrimitive.ToggleItem
-					value="bulletList"
-					aria-label="Bulleted list"
-					data-toolbar-item
-					onClick={() => {
-						if (editor.isActive("orderedList")) {
-							editor.chain().focus().toggleOrderedList().run();
+					<ToolbarPrimitive.ToggleItem
+						value="bulletList"
+						aria-label="Bulleted list"
+						data-toolbar-item
+						onClick={() => {
+							if (editor.isActive("orderedList")) {
+								editor.chain().focus().toggleList("orderedList", "listItem").run();
+							}
+							editor.chain().focus().toggleList("bulletList", "listItem").run();
+						}}
+						disabled={
+							!editor
+								.can()
+								.chain()
+								.focus()
+								.toggleList("bulletList", "listItem")
+								.run()
 						}
-						editor.chain().focus().toggleBulletList().run();
-					}}
-					disabled={!editor.can().chain().focus().toggleBulletList().run()}
-				>
-					<List className="w-[18px]" />
-				</ToolbarPrimitive.ToggleItem>
+					>
+						<List className="w-[18px]" />
+					</ToolbarPrimitive.ToggleItem>
 			</ToolbarPrimitive.ToggleGroup>
 			{tools && (
 				<>
@@ -189,6 +203,8 @@ export function TextEditor({
 					Placeholder.configure({ placeholder }),
 				];
 	}, [connections, placeholder]);
+	const editorExtensions =
+		extensions as unknown as NonNullable<EditorProviderProps["extensions"]>;
 	return (
 		<EditorProvider
 			key={`text-editor-${connectionsSignature}`}
@@ -198,7 +214,7 @@ export function TextEditor({
 					{header && <div className="mb-[4px]">{header}</div>}
 				</>
 			}
-			extensions={extensions}
+			extensions={editorExtensions}
 			content={
 				value === undefined
 					? undefined

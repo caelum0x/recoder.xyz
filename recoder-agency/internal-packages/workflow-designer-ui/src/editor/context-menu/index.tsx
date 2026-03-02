@@ -1,6 +1,6 @@
-import { Button } from "@giselle-internal/ui/button";
-import { PopoverContent } from "@giselle-internal/ui/popover";
-import { useToasts } from "@giselle-internal/ui/toast";
+import { Button } from "@recoder-internal/ui/button";
+import { PopoverContent } from "@recoder-internal/ui/popover";
+import { useToasts } from "@recoder-internal/ui/toast";
 import { useCallback } from "react";
 import { useDeleteNode } from "../../app-designer";
 import { useNodeManipulation } from "../node";

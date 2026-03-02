@@ -1,4 +1,4 @@
-import { StatusBadge } from "@giselle-internal/ui/status-badge";
+import { StatusBadge } from "@recoder-internal/ui/status-badge";
 import type { githubRepositoryContentStatus } from "@/db";
 import type { GITHUB_EMBEDDING_PROFILES } from "./github-embedding-profiles";
 

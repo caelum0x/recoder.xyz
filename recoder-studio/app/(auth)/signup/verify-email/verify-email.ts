@@ -1,8 +1,6 @@
 "use server";
 
-import { redirect } from "next/navigation";
-import { type AuthError, createAuthError, createClient } from "@/lib/supabase";
-import { initializeAccount } from "@/services/accounts";
+import type { AuthError } from "../../login/login";
 
 export const verifyEmail = async (
 	_prevState: null | AuthError,
@@ -14,39 +12,21 @@ export const verifyEmail = async (
 		typeof verificationEmailEntry !== "string" ||
 		typeof tokenEntry !== "string"
 	) {
-		return createAuthError({
+		return {
 			code: "invalid_verification_payload",
-			message: "Invalid verification payload. Please request a new code.",
+			message: "Invalid verification payload. Please request a new email.",
 			name: "AuthValidationError",
 			status: 400,
-		});
-	}
-	const verificationEmail = verificationEmailEntry;
-	const token = tokenEntry;
-	const supabase = await createClient();
-	const { data: supabaseData, error } = await supabase.auth.verifyOtp({
-		email: verificationEmail,
-		token,
-		type: "email",
-	});
-	if (error != null) {
-		return createAuthError(error);
-	}
-	if (supabaseData.user == null) {
-		return createAuthError({
-			code: "missing_user",
-			message: "No user returned",
-			name: "AuthMissingUserError",
-			status: 500,
-		});
+		};
 	}
 
-	const _user = await initializeAccount(
-		supabaseData.user.id,
-		supabaseData.user.email,
-	);
-
-	redirect("/");
+	return {
+		code: "verification_link_required",
+		message:
+			"Email verification now uses the link sent to your inbox. Open that link to continue.",
+		name: "AuthVerificationError",
+		status: 400,
+	};
 };
 
 export const resendOtp = async (
@@ -55,26 +35,34 @@ export const resendOtp = async (
 ): Promise<AuthError | null> => {
 	const verificationEmailEntry = formData.get("verificationEmail");
 	if (typeof verificationEmailEntry !== "string") {
-		return createAuthError({
+		return {
 			code: "invalid_email",
 			message: "Please enter a valid email address.",
 			name: "AuthValidationError",
 			status: 422,
-		});
+		};
 	}
-	const verificationEmail = verificationEmailEntry;
-	const supabase = await createClient();
-	const { error } = await supabase.auth.resend({
-		type: "signup",
-		email: verificationEmail,
+
+	const baseUrl = process.env.BETTER_AUTH_URL ?? "https://recoder.xyz";
+	const response = await fetch(`${baseUrl}/api/auth/magic-link/send`, {
+		method: "POST",
+		headers: { "Content-Type": "application/json" },
+		body: JSON.stringify({ email: verificationEmailEntry }),
 	});
-	if (error != null) {
-		return createAuthError(error);
+
+	if (!response.ok) {
+		return {
+			code: "resend_failed",
+			message: "Failed to resend verification email. Please try again.",
+			name: "AuthError",
+			status: response.status,
+		};
 	}
+
 	return {
 		code: "success",
 		status: 200,
-		message: "A new confirmation code has been sent to your email address.",
+		message: "A new verification email has been sent.",
 		name: "Success",
 	};
 };

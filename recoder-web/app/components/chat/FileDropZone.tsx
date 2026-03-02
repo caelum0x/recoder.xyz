@@ -308,7 +308,7 @@ const FileDropOverlay = memo(({ state, customContent }: FileDropOverlayProps) =>
     >
       <div
         className={classNames(
-          'bg-bolt-elements-background-depth-1 px-8 py-6 rounded-xl shadow-2xl',
+          'bg-recoder-elements-background-depth-1 px-8 py-6 rounded-xl shadow-2xl',
           'border-2 border-dashed',
           'text-center transform transition-all duration-200',
           'animate-pulse-subtle',
@@ -330,7 +330,7 @@ const FileDropOverlay = memo(({ state, customContent }: FileDropOverlayProps) =>
             'text-base font-semibold',
             isInvalid
               ? 'text-red-600 dark:text-red-400'
-              : 'text-bolt-elements-textPrimary',
+              : 'text-recoder-elements-textPrimary',
           )}
         >
           {isInvalid ? 'Unsupported file type' : 'Drop files here'}
@@ -340,7 +340,7 @@ const FileDropOverlay = memo(({ state, customContent }: FileDropOverlayProps) =>
             'text-sm mt-1.5',
             isInvalid
               ? 'text-red-500/70 dark:text-red-400/70'
-              : 'text-bolt-elements-textSecondary',
+              : 'text-recoder-elements-textSecondary',
           )}
         >
           {isInvalid ? (
@@ -363,7 +363,7 @@ FileDropOverlay.displayName = 'FileDropOverlay';
  * Compact inline drop hint shown at the bottom of chat input
  */
 export const DropHint = memo(() => (
-  <div className="text-xs text-bolt-elements-textTertiary text-right">
+  <div className="text-xs text-recoder-elements-textTertiary text-right">
     <div>Drag & drop files anywhere</div>
     <div className="opacity-70">Max {formatFileSize(MAX_FILE_SIZE)} per file, {formatFileSize(MAX_TOTAL_SIZE)} total</div>
   </div>
@@ -394,10 +394,10 @@ export const getFileTypeIcon = (mimeType: string): string => {
     return 'i-ph:file-html text-orange-500';
   }
   if (mimeType.includes('markdown') || mimeType === 'text/x-markdown') {
-    return 'i-ph:markdown-logo text-bolt-elements-textTertiary';
+    return 'i-ph:markdown-logo text-recoder-elements-textTertiary';
   }
   if (mimeType === 'text/plain') {
-    return 'i-ph:file-text text-bolt-elements-textTertiary';
+    return 'i-ph:file-text text-recoder-elements-textTertiary';
   }
   return 'i-ph:file text-blue-400';
 };

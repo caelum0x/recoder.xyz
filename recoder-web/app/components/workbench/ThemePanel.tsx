@@ -124,13 +124,13 @@ export function ThemePanel() {
   return (
     <div className="h-full flex flex-col overflow-hidden">
       {/* Tab header */}
-      <div className="flex border-b border-bolt-elements-borderColor">
+      <div className="flex border-b border-recoder-elements-borderColor">
         <button
           onClick={() => setActiveTab('library')}
           className={`flex-1 px-4 py-2 text-sm font-medium transition-colors ${
             activeTab === 'library'
               ? 'text-purple-500 border-b-2 border-purple-500'
-              : 'text-bolt-elements-textSecondary hover:text-bolt-elements-textPrimary'
+              : 'text-recoder-elements-textSecondary hover:text-recoder-elements-textPrimary'
           }`}
         >
           Theme Library
@@ -140,7 +140,7 @@ export function ThemePanel() {
           className={`flex-1 px-4 py-2 text-sm font-medium transition-colors ${
             activeTab === 'create'
               ? 'text-purple-500 border-b-2 border-purple-500'
-              : 'text-bolt-elements-textSecondary hover:text-bolt-elements-textPrimary'
+              : 'text-recoder-elements-textSecondary hover:text-recoder-elements-textPrimary'
           }`}
         >
           Create Theme
@@ -156,15 +156,15 @@ export function ThemePanel() {
               className={`w-full text-left px-3 py-2.5 rounded-lg border text-sm transition-colors ${
                 !projectThemeId
                   ? 'border-purple-500 bg-purple-500/10'
-                  : 'border-bolt-elements-borderColor hover:border-purple-500/50'
+                  : 'border-recoder-elements-borderColor hover:border-purple-500/50'
               }`}
             >
-              <div className="font-medium text-bolt-elements-textPrimary">No Theme</div>
-              <div className="text-xs text-bolt-elements-textSecondary">AI uses default styling</div>
+              <div className="font-medium text-recoder-elements-textPrimary">No Theme</div>
+              <div className="text-xs text-recoder-elements-textSecondary">AI uses default styling</div>
             </button>
 
             {/* Built-in themes */}
-            <div className="text-xs font-medium text-bolt-elements-textSecondary mt-4 mb-1">Built-in Themes</div>
+            <div className="text-xs font-medium text-recoder-elements-textSecondary mt-4 mb-1">Built-in Themes</div>
             {builtinThemes.map((theme) => (
               <button
                 key={theme.id}
@@ -172,30 +172,30 @@ export function ThemePanel() {
                 className={`w-full text-left px-3 py-2.5 rounded-lg border text-sm transition-colors ${
                   projectThemeId === theme.id
                     ? 'border-purple-500 bg-purple-500/10'
-                    : 'border-bolt-elements-borderColor hover:border-purple-500/50'
+                    : 'border-recoder-elements-borderColor hover:border-purple-500/50'
                 }`}
               >
                 <div className="flex items-center justify-between">
-                  <span className="font-medium text-bolt-elements-textPrimary">{theme.name}</span>
+                  <span className="font-medium text-recoder-elements-textPrimary">{theme.name}</span>
                   {projectThemeId === theme.id && (
                     <span className="text-purple-500 text-xs">Active</span>
                   )}
                 </div>
-                <div className="text-xs text-bolt-elements-textSecondary mt-0.5">{theme.description}</div>
+                <div className="text-xs text-recoder-elements-textSecondary mt-0.5">{theme.description}</div>
               </button>
             ))}
 
             {/* Custom themes */}
             {customThemes.length > 0 && (
               <>
-                <div className="text-xs font-medium text-bolt-elements-textSecondary mt-4 mb-1">Custom Themes</div>
+                <div className="text-xs font-medium text-recoder-elements-textSecondary mt-4 mb-1">Custom Themes</div>
                 {customThemes.map((theme) => (
                   <div
                     key={theme.id}
                     className={`w-full px-3 py-2.5 rounded-lg border text-sm transition-colors ${
                       projectThemeId === theme.id
                         ? 'border-purple-500 bg-purple-500/10'
-                        : 'border-bolt-elements-borderColor'
+                        : 'border-recoder-elements-borderColor'
                     }`}
                   >
                     <div className="flex items-center justify-between">
@@ -203,7 +203,7 @@ export function ThemePanel() {
                         onClick={() => handleSelectTheme(theme.id)}
                         className="flex-1 text-left"
                       >
-                        <span className="font-medium text-bolt-elements-textPrimary">{theme.name}</span>
+                        <span className="font-medium text-recoder-elements-textPrimary">{theme.name}</span>
                         {projectThemeId === theme.id && (
                           <span className="text-purple-500 text-xs ml-2">Active</span>
                         )}
@@ -215,7 +215,7 @@ export function ThemePanel() {
                         Delete
                       </button>
                     </div>
-                    <div className="text-xs text-bolt-elements-textSecondary mt-0.5">{theme.description}</div>
+                    <div className="text-xs text-recoder-elements-textSecondary mt-0.5">{theme.description}</div>
                   </div>
                 ))}
               </>
@@ -230,7 +230,7 @@ export function ThemePanel() {
                 className={`flex-1 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
                   createMode === 'ai'
                     ? 'bg-purple-500/20 text-purple-500 border border-purple-500/50'
-                    : 'border border-bolt-elements-borderColor text-bolt-elements-textSecondary'
+                    : 'border border-recoder-elements-borderColor text-recoder-elements-textSecondary'
                 }`}
               >
                 AI Generator
@@ -240,7 +240,7 @@ export function ThemePanel() {
                 className={`flex-1 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
                   createMode === 'manual'
                     ? 'bg-purple-500/20 text-purple-500 border border-purple-500/50'
-                    : 'border border-bolt-elements-borderColor text-bolt-elements-textSecondary'
+                    : 'border border-recoder-elements-borderColor text-recoder-elements-textSecondary'
                 }`}
               >
                 Manual
@@ -251,7 +251,7 @@ export function ThemePanel() {
               <div className="space-y-3">
                 {/* Image upload */}
                 <div>
-                  <label className="block text-xs text-bolt-elements-textSecondary mb-1">
+                  <label className="block text-xs text-recoder-elements-textSecondary mb-1">
                     Screenshots ({aiImages.length}/5)
                   </label>
                   <input
@@ -265,7 +265,7 @@ export function ThemePanel() {
                   <button
                     onClick={() => fileInputRef.current?.click()}
                     disabled={aiImages.length >= 5}
-                    className="w-full px-3 py-6 rounded-lg border-2 border-dashed border-bolt-elements-borderColor text-bolt-elements-textSecondary text-sm hover:border-purple-500/50 hover:text-purple-500 disabled:opacity-50 transition-colors"
+                    className="w-full px-3 py-6 rounded-lg border-2 border-dashed border-recoder-elements-borderColor text-recoder-elements-textSecondary text-sm hover:border-purple-500/50 hover:text-purple-500 disabled:opacity-50 transition-colors"
                   >
                     {aiImages.length > 0
                       ? `${aiImages.length} image(s) uploaded. Click to add more.`
@@ -283,27 +283,27 @@ export function ThemePanel() {
 
                 {/* Keywords */}
                 <div>
-                  <label className="block text-xs text-bolt-elements-textSecondary mb-1">Keywords (optional)</label>
+                  <label className="block text-xs text-recoder-elements-textSecondary mb-1">Keywords (optional)</label>
                   <input
                     type="text"
                     value={aiKeywords}
                     onChange={(e) => setAiKeywords(e.target.value)}
                     placeholder="e.g., dark mode, glassmorphism, startup"
                     maxLength={500}
-                    className="w-full px-3 py-2 rounded-lg border border-bolt-elements-borderColor bg-bolt-elements-background-depth-1 text-bolt-elements-textPrimary text-sm"
+                    className="w-full px-3 py-2 rounded-lg border border-recoder-elements-borderColor bg-recoder-elements-background-depth-1 text-recoder-elements-textPrimary text-sm"
                   />
                 </div>
 
                 {/* Generation mode */}
                 <div>
-                  <label className="block text-xs text-bolt-elements-textSecondary mb-1">Mode</label>
+                  <label className="block text-xs text-recoder-elements-textSecondary mb-1">Mode</label>
                   <div className="flex gap-2">
                     <button
                       onClick={() => setAiMode('inspired')}
                       className={`flex-1 px-3 py-1.5 rounded text-xs ${
                         aiMode === 'inspired'
                           ? 'bg-purple-500/20 text-purple-500 border border-purple-500/50'
-                          : 'border border-bolt-elements-borderColor text-bolt-elements-textSecondary'
+                          : 'border border-recoder-elements-borderColor text-recoder-elements-textSecondary'
                       }`}
                     >
                       Inspired
@@ -313,7 +313,7 @@ export function ThemePanel() {
                       className={`flex-1 px-3 py-1.5 rounded text-xs ${
                         aiMode === 'high-fidelity'
                           ? 'bg-purple-500/20 text-purple-500 border border-purple-500/50'
-                          : 'border border-bolt-elements-borderColor text-bolt-elements-textSecondary'
+                          : 'border border-recoder-elements-borderColor text-recoder-elements-textSecondary'
                       }`}
                     >
                       High Fidelity
@@ -324,11 +324,11 @@ export function ThemePanel() {
                 {/* Provider & model */}
                 <div className="grid grid-cols-2 gap-2">
                   <div>
-                    <label className="block text-xs text-bolt-elements-textSecondary mb-1">Provider</label>
+                    <label className="block text-xs text-recoder-elements-textSecondary mb-1">Provider</label>
                     <select
                       value={aiProvider}
                       onChange={(e) => setAiProvider(e.target.value as any)}
-                      className="w-full px-2 py-1.5 rounded border border-bolt-elements-borderColor bg-bolt-elements-background-depth-1 text-bolt-elements-textPrimary text-xs"
+                      className="w-full px-2 py-1.5 rounded border border-recoder-elements-borderColor bg-recoder-elements-background-depth-1 text-recoder-elements-textPrimary text-xs"
                     >
                       <option value="openrouter">OpenRouter</option>
                       <option value="anthropic">Anthropic</option>
@@ -337,25 +337,25 @@ export function ThemePanel() {
                     </select>
                   </div>
                   <div>
-                    <label className="block text-xs text-bolt-elements-textSecondary mb-1">Model</label>
+                    <label className="block text-xs text-recoder-elements-textSecondary mb-1">Model</label>
                     <input
                       type="text"
                       value={aiModel}
                       onChange={(e) => setAiModel(e.target.value)}
                       placeholder="e.g., gpt-4o"
-                      className="w-full px-2 py-1.5 rounded border border-bolt-elements-borderColor bg-bolt-elements-background-depth-1 text-bolt-elements-textPrimary text-xs"
+                      className="w-full px-2 py-1.5 rounded border border-recoder-elements-borderColor bg-recoder-elements-background-depth-1 text-recoder-elements-textPrimary text-xs"
                     />
                   </div>
                 </div>
 
                 <div>
-                  <label className="block text-xs text-bolt-elements-textSecondary mb-1">API Key</label>
+                  <label className="block text-xs text-recoder-elements-textSecondary mb-1">API Key</label>
                   <input
                     type="password"
                     value={aiApiKey}
                     onChange={(e) => setAiApiKey(e.target.value)}
                     placeholder="Your API key for this provider"
-                    className="w-full px-3 py-2 rounded-lg border border-bolt-elements-borderColor bg-bolt-elements-background-depth-1 text-bolt-elements-textPrimary text-sm"
+                    className="w-full px-3 py-2 rounded-lg border border-recoder-elements-borderColor bg-recoder-elements-background-depth-1 text-recoder-elements-textPrimary text-sm"
                   />
                 </div>
 
@@ -370,12 +370,12 @@ export function ThemePanel() {
                 {/* Generated result */}
                 {generatedPrompt && (
                   <div className="space-y-2">
-                    <label className="block text-xs text-bolt-elements-textSecondary">Generated Theme (editable)</label>
+                    <label className="block text-xs text-recoder-elements-textSecondary">Generated Theme (editable)</label>
                     <textarea
                       value={generatedPrompt}
                       onChange={(e) => setGeneratedPrompt(e.target.value)}
                       rows={8}
-                      className="w-full px-3 py-2 rounded-lg border border-bolt-elements-borderColor bg-bolt-elements-background-depth-1 text-bolt-elements-textPrimary text-xs font-mono resize-y"
+                      className="w-full px-3 py-2 rounded-lg border border-recoder-elements-borderColor bg-recoder-elements-background-depth-1 text-recoder-elements-textPrimary text-xs font-mono resize-y"
                     />
                     <div className="flex gap-2">
                       <input
@@ -383,7 +383,7 @@ export function ThemePanel() {
                         value={saveName}
                         onChange={(e) => setSaveName(e.target.value)}
                         placeholder="Theme name"
-                        className="flex-1 px-3 py-2 rounded-lg border border-bolt-elements-borderColor bg-bolt-elements-background-depth-1 text-bolt-elements-textPrimary text-sm"
+                        className="flex-1 px-3 py-2 rounded-lg border border-recoder-elements-borderColor bg-recoder-elements-background-depth-1 text-recoder-elements-textPrimary text-sm"
                       />
                       <button
                         onClick={handleSaveGenerated}
@@ -400,27 +400,27 @@ export function ThemePanel() {
               /* Manual create */
               <div className="space-y-3">
                 <div>
-                  <label className="block text-xs text-bolt-elements-textSecondary mb-1">Name</label>
+                  <label className="block text-xs text-recoder-elements-textSecondary mb-1">Name</label>
                   <input
                     type="text"
                     value={manualName}
                     onChange={(e) => setManualName(e.target.value)}
                     placeholder="My Custom Theme"
-                    className="w-full px-3 py-2 rounded-lg border border-bolt-elements-borderColor bg-bolt-elements-background-depth-1 text-bolt-elements-textPrimary text-sm"
+                    className="w-full px-3 py-2 rounded-lg border border-recoder-elements-borderColor bg-recoder-elements-background-depth-1 text-recoder-elements-textPrimary text-sm"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs text-bolt-elements-textSecondary mb-1">Description</label>
+                  <label className="block text-xs text-recoder-elements-textSecondary mb-1">Description</label>
                   <input
                     type="text"
                     value={manualDescription}
                     onChange={(e) => setManualDescription(e.target.value)}
                     placeholder="Brief description"
-                    className="w-full px-3 py-2 rounded-lg border border-bolt-elements-borderColor bg-bolt-elements-background-depth-1 text-bolt-elements-textPrimary text-sm"
+                    className="w-full px-3 py-2 rounded-lg border border-recoder-elements-borderColor bg-recoder-elements-background-depth-1 text-recoder-elements-textPrimary text-sm"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs text-bolt-elements-textSecondary mb-1">
+                  <label className="block text-xs text-recoder-elements-textSecondary mb-1">
                     Theme Prompt (wrap in &lt;theme&gt;&lt;/theme&gt;)
                   </label>
                   <textarea
@@ -428,7 +428,7 @@ export function ThemePanel() {
                     onChange={(e) => setManualPrompt(e.target.value)}
                     rows={10}
                     placeholder={'<theme>\nDESIGN SYSTEM: ...\n\nCOLOR SYSTEM:\n- Primary: ...\n\nTYPOGRAPHY:\n...\n</theme>'}
-                    className="w-full px-3 py-2 rounded-lg border border-bolt-elements-borderColor bg-bolt-elements-background-depth-1 text-bolt-elements-textPrimary text-xs font-mono resize-y"
+                    className="w-full px-3 py-2 rounded-lg border border-recoder-elements-borderColor bg-recoder-elements-background-depth-1 text-recoder-elements-textPrimary text-xs font-mono resize-y"
                   />
                 </div>
                 <button

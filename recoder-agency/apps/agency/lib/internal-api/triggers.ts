@@ -1,11 +1,11 @@
 "use server";
 
-import { DataQueryError } from "@giselles-ai/giselle";
+import { DataQueryError } from "@recoder/giselle";
 import type {
 	QueuedGeneration,
 	Trigger,
 	TriggerId,
-} from "@giselles-ai/protocol";
+} from "@recoder/protocol";
 import { giselle } from "@/app/giselle";
 
 export async function resolveTrigger(input: { generation: QueuedGeneration }) {

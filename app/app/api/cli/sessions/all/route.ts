@@ -12,6 +12,12 @@ import { logger } from '@/lib/logger';
 
 const BACKEND_URL = process.env.BACKEND_URL || 'http://localhost:3001';
 
+function getAccessToken(session: unknown): string {
+  if (!session || typeof session !== 'object') return '';
+  const token = (session as Record<string, unknown>).accessToken;
+  return typeof token === 'string' ? token : '';
+}
+
 /**
  * DELETE /api/cli/sessions/all
  * Revoke all CLI sessions for the authenticated user
@@ -37,7 +43,7 @@ export async function DELETE(request: NextRequest) {
     const response = await fetch(`${BACKEND_URL}/api/auth/cli/sessions/all`, {
       method: 'DELETE',
       headers: {
-        'Authorization': `Bearer ${(session as any)?.accessToken || ''}`,
+        'Authorization': `Bearer ${getAccessToken(session)}`,
         'Content-Type': 'application/json',
         'X-User-Email': user.email,
         'X-User-ID': user.id || '',

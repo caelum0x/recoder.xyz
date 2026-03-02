@@ -1,10 +1,10 @@
 import { anthropic } from "@ai-sdk/anthropic";
 import { google } from "@ai-sdk/google";
 import { openai } from "@ai-sdk/openai";
-import { octokit } from "@giselles-ai/github-tool";
-import { getLanguageModelTool } from "@giselles-ai/language-model-registry";
-import type { ContentGenerationContent } from "@giselles-ai/protocol";
-import { SecretId } from "@giselles-ai/protocol";
+import { octokit } from "@recoder/github-tool";
+import { getLanguageModelTool } from "@recoder/language-model-registry";
+import type { ContentGenerationContent } from "@recoder/protocol";
+import { SecretId } from "@recoder/protocol";
 import type { Tool, ToolSet } from "ai";
 import z from "zod/v4";
 import { decryptSecret } from "../../../secrets";

@@ -1,9 +1,9 @@
-import { traceGeneration } from "@giselles-ai/langfuse";
+import { traceGeneration } from "@recoder/langfuse";
 import type {
 	CompletedGeneration,
 	FailedGeneration,
 	OutputFileBlob,
-} from "@giselles-ai/protocol";
+} from "@recoder/protocol";
 import type { CurrentTeam } from "@/services/teams";
 
 type ModelMessage = unknown;

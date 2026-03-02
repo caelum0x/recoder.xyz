@@ -1,6 +1,6 @@
 /**
  * COMPREHENSIVE END-TO-END TEST SUITE
- * Tests ALL features of the bolt.new application
+ * Tests ALL features of the recoder-web application
  *
  * Features Tested:
  * 1. Database Connection
@@ -83,7 +83,7 @@ async function runAllTests() {
   console.log(`${colors.bright}${colors.cyan}`);
   console.log('╔═══════════════════════════════════════════════════════════════════════╗');
   console.log('║                                                                       ║');
-  console.log('║        BOLT.NEW CLONE - COMPREHENSIVE FEATURE TEST SUITE             ║');
+  console.log('║        RECODER WEB - COMPREHENSIVE FEATURE TEST SUITE                ║');
   console.log('║                                                                       ║');
   console.log('╚═══════════════════════════════════════════════════════════════════════╝');
   console.log(colors.reset);
@@ -904,7 +904,7 @@ npm run dev
       console.log(`║                                                                       ║`);
       console.log(`║                     🎉 ALL TESTS PASSED! 🎉                          ║`);
       console.log(`║                                                                       ║`);
-      console.log(`║              Your bolt.new clone is PRODUCTION READY!                ║`);
+      console.log(`║              Your recoder-web is PRODUCTION READY!                   ║`);
       console.log(`║                                                                       ║`);
       console.log(`╚═══════════════════════════════════════════════════════════════════════╝${colors.reset}\n`);
 

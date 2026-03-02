@@ -1,0 +1,313 @@
+{
+  "$schema": "connector-contract-snapshot-v1",
+  "generated_at": "2026-02-24T21:05:50.179Z",
+  "schema_versions": {
+    "task_envelope": "1.0.0",
+    "audit_event": "1.0.0"
+  },
+  "task_states": {
+    "all": [
+      "submitted",
+      "working",
+      "input-required",
+      "completed",
+      "failed",
+      "cancelled"
+    ],
+    "terminal": [
+      "completed",
+      "failed",
+      "cancelled"
+    ],
+    "non_terminal": [
+      "submitted",
+      "working",
+      "input-required"
+    ]
+  },
+  "error_taxonomy": {
+    "categories": [
+      "envelope",
+      "connector",
+      "policy",
+      "task",
+      "registry",
+      "collaboration",
+      "transport",
+      "auth",
+      "rate_limit",
+      "internal"
+    ],
+    "severities": [
+      "low",
+      "medium",
+      "high",
+      "critical"
+    ],
+    "codes": [
+      {
+        "code": "INVALID_ENVELOPE",
+        "category": "envelope",
+        "severity": "medium",
+        "retryable": false
+      },
+      {
+        "code": "UNSUPPORTED_ENVELOPE_VERSION",
+        "category": "envelope",
+        "severity": "medium",
+        "retryable": false
+      },
+      {
+        "code": "MISSING_ENVELOPE_FIELD",
+        "category": "envelope",
+        "severity": "medium",
+        "retryable": false
+      },
+      {
+        "code": "INVALID_PAYLOAD",
+        "category": "envelope",
+        "severity": "medium",
+        "retryable": false
+      },
+      {
+        "code": "CONNECTOR_NOT_FOUND",
+        "category": "connector",
+        "severity": "high",
+        "retryable": false
+      },
+      {
+        "code": "CONNECTOR_TIMEOUT",
+        "category": "connector",
+        "severity": "high",
+        "retryable": true
+      },
+      {
+        "code": "CONNECTOR_ERROR",
+        "category": "connector",
+        "severity": "high",
+        "retryable": true
+      },
+      {
+        "code": "CONNECTOR_UNAVAILABLE",
+        "category": "connector",
+        "severity": "high",
+        "retryable": true
+      },
+      {
+        "code": "PROTOCOL_MISMATCH",
+        "category": "connector",
+        "severity": "high",
+        "retryable": false
+      },
+      {
+        "code": "POLICY_DENIED",
+        "category": "policy",
+        "severity": "medium",
+        "retryable": false
+      },
+      {
+        "code": "POLICY_HANDLER_MISSING",
+        "category": "policy",
+        "severity": "medium",
+        "retryable": false
+      },
+      {
+        "code": "POLICY_TIMEOUT",
+        "category": "policy",
+        "severity": "high",
+        "retryable": true
+      },
+      {
+        "code": "TASK_NOT_FOUND",
+        "category": "task",
+        "severity": "medium",
+        "retryable": false
+      },
+      {
+        "code": "INVALID_STATE_TRANSITION",
+        "category": "task",
+        "severity": "medium",
+        "retryable": false
+      },
+      {
+        "code": "TASK_ALREADY_TERMINAL",
+        "category": "task",
+        "severity": "low",
+        "retryable": false
+      },
+      {
+        "code": "TASK_EXECUTION_FAILED",
+        "category": "task",
+        "severity": "high",
+        "retryable": true
+      },
+      {
+        "code": "TASK_CANCELLED",
+        "category": "task",
+        "severity": "low",
+        "retryable": false
+      },
+      {
+        "code": "AGENT_NOT_FOUND",
+        "category": "registry",
+        "severity": "medium",
+        "retryable": false
+      },
+      {
+        "code": "AGENT_ALREADY_REGISTERED",
+        "category": "registry",
+        "severity": "low",
+        "retryable": false
+      },
+      {
+        "code": "CAPABILITY_NOT_FOUND",
+        "category": "registry",
+        "severity": "medium",
+        "retryable": false
+      },
+      {
+        "code": "CHANNEL_NOT_FOUND",
+        "category": "collaboration",
+        "severity": "medium",
+        "retryable": false
+      },
+      {
+        "code": "THREAD_NOT_FOUND",
+        "category": "collaboration",
+        "severity": "medium",
+        "retryable": false
+      },
+      {
+        "code": "MESSAGE_NOT_FOUND",
+        "category": "collaboration",
+        "severity": "medium",
+        "retryable": false
+      },
+      {
+        "code": "NOT_CHANNEL_MEMBER",
+        "category": "collaboration",
+        "severity": "medium",
+        "retryable": false
+      },
+      {
+        "code": "NETWORK_ERROR",
+        "category": "transport",
+        "severity": "high",
+        "retryable": true
+      },
+      {
+        "code": "UNEXPECTED_STATUS",
+        "category": "transport",
+        "severity": "medium",
+        "retryable": true
+      },
+      {
+        "code": "SERIALIZATION_ERROR",
+        "category": "transport",
+        "severity": "medium",
+        "retryable": false
+      },
+      {
+        "code": "AUTHENTICATION_FAILED",
+        "category": "auth",
+        "severity": "high",
+        "retryable": false
+      },
+      {
+        "code": "AUTHORIZATION_DENIED",
+        "category": "auth",
+        "severity": "medium",
+        "retryable": false
+      },
+      {
+        "code": "TOKEN_EXPIRED",
+        "category": "auth",
+        "severity": "medium",
+        "retryable": true
+      },
+      {
+        "code": "RATE_LIMIT_EXCEEDED",
+        "category": "rate_limit",
+        "severity": "medium",
+        "retryable": true
+      },
+      {
+        "code": "QUOTA_EXCEEDED",
+        "category": "rate_limit",
+        "severity": "medium",
+        "retryable": false
+      },
+      {
+        "code": "INTERNAL_ERROR",
+        "category": "internal",
+        "severity": "critical",
+        "retryable": false
+      },
+      {
+        "code": "CONFIGURATION_ERROR",
+        "category": "internal",
+        "severity": "high",
+        "retryable": false
+      }
+    ]
+  },
+  "audit_events": {
+    "event_types": [
+      "task.submitted",
+      "task.started",
+      "task.progress",
+      "task.input_required",
+      "task.completed",
+      "task.failed",
+      "task.cancelled",
+      "policy.checked",
+      "policy.approved",
+      "policy.denied",
+      "connector.attached",
+      "connector.detached",
+      "connector.health",
+      "connector.error",
+      "agent.registered",
+      "agent.unregistered",
+      "agent.updated",
+      "collaboration.channel_created",
+      "collaboration.thread_created",
+      "collaboration.message_sent",
+      "system.config",
+      "system.error"
+    ],
+    "actor_kinds": [
+      "agent",
+      "user",
+      "system",
+      "connector"
+    ],
+    "target_kinds": [
+      "task",
+      "agent",
+      "connector",
+      "channel",
+      "thread",
+      "message",
+      "policy",
+      "workspace",
+      "system"
+    ],
+    "severities": [
+      "info",
+      "warning",
+      "error",
+      "critical"
+    ]
+  },
+  "connector_contract_methods": [
+    "isTerminalState",
+    "createTaskEnvelope",
+    "isValidTransition",
+    "transitionTaskEnvelope",
+    "createAuditEvent",
+    "buildA2AError",
+    "getErrorCodeMeta",
+    "isA2AErrorCode"
+  ]
+}

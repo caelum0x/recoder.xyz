@@ -1,5 +1,6 @@
-import type { WorkspaceId } from "@giselles-ai/protocol";
+import type { WorkspaceId } from "@recoder/protocol";
 import { desc, eq } from "drizzle-orm";
+import { cookies } from "next/headers";
 import { notFound } from "next/navigation";
 import { giselle } from "@/app/giselle";
 import { dataStores, db } from "@/db";
@@ -27,6 +28,52 @@ import { getUsageLimitsForTeam } from "@/packages/lib/usage-limits";
 import { fetchCurrentUser } from "@/services/accounts";
 import { fetchWorkspaceTeam, isMemberOfTeam } from "@/services/teams";
 import { isInternalPlan } from "@/services/teams/utils";
+
+/**
+ * Check if the user has configured AI provider API keys on recoder.xyz.
+ * BYOK-only beta: users must bring their own API keys.
+ */
+async function checkByokStatus(): Promise<{
+	hasKeys: boolean;
+	keyCount: number;
+}> {
+	try {
+		const cookieStore = await cookies();
+		const sessionCookie =
+			cookieStore.get("__Secure-recoder.session_token") ??
+			cookieStore.get("recoder.session_token");
+
+		if (!sessionCookie) {
+			return { hasKeys: false, keyCount: 0 };
+		}
+
+		const appUrl =
+			process.env.BETTER_AUTH_URL ||
+			process.env.NEXT_PUBLIC_APP_URL ||
+			"https://recoder.xyz";
+		const res = await fetch(`${appUrl}/api/user/ai-provider-keys`, {
+			headers: {
+				Cookie: `${sessionCookie.name}=${sessionCookie.value}`,
+			},
+			cache: "no-store",
+		});
+
+		if (!res.ok) {
+			return { hasKeys: false, keyCount: 0 };
+		}
+
+		const data = await res.json();
+		return {
+			hasKeys: Array.isArray(data.keys) && data.keys.length > 0,
+			keyCount: data.keys?.length ?? 0,
+		};
+	} catch (e) {
+		logger.warn("BYOK status check failed (non-blocking)", {
+			error: e instanceof Error ? e.message : String(e),
+		});
+		return { hasKeys: false, keyCount: 0 };
+	}
+}
 
 export async function dataLoader(workspaceId: WorkspaceId) {
 	logger.debug("Loading workspace");
@@ -115,6 +162,9 @@ export async function dataLoader(workspaceId: WorkspaceId) {
 
 	const llmProviders = giselle.getLanguageModelProviders();
 
+	// BYOK check — best-effort, non-blocking
+	const byokStatus = await checkByokStatus();
+
 	return {
 		currentUser,
 		agent,
@@ -144,6 +194,7 @@ export async function dataLoader(workspaceId: WorkspaceId) {
 			sdkAvailability,
 		},
 		llmProviders,
+		byokStatus,
 	};
 }
 

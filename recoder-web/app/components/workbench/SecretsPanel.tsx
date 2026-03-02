@@ -222,12 +222,12 @@ export const SecretsPanel = memo(({ className = '' }: SecretsPanelProps) => {
   }, [projectId, currentEnvironment]);
 
   return (
-    <div className={`flex flex-col h-full bg-bolt-elements-background-depth-1 ${className}`}>
+    <div className={`flex flex-col h-full bg-recoder-elements-background-depth-1 ${className}`}>
       {/* Header */}
-      <div className="flex items-center justify-between px-3 py-2 border-b border-bolt-elements-borderColor">
+      <div className="flex items-center justify-between px-3 py-2 border-b border-recoder-elements-borderColor">
         <div className="flex items-center gap-2">
           <span className="i-ph:key text-yellow-400" />
-          <span className="font-medium text-bolt-elements-textPrimary text-sm">
+          <span className="font-medium text-recoder-elements-textPrimary text-sm">
             Environment Variables
           </span>
         </div>
@@ -236,7 +236,7 @@ export const SecretsPanel = memo(({ className = '' }: SecretsPanelProps) => {
             onClick={toggleShowSecrets}
             className={classNames(
               'p-1.5 rounded transition-colors',
-              showSecrets ? 'bg-yellow-500/20 text-yellow-400' : 'hover:bg-bolt-elements-background-depth-3'
+              showSecrets ? 'bg-yellow-500/20 text-yellow-400' : 'hover:bg-recoder-elements-background-depth-3'
             )}
             title={showSecrets ? 'Hide values' : 'Show values'}
           >
@@ -246,7 +246,7 @@ export const SecretsPanel = memo(({ className = '' }: SecretsPanelProps) => {
             onClick={() => setShowAddForm(!showAddForm)}
             className={classNames(
               'p-1.5 rounded transition-colors',
-              showAddForm ? 'bg-blue-500/20 text-blue-400' : 'hover:bg-bolt-elements-background-depth-3'
+              showAddForm ? 'bg-blue-500/20 text-blue-400' : 'hover:bg-recoder-elements-background-depth-3'
             )}
             title="Add Variable"
           >
@@ -255,7 +255,7 @@ export const SecretsPanel = memo(({ className = '' }: SecretsPanelProps) => {
           <button
             onClick={loadSecrets}
             disabled={isLoading}
-            className="p-1.5 hover:bg-bolt-elements-background-depth-3 rounded"
+            className="p-1.5 hover:bg-recoder-elements-background-depth-3 rounded"
             title="Refresh"
           >
             <span className={classNames('i-ph:arrows-clockwise', isLoading ? 'animate-spin' : '')} />
@@ -264,7 +264,7 @@ export const SecretsPanel = memo(({ className = '' }: SecretsPanelProps) => {
       </div>
 
       {/* Environment Tabs */}
-      <div className="flex border-b border-bolt-elements-borderColor overflow-x-auto">
+      <div className="flex border-b border-recoder-elements-borderColor overflow-x-auto">
         {ENVIRONMENTS.map((env) => (
           <button
             key={env.value}
@@ -272,12 +272,12 @@ export const SecretsPanel = memo(({ className = '' }: SecretsPanelProps) => {
             className={classNames(
               'px-3 py-1.5 text-xs whitespace-nowrap transition-colors',
               currentEnvironment === env.value
-                ? 'text-bolt-elements-textPrimary border-b-2 border-yellow-500 bg-bolt-elements-background-depth-2'
-                : 'text-bolt-elements-textTertiary hover:text-bolt-elements-textSecondary'
+                ? 'text-recoder-elements-textPrimary border-b-2 border-yellow-500 bg-recoder-elements-background-depth-2'
+                : 'text-recoder-elements-textTertiary hover:text-recoder-elements-textSecondary'
             )}
           >
             {env.label}
-            <span className="ml-1 text-bolt-elements-textTertiary">
+            <span className="ml-1 text-recoder-elements-textTertiary">
               ({secrets.filter(s => s.environment === env.value).length})
             </span>
           </button>
@@ -286,7 +286,7 @@ export const SecretsPanel = memo(({ className = '' }: SecretsPanelProps) => {
 
       {/* Add Secret Form */}
       {showAddForm && (
-        <div className="p-3 border-b border-bolt-elements-borderColor bg-bolt-elements-background-depth-2">
+        <div className="p-3 border-b border-recoder-elements-borderColor bg-recoder-elements-background-depth-2">
           <div className="flex gap-2 mb-2">
             <input
               ref={inputRef}
@@ -294,7 +294,7 @@ export const SecretsPanel = memo(({ className = '' }: SecretsPanelProps) => {
               value={newKey}
               onChange={(e) => setNewKey(e.target.value.toUpperCase())}
               placeholder="KEY_NAME"
-              className="flex-1 px-2 py-1.5 text-xs bg-bolt-elements-background-depth-3 border border-bolt-elements-borderColor rounded focus:border-blue-500 focus:outline-none text-bolt-elements-textPrimary placeholder:text-bolt-elements-textTertiary font-mono"
+              className="flex-1 px-2 py-1.5 text-xs bg-recoder-elements-background-depth-3 border border-recoder-elements-borderColor rounded focus:border-blue-500 focus:outline-none text-recoder-elements-textPrimary placeholder:text-recoder-elements-textTertiary font-mono"
             />
           </div>
           <div className="flex gap-2">
@@ -303,7 +303,7 @@ export const SecretsPanel = memo(({ className = '' }: SecretsPanelProps) => {
               value={newValue}
               onChange={(e) => setNewValue(e.target.value)}
               placeholder="value"
-              className="flex-1 px-2 py-1.5 text-xs bg-bolt-elements-background-depth-3 border border-bolt-elements-borderColor rounded focus:border-blue-500 focus:outline-none text-bolt-elements-textPrimary placeholder:text-bolt-elements-textTertiary font-mono"
+              className="flex-1 px-2 py-1.5 text-xs bg-recoder-elements-background-depth-3 border border-recoder-elements-borderColor rounded focus:border-blue-500 focus:outline-none text-recoder-elements-textPrimary placeholder:text-recoder-elements-textTertiary font-mono"
               onKeyDown={(e) => e.key === 'Enter' && handleAddSecret()}
             />
             <button
@@ -319,7 +319,7 @@ export const SecretsPanel = memo(({ className = '' }: SecretsPanelProps) => {
                 setNewKey('');
                 setNewValue('');
               }}
-              className="px-3 py-1.5 text-xs bg-bolt-elements-background-depth-3 hover:bg-bolt-elements-background-depth-2 rounded text-bolt-elements-textPrimary"
+              className="px-3 py-1.5 text-xs bg-recoder-elements-background-depth-3 hover:bg-recoder-elements-background-depth-2 rounded text-recoder-elements-textPrimary"
             >
               Cancel
             </button>
@@ -330,17 +330,17 @@ export const SecretsPanel = memo(({ className = '' }: SecretsPanelProps) => {
       {/* Secrets List */}
       <div className="flex-1 overflow-auto">
         {!containerReady ? (
-          <div className="p-4 text-center text-bolt-elements-textTertiary text-sm">
+          <div className="p-4 text-center text-recoder-elements-textTertiary text-sm">
             <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-yellow-500 mx-auto mb-2" />
             Waiting for container...
           </div>
         ) : isLoading ? (
-          <div className="p-4 text-center text-bolt-elements-textTertiary text-sm">
+          <div className="p-4 text-center text-recoder-elements-textTertiary text-sm">
             <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-yellow-500 mx-auto mb-2" />
             Loading secrets...
           </div>
         ) : filteredSecrets.length === 0 ? (
-          <div className="p-4 text-center text-bolt-elements-textTertiary text-sm">
+          <div className="p-4 text-center text-recoder-elements-textTertiary text-sm">
             <span className="i-ph:key text-2xl block mb-2" />
             No environment variables
             <button
@@ -368,12 +368,12 @@ export const SecretsPanel = memo(({ className = '' }: SecretsPanelProps) => {
 
       {/* Footer Actions */}
       {filteredSecrets.length > 0 && (
-        <div className="flex items-center justify-between px-3 py-2 border-t border-bolt-elements-borderColor bg-bolt-elements-background-depth-2">
-          <span className="text-xs text-bolt-elements-textTertiary">
+        <div className="flex items-center justify-between px-3 py-2 border-t border-recoder-elements-borderColor bg-recoder-elements-background-depth-2">
+          <span className="text-xs text-recoder-elements-textTertiary">
             {filteredSecrets.length} variable{filteredSecrets.length !== 1 ? 's' : ''}
           </span>
           <div className="flex items-center gap-2">
-            <label className="px-2 py-1 text-xs bg-bolt-elements-background-depth-3 hover:bg-bolt-elements-background-depth-2 rounded text-bolt-elements-textPrimary cursor-pointer">
+            <label className="px-2 py-1 text-xs bg-recoder-elements-background-depth-3 hover:bg-recoder-elements-background-depth-2 rounded text-recoder-elements-textPrimary cursor-pointer">
               Import
               <input
                 type="file"
@@ -384,7 +384,7 @@ export const SecretsPanel = memo(({ className = '' }: SecretsPanelProps) => {
             </label>
             <button
               onClick={handleExport}
-              className="px-2 py-1 text-xs bg-bolt-elements-background-depth-3 hover:bg-bolt-elements-background-depth-2 rounded text-bolt-elements-textPrimary"
+              className="px-2 py-1 text-xs bg-recoder-elements-background-depth-3 hover:bg-recoder-elements-background-depth-2 rounded text-recoder-elements-textPrimary"
             >
               Export
             </button>
@@ -428,7 +428,7 @@ const SecretItem = memo(({ secret, isEditing, showValue, onEdit, onSave, onCance
   };
 
   return (
-    <div className="flex items-center gap-2 px-3 py-2 hover:bg-bolt-elements-background-depth-2 border-b border-bolt-elements-borderColor group">
+    <div className="flex items-center gap-2 px-3 py-2 hover:bg-recoder-elements-background-depth-2 border-b border-recoder-elements-borderColor group">
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
           <span className="font-mono text-xs text-yellow-400 font-medium">
@@ -443,24 +443,24 @@ const SecretItem = memo(({ secret, isEditing, showValue, onEdit, onSave, onCance
               value={editValue}
               onChange={(e) => setEditValue(e.target.value)}
               onKeyDown={handleKeyDown}
-              className="flex-1 px-2 py-1 text-xs bg-bolt-elements-background-depth-3 border border-blue-500 rounded focus:outline-none text-bolt-elements-textPrimary font-mono"
+              className="flex-1 px-2 py-1 text-xs bg-recoder-elements-background-depth-3 border border-blue-500 rounded focus:outline-none text-recoder-elements-textPrimary font-mono"
             />
             <button
               onClick={() => onSave(editValue)}
-              className="p-1 text-green-400 hover:bg-bolt-elements-background-depth-3 rounded"
+              className="p-1 text-green-400 hover:bg-recoder-elements-background-depth-3 rounded"
             >
               <span className="i-ph:check" />
             </button>
             <button
               onClick={onCancel}
-              className="p-1 text-red-400 hover:bg-bolt-elements-background-depth-3 rounded"
+              className="p-1 text-red-400 hover:bg-recoder-elements-background-depth-3 rounded"
             >
               <span className="i-ph:x" />
             </button>
           </div>
         ) : (
           <div className="flex items-center gap-2 mt-0.5">
-            <span className="font-mono text-xs text-bolt-elements-textSecondary truncate">
+            <span className="font-mono text-xs text-recoder-elements-textSecondary truncate">
               {showValue ? secret.value : '••••••••'}
             </span>
           </div>
@@ -470,14 +470,14 @@ const SecretItem = memo(({ secret, isEditing, showValue, onEdit, onSave, onCance
         <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
           <button
             onClick={onEdit}
-            className="p-1 hover:bg-bolt-elements-background-depth-3 rounded text-bolt-elements-textTertiary"
+            className="p-1 hover:bg-recoder-elements-background-depth-3 rounded text-recoder-elements-textTertiary"
             title="Edit"
           >
             <span className="i-ph:pencil" />
           </button>
           <button
             onClick={onDelete}
-            className="p-1 hover:bg-bolt-elements-background-depth-3 rounded text-red-400"
+            className="p-1 hover:bg-recoder-elements-background-depth-3 rounded text-red-400"
             title="Delete"
           >
             <span className="i-ph:trash" />

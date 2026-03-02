@@ -10,9 +10,15 @@ FAIL=0
 WARN=0
 UV_CACHE_DIR="${UV_CACHE_DIR:-$REPO_ROOT/.uv-cache}"
 CHECK_MODE="${ECOSYSTEM_CHECK_MODE:-production}"
+ECOSYSTEM_SCOPE="${ECOSYSTEM_SCOPE:-core}"
 
 if [[ "${1:-}" == "--local-dev" ]]; then
   CHECK_MODE="local-dev"
+fi
+
+if [[ "$ECOSYSTEM_SCOPE" != "core" && "$ECOSYSTEM_SCOPE" != "full" ]]; then
+  echo "Invalid ECOSYSTEM_SCOPE='$ECOSYSTEM_SCOPE' (expected core|full)" >&2
+  exit 1
 fi
 
 pass() { echo "  PASS: $1"; ((PASS++)); }
@@ -148,6 +154,7 @@ run_backend_guard() {
 # --------------------------------------------------
 echo ""
 echo "Ecosystem check mode: $CHECK_MODE"
+echo "Ecosystem scope: $ECOSYSTEM_SCOPE"
 echo ""
 echo "=== Track 1: Shared Auth ==="
 echo ""
@@ -175,30 +182,36 @@ elif [[ -f "$AGENCY_ENV_ALT" ]]; then
   AGENCY_ACTIVE="$AGENCY_ENV_ALT"
 else
   AGENCY_ACTIVE=""
-  fail "Auth — No agency env file found ($AGENCY_ENV or $AGENCY_ENV_ALT)"
+  if [[ "$ECOSYSTEM_SCOPE" == "full" ]]; then
+    fail "Auth — No agency env file found ($AGENCY_ENV or $AGENCY_ENV_ALT)"
+  else
+    warn "Auth — No agency env file found in core scope ($AGENCY_ENV or $AGENCY_ENV_ALT)"
+  fi
 fi
 
 if [[ -n "$APP_ACTIVE" ]]; then
   check_env_var "$APP_ACTIVE" "BETTER_AUTH_SECRET" "Auth"
 fi
 
-if [[ -n "$AGENCY_ACTIVE" ]]; then
+if [[ "$ECOSYSTEM_SCOPE" == "full" && -n "$AGENCY_ACTIVE" ]]; then
   check_env_var "$AGENCY_ACTIVE" "BETTER_AUTH_SECRET" "Auth (agency)"
   check_env_var "$AGENCY_ACTIVE" "AUTH_DATABASE_URL" "Auth (agency)"
 fi
 
-if [[ -f "$PM_ENV" ]]; then
+if [[ -f "$PM_ENV" && "$ECOSYSTEM_SCOPE" == "full" ]]; then
   check_env_var "$PM_ENV" "BETTER_AUTH_SECRET" "Auth (PM)"
   check_env_var "$PM_ENV" "AUTH_DATABASE_URL" "Auth (PM)"
-else
+elif [[ "$ECOSYSTEM_SCOPE" == "full" ]]; then
   fail "Auth — PM env file not found: $PM_ENV"
 fi
 
 # Check BETTER_AUTH_SECRET consistency
 AUTH_FILES=()
 [[ -n "$APP_ACTIVE" ]] && AUTH_FILES+=("$APP_ACTIVE")
-[[ -n "$AGENCY_ACTIVE" ]] && AUTH_FILES+=("$AGENCY_ACTIVE")
-[[ -f "$PM_ENV" ]] && AUTH_FILES+=("$PM_ENV")
+if [[ "$ECOSYSTEM_SCOPE" == "full" ]]; then
+  [[ -n "$AGENCY_ACTIVE" ]] && AUTH_FILES+=("$AGENCY_ACTIVE")
+  [[ -f "$PM_ENV" ]] && AUTH_FILES+=("$PM_ENV")
+fi
 if [[ "${#AUTH_FILES[@]}" -ge 2 ]]; then
   check_env_match "BETTER_AUTH_SECRET" "Auth consistency" "${AUTH_FILES[@]}"
 fi
@@ -245,7 +258,9 @@ echo ""
 echo "=== Track 3: Agency Go-Live ==="
 echo ""
 
-if [[ -n "$AGENCY_ACTIVE" ]]; then
+if [[ "$ECOSYSTEM_SCOPE" != "full" ]]; then
+  warn "Agency Go-Live checks skipped in core scope."
+elif [[ -n "$AGENCY_ACTIVE" ]]; then
   check_env_var_optional_in_local "$AGENCY_ACTIVE" "POLAR_ACCESS_TOKEN" "Agency billing"
   check_env_var_optional_in_local "$AGENCY_ACTIVE" "POLAR_PRO_PRODUCT_ID" "Agency billing"
   check_env_var_optional_in_local "$AGENCY_ACTIVE" "POLAR_WEBHOOK_SECRET" "Agency billing"
@@ -261,7 +276,9 @@ echo ""
 echo "=== Track 4: PM Go-Live ==="
 echo ""
 
-if [[ -f "$PM_ENV" ]]; then
+if [[ "$ECOSYSTEM_SCOPE" != "full" ]]; then
+  warn "PM Go-Live checks skipped in core scope."
+elif [[ -f "$PM_ENV" ]]; then
   check_env_var "$PM_ENV" "DATABASE_URL" "PM database"
   check_env_var "$PM_ENV" "RESEND_API_KEY" "PM email"
   check_env_var_optional_in_local "$PM_ENV" "POLAR_ACCESS_TOKEN" "PM billing"

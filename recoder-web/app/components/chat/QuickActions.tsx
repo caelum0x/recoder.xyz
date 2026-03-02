@@ -218,8 +218,8 @@ export function QuickActions({
               disabled={disabled}
               className={classNames(
                 'group relative flex items-center gap-3 px-4 py-3 rounded-lg',
-                'bg-bolt-elements-background-depth-2 hover:bg-bolt-elements-background-depth-3',
-                'border border-bolt-elements-borderColor hover:border-bolt-elements-borderColorActive',
+                'bg-recoder-elements-background-depth-2 hover:bg-recoder-elements-background-depth-3',
+                'border border-recoder-elements-borderColor hover:border-recoder-elements-borderColorActive',
                 'shadow-lg hover:shadow-xl',
                 'transition-all duration-200 transform hover:scale-105',
                 'disabled:opacity-50 disabled:cursor-not-allowed',
@@ -241,22 +241,22 @@ export function QuickActions({
 
               {/* Label and description */}
               <div className="flex flex-col items-start text-left">
-                <span className="font-medium text-sm text-bolt-elements-textPrimary">
+                <span className="font-medium text-sm text-recoder-elements-textPrimary">
                   {action.label}
                 </span>
-                <span className="text-xs text-bolt-elements-textSecondary">
+                <span className="text-xs text-recoder-elements-textSecondary">
                   {action.description}
                 </span>
               </div>
 
               {/* Arrow on hover */}
-              <div className="ml-auto text-bolt-elements-textTertiary group-hover:text-bolt-elements-textPrimary transition-colors">
+              <div className="ml-auto text-recoder-elements-textTertiary group-hover:text-recoder-elements-textPrimary transition-colors">
                 <div className="i-ph:arrow-right text-lg" />
               </div>
 
               {/* Tooltip on hover - only show for prompt actions */}
               {hoveredAction === action.id && action.prompt && (
-                <div className="absolute right-full mr-2 top-1/2 -translate-y-1/2 px-3 py-2 bg-bolt-elements-background-depth-4 rounded-lg border border-bolt-elements-borderColor shadow-xl text-xs text-bolt-elements-textSecondary max-w-xs whitespace-normal z-10">
+                <div className="absolute right-full mr-2 top-1/2 -translate-y-1/2 px-3 py-2 bg-recoder-elements-background-depth-4 rounded-lg border border-recoder-elements-borderColor shadow-xl text-xs text-recoder-elements-textSecondary max-w-xs whitespace-normal z-10">
                   {action.prompt}
                 </div>
               )}
@@ -296,7 +296,7 @@ export function InlineQuickActions({ onSelectAction }: Pick<QuickActionsProps, '
 
   return (
     <div className="flex flex-wrap gap-2 p-4">
-      <div className="w-full text-sm text-bolt-elements-textSecondary mb-2">
+      <div className="w-full text-sm text-recoder-elements-textSecondary mb-2">
         Quick actions:
       </div>
       {promptActions.slice(0, 4).map((action) => (
@@ -305,13 +305,13 @@ export function InlineQuickActions({ onSelectAction }: Pick<QuickActionsProps, '
           onClick={() => action.prompt && onSelectAction(action.prompt)}
           className={classNames(
             'flex items-center gap-2 px-3 py-2 rounded-lg',
-            'bg-bolt-elements-background-depth-2 hover:bg-bolt-elements-background-depth-3',
-            'border border-bolt-elements-borderColor hover:border-bolt-elements-borderColorActive',
+            'bg-recoder-elements-background-depth-2 hover:bg-recoder-elements-background-depth-3',
+            'border border-recoder-elements-borderColor hover:border-recoder-elements-borderColorActive',
             'text-sm transition-all duration-200'
           )}
         >
           <div className={classNames(action.iconClass, 'text-lg')} />
-          <span className="text-bolt-elements-textPrimary">{action.label}</span>
+          <span className="text-recoder-elements-textPrimary">{action.label}</span>
         </button>
       ))}
     </div>

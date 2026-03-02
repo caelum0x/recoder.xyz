@@ -1,5 +1,5 @@
-import type { ChunkerFunction } from "@giselles-ai/rag";
-import { createDefaultChunker } from "@giselles-ai/rag";
+import type { ChunkerFunction } from "@recoder/rag";
+import { createDefaultChunker } from "@recoder/rag";
 
 interface ChunkTextOptions {
 	/**

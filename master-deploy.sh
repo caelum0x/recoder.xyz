@@ -2,6 +2,16 @@
 
 # MASTER DEPLOYMENT SCRIPT - Recoder.xyz Ecosystem
 # Deploy all 12+ platforms in coordinated sequence for market domination
+# DEPRECATED: use deploy.yml workflow + docker-compose.deploy.yml.
+# Override only for forensic/legacy use:
+#   ALLOW_LEGACY_DEPLOY=1 bash master-deploy.sh
+
+if [[ "${ALLOW_LEGACY_DEPLOY:-0}" != "1" ]]; then
+  echo "ERROR: master-deploy.sh is deprecated and blocked by default."
+  echo "Use deploy.yml and docker-compose.deploy.yml instead."
+  echo "If you explicitly need this legacy path, run with ALLOW_LEGACY_DEPLOY=1."
+  exit 1
+fi
 
 set -e
 trap 'echo "❌ Deployment failed at line $LINENO"' ERR

@@ -1,31 +1,16 @@
-name: 🚀 Recoder.xyz Master CI/CD Pipeline
+name: Recoder.xyz CI Pipeline
 
+# CI checks only — actual deployment handled by deploy.yml
 on:
-  push:
-    branches: [main, develop]
-    paths-ignore:
-      - '*.md'
-      - 'docs/**'
   pull_request:
     branches: [main]
     paths-ignore:
       - '*.md'
       - 'docs/**'
   workflow_dispatch:
-    inputs:
-      deploy_environment:
-        description: 'Environment to deploy'
-        required: true
-        default: 'staging'
-        type: choice
-        options:
-          - staging
-          - production
 
 env:
   NODE_VERSION: '20'
-  NODE_ENV: production
-  REGISTRY: ghcr.io
   SKIP_ENV_VALIDATION: true
 
 concurrency:
@@ -33,1131 +18,330 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  workspace-manifest-check:
+    name: Workspace Manifest Validation
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Validate pnpm workspace manifest
+        run: bash scripts/validate-workspace-manifest.sh
+
+      - name: Validate workspace boundary documentation
+        run: test -f docs/workspace-boundaries.md
+
+  first-party-script-contract-check:
+    name: First-Party Script Contract Validation
+    runs-on: ubuntu-latest
+    needs: [workspace-manifest-check]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Validate first-party script contracts
+        run: bash scripts/validate-first-party-scripts.sh
+
+  required-workflow-policy-check:
+    name: Required Workflow Policy Validation
+    runs-on: ubuntu-latest
+    needs: [workspace-manifest-check]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Validate required workflow policy
+        run: bash scripts/validate-required-workflow-policy.sh
+
   # =============================================
   # HEALTH CHECK & PLATFORM DETECTION
   # =============================================
   health-check:
-    name: 🏥 System Health Check
+    name: Platform Detection
     runs-on: ubuntu-latest
+    needs: [workspace-manifest-check, first-party-script-contract-check, required-workflow-policy-check]
     outputs:
       has-web: ${{ steps.platforms.outputs.has-web }}
-      has-chat: ${{ steps.platforms.outputs.has-chat }}
-      has-mobile: ${{ steps.platforms.outputs.has-mobile }}
-      has-desktop: ${{ steps.platforms.outputs.has-desktop }}
-      has-extension: ${{ steps.platforms.outputs.has-extension }}
-      has-cli: ${{ steps.platforms.outputs.has-cli }}
+      has-app: ${{ steps.platforms.outputs.has-app }}
       has-backend: ${{ steps.platforms.outputs.has-backend }}
-      has-engine: ${{ steps.platforms.outputs.has-engine }}
-      
+      has-docker-backend: ${{ steps.platforms.outputs.has-docker-backend }}
+      has-studio: ${{ steps.platforms.outputs.has-studio }}
+      has-agency: ${{ steps.platforms.outputs.has-agency }}
+      has-pm: ${{ steps.platforms.outputs.has-pm }}
+      has-frontend: ${{ steps.platforms.outputs.has-frontend }}
+
     steps:
-      - name: 📂 Checkout code
+      - name: Checkout code
         uses: actions/checkout@v4
-        
-      - name: 🔍 Platform detection
+
+      - name: Detect platforms
         id: platforms
         run: |
           set -e
           echo "has-web=$([[ -d recoder-web ]] && echo 'true' || echo 'false')" >> $GITHUB_OUTPUT
-          echo "has-chat=$([[ -d recoder-chat ]] && echo 'true' || echo 'false')" >> $GITHUB_OUTPUT
-          echo "has-mobile=$([[ -d recoder-chat-mobile ]] && echo 'true' || echo 'false')" >> $GITHUB_OUTPUT
-          echo "has-desktop=$([[ -d recoder-desktop ]] && echo 'true' || echo 'false')" >> $GITHUB_OUTPUT
-          echo "has-extension=$([[ -d recoder-extension ]] && echo 'true' || echo 'false')" >> $GITHUB_OUTPUT
-          echo "has-cli=$([[ -d packages/cli ]] && echo 'true' || echo 'false')" >> $GITHUB_OUTPUT
+          echo "has-app=$([[ -d app ]] && echo 'true' || echo 'false')" >> $GITHUB_OUTPUT
           echo "has-backend=$([[ -d backend ]] && echo 'true' || echo 'false')" >> $GITHUB_OUTPUT
-          echo "has-engine=$([[ -d production-engine ]] && echo 'true' || echo 'false')" >> $GITHUB_OUTPUT
-          
-          echo "Platform detection completed successfully"
-          
-      - name: 📊 Health summary
+          echo "has-docker-backend=$([[ -d docker-backend ]] && echo 'true' || echo 'false')" >> $GITHUB_OUTPUT
+          echo "has-studio=$([[ -d recoder-studio ]] && echo 'true' || echo 'false')" >> $GITHUB_OUTPUT
+          echo "has-agency=$([[ -d recoder-agency ]] && echo 'true' || echo 'false')" >> $GITHUB_OUTPUT
+          echo "has-pm=$([[ -d recoder-pm ]] && echo 'true' || echo 'false')" >> $GITHUB_OUTPUT
+          echo "has-frontend=$([[ -d recoder-frontend ]] && echo 'true' || echo 'false')" >> $GITHUB_OUTPUT
+
+      - name: Summary
         run: |
-          echo "## 🏗️ Recoder.xyz Platform Status" >> $GITHUB_STEP_SUMMARY
-          echo "| Platform | Status |" >> $GITHUB_STEP_SUMMARY
-          echo "|----------|--------|" >> $GITHUB_STEP_SUMMARY
-          echo "| 🌐 Web Platform | ${{ steps.platforms.outputs.has-web }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| 💬 Chat Platform | ${{ steps.platforms.outputs.has-chat }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| 📱 Mobile App | ${{ steps.platforms.outputs.has-mobile }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| 🖥️ Desktop App | ${{ steps.platforms.outputs.has-desktop }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| 🔌 VS Code Extension | ${{ steps.platforms.outputs.has-extension }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| 🛠️ CLI Package | ${{ steps.platforms.outputs.has-cli }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| ⚡ Backend API | ${{ steps.platforms.outputs.has-backend }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| 🔧 Production Engine | ${{ steps.platforms.outputs.has-engine }} |" >> $GITHUB_STEP_SUMMARY
+          echo "## Recoder.xyz Platform Status" >> $GITHUB_STEP_SUMMARY
+          echo "| Service | Found |" >> $GITHUB_STEP_SUMMARY
+          echo "|---------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| recoder-web (Web IDE) | ${{ steps.platforms.outputs.has-web }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| app (Hub) | ${{ steps.platforms.outputs.has-app }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| backend (Python API) | ${{ steps.platforms.outputs.has-backend }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| docker-backend (A2A Gateway) | ${{ steps.platforms.outputs.has-docker-backend }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| recoder-studio (Workflow Builder) | ${{ steps.platforms.outputs.has-studio }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| recoder-agency (Multi-Agent) | ${{ steps.platforms.outputs.has-agency }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| recoder-pm (Project Management) | ${{ steps.platforms.outputs.has-pm }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| recoder-frontend (AI IDE) | ${{ steps.platforms.outputs.has-frontend }} |" >> $GITHUB_STEP_SUMMARY
 
   # =============================================
-  # AI PROVIDERS VALIDATION
+  # WEB IDE BUILD CHECK
   # =============================================
-  ai-validation:
-    name: 🤖 AI Providers Validation
+  web-build:
+    name: Build recoder-web
     runs-on: ubuntu-latest
-    
-    steps:
-      - name: 📂 Checkout code
-        uses: actions/checkout@v4
-        
-      - name: 🔍 Validate AI integration
-        run: |
-          set -e
-          echo "🤖 Validating AI providers integration..."
-          
-          # Multi-model validation
-          providers_found=0
-          
-          # Check Claude/Anthropic
-          if grep -r "anthropic\|claude" . --include="*.ts" --include="*.js" || true; then
-            echo "✅ Anthropic/Claude integration found"
-            providers_found=$((providers_found + 1))
-          else
-            echo "ℹ️ Anthropic/Claude integration not found"
-          fi
-          
-          # Check Groq
-          if grep -r "groq" . --include="*.ts" --include="*.js" || true; then
-            echo "✅ Groq integration found"
-            providers_found=$((providers_found + 1))
-          else
-            echo "ℹ️ Groq integration not found"
-          fi
-          
-          # Check Google/Gemini
-          if grep -r "google\|gemini" . --include="*.ts" --include="*.js" || true; then
-            echo "✅ Google/Gemini integration found"
-            providers_found=$((providers_found + 1))
-          else
-            echo "ℹ️ Google/Gemini integration not found"
-          fi
-          
-          # Check OpenAI
-          if grep -r "openai" . --include="*.ts" --include="*.js" || true; then
-            echo "✅ OpenAI integration found"
-            providers_found=$((providers_found + 1))
-          else
-            echo "ℹ️ OpenAI integration not found"
-          fi
-          
-          # Check Ollama (local)
-          if grep -r "ollama" . --include="*.ts" --include="*.js" || true; then
-            echo "✅ Ollama (local AI) integration found"
-            providers_found=$((providers_found + 1))
-          else
-            echo "ℹ️ Ollama integration not found"
-          fi
-          
-          echo "🎉 Found $providers_found AI providers - Multi-AI system validation completed!"
-          
-      - name: 📊 AI summary
-        run: |
-          echo "## 🤖 AI Integration Status" >> $GITHUB_STEP_SUMMARY
-          echo "✅ Multi-Provider AI Architecture" >> $GITHUB_STEP_SUMMARY
-          echo "✅ Local-First with Cloud Fallback" >> $GITHUB_STEP_SUMMARY
-          echo "✅ Production-Ready Code Generation" >> $GITHUB_STEP_SUMMARY
+    needs: [health-check]
+    if: needs.health-check.outputs.has-web == 'true'
 
-  # =============================================
-  # BACKEND SERVICES BUILD (Foundation First)
-  # =============================================
-  backend-services:
-    name: ⚡ Backend Services
-    runs-on: ubuntu-latest
-    needs: [health-check, ai-validation]
-    if: needs.health-check.outputs.has-backend == 'true' || needs.health-check.outputs.has-engine == 'true'
-    
-    strategy:
-      fail-fast: false
-      matrix:
-        service: [backend, production-engine]
-        
     defaults:
       run:
-        working-directory: ./${{ matrix.service }}
-        
+        working-directory: ./recoder-web
+
     steps:
-      - name: 📂 Checkout code
+      - name: Checkout code
         uses: actions/checkout@v4
-        
-      - name: 📦 Setup Node.js
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: latest
+
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'pnpm'
-          
-      - name: 📦 Setup pnpm
+          cache-dependency-path: recoder-web/pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Build
+        run: SKIP_ENV_VALIDATION=true pnpm run build
+        env:
+          NODE_ENV: production
+
+  # =============================================
+  # DOCKER-BACKEND BUILD & TEST
+  # =============================================
+  docker-backend-check:
+    name: Test docker-backend
+    runs-on: ubuntu-latest
+    needs: [health-check]
+    if: needs.health-check.outputs.has-docker-backend == 'true'
+
+    defaults:
+      run:
+        working-directory: ./docker-backend
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
         uses: pnpm/action-setup@v2
         with:
           version: latest
-          
-      - name: 🔧 Fix missing dependencies
-        run: |
-          if [[ "${{ matrix.service }}" == "production-engine" ]]; then
-            pnpm add jest --save-dev || echo "Jest installation completed"
-          fi
-          
-      - name: 📥 Install dependencies
-        run: pnpm install
-        
-      - name: 🏗️ Build service
-        run: |
-          pnpm run build || echo "${{ matrix.service }} build completed with warnings"
-        env:
-          NODE_ENV: ${{ env.NODE_ENV }}
-          SKIP_ENV_VALIDATION: ${{ env.SKIP_ENV_VALIDATION }}
-          
-      - name: 📦 Upload service artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ matrix.service }}-build
-          path: |
-            ./${{ matrix.service }}/dist
-            ./${{ matrix.service }}/*.js
-          retention-days: 7
 
-  # =============================================
-  # CORE CLI BUILD 
-  # =============================================
-  cli-build:
-    name: 🛠️ CLI Core Build
-    runs-on: ubuntu-latest
-    needs: [health-check, ai-validation]
-    if: needs.health-check.outputs.has-cli == 'true'
-    
-    defaults:
-      run:
-        working-directory: ./packages/cli
-        
-    steps:
-      - name: 📂 Checkout code
-        uses: actions/checkout@v4
-        
-      - name: 📦 Setup Node.js
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'pnpm'
-          
-      - name: 📦 Setup pnpm
-        uses: pnpm/action-setup@v2
-        with:
-          version: latest
-          
-      - name: 📥 Install dependencies
-        run: pnpm install
-        
-      - name: 🏗️ Build CLI
-        run: |
-          pnpm run build || echo "CLI build completed with warnings"
-          pnpm pack || echo "CLI packaging completed"
-          
-      - name: 🧪 Test CLI commands
-        run: |
-          echo "Testing CLI functionality..."
-          # Test basic commands (without API keys)
-          if [[ -f "dist/index.js" ]]; then
-            node dist/index.js --help || echo "CLI help test completed"
-            node dist/index.js --version || echo "CLI version test completed"
-          else
-            echo "CLI dist not found, skipping tests"
-          fi
-          
-      - name: 📦 Upload CLI artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: cli-build
-          path: |
-            ./packages/cli/*.tgz
-            ./packages/cli/dist
-          retention-days: 7
+          cache-dependency-path: docker-backend/pnpm-lock.yaml
 
-
-  # =============================================
-  # WEB PLATFORMS BUILD
-  # =============================================
-  web-platforms:
-    name: 🌐 Web Platforms
-    runs-on: ubuntu-latest
-    needs: [health-check, ai-validation]
-    if: needs.health-check.outputs.has-web == 'true' || needs.health-check.outputs.has-chat == 'true'
-    
-    strategy:
-      fail-fast: false
-      matrix:
-        platform: [recoder-web, recoder-chat]
-        
-    defaults:
-      run:
-        working-directory: ./${{ matrix.platform }}
-        
-    steps:
-      - name: 📂 Checkout code
-        uses: actions/checkout@v4
-        
-      - name: 📦 Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: 'pnpm'
-          
-      - name: 📦 Setup pnpm
-        uses: pnpm/action-setup@v2
-        with:
-          version: latest
-          
-      - name: 📥 Install dependencies
+      - name: Install dependencies
         run: pnpm install
-        
-      - name: 🔧 Platform-specific fixes
-        run: |
-          if [[ "${{ matrix.platform }}" == "recoder-web" ]]; then
-            # Fix dependency conflicts for web platform
-            pnpm install --force || echo "Force installation completed"
-          fi
-          
-      - name: 🏗️ Build platform
-        run: |
-          if [[ "${{ matrix.platform }}" == "recoder-web" ]]; then
-            SKIP_ENV_VALIDATION=true pnpm run build || echo "Web platform build completed with warnings"
-          else
-            pnpm run build || echo "${{ matrix.platform }} build completed with warnings"
-          fi
+
+      - name: Run tests
+        run: pnpm test
         env:
-          NODE_ENV: ${{ env.NODE_ENV }}
-          SKIP_ENV_VALIDATION: ${{ env.SKIP_ENV_VALIDATION }}
-          
-      - name: 📦 Upload platform artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ matrix.platform }}-build
-          path: |
-            ./${{ matrix.platform }}/.next
-            ./${{ matrix.platform }}/dist
-          retention-days: 7
-
-  # =============================================
-  # EXTENSION BUILD
-  # =============================================
-  extension-build:
-    name: 🔌 VS Code Extension
-    runs-on: ubuntu-latest
-    needs: [health-check, ai-validation]
-    if: needs.health-check.outputs.has-extension == 'true'
-    
-    defaults:
-      run:
-        working-directory: ./recoder-extension
-        
-    steps:
-      - name: 📂 Checkout code
-        uses: actions/checkout@v4
-        
-      - name: 📦 Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          
-      - name: 📦 Setup pnpm
-        uses: pnpm/action-setup@v2
-        with:
-          version: latest
-          
-      - name: 📥 Install dependencies
-        run: pnpm install
-        
-      - name: 🏗️ Build extension
-        run: |
-          pnpm run build || echo "Extension build completed"
-        env:
-          NODE_ENV: ${{ env.NODE_ENV }}
-          
-      - name: 📦 Create VSIX package
-        run: |
-          pnpm vsix || echo "VSIX creation completed"
-        continue-on-error: true
-          
-      - name: 📦 Upload extension artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: extension-build
-          path: |
-            ./recoder-extension/bin/*.vsix
-            ./recoder-extension/src/dist
-          retention-days: 7
-
-  # =============================================
-  # DESKTOP BUILD
-  # =============================================
-  desktop-build:
-    name: 🖥️ Desktop App
-    runs-on: ${{ matrix.os }}
-    needs: [health-check, ai-validation]
-    if: needs.health-check.outputs.has-desktop == 'true'
-    
-    strategy:
-      matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
-        
-    defaults:
-      run:
-        working-directory: ./recoder-desktop
-        
-    steps:
-      - name: 📂 Checkout code
-        uses: actions/checkout@v4
-        
-      - name: 📦 Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: 'pnpm'
-          
-      - name: 📦 Setup pnpm
-        uses: pnpm/action-setup@v2
-        with:
-          version: latest
-          
-      - name: 📥 Install dependencies
-        run: pnpm install
-        
-      - name: 🏗️ Build desktop app
-        run: |
-          timeout 600 pnpm run build || echo "Desktop build completed with timeout"
-        env:
-          NODE_ENV: ${{ env.NODE_ENV }}
-        continue-on-error: true
-          
-      - name: 📦 Upload desktop artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: desktop-${{ matrix.os }}
-          path: |
-            ./recoder-desktop/dist
-          retention-days: 7
-
-  # =============================================
-  # MOBILE BUILD
-  # =============================================
-  mobile-build:
-    name: 📱 Mobile App
-    runs-on: ubuntu-latest
-    needs: [health-check, ai-validation]
-    if: needs.health-check.outputs.has-mobile == 'true'
-    
-    defaults:
-      run:
-        working-directory: ./recoder-chat-mobile
-        
-    steps:
-      - name: 📂 Checkout code
-        uses: actions/checkout@v4
-        
-      - name: 📦 Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: 'pnpm'
-          
-      - name: 📦 Setup pnpm
-        uses: pnpm/action-setup@v2
-        with:
-          version: latest
-          
-      - name: 📱 Setup Expo CLI
-        run: pnpm add -g @expo/cli@latest
-        
-      - name: 📥 Install dependencies
-        run: pnpm install
-        
-      - name: 🏗️ Build for web
-        run: |
-          npx expo export -p web || echo "Mobile web build completed"
-        env:
-          NODE_ENV: ${{ env.NODE_ENV }}
-        continue-on-error: true
-          
-      - name: 📦 Upload mobile artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: mobile-build
-          path: |
-            ./recoder-chat-mobile/dist
-          retention-days: 7
-
-  # =============================================
-  # INTEGRATION TESTS
-  # =============================================
-  integration-tests:
-    name: 🧪 Integration Tests
-    runs-on: ubuntu-latest
-    needs: [cli-build, backend-services, web-platforms]
-    if: always()
-    
-    steps:
-      - name: 📂 Checkout code
-        uses: actions/checkout@v4
-        
-      - name: 📥 Download all artifacts
-        uses: actions/download-artifact@v4
-        with:
-          path: ./artifacts
-        continue-on-error: true
-          
-      - name: 🧪 Run integration tests
-        run: |
-          set -e
-          echo "🧪 Running integration tests..."
-          
-          # Initialize test results
-          tests_passed=0
-          total_tests=0
-          
-          # Test CLI functionality
-          total_tests=$((total_tests + 1))
-          if [[ -d "artifacts/cli-build" ]]; then
-            echo "✅ CLI build verified"
-            tests_passed=$((tests_passed + 1))
-          else
-            echo "❌ CLI build artifacts not found"
-          fi
-          
-          # Test web platform builds
-          for platform in recoder-web recoder-chat; do
-            total_tests=$((total_tests + 1))
-            if [[ -d "artifacts/${platform}-build" ]]; then
-              echo "✅ $platform build verified"
-              tests_passed=$((tests_passed + 1))
-            else
-              echo "❌ $platform build artifacts not found"
-            fi
-          done
-          
-          # Test backend services
-          for service in backend production-engine; do
-            total_tests=$((total_tests + 1))
-            if [[ -d "artifacts/${service}-build" ]]; then
-              echo "✅ $service build verified"
-              tests_passed=$((tests_passed + 1))
-            else
-              echo "❌ $service build artifacts not found"
-            fi
-          done
-          
-          # Test results summary
-          echo "📊 Integration test results: $tests_passed/$total_tests tests passed"
-          
-          # Always pass integration tests for now (since artifacts may not exist)
-          echo "✅ Integration tests completed (non-blocking)"
-          
-      - name: 📊 Integration summary
-        run: |
-          echo "## 🧪 Integration Test Results" >> $GITHUB_STEP_SUMMARY
-          echo "✅ All platform builds verified" >> $GITHUB_STEP_SUMMARY
-          echo "✅ AI provider connectivity tested" >> $GITHUB_STEP_SUMMARY
-          echo "✅ Cross-platform compatibility confirmed" >> $GITHUB_STEP_SUMMARY
+          SKIP_ENV_VALIDATION: true
 
   # =============================================
   # SECURITY SCANNING
   # =============================================
   security-scan:
-    name: 🔒 Security Scan
+    name: Security Scan
     runs-on: ubuntu-latest
-    
+    needs: [workspace-manifest-check, first-party-script-contract-check, required-workflow-policy-check]
+
     steps:
-      - name: 📂 Checkout code
+      - name: Checkout code
         uses: actions/checkout@v4
-        
-      - name: 📦 Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          
-      - name: 📦 Setup pnpm
-        uses: pnpm/action-setup@v2
-        with:
-          version: latest
-        
-      - name: 🔍 Dependency Security Audit
-        run: |
-          set -e
-          echo "🔒 Running dependency security audit..."
-          
-          # Audit key platforms
-          for platform in "recoder-web" "recoder-chat" "backend" "packages/cli" "production-engine"; do
-            if [[ -d "$platform" && -f "$platform/package.json" ]]; then
-              echo "🔍 Auditing $platform..."
-              cd "$platform"
-              pnpm install --frozen-lockfile || echo "$platform deps installed"
-              pnpm audit --audit-level high --prod || echo "$platform audit completed"
-              cd - > /dev/null
-            else
-              echo "ℹ️ Skipping $platform (not found)"
-            fi
-          done
-          
-          echo "✅ Security audit completed"
-          
-      - name: 🔒 CodeQL Analysis
+
+      - name: CodeQL Init
         uses: github/codeql-action/init@v3
         with:
           languages: typescript, javascript
           queries: security-and-quality
-          
-      - name: 🔒 Perform CodeQL Analysis
+
+      - name: CodeQL Analysis
         uses: github/codeql-action/analyze@v3
-        
-      - name: 🛡️ Secret Detection
-        run: |
-          set -e
-          echo "🛡️ Scanning for secrets and sensitive data..."
-          
-          # Check for common secret patterns
-          if grep -r "sk-[a-zA-Z0-9]" . --include="*.ts" --include="*.js" --include="*.json" | grep -v ".git" | grep -v "node_modules" | head -5 || true; then
-            echo "⚠️ Potential API keys found - review required"
-          else
-            echo "✅ No API keys found in code"
-          fi
-          
-          # Check for common secrets
-          for pattern in "password.*=" "secret.*=" "key.*=" "token.*="; do
-            if grep -ri "$pattern" . --include="*.ts" --include="*.js" --include="*.env*" | grep -v ".git" | grep -v "node_modules" | head -3 || true; then
-              echo "⚠️ Potential secrets found for pattern: $pattern"
-            fi
-          done
-          
-          echo "✅ Secret detection scan completed"
-          
-      - name: 🔍 AI Security Validation
-        run: |
-          set -e
-          echo "🤖 Validating AI security implementations..."
-          
-          # Check for proper input sanitization
-          if grep -r "sanitize\|validate\|escape" . --include="*.ts" --include="*.js" | head -3 || true; then
-            echo "✅ Input sanitization found"
-          else
-            echo "⚠️ Consider adding input sanitization"
-          fi
-          
-          # Check for rate limiting
-          if grep -r "rate.limit\|throttle" . --include="*.ts" --include="*.js" | head -3 || true; then
-            echo "✅ Rate limiting found"
-          else
-            echo "⚠️ Consider adding rate limiting"
-          fi
-          
-          echo "✅ AI security validation completed"
-          
-      - name: 📊 Security Report
-        run: |
-          echo "## 🔒 Security Scan Results" >> $GITHUB_STEP_SUMMARY
-          echo "✅ Dependency audit completed" >> $GITHUB_STEP_SUMMARY
-          echo "✅ Static analysis (CodeQL) completed" >> $GITHUB_STEP_SUMMARY
-          echo "✅ Secret detection completed" >> $GITHUB_STEP_SUMMARY
-          echo "✅ AI security validation completed" >> $GITHUB_STEP_SUMMARY
+
+      - name: Secret detection
+        run: bash scripts/leak-scan-strict.sh
 
   # =============================================
-  # DOCKER BUILDS & CONTAINERIZATION
+  # TEST COVERAGE
   # =============================================
-  docker-builds:
-    name: 🐳 Docker Builds
+  test-coverage:
+    name: Test Coverage
     runs-on: ubuntu-latest
-    needs: [backend-services, web-platforms]
-    if: github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
-    
-    strategy:
-      fail-fast: false
-      matrix:
-        service: [backend, production-engine, recoder-web, recoder-chat]
-        
-    steps:
-      - name: 📂 Checkout code
-        uses: actions/checkout@v4
-        
-      - name: 🔧 Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-        
-      - name: 🐳 Log in to Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-          
-      - name: 📥 Download build artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: ${{ matrix.service }}-build
-          path: ./artifacts/${{ matrix.service }}
-        continue-on-error: true
-          
-      - name: 🏗️ Create Dockerfile
-        run: |
-          service="${{ matrix.service }}"
-          
-          # Create service-specific Dockerfile
-          cat > Dockerfile.$service << 'EOF'
-          FROM node:20-alpine AS base
-          
-          # Install dependencies only when needed
-          FROM base AS deps
-          RUN apk add --no-cache libc6-compat
-          WORKDIR /app
-          
-          # Copy package files
-          COPY package*.json pnpm-lock.yaml* ./
-          RUN npm install -g pnpm@latest
-          RUN pnpm install --frozen-lockfile --prod
-          
-          # Rebuild the source code only when needed
-          FROM base AS builder
-          WORKDIR /app
-          COPY --from=deps /app/node_modules ./node_modules
-          COPY . .
-          
-          # Build the application
-          ENV NODE_ENV=production
-          ENV SKIP_ENV_VALIDATION=true
-          RUN npm install -g pnpm@latest
-          RUN pnpm install --frozen-lockfile
-          RUN pnpm run build || echo "Build completed"
-          
-          # Production image
-          FROM base AS runner
-          WORKDIR /app
-          
-          ENV NODE_ENV=production
-          
-          RUN addgroup --system --gid 1001 nodejs
-          RUN adduser --system --uid 1001 nextjs
-          
-          # Copy built application
-          COPY --from=builder /app/dist ./dist
-          COPY --from=builder /app/.next ./.next
-          COPY --from=builder /app/public ./public
-          COPY --from=deps /app/node_modules ./node_modules
-          COPY --from=builder /app/package.json ./package.json
-          
-          USER nextjs
-          
-          EXPOSE 3000
-          
-          ENV PORT 3000
-          
-          CMD ["npm", "start"]
-          EOF
-          
-      - name: 🏷️ Extract metadata
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.REGISTRY }}/${{ github.repository }}/${{ matrix.service }}
-          tags: |
-            type=ref,event=branch
-            type=ref,event=pr
-            type=sha,prefix={{branch}}-
-            type=raw,value=latest,enable={{is_default_branch}}
-            
-      - name: 🐳 Build and push Docker image
-        uses: docker/build-push-action@v5
-        with:
-          context: ./${{ matrix.service }}
-          file: ./Dockerfile.${{ matrix.service }}
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-          platforms: linux/amd64,linux/arm64
-          
-      - name: 📊 Docker Summary
-        run: |
-          echo "## 🐳 Docker Build Results" >> $GITHUB_STEP_SUMMARY
-          echo "Service: ${{ matrix.service }}" >> $GITHUB_STEP_SUMMARY
-          echo "Tags: ${{ steps.meta.outputs.tags }}" >> $GITHUB_STEP_SUMMARY
+    needs: [health-check]
+    if: always()
 
-  # =============================================
-  # PERFORMANCE TESTING
-  # =============================================
-  performance-tests:
-    name: ⚡ Performance Tests
-    runs-on: ubuntu-latest
-    needs: [docker-builds]
-    if: github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
-    
     steps:
-      - name: 📂 Checkout code
+      - name: Checkout code
         uses: actions/checkout@v4
-        
-      - name: 📦 Setup Node.js
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: latest
+
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-          
-      - name: 🚀 Install k6
-        run: |
-          sudo gpg -k
-          sudo gpg --no-default-keyring --keyring /usr/share/keyrings/k6-archive-keyring.gpg --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys C5AD17C747E3415A3642D57D77C6C491D6AC1D69
-          echo "deb [signed-by=/usr/share/keyrings/k6-archive-keyring.gpg] https://dl.k6.io/deb stable main" | sudo tee /etc/apt/sources.list.d/k6.list
-          sudo apt-get update
-          sudo apt-get install k6
-          
-      - name: 📊 Create performance test script
-        run: |
-          mkdir -p k6-tests
-          cat > k6-tests/load-test.js << 'EOF'
-          import http from 'k6/http';
-          import { check, sleep } from 'k6';
-          
-          export let options = {
-            stages: [
-              { duration: '30s', target: 10 },
-              { duration: '1m', target: 50 },
-              { duration: '30s', target: 0 },
-            ],
-            thresholds: {
-              http_req_duration: ['p(95)<500'],
-              http_req_failed: ['rate<0.1'],
-            },
-          };
-          
-          export default function () {
-            // Test CLI health endpoint (mock)
-            let response = http.get('https://httpbin.org/status/200');
-            check(response, {
-              'status is 200': (r) => r.status === 200,
-              'response time < 500ms': (r) => r.timings.duration < 500,
-            });
-            sleep(1);
-          }
-          EOF
-          
-      - name: ⚡ Run performance tests
-        run: |
-          echo "⚡ Running performance tests..."
-          k6 run k6-tests/load-test.js || echo "Performance tests completed"
-          
-      - name: 📊 Performance Report
-        run: |
-          echo "## ⚡ Performance Test Results" >> $GITHUB_STEP_SUMMARY
-          echo "✅ Load testing completed" >> $GITHUB_STEP_SUMMARY
-          echo "✅ Response time thresholds validated" >> $GITHUB_STEP_SUMMARY
-          echo "✅ Error rate within acceptable limits" >> $GITHUB_STEP_SUMMARY
+          cache: 'pnpm'
 
-  # =============================================
-  # DEPLOYMENT SUMMARY
-  # =============================================
-  # =============================================
-  # STAGING DEPLOYMENT
-  # =============================================
-  deploy-staging:
-    name: 🚀 Deploy to Staging
-    runs-on: ubuntu-latest
-    needs: [docker-builds, performance-tests, security-scan]
-    if: github.ref == 'refs/heads/main' || (github.event_name == 'workflow_dispatch' && github.event.inputs.deploy_environment == 'staging')
-    
-    steps:
-      - name: 📂 Checkout code
-        uses: actions/checkout@v4
-        
-      - name: 🔧 Configure deployment
-        run: |
-          echo "🚀 Deploying to staging environment..."
-          
-          # Create deployment configuration
-          cat > staging-deploy.yml << 'EOF'
-          version: '3.8'
-          services:
-            backend:
-              image: ghcr.io/${{ github.repository }}/backend:latest
-              ports:
-                - "3001:3000"
-              environment:
-                - NODE_ENV=staging
-                - DATABASE_URL=\${{ secrets.DATABASE_URL }}
-                - REDIS_URL=\${{ secrets.REDIS_URL }}
-              restart: unless-stopped
-              
-            production-engine:
-              image: ghcr.io/${{ github.repository }}/production-engine:latest
-              ports:
-                - "3002:3000"
-              environment:
-                - NODE_ENV=staging
-                - ANTHROPIC_API_KEY=\${{ secrets.ANTHROPIC_API_KEY }}
-                - GROQ_API_KEY=\${{ secrets.GROQ_API_KEY }}
-              restart: unless-stopped
-              
-            web:
-              image: ghcr.io/${{ github.repository }}/recoder-web:latest
-              ports:
-                - "3000:3000"
-              environment:
-                - NODE_ENV=staging
-                - NEXT_PUBLIC_API_URL=https://staging-api.recoder.xyz
-              restart: unless-stopped
-              
-            chat:
-              image: ghcr.io/${{ github.repository }}/recoder-chat:latest
-              ports:
-                - "3003:3000"
-              environment:
-                - NODE_ENV=staging
-                - NEXT_PUBLIC_API_URL=https://staging-api.recoder.xyz
-              restart: unless-stopped
-          EOF
-          
-      - name: 🎯 Deploy to staging
-        run: |
-          echo "🎯 Deploying services to staging..."
-          
-          # Simulate deployment (in real scenario, this would deploy to actual infrastructure)
-          echo "✅ Backend API deployed to staging"
-          echo "✅ Production Engine deployed to staging"
-          echo "✅ Web Platform deployed to staging"
-          echo "✅ Chat Platform deployed to staging"
-          
-          # Health check simulation
-          echo "🏥 Running health checks..."
-          sleep 5
-          echo "✅ All services healthy in staging"
-          
-      - name: 📊 Staging deployment summary
-        run: |
-          echo "## 🚀 Staging Deployment" >> $GITHUB_STEP_SUMMARY
-          echo "✅ Backend API: https://staging-api.recoder.xyz" >> $GITHUB_STEP_SUMMARY
-          echo "✅ Production Engine: https://staging-engine.recoder.xyz" >> $GITHUB_STEP_SUMMARY
-          echo "✅ Web Platform: https://staging.recoder.xyz" >> $GITHUB_STEP_SUMMARY
-          echo "✅ Chat Platform: https://staging-chat.recoder.xyz" >> $GITHUB_STEP_SUMMARY
+      # ---- docker-backend coverage ----
+      - name: Install docker-backend dependencies
+        if: needs.health-check.outputs.has-docker-backend == 'true'
+        working-directory: ./docker-backend
+        run: pnpm install --no-frozen-lockfile
 
-  # =============================================
-  # PRODUCTION DEPLOYMENT
-  # =============================================
-  deploy-production:
-    name: 🌟 Deploy to Production
-    runs-on: ubuntu-latest
-    needs: [deploy-staging]
-    if: github.event_name == 'workflow_dispatch' && github.event.inputs.deploy_environment == 'production'
-    
-    steps:
-      - name: 📂 Checkout code
-        uses: actions/checkout@v4
-        
-      - name: 🔒 Production safety checks
-        run: |
-          echo "🔒 Running production safety checks..."
-          
-          # Verify all prerequisites
-          echo "✅ Security scans passed"
-          echo "✅ Performance tests passed" 
-          echo "✅ Integration tests passed"
-          echo "✅ Staging deployment verified"
-          
-          # Additional production checks
-          echo "🔍 Checking for production readiness..."
-          echo "✅ Environment variables configured"
-          echo "✅ Database migrations ready"
-          echo "✅ Monitoring configured"
-          
-      - name: 🌟 Deploy to production
-        run: |
-          echo "🌟 Deploying to production environment..."
-          
-          # Create production deployment configuration
-          cat > production-deploy.yml << 'EOF'
-          version: '3.8'
-          services:
-            backend:
-              image: ghcr.io/${{ github.repository }}/backend:latest
-              ports:
-                - "3001:3000"
-              environment:
-                - NODE_ENV=production
-                - DATABASE_URL=\${{ secrets.DATABASE_URL }}
-                - REDIS_URL=\${{ secrets.REDIS_URL }}
-              restart: unless-stopped
-              deploy:
-                replicas: 3
-                
-            production-engine:
-              image: ghcr.io/${{ github.repository }}/production-engine:latest
-              ports:
-                - "3002:3000"
-              environment:
-                - NODE_ENV=production
-                - ANTHROPIC_API_KEY=\${{ secrets.ANTHROPIC_API_KEY }}
-                - GROQ_API_KEY=\${{ secrets.GROQ_API_KEY }}
-              restart: unless-stopped
-              deploy:
-                replicas: 2
-                
-            web:
-              image: ghcr.io/${{ github.repository }}/recoder-web:latest
-              ports:
-                - "3000:3000"
-              environment:
-                - NODE_ENV=production
-                - NEXT_PUBLIC_API_URL=https://api.recoder.xyz
-              restart: unless-stopped
-              deploy:
-                replicas: 3
-                
-            chat:
-              image: ghcr.io/${{ github.repository }}/recoder-chat:latest
-              ports:
-                - "3003:3000"
-              environment:
-                - NODE_ENV=production
-                - NEXT_PUBLIC_API_URL=https://api.recoder.xyz
-              restart: unless-stopped
-              deploy:
-                replicas: 2
-          EOF
-          
-          # Simulate production deployment
-          echo "✅ Backend API deployed to production"
-          echo "✅ Production Engine deployed to production"
-          echo "✅ Web Platform deployed to production"
-          echo "✅ Chat Platform deployed to production"
-          
-      - name: 🏥 Production health checks
-        run: |
-          echo "🏥 Running production health checks..."
-          
-          # Simulate health checks
-          sleep 10
-          echo "✅ Backend API health: OK"
-          echo "✅ Production Engine health: OK"
-          echo "✅ Web Platform health: OK"
-          echo "✅ Chat Platform health: OK"
-          echo "✅ Database connections: OK"
-          echo "✅ Redis connections: OK"
-          
-      - name: 📊 Production deployment summary
-        run: |
-          echo "## 🌟 Production Deployment" >> $GITHUB_STEP_SUMMARY
-          echo "✅ Backend API: https://api.recoder.xyz" >> $GITHUB_STEP_SUMMARY
-          echo "✅ Production Engine: https://engine.recoder.xyz" >> $GITHUB_STEP_SUMMARY
-          echo "✅ Web Platform: https://recoder.xyz" >> $GITHUB_STEP_SUMMARY
-          echo "✅ Chat Platform: https://chat.recoder.xyz" >> $GITHUB_STEP_SUMMARY
-          echo "✅ CLI Package: Available on npm" >> $GITHUB_STEP_SUMMARY
+      - name: Run docker-backend coverage
+        if: needs.health-check.outputs.has-docker-backend == 'true'
+        working-directory: ./docker-backend
+        run: pnpm run test:coverage
+        env:
+          SKIP_ENV_VALIDATION: true
 
-  deployment-summary:
-    name: 📋 Deployment Ready
-    runs-on: ubuntu-latest
-    needs: [health-check, ai-validation, integration-tests, security-scan]
-    if: always()
-    
-    steps:
-      - name: 📊 Generate deployment report
-        run: |
-          echo "## 🚀 Recoder.xyz Production Deployment Report" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          
-          echo "### 🏗️ Pipeline Status" >> $GITHUB_STEP_SUMMARY
-          echo "| Component | Status |" >> $GITHUB_STEP_SUMMARY
-          echo "|-----------|--------|" >> $GITHUB_STEP_SUMMARY
-          echo "| 🏥 Health Check | ${{ needs.health-check.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| 🤖 AI Validation | ${{ needs.ai-validation.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| 🧪 Integration Tests | ${{ needs.integration-tests.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| 🔒 Security Scan | ${{ needs.security-scan.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          
-          echo "### 🤖 AI Capabilities" >> $GITHUB_STEP_SUMMARY
-          echo "- ✅ Multi-Provider AI Architecture (Claude + Groq + Gemini + OpenAI + Ollama)" >> $GITHUB_STEP_SUMMARY
-          echo "- ✅ Local-First with Cloud Fallback" >> $GITHUB_STEP_SUMMARY
-          echo "- ✅ Real Code Generation (No Mock/Placeholder)" >> $GITHUB_STEP_SUMMARY
-          echo "- ✅ Production-Ready Deployment with Docker" >> $GITHUB_STEP_SUMMARY
-          echo "- ✅ Enterprise Security & Performance Validated" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          
-          echo "### 🚀 Deployment Options" >> $GITHUB_STEP_SUMMARY
-          echo "- **Staging**: Deploy via workflow_dispatch with 'staging' option" >> $GITHUB_STEP_SUMMARY
-          echo "- **Production**: Deploy via workflow_dispatch with 'production' option" >> $GITHUB_STEP_SUMMARY
-          echo "- **CLI Package**: Ready for npm publish" >> $GITHUB_STEP_SUMMARY
-          echo "- **Docker Images**: Available in GitHub Container Registry" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          
-          echo "### 🎉 Status: PRODUCTION READY!" >> $GITHUB_STEP_SUMMARY
-          echo "All Recoder.xyz platforms built, tested, secured, and ready for deployment." >> $GITHUB_STEP_SUMMARY
+      # ---- recoder-web coverage ----
+      - name: Install recoder-web dependencies
+        if: needs.health-check.outputs.has-web == 'true'
+        working-directory: ./recoder-web
+        run: pnpm install --no-frozen-lockfile
 
-  # =============================================
-  # NOTIFICATION SYSTEM
-  # =============================================  
-  notifications:
-    name: 📢 Notifications
-    runs-on: ubuntu-latest
-    needs: [deployment-summary]
-    if: always()
-    
-    steps:
-      - name: 📊 Determine overall status
-        id: status
+      - name: Run recoder-web coverage
+        if: needs.health-check.outputs.has-web == 'true'
+        working-directory: ./recoder-web
+        run: pnpm run test:coverage
+        env:
+          SKIP_ENV_VALIDATION: true
+
+      # ---- app (Hub) coverage ----
+      - name: Install app dependencies
+        if: needs.health-check.outputs.has-app == 'true'
+        working-directory: ./app
+        run: pnpm install --no-frozen-lockfile
+
+      - name: Run app coverage
+        if: needs.health-check.outputs.has-app == 'true'
+        working-directory: ./app
+        run: pnpm run test:coverage
+        env:
+          SKIP_ENV_VALIDATION: true
+
+      # ---- Aggregate coverage ----
+      - name: Aggregate coverage reports
+        run: node scripts/aggregate-coverage.mjs
+        env:
+          COVERAGE_MIN_LINES: '50'
+          COVERAGE_MIN_STATEMENTS: '50'
+          COVERAGE_MIN_FUNCTIONS: '50'
+          COVERAGE_MIN_BRANCHES: '40'
+
+      - name: Post coverage summary
+        if: always()
         run: |
-          # Determine if deployment was successful
-          if [[ "${{ needs.deployment-summary.result }}" == "success" ]]; then
-            echo "status=success" >> $GITHUB_OUTPUT
-            echo "message=✅ Recoder.xyz pipeline completed successfully!" >> $GITHUB_OUTPUT
-            echo "color=good" >> $GITHUB_OUTPUT
+          echo "## Test Coverage Report" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          if [ -f logs/coverage/aggregate-summary.json ]; then
+            echo "### Aggregate Coverage" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo '```json' >> $GITHUB_STEP_SUMMARY
+            cat logs/coverage/aggregate-summary.json >> $GITHUB_STEP_SUMMARY
+            echo '' >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+
+            # Extract percentages for the summary table
+            lines_pct=$(node -pe "JSON.parse(require('fs').readFileSync('logs/coverage/aggregate-summary.json','utf8')).aggregate.lines.pct")
+            stmts_pct=$(node -pe "JSON.parse(require('fs').readFileSync('logs/coverage/aggregate-summary.json','utf8')).aggregate.statements.pct")
+            funcs_pct=$(node -pe "JSON.parse(require('fs').readFileSync('logs/coverage/aggregate-summary.json','utf8')).aggregate.functions.pct")
+            branches_pct=$(node -pe "JSON.parse(require('fs').readFileSync('logs/coverage/aggregate-summary.json','utf8')).aggregate.branches.pct")
+
+            echo "| Metric | Coverage | Threshold |" >> $GITHUB_STEP_SUMMARY
+            echo "|--------|----------|-----------|" >> $GITHUB_STEP_SUMMARY
+            echo "| Lines | ${lines_pct}% | 50% |" >> $GITHUB_STEP_SUMMARY
+            echo "| Statements | ${stmts_pct}% | 50% |" >> $GITHUB_STEP_SUMMARY
+            echo "| Functions | ${funcs_pct}% | 50% |" >> $GITHUB_STEP_SUMMARY
+            echo "| Branches | ${branches_pct}% | 40% |" >> $GITHUB_STEP_SUMMARY
           else
-            echo "status=failure" >> $GITHUB_OUTPUT
-            echo "message=❌ Recoder.xyz pipeline encountered issues!" >> $GITHUB_OUTPUT
-            echo "color=danger" >> $GITHUB_OUTPUT
+            echo "No coverage data was generated. This is expected if:" >> $GITHUB_STEP_SUMMARY
+            echo "- Services have not yet added test suites" >> $GITHUB_STEP_SUMMARY
+            echo "- Dependencies failed to install" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "### Services with coverage configured" >> $GITHUB_STEP_SUMMARY
+            echo "- **docker-backend** — vitest + @vitest/coverage-v8" >> $GITHUB_STEP_SUMMARY
+            echo "- **recoder-web** — vitest + @vitest/coverage-v8" >> $GITHUB_STEP_SUMMARY
+            echo "- **app** — vitest + @vitest/coverage-v8 (newly added)" >> $GITHUB_STEP_SUMMARY
           fi
-          
-      - name: 📢 Slack notification
-        uses: 8398a7/action-slack@v3
+
+      - name: Upload coverage artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
         with:
-          status: ${{ steps.status.outputs.status }}
-          channel: '#deployments'
-          text: ${{ steps.status.outputs.message }}
-          fields: repo,message,commit,author,action,eventName,ref,workflow
-        env:
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
-        if: always() && secrets.SLACK_WEBHOOK_URL != ''
-        
-      - name: 📧 Email notification on failure
-        uses: dawidd6/action-send-mail@v3
-        with:
-          server_address: smtp.gmail.com
-          server_port: 465
-          username: ${{ secrets.EMAIL_USERNAME }}
-          password: ${{ secrets.EMAIL_PASSWORD }}
-          subject: "🚨 Recoder.xyz Pipeline Failure - ${{ github.ref_name }}"
-          to: ${{ secrets.NOTIFICATION_EMAIL }}
-          from: "Recoder.xyz CI/CD <noreply@recoder.xyz>"
-          body: |
-            Pipeline failed for commit ${{ github.sha }} on branch ${{ github.ref_name }}.
-            
-            Repository: ${{ github.repository }}
-            Workflow: ${{ github.workflow }}
-            Run ID: ${{ github.run_id }}
-            
-            Please check the GitHub Actions logs for details:
-            https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
-        if: failure() && secrets.EMAIL_USERNAME != ''
-          
-      - name: 📱 Discord webhook notification
+          name: coverage-reports
+          path: |
+            app/coverage/
+            docker-backend/coverage/
+            recoder-web/coverage/
+            logs/coverage/
+          retention-days: 14
+          if-no-files-found: ignore
+
+  # =============================================
+  # CI SUMMARY
+  # =============================================
+  ci-summary:
+    name: CI Summary
+    runs-on: ubuntu-latest
+    needs: [health-check, web-build, docker-backend-check, security-scan, test-coverage]
+    if: always()
+
+    steps:
+      - name: Generate report
         run: |
-          if [[ -n "${DISCORD_WEBHOOK_URL}" ]]; then
-            curl -H "Content-Type: application/json" \
-                 -X POST \
-                 -d '{
-                   "embeds": [{
-                     "title": "🚀 Recoder.xyz Pipeline Status",
-                     "description": "${{ steps.status.outputs.message }}",
-                     "color": "${{ steps.status.outputs.status == 'success' && '3066993' || '15158332' }}",
-                     "fields": [
-                       {"name": "Repository", "value": "${{ github.repository }}", "inline": true},
-                       {"name": "Branch", "value": "${{ github.ref_name }}", "inline": true},
-                       {"name": "Commit", "value": "${{ github.sha }}", "inline": true},
-                       {"name": "Workflow", "value": "${{ github.workflow }}", "inline": true}
-                     ],
-                     "timestamp": "'$(date -u +%Y-%m-%dT%H:%M:%SZ)'"
-                   }]
-                 }' \
-                 "${DISCORD_WEBHOOK_URL}" || echo "Discord notification failed"
-          fi
-        env:
-          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
-        if: always() && secrets.DISCORD_WEBHOOK_URL != ''
-        
-      - name: 📋 Pipeline summary
-        run: |
-          echo "## 📢 Pipeline Notifications Sent" >> $GITHUB_STEP_SUMMARY
-          echo "Status: ${{ steps.status.outputs.status }}" >> $GITHUB_STEP_SUMMARY
-          echo "Message: ${{ steps.status.outputs.message }}" >> $GITHUB_STEP_SUMMARY
-          echo "✅ Notifications configured (check secrets for active channels)" >> $GITHUB_STEP_SUMMARY
+          echo "## Recoder.xyz CI Report" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Check | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Platform Detection | ${{ needs.health-check.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| recoder-web Build | ${{ needs.web-build.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| docker-backend Tests | ${{ needs.docker-backend-check.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Security Scan | ${{ needs.security-scan.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Test Coverage | ${{ needs.test-coverage.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Deployment is handled by the separate **Deploy Production** workflow on push to main." >> $GITHUB_STEP_SUMMARY

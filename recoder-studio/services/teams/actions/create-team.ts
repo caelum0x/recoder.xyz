@@ -1,12 +1,12 @@
 "use server";
 
-import type { User } from "@supabase/supabase-js";
+import type { CompatUser } from "@/lib/auth/user";
 import { eq } from "drizzle-orm";
 import { redirect } from "next/navigation";
 import invariant from "tiny-invariant";
-import { db, supabaseUserMappings, teamMemberships, teams, users } from "@/db";
+import { db, authUserMappings, teamMemberships, teams, users } from "@/db";
 import { updateRecoderStudioSession } from "@/lib/recoder-studio-session";
-import { getUser } from "@/lib/supabase";
+import { getUser } from "@/lib/auth/user";
 import { isEmailFromRoute06 } from "@/lib/utils";
 import {
 	DRAFT_TEAM_NAME_METADATA_KEY,
@@ -57,7 +57,7 @@ export async function createTeam(formData: FormData) {
  * 1. Create a new draft team
  * 2. Set the draft team informations in metadata (https://support.stripe.com/questions/using-metadata-with-checkout-sessions)
  */
-async function prepareProTeamCreation(supabaseUser: User, teamName: string) {
+async function prepareProTeamCreation(supabaseUser: CompatUser, teamName: string) {
 	const userDbId = await getUserDbId(supabaseUser);
 	return createCheckout(userDbId, teamName);
 }
@@ -85,16 +85,16 @@ async function createCheckout(userDbId: number, teamName: string) {
 	return checkoutSession;
 }
 
-async function createInternalTeam(supabaseUser: User, teamName: string) {
+async function createInternalTeam(supabaseUser: CompatUser, teamName: string) {
 	return await createTeamInDatabase(supabaseUser, teamName, true);
 }
 
-async function createFreeTeam(supabaseUser: User, teamName: string) {
+async function createFreeTeam(supabaseUser: CompatUser, teamName: string) {
 	return await createTeamInDatabase(supabaseUser, teamName, false);
 }
 
 async function createTeamInDatabase(
-	supabaseUser: User,
+	supabaseUser: CompatUser,
 	teamName: string,
 	isInternal: boolean,
 ) {
@@ -120,14 +120,14 @@ async function createTeamInDatabase(
 	return teamId;
 }
 
-async function getUserDbId(supabaseUser: User) {
+async function getUserDbId(supabaseUser: CompatUser) {
 	const [result] = await db
 		.select()
 		.from(users)
 		.innerJoin(
-			supabaseUserMappings,
-			eq(users.dbId, supabaseUserMappings.userDbId),
+			authUserMappings,
+			eq(users.dbId, authUserMappings.userDbId),
 		)
-		.where(eq(supabaseUserMappings.supabaseUserId, supabaseUser.id));
+		.where(eq(authUserMappings.authUserId, supabaseUser.id));
 	return result.users.dbId;
 }

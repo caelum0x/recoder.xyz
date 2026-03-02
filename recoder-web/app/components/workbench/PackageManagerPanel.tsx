@@ -217,8 +217,8 @@ export const PackageManagerPanel = memo(({ files, className = '' }: PackageManag
   // No package manager detected
   if (!detectedManager) {
     return (
-      <div className={`flex flex-col h-full bg-bolt-elements-background-depth-1 ${className}`}>
-        <div className="p-4 text-center text-bolt-elements-textTertiary text-sm">
+      <div className={`flex flex-col h-full bg-recoder-elements-background-depth-1 ${className}`}>
+        <div className="p-4 text-center text-recoder-elements-textTertiary text-sm">
           <span className="i-ph:package text-2xl block mb-2" />
           No package manager detected
           <p className="text-xs mt-2">
@@ -235,12 +235,12 @@ export const PackageManagerPanel = memo(({ files, className = '' }: PackageManag
   const outdatedCount = packages.filter((p) => p.isOutdated).length;
 
   return (
-    <div className={`flex flex-col h-full bg-bolt-elements-background-depth-1 ${className}`}>
+    <div className={`flex flex-col h-full bg-recoder-elements-background-depth-1 ${className}`}>
       {/* Header */}
-      <div className="flex items-center justify-between px-3 py-2 border-b border-bolt-elements-borderColor">
+      <div className="flex items-center justify-between px-3 py-2 border-b border-recoder-elements-borderColor">
         <div className="flex items-center gap-2">
           <span className={classNames(managerInfo.icon, managerInfo.color)} />
-          <span className="font-medium text-bolt-elements-textPrimary text-sm">
+          <span className="font-medium text-recoder-elements-textPrimary text-sm">
             {detectedManager.toUpperCase()}
           </span>
           {outdatedCount > 0 && (
@@ -254,7 +254,7 @@ export const PackageManagerPanel = memo(({ files, className = '' }: PackageManag
             onClick={() => setShowSearch(!showSearch)}
             className={classNames(
               'p-1.5 rounded transition-colors',
-              showSearch ? 'bg-blue-500/20 text-blue-400' : 'hover:bg-bolt-elements-background-depth-2'
+              showSearch ? 'bg-blue-500/20 text-blue-400' : 'hover:bg-recoder-elements-background-depth-2'
             )}
             title="Add Package"
           >
@@ -263,7 +263,7 @@ export const PackageManagerPanel = memo(({ files, className = '' }: PackageManag
           <button
             onClick={loadPackages}
             disabled={isLoading}
-            className="p-1.5 hover:bg-bolt-elements-background-depth-2 rounded"
+            className="p-1.5 hover:bg-recoder-elements-background-depth-2 rounded"
             title="Refresh"
           >
             <span className={classNames('i-ph:arrows-clockwise', isLoading ? 'animate-spin' : '')} />
@@ -273,14 +273,14 @@ export const PackageManagerPanel = memo(({ files, className = '' }: PackageManag
 
       {/* Search Input */}
       {showSearch && (
-        <div className="p-2 border-b border-bolt-elements-borderColor">
+        <div className="p-2 border-b border-recoder-elements-borderColor">
           <div className="relative">
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder={`Search ${detectedManager} packages...`}
-              className="w-full px-3 py-1.5 pr-8 text-sm bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor rounded focus:border-blue-500 focus:outline-none text-bolt-elements-textPrimary placeholder:text-bolt-elements-textTertiary"
+              className="w-full px-3 py-1.5 pr-8 text-sm bg-recoder-elements-background-depth-2 border border-recoder-elements-borderColor rounded focus:border-blue-500 focus:outline-none text-recoder-elements-textPrimary placeholder:text-recoder-elements-textTertiary"
               autoFocus
             />
             {isSearching && (
@@ -290,23 +290,23 @@ export const PackageManagerPanel = memo(({ files, className = '' }: PackageManag
 
           {/* Search Results */}
           {searchResults.length > 0 && (
-            <div className="mt-2 max-h-48 overflow-auto rounded border border-bolt-elements-borderColor">
+            <div className="mt-2 max-h-48 overflow-auto rounded border border-recoder-elements-borderColor">
               {searchResults.map((result) => (
                 <div
                   key={result.name}
-                  className="flex items-center justify-between px-3 py-2 hover:bg-bolt-elements-background-depth-2 border-b border-bolt-elements-borderColor last:border-b-0"
+                  className="flex items-center justify-between px-3 py-2 hover:bg-recoder-elements-background-depth-2 border-b border-recoder-elements-borderColor last:border-b-0"
                 >
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
-                      <span className="font-medium text-sm text-bolt-elements-textPrimary truncate">
+                      <span className="font-medium text-sm text-recoder-elements-textPrimary truncate">
                         {result.name}
                       </span>
-                      <span className="text-xs text-bolt-elements-textTertiary">
+                      <span className="text-xs text-recoder-elements-textTertiary">
                         v{result.version}
                       </span>
                     </div>
                     {result.description && (
-                      <p className="text-xs text-bolt-elements-textTertiary truncate mt-0.5">
+                      <p className="text-xs text-recoder-elements-textTertiary truncate mt-0.5">
                         {result.description}
                       </p>
                     )}
@@ -327,7 +327,7 @@ export const PackageManagerPanel = memo(({ files, className = '' }: PackageManag
                     <button
                       onClick={() => installPackage(result.name, true)}
                       disabled={installingPackage === result.name}
-                      className="px-2 py-1 text-xs bg-bolt-elements-background-depth-3 hover:bg-bolt-elements-background-depth-3 disabled:opacity-50 rounded text-bolt-elements-textPrimary"
+                      className="px-2 py-1 text-xs bg-recoder-elements-background-depth-3 hover:bg-recoder-elements-background-depth-3 disabled:opacity-50 rounded text-recoder-elements-textPrimary"
                       title="Install as dev dependency"
                     >
                       Dev
@@ -339,7 +339,7 @@ export const PackageManagerPanel = memo(({ files, className = '' }: PackageManag
           )}
 
           {searchQuery.length >= 2 && searchResults.length === 0 && !isSearching && (
-            <p className="mt-2 text-xs text-bolt-elements-textTertiary text-center">
+            <p className="mt-2 text-xs text-recoder-elements-textTertiary text-center">
               No packages found
             </p>
           )}
@@ -347,14 +347,14 @@ export const PackageManagerPanel = memo(({ files, className = '' }: PackageManag
       )}
 
       {/* Tabs */}
-      <div className="flex border-b border-bolt-elements-borderColor">
+      <div className="flex border-b border-recoder-elements-borderColor">
         <button
           onClick={() => setSelectedTab('deps')}
           className={classNames(
             'flex-1 px-3 py-2 text-xs font-medium transition-colors',
             selectedTab === 'deps'
-              ? 'text-bolt-elements-textPrimary border-b-2 border-blue-500'
-              : 'text-bolt-elements-textTertiary hover:text-bolt-elements-textSecondary'
+              ? 'text-recoder-elements-textPrimary border-b-2 border-blue-500'
+              : 'text-recoder-elements-textTertiary hover:text-recoder-elements-textSecondary'
           )}
         >
           Dependencies ({dependencies.length})
@@ -364,8 +364,8 @@ export const PackageManagerPanel = memo(({ files, className = '' }: PackageManag
           className={classNames(
             'flex-1 px-3 py-2 text-xs font-medium transition-colors',
             selectedTab === 'dev'
-              ? 'text-bolt-elements-textPrimary border-b-2 border-purple-500'
-              : 'text-bolt-elements-textTertiary hover:text-bolt-elements-textSecondary'
+              ? 'text-recoder-elements-textPrimary border-b-2 border-purple-500'
+              : 'text-recoder-elements-textTertiary hover:text-recoder-elements-textSecondary'
           )}
         >
           Dev Dependencies ({devDependencies.length})
@@ -375,12 +375,12 @@ export const PackageManagerPanel = memo(({ files, className = '' }: PackageManag
       {/* Package List */}
       <div className="flex-1 overflow-auto">
         {!containerReady ? (
-          <div className="p-4 text-center text-bolt-elements-textTertiary text-sm">
+          <div className="p-4 text-center text-recoder-elements-textTertiary text-sm">
             <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500 mx-auto mb-2" />
             Waiting for container...
           </div>
         ) : isLoading ? (
-          <div className="p-4 text-center text-bolt-elements-textTertiary text-sm">
+          <div className="p-4 text-center text-recoder-elements-textTertiary text-sm">
             <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500 mx-auto mb-2" />
             Loading packages...
           </div>
@@ -398,7 +398,7 @@ export const PackageManagerPanel = memo(({ files, className = '' }: PackageManag
         ) : (
           <>
             {(selectedTab === 'deps' ? dependencies : devDependencies).length === 0 ? (
-              <div className="p-4 text-center text-bolt-elements-textTertiary text-sm">
+              <div className="p-4 text-center text-recoder-elements-textTertiary text-sm">
                 <span className="i-ph:package text-2xl block mb-2" />
                 No {selectedTab === 'deps' ? 'dependencies' : 'dev dependencies'}
                 <button
@@ -438,13 +438,13 @@ interface PackageItemProps {
 
 const PackageItem = memo(({ package: pkg, isInstalling, onUpdate, onUninstall }: PackageItemProps) => {
   return (
-    <div className="flex items-center justify-between px-3 py-2 hover:bg-bolt-elements-background-depth-2 border-b border-bolt-elements-borderColor group">
+    <div className="flex items-center justify-between px-3 py-2 hover:bg-recoder-elements-background-depth-2 border-b border-recoder-elements-borderColor group">
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
-          <span className="font-medium text-sm text-bolt-elements-textPrimary truncate">
+          <span className="font-medium text-sm text-recoder-elements-textPrimary truncate">
             {pkg.name}
           </span>
-          <span className="text-xs text-bolt-elements-textTertiary">
+          <span className="text-xs text-recoder-elements-textTertiary">
             {pkg.version}
           </span>
           {pkg.isOutdated && pkg.latestVersion && (
@@ -454,7 +454,7 @@ const PackageItem = memo(({ package: pkg, isInstalling, onUpdate, onUninstall }:
           )}
         </div>
         {pkg.description && (
-          <p className="text-xs text-bolt-elements-textTertiary truncate mt-0.5">
+          <p className="text-xs text-recoder-elements-textTertiary truncate mt-0.5">
             {pkg.description}
           </p>
         )}
@@ -467,7 +467,7 @@ const PackageItem = memo(({ package: pkg, isInstalling, onUpdate, onUninstall }:
             {pkg.isOutdated && (
               <button
                 onClick={onUpdate}
-                className="p-1 hover:bg-bolt-elements-background-depth-2 rounded text-yellow-400"
+                className="p-1 hover:bg-recoder-elements-background-depth-2 rounded text-yellow-400"
                 title="Update"
               >
                 <span className="i-ph:arrow-circle-up" />
@@ -475,7 +475,7 @@ const PackageItem = memo(({ package: pkg, isInstalling, onUpdate, onUninstall }:
             )}
             <button
               onClick={onUninstall}
-              className="p-1 hover:bg-bolt-elements-background-depth-2 rounded text-red-400"
+              className="p-1 hover:bg-recoder-elements-background-depth-2 rounded text-red-400"
               title="Remove"
             >
               <span className="i-ph:trash" />

@@ -167,9 +167,9 @@ export const LogsPanel = memo(({ projectId, className }: LogsPanelProps) => {
         '34': '<span class="text-blue-400">',
         '35': '<span class="text-purple-400">',
         '36': '<span class="text-cyan-400">',
-        '37': '<span class="text-bolt-elements-textSecondary">',
+        '37': '<span class="text-recoder-elements-textSecondary">',
         '39': '</span>',
-        '90': '<span class="text-bolt-elements-textTertiary">',
+        '90': '<span class="text-recoder-elements-textTertiary">',
       };
       return colorMap[code] || '';
     }
@@ -177,8 +177,8 @@ export const LogsPanel = memo(({ projectId, className }: LogsPanelProps) => {
 
   if (!projectId) {
     return (
-      <div className={`flex flex-col h-full bg-bolt-elements-background-depth-1 ${className}`}>
-        <div className="flex items-center justify-center h-full text-bolt-elements-textTertiary">
+      <div className={`flex flex-col h-full bg-recoder-elements-background-depth-1 ${className}`}>
+        <div className="flex items-center justify-center h-full text-recoder-elements-textTertiary">
           <p>No project selected</p>
         </div>
       </div>
@@ -186,14 +186,14 @@ export const LogsPanel = memo(({ projectId, className }: LogsPanelProps) => {
   }
 
   return (
-    <div className={`flex flex-col h-full min-h-0 bg-bolt-elements-background-depth-1 ${className}`}>
+    <div className={`flex flex-col h-full min-h-0 bg-recoder-elements-background-depth-1 ${className}`}>
       {/* Header */}
-      <div className="flex items-center justify-between px-3 py-2 border-b border-bolt-elements-borderColor bg-bolt-elements-background-depth-2">
+      <div className="flex items-center justify-between px-3 py-2 border-b border-recoder-elements-borderColor bg-recoder-elements-background-depth-2">
         <div className="flex items-center gap-2">
           <div className="i-ph:terminal text-lg" />
           <span className="text-sm font-medium">{isExpo ? 'Metro Logs' : 'Dev Server Logs'}</span>
           {isLoading && (
-            <div className="i-ph:spinner animate-spin text-sm text-bolt-elements-textTertiary" />
+            <div className="i-ph:spinner animate-spin text-sm text-recoder-elements-textTertiary" />
           )}
         </div>
         <div className="flex items-center gap-1">
@@ -214,7 +214,7 @@ export const LogsPanel = memo(({ projectId, className }: LogsPanelProps) => {
             className={`flex items-center gap-1 px-2 py-1 text-xs rounded transition-colors ${
               autoScroll
                 ? 'bg-green-500/20 text-green-400 border border-green-500/30'
-                : 'bg-bolt-elements-background-depth-3 text-bolt-elements-textTertiary border border-bolt-elements-borderColor'
+                : 'bg-recoder-elements-background-depth-3 text-recoder-elements-textTertiary border border-recoder-elements-borderColor'
             }`}
             title={autoScroll ? 'Auto-scroll enabled (click to pause)' : 'Auto-scroll paused (click to enable)'}
           >
@@ -240,7 +240,7 @@ export const LogsPanel = memo(({ projectId, className }: LogsPanelProps) => {
       {/* Logs content */}
       <pre
         ref={logsRef}
-        className="flex-1 min-h-0 overflow-auto p-3 text-xs font-mono text-bolt-elements-textSecondary whitespace-pre-wrap break-words"
+        className="flex-1 min-h-0 overflow-auto p-3 text-xs font-mono text-recoder-elements-textSecondary whitespace-pre-wrap break-words"
         style={{ tabSize: 2 }}
         dangerouslySetInnerHTML={{ __html: colorizedLogs || 'Waiting for logs...' }}
       />

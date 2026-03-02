@@ -7,12 +7,12 @@ on:
     branches: [main, develop]
 
 env:
-  NODE_VERSION: '20.x'
+  NODE_VERSION: '20'
   COMPOSER_REQUIRE_INBOX: 'false'
 
 jobs:
   test:
-    name: Test ${{ matrix.project }}
+    name: Required - Test ${{ matrix.project.name }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -21,15 +21,24 @@ jobs:
           - name: recoder-web
             path: recoder-web
             install: npm install --legacy-peer-deps
-          - name: recoder-extension
-            path: recoder-extension/src
-            install: npm install
+            lint: npm run lint
+            typecheck: npm run typecheck
+            test: npm run test
+            build: npm run build
           - name: cli
             path: packages/cli
             install: npm install
+            lint: npm run lint
+            typecheck: npm run typecheck
+            test: npm run test
+            build: npm run build
           - name: cli-router
             path: packages/recoder-cli-router
             install: npm install
+            lint: ''
+            typecheck: ''
+            test: ''
+            build: npm run build
     
     steps:
       - name: Checkout code
@@ -47,50 +56,28 @@ jobs:
         run: ${{ matrix.project.install }}
       
       - name: Run linter
+        if: matrix.project.lint != ''
         working-directory: ${{ matrix.project.path }}
-        run: |
-          if npm run lint --if-present; then
-            echo "Linting passed"
-          else
-            echo "No linting configured or linting failed"
-          fi
+        run: ${{ matrix.project.lint }}
       
       - name: Run type checking
+        if: matrix.project.typecheck != ''
         working-directory: ${{ matrix.project.path }}
-        run: |
-          if npm run typecheck --if-present || npm run check-types --if-present; then
-            echo "Type checking passed"
-          else
-            echo "No type checking configured"
-          fi
+        run: ${{ matrix.project.typecheck }}
       
       - name: Run tests
+        if: matrix.project.test != ''
         working-directory: ${{ matrix.project.path }}
-        run: |
-          if npm run test --if-present; then
-            echo "Tests passed"
-          else
-            echo "No tests configured"
-          fi
+        run: ${{ matrix.project.test }}
       
       - name: Build project
         working-directory: ${{ matrix.project.path }}
-        run: |
-          case "${{ matrix.project.name }}" in
-            "recoder-web")
-              npm run build
-              ;;
-            "recoder-extension")
-              npm run bundle
-              ;;
-            *)
-              npm run build
-              ;;
-          esac
+        run: ${{ matrix.project.build }}
 
   security:
-    name: Security Audit
+    name: Advisory - Security Audit
     runs-on: ubuntu-latest
+    continue-on-error: true
     
     steps:
       - name: Checkout code
@@ -103,19 +90,15 @@ jobs:
       
       - name: Run security audit (recoder-web)
         working-directory: recoder-web
-        run: npm audit --audit-level high || true
-      
-      - name: Run security audit (recoder-extension)
-        working-directory: recoder-extension/src
-        run: npm audit --audit-level high || true
+        run: npm audit --audit-level high
       
       - name: Run security audit (cli)
         working-directory: packages/cli
-        run: npm audit --audit-level high || true
+        run: npm audit --audit-level high
       
       - name: Run security audit (cli-router)
         working-directory: packages/recoder-cli-router
-        run: npm audit --audit-level high || true
+        run: npm audit --audit-level high
 
   docker-test:
     name: Docker Build Test

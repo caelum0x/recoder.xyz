@@ -10,7 +10,7 @@ import {
 	type Task,
 	type TaskId,
 	type WorkspaceId,
-} from "@giselles-ai/protocol";
+} from "@recoder/protocol";
 import { giselle } from "@/app/giselle";
 import { db, tasks } from "@/db";
 import { logger } from "@/lib/logger";
@@ -290,8 +290,10 @@ export async function getTaskData(taskId: TaskId): Promise<UITask> {
 							generation,
 						} satisfies UIStepItem;
 					default: {
-						const _exhaustiveCheck: never = generation;
-						throw new Error(`Unhandled status: ${_exhaustiveCheck}`);
+						const status = String(
+							(generation as { status?: unknown }).status,
+						);
+						throw new Error(`Unhandled status: ${status}`);
 					}
 				}
 			})

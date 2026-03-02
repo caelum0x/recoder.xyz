@@ -380,9 +380,8 @@ export function createIsolatedDispatcher(
           headers: request.headers,
           body: request.body,
           signal: controller.signal,
-          // @ts-ignore
           duplex: 'half',
-        })
+        } as RequestInit)
 
         const response = await userWorker.fetch(requestWithSignal)
         clearTimeout(timeoutId)

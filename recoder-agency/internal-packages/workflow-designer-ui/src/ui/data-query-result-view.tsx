@@ -1,4 +1,4 @@
-import type { DataQueryResult, Generation } from "@giselles-ai/protocol";
+import type { DataQueryResult, Generation } from "@recoder/protocol";
 import { ChevronDownIcon, ChevronRightIcon } from "lucide-react";
 import { useState } from "react";
 import { Streamdown } from "streamdown";

@@ -5,7 +5,7 @@
  * storage, and calls `handleWhatsAppTrigger` for each matching WhatsApp trigger.
  */
 
-import type { Trigger } from "@giselles-ai/protocol";
+import type { Trigger } from "@recoder/protocol";
 import type { OnGenerationComplete, OnGenerationError } from "../generations";
 import { createAndStartTask, type OnTaskCreate } from "../tasks";
 import { getWorkspace } from "../workspaces";

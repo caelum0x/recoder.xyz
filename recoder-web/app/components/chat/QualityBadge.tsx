@@ -66,13 +66,13 @@ const DimensionBar: React.FC<{
   return (
     <div className="space-y-1">
       <div className="flex items-center justify-between text-xs">
-        <span className="flex items-center gap-1 text-bolt-elements-textSecondary">
+        <span className="flex items-center gap-1 text-recoder-elements-textSecondary">
           <div className={icon} />
           {label}
         </span>
         <span className={`font-mono ${getScoreColor(score)}`}>{score}</span>
       </div>
-      <div className="h-1 rounded-full overflow-hidden" style={{ backgroundColor: 'var(--bolt-elements-bg-depth-3)' }}>
+      <div className="h-1 rounded-full overflow-hidden" style={{ backgroundColor: 'var(--recoder-elements-bg-depth-3)' }}>
         <div
           className={`h-full transition-all duration-300 ${getBarColor(score)}`}
           style={{ width: `${score}%` }}
@@ -95,13 +95,13 @@ const QualityTooltip: React.FC<TooltipProps> = ({ result, visible, position }) =
         top: position.top,
         left: position.left,
         transform: 'translateX(-50%)',
-        backgroundColor: 'var(--bolt-elements-bg-depth-2)',
-        border: '1px solid var(--bolt-elements-bg-depth-3)',
+        backgroundColor: 'var(--recoder-elements-bg-depth-2)',
+        border: '1px solid var(--recoder-elements-bg-depth-3)',
       }}
     >
       {/* Header */}
-      <div className="flex items-center justify-between mb-3 pb-2" style={{ borderBottom: '1px solid var(--bolt-elements-bg-depth-3)' }}>
-        <span className="text-sm font-medium text-bolt-elements-textPrimary">
+      <div className="flex items-center justify-between mb-3 pb-2" style={{ borderBottom: '1px solid var(--recoder-elements-bg-depth-3)' }}>
+        <span className="text-sm font-medium text-recoder-elements-textPrimary">
           Quality Score
         </span>
         <div className="flex items-center gap-2">
@@ -143,14 +143,14 @@ const QualityTooltip: React.FC<TooltipProps> = ({ result, visible, position }) =
       {/* Issues */}
       {result.issues.length > 0 && (
         <div className="mb-2">
-          <div className="text-xs font-medium text-bolt-elements-textSecondary mb-1">
+          <div className="text-xs font-medium text-recoder-elements-textSecondary mb-1">
             Issues ({result.issues.length})
           </div>
           <div className="space-y-1">
             {result.issues.slice(0, 3).map((issue, idx) => (
               <div
                 key={idx}
-                className="flex items-start gap-1 text-xs text-bolt-elements-textTertiary"
+                className="flex items-start gap-1 text-xs text-recoder-elements-textTertiary"
               >
                 <div
                   className={`mt-0.5 ${
@@ -165,7 +165,7 @@ const QualityTooltip: React.FC<TooltipProps> = ({ result, visible, position }) =
               </div>
             ))}
             {result.issues.length > 3 && (
-              <div className="text-xs text-bolt-elements-textTertiary">
+              <div className="text-xs text-recoder-elements-textTertiary">
                 +{result.issues.length - 3} more issues
               </div>
             )}
@@ -174,8 +174,8 @@ const QualityTooltip: React.FC<TooltipProps> = ({ result, visible, position }) =
       )}
 
       {/* Status */}
-      <div className="flex items-center justify-between pt-2" style={{ borderTop: '1px solid var(--bolt-elements-bg-depth-3)' }}>
-        <span className="text-xs text-bolt-elements-textTertiary">
+      <div className="flex items-center justify-between pt-2" style={{ borderTop: '1px solid var(--recoder-elements-bg-depth-3)' }}>
+        <span className="text-xs text-recoder-elements-textTertiary">
           {result.metadata.codeBlockCount} code blocks
         </span>
         <span
@@ -351,7 +351,7 @@ export const QualitySummary: React.FC<{
   return (
     <div
       className={`
-        flex items-center gap-2 text-xs text-bolt-elements-textSecondary
+        flex items-center gap-2 text-xs text-recoder-elements-textSecondary
         ${className}
       `}
     >

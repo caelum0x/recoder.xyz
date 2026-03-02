@@ -8,9 +8,9 @@ import {
 	DialogFooter,
 	DialogHeader,
 	DialogTitle,
-} from "@giselle-internal/ui/dialog";
-import { Select } from "@giselle-internal/ui/select";
-import { useToasts } from "@giselle-internal/ui/toast";
+} from "@recoder-internal/ui/dialog";
+import { Select } from "@recoder-internal/ui/select";
+import { useToasts } from "@recoder-internal/ui/toast";
 import { useState } from "react";
 import type { TeamRole } from "@/db";
 import { AvatarImage } from "@/services/accounts/components/user-button/avatar-image";

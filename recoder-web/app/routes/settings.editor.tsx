@@ -80,7 +80,7 @@ export default function EditorSettingsPage() {
       {/* Header */}
       <div>
         <h1 className="text-3xl font-bold mb-2">Editor Settings</h1>
-        <p className="text-bolt-elements-textSecondary">
+        <p className="text-recoder-elements-textSecondary">
           Customize your coding environment
         </p>
       </div>
@@ -98,7 +98,7 @@ export default function EditorSettingsPage() {
       )}
 
       {/* Appearance */}
-      <section className="p-6 rounded-xl border border-bolt-elements-borderColor bg-bolt-elements-background-depth-2">
+      <section className="p-6 rounded-xl border border-recoder-elements-borderColor bg-recoder-elements-background-depth-2">
         <h2 className="text-xl font-bold mb-4">Appearance</h2>
         <div className="space-y-4">
           {/* Theme */}
@@ -107,7 +107,7 @@ export default function EditorSettingsPage() {
             <select
               value={settings.theme}
               onChange={(e) => updateSetting('theme', e.target.value)}
-              className="w-full px-4 py-2 bg-bolt-elements-background-depth-1 border border-bolt-elements-borderColor rounded-lg focus:outline-none focus:ring-2 focus:ring-bolt-elements-focus"
+              className="w-full px-4 py-2 bg-recoder-elements-background-depth-1 border border-recoder-elements-borderColor rounded-lg focus:outline-none focus:ring-2 focus:ring-recoder-elements-focus"
             >
               <option value="dark">Dark</option>
               <option value="light">Light</option>
@@ -121,7 +121,7 @@ export default function EditorSettingsPage() {
             <select
               value={settings.color_scheme}
               onChange={(e) => updateSetting('color_scheme', e.target.value)}
-              className="w-full px-4 py-2 bg-bolt-elements-background-depth-1 border border-bolt-elements-borderColor rounded-lg focus:outline-none focus:ring-2 focus:ring-bolt-elements-focus"
+              className="w-full px-4 py-2 bg-recoder-elements-background-depth-1 border border-recoder-elements-borderColor rounded-lg focus:outline-none focus:ring-2 focus:ring-recoder-elements-focus"
             >
               <option value="nord">Nord</option>
               <option value="dracula">Dracula</option>
@@ -137,7 +137,7 @@ export default function EditorSettingsPage() {
             <select
               value={settings.font_family}
               onChange={(e) => updateSetting('font_family', e.target.value)}
-              className="w-full px-4 py-2 bg-bolt-elements-background-depth-1 border border-bolt-elements-borderColor rounded-lg focus:outline-none focus:ring-2 focus:ring-bolt-elements-focus"
+              className="w-full px-4 py-2 bg-recoder-elements-background-depth-1 border border-recoder-elements-borderColor rounded-lg focus:outline-none focus:ring-2 focus:ring-recoder-elements-focus"
             >
               <option value="JetBrains Mono">JetBrains Mono</option>
               <option value="Fira Code">Fira Code</option>
@@ -182,7 +182,7 @@ export default function EditorSettingsPage() {
       </section>
 
       {/* Indentation */}
-      <section className="p-6 rounded-xl border border-bolt-elements-borderColor bg-bolt-elements-background-depth-2">
+      <section className="p-6 rounded-xl border border-recoder-elements-borderColor bg-recoder-elements-background-depth-2">
         <h2 className="text-xl font-bold mb-4">Indentation</h2>
         <div className="space-y-4">
           {/* Tab Size */}
@@ -191,7 +191,7 @@ export default function EditorSettingsPage() {
             <select
               value={settings.tab_size}
               onChange={(e) => updateSetting('tab_size', parseInt(e.target.value))}
-              className="w-full px-4 py-2 bg-bolt-elements-background-depth-1 border border-bolt-elements-borderColor rounded-lg focus:outline-none focus:ring-2 focus:ring-bolt-elements-focus"
+              className="w-full px-4 py-2 bg-recoder-elements-background-depth-1 border border-recoder-elements-borderColor rounded-lg focus:outline-none focus:ring-2 focus:ring-recoder-elements-focus"
             >
               <option value="2">2 spaces</option>
               <option value="4">4 spaces</option>
@@ -203,14 +203,14 @@ export default function EditorSettingsPage() {
           <div className="flex items-center justify-between">
             <div>
               <div className="font-medium">Use Spaces</div>
-              <div className="text-sm text-bolt-elements-textSecondary">
+              <div className="text-sm text-recoder-elements-textSecondary">
                 Insert spaces instead of tabs
               </div>
             </div>
             <button
               onClick={() => updateSetting('use_spaces', !settings.use_spaces)}
               className={`relative w-12 h-6 rounded-full transition-colors ${
-                settings.use_spaces ? 'bg-bolt-elements-item-contentAccent' : 'bg-gray-600'
+                settings.use_spaces ? 'bg-recoder-elements-item-contentAccent' : 'bg-gray-600'
               }`}
             >
               <div
@@ -224,7 +224,7 @@ export default function EditorSettingsPage() {
       </section>
 
       {/* Editor Features */}
-      <section className="p-6 rounded-xl border border-bolt-elements-borderColor bg-bolt-elements-background-depth-2">
+      <section className="p-6 rounded-xl border border-recoder-elements-borderColor bg-recoder-elements-background-depth-2">
         <h2 className="text-xl font-bold mb-4">Editor Features</h2>
         <div className="space-y-4">
           {[
@@ -240,12 +240,12 @@ export default function EditorSettingsPage() {
             <div key={feature.key} className="flex items-center justify-between">
               <div>
                 <div className="font-medium">{feature.label}</div>
-                <div className="text-sm text-bolt-elements-textSecondary">{feature.desc}</div>
+                <div className="text-sm text-recoder-elements-textSecondary">{feature.desc}</div>
               </div>
               <button
                 onClick={() => updateSetting(feature.key as keyof EditorSettings, !settings[feature.key as keyof EditorSettings])}
                 className={`relative w-12 h-6 rounded-full transition-colors ${
-                  settings[feature.key as keyof EditorSettings] ? 'bg-bolt-elements-item-contentAccent' : 'bg-gray-600'
+                  settings[feature.key as keyof EditorSettings] ? 'bg-recoder-elements-item-contentAccent' : 'bg-gray-600'
                 }`}
               >
                 <div
@@ -260,9 +260,9 @@ export default function EditorSettingsPage() {
       </section>
 
       {/* Auto-Save Settings */}
-      <section className="p-6 rounded-xl border border-bolt-elements-borderColor bg-bolt-elements-background-depth-2">
+      <section className="p-6 rounded-xl border border-recoder-elements-borderColor bg-recoder-elements-background-depth-2">
         <h2 className="text-xl font-bold mb-4">Auto-Save</h2>
-        <p className="text-sm text-bolt-elements-textSecondary mb-4">
+        <p className="text-sm text-recoder-elements-textSecondary mb-4">
           Automatically save files after a period of inactivity. These settings are stored locally.
         </p>
         <div className="space-y-4">
@@ -270,14 +270,14 @@ export default function EditorSettingsPage() {
           <div className="flex items-center justify-between">
             <div>
               <div className="font-medium">Enable Auto-Save</div>
-              <div className="text-sm text-bolt-elements-textSecondary">
+              <div className="text-sm text-recoder-elements-textSecondary">
                 Automatically save files after you stop typing
               </div>
             </div>
             <button
               onClick={autoSaveSettings.toggle}
               className={`relative w-12 h-6 rounded-full transition-colors ${
-                autoSaveSettings.isEnabled ? 'bg-bolt-elements-item-contentAccent' : 'bg-gray-600'
+                autoSaveSettings.isEnabled ? 'bg-recoder-elements-item-contentAccent' : 'bg-gray-600'
               }`}
             >
               <div
@@ -302,7 +302,7 @@ export default function EditorSettingsPage() {
               onChange={(e) => autoSaveSettings.setDelay(parseInt(e.target.value))}
               className="w-full"
             />
-            <div className="flex justify-between text-xs text-bolt-elements-textTertiary mt-1">
+            <div className="flex justify-between text-xs text-recoder-elements-textTertiary mt-1">
               <span>0.5s</span>
               <span>5s</span>
               <span>10s</span>
@@ -313,14 +313,14 @@ export default function EditorSettingsPage() {
           <div className={`flex items-center justify-between ${autoSaveSettings.isEnabled ? '' : 'opacity-50 pointer-events-none'}`}>
             <div>
               <div className="font-medium">Skip if File Has Errors</div>
-              <div className="text-sm text-bolt-elements-textSecondary">
+              <div className="text-sm text-recoder-elements-textSecondary">
                 Don't auto-save files with syntax errors
               </div>
             </div>
             <button
               onClick={() => autoSaveSettings.setSkipOnErrors(!autoSaveSettings.skipOnErrors)}
               className={`relative w-12 h-6 rounded-full transition-colors ${
-                autoSaveSettings.skipOnErrors ? 'bg-bolt-elements-item-contentAccent' : 'bg-gray-600'
+                autoSaveSettings.skipOnErrors ? 'bg-recoder-elements-item-contentAccent' : 'bg-gray-600'
               }`}
             >
               <div
@@ -334,7 +334,7 @@ export default function EditorSettingsPage() {
       </section>
 
       {/* Terminal Settings */}
-      <section className="p-6 rounded-xl border border-bolt-elements-borderColor bg-bolt-elements-background-depth-2">
+      <section className="p-6 rounded-xl border border-recoder-elements-borderColor bg-recoder-elements-background-depth-2">
         <h2 className="text-xl font-bold mb-4">Terminal</h2>
         <div className="space-y-4">
           {/* Terminal Font Size */}
@@ -358,7 +358,7 @@ export default function EditorSettingsPage() {
             <select
               value={settings.terminal_cursor_style}
               onChange={(e) => updateSetting('terminal_cursor_style', e.target.value)}
-              className="w-full px-4 py-2 bg-bolt-elements-background-depth-1 border border-bolt-elements-borderColor rounded-lg focus:outline-none focus:ring-2 focus:ring-bolt-elements-focus"
+              className="w-full px-4 py-2 bg-recoder-elements-background-depth-1 border border-recoder-elements-borderColor rounded-lg focus:outline-none focus:ring-2 focus:ring-recoder-elements-focus"
             >
               <option value="block">Block</option>
               <option value="line">Line</option>
@@ -372,7 +372,7 @@ export default function EditorSettingsPage() {
             <select
               value={settings.terminal_shell}
               onChange={(e) => updateSetting('terminal_shell', e.target.value)}
-              className="w-full px-4 py-2 bg-bolt-elements-background-depth-1 border border-bolt-elements-borderColor rounded-lg focus:outline-none focus:ring-2 focus:ring-bolt-elements-focus"
+              className="w-full px-4 py-2 bg-recoder-elements-background-depth-1 border border-recoder-elements-borderColor rounded-lg focus:outline-none focus:ring-2 focus:ring-recoder-elements-focus"
             >
               <option value="bash">Bash</option>
               <option value="zsh">Zsh</option>
@@ -387,7 +387,7 @@ export default function EditorSettingsPage() {
         <button
           onClick={handleSave}
           disabled={saving}
-          className="px-6 py-3 bg-bolt-elements-item-contentAccent hover:bg-bolt-elements-item-contentActive rounded-lg font-medium transition-colors disabled:opacity-50"
+          className="px-6 py-3 bg-recoder-elements-item-contentAccent hover:bg-recoder-elements-item-contentActive rounded-lg font-medium transition-colors disabled:opacity-50"
         >
           {saving ? 'Saving...' : 'Save Changes'}
         </button>

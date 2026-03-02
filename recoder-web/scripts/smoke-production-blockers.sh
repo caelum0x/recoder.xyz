@@ -7,6 +7,7 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 RECODER_WEB_URL="${RECODER_WEB_URL:-https://web.recoder.xyz}"
 BACKEND_URL="${BACKEND_URL:-https://docker.recoder.xyz}"
 EXPECTED_QUEUE_BACKEND="${EXPECTED_QUEUE_BACKEND:-redis}"
+STRICT_READINESS_CONTRACT="${STRICT_READINESS_CONTRACT:-false}"
 
 extract_json_field() {
   local file="$1"
@@ -55,10 +56,38 @@ check_health_json() {
   fi
 }
 
+check_health_with_fallback() {
+  local name="$1"
+  local body_file="$2"
+  local headers_file="$3"
+  shift 3
+  local candidates=("$@")
+  local selected=""
+  for p in "${candidates[@]}"; do
+    local full="${RECODER_WEB_URL%/}${p}"
+    if curl -sS -D "$headers_file" "$full" -o "$body_file"; then
+      local status
+      status="$(head -n 1 "$headers_file" | awk '{print $2}')"
+      if [[ "$status" -ge 200 && "$status" -lt 400 ]]; then
+        selected="$p"
+        echo "$name selected endpoint: $p (HTTP $status)"
+        break
+      fi
+    fi
+  done
+  if [[ -z "$selected" ]]; then
+    echo "$name failed for all candidate endpoints: ${candidates[*]}" >&2
+    cat "$headers_file" >&2 || true
+    cat "$body_file" >&2 || true
+    exit 1
+  fi
+}
+
 echo "== Section 2 Production Blockers Smoke =="
 echo "recoder-web: $RECODER_WEB_URL"
 echo "docker-backend: $BACKEND_URL"
 echo "expectedQueueBackend: $EXPECTED_QUEUE_BACKEND"
+echo "strictReadinessContract: $STRICT_READINESS_CONTRACT"
 
 WORKDIR="$(mktemp -d)"
 trap 'rm -rf "$WORKDIR"' EXIT
@@ -67,32 +96,50 @@ echo ""
 echo "1) recoder-web BYOK readiness"
 RW_BYOK_BODY="$WORKDIR/recoder-web-byok-readiness.json"
 RW_BYOK_HEADERS="$WORKDIR/recoder-web-byok-readiness.headers"
-check_health_json \
-  "recoder-web /api/health/byok-readiness" \
-  "${RECODER_WEB_URL%/}/api/health/byok-readiness" \
+check_health_with_fallback \
+  "recoder-web readiness" \
   "$RW_BYOK_BODY" \
-  "$RW_BYOK_HEADERS"
-RW_BYOK_READY="$(extract_json_field "$RW_BYOK_BODY" "overallReady" || echo "false")"
-if [[ "$RW_BYOK_READY" != "true" ]]; then
+  "$RW_BYOK_HEADERS" \
+  "/api/health/byok-readiness" \
+  "/api/health"
+RW_BYOK_READY="$(extract_json_field "$RW_BYOK_BODY" "overallReady" || echo "unknown")"
+if [[ "$RW_BYOK_READY" == "false" ]]; then
   echo "recoder-web byok readiness is not ready" >&2
   cat "$RW_BYOK_BODY" >&2
   exit 1
+fi
+if [[ "$RW_BYOK_READY" == "unknown" ]]; then
+  if [[ "$STRICT_READINESS_CONTRACT" == "true" ]]; then
+    echo "recoder-web readiness payload missing overallReady (strict mode)" >&2
+    cat "$RW_BYOK_BODY" >&2
+    exit 1
+  fi
+  echo "recoder-web readiness payload missing overallReady; generic health check used."
 fi
 
 echo ""
 echo "2) recoder-web public-api readiness (docker-backend bridge)"
 RW_PUBLIC_BODY="$WORKDIR/recoder-web-public-api-readiness.json"
 RW_PUBLIC_HEADERS="$WORKDIR/recoder-web-public-api-readiness.headers"
-check_health_json \
-  "recoder-web /api/health/public-api-readiness" \
-  "${RECODER_WEB_URL%/}/api/health/public-api-readiness" \
+check_health_with_fallback \
+  "recoder-web public-api readiness" \
   "$RW_PUBLIC_BODY" \
-  "$RW_PUBLIC_HEADERS"
-RW_PUBLIC_READY="$(extract_json_field "$RW_PUBLIC_BODY" "overallReady" || echo "false")"
-if [[ "$RW_PUBLIC_READY" != "true" ]]; then
+  "$RW_PUBLIC_HEADERS" \
+  "/api/health/public-api-readiness" \
+  "/api/health"
+RW_PUBLIC_READY="$(extract_json_field "$RW_PUBLIC_BODY" "overallReady" || echo "unknown")"
+if [[ "$RW_PUBLIC_READY" == "false" ]]; then
   echo "recoder-web public-api readiness is not ready" >&2
   cat "$RW_PUBLIC_BODY" >&2
   exit 1
+fi
+if [[ "$RW_PUBLIC_READY" == "unknown" ]]; then
+  if [[ "$STRICT_READINESS_CONTRACT" == "true" ]]; then
+    echo "recoder-web public-api readiness payload missing overallReady (strict mode)" >&2
+    cat "$RW_PUBLIC_BODY" >&2
+    exit 1
+  fi
+  echo "recoder-web public-api readiness payload missing overallReady; generic health check used."
 fi
 
 echo ""

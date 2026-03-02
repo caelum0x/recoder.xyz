@@ -1,4 +1,4 @@
-import { GlassSurfaceLayers } from "@giselle-internal/ui/glass-surface";
+import { GlassSurfaceLayers } from "@recoder-internal/ui/glass-surface";
 import {
 	getEntry,
 	hasTierAccess,
@@ -6,7 +6,7 @@ import {
 	type LanguageModelId,
 	type LanguageModelTier,
 	languageModels as registryLanguageModels,
-} from "@giselles-ai/language-model-registry";
+} from "@recoder/language-model-registry";
 import { ToggleGroup } from "radix-ui";
 import { useCallback, useMemo, useState } from "react";
 import { useShallow } from "zustand/shallow";

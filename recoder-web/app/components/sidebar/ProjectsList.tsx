@@ -80,21 +80,21 @@ export function ProjectsList() {
   return (
     <div className="projects-list mb-4">
       <div className="flex items-center justify-between mb-2 px-2">
-        <h3 className="text-sm font-semibold text-bolt-elements-textPrimary">Projects</h3>
+        <h3 className="text-sm font-semibold text-recoder-elements-textPrimary">Projects</h3>
         <div className="flex items-center gap-1">
           <button
             onClick={() => setShowSearch(!showSearch)}
-            className="p-1 hover:bg-bolt-elements-background-depth-3 rounded transition-colors"
+            className="p-1 hover:bg-recoder-elements-background-depth-3 rounded transition-colors"
             title="Search projects"
           >
-            <span className="i-ph:magnifying-glass text-bolt-elements-textTertiary text-base" />
+            <span className="i-ph:magnifying-glass text-recoder-elements-textTertiary text-base" />
           </button>
           <button
             onClick={() => setShowCreateModal(true)}
-            className="p-1 hover:bg-bolt-elements-background-depth-3 rounded transition-colors"
+            className="p-1 hover:bg-recoder-elements-background-depth-3 rounded transition-colors"
             title="Create project"
           >
-            <span className="i-ph:plus text-bolt-elements-textTertiary text-base" />
+            <span className="i-ph:plus text-recoder-elements-textTertiary text-base" />
           </button>
         </div>
       </div>
@@ -107,7 +107,7 @@ export function ProjectsList() {
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Filter projects..."
-            className="w-full px-2 py-1 text-sm bg-bolt-elements-background-depth-1 border border-bolt-elements-borderColor rounded text-bolt-elements-textPrimary placeholder:text-bolt-elements-textTertiary focus:outline-none focus:border-orange-500"
+            className="w-full px-2 py-1 text-sm bg-recoder-elements-background-depth-1 border border-recoder-elements-borderColor rounded text-recoder-elements-textPrimary placeholder:text-recoder-elements-textTertiary focus:outline-none focus:border-orange-500"
             autoFocus
           />
         </div>
@@ -115,13 +115,13 @@ export function ProjectsList() {
 
       <div className="space-y-1">
         {filteredProjects.length === 0 && searchQuery && (
-          <div className="px-2 py-2 text-xs text-bolt-elements-textTertiary text-center">
+          <div className="px-2 py-2 text-xs text-recoder-elements-textTertiary text-center">
             No projects match "{searchQuery}"
           </div>
         )}
         {filteredProjects.map(project => (
           <div key={project.id} className="group">
-            <div className="w-full flex items-center gap-2 px-2 py-1.5 hover:bg-bolt-elements-background-depth-3 rounded transition-colors">
+            <div className="w-full flex items-center gap-2 px-2 py-1.5 hover:bg-recoder-elements-background-depth-3 rounded transition-colors">
               <button
                 onClick={() => toggleProject(project.id)}
                 className="flex items-center gap-2 flex-1 min-w-0 text-left"
@@ -129,8 +129,8 @@ export function ProjectsList() {
                 <span className={`text-sm ${expandedProjects.has(project.id) ? 'i-ph:caret-down' : 'i-ph:caret-right'}`} />
                 <span className="text-base">{project.icon}</span>
                 <div className="flex-1 min-w-0">
-                  <div className="text-sm font-medium text-bolt-elements-textPrimary truncate">{project.name}</div>
-                  <div className="text-xs text-bolt-elements-textTertiary">
+                  <div className="text-sm font-medium text-recoder-elements-textPrimary truncate">{project.name}</div>
+                  <div className="text-xs text-recoder-elements-textTertiary">
                     {project.chat_count} chats · {project.file_count} files
                   </div>
                 </div>
@@ -141,15 +141,15 @@ export function ProjectsList() {
                   e.stopPropagation();
                   window.location.href = `/?projectId=${project.id}`;
                 }}
-                className="opacity-0 group-hover:opacity-100 p-1 hover:bg-bolt-elements-background-depth-2 rounded transition-all"
+                className="opacity-0 group-hover:opacity-100 p-1 hover:bg-recoder-elements-background-depth-2 rounded transition-all"
                 title="Open project"
               >
-                <span className="i-ph:arrow-square-out text-bolt-elements-textTertiary text-sm" />
+                <span className="i-ph:arrow-square-out text-recoder-elements-textTertiary text-sm" />
               </button>
             </div>
 
             {expandedProjects.has(project.id) && (
-              <div className="ml-6 mt-1 text-xs text-bolt-elements-textTertiary">
+              <div className="ml-6 mt-1 text-xs text-recoder-elements-textTertiary">
                 {project.description || 'No description'}
               </div>
             )}
@@ -210,36 +210,36 @@ function CreateProjectModal({ onClose, onCreated, userId }: { onClose: () => voi
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={onClose}>
-      <div className="bg-bolt-elements-background-depth-2 rounded-lg p-6 w-96 max-w-full" onClick={e => e.stopPropagation()}>
-        <h2 className="text-lg font-bold mb-4 text-bolt-elements-textPrimary">Create Project</h2>
+      <div className="bg-recoder-elements-background-depth-2 rounded-lg p-6 w-96 max-w-full" onClick={e => e.stopPropagation()}>
+        <h2 className="text-lg font-bold mb-4 text-recoder-elements-textPrimary">Create Project</h2>
         <form onSubmit={handleCreate} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium mb-1 text-bolt-elements-textPrimary">Icon</label>
+            <label className="block text-sm font-medium mb-1 text-recoder-elements-textPrimary">Icon</label>
             <input
               type="text"
               value={icon}
               onChange={e => setIcon(e.target.value)}
-              className="w-full px-3 py-2 bg-bolt-elements-background-depth-1 border border-bolt-elements-borderColor rounded text-bolt-elements-textPrimary"
+              className="w-full px-3 py-2 bg-recoder-elements-background-depth-1 border border-recoder-elements-borderColor rounded text-recoder-elements-textPrimary"
               placeholder="i-ph:folder"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium mb-1 text-bolt-elements-textPrimary">Name</label>
+            <label className="block text-sm font-medium mb-1 text-recoder-elements-textPrimary">Name</label>
             <input
               type="text"
               value={name}
               onChange={e => setName(e.target.value)}
-              className="w-full px-3 py-2 bg-bolt-elements-background-depth-1 border border-bolt-elements-borderColor rounded text-bolt-elements-textPrimary"
+              className="w-full px-3 py-2 bg-recoder-elements-background-depth-1 border border-recoder-elements-borderColor rounded text-recoder-elements-textPrimary"
               placeholder="My Project"
               required
             />
           </div>
           <div>
-            <label className="block text-sm font-medium mb-1 text-bolt-elements-textPrimary">Description</label>
+            <label className="block text-sm font-medium mb-1 text-recoder-elements-textPrimary">Description</label>
             <textarea
               value={description}
               onChange={e => setDescription(e.target.value)}
-              className="w-full px-3 py-2 bg-bolt-elements-background-depth-1 border border-bolt-elements-borderColor rounded text-bolt-elements-textPrimary"
+              className="w-full px-3 py-2 bg-recoder-elements-background-depth-1 border border-recoder-elements-borderColor rounded text-recoder-elements-textPrimary"
               placeholder="Optional description"
               rows={3}
             />
@@ -248,7 +248,7 @@ function CreateProjectModal({ onClose, onCreated, userId }: { onClose: () => voi
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 text-sm text-bolt-elements-textTertiary hover:bg-bolt-elements-background-depth-3 rounded"
+              className="px-4 py-2 text-sm text-recoder-elements-textTertiary hover:bg-recoder-elements-background-depth-3 rounded"
             >
               Cancel
             </button>

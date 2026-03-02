@@ -1,5 +1,5 @@
-import { Select } from "@giselle-internal/ui/select";
-import type { GenerationContextInput } from "@giselles-ai/protocol";
+import { Select } from "@recoder-internal/ui/select";
+import type { GenerationContextInput } from "@recoder/protocol";
 import { ArrowUpIcon, Paperclip, X } from "lucide-react";
 import { useEffect } from "react";
 import { FileAttachments } from "../../playground/file-attachments";

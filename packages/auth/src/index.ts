@@ -3,19 +3,44 @@ import { prismaAdapter } from "better-auth/adapters/prisma";
 import { magicLink } from "better-auth/plugins";
 import { authDatabase } from "./database";
 import { getAuthEnv } from "./keys";
+import { COOKIE_DOMAIN, SURFACE_ORIGINS } from "./edge";
 
 export type { AuthEnv } from "./keys";
 export { getAuthEnv } from "./keys";
 export { authDatabase } from "./database";
+export {
+  COOKIE_DOMAIN,
+  SURFACE_ORIGINS,
+  SESSION_COOKIE_NAMES,
+  hasSessionCookie,
+  extractSessionToken,
+  extractSessionTokenFromHeader,
+  parseSessionToken,
+} from "./edge";
+export {
+  verifySession,
+} from "./verify";
+export type { AuthSession } from "./verify";
+export {
+  verifySessionFromRequest,
+  verifySessionFromCookieStore,
+  verifySessionFromHeader,
+  verifySessionFromGetter,
+  hasSessionInRequest,
+  extractSessionFromRequest,
+  getSessionCookieAttributes,
+  getSignOutCookieAttributes,
+  isTrustedOrigin,
+  AUTH_ORIGIN,
+} from "./cross-domain";
 
 /**
  * Trusted origins for cross-subdomain session sharing.
+ * Derived from the canonical SURFACE_ORIGINS map in edge.ts.
  */
 const PRODUCTION_ORIGINS = [
-  "https://recoder.xyz",
+  ...Object.values(SURFACE_ORIGINS),
   "https://www.recoder.xyz",
-  "https://pm.recoder.xyz",
-  "https://agency.recoder.xyz",
   "https://app.recoder.xyz",
   "https://ide.recoder.xyz",
 ];
@@ -24,8 +49,13 @@ const DEV_ORIGINS = [
   "http://localhost:3000",
   "http://localhost:3001",
   "http://localhost:3002",
+  "http://localhost:3004",
+  "http://localhost:3005",
+  "http://localhost:3007",
+  "http://localhost:3100",
   "http://localhost:5173",
   "http://localhost:8000",
+  "http://localhost:18789",
   ...PRODUCTION_ORIGINS,
 ];
 
@@ -52,12 +82,12 @@ export function createAuth(options: {
     emailAndPassword: {
       enabled: true,
       sendResetPassword: options.sendResetPassword
-        ? async ({ user, url }) => {
+        ? async ({ user, url }: { user: { email?: string | null }; url: string }) => {
             await options.sendResetPassword!({ user: { email: user.email ?? null }, url });
           }
         : undefined,
       sendVerificationEmail: options.sendVerificationEmail
-        ? async ({ user, url }) => {
+        ? async ({ user, url }: { user: { email?: string | null }; url: string }) => {
             await options.sendVerificationEmail!({ user: { email: user.email ?? null }, url });
           }
         : undefined,
@@ -92,7 +122,7 @@ export function createAuth(options: {
       crossSubDomainCookies: {
         enabled: true,
         domain:
-          process.env.NODE_ENV === "production" ? ".recoder.xyz" : undefined,
+          process.env.NODE_ENV === "production" ? COOKIE_DOMAIN : undefined,
       },
       useSecureCookies: process.env.NODE_ENV === "production",
       defaultCookieAttributes: {

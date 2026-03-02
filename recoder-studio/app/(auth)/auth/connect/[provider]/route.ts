@@ -1,8 +1,6 @@
-import { getUser } from "@/lib/supabase";
 import {
 	connectIdentity,
 	type OAuthProvider,
-	reconnectIdentity,
 } from "@/services/accounts";
 
 function isValidOAuthProvider(provider: string): provider is OAuthProvider {
@@ -20,15 +18,5 @@ export async function GET(
 		return new Response(`Invalid provider: ${providerParam}`, { status: 400 });
 	}
 	const provider: OAuthProvider = providerParam;
-
-	const user = await getUser();
-	const isAlreadyLinked = user.identities?.some(
-		(identity) => identity.provider === provider,
-	);
-
-	if (isAlreadyLinked) {
-		await reconnectIdentity(provider, "/connected");
-	} else {
-		await connectIdentity(provider, "/connected");
-	}
+	await connectIdentity(provider, "/connected");
 }

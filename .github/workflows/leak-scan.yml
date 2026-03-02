@@ -1,0 +1,19 @@
+name: Leak Scan
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  leak-scan:
+    name: Strict Leak Scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run strict leak scan
+        run: bash scripts/leak-scan-strict.sh

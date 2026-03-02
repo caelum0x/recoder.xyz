@@ -1,8 +1,8 @@
 "use client";
 
-import type { LanguageModelProvider } from "@giselles-ai/language-model";
-import type { Workspace } from "@giselles-ai/protocol";
-import type { GiselleClient } from "@giselles-ai/react";
+import type { LanguageModelProvider } from "@recoder/language-model";
+import type { Workspace } from "@recoder/protocol";
+import type { GiselleClient } from "@recoder/react";
 import { usePathname } from "next/navigation";
 import { createContext, useContext, useEffect, useRef, useState } from "react";
 import { AppConnectionStateSyncProvider } from "./app-connection-state-sync-provider";

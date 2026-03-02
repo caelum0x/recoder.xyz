@@ -62,13 +62,13 @@ export function ResizablePanels({
 
       {/* Resize Handle */}
       <div
-        className={`w-1 bg-bolt-elements-borderColor hover:bg-bolt-elements-borderColorActive cursor-col-resize flex-shrink-0 ${
-          isDragging ? 'bg-bolt-elements-borderColorActive' : ''
+        className={`w-1 bg-recoder-elements-borderColor hover:bg-recoder-elements-borderColorActive cursor-col-resize flex-shrink-0 ${
+          isDragging ? 'bg-recoder-elements-borderColorActive' : ''
         }`}
         onMouseDown={() => setIsDragging(true)}
       >
         <div className="w-full h-full flex items-center justify-center">
-          <div className="w-0.5 h-8 bg-bolt-elements-textTertiary rounded-full" />
+          <div className="w-0.5 h-8 bg-recoder-elements-textTertiary rounded-full" />
         </div>
       </div>
 

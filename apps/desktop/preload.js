@@ -99,6 +99,56 @@ contextBridge.exposeInMainWorld('recoderDesktop', {
   /** Build a subagent workflow plan for multi-repo development */
   getAgentWorkflowPlan: (payload) => ipcRenderer.invoke('agent:getWorkflowPlan', payload || {}),
 
+  /** Trigger delegated A2A task through desktop bridge */
+  delegateTask: (payload) => ipcRenderer.invoke('agent:delegateTask', payload || {}),
+
+  /** Get delegated task status by bridge job ID */
+  getDelegatedTaskStatus: (payload) => ipcRenderer.invoke('agent:getDelegatedTaskStatus', payload || {}),
+
+  /** Poll delegated task status until terminal state or timeout */
+  pollDelegatedTaskStatus: (payload) => ipcRenderer.invoke('agent:pollDelegatedTaskStatus', payload || {}),
+
+  // ============== A2A Task Visibility (SFA-020) ==============
+  /** List delegated A2A tasks */
+  listA2ATasks: (params) => ipcRenderer.invoke('a2a:listTasks', params || {}),
+
+  /** Get a single A2A task by ID */
+  getA2ATask: (params) => ipcRenderer.invoke('a2a:getTask', params || {}),
+
+  /** Poll an A2A task until terminal state or timeout */
+  pollA2ATask: (params) => ipcRenderer.invoke('a2a:pollTask', params || {}),
+
+  /** Create a new delegated A2A task */
+  createA2ATask: (params) => ipcRenderer.invoke('a2a:createTask', params || {}),
+
+  /** Listen for "open tasks panel" event from main menu / tray */
+  onOpenTasksPanel: (callback) => {
+    const handler = (_event) => callback();
+    ipcRenderer.on('a2a:openTasksPanel', handler);
+    return () => ipcRenderer.removeListener('a2a:openTasksPanel', handler);
+  },
+
+  /** Listen for "refresh tasks" event from main menu */
+  onRefreshTasks: (callback) => {
+    const handler = (_event) => callback();
+    ipcRenderer.on('a2a:refreshTasks', handler);
+    return () => ipcRenderer.removeListener('a2a:refreshTasks', handler);
+  },
+
+  /** Listen for "create task dialog" event from main menu */
+  onCreateTaskDialog: (callback) => {
+    const handler = (_event) => callback();
+    ipcRenderer.on('a2a:createTaskDialog', handler);
+    return () => ipcRenderer.removeListener('a2a:createTaskDialog', handler);
+  },
+
+  /** Listen for activation events from main process */
+  onActivationEvent: (callback) => {
+    const handler = (_event, data) => callback(data);
+    ipcRenderer.on('desktop:activationEvent', handler);
+    return () => ipcRenderer.removeListener('desktop:activationEvent', handler);
+  },
+
   /** Check for updates */
   checkForUpdates: () => ipcRenderer.invoke('app:checkForUpdates'),
 

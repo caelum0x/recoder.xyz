@@ -1,0 +1,162 @@
+# Alertmanager Configuration for Recoder Platform
+# Deployed alongside Prometheus on monitor.recoder.xyz
+# Server: Hetzner 8 vCPU, 16GB RAM (77.42.23.19)
+#
+# NOTE:
+# This file must remain valid without env expansion, because the current
+# Alertmanager container startup path does not expand ${...} placeholders.
+#
+# REQUIRED BEFORE PRODUCTION:
+# Replace ALL 'http://localhost:9095/alertmanager-not-configured' URLs below
+# with your real webhook endpoint (e.g., Slack incoming webhook, PagerDuty,
+# or internal notification service).
+#
+# The placeholder URL will cause connection-refused errors that are visible
+# in Alertmanager logs, making misconfiguration obvious rather than silent.
+
+global:
+  # No SMTP defaults here; enable email only after explicit SMTP wiring.
+  # PLACEHOLDER — replace with real Slack webhook URL before production use
+  slack_api_url: 'http://localhost:9095/alertmanager-not-configured'
+
+# ──────────────────────────────────────────────
+# Inhibition Rules
+# Suppress lower-severity alerts when higher-severity ones fire
+# ──────────────────────────────────────────────
+inhibit_rules:
+  # If a critical alert fires, suppress corresponding warnings
+  - source_matchers:
+      - severity = critical
+    target_matchers:
+      - severity = warning
+    equal: ['job', 'instance']
+
+  # If multiple services are down, suppress individual ServiceDown alerts
+  - source_matchers:
+      - alertname = MultipleServicesDown
+    target_matchers:
+      - alertname = ServiceDown
+
+  # If memory is critically high, suppress the warning-level alert
+  - source_matchers:
+      - alertname = CriticalMemoryUsage
+    target_matchers:
+      - alertname = HighMemoryUsage
+    equal: ['instance']
+
+  # If CPU is critically high, suppress the warning-level alert
+  - source_matchers:
+      - alertname = CriticalCPUUsage
+    target_matchers:
+      - alertname = HighCPUUsage
+    equal: ['instance']
+
+  # If Redis is completely down, suppress memory alerts
+  - source_matchers:
+      - alertname = RedisDown
+    target_matchers:
+      - alertname =~ "RedisMemory.*"
+
+  # If error rate is critical (>5%), suppress the warning (>1%) alert
+  - source_matchers:
+      - alertname = CriticalErrorRate
+    target_matchers:
+      - alertname = HighErrorRate
+    equal: ['job']
+
+# ──────────────────────────────────────────────
+# Route Tree
+# Determines which receiver handles each alert
+# ──────────────────────────────────────────────
+route:
+  # Default receiver for unmatched alerts
+  receiver: 'default-webhook'
+
+  # Group alerts by severity and job to reduce noise
+  group_by: ['severity', 'job', 'alertname']
+
+  # Wait 30s to buffer alerts before sending first notification
+  group_wait: 30s
+
+  # Wait 5 min before sending updates for an existing group
+  group_interval: 5m
+
+  # Default repeat interval for all alerts
+  repeat_interval: 4h
+
+  # Child routes (evaluated in order, first match wins)
+  routes:
+    # ── Critical alerts: short repeat, both webhook + email ──
+    - matchers:
+        - severity = critical
+      receiver: 'critical-alerts'
+      repeat_interval: 30m
+      group_wait: 15s
+      continue: false
+
+    # ── Payment/billing alerts: always critical path ──
+    - matchers:
+        - alertname =~ "PaymentWebhook.*|WebhookProcessing.*"
+      receiver: 'critical-alerts'
+      repeat_interval: 15m
+      group_wait: 10s
+      continue: false
+
+    # ── SLO burn rate alerts ──
+    - matchers:
+        - alert_type = slo_burn
+        - severity = critical
+      receiver: 'critical-alerts'
+      repeat_interval: 30m
+      continue: false
+
+    - matchers:
+        - alert_type = slo_burn
+        - severity = warning
+      receiver: 'default-webhook'
+      repeat_interval: 4h
+      continue: false
+
+    # ── Auth security alerts ──
+    - matchers:
+        - alertname =~ ".*Auth.*|.*2FA.*"
+        - severity = critical
+      receiver: 'critical-alerts'
+      repeat_interval: 30m
+      continue: false
+
+    # ── Infrastructure warnings ──
+    - matchers:
+        - severity = warning
+      receiver: 'default-webhook'
+      repeat_interval: 4h
+      continue: false
+
+# ──────────────────────────────────────────────
+# Receivers
+# ──────────────────────────────────────────────
+receivers:
+  # --- Default: webhook only, for warnings ---
+  # REQUIRED: Replace placeholder URL with real webhook endpoint
+  - name: 'default-webhook'
+    webhook_configs:
+      - url: 'http://localhost:9095/alertmanager-not-configured'
+        send_resolved: true
+        http_config:
+          follow_redirects: true
+        max_alerts: 10
+
+  # --- Critical: webhook only by default ---
+  # REQUIRED: Replace placeholder URL with real webhook endpoint
+  - name: 'critical-alerts'
+    webhook_configs:
+      - url: 'http://localhost:9095/alertmanager-not-configured'
+        send_resolved: true
+        http_config:
+          follow_redirects: true
+        max_alerts: 0  # Send all alerts, no limit
+
+# ──────────────────────────────────────────────
+# Templates (optional, for custom notification formatting)
+# ──────────────────────────────────────────────
+templates: []

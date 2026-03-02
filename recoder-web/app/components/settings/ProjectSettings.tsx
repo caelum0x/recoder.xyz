@@ -89,14 +89,14 @@ export function ProjectSettings() {
           initial={{ scale: 0.95, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
           exit={{ scale: 0.95, opacity: 0 }}
-          className="bg-bolt-elements-background-depth-2 rounded-lg shadow-2xl w-[800px] max-w-[90vw] max-h-[85vh] flex flex-col overflow-hidden border border-bolt-elements-borderColor"
+          className="bg-recoder-elements-background-depth-2 rounded-lg shadow-2xl w-[800px] max-w-[90vw] max-h-[85vh] flex flex-col overflow-hidden border border-recoder-elements-borderColor"
           onClick={(e) => e.stopPropagation()}
         >
           {/* Header */}
-          <div className="flex items-center justify-between px-6 py-4 border-b border-bolt-elements-borderColor">
+          <div className="flex items-center justify-between px-6 py-4 border-b border-recoder-elements-borderColor">
             <div className="flex items-center gap-3">
-              <div className="i-ph:gear-six text-xl text-bolt-elements-textPrimary" />
-              <h2 className="text-lg font-semibold text-bolt-elements-textPrimary">
+              <div className="i-ph:gear-six text-xl text-recoder-elements-textPrimary" />
+              <h2 className="text-lg font-semibold text-recoder-elements-textPrimary">
                 Project Settings
               </h2>
               {unsavedChanges && (
@@ -107,14 +107,14 @@ export function ProjectSettings() {
             </div>
             <button
               onClick={handleClose}
-              className="p-2 text-bolt-elements-textTertiary hover:text-bolt-elements-textPrimary hover:bg-bolt-elements-background-depth-2 rounded-md transition-colors"
+              className="p-2 text-recoder-elements-textTertiary hover:text-recoder-elements-textPrimary hover:bg-recoder-elements-background-depth-2 rounded-md transition-colors"
             >
               <div className="i-ph:x text-lg" />
             </button>
           </div>
 
           {/* Tabs */}
-          <div className="flex border-b border-bolt-elements-borderColor px-4">
+          <div className="flex border-b border-recoder-elements-borderColor px-4">
             {TABS.map((tab) => (
               <button
                 key={tab.id}
@@ -122,8 +122,8 @@ export function ProjectSettings() {
                 className={classNames(
                   'flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 -mb-px transition-colors',
                   activeTab === tab.id
-                    ? 'border-orange-500 text-bolt-elements-textPrimary'
-                    : 'border-transparent text-bolt-elements-textTertiary hover:text-bolt-elements-textPrimary'
+                    ? 'border-orange-500 text-recoder-elements-textPrimary'
+                    : 'border-transparent text-recoder-elements-textTertiary hover:text-recoder-elements-textPrimary'
                 )}
               >
                 <div className={classNames(tab.icon, 'text-base')} />
@@ -152,11 +152,11 @@ export function ProjectSettings() {
           )}
 
           {/* Footer */}
-          <div className="flex items-center justify-between px-6 py-4 border-t border-bolt-elements-borderColor bg-bolt-elements-background-depth-1">
+          <div className="flex items-center justify-between px-6 py-4 border-t border-recoder-elements-borderColor bg-recoder-elements-background-depth-1">
             <div className="flex items-center gap-2">
               <button
                 onClick={() => resetCategory(activeTab)}
-                className="px-3 py-1.5 text-sm text-bolt-elements-textTertiary hover:text-bolt-elements-textPrimary hover:bg-bolt-elements-background-depth-2 rounded-md transition-colors"
+                className="px-3 py-1.5 text-sm text-recoder-elements-textTertiary hover:text-recoder-elements-textPrimary hover:bg-recoder-elements-background-depth-2 rounded-md transition-colors"
               >
                 Reset Tab
               </button>
@@ -170,7 +170,7 @@ export function ProjectSettings() {
             <div className="flex items-center gap-2">
               <button
                 onClick={handleClose}
-                className="px-4 py-2 text-sm text-bolt-elements-textTertiary hover:text-bolt-elements-textPrimary bg-bolt-elements-background-depth-2 rounded-md transition-colors"
+                className="px-4 py-2 text-sm text-recoder-elements-textTertiary hover:text-recoder-elements-textPrimary bg-recoder-elements-background-depth-2 rounded-md transition-colors"
               >
                 Cancel
               </button>
@@ -609,7 +609,7 @@ interface SettingGroupProps {
 function SettingGroup({ title, children }: SettingGroupProps) {
   return (
     <div className="space-y-4">
-      <h3 className="text-sm font-medium text-bolt-elements-textPrimary">{title}</h3>
+      <h3 className="text-sm font-medium text-recoder-elements-textPrimary">{title}</h3>
       <div className="space-y-4 pl-1">{children}</div>
     </div>
   );
@@ -627,17 +627,17 @@ interface TextInputProps {
 function TextInput({ label, value, onChange, placeholder, maxLength, description }: TextInputProps) {
   return (
     <div className="space-y-1">
-      <label className="block text-sm text-bolt-elements-textTertiary">{label}</label>
+      <label className="block text-sm text-recoder-elements-textTertiary">{label}</label>
       <input
         type="text"
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
         maxLength={maxLength}
-        className="w-full px-3 py-2 text-sm bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor rounded-md text-bolt-elements-textPrimary placeholder:text-bolt-elements-textTertiary focus:outline-none focus:ring-2 focus:ring-orange-500/50"
+        className="w-full px-3 py-2 text-sm bg-recoder-elements-background-depth-2 border border-recoder-elements-borderColor rounded-md text-recoder-elements-textPrimary placeholder:text-recoder-elements-textTertiary focus:outline-none focus:ring-2 focus:ring-orange-500/50"
       />
       {description && (
-        <p className="text-xs text-bolt-elements-textTertiary">{description}</p>
+        <p className="text-xs text-recoder-elements-textTertiary">{description}</p>
       )}
     </div>
   );
@@ -656,17 +656,17 @@ interface TextAreaProps {
 function TextArea({ label, value, onChange, placeholder, maxLength, rows = 3, description }: TextAreaProps) {
   return (
     <div className="space-y-1">
-      <label className="block text-sm text-bolt-elements-textTertiary">{label}</label>
+      <label className="block text-sm text-recoder-elements-textTertiary">{label}</label>
       <textarea
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
         maxLength={maxLength}
         rows={rows}
-        className="w-full px-3 py-2 text-sm bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor rounded-md text-bolt-elements-textPrimary placeholder:text-bolt-elements-textTertiary focus:outline-none focus:ring-2 focus:ring-orange-500/50 resize-none"
+        className="w-full px-3 py-2 text-sm bg-recoder-elements-background-depth-2 border border-recoder-elements-borderColor rounded-md text-recoder-elements-textPrimary placeholder:text-recoder-elements-textTertiary focus:outline-none focus:ring-2 focus:ring-orange-500/50 resize-none"
       />
       {description && (
-        <p className="text-xs text-bolt-elements-textTertiary">{description}</p>
+        <p className="text-xs text-recoder-elements-textTertiary">{description}</p>
       )}
     </div>
   );
@@ -683,11 +683,11 @@ interface SelectInputProps {
 function SelectInput({ label, value, onChange, options, description }: SelectInputProps) {
   return (
     <div className="space-y-1">
-      <label className="block text-sm text-bolt-elements-textTertiary">{label}</label>
+      <label className="block text-sm text-recoder-elements-textTertiary">{label}</label>
       <select
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="w-full px-3 py-2 text-sm bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor rounded-md text-bolt-elements-textPrimary focus:outline-none focus:ring-2 focus:ring-orange-500/50"
+        className="w-full px-3 py-2 text-sm bg-recoder-elements-background-depth-2 border border-recoder-elements-borderColor rounded-md text-recoder-elements-textPrimary focus:outline-none focus:ring-2 focus:ring-orange-500/50"
       >
         {options.map((opt) => (
           <option key={opt.value} value={opt.value}>
@@ -696,7 +696,7 @@ function SelectInput({ label, value, onChange, options, description }: SelectInp
         ))}
       </select>
       {description && (
-        <p className="text-xs text-bolt-elements-textTertiary">{description}</p>
+        <p className="text-xs text-recoder-elements-textTertiary">{description}</p>
       )}
     </div>
   );
@@ -727,7 +727,7 @@ function NumberInput({
 }: NumberInputProps) {
   return (
     <div className="space-y-1">
-      <label className="block text-sm text-bolt-elements-textTertiary">{label}</label>
+      <label className="block text-sm text-recoder-elements-textTertiary">{label}</label>
       <div className="flex items-center gap-2">
         <input
           type="number"
@@ -737,14 +737,14 @@ function NumberInput({
           max={max}
           step={step}
           disabled={disabled}
-          className="w-full px-3 py-2 text-sm bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor rounded-md text-bolt-elements-textPrimary focus:outline-none focus:ring-2 focus:ring-orange-500/50 disabled:opacity-50"
+          className="w-full px-3 py-2 text-sm bg-recoder-elements-background-depth-2 border border-recoder-elements-borderColor rounded-md text-recoder-elements-textPrimary focus:outline-none focus:ring-2 focus:ring-orange-500/50 disabled:opacity-50"
         />
         {suffix && (
-          <span className="text-sm text-bolt-elements-textTertiary whitespace-nowrap">{suffix}</span>
+          <span className="text-sm text-recoder-elements-textTertiary whitespace-nowrap">{suffix}</span>
         )}
       </div>
       {description && (
-        <p className="text-xs text-bolt-elements-textTertiary">{description}</p>
+        <p className="text-xs text-recoder-elements-textTertiary">{description}</p>
       )}
     </div>
   );
@@ -765,8 +765,8 @@ function SliderInput({ label, value, onChange, min, max, step, suffix, descripti
   return (
     <div className="space-y-1">
       <div className="flex items-center justify-between">
-        <label className="block text-sm text-bolt-elements-textTertiary">{label}</label>
-        <span className="text-sm text-bolt-elements-textPrimary">
+        <label className="block text-sm text-recoder-elements-textTertiary">{label}</label>
+        <span className="text-sm text-recoder-elements-textPrimary">
           {value}
           {suffix}
         </span>
@@ -778,10 +778,10 @@ function SliderInput({ label, value, onChange, min, max, step, suffix, descripti
         min={min}
         max={max}
         step={step}
-        className="w-full h-2 bg-bolt-elements-background-depth-2 rounded-lg appearance-none cursor-pointer accent-orange-500"
+        className="w-full h-2 bg-recoder-elements-background-depth-2 rounded-lg appearance-none cursor-pointer accent-orange-500"
       />
       {description && (
-        <p className="text-xs text-bolt-elements-textTertiary">{description}</p>
+        <p className="text-xs text-recoder-elements-textTertiary">{description}</p>
       )}
     </div>
   );
@@ -798,9 +798,9 @@ function ToggleInput({ label, value, onChange, description }: ToggleInputProps) 
   return (
     <div className="flex items-start justify-between gap-4">
       <div className="space-y-0.5">
-        <label className="block text-sm text-bolt-elements-textPrimary">{label}</label>
+        <label className="block text-sm text-recoder-elements-textPrimary">{label}</label>
         {description && (
-          <p className="text-xs text-bolt-elements-textTertiary">{description}</p>
+          <p className="text-xs text-recoder-elements-textTertiary">{description}</p>
         )}
       </div>
       <button
@@ -810,7 +810,7 @@ function ToggleInput({ label, value, onChange, description }: ToggleInputProps) 
         onClick={() => onChange(!value)}
         className={classNames(
           'relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-orange-500/50',
-          value ? 'bg-orange-500' : 'bg-bolt-elements-background-depth-2'
+          value ? 'bg-orange-500' : 'bg-recoder-elements-background-depth-2'
         )}
       >
         <span
@@ -854,12 +854,12 @@ function TagInput({ label, value, onChange, placeholder, maxTags = 20 }: TagInpu
 
   return (
     <div className="space-y-1">
-      <label className="block text-sm text-bolt-elements-textTertiary">{label}</label>
-      <div className="flex flex-wrap gap-2 p-2 min-h-[42px] bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor rounded-md">
+      <label className="block text-sm text-recoder-elements-textTertiary">{label}</label>
+      <div className="flex flex-wrap gap-2 p-2 min-h-[42px] bg-recoder-elements-background-depth-2 border border-recoder-elements-borderColor rounded-md">
         {value.map((tag) => (
           <span
             key={tag}
-            className="inline-flex items-center gap-1 px-2 py-1 text-xs bg-bolt-elements-background-depth-2 text-bolt-elements-textPrimary rounded"
+            className="inline-flex items-center gap-1 px-2 py-1 text-xs bg-recoder-elements-background-depth-2 text-recoder-elements-textPrimary rounded"
           >
             {tag}
             <button
@@ -878,11 +878,11 @@ function TagInput({ label, value, onChange, placeholder, maxTags = 20 }: TagInpu
             onChange={(e) => setInputValue(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder={value.length === 0 ? placeholder : ''}
-            className="flex-1 min-w-[100px] bg-transparent text-sm text-bolt-elements-textPrimary placeholder:text-bolt-elements-textTertiary focus:outline-none"
+            className="flex-1 min-w-[100px] bg-transparent text-sm text-recoder-elements-textPrimary placeholder:text-recoder-elements-textTertiary focus:outline-none"
           />
         )}
       </div>
-      <p className="text-xs text-bolt-elements-textTertiary">
+      <p className="text-xs text-recoder-elements-textTertiary">
         Press Enter to add a tag ({value.length}/{maxTags})
       </p>
     </div>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useFeatureFlag } from "@giselles-ai/react";
+import { useFeatureFlag } from "@recoder/react";
 import { useCallback, useState } from "react";
 import { useShallow } from "zustand/shallow";
 import { useAppDesignerStore } from "../../app-designer";

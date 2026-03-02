@@ -41,7 +41,7 @@ export function V2Footer({
 							data-panel-trigger="run-history"
 							className={`cursor-pointer ${
 								activePanel === "run-history"
-									? "text-[#6B8FF0]"
+									? "text-[#f97316]"
 									: "text-inverse hover:text-icon-hover"
 							}`}
 						>
@@ -62,7 +62,7 @@ export function V2Footer({
 							data-panel-trigger="secret"
 							className={`cursor-pointer ${
 								activePanel === "secret"
-									? "text-[#6B8FF0]"
+									? "text-[#f97316]"
 									: "text-inverse hover:text-icon-hover"
 							}`}
 						>
@@ -85,7 +85,7 @@ export function V2Footer({
 							data-panel-trigger="chat"
 							className={`cursor-pointer ${
 								chat?.isOpen
-									? "text-[#6B8FF0]"
+									? "text-[#f97316]"
 									: "text-inverse hover:text-icon-hover"
 							}`}
 						>
@@ -101,7 +101,7 @@ export function V2Footer({
 						align="start"
 					>
 						<a
-							href="https://docs.giselles.ai/en/guides/introduction"
+							href="https://docs.recoder.xyz/en/guides/introduction"
 							target="_blank"
 							rel="noopener noreferrer"
 							className="text-xs text-inverse hover:text-icon-hover flex items-center gap-1"

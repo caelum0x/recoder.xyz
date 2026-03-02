@@ -5,7 +5,8 @@
 
 import { prisma } from '@/lib/prisma';
 import { sendSubscriptionConfirmationEmail } from '../email';
-import { randomUUID } from 'crypto';
+import { randomUUID, createHmac, timingSafeEqual } from 'crypto';
+import { logger } from '@/lib/logger';
 
 export class BillingService {
   /**
@@ -86,7 +87,7 @@ export class BillingService {
           user.name,
           plan,
           amount / 100 // Convert cents to dollars
-        ).catch((err) => console.error('Failed to send subscription email:', err));
+        ).catch((err) => logger.error('Failed to send subscription email', { error: String(err) }));
       }
 
       // Log subscription creation
@@ -101,7 +102,7 @@ export class BillingService {
       });
 
     } catch (error: any) {
-      console.error('Create subscription error:', error);
+      logger.error('Create subscription error', { error: String(error) });
       throw error;
     }
   }
@@ -116,7 +117,7 @@ export class BillingService {
       });
 
     } catch (error: any) {
-      console.error('Get subscription error:', error);
+      logger.error('Get subscription error', { error: String(error) });
       throw error;
     }
   }
@@ -168,7 +169,7 @@ export class BillingService {
       });
 
     } catch (error: any) {
-      console.error('Update subscription error:', error);
+      logger.error('Update subscription error', { error: String(error) });
       throw error;
     }
   }
@@ -235,7 +236,7 @@ export class BillingService {
           : 'Subscription will cancel at end of billing period',
       };
     } catch (error: any) {
-      console.error('Cancel subscription error:', error);
+      logger.error('Cancel subscription error', { error: String(error) });
       throw error;
     }
   }
@@ -274,7 +275,7 @@ export class BillingService {
       });
 
     } catch (error: any) {
-      console.error('Resume subscription error:', error);
+      logger.error('Resume subscription error', { error: String(error) });
       throw error;
     }
   }
@@ -294,7 +295,7 @@ export class BillingService {
         amount,
       };
     } catch (error: any) {
-      console.error('Create checkout session error:', error);
+      logger.error('Create checkout session error', { error: String(error) });
       throw error;
     }
   }
@@ -333,11 +334,11 @@ export class BillingService {
           break;
 
         default:
-          console.log(`Unhandled webhook event: ${eventType}`);
+          logger.warn('Unhandled webhook event', { eventType });
       }
 
     } catch (error: any) {
-      console.error('Handle webhook error:', error);
+      logger.error('Handle webhook error', { error: String(error) });
       throw error;
     }
   }
@@ -354,7 +355,7 @@ export class BillingService {
       });
 
     } catch (error: any) {
-      console.error('Get invoices error:', error);
+      logger.error('Get invoices error', { error: String(error) });
       throw error;
     }
   }
@@ -376,7 +377,7 @@ export class BillingService {
       }
 
     } catch (error: any) {
-      console.error('Get invoice error:', error);
+      logger.error('Get invoice error', { error: String(error) });
       throw error;
     }
   }
@@ -404,7 +405,7 @@ export class BillingService {
       });
 
     } catch (error: any) {
-      console.error('Create invoice error:', error);
+      logger.error('Create invoice error', { error: String(error) });
       throw error;
     }
   }
@@ -438,7 +439,7 @@ export class BillingService {
       });
 
     } catch (error: any) {
-      console.error('Add payment method error:', error);
+      logger.error('Add payment method error', { error: String(error) });
       throw error;
     }
   }
@@ -454,7 +455,7 @@ export class BillingService {
       });
 
     } catch (error: any) {
-      console.error('List payment methods error:', error);
+      logger.error('List payment methods error', { error: String(error) });
       throw error;
     }
   }
@@ -477,7 +478,7 @@ export class BillingService {
       });
 
     } catch (error: any) {
-      console.error('Set default payment method error:', error);
+      logger.error('Set default payment method error', { error: String(error) });
       throw error;
     }
   }
@@ -492,7 +493,7 @@ export class BillingService {
       });
 
     } catch (error: any) {
-      console.error('Remove payment method error:', error);
+      logger.error('Remove payment method error', { error: String(error) });
       throw error;
     }
   }
@@ -533,7 +534,7 @@ export class BillingService {
         daysRemaining: Math.ceil(daysRemaining),
       };
     } catch (error: any) {
-      console.error('Calculate proration error:', error);
+      logger.error('Calculate proration error', { error: String(error) });
       throw error;
     }
   }
@@ -590,26 +591,68 @@ export class BillingService {
     payload: any,
     signature: string
   ): Promise<boolean> {
-    // Implement signature verification based on provider
-    // For now, return true
-    return true;
+    try {
+      const rawPayload = typeof payload === 'string' ? payload : JSON.stringify(payload);
+
+      switch (provider) {
+        case 'dodo': {
+          const secret = process.env.DODO_WEBHOOK_SECRET;
+          if (!secret) {
+            logger.error('DODO_WEBHOOK_SECRET not configured');
+            return false;
+          }
+          const expected = createHmac('sha256', secret).update(rawPayload).digest('hex');
+          return timingSafeEqual(Buffer.from(signature), Buffer.from(expected));
+        }
+
+        case 'polar': {
+          const secret = process.env.POLAR_WEBHOOK_SECRET;
+          if (!secret) {
+            logger.error('POLAR_WEBHOOK_SECRET not configured');
+            return false;
+          }
+          // Polar uses "sha256=<hex>" format
+          const [algo, sig] = signature.split('=');
+          if (algo !== 'sha256' || !sig) return false;
+          const expected = createHmac('sha256', secret).update(rawPayload).digest('hex');
+          return timingSafeEqual(Buffer.from(sig), Buffer.from(expected));
+        }
+
+        case 'paddle': {
+          const secret = process.env.PADDLE_WEBHOOK_SECRET;
+          if (!secret) {
+            logger.error('PADDLE_WEBHOOK_SECRET not configured');
+            return false;
+          }
+          const expected = createHmac('sha256', secret).update(rawPayload).digest('hex');
+          return timingSafeEqual(Buffer.from(signature), Buffer.from(expected));
+        }
+
+        default:
+          logger.warn('Unknown billing provider for webhook verification', { provider });
+          return false;
+      }
+    } catch (error) {
+      logger.error('Webhook signature verification failed', { provider, error: String(error) });
+      return false;
+    }
   }
 
   private async handlePaymentSuccess(payload: any) {
     // Extract user ID and create/update subscription
-    console.log('Payment success:', payload);
+    logger.info('Payment success', { payload: JSON.stringify(payload) });
   }
 
   private async handleSubscriptionUpdate(payload: any) {
-    console.log('Subscription update:', payload);
+    logger.info('Subscription update', { payload: JSON.stringify(payload) });
   }
 
   private async handleSubscriptionCancelled(payload: any) {
-    console.log('Subscription cancelled:', payload);
+    logger.info('Subscription cancelled', { payload: JSON.stringify(payload) });
   }
 
   private async handlePaymentFailed(payload: any) {
-    console.log('Payment failed:', payload);
+    logger.error('Payment failed', { payload: JSON.stringify(payload) });
   }
 }
 

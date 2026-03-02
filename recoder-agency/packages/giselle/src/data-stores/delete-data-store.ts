@@ -1,4 +1,4 @@
-import { DataStore, type DataStoreId } from "@giselles-ai/protocol";
+import { DataStore, type DataStoreId } from "@recoder/protocol";
 import type { GiselleContext } from "../types";
 import { dataStorePath } from "./paths";
 

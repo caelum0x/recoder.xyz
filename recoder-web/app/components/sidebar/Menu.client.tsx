@@ -248,21 +248,21 @@ export function Menu() {
         initial="closed"
         animate={open ? 'open' : 'closed'}
         variants={menuVariants}
-        className="flex flex-col side-menu fixed top-0 w-[350px] h-full bg-bolt-elements-background-depth-2 border-r rounded-r-3xl border-bolt-elements-borderColor z-sidebar shadow-xl text-sm"
+        className="flex flex-col side-menu fixed top-0 w-[350px] h-full bg-recoder-elements-background-depth-2 border-r rounded-r-3xl border-recoder-elements-borderColor z-sidebar shadow-xl text-sm"
       >
         <div className="flex items-center justify-end h-[var(--header-height)] px-4">
           <IconButton
             icon="i-ph:x"
             onClick={() => setOpen(false)}
             title="Close menu"
-            className="text-bolt-elements-textSecondary hover:text-bolt-elements-textPrimary"
+            className="text-recoder-elements-textSecondary hover:text-recoder-elements-textPrimary"
           />
         </div>
       <div className="flex-1 flex flex-col h-full w-full overflow-hidden">
         <div className="p-4">
           <a
             href="/"
-            className="flex gap-2 items-center bg-bolt-elements-background-depth-2 text-bolt-elements-textPrimary hover:bg-bolt-elements-background-depth-3 rounded-md p-2 transition-colors"
+            className="flex gap-2 items-center bg-recoder-elements-background-depth-2 text-recoder-elements-textPrimary hover:bg-recoder-elements-background-depth-3 rounded-md p-2 transition-colors"
           >
             <span className="inline-block i-bolt:chat scale-110" />
             Start new chat
@@ -273,29 +273,29 @@ export function Menu() {
         {USE_ENHANCED_SESSIONS && (
           <div className="px-4 pb-2">
             <div className="relative">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 i-ph:magnifying-glass text-bolt-elements-textTertiary" />
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 i-ph:magnifying-glass text-recoder-elements-textTertiary" />
               <input
                 ref={searchInputRef}
                 type="text"
                 placeholder="Search chats..."
                 value={query}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-9 pr-8 py-1.5 text-sm bg-bolt-elements-background-depth-1 border border-bolt-elements-borderColor rounded-md text-bolt-elements-textPrimary placeholder:text-bolt-elements-textTertiary focus:outline-none focus:ring-1 focus:ring-blue-500"
+                className="w-full pl-9 pr-8 py-1.5 text-sm bg-recoder-elements-background-depth-1 border border-recoder-elements-borderColor rounded-md text-recoder-elements-textPrimary placeholder:text-recoder-elements-textTertiary focus:outline-none focus:ring-1 focus:ring-blue-500"
               />
               {query && (
                 <button
                   onClick={() => setSearchQuery('')}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 i-ph:x text-bolt-elements-textTertiary hover:text-bolt-elements-textPrimary"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 i-ph:x text-recoder-elements-textTertiary hover:text-recoder-elements-textPrimary"
                 />
               )}
             </div>
           </div>
         )}
 
-        <div className="text-bolt-elements-textPrimary font-medium pl-6 pr-5 my-2">Your Chats</div>
+        <div className="text-recoder-elements-textPrimary font-medium pl-6 pr-5 my-2">Your Chats</div>
         <div className="flex-1 overflow-scroll pl-4 pr-5 pb-5">
           {(loadingFromDb || loading) && (
-            <div className="pl-2 text-bolt-elements-textTertiary flex items-center gap-2">
+            <div className="pl-2 text-recoder-elements-textTertiary flex items-center gap-2">
               <div className="i-ph:spinner animate-spin" />
               Loading...
             </div>
@@ -303,14 +303,14 @@ export function Menu() {
 
           {/* Enhanced sessions view */}
           {USE_ENHANCED_SESSIONS && !loading && sessions.length === 0 && (
-            <div className="pl-2 text-bolt-elements-textTertiary">
+            <div className="pl-2 text-recoder-elements-textTertiary">
               {query ? 'No conversations match your search' : 'No previous conversations'}
             </div>
           )}
 
           {/* Legacy list view (fallback) */}
           {!USE_ENHANCED_SESSIONS && !loadingFromDb && list.length === 0 && (
-            <div className="pl-2 text-bolt-elements-textTertiary">No previous conversations</div>
+            <div className="pl-2 text-recoder-elements-textTertiary">No previous conversations</div>
           )}
 
           <DialogRoot open={dialogContent !== null}>
@@ -327,7 +327,7 @@ export function Menu() {
                   }))
                 ).map(({ category, items }) => (
                   <div key={category} className="mt-4 first:mt-0 space-y-1">
-                    <div className="text-bolt-elements-textTertiary sticky top-0 z-1 bg-bolt-elements-background-depth-2 pl-2 pt-2 pb-1">
+                    <div className="text-recoder-elements-textTertiary sticky top-0 z-1 bg-recoder-elements-background-depth-2 pl-2 pt-2 pb-1">
                       {category}
                     </div>
                     {items.map((item) => {
@@ -358,7 +358,7 @@ export function Menu() {
             {/* Legacy rendering */}
             {!USE_ENHANCED_SESSIONS && binDates(list).map(({ category, items }) => (
               <div key={category} className="mt-4 first:mt-0 space-y-1">
-                <div className="text-bolt-elements-textTertiary sticky top-0 z-1 bg-bolt-elements-background-depth-2 pl-2 pt-2 pb-1">
+                <div className="text-recoder-elements-textTertiary sticky top-0 z-1 bg-recoder-elements-background-depth-2 pl-2 pt-2 pb-1">
                   {category}
                 </div>
                 {items.map((item) => (
@@ -379,7 +379,7 @@ export function Menu() {
                       <p className="mt-1">Are you sure you want to delete this chat?</p>
                     </div>
                   </DialogDescription>
-                  <div className="px-5 pb-4 bg-bolt-elements-background-depth-2 flex gap-2 justify-end">
+                  <div className="px-5 pb-4 bg-recoder-elements-background-depth-2 flex gap-2 justify-end">
                     <DialogButton type="secondary" onClick={closeDialog}>
                       Cancel
                     </DialogButton>
@@ -398,7 +398,7 @@ export function Menu() {
             </Dialog>
           </DialogRoot>
         </div>
-        <div className="flex items-center border-t border-bolt-elements-borderColor p-4">
+        <div className="flex items-center border-t border-recoder-elements-borderColor p-4">
           <ThemeSwitch className="ml-auto" />
         </div>
       </div>

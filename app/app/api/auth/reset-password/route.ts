@@ -7,9 +7,17 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
+import { rateLimit, rateLimitConfigs } from '@/lib/middleware/rate-limit';
+import { validatePassword } from '@/lib/password-validation';
+
+const passwordResetRateLimiter = rateLimit(rateLimitConfigs.passwordReset);
 
 export async function POST(request: NextRequest) {
   try {
+    // Rate limit: 3 requests per hour
+    const rateLimitResponse = await passwordResetRateLimiter(request);
+    if (rateLimitResponse) return rateLimitResponse;
+
     const body = await request.json();
     const { token, password, validate } = body;
 
@@ -66,9 +74,10 @@ export async function POST(request: NextRequest) {
     }
 
     // Validate password strength
-    if (password.length < 8) {
+    const validation = validatePassword(password);
+    if (!validation.valid) {
       return NextResponse.json(
-        { success: false, error: 'Password must be at least 8 characters' },
+        { success: false, error: validation.errors[0] || 'Password is too weak', errors: validation.errors },
         { status: 400 }
       );
     }
@@ -90,10 +99,10 @@ export async function POST(request: NextRequest) {
       where: { id: verification.id }
     });
 
-    // Revoke all existing sessions for security
-    await prisma.sessions.deleteMany({
+    // Revoke all existing sessions for security (Better Auth table)
+    await prisma.session.deleteMany({
       where: {
-        users: {
+        user: {
           email
         }
       }

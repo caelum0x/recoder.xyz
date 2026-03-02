@@ -1,4 +1,4 @@
-import { Button } from "@giselle-internal/ui/button";
+import { Button } from "@recoder-internal/ui/button";
 import {
 	Dialog,
 	DialogContent,
@@ -6,7 +6,7 @@ import {
 	DialogFooter,
 	DialogTitle,
 	DialogTrigger,
-} from "@giselle-internal/ui/dialog";
+} from "@recoder-internal/ui/dialog";
 import { DemoSection } from "../components/demo-section";
 import { UiPage } from "../components/ui-page";
 

@@ -1,5 +1,5 @@
-import type { GitHubQueryContext } from "@giselles-ai/giselle";
-import type { QueryResult } from "@giselles-ai/rag";
+import type { GitHubQueryContext } from "@recoder/giselle";
+import type { QueryResult } from "@recoder/rag";
 import { and, eq, inArray } from "drizzle-orm";
 import { db, githubRepositoryIssueEmbeddings } from "@/db";
 import { resolveGitHubRepositoryIndex } from "../resolve-github-repository-index";

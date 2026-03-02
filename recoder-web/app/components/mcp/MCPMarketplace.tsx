@@ -268,45 +268,45 @@ export default function MCPMarketplace({
   }
 
   return (
-    <div className="flex flex-col h-full bg-bolt-elements-background-depth-1">
+    <div className="flex flex-col h-full bg-recoder-elements-background-depth-1">
       {/* Header */}
-      <div className="flex items-center justify-between p-4 border-b border-bolt-elements-borderColor">
+      <div className="flex items-center justify-between p-4 border-b border-recoder-elements-borderColor">
         <div>
-          <h2 className="text-xl font-semibold text-bolt-elements-textPrimary flex items-center gap-2">
+          <h2 className="text-xl font-semibold text-recoder-elements-textPrimary flex items-center gap-2">
             <Package className="w-5 h-5" />
             MCP Server Marketplace
           </h2>
-          <p className="text-sm text-bolt-elements-textSecondary mt-1">
+          <p className="text-sm text-recoder-elements-textSecondary mt-1">
             Extend your AI assistant with powerful tools and integrations
           </p>
         </div>
         {onClose && (
           <button
             onClick={onClose}
-            className="p-2 hover:bg-bolt-elements-background-depth-2 rounded-lg transition-colors"
+            className="p-2 hover:bg-recoder-elements-background-depth-2 rounded-lg transition-colors"
           >
-            <X className="w-5 h-5 text-bolt-elements-textSecondary" />
+            <X className="w-5 h-5 text-recoder-elements-textSecondary" />
           </button>
         )}
       </div>
 
       {/* Search and Filters */}
-      <div className="p-4 border-b border-bolt-elements-borderColor">
+      <div className="p-4 border-b border-recoder-elements-borderColor">
         <div className="flex gap-3">
           <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-bolt-elements-textTertiary" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-recoder-elements-textTertiary" />
             <input
               type="text"
               placeholder="Search servers..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor rounded-lg text-bolt-elements-textPrimary placeholder:text-bolt-elements-textTertiary focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full pl-10 pr-4 py-2 bg-recoder-elements-background-depth-2 border border-recoder-elements-borderColor rounded-lg text-recoder-elements-textPrimary placeholder:text-recoder-elements-textTertiary focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
           <select
             value={selectedCategory}
             onChange={(e) => setSelectedCategory(e.target.value as MarketplaceCategory | 'all')}
-            className="px-4 py-2 bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor rounded-lg text-bolt-elements-textPrimary focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="px-4 py-2 bg-recoder-elements-background-depth-2 border border-recoder-elements-borderColor rounded-lg text-recoder-elements-textPrimary focus:outline-none focus:ring-2 focus:ring-blue-500"
           >
             <option value="all">All Categories</option>
             {categories.map(({ category, count }) => (
@@ -323,7 +323,7 @@ export default function MCPMarketplace({
         {/* Featured Section */}
         {selectedCategory === 'all' && !searchQuery && featuredServers.length > 0 && (
           <div className="mb-6">
-            <h3 className="text-lg font-medium text-bolt-elements-textPrimary mb-3 flex items-center gap-2">
+            <h3 className="text-lg font-medium text-recoder-elements-textPrimary mb-3 flex items-center gap-2">
               <Star className="w-4 h-4 text-yellow-500" />
               Featured
             </h3>
@@ -345,12 +345,12 @@ export default function MCPMarketplace({
         {/* Server List */}
         <div>
           {selectedCategory === 'all' && !searchQuery && (
-            <h3 className="text-lg font-medium text-bolt-elements-textPrimary mb-3">
+            <h3 className="text-lg font-medium text-recoder-elements-textPrimary mb-3">
               All Servers ({filteredServers.length})
             </h3>
           )}
           {filteredServers.length === 0 ? (
-            <div className="text-center py-12 text-bolt-elements-textSecondary">
+            <div className="text-center py-12 text-recoder-elements-textSecondary">
               No servers found matching your criteria
             </div>
           ) : (
@@ -372,18 +372,18 @@ export default function MCPMarketplace({
       {/* Environment Variables Modal */}
       {showEnvModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-bolt-elements-background-depth-1 rounded-xl p-6 max-w-md w-full mx-4 shadow-xl">
-            <h3 className="text-lg font-semibold text-bolt-elements-textPrimary mb-2">
+          <div className="bg-recoder-elements-background-depth-1 rounded-xl p-6 max-w-md w-full mx-4 shadow-xl">
+            <h3 className="text-lg font-semibold text-recoder-elements-textPrimary mb-2">
               Configure {showEnvModal.name}
             </h3>
-            <p className="text-sm text-bolt-elements-textSecondary mb-4">
+            <p className="text-sm text-recoder-elements-textSecondary mb-4">
               This server requires the following credentials:
             </p>
 
             <div className="space-y-3 mb-6">
               {showEnvModal.installCommand.envRequired?.map((key) => (
                 <div key={key}>
-                  <label className="block text-sm font-medium text-bolt-elements-textPrimary mb-1">
+                  <label className="block text-sm font-medium text-recoder-elements-textPrimary mb-1">
                     {key}
                   </label>
                   <input
@@ -391,7 +391,7 @@ export default function MCPMarketplace({
                     value={envValues[key] || ''}
                     onChange={(e) => setEnvValues({ ...envValues, [key]: e.target.value })}
                     placeholder={`Enter ${key}`}
-                    className="w-full px-3 py-2 bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor rounded-lg text-bolt-elements-textPrimary placeholder:text-bolt-elements-textTertiary focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3 py-2 bg-recoder-elements-background-depth-2 border border-recoder-elements-borderColor rounded-lg text-recoder-elements-textPrimary placeholder:text-recoder-elements-textTertiary focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
               ))}
@@ -400,7 +400,7 @@ export default function MCPMarketplace({
             <div className="flex gap-3">
               <button
                 onClick={() => setShowEnvModal(null)}
-                className="flex-1 px-4 py-2 border border-bolt-elements-borderColor rounded-lg text-bolt-elements-textSecondary hover:bg-bolt-elements-background-depth-2 transition-colors"
+                className="flex-1 px-4 py-2 border border-recoder-elements-borderColor rounded-lg text-recoder-elements-textSecondary hover:bg-recoder-elements-background-depth-2 transition-colors"
               >
                 Cancel
               </button>
@@ -443,37 +443,37 @@ function ServerCard({ server, isInstalled, isInstalling, onInstall, featured }: 
       className={`p-4 rounded-xl border transition-all ${
         featured
           ? 'bg-gradient-to-br from-blue-500/10 to-purple-500/10 border-blue-500/30'
-          : 'bg-bolt-elements-background-depth-2 border-bolt-elements-borderColor hover:border-blue-500/50'
+          : 'bg-recoder-elements-background-depth-2 border-recoder-elements-borderColor hover:border-blue-500/50'
       }`}
     >
       <div className="flex items-start justify-between mb-2">
         <div className="flex items-center gap-2">
           <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${
-            featured ? 'bg-blue-500/20' : 'bg-bolt-elements-background-depth-3'
+            featured ? 'bg-blue-500/20' : 'bg-recoder-elements-background-depth-3'
           }`}>
             <span className={`${server.icon || 'i-ph:cube'} w-5 h-5 text-blue-500`} />
           </div>
           <div>
-            <h4 className="font-medium text-bolt-elements-textPrimary flex items-center gap-1">
+            <h4 className="font-medium text-recoder-elements-textPrimary flex items-center gap-1">
               {server.name}
               {server.verified && (
                 <Shield className="w-3.5 h-3.5 text-green-500" title="Verified" />
               )}
             </h4>
-            <span className="text-xs text-bolt-elements-textTertiary">{server.author}</span>
+            <span className="text-xs text-recoder-elements-textTertiary">{server.author}</span>
           </div>
         </div>
-        <span className="text-xs px-2 py-0.5 bg-bolt-elements-background-depth-3 rounded-full text-bolt-elements-textSecondary">
+        <span className="text-xs px-2 py-0.5 bg-recoder-elements-background-depth-3 rounded-full text-recoder-elements-textSecondary">
           {server.toolCount} tools
         </span>
       </div>
 
-      <p className="text-sm text-bolt-elements-textSecondary mb-3 line-clamp-2">
+      <p className="text-sm text-recoder-elements-textSecondary mb-3 line-clamp-2">
         {server.description}
       </p>
 
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3 text-xs text-bolt-elements-textTertiary">
+        <div className="flex items-center gap-3 text-xs text-recoder-elements-textTertiary">
           {server.stars && (
             <span className="flex items-center gap-1">
               <Star className="w-3 h-3" />
@@ -521,7 +521,7 @@ function ServerCard({ server, isInstalled, isInstalling, onInstall, featured }: 
         {server.tags.slice(0, 3).map((tag) => (
           <span
             key={tag}
-            className="text-xs px-2 py-0.5 bg-bolt-elements-background-depth-3 text-bolt-elements-textTertiary rounded"
+            className="text-xs px-2 py-0.5 bg-recoder-elements-background-depth-3 text-recoder-elements-textTertiary rounded"
           >
             {tag}
           </span>

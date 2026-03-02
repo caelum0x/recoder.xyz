@@ -87,14 +87,14 @@ export function GitHubImporter({ onImport, onClose }: GitHubImporterProps) {
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
       <div
         className="rounded-lg shadow-xl w-full max-w-2xl"
-        style={{ backgroundColor: 'var(--bolt-elements-bg-depth-2)', border: '1px solid var(--bolt-elements-borderColor)' }}
+        style={{ backgroundColor: 'var(--recoder-elements-bg-depth-2)', border: '1px solid var(--recoder-elements-borderColor)' }}
       >
         {/* Header */}
         <div
           className="flex items-center justify-between p-6"
-          style={{ borderBottom: '1px solid var(--bolt-elements-borderColor)' }}
+          style={{ borderBottom: '1px solid var(--recoder-elements-borderColor)' }}
         >
-          <h2 className="text-xl font-semibold text-bolt-elements-textPrimary">
+          <h2 className="text-xl font-semibold text-recoder-elements-textPrimary">
             Import from GitHub
           </h2>
           <IconButton onClick={onClose}>
@@ -107,7 +107,7 @@ export function GitHubImporter({ onImport, onClose }: GitHubImporterProps) {
           <div className="space-y-4">
             {/* Repository URL */}
             <div>
-              <label className="block text-sm font-medium text-bolt-elements-textPrimary mb-2">
+              <label className="block text-sm font-medium text-recoder-elements-textPrimary mb-2">
                 Repository URL
               </label>
               <div className="flex gap-2">
@@ -122,9 +122,9 @@ export function GitHubImporter({ onImport, onClose }: GitHubImporterProps) {
                   }}
                   className="flex-1 px-3 py-2 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   style={{
-                    backgroundColor: 'var(--bolt-elements-bg-depth-2)',
-                    border: '1px solid var(--bolt-elements-borderColor)',
-                    color: 'var(--bolt-elements-textPrimary)',
+                    backgroundColor: 'var(--recoder-elements-bg-depth-2)',
+                    border: '1px solid var(--recoder-elements-borderColor)',
+                    color: 'var(--recoder-elements-textPrimary)',
                   }}
                 />
                 <button
@@ -135,14 +135,14 @@ export function GitHubImporter({ onImport, onClose }: GitHubImporterProps) {
                   {loading ? 'Analyzing...' : 'Analyze'}
                 </button>
               </div>
-              <p className="text-xs mt-1" style={{ color: 'var(--bolt-elements-textTertiary)' }}>
+              <p className="text-xs mt-1" style={{ color: 'var(--recoder-elements-textTertiary)' }}>
                 Enter a public GitHub repository URL
               </p>
             </div>
 
             {/* Sub-path (optional) */}
             <div>
-              <label className="block text-sm font-medium text-bolt-elements-textPrimary mb-2">
+              <label className="block text-sm font-medium text-recoder-elements-textPrimary mb-2">
                 Sub-path (optional)
               </label>
               <input
@@ -152,12 +152,12 @@ export function GitHubImporter({ onImport, onClose }: GitHubImporterProps) {
                 onChange={(e) => setSubPath(e.target.value)}
                 className="w-full px-3 py-2 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 style={{
-                  backgroundColor: 'var(--bolt-elements-bg-depth-2)',
-                  border: '1px solid var(--bolt-elements-borderColor)',
-                  color: 'var(--bolt-elements-textPrimary)',
+                  backgroundColor: 'var(--recoder-elements-bg-depth-2)',
+                  border: '1px solid var(--recoder-elements-borderColor)',
+                  color: 'var(--recoder-elements-textPrimary)',
                 }}
               />
-              <p className="text-xs mt-1" style={{ color: 'var(--bolt-elements-textTertiary)' }}>
+              <p className="text-xs mt-1" style={{ color: 'var(--recoder-elements-textTertiary)' }}>
                 Import only files from a specific directory
               </p>
             </div>
@@ -166,17 +166,17 @@ export function GitHubImporter({ onImport, onClose }: GitHubImporterProps) {
             {repoInfo && (
               <div
                 className="rounded-lg p-4"
-                style={{ backgroundColor: 'var(--bolt-elements-bg-depth-2)', border: '1px solid var(--bolt-elements-borderColor)' }}
+                style={{ backgroundColor: 'var(--recoder-elements-bg-depth-2)', border: '1px solid var(--recoder-elements-borderColor)' }}
               >
-                <h3 className="font-semibold text-bolt-elements-textPrimary mb-2">
+                <h3 className="font-semibold text-recoder-elements-textPrimary mb-2">
                   {repoInfo.name}
                 </h3>
                 {repoInfo.description && (
-                  <p className="text-sm mb-3" style={{ color: 'var(--bolt-elements-textSecondary)' }}>
+                  <p className="text-sm mb-3" style={{ color: 'var(--recoder-elements-textSecondary)' }}>
                     {repoInfo.description}
                   </p>
                 )}
-                <div className="flex items-center gap-4 text-xs" style={{ color: 'var(--bolt-elements-textTertiary)' }}>
+                <div className="flex items-center gap-4 text-xs" style={{ color: 'var(--recoder-elements-textTertiary)' }}>
                   {repoInfo.language && (
                     <span className="flex items-center gap-1">
                       <div className="i-ph:code text-sm" />
@@ -193,7 +193,7 @@ export function GitHubImporter({ onImport, onClose }: GitHubImporterProps) {
                         <span
                           key={topic}
                           className="px-2 py-0.5 rounded text-xs"
-                          style={{ backgroundColor: 'var(--bolt-elements-bg-depth-3)' }}
+                          style={{ backgroundColor: 'var(--recoder-elements-bg-depth-3)' }}
                         >
                           {topic}
                         </span>
@@ -219,11 +219,11 @@ export function GitHubImporter({ onImport, onClose }: GitHubImporterProps) {
         {/* Footer */}
         <div
           className="flex items-center justify-end gap-2 p-6"
-          style={{ borderTop: '1px solid var(--bolt-elements-borderColor)' }}
+          style={{ borderTop: '1px solid var(--recoder-elements-borderColor)' }}
         >
           <button
             onClick={onClose}
-            className="px-4 py-2 transition-colors text-bolt-elements-textSecondary hover:text-bolt-elements-textPrimary"
+            className="px-4 py-2 transition-colors text-recoder-elements-textSecondary hover:text-recoder-elements-textPrimary"
           >
             Cancel
           </button>

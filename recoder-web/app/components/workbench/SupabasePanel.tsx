@@ -72,16 +72,16 @@ export function SupabasePanel() {
       <div className="h-full flex flex-col p-4 overflow-auto">
         <div className="flex items-center gap-2 mb-4">
           <div className="i-ph:database text-green-500 text-xl" />
-          <h3 className="font-semibold text-bolt-elements-textPrimary">Connect Supabase</h3>
+          <h3 className="font-semibold text-recoder-elements-textPrimary">Connect Supabase</h3>
         </div>
 
-        <p className="text-sm text-bolt-elements-textSecondary mb-4">
+        <p className="text-sm text-recoder-elements-textSecondary mb-4">
           Connect your Supabase project to enable database schema context for AI, edge function deployment, and more.
         </p>
 
         <div className="space-y-3">
           <div>
-            <label className="block text-xs text-bolt-elements-textSecondary mb-1">
+            <label className="block text-xs text-recoder-elements-textSecondary mb-1">
               Personal Access Token
             </label>
             <input
@@ -90,7 +90,7 @@ export function SupabasePanel() {
               onChange={(e) => setTokenInput(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && handleConnect()}
               placeholder="sbp_xxxxxxxxxxxxxxxx"
-              className="w-full px-3 py-2 rounded-lg border border-bolt-elements-borderColor bg-bolt-elements-background-depth-1 text-bolt-elements-textPrimary text-sm focus:outline-none focus:ring-2 focus:ring-green-500/50"
+              className="w-full px-3 py-2 rounded-lg border border-recoder-elements-borderColor bg-recoder-elements-background-depth-1 text-recoder-elements-textPrimary text-sm focus:outline-none focus:ring-2 focus:ring-green-500/50"
             />
           </div>
 
@@ -126,17 +126,17 @@ export function SupabasePanel() {
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2">
             <div className="i-ph:database text-green-500 text-xl" />
-            <h3 className="font-semibold text-bolt-elements-textPrimary">Link Supabase Project</h3>
+            <h3 className="font-semibold text-recoder-elements-textPrimary">Link Supabase Project</h3>
           </div>
           <button
             onClick={disconnect}
-            className="text-xs text-bolt-elements-textSecondary hover:text-red-500"
+            className="text-xs text-recoder-elements-textSecondary hover:text-red-500"
           >
             Disconnect
           </button>
         </div>
 
-        <p className="text-sm text-bolt-elements-textSecondary mb-3">
+        <p className="text-sm text-recoder-elements-textSecondary mb-3">
           Select a Supabase project to link to this Recoder project.
         </p>
 
@@ -147,8 +147,8 @@ export function SupabasePanel() {
               onClick={() => setSelectedProject(proj)}
               className={`w-full text-left px-3 py-2 rounded-lg border text-sm transition-colors ${
                 selectedProject?.id === proj.id
-                  ? 'border-green-500 bg-green-500/10 text-bolt-elements-textPrimary'
-                  : 'border-bolt-elements-borderColor hover:border-green-500/50 text-bolt-elements-textSecondary'
+                  ? 'border-green-500 bg-green-500/10 text-recoder-elements-textPrimary'
+                  : 'border-recoder-elements-borderColor hover:border-green-500/50 text-recoder-elements-textSecondary'
               }`}
             >
               <div className="font-medium">{proj.name}</div>
@@ -157,7 +157,7 @@ export function SupabasePanel() {
           ))}
 
           {projects.length === 0 && (
-            <p className="text-xs text-bolt-elements-textSecondary text-center py-4">
+            <p className="text-xs text-recoder-elements-textSecondary text-center py-4">
               No projects found. Create one in Supabase first.
             </p>
           )}
@@ -166,7 +166,7 @@ export function SupabasePanel() {
         <div className="mt-3 flex gap-2">
           <button
             onClick={refreshProjects}
-            className="flex-1 px-3 py-2 rounded-lg border border-bolt-elements-borderColor text-bolt-elements-textSecondary text-sm hover:bg-bolt-elements-background-depth-1"
+            className="flex-1 px-3 py-2 rounded-lg border border-recoder-elements-borderColor text-recoder-elements-textSecondary text-sm hover:bg-recoder-elements-background-depth-1"
           >
             Refresh
           </button>
@@ -188,12 +188,12 @@ export function SupabasePanel() {
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2">
           <div className="i-ph:database text-green-500 text-xl" />
-          <h3 className="font-semibold text-bolt-elements-textPrimary">Supabase</h3>
+          <h3 className="font-semibold text-recoder-elements-textPrimary">Supabase</h3>
           <span className="px-2 py-0.5 rounded-full bg-green-500/20 text-green-500 text-xs">Connected</span>
         </div>
         <button
           onClick={unlinkProject}
-          className="text-xs text-bolt-elements-textSecondary hover:text-red-500"
+          className="text-xs text-recoder-elements-textSecondary hover:text-red-500"
         >
           Unlink
         </button>
@@ -204,19 +204,19 @@ export function SupabasePanel() {
         <button
           onClick={handleGetSchema}
           disabled={isLoading}
-          className="w-full px-3 py-2 rounded-lg border border-bolt-elements-borderColor text-bolt-elements-textPrimary text-sm hover:bg-bolt-elements-background-depth-1 flex items-center gap-2"
+          className="w-full px-3 py-2 rounded-lg border border-recoder-elements-borderColor text-recoder-elements-textPrimary text-sm hover:bg-recoder-elements-background-depth-1 flex items-center gap-2"
         >
           <div className="i-ph:table" />
           View Schema
         </button>
 
         {showSchema && (
-          <div className="p-3 rounded-lg bg-bolt-elements-background-depth-1 border border-bolt-elements-borderColor max-h-64 overflow-auto">
+          <div className="p-3 rounded-lg bg-recoder-elements-background-depth-1 border border-recoder-elements-borderColor max-h-64 overflow-auto">
             <div className="flex justify-between items-center mb-2">
-              <span className="text-xs font-medium text-bolt-elements-textSecondary">Database Schema</span>
-              <button onClick={() => setShowSchema(false)} className="text-xs text-bolt-elements-textSecondary hover:text-bolt-elements-textPrimary">Close</button>
+              <span className="text-xs font-medium text-recoder-elements-textSecondary">Database Schema</span>
+              <button onClick={() => setShowSchema(false)} className="text-xs text-recoder-elements-textSecondary hover:text-recoder-elements-textPrimary">Close</button>
             </div>
-            <pre className="text-xs text-bolt-elements-textPrimary whitespace-pre-wrap font-mono">{schema}</pre>
+            <pre className="text-xs text-recoder-elements-textPrimary whitespace-pre-wrap font-mono">{schema}</pre>
           </div>
         )}
 
@@ -224,21 +224,21 @@ export function SupabasePanel() {
         <button
           onClick={handleDeploy}
           disabled={isLoading}
-          className="w-full px-3 py-2 rounded-lg border border-bolt-elements-borderColor text-bolt-elements-textPrimary text-sm hover:bg-bolt-elements-background-depth-1 flex items-center gap-2"
+          className="w-full px-3 py-2 rounded-lg border border-recoder-elements-borderColor text-recoder-elements-textPrimary text-sm hover:bg-recoder-elements-background-depth-1 flex items-center gap-2"
         >
           <div className="i-ph:cloud-arrow-up" />
           Deploy Edge Functions
         </button>
 
         {deployResult && (
-          <div className="p-3 rounded-lg bg-bolt-elements-background-depth-1 border border-bolt-elements-borderColor">
-            <span className="text-xs font-medium text-bolt-elements-textSecondary mb-1 block">Deploy Results</span>
+          <div className="p-3 rounded-lg bg-recoder-elements-background-depth-1 border border-recoder-elements-borderColor">
+            <span className="text-xs font-medium text-recoder-elements-textSecondary mb-1 block">Deploy Results</span>
             {deployResult.map((r) => (
               <div key={r.name} className="flex items-center gap-2 text-xs py-0.5">
                 <span className={r.status === 'deployed' ? 'text-green-500' : 'text-red-500'}>
                   {r.status === 'deployed' ? '\u2713' : '\u2717'}
                 </span>
-                <span className="text-bolt-elements-textPrimary">{r.name}</span>
+                <span className="text-recoder-elements-textPrimary">{r.name}</span>
               </div>
             ))}
           </div>

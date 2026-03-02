@@ -1,4 +1,4 @@
-import { Button } from "@giselle-internal/ui/button";
+import { Button } from "@recoder-internal/ui/button";
 import {
 	Dialog,
 	DialogBody,
@@ -8,8 +8,8 @@ import {
 	type DialogSize,
 	DialogTitle,
 	DialogTrigger,
-} from "@giselle-internal/ui/dialog";
-import type { LanguageModelTool } from "@giselles-ai/language-model-registry";
+} from "@recoder-internal/ui/dialog";
+import type { LanguageModelTool } from "@recoder/language-model-registry";
 import {
 	type ComponentProps,
 	type PropsWithChildren,

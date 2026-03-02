@@ -1,5 +1,7 @@
 'use client';
 
+import { SiteHeader } from '@/components/SiteHeader';
+import { SiteFooter } from '@/components/SiteFooter';
 import Link from 'next/link';
 import { 
   Terminal, Code, Download, Copy, ExternalLink, 
@@ -160,6 +162,7 @@ export default function DeveloperToolsPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900">
+      <SiteHeader />
       {/* Hero Section */}
       <section className="relative py-20 px-4 sm:px-6 lg:px-8">
         <div className="max-w-7xl mx-auto text-center">
@@ -475,6 +478,7 @@ export default function DeveloperToolsPage() {
           </div>
         </div>
       </section>
+      <SiteFooter />
     </div>
   );
 }

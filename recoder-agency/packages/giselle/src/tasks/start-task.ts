@@ -1,4 +1,4 @@
-import { GenerationOrigin, TaskId } from "@giselles-ai/protocol";
+import { GenerationOrigin, TaskId } from "@recoder/protocol";
 import * as z from "zod/v4";
 import type { OnGenerationComplete, OnGenerationError } from "../generations";
 import type { GiselleContext } from "../types";

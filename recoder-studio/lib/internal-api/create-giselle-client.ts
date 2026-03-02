@@ -1,6 +1,6 @@
 "use client";
 
-import type { GiselleClient } from "@giselles-ai/react";
+import type { GiselleClient } from "@recoder/react";
 import * as internalApi from "@/lib/internal-api";
 
 export type RecoderStudioClient = GiselleClient;
@@ -50,7 +50,7 @@ export function createInternalRecoderStudioClient(): RecoderStudioClient {
 		addSecret: internalApi.addSecret,
 		deleteSecret: internalApi.deleteSecret,
 		getWorkspaceSecrets: internalApi.getWorkspaceSecrets,
-	};
+		} as unknown as RecoderStudioClient;
 }
 
 // Backward compatibility alias for legacy imports.

@@ -1,14 +1,45 @@
-import { createClient } from "@supabase/supabase-js";
+import {
+	storageDeleteObjects,
+	storagePublicUrl,
+	storageUploadObject,
+} from "@/lib/storage/r2";
 
-const storageBucketName = "public-assets";
+const storageBucketName = process.env.APP_STORAGE_BUCKET ?? "public-assets";
 
 export function appStorage() {
-	const supabaseClient = createClient(
-		// biome-ignore lint/style/noNonNullAssertion: SUPABASE_URL is always set and errors occur elsewhere too, so excessive error handling is unnecessary
-		process.env.SUPABASE_URL!,
-		// biome-ignore lint/style/noNonNullAssertion: SUPABASE_SERVICE_KEY is always set and errors occur elsewhere too, so excessive error handling is unnecessary
-		process.env.SUPABASE_SERVICE_KEY!,
-		{},
-	);
-	return supabaseClient.storage.from(storageBucketName);
+	return {
+		async upload(
+			path: string,
+			data: Buffer,
+			options?: { contentType?: string; upsert?: boolean },
+		) {
+			try {
+				const uploaded = await storageUploadObject({
+					bucket: storageBucketName,
+					key: path,
+					body: data,
+					contentType: options?.contentType,
+					upsert: options?.upsert,
+				});
+				return { data: { path: uploaded.key }, error: null };
+			} catch (error) {
+				return { data: null, error };
+			}
+		},
+		getPublicUrl(path: string) {
+			return {
+				data: {
+					publicUrl: storagePublicUrl(storageBucketName, path),
+				},
+			};
+		},
+		async remove(paths: string[]) {
+			try {
+				await storageDeleteObjects(storageBucketName, paths);
+				return { data: null, error: null };
+			} catch (error) {
+				return { data: null, error };
+			}
+		},
+	};
 }

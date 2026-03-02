@@ -1,4 +1,4 @@
-import { ToastProvider } from "@giselle-internal/ui/toast";
+import { ToastProvider } from "@recoder-internal/ui/toast";
 import { requireCurrentTeamRole } from "@/services/teams";
 import { AdminHeader } from "./ui/header";
 import { AdminSidebar } from "./ui/sidebar";

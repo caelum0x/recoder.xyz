@@ -1,6 +1,6 @@
 "use client";
 
-import { Button } from "@giselle-internal/ui/button";
+import { Button } from "@recoder-internal/ui/button";
 import {
 	Dialog,
 	DialogBody,
@@ -11,9 +11,9 @@ import {
 	DialogHeader,
 	DialogTitle,
 	DialogTrigger,
-} from "@giselle-internal/ui/dialog";
-import { Select, type SelectOption } from "@giselle-internal/ui/select";
-import { Toggle } from "@giselle-internal/ui/toggle";
+} from "@recoder-internal/ui/dialog";
+import { Select, type SelectOption } from "@recoder-internal/ui/select";
+import { Toggle } from "@recoder-internal/ui/toggle";
 import * as Tooltip from "@radix-ui/react-tooltip";
 import { CircleDot, Code, GitPullRequest, Plus, X } from "lucide-react";
 import { useCallback, useMemo, useState, useTransition } from "react";

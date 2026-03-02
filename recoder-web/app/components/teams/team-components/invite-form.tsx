@@ -38,13 +38,13 @@ export function InviteForm({ onInvite, isLoading }: InviteFormProps) {
 
   return (
     <form onSubmit={handleSubmit}>
-      <div className="mb-8 border border-bolt-elements-borderColor bg-bolt-elements-background-depth-2 rounded-lg shadow-sm">
-        <div className="p-6 pb-3 border-b border-bolt-elements-borderColor">
-          <h3 className="text-xl font-semibold text-bolt-elements-textPrimary flex items-center gap-2">
+      <div className="mb-8 border border-recoder-elements-borderColor bg-recoder-elements-background-depth-2 rounded-lg shadow-sm">
+        <div className="p-6 pb-3 border-b border-recoder-elements-borderColor">
+          <h3 className="text-xl font-semibold text-recoder-elements-textPrimary flex items-center gap-2">
             <UserPlusIcon className="h-5 w-5 text-orange-500" />
             Invite Team Member
           </h3>
-          <p className="text-sm text-bolt-elements-textSecondary mt-1">
+          <p className="text-sm text-recoder-elements-textSecondary mt-1">
             Send an invitation to add a new member to your team
           </p>
         </div>
@@ -55,9 +55,9 @@ export function InviteForm({ onInvite, isLoading }: InviteFormProps) {
             <div className="space-y-2">
               <label
                 htmlFor="email"
-                className="flex items-center gap-2 text-sm font-medium text-bolt-elements-textPrimary"
+                className="flex items-center gap-2 text-sm font-medium text-recoder-elements-textPrimary"
               >
-                <MailIcon className="h-3.5 w-3.5 text-bolt-elements-textSecondary" />
+                <MailIcon className="h-3.5 w-3.5 text-recoder-elements-textSecondary" />
                 Email Address
               </label>
               <input
@@ -69,11 +69,11 @@ export function InviteForm({ onInvite, isLoading }: InviteFormProps) {
                 disabled={isLoading}
                 className={classNames(
                   'w-full px-3 py-2 rounded-md text-sm',
-                  'bg-bolt-elements-background-depth-3 border border-bolt-elements-borderColor',
-                  'text-bolt-elements-textPrimary placeholder:text-bolt-elements-textTertiary',
+                  'bg-recoder-elements-background-depth-3 border border-recoder-elements-borderColor',
+                  'text-recoder-elements-textPrimary placeholder:text-recoder-elements-textTertiary',
                   'focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500/50',
                   'disabled:opacity-50 disabled:cursor-not-allowed',
-                  'transition-all duration-200 hover:border-bolt-elements-borderColor/80'
+                  'transition-all duration-200 hover:border-recoder-elements-borderColor/80'
                 )}
               />
               {error && <p className="text-sm text-red-500 mt-1">{error}</p>}
@@ -83,9 +83,9 @@ export function InviteForm({ onInvite, isLoading }: InviteFormProps) {
             <div className="space-y-2">
               <label
                 htmlFor="role"
-                className="flex items-center gap-2 text-sm font-medium text-bolt-elements-textPrimary"
+                className="flex items-center gap-2 text-sm font-medium text-recoder-elements-textPrimary"
               >
-                <UserIcon className="h-3.5 w-3.5 text-bolt-elements-textSecondary" />
+                <UserIcon className="h-3.5 w-3.5 text-recoder-elements-textSecondary" />
                 Role
               </label>
               <select
@@ -95,11 +95,11 @@ export function InviteForm({ onInvite, isLoading }: InviteFormProps) {
                 disabled={isLoading}
                 className={classNames(
                   'w-full px-3 py-2 rounded-md text-sm h-[38px]',
-                  'bg-bolt-elements-background-depth-3 border border-bolt-elements-borderColor',
-                  'text-bolt-elements-textPrimary',
+                  'bg-recoder-elements-background-depth-3 border border-recoder-elements-borderColor',
+                  'text-recoder-elements-textPrimary',
                   'focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500/50',
                   'disabled:opacity-50 disabled:cursor-not-allowed',
-                  'transition-all duration-200 hover:border-bolt-elements-borderColor/80'
+                  'transition-all duration-200 hover:border-recoder-elements-borderColor/80'
                 )}
               >
                 <option value="member">Member</option>
@@ -109,7 +109,7 @@ export function InviteForm({ onInvite, isLoading }: InviteFormProps) {
           </div>
         </div>
 
-        <div className="px-6 py-4 flex justify-end border-t border-bolt-elements-borderColor bg-bolt-elements-background-depth-3/50">
+        <div className="px-6 py-4 flex justify-end border-t border-recoder-elements-borderColor bg-recoder-elements-background-depth-3/50">
           <Button
             type="submit"
             disabled={isLoading}

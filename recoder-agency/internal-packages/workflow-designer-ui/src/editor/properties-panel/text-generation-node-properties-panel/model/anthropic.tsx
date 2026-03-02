@@ -1,11 +1,11 @@
-import { Toggle } from "@giselle-internal/ui/toggle";
+import { Toggle } from "@recoder-internal/ui/toggle";
 import {
 	anthropicLanguageModels,
 	Capability,
 	hasCapability,
-} from "@giselles-ai/language-model";
-import { AnthropicLanguageModelData } from "@giselles-ai/protocol";
-import { useUsageLimits } from "@giselles-ai/react";
+} from "@recoder/language-model";
+import { AnthropicLanguageModelData } from "@recoder/protocol";
+import { useUsageLimits } from "@recoder/react";
 import { useMemo } from "react";
 import { TemperatureSlider, TopPSlider } from "./shared-model-controls";
 

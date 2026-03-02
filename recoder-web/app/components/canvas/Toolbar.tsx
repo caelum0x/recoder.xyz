@@ -15,12 +15,12 @@ export function Toolbar({ onAddElement, onExport }: ToolbarProps) {
   ];
 
   return (
-    <div className="flex items-center gap-2 p-2 border-b border-bolt-elements-borderColor bg-bolt-elements-background-depth-2">
+    <div className="flex items-center gap-2 p-2 border-b border-recoder-elements-borderColor bg-recoder-elements-background-depth-2">
       {tools.map((tool) => (
         <button
           key={tool.type}
           onClick={() => onAddElement(tool.type)}
-          className="flex flex-col items-center gap-1 px-3 py-2 hover:bg-bolt-elements-background-depth-3 rounded"
+          className="flex flex-col items-center gap-1 px-3 py-2 hover:bg-recoder-elements-background-depth-3 rounded"
           title={tool.label}
         >
           <div className={`${tool.icon} text-xl`} />
@@ -31,7 +31,7 @@ export function Toolbar({ onAddElement, onExport }: ToolbarProps) {
       <div className="ml-auto">
         <button
           onClick={onExport}
-          className="px-4 py-2 bg-bolt-elements-button-primary-background text-bolt-elements-button-primary-text rounded hover:bg-bolt-elements-button-primary-backgroundHover"
+          className="px-4 py-2 bg-recoder-elements-button-primary-background text-recoder-elements-button-primary-text rounded hover:bg-recoder-elements-button-primary-backgroundHover"
         >
           Export Code
         </button>

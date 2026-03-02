@@ -1,4 +1,4 @@
-import { type ActionProvider, getEntry } from "@giselles-ai/action-registry";
+import { type ActionProvider, getEntry } from "@recoder/action-registry";
 import {
 	isActionNode,
 	isContentGenerationNode,
@@ -12,11 +12,11 @@ import {
 	isVectorStoreNode,
 	type NodeLike,
 	type VectorStoreProvider,
-} from "@giselles-ai/protocol";
+} from "@recoder/protocol";
 import {
 	getEntry as getTriggerEntry,
 	type TriggerProvider,
-} from "@giselles-ai/trigger-registry";
+} from "@recoder/trigger-registry";
 
 export function triggerNodeDefaultName(triggerProvider: TriggerProvider) {
 	return getTriggerEntry(triggerProvider).label;

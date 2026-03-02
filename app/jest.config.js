@@ -42,17 +42,6 @@ const customJestConfig = {
       statements: 70,
     },
   },
-  transform: {
-    '^.+\\.(js|jsx|ts|tsx)$': ['@swc/jest', {
-      jsc: {
-        transform: {
-          react: {
-            runtime: 'automatic',
-          },
-        },
-      },
-    }],
-  },
 };
 
 // createJestConfig is exported this way to ensure that next/jest can load the Next.js config which is async

@@ -1,4 +1,4 @@
-import { PopoverContent } from "@giselle-internal/ui/popover";
+import { PopoverContent } from "@recoder-internal/ui/popover";
 import { ChevronsUpDown } from "lucide-react";
 import { redirect } from "next/navigation";
 import { Popover } from "radix-ui";

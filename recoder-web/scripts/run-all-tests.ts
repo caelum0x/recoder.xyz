@@ -60,7 +60,7 @@ async function runAllTests() {
   console.log(`${colors.bright}${colors.cyan}`);
   console.log('╔═══════════════════════════════════════════════════════════════════════╗');
   console.log('║                                                                       ║');
-  console.log('║           BOLT.NEW CLONE - COMPREHENSIVE TEST SUITE                  ║');
+  console.log('║           RECODER WEB - COMPREHENSIVE TEST SUITE                     ║');
   console.log('║                  Running All Tests Sequentially                      ║');
   console.log('║                                                                       ║');
   console.log('╚═══════════════════════════════════════════════════════════════════════╝');
@@ -164,7 +164,7 @@ async function runAllTests() {
     console.log('║                                                                       ║');
     console.log('║                     🎉 ALL TESTS PASSED! 🎉                          ║');
     console.log('║                                                                       ║');
-    console.log('║              Your bolt.new clone is PRODUCTION READY!                ║');
+    console.log('║              Your recoder-web is PRODUCTION READY!                   ║');
     console.log('║                                                                       ║');
     console.log('╚═══════════════════════════════════════════════════════════════════════╝');
     console.log(colors.reset);

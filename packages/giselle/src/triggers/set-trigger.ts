@@ -1,4 +1,4 @@
-import type { Trigger } from "@giselles-ai/protocol";
+import type { Trigger } from "@recoder/protocol";
 import type { GiselleContext } from "../types";
 import { setTrigger as setTriggerInternal } from "./utils";
 

@@ -19,13 +19,13 @@ const apps = [
   },
   {
     label: "Frontend",
-    description: "Suna AI IDE",
+    description: "AI Agent IDE",
     href: "https://frontend.recoder.xyz",
     current: false,
   },
   {
     label: "Web",
-    description: "Bolt AI IDE",
+    description: "Web AI IDE",
     href: "https://web.recoder.xyz",
     current: false,
   },

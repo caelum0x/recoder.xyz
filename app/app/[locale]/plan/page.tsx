@@ -2,20 +2,20 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { Check, ArrowRight, Globe, Terminal, Code2, Bot, Workflow, Sparkles, Database, Server, Cpu, Shield, X } from 'lucide-react';
+import { Check, ArrowRight, Globe, Terminal, Code2, Bot, Workflow, Sparkles, Database, Server, X } from 'lucide-react';
 import { RECODER_SERVICES, getServiceUrlClient } from '@/lib/config/platforms';
+import { SiteHeader } from '@/components/SiteHeader';
+import { SiteFooter } from '@/components/SiteFooter';
 
 const serviceIcons: Record<string, React.ElementType> = {
   app: Globe,
-  frontend: Bot,
+  agents: Bot,
   web: Code2,
-  'docker-backend': Server,
-  backend: Cpu,
+  api: Server,
   pm: Database,
   studio: Sparkles,
   agency: Workflow,
   openclaw: Terminal,
-  redis: Shield,
 };
 
 const plans = [
@@ -91,20 +91,7 @@ export default function PlanPage() {
 
   return (
     <div className="min-h-screen bg-black text-white">
-      {/* Header */}
-      <header className="border-b border-white/10 bg-black/80 backdrop-blur-xl">
-        <div className="container mx-auto px-6 h-16 flex items-center justify-between">
-          <Link href="/" className="flex items-center space-x-2">
-            <img src="/logo.png" alt="Recoder" className="w-8 h-8 rounded-lg" />
-            <span className="text-xl font-bold">recoder</span>
-          </Link>
-          <nav className="flex items-center space-x-6">
-            <Link href="/agents" className="text-sm text-gray-400 hover:text-white transition-colors">Agents</Link>
-            <Link href="/status" className="text-sm text-gray-400 hover:text-white transition-colors">Status</Link>
-            <Link href="/dashboard" className="text-sm text-gray-400 hover:text-white transition-colors">Dashboard</Link>
-          </nav>
-        </div>
-      </header>
+      <SiteHeader fixed={false} />
 
       {/* Hero */}
       <section className="py-20 px-6">
@@ -276,6 +263,7 @@ export default function PlanPage() {
           </div>
         </div>
       )}
+      <SiteFooter />
     </div>
   );
 }

@@ -175,8 +175,8 @@ export const ReplLauncher = memo(({
         onClick={onToggleExpand}
         className={classNames(
           'flex items-center gap-1.5 px-2 py-1 rounded text-xs transition-colors',
-          'bg-bolt-elements-background-depth-3 text-bolt-elements-textSecondary',
-          'hover:bg-bolt-elements-background-depth-4 hover:text-bolt-elements-textPrimary',
+          'bg-recoder-elements-background-depth-3 text-recoder-elements-textSecondary',
+          'hover:bg-recoder-elements-background-depth-4 hover:text-recoder-elements-textPrimary',
           className
         )}
         title="Quick launch REPLs and commands"
@@ -191,24 +191,24 @@ export const ReplLauncher = memo(({
   return (
     <div className={classNames(
       'absolute bottom-full left-0 mb-1 z-50',
-      'bg-bolt-elements-background-depth-2 border border-bolt-elements-borderColor',
+      'bg-recoder-elements-background-depth-2 border border-recoder-elements-borderColor',
       'rounded-lg shadow-lg overflow-hidden min-w-[200px]',
       className
     )}>
       {/* Header */}
-      <div className="flex items-center justify-between px-3 py-2 border-b border-bolt-elements-borderColor">
-        <span className="text-xs font-medium text-bolt-elements-textPrimary">Quick Launch</span>
+      <div className="flex items-center justify-between px-3 py-2 border-b border-recoder-elements-borderColor">
+        <span className="text-xs font-medium text-recoder-elements-textPrimary">Quick Launch</span>
         <button
           onClick={onToggleExpand}
-          className="p-0.5 hover:bg-bolt-elements-background-depth-3 rounded"
+          className="p-0.5 hover:bg-recoder-elements-background-depth-3 rounded"
         >
-          <div className="i-ph:x text-xs text-bolt-elements-textTertiary" />
+          <div className="i-ph:x text-xs text-recoder-elements-textTertiary" />
         </button>
       </div>
 
       {/* REPLs Section */}
       <div className="p-2">
-        <div className="text-[10px] uppercase tracking-wide text-bolt-elements-textTertiary mb-1.5 px-1">
+        <div className="text-[10px] uppercase tracking-wide text-recoder-elements-textTertiary mb-1.5 px-1">
           REPLs
         </div>
         <div className="grid grid-cols-2 gap-1">
@@ -219,16 +219,16 @@ export const ReplLauncher = memo(({
                 onClick={() => handleLaunch(config)}
                 className={classNames(
                   'flex items-center gap-2 px-2 py-1.5 rounded text-xs transition-colors text-left',
-                  'hover:bg-bolt-elements-background-depth-3'
+                  'hover:bg-recoder-elements-background-depth-3'
                 )}
                 title={config.description}
               >
                 <div className={classNames(config.icon, config.iconColor, 'text-sm flex-shrink-0')} />
-                <span className="truncate text-bolt-elements-textSecondary">{config.name}</span>
+                <span className="truncate text-recoder-elements-textSecondary">{config.name}</span>
               </button>
             ))
           ) : (
-            <span className="col-span-2 text-xs text-bolt-elements-textTertiary px-2 py-1">
+            <span className="col-span-2 text-xs text-recoder-elements-textTertiary px-2 py-1">
               No REPLs detected for this project
             </span>
           )}
@@ -238,19 +238,19 @@ export const ReplLauncher = memo(({
             <>
               <button
                 onClick={() => handleLaunch(REPL_CONFIGS[0])}
-                className="flex items-center gap-2 px-2 py-1.5 rounded text-xs hover:bg-bolt-elements-background-depth-3"
+                className="flex items-center gap-2 px-2 py-1.5 rounded text-xs hover:bg-recoder-elements-background-depth-3"
                 title="Node.js REPL"
               >
                 <div className="i-logos:nodejs-icon text-sm" />
-                <span className="text-bolt-elements-textSecondary">Node.js</span>
+                <span className="text-recoder-elements-textSecondary">Node.js</span>
               </button>
               <button
                 onClick={() => handleLaunch(REPL_CONFIGS[1])}
-                className="flex items-center gap-2 px-2 py-1.5 rounded text-xs hover:bg-bolt-elements-background-depth-3"
+                className="flex items-center gap-2 px-2 py-1.5 rounded text-xs hover:bg-recoder-elements-background-depth-3"
                 title="Python REPL"
               >
                 <div className="i-logos:python text-sm" />
-                <span className="text-bolt-elements-textSecondary">Python</span>
+                <span className="text-recoder-elements-textSecondary">Python</span>
               </button>
             </>
           )}
@@ -259,10 +259,10 @@ export const ReplLauncher = memo(({
 
       {/* Quick Commands Section */}
       {availableQuickCommands.length > 0 && (
-        <div className="p-2 border-t border-bolt-elements-borderColor">
+        <div className="p-2 border-t border-recoder-elements-borderColor">
           <button
             onClick={() => setShowQuickCommands(!showQuickCommands)}
-            className="flex items-center gap-1 text-[10px] uppercase tracking-wide text-bolt-elements-textTertiary mb-1.5 px-1 w-full"
+            className="flex items-center gap-1 text-[10px] uppercase tracking-wide text-recoder-elements-textTertiary mb-1.5 px-1 w-full"
           >
             Quick Commands
             <div className={classNames(
@@ -279,13 +279,13 @@ export const ReplLauncher = memo(({
                   onClick={() => handleLaunch(config)}
                   className={classNames(
                     'flex items-center gap-2 px-2 py-1.5 rounded text-xs transition-colors w-full text-left',
-                    'hover:bg-bolt-elements-background-depth-3'
+                    'hover:bg-recoder-elements-background-depth-3'
                   )}
                   title={config.description}
                 >
                   <div className={classNames(config.icon, config.iconColor, 'text-sm flex-shrink-0')} />
-                  <span className="truncate text-bolt-elements-textSecondary">{config.name}</span>
-                  <code className="ml-auto text-[10px] text-bolt-elements-textTertiary truncate max-w-[80px]">
+                  <span className="truncate text-recoder-elements-textSecondary">{config.name}</span>
+                  <code className="ml-auto text-[10px] text-recoder-elements-textTertiary truncate max-w-[80px]">
                     {config.command}
                   </code>
                 </button>
@@ -296,7 +296,7 @@ export const ReplLauncher = memo(({
       )}
 
       {/* Custom Command */}
-      <div className="p-2 border-t border-bolt-elements-borderColor">
+      <div className="p-2 border-t border-recoder-elements-borderColor">
         <CustomCommandInput onSubmit={(cmd) => onLaunch(cmd, 'Custom')} />
       </div>
     </div>
@@ -326,9 +326,9 @@ const CustomCommandInput = memo(({ onSubmit }: { onSubmit: (command: string) => 
         onChange={(e) => setValue(e.target.value)}
         placeholder="Custom command..."
         className={classNames(
-          'flex-1 px-2 py-1 text-xs rounded bg-bolt-elements-background-depth-3',
-          'border border-bolt-elements-borderColor text-bolt-elements-textPrimary',
-          'placeholder:text-bolt-elements-textTertiary focus:outline-none focus:border-blue-500'
+          'flex-1 px-2 py-1 text-xs rounded bg-recoder-elements-background-depth-3',
+          'border border-recoder-elements-borderColor text-recoder-elements-textPrimary',
+          'placeholder:text-recoder-elements-textTertiary focus:outline-none focus:border-blue-500'
         )}
       />
       <button
@@ -338,7 +338,7 @@ const CustomCommandInput = memo(({ onSubmit }: { onSubmit: (command: string) => 
           'px-2 py-1 rounded text-xs transition-colors',
           value.trim()
             ? 'bg-blue-500 text-white hover:bg-blue-600'
-            : 'bg-bolt-elements-background-depth-3 text-bolt-elements-textTertiary cursor-not-allowed'
+            : 'bg-recoder-elements-background-depth-3 text-recoder-elements-textTertiary cursor-not-allowed'
         )}
       >
         Run

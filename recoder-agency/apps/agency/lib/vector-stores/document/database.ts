@@ -1,8 +1,8 @@
 import type {
 	EmbeddingDimensions,
 	EmbeddingProfileId,
-} from "@giselles-ai/protocol";
-import type { DocumentVectorStoreSourceId } from "@giselles-ai/types";
+} from "@recoder/protocol";
+import type { DocumentVectorStoreSourceId } from "@recoder/types";
 import { and, eq, inArray } from "drizzle-orm";
 import { db } from "@/db/db";
 import type {

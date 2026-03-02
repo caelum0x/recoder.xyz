@@ -278,7 +278,7 @@ cd recoder-web && pnpm build
 2. Create a new project
 3. Copy connection string to `.env`:
    ```
-   DATABASE_URL=postgresql://user:pass@host.neon.tech/dbname?sslmode=require
+   DATABASE_URL=<DATABASE_URL>
    ```
 
 ### Local PostgreSQL

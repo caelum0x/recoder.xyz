@@ -1,6 +1,6 @@
 "use client";
 
-import { useToasts } from "@giselle-internal/ui/toast";
+import { useToasts } from "@recoder-internal/ui/toast";
 import { ChevronDownIcon, ChevronRightIcon } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { usePostHog } from "posthog-js/react";

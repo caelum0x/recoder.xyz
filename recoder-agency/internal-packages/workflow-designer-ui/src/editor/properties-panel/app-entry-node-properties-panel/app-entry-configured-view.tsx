@@ -1,7 +1,7 @@
-import { Button } from "@giselle-internal/ui/button";
-import { useToasts } from "@giselle-internal/ui/toast";
-import type { App, AppEntryNode } from "@giselles-ai/protocol";
-import { useGiselle } from "@giselles-ai/react";
+import { Button } from "@recoder-internal/ui/button";
+import { useToasts } from "@recoder-internal/ui/toast";
+import type { App, AppEntryNode } from "@recoder/protocol";
+import { useGiselle } from "@recoder/react";
 import { LoaderIcon } from "lucide-react";
 import { type FormEvent, useCallback, useEffect, useState } from "react";
 import type { KeyedMutator } from "swr";

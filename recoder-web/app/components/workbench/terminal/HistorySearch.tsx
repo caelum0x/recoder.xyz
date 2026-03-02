@@ -103,10 +103,10 @@ export const HistorySearch = memo(({
       />
 
       {/* Search Panel */}
-      <div className="relative bg-bolt-elements-background-depth-2 border-t border-bolt-elements-borderColor shadow-lg">
+      <div className="relative bg-recoder-elements-background-depth-2 border-t border-recoder-elements-borderColor shadow-lg">
         {/* Search Input */}
-        <div className="flex items-center gap-2 px-3 py-2 border-b border-bolt-elements-borderColor">
-          <div className="i-ph:magnifying-glass text-bolt-elements-textTertiary" />
+        <div className="flex items-center gap-2 px-3 py-2 border-b border-recoder-elements-borderColor">
+          <div className="i-ph:magnifying-glass text-recoder-elements-textTertiary" />
           <input
             ref={inputRef}
             type="text"
@@ -115,18 +115,18 @@ export const HistorySearch = memo(({
             onKeyDown={handleKeyDown}
             placeholder="Search command history (Ctrl+R)..."
             className={classNames(
-              'flex-1 bg-transparent text-sm text-bolt-elements-textPrimary',
-              'placeholder:text-bolt-elements-textTertiary focus:outline-none'
+              'flex-1 bg-transparent text-sm text-recoder-elements-textPrimary',
+              'placeholder:text-recoder-elements-textTertiary focus:outline-none'
             )}
             autoComplete="off"
             spellCheck={false}
           />
-          <div className="flex items-center gap-1 text-[10px] text-bolt-elements-textTertiary">
-            <kbd className="px-1 py-0.5 rounded bg-bolt-elements-background-depth-3 border border-bolt-elements-borderColor">
+          <div className="flex items-center gap-1 text-[10px] text-recoder-elements-textTertiary">
+            <kbd className="px-1 py-0.5 rounded bg-recoder-elements-background-depth-3 border border-recoder-elements-borderColor">
               Enter
             </kbd>
             <span>select</span>
-            <kbd className="px-1 py-0.5 rounded bg-bolt-elements-background-depth-3 border border-bolt-elements-borderColor ml-1">
+            <kbd className="px-1 py-0.5 rounded bg-recoder-elements-background-depth-3 border border-recoder-elements-borderColor ml-1">
               Esc
             </kbd>
             <span>close</span>
@@ -144,17 +144,17 @@ export const HistorySearch = memo(({
                   'w-full flex items-center gap-2 px-3 py-1.5 text-left text-sm transition-colors',
                   index === selectedIndex
                     ? 'bg-blue-500/20 text-blue-300'
-                    : 'text-bolt-elements-textSecondary hover:bg-bolt-elements-background-depth-3'
+                    : 'text-recoder-elements-textSecondary hover:bg-recoder-elements-background-depth-3'
                 )}
               >
-                <div className="i-ph:terminal-window text-xs text-bolt-elements-textTertiary" />
+                <div className="i-ph:terminal-window text-xs text-recoder-elements-textTertiary" />
                 <code className="flex-1 font-mono text-xs truncate">
                   {highlightMatch(result.command, query)}
                 </code>
               </button>
             ))
           ) : (
-            <div className="px-3 py-4 text-center text-sm text-bolt-elements-textTertiary">
+            <div className="px-3 py-4 text-center text-sm text-recoder-elements-textTertiary">
               {query ? 'No matching commands found' : 'No command history yet'}
             </div>
           )}

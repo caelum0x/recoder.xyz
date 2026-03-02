@@ -1,4 +1,4 @@
-import type { TriggerId } from "@giselles-ai/protocol";
+import type { TriggerId } from "@recoder/protocol";
 import { useGitHubTrigger } from "../../lib/use-github-trigger";
 import { GitHubRepositoryBadge } from "./github-repository-badge";
 

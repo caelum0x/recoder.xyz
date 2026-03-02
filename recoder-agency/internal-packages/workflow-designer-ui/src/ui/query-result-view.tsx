@@ -1,8 +1,8 @@
-import type { Generation } from "@giselles-ai/protocol";
+import type { Generation } from "@recoder/protocol";
 import {
 	useVectorStore,
 	type VectorStoreContextValue,
-} from "@giselles-ai/react";
+} from "@recoder/react";
 import clsx from "clsx/lite";
 import {
 	ChevronDownIcon,
