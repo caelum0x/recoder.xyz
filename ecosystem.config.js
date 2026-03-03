@@ -26,7 +26,7 @@ module.exports = {
     // ── recoder-agents (Next.js) ──────────────────────────────────
     {
       name: 'recoder-agents',
-      cwd: '/root/recoder.xyz/recoder-frontend',
+      cwd: '/root/recoder.xyz/recoder-agents',
       script: 'node_modules/.bin/next',
       args: 'start',
       interpreter: 'none',
@@ -67,11 +67,13 @@ module.exports = {
       }
     },
 
-    // ── recoder-pm (Turbo monorepo – Next.js web app, standalone) ───
+    // ── recoder-pm (Turbo monorepo – Next.js web app) ────────────────
     {
       name: 'recoder-pm',
       cwd: '/root/recoder.xyz/recoder-pm/apps/web',
-      script: '.next/standalone/recoder-pm/apps/web/server.js',
+      script: 'node_modules/.bin/next',
+      args: 'start',
+      interpreter: 'none',
       max_memory_restart: '512M',
       restart_delay: 3000,
       kill_timeout: 5000,
