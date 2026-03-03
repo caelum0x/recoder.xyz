@@ -196,7 +196,7 @@ cd /root/recoder.xyz
 # Validate required env files exist before building
 echo "--- Validating required env files ---"
 MISSING_ENV=0
-for envfile in app/.env.production recoder-web/.env docker-backend/.env recoder-frontend/.env.local; do
+for envfile in app/.env.production recoder-web/.env docker-backend/.env recoder-agents/.env.local; do
   if [ ! -f "$envfile" ]; then
     echo "FATAL: Missing required env file: $envfile"
     MISSING_ENV=1
@@ -283,7 +283,7 @@ echo "[$(date -u)] recoder-web built"
 
 echo "--- Building recoder-frontend ---"
 docker build \
-  -f recoder-frontend/Dockerfile \
+  -f recoder-agents/Dockerfile \
   -t recoderxyz-recoder-frontend:latest \
   --build-arg APP_PORT=3001 \
   --build-arg PNPM_LOCKFILE_MODE=--no-frozen-lockfile \

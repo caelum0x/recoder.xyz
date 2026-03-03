@@ -5,7 +5,7 @@ set -euo pipefail
 required_surfaces=(
   "app"
   "recoder-web"
-  "recoder-frontend"
+  "recoder-agents"
   "recoder-studio"
   "recoder-pm"
   "apps/mobile"

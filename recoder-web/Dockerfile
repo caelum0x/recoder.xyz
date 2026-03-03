@@ -31,7 +31,7 @@ RUN rm -rf packages/auth && \
     echo '{"name":"@recoder/auth","version":"0.0.0","private":true}' > packages/auth/package.json
 
 # Create stubs for workspace members we don't need but that pnpm-workspace.yaml references
-RUN for dir in production-engine docker-backend recoder-chat app recoder-frontend apps/mobile recoder-studio apps/ui.giselles.ai scripts deployment; do \
+RUN for dir in production-engine docker-backend recoder-chat app recoder-agents apps/mobile recoder-studio apps/ui.giselles.ai scripts deployment; do \
       mkdir -p "$dir" && echo '{"name":"stub-'$(echo $dir | tr / -)'","version":"0.0.0","private":true}' > "$dir/package.json"; \
     done && \
     mkdir -p internal-packages/stub && echo '{"name":"stub-internal","version":"0.0.0","private":true}' > internal-packages/stub/package.json

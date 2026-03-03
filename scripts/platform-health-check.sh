@@ -76,7 +76,7 @@ echo "Running active-surface platform health checks..."
 
 failures=0
 run_check "recoder-web" "recoder-web" "npm run build" false || failures=$((failures + 1))
-run_check "recoder-frontend" "recoder-frontend" "npm run build" false || failures=$((failures + 1))
+run_check "recoder-agents" "recoder-agents" "npm run build" false || failures=$((failures + 1))
 run_check "apps-mobile" "apps/mobile" "npm run typecheck" false || failures=$((failures + 1))
 run_check "apps-desktop" "apps/desktop" "npm run lint" false || failures=$((failures + 1))
 run_check "backend" "backend" "npm run build" false || failures=$((failures + 1))

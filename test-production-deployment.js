@@ -122,7 +122,7 @@ class ProductionValidator {
     this.log('🏗️ Validating Production Infrastructure...', 'info');
     
     // Check if production compose file exists
-    const composeFile = 'docker-compose.production-enhanced.yml';
+    const composeFile = 'docker-compose.deploy.yml';
     if (!fs.existsSync(composeFile)) {
       this.errors.push(`Production compose file missing: ${composeFile}`);
       this.log(`Production compose file missing: ${composeFile}`, 'error');
@@ -132,7 +132,7 @@ class ProductionValidator {
     this.log(`Production compose file found: ${composeFile}`, 'success');
     
     // Check deployment script
-    const deployScript = 'deploy-production.sh';
+    const deployScript = 'scripts/deploy-all-services.sh';
     if (!fs.existsSync(deployScript)) {
       this.errors.push(`Deployment script missing: ${deployScript}`);
       this.log(`Deployment script missing: ${deployScript}`, 'error');
