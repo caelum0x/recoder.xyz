@@ -7,6 +7,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth-helpers';
 import { prisma } from '@/lib/prisma';
 import crypto from 'crypto';
+import {
+  deleteVerificationsByIdentifiers,
+  findValidVerificationByIdentifierPrefixAndHashedValue,
+} from '@/lib/auth/verification-store';
 
 /**
  * GET /api/user/account/verify-email-change?token=...
@@ -24,16 +28,9 @@ export async function GET(request: NextRequest) {
 
     const hashedToken = crypto.createHash('sha256').update(token).digest('hex');
 
-    // Find the token-based verification
-    const verifications = await prisma.verifications.findMany({
-      where: {
-        value: hashedToken,
-        expires_at: { gt: new Date() },
-      }
-    });
-
-    const verification = verifications.find(v =>
-      v.identifier.startsWith('email-change-token:')
+    const verification = await findValidVerificationByIdentifierPrefixAndHashedValue(
+      'email-change-token:',
+      hashedToken
     );
 
     if (!verification) {
@@ -55,16 +52,10 @@ export async function GET(request: NextRequest) {
     }
 
     // Clean up all related verifications
-    await prisma.verifications.deleteMany({
-      where: {
-        identifier: {
-          in: [
-            `email-change:${userId}:${newEmail}`,
-            `email-change-token:${userId}:${newEmail}`,
-          ]
-        }
-      }
-    });
+    await deleteVerificationsByIdentifiers([
+      `email-change:${userId}:${newEmail}`,
+      `email-change-token:${userId}:${newEmail}`,
+    ]);
 
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://recoder.xyz';
     return NextResponse.redirect(new URL('/settings/account?emailChanged=true', baseUrl));
@@ -110,16 +101,9 @@ export async function POST(request: NextRequest) {
 
     const hashedCode = crypto.createHash('sha256').update(code).digest('hex');
 
-    // Find matching code verification for this user
-    const verifications = await prisma.verifications.findMany({
-      where: {
-        value: hashedCode,
-        expires_at: { gt: new Date() },
-      }
-    });
-
-    const verification = verifications.find(v =>
-      v.identifier.startsWith(`email-change:${user.id}:`)
+    const verification = await findValidVerificationByIdentifierPrefixAndHashedValue(
+      `email-change:${user.id}:`,
+      hashedCode
     );
 
     if (!verification) {
@@ -143,16 +127,10 @@ export async function POST(request: NextRequest) {
     }
 
     // Clean up all related verifications
-    await prisma.verifications.deleteMany({
-      where: {
-        identifier: {
-          in: [
-            `email-change:${user.id}:${newEmail}`,
-            `email-change-token:${user.id}:${newEmail}`,
-          ]
-        }
-      }
-    });
+    await deleteVerificationsByIdentifiers([
+      `email-change:${user.id}:${newEmail}`,
+      `email-change-token:${user.id}:${newEmail}`,
+    ]);
 
     return NextResponse.json({
       success: true,

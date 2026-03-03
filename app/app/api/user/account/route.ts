@@ -8,6 +8,10 @@ import {
   assertAccountPutResponse,
 } from '@/lib/contracts/account-contracts';
 import nodeCrypto from 'crypto';
+import {
+  createVerificationRecord,
+  deleteVerificationsByIdentifierPrefixes,
+} from '@/lib/auth/verification-store';
 
 function getPreferenceValue(
   value: unknown,
@@ -139,45 +143,28 @@ export async function PUT(request: NextRequest) {
       }
 
       // Clean up any previous pending email change verifications for this user
-      await prisma.verifications.deleteMany({
-        where: {
-          identifier: { startsWith: `email-change:${user.id}:` }
-        }
-      });
+      await deleteVerificationsByIdentifierPrefixes([
+        `email-change:${user.id}:`,
+        `email-change-token:${user.id}:`,
+      ]);
 
       // Generate 6-digit verification code
       const verificationCode = nodeCrypto.randomInt(100000, 999999).toString();
-      const hashedCode = nodeCrypto.createHash('sha256').update(verificationCode).digest('hex');
-
       // Generate link-based token
       const verificationToken = nodeCrypto.randomBytes(32).toString('hex');
-      const hashedToken = nodeCrypto.createHash('sha256').update(verificationToken).digest('hex');
 
       const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
 
-      // Store code verification (identifier encodes userId + newEmail)
-      await prisma.verifications.create({
-        data: {
-          id: nodeCrypto.randomUUID(),
-          identifier: `email-change:${user.id}:${email}`,
-          value: hashedCode,
-          expires_at: expiresAt,
-          created_at: new Date(),
-          updated_at: new Date(),
-        }
-      });
-
-      // Store token verification
-      await prisma.verifications.create({
-        data: {
-          id: nodeCrypto.randomUUID(),
-          identifier: `email-change-token:${user.id}:${email}`,
-          value: hashedToken,
-          expires_at: expiresAt,
-          created_at: new Date(),
-          updated_at: new Date(),
-        }
-      });
+      await createVerificationRecord(
+        `email-change:${user.id}:${email}`,
+        verificationCode,
+        expiresAt
+      );
+      await createVerificationRecord(
+        `email-change-token:${user.id}:${email}`,
+        verificationToken,
+        expiresAt
+      );
 
       // Build verification URL
       const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://recoder.xyz';
