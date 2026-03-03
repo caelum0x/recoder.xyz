@@ -4710,6 +4710,24 @@ async def get_analytics_queue_status(
     Useful for monitoring the background worker.
     """
     try:
+        queue_exists = await execute_scalar_read(
+            "SELECT to_regclass('public.conversation_analytics_queue') IS NOT NULL"
+        )
+
+        if not queue_exists:
+            total_analyzed = await execute_scalar_read("SELECT count(*) FROM conversation_analytics")
+            return {
+                "queue": {
+                    "pending": 0,
+                    "processing": 0,
+                    "failed": 0,
+                    "completed": 0,
+                    "enabled": False,
+                    "reason": "conversation_analytics_queue table missing",
+                },
+                "total_analyzed": total_analyzed or 0,
+            }
+
         pending, processing, failed, completed, total_analyzed = await asyncio.gather(
             execute_scalar_read("SELECT count(*) FROM conversation_analytics_queue WHERE status = 'pending'"),
             execute_scalar_read("SELECT count(*) FROM conversation_analytics_queue WHERE status = 'processing'"),
@@ -4723,7 +4741,8 @@ async def get_analytics_queue_status(
                 "pending": pending or 0,
                 "processing": processing or 0,
                 "failed": failed or 0,
-                "completed": completed or 0
+                "completed": completed or 0,
+                "enabled": True,
             },
             "total_analyzed": total_analyzed or 0
         }

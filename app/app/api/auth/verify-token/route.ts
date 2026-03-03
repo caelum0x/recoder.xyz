@@ -52,60 +52,86 @@ function normalizeSessionToken(rawToken: string): string {
   return token.trim();
 }
 
-export async function POST(request: NextRequest) {
-  try {
-    const rawBody = await request.text();
-    let parsed: { token?: string } = {};
-    try {
-      parsed = rawBody ? JSON.parse(rawBody) : {};
-    } catch {
-      return NextResponse.json(
-        { error: 'Invalid JSON payload' },
-        { status: 400 }
-      );
+function jsonError(message: string, status: number, extra?: Record<string, unknown>) {
+  return NextResponse.json(
+    { error: message, ...extra },
+    {
+      status,
+      headers: {
+        'Cache-Control': 'no-store, no-cache, must-revalidate',
+      },
     }
-    const tokenFromBody = parsed.token?.trim() || '';
-    const authHeader = request.headers.get('authorization') || '';
-    const bearerMatch = authHeader.match(/^Bearer\s+(.+)$/i);
-    const tokenFromBearer = bearerMatch?.[1]?.trim() || '';
-    const tokenFromCookie = extractTokenFromCookieHeader(request.headers.get('cookie') || '');
-    const token = normalizeSessionToken(tokenFromBody || tokenFromBearer || tokenFromCookie);
+  );
+}
+
+async function resolveSessionFromToken(token: string) {
+  let session: Awaited<ReturnType<typeof auth.api.getSession>> | null = null;
+  for (const cookieName of SESSION_COOKIE_CANDIDATES) {
+    session = await auth.api.getSession({
+      headers: new Headers({
+        cookie: `${cookieName}=${token}`,
+      }),
+    });
+    if (session?.user) {
+      return session;
+    }
+  }
+
+  return null;
+}
+
+async function extractVerifiedToken(
+  request: NextRequest,
+  rawBody?: string,
+): Promise<{ token: string } | { token: null; reason: string }> {
+  const authResult = verifyInternalServiceRequest(request, { rawBody: rawBody ?? '' });
+  if (!authResult.ok) {
+    return {
+      token: null,
+      reason: 'reason' in authResult ? authResult.reason : 'missing_internal_auth',
+    };
+  }
+
+  const authHeader = request.headers.get('authorization') || '';
+  const bearerMatch = authHeader.match(/^Bearer\s+(.+)$/i);
+  const tokenFromBearer = bearerMatch?.[1]?.trim() || '';
+  const tokenFromCookie = extractTokenFromCookieHeader(request.headers.get('cookie') || '');
+
+  let tokenFromBody = '';
+  if (rawBody) {
+    try {
+      const parsed = JSON.parse(rawBody) as { token?: string };
+      tokenFromBody = parsed.token?.trim() || '';
+    } catch {
+      throw new Error('invalid_json');
+    }
+  }
+
+  return { token: normalizeSessionToken(tokenFromBody || tokenFromBearer || tokenFromCookie) };
+}
+
+async function handleVerification(request: NextRequest, rawBody?: string) {
+  try {
+    const tokenResult = await extractVerifiedToken(request, rawBody);
+
+    if (tokenResult.token === null) {
+      return jsonError('Unauthorized', 401, {
+        reason: 'reason' in tokenResult ? tokenResult.reason : 'missing_internal_auth',
+      });
+    }
+
+    const token = tokenResult.token;
 
     if (!token) {
-      return NextResponse.json(
-        { error: 'Token is required' },
-        { status: 400 }
-      );
+      return jsonError('Token is required', 400);
     }
 
-    const authResult = verifyInternalServiceRequest(request, { rawBody });
-    if (!authResult.ok) {
-      return NextResponse.json(
-        { error: 'Unauthorized', reason: (authResult as { ok: false; reason: string }).reason },
-        { status: 401 }
-      );
-    }
-
-    let session: Awaited<ReturnType<typeof auth.api.getSession>> | null = null;
-    for (const cookieName of SESSION_COOKIE_CANDIDATES) {
-      session = await auth.api.getSession({
-        headers: new Headers({
-          cookie: `${cookieName}=${token}`,
-        }),
-      });
-      if (session?.user) {
-        break;
-      }
-    }
+    const session = await resolveSessionFromToken(token);
 
     if (!session || !session.user) {
-      return NextResponse.json(
-        { error: 'Invalid or expired token' },
-        { status: 401 }
-      );
+      return jsonError('Invalid or expired token', 401);
     }
 
-    // Return user data
     return NextResponse.json({
       success: true,
       user: {
@@ -114,12 +140,25 @@ export async function POST(request: NextRequest) {
         name: session.user.name,
         image: session.user.image
       }
+    }, {
+      headers: {
+        'Cache-Control': 'no-store, no-cache, must-revalidate',
+      },
     });
   } catch (error) {
+    if (error instanceof Error && error.message === 'invalid_json') {
+      return jsonError('Invalid JSON payload', 400);
+    }
     console.error('Token verification error:', error);
-    return NextResponse.json(
-      { error: 'Token verification failed' },
-      { status: 500 }
-    );
+    return jsonError('Token verification failed', 500);
   }
+}
+
+export async function GET(request: NextRequest) {
+  return handleVerification(request);
+}
+
+export async function POST(request: NextRequest) {
+  const rawBody = await request.text();
+  return handleVerification(request, rawBody);
 }

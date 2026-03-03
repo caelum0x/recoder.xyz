@@ -14,6 +14,25 @@ import {
   findValidVerificationByHashedValue,
 } from '@/lib/auth/verification-store';
 
+async function markEmailVerifiedAcrossTables(email: string) {
+  await Promise.allSettled([
+    prisma.user.update({
+      where: { email },
+      data: {
+        emailVerified: true,
+        updatedAt: new Date(),
+      },
+    }),
+    prisma.users.update({
+      where: { email },
+      data: {
+        emailVerified: true,
+        updatedAt: new Date(),
+      },
+    }),
+  ]);
+}
+
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
@@ -35,34 +54,8 @@ export async function GET(request: NextRequest) {
     // Extract email from identifier
     const email = verification.identifier.replace('email-verify:', '');
 
-    // Update user email verified status in BOTH tables
-    // Better Auth's user table (web logins)
-    try {
-      await prisma.user.update({
-        where: { email },
-        data: {
-          emailVerified: true,
-          updatedAt: new Date()
-        }
-      });
-    } catch (e) {
-      // User might not exist in this table - that's OK
-      logger.info('User not in user table (Better Auth)', { route: 'api/auth/verify-email', email });
-    }
-
-    // CLI users table
-    try {
-      await prisma.users.update({
-        where: { email },
-        data: {
-          emailVerified: true,
-          updatedAt: new Date()
-        }
-      });
-    } catch (e) {
-      // User might not exist in this table - that's OK
-      logger.info('User not in users table (CLI)', { route: 'api/auth/verify-email', email });
-    }
+    // Keep web and CLI identity state aligned regardless of link-vs-code verification path.
+    await markEmailVerifiedAcrossTables(email);
 
     // Delete the verification token from both compatibility tables
     await consumeVerification(verification.identifier, hashedToken);
@@ -90,15 +83,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Check BOTH user tables (web and CLI sign-ups)
-    const webUser = await prisma.user.findUnique({
+    // Only 'users' (plural) table exists
+    const user = await prisma.users.findUnique({
       where: { email }
     });
-    const cliUser = await prisma.users.findUnique({
-      where: { email }
-    });
-
-    const user = webUser || cliUser;
 
     if (!user) {
       return NextResponse.json(

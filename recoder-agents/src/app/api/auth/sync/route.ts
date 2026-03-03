@@ -1,5 +1,5 @@
 /**
- * Cross-domain session sync receiver for recoder-frontend
+ * Cross-domain session sync receiver for recoder-agents
  *
  * Receives JWT sync tokens from recoder.xyz (main app) and sets a
  * cross-domain cookie so users don't need to sign in separately.
