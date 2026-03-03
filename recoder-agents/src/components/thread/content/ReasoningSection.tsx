@@ -84,7 +84,7 @@ export function ReasoningSection({
       <div className="flex items-center gap-3">
         {/* Full Recoder logo (logomark with text) - pulses when reasoning is active */}
         <img
-          src="/Logomark.svg"
+          src="/logo.png"
           alt="Recoder"
           className={cn(
             "flex-shrink-0 dark:invert-0 invert",

@@ -111,13 +111,17 @@ export const WORKFLOW_REQUEST_CONTRACT_ERROR_SCHEMA = 'agent-workflow-contract-e
 export const WORKFLOW_CONTRACT_VERSION = INTERNAL_WORKFLOW_CONTRACT;
 export const PUBLIC_WORKFLOW_CONTRACT_VERSION = PUBLIC_WORKFLOW_CONTRACT;
 
+// Keep the legacy workspace path until the app is physically moved, but expose the
+// current product identity in user-facing workflow labels.
+const UI_RECODER_WORKSPACE_PATH = '/Users/arhansubasi/recoder.xyz/apps/ui.giselles.ai';
+
 const DEFAULT_REPO_PATHS = [
   '/Users/arhansubasi/recoder.xyz/app',
   '/Users/arhansubasi/recoder.xyz/apps/desktop',
   '/Users/arhansubasi/recoder.xyz/apps/frontend',
   '/Users/arhansubasi/recoder.xyz/apps/mobile',
   '/Users/arhansubasi/recoder.xyz/recoder-studio',
-  '/Users/arhansubasi/recoder.xyz/apps/ui.giselles.ai',
+  UI_RECODER_WORKSPACE_PATH,
   '/Users/arhansubasi/recoder.xyz/backend',
   '/Users/arhansubasi/recoder.xyz/docker-backend',
   '/Users/arhansubasi/recoder.xyz/openclaw',
@@ -159,10 +163,10 @@ const LANE_CATALOG: Array<Pick<SubagentLane, 'laneId' | 'title' | 'paths' | 'val
   },
   {
     laneId: 'A4',
-    title: 'Studio and UI apps',
+    title: 'Studio and ui.recoder.xyz',
     paths: [
       '/Users/arhansubasi/recoder.xyz/recoder-studio',
-      '/Users/arhansubasi/recoder.xyz/apps/ui.giselles.ai',
+      UI_RECODER_WORKSPACE_PATH,
     ],
     validationCommands: ['pnpm -C /Users/arhansubasi/recoder.xyz/recoder-studio test'],
   },

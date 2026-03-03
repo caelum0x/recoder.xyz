@@ -14,20 +14,6 @@ const STORE_LINKS = {
   android: 'https://play.google.com/store/apps/details?id=com.recoder.app',
 };
 
-// Recoder symbol SVG (inline to avoid loading issues)
-function RecoderSymbol({ size = 24, className }: { size?: number; className?: string }) {
-  return (
-    <svg 
-      width={size} 
-      height={size} 
-      viewBox="0 0 30 25" 
-      fill="currentColor" 
-      className={className}
-    >
-      <path d="M25.5614 24.916H29.8268C29.8268 19.6306 26.9378 15.0039 22.6171 12.4587C26.9377 9.91355 29.8267 5.28685 29.8267 0.00146484H25.5613C25.5613 5.00287 21.8906 9.18692 17.0654 10.1679V0.00146484H12.8005V10.1679C7.9526 9.20401 4.3046 5.0186 4.3046 0.00146484H0.0391572C0.0391572 5.28685 2.92822 9.91355 7.24884 12.4587C2.92818 15.0039 0.0390625 19.6306 0.0390625 24.916H4.30451C4.30451 19.8989 7.95259 15.7135 12.8005 14.7496V24.9206H17.0654V14.7496C21.9133 15.7134 25.5614 19.8989 25.5614 24.916Z"/>
-    </svg>
-  );
-}
 
 // Apple logo SVG
 function AppleLogo({ className }: { className?: string }) {
@@ -78,8 +64,8 @@ export default function AppDownloadPage() {
           >
             {/* App icon */}
             <div className="relative mb-6 z-10">
-              <div className="relative w-20 h-20 bg-foreground rounded-[20px] flex items-center justify-center">
-                <RecoderSymbol size={40} className="text-background" />
+              <div className="relative w-20 h-20 rounded-[20px] overflow-hidden">
+                <img src="/icon.png" alt="Recoder" className="w-full h-full object-cover" />
               </div>
             </div>
             

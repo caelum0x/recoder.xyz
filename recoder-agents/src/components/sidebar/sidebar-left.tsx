@@ -152,7 +152,7 @@ export function SidebarLeft({
   }, [pathname, isOnThread]);
 
   // Handle view switching (Files is independent - just a link, not part of this)
-  const handleViewChange = (view: 'chats' | 'workers' | 'starred') => {
+  const handleViewChange = (view: 'chats' | 'workers' | 'workspaces' | 'starred') => {
     setActiveView(view);
   };
 

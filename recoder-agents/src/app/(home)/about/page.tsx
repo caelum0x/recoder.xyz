@@ -240,23 +240,8 @@ export default function AboutPage() {
     <main ref={mainRef} className="min-h-screen bg-background">
       <article className="max-w-4xl mx-auto px-6 md:px-10 pt-24 md:pt-28 pb-32">
         
-        {/* Hero Image */}
-        <motion.figure 
-          className="mb-16 md:mb-20"
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6 }}
-        >
-          <div className="relative aspect-[16/9] w-full overflow-hidden">
-            <Image
-              src="/images/team.webp"
-              alt="The Recoder team"
-              fill
-              className="object-cover object-top"
-              priority
-            />
-          </div>
-        </motion.figure>
+        {/* Spacer */}
+        <div className="mb-16 md:mb-20" />
 
         <div 
           ref={containerRef}
@@ -316,7 +301,7 @@ export default function AboutPage() {
 
             {/* Recoder logo */}
             <div className="text-center mt-6">
-              <Image src="/recoder-symbol.svg" alt="Recoder" width={16} height={13} className="inline-block opacity-20 dark:invert" />
+              <Image src="/logo.png" alt="Recoder" width={16} height={13} className="inline-block opacity-20 dark:invert" />
             </div>
           </div>
 
@@ -351,7 +336,7 @@ export default function AboutPage() {
 
               {/* Recoder logo */}
               <div className="text-center mt-4">
-                <Image src="/recoder-symbol.svg" alt="Recoder" width={16} height={13} className="inline-block opacity-20 dark:invert" />
+                <Image src="/logo.png" alt="Recoder" width={16} height={13} className="inline-block opacity-20 dark:invert" />
               </div>
             </div>
 
@@ -380,7 +365,7 @@ export default function AboutPage() {
 
               {/* Recoder logo */}
               <div className="text-center mt-4">
-                <Image src="/recoder-symbol.svg" alt="Recoder" width={16} height={13} className="inline-block opacity-20 dark:invert" />
+                <Image src="/logo.png" alt="Recoder" width={16} height={13} className="inline-block opacity-20 dark:invert" />
               </div>
             </div>
           </div>

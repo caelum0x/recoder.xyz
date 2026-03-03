@@ -9,7 +9,7 @@ This repository contains multiple ecosystems. Not every directory is part of the
 - `docker-backend`
 - `recoder-web`
 - `app`
-- `recoder-frontend`
+- `recoder-agents`
 - `apps/mobile`
 - `recoder-studio`
 - `apps/ui.giselles.ai`
@@ -17,6 +17,11 @@ This repository contains multiple ecosystems. Not every directory is part of the
 - `packages/*`
 - `internal-packages/*`
 - `scripts`
+
+Legacy workspace note:
+- `apps/ui.giselles.ai` remains the physical workspace path for now.
+- The active product/package identity is `ui.recoder.xyz`.
+- Do not rename or move the workspace path unless the full workspace, Docker, and script graph is migrated together.
 
 ## Explicitly excluded in root workspace (`exclude:`)
 - Glob excludes: `**/node_modules/**`, `**/dist/**`, `**/.next/**`, `**/build/**`, `**/coverage/**`, `**/.turbo/**`, `**/.nx/**`

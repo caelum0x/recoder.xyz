@@ -175,35 +175,6 @@ export function Navbar({ isAbsolute = false }: NavbarProps) {
                   {item.name}
                 </Link>
               ))}
-              
-              {/* Mobile App Download with QR Popover */}
-              <div className="relative group">
-                <Link
-                  href="/app"
-                  className={cn(
-                    "px-3 py-1.5 text-sm font-medium rounded-lg transition-colors",
-                    pathname === '/app'
-                      ? "text-foreground"
-                      : "text-muted-foreground hover:text-foreground"
-                  )}
-                >
-                  Mobile
-                </Link>
-                
-                {/* QR Code Popover - appears on hover */}
-                <div className="absolute top-full left-1/2 -translate-x-1/2 pt-2 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50">
-                  <div className="relative bg-[#E8E8E8] dark:bg-[#1a1a1a] rounded-2xl border border-border/60 dark:border-[#2a2a2a] p-4 min-w-[200px]">
-                    <AppDownloadQR size={160} logoSize={24} className="rounded-xl p-3 shadow-md" />
-                    <p className="text-xs text-muted-foreground text-center mt-3">
-                      Scan to download
-                    </p>
-                    <div className="flex items-center justify-center gap-1.5 mt-1.5">
-                      <AppleLogo className="h-3 w-3 text-muted-foreground/60" />
-                      <PlayIcon className="h-2.5 w-2.5 text-muted-foreground/60" />
-                    </div>
-                  </div>
-                </div>
-              </div>
             </nav>
 
             {/* Right Section - Actions */}
@@ -301,20 +272,6 @@ export function Navbar({ isAbsolute = false }: NavbarProps) {
                     </a>
                   </motion.li>
                 ))}
-                {/* Mobile App Link */}
-                <motion.li variants={drawerMenuVariants}>
-                  <Link
-                    href="/app"
-                    onClick={() => setIsDrawerOpen(false)}
-                    className={`block py-3 text-4xl font-medium tracking-tight transition-colors ${
-                      pathname === '/app'
-                        ? 'text-foreground'
-                        : 'text-muted-foreground hover:text-foreground'
-                    }`}
-                  >
-                    Mobile
-                  </Link>
-                </motion.li>
               </ul>
             </motion.nav>
 

@@ -94,7 +94,7 @@ export function ModelProviderIcon({
   const provider = getModelProvider(modelId);
 
   const iconMap: Record<ModelProvider, string> = {
-    recoder: '/recoder-symbol.svg', // Recoder modes use the Recoder symbol
+    recoder: '/logo.png', // Recoder modes use the Recoder symbol
     anthropic: '/images/models/Anthropic.svg',
     openai: '/images/models/OAI.svg',
     google: '/images/models/Gemini.svg',

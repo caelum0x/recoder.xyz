@@ -932,7 +932,7 @@ export function NewThreadEmptyState({ onSubmit, className }: NewThreadEmptyState
     <div className={cn('flex flex-col gap-6 max-w-3xl w-full mx-auto', className)}>
       <div className="flex items-center gap-2">
         <img
-          src="/Logomark.svg"
+          src="/logo.png"
           alt="Recoder"
           className="dark:invert-0 invert"
           style={{ height: '14px', width: 'auto' }}
