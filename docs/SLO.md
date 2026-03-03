@@ -13,7 +13,7 @@
 | # | Service | Job Name | Port | Health Path |
 |---|---------|----------|------|-------------|
 | 1 | Recoder App (Next.js) | `recoder-app` | 3000 | `/api/health` |
-| 2 | Recoder Frontend | `recoder-frontend` | 3001 | `/api/health` |
+| 2 | Recoder Agents | `recoder-frontend` (compat service label) | 3001 | `/api/health` |
 | 3 | Recoder Backend (Python) | `recoder-backend` | 8000 | `/v1/health` |
 | 4 | Recoder PM | `recoder-pm` | 3004 | `/api/health` |
 | 5 | Recoder Studio | `recoder-studio` | 3005 | `/api/health` |
@@ -31,7 +31,7 @@
 
 | Service | SLI | SLO Target | Error Budget (30 days) |
 |---------|-----|------------|------------------------|
-| All web surfaces (app, frontend, web, studio, PM, agency) | Availability: `(2xx + 3xx) / total requests` | 99.9% | 43.2 min downtime |
+| All web surfaces (app, agents, web, studio, PM, agency) | Availability: `(2xx + 3xx) / total requests` | 99.9% | 43.2 min downtime |
 | Docker Backend | Availability: `up == 1` | 99.9% | 43.2 min downtime |
 | OpenClaw Gateway | Availability: `up == 1` | 99.5% | 216 min downtime |
 

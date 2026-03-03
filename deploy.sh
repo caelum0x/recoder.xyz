@@ -1,9 +1,12 @@
 #!/bin/bash
+set -e
 
-# Recoder.xyz Production Deployment Script
-# Automated deployment with zero-downtime and rollback capabilities
-
-set -e  # Exit on any error
+echo "deploy.sh is deprecated for production."
+echo "Use the canonical deploy path instead:"
+echo "  bash scripts/deploy-all-services.sh"
+echo ""
+echo "That workflow is the supported production entrypoint and targets docker-compose.deploy.yml."
+exit 1
 
 # Configuration
 PROJECT_NAME="recoder"

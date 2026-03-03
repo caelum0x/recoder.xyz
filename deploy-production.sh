@@ -1,11 +1,12 @@
 #!/bin/bash
+set -e
 
-# Recoder.xyz Production Deployment Script
-# Deploys backend, production engine, and main web app
-
-set -e  # Exit on any error
-
-echo "🚀 Starting Recoder.xyz Production Deployment..."
+echo "deploy-production.sh is deprecated for production."
+echo "Use the canonical deploy path instead:"
+echo "  bash scripts/deploy-all-services.sh"
+echo ""
+echo "That workflow is the supported production entrypoint and targets docker-compose.deploy.yml."
+exit 1
 
 # Colors for output
 RED='\033[0;31m'

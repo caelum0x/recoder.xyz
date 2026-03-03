@@ -1,39 +1,69 @@
 {
-  "timestamp": "2025-08-11T17:07:54.450Z",
-  "overallStatus": "NEEDS_IMPROVEMENT",
-  "overallScore": 86,
-  "readinessLevel": "PRODUCTION READY",
+  "timestamp": "2026-03-03T16:03:37.875Z",
+  "overallStatus": "PRODUCTION_READY",
+  "overallScore": 98,
   "results": {
-    "infrastructure": {
+    "canonicalDeployPath": {
       "passed": true,
-      "score": 90
+      "score": 100,
+      "details": [
+        "present: canonical deploy script (scripts/deploy-all-services.sh)",
+        "present: canonical runtime verification (scripts/post-rotation-verify.sh)",
+        "present: canonical compose manifest (docker-compose.deploy.yml)",
+        "present: production runbook (PRODUCTION_RUNBOOK.md)",
+        "present: deployment runbook (DEPLOYMENT_RUNBOOK.md)"
+      ]
     },
-    "aiIntegration": {
-      "passed": false,
-      "score": 65
-    },
-    "platforms": {
+    "composeTopology": {
       "passed": true,
-      "score": 100
+      "score": 100,
+      "details": [
+        "present: service redis",
+        "present: service docker-backend",
+        "present: service recoder-web",
+        "present: service recoder-app",
+        "present: service recoder-frontend",
+        "present: service openclaw-gateway",
+        "present: service prometheus",
+        "present: service alertmanager",
+        "present: service grafana",
+        "docker compose config: valid"
+      ]
     },
-    "security": {
-      "passed": false,
-      "score": 75
-    },
-    "deployment": {
+    "runtimeConfig": {
       "passed": true,
-      "score": 100
+      "score": 90,
+      "details": [
+        "present: app/.env.production",
+        "present: recoder-web/.env",
+        "present: docker-backend/.env",
+        "present: recoder-agents/.env.local",
+        "present: credential rotation audit script"
+      ]
+    },
+    "monitoringConfig": {
+      "passed": true,
+      "score": 100,
+      "details": [
+        "present: monitoring/prometheus.yml",
+        "present: monitoring/alertmanager.yml",
+        "present: monitoring/alert-rules.yml",
+        "present: monitoring/grafana-datasources.yml",
+        "present: monitoring/grafana-dashboards.yml",
+        "present: monitoring verification script"
+      ]
+    },
+    "workspaceIdentity": {
+      "passed": true,
+      "score": 100,
+      "details": [
+        "package identity matches ui.recoder.xyz",
+        "workspace boundaries document legacy path and current identity"
+      ]
     }
   },
   "recommendations": [
-    "🤖 Fix AI provider integrations across all platforms",
-    "🔒 Complete security configuration and secrets management"
-  ],
-  "nextSteps": [
-    "1. Address failing validation categories",
-    "2. Re-run validation until all categories pass",
-    "3. Test platforms locally",
-    "4. Prepare production deployment",
-    "5. Follow production deployment guide"
+    "Run bash scripts/deploy-all-services.sh for deployment.",
+    "Run bash scripts/post-rotation-verify.sh after each production rotation."
   ]
 }

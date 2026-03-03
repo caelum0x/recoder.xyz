@@ -8,7 +8,7 @@ const TARGETS = [
   'app/coverage/coverage-summary.json',
   'docker-backend/coverage/coverage-summary.json',
   'recoder-web/coverage/coverage-summary.json',
-  'recoder-frontend/coverage/coverage-summary.json',
+  'recoder-agents/coverage/coverage-summary.json',
   'recoder-agency/coverage/coverage-summary.json',
   'recoder-studio/coverage/coverage-summary.json',
   'recoder-pm/coverage/coverage-summary.json',

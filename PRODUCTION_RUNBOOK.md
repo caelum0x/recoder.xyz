@@ -1,6 +1,11 @@
 # Recoder.xyz Production Runbook
 
-Last updated: 2026-02-14
+Last updated: 2026-03-03
+
+Canonical deployment path:
+- Use `bash scripts/deploy-all-services.sh`
+- Supported production compose manifest: `docker-compose.deploy.yml`
+- Do not use `deploy.sh` or `scripts/deploy-production.sh` for production deploys
 
 This runbook contains the exact commands to bring the entire recoder.xyz ecosystem to production. All feature code is complete. Only config/ops steps remain.
 
