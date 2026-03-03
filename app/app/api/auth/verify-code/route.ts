@@ -10,6 +10,40 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import crypto from 'crypto';
 import { logger } from '@/lib/logger';
+import {
+  consumeVerification,
+  findValidVerificationByIdentifierAndHashedValue,
+  findValidVerificationByIdentifierPrefixAndHashedValue,
+} from '@/lib/auth/verification-store';
+
+async function markEmailVerifiedAcrossTables(email: string) {
+  const results = await Promise.allSettled([
+    prisma.user.update({
+      where: { email },
+      data: {
+        emailVerified: true,
+        updatedAt: new Date(),
+      },
+    }),
+    prisma.users.update({
+      where: { email },
+      data: {
+        emailVerified: true,
+        updatedAt: new Date(),
+      },
+    }),
+  ]);
+
+  for (const result of results) {
+    if (result.status === 'rejected') {
+      logger.info('Verification update skipped for one user table', {
+        route: 'api/auth/verify-code',
+        email,
+        error: result.reason instanceof Error ? result.reason.message : String(result.reason),
+      });
+    }
+  }
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -28,34 +62,18 @@ export async function POST(request: NextRequest) {
 
     // Find verification by code
     // Codes are stored with identifier 'email-code:{email}'
-    let verification;
+    let verification = null;
 
     if (email) {
-      // If email is provided, look up specific verification
-      verification = await prisma.verifications.findFirst({
-        where: {
-          identifier: `email-code:${email}`,
-          value: hashedCode,
-          expires_at: {
-            gt: new Date()
-          }
-        }
-      });
+      verification = await findValidVerificationByIdentifierAndHashedValue(
+        `email-code:${email}`,
+        hashedCode
+      );
     } else {
-      // Search all code-based verifications
-      const verifications = await prisma.verifications.findMany({
-        where: {
-          identifier: {
-            startsWith: 'email-code:'
-          },
-          value: hashedCode,
-          expires_at: {
-            gt: new Date()
-          }
-        }
-      });
-
-      verification = verifications[0];
+      verification = await findValidVerificationByIdentifierPrefixAndHashedValue(
+        'email-code:',
+        hashedCode
+      );
     }
 
     if (!verification) {
@@ -68,39 +86,8 @@ export async function POST(request: NextRequest) {
     // Extract email from identifier
     const verifiedEmail = verification.identifier.replace('email-code:', '');
 
-    // Update user email verified status in BOTH tables
-    // Better Auth's user table (web logins)
-    try {
-      await prisma.user.update({
-        where: { email: verifiedEmail },
-        data: {
-          emailVerified: true,
-          updatedAt: new Date()
-        }
-      });
-      logger.info('User verified in user table', { route: 'api/auth/verify-code', email: verifiedEmail });
-    } catch (e) {
-      logger.info('User not in user table (Better Auth)', { route: 'api/auth/verify-code', email: verifiedEmail });
-    }
-
-    // CLI users table
-    try {
-      await prisma.users.update({
-        where: { email: verifiedEmail },
-        data: {
-          emailVerified: true,
-          updatedAt: new Date()
-        }
-      });
-      logger.info('User verified in users table', { route: 'api/auth/verify-code', email: verifiedEmail });
-    } catch (e) {
-      logger.info('User not in users table (CLI)', { route: 'api/auth/verify-code', email: verifiedEmail });
-    }
-
-    // Delete the verification record
-    await prisma.verifications.delete({
-      where: { id: verification.id }
-    });
+    await markEmailVerifiedAcrossTables(verifiedEmail);
+    await consumeVerification(verification.identifier, hashedCode);
 
     logger.info('Email verified via code', { route: 'api/auth/verify-code', email: verifiedEmail });
 
@@ -133,21 +120,14 @@ export async function GET(request: NextRequest) {
 
   const hashedCode = crypto.createHash('sha256').update(code).digest('hex');
 
-  const verification = await prisma.verifications.findFirst({
-    where: {
-      identifier: {
-        startsWith: 'email-code:'
-      },
-      value: hashedCode,
-      expires_at: {
-        gt: new Date()
-      }
-    }
-  });
+  const verification = await findValidVerificationByIdentifierPrefixAndHashedValue(
+    'email-code:',
+    hashedCode
+  );
 
   return NextResponse.json({
     success: !!verification,
     valid: !!verification,
-    expiresAt: verification?.expires_at || null
+    expiresAt: verification?.expiresAt || null
   });
 }

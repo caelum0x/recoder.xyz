@@ -6,7 +6,7 @@ Updated: 2026-02-24
 
 Surfaces reviewed:
 - `app` (`recoder.xyz`)
-- `recoder-frontend` (`frontend.recoder.xyz`)
+- `recoder-agents` (`agents.recoder.xyz`, with `frontend.recoder.xyz` alias)
 - `recoder-agency` (`agency.recoder.xyz`)
 - `recoder-studio` (`studio.recoder.xyz`)
 - `recoder-pm` (`pm.recoder.xyz`)
@@ -15,7 +15,7 @@ Surfaces reviewed:
 ## Findings
 
 1. Session verification logic was duplicated in route handlers.
-- Example: `recoder-frontend` read cookie names directly and called `verifySessionToken` manually.
+- Example: `recoder-agents` read cookie names directly and called `verifySessionToken` manually.
 - Risk: drift in cookie-name support and token parsing behavior.
 
 2. Secret fallback chains differ across apps.
@@ -37,9 +37,9 @@ Surfaces reviewed:
 - `packages/auth/package.json` now exports `./verify`.
 - `packages/auth/src/index.ts` now re-exports verification helpers/types.
 
-2. Migrated `recoder-frontend` API routes to shared verifier:
-- `recoder-frontend/src/app/api/auth/session/route.ts`
-- `recoder-frontend/src/app/api/user/profile/route.ts`
+2. Migrated `recoder-agents` API routes to shared verifier:
+- `recoder-agents/src/app/api/auth/session/route.ts`
+- `recoder-agents/src/app/api/user/profile/route.ts`
 - Both now call `verifySession(...)` from `@recoder/auth/verify` instead of duplicating cookie/token logic.
 3. Migrated server-side session loaders in remaining web surfaces:
 - `recoder-agency/apps/agency/lib/auth/server.ts`
