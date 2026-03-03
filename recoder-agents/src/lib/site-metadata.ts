@@ -2,7 +2,10 @@
  * Site metadata configuration - SIMPLE AND WORKING
  */
 
-const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://www.recoder.xyz';
+const baseUrl =
+  process.env.NEXT_PUBLIC_APP_URL ||
+  process.env.NEXT_PUBLIC_URL ||
+  'https://agents.recoder.xyz';
 
 export const siteMetadata = {
   name: 'Recoder',

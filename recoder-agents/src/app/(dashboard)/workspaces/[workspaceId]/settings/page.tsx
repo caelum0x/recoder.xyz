@@ -15,6 +15,15 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useWorkspace, useUpdateWorkspace } from '@/hooks/workspaces/use-workspaces';
+import type { WorkspaceSettings } from '@recoder/shared/a2a';
+
+type OrchestrationPattern = WorkspaceSettings['defaultOrchestrationPattern'];
+
+const ORCHESTRATION_PATTERNS: OrchestrationPattern[] = ['direct', 'fan-out', 'pipeline', 'competitive'];
+
+function isOrchestrationPattern(value: string): value is OrchestrationPattern {
+  return ORCHESTRATION_PATTERNS.includes(value as OrchestrationPattern);
+}
 
 export default function WorkspaceSettingsPage() {
   const params = useParams();
@@ -27,7 +36,7 @@ export default function WorkspaceSettingsPage() {
   const [approvalRequired, setApprovalRequired] = useState(workspace?.settings.approvalRequired ?? false);
   const [worktreeIsolation, setWorktreeIsolation] = useState(workspace?.settings.worktreeIsolation ?? false);
   const [maxConcurrent, setMaxConcurrent] = useState(workspace?.settings.maxConcurrentTasks ?? 5);
-  const [pattern, setPattern] = useState(workspace?.settings.defaultOrchestrationPattern ?? 'direct');
+  const [pattern, setPattern] = useState<OrchestrationPattern>(workspace?.settings.defaultOrchestrationPattern ?? 'direct');
 
   const handleSave = async () => {
     await updateWorkspace.mutateAsync({
@@ -38,7 +47,7 @@ export default function WorkspaceSettingsPage() {
         approvalRequired,
         worktreeIsolation,
         maxConcurrentTasks: maxConcurrent,
-        defaultOrchestrationPattern: pattern as any,
+        defaultOrchestrationPattern: pattern,
       },
     });
   };
@@ -100,7 +109,12 @@ export default function WorkspaceSettingsPage() {
 
           <div>
             <Label>Default Orchestration Pattern</Label>
-            <Select value={pattern} onValueChange={setPattern}>
+            <Select
+              value={pattern}
+              onValueChange={(value) => {
+                if (isOrchestrationPattern(value)) setPattern(value);
+              }}
+            >
               <SelectTrigger className="mt-1.5 w-48">
                 <SelectValue />
               </SelectTrigger>

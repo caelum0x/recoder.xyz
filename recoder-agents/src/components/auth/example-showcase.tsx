@@ -332,7 +332,7 @@ export function ExampleShowcase() {
                       <div className="max-w-[90%] space-y-1">
                         <div className="flex items-center gap-1 mb-1">
                           <img
-                            src="/Logomark.svg"
+                            src="/logo.png"
                             alt="Recoder"
                             className="dark:invert-0 invert flex-shrink-0"
                             style={{ height: '8px', width: 'auto' }}

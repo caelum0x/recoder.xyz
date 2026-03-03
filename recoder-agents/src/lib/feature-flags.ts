@@ -17,10 +17,29 @@ export const featureFlags = {
     process.env.NEXT_PUBLIC_DISABLE_MOBILE_ADVERTISING,
     false,
   ),
+  /**
+   * Optional Vercel analytics loader.
+   *
+   * Default: false
+   * Set NEXT_PUBLIC_ENABLE_VERCEL_ANALYTICS=true when the deployment is actually configured for it.
+   */
+  enableVercelAnalytics: parseEnvBoolean(
+    process.env.NEXT_PUBLIC_ENABLE_VERCEL_ANALYTICS,
+    false,
+  ),
+  /**
+   * Optional Vercel Speed Insights loader.
+   *
+   * Default: false
+   * Set NEXT_PUBLIC_ENABLE_VERCEL_SPEED_INSIGHTS=true when the deployment is actually configured for it.
+   */
+  enableVercelSpeedInsights: parseEnvBoolean(
+    process.env.NEXT_PUBLIC_ENABLE_VERCEL_SPEED_INSIGHTS,
+    false,
+  ),
 } as const;
 
 // Helpful during development/debugging; kept out of production logs.
 if (process.env.NODE_ENV !== 'production') {
   console.log('[featureFlags]', featureFlags);
 }
-

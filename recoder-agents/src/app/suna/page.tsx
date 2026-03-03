@@ -109,7 +109,7 @@ export default function SunaPage() {
               {/* Recoder Symbol with grain texture */}
               <div className="relative mb-8 sm:mb-12" style={{ width: '80px', height: '80px' }}>
                 <Image
-                  src="/recoder-symbol.svg"
+                  src="/logo.png"
                   alt="Recoder"
                   fill
                   className="object-contain dark:invert"
@@ -124,8 +124,8 @@ export default function SunaPage() {
                     backgroundRepeat: 'repeat',
                     mixBlendMode: 'multiply',
                     opacity: 0.6,
-                    maskImage: 'url(/recoder-symbol.svg)',
-                    WebkitMaskImage: 'url(/recoder-symbol.svg)',
+                    maskImage: 'url(/logo.png)',
+                    WebkitMaskImage: 'url(/logo.png)',
                     maskSize: 'contain',
                     WebkitMaskSize: 'contain',
                     maskRepeat: 'no-repeat',
@@ -212,7 +212,7 @@ export default function SunaPage() {
             <div className="relative w-full max-w-5xl mx-auto aspect-[1150/344] px-8 md:px-16">
               <div className="relative w-full h-full" style={{ isolation: 'isolate' }}>
                 <Image
-                  src="/wordmark.svg"
+                  src="/logo.png"
                   alt="Recoder"
                   fill
                   className="object-contain dark:invert opacity-10"
@@ -228,8 +228,8 @@ export default function SunaPage() {
                     backgroundRepeat: 'repeat',
                     mixBlendMode: 'multiply',
                     opacity: 0.6,
-                    maskImage: 'url(/wordmark.svg)',
-                    WebkitMaskImage: 'url(/wordmark.svg)',
+                    maskImage: 'url(/logo.png)',
+                    WebkitMaskImage: 'url(/logo.png)',
                     maskSize: 'contain',
                     WebkitMaskSize: 'contain',
                     maskRepeat: 'no-repeat',

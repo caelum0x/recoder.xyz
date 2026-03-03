@@ -144,7 +144,7 @@ const desktopSubagentWorkflowLanes = [
   { laneId: 'A1', title: 'Core app and web runtime', paths: ['/Users/arhansubasi/recoder.xyz/app', '/Users/arhansubasi/recoder.xyz/recoder-web'] },
   { laneId: 'A2', title: 'Desktop productization', paths: ['/Users/arhansubasi/recoder.xyz/apps/desktop'] },
   { laneId: 'A3', title: 'Frontend and mobile', paths: ['/Users/arhansubasi/recoder.xyz/apps/frontend', '/Users/arhansubasi/recoder.xyz/apps/mobile'] },
-  { laneId: 'A4', title: 'Studio and UI apps', paths: ['/Users/arhansubasi/recoder.xyz/recoder-studio', '/Users/arhansubasi/recoder.xyz/apps/ui.giselles.ai'] },
+  { laneId: 'A4', title: 'Studio and ui.recoder.xyz', paths: ['/Users/arhansubasi/recoder.xyz/recoder-studio', '/Users/arhansubasi/recoder.xyz/apps/ui.giselles.ai'] },
   { laneId: 'A5', title: 'Python backend', paths: ['/Users/arhansubasi/recoder.xyz/backend'] },
   { laneId: 'A6', title: 'Docker backend', paths: ['/Users/arhansubasi/recoder.xyz/docker-backend'] },
   { laneId: 'A7', title: 'OpenClaw ecosystem', paths: ['/Users/arhansubasi/recoder.xyz/openclaw'] },

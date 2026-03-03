@@ -75,7 +75,7 @@ const AgentHeader = memo(function AgentHeader({ agentInfo }: { agentInfo: AgentI
   if (agentInfo.name === "Recoder") {
     return (
       <img
-        src="/Logomark.svg"
+        src="/logo.png"
         alt="Recoder"
         className="dark:invert-0 invert flex-shrink-0"
         style={{ height: '12px', width: 'auto' }}
@@ -1818,7 +1818,7 @@ export const ThreadContent: React.FC<ThreadContentProps> = memo(
                       {/* Match ReasoningSection header layout for smooth transition */}
                       <div className="flex items-center gap-3">
                         <img
-                          src="/Logomark.svg"
+                          src="/logo.png"
                           alt="Recoder"
                           className="dark:invert-0 invert flex-shrink-0 animate-pulse"
                           style={{ height: '14px', width: 'auto' }}

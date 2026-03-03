@@ -166,23 +166,6 @@ export default function RootLayout({
           }}
         />
         
-        {/* Static SEO meta tags - rendered in initial HTML */}
-        <title>Recoder: Your Autonomous AI Worker</title>
-        <meta name="description" content="Built for complex tasks, designed for everything. The ultimate AI assistant that handles it all—from simple requests to mega-complex projects." />
-        <meta name="keywords" content="Recoder, AI Worker, Agentic AI, Autonomous AI Worker, AI Automation, AI Workflow Automation, AI Assistant, Task Automation" />
-        <meta property="og:title" content="Recoder: Your Autonomous AI Worker" />
-        <meta property="og:description" content="Built for complex tasks, designed for everything. The ultimate AI assistant that handles it all—from simple requests to mega-complex projects." />
-        <meta property="og:image" content="https://recoder.xyz/banner.png" />
-        <meta property="og:url" content="https://recoder.xyz" />
-        <meta property="og:type" content="website" />
-        <meta property="og:site_name" content="Recoder" />
-        <meta name="twitter:card" content="summary_large_image" />
-        <meta name="twitter:title" content="Recoder: Your Autonomous AI Worker" />
-        <meta name="twitter:description" content="Built for complex tasks, designed for everything. The ultimate AI assistant that handles it all—from simple requests to mega-complex projects." />
-        <meta name="twitter:image" content="https://recoder.xyz/banner.png" />
-        <meta name="twitter:site" content="@recoder_xyz" />
-        <link rel="canonical" href="https://recoder.xyz" />
-        
         {/* iOS Smart App Banner - shows native install banner in Safari */}
         {!featureFlags.disableMobileAdvertising ? (
           <meta name="apple-itunes-app" content="app-id=6754448524, app-argument=recoder://" />
@@ -273,17 +256,21 @@ export default function RootLayout({
             </I18nProvider>
           </AuthProvider>
           {/* Analytics - lazy loaded to not block FCP */}
-          <Suspense fallback={null}>
-            <Analytics />
-          </Suspense>
+          {featureFlags.enableVercelAnalytics ? (
+            <Suspense fallback={null}>
+              <Analytics />
+            </Suspense>
+          ) : null}
           {process.env.NEXT_PUBLIC_GTM_ID && (
           <Suspense fallback={null}>
               <GoogleTagManager gtmId={process.env.NEXT_PUBLIC_GTM_ID} />
           </Suspense>
           )}
-          <Suspense fallback={null}>
-            <SpeedInsights />
-          </Suspense>
+          {featureFlags.enableVercelSpeedInsights ? (
+            <Suspense fallback={null}>
+              <SpeedInsights />
+            </Suspense>
+          ) : null}
           <Suspense fallback={null}>
             <RouteChangeTracker />
           </Suspense>

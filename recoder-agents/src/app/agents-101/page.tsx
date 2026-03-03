@@ -665,7 +665,7 @@ const SlideContent = ({ slide }: { slide: Slide }) => {
             transition={{ delay: 0.2 }}
           >
             <Image
-              src="/Logomark.svg"
+              src="/logo.png"
               alt="Recoder"
               width={140}
               height={40}
@@ -741,7 +741,7 @@ const SlideContent = ({ slide }: { slide: Slide }) => {
             transition={{ delay: 0.2, type: 'spring' }}
           >
             <Image
-              src="/recoder-symbol.svg"
+              src="/logo.png"
               alt="Recoder"
               width={80}
               height={80}
@@ -1122,7 +1122,7 @@ export default function Agents101Page() {
       {/* Logo */}
       <div className="fixed top-8 left-8 z-50">
         <Image
-          src="/Logomark.svg"
+          src="/logo.png"
           alt="Recoder"
           width={72}
           height={72}
