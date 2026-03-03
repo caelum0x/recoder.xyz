@@ -1,5 +1,10 @@
 # Recoder Platform — Server Deployment Runbook
 
+Canonical deployment path:
+- Use `bash scripts/deploy-all-services.sh`
+- Supported production compose manifest: `docker-compose.deploy.yml`
+- `deploy.sh` and `scripts/deploy-production.sh` are deprecated and should not be used for production
+
 **Server**: Hetzner 8 vCPU, 16GB RAM, 150GB disk
 **IP**: 77.42.23.19
 **SSH**: `ssh root@77.42.23.19`
@@ -156,8 +161,8 @@ SENTRY_DSN="https://your-dsn@oXXXXXX.ingest.sentry.io/XXXXXXX"
 # App
 echo "NEXT_PUBLIC_SENTRY_DSN=$SENTRY_DSN" >> app/.env
 
-# Frontend
-echo "NEXT_PUBLIC_SENTRY_DSN=$SENTRY_DSN" >> recoder-frontend/.env
+# Agents
+echo "NEXT_PUBLIC_SENTRY_DSN=$SENTRY_DSN" >> recoder-agents/.env.local
 
 # Studio
 echo "NEXT_PUBLIC_SENTRY_DSN=$SENTRY_DSN" >> recoder-studio/.env
@@ -283,16 +288,19 @@ ssh root@77.42.23.19
 cd /root/recoder.xyz
 
 # Check which env files exist
-ls -la app/.env recoder-frontend/.env recoder-web/.env backend/.env 2>/dev/null
+ls -la app/.env.production recoder-agents/.env.local recoder-web/.env docker-backend/.env 2>/dev/null
 
 # Verify key vars are set (don't print values)
-for service in app recoder-frontend recoder-web backend; do
+for service in app recoder-agents recoder-web docker-backend; do
   echo "=== $service ==="
-  if [ -f "$service/.env" ]; then
-    grep -c 'ANTHROPIC_API_KEY' "$service/.env" 2>/dev/null && echo "  ANTHROPIC: set" || echo "  ANTHROPIC: MISSING"
-    grep -c 'OPENROUTER_API_KEY' "$service/.env" 2>/dev/null && echo "  OPENROUTER: set" || echo "  OPENROUTER: MISSING"
+  env_file=".env"
+  if [ "$service" = "app" ]; then env_file=".env.production"; fi
+  if [ "$service" = "recoder-agents" ]; then env_file=".env.local"; fi
+  if [ -f "$service/$env_file" ]; then
+    grep -c 'ANTHROPIC_API_KEY' "$service/$env_file" 2>/dev/null && echo "  ANTHROPIC: set" || echo "  ANTHROPIC: MISSING"
+    grep -c 'OPENROUTER_API_KEY' "$service/$env_file" 2>/dev/null && echo "  OPENROUTER: set" || echo "  OPENROUTER: MISSING"
   else
-    echo "  .env file MISSING"
+    echo "  $env_file file MISSING"
   fi
 done
 
@@ -342,7 +350,8 @@ ssh root@77.42.23.19
 
 echo "=== Service Health ==="
 curl -s -o /dev/null -w "recoder-app:        %{http_code}\n" https://recoder.xyz/
-curl -s -o /dev/null -w "recoder-frontend:    %{http_code}\n" https://frontend.recoder.xyz/
+curl -s -o /dev/null -w "recoder-agents:      %{http_code}\n" https://agents.recoder.xyz/
+curl -s -o /dev/null -w "frontend-alias:      %{http_code}\n" https://frontend.recoder.xyz/
 curl -s -o /dev/null -w "recoder-backend:     %{http_code}\n" https://backend.recoder.xyz/v1/health
 curl -s -o /dev/null -w "recoder-pm:          %{http_code}\n" https://pm.recoder.xyz/
 curl -s -o /dev/null -w "recoder-studio:      %{http_code}\n" https://studio.recoder.xyz/

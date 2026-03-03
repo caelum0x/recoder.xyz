@@ -2,7 +2,7 @@ packages:
   - docker-backend
   - recoder-web
   - app
-  - recoder-frontend
+  - recoder-agents
   - apps/mobile
   - recoder-studio
   - apps/ui.giselles.ai
