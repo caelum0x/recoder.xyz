@@ -80,15 +80,15 @@ export function HeroSection() {
   return (
     <section id="hero" className="w-full h-dvh relative overflow-hidden">
       <div className="flex flex-col h-full w-full overflow-hidden relative">
-        {/* Brandmark Background - responsive sizing for all devices */}
+        {/* Low-contrast product mark background for the hero surface */}
         <div 
           className="absolute inset-0 pointer-events-none overflow-hidden"
           aria-hidden="true"
         >
           <img
-            src="/recoder-brandmark-bg.svg"
+            src="/icon.png"
             alt=""
-            className="absolute left-1/2 -translate-x-1/2 top-[-10%] sm:top-1/2 sm:-translate-y-1/2 w-[140vw] min-w-[700px] h-auto sm:w-[160vw] sm:min-w-[1000px] md:min-w-[1200px] lg:w-[162vw] lg:min-w-[1620px] object-contain select-none invert dark:invert-0"
+            className="absolute left-1/2 -translate-x-1/2 top-[-10%] sm:top-1/2 sm:-translate-y-1/2 w-[120vw] min-w-[640px] h-auto sm:w-[132vw] sm:min-w-[880px] md:min-w-[1040px] lg:w-[140vw] lg:min-w-[1320px] object-contain select-none opacity-[0.06] dark:opacity-[0.08]"
             draggable={false}
           />
         </div>

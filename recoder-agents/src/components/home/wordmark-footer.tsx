@@ -14,7 +14,7 @@ export function WordmarkFooter() {
                             {/* Mobile: Symbol */}
                             <div className="md:hidden absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2" style={{ width: '280px', height: '280px' }}>
                                 <Image
-                                    src="/recoder-symbol.svg"
+                                    src="/logo.png"
                                     alt="Recoder"
                                     fill
                                     className="object-contain invert dark:invert-0 opacity-15"
@@ -30,8 +30,8 @@ export function WordmarkFooter() {
                                         backgroundRepeat: 'repeat',
                                         mixBlendMode: 'multiply',
                                         opacity: 0.6,
-                                        maskImage: 'url(/recoder-symbol.svg)',
-                                        WebkitMaskImage: 'url(/recoder-symbol.svg)',
+                                        maskImage: 'url(/logo.png)',
+                                        WebkitMaskImage: 'url(/logo.png)',
                                         maskSize: 'contain',
                                         WebkitMaskSize: 'contain',
                                         maskRepeat: 'no-repeat',
@@ -43,7 +43,7 @@ export function WordmarkFooter() {
                             </div>
                             {/* Desktop: Full wordmark */}
                             <Image
-                                src="/wordmark.svg"
+                                src="/logo.png"
                                 alt="Recoder"
                                 fill
                                 className="object-contain dark:invert hidden md:block"
@@ -59,8 +59,8 @@ export function WordmarkFooter() {
                                     backgroundRepeat: 'repeat',
                                     mixBlendMode: 'multiply',
                                     opacity: 0.6,
-                                    maskImage: 'url(/wordmark.svg)',
-                                    WebkitMaskImage: 'url(/wordmark.svg)',
+                                    maskImage: 'url(/logo.png)',
+                                    WebkitMaskImage: 'url(/logo.png)',
                                     maskSize: 'contain',
                                     WebkitMaskSize: 'contain',
                                     maskRepeat: 'no-repeat',
@@ -76,7 +76,7 @@ export function WordmarkFooter() {
                     <div className="relative w-full h-full opacity-0">
                         <div className="relative w-full h-full md:hidden">
                             <Image
-                                src="/recoder-symbol.svg"
+                                src="/logo.png"
                                 alt="Recoder"
                                 fill
                                 className="object-contain"
@@ -84,7 +84,7 @@ export function WordmarkFooter() {
                             />
                         </div>
                         <Image
-                            src="/wordmark.svg"
+                            src="/logo.png"
                             alt="Recoder"
                             fill
                             className="object-contain hidden md:block"

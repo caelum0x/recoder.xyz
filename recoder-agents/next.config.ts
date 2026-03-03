@@ -32,6 +32,56 @@ const getBackendUrl = (): string => {
   return 'https://staging-api.recoder.xyz/v1';
 };
 
+const buildCsp = () => {
+  const directives = [
+    "default-src 'self'",
+    [
+      "script-src",
+      "'self'",
+      "'unsafe-inline'",
+      "'unsafe-eval'",
+      'https://www.googletagmanager.com',
+      'https://www.google-analytics.com',
+      'https://tagmanager.google.com',
+      'https://js.stripe.com',
+      'https://static.cloudflareinsights.com',
+    ].join(' '),
+    [
+      "script-src-elem",
+      "'self'",
+      "'unsafe-inline'",
+      'https://www.googletagmanager.com',
+      'https://www.google-analytics.com',
+      'https://tagmanager.google.com',
+      'https://js.stripe.com',
+      'https://static.cloudflareinsights.com',
+    ].join(' '),
+    "style-src 'self' 'unsafe-inline'",
+    "img-src 'self' data: blob: https:",
+    "font-src 'self' data:",
+    [
+      'connect-src',
+      "'self'",
+      'https://recoder.xyz',
+      'https://www.recoder.xyz',
+      'https://*.recoder.xyz',
+      'wss://*.recoder.xyz',
+      'https://www.google-analytics.com',
+      'https://region1.google-analytics.com',
+      'https://www.googletagmanager.com',
+      'https://*.posthog.com',
+      'https://*.i.posthog.com',
+      'https://api.stripe.com',
+      'https://r.stripe.com',
+      'https://m.stripe.network',
+    ].join(' '),
+    "frame-src 'self' https://js.stripe.com https://hooks.stripe.com https://checkout.stripe.com",
+    "frame-ancestors 'none'",
+  ];
+
+  return directives.join('; ');
+};
+
 const nextConfig = (): NextConfig => ({
   output: (process.env.NEXT_OUTPUT as 'standalone') || undefined,
 
@@ -142,7 +192,7 @@ const nextConfig = (): NextConfig => ({
           },
           {
             key: 'Content-Security-Policy',
-            value: "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.googletagmanager.com https://www.google-analytics.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' https://www.google-analytics.com https://region1.google-analytics.com https://*.recoder.xyz wss://*.recoder.xyz https://*.posthog.com https://*.i.posthog.com; frame-ancestors 'none';",
+            value: buildCsp(),
           },
         ],
       },

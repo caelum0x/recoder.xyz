@@ -1,7 +1,6 @@
 import "server-only";
 import { anthropic } from "@ai-sdk/anthropic";
 import { createOpenAI, openai } from "@ai-sdk/openai";
-import type { LanguageModelV1 } from "ai";
 import { decryptApiKey } from "./ai-keys";
 import { database } from "./database";
 
@@ -69,7 +68,7 @@ const getOpenRouterTextModelName = () =>
 
 const getAnthropicTextModelName = () => process.env.ANTHROPIC_TEXT_MODEL;
 
-export const getTextModel = () => {
+export const getTextModel = (): any => {
   const provider = resolveProvider();
 
   if (provider === "openrouter") {
@@ -104,7 +103,7 @@ export const getTextModel = () => {
 export const getOrganizationTextModel = async (
   organizationId?: string | null
   // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: complex business logic
-): Promise<LanguageModelV1> => {
+): Promise<any> => {
   if (!organizationId) {
     return getTextModel();
   }
@@ -171,7 +170,7 @@ export const getOrganizationTextModel = async (
   return client(aiModel ?? getOpenAiTextModelName());
 };
 
-export const getTranscriptionModel = () => {
+export const getTranscriptionModel = (): any => {
   if (!process.env.OPENAI_API_KEY) {
     throw new Error("OPENAI_API_KEY is not set");
   }
