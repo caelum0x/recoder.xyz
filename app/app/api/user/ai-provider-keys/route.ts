@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { encrypt, decrypt, maskApiKey, validateApiKeyFormat } from '@/lib/encryption';
-import { requireAuth } from '@/lib/auth-helpers';
+import { ensureAppUserFromAuthUser, requireAuth } from '@/lib/auth-helpers';
 import { verifyInternalServiceRequest } from '@/lib/internal-service-auth';
 import { logger } from '@/lib/logger';
 
@@ -16,10 +16,7 @@ export async function GET(request: NextRequest) {
     const { user } = authResult;
 
     // Look up the user in the users table (Better Auth uses 'user' table, app uses 'users' table)
-    const appUser = await prisma.users.findUnique({
-      where: { email: user.email },
-      select: { id: true }
-    });
+    const appUser = await ensureAppUserFromAuthUser(user);
 
     if (!appUser) {
       return NextResponse.json(
@@ -76,10 +73,7 @@ export async function POST(request: NextRequest) {
     logger.info('Add API key request', { route: 'api/user/ai-provider-keys', userId: user.id });
 
     // Look up the user in the users table (Better Auth uses 'user' table, app uses 'users' table)
-    const appUser = await prisma.users.findUnique({
-      where: { email: user.email },
-      select: { id: true }
-    });
+    const appUser = await ensureAppUserFromAuthUser(user);
 
     if (!appUser) {
       logger.warn('User not found in users table', { route: 'api/user/ai-provider-keys', email: user.email });

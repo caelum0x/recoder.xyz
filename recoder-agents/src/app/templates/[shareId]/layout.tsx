@@ -1,11 +1,13 @@
 import { backendApi } from '@/lib/api-client';
 import { Metadata } from 'next';
+import { resolveAgentsSiteUrl, resolveBackendApiUrl } from '@/lib/runtime-urls';
 
 export async function generateMetadata({ params }: { params: Promise<{ shareId: string }> }): Promise<Metadata> {
   const { shareId: templateId } = await params;
+  const siteUrl = resolveAgentsSiteUrl();
 
   try {
-    const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000/v1'}/templates/public/${templateId}`);
+    const response = await fetch(`${resolveBackendApiUrl()}/templates/public/${templateId}`);
 
     if (!response.ok) {
       throw new Error('Template not found');
@@ -16,7 +18,7 @@ export async function generateMetadata({ params }: { params: Promise<{ shareId: 
     const title = `${template.name} - AI Worker Template | Recoder`;
     const description = template.description || 'Discover and install this AI worker template to enhance your workflow with powerful automation capabilities.';
 
-    const ogImage = `${process.env.NEXT_PUBLIC_URL}/api/og/template?shareId=${templateId}`;
+    const ogImage = `${siteUrl}/api/og/template?shareId=${templateId}`;
 
     return {
       title,
@@ -25,7 +27,7 @@ export async function generateMetadata({ params }: { params: Promise<{ shareId: 
         title,
         description,
         type: 'website',
-        url: `${process.env.NEXT_PUBLIC_URL}/templates/${templateId}`,
+        url: `${siteUrl}/templates/${templateId}`,
         images: [
           {
             url: ogImage,
@@ -50,10 +52,10 @@ export async function generateMetadata({ params }: { params: Promise<{ shareId: 
         title: 'AI Worker Template | Recoder',
         description: 'Discover and install AI worker templates to enhance your workflow with powerful automation capabilities.',
         type: 'website',
-        url: `${process.env.NEXT_PUBLIC_URL}/templates/${templateId}`,
+        url: `${siteUrl}/templates/${templateId}`,
         images: [
           {
-            url: `${process.env.NEXT_PUBLIC_URL}/share-page/og-fallback.png`,
+            url: `${siteUrl}/share-page/og-fallback.png`,
             width: 1200,
             height: 630,
             alt: 'Recoder Worker Template',

@@ -182,7 +182,7 @@ export default function RootLayout({
               name: siteMetadata.name,
               alternateName: ['Recoder', 'Recoder', 'Recoder: Your Autonomous AI Worker'],
               url: siteMetadata.url,
-              logo: `${siteMetadata.url}/icon.png`,
+              logo: `${siteMetadata.url}/logo.png`,
               description: siteMetadata.description,
               foundingDate: '2024',
               sameAs: [
@@ -231,7 +231,7 @@ export default function RootLayout({
           aria-label="Recoder Home"
           style={{ position: 'fixed', left: 12, top: 12, zIndex: 9999 }}
         >
-          <Image src="/icon.png" alt="Recoder logo" width={36} height={36} />
+          <Image src="/logo.png" alt="Recoder logo" width={36} height={36} />
         </a>
         <ThemeProvider
           attribute="class"

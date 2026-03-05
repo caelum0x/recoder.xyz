@@ -14,6 +14,7 @@ import { RecoderLoader } from '@/components/ui/recoder-loader';
 import { toast } from '@/lib/toast';
 import { backendApi } from '@/lib/api-client';
 import { fileQueryKeys } from '@/hooks/files/use-file-queries';
+import { resolveBackendApiUrl } from '@/lib/runtime-urls';
 
 interface SSHTerminalProps {
   sandboxId: string;
@@ -71,7 +72,7 @@ const lightTheme: ITheme = {
 };
 
 const getWebSocketUrl = () => {
-  const baseUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000';
+  const baseUrl = resolveBackendApiUrl();
   return baseUrl.replace('https://', 'wss://').replace('http://', 'ws://');
 };
 

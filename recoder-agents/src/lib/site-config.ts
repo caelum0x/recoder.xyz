@@ -1,11 +1,12 @@
 import { pricingTiers, type PricingTier } from '@/lib/pricing-config';
 import { RECODER_ECOSYSTEM_URLS } from '@recoder/ecosystem-config';
+import { resolveAgentsSiteUrl } from '@/lib/runtime-urls';
 
 // Re-export for backward compatibility
 export type { PricingTier } from '@/lib/pricing-config';
 
 export const siteConfig = {
-  url: process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000',
+  url: resolveAgentsSiteUrl(),
   nav: {
     links: [
       { id: 1, name: 'Home', href: '/' },

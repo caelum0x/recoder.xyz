@@ -67,7 +67,7 @@ export default function RootLayout({
 					aria-label="Recoder Home"
 					style={{ position: "fixed", left: 12, top: 12, zIndex: 9999 }}
 				>
-					<Image src="/icon.png" alt="Recoder logo" width={36} height={36} />
+					<Image src="/logo.png" alt="Recoder logo" width={36} height={36} />
 				</a>
 				<ThemeProvider
 					attribute="class"

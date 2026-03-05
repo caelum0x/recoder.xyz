@@ -127,7 +127,6 @@ async function handleVerification(request: NextRequest, rawBody?: string) {
     }
 
     const session = await resolveSessionFromToken(token);
-
     if (!session || !session.user) {
       return jsonError('Invalid or expired token', 401);
     }

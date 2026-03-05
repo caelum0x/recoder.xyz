@@ -29,6 +29,7 @@ export const metadata: Metadata = {
   icons: {
     icon: [
       { url: "/favicon.ico", sizes: "any" },
+      { url: "/favicon.png", sizes: "32x32", type: "image/png" },
       { url: "/icon.png", sizes: "512x512", type: "image/png" },
     ],
     apple: "/apple-icon.png",
@@ -64,7 +65,7 @@ const RootLayout = ({ children }: RootLayoutProperties) => (
         aria-label="Recoder Home"
         style={{ position: "fixed", left: 12, top: 12, zIndex: 9999 }}
       >
-        <Image src="/icon.png" alt="Recoder logo" width={36} height={36} />
+        <Image src="/logo.png" alt="Recoder logo" width={36} height={36} />
       </a>
       <AnalyticsProvider>
         <Suspense fallback={null}>

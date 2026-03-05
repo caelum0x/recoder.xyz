@@ -38,6 +38,15 @@ function checkBodyLimit(request: NextRequest): NextResponse | null {
 
 export async function proxy(request: NextRequest) {
 	const { pathname } = request.nextUrl;
+	const nextActionId = request.headers.get("next-action");
+
+	// Reduce noisy Next.js errors from malformed action probes.
+	if (request.method === "POST" && nextActionId) {
+		const isPlausibleActionId = /^[A-Za-z0-9_-]{20,}$/.test(nextActionId);
+		if (!isPlausibleActionId) {
+			return NextResponse.json({ error: "Invalid Server Action id" }, { status: 400 });
+		}
+	}
 
 	// Maintenance mode via env var
 	if (process.env.MAINTENANCE_MODE === "true") {

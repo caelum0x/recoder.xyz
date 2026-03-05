@@ -25,6 +25,7 @@ import {
   Palette,
 } from 'lucide-react';
 import { RecoderLoader } from '@/components/ui/recoder-loader';
+import { resolveBackendApiUrl } from '@/lib/runtime-urls';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import {
@@ -2254,7 +2255,7 @@ function MultiSelectToolbar({
       );
 
       // Send to backend - use correct backend URL
-      const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000';
+      const backendUrl = resolveBackendApiUrl();
       const response = await fetch(`${backendUrl}/canvas-ai/merge`, {
         method: 'POST',
         headers: {

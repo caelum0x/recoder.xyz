@@ -21,7 +21,6 @@ import {
   Loader2,
   CheckCircle
 } from 'lucide-react';
-import { SiteHeader } from '@/components/SiteHeader';
 
 interface NotificationSetting {
   id: string;
@@ -357,8 +356,6 @@ export default function NotificationSettingsPage() {
 
   return (
     <div className="min-h-screen bg-black text-white">
-      <SiteHeader />
-
       <div className="container mx-auto px-6 py-24">
         <div className="max-w-3xl mx-auto">
           {/* Page Header */}

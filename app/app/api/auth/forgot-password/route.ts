@@ -20,14 +20,25 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Find user (check both User and users tables for compatibility)
-    let user = await prisma.users.findUnique({
-      where: { email }
+    // Find user across both app users and Better Auth users.
+    const appUser = await prisma.users.findUnique({
+      where: { email },
+      select: { id: true, email: true },
     });
+    const prismaAny = prisma as unknown as {
+      user?: { findUnique: (args: unknown) => Promise<{ id: string; email: string } | null> };
+    };
+    const authUser = prismaAny.user
+      ? await prismaAny.user.findUnique({
+          where: { email },
+          select: { id: true, email: true },
+        })
+      : null;
+    const userEmail = appUser?.email || authUser?.email || null;
 
     // Always return success to prevent email enumeration
     // Even if user doesn't exist, we return success
-    if (!user) {
+    if (!userEmail) {
       console.log(`Password reset requested for non-existent email: ${email}`);
       return NextResponse.json({
         success: true,
@@ -41,10 +52,16 @@ export async function POST(request: NextRequest) {
     const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
 
     // Store token in verifications table (reusing existing table)
+    await prisma.verifications.deleteMany({
+      where: {
+        identifier: `password-reset:${userEmail}`
+      }
+    });
+
     await prisma.verifications.create({
       data: {
         id: crypto.randomUUID(),
-        identifier: `password-reset:${email}`,
+        identifier: `password-reset:${userEmail}`,
         value: hashedToken,
         expires_at: expiresAt,
         created_at: new Date(),
@@ -52,10 +69,20 @@ export async function POST(request: NextRequest) {
       }
     });
 
-    // Send password reset email
-    await sendPasswordResetEmail(email, resetToken);
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://recoder.xyz';
+    const resetUrl = `${appUrl}/auth/reset-password?token=${encodeURIComponent(resetToken)}`;
 
-    console.log(`✅ Password reset email sent to ${email}`);
+    // Send password reset email
+    const emailResult = await sendPasswordResetEmail(userEmail, resetUrl);
+    if (!emailResult.success) {
+      console.error('❌ Password reset email failed to send', emailResult.error);
+      return NextResponse.json(
+        { success: false, error: 'Failed to send reset email' },
+        { status: 500 }
+      );
+    }
+
+    console.log(`✅ Password reset email sent to ${userEmail} via Resend/SMTP`);
 
     return NextResponse.json({
       success: true,

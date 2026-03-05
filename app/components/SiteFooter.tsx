@@ -20,7 +20,7 @@ export function SiteFooter() {
       <div className="container mx-auto max-w-6xl">
         <div className="flex flex-col md:flex-row items-center justify-between space-y-4 md:space-y-0">
           <div className="flex items-center space-x-2">
-            <div className="w-6 h-6 bg-gradient-to-br from-orange-500 to-purple-600 rounded-lg" />
+            <img src="/logo.png" alt="Recoder" className="w-6 h-6 rounded-md" />
             <span className="font-bold">recoder</span>
           </div>
 

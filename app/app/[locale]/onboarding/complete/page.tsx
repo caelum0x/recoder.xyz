@@ -198,7 +198,7 @@ export default function CompletePage() {
               href="/dashboard"
               className="inline-flex items-center space-x-2 px-12 py-4 bg-gradient-to-r from-orange-500 to-purple-600 hover:from-orange-600 hover:to-purple-700 rounded-xl font-bold text-lg transition-all transform hover:scale-105"
             >
-              <span>Go to Dashboard</span>
+              <span>Go to Projects</span>
               <Sparkles className="w-5 h-5" />
             </Link>
           </div>

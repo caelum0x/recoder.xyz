@@ -20,6 +20,8 @@ import {
 import { CheckIcon, HelpCircleIcon } from "lucide-react";
 import { useState } from "react";
 
+const signupUrl = "https://recoder.xyz/auth/signup";
+
 const groups = [
   {
     name: "Workspace",
@@ -396,7 +398,7 @@ export const PricingTable = ({
         yearly: "Free forever",
       },
       cta: "Get started for free",
-      link: "https://pm.recoder.xyz/app/",
+      link: signupUrl,
       caption: "No credit card required.",
     },
     {
@@ -407,7 +409,7 @@ export const PricingTable = ({
         yearly: annualPrice,
       },
       cta: "Start your free trial",
-      link: "https://pm.recoder.xyz/app/",
+      link: signupUrl,
       caption: `Billed ${yearly ? "annually" : "monthly"}.`,
     },
     {

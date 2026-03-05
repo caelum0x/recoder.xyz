@@ -40,6 +40,9 @@ export const WidgetForm = ({
   hasPortal,
   slug,
 }: WidgetFormProperties) => {
+  const normalizedWidgetUrl = widgetUrl.endsWith("/")
+    ? widgetUrl
+    : `${widgetUrl}/`;
   const [enablePortal, setEnablePortal] = useState(
     hasPortal ? data.enablePortal : false
   );
@@ -58,7 +61,7 @@ export const WidgetForm = ({
     var s = document.createElement('script');
     s.type = 'text/javascript';
     s.async = true;
-    s.src = '${new URL("/widget.js", widgetUrl).toString()}';
+    s.src = '${new URL("widget.js", normalizedWidgetUrl).toString()}';
     var x = document.getElementsByTagName('script')[0];
     x.parentNode.insertBefore(s, x);
   })();

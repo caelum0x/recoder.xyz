@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Globe, Key, AlertCircle, X } from 'lucide-react';
@@ -20,23 +20,8 @@ export function LaunchWebIDEButton({
 }: LaunchWebIDEButtonProps) {
   const router = useRouter();
   const { data: session } = useSession();
-  const [hasApiKey, setHasApiKey] = useState<boolean | null>(null);
   const [showModal, setShowModal] = useState(false);
   const [loading, setLoading] = useState(false);
-
-  // Check if user has API keys
-  useEffect(() => {
-    if (session?.user) {
-      fetch('/api/user/ai-provider-keys')
-        .then(r => r.json())
-        .then(data => {
-          if (data.success) {
-            setHasApiKey(data.keys && data.keys.length > 0);
-          }
-        })
-        .catch(() => setHasApiKey(false));
-    }
-  }, [session]);
 
   const handleClick = async (e: React.MouseEvent) => {
     e.preventDefault();
@@ -47,20 +32,28 @@ export function LaunchWebIDEButton({
       return;
     }
 
-    // Check 2: User must have API key
-    if (hasApiKey === false) {
+    setLoading(true);
+
+    try {
+      const response = await fetch('/api/user/ai-provider-keys', { credentials: 'include' });
+
+      if (response.status === 401) {
+        router.push('/auth/signin?redirect=/settings/ai-providers?redirect=web-ide');
+        return;
+      }
+
+      const data = response.ok ? await response.json() : { success: false, keys: [] };
+      const hasApiKey = Boolean(data.success && data.keys && data.keys.length > 0);
+
+      if (!hasApiKey) {
+        setShowModal(true);
+        return;
+      }
+    } catch {
       setShowModal(true);
       return;
-    }
-
-    // Check 3: If still loading, wait
-    if (hasApiKey === null) {
-      setLoading(true);
-      // Wait a bit for API key check to complete, then redirect
-      setTimeout(() => {
-        window.location.href = getRecoderWebUrlClient();
-      }, 1000);
-      return;
+    } finally {
+      setLoading(false);
     }
 
     // Non-blocking analytics
@@ -68,7 +61,7 @@ export function LaunchWebIDEButton({
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ platform: 'web' }),
-    }).catch(() => {}); // fire-and-forget
+    }).catch(() => {});
 
     // All checks passed - launch the Web IDE directly
     window.location.href = getRecoderWebUrlClient();

@@ -111,9 +111,9 @@ export const WORKFLOW_REQUEST_CONTRACT_ERROR_SCHEMA = 'agent-workflow-contract-e
 export const WORKFLOW_CONTRACT_VERSION = INTERNAL_WORKFLOW_CONTRACT;
 export const PUBLIC_WORKFLOW_CONTRACT_VERSION = PUBLIC_WORKFLOW_CONTRACT;
 
-// Keep the legacy workspace path until the app is physically moved, but expose the
-// current product identity in user-facing workflow labels.
-const UI_RECODER_WORKSPACE_PATH = '/Users/arhansubasi/recoder.xyz/apps/ui.giselles.ai';
+const UI_RECODER_WORKSPACE_PATH =
+  process.env.UI_RECODER_WORKSPACE_PATH ||
+  '/Users/arhansubasi/recoder.xyz/apps/ui.giselles.ai';
 
 const DEFAULT_REPO_PATHS = [
   '/Users/arhansubasi/recoder.xyz/app',

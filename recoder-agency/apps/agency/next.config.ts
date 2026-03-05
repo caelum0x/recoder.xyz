@@ -60,16 +60,6 @@ const nextConfig: NextConfig = {
 		],
 	},
 	// biome-ignore lint/suspicious/useAwait: Next.js specification
-	async redirects() {
-		return [
-			{
-				source: "/",
-				destination: "/dashboard",
-				permanent: false,
-			},
-		];
-	},
-	// biome-ignore lint/suspicious/useAwait: Next.js specification
 	async headers() {
 		return [
 			{

@@ -37,7 +37,7 @@ export const Hero = ({
               >
                 <a
                   aria-label="View latest update on Recoder PM changelog page"
-                  href="https://pm.recoder.xyz/portal/changelog"
+                  href="/#changelog"
                   rel="noopener noreferrer"
                   target="_blank"
                 >

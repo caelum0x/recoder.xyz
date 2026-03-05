@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { requireAuth } from "@/lib/auth-helpers";
+import { ensureAppUserFromAuthUser, requireAuth } from "@/lib/auth-helpers";
 import { auth } from '@/lib/auth-config';
 import { headers } from 'next/headers';
 
@@ -21,15 +21,16 @@ export async function GET(req: NextRequest) {
     const authResult = await requireAuth(req);
     if (authResult.error) return authResult.response;
     const user = authResult.user;
+    const appUser = await ensureAppUserFromAuthUser(user);
 
-    if (!user?.id) {
+    if (!appUser?.id) {
       return NextResponse.json(
         { error: 'Unauthorized' },
         { status: 401 }
       );
     }
 
-    const keys = await PlatformApiKeyService.listUserApiKeys(user.id);
+    const keys = await PlatformApiKeyService.listUserApiKeys(appUser.id);
 
     return NextResponse.json({
       success: true,
@@ -53,8 +54,9 @@ export async function POST(req: NextRequest) {
     const authResult = await requireAuth(req);
     if (authResult.error) return authResult.response;
     const user = authResult.user;
+    const appUser = await ensureAppUserFromAuthUser(user);
 
-    if (!user?.id) {
+    if (!appUser?.id) {
       return NextResponse.json(
         { error: 'Unauthorized' },
         { status: 401 }
@@ -74,7 +76,7 @@ export async function POST(req: NextRequest) {
     const { name, description, expiresAt } = validation.data;
 
     // Check if user can create more keys
-    const canCreate = await PlatformApiKeyService.canCreateApiKey(user.id);
+    const canCreate = await PlatformApiKeyService.canCreateApiKey(appUser.id);
 
     if (!canCreate.canCreate) {
       return NextResponse.json(
@@ -89,7 +91,7 @@ export async function POST(req: NextRequest) {
 
     // Generate the API key
     const result = await PlatformApiKeyService.generateApiKey(
-      user.id,
+      appUser.id,
       name,
       description,
       expiresAt ? new Date(expiresAt) : undefined
@@ -126,8 +128,9 @@ export async function DELETE(req: NextRequest) {
     const authResult = await requireAuth(req);
     if (authResult.error) return authResult.response;
     const user = authResult.user;
+    const appUser = await ensureAppUserFromAuthUser(user);
 
-    if (!user?.id) {
+    if (!appUser?.id) {
       return NextResponse.json(
         { error: 'Unauthorized' },
         { status: 401 }
@@ -144,7 +147,7 @@ export async function DELETE(req: NextRequest) {
       );
     }
 
-    const result = await PlatformApiKeyService.revokeApiKey(keyId, user.id);
+    const result = await PlatformApiKeyService.revokeApiKey(keyId, appUser.id);
 
     if (!result.success) {
       return NextResponse.json(

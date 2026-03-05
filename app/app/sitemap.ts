@@ -137,12 +137,9 @@ const companyPages: SitemapPage[] = [
 const dashboardPages: SitemapPage[] = [
   { path: '/dashboard',               changeFrequency: 'daily',    priority: 0.6 },
   { path: '/dashboard/overview',       changeFrequency: 'daily',    priority: 0.6 },
-  { path: '/dashboard/projects',       changeFrequency: 'daily',    priority: 0.5 },
   { path: '/dashboard/analytics',      changeFrequency: 'daily',    priority: 0.5 },
   { path: '/dashboard/api-keys',       changeFrequency: 'weekly',   priority: 0.5 },
-  { path: '/dashboard/billing',        changeFrequency: 'monthly',  priority: 0.5 },
   { path: '/dashboard/production',     changeFrequency: 'weekly',   priority: 0.5 },
-  { path: '/dashboard/team',           changeFrequency: 'weekly',   priority: 0.5 },
   { path: '/dashboard/usage',          changeFrequency: 'daily',    priority: 0.5 },
 ];
 
@@ -187,7 +184,6 @@ const onboardingPages: SitemapPage[] = [
 // ── Misc pages ────────────────────────────────────────────────────────────
 const miscPages: SitemapPage[] = [
   { path: '/analytics',               changeFrequency: 'daily',    priority: 0.5 },
-  { path: '/projects',                changeFrequency: 'daily',    priority: 0.5 },
   { path: '/plan',                    changeFrequency: 'monthly',  priority: 0.5 },
   { path: '/verify',                  changeFrequency: 'monthly',  priority: 0.3 },
   { path: '/checkout',                changeFrequency: 'monthly',  priority: 0.4 },

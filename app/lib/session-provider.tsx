@@ -37,7 +37,14 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
       if (response.ok) {
         const sessionData = await response.json();
-        setSession(sessionData);
+        if (sessionData?.user) {
+          setSession({
+            user: sessionData.user,
+            expires: sessionData?.session?.expiresAt || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+          });
+        } else {
+          setSession(null);
+        }
       } else {
         setSession(null);
       }
@@ -134,10 +141,18 @@ export async function signUp(email: string, password: string, name: string) {
 }
 
 export async function signOut() {
-  const response = await fetch('/api/auth/logout', {
+  let response = await fetch('/api/auth/sign-out', {
     method: 'POST',
     credentials: 'include',
   });
+
+  // Compatibility fallback for older deployments.
+  if (!response.ok && response.status === 404) {
+    response = await fetch('/api/auth/logout', {
+      method: 'POST',
+      credentials: 'include',
+    });
+  }
 
   if (response.ok) {
     window.location.href = '/';

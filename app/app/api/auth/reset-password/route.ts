@@ -85,14 +85,34 @@ export async function POST(request: NextRequest) {
     // Hash new password
     const hashedPassword = await bcrypt.hash(password, 12);
 
-    // Update user password
-    await prisma.users.update({
+    // Update password in both compatibility tables.
+    const appUpdate = await prisma.users.updateMany({
       where: { email },
       data: {
         password: hashedPassword,
         updatedAt: new Date()
       }
     });
+
+    const prismaAny = prisma as unknown as {
+      user?: { updateMany: (args: unknown) => Promise<{ count: number }> };
+    };
+    const authUpdate = prismaAny.user
+      ? await prismaAny.user.updateMany({
+          where: { email },
+          data: {
+            password: hashedPassword,
+            updatedAt: new Date()
+          }
+        })
+      : { count: 0 };
+
+    if ((appUpdate.count + authUpdate.count) === 0) {
+      return NextResponse.json(
+        { success: false, error: 'Account not found for reset token' },
+        { status: 404 }
+      );
+    }
 
     // Delete the verification token (marking it as used)
     await prisma.verifications.delete({

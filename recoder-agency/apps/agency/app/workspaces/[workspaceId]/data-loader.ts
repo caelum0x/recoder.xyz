@@ -68,9 +68,11 @@ async function checkByokStatus(): Promise<{
 			keyCount: data.keys?.length ?? 0,
 		};
 	} catch (e) {
-		logger.warn("BYOK status check failed (non-blocking)", {
-			error: e instanceof Error ? e.message : String(e),
-		});
+		logger.warn(
+			`BYOK status check failed (non-blocking): ${
+				e instanceof Error ? e.message : String(e)
+			}`
+		);
 		return { hasKeys: false, keyCount: 0 };
 	}
 }
