@@ -3,8 +3,11 @@
 import { authDatabase } from "@recoder/auth";
 import { database } from "../database";
 
-const protocol = process.env.NODE_ENV === "production" ? "https" : "http";
-const baseUrl = `${protocol}://${process.env.NEXT_PUBLIC_VERCEL_PROJECT_PRODUCTION_URL}`;
+const baseUrl =
+  process.env.RECODER_PM_WEB_URL ??
+  process.env.NEXT_PUBLIC_VERCEL_PROJECT_PRODUCTION_URL ??
+  process.env.VERCEL_PROJECT_PRODUCTION_URL ??
+  "http://localhost:3000";
 
 export const login = async (
   email: string

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { resolveBackendApiUrl } from '@/lib/runtime-urls';
 
-const BACKEND_URL = process.env.BACKEND_URL || 'http://localhost:8000/v1';
+const BACKEND_URL = resolveBackendApiUrl();
 
 export async function GET(
   request: NextRequest,

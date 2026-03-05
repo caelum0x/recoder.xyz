@@ -8,7 +8,7 @@ const accountUserSchema = z.object({
   organization: z.string().nullable().optional(),
   createdAt: z.union([z.string(), z.date()]).optional(),
   updatedAt: z.union([z.string(), z.date()]).optional(),
-  emailVerified: z.union([z.string(), z.date(), z.null()]).optional(),
+  emailVerified: z.union([z.string(), z.date(), z.boolean(), z.null()]).optional(),
   role: z.string().optional(),
   isActive: z.boolean().optional(),
   twoFactorEnabled: z.boolean().optional(),

@@ -106,6 +106,13 @@ export default function DashboardOverviewPage() {
     }
   };
 
+  const usageRequests = Number(stats?.usage?.requests ?? 0);
+  const usageCost = Number(stats?.usage?.cost ?? 0);
+  const activeProjects = Number(stats?.projects?.active ?? 0);
+  const totalProjects = Number(stats?.projects?.total ?? 0);
+  const activeApiKeys = Number(stats?.apiKeys?.active ?? 0);
+  const totalApiKeys = Number(stats?.apiKeys?.total ?? 0);
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 p-8">
@@ -169,7 +176,7 @@ export default function DashboardOverviewPage() {
             </div>
             <h3 className="text-gray-400 text-sm mb-1">API Requests</h3>
             <p className="text-2xl font-bold text-white">
-              {stats?.usage.requests.toLocaleString() || '0'}
+              {usageRequests.toLocaleString()}
             </p>
             <p className="text-xs text-gray-500 mt-2">This month</p>
           </div>
@@ -183,10 +190,10 @@ export default function DashboardOverviewPage() {
             </div>
             <h3 className="text-gray-400 text-sm mb-1">Total Cost</h3>
             <p className="text-2xl font-bold text-white">
-              ${stats?.usage.cost.toFixed(2) || '0.00'}
+              ${usageCost.toFixed(2)}
             </p>
             <p className="text-xs text-gray-500 mt-2">
-              ${(stats?.usage.cost / (stats?.usage.requests || 1)).toFixed(4)} per request
+              ${(usageCost / (usageRequests || 1)).toFixed(4)} per request
             </p>
           </div>
 
@@ -211,10 +218,10 @@ export default function DashboardOverviewPage() {
             </div>
             <h3 className="text-gray-400 text-sm mb-1">Active Projects</h3>
             <p className="text-2xl font-bold text-white">
-              {stats?.projects.active || '0'}
+              {activeProjects}
             </p>
             <p className="text-xs text-gray-500 mt-2">
-              {stats?.projects.total || '0'} total
+              {totalProjects} total
             </p>
           </div>
 
@@ -227,10 +234,10 @@ export default function DashboardOverviewPage() {
             </div>
             <h3 className="text-gray-400 text-sm mb-1">API Keys</h3>
             <p className="text-2xl font-bold text-white">
-              {stats?.apiKeys.active || '0'}
+              {activeApiKeys}
             </p>
             <p className="text-xs text-gray-500 mt-2">
-              {stats?.apiKeys.total || '0'} total
+              {totalApiKeys} total
             </p>
           </div>
         </div>
@@ -243,13 +250,13 @@ export default function DashboardOverviewPage() {
               <div className="flex items-center justify-between mb-6">
                 <h2 className="text-xl font-semibold text-white flex items-center gap-2">
                   <CreditCard className="h-5 w-5 text-blue-400" />
-                  Subscription
+                  Plan
                 </h2>
                 <Link 
-                  href="/dashboard/billing"
+                  href="/pricing"
                   className="text-sm text-blue-400 hover:text-blue-300 transition-colors"
                 >
-                  Manage →
+                  View plans →
                 </Link>
               </div>
 
@@ -273,7 +280,7 @@ export default function DashboardOverviewPage() {
                 {stats?.subscription.renewsAt && (
                   <div className="border-t border-slate-700/50 pt-4">
                     <div className="flex items-center justify-between text-sm">
-                      <span className="text-gray-400">Next billing date</span>
+                      <span className="text-gray-400">Renewal date</span>
                       <span className="text-white">
                         {new Date(stats.subscription.renewsAt).toLocaleDateString()}
                       </span>

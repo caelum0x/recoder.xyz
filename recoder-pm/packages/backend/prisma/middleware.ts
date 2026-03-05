@@ -31,10 +31,19 @@ const runAsync = (name: string, task: () => Promise<void>) => {
     try {
       await task();
     } catch (error) {
-      log.error(`Database middleware failed: ${name}`, error);
+      const details =
+        error instanceof Error
+          ? { message: error.message, stack: error.stack }
+          : { error };
+      log.error(`Database middleware failed: ${name}`, details);
     }
   })();
 };
+
+const toLogDetails = (error: unknown) =>
+  error instanceof Error
+    ? { message: error.message, stack: error.stack }
+    : { error };
 
 const handleFeedbackCreate = async (
   client: PrismaClient,
@@ -55,7 +64,10 @@ const handleFeedbackCreate = async (
       });
       await markAiJobRunning(sentimentJob.id);
     } catch (error) {
-      log.error("Failed to create FEEDBACK_SENTIMENT AiJob", error);
+      log.error(
+        "Failed to create FEEDBACK_SENTIMENT AiJob",
+        toLogDetails(error)
+      );
     }
 
     try {
@@ -119,7 +131,10 @@ const handleFeedbackCreate = async (
         });
         await markAiJobRunning(analysisJob.id);
       } catch (error) {
-        log.error("Failed to create FEEDBACK_ANALYSIS AiJob", error);
+        log.error(
+          "Failed to create FEEDBACK_ANALYSIS AiJob",
+          toLogDetails(error)
+        );
       }
 
       try {
@@ -285,7 +300,7 @@ const handleFeatureCreate = async (client: PrismaClient, feature: Feature) => {
     });
     await markAiJobRunning(riceJob.id);
   } catch (error) {
-    log.error("Failed to create FEATURE_RICE AiJob", error);
+    log.error("Failed to create FEATURE_RICE AiJob", toLogDetails(error));
   }
 
   try {
@@ -489,7 +504,17 @@ const handleAuthUserUpsert = async (
     return;
   }
 
-  const user = toUser(authUser);
+  const coreUser = {
+    id: authUser.id,
+    email: authUser.email,
+    emailVerified: authUser.emailVerified,
+    name: authUser.name ?? authUser.email,
+    image: authUser.imageUrl,
+    createdAt: authUser.createdAt,
+    updatedAt: authUser.updatedAt,
+  };
+
+  const user = toUser(coreUser, authUser);
   const userName = getUserName(user);
   const [, domain] = user.email.split("@");
 
@@ -553,25 +578,40 @@ const handleOrganizationDelete = async (organization: Organization) => {
 };
 
 export const registerDatabaseMiddleware = (client: PrismaClient) => {
+  const middlewareClient = client as PrismaClient & {
+    $use: (
+      handler: (
+        params: { model?: string; action: string },
+        next: (params: unknown) => Promise<unknown>
+      ) => Promise<unknown>
+    ) => void;
+  };
+
   // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: complex business logic
-  client.$use(async (params, next) => {
+  middlewareClient.$use(async (params, next) => {
     const result = await next(params);
 
     if (params.model === "Feedback" && params.action === "create") {
-      runAsync("feedback.create", () => handleFeedbackCreate(client, result));
+      runAsync("feedback.create", () =>
+        handleFeedbackCreate(client, result as Feedback)
+      );
     }
 
     if (params.model === "Feature" && params.action === "create") {
-      runAsync("feature.create", () => handleFeatureCreate(client, result));
+      runAsync("feature.create", () =>
+        handleFeatureCreate(client, result as Feature)
+      );
     }
 
     if (params.model === "Interview" && params.action === "create") {
-      runAsync("interview.create", () => handleInterviewCreate(client, result));
+      runAsync("interview.create", () =>
+        handleInterviewCreate(client, result as Interview)
+      );
     }
 
     if (params.model === "SupportTicket" && params.action === "create") {
       runAsync("supportTicket.create", () =>
-        handleSupportTicketCreate(client, result)
+        handleSupportTicketCreate(client, result as SupportTicket)
       );
     }
 
@@ -579,7 +619,9 @@ export const registerDatabaseMiddleware = (client: PrismaClient) => {
       params.model === "AuthUser" &&
       (params.action === "create" || params.action === "update")
     ) {
-      runAsync("authUser.upsert", () => handleAuthUserUpsert(client, result));
+      runAsync("authUser.upsert", () =>
+        handleAuthUserUpsert(client, result as AuthUser)
+      );
     }
 
     if (params.model === "Organization" && params.action === "delete") {

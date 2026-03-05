@@ -6,13 +6,10 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import Link from 'next/link';
-import { 
-  ArrowLeft,
-  Terminal,
+import { useRouter } from 'next/navigation';
+import {
   Download,
   TrendingUp,
-  TrendingDown,
   Zap,
   DollarSign,
   Activity,
@@ -20,8 +17,7 @@ import {
   Calendar,
   AlertCircle
 } from 'lucide-react';
-import { apiClient } from '@/lib/api-client';
-import { SiteHeader } from '@/components/SiteHeader';
+import { useSession } from '@/lib/session-provider';
 
 interface UsageData {
   overview: {
@@ -73,6 +69,8 @@ interface UsageData {
 }
 
 export default function UsageDashboardPage() {
+  const router = useRouter();
+  const { data: session, isPending } = useSession();
   const [timeRange, setTimeRange] = useState('7d');
   const [selectedModel, setSelectedModel] = useState('all');
   const [loading, setLoading] = useState(true);
@@ -82,19 +80,25 @@ export default function UsageDashboardPage() {
   const [recentActivity, setRecentActivity] = useState<any[]>([]);
 
   useEffect(() => {
-    loadUsageData();
-  }, [timeRange, selectedModel]);
+    if (!isPending && !session) {
+      router.push('/auth/signin');
+      return;
+    }
+
+    if (!isPending && session) {
+      void loadUsageData();
+    }
+  }, [timeRange, selectedModel, isPending, router, session]);
 
   const loadUsageData = async () => {
     try {
       setLoading(true);
       setError(null);
 
-      // Fetch analytics data
       const [analytics, breakdown, history] = await Promise.all([
-        apiClient.getUsageAnalytics(timeRange, selectedModel),
-        apiClient.getCostBreakdown(timeRange === '24h' ? 'day' : timeRange === '7d' ? 'week' : 'month'),
-        apiClient.getUsageHistory({ limit: 10, offset: 0 })
+        fetchUsageAnalytics(timeRange, selectedModel),
+        fetchCostBreakdown(timeRange === '24h' ? 'day' : timeRange === '7d' ? 'week' : 'month'),
+        fetchUsageHistory({ limit: 10, offset: 0 })
       ]);
 
       setUsageData(analytics as UsageData);
@@ -124,7 +128,7 @@ export default function UsageDashboardPage() {
 
   const handleExport = async () => {
     try {
-      await apiClient.exportUsageData('csv', timeRange);
+      await exportUsageData('csv', timeRange);
     } catch (err) {
       console.error('Export failed:', err);
       alert('Export failed. Please try again.');
@@ -183,7 +187,268 @@ export default function UsageDashboardPage() {
     return `${diffDays} days ago`;
   }
 
-  if (loading) {
+  async function fetchUsageEndpoint(params: URLSearchParams) {
+    const response = await fetch(`/api/usage/history?${params.toString()}`, {
+      credentials: 'include',
+    });
+
+    if (response.status === 401) {
+      throw new Error('Authentication required');
+    }
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}));
+      throw new Error(error.error || `HTTP ${response.status}`);
+    }
+
+    const payload = await response.json();
+    return payload.data || payload;
+  }
+
+  async function fetchUsageAnalytics(range: string, model: string) {
+    const endDate = new Date().toISOString();
+    const startDate = new Date();
+
+    switch (range) {
+      case '24h':
+        startDate.setHours(startDate.getHours() - 24);
+        break;
+      case '7d':
+        startDate.setDate(startDate.getDate() - 7);
+        break;
+      case '30d':
+        startDate.setDate(startDate.getDate() - 30);
+        break;
+      case '90d':
+        startDate.setDate(startDate.getDate() - 90);
+        break;
+    }
+
+    const params = new URLSearchParams({
+      startDate: startDate.toISOString(),
+      endDate,
+      limit: '1000',
+    });
+
+    if (model && model !== 'all') {
+      params.append('model', model);
+    }
+
+    const response = await fetchUsageEndpoint(params);
+    const records = response.records || [];
+    const summary = response.summary || { totalRecords: 0, totalTokens: 0, totalCost: 0 };
+
+    return {
+      overview: {
+        totalRequests: summary.totalRecords,
+        totalTokens: summary.totalTokens,
+        totalCost: summary.totalCost,
+        averageCostPerRequest: summary.totalRecords > 0 ? summary.totalCost / summary.totalRecords : 0,
+        currentPlan: 'free',
+        quotaStatus: 'normal',
+      },
+      detailed: {
+        weeklyTrend: aggregateByDay(records),
+        topModels: aggregateByModel(records),
+        platformBreakdown: aggregateByPlatform(records),
+        featureUsage: {},
+      },
+      projections: {
+        projectedMonthlyCost: calculateProjectedCost(records, range),
+        projectedAnnualCost: calculateProjectedCost(records, range) * 12,
+        costTrend: 'stable',
+        recommendations: generateRecommendations(records),
+      },
+    };
+  }
+
+  async function fetchCostBreakdown(period: 'day' | 'week' | 'month') {
+    const endDate = new Date();
+    const startDate = new Date();
+
+    switch (period) {
+      case 'day':
+        startDate.setDate(startDate.getDate() - 1);
+        break;
+      case 'week':
+        startDate.setDate(startDate.getDate() - 7);
+        break;
+      case 'month':
+        startDate.setMonth(startDate.getMonth() - 1);
+        break;
+    }
+
+    const params = new URLSearchParams({
+      startDate: startDate.toISOString(),
+      endDate: endDate.toISOString(),
+      limit: '1000',
+    });
+
+    const response = await fetchUsageEndpoint(params);
+    return aggregateByModel(response.records || []);
+  }
+
+  async function fetchUsageHistory(params: { limit?: number; offset?: number }) {
+    const searchParams = new URLSearchParams();
+
+    if (params.limit !== undefined) searchParams.append('limit', String(params.limit));
+    if (params.offset !== undefined) searchParams.append('offset', String(params.offset));
+
+    return fetchUsageEndpoint(searchParams);
+  }
+
+  async function exportUsageData(format: 'json' | 'csv', range: string) {
+    const endDate = new Date().toISOString();
+    const startDate = new Date();
+
+    switch (range) {
+      case '24h':
+        startDate.setHours(startDate.getHours() - 24);
+        break;
+      case '7d':
+        startDate.setDate(startDate.getDate() - 7);
+        break;
+      case '30d':
+        startDate.setDate(startDate.getDate() - 30);
+        break;
+      case '90d':
+        startDate.setDate(startDate.getDate() - 90);
+        break;
+    }
+
+    const params = new URLSearchParams({
+      format,
+      startDate: startDate.toISOString(),
+      endDate,
+    });
+
+    const response = await fetch(`/api/usage/export?${params.toString()}`, {
+      credentials: 'include',
+    });
+
+    if (!response.ok) {
+      throw new Error('Export failed');
+    }
+
+    const blob =
+      format === 'csv'
+        ? await response.blob()
+        : new Blob([JSON.stringify(await response.json(), null, 2)], { type: 'application/json' });
+
+    const downloadUrl = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = downloadUrl;
+    a.download = `usage-export-${range}.${format}`;
+    document.body.appendChild(a);
+    a.click();
+    window.URL.revokeObjectURL(downloadUrl);
+    document.body.removeChild(a);
+  }
+
+  function aggregateByDay(records: any[]) {
+    const dayMap = new Map();
+
+    records.forEach((record) => {
+      const day = new Date(record.timestamp).toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+      });
+
+      if (!dayMap.has(day)) {
+        dayMap.set(day, { day, requests: 0, cost: 0 });
+      }
+
+      const dayData = dayMap.get(day);
+      dayData.requests += 1;
+      dayData.cost += record.cost || 0;
+    });
+
+    return Array.from(dayMap.values()).slice(-7);
+  }
+
+  function aggregateByModel(records: any[]) {
+    const modelMap = new Map();
+    const totalRecords = records.length;
+
+    records.forEach((record) => {
+      const model = record.model || 'unknown';
+
+      if (!modelMap.has(model)) {
+        modelMap.set(model, { model, usage: 0, cost: 0, efficiency: 0, requests: 0 });
+      }
+
+      const modelData = modelMap.get(model);
+      modelData.requests += 1;
+      modelData.cost += record.cost || 0;
+      modelData.usage = totalRecords > 0 ? (modelData.requests / totalRecords) * 100 : 0;
+    });
+
+    return Array.from(modelMap.values())
+      .sort((a, b) => b.requests - a.requests)
+      .slice(0, 5);
+  }
+
+  function aggregateByPlatform(records: any[]) {
+    const platformMap = new Map();
+    const totalRecords = records.length;
+
+    records.forEach((record) => {
+      const platform = record.platform || 'unknown';
+
+      if (!platformMap.has(platform)) {
+        platformMap.set(platform, { platform, requests: 0, cost: 0, tokens: 0, percentage: 0 });
+      }
+
+      const platformData = platformMap.get(platform);
+      platformData.requests += 1;
+      platformData.cost += record.cost || 0;
+      platformData.tokens += record.tokens || 0;
+      platformData.percentage = totalRecords > 0 ? (platformData.requests / totalRecords) * 100 : 0;
+    });
+
+    return Array.from(platformMap.values()).sort((a, b) => b.requests - a.requests);
+  }
+
+  function calculateProjectedCost(records: any[], range: string) {
+    if (records.length === 0) return 0;
+    const totalCost = records.reduce((sum, r) => sum + (r.cost || 0), 0);
+    const days = range === '24h' ? 1 : range === '7d' ? 7 : range === '30d' ? 30 : 90;
+    return (totalCost / days) * 30;
+  }
+
+  function generateRecommendations(records: any[]) {
+    if (records.length === 0) {
+      return ['Start using the platform to get personalized recommendations'];
+    }
+
+    const recommendations: string[] = [];
+    const modelUsage = aggregateByModel(records);
+    const platformUsage = aggregateByPlatform(records);
+    const totalCost = records.reduce((sum, r) => sum + (r.cost || 0), 0);
+    const cliUsage = platformUsage.find((p) => p.platform === 'cli');
+    const webUsage = platformUsage.find((p) => p.platform === 'web');
+
+    if (cliUsage && webUsage) {
+      if (cliUsage.cost > webUsage.cost * 2) {
+        recommendations.push('Consider using web interface for cost-effective operations');
+      } else if (webUsage.cost > cliUsage.cost * 2) {
+        recommendations.push('CLI usage is more cost-effective for your workflow');
+      }
+    }
+
+    if (totalCost > 10) {
+      recommendations.push('Consider using more cost-effective models for simple tasks');
+    }
+
+    if (modelUsage.length > 3) {
+      recommendations.push('Consolidate to fewer models to optimize costs');
+    }
+
+    recommendations.push('Monitor usage patterns to identify optimization opportunities');
+    return recommendations;
+  }
+
+  if (isPending || loading) {
     return (
       <div className="min-h-screen bg-black text-white flex items-center justify-center">
         <div className="text-center">
@@ -196,9 +461,7 @@ export default function UsageDashboardPage() {
 
   return (
     <div className="min-h-screen bg-black text-white">
-      <SiteHeader />
-
-      <div className="container mx-auto px-6 py-24">
+      <div className="container mx-auto px-6 py-10">
         <div className="max-w-7xl mx-auto">
           {/* Error State */}
           {error && (

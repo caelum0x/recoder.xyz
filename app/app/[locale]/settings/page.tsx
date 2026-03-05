@@ -5,9 +5,7 @@
 
 'use client';
 
-import { useState } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
 import { 
   User,
   Shield,
@@ -15,15 +13,10 @@ import {
   Link2,
   Key,
   Settings as SettingsIcon,
-  ChevronRight,
-  ArrowLeft,
-  Terminal
+  ChevronRight
 } from 'lucide-react';
-import { SiteHeader } from '@/components/SiteHeader';
 
 export default function SettingsPage() {
-  const pathname = usePathname();
-
   const settingsSections = [
     {
       title: 'Account',
@@ -73,13 +66,11 @@ export default function SettingsPage() {
       icon: Key,
       href: '/settings/ai-providers',
       color: 'from-orange-500 to-purple-600'
-    }
+    },
   ];
 
   return (
     <div className="min-h-screen bg-black text-white">
-      <SiteHeader />
-
       <div className="container mx-auto px-6 py-24">
         <div className="max-w-4xl mx-auto">
           {/* Page Header */}
@@ -124,29 +115,6 @@ export default function SettingsPage() {
                 </Link>
               );
             })}
-          </div>
-
-          {/* Quick Stats */}
-          <div className="mt-8 p-6 rounded-2xl border border-white/10 bg-black/50 backdrop-blur-xl">
-            <h3 className="text-lg font-bold mb-4">Account Overview</h3>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <div className="p-4 rounded-lg bg-white/5 border border-white/10">
-                <div className="text-2xl font-bold text-orange-500 mb-1">100%</div>
-                <div className="text-xs text-gray-400">Profile Complete</div>
-              </div>
-              <div className="p-4 rounded-lg bg-white/5 border border-white/10">
-                <div className="text-2xl font-bold text-green-500 mb-1">Active</div>
-                <div className="text-xs text-gray-400">Account Status</div>
-              </div>
-              <div className="p-4 rounded-lg bg-white/5 border border-white/10">
-                <div className="text-2xl font-bold text-blue-500 mb-1">2FA</div>
-                <div className="text-xs text-gray-400">Security Level</div>
-              </div>
-              <div className="p-4 rounded-lg bg-white/5 border border-white/10">
-                <div className="text-2xl font-bold text-green-500 mb-1">Beta</div>
-                <div className="text-xs text-gray-400">100% Free</div>
-              </div>
-            </div>
           </div>
 
           {/* Help Section */}

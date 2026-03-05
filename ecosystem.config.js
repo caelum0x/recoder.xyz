@@ -117,7 +117,8 @@ module.exports = {
     {
       name: 'recoder-agency',
       cwd: '/root/recoder.xyz/recoder-agency/apps/agency',
-      script: '.next/standalone/apps/agency/server.js',
+      script: './start.sh',
+      interpreter: 'none',
       max_memory_restart: '1G',
       restart_delay: 3000,
       kill_timeout: 5000,

@@ -23,7 +23,6 @@ import {
   Twitter,
   Linkedin
 } from 'lucide-react';
-import { SiteHeader } from '@/components/SiteHeader';
 
 export default function ProfileSettingsPage() {
   const [loading, setLoading] = useState(true);
@@ -133,8 +132,6 @@ export default function ProfileSettingsPage() {
 
   return (
     <div className="min-h-screen bg-black text-white">
-      <SiteHeader />
-
       <div className="container mx-auto px-6 py-24">
         <div className="max-w-2xl mx-auto">
           {/* Page Header */}

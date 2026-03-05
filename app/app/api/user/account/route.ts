@@ -1,10 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { requireAuth } from "@/lib/auth-helpers";
+import { ensureAppUserFromAuthUser, requireAuth } from "@/lib/auth-helpers";
 import { prisma } from '@/lib/prisma';
 import { sendVerificationEmailWithCode } from '@/lib/email';
 import {
   assertAccountDeleteResponse,
-  assertAccountGetResponse,
   assertAccountPutResponse,
 } from '@/lib/contracts/account-contracts';
 import nodeCrypto from 'crypto';
@@ -33,42 +32,66 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const user = await prisma.users.findUnique({
-      where: { email: authUser.email },
-      select: {
-        id: true,
-        email: true,
-        name: true,
-        image: true,
-        organization: true,
-        createdAt: true,
-        emailVerified: true,
-        subscription: true,
-        role: true,
-        isActive: true,
-        twoFactorEnabled: true,
-      }
-    });
+    const appUser = await ensureAppUserFromAuthUser(authUser);
 
-    if (!user) {
+    if (!appUser) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
 
-    // Get user preferences if they exist
-    const preferences = await prisma.user_preferences.findUnique({
-      where: { userId: user.id }
-    });
+    // Prefer a fresh read for dashboard/settings consistency, but never fail
+    // the entire endpoint if optional fields or schema drift cause a read error.
+    let resolvedUser: typeof appUser = appUser;
+    try {
+      const user = await prisma.users.findUnique({
+        where: { email: authUser.email },
+        select: {
+          id: true,
+          email: true,
+          name: true,
+          image: true,
+          organization: true,
+          createdAt: true,
+          updatedAt: true,
+          emailVerified: true,
+          role: true,
+          isActive: true,
+          twoFactorEnabled: true,
+        }
+      });
 
-    return NextResponse.json(assertAccountGetResponse({
+      if (user) {
+        resolvedUser = {
+          ...appUser,
+          ...user,
+        };
+      }
+    } catch (userReadError) {
+      console.warn('[Account] primary user read failed, using appUser fallback:', userReadError);
+    }
+
+    if (!resolvedUser) {
+      return NextResponse.json({ error: 'User not found' }, { status: 404 });
+    }
+
+    let preferences: { developerPreferences?: unknown; languagePreferences?: unknown } | null = null;
+    try {
+      preferences = await prisma.user_preferences.findUnique({
+        where: { userId: resolvedUser.id }
+      });
+    } catch (preferencesError) {
+      console.warn('[Account] user_preferences lookup failed, using defaults:', preferencesError);
+    }
+
+    return NextResponse.json({
       success: true,
       data: {
         user: {
-          ...user,
+          ...resolvedUser,
           timezone: getPreferenceValue(preferences?.developerPreferences, 'timezone') || 'America/New_York',
           language: getPreferenceValue(preferences?.languagePreferences, 'language') || 'en'
         }
       }
-    }));
+    });
 
   } catch (error) {
     console.error('Get account error:', error);
@@ -92,9 +115,7 @@ export async function PUT(request: NextRequest) {
     const body = await request.json();
     const { name, email, timezone, language, organization } = body;
 
-    const user = await prisma.users.findUnique({
-      where: { email: authUser.email }
-    });
+    const user = await ensureAppUserFromAuthUser(authUser);
 
     if (!user) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
@@ -213,10 +234,10 @@ export async function PUT(request: NextRequest) {
 
     // Update preferences
     if (timezone || language) {
-      await prisma.user_preferences.upsert({
+    await prisma.user_preferences.upsert({
         where: { userId: user.id },
         create: {
-          id: crypto.randomUUID(),
+          id: nodeCrypto.randomUUID(),
           userId: user.id,
           developerPreferences: { timezone: timezone || 'America/New_York' },
           languagePreferences: { language: language || 'en' },
@@ -230,17 +251,21 @@ export async function PUT(request: NextRequest) {
       });
     }
 
-    // Log audit event
-    await prisma.audit_logs.create({
-      data: {
-        id: crypto.randomUUID(),
-        userId: user.id,
-        action: 'updated',
-        resource: 'account',
-        resourceId: user.id,
-        metadata: { fields: Object.keys(updateData) },
-      }
-    });
+    // Optional audit trail; don't fail account updates if audit table is unavailable.
+    try {
+      await prisma.audit_logs.create({
+        data: {
+          id: nodeCrypto.randomUUID(),
+          userId: user.id,
+          action: 'updated',
+          resource: 'account',
+          resourceId: user.id,
+          metadata: { fields: Object.keys(updateData) },
+        }
+      });
+    } catch (auditError) {
+      console.warn('[Account] audit log write failed:', auditError);
+    }
 
     return NextResponse.json(assertAccountPutResponse({
       success: true,
@@ -267,25 +292,27 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const user = await prisma.users.findUnique({
-      where: { email: authUser.email }
-    });
+    const user = await ensureAppUserFromAuthUser(authUser);
 
     if (!user) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
 
-    // Log audit event before deletion
-    await prisma.audit_logs.create({
-      data: {
-        id: crypto.randomUUID(),
-        userId: user.id,
-        action: 'deleted',
-        resource: 'account',
-        resourceId: user.id,
-        metadata: { email: user.email },
-      }
-    });
+    // Optional audit trail; don't fail deletion if audit table is unavailable.
+    try {
+      await prisma.audit_logs.create({
+        data: {
+          id: nodeCrypto.randomUUID(),
+          userId: user.id,
+          action: 'deleted',
+          resource: 'account',
+          resourceId: user.id,
+          metadata: { email: user.email },
+        }
+      });
+    } catch (auditError) {
+      console.warn('[Account] audit log write failed during delete:', auditError);
+    }
 
     // Delete user (cascade will handle related records)
     await prisma.users.delete({

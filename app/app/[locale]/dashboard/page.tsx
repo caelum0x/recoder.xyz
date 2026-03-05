@@ -8,7 +8,7 @@ import { LaunchWebIDEButton } from '@/app/components/LaunchWebIDEButton';
 import {
   Globe,
   ArrowRight, CheckCircle, Sparkles, TrendingUp,
-  BarChart3, FolderOpen, X, Key, AlertCircle,
+  BarChart3, FolderOpen,
   MessageCircle, Terminal, Zap, Code2, Bot, Workflow,
   Database, Server, ExternalLink
 } from 'lucide-react';
@@ -38,8 +38,6 @@ function DashboardContent() {
   const searchParams = useSearchParams();
   const { data: session, isPending } = useSession();
   const [showWelcome, setShowWelcome] = useState(false);
-  const [hasApiKey, setHasApiKey] = useState<boolean | null>(null);
-  const [showApiKeyModal, setShowApiKeyModal] = useState(false);
   const [serviceHealth, setServiceHealth] = useState<Record<string, ServiceHealthEntry>>({});
 
   useEffect(() => {
@@ -52,20 +50,6 @@ function DashboardContent() {
       setTimeout(() => setShowWelcome(false), 5000);
     }
   }, [session, isPending, router, searchParams]);
-
-  // Check if user has API keys
-  useEffect(() => {
-    if (session) {
-      fetch('/api/user/ai-provider-keys')
-        .then(r => r.json())
-        .then(data => {
-          if (data.success) {
-            setHasApiKey(data.keys && data.keys.length > 0);
-          }
-        })
-        .catch(() => setHasApiKey(false));
-    }
-  }, [session]);
 
   // Fetch ecosystem health for status dots
   useEffect(() => {
@@ -99,67 +83,6 @@ function DashboardContent() {
           <div className="px-8 py-4 bg-gradient-to-r from-green-500 to-emerald-600 rounded-full shadow-2xl flex items-center space-x-3">
             <CheckCircle className="w-6 h-6" />
             <span className="font-bold">Welcome to Recoder! Your account is ready.</span>
-          </div>
-        </div>
-      )}
-
-      {/* API Key Required Modal */}
-      {showApiKeyModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-          <div className="bg-gradient-to-br from-gray-900 to-black border border-orange-500/30 rounded-2xl shadow-2xl max-w-2xl w-full overflow-hidden">
-            <div className="p-6 border-b border-white/10">
-              <div className="flex items-start justify-between">
-                <div className="flex items-center space-x-3">
-                  <div className="w-12 h-12 bg-gradient-to-br from-orange-500 to-purple-600 rounded-xl flex items-center justify-center">
-                    <Key className="w-6 h-6 text-white" />
-                  </div>
-                  <div>
-                    <h2 className="text-2xl font-bold text-white">API Key Required</h2>
-                    <p className="text-sm text-gray-400">One quick step before you start coding</p>
-                  </div>
-                </div>
-                <button onClick={() => setShowApiKeyModal(false)} className="text-gray-400 hover:text-white transition-colors">
-                  <X className="w-6 h-6" />
-                </button>
-              </div>
-            </div>
-            <div className="p-6 space-y-6">
-              <div className="p-4 bg-gradient-to-r from-orange-500/10 to-purple-600/10 border border-orange-500/20 rounded-xl">
-                <div className="flex items-start space-x-3">
-                  <Sparkles className="w-5 h-5 text-orange-500 mt-0.5 flex-shrink-0" />
-                  <div>
-                    <h3 className="font-bold text-white mb-2">Recoder uses BYOK (Bring Your Own Key)</h3>
-                    <p className="text-sm text-gray-300">You bring your API key, we provide the platform. No markup, no subscriptions.</p>
-                  </div>
-                </div>
-              </div>
-              <div className="p-4 bg-gradient-to-r from-blue-500/10 to-cyan-600/10 border border-blue-500/20 rounded-xl">
-                <div className="flex items-start space-x-3">
-                  <Zap className="w-5 h-5 text-blue-500 mt-0.5 flex-shrink-0" />
-                  <div className="text-sm">
-                    <strong className="text-white">Recommendation:</strong>
-                    <p className="text-gray-300 mt-1">
-                      Start with <strong className="text-blue-400">OpenRouter</strong> - one key for 40+ models. $5 = ~500 requests.
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </div>
-            <div className="p-6 border-t border-white/10 bg-white/5">
-              <div className="flex items-center justify-between">
-                <button onClick={() => setShowApiKeyModal(false)} className="text-gray-400 hover:text-white transition-colors text-sm">
-                  I'll do this later
-                </button>
-                <Link
-                  href="/settings/ai-providers?redirect=web-ide"
-                  className="px-6 py-3 bg-gradient-to-r from-orange-500 to-purple-600 hover:from-orange-600 hover:to-purple-700 rounded-lg font-medium transition-all flex items-center space-x-2 shadow-lg"
-                >
-                  <Key className="w-5 h-5" />
-                  <span>Add API Key Now</span>
-                  <ArrowRight className="w-5 h-5" />
-                </Link>
-              </div>
-            </div>
           </div>
         </div>
       )}
@@ -226,12 +149,6 @@ function DashboardContent() {
                 <span>Launch</span>
                 <ArrowRight className="w-4 h-4 ml-1 group-hover:translate-x-1 transition-transform" />
               </LaunchWebIDEButton>
-              {hasApiKey === false && (
-                <div className="mt-3 flex items-center space-x-1 text-xs text-yellow-500">
-                  <AlertCircle className="w-3 h-3" />
-                  <span>API key required</span>
-                </div>
-              )}
             </div>
           </div>
         </div>
@@ -277,7 +194,7 @@ function DashboardContent() {
         <div className="mb-12">
           <h2 className="text-2xl font-bold mb-6">Quick Actions</h2>
           <div className="grid md:grid-cols-4 gap-6">
-            <Link href="/projects" className="p-6 rounded-2xl border border-white/10 bg-white/5 hover:border-white/20 hover:bg-white/10 transition-all group">
+            <Link href="/dashboard/projects" className="p-6 rounded-2xl border border-white/10 bg-white/5 hover:border-white/20 hover:bg-white/10 transition-all group">
               <FolderOpen className="w-8 h-8 text-purple-500 mb-3 group-hover:scale-110 transition-transform" />
               <h3 className="font-bold mb-2">My Projects</h3>
               <p className="text-sm text-gray-400">View and manage your projects</p>

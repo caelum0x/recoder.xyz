@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { requireAuth } from "@/lib/auth-helpers";
+import { ensureAppUserFromAuthUser, requireAuth } from "@/lib/auth-helpers";
 import { auth } from '@/lib/auth-config';
 import { headers } from 'next/headers';
 
@@ -20,8 +20,9 @@ export async function GET(
     const authResult = await requireAuth(req);
     if (authResult.error) return authResult.response;
     const user = authResult.user;
+    const appUser = await ensureAppUserFromAuthUser(user);
 
-    if (!user?.id) {
+    if (!appUser?.id) {
       return NextResponse.json(
         { error: 'Unauthorized' },
         { status: 401 }
@@ -37,7 +38,7 @@ export async function GET(
       );
     }
 
-    const stats = await PlatformApiKeyService.getKeyUsageStats(keyId, user.id);
+    const stats = await PlatformApiKeyService.getKeyUsageStats(keyId, appUser.id);
 
     return NextResponse.json({
       success: true,

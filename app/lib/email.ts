@@ -6,8 +6,10 @@
 import nodemailer from 'nodemailer';
 import { logger } from '@/lib/logger';
 
-const FROM_EMAIL = process.env.EMAIL_FROM || process.env.SMTP_FROM || 'noreply@recoder.xyz';
+const RESEND_FROM = process.env.RESEND_FROM || process.env.EMAIL_FROM || 'noreply@recoder.xyz';
+const SMTP_FROM = process.env.SMTP_FROM || process.env.EMAIL_FROM || 'noreply@recoder.xyz';
 const FROM_NAME = 'Recoder.xyz';
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://recoder.xyz';
 
 // Initialize SMTP transporter (fallback if Resend is not configured)
 const transporter = nodemailer.createTransport({
@@ -48,7 +50,7 @@ export async function sendEmail({ to, subject, html, text }: EmailOptions) {
           'Authorization': `Bearer ${process.env.RESEND_API_KEY}`,
         },
         body: JSON.stringify({
-          from: `${FROM_NAME} <${FROM_EMAIL}>`,
+          from: `${FROM_NAME} <${RESEND_FROM}>`,
           to: [to],
           subject,
           html,
@@ -63,6 +65,7 @@ export async function sendEmail({ to, subject, html, text }: EmailOptions) {
         throw new Error(responseData.message || responseData.error || 'Resend API error');
       }
 
+      logger.info('Email sent via Resend', { to, subject, messageId: responseData.id });
       return { success: true, messageId: responseData.id };
     } catch (error: any) {
       logger.error('Email error', { error: error.message });
@@ -73,12 +76,13 @@ export async function sendEmail({ to, subject, html, text }: EmailOptions) {
   // SMTP fallback
   try {
     const info = await transporter.sendMail({
-      from: `${FROM_NAME} <${FROM_EMAIL}>`,
+      from: `${FROM_NAME} <${SMTP_FROM}>`,
       to,
       subject,
       html,
       text: text || html.replace(/<[^>]*>/g, ''),
     });
+    logger.info('Email sent via SMTP', { to, subject, messageId: info.messageId });
     return { success: true, messageId: info.messageId };
   } catch (error) {
     logger.error('SMTP error', { error: String(error) });
@@ -450,7 +454,7 @@ export async function sendTemporaryPasswordEmail(email: string, tempPassword: st
               Please change this password immediately after your first login. This temporary password should not be shared with anyone.
             </div>
 
-            <a href="${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/auth/signin" class="button">Sign In Now</a>
+            <a href="${APP_URL}/auth/signin" class="button">Sign In Now</a>
 
             <h3>Getting Started:</h3>
             <ul>
@@ -476,7 +480,7 @@ TEMPORARY PASSWORD: ${tempPassword}
 
 ⚠️ Important: Please change this password immediately after your first login.
 
-Sign in at: ${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/auth/signin
+Sign in at: ${APP_URL}/auth/signin
 
 Getting Started:
 - Sign in with your email and temporary password

@@ -4,6 +4,7 @@ import {
   hasSessionCookie as _hasSessionCookie,
   extractSessionToken,
 } from '@recoder/auth/edge';
+import { resolveAgentsSiteUrl, resolveBackendApiUrl } from '@/lib/runtime-urls';
 
 /**
  * Auth Callback Route - Web Handler
@@ -56,7 +57,7 @@ export async function GET(request: NextRequest) {
   const email = searchParams.get('email') || ''
 
   const requestOrigin = request.nextUrl.origin
-  const baseUrl = requestOrigin || process.env.NEXT_PUBLIC_URL || 'http://localhost:3000'
+  const baseUrl = requestOrigin || resolveAgentsSiteUrl()
   const error = searchParams.get('error')
   const errorCode = searchParams.get('error_code')
   const errorDescription = searchParams.get('error_description')
@@ -97,7 +98,7 @@ export async function GET(request: NextRequest) {
   let shouldClearReferralCookie = false
   const authEvent = 'login'
   const authMethod = 'email'
-  const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || ''
+  const backendUrl = resolveBackendApiUrl()
   const sessionToken = getSessionToken(request)
 
   // Handle referral code from cookie

@@ -10,17 +10,12 @@ export const MAX_FREE_INITIATIVE_PAGES = 5;
 export const MAX_FREE_INITIATIVE_UPDATES = 5;
 export const MAX_FREE_RELEASES = 5;
 
-if (!process.env.NEXT_PUBLIC_VERCEL_PROJECT_PRODUCTION_URL) {
-  throw new Error("NEXT_PUBLIC_VERCEL_PROJECT_PRODUCTION_URL is not defined.");
-}
+const publicBaseUrl =
+  process.env.RECODER_PM_WEB_URL ??
+  process.env.NEXT_PUBLIC_VERCEL_PROJECT_PRODUCTION_URL ??
+  process.env.VERCEL_PROJECT_PRODUCTION_URL ??
+  "http://localhost:3000";
 
-const protocol =
-  process.env.NODE_ENV === "production" ||
-  process.env.NEXT_PUBLIC_VERCEL_PROJECT_PRODUCTION_URL.endsWith(".local")
-    ? "https"
-    : "http";
-export const baseUrl = new URL(
-  `${protocol}://${process.env.NEXT_PUBLIC_VERCEL_PROJECT_PRODUCTION_URL}`
-).toString();
+export const baseUrl = new URL(publicBaseUrl).toString();
 
 export const BLOG_POST_PAGE_SIZE = 12;

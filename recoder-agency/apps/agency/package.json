@@ -74,6 +74,7 @@
 		"@react-email/components": "1.0.1",
 		"@sentry/nextjs": "10.28.0",
 		"@supabase/supabase-js": "catalog:",
+		"@ai-sdk/openai": "catalog:",
 		"better-auth": "catalog:",
 		"@trigger.dev/sdk": "catalog:",
 		"@vercel/edge-config": "catalog:",

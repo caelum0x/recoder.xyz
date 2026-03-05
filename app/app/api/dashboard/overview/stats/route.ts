@@ -1,13 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from "@/lib/auth-helpers";
-import { auth } from '@/lib/auth-config';
-import { headers } from 'next/headers';
+import { ensureAppUserFromAuthUser } from '@/lib/auth-helpers';
 
 import { prisma } from '@/lib/prisma';
 
 export async function GET(request: NextRequest) {
   try {
-    const authResult = await requireAuth();
+    const authResult = await requireAuth(request);
     if (authResult.error) return authResult.response;
     const { user: authUser } = authResult;
 
@@ -15,9 +14,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const user = await prisma.users.findUnique({
-      where: { email: authUser.email }
-    });
+    const user = await ensureAppUserFromAuthUser(authUser);
 
     if (!user) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
@@ -35,7 +32,7 @@ export async function GET(request: NextRequest) {
         timestamp: { gte: startOfMonth }
       },
       _sum: {
-        tokens: true,
+        tokensUsed: true,
         cost: true
       },
       _count: true
@@ -51,7 +48,7 @@ export async function GET(request: NextRequest) {
         }
       },
       _sum: {
-        tokens: true,
+        tokensUsed: true,
         cost: true
       },
       _count: true
@@ -63,18 +60,19 @@ export async function GET(request: NextRequest) {
       : 0;
 
     // Projects stats
-    const totalProjects = await prisma.projects.count({
+    const totalProjects = await prisma.ai_generated_projects.count({
       where: { userId: user.id }
     });
 
-    const activeProjects = await prisma.projects.count({
+    const activeProjects = await prisma.ai_generated_projects.count({
       where: {
         userId: user.id,
-        status: 'active'
+        // A project is treated as active if updated within the last 30 days.
+        updatedAt: { gte: lastMonth }
       }
     });
 
-    const lastMonthProjects = await prisma.projects.count({
+    const lastMonthProjects = await prisma.ai_generated_projects.count({
       where: {
         userId: user.id,
         createdAt: {
@@ -89,11 +87,11 @@ export async function GET(request: NextRequest) {
       : 0;
 
     // API Keys stats
-    const totalApiKeys = await prisma.api_keys.count({
+    const totalApiKeys = await prisma.user_api_keys.count({
       where: { userId: user.id }
     });
 
-    const activeApiKeys = await prisma.api_keys.count({
+    const activeApiKeys = await prisma.user_api_keys.count({
       where: { 
         userId: user.id,
         isActive: true
@@ -113,7 +111,7 @@ export async function GET(request: NextRequest) {
       data: {
         usage: {
           requests: currentMonthUsage._count || 0,
-          tokens: currentMonthUsage._sum.tokens || 0,
+          tokens: currentMonthUsage._sum.tokensUsed || 0,
           cost: currentMonthUsage._sum.cost || 0,
           trend: Math.round(requestTrend)
         },

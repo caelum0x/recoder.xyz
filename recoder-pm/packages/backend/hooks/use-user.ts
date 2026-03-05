@@ -11,11 +11,29 @@ export const useUser = () => {
         const session = await authClient.getSession();
 
         if (session?.data?.user) {
-          const sessionUser = session.data.user as User;
+          const sessionUser = session.data.user;
+          const now = new Date();
           setUser({
-            ...sessionUser,
-            createdAt: new Date(sessionUser.createdAt),
-            updatedAt: new Date(sessionUser.updatedAt),
+            id: sessionUser.id,
+            email: sessionUser.email,
+            emailVerified: sessionUser.emailVerified,
+            name: sessionUser.name ?? null,
+            firstName: null,
+            lastName: null,
+            imageUrl: sessionUser.image ?? null,
+            organizationId: null,
+            organizationRole: "MEMBER",
+            createdAt: now,
+            updatedAt: now,
+            user_metadata: {
+              name: sessionUser.name ?? null,
+              first_name: null,
+              last_name: null,
+              image_url: sessionUser.image ?? null,
+              imageUrl: sessionUser.image ?? null,
+              organization_id: null,
+              organization_role: "MEMBER",
+            },
           });
         }
       } catch (error) {

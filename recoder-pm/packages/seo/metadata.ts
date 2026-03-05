@@ -15,9 +15,12 @@ const author: Metadata["authors"] = {
 const publisher = "Hayden Bleasel";
 const twitterHandle = "@haydenbleasel";
 
-const productionUrl = process.env.VERCEL_PROJECT_PRODUCTION_URL;
-const protocol = productionUrl?.includes("localhost") ? "http" : "https";
-const baseUrl = new URL(`${protocol}://${productionUrl}`);
+const productionUrl =
+  process.env.RECODER_PM_WEB_URL ??
+  process.env.NEXT_PUBLIC_VERCEL_PROJECT_PRODUCTION_URL ??
+  process.env.VERCEL_PROJECT_PRODUCTION_URL ??
+  "http://localhost:3000";
+const baseUrl = new URL(productionUrl);
 
 export const createMetadata = ({
   title,

@@ -1,13 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { requireAuth } from "@/lib/auth-helpers";
-import { auth } from '@/lib/auth-config';
-import { headers } from 'next/headers';
+import { ensureAppUserFromAuthUser, requireAuth } from "@/lib/auth-helpers";
 
 import { prisma } from '@/lib/prisma';
 
 export async function GET(request: NextRequest) {
   try {
-    const authResult = await requireAuth();
+    const authResult = await requireAuth(request);
     if (authResult.error) return authResult.response;
     const { user: authUser } = authResult;
 
@@ -21,9 +19,7 @@ export async function GET(request: NextRequest) {
     const model = searchParams.get('model');
     const limit = parseInt(searchParams.get('limit') || '100');
 
-    const user = await prisma.users.findUnique({
-      where: { email: authUser.email }
-    });
+    const user = await ensureAppUserFromAuthUser(authUser);
 
     if (!user) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 });

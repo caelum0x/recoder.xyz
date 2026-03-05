@@ -1,6 +1,7 @@
 'use server';
 
 import { auth } from '@/lib/auth';
+import { resolveAgentsSiteUrl } from '@/lib/runtime-urls';
 import { redirect } from 'next/navigation';
 import { headers as getHeaders } from 'next/headers';
 
@@ -261,7 +262,7 @@ export async function signInWithPassword(prevState: any, formData: FormData) {
   }
 
   const finalReturnUrl = returnUrl || '/dashboard';
-  const redirectUrl = new URL(finalReturnUrl, 'http://localhost');
+  const redirectUrl = new URL(finalReturnUrl, resolveAgentsSiteUrl());
   redirectUrl.searchParams.set('auth_event', 'login');
   redirectUrl.searchParams.set('auth_method', 'email');
   redirect(`${redirectUrl.pathname}${redirectUrl.search}`);
@@ -306,7 +307,7 @@ export async function signUpWithPassword(prevState: any, formData: FormData) {
 
 export async function signOut() {
   try {
-    await fetch(`${process.env.NEXT_PUBLIC_URL || 'http://localhost:3000'}/api/auth/sign-out`, {
+    await fetch(`${resolveAgentsSiteUrl()}/api/auth/sign-out`, {
       method: 'POST',
       headers: {
         cookie: (await getHeaders()).get('cookie') || '',

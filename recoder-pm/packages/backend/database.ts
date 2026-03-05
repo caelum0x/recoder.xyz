@@ -23,6 +23,9 @@ const globalForPrisma = global as unknown as {
 };
 const adapter = new PrismaPg({ connectionString: url.toString() });
 const client = globalForPrisma.prisma || new PrismaClient({ adapter });
+const middlewareCapableClient = client as PrismaClient & {
+  $use?: (...args: unknown[]) => unknown;
+};
 
 if (process.env.NODE_ENV !== "production") {
   globalForPrisma.prisma = client;
@@ -30,7 +33,7 @@ if (process.env.NODE_ENV !== "production") {
 
 if (
   !globalForPrisma.prismaMiddlewareRegistered &&
-  typeof (client as Record<string, unknown>).$use === "function"
+  typeof middlewareCapableClient.$use === "function"
 ) {
   registerDatabaseMiddleware(client);
   globalForPrisma.prismaMiddlewareRegistered = true;
