@@ -21,7 +21,6 @@ import {
   ExternalLink,
   Loader2
 } from 'lucide-react';
-import { SiteHeader } from '@/components/SiteHeader';
 
 interface Integration {
   id: string;
@@ -139,8 +138,6 @@ export default function IntegrationsSettingsPage() {
 
   return (
     <div className="min-h-screen bg-black text-white">
-      <SiteHeader />
-
       <div className="container mx-auto px-6 py-24">
         <div className="max-w-4xl mx-auto">
           {/* Page Header */}

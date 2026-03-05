@@ -6,8 +6,10 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { 
+import { useSession } from '@/lib/session-provider';
+import {
   ArrowLeft,
   Terminal,
   Mail,
@@ -20,9 +22,10 @@ import {
   Loader2,
   CheckCircle
 } from 'lucide-react';
-import { SiteHeader } from '@/components/SiteHeader';
 
 export default function AccountSettingsPage() {
+  const router = useRouter();
+  const { data: session, isPending } = useSession();
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState('');
@@ -40,13 +43,26 @@ export default function AccountSettingsPage() {
 
   // Load account data on mount
   useEffect(() => {
-    loadAccountData();
-  }, []);
+    if (!isPending && !session) {
+      router.push('/auth/signin');
+      return;
+    }
+
+    if (!isPending && session) {
+      loadAccountData();
+    }
+  }, [isPending, session, router]);
 
   async function loadAccountData() {
     try {
       setInitialLoading(true);
-      const response = await fetch('/api/user/account');
+      const response = await fetch('/api/user/account', { credentials: 'include' });
+
+      if (response.status === 401) {
+        router.push('/auth/signin');
+        return;
+      }
+
       const data = await response.json();
 
       if (data.success) {
@@ -98,6 +114,7 @@ export default function AccountSettingsPage() {
     try {
       const response = await fetch('/api/user/account', {
         method: 'PUT',
+        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(accountData)
       });
@@ -119,7 +136,7 @@ export default function AccountSettingsPage() {
 
   const handleExportData = async () => {
     try {
-      const response = await fetch('/api/user/export');
+      const response = await fetch('/api/user/export', { credentials: 'include' });
       const blob = await response.blob();
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -141,7 +158,8 @@ export default function AccountSettingsPage() {
 
     try {
       const response = await fetch('/api/user/account', {
-        method: 'DELETE'
+        method: 'DELETE',
+        credentials: 'include'
       });
 
       if (response.ok) {
@@ -152,7 +170,7 @@ export default function AccountSettingsPage() {
     }
   };
 
-  if (initialLoading) {
+  if (initialLoading || isPending) {
     return (
       <div className="min-h-screen bg-black text-white flex items-center justify-center">
         <div className="text-center">
@@ -165,12 +183,17 @@ export default function AccountSettingsPage() {
 
   return (
     <div className="min-h-screen bg-black text-white">
-      <SiteHeader />
-
       <div className="container mx-auto px-6 py-24">
         <div className="max-w-2xl mx-auto">
           {/* Page Header */}
           <div className="mb-8">
+            <Link
+              href="/settings"
+              className="inline-flex items-center gap-2 text-sm text-gray-400 hover:text-white transition-colors mb-4"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              Back to Settings
+            </Link>
             <h1 className="text-3xl font-bold mb-2">Account Settings</h1>
             <p className="text-gray-400">Manage your account information and preferences</p>
           </div>

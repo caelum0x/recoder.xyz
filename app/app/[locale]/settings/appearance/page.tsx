@@ -22,7 +22,6 @@ import {
   Loader2,
   Save
 } from 'lucide-react';
-import { SiteHeader } from '@/components/SiteHeader';
 
 export default function AppearanceSettingsPage() {
   const { theme, setTheme } = useThemeContext();
@@ -123,8 +122,6 @@ export default function AppearanceSettingsPage() {
 
   return (
     <div className="min-h-screen bg-black text-white">
-      <SiteHeader />
-
       <div className="container mx-auto px-6 py-24">
         <div className="max-w-2xl mx-auto">
           {/* Page Header */}

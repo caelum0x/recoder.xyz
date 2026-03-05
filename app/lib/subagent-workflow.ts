@@ -12,9 +12,9 @@ export type SubagentWorkflowPlan = {
   nextActions: string[];
 };
 
-// Keep the legacy workspace path until the app is physically moved, but expose the
-// current product identity in user-facing workflow labels.
-const UI_RECODER_WORKSPACE_PATH = '/Users/arhansubasi/recoder.xyz/apps/ui.giselles.ai';
+const UI_RECODER_WORKSPACE_PATH =
+  process.env.UI_RECODER_WORKSPACE_PATH ||
+  '/Users/arhansubasi/recoder.xyz/apps/ui.giselles.ai';
 
 const DEFAULT_PATHS = [
   '/Users/arhansubasi/recoder.xyz/app',

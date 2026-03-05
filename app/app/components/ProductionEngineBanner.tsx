@@ -70,9 +70,9 @@ export default function ProductionEngineBanner() {
               size="lg" 
               variant="outline" 
               className="border-white text-white hover:bg-white hover:text-blue-600 px-8"
-              onClick={() => window.location.href = '/dashboard/billing'}
+              onClick={() => window.location.href = '/pricing'}
             >
-              View Pricing
+              View Plans
             </Button>
           </div>
           
@@ -272,7 +272,7 @@ export function ProductionEngineFeatureSection() {
                   size="lg" 
                   variant="outline" 
                   className="border-white text-white hover:bg-white hover:text-blue-600 px-8"
-                  onClick={() => window.location.href = '/dashboard/billing'}
+                  onClick={() => window.location.href = '/pricing'}
                 >
                   View Pricing Plans
                 </Button>

@@ -574,6 +574,17 @@ async function checkProjectOwnership(userId: string, projectId: string): Promise
 // In strict mode (default in production): always requires token
 const REQUIRE_AUTH = process.env.REQUIRE_AUTH === 'true';
 const STRICT_AUTH = isStrictAuthMode();
+const ALLOW_LOCALHOST_ORIGIN = process.env.NODE_ENV !== 'production';
+
+function isLocalhostOrigin(origin: string): boolean {
+  if (!origin) return false;
+  try {
+    const { hostname } = new URL(origin);
+    return hostname === 'localhost' || hostname === '127.0.0.1';
+  } catch {
+    return false;
+  }
+}
 
 function authenticateRequest(req: AuthenticatedRequest, res: express.Response, next: express.NextFunction) {
   // Get token from Authorization header OR cookies (for cross-origin with httpOnly cookies)
@@ -583,7 +594,10 @@ function authenticateRequest(req: AuthenticatedRequest, res: express.Response, n
   // If no token provided
   if (!token) {
     // In development or if origin is allowed, permit without auth (migration mode)
-    const isAllowedOrigin = ALLOWED_ORIGINS.includes(origin) || origin === '' || origin.includes('localhost');
+    const isAllowedOrigin =
+      ALLOWED_ORIGINS.includes(origin) ||
+      origin === '' ||
+      (ALLOW_LOCALHOST_ORIGIN && isLocalhostOrigin(origin));
 
     if (!STRICT_AUTH && isAllowedOrigin) {
       // Migration mode: allow but log warning
@@ -603,7 +617,10 @@ function authenticateRequest(req: AuthenticatedRequest, res: express.Response, n
   verifySessionToken(token).then(session => {
     if (!session) {
       // Token invalid but from allowed origin - allow in migration mode
-      const isAllowedOrigin = ALLOWED_ORIGINS.includes(origin) || origin === '' || origin.includes('localhost');
+      const isAllowedOrigin =
+        ALLOWED_ORIGINS.includes(origin) ||
+        origin === '' ||
+        (ALLOW_LOCALHOST_ORIGIN && isLocalhostOrigin(origin));
       if (!STRICT_AUTH && isAllowedOrigin) {
         logWarning(ErrorCode.AUTH_INVALID_TOKEN, 'Invalid token accepted in migration mode', {
           origin: origin || 'same-origin',
@@ -1363,12 +1380,34 @@ const containerLimiter = rateLimit({
 const ALLOWED_ORIGINS = [
   'https://recoder.xyz',
   'https://www.recoder.xyz',
+  'https://agents.recoder.xyz',
+  'https://app.recoder.xyz',
   'https://web.recoder.xyz',
+  'https://studio.recoder.xyz',
+  'https://agency.recoder.xyz',
+  'https://pm.recoder.xyz',
   'https://docker.recoder.xyz', // Self-reference for same-origin API calls
-  'http://localhost:3000',
-  'http://localhost:5173',
-  'http://localhost:3100'
+  ...(process.env.NODE_ENV === 'production'
+    ? []
+    : [
+        'http://localhost:3000',
+        'http://localhost:5173',
+        'http://localhost:3100',
+      ]),
 ];
+
+const PUBLIC_DOCKER_BACKEND_URL =
+  process.env.DOCKER_BACKEND_PUBLIC_URL ||
+  process.env.RECODER_DOCKER_BACKEND_URL ||
+  process.env.BACKEND_PUBLIC_URL ||
+  'https://docker.recoder.xyz';
+
+const PUBLIC_DOCKER_BACKEND_WS_URL = PUBLIC_DOCKER_BACKEND_URL
+  .replace('https://', 'wss://')
+  .replace('http://', 'ws://');
+
+const PUBLIC_OPENCLAW_GATEWAY_URL =
+  process.env.OPENCLAW_GATEWAY_URL || 'https://openclaw.recoder.xyz';
 
 app.use(cors({
   origin: (origin, callback) => {
@@ -8253,7 +8292,7 @@ app.post('/api/tunnel/start', authenticateRequest, async (req: AuthenticatedRequ
   try {
     // Get the local URL to tunnel
     // The preview URL proxies to the container's dev server
-    const BACKEND_URL = process.env.BACKEND_PUBLIC_URL || `http://localhost:${process.env.PORT || 3100}`;
+    const BACKEND_URL = PUBLIC_DOCKER_BACKEND_URL;
     const localUrl = `${BACKEND_URL}/preview/${projectId}`;
 
     // Mark as starting
@@ -9974,7 +10013,7 @@ function canvasElementToReactNative(element: CanvasElement, indent = 4): string 
 app.post('/api/canvas-connect/:projectId', authenticateRequest, verifyProjectOwnership, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
   const { canvasHostUrl } = req.body;
 
-  const gatewayUrl = canvasHostUrl || process.env.OPENCLAW_GATEWAY_URL || 'http://localhost:18789';
+  const gatewayUrl = canvasHostUrl || PUBLIC_OPENCLAW_GATEWAY_URL;
 
   try {
     const healthCheck = await fetch(`${gatewayUrl}/health`, { signal: AbortSignal.timeout(3000) });
@@ -15454,8 +15493,8 @@ server.listen(PORT, async () => {
   startupInfo('server', 'docker backend running', {
     port: PORT,
     image: IMAGE_NAME,
-    previewUrlPattern: `http://localhost:${PORT}/preview/{projectId}`,
-    collaborationUrlPattern: `ws://localhost:${PORT}/collab?projectId=XXX&file=YYY`,
+    previewUrlPattern: `${PUBLIC_DOCKER_BACKEND_URL}/preview/{projectId}`,
+    collaborationUrlPattern: `${PUBLIC_DOCKER_BACKEND_WS_URL}/collab?projectId=XXX&file=YYY`,
     lspStartEndpoint: '/api/lsp/:projectId/start',
   });
 

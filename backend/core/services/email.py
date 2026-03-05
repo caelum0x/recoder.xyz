@@ -277,7 +277,7 @@ You received this email because you signed up for a Recoder account."""
     <tr>
       <td>
         <div style="text-align: center; margin-bottom: 40px;">
-          <img src="https://recoder.xyz/Logomark.svg" alt="Recoder" style="height: 24px; width: auto; display: inline-block;" />
+          <img src="https://recoder.xyz/logo.png" alt="Recoder" style="height: 24px; width: auto; display: inline-block;" />
         </div>
         <div style="background-color: #ffffff; border-radius: 16px; padding: 40px 32px;">
           {content}
@@ -349,7 +349,7 @@ Claim your invite: {referral_url}
     <tr>
       <td>
         <div style="text-align: center; margin-bottom: 40px;">
-          <img src="https://recoder.xyz/Logomark.svg" alt="Recoder" style="height: 24px; width: auto; display: inline-block;" />
+          <img src="https://recoder.xyz/logo.png" alt="Recoder" style="height: 24px; width: auto; display: inline-block;" />
         </div>
         <div style="background-color: #ffffff; border-radius: 16px; padding: 40px 32px; text-align: center;">
           <h1 style="font-size: 24px; font-weight: 500; color: #000; margin: 0 0 16px 0; letter-spacing: -0.02em;">

@@ -16,13 +16,13 @@
  */
 
 import { getSessionAccessToken } from '@/lib/auth/session-token';
+import { resolveDockerBackendUrl } from '@/lib/runtime-urls';
 
 // ---------------------------------------------------------------------------
 // Config
 // ---------------------------------------------------------------------------
 
-const DOCKER_BACKEND_URL =
-  process.env.NEXT_PUBLIC_DOCKER_BACKEND_URL || 'http://localhost:3001';
+const DOCKER_BACKEND_URL = resolveDockerBackendUrl();
 
 // ---------------------------------------------------------------------------
 // Types

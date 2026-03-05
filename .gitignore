@@ -370,3 +370,8 @@ hetzner-setup.sh
 diagnose.sh
 deploy-all.sh
 check-errors.sh
+
+# Local secrets and generated artifacts
+**/.xcode.env
+**/__pycache__/
+*.pyc

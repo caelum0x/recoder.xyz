@@ -20,6 +20,8 @@ import {
 } from "lucide-react";
 import { domAnimation, LazyMotion } from "motion/react";
 
+const signupUrl = "https://recoder.xyz/auth/signup";
+
 const links = [
   {
     href: "/pricing",
@@ -32,7 +34,7 @@ const links = [
     icon: MessageSquareIcon,
   },
   {
-    href: "https://pm.recoder.xyz/portal",
+    href: "/#roadmap",
     label: "Roadmap",
     icon: CalendarIcon,
   },
@@ -90,10 +92,10 @@ export const Navbar = () => (
         </div>
         <div className="flex justify-end">
           <Button asChild className="hidden md:flex">
-            <a href="https://pm.recoder.xyz/app">Get started</a>
+            <a href={signupUrl}>Get started</a>
           </Button>
           <Button asChild className="flex md:hidden" size="icon">
-            <a href="https://pm.recoder.xyz/app">
+            <a href={signupUrl}>
               <ArrowRightIcon size={16} />
             </a>
           </Button>

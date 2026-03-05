@@ -85,12 +85,25 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Check if 2FA is enabled
-    const securitySettings = await prisma.$queryRaw<any[]>`
-      SELECT two_factor_enabled FROM security_settings WHERE user_id = ${user.id}
-    `;
-
-    const has2FA = securitySettings && securitySettings.length > 0 && securitySettings[0].two_factor_enabled;
+    // Check if 2FA is enabled. Some production databases may not have
+    // the legacy `security_settings` table yet, so treat it as disabled.
+    let has2FA = false;
+    try {
+      const securitySettings = await prisma.$queryRaw<any[]>`
+        SELECT two_factor_enabled FROM security_settings WHERE user_id = ${user.id}
+      `;
+      has2FA = Boolean(
+        securitySettings &&
+        securitySettings.length > 0 &&
+        securitySettings[0]?.two_factor_enabled
+      );
+    } catch (error) {
+      logger.warn('security_settings table unavailable; defaulting 2FA to disabled', {
+        route: 'auth/login',
+        userId: user.id,
+        error: String(error),
+      });
+    }
 
     // If 2FA is enabled, require 2FA verification
     if (has2FA) {

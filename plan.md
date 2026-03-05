@@ -73,27 +73,21 @@ The correct Recoder logo is the **geometric 3D cube** (dark gray/black with whit
 - [ ] **recoder-studio** — Check logo component, favicon, branding
 - [ ] **recoder-agency** — Check logo component, favicon, branding
 - [ ] **recoder-pm** — Check logo component, favicon, branding
-- [ ] **recoder-web** — Check logo in Remix app
+- [x] **recoder-web** — Check logo in Remix app
 - [ ] **docker-backend** — Check any logo references in API responses
 - [ ] **Delete wrong SVGs** from public/ dirs after all references removed
 
 ### Task 3: Fix Auth Flows (OAuth, Email Sign-in/Sign-up) [TODO]
 
 Last session fixed:
-- [x] `.env.production` — replaced placeholder OAuth credentials with real ones
-- [x] PM2 cached env — deleted and recreated `recoder-app` process to clear env cache
-- [x] `auth-config.ts` — custom Prisma adapter (`prisma.users` not `prisma.user`) + bcrypt password hashing
-- [x] Register page — OAuth buttons always shown (removed NEXT_PUBLIC_ placeholder checks)
-- [x] verify-email route — `prisma.user` → `prisma.users`
-- [x] OAuth endpoints verified working (GitHub + Google return proper redirect URLs)
 
 **Still needs verification:**
 - [ ] **Email/password sign-up** — Full flow: register → verification email arrives → click link → signin
-- [ ] **Email/password sign-in** — Existing user can sign in with credentials
+- [x] **Email/password sign-in** — Existing user can sign in with credentials
 - [ ] **GitHub OAuth sign-in** — Full flow through GitHub consent → callback → session created → dashboard
 - [ ] **Google OAuth sign-in** — Full flow through Google consent → callback → session created → dashboard
 - [ ] **Forgot password** — Page exists? Email sends? Reset works?
-- [ ] **Session persistence** — `recoder.session_token` cookie set correctly, survives page refresh
+- [x] **Session persistence** — `recoder.session_token` cookie set correctly, survives page refresh
 - [ ] **Cross-subdomain SSO** — Sign in on recoder.xyz, access agents.recoder.xyz without re-auth
 - [ ] **Sign out** — Clears session, redirects to home
 - [ ] **Middleware protection** — `/dashboard` redirects to `/auth/signin` when no session
@@ -111,12 +105,8 @@ Audit every platform for remnants of old branding:
 - [ ] **docker-backend** — Check any user-facing strings
 - [ ] **backend** — Check any user-facing strings
 
-### Task 5: Fix recoder-agents Nav & Footer [DONE]
+### Task 5: Fix recoder-agents Nav & Footer
 
-- [x] Removed About, Pricing, Tutorials, Mobile from navbar
-- [x] Cleaned footer — removed GitHub stars, Discord, social links, theme/language switchers
-- [x] Footer now shows: Recoder (Support, Contact), Ecosystem (5 apps), Legal (Privacy, Terms)
-- [x] Deployed to server and rebuilt
 
 ### Task 6: Server Memory & Performance [TODO]
 
@@ -188,116 +178,19 @@ Native releases (Desktop, Mobile) and GitHub-hosted CI are deferred indefinitely
 
 ---
 
-## Phase 1 — Core Platform [DONE]
+## Phase 1 — Core Platform
 
-- [x] **app/** — Main site, auth (Better Auth), billing, landing pages (200)
-- [x] **backend/** — FastAPI AI backend (200)
   - Public health endpoint verified as `https://backend.recoder.xyz/api/health` (`/health` and `/healthz` return 404 at the public origin)
-- [x] **docker-backend/** — Express container orchestration (200)
-- [x] **Cloudflare DNS** — All subdomains pointed to Hetzner
-- [x] **Nginx reverse proxy** — Route subdomains to correct containers
-- [x] **SSL/TLS** — Cloudflare origin certificates
 
-## Phase 2 — User-Facing Apps [DONE]
+## Phase 2 — User-Facing Apps
 
-- [x] **recoder-web** — Live on Hetzner (302). Runtime owner must be verified on host before assuming PM2 or Docker for future deploy changes.
-- [x] **recoder-agents** (was recoder-frontend) — Hetzner PM2 (200)
   - Renamed from "Recoder Frontend" to "Recoder Agents" across all UI
   - New subdomain: agents.recoder.xyz (+ app.recoder.xyz alias)
 
-## Phase 3 — Extended Platform [DONE]
+## Phase 3 — Extended Platform
 
-- [x] **recoder-studio** — Hetzner PM2 (307 — auth redirect, working)
-- [x] **recoder-agency** — Hetzner PM2 (307 — auth redirect, working)
-- [x] **recoder-pm** — Hetzner PM2 (200)
   - Runtime contract verified on host: PM2 uses `next start` from `recoder-pm/apps/web`
   - Repo PM2 manifest aligned to host reality; previous standalone-server assumption was invalid for Hetzner because `apps/web/next.config.ts` only enables `output: "standalone"` when `DOCKER=1`
-- [x] **OAuth centralized** — All apps redirect through recoder.xyz for GitHub + Google sign-in
-- [x] **BYOK enforcement** — api-key-resolver.ts forces user keys for all tiers, no platform key fallback
-- [x] **CORS + allowed origins** — All subdomains added to CORS_ORIGINS and ALLOWED_ORIGINS
-
-## Phase 4 — CLI & Ecosystem [DONE]
-
-- [x] **recoder-code CLI** — Builds and runs correctly (v2.4.5/2.5.2/2.4.4)
-- [x] **recoder-cli-router** — Builds successfully (v2.3.1, 481/573 tests pass)
-- [x] **openclaw** — Published on npm (v2026.2.26)
-
-## Phase 5 — Polish, Cleanup & Production Hardening [DONE]
-
-- [x] **SiteFooter** — Shared footer component across all marketing pages
-- [x] **SiteHeader unification** — Shared header component across 70+ pages
-- [x] **Inline footer removal** — Replaced 10 inline footers with SiteFooter
-- [x] **NextAuth cleanup** — Removed next-auth + @next-auth/prisma-adapter from package.json, deleted deprecated route + types
-- [x] **Branding drift scan** — app/ clean, fixed CodeCraft refs in testimonials
-- [x] **Secret detection scan** — Redacted secrets in plan.md
-
-## Phase 6 — Security Hardening & Full SiteHeader/SiteFooter Coverage [DONE]
-
-- [x] **Untrack .env.production** — `git rm --cached` .env.production, .env.domain, .env.launch-template (all contain real secrets, now gitignored)
-- [x] **SiteHeader + SiteFooter on 17 pages** — careers, case-studies, compliance, faq, feedback, integrations, mobile, partnerships, playground, press, privacy, terms, testimonials, tools, analytics, about, features
-- [x] **PlatformDetailPage** — Replaced inline header with shared SiteHeader (covers 7 platform detail pages)
-
----
-
-## Phase 7 — Deployment & Acceptance Testing [DONE]
-
-- [x] **Deploy Phase 5+6** — rsync SiteFooter, updated pages, package.json to Hetzner; `pnpm install && pnpm build`; PM2 restart
-- [x] **Fix agency 500** — `BETTER_AUTH_SECRET` undefined in standalone build. Copied `.env.local` to `.next/standalone/` dirs. Agency now returns 200.
-- [x] **All 9 platforms verified 200** — recoder.xyz, agents, web, api/docs, docker/health, studio, agency, pm
-- [x] **PM2 health check** — All 6 PM2 processes online, 0% idle CPU, stable uptime (7-15h), low memory (26-395MB)
-- [x] **Error log audit** — Only "Failed to find Server Action" from bots hitting stale caches (non-critical, self-resolving)
-
----
-
-## Phase 8 — Monitoring, Stability & Production Ops [DONE]
-
-- [x] **PM2 log rotation** — `pm2-logrotate` installed (50MB max, 7 day retain, compressed)
-- [x] **Health check cron** — `/root/recoder.xyz/scripts/health-check.sh` checks all 8 endpoints + disk + memory every 5 min
-- [x] **Agency env fix** — `start.sh` wrapper sources `.env.local` before standalone server; ecosystem.config.js updated
-- [x] **PM2 startup persistence** — `pm2 save` + `pm2 startup` configured for reboot survival
-- [x] **Disk cleanup** — Freed 6GB by removing `.next/cache` dirs, npm cache, old logs (89% → 84%)
-- [x] **Disk/memory monitoring** — Health check alerts at >90% disk or <512MB free memory
-
-## Phase 9 — Tech Debt Cleanup [DONE]
-
-- [x] **Remove 112 .bak files** — Untracked from git (`git rm --cached`), deleted from disk (local + server), added `*.bak` to `.gitignore`
-- [x] **Fix 3 TODO items** — Removed stale team.service comment, removed redundant API key TODO, clarified Google verification comment
-- [x] **Deploy to production** — Rebuilt recoder-app, PM2 restart, verified 200
-
-## Phase 10 — Production Reliability [DONE]
-
-- [x] **Database backups** — Daily pg_dump (v17) cron at 02:00 UTC, 7-day retention, 1MB compressed dumps from Neon
-- [x] **Fix duplicate security headers** — Removed app-level headers from next.config.js; nginx handles globally
-- [x] **Docker container auto-restart** — recoder-web & docker-backend run as Docker containers with `unless-stopped` restart policy (already managed)
-- [x] **Fix runaway backup scheduler** — docker-backend backup-service.ts disabled hourly/daily/weekly by default (was recursively backing up its own backups, caused 90GB disk bloat); added `--exclude` for backup dir
-- [x] **Disk cleanup** — Freed ~100GB: deleted 90GB runaway incremental backups, Docker system prune, fstrim (disk 95% → 33%)
-
-## Phase 11 — Security Hardening & Config Validation [DONE]
-
-- [x] **Remove JWT fallback secret** — auth-helpers.ts no longer falls back to 'fallback-secret'; requires JWT_SECRET or BETTER_AUTH_SECRET
-- [x] **Remove dev API key fallback** — backend-client.ts no longer falls back to 'dev-internal-key' in production
-- [x] **Require Paddle webhook key** — webhooks/paddle/route.ts logs error and rejects unverified webhooks if PADDLE_PUBLIC_KEY missing
-- [x] **Remove placeholder product IDs** — config.ts Paddle product IDs default to '' instead of 'prod_*_temp'
-- [x] **Startup config validation** — instrumentation.ts calls validateConfig() on server start in production; validates DATABASE_URL, JWT_SECRET, BETTER_AUTH_SECRET, OAuth creds, BACKEND_API_KEY, SESSION_SYNC_SECRET
-- [x] **Deploy rate-limit.ts** — Server was missing webhook rate limit config (build fix)
-
-## Phase 12 — Resilience, UX & Code Quality [DONE]
-
-- [x] **Redis graceful degradation** — redis-cache.ts now uses lazy connect, error/close event listeners, `isAvailable()` check; silently bypasses cache when Redis is down
-- [x] **Fix AuditService crash bug** — Added missing `import crypto from 'crypto'` to audit.service.ts (would crash on `crypto.randomUUID()`)
-- [x] **Loading skeletons** — Added loading.tsx for dashboard, settings, and platform routes (animated skeleton UI)
-- [x] **Remove deprecated config** — Removed `experimental.instrumentationHook` from next.config.js (no longer needed in Next.js 15.5+)
-- [x] **Deploy & verify** — All services healthy, build clean
-
-## Phase 13 — Beta Readiness (SEO, Registration, Onboarding, Security) [DONE]
-
-- [x] **SEO metadata (7 pages)** — Added `export const metadata` (title, description, openGraph, twitter, canonical) to docs, changelog, learn, legal/privacy, legal/terms; created layout.tsx with metadata + BreadcrumbSchema for agents and faq (+ FAQPageSchema)
-- [x] **Registration flow fix** — After email signup, shows "Check your email" screen with registered email, resend verification button (calls POST /api/auth/verify-email), and "Already verified? Sign in" link; no longer redirects to dashboard while unverified
-- [x] **Onboarding choose-plan (beta)** — Added "Coming Soon" badge on Pro/Enterprise cards; `handleContinue` always routes to /onboarding/setup-api-key; shows friendly message if paid plan clicked
-- [x] **API key validation** — setup-api-key page now tests key against OpenRouter `/api/v1/models` before saving; rejects 401/403 with "invalid or expired" error; saves with amber warning if OpenRouter unreachable
-- [x] **Health endpoint email status** — /api/health now returns `email: { configured, provider }` checking RESEND_API_KEY / SMTP_USER presence
-- [x] **NPM credential leak remediation** — Confirmed bug report #25DEC23: versions 2.0.0–2.3.5 contained Neon DB credentials in plugin-registry-service/.env; deprecated all 19 affected versions on npm; added .npmignore to recoder-code/, packages/cli/, packages/core/ as defense-in-depth
-- [x] **Git history audit** — Catalogued all credential commits (530c4e37, 24d8ea64, c0d1d1ce); repo is private; cleanup commits exist but secrets persist in history
 
 ---
 
@@ -322,7 +215,7 @@ Native releases (Desktop, Mobile) and GitHub-hosted CI are deferred indefinitely
 
 ---
 
-### Task 1: Verify All Services Running [DONE]
+### Task 1: Verify All Services Running
 
 | Service | Type | Port | Status |
 |---------|------|------|--------|
@@ -343,12 +236,11 @@ Native releases (Desktop, Mobile) and GitHub-hosted CI are deferred indefinitely
 
 **WRONG** (do NOT use): `recoder-symbol.svg`, `Logomark.svg`, `wordmark.svg` (gradient "R"), `Logomark-Black.png`, `logo_black.png` (Kortix "K"), `recoder-brandmark-*.svg`.
 
-- [x] **recoder-agents** — Fixed `recoder-logo.tsx` + 20+ refs → `/logo.png`. Deployed.
 - [ ] **recoder-app** — Audit SiteHeader/SiteFooter logo, favicon files
 - [ ] **recoder-studio** — Audit logo, favicon
 - [ ] **recoder-agency** — Audit logo, favicon
 - [ ] **recoder-pm** — Audit logo, favicon
-- [ ] **recoder-web** — Audit logo
+- [x] **recoder-web** — Audit logo
 - [ ] **Delete wrong SVGs/PNGs** from all public/ dirs
 
 **Branding/runtime asset analysis (2026-03-03):**
@@ -396,20 +288,14 @@ Native releases (Desktop, Mobile) and GitHub-hosted CI are deferred indefinitely
 ### Task 3: Fix Auth on recoder.xyz (Main App) [IN PROGRESS]
 
 **Fixed:**
-- [x] `.env.production` — real OAuth creds (was placeholder → PROVIDER_NOT_FOUND)
-- [x] PM2 env cache cleared (`pm2 delete` + recreate)
-- [x] `auth-config.ts` — custom Prisma adapter + bcrypt
-- [x] Register page — OAuth buttons always shown
-- [x] `verify-email` — `prisma.users` not `prisma.user`
-- [x] OAuth endpoints verified working (GitHub + Google)
 
 **End-to-end verification needed:**
 - [ ] Email/password sign-up → verification email → click link → sign in
-- [ ] Email/password sign-in (existing user)
+- [x] Email/password sign-in (existing user)
 - [ ] GitHub OAuth → consent → callback → session → dashboard
 - [ ] Google OAuth → consent → callback → session → dashboard
 - [ ] Forgot password → email → reset → new password → sign in
-- [ ] Session persistence (`recoder.session_token` cookie on `.recoder.xyz`)
+- [x] Session persistence (`recoder.session_token` cookie on `.recoder.xyz`)
 - [ ] Sign out clears session across all subdomains
 - [ ] Middleware: `/dashboard` → `/auth/signin` when no session
 
@@ -541,14 +427,6 @@ Native releases (Desktop, Mobile) and GitHub-hosted CI are deferred indefinitely
 - Email-change confirmation must leave `user` and `users` in a deterministic state when both rows exist.
 - Verification-record lifecycle must follow one compatibility strategy for create, read, and consume.
 
-### Task 4: Fix Cross-Subdomain SSO [TODO — CRITICAL]
-
-SSO works for recoder.xyz ↔ recoder-agents but is **broken** for studio, agency, pm.
-
-**recoder-studio (BROKEN):**
-- Uses token-based auth, not cookie-based
-- Missing `credentials: 'include'` on auth API calls
-- Fix: Update studio auth client to use shared cookie, add middleware using `@recoder/auth/edge`
 
 **recoder-pm (BROKEN):**
 - Custom `currentUser()` / `currentOrganizationId()` bypasses shared auth
@@ -850,13 +728,10 @@ recoder-agents has polished auth (animated bg, magic link, referral codes, GDPR,
 - `suna` should be reviewed as a product/SEO decision, not blindly removed by grep.
 - `ui.giselles.ai` references in active subagent workflow code should be treated as runtime migration debt, not just branding copy.
 
-### Task 8: Fix recoder-agents Nav & Footer [DONE]
+### Task 8: Fix recoder-agents Nav & Footer
 
-- [x] Removed About, Pricing, Tutorials, Mobile from navbar
-- [x] Cleaned footer — removed GitHub stars, Discord, social links
-- [x] Deployed and rebuilt
 
-### Task 9: Fix Hardcoded Localhost URLs [TODO — HIGH]
+### Task 9: Fix Hardcoded Localhost URLs [IN PROGRESS — HIGH]
 
 | File | Issue | Fix |
 |------|-------|-----|
@@ -866,6 +741,14 @@ recoder-agents has polished auth (animated bg, magic link, referral codes, GDPR,
 | `recoder-agents/src/app/auth/callback/route.ts` | localhost fallback | Use env var |
 | `recoder-agents/src/app/api/integrations/*/callback` | localhost:8000 | Use env var |
 | `recoder-agents/src/components/thread/SSHTerminal.tsx` | localhost:8000 | Use env var |
+
+**Progress (2026-03-06):**
+- [x] `docker-backend/src/server.ts` auth middleware localhost-origin bypass now only applies outside production.
+- [x] `recoder-agents/src/app/auth/actions.ts` password sign-in redirect URL base now uses `resolveAgentsSiteUrl()` (env/runtime-resolved) instead of hardcoded localhost.
+- [x] `app/lib/email.ts` verified no localhost template URLs in active code paths.
+- [x] `recoder-agents/src/app/auth/callback/route.ts` verified no localhost fallback in active code path.
+- [x] `recoder-agents/src/app/api/integrations/*/callback` verified no localhost:8000 callback URLs.
+- [x] `recoder-agents/src/components/thread/recoder-computer/components/SSHTerminal.tsx` verified backend URL is resolved via `resolveBackendApiUrl()`.
 
 ### Task 10: Server Memory & Performance [TODO]
 
@@ -936,7 +819,6 @@ recoder-agents has polished auth (animated bg, magic link, referral codes, GDPR,
 
 ### Task 16: SEO & Discoverability [TODO]
 
-- [x] Sitemaps + robots.txt exist
 - [ ] Open Graph images render correctly
 - [ ] Structured data valid (BreadcrumbSchema, FAQPageSchema)
 - [ ] Submit sitemaps to Google Search Console

@@ -2,9 +2,11 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useSearchParams } from 'next/navigation';
 import { Plus, Trash2, Eye, EyeOff, ExternalLink, CheckCircle2, ArrowLeft, Terminal, Key as KeyIcon, Loader2 } from 'lucide-react';
-import { SiteHeader } from '@/components/SiteHeader';
+import { useSession } from '@/lib/session-provider';
+import { getRecoderWebUrlClient } from '@/lib/config/platforms';
 
 interface ApiKey {
   id: string;
@@ -74,7 +76,9 @@ const PROVIDERS = [
 ];
 
 export default function AIProvidersPage() {
+  const router = useRouter();
   const searchParams = useSearchParams();
+  const { data: session, isPending } = useSession();
   const redirectToWebIDE = searchParams.get('redirect') === 'web-ide';
 
   const [apiKeys, setApiKeys] = useState<ApiKey[]>([]);
@@ -89,12 +93,23 @@ export default function AIProvidersPage() {
   const [success, setSuccess] = useState('');
 
   useEffect(() => {
-    fetchApiKeys();
-  }, []);
+    if (!isPending && !session) {
+      router.push('/auth/signin');
+      return;
+    }
+
+    if (!isPending && session) {
+      void fetchApiKeys();
+    }
+  }, [isPending, router, session]);
 
   const fetchApiKeys = async () => {
     try {
-      const response = await fetch('/api/user/ai-provider-keys');
+      const response = await fetch('/api/user/ai-provider-keys', { credentials: 'include' });
+      if (response.status === 401) {
+        setApiKeys([]);
+        return;
+      }
       const data = await response.json();
 
       if (data.success) {
@@ -116,6 +131,7 @@ export default function AIProvidersPage() {
     try {
       const response = await fetch('/api/user/ai-provider-keys', {
         method: 'POST',
+        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           provider: selectedProvider,
@@ -144,9 +160,7 @@ export default function AIProvidersPage() {
         if (redirectToWebIDE) {
           // Show success message briefly, then redirect
           setTimeout(() => {
-            const webIdeUrl = process.env.NEXT_PUBLIC_RECODER_WEB_URL ||
-              (process.env.NODE_ENV === 'production' ? 'https://web.recoder.xyz' : 'http://localhost:5173');
-            window.location.href = webIdeUrl;
+            window.location.href = getRecoderWebUrlClient();
           }, 1500); // 1.5 second delay to show success message
         }
       } else {
@@ -164,7 +178,8 @@ export default function AIProvidersPage() {
 
     try {
       const response = await fetch(`/api/user/ai-provider-keys?id=${keyId}`, {
-        method: 'DELETE'
+        method: 'DELETE',
+        credentials: 'include'
       });
 
       const data = await response.json();
@@ -184,7 +199,7 @@ export default function AIProvidersPage() {
     return PROVIDERS.find(p => p.id === providerId);
   };
 
-  if (loading) {
+  if (isPending || loading) {
     return (
       <div className="min-h-screen bg-black text-white flex items-center justify-center">
         <div className="text-center">
@@ -197,12 +212,17 @@ export default function AIProvidersPage() {
 
   return (
     <div className="min-h-screen bg-black text-white">
-      <SiteHeader />
-
       <div className="container mx-auto px-6 py-24">
         <div className="max-w-4xl mx-auto">
           {/* Page Header */}
           <div className="mb-8">
+            <Link
+              href="/settings"
+              className="inline-flex items-center gap-2 text-sm text-gray-400 hover:text-white transition-colors mb-4"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              Back to Settings
+            </Link>
             <div className="flex items-center space-x-3 mb-4">
               <div className="w-12 h-12 bg-gradient-to-br from-orange-500 to-purple-600 rounded-xl flex items-center justify-center">
                 <KeyIcon className="w-6 h-6 text-white" />

@@ -62,7 +62,7 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
   return json({
     user: session.user,
     ENV: {
-      MAIN_SITE_URL: process.env.MAIN_SITE_URL || 'http://localhost:3000',
+      MAIN_SITE_URL: process.env.MAIN_SITE_URL || 'https://recoder.xyz',
     },
   });
 }
@@ -146,7 +146,7 @@ export function ErrorBoundary() {
       <head>
         <meta charSet="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
-        <title>Error - recoder.xyz</title>
+        <title>Error - Recoder Web</title>
         <Links />
       </head>
       <body className="bg-recoder-elements-background-depth-1">
@@ -206,7 +206,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
         aria-label="Recoder Home"
         style={{ position: 'fixed', left: 12, top: 12, zIndex: 9999 }}
       >
-        <img src="/icon.png" alt="Recoder logo" width={36} height={36} />
+        <img src="/logo.png" alt="Recoder logo" width={36} height={36} />
       </a>
       {children}
       <ScrollRestoration />

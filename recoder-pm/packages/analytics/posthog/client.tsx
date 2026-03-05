@@ -11,6 +11,14 @@ type PostHogProviderProps = {
 
 export const identify = posthog.identify;
 
+const isUsablePostHogKey = (value: string | undefined) =>
+  Boolean(
+    value &&
+      value.startsWith("phc_") &&
+      !value.includes("placeholder") &&
+      !value.includes("disabled")
+  );
+
 export const PostHogProvider = ({ children }: PostHogProviderProps) => {
   useEffect(() => {
     if (process.env.NODE_ENV === "development") {
@@ -19,11 +27,11 @@ export const PostHogProvider = ({ children }: PostHogProviderProps) => {
 
     const posthogKey = keys().NEXT_PUBLIC_POSTHOG_KEY;
 
-    if (!posthogKey) {
+    if (!isUsablePostHogKey(posthogKey)) {
       return;
     }
 
-    posthog.init(posthogKey, {
+    posthog.init(posthogKey!, {
       api_host: "/ingest",
       ui_host: "https://us.posthog.com",
       capture_pageview: false, // We capture pageviews manually

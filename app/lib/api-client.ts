@@ -3,7 +3,10 @@
  * Handles all API calls to the backend
  */
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+const API_BASE_URL =
+  typeof window !== 'undefined'
+    ? ''
+    : process.env.NEXT_PUBLIC_API_URL || process.env.BACKEND_URL || 'https://api.recoder.xyz';
 
 export interface UsageStats {
   totalRequests: number;
@@ -78,6 +81,7 @@ class ApiClient {
 
     const response = await fetch(url, {
       ...options,
+      credentials: options.credentials ?? 'include',
       headers,
     });
 

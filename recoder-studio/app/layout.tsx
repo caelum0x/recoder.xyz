@@ -4,6 +4,7 @@ import "./globals.css";
 import { GoogleTagManager } from "@next/third-parties/google";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 import { DM_Mono, DM_Sans } from "next/font/google";
+import Link from "next/link";
 import { NuqsAdapter } from "nuqs/adapters/next/app";
 import { Suspense } from "react";
 import { ThemeProvider } from "@/components/theme-provider";
@@ -68,13 +69,13 @@ export default function RootLayout({
 			{process.env.GTM_ID && <GoogleTagManager gtmId={process.env.GTM_ID} />}
 			<PHProvider>
 				<body>
-					<a
+					<Link
 						href="/"
 						aria-label="Recoder Home"
 						style={{ position: "fixed", left: 12, top: 12, zIndex: 9999 }}
 					>
-						<Image src="/favicon.png" alt="Recoder logo" width={36} height={36} />
-					</a>
+						<Image src="/logo.png" alt="Recoder logo" width={36} height={36} />
+					</Link>
 					<ThemeProvider
 						attribute="class"
 						defaultTheme="dark"

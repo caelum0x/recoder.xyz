@@ -6,10 +6,9 @@ import { useSession, signOut } from '@/lib/session-provider';
 import { LaunchWebIDEButton } from '@/app/components/LaunchWebIDEButton';
 import {
   LayoutDashboard, Key, FolderOpen, BarChart3, Settings, LogOut,
-  User, ChevronDown, Globe, Terminal, Sparkles, CreditCard,
-  Users, Cpu
+  User, ChevronDown, Globe, Terminal, Sparkles, Cpu
 } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 const sidebarLinks = [
   { href: '/dashboard', label: 'Overview', icon: LayoutDashboard, exact: true },
@@ -17,8 +16,6 @@ const sidebarLinks = [
   { href: '/dashboard/projects', label: 'Projects', icon: FolderOpen },
   { href: '/dashboard/usage', label: 'Usage', icon: BarChart3 },
   { href: '/dashboard/analytics', label: 'Analytics', icon: Cpu },
-  { href: '/dashboard/billing', label: 'Billing', icon: CreditCard },
-  { href: '/dashboard/team', label: 'Team', icon: Users },
 ];
 
 const settingsLinks = [
@@ -33,6 +30,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const { data: session, isPending } = useSession();
   const [showUserMenu, setShowUserMenu] = useState(false);
 
+  useEffect(() => {
+    if (!isPending && !session?.user) {
+      const redirect = encodeURIComponent(pathname || '/dashboard');
+      router.replace(`/auth/signin?redirect=${redirect}`);
+    }
+  }, [isPending, pathname, router, session?.user]);
+
   // Strip locale prefix for matching
   const pathWithoutLocale = pathname.replace(/^\/[a-z]{2}(?:\/|$)/, '/');
 
@@ -46,7 +50,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     router.push('/');
   };
 
-  if (isPending) {
+  if (isPending || !session?.user) {
     return (
       <div className="min-h-screen bg-black flex items-center justify-center">
         <div className="w-12 h-12 border-2 border-orange-500 border-t-transparent rounded-full animate-spin"></div>

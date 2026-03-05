@@ -9,9 +9,10 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from './prisma';
-import jwt from 'jsonwebtoken';
-import { cookies } from 'next/headers';
+import { cookies, headers } from 'next/headers';
 import { logger } from '@/lib/logger';
+import crypto from 'crypto';
+import { auth } from '@/lib/auth-config';
 import {
   extractSessionToken,
   extractSessionTokenFromHeader,
@@ -19,22 +20,56 @@ import {
 } from '@recoder/auth/edge';
 
 /**
- * Get session from Better Auth cookie or JWT token.
+ * Get session from Better Auth cookie.
  *
  * Priority:
- *   1. Better Auth session cookie (`recoder.session_token`)
- *   2. Legacy JWT `auth-token` cookie / Bearer header
+ *   1. Better Auth server API (`auth.api.getSession`)
+ *   2. Better Auth session cookie parsing fallback
  */
 export async function getSession(request?: NextRequest) {
   try {
-    let token: string | undefined;
+    // Resolve Better Auth session through the canonical server API first.
+    // This keeps /api/auth/session and route-level auth checks consistent.
+    try {
+      const resolvedHeaders = request ? request.headers : await headers();
+      const betterAuthSession = await auth.api.getSession({ headers: resolvedHeaders });
+
+      if (betterAuthSession?.user) {
+        const appUser = await prisma.users.findUnique({
+          where: { email: betterAuthSession.user.email },
+          select: { id: true }
+        });
+
+        const userIdForKeys = appUser?.id || betterAuthSession.user.id;
+        const hasApiKey = await prisma.user_api_keys.count({
+          where: {
+            userId: userIdForKeys,
+            isActive: true,
+          }
+        }) > 0;
+
+        return {
+          user: {
+            id: betterAuthSession.user.id,
+            email: betterAuthSession.user.email,
+            name: betterAuthSession.user.name,
+            image: betterAuthSession.user.image,
+            hasApiKey,
+            subscription: 'free',
+            role: 'user',
+          },
+          expires: new Date(betterAuthSession.session.expiresAt).toISOString(),
+        };
+      }
+    } catch (error) {
+      logger.warn('Canonical Better Auth session check failed, falling back to cookie/JWT parsing', {
+        error: String(error),
+      });
+    }
+
     let betterAuthToken: string | null = null;
 
     if (request) {
-      // Get legacy JWT token from request cookies or Authorization header
-      token = request.cookies.get('auth-token')?.value ||
-              request.headers.get('authorization')?.replace('Bearer ', '');
-
       // Extract Better Auth session token using shared helpers
       const rawToken = extractSessionToken(
         (name) => request.cookies.get(name)?.value ?? null,
@@ -54,7 +89,6 @@ export async function getSession(request?: NextRequest) {
     } else {
       // Server-side: read from Next.js cookie store
       const cookieStore = await cookies();
-      token = cookieStore.get('auth-token')?.value;
 
       const rawToken = extractSessionToken(
         (name) => cookieStore.get(name)?.value ?? null,
@@ -124,58 +158,55 @@ export async function getSession(request?: NextRequest) {
       }
     }
 
-    // Fallback to JWT auth
-    if (!token) {
-      return null;
-    }
-
-    // Verify JWT token
-    const jwtSecret = process.env.JWT_SECRET || process.env.BETTER_AUTH_SECRET;
-    if (!jwtSecret) {
-      console.error('[auth-helpers] JWT_SECRET or BETTER_AUTH_SECRET is not configured');
-      return null;
-    }
-    const decoded = jwt.verify(token, jwtSecret) as any;
-
-    // Fetch user from database
-    const user = await prisma.users.findUnique({
-      where: { id: decoded.userId },
-      select: {
-        id: true,
-        email: true,
-        name: true,
-        image: true,
-      }
-    });
-
-    if (!user) {
-      return null;
-    }
-
-    // Check if user has any API keys
-    const hasApiKey = await prisma.user_api_keys.count({
-      where: {
-        userId: user.id,
-        isActive: true
-      }
-    }) > 0;
-
-    return {
-      user: {
-        id: user.id,
-        email: user.email,
-        name: user.name,
-        image: user.image,
-        hasApiKey,
-        subscription: 'free',
-        role: 'user',
-      },
-      expires: new Date(decoded.exp * 1000).toISOString()
-    };
+    return null;
   } catch (error) {
     logger.error('Failed to get session', { error: String(error) });
     return null;
   }
+}
+
+export async function ensureAppUserFromAuthUser(authUser: {
+  email?: string | null;
+  name?: string | null;
+  image?: string | null;
+}) {
+  if (!authUser.email) {
+    return null;
+  }
+
+  let appUser = await prisma.users.findUnique({
+    where: { email: authUser.email },
+  });
+
+  if (appUser) {
+    return appUser;
+  }
+
+  try {
+    appUser = await prisma.users.create({
+      data: {
+        id: crypto.randomUUID(),
+        email: authUser.email,
+        name: authUser.name || authUser.email.split('@')[0],
+        image: authUser.image || null,
+        emailVerified: true,
+        subscription: 'free',
+        role: 'user',
+        isActive: true,
+        updatedAt: new Date(),
+      },
+    });
+  } catch (error) {
+    logger.warn('Failed to create app user from Better Auth user, retrying lookup', {
+      email: authUser.email,
+      error: String(error),
+    });
+    appUser = await prisma.users.findUnique({
+      where: { email: authUser.email },
+    });
+  }
+
+  return appUser;
 }
 
 /**

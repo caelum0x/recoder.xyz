@@ -1,3 +1,5 @@
+import type { AuthCoreUser } from "@recoder/auth/session";
+
 /**
  * User type that is compatible with the old Supabase User type.
  * Provides user_metadata as a computed property so existing code

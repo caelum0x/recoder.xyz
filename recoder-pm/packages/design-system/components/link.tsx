@@ -1,5 +1,5 @@
 import NextLink from "next/link";
-import type { ComponentProps } from "react";
+import type { ComponentProps, RefObject } from "react";
 
 type LinkProperties = {
   readonly href: string;
@@ -31,7 +31,7 @@ export const Link = ({
   return (
     <NextLink
       href={href}
-      target={external ? "_blank" : null}
+      target={external ? "_blank" : undefined}
       {...properties}
       ref={reference}
     />

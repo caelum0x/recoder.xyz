@@ -23,7 +23,6 @@ import {
   Copy,
   Trash2
 } from 'lucide-react';
-import { SiteHeader } from '@/components/SiteHeader';
 
 export default function APISettingsPage() {
   const [loading, setLoading] = useState(false);
@@ -136,8 +135,6 @@ export default function APISettingsPage() {
 
   return (
     <div className="min-h-screen bg-black text-white">
-      <SiteHeader />
-
       <div className="container mx-auto px-6 py-24">
         <div className="max-w-2xl mx-auto">
           {/* Page Header */}

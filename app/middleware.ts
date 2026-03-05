@@ -26,6 +26,14 @@ function stripLocale(pathname: string): string {
 }
 
 export default async function middleware(request: NextRequest) {
+  const nextActionId = request.headers.get('next-action');
+  if (request.method === 'POST' && nextActionId) {
+    const isPlausibleActionId = /^[A-Za-z0-9_-]{20,}$/.test(nextActionId);
+    if (!isPlausibleActionId) {
+      return NextResponse.json({ error: 'Invalid Server Action id' }, { status: 400 });
+    }
+  }
+
   // Run i18n middleware first
   const response = intlMiddleware(request);
 
@@ -45,8 +53,7 @@ export default async function middleware(request: NextRequest) {
 
   const isAdminRoute = stripped === ADMIN_PREFIX || stripped.startsWith(`${ADMIN_PREFIX}/`);
   if (isAdminRoute) {
-    const hasSession = hasSessionCookieInRequest(request) ||
-      !!request.cookies.get('auth-token')?.value;
+    const hasSession = hasSessionCookieInRequest(request);
 
     if (!hasSession) {
       const signInUrl = new URL('/auth/signin', request.url);

@@ -1,5 +1,6 @@
 import { ImageResponse } from 'next/og';
 import { NextRequest } from 'next/server';
+import { resolveBackendApiUrl } from '@/lib/runtime-urls';
 
 export const runtime = 'edge';
 
@@ -13,7 +14,7 @@ export async function GET(request: NextRequest) {
     }
 
     const templateResponse = await fetch(
-      `${process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000/v1'}/templates/public/${shareId}`
+      `${resolveBackendApiUrl()}/templates/public/${shareId}`
     );
 
     if (!templateResponse.ok) {

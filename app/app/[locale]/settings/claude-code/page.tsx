@@ -3,7 +3,6 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { ArrowLeft, Terminal, Key, Eye, EyeOff, CheckCircle2, Loader2, ExternalLink, Trash2, Shield, Zap } from 'lucide-react';
-import { SiteHeader } from '@/components/SiteHeader';
 
 interface ClaudeCodeStatus {
   hasToken: boolean;
@@ -135,8 +134,6 @@ export default function ClaudeCodeSettingsPage() {
 
   return (
     <div className="min-h-screen bg-black text-white">
-      <SiteHeader />
-
       <div className="container mx-auto px-6 py-24">
         <div className="max-w-3xl mx-auto">
           {/* Page Header */}
