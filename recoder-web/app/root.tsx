@@ -16,6 +16,7 @@ import { useErrorToasts } from './lib/errors/toast-error';
 import reactToastifyStyles from 'react-toastify/dist/ReactToastify.css?url';
 import globalStyles from './styles/index.scss?url';
 import xtermStyles from '@xterm/xterm/css/xterm.css?url';
+import roobertStyles from './styles/roobert-font.css?url';
 
 import 'virtual:uno.css';
 import { createScopedLogger } from '~/utils/logger';
@@ -93,23 +94,11 @@ export const links: LinksFunction = () => [
     rel: 'manifest',
     href: '/manifest.json',
   },
+  { rel: 'stylesheet', href: roobertStyles },
   { rel: 'stylesheet', href: reactToastifyStyles },
   { rel: 'stylesheet', href: tailwindReset },
   { rel: 'stylesheet', href: globalStyles },
   { rel: 'stylesheet', href: xtermStyles },
-  {
-    rel: 'preconnect',
-    href: 'https://fonts.googleapis.com',
-  },
-  {
-    rel: 'preconnect',
-    href: 'https://fonts.gstatic.com',
-    crossOrigin: 'anonymous',
-  },
-  {
-    rel: 'stylesheet',
-    href: 'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap',
-  },
 ];
 
 const inlineThemeCode = stripIndents`

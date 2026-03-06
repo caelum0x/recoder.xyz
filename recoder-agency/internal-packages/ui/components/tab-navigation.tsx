@@ -77,7 +77,7 @@ export function TabNavigation({
 								aria-label={`${link.label} ${ariaLabelPrefix}`}
 								className={clsx(
 									"text-[16px] font-sans font-medium transition-colors px-2 py-2 relative rounded-md",
-									"text-primary-100 [text-shadow:0px_0px_20px_#0087f6] after:content-[''] after:absolute after:left-0 after:right-0 after:bottom-0 after:h-[2px] after:bg-primary-100",
+									"text-primary-100 [text-shadow:0px_0px_20px_#F79009] after:content-[''] after:absolute after:left-0 after:right-0 after:bottom-0 after:h-[2px] after:bg-primary-100",
 								)}
 							>
 								{link.label}
@@ -107,7 +107,7 @@ export function TabNavigation({
 								aria-label={`${link.label} ${ariaLabelPrefix}`}
 								className={clsx(
 									"text-[16px] font-sans font-medium transition-colors px-2 py-2 relative rounded-md",
-									"text-primary-100 [text-shadow:0px_0px_20px_#0087f6] after:content-[''] after:absolute after:left-0 after:right-0 after:bottom-0 after:h-[2px] after:bg-primary-100",
+									"text-primary-100 [text-shadow:0px_0px_20px_#F79009] after:content-[''] after:absolute after:left-0 after:right-0 after:bottom-0 after:h-[2px] after:bg-primary-100",
 								)}
 							>
 								{link.label}
@@ -139,7 +139,7 @@ export function TabNavigation({
 							className={clsx(
 								"text-[16px] font-sans font-medium transition-colors px-2 py-2 relative rounded-md",
 								isActive
-									? "text-primary-100 [text-shadow:0px_0px_20px_#0087f6] after:content-[''] after:absolute after:left-0 after:right-0 after:bottom-0 after:h-[2px] after:bg-primary-100"
+									? "text-primary-100 [text-shadow:0px_0px_20px_#F79009] after:content-[''] after:absolute after:left-0 after:right-0 after:bottom-0 after:h-[2px] after:bg-primary-100"
 									: "text-tabs-inactive-text hover:text-white-100 hover:after:content-[''] hover:after:absolute hover:after:left-0 hover:after:right-0 hover:after:bottom-0 hover:after:h-[2px] hover:after:bg-primary-100",
 							)}
 						>

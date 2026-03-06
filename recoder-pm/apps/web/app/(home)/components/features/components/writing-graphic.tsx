@@ -84,7 +84,7 @@ export const WritingGraphic = () => {
             {[...continueText].map((char, index) => (
               <m.span
                 animate={{ opacity: playing ? 1 : 0 }}
-                className="text-violet-600 dark:text-violet-400"
+                className="text-orange-600 dark:text-orange-400"
                 initial={{ opacity: 0 }}
                 // biome-ignore lint/suspicious/noArrayIndexKey: static list
                 key={index}

@@ -15,7 +15,7 @@ export const IncomingChart = async () => {
   const config: AreaChartProperties["config"] = {
     feedback: {
       label: "Feedback",
-      color: colors.violet,
+      color: colors.orange,
     },
   };
 

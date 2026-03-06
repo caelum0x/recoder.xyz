@@ -227,6 +227,11 @@
  * Hierarchy: Element Token -> (Element Token | Color Tokens) -> Primitives
  */
 :root {
+  /* Typography */
+  --font-family-sans: 'Roobert', system-ui, -apple-system, sans-serif;
+  --font-family-mono: 'Roobert Mono', Consolas, monospace;
+  font-family: var(--font-family-sans);
+
   --header-height: 54px;
   --chat-max-width: 50rem; /* Increased from 37rem for wider chat input */
   --chat-min-width: 700px; /* Increased from 640px for wider chat */

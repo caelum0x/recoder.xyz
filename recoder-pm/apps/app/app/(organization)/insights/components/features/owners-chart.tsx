@@ -50,7 +50,7 @@ export const OwnersChart = async () => {
   for (const [_index, item] of data.entries()) {
     config[item.id] = {
       label: item.name,
-      color: colors.violet,
+      color: colors.orange,
     };
   }
 
@@ -58,7 +58,7 @@ export const OwnersChart = async () => {
     <StackCard className="p-8" icon={UserCircleIcon} title="Feature Owners">
       <BarChart
         className="mx-auto h-80"
-        color={colors.violet}
+        color={colors.orange}
         config={config}
         data={data}
         xAxisKey="count"

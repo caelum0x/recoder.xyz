@@ -37,7 +37,7 @@ export const GenerativeMenuSwitch = ({
       ) : (
         <>
           <Button
-            className="gap-1 rounded-none text-violet-500 dark:text-violet-400"
+            className="gap-1 rounded-none text-orange-500 dark:text-orange-400"
             onClick={() => onOpenChange(true)}
             variant="ghost"
           >

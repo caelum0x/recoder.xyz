@@ -21,7 +21,7 @@ const getColorForStatus = (status: string): string => {
       return colors.blue;
     }
     case "in progress": {
-      return colors.violet;
+      return colors.orange;
     }
     case "complete": {
       return colors.emerald;

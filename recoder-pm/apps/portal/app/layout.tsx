@@ -2,15 +2,49 @@ import "./styles.css";
 import { AnalyticsProvider } from "@repo/analytics";
 import { Container } from "@repo/design-system/components/container";
 import { DesignSystemProvider } from "@repo/design-system/components/provider";
-import { fonts } from "@repo/design-system/lib/fonts";
 import type { Metadata } from "next";
 import Image from "next/image";
+import localFont from "next/font/local";
 import { type ReactNode, Suspense } from "react";
 import { env } from "@/env";
 import { Footer } from "./components/footer";
 import { Identify } from "./components/identify";
 import { Navbar } from "./components/navbar";
 import { Pageview } from "./components/pageview";
+
+const roobertSans = localFont({
+  src: [
+    {
+      path: "../../public/fonts/roobert/RoobertUprightsVF.woff2",
+      style: "normal",
+      weight: "100 900",
+    },
+    {
+      path: "../../public/fonts/roobert/RoobertItalicsVF.woff2",
+      style: "italic",
+      weight: "100 900",
+    },
+  ],
+  variable: "--font-geist-sans",
+  display: "swap",
+});
+
+const roobertMono = localFont({
+  src: [
+    {
+      path: "../../public/fonts/roobert/RoobertMonoUprightsVF.woff2",
+      style: "normal",
+      weight: "100 900",
+    },
+    {
+      path: "../../public/fonts/roobert/RoobertMonoItalicsVF.woff2",
+      style: "italic",
+      weight: "100 900",
+    },
+  ],
+  variable: "--font-geist-mono",
+  display: "swap",
+});
 
 type RootLayoutProperties = {
   readonly children: ReactNode;
@@ -61,14 +95,14 @@ export const metadata: Metadata = {
 };
 
 const RootLayout = ({ children }: RootLayoutProperties) => (
-  <html className={fonts} lang="en">
+  <html className={`${roobertSans.variable} ${roobertMono.variable} touch-manipulation font-sans antialiased`} lang="en">
     <body className="bg-background">
       <a
         aria-label="Recoder Home"
         href="/"
         style={{ position: "fixed", left: 12, top: 12, zIndex: 9999 }}
       >
-        <Image alt="Recoder logo" height={36} src="/logo.svg" width={36} />
+        <Image alt="Recoder logo" height={36} src="/logo.png" width={36} />
       </a>
       <AnalyticsProvider>
         <Suspense fallback={null}>

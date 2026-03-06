@@ -44,28 +44,28 @@ export const RiceGraphic = () => {
   return (
     <div className="not-prose flex h-full w-full items-center justify-center gap-2 p-6">
       <div className="-space-x-px flex items-center rounded bg-background shadow-sm">
-        <div className="flex aspect-square w-16 items-center justify-center rounded-l border text-violet-400">
+        <div className="flex aspect-square w-16 items-center justify-center rounded-l border text-orange-400">
           {reach ? (
             <p className="font-medium font-mono text-lg">{reach}</p>
           ) : (
             <LoadingCircle />
           )}
         </div>
-        <div className="flex aspect-square w-16 items-center justify-center border text-violet-400">
+        <div className="flex aspect-square w-16 items-center justify-center border text-orange-400">
           {impact ? (
             <p className="font-medium font-mono text-lg">{impact}</p>
           ) : (
             <LoadingCircle />
           )}
         </div>
-        <div className="flex aspect-square w-16 items-center justify-center border text-violet-400">
+        <div className="flex aspect-square w-16 items-center justify-center border text-orange-400">
           {confidence ? (
             <p className="font-medium font-mono text-lg">{confidence}</p>
           ) : (
             <LoadingCircle />
           )}
         </div>
-        <div className="flex aspect-square w-16 items-center justify-center rounded-r border text-violet-400">
+        <div className="flex aspect-square w-16 items-center justify-center rounded-r border text-orange-400">
           {effort ? (
             <p className="font-medium font-mono text-lg">{effort}</p>
           ) : (

@@ -41,7 +41,7 @@ export const Template = ({
       "flex aspect-[2/3] w-full flex-col divide-y overflow-hidden rounded-md border bg-background transition-colors",
       children ? "" : "hover:bg-card",
       active
-        ? "border-transparent ring-2 ring-violet-500 dark:ring-violet-400"
+        ? "border-transparent ring-2 ring-orange-500 dark:ring-orange-400"
         : "",
       className
     )}
