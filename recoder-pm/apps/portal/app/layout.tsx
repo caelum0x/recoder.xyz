@@ -15,12 +15,12 @@ import { Pageview } from "./components/pageview";
 const roobertSans = localFont({
   src: [
     {
-      path: "../../public/fonts/roobert/RoobertUprightsVF.woff2",
+      path: "../public/fonts/roobert/RoobertUprightsVF.woff2",
       style: "normal",
       weight: "100 900",
     },
     {
-      path: "../../public/fonts/roobert/RoobertItalicsVF.woff2",
+      path: "../public/fonts/roobert/RoobertItalicsVF.woff2",
       style: "italic",
       weight: "100 900",
     },
@@ -32,12 +32,12 @@ const roobertSans = localFont({
 const roobertMono = localFont({
   src: [
     {
-      path: "../../public/fonts/roobert/RoobertMonoUprightsVF.woff2",
+      path: "../public/fonts/roobert/RoobertMonoUprightsVF.woff2",
       style: "normal",
       weight: "100 900",
     },
     {
-      path: "../../public/fonts/roobert/RoobertMonoItalicsVF.woff2",
+      path: "../public/fonts/roobert/RoobertMonoItalicsVF.woff2",
       style: "italic",
       weight: "100 900",
     },

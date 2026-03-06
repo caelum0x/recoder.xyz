@@ -1,10 +1,11 @@
 import "./styles.css";
 import { AnalyticsProvider } from "@repo/analytics";
 import { DesignSystemProvider } from "@repo/design-system/components/provider";
-import { fonts } from "@repo/design-system/lib/fonts";
 import type { Metadata } from "next";
 import Image from "next/image";
+import localFont from "next/font/local";
 import { type ReactNode, Suspense } from "react";
+import { AppSwitcher } from "@/components/app-switcher";
 import { QueryProvider } from "@/providers/query-provider";
 import { Identify } from "./components/identify";
 import { Pageview } from "./components/pageview";
@@ -13,6 +14,40 @@ import { env } from "@/env";
 type RootLayoutProperties = {
   readonly children: ReactNode;
 };
+
+const roobertSans = localFont({
+  src: [
+    {
+      path: "../public/fonts/roobert/RoobertUprightsVF.woff2",
+      style: "normal",
+      weight: "100 900",
+    },
+    {
+      path: "../public/fonts/roobert/RoobertItalicsVF.woff2",
+      style: "italic",
+      weight: "100 900",
+    },
+  ],
+  variable: "--font-geist-sans",
+  display: "swap",
+});
+
+const roobertMono = localFont({
+  src: [
+    {
+      path: "../public/fonts/roobert/RoobertMonoUprightsVF.woff2",
+      style: "normal",
+      weight: "100 900",
+    },
+    {
+      path: "../public/fonts/roobert/RoobertMonoItalicsVF.woff2",
+      style: "italic",
+      weight: "100 900",
+    },
+  ],
+  variable: "--font-geist-mono",
+  display: "swap",
+});
 
 const siteUrl = env.RECODER_PM_API_URL;
 const title = "Recoder PM App";
@@ -58,15 +93,18 @@ export const metadata: Metadata = {
 };
 
 const RootLayout = ({ children }: RootLayoutProperties) => (
-  <html className={fonts} lang="en" suppressHydrationWarning>
+  <html
+    className={`${roobertSans.variable} ${roobertMono.variable} touch-manipulation font-sans antialiased`}
+    lang="en"
+    suppressHydrationWarning
+  >
     <body className="min-h-screen bg-backdrop">
-      <a
-        href="/"
-        aria-label="Recoder Home"
-        style={{ position: "fixed", left: 12, top: 12, zIndex: 9999 }}
-      >
-        <Image src="/logo.png" alt="Recoder logo" width={36} height={36} />
-      </a>
+      <div className="fixed left-4 top-4 z-[9999] flex items-center gap-1.5 rounded-lg border border-border/60 bg-background/80 px-1.5 py-1 backdrop-blur-sm">
+        <a href="/" aria-label="Recoder Home">
+          <Image src="/logo.png" alt="Recoder logo" width={36} height={36} />
+        </a>
+        <AppSwitcher />
+      </div>
       <AnalyticsProvider>
         <Suspense fallback={null}>
           <Pageview />
