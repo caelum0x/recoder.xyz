@@ -109,6 +109,8 @@ service-account*.json
 !recoder-web/app/lib/hooks/useTokenCount.ts
 !recoder-web/app/**/*.ts
 !recoder-web/app/**/*.tsx
+!packages/design-tokens/
+!packages/design-tokens/**
 
 # Allow documentation files
 !*GUIDE*.md

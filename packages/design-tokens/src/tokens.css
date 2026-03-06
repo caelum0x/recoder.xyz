@@ -1,0 +1,54 @@
+/*
+ * Recoder Design Tokens — CSS Custom Properties
+ *
+ * Import this file in each app's globals.css to get shared brand tokens.
+ * Reference: hsl(var(--recoder-orange-500))
+ */
+
+:root {
+  /* Brand: Orange (primary) */
+  --recoder-orange-50: 25 100% 95%;
+  --recoder-orange-100: 25 100% 90%;
+  --recoder-orange-200: 25 100% 80%;
+  --recoder-orange-300: 25 95% 65%;
+  --recoder-orange-400: 25 95% 58%;
+  --recoder-orange-500: 25 95% 53%;
+  --recoder-orange-600: 25 95% 45%;
+  --recoder-orange-700: 25 90% 38%;
+
+  /* Brand: Purple (secondary) */
+  --recoder-purple-50: 270 100% 95%;
+  --recoder-purple-100: 270 100% 90%;
+  --recoder-purple-200: 270 91% 80%;
+  --recoder-purple-300: 270 91% 72%;
+  --recoder-purple-400: 270 91% 65%;
+  --recoder-purple-500: 270 85% 58%;
+  --recoder-purple-600: 270 80% 50%;
+  --recoder-purple-700: 270 75% 42%;
+
+  /* Neutrals */
+  --recoder-gray-50: 0 0% 98%;
+  --recoder-gray-100: 0 0% 95%;
+  --recoder-gray-200: 0 0% 90%;
+  --recoder-gray-300: 0 0% 80%;
+  --recoder-gray-400: 0 0% 64%;
+  --recoder-gray-500: 0 0% 45%;
+  --recoder-gray-600: 0 0% 32%;
+  --recoder-gray-700: 0 0% 20%;
+  --recoder-gray-800: 0 0% 12%;
+  --recoder-gray-900: 0 0% 8%;
+  --recoder-gray-950: 0 0% 5%;
+
+  /* Semantic */
+  --recoder-success: 160 84% 39%;
+  --recoder-warning: 38 92% 50%;
+  --recoder-error: 0 84% 60%;
+  --recoder-info: 217 91% 60%;
+
+  /* Typography */
+  --font-sans: Roobert, system-ui, -apple-system, sans-serif;
+  --font-mono: Roobert Mono, Consolas, monospace;
+
+  /* Border Radius */
+  --radius: 0.625rem;
+}
