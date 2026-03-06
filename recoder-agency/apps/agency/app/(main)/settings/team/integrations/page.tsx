@@ -8,7 +8,7 @@ export default function TeamIntegrationsPage() {
 				<h1
 					className="text-[30px] font-sans font-medium text-[hsl(192,73%,84%)]"
 					style={{
-						textShadow: "0 0 20px #0087f6, 0 0 40px #0087f6, 0 0 60px #0087f6",
+						textShadow: "0 0 20px #F79009, 0 0 40px #F79009, 0 0 60px #F79009",
 					}}
 				>
 					Integrations

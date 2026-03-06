@@ -247,7 +247,7 @@ const createColumns = (
           <FeatureRiceScore rice={row.original.rice} />
         ) : null}
         {!!row.original.aiRice && !row.original.rice ? (
-          <div className="flex items-center gap-2 text-violet-500 dark:text-violet-400">
+          <div className="flex items-center gap-2 text-orange-500 dark:text-orange-400">
             <SparkleIcon size={16} />
             <FeatureRiceScore rice={row.original.aiRice} />
           </div>

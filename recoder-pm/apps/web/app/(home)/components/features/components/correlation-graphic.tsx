@@ -109,7 +109,7 @@ export const CorrelationGraphic: FC = () => {
             className="shrink-0"
             initial={{ opacity: 0 }}
           >
-            <p className="font-medium text-sm text-violet-400">
+            <p className="font-medium text-sm text-orange-400">
               🤖 Here are some insights related to a new checkout process:
             </p>
             <div className="not-prose mt-2 flex flex-nowrap items-center gap-3">

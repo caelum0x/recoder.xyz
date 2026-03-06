@@ -4,7 +4,12 @@ export default {
     './components/**/*.{js,ts,jsx,tsx,mdx}',
   ],
   theme: {
-    extend: {},
+    extend: {
+      fontFamily: {
+        sans: ['var(--font-roobert)', 'system-ui', '-apple-system', 'sans-serif'],
+        mono: ['var(--font-roobert-mono)', 'Consolas', 'monospace'],
+      },
+    },
   },
   plugins: [],
 }

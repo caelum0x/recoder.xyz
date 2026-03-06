@@ -1,30 +1,28 @@
 import type { Metadata } from "next";
 import Image from "next/image";
 import "./globals.css";
-import { DM_Mono, DM_Sans } from "next/font/google";
 import { NuqsAdapter } from "nuqs/adapters/next/app";
 import { ThemeProvider } from "@/components/theme-provider";
+import { roobert, roobertMono } from "./fonts/roobert";
 
 const title = "Recoder Agency";
 const description =
 	"AI-powered agency platform. Automate service delivery with intelligent workflows.";
-const url = process.env.NEXT_PUBLIC_SITE_URL || "https://agency.recoder.xyz";
-
-const dmSans = DM_Sans({
-	weight: "variable",
-	variable: "--font-dm-sans",
-	subsets: ["latin"],
-});
-
-const dmMono = DM_Mono({
-	weight: ["300", "500"],
-	variable: "--font-dm-mono",
-	subsets: ["latin"],
-});
+const canonicalAgencyUrl = "https://agency.recoder.xyz";
+const configuredSiteUrl = process.env.NEXT_PUBLIC_SITE_URL;
+const url =
+	configuredSiteUrl &&
+	configuredSiteUrl.includes("agency.recoder.xyz")
+		? configuredSiteUrl
+		: canonicalAgencyUrl;
 
 export const metadata: Metadata = {
 	title,
 	description,
+	metadataBase: new URL(url),
+	alternates: {
+		canonical: url,
+	},
 	icons: {
 		icon: [
 			{ url: "/favicon.png", sizes: "32x32", type: "image/png" },
@@ -50,6 +48,15 @@ export const metadata: Metadata = {
 	},
 };
 
+const jsonLd = {
+	"@context": "https://schema.org",
+	"@type": "Organization",
+	name: "Recoder",
+	url,
+	logo: `${url}/logo.png`,
+	description,
+};
+
 export default function RootLayout({
 	children,
 }: Readonly<{
@@ -59,13 +66,19 @@ export default function RootLayout({
 		<html
 			lang="en"
 			suppressHydrationWarning
-			className={`${dmSans.variable} ${dmMono.variable}`}
+			className={`${roobert.variable} ${roobertMono.variable} ${roobert.className}`}
 		>
+			<head>
+				<script
+					type="application/ld+json"
+					dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+				/>
+			</head>
 			<body>
 				<a
 					href="/"
 					aria-label="Recoder Home"
-					style={{ position: "fixed", left: 12, top: 12, zIndex: 9999 }}
+					className="fixed left-4 top-4 z-[9999] rounded-lg border border-white/10 bg-black/30 p-1 backdrop-blur-sm"
 				>
 					<Image src="/logo.png" alt="Recoder logo" width={36} height={36} />
 				</a>

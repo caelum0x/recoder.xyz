@@ -61,7 +61,7 @@ export const SentimentChart = async () => {
   const config: RadarChartProperties["config"] = {
     value: {
       label: "Feedback",
-      color: colors.violet,
+      color: colors.orange,
     },
   };
 

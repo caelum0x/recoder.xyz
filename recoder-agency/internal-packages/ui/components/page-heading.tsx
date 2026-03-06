@@ -11,7 +11,7 @@ interface PageHeadingProps extends React.HTMLAttributes<HTMLHeadingElement> {
 export function PageHeading({
 	as = "h1",
 	glow = false,
-	glowColor = "#0087f6",
+	glowColor = "#F79009",
 	className,
 	style,
 	children,

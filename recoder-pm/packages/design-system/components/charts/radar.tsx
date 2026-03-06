@@ -32,7 +32,7 @@ export const RadarChart = ({
       <ChartTooltip content={<ChartTooltipContent />} cursor={false} />
       <PolarAngleAxis dataKey={axisKey} />
       <PolarGrid />
-      <Radar dataKey={dataKey} fill={colors.violet} fillOpacity={0.6} />
+      <Radar dataKey={dataKey} fill={colors.orange} fillOpacity={0.6} />
     </RadarChartComponent>
   </ChartContainer>
 );

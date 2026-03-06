@@ -1,10 +1,8 @@
 import type { Metadata } from 'next';
-import { Inter } from 'next/font/google';
 import './globals.css';
 import { Providers } from '@/components/providers';
 import UTMCapture from '@/components/UTMCapture';
-
-const inter = Inter({ subsets: ['latin'] });
+import { roobert, roobertMono } from './fonts/roobert';
 
 export const metadata: Metadata = {
   title: 'Recoder.xyz - FREE AI Coding Platform | Web IDE + CLI with 40+ Models',
@@ -104,7 +102,7 @@ export default function RootLayout({
           }}
         />
       </head>
-      <body className={inter.className}>
+      <body className={`${roobert.variable} ${roobertMono.variable} font-sans`}>
         <UTMCapture />
         <Providers>{children}</Providers>
       </body>

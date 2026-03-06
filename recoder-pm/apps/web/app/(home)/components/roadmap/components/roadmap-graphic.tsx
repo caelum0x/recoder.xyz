@@ -133,7 +133,7 @@ const data: (Gantt.GanttFeature & {
     status: {
       id: "8",
       name: "",
-      color: colors.purple,
+      color: colors.orange,
     },
     owner: {
       id: "4",

@@ -173,7 +173,7 @@ export const ProductsListItem = ({
                 <MoreHorizontalIcon
                   className={cn(
                     active
-                      ? "text-violet-700 dark:text-violet-300"
+                      ? "text-orange-700 dark:text-orange-300"
                       : "text-muted-foreground"
                   )}
                   size={16}
@@ -191,7 +191,7 @@ export const ProductsListItem = ({
                 className={cn(
                   "transition-transform",
                   active
-                    ? "text-violet-700 dark:text-violet-300"
+                    ? "text-orange-700 dark:text-orange-300"
                     : "text-muted-foreground",
                   // biome-ignore lint/nursery/noLeakedRender: cn() utility, not a render expression
                   childrenOpen && "rotate-180"

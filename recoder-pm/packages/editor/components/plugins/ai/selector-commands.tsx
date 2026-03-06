@@ -68,7 +68,7 @@ export const AISelectorCommands = ({
             onSelect={handleSelect}
             value={option.value}
           >
-            <option.icon className="h-4 w-4 text-violet-500 dark:text-violet-400" />
+            <option.icon className="h-4 w-4 text-orange-500 dark:text-orange-400" />
             {option.label}
           </CommandItem>
         ))}
@@ -84,7 +84,7 @@ export const AISelectorCommands = ({
           }}
           value="continue"
         >
-          <StepForward className="h-4 w-4 text-violet-500 dark:text-violet-400" />
+          <StepForward className="h-4 w-4 text-orange-500 dark:text-orange-400" />
           Continue writing
         </CommandItem>
       </CommandGroup>

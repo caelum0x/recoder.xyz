@@ -142,7 +142,7 @@ export const Plans = ({ products, currentPlan }: PlansProperties) => {
           value={interval}
         />
         {interval === "YEARLY" && (
-          <p className="-right-20 -rotate-6 absolute top-2 font-medium text-sm text-violet-500">
+          <p className="-right-20 -rotate-6 absolute top-2 font-medium text-sm text-orange-500">
             Save 20%!
           </p>
         )}
