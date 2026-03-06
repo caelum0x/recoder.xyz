@@ -43,8 +43,8 @@ const tiptapLink = TiptapLink.configure({
   HTMLAttributes: {
     class: cn(
       "cursor-pointer text-muted-foreground underline underline-offset-[3px] transition-colors",
-      "hover:text-violet-500",
-      "dark:hover:text-violet-400"
+      "hover:text-orange-500",
+      "dark:hover:text-orange-400"
     ),
   },
 });

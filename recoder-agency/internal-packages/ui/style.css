@@ -47,7 +47,7 @@
 	--color-link-accent: #1663f3;
 	--color-link-accent-hover: #0f4cd1;
 	/* global accent (water blue) */
-	--color-accent: var(--color-primary-100, #0087f6);
+	--color-accent: var(--color-primary-100, #F79009);
 	--color-accent-muted: color-mix(in srgb, var(--color-accent) 60%, transparent);
 	--color-accent-foreground: var(--color-background, #0d0d0d);
 	/* blue palette */

@@ -44,7 +44,7 @@ export const DesignSystemProvider = ({
     <TooltipProvider>{children}</TooltipProvider>
     <Toaster />
     <ProgressBar
-      color={colors.violet}
+      color={colors.orange}
       height="2px"
       options={{ showSpinner: false }}
       shallowRouting

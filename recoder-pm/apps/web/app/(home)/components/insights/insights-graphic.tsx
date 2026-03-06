@@ -205,7 +205,7 @@ export const InsightsGraphic: FC = () => {
             ) : (
               <m.button
                 animate={{ opacity: ready ? 1 : 0 }}
-                className="shrink-0 cursor-pointer rounded-full bg-violet-600 p-1"
+                className="shrink-0 cursor-pointer rounded-full bg-orange-600 p-1"
                 initial={{ opacity: 0 }}
                 onClick={handleSearch}
               >

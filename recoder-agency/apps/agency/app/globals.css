@@ -131,9 +131,9 @@
 	--red_300: var(--color-red-300);
 	--red_200: var(--color-red-200);
 
-	--font-accent: var(--font-dm-sans);
-	--font-sans: var(--font-dm-sans);
-	--font-mono: var(--font-dm-mono);
+	--font-accent: var(--font-roobert);
+	--font-sans: var(--font-roobert);
+	--font-mono: var(--font-roobert-mono);
 
 	--spacing-navigation-rail-expanded: 240px;
 	--spacing-navigation-rail-collapsed: 52px;

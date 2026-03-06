@@ -247,7 +247,7 @@ export function ShowCaseSection() {
                                         </div>
 
                                         {/* Preview Image */}
-                                        <div className="relative flex-1 bg-black overflow-hidden min-h-0 aspect-[539/271]">
+                                        <div className="relative flex-1 bg-foreground overflow-hidden min-h-0 aspect-[539/271]">
                                             <Image
                                                 src={worker.image}
                                                 alt={worker.imageAlt}

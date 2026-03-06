@@ -25,7 +25,7 @@ export default async function HomePage({ searchParams }: PlaygroundPageProps) {
 							className="text-[16px] font-sans font-medium text-[hsl(192,73%,84%)] mb-4"
 							style={{
 								textShadow:
-									"0 0 20px #0087f6, 0 0 40px #0087f6, 0 0 60px #0087f6",
+									"0 0 20px #F79009, 0 0 40px #F79009, 0 0 60px #F79009",
 							}}
 						>
 							Loading...

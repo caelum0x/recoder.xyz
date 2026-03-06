@@ -4,6 +4,10 @@
 
 @layer base {
   :root {
+    /* Roobert font family */
+    --font-sans: var(--font-roobert), system-ui, -apple-system, sans-serif;
+    --font-mono: var(--font-roobert-mono), Consolas, monospace;
+
     /* Professional Black/Orange/Purple Theme */
     --background: 0 0% 100%;
     --foreground: 0 0% 5%;
@@ -374,9 +378,8 @@
 }
 
 .font-display {
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-    font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
-    font-variation-settings: 'opsz' 32;
+    font-family: var(--font-sans);
+    font-feature-settings: 'ss10' on, 'ss09' on, 'ss03' on, 'ss04' on, 'ss14' on;
 }
 
 /* Code Terminal Styling */

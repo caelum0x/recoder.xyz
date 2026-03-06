@@ -24,7 +24,7 @@ export const FeatureStatusColumn = ({
     <div
       className={cn(
         "flex min-h-40 flex-col gap-2 rounded-lg bg-card p-2 outline-2 transition-all",
-        isOver ? "outline-violet-500" : "outline-transparent"
+        isOver ? "outline-orange-500" : "outline-transparent"
       )}
     >
       <div className="flex shrink-0 items-center gap-2">

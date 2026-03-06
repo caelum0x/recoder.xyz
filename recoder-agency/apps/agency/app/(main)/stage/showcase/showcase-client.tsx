@@ -46,35 +46,8 @@ interface ShowcaseClientProps {
 	currentTeamId: string;
 }
 
-// Mock playlist data - replace with actual data from props
-const mockPlaylists: Playlist[] = [
-	{
-		id: "1",
-		title: "AI Writing Assistants",
-		description:
-			"A collection of AI agents focused on content creation and writing tasks",
-		createdAt: new Date("2024-01-15"),
-		updatedAt: new Date("2024-01-20"),
-		appsCount: 3,
-	},
-	{
-		id: "2",
-		title: "Data Analysis Tools",
-		description: "Smart agents for data processing and insights generation",
-		createdAt: new Date("2024-01-10"),
-		updatedAt: new Date("2024-01-25"),
-		appsCount: 2,
-	},
-	{
-		id: "3",
-		title: "Customer Support Bots",
-		description:
-			"Automated agents for handling customer inquiries and support tasks",
-		createdAt: new Date("2024-01-05"),
-		updatedAt: new Date("2024-01-22"),
-		appsCount: 4,
-	},
-];
+// TODO: Load playlists from database via props
+const playlists: Playlist[] = [];
 
 export function ShowcaseClient({
 	teamApps,
@@ -115,8 +88,7 @@ export function ShowcaseClient({
 
 	// Handle playlist form submission
 	const handleSavePlaylist = () => {
-		// TODO: Implement playlist creation logic
-		console.log("Creating playlist:", playlistForm);
+		// TODO: Implement playlist creation when persistence is added
 		setIsPlaylistDialogOpen(false);
 		setPlaylistForm({ title: "", description: "" });
 	};
@@ -186,7 +158,7 @@ export function ShowcaseClient({
 							className="text-[30px] font-sans font-medium text-[hsl(192,73%,84%)] mb-2"
 							style={{
 								textShadow:
-									"0 0 20px #0087f6, 0 0 40px #0087f6, 0 0 60px #0087f6",
+									"0 0 20px #F79009, 0 0 40px #F79009, 0 0 60px #F79009",
 							}}
 						>
 							Showcase
@@ -302,14 +274,6 @@ export function ShowcaseClient({
 													}}
 													onClick={(e) => {
 														e.stopPropagation();
-														console.log("🔗 Edit button clicked for app:", {
-															id: app.id,
-															name: app.name,
-															workspaceId: app.workspaceId,
-															targetUrl: app.workspaceId
-																? `/workspaces/${app.workspaceId}`
-																: "/playground",
-														});
 													}}
 												>
 													Edit
@@ -415,9 +379,9 @@ export function ShowcaseClient({
 								</Dialog>
 							</div>
 
-							{mockPlaylists.length > 0 && (
+							{playlists.length > 0 && (
 								<div className="flex flex-wrap gap-6">
-									{mockPlaylists.map((playlist, index) => {
+									{playlists.map((playlist, index) => {
 										// Generate different gradient backgrounds
 										const gradients = [
 											"bg-gradient-to-br from-orange-400 via-pink-500 to-purple-600",
@@ -470,7 +434,7 @@ export function ShowcaseClient({
 								</div>
 							)}
 
-							{mockPlaylists.length === 0 && (
+							{playlists.length === 0 && (
 								<div className="flex justify-center items-center h-full">
 									<div className="grid gap-[8px] justify-center text-center">
 										<h3 className="text-[18px] font-geist font-bold text-text-muted">

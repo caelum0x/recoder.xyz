@@ -128,7 +128,7 @@ div[data-panel-type="error"] {
 }
 
 .ProseMirror-hideselection *::selection {
-  @apply !bg-violet-500 !text-white;
+  @apply !bg-orange-500 !text-white;
 }
 
 .lb-portal.lb-elevation {

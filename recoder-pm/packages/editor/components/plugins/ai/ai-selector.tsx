@@ -90,7 +90,7 @@ export const AISelector = ({ onOpenChange }: AiSelectorProperties) => {
               value={inputValue}
             />
             <Button
-              className="-translate-y-1/2 absolute top-1/2 right-2 h-6 w-6 bg-violet-500 dark:bg-violet-400"
+              className="-translate-y-1/2 absolute top-1/2 right-2 h-6 w-6 bg-orange-500 dark:bg-orange-400"
               onClick={handleAppend}
               size="icon"
             >

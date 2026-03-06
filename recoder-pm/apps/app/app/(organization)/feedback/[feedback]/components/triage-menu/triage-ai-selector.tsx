@@ -70,7 +70,7 @@ export const TriageAISelector = ({
   return (
     <div className="space-y-1.5 p-3">
       <Label
-        className="flex items-center gap-2 text-violet-500 dark:text-violet-400"
+        className="flex items-center gap-2 text-orange-500 dark:text-orange-400"
         htmlFor="triage-menu"
       >
         <SparklesIcon size={16} /> Suggested features
