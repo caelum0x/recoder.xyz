@@ -44,6 +44,7 @@ import {
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { AppSwitcher } from "@/components/app-switcher";
 import { OrganizationSwitcher } from "../../app/(organization)/components/organization-switcher";
 // biome-ignore lint/performance/noNamespaceImport: navigation module is designed for namespace access
 import * as navigation from "../../lib/navigation";
@@ -74,16 +75,19 @@ export const Sidebar = ({ user, organization }: SidebarProps) => {
           <SidebarMenuItem
             className={cn("flex items-center gap-2", !!sidebar.open && "px-2")}
           >
-            <div className="flex aspect-square size-8 shrink-0 items-center justify-center overflow-hidden rounded-lg border bg-sidebar-primary">
-              {!!organization.logoUrl && (
-                <Image
-                  alt=""
-                  className="object-cover"
-                  height={32}
-                  src={organization.logoUrl}
-                  width={32}
-                />
-              )}
+            <div className="flex items-center gap-1.5">
+              <div className="flex aspect-square size-8 shrink-0 items-center justify-center overflow-hidden rounded-lg border bg-sidebar-primary">
+                {!!organization.logoUrl && (
+                  <Image
+                    alt=""
+                    className="object-cover"
+                    height={32}
+                    src={organization.logoUrl}
+                    width={32}
+                  />
+                )}
+              </div>
+              <AppSwitcher />
             </div>
             <div
               className={cn(
@@ -233,7 +237,7 @@ export const Sidebar = ({ user, organization }: SidebarProps) => {
                   <DropdownMenuItem className="flex items-center gap-2">
                     <LifeBuoyIcon className="text-muted-foreground" size={16} />
                     <a
-                      href="https://x.com/haydenbleasel"
+                      href="https://recoder.xyz/contact"
                       rel="noopener noreferrer"
                       target="_blank"
                     >

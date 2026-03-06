@@ -2,11 +2,10 @@
 
 import { Button } from "@repo/design-system/components/ui/button";
 import { captureException } from "@sentry/nextjs";
-import type NextError from "next/error";
 import { useEffect } from "react";
 
 type GlobalErrorProperties = {
-  readonly error: NextError & { digest?: string };
+  readonly error: Error & { digest?: string };
   readonly reset: () => void;
 };
 
@@ -17,9 +16,29 @@ const GlobalError = ({ error, reset }: GlobalErrorProperties) => {
 
   return (
     <html lang="en">
-      <body>
-        <h1>Oops, something went wrong</h1>
-        <Button onClick={() => reset()}>Try again</Button>
+      <body className="min-h-screen bg-background">
+        <div className="flex min-h-screen flex-col items-center justify-center gap-6 px-4">
+          <div className="flex justify-center">
+            <img src="/logo.png" alt="Recoder" className="h-12 w-12" />
+          </div>
+          <h1 className="text-4xl font-bold text-foreground">
+            Something went wrong
+          </h1>
+          <p className="max-w-md text-center text-muted-foreground">
+            An unexpected error occurred. Please try again.
+          </p>
+          {error.digest && (
+            <p className="text-sm text-muted-foreground/70">
+              Error ID: {error.digest}
+            </p>
+          )}
+          <div className="flex gap-3">
+            <Button onClick={() => reset()}>Try Again</Button>
+            <Button asChild variant="outline">
+              <a href="/">Return Home</a>
+            </Button>
+          </div>
+        </div>
       </body>
     </html>
   );
