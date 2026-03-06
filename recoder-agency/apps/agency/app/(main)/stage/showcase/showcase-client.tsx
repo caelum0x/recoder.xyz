@@ -17,7 +17,7 @@ import { TabNavigation } from "@recoder-internal/ui/tab-navigation";
 import { Play, RotateCcw, Star } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { GlassButton } from "@/components/ui/glass-button";
 import { Card } from "../../settings/components/card";
 import { SearchHeader } from "../../workspaces/components/search-header";
@@ -46,8 +46,63 @@ interface ShowcaseClientProps {
 	currentTeamId: string;
 }
 
-// TODO: Load playlists from database via props
-const playlists: Playlist[] = [];
+const PLAYLISTS_STORAGE_KEY = "recoder-agency-playlists";
+const FAVORITES_STORAGE_KEY = "recoder-agency-favorites";
+
+function loadPlaylists(): Playlist[] {
+	if (typeof window === "undefined") return [];
+	try {
+		const raw = localStorage.getItem(PLAYLISTS_STORAGE_KEY);
+		if (!raw) return [];
+		const parsed = JSON.parse(raw) as Array<{
+			id: string;
+			title: string;
+			description: string;
+			createdAt: string;
+			updatedAt: string;
+			appsCount: number;
+		}>;
+		return parsed.map((p) => ({
+			...p,
+			createdAt: new Date(p.createdAt),
+			updatedAt: new Date(p.updatedAt),
+		}));
+	} catch {
+		return [];
+	}
+}
+
+function savePlaylists(playlists: Playlist[]) {
+	if (typeof window === "undefined") return;
+	try {
+		localStorage.setItem(PLAYLISTS_STORAGE_KEY, JSON.stringify(playlists));
+	} catch {
+		// Storage full or unavailable — silently ignore
+	}
+}
+
+function loadFavorites(): Set<string> {
+	if (typeof window === "undefined") return new Set();
+	try {
+		const raw = localStorage.getItem(FAVORITES_STORAGE_KEY);
+		if (!raw) return new Set();
+		return new Set(JSON.parse(raw) as string[]);
+	} catch {
+		return new Set();
+	}
+}
+
+function saveFavorites(favorites: Set<string>) {
+	if (typeof window === "undefined") return;
+	try {
+		localStorage.setItem(
+			FAVORITES_STORAGE_KEY,
+			JSON.stringify(Array.from(favorites)),
+		);
+	} catch {
+		// Storage full or unavailable — silently ignore
+	}
+}
 
 export function ShowcaseClient({
 	teamApps,
@@ -65,12 +120,22 @@ export function ShowcaseClient({
 		{ href: "/stage/showcase?tab=History", label: "History" },
 	] as const;
 
-	// Playlist dialog state
+	// Playlist state — loaded from localStorage
+	const [playlists, setPlaylists] = useState<Playlist[]>([]);
 	const [isPlaylistDialogOpen, setIsPlaylistDialogOpen] = useState(false);
 	const [playlistForm, setPlaylistForm] = useState({
 		title: "",
 		description: "",
 	});
+
+	// Favorites state — loaded from localStorage
+	const [favorites, setFavorites] = useState<Set<string>>(new Set());
+
+	// Load playlists and favorites from localStorage on mount
+	useEffect(() => {
+		setPlaylists(loadPlaylists());
+		setFavorites(loadFavorites());
+	}, []);
 
 	// Apps tab states
 	const [searchQuery, setSearchQuery] = useState("");
@@ -86,9 +151,36 @@ export function ShowcaseClient({
 		return teamHistory[currentTeamId] || [];
 	}, [teamHistory, currentTeamId]);
 
+	// Toggle favorite for an app
+	const toggleFavorite = useCallback(
+		(appId: string) => {
+			const next = new Set(favorites);
+			if (next.has(appId)) {
+				next.delete(appId);
+			} else {
+				next.add(appId);
+			}
+			setFavorites(next);
+			saveFavorites(next);
+		},
+		[favorites],
+	);
+
 	// Handle playlist form submission
 	const handleSavePlaylist = () => {
-		// TODO: Implement playlist creation when persistence is added
+		if (!playlistForm.title.trim()) return;
+		const now = new Date();
+		const newPlaylist: Playlist = {
+			id: `pl_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
+			title: playlistForm.title.trim(),
+			description: playlistForm.description.trim(),
+			createdAt: now,
+			updatedAt: now,
+			appsCount: 0,
+		};
+		const updated = [...playlists, newPlaylist];
+		setPlaylists(updated);
+		savePlaylists(updated);
 		setIsPlaylistDialogOpen(false);
 		setPlaylistForm({ title: "", description: "" });
 	};
@@ -281,11 +373,14 @@ export function ShowcaseClient({
 												<button
 													type="button"
 													className="p-1.5 rounded-md text-white/60 hover:text-white transition-colors"
-													onClick={() => {
-														// TODO: Add favorite functionality
+													onClick={(e) => {
+														e.stopPropagation();
+														toggleFavorite(app.id);
 													}}
 												>
-													<Star className="h-4 w-4 hover:fill-current" />
+													<Star
+														className={`h-4 w-4 ${favorites.has(app.id) ? "fill-current text-yellow-400" : "hover:fill-current"}`}
+													/>
 												</button>
 											</div>
 										</div>
@@ -537,8 +632,14 @@ export function ShowcaseClient({
 												<button
 													type="button"
 													className="p-1.5 rounded-md text-white/60 hover:text-white transition-colors"
+													onClick={(e) => {
+														e.stopPropagation();
+														toggleFavorite(item.id);
+													}}
 												>
-													<Star className="h-4 w-4 hover:fill-current" />
+													<Star
+														className={`h-4 w-4 ${favorites.has(item.id) ? "fill-current text-yellow-400" : "hover:fill-current"}`}
+													/>
 												</button>
 											</div>
 										</div>

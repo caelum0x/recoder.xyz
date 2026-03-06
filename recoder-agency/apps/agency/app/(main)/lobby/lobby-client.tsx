@@ -13,40 +13,27 @@ import { GreetingHeading } from "./greeting-heading";
 
 interface LobbyClientProps {
 	username: string;
+	recentApps: { title: string; appsCount: number }[];
+	recentWorkflows: { id: string; name: string; updatedAt: Date }[];
 }
 
-export function LobbyClient({ username }: LobbyClientProps) {
+export function LobbyClient({
+	username,
+	recentApps,
+	recentWorkflows,
+}: LobbyClientProps) {
 	const [activeTab, setActiveTab] = useState<"apps" | "workflow">("apps");
 	const [activeAppTab, setActiveAppTab] = useState<string>("Recent");
 	const [activeWorkflowTab, setActiveWorkflowTab] = useState<string>("Recent");
 	const router = useRouter();
 	const [isCreatingWorkspace, setIsCreatingWorkspace] = useState(false);
 
-	// TODO: Fetch from actual data source
-	const hasRecentApps = false; // Whether user has used apps before
-	const hasRecentWorkflows = false; // Whether user has used workflows before
+	const hasRecentApps = recentApps.length > 0;
+	const hasRecentWorkflows = recentWorkflows.length > 0;
 
-	const featuredApps = [
-		{ title: "AI Writing Assistant", appsCount: 3 },
-		{ title: "Data Analyzer", appsCount: 2 },
-		{ title: "Customer Support Bot", appsCount: 4 },
-	];
-
-	const recentApps = [
-		{ title: "Recent App 1", appsCount: 1 },
-		{ title: "Recent App 2", appsCount: 2 },
-	];
-
-	const featuredWorkflows = [
-		{ id: "wf1", name: "Content Generation Workflow", updatedAt: new Date() },
-		{ id: "wf2", name: "Data Processing Pipeline", updatedAt: new Date() },
-		{ id: "wf3", name: "Customer Support Automation", updatedAt: new Date() },
-	];
-
-	const recentWorkflows = [
-		{ id: "rwf1", name: "Recent Workflow 1", updatedAt: new Date() },
-		{ id: "rwf2", name: "Recent Workflow 2", updatedAt: new Date() },
-	];
+	// Featured items are not yet implemented; show empty arrays
+	const featuredApps: { title: string; appsCount: number }[] = [];
+	const featuredWorkflows: { id: string; name: string; updatedAt: Date }[] = [];
 
 	const handleCreateNewAgent = async () => {
 		if (isCreatingWorkspace) return;
@@ -170,7 +157,7 @@ export function LobbyClient({ username }: LobbyClientProps) {
 										onClick={() => setActiveTab(tabKey as "apps" | "workflow")}
 										className={`flex-1 text-[16px] font-sans font-medium transition-colors px-2 py-2 relative rounded-md ${
 											isActive
-												? "text-primary-100 [text-shadow:0px_0px_20px_#0087f6] after:content-[''] after:absolute after:left-0 after:right-0 after:bottom-0 after:h-[2px] after:bg-primary-100"
+												? "text-primary-100 [text-shadow:0px_0px_20px_var(--color-primary-100)] after:content-[''] after:absolute after:left-0 after:right-0 after:bottom-0 after:h-[2px] after:bg-primary-100"
 												: "text-tabs-inactive-text hover:text-inverse hover:after:content-[''] hover:after:absolute hover:after:left-0 hover:after:right-0 hover:after:bottom-0 hover:after:h-[2px] hover:after:bg-primary-100"
 										}`}
 									>
@@ -203,6 +190,19 @@ export function LobbyClient({ username }: LobbyClientProps) {
 								<AppCard key={item.title} title={item.title} index={index} />
 							))}
 						</div>
+
+						{/* Empty state */}
+						{!hasRecentApps && featuredApps.length === 0 && (
+							<div className="flex flex-col items-center justify-center py-16 text-center">
+								<div className="w-14 h-14 rounded-2xl bg-primary-100/10 flex items-center justify-center mb-4">
+									<Blocks className="w-7 h-7 text-primary-100/60" />
+								</div>
+								<h3 className="text-lg font-medium text-inverse mb-2">No apps yet</h3>
+								<p className="text-sm text-muted-foreground max-w-sm">
+									Create your first agent to get started. Apps you build will appear here.
+								</p>
+							</div>
+						)}
 					</>
 				)}
 
@@ -236,6 +236,19 @@ export function LobbyClient({ username }: LobbyClientProps) {
 								);
 							})}
 						</div>
+
+						{/* Empty state */}
+						{!hasRecentWorkflows && featuredWorkflows.length === 0 && (
+							<div className="flex flex-col items-center justify-center py-16 text-center">
+								<div className="w-14 h-14 rounded-2xl bg-primary-100/10 flex items-center justify-center mb-4">
+									<SparklesIcon className="w-7 h-7 text-primary-100/60" />
+								</div>
+								<h3 className="text-lg font-medium text-inverse mb-2">No workflows yet</h3>
+								<p className="text-sm text-muted-foreground max-w-sm">
+									Create a workflow to automate tasks. Your workflows will appear here.
+								</p>
+							</div>
+						)}
 					</>
 				)}
 			</section>

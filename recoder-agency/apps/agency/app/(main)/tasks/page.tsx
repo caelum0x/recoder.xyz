@@ -202,10 +202,10 @@ export default async function TaskListPage({
 						<div className="mb-4 flex items-center justify-center">
 							<div className="relative drop-shadow-[0_5px_5px_rgba(0,0,255,0.4)]">
 								<ClipboardList
-									className="relative z-10 h-9 w-9 text-[#B8E8F4]"
+									className="relative z-10 h-9 w-9 text-sky-200"
 									strokeWidth={0.8}
 								/>
-								<div className="absolute inset-0 rounded-full bg-[#0087F6] opacity-30 blur-[10px]" />
+								<div className="absolute inset-0 rounded-full bg-blue-500 opacity-30 blur-[10px]" />
 							</div>
 						</div>
 						<h2 className="mb-2 text-lg font-medium text-link-muted">
@@ -231,14 +231,6 @@ export default async function TaskListPage({
 							<p className="text-[12px] font-geist font-semibold text-text/60">
 								Status
 							</p>
-							{/* TODO: Implement Input column once inputSummary is fetched from task data */}
-							{/* <p className="hidden md:block text-[12px] font-geist font-semibold text-text/60">
-								Input
-							</p> */}
-							{/* TODO: Implement Model column once LLM model info is available from task data */}
-							{/* <p className="hidden md:block text-[12px] font-geist font-semibold text-text/60">
-								Model
-							</p> */}
 							<p className="hidden md:block text-[12px] font-geist font-semibold text-text/60">
 								Origin
 							</p>
@@ -249,10 +241,6 @@ export default async function TaskListPage({
 								task.origin.type === "app"
 									? task.origin.appName
 									: task.origin.repoName;
-							// TODO: Implement once inputSummary is fetched from task data
-							// const inputLabel = task.inputSummary ?? "—";
-							// TODO: Implement once LLM model info is available from task data
-							// const modelLabel = "—";
 
 							return (
 								<div
@@ -275,20 +263,6 @@ export default async function TaskListPage({
 									<div className="flex items-center justify-start">
 										{getStatusBadge(task.status)}
 									</div>
-
-									{/* TODO: Implement Input column once inputSummary is fetched from task data */}
-									{/* <div className="hidden md:flex min-w-0">
-										<span className="text-sm text-white-700 truncate">
-											{inputLabel}
-										</span>
-									</div> */}
-
-									{/* TODO: Implement Model column once LLM model info is available from task data */}
-									{/* <div className="hidden md:flex min-w-0">
-										<span className="text-sm text-white-700 truncate">
-											{modelLabel}
-										</span>
-									</div> */}
 
 									<div className="hidden md:flex min-w-0">
 										<span className="text-sm text-white-700 truncate">
