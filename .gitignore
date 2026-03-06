@@ -82,6 +82,7 @@ known_hosts
 .aitimemachine/
 *.aitimemachine*
 *conversation*
+!backend/supabase/migrations/20260306001500_ensure_conversation_analytics_queue.sql
 *scan-cache*
 
 # Database credentials and URIs (CRITICAL - NEVER COMMIT)
@@ -375,3 +376,6 @@ check-errors.sh
 **/.xcode.env
 **/__pycache__/
 *.pyc
+
+# Dolt database files (added by bd init)
+.dolt/
