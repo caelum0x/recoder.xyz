@@ -3,7 +3,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev -p 3004",
-    "build": "POLAR_ACCESS_TOKEN=${POLAR_ACCESS_TOKEN:-build-time-placeholder} POLAR_WEBHOOK_SECRET=${POLAR_WEBHOOK_SECRET:-build-time-placeholder} POLAR_PRODUCT_PRO_ID=${POLAR_PRODUCT_PRO_ID:-build-time-placeholder} POLAR_PRODUCT_ENTERPRISE_ID=${POLAR_PRODUCT_ENTERPRISE_ID:-build-time-placeholder} next build",
+    "build": "POLAR_ACCESS_TOKEN=${POLAR_ACCESS_TOKEN:-build-time-placeholder} POLAR_WEBHOOK_SECRET=${POLAR_WEBHOOK_SECRET:-build-time-placeholder} POLAR_PRODUCT_PRO_ID=${POLAR_PRODUCT_PRO_ID:-build-time-placeholder} POLAR_PRODUCT_ENTERPRISE_ID=${POLAR_PRODUCT_ENTERPRISE_ID:-build-time-placeholder} RESEND_FROM=${RESEND_FROM:-noreply@localhost.test} RESEND_TOKEN=${RESEND_TOKEN:-re_build_placeholder} next build",
     "analyze": "ANALYZE=true pnpm build",
     "worker": "tsx worker.ts",
     "test": "pnpm run test:a2a && pnpm run test:gateway && pnpm run test:dispatch && pnpm run test:analytics && pnpm run test:agent-card",
