@@ -3,7 +3,7 @@ import { z } from "zod/v3";
 
 export const keys = () =>
   createEnv({
-    skipValidation: !!process.env.DOCKER,
+    skipValidation: !!process.env.DOCKER || !!process.env.SKIP_ENV_VALIDATION,
     server: {
       RESEND_FROM: z.string().min(1).email(),
       RESEND_TOKEN: z.string().min(1).startsWith("re_"),

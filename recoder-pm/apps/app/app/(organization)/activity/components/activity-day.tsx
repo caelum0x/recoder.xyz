@@ -88,7 +88,7 @@ export const ActivityDay = ({ data, members }: ActivityDayProperties) => {
         </span>
       ),
       createdAt: item.createdAt,
-      userImage: item.feedbackUser?.imageUrl,
+      userImage: item.feedbackUser?.imageUrl ?? undefined,
       userName: item.feedbackUser?.name,
       userIdentifier: item.feedbackUser?.feedbackOrganization?.name,
       icon: getIconForSource(item.source) ?? MessageCircleIcon,
@@ -107,7 +107,7 @@ export const ActivityDay = ({ data, members }: ActivityDayProperties) => {
         </span>
       ),
       createdAt: item.createdAt,
-      userImage: getMemberById(item.creatorId)?.user_metadata?.image_url,
+      userImage: getMemberById(item.creatorId)?.user_metadata?.image_url ?? undefined,
       userName: getMemberName(item.creatorId),
       userIdentifier: getMemberById(item.creatorId)?.email,
       icon: CompassIcon,
@@ -130,7 +130,7 @@ export const ActivityDay = ({ data, members }: ActivityDayProperties) => {
         </span>
       ),
       createdAt: item.createdAt,
-      userImage: getMemberById(item.creatorId)?.user_metadata?.image_url,
+      userImage: getMemberById(item.creatorId)?.user_metadata?.image_url ?? undefined,
       userName: getMemberName(item.creatorId),
       userIdentifier: getMemberById(item.creatorId)?.email,
       icon: UserPlusIcon,
@@ -157,7 +157,7 @@ export const ActivityDay = ({ data, members }: ActivityDayProperties) => {
         </span>
       ),
       createdAt: item.createdAt,
-      userImage: getMemberById(item.creatorId)?.user_metadata?.image_url,
+      userImage: getMemberById(item.creatorId)?.user_metadata?.image_url ?? undefined,
       userName: getMemberName(item.creatorId),
       userIdentifier: getMemberById(item.creatorId)?.email,
       icon: FilePenIcon,
@@ -184,7 +184,7 @@ export const ActivityDay = ({ data, members }: ActivityDayProperties) => {
         </span>
       ),
       createdAt: item.createdAt,
-      userImage: getMemberById(item.creatorId)?.user_metadata?.image_url,
+      userImage: getMemberById(item.creatorId)?.user_metadata?.image_url ?? undefined,
       userName: getMemberName(item.creatorId),
       userIdentifier: getMemberById(item.creatorId)?.email,
       icon: FrameIcon,
@@ -208,7 +208,7 @@ export const ActivityDay = ({ data, members }: ActivityDayProperties) => {
         </span>
       ),
       createdAt: item.createdAt,
-      userImage: getMemberById(item.creatorId)?.user_metadata?.image_url,
+      userImage: getMemberById(item.creatorId)?.user_metadata?.image_url ?? undefined,
       userName: getMemberName(item.creatorId),
       userIdentifier: getMemberById(item.creatorId)?.email,
       icon: LinkIcon,
@@ -227,7 +227,7 @@ export const ActivityDay = ({ data, members }: ActivityDayProperties) => {
         </span>
       ),
       createdAt: item.createdAt,
-      userImage: getMemberById(item.creatorId)?.user_metadata?.image_url,
+      userImage: getMemberById(item.creatorId)?.user_metadata?.image_url ?? undefined,
       userName: getMemberName(item.creatorId),
       userIdentifier: getMemberById(item.creatorId)?.email,
       icon: BoxIcon,
@@ -246,7 +246,7 @@ export const ActivityDay = ({ data, members }: ActivityDayProperties) => {
         </span>
       ),
       createdAt: item.createdAt,
-      userImage: getMemberById(item.creatorId)?.user_metadata?.image_url,
+      userImage: getMemberById(item.creatorId)?.user_metadata?.image_url ?? undefined,
       userName: getMemberName(item.creatorId),
       userIdentifier: getMemberById(item.creatorId)?.email,
       icon: GroupIcon,
@@ -265,7 +265,7 @@ export const ActivityDay = ({ data, members }: ActivityDayProperties) => {
         </span>
       ),
       createdAt: item.createdAt,
-      userImage: getMemberById(item.creatorId)?.user_metadata?.image_url,
+      userImage: getMemberById(item.creatorId)?.user_metadata?.image_url ?? undefined,
       userName: getMemberName(item.creatorId),
       userIdentifier: getMemberById(item.creatorId)?.email,
       icon: getIconForSource(item.source) ?? BlocksIcon,
@@ -284,7 +284,7 @@ export const ActivityDay = ({ data, members }: ActivityDayProperties) => {
         </span>
       ),
       createdAt: item.createdAt,
-      userImage: getMemberById(item.creatorId)?.user_metadata?.image_url,
+      userImage: getMemberById(item.creatorId)?.user_metadata?.image_url ?? undefined,
       userName: getMemberName(item.creatorId),
       userIdentifier: getMemberById(item.creatorId)?.email,
       icon: ClockIcon,
@@ -298,7 +298,7 @@ export const ActivityDay = ({ data, members }: ActivityDayProperties) => {
         </span>
       ),
       createdAt: item.createdAt,
-      userImage: getMemberById(item.creatorId)?.user_metadata?.image_url,
+      userImage: getMemberById(item.creatorId)?.user_metadata?.image_url ?? undefined,
       userName: getMemberName(item.creatorId),
       userIdentifier: getMemberById(item.creatorId)?.email,
       icon: CodeIcon,
@@ -341,7 +341,7 @@ export const ActivityDay = ({ data, members }: ActivityDayProperties) => {
       ),
       createdAt: item.createdAt,
       userImage: item.creatorId
-        ? getMemberById(item.creatorId)?.user_metadata?.image_url
+        ? (getMemberById(item.creatorId)?.user_metadata?.image_url ?? undefined)
         : undefined,
       userName: item.creatorId ? getMemberName(item.creatorId) : undefined,
       userIdentifier: item.creatorId
@@ -363,7 +363,7 @@ export const ActivityDay = ({ data, members }: ActivityDayProperties) => {
         </span>
       ),
       createdAt: item.createdAt,
-      userImage: getMemberById(item.creatorId)?.user_metadata?.image_url,
+      userImage: getMemberById(item.creatorId)?.user_metadata?.image_url ?? undefined,
       userName: getMemberName(item.creatorId),
       userIdentifier: getMemberById(item.creatorId)?.email,
       icon: BlocksIcon,
@@ -379,7 +379,7 @@ export const ActivityDay = ({ data, members }: ActivityDayProperties) => {
         </span>
       ),
       createdAt: item.createdAt,
-      userImage: getMemberById(item.creatorId)?.user_metadata?.image_url,
+      userImage: getMemberById(item.creatorId)?.user_metadata?.image_url ?? undefined,
       userName: getMemberName(item.creatorId),
       userIdentifier: getMemberById(item.creatorId)?.email,
       icon: BlocksIcon,
@@ -409,7 +409,7 @@ export const ActivityDay = ({ data, members }: ActivityDayProperties) => {
       ),
       createdAt: item.createdAt,
       userImage: item.creatorId
-        ? getMemberById(item.creatorId)?.user_metadata?.image_url
+        ? (getMemberById(item.creatorId)?.user_metadata?.image_url ?? undefined)
         : undefined,
       userName: item.creatorId ? getMemberName(item.creatorId) : undefined,
       userIdentifier: item.creatorId

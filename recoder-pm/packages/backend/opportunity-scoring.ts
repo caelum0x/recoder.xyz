@@ -202,7 +202,7 @@ export const runOpportunityScoring = async () => {
         select: { id: true },
       });
     } catch (error) {
-      log.error("Opportunity scoring failed", error);
+      log.error("Opportunity scoring failed", error as Record<string, unknown>);
     }
   }
 };

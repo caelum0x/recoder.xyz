@@ -101,7 +101,7 @@ export const generateProposals = async () => {
         });
       }
     } catch (error) {
-      log.error("Proposal generation failed", error);
+      log.error("Proposal generation failed", error as Record<string, unknown>);
     }
   }
 };

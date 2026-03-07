@@ -293,7 +293,7 @@ export const AiProviderForm = ({
         data={providers}
         label="Provider"
         onChange={(value) => {
-          setProvider(value);
+          setProvider(value as AiProvider);
           setModel("");
           setApiKey("");
           setModelQuery("");

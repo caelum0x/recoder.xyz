@@ -177,7 +177,7 @@ export const detectContradictions = async () => {
         });
       }
     } catch (error) {
-      log.error("Contradiction detection failed", error);
+      log.error("Contradiction detection failed", error as Record<string, unknown>);
     }
   }
 };

@@ -1,4 +1,5 @@
 import { currentOrganizationId } from "@repo/backend/auth/utils";
+import type { ai_job_status, ai_job_type } from "@repo/backend/prisma/client";
 import { createMetadata } from "@repo/seo/metadata";
 import type { Metadata } from "next";
 import Link from "next/link";
@@ -56,11 +57,11 @@ const AiJobsSettingsPage = async ({
 
   const validStatus =
     statusFilter && (statusOptions as readonly string[]).includes(statusFilter)
-      ? statusFilter
+      ? (statusFilter as ai_job_status)
       : undefined;
   const validType =
     typeFilter && (typeOptions as readonly string[]).includes(typeFilter)
-      ? typeFilter
+      ? (typeFilter as ai_job_type)
       : undefined;
 
   const where = {
@@ -73,19 +74,19 @@ const AiJobsSettingsPage = async ({
             {
               id: {
                 contains: searchQuery,
-                mode: "insensitive",
+                mode: "insensitive" as const,
               },
             },
             {
               entityId: {
                 contains: searchQuery,
-                mode: "insensitive",
+                mode: "insensitive" as const,
               },
             },
             {
               error: {
                 contains: searchQuery,
-                mode: "insensitive",
+                mode: "insensitive" as const,
               },
             },
           ],

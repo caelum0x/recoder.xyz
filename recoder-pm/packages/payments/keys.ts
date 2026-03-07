@@ -3,12 +3,12 @@ import { z } from "zod/v3";
 
 export const keys = () =>
   createEnv({
-    skipValidation: !!process.env.DOCKER,
+    skipValidation: !!process.env.DOCKER || !!process.env.SKIP_ENV_VALIDATION,
     server: {
-      POLAR_ACCESS_TOKEN: z.string().min(1),
-      POLAR_WEBHOOK_SECRET: z.string().min(1),
-      POLAR_PRODUCT_PRO_ID: z.string().min(1),
-      POLAR_PRODUCT_ENTERPRISE_ID: z.string().min(1),
+      POLAR_ACCESS_TOKEN: z.string().min(1).optional(),
+      POLAR_WEBHOOK_SECRET: z.string().min(1).optional(),
+      POLAR_PRODUCT_PRO_ID: z.string().min(1).optional(),
+      POLAR_PRODUCT_ENTERPRISE_ID: z.string().min(1).optional(),
       POLAR_SERVER: z.enum(["sandbox", "production"]).optional(),
     },
     runtimeEnv: {

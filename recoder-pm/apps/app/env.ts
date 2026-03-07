@@ -8,9 +8,9 @@ import { z } from "zod/v3";
 
 export const env = createEnv({
   extends: [core(), observability(), email(), github(), payments()],
-  skipValidation: !!process.env.DOCKER,
+  skipValidation: !!process.env.DOCKER || !!process.env.SKIP_ENV_VALIDATION,
   client: {
-    NEXT_PUBLIC_LOGO_DEV_API_KEY: z.string().min(1),
+    NEXT_PUBLIC_LOGO_DEV_API_KEY: z.string().min(1).optional(),
   },
   runtimeEnv: {
     NEXT_PUBLIC_LOGO_DEV_API_KEY: process.env.NEXT_PUBLIC_LOGO_DEV_API_KEY,

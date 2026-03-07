@@ -12,7 +12,7 @@ import Image from "next/image";
 import { useState } from "react";
 import { createInitiativeLink } from "@/actions/initiative-link/create";
 import DropboxIcon from "@/public/dropbox.svg";
-import EververseIcon from "@/public/eververse.svg";
+import RecoderPmIcon from "@/public/recoder-pm.svg";
 import FigmaIcon from "@/public/figma.svg";
 import GitHubIcon from "@/public/github.svg";
 import GitLabIcon from "@/public/gitlab.svg";
@@ -39,7 +39,7 @@ export const externalLinkProperties: {
   {
     value: "recoder-pm",
     regex: /recoder\.xyz/u,
-    icon: EververseIcon as StaticImageData,
+    icon: RecoderPmIcon as StaticImageData,
   },
   {
     value: "dropbox",

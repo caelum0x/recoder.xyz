@@ -1,3 +1,4 @@
+/// <reference path="./adm-zip.d.ts" />
 import AdmZip from "adm-zip";
 
 export type AnalyticsDateRange = {
@@ -107,9 +108,9 @@ export const fetchMixpanelEvents = async (
           : undefined,
         properties,
         raw: record,
-      } satisfies AnalyticsEventPayload;
+      };
     })
-    .filter((event): event is AnalyticsEventPayload => Boolean(event));
+    .filter((event): event is NonNullable<typeof event> => event !== null);
 };
 
 export const fetchAmplitudeEvents = async (
@@ -179,9 +180,9 @@ export const fetchAmplitudeEvents = async (
           | Record<string, unknown>
           | undefined,
         raw: record,
-      } satisfies AnalyticsEventPayload;
+      };
     })
-    .filter((event): event is AnalyticsEventPayload => Boolean(event));
+    .filter((event): event is NonNullable<typeof event> => event !== null);
 };
 
 export const fetchPosthogEvents = async (

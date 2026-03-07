@@ -11,6 +11,8 @@ let nextConfig: NextConfig = withBackend(
       ? { output: "standalone", typescript: { ignoreBuildErrors: true } }
       : {}),
 
+    transpilePackages: ["@sentry/nextjs", "@recoder/auth"],
+
     // biome-ignore lint/suspicious/useAwait: Next.js expects async redirects.
     async redirects() {
       return [

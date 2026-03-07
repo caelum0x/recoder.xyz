@@ -3,7 +3,7 @@ import { z } from "zod/v3";
 
 export const keys = () =>
   createEnv({
-    skipValidation: !!process.env.DOCKER,
+    skipValidation: !!process.env.DOCKER || !!process.env.SKIP_ENV_VALIDATION,
     server: {
       BETTERSTACK_API_KEY: z.string().min(1).optional(),
       BETTERSTACK_URL: z.string().min(1).url().optional(),

@@ -26,7 +26,7 @@ export const keys = () =>
     // WARNING: skipValidation disables ALL T3 schema checks.
     // Critical vars (BETTER_AUTH_SECRET, AUTH_DATABASE_URL, DATABASE_URL)
     // are guarded by the runtime check above even when this is true.
-    skipValidation: !!process.env.DOCKER,
+    skipValidation: !!process.env.DOCKER || !!process.env.SKIP_ENV_VALIDATION,
     server: {
       BETTER_AUTH_SECRET: z.string().min(1),
       BETTER_AUTH_URL: z.string().url().min(1),

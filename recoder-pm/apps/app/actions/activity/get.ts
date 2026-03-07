@@ -412,13 +412,13 @@ export const getActivity = async (
       members: members
         .filter(
           (member) =>
-            new Date(member.created_at) >= startOfDay &&
-            new Date(member.created_at) <= endOfDay
+            new Date(member.createdAt) >= startOfDay &&
+            new Date(member.createdAt) <= endOfDay
         )
         .map((member) => ({
           id: member.id,
-          createdAt: new Date(member.created_at),
-          userImage: member.user_metadata?.image,
+          createdAt: new Date(member.createdAt),
+          userImage: member.user_metadata?.image_url ?? member.user_metadata?.imageUrl ?? undefined,
           userName: getUserName(member),
         })),
     };

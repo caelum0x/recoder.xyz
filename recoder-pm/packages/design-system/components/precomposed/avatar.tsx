@@ -3,7 +3,7 @@ import * as AvatarComponent from "../ui/avatar";
 
 type AvatarProps = {
   size?: number;
-  src?: string;
+  src?: string | null;
   fallback?: string;
 };
 
@@ -19,7 +19,7 @@ export const Avatar = ({ size = 24, src, fallback }: AvatarProps) => (
       alt=""
       className="aspect-square h-full w-full object-cover"
       height={size}
-      src={src}
+      src={src ?? undefined}
       width={size}
     />
     <AvatarComponent.AvatarFallback

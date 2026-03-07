@@ -120,7 +120,7 @@ const Welcome = async () => {
     complete: portalCount > 0,
     children: (
       <Button asChild>
-        <Link href="/portal">Create a portal</Link>
+        <Link href="/settings/portal">Create a portal</Link>
       </Button>
     ),
     disabled: user.user_metadata.organization_role !== RecoderPmRole.Admin,
@@ -252,7 +252,7 @@ const Welcome = async () => {
     complete: widgetCount > 0,
     children: (
       <Button asChild>
-        <Link href="/widget">Create a widget</Link>
+        <Link href="/settings/widget">Create a widget</Link>
       </Button>
     ),
     disabled: user.user_metadata.organization_role !== RecoderPmRole.Admin,
@@ -265,7 +265,7 @@ const Welcome = async () => {
     complete: widgetItemCount > 0,
     children: (
       <Button asChild>
-        <Link href="/widget">Add custom links</Link>
+        <Link href="/settings/widget">Add custom links</Link>
       </Button>
     ),
     disabled: user.user_metadata.organization_role !== RecoderPmRole.Admin,

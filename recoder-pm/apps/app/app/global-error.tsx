@@ -34,7 +34,7 @@ const GlobalError = ({ error, reset }: GlobalErrorProperties) => {
             <div className="mt-4 flex items-center gap-2">
               <Button onClick={() => reset()}>Try again</Button>
               <Button asChild variant="link">
-                <Link href="/">Return Home</Link>
+                <Link href="/app">Return to App</Link>
               </Button>
             </div>
           </EmptyState>

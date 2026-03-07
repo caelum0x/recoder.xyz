@@ -14,6 +14,7 @@ type ErrorProperties = {
 
 const ErrorPage = ({ error, reset }: ErrorProperties) => {
   const [message, setMessage] = useState<string>("");
+  const isDevelopment = process.env.NODE_ENV === "development";
 
   useEffect(() => {
     const newMessage = parseError(error);
@@ -32,14 +33,22 @@ const ErrorPage = ({ error, reset }: ErrorProperties) => {
           <div className="mt-4 flex items-center gap-2">
             <Button onClick={() => reset()}>Try again</Button>
             <Button asChild variant="link">
-              <Link href="/">Return Home</Link>
+              <Link href="/app">Return to App</Link>
             </Button>
           </div>
         </EmptyState>
       </div>
-      <div className="h-full w-full max-w-none">
-        <pre className="h-full w-full rounded-none border-none">{message}</pre>
-      </div>
+      {isDevelopment ? (
+        <div className="h-full w-full max-w-none">
+          <pre className="h-full w-full rounded-none border-none">{message}</pre>
+        </div>
+      ) : (
+        <div className="hidden sm:flex h-full w-full items-center justify-center border-l border-border/40">
+          <p className="max-w-sm text-sm text-muted-foreground px-8 text-center">
+            Technical error details are hidden in production. Check server logs for full diagnostics.
+          </p>
+        </div>
+      )}
     </main>
   );
 };
