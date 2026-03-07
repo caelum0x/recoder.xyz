@@ -19,7 +19,7 @@ Code-level mock cleanup, security hardening, and quality sweep are complete. Rem
 - [x] **recoder-web alignment** — @font-face Roobert, font-family updated in variables.scss
 - [x] **PM AppSwitcher** — Added to authenticated app sidebar
 - [x] **PM portal error page** — Restyled with branded layout
-- [x] **Build verification** — app/, agents, web build clean; PM/agency pre-existing env/type errors confirmed unrelated
+- [x] **Build verification** — app/, agents, web build clean; PM TypeScript now compiles clean; agency build handled by separate agent
 
 ## Recently Completed — Security & Code Quality Sweep (2026-03-06)
 
@@ -103,6 +103,25 @@ Code-level mock cleanup, security hardening, and quality sweep are complete. Rem
     - `extensions/msteams/src/graph-upload.test.ts`
 - `pnpm --dir openclaw check` now passes end-to-end (`tsgo` + `oxlint --type-aware` + `oxfmt --check`).
 
+## Recently Completed — PM TypeScript Build Fix (2026-03-07)
+
+- [x] **null/undefined mismatches** — Fixed imageUrl, avatar src, Dropzone props across ~20 files
+- [x] **Prisma strict types** — InputJsonValue casts, Prisma.DbNull, Exact<> update data casts
+- [x] **Prisma enum casts** — String params cast to analytics_provider, session_recording_source, ai_job_status, etc.
+- [x] **React 19 JSX types** — ReactElement → ReactNode for children props
+- [x] **Auth type migration** — email_confirmed_at → emailVerified, created_at → createdAt
+- [x] **log.error unknown casts** — 7 backend files fixed
+- [x] **adm-zip type declaration** — Added missing module types
+- [x] **RecoderPmRole enum** — Used enum values instead of string literals
+- [x] **Env validation** — Optional Polar/GitHub App/Logo.dev keys, SKIP_ENV_VALIDATION support, safe PostHog init
+- [x] **tsc --noEmit** — Passes with zero errors
+- [ ] **Full next build** — Blocked by Neon free tier compute quota; TypeScript layer is clean
+
+## Agency Build (2026-03-07) — Separate Agent
+
+- Being handled by a separate agent session
+- Known issues: @giselles-ai/* package rename drift, Drizzle schema types
+
 ## Priority Order
 
 ### 0. Next Sprint Plan — Design + Runtime Reliability (Immediate)
@@ -128,12 +147,25 @@ Code-level mock cleanup, security hardening, and quality sweep are complete. Rem
   - Ensure no broken links or dead-end pages from main nav routes
   - Loading.tsx added to all key interactive route groups: settings/*, dashboard/*, billing/*, agency settings/tasks/playground, agents checkout
   - Last `alert()` call replaced with inline error feedback (usage export)
-- [ ] **P1: Critical flow smoke matrix (manual + scripted)**
-  - Sign-up/sign-in/sign-out, SSO propagation, checkout entry, BYOK settings, PM `/app` auth gate, agency dashboard landing
-  - Record exact pass/fail with timestamp and blocker source (config, runtime, code, external dependency)
-- [ ] **P2: Design improvements after reliability baseline is green**
-  - Apply intentional visual polish per app surface (not generic/template look)
-  - Keep design system alignment and avoid introducing per-app style drift
+- [x] **P1: Critical flow smoke matrix (manual + scripted)** — VERIFIED 2026-03-06
+  - `verify-phase14-runtime.sh`: 12/12 PASS (social auth, CSP, health, forgot-password, docker, web)
+  - `production-external-closeout.sh`: 2 PASS, 0 FAIL, 5 SKIP (secrets not set)
+  - Auth pages: signin 200, signup 200
+  - Protected routes: dashboard/settings/projects/billing all 307 → signin with redirect param
+  - BYOK: settings/ai-providers 307 → signin with redirect (auth-gated, correct)
+  - Cross-app health: recoder.xyz 200, agents 200, api 200, docker 200, web 200, pm 200 (6/6)
+  - SSO gates: agency 307→login, agency/dashboard 307→login, pm/app 307→centralized signin, web 302→signin
+  - SEO: sitemap.xml 200 on recoder.xyz, agents, pm; robots.txt 200 on recoder.xyz
+  - Checkout entry: billing/upgrade 307→signin (auth-gated, correct)
+  - Blocker: billing providers unconfigured (no real keys), GSC manual, ADMIN_SECRET needed for admin tests
+- [x] **P2: Design improvements after reliability baseline is green** — COMPLETED 2026-03-07
+  - **P0 fixes**: Onboarding page converted from light to dark theme (bg-white → bg-black, all gray → zinc, purple-blue CTA → orange-purple brand gradient); Checkout page shell converted to dark theme (bg-white → bg-zinc-950)
+  - **P1 CTA unification**: Standardized all auth page primary buttons to `from-orange-500 to-purple-600` gradient (signin, device, cli-callback, PlanOverview)
+  - **P1 agency join flow**: Fixed inconsistent team name color — indigo (#6B8FF0) replaced with `text-orange-500` on join and client-portal pages; signup/login hex also normalized
+  - **P2 app/ hex cleanup**: Replaced `bg-[#111]/#222/#333/#0d0d0d` with `bg-zinc-900/800/700/950` across plan, platform, agents, blog pages
+  - **P2 agency hex cleanup**: Replaced 15+ hardcoded hex colors in vector-stores UI, tooltip, github-integration, task-input-string with semantic Tailwind classes
+  - **P2 agents banner cleanup**: Replaced `#2a2a2a/#161618/#1a1a1a/#232324/#e8e4df` with `zinc-800/900/200` across 3 banner components
+  - **P2 web ErrorMessage**: Replaced `bg-[#2563eb]` with `bg-blue-600`
 
 ### 1. Fix Neon DB Quota — RESOLVED (2026-03-06)
 - [x] Neon quota bypassed — production now uses local temp Postgres (`recoder-temp-postgres` on port 55432)
@@ -171,14 +203,15 @@ Code-level mock cleanup, security hardening, and quality sweep are complete. Rem
 - [x] `recoder.xyz` → `pm.recoder.xyz/app` — authenticated redirect to `pm.recoder.xyz/` (307)
 - [x] Sign-out propagation previously verified across all surfaces
 
-### 7. Monitor Server Memory & Disk — ACTIVE (2026-03-06)
-- **Memory**: 4GB/16GB used — healthy
-- **Disk**: 99% full (1.8GB free of 150GB) — critical
-  - `du` accounts for ~51GB but `df` shows 142GB used — likely ext4 metadata/corruption
-  - Cleaned: `.next/cache` (569MB), unused dirs (frontend/mobile/apps/core/auth: 414MB), apt cache (128MB)
-  - Large consumers: Docker overlay2 (29GB), node_modules (5.5G root + 2.5G PM + 1.8G agency), backend .venv (1.3G)
-  - [ ] Investigate `du` vs `df` 91GB discrepancy — may need `e2fsck` during maintenance
-  - [ ] Consider Hetzner disk resize or adding a volume
+### 7. Monitor Server Memory & Disk — RESOLVED (2026-03-07)
+- **Memory**: 5.4GB/16GB used — healthy
+- **Disk**: 24% used (111GB free of 150GB) — healthy
+  - Resolved from 99% → 24% via multi-stage Docker builds, dangling image prune (3.7GB), build cache prune, unused dir cleanup
+  - `du`/`df` discrepancy was stale superblock counter; corrected after Docker prune
+  - [x] Multi-stage Docker builds: docker-backend (4.81GB → 3.1GB), recoder-web rebuilt
+  - [x] recoder-web: Fixed 5 stale `@giselles-ai/*` → `@recoder/*` imports blocking Vite build
+  - [x] recoder-web: Added missing `INTERNAL_SERVICE_KEY` to .env (required for production startup)
+  - [x] Container redeployed and healthy (`web.recoder.xyz/api/health` → 200)
   - `recoder-studio` confirmed not running (no PM2 process, no directory on server)
 
 ## Follow-up Pass (2026-03-06) - Runtime Health + recoder-web Routing
@@ -650,6 +683,6 @@ Code-level mock cleanup, security hardening, and quality sweep are complete. Rem
 - [x] Workspace generation timeout extracted to env-configurable constant
 - [x] Vector-stores team installation FIXME documented as known limitation
 - [x] DB schema TODOs cleaned up (stale email null comment removed, graphUrl/workspaceId reworded)
-- [ ] Lobby recent apps/workflows wired to DB (in progress)
-- [ ] Favorites toggle API for showcase (in progress)
-- [ ] Task archive functionality (in progress)
+- [x] Lobby recent apps/workflows wired to DB (server actions + props)
+- [x] Favorites toggle API for showcase (optimistic update + rollback)
+- [x] Task archive functionality (client-side archived set + filter integration)
