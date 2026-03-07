@@ -11,7 +11,7 @@
 | recoder-pm | https://pm.recoder.xyz | 200 |
 | recoder-web | https://web.recoder.xyz | 302 (intentional auth gate), `/api/health` 200 |
 
-Last updated: 2026-03-06
+Last updated: 2026-03-07
 
 All 9 services are live on Hetzner (77.42.23.19). Platform is in beta — BYOK-only, no platform AI keys.
 
@@ -74,15 +74,16 @@ Native releases (Desktop, Mobile) and GitHub-hosted CI are deferred indefinitely
 - [ ] Forgot password full mailbox-link click → reset flow end-user verification
 - PM workspace runtime is marketing-first; `/app` serves auth-gated redirect shim
 
-### 2. Server Memory & Disk [ACTIVE MONITORING]
+### 2. Server Memory & Disk [RESOLVED 2026-03-07]
 
-Memory: 4GB/16GB — healthy. Docker-backend capped at 2G.
+Memory: 5.4GB/16GB — healthy. Docker-backend capped at 2G.
 
-- **Disk: 99% full (1.8GB free of 150GB)** — critical
-  - `du` shows ~51GB used but `df` reports 142GB — 91GB discrepancy, possible ext4 issue
-  - Cleaned: `.next/cache`, unused dirs, apt cache (~1.1GB freed)
-  - [ ] Investigate `du`/`df` discrepancy — may need `e2fsck` during maintenance window
-  - [ ] Consider Hetzner disk resize or volume addition
+- **Disk: 24% used (111GB free of 150GB)** — healthy
+  - Resolved from 99% → 24% via: unused dir cleanup, `.next/cache` purge, multi-stage Docker builds, dangling image prune (3.7GB), build cache prune
+  - `du`/`df` discrepancy was stale superblock counter from last clean unmount; corrected after prune
+  - Multi-stage Docker builds deployed: docker-backend (4.81GB → 3.1GB), recoder-web (rebuilt with fixed imports)
+  - recoder-web Docker image rebuilt after fixing 5 stale `@giselles-ai/*` → `@recoder/*` imports
+  - Added missing `INTERNAL_SERVICE_KEY` to recoder-web .env (required for production startup)
 
 ### 3. Email Delivery [VERIFIED 2026-03-06]
 
@@ -140,7 +141,7 @@ Future items:
 - **Agency data**: Lobby wired to real DB queries (recent apps/workflows via Drizzle ORM), showcase playlists/favorites persisted to localStorage, tasks page cleaned up
 - **PM AppSwitcher**: Added to authenticated sidebar; portal global-error.tsx restyled with branded layout
 - **Studio**: Abandoned — no longer active
-- **Build verification**: app/, agents, web all build clean; PM and agency have pre-existing env/type errors unrelated to design changes
+- **Build verification**: app/, agents, web all build clean; PM TypeScript now compiles clean (tsc --noEmit passes); agency build handled separately
 
 ## Completed Work (Phase 14 Summary)
 
@@ -211,6 +212,27 @@ All of these are done and do not need further action:
   - `pnpm --dir openclaw exec tsgo` passes.
   - `pnpm --dir openclaw lint` passes after lint burn-down in workflow/cli/session commands and extension tests (copilot-proxy, discord, telegram, memory-core, msteams).
   - `pnpm --dir openclaw check` now passes end-to-end after applying `oxfmt` in `openclaw`.
+
+---
+
+## Completed Work (PM TypeScript Build Fix — 2026-03-07)
+
+- **TypeScript compilation**: All ~40 pre-existing type errors resolved; `tsc --noEmit` passes with zero errors
+- **null vs undefined**: Fixed imageUrl/avatar src mismatches across ~20 files; Avatar/AvatarTooltip components now accept `string | null`
+- **Prisma strict types**: Cast JSON fields to `InputJsonValue`, used `Prisma.DbNull` for JSON nulls, cast update data through `Prisma.*UpdateInput`
+- **Prisma enum casts**: String search params cast to proper enum types (`analytics_provider`, `session_recording_source`, `ai_job_status`, etc.)
+- **React 19 JSX**: `ReactElement` → `ReactNode` for children props, added missing `children` prop to feedback editor
+- **Auth type migration**: `email_confirmed_at` → `emailVerified`, `created_at` → `createdAt` in all references
+- **log.error unknown**: Cast catch errors to `Record<string, unknown>` in 7 backend files
+- **Type declarations**: Added `adm-zip.d.ts` for missing module types
+- **Enum types**: Used `RecoderPmRole.Member` instead of string literal `"MEMBER"`
+- **Env validation**: Made Polar, GitHub App, Logo.dev keys optional; added `SKIP_ENV_VALIDATION` support; safe PostHog server init
+- **Build blocker**: Full `next build` requires active Neon database (current free tier quota exceeded); TypeScript layer is clean
+
+## Completed Work (Agency Build — 2026-03-07, separate agent)
+
+- Status: Being handled by a separate agent session
+- Known issues: `@giselles-ai/*` package rename drift, Drizzle schema types
 
 ---
 
