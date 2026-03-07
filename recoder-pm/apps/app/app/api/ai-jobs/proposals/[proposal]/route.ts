@@ -4,8 +4,9 @@ import { database } from "@/lib/database";
 
 export const GET = async (
   _request: Request,
-  { params }: { params: { proposal: string } }
+  { params }: { params: Promise<{ proposal: string }> }
 ): Promise<Response> => {
+  const { proposal: proposalId } = await params;
   const organizationId = await currentOrganizationId();
 
   if (!organizationId) {
@@ -15,7 +16,7 @@ export const GET = async (
   const job = await database.aiJob.findFirst({
     where: {
       type: "PROPOSAL_PRD",
-      entityId: params.proposal,
+      entityId: proposalId,
     },
     orderBy: { createdAt: "desc" },
     select: {

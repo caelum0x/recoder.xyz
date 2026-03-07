@@ -1,4 +1,5 @@
 import { currentOrganizationId } from "@repo/backend/auth/utils";
+import type { support_ticket_source } from "@repo/backend/prisma/client";
 import { Link } from "@repo/design-system/components/link";
 import { StackCard } from "@repo/design-system/components/stack-card";
 import { Badge } from "@repo/design-system/components/ui/badge";
@@ -51,7 +52,7 @@ const SupportTicketsPage = async ({
 
   const source =
     typeof sourceParam === "string" && sources.includes(sourceParam)
-      ? sourceParam
+      ? (sourceParam as support_ticket_source)
       : undefined;
   const page =
     typeof pageParam === "string" && Number.isFinite(Number(pageParam))

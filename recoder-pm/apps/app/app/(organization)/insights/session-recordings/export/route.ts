@@ -1,4 +1,5 @@
 import { currentOrganizationId } from "@repo/backend/auth/utils";
+import type { session_recording_insight_type, session_recording_source } from "@repo/backend/prisma/client";
 import { database } from "@/lib/database";
 
 const types = ["ERROR", "RAGE_CLICK", "DEAD_CLICK", "LONG_TASK", "ABANDON"];
@@ -31,9 +32,9 @@ export const GET = async (request: Request): Promise<Response> => {
   const typeParam = searchParams.get("type");
   const sourceParam = searchParams.get("source");
 
-  const type = typeParam && types.includes(typeParam) ? typeParam : undefined;
+  const type = typeParam && types.includes(typeParam) ? (typeParam as session_recording_insight_type) : undefined;
   const source =
-    sourceParam && sources.includes(sourceParam) ? sourceParam : undefined;
+    sourceParam && sources.includes(sourceParam) ? (sourceParam as session_recording_source) : undefined;
 
   const insights = await database.sessionRecordingInsight.findMany({
     where: {

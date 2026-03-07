@@ -162,7 +162,7 @@ export const SessionRecordingSettings = ({
           <Select
             data={providerOptions}
             label="Provider"
-            onChange={setSelectedProvider}
+            onChange={(value) => setSelectedProvider(value as SessionRecordingProvider)}
             value={selectedProvider}
           />
           <div className="text-muted-foreground text-xs">

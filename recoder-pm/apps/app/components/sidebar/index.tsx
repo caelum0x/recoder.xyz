@@ -177,7 +177,7 @@ export const Sidebar = ({ user, organization }: SidebarProps) => {
                   <Avatar className="h-8 w-8 rounded-lg">
                     <AvatarImage
                       alt={getUserName(user)}
-                      src={user.user_metadata.image_url}
+                      src={user.user_metadata.image_url ?? ""}
                     />
                     <AvatarFallback className="rounded-lg">
                       {getUserName(user).slice(0, 2).toUpperCase()}
@@ -205,7 +205,7 @@ export const Sidebar = ({ user, organization }: SidebarProps) => {
                     <Avatar className="h-8 w-8 rounded-lg">
                       <AvatarImage
                         alt={getUserName(user)}
-                        src={user.user_metadata.image_url}
+                        src={user.user_metadata.image_url ?? ""}
                       />
                       <AvatarFallback className="rounded-lg">
                         {getUserName(user).slice(0, 2).toUpperCase()}

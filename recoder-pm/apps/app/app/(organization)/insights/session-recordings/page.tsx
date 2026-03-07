@@ -1,4 +1,5 @@
 import { currentOrganizationId } from "@repo/backend/auth/utils";
+import type { session_recording_insight_type, session_recording_source } from "@repo/backend/prisma/client";
 import { Link } from "@repo/design-system/components/link";
 import { StackCard } from "@repo/design-system/components/stack-card";
 import { Badge } from "@repo/design-system/components/ui/badge";
@@ -60,11 +61,11 @@ const SessionRecordingsInsightsPage = async ({
   const pageParam = searchParams?.page;
   const type =
     typeof typeParam === "string" && types.includes(typeParam)
-      ? typeParam
+      ? (typeParam as session_recording_insight_type)
       : undefined;
   const source =
     typeof sourceParam === "string" && sources.includes(sourceParam)
-      ? sourceParam
+      ? (sourceParam as session_recording_source)
       : undefined;
   const page =
     typeof pageParam === "string" && Number.isFinite(Number(pageParam))

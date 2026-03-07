@@ -6,6 +6,7 @@ import {
   fetchPosthogEvents,
 } from "@repo/analytics-connectors";
 import { log } from "@repo/observability/log";
+import type { Prisma } from "@repo/backend/prisma/client";
 import { decryptApiKey } from "./ai-keys";
 import { database } from "./database";
 import type { AnalyticsConnector, PrismaClient } from "./prisma/client";
@@ -39,8 +40,8 @@ const normalizeEvents = (
     userId: event.userId ?? null,
     userEmail: event.userEmail ?? null,
     sessionId: event.sessionId ?? null,
-    properties: event.properties ?? undefined,
-    raw: event.raw ?? undefined,
+    properties: (event.properties ?? undefined) as Prisma.InputJsonValue | undefined,
+    raw: (event.raw ?? undefined) as Prisma.InputJsonValue | undefined,
   }));
 
 const syncConnectorEvents = async (
@@ -152,7 +153,7 @@ export const syncAnalyticsConnector = async (connectorId: string) => {
       select: { id: true },
     });
   } catch (error) {
-    log.error("Analytics connector sync failed", error);
+    log.error("Analytics connector sync failed", error as Record<string, unknown>);
 
     await database.analyticsSyncLog.update({
       where: { id: syncLog.id },

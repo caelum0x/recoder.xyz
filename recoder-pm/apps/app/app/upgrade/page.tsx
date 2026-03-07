@@ -42,6 +42,10 @@ const Upgrade = async () => {
     redirect("/");
   }
 
+  if (!env.POLAR_PRODUCT_PRO_ID) {
+    notFound();
+  }
+
   const product = await polar.products.get({
     id: env.POLAR_PRODUCT_PRO_ID,
   });

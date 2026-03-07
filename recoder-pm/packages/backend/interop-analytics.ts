@@ -34,11 +34,13 @@ const InteropPayloadSchema = z.object({
   error: z.string().nullable(),
 });
 
-const analytics = new PostHog(process.env.NEXT_PUBLIC_POSTHOG_KEY ?? "", {
-  host: process.env.NEXT_PUBLIC_POSTHOG_HOST ?? "https://us.i.posthog.com",
-  flushAt: 1,
-  flushInterval: 0,
-});
+const analytics = process.env.NEXT_PUBLIC_POSTHOG_KEY
+  ? new PostHog(process.env.NEXT_PUBLIC_POSTHOG_KEY, {
+      host: process.env.NEXT_PUBLIC_POSTHOG_HOST ?? "https://us.i.posthog.com",
+      flushAt: 1,
+      flushInterval: 0,
+    })
+  : null;
 
 type JobContext = {
   id: string;
@@ -92,7 +94,7 @@ const safeCapture = (event: string, properties: Record<string, unknown>, distinc
     return;
   }
 
-  void analytics.capture({
+  void analytics?.capture({
     distinctId,
     event,
     properties,

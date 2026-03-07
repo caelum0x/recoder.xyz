@@ -10,7 +10,7 @@ const defaultAdminOrganizationId = "local-dev-admin-org";
 export const keys = () =>
   createEnv({
     extends: [vercel()],
-    skipValidation: !!process.env.DOCKER,
+    skipValidation: !!process.env.DOCKER || !!process.env.SKIP_ENV_VALIDATION,
     server: {
       ANALYZE: z.string().optional(),
 

@@ -1,4 +1,5 @@
 import { currentOrganizationId } from "@repo/backend/auth/utils";
+import type { analytics_provider } from "@repo/backend/prisma/client";
 import { Link } from "@repo/design-system/components/link";
 import { StackCard } from "@repo/design-system/components/stack-card";
 import { Badge } from "@repo/design-system/components/ui/badge";
@@ -52,7 +53,7 @@ const AnalyticsEventsPage = async ({
 
   const provider =
     typeof providerParam === "string" && providers.includes(providerParam)
-      ? providerParam
+      ? (providerParam as analytics_provider)
       : undefined;
   const query = typeof queryParam === "string" ? queryParam.trim() : "";
   const page =

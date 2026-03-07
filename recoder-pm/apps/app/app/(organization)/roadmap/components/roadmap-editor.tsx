@@ -233,7 +233,7 @@ export const RoadmapEditor = ({
     <>
       <div className="flex h-[calc(100vh-57px)] flex-col overflow-clip pb-[45px]">
         <Gantt.GanttProvider
-          onAddItem={editable ? setNewFeatureDate : null}
+          onAddItem={editable ? setNewFeatureDate : undefined}
           range={roadmap.range}
           zoom={roadmap.zoom}
         >
@@ -265,7 +265,7 @@ export const RoadmapEditor = ({
                           >
                             <Gantt.GanttFeatureItem
                               {...feature}
-                              onMove={editable ? handleMoveFeature : null}
+                              onMove={editable ? handleMoveFeature : undefined}
                             >
                               <FeatureItemInner
                                 feature={feature}
@@ -374,7 +374,7 @@ export const RoadmapEditor = ({
         owner={
           peekFeature
             ? members.find((member) => member.id === peekFeature.ownerId)
-            : null
+            : undefined
         }
       />
       <RoadmapAddFeature

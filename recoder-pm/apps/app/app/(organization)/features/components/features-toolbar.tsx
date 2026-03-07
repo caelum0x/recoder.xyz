@@ -121,7 +121,7 @@ export const FeaturesToolbar = ({
                     alt=""
                     className="h-5 w-5 shrink-0 rounded-full object-cover"
                     height={20}
-                    src={member.user_metadata.image_url}
+                    src={member.user_metadata.image_url ?? ""}
                     width={20}
                   />
                   <span>{item.label}</span>

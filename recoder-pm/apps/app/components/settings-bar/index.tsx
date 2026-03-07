@@ -1,8 +1,8 @@
-import type { ReactElement, ReactNode } from "react";
+import type { ReactNode } from "react";
 
 type SettingsBarItemProperties = {
   readonly title: string;
-  readonly children: ReactElement<unknown>;
+  readonly children: ReactNode;
   readonly action?: ReactNode;
 };
 

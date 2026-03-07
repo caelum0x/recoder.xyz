@@ -376,7 +376,7 @@ FeedbackFormProperties) => {
             maxFiles={1}
             onDrop={([file]) => setAudio(file)}
             onError={console.error}
-            src={audio ? [audio] : null}
+            src={audio ? [audio] : undefined}
           >
             <DropzoneEmptyState />
             <DropzoneContent />
@@ -389,7 +389,7 @@ FeedbackFormProperties) => {
             maxFiles={1}
             onDrop={([file]) => setVideo(file)}
             onError={console.error}
-            src={video ? [video] : null}
+            src={video ? [video] : undefined}
           >
             <DropzoneEmptyState />
             <DropzoneContent />

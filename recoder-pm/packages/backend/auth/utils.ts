@@ -40,7 +40,7 @@ export const getMembers = async (organizationId: string): Promise<User[]> => {
         id: profile.id,
         email: profile.email,
         emailVerified: profile.emailVerified,
-        name: profile.name,
+        name: profile.name ?? profile.email.split("@")[0],
         image: profile.imageUrl,
         createdAt: profile.createdAt,
         updatedAt: profile.updatedAt,

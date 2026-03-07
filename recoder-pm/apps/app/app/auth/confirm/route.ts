@@ -110,6 +110,7 @@ export const GET = async (request: NextRequest) => {
 
   await authDatabase.session.create({
     data: {
+      id: crypto.randomUUID(),
       userId: user.id,
       token: sessionToken,
       expiresAt,

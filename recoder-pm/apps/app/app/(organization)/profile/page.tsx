@@ -36,8 +36,8 @@ const Profile = async () => {
           <div className="col-span-2">
             <ProfileForm
               defaultEmail={user.email ?? ""}
-              defaultFirstName={user.user_metadata.first_name}
-              defaultLastName={user.user_metadata.last_name}
+              defaultFirstName={user.user_metadata.first_name ?? ""}
+              defaultLastName={user.user_metadata.last_name ?? ""}
             />
           </div>
         </div>
