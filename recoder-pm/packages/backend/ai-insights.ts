@@ -183,7 +183,7 @@ export const synthesizeAiInsights = async () => {
         });
       }
     } catch (error) {
-      log.error("AI insight synthesis failed", error);
+      log.error("AI insight synthesis failed", error as Record<string, unknown>);
     }
   }
 };

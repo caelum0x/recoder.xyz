@@ -1,6 +1,7 @@
 "use server";
 
 import { currentOrganizationId } from "@repo/backend/auth/utils";
+import { Prisma } from "@repo/backend/prisma/client";
 import { parseError } from "@repo/lib/parse-error";
 import { revalidatePath } from "next/cache";
 import { database } from "@/lib/database";
@@ -18,7 +19,7 @@ export const disconnectSessionRecordings = async () => {
       data: {
         sessionRecordingProvider: null,
         sessionRecordingEncryptedKey: null,
-        sessionRecordingConfig: null,
+        sessionRecordingConfig: Prisma.DbNull,
         sessionRecordingLastSyncedAt: null,
       },
       select: { id: true },

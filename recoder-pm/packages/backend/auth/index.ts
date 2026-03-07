@@ -14,7 +14,7 @@ export type User = {
   lastName: string | null;
   imageUrl: string | null;
   organizationId: string | null;
-  organizationRole: string;
+  organizationRole: RecoderPmRole;
   createdAt: Date;
   updatedAt: Date;
   user_metadata: {
@@ -24,7 +24,7 @@ export type User = {
     image_url: string | null;
     imageUrl: string | null;
     organization_id: string | null;
-    organization_role: string;
+    organization_role: RecoderPmRole;
   };
 };
 
@@ -57,7 +57,7 @@ export const toUser = (
   const lastName = profile?.lastName ?? null;
   const imageUrl = profile?.imageUrl ?? coreUser.image ?? null;
   const organizationId = profile?.organizationId ?? null;
-  const organizationRole = profile?.organizationRole ?? "MEMBER";
+  const organizationRole = (profile?.organizationRole ?? "MEMBER") as RecoderPmRole;
 
   return {
     id: coreUser.id,

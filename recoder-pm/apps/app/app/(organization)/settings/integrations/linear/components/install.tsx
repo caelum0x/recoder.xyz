@@ -55,7 +55,7 @@ export const InstallLinear = () => (
         <p>
           Go to the{" "}
           <a
-            href="https://linear.app/eververse/settings/account/security"
+            href="https://linear.app/settings/account/security"
             rel="noreferrer"
             target="_blank"
           >

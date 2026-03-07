@@ -7,7 +7,7 @@ import {
 } from "@repo/session-recordings";
 import { decryptApiKey } from "./ai-keys";
 import { database } from "./database";
-import type { PrismaClient } from "./prisma/client";
+import type { Prisma, PrismaClient } from "./prisma/client";
 
 type Provider = "FULLSTORY" | "HOTJAR";
 
@@ -42,7 +42,7 @@ const normalizeInsights = (
     description: insight.description ?? null,
     severity: insight.severity ?? null,
     externalId: insight.externalId ?? null,
-    raw: insight.raw,
+    raw: (insight.raw ?? undefined) as Prisma.InputJsonValue | undefined,
   }));
 
 const syncProvider = async (
@@ -169,7 +169,7 @@ export const syncSessionRecordingInsights = async () => {
         select: { id: true },
       });
     } catch (error) {
-      log.error("Session recording sync failed", error);
+      log.error("Session recording sync failed", error as Record<string, unknown>);
 
       await database.sessionRecordingSyncLog.update({
         where: { id: syncLog.id },

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { authClient } from "../auth/client";
-import type { User } from "../auth/index";
+import { type User, RecoderPmRole } from "../auth/index";
 
 export const useUser = () => {
   const [user, setUser] = useState<User | null>(null);
@@ -22,7 +22,7 @@ export const useUser = () => {
             lastName: null,
             imageUrl: sessionUser.image ?? null,
             organizationId: null,
-            organizationRole: "MEMBER",
+            organizationRole: RecoderPmRole.Member,
             createdAt: now,
             updatedAt: now,
             user_metadata: {
@@ -32,7 +32,7 @@ export const useUser = () => {
               image_url: sessionUser.image ?? null,
               imageUrl: sessionUser.image ?? null,
               organization_id: null,
-              organization_role: "MEMBER",
+              organization_role: RecoderPmRole.Member,
             },
           });
         }

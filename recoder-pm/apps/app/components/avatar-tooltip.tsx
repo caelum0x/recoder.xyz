@@ -3,7 +3,7 @@ import type { TooltipProperties } from "@repo/design-system/components/precompos
 import { Tooltip } from "@repo/design-system/components/precomposed/tooltip";
 
 type AvatarTooltipProperties = {
-  readonly src?: string | undefined;
+  readonly src?: string | null | undefined;
   readonly fallback: string;
   readonly title: string;
   readonly subtitle: string;

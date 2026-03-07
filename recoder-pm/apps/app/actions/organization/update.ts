@@ -1,7 +1,7 @@
 "use server";
 
 import { currentOrganizationId } from "@repo/backend/auth/utils";
-import type { Organization } from "@repo/backend/prisma/client";
+import type { Organization, Prisma } from "@repo/backend/prisma/client";
 import { parseError } from "@repo/lib/parse-error";
 import { revalidatePath } from "next/cache";
 import { database } from "@/lib/database";
@@ -20,7 +20,7 @@ export const updateOrganization = async (
 
     await database.organization.update({
       where: { id: organizationId },
-      data,
+      data: data as Prisma.OrganizationUpdateInput,
       select: { id: true },
     });
 

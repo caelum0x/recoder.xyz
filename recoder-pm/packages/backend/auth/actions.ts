@@ -34,6 +34,7 @@ export const login = async (
 
     await authDatabase.verification.create({
       data: {
+        id: crypto.randomUUID(),
         identifier: email,
         value: token,
         expiresAt,
@@ -118,6 +119,7 @@ export const signup = async (
 
     await authDatabase.verification.create({
       data: {
+        id: crypto.randomUUID(),
         identifier: email,
         value: token,
         expiresAt,

@@ -82,7 +82,7 @@ export const MembersTable = ({ data }: MembersTableProps) => {
         <TableColumnHeader className="text-xs" column={column} title="Status" />
       ),
       cell: ({ row }) =>
-        row.original.email_confirmed_at ? (
+        row.original.emailVerified ? (
           <Badge className="border-success text-success" variant="outline">
             Active
           </Badge>
@@ -93,14 +93,14 @@ export const MembersTable = ({ data }: MembersTableProps) => {
         ),
     },
     {
-      accessorKey: "created_at",
+      accessorKey: "createdAt",
       header: ({ column }) => (
         <TableColumnHeader column={column} title="Joined" />
       ),
       cell: ({ row }) =>
         new Intl.DateTimeFormat("en-US", {
           dateStyle: "medium",
-        }).format(new Date(row.original.created_at)),
+        }).format(new Date(row.original.createdAt)),
     },
     {
       accessorKey: "user_metadata.organization_role",

@@ -68,7 +68,7 @@ export const getFeature = async (
           ? {
               name: getUserName(owner),
               email: owner.email,
-              imageUrl: owner.user_metadata.imageUrl,
+              imageUrl: owner.user_metadata.imageUrl ?? undefined,
             }
           : null,
       },

@@ -4,8 +4,9 @@ import { database } from "@/lib/database";
 
 export const GET = async (
   _request: Request,
-  { params }: { params: { proposal: string } }
+  { params }: { params: Promise<{ proposal: string }> }
 ): Promise<Response> => {
+  const { proposal: proposalId } = await params;
   const organizationId = await currentOrganizationId();
 
   if (!organizationId) {
@@ -13,7 +14,7 @@ export const GET = async (
   }
 
   const proposal = await database.proposal.findFirst({
-    where: { id: params.proposal, organizationId },
+    where: { id: proposalId, organizationId },
     select: {
       id: true,
       title: true,

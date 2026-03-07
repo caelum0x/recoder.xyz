@@ -53,7 +53,7 @@ export const InstallJira = async () => {
           </p>
 
           <div className="rounded-md bg-secondary px-4 py-3">
-            <p>https://eververse.atlassian.net/plugins/servlet/webhooks</p>
+            <p>https://your-domain.atlassian.net/plugins/servlet/webhooks</p>
           </div>
 
           <p>

@@ -83,7 +83,7 @@ const FeatureListLayout = async ({ children }: FeatureListLayoutProperties) => {
         ? {
             name: getUserName(owner),
             email: owner.email,
-            imageUrl: owner.user_metadata.image_url,
+            imageUrl: owner.user_metadata.image_url ?? undefined,
           }
         : null,
     };

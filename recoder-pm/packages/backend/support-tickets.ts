@@ -3,7 +3,7 @@ import { log } from "@repo/observability/log";
 import { fetchZendeskTickets } from "@repo/zendesk";
 import { decryptApiKey } from "./ai-keys";
 import { database } from "./database";
-import type { PrismaClient, ZendeskInstallation } from "./prisma/client";
+import type { Prisma, PrismaClient, ZendeskInstallation } from "./prisma/client";
 
 const getSyncStart = (installation: ZendeskInstallation) => {
   if (installation.lastSyncedAt) {
@@ -54,7 +54,7 @@ const syncZendeskInstallation = async (
         externalId,
         requesterId: ticket.requester_id?.toString() ?? null,
         status: ticket.status ?? null,
-        raw: ticket.raw,
+        raw: (ticket.raw ?? undefined) as Prisma.InputJsonValue | undefined,
         zendeskId: installation.id,
       },
       select: { id: true },
@@ -77,7 +77,7 @@ export const syncZendeskInstallations = async () => {
     try {
       await syncZendeskInstallation(database, installation);
     } catch (error) {
-      log.error("Zendesk sync failed", error);
+      log.error("Zendesk sync failed", error as Record<string, unknown>);
 
       await database.zendeskInstallation.update({
         where: { id: installation.id },

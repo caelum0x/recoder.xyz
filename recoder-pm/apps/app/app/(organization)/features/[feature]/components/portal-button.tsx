@@ -63,7 +63,7 @@ export const PortalButton = async ({
   if (!portal) {
     return (
       <Button asChild variant="outline">
-        <Link href="/portal">Create a portal</Link>
+        <Link href="/settings/portal">Create a portal</Link>
       </Button>
     );
   }

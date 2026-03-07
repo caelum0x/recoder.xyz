@@ -20,7 +20,7 @@ export const CompanyLogo = ({
 }: CompanyLogoProps) => {
   const imageUrl = src ? new URL(src, "https://img.logo.dev/") : undefined;
 
-  if (imageUrl) {
+  if (imageUrl && env.NEXT_PUBLIC_LOGO_DEV_API_KEY) {
     imageUrl.searchParams.set("token", env.NEXT_PUBLIC_LOGO_DEV_API_KEY);
     imageUrl.searchParams.set("size", (size * 2).toString());
   }

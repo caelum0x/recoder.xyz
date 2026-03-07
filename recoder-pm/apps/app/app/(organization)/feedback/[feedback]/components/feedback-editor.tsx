@@ -4,6 +4,7 @@ import type { Feedback } from "@repo/backend/prisma/client";
 import { handleError } from "@repo/design-system/lib/handle-error";
 import type { EditorInstance, JSONContent } from "@repo/editor";
 import dynamic from "next/dynamic";
+import type { ReactNode } from "react";
 import { updateFeedback } from "@/actions/feedback/update";
 import { staticify } from "@/lib/staticify";
 
@@ -11,6 +12,8 @@ type FeedbackEditorProperties = {
   readonly defaultValue: JSONContent | undefined;
   readonly feedbackId: Feedback["id"];
   readonly editable: boolean;
+  readonly subscribed?: boolean;
+  readonly children?: ReactNode;
 };
 
 const Editor = dynamic(
@@ -31,6 +34,7 @@ export const FeedbackEditor = ({
   defaultValue,
   feedbackId,
   editable,
+  children,
 }: FeedbackEditorProperties) => {
   const handleDebouncedUpdate = async (editor?: EditorInstance | undefined) => {
     if (!editor) {
@@ -50,10 +54,13 @@ export const FeedbackEditor = ({
   };
 
   return (
-    <Editor
-      defaultValue={defaultValue}
-      editable={editable}
-      onDebouncedUpdate={handleDebouncedUpdate}
-    />
+    <>
+      <Editor
+        defaultValue={defaultValue}
+        editable={editable}
+        onDebouncedUpdate={handleDebouncedUpdate}
+      />
+      {children}
+    </>
   );
 };

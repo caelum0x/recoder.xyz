@@ -34,7 +34,7 @@ export const createGroup = async ({
       throw new Error("You must have an email to create a group.");
     }
 
-    if (!user.email_confirmed_at) {
+    if (!user.emailVerified) {
       throw new Error("You must have a verified email to create a group.");
     }
 

@@ -87,7 +87,7 @@ export const Widget = ({
               items={changelog.map((item) => ({
                 id: item.id,
                 title: item.title,
-                link: new URL(`/changelog/${item.id}`, portalUrl).toString(),
+                link: new URL(`/changelog/${item.id}`, portalUrl ?? undefined).toString(),
                 date: item.createdAt,
               }))}
               title="Recent Updates"
@@ -98,7 +98,7 @@ export const Widget = ({
               items={features.map((item) => ({
                 id: item.id,
                 title: item.title,
-                link: new URL(item.id, portalUrl).toString(),
+                link: new URL(item.id, portalUrl ?? undefined).toString(),
               }))}
               title="Upcoming Features"
             />
