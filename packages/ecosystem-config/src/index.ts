@@ -1,9 +1,22 @@
-export type EcosystemAppId = "home" | "web" | "studio" | "agency" | "pm" | "ui";
+export type EcosystemAppId =
+  | "home"
+  | "web"
+  | "agency"
+  | "pm"
+  | "ui"
+  | "agents"
+  | "openclaw";
 
 export interface EcosystemApp {
   id: EcosystemAppId;
   label: string;
   description: string;
+  href: string;
+}
+
+export interface EcosystemSettingsRoute {
+  id: string;
+  label: string;
   href: string;
 }
 
@@ -69,11 +82,42 @@ export const RECODER_STUDIO_POSITIONING =
 export const RECODER_ECOSYSTEM_URLS = {
   home: "https://recoder.xyz",
   web: "https://web.recoder.xyz",
-  studio: "https://studio.recoder.xyz",
   agency: "https://agency.recoder.xyz",
   pm: "https://pm.recoder.xyz",
   ui: "https://ui.recoder.xyz",
+  agents: "https://agents.recoder.xyz",
+  openclaw: "https://openclaw.recoder.xyz",
   stagingHome: "https://staging.recoder.xyz",
+} as const;
+
+export const RECODER_SETTINGS_URLS = {
+  home: {
+    main: `${RECODER_ECOSYSTEM_URLS.home}/settings`,
+    profile: `${RECODER_ECOSYSTEM_URLS.home}/settings/profile`,
+    security: `${RECODER_ECOSYSTEM_URLS.home}/settings/security`,
+    apiKeys: `${RECODER_ECOSYSTEM_URLS.home}/settings/api-keys`,
+    notifications: `${RECODER_ECOSYSTEM_URLS.home}/settings/notifications`,
+    integrations: `${RECODER_ECOSYSTEM_URLS.home}/settings/integrations`,
+    aiProviders: `${RECODER_ECOSYSTEM_URLS.home}/settings/ai-providers`,
+  },
+  agents: {
+    main: `${RECODER_ECOSYSTEM_URLS.agents}/settings`,
+    subscription: `${RECODER_ECOSYSTEM_URLS.agents}/subscription`,
+  },
+  pm: {
+    main: `${RECODER_ECOSYSTEM_URLS.pm}/settings`,
+    members: `${RECODER_ECOSYSTEM_URLS.pm}/settings/members`,
+    integrations: `${RECODER_ECOSYSTEM_URLS.pm}/settings/integrations`,
+  },
+  agency: {
+    main: `${RECODER_ECOSYSTEM_URLS.agency}/settings`,
+    account: `${RECODER_ECOSYSTEM_URLS.agency}/settings/account`,
+    team: `${RECODER_ECOSYSTEM_URLS.agency}/settings/team`,
+  },
+  web: {
+    main: `${RECODER_ECOSYSTEM_URLS.web}/settings`,
+    mcp: `${RECODER_ECOSYSTEM_URLS.web}/settings/mcp`,
+  },
 } as const;
 
 export const RECODER_ECOSYSTEM_APPS: readonly EcosystemApp[] = [
@@ -82,12 +126,6 @@ export const RECODER_ECOSYSTEM_APPS: readonly EcosystemApp[] = [
     label: "Web",
     description: "AI Workspace",
     href: RECODER_ECOSYSTEM_URLS.web,
-  },
-  {
-    id: "studio",
-    label: "Studio",
-    description: "Recoder Studio",
-    href: RECODER_ECOSYSTEM_URLS.studio,
   },
   {
     id: "agency",
@@ -108,12 +146,43 @@ export const RECODER_ECOSYSTEM_APPS: readonly EcosystemApp[] = [
     href: RECODER_ECOSYSTEM_URLS.home,
   },
   {
+    id: "agents",
+    label: "Agents",
+    description: "AI Agent IDE",
+    href: RECODER_ECOSYSTEM_URLS.agents,
+  },
+  {
+    id: "openclaw",
+    label: "OpenClaw",
+    description: "Open-source AI Tools",
+    href: RECODER_ECOSYSTEM_URLS.openclaw,
+  },
+  {
     id: "ui",
     label: "UI",
     description: "Component Library & Blueprint Gallery",
     href: RECODER_ECOSYSTEM_URLS.ui,
   },
 ] as const;
+
+/** Returns user-facing apps suitable for an app-switcher UI (excludes home & ui). */
+export function getSwitcherApps(): readonly EcosystemApp[] {
+  return RECODER_ECOSYSTEM_APPS.filter(
+    (app) => app.id !== "home" && app.id !== "ui",
+  );
+}
+
+export function getHomeSettingsRoutes(): readonly EcosystemSettingsRoute[] {
+  return [
+    { id: "main", label: "Settings", href: RECODER_SETTINGS_URLS.home.main },
+    { id: "profile", label: "Profile", href: RECODER_SETTINGS_URLS.home.profile },
+    { id: "security", label: "Security", href: RECODER_SETTINGS_URLS.home.security },
+    { id: "api-keys", label: "API Keys", href: RECODER_SETTINGS_URLS.home.apiKeys },
+    { id: "notifications", label: "Notifications", href: RECODER_SETTINGS_URLS.home.notifications },
+    { id: "integrations", label: "Integrations", href: RECODER_SETTINGS_URLS.home.integrations },
+    { id: "ai-providers", label: "AI Providers", href: RECODER_SETTINGS_URLS.home.aiProviders },
+  ] as const;
+}
 
 export const RECODER_AI_STUDIO_USE_CASES: readonly AiStudioUseCase[] = [
   {
