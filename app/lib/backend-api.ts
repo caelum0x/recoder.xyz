@@ -5,9 +5,9 @@
 
 import { logger } from '@/lib/logger';
 
-const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || process.env.BACKEND_URL || 'http://localhost:3001';
+const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || process.env.BACKEND_URL || 'http://localhost:3100';
 
-export interface ApiResponse<T = any> {
+export interface ApiResponse<T = unknown> {
   success: boolean;
   data?: T;
   error?: string;
@@ -88,7 +88,7 @@ class BackendApiClient {
   /**
    * Make an authenticated request to the backend API
    */
-  private async request<T = any>(
+  private async request<T = unknown>(
     endpoint: string,
     options: RequestInit = {}
   ): Promise<T> {
@@ -320,14 +320,14 @@ class BackendApiClient {
   /**
    * Get current user profile
    */
-  async getUserProfile(): Promise<any> {
+  async getUserProfile(): Promise<unknown> {
     return this.request('/api/user/profile');
   }
 
   /**
    * Update user profile
    */
-  async updateUserProfile(data: any): Promise<any> {
+  async updateUserProfile(data: Record<string, unknown>): Promise<unknown> {
     return this.request('/api/user/profile', {
       method: 'PUT',
       body: JSON.stringify(data),
@@ -337,15 +337,15 @@ class BackendApiClient {
   /**
    * Get user API keys
    */
-  async getUserApiKeys(): Promise<any[]> {
-    const result = await this.request<{ apiKeys: any[] }>('/api/user/keys');
+  async getUserApiKeys(): Promise<unknown[]> {
+    const result = await this.request<{ apiKeys: unknown[] }>('/api/user/keys');
     return result.apiKeys || [];
   }
 
   /**
    * Create new API key
    */
-  async createApiKey(data: { name: string; scopes?: string[] }): Promise<any> {
+  async createApiKey(data: { name: string; scopes?: string[] }): Promise<unknown> {
     return this.request('/api/user/keys', {
       method: 'POST',
       body: JSON.stringify(data),
@@ -366,16 +366,16 @@ class BackendApiClient {
   /**
    * Get usage statistics
    */
-  async getUsageStats(params?: { startDate?: string; endDate?: string }): Promise<any> {
-    const queryParams = new URLSearchParams(params as any).toString();
+  async getUsageStats(params?: { startDate?: string; endDate?: string }): Promise<unknown> {
+    const queryParams = params ? new URLSearchParams(Object.entries(params).filter((e): e is [string, string] => e[1] != null)).toString() : '';
     return this.request(`/api/usage/stats${queryParams ? '?' + queryParams : ''}`);
   }
 
   /**
    * Get usage history
    */
-  async getUsageHistory(params?: { page?: number; limit?: number }): Promise<any> {
-    const queryParams = new URLSearchParams(params as any).toString();
+  async getUsageHistory(params?: { page?: number; limit?: number }): Promise<unknown> {
+    const queryParams = params ? new URLSearchParams(Object.entries(params).filter((e): e is [string, string] => e[1] != null).map(([k, v]) => [k, String(v)])).toString() : '';
     return this.request(`/api/usage/history${queryParams ? '?' + queryParams : ''}`);
   }
 
@@ -401,15 +401,15 @@ class BackendApiClient {
   /**
    * Get billing invoices
    */
-  async getInvoices(params?: { page?: number; limit?: number }): Promise<any> {
-    const queryParams = new URLSearchParams(params as any).toString();
+  async getInvoices(params?: { page?: number; limit?: number }): Promise<unknown> {
+    const queryParams = params ? new URLSearchParams(Object.entries(params).filter((e): e is [string, string] => e[1] != null).map(([k, v]) => [k, String(v)])).toString() : '';
     return this.request(`/api/billing/invoices${queryParams ? '?' + queryParams : ''}`);
   }
 
   /**
    * Get invoice by ID
    */
-  async getInvoice(invoiceId: string): Promise<any> {
+  async getInvoice(invoiceId: string): Promise<unknown> {
     return this.request(`/api/billing/invoices/${invoiceId}`);
   }
 
@@ -433,15 +433,15 @@ class BackendApiClient {
   /**
    * Get payment methods
    */
-  async getPaymentMethods(): Promise<any[]> {
-    const result = await this.request<{ paymentMethods: any[] }>('/api/billing/payment-methods');
+  async getPaymentMethods(): Promise<unknown[]> {
+    const result = await this.request<{ paymentMethods: unknown[] }>('/api/billing/payment-methods');
     return result.paymentMethods || [];
   }
 
   /**
    * Add payment method
    */
-  async addPaymentMethod(data: any): Promise<any> {
+  async addPaymentMethod(data: Record<string, unknown>): Promise<unknown> {
     return this.request('/api/billing/payment-methods', {
       method: 'POST',
       body: JSON.stringify(data),
@@ -471,15 +471,15 @@ class BackendApiClient {
   /**
    * Get dashboard overview data
    */
-  async getDashboardOverview(): Promise<any> {
+  async getDashboardOverview(): Promise<unknown> {
     return this.request('/api/dashboard/overview');
   }
 
   /**
    * Get dashboard analytics
    */
-  async getDashboardAnalytics(params?: { period?: string }): Promise<any> {
-    const queryParams = new URLSearchParams(params as any).toString();
+  async getDashboardAnalytics(params?: { period?: string }): Promise<unknown> {
+    const queryParams = params ? new URLSearchParams(Object.entries(params).filter((e): e is [string, string] => e[1] != null)).toString() : '';
     return this.request(`/api/dashboard/analytics${queryParams ? '?' + queryParams : ''}`);
   }
 
@@ -494,7 +494,7 @@ class BackendApiClient {
     cost: number;
     endpoint: string;
     success: boolean;
-    metadata?: any;
+    metadata?: Record<string, unknown>;
   }): Promise<void> {
     await this.request('/api/usage/track', {
       method: 'POST',
@@ -505,15 +505,15 @@ class BackendApiClient {
   /**
    * Get available AI models
    */
-  async getAIModels(): Promise<any[]> {
-    const result = await this.request<{ models: any[] }>('/api/ai-providers/models');
+  async getAIModels(): Promise<unknown[]> {
+    const result = await this.request<{ models: unknown[] }>('/api/ai-providers/models');
     return result.models || [];
   }
 
   /**
    * Get usage limits for current plan
    */
-  async getUsageLimits(): Promise<any> {
+  async getUsageLimits(): Promise<unknown> {
     return this.request('/api/subscriptions/usage-limits');
   }
 }

@@ -9,17 +9,17 @@ type MetadataGenerator = Omit<Metadata, "description" | "title"> & {
 
 const applicationName = "Recoder PM";
 const author: Metadata["authors"] = {
-  name: "Hayden Bleasel",
-  url: "https://haydenbleasel.com/",
+  name: "Recoder",
+  url: "https://recoder.xyz/",
 };
-const publisher = "Hayden Bleasel";
-const twitterHandle = "@haydenbleasel";
+const publisher = "Recoder";
+const twitterHandle = "@recoder_xyz";
 
 const productionUrl =
   process.env.RECODER_PM_WEB_URL ??
   process.env.NEXT_PUBLIC_VERCEL_PROJECT_PRODUCTION_URL ??
   process.env.VERCEL_PROJECT_PRODUCTION_URL ??
-  "http://localhost:3000";
+  "https://pm.recoder.xyz";
 const baseUrl = new URL(productionUrl);
 
 export const createMetadata = ({

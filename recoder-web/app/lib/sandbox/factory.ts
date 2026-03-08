@@ -121,7 +121,7 @@ export class SandboxFactory {
           }
         : undefined,
       docker: {
-        endpoint: process.env.DOCKER_BACKEND_URL || 'http://localhost:4000',
+        endpoint: process.env.DOCKER_BACKEND_URL || 'http://localhost:3100',
         authToken: process.env.DOCKER_AUTH_TOKEN,
         containerId: process.env.DOCKER_CONTAINER_ID,
       },
