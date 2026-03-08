@@ -16,6 +16,18 @@ interface PlatformEvent {
   channels?: ("in_app" | "email" | "push")[];
 }
 
+function escapeHtml(s: string): string {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
+function isHttpsUrl(url: string): boolean {
+  try {
+    return new URL(url).protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
 function validateEvent(body: unknown): body is PlatformEvent {
   if (!body || typeof body !== "object") return false;
   const b = body as Record<string, unknown>;
@@ -62,7 +74,7 @@ export async function POST(request: NextRequest) {
       title: body.title,
       message: body.message,
       type: body.type,
-      actionUrl: body.actionUrl ?? null,
+      actionUrl: body.actionUrl && isHttpsUrl(body.actionUrl) ? body.actionUrl : null,
       metadata: { sourceApp: body.sourceApp },
     },
   });
@@ -85,8 +97,8 @@ export async function POST(request: NextRequest) {
       await sendEmail({
         to: user.email,
         subject: body.title,
-        html: `<p>${body.message}</p>${body.actionUrl ? `<p><a href="${body.actionUrl}">View details</a></p>` : ""}`,
-        text: `${body.message}${body.actionUrl ? `\n\nView details: ${body.actionUrl}` : ""}`,
+        html: `<p>${escapeHtml(body.message)}</p>${body.actionUrl && isHttpsUrl(body.actionUrl) ? `<p><a href="${escapeHtml(body.actionUrl)}">View details</a></p>` : ""}`,
+        text: `${body.message}${body.actionUrl && isHttpsUrl(body.actionUrl) ? `\n\nView details: ${body.actionUrl}` : ""}`,
       }).catch(() => {});
     }
   }

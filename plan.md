@@ -120,7 +120,7 @@ Sitemaps serving: `recoder.xyz` (200), `agents.recoder.xyz` (200), `pm.recoder.x
 PM2 runs `apps/app` (workspace). Unauthenticated users at root are redirected to PM sign-in. Marketing landing (apps/web) is not running; accept app-only surface for now.
 
 - [x] Decision: app-only surface — PM is a workspace tool, auth-gated redirect is acceptable
-- [ ] Future: consider running `apps/web` marketing page if PM gets its own public landing
+- [x] PM marketing surface: workspace-only, no public landing needed (decided 2026-03-08)
 
 ### 8. BYOK End-to-End Verification [VERIFIED 2026-03-08]
 
@@ -173,11 +173,11 @@ Progress (2026-03-08): app switchers now include a shared "Account Settings" sho
 Progress (2026-03-08): app switchers now also include shared `Security` and `AI Providers` shortcuts via `RECODER_SETTINGS_URLS.home.{security,aiProviders}` across `app`, `recoder-agents`, `recoder-web`, and PM surfaces.
 
 Future items:
-- [ ] Shared notification system (cross-app: agent completed task, PM update, etc.)
-- [ ] Unified settings (profile/avatar change on recoder.xyz reflects everywhere)
-- [ ] Cross-app project linking (agent workspace ↔ PM project ↔ web IDE)
-- [ ] Single dashboard (recoder.xyz shows activity across ALL apps)
-- [ ] Billing awareness (all apps check subscription, show upgrade prompts)
+- [x] Shared notification system (cross-app: agent completed task, PM update, etc.) — DONE 2026-03-08: Platform Events API + Notifications API + NotificationBell component in all 5 apps
+- [x] Unified settings (profile/avatar change on recoder.xyz reflects everywhere) — DONE 2026-03-08: Eventual sync via shared auth DB; agency ensureProfile already handles updates
+- [x] Cross-app project linking (agent workspace ↔ PM project ↔ web IDE) — DONE 2026-03-08: Ecosystem tags (ecosystem_tags + ecosystem_tag_items tables) + Tags API + EcosystemTagPicker component
+- [x] Single dashboard (recoder.xyz shows activity across ALL apps) — DONE 2026-03-08: Platform aggregator + per-app /api/platform/activity endpoints + unified dashboard section
+- [x] Billing awareness (all apps check subscription, show upgrade prompts) — DONE 2026-03-08: SubscriptionBadge in all 5 apps + PlanLimitError 403 standardization
 - [x] Consistent theme consumption (all apps consume design tokens)
 
 ---

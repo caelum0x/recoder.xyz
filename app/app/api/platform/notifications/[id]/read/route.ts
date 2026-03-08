@@ -13,10 +13,13 @@ export async function PATCH(
 
   const { id } = await params;
 
-  const notification = await prisma.notifications.update({
-    where: { id, userId: user.id },
-    data: { read: true, readAt: new Date() },
-  });
-
-  return NextResponse.json({ id: notification.id, read: true });
+  try {
+    const notification = await prisma.notifications.update({
+      where: { id, userId: user.id },
+      data: { read: true, readAt: new Date() },
+    });
+    return NextResponse.json({ id: notification.id, read: true });
+  } catch {
+    return NextResponse.json({ error: "not_found" }, { status: 404 });
+  }
 }
