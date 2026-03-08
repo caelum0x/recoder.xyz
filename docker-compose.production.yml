@@ -201,6 +201,7 @@ services:
     environment:
       - NODE_ENV=production
       - PORT=3100
+      - NODE_OPTIONS=--max_old_space_size=1536
       - REDIS_URL=redis://:${REDIS_PASSWORD}@recoder-redis:6379/0
       - PUBLIC_PROMPT_TASK_QUEUE_BACKEND=redis
       # --- A2A inter-service communication ---
@@ -220,7 +221,7 @@ services:
       - RECODER_A2A_ADMIN_TOKEN=${RECODER_A2A_ADMIN_TOKEN:-}
       - RECODER_A2A_BRIDGE_TOKEN=${RECODER_A2A_BRIDGE_TOKEN:-}
       - RECODER_A2A_EGRESS_ALLOWLIST=http://recoder-web:5173,http://openclaw-gateway:18789
-      - RECODER_A2A_ALLOWED_AGENTS=codex,claude_code,recoder-web,docker-backend,openclaw-gateway,recoder-agency,recoder-pm,recoder-studio
+      - RECODER_A2A_ALLOWED_AGENTS=codex,claude_code,recoder-web,docker-backend,openclaw-gateway,recoder-agency,recoder-pm
       # Tier-1 connector flags
       - RECODER_A2A_ENABLE_CODEX=${RECODER_A2A_ENABLE_CODEX:-true}
       - RECODER_A2A_ENABLE_CLAUDE_CODE=${RECODER_A2A_ENABLE_CLAUDE_CODE:-true}
@@ -240,10 +241,10 @@ services:
       resources:
         limits:
           cpus: "4"
-          memory: 4G
-        reservations:
-          cpus: "2"
           memory: 2G
+        reservations:
+          cpus: "1"
+          memory: 512M
     stop_grace_period: 45s
 
   # Remix/Vite IDE — web.recoder.xyz / recoder.xyz
@@ -311,8 +312,10 @@ services:
     environment:
       - NODE_ENV=production
       - PORT=3001
+      - BETTER_AUTH_URL=https://recoder.xyz
       - NEXT_PUBLIC_APP_URL=https://app.recoder.xyz
       - NEXT_PUBLIC_API_URL=http://recoder-backend-api:8000
+      - NEXT_PUBLIC_BACKEND_URL=http://recoder-backend-api:8000/v1
     depends_on:
       backend:
         condition: service_healthy
@@ -337,46 +340,13 @@ services:
           memory: 512M
     stop_grace_period: 30s
 
-  # Recoder Studio (Giselle-based workflow editor) — studio.recoder.xyz
-  recoder-studio:
-    build:
-      context: .
-      dockerfile: recoder-studio/Dockerfile
-    container_name: recoder-studio
-    <<: *restart-policy
-    env_file:
-      - .env.production
-    environment:
-      - NODE_ENV=production
-      - PORT=3005
-      - HOSTNAME=0.0.0.0
-      - NEXT_TELEMETRY_DISABLED=1
-      - BETTER_AUTH_URL=https://recoder.xyz
-      - NEXT_PUBLIC_APP_URL=https://studio.recoder.xyz
-      - NEXT_PUBLIC_SITE_URL=https://studio.recoder.xyz
-      - DATABASE_URL=${DATABASE_URL}
-      - REDIS_URL=redis://:${REDIS_PASSWORD}@recoder-redis:6379/0
-    depends_on:
-      redis:
-        condition: service_healthy
-    networks:
-      - recoder
-    healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:3005/api/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
-    logging: *default-logging
-    deploy:
-      resources:
-        limits:
-          cpus: "2"
-          memory: 2G
-        reservations:
-          cpus: "0.5"
-          memory: 512M
-    stop_grace_period: 30s
+  # Recoder Studio — ABANDONED, no longer deployed.
+  # Kept commented out for reference only.
+  # recoder-studio:
+  #   build:
+  #     context: .
+  #     dockerfile: recoder-studio/Dockerfile
+  #   container_name: recoder-studio
 
   # Recoder Agency (agency workflows) — agency.recoder.xyz
   recoder-agency:
@@ -397,8 +367,6 @@ services:
       - NEXT_PUBLIC_SITE_URL=https://agency.recoder.xyz
       - DATABASE_URL=${DATABASE_URL}
       - REDIS_URL=redis://:${REDIS_PASSWORD}@recoder-redis:6379/0
-    ports:
-      - "3007:3007"
     depends_on:
       redis:
         condition: service_healthy
@@ -442,13 +410,14 @@ services:
       - RECODER_PM_API_URL=https://pm.recoder.xyz/api
       - RECODER_PM_PORTAL_URL=https://pm.recoder.xyz/portal
       - DATABASE_URL=${DATABASE_URL}
+      - AUTH_DATABASE_URL=${AUTH_DATABASE_URL:-${DATABASE_URL}}
+      - POSTGRES_PRISMA_URL=${POSTGRES_PRISMA_URL:-${DATABASE_URL}}
+      - POSTGRES_URL_NON_POOLING=${POSTGRES_URL_NON_POOLING:-${DATABASE_URL}}
       - REDIS_URL=redis://:${REDIS_PASSWORD}@recoder-redis:6379/0
       # BYOK: No AI provider keys — users configure at org level
       - OPENROUTER_API_KEY=
       - OPENAI_API_KEY=
       - ANTHROPIC_API_KEY=
-    ports:
-      - "3004:3004"
     depends_on:
       redis:
         condition: service_healthy
@@ -527,8 +496,6 @@ services:
       recoder-web:
         condition: service_healthy
       recoder-agents:
-        condition: service_healthy
-      recoder-studio:
         condition: service_healthy
       recoder-agency:
         condition: service_healthy
@@ -644,7 +611,11 @@ services:
       - alertmanager_data:/alertmanager
     environment:
       - ALERT_WEBHOOK_URL=${ALERT_WEBHOOK_URL:-}
+      - ALERT_CRITICAL_WEBHOOK_URL=${ALERT_CRITICAL_WEBHOOK_URL:-}
+      - ALERT_SLACK_API_URL=${ALERT_SLACK_API_URL:-}
       - ALERT_EMAIL=${ALERT_EMAIL:-}
+      - ALERT_EMAIL_TO=${ALERT_EMAIL_TO:-}
+      - RESEND_API_KEY=${RESEND_API_KEY:-}
       - SMTP_SMARTHOST=${SMTP_SMARTHOST:-}
       - SMTP_FROM=${SMTP_FROM:-}
       - SMTP_AUTH_USERNAME=${SMTP_AUTH_USERNAME:-}
@@ -672,7 +643,7 @@ services:
       - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
       - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin}
       - GF_USERS_ALLOW_SIGN_UP=false
-      - GF_SERVER_ROOT_URL=http://localhost:3003
+      - GF_SERVER_ROOT_URL=https://recoder.xyz/grafana
     volumes:
       - grafana_data:/var/lib/grafana
       - ./monitoring/grafana-datasources.yml:/etc/grafana/provisioning/datasources/datasources.yml:ro

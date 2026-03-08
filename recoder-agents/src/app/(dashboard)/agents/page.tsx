@@ -5,7 +5,7 @@ import { toast } from '@/lib/toast';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 
 import { useAgents, useUpdateAgent, useDeleteAgent, useOptimisticAgentUpdate, useAgentDeletionState } from '@/hooks/agents/use-agents';
-import { useMarketplaceTemplates, useInstallTemplate, useMyTemplates, useUnpublishTemplate, usePublishTemplate, useCreateTemplate, useDeleteTemplate } from '@/hooks/secure-mcp/use-secure-mcp';
+import { useInstallTemplate, useMyTemplates, useUnpublishTemplate, usePublishTemplate, useCreateTemplate, useDeleteTemplate } from '@/hooks/secure-mcp/use-secure-mcp';
 import { useAuth } from '@/components/AuthProvider';
 
 import { StreamlinedInstallDialog } from '@/components/agents/installation/streamlined-install-dialog';
@@ -16,7 +16,7 @@ import { AgentsParams } from '@/hooks/agents/utils';
 import { AgentsPageHeader } from '@/components/agents/custom-agents-page/header';
 import { TabsNavigation } from '@/components/agents/custom-agents-page/tabs-navigation';
 import { MyAgentsTab } from '@/components/agents/custom-agents-page/my-agents-tab';
-import { MarketplaceTab } from '@/components/agents/custom-agents-page/marketplace-tab';
+// MarketplaceTab disabled — marketplace feature is not active in production
 import { PublishDialog } from '@/components/agents/custom-agents-page/publish-dialog';
 import { LoadingSkeleton } from '@/components/agents/custom-agents-page/loading-skeleton';
 import { NewAgentDialog } from '@/components/agents/new-agent-dialog';
@@ -157,7 +157,9 @@ export default function AgentsPage() {
   }), [templatesPage, templatesPageSize, templatesSearchQuery, templatesSortBy, templatesSortOrder]);
 
   const { data: agentsResponse, isLoading: agentsLoading, error: agentsError, refetch: loadAgents } = useAgents(agentsQueryParams);
-  const { data: marketplaceTemplates, isLoading: marketplaceLoading } = useMarketplaceTemplates(marketplaceQueryParams);
+  // Marketplace tab is disabled — skip the API call to avoid errors when backend endpoint is unavailable
+  const marketplaceTemplates = undefined;
+  const marketplaceLoading = false;
 
   const templatesAgentsQueryParams = useMemo(() => ({
     ...agentsQueryParams,
@@ -287,7 +289,7 @@ export default function AgentsPage() {
 
   const handleCreateNewAgent = useCallback(() => {
     setShowNewAgentDialog(true);
-  }, []);
+  }, [setShowNewAgentDialog]);
 
   const handleInstallClick = (item: MarketplaceTemplate, e?: React.MouseEvent) => {
     if (e) {
@@ -371,15 +373,6 @@ export default function AgentsPage() {
         return;
       }
 
-      console.log('Installing template with:', {
-        template_id: item.template_id,
-        instance_name: instanceName,
-        profile_mappings: profileMappings,
-        custom_mcp_configs: customMcpConfigs,
-        trigger_configs: triggerConfigs,
-        trigger_variables: triggerVariables
-      });
-      
       const result = await installTemplateMutation.mutateAsync({
         template_id: item.template_id,
         instance_name: instanceName,
@@ -389,8 +382,6 @@ export default function AgentsPage() {
         trigger_variables: triggerVariables
       });
       
-      console.log('Installation result:', result);
-
       if (result.status === 'installed') {
         toast.success(`Worker "${instanceName}" installed successfully!`);
         setShowInstallDialog(false);

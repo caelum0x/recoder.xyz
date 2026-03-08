@@ -1,6 +1,9 @@
 # Prometheus Configuration for Recoder Platform
 # Deployed at: monitor.recoder.xyz (behind nginx auth)
 # Server: Hetzner 8 vCPU, 16GB RAM (77.42.23.19)
+#
+# NOTE: Targets use Docker Compose service names for DNS resolution
+# on the shared 'recoder' network.
 
 global:
   scrape_interval: 30s
@@ -15,77 +18,70 @@ rule_files:
 alerting:
   alertmanagers:
     - static_configs:
-        - targets: ['localhost:9093']
+        - targets: ['alertmanager:9093']
       # Timeout for sending alerts to Alertmanager
       timeout: 10s
 
 scrape_configs:
-  # PM2 services (Node.js / Python)
+  # App services (Next.js)
   - job_name: 'recoder-app'
     static_configs:
-      - targets: ['localhost:3000']
+      - targets: ['app:3000']
     metrics_path: /api/health
     scrape_interval: 60s
 
-  - job_name: 'recoder-frontend'
+  - job_name: 'recoder-agents'
     static_configs:
-      - targets: ['localhost:3001']
+      - targets: ['recoder-agents:3001']
     metrics_path: /api/health
     scrape_interval: 60s
 
-  # PM2 services (not in docker-compose.deploy.yml — uncomment when deployed)
-  # - job_name: 'recoder-pm'
-  #   static_configs:
-  #     - targets: ['localhost:3004']
-  #   metrics_path: /api/health
-  #   scrape_interval: 60s
-  #
-  # - job_name: 'recoder-studio'
-  #   static_configs:
-  #     - targets: ['localhost:3005']
-  #   metrics_path: /api/health
-  #   scrape_interval: 60s
-  #
-  # - job_name: 'recoder-agency'
-  #   static_configs:
-  #     - targets: ['localhost:3007']
-  #   metrics_path: /api/health
-  #   scrape_interval: 60s
+  - job_name: 'recoder-pm'
+    static_configs:
+      - targets: ['recoder-pm:3004']
+    metrics_path: /api/health
+    scrape_interval: 60s
+
+  - job_name: 'recoder-agency'
+    static_configs:
+      - targets: ['recoder-agency:3007']
+    metrics_path: /api/health
+    scrape_interval: 60s
 
   # Docker services
   - job_name: 'docker-backend'
     static_configs:
-      - targets: ['localhost:3100']
+      - targets: ['docker-backend:3100']
     metrics_path: /api/metrics/prometheus
     scrape_interval: 30s
 
   # A2A SLO metrics (connector success rates, circuit breakers, latency)
   - job_name: 'docker-backend-a2a'
     static_configs:
-      - targets: ['localhost:3100']
+      - targets: ['docker-backend:3100']
     metrics_path: /api/a2a/metrics/prometheus
     scrape_interval: 30s
 
   - job_name: 'recoder-web'
     static_configs:
-      - targets: ['localhost:5173']
+      - targets: ['recoder-web:5173']
     metrics_path: /
     scrape_interval: 60s
 
   - job_name: 'openclaw-gateway'
     static_configs:
-      - targets: ['localhost:18789']
+      - targets: ['openclaw-gateway:18789']
     metrics_path: /health
     scrape_interval: 60s
 
   # Redis metrics via redis_exporter sidecar
   - job_name: 'redis'
     static_configs:
-      - targets: ['localhost:9121']
+      - targets: ['redis-exporter:9121']
     scrape_interval: 30s
 
   # Node exporter for system metrics (CPU, memory, disk)
   - job_name: 'node'
     static_configs:
-      - targets: ['localhost:9100']
+      - targets: ['node-exporter:9100']
     scrape_interval: 60s

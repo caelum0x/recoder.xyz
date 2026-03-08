@@ -3,6 +3,8 @@
  * Central ecosystem registry for all Recoder services
  */
 
+import { RECODER_ECOSYSTEM_URLS, getSwitcherApps as getEcosystemSwitcherApps } from '@recoder/ecosystem-config';
+
 export interface RecoderService {
   id: string;
   label: string;
@@ -16,41 +18,45 @@ export interface RecoderService {
   internal: boolean;
 }
 
+const SWITCHER_SERVICE_IDS = new Set(
+  getEcosystemSwitcherApps().map((app) => (app.id === 'home' ? 'app' : app.id)),
+);
+
 export const RECODER_SERVICES: RecoderService[] = [
   {
     id: 'app',
     label: 'Recoder Hub',
     description: 'Dashboard, auth & settings',
-    productionUrl: 'https://recoder.xyz',
+    productionUrl: RECODER_ECOSYSTEM_URLS.home,
     devUrl: 'http://localhost:3000',
     port: 3000,
     healthPath: '/',
     healthResponseType: 'html',
-    showInSwitcher: true,
+    showInSwitcher: SWITCHER_SERVICE_IDS.has('app'),
     internal: false,
   },
   {
     id: 'agents',
     label: 'Recoder Agents',
     description: 'AI agent IDE',
-    productionUrl: 'https://agents.recoder.xyz',
+    productionUrl: RECODER_ECOSYSTEM_URLS.agents,
     devUrl: 'http://localhost:3001',
     port: 3001,
     healthPath: '/',
     healthResponseType: 'html',
-    showInSwitcher: true,
+    showInSwitcher: SWITCHER_SERVICE_IDS.has('agents'),
     internal: false,
   },
   {
     id: 'web',
     label: 'Recoder Web',
     description: 'Web AI IDE',
-    productionUrl: 'https://web.recoder.xyz',
+    productionUrl: RECODER_ECOSYSTEM_URLS.web,
     devUrl: 'http://localhost:5173',
     port: 5173,
     healthPath: '/',
     healthResponseType: 'html',
-    showInSwitcher: true,
+    showInSwitcher: SWITCHER_SERVICE_IDS.has('web'),
     internal: false,
   },
   {
@@ -81,12 +87,12 @@ export const RECODER_SERVICES: RecoderService[] = [
     id: 'pm',
     label: 'Recoder PM',
     description: 'Project management',
-    productionUrl: 'https://pm.recoder.xyz',
+    productionUrl: RECODER_ECOSYSTEM_URLS.pm,
     devUrl: 'http://localhost:3004',
     port: 3004,
     healthPath: '/',
     healthResponseType: 'html',
-    showInSwitcher: true,
+    showInSwitcher: SWITCHER_SERVICE_IDS.has('pm'),
     internal: false,
   },
   {
@@ -98,38 +104,38 @@ export const RECODER_SERVICES: RecoderService[] = [
     port: 3005,
     healthPath: '/',
     healthResponseType: 'html',
-    showInSwitcher: true,
+    showInSwitcher: false,
     internal: false,
   },
   {
     id: 'agency',
     label: 'Recoder Agency',
     description: 'AI agent workflows',
-    productionUrl: 'https://agency.recoder.xyz',
+    productionUrl: RECODER_ECOSYSTEM_URLS.agency,
     devUrl: 'http://localhost:3007',
     port: 3007,
     healthPath: '/',
     healthResponseType: 'html',
-    showInSwitcher: true,
+    showInSwitcher: SWITCHER_SERVICE_IDS.has('agency'),
     internal: false,
   },
   {
     id: 'openclaw',
     label: 'OpenClaw',
     description: 'Open-source AI tools',
-    productionUrl: 'https://openclaw.recoder.xyz',
+    productionUrl: RECODER_ECOSYSTEM_URLS.openclaw,
     devUrl: 'http://localhost:18789',
     port: 18789,
     healthPath: '/health',
     healthResponseType: 'json',
-    showInSwitcher: true,
+    showInSwitcher: SWITCHER_SERVICE_IDS.has('openclaw'),
     internal: false,
   },
   {
     id: 'redis',
     label: 'Redis',
     description: 'Cache & pub/sub',
-    productionUrl: 'redis://localhost:6379',
+    productionUrl: 'redis://redis:6379',
     devUrl: 'redis://localhost:6379',
     port: 6379,
     healthPath: '',
@@ -177,11 +183,6 @@ export function getAllProductionOrigins(): string[] {
   return RECODER_SERVICES
     .filter(s => !s.internal && s.productionUrl.startsWith('https://'))
     .map(s => s.productionUrl);
-}
-
-/** Get services to display in AppSwitcher */
-export function getSwitcherApps(): RecoderService[] {
-  return RECODER_SERVICES.filter(s => s.showInSwitcher);
 }
 
 /** Get services that should be health-monitored */

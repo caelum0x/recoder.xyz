@@ -79,14 +79,17 @@ const githubAppClientId = process.env.GITHUB_APP_CLIENT_ID;
 const githubAppClientSecret = process.env.GITHUB_APP_CLIENT_SECRET;
 const githubAppWebhookSecret = process.env.GITHUB_APP_WEBHOOK_SECRET;
 
-if (
-	githubAppId === undefined ||
-	githubAppPrivateKey === undefined ||
-	githubAppClientId === undefined ||
-	githubAppClientSecret === undefined ||
-	githubAppWebhookSecret === undefined
-) {
-	throw new Error("missing github credentials");
+const hasGitHubCredentials =
+	githubAppId !== undefined &&
+	githubAppPrivateKey !== undefined &&
+	githubAppClientId !== undefined &&
+	githubAppClientSecret !== undefined &&
+	githubAppWebhookSecret !== undefined;
+
+if (!hasGitHubCredentials) {
+	console.warn(
+		"GitHub App credentials are not fully configured. GitHub integration features will be unavailable.",
+	);
 }
 
 type TeamForPlan = Pick<
@@ -654,13 +657,17 @@ export const giselle = NextGiselle({
 					installationIds: () => [1234],
 				},
 			},
-			authV2: {
-				appId: githubAppId,
-				privateKey: githubAppPrivateKey,
-				clientId: githubAppClientId,
-				clientSecret: githubAppClientSecret,
-				webhookSecret: githubAppWebhookSecret,
-			},
+			...(hasGitHubCredentials
+				? {
+						authV2: {
+							appId: githubAppId!,
+							privateKey: githubAppPrivateKey!,
+							clientId: githubAppClientId!,
+							clientSecret: githubAppClientSecret!,
+							webhookSecret: githubAppWebhookSecret!,
+						},
+					}
+				: {}),
 		},
 	},
 	vault,
