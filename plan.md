@@ -11,7 +11,7 @@
 | recoder-pm | https://pm.recoder.xyz | 200 |
 | recoder-web | https://web.recoder.xyz | 302 (intentional auth gate), `/api/health` 200 |
 
-Last updated: 2026-03-07
+Last updated: 2026-03-08
 
 All 9 services are live on Hetzner (77.42.23.19). Platform is in beta — BYOK-only, no platform AI keys.
 
@@ -68,7 +68,7 @@ Native releases (Desktop, Mobile) and GitHub-hosted CI are deferred indefinitely
   - `recoder.xyz` → `agency.recoder.xyz` — session recognized (dbId assigned)
   - `recoder.xyz` → `pm.recoder.xyz/app` — authenticated redirect (307)
 - [x] **Cross-subdomain sign-out propagation** — verified across all surfaces
-- [x] **`recoder-code` CLI device flow** — endpoint + verifier script ready (live run pending `ADMIN_SECRET`)
+- [x] **`recoder-code` CLI device flow** — 9/9 PASS on production (2026-03-08)
 
 **Remaining**:
 - [ ] Forgot password full mailbox-link click → reset flow end-user verification
@@ -99,7 +99,7 @@ All billing env vars are still placeholders (`your-paddle-*`, `your-dodo-pay-*`)
 - [ ] Configure real Paddle or DodoPayments API keys in production
 - [ ] Test checkout flow end-to-end (user subscribes to Pro)
 - [ ] Test subscription cancel/reactivate
-- [ ] Verify BYOK flow at `/settings/ai-providers` (`scripts/verify-byok-e2e.sh` ready)
+- [x] Verify BYOK flow at `/settings/ai-providers` — 10/10 PASS (2026-03-08)
 - [x] Verify cross-app billing awareness (agents/studio/agency check subscription)
 
 ### 5. Production Monitoring [DEPLOYED 2026-03-06]
@@ -115,9 +115,62 @@ Sitemaps serving: `recoder.xyz` (200), `agents.recoder.xyz` (200), `pm.recoder.x
 - [ ] Verify domain ownership in GSC (DNS TXT via Cloudflare)
 - [ ] Submit top 3 sitemaps
 
-### 7. Unified User Experience [FUTURE]
+### 7. PM Marketing Site [APP-ONLY — ACCEPTED]
+
+PM2 runs `apps/app` (workspace). Unauthenticated users at root are redirected to PM sign-in. Marketing landing (apps/web) is not running; accept app-only surface for now.
+
+- [x] Decision: app-only surface — PM is a workspace tool, auth-gated redirect is acceptable
+- [ ] Future: consider running `apps/web` marketing page if PM gets its own public landing
+
+### 8. BYOK End-to-End Verification [VERIFIED 2026-03-08]
+
+- [x] Set `ADMIN_SECRET` in production env
+- [x] Run `scripts/verify-byok-e2e.sh` against production — **10/10 PASS**
+- [x] Verified: register → seed verify → verify-code → sign-in → list keys → create key → list confirms → decrypt matches → delete → confirm removal
+
+### 9. CLI Device Flow Verification [VERIFIED 2026-03-08]
+
+- [x] Run `scripts/verify-cli-device-flow-e2e.sh` against production — **9/9 PASS**
+- [x] Verified: register → seed verify → verify-code → sign-in → device code → approve → token exchange → validate → refresh
+
+### 10. Test Coverage [COMPLETE]
+
+Audit (2026-03-08): Strong coverage in app/ (332), recoder-web/ (361), docker-backend/ (107), packages/cli (500+). Critical gaps in recoder-agents/ and recoder-pm/.
+
+- [x] Test coverage audit completed — identified critical gaps
+- [x] recoder-agents: Added integration callback, site-config, monitoring tests (85 total tests, 12 files, all pass)
+- [x] recoder-agents: Added AuthProvider + AppSwitcher config component tests (97 total tests, 14 files, all pass)
+- [x] recoder-pm: Added webhook route tests — feedback analyze, org delete, user upsert (25 tests, all pass)
+- [x] Cross-app session validation tests — @recoder/auth edge + cross-domain (30 tests: cookie parsing, token extraction, trusted origin, sign-out attributes)
+- [x] Test count check script: `scripts/check-test-counts.sh` — 401 total tests across 4 packages, all pass
+
+### 11. Landing Page & Content Quality [PARTIALLY DONE]
+
+About and Learn pages updated (2026-03-08): dark theme aligned, dead links fixed (`/docs`, `/changelog`, `/contact` replaced with real routes), CTA buttons use brand gradient, deployed to production.
+
+- [x] About page: dark theme, brand gradient CTAs, dead `/docs` link removed
+- [x] Learn page: dark theme, dead links replaced with real platform links (agents, agency, web, PM)
+- [x] Write more detailed About content (team, mission, product story)
+- [x] Add real tutorials/documentation when available
+
+### 12. Performance & Bundle Optimization [AUDITED]
+
+Initial bundle audit (2026-03-08): Main app 4.8MB (healthy). Agents 31MB total (3.2MB largest chunk). PM 28MB total (2.3MB largest chunk). Server TTFB: 256ms (app), 300ms (agents).
+
+- [x] Bundle size audit completed across all apps
+- [x] Agents 3.2MB chunk investigated — Syncfusion ej2-react-spreadsheet, already fully lazy-loaded via next/dynamic in all 4 usage sites
+- [x] PM 2.3MB chunk investigated — novel (tiptap editor), @repo/canvas, emoji-mart; expected for rich-text PM features, not optimizable without feature removal
+- [x] Run `ANALYZE=true` builds for detailed dependency breakdown (added `@next/bundle-analyzer` to agents; reports generated at `recoder-agents/.next/analyze/{client,nodejs,edge}.html`; PM app now supports `analyze:webpack` and generates reports at `recoder-pm/apps/app/.next/analyze/{client,nodejs,edge}.html`)
+- [x] TTFB audit: recoder.xyz 429ms, agents 492ms, public pages (about/learn/signin) all under 200ms — healthy
+
+### 13. Unified User Experience [FUTURE]
 
 Design tokens package created. Subscription endpoint exists. Ecosystem architecture documented. Cross-app navigation (AppSwitcher) deployed to all apps.
+
+Progress (2026-03-08): shared token imports wired in `app`, `recoder-agents`, `recoder-web`, `recoder-pm` (`apps/app`, `apps/web`), and `recoder-agency` via `@recoder/design-tokens/tokens.css`.
+Progress (2026-03-08): unified settings groundwork added in `@recoder/ecosystem-config` (`RECODER_SETTINGS_URLS` + helpers) and consumed in app command palette settings routes to remove hardcoded path drift.
+Progress (2026-03-08): app switchers now include a shared "Account Settings" shortcut wired to `RECODER_SETTINGS_URLS.home.main` across `app`, `recoder-agents`, `recoder-web`, and PM surfaces.
+Progress (2026-03-08): app switchers now also include shared `Security` and `AI Providers` shortcuts via `RECODER_SETTINGS_URLS.home.{security,aiProviders}` across `app`, `recoder-agents`, `recoder-web`, and PM surfaces.
 
 Future items:
 - [ ] Shared notification system (cross-app: agent completed task, PM update, etc.)
@@ -125,7 +178,7 @@ Future items:
 - [ ] Cross-app project linking (agent workspace ↔ PM project ↔ web IDE)
 - [ ] Single dashboard (recoder.xyz shows activity across ALL apps)
 - [ ] Billing awareness (all apps check subscription, show upgrade prompts)
-- [ ] Consistent theme consumption (all apps consume design tokens)
+- [x] Consistent theme consumption (all apps consume design tokens)
 
 ---
 

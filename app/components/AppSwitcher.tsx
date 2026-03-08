@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { getSwitcherApps, getServiceUrlClient } from '@/lib/config/platforms';
+import { getSwitcherApps, RECODER_SETTINGS_URLS } from '@recoder/ecosystem-config';
+import { Key, Settings, Shield } from 'lucide-react';
 
 export function AppSwitcher() {
   const [showMenu, setShowMenu] = useState(false);
@@ -14,12 +15,7 @@ export function AppSwitcher() {
     }
   }, []);
 
-  const switcherApps = getSwitcherApps().map(s => ({
-    id: s.id,
-    label: s.label,
-    description: s.description,
-    href: getServiceUrlClient(s.id),
-  }));
+  const switcherApps = getSwitcherApps();
 
   const isCurrentApp = (href: string) => {
     try {
@@ -77,6 +73,31 @@ export function AppSwitcher() {
             </a>
             );
           })}
+          <div className="my-1 border-t border-white/10" />
+          <a
+            href={RECODER_SETTINGS_URLS.home.main}
+            onClick={() => setShowMenu(false)}
+            className="w-full px-4 py-2 flex items-center justify-between text-gray-300 hover:bg-white/10 transition-colors"
+          >
+            <span className="text-sm font-medium">Account Settings</span>
+            <Settings className="w-3.5 h-3.5 text-gray-500" />
+          </a>
+          <a
+            href={RECODER_SETTINGS_URLS.home.security}
+            onClick={() => setShowMenu(false)}
+            className="w-full px-4 py-2 flex items-center justify-between text-gray-300 hover:bg-white/10 transition-colors"
+          >
+            <span className="text-sm font-medium">Security</span>
+            <Shield className="w-3.5 h-3.5 text-gray-500" />
+          </a>
+          <a
+            href={RECODER_SETTINGS_URLS.home.aiProviders}
+            onClick={() => setShowMenu(false)}
+            className="w-full px-4 py-2 flex items-center justify-between text-gray-300 hover:bg-white/10 transition-colors"
+          >
+            <span className="text-sm font-medium">AI Providers</span>
+            <Key className="w-3.5 h-3.5 text-gray-500" />
+          </a>
         </div>
       )}
     </div>
