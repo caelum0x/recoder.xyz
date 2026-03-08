@@ -1,6 +1,8 @@
 'use client';
 
 import { getSwitcherApps, RECODER_SETTINGS_URLS } from '@recoder/ecosystem-config';
+import { NotificationBell } from '@recoder/ui/notification-bell';
+import { SubscriptionBadge } from '@recoder/ui/subscription-badge';
 import { ArrowUpRight, Grid3X3, Key, Settings, Shield } from 'lucide-react';
 import {
   Popover,
@@ -14,6 +16,9 @@ const apps = getSwitcherApps();
 
 export function AppSwitcher() {
   return (
+    <div className="flex items-center gap-2">
+      <SubscriptionBadge />
+      <NotificationBell />
     <Popover>
       <PopoverTrigger asChild>
         <Button variant="ghost" size="icon" className="h-8 w-8">
@@ -69,5 +74,6 @@ export function AppSwitcher() {
         </a>
       </PopoverContent>
     </Popover>
+    </div>
   );
 }
