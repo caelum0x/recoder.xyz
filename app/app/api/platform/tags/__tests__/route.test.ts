@@ -8,17 +8,24 @@ vi.mock("@/lib/prisma", () => ({
       update: vi.fn(),
       delete: vi.fn(),
       findUnique: vi.fn(),
+      count: vi.fn().mockResolvedValue(0),
     },
     ecosystem_tag_items: {
       findMany: vi.fn(),
       create: vi.fn(),
       delete: vi.fn(),
+      findFirst: vi.fn(),
+      count: vi.fn().mockResolvedValue(0),
     },
   },
 }));
 
 vi.mock("@/lib/auth-helpers", () => ({
   getUserFromToken: vi.fn(),
+}));
+
+vi.mock("@/lib/plan-limits", () => ({
+  checkPlanLimit: vi.fn().mockResolvedValue({ allowed: true }),
 }));
 
 import { prisma } from "@/lib/prisma";
