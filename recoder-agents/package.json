@@ -4,7 +4,8 @@
   "private": true,
   "scripts": {
     "dev": "next dev --turbopack",
-    "build": "next build",
+    "build": "AUTH_DATABASE_URL=${AUTH_DATABASE_URL:-postgresql://build:build@localhost:5432/build} next build",
+    "analyze": "ANALYZE=true AUTH_DATABASE_URL=${AUTH_DATABASE_URL:-postgresql://build:build@localhost:5432/build} next build",
     "start": "next start",
     "lint": "pnpm exec eslint .",
     "typecheck": "pnpm exec tsc --noEmit",
@@ -22,7 +23,6 @@
     "format:check": "pnpm exec prettier --check ."
   },
   "dependencies": {
-    "@calcom/embed-react": "^1.5.2",
     "@codemirror/commands": "^6.10.1",
     "@codemirror/language": "^6.12.1",
     "@codemirror/state": "^6.5.3",
@@ -72,7 +72,9 @@
     "@radix-ui/react-visually-hidden": "^1.2.4",
     "@react-pdf/renderer": "^4.3.0",
     "@recoder/auth": "workspace:*",
+    "@recoder/design-tokens": "workspace:*",
     "@recoder/ecosystem-config": "workspace:*",
+    "@recoder/ui": "workspace:*",
     "@recoder/shared": "workspace:*",
     "@shikijs/transformers": "^3.12.0",
     "@silevis/reactgrid": "^4.1.17",
@@ -149,7 +151,6 @@
     "@xterm/xterm": "^5.5.0",
     "autoprefixer": "10.4.17",
     "better-auth": "^1.2.0",
-    "canvas": "^3.1.0",
     "canvas-confetti": "^1.9.4",
     "chart.js": "^4.5.1",
     "class-variance-authority": "^0.7.1",
@@ -192,7 +193,6 @@
     "npm": "^11.5.2",
     "papaparse": "^5.5.2",
     "pdfjs-dist": "4.8.69",
-    "playwright": "^1.57.0",
     "postcss": "8.4.33",
     "posthog-js": "^1.258.6",
     "posthog-node": "^5.6.0",
@@ -205,10 +205,8 @@
     "react-dom": "19.1.0",
     "react-hook-form": "^7.62.0",
     "react-icons": "^5.5.0",
-    "react-is": "^19.2.3",
     "react-konva": "^19.2.1",
     "react-markdown": "^10.1.0",
-    "react-papaparse": "^4.4.0",
     "react-pdf": "^9.2.1",
     "react-phone-number-input": "^3.4.12",
     "react-resizable-panels": "^3.0.6",
@@ -236,6 +234,7 @@
     "zustand": "^5.0.3"
   },
   "devDependencies": {
+    "@next/bundle-analyzer": "^15.5.0",
     "@eslint/eslintrc": "^3",
     "@tailwindcss/postcss": "^4.1.4",
     "@testing-library/jest-dom": "^6.9.1",

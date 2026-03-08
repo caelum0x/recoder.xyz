@@ -2,6 +2,8 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { getSwitcherApps, RECODER_SETTINGS_URLS } from '@recoder/ecosystem-config';
+import { NotificationBell } from '@recoder/ui/notification-bell';
+import { SubscriptionBadge } from '@recoder/ui/subscription-badge';
 import { Key, Settings, Shield } from 'lucide-react';
 
 export function AppSwitcher() {
@@ -37,7 +39,9 @@ export function AppSwitcher() {
   }, []);
 
   return (
-    <div className="relative" ref={menuRef}>
+    <div className="relative flex items-center gap-2" ref={menuRef}>
+      <SubscriptionBadge />
+      <NotificationBell />
       <button
         onClick={() => setShowMenu(!showMenu)}
         className="w-9 h-9 flex items-center justify-center rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 hover:border-orange-500/50 transition-all"
