@@ -8,11 +8,16 @@ import {
   PopoverTrigger,
 } from "@repo/design-system/components/ui/popover";
 import { ArrowUpRight, Grid3X3, Key, Settings, Shield } from "lucide-react";
+import { NotificationBell } from "./notification-bell";
+import { SubscriptionBadge } from "./subscription-badge";
 
 const currentAppId = "pm";
 const apps = getSwitcherApps();
 
 export const AppSwitcher = () => (
+  <div className="flex items-center gap-2">
+    <SubscriptionBadge />
+    <NotificationBell />
   <Popover>
     <PopoverTrigger asChild>
       <Button variant="ghost" size="icon" className="h-8 w-8">
@@ -70,4 +75,5 @@ export const AppSwitcher = () => (
       </a>
     </PopoverContent>
   </Popover>
+  </div>
 );
