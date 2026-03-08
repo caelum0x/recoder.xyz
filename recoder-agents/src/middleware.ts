@@ -134,7 +134,6 @@ export async function middleware(request: NextRequest) {
         callbackUrl.searchParams.set(key, value);
       });
       
-      console.log('Redirecting root auth callback params to /auth/callback');
       return NextResponse.redirect(callbackUrl);
     }
   }
@@ -253,7 +252,7 @@ export async function middleware(request: NextRequest) {
 
       if (backendUrl && sessionToken) {
         try {
-          const billingResponse = await fetch(`${backendUrl}/v1/billing/account-state/minimal`, {
+          const billingResponse = await fetch(`${backendUrl}/billing/account-state/minimal`, {
             headers: {
               Authorization: `Bearer ${sessionToken}`,
             },

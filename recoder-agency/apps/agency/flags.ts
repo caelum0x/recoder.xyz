@@ -61,7 +61,7 @@ export const experimental_storageFlag = flag<boolean>({
 export const stageV2Flag = flag<boolean>({
 	key: "stage-v2",
 	decide() {
-		return takeEnvFlag("STAGE_V2_FLAG");
+		return takeEnvFlag("STAGE_V2_FLAG", true);
 	},
 	description: "Enable stage showcase (Apps page)",
 	options: [
