@@ -17,15 +17,18 @@ export async function PUT(
     return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
 
-  const updated = await prisma.ecosystem_tags.update({
-    where: { id },
-    data: {
-      ...(body.name && { name: body.name }),
-      ...(body.color !== undefined && { color: body.color }),
-    },
-  });
-
-  return NextResponse.json(updated);
+  try {
+    const updated = await prisma.ecosystem_tags.update({
+      where: { id },
+      data: {
+        ...(body.name && { name: body.name }),
+        ...(body.color !== undefined && { color: body.color }),
+      },
+    });
+    return NextResponse.json(updated);
+  } catch {
+    return NextResponse.json({ error: "update_failed" }, { status: 500 });
+  }
 }
 
 export async function DELETE(
@@ -41,6 +44,10 @@ export async function DELETE(
     return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
 
-  await prisma.ecosystem_tags.delete({ where: { id } });
-  return NextResponse.json({ deleted: true });
+  try {
+    await prisma.ecosystem_tags.delete({ where: { id } });
+    return NextResponse.json({ deleted: true });
+  } catch {
+    return NextResponse.json({ error: "delete_failed" }, { status: 500 });
+  }
 }

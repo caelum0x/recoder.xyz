@@ -15,6 +15,11 @@ export async function DELETE(
     return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
 
+  const item = await prisma.ecosystem_tag_items.findFirst({ where: { id: itemId, tagId: id } });
+  if (!item) {
+    return NextResponse.json({ error: "not_found" }, { status: 404 });
+  }
+
   await prisma.ecosystem_tag_items.delete({ where: { id: itemId } });
   return NextResponse.json({ deleted: true });
 }

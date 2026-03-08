@@ -1199,6 +1199,38 @@ model notifications {
   @@index([userId, read])
 }
 
+model ecosystem_tags {
+  id        String   @id @default(uuid())
+  name      String
+  slug      String
+  color     String?
+  userId    String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users users @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items ecosystem_tag_items[]
+
+  @@unique([userId, slug])
+  @@index([userId])
+}
+
+model ecosystem_tag_items {
+  id         String   @id @default(uuid())
+  tagId      String
+  sourceApp  String
+  externalId String
+  label      String
+  itemType   String
+  itemUrl    String
+  createdAt  DateTime @default(now())
+
+  tag ecosystem_tags @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@unique([tagId, sourceApp, externalId])
+  @@index([tagId])
+}
+
 model oauth_accounts {
   id             String    @id
   provider       String
@@ -2573,6 +2605,7 @@ model users {
   scheduled_emails                                   scheduled_emails[]
   newsletter_subscribers                             newsletter_subscribers[]
   web_push_subscriptions                             web_push_subscriptions[]
+  ecosystem_tags                                     ecosystem_tags[]
 
   @@index([createdAt])
   @@index([subscription])
