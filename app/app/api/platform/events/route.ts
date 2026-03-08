@@ -3,6 +3,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { sendEmail } from "@/lib/email";
 import { verifyInternalServiceRequest } from "@/lib/internal-service-auth";
+import { checkPlanLimit } from "@/lib/plan-limits";
+import { sendWebPush, isWebPushEnabled, isStaleSubscription } from "@/lib/push-server";
 
 const VALID_SOURCE_APPS = ["agents", "agency", "pm", "web"] as const;
 
@@ -35,7 +37,9 @@ function validateEvent(body: unknown): body is PlatformEvent {
     typeof b.type === "string" &&
     typeof b.userId === "string" &&
     typeof b.title === "string" &&
+    (b.title as string).length <= 200 &&
     typeof b.message === "string" &&
+    (b.message as string).length <= 2000 &&
     typeof b.sourceApp === "string" &&
     VALID_SOURCE_APPS.includes(b.sourceApp as any)
   );
@@ -64,6 +68,17 @@ export async function POST(request: NextRequest) {
       { error: "invalid_event", required: ["type", "userId", "title", "message", "sourceApp"] },
       { status: 400 }
     );
+  }
+
+  // Check daily notification limit
+  const dayStart = new Date();
+  dayStart.setHours(0, 0, 0, 0);
+  const todayCount = await prisma.notifications.count({
+    where: { userId: body.userId, createdAt: { gte: dayStart } },
+  });
+  const limitCheck = await checkPlanLimit(body.userId, "notifications_per_day", todayCount);
+  if (!limitCheck.allowed) {
+    return Response.json(limitCheck.error!.toJSON(), { status: 403 });
   }
 
   // Write in-app notification
@@ -100,6 +115,34 @@ export async function POST(request: NextRequest) {
         html: `<p>${escapeHtml(body.message)}</p>${body.actionUrl && isHttpsUrl(body.actionUrl) ? `<p><a href="${escapeHtml(body.actionUrl)}">View details</a></p>` : ""}`,
         text: `${body.message}${body.actionUrl && isHttpsUrl(body.actionUrl) ? `\n\nView details: ${body.actionUrl}` : ""}`,
       }).catch(() => {});
+    }
+  }
+
+  // Send push if enabled
+  if (channels.includes("push") && prefs.pushNotifications && isWebPushEnabled()) {
+    const subscriptions = await prisma.web_push_subscriptions.findMany({
+      where: { userId: body.userId },
+      select: { id: true, endpoint: true, p256dh: true, auth: true },
+    });
+    const staleIds: string[] = [];
+    for (const sub of subscriptions) {
+      const result = await sendWebPush(
+        { endpoint: sub.endpoint, p256dh: sub.p256dh, auth: sub.auth },
+        {
+          title: body.title,
+          body: body.message,
+          url: body.actionUrl && isHttpsUrl(body.actionUrl) ? body.actionUrl : "/",
+          timestamp: new Date().toISOString(),
+          type: body.type,
+        }
+      );
+      if (isStaleSubscription(result)) {
+        staleIds.push(sub.id);
+      }
+    }
+    // Prune stale subscriptions
+    if (staleIds.length > 0) {
+      await prisma.web_push_subscriptions.deleteMany({ where: { id: { in: staleIds } } }).catch(() => {});
     }
   }
 

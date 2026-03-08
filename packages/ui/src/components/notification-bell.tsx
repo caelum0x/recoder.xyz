@@ -148,6 +148,7 @@ export function NotificationBell() {
             {unread > 0 && (
               <button
                 onClick={markAllRead}
+                type="button"
                 style={{
                   background: "none",
                   border: "none",
@@ -175,6 +176,14 @@ export function NotificationBell() {
                     if (!n.read) markRead(n.id);
                     if (n.actionUrl) window.open(n.actionUrl, "_blank");
                   }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      if (!n.read) markRead(n.id);
+                      if (n.actionUrl) window.open(n.actionUrl, "_blank");
+                    }
+                  }}
+                  role="button"
+                  tabIndex={0}
                   style={{
                     padding: "12px 16px",
                     borderBottom: "1px solid rgba(255,255,255,0.05)",
