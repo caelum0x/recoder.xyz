@@ -10,7 +10,7 @@ import {
   ArrowRight, CheckCircle, Sparkles, TrendingUp,
   BarChart3, FolderOpen,
   MessageCircle, Terminal, Zap, Code2, Bot, Workflow,
-  Database, Server, ExternalLink
+  Database, Server, ExternalLink, Activity, AlertCircle, Clock
 } from 'lucide-react';
 import { RECODER_SERVICES, getServiceUrlClient } from '@/lib/config/platforms';
 
@@ -33,23 +33,62 @@ interface ServiceHealthEntry {
   lastChecked: string;
 }
 
+interface AppActivity {
+  app: string;
+  stats: {
+    totalItems: number;
+    activeItems: number;
+    lastActivityAt: string | null;
+  };
+  recentActivity: Array<{
+    id: string;
+    type: string;
+    title: string;
+    timestamp: string;
+    url: string;
+  }>;
+  error?: string;
+}
+
+const appDisplayNames: Record<string, string> = {
+  agents: 'Agents',
+  agency: 'Agency',
+  pm: 'PM',
+  web: 'Web IDE',
+};
+
+const appIcons: Record<string, React.ElementType> = {
+  agents: Bot,
+  agency: Workflow,
+  pm: Database,
+  web: Code2,
+};
+
 function DashboardContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { data: session, isPending } = useSession();
   const [showWelcome, setShowWelcome] = useState(false);
   const [serviceHealth, setServiceHealth] = useState<Record<string, ServiceHealthEntry>>({});
+  const [platformActivity, setPlatformActivity] = useState<AppActivity[]>([]);
+  const [platformActivityLoading, setPlatformActivityLoading] = useState(true);
+  const redirectToSignIn = () => {
+    const currentPath = typeof window !== 'undefined'
+      ? `${window.location.pathname}${window.location.search}`
+      : '/dashboard';
+    router.push(`/auth/signin?redirect=${encodeURIComponent(currentPath)}`);
+  };
 
   useEffect(() => {
     if (!isPending && !session) {
-      router.push('/auth/signin');
+      redirectToSignIn();
       return;
     }
     if (searchParams.get('welcome') === 'true') {
       setShowWelcome(true);
       setTimeout(() => setShowWelcome(false), 5000);
     }
-  }, [session, isPending, router, searchParams]);
+  }, [session, isPending, searchParams]);
 
   // Fetch ecosystem health for status dots
   useEffect(() => {
@@ -65,6 +104,20 @@ function DashboardContent() {
         }
       })
       .catch(() => {});
+  }, []);
+
+  // Fetch cross-app platform activity
+  useEffect(() => {
+    setPlatformActivityLoading(true);
+    fetch('/api/dashboard/platform-activity')
+      .then(r => r.json())
+      .then((data: { success?: boolean; data?: AppActivity[] }) => {
+        if (data.success && data.data) {
+          setPlatformActivity(data.data);
+        }
+      })
+      .catch(() => {})
+      .finally(() => setPlatformActivityLoading(false));
   }, []);
 
   if (isPending) {
@@ -218,6 +271,132 @@ function DashboardContent() {
               <p className="text-sm text-gray-400">Learn how to use Recoder</p>
             </Link>
           </div>
+        </div>
+
+        {/* Platform Activity */}
+        <div className="mb-12">
+          <div className="flex items-center space-x-3 mb-6">
+            <Activity className="w-6 h-6 text-orange-500" />
+            <h2 className="text-2xl font-bold">Platform Activity</h2>
+          </div>
+
+          {platformActivityLoading ? (
+            <div className="flex items-center justify-center py-12">
+              <div className="w-8 h-8 border-2 border-orange-500 border-t-transparent rounded-full animate-spin" />
+            </div>
+          ) : (
+            <>
+              {/* App stat cards */}
+              <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+                {platformActivity.map((entry) => {
+                  const Icon = appIcons[entry.app] || Globe;
+                  const displayName = appDisplayNames[entry.app] || entry.app;
+                  const hasError = !!entry.error;
+
+                  return (
+                    <div
+                      key={entry.app}
+                      className={`p-5 rounded-2xl border ${
+                        hasError
+                          ? 'border-zinc-700 bg-zinc-900/50'
+                          : 'border-white/10 bg-white/5'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-center space-x-2">
+                          <div className="w-8 h-8 bg-gradient-to-br from-orange-500/20 to-purple-600/20 rounded-lg flex items-center justify-center">
+                            <Icon className="w-4 h-4 text-gray-300" />
+                          </div>
+                          <span className="font-semibold text-sm">{displayName}</span>
+                        </div>
+                        {hasError && (
+                          <AlertCircle className="w-4 h-4 text-zinc-500" />
+                        )}
+                      </div>
+
+                      {hasError ? (
+                        <p className="text-xs text-zinc-500">Unavailable</p>
+                      ) : (
+                        <div className="space-y-1">
+                          <div className="flex items-baseline justify-between">
+                            <span className="text-2xl font-bold">{entry.stats.totalItems}</span>
+                            <span className="text-xs text-gray-500">total</span>
+                          </div>
+                          <div className="flex items-baseline justify-between">
+                            <span className="text-sm text-orange-400">{entry.stats.activeItems} active</span>
+                            {entry.stats.lastActivityAt && (
+                              <span className="text-xs text-gray-600">
+                                {new Date(entry.stats.lastActivityAt).toLocaleDateString()}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Unified activity feed */}
+              {(() => {
+                const allActivities = platformActivity
+                  .flatMap((entry) =>
+                    entry.recentActivity.map((item) => ({
+                      ...item,
+                      app: entry.app,
+                    })),
+                  )
+                  .sort(
+                    (a, b) =>
+                      new Date(b.timestamp).getTime() -
+                      new Date(a.timestamp).getTime(),
+                  )
+                  .slice(0, 10);
+
+                if (allActivities.length === 0) return null;
+
+                return (
+                  <div className="rounded-2xl border border-white/10 bg-white/5 overflow-hidden">
+                    <div className="px-5 py-3 border-b border-white/10">
+                      <h3 className="text-sm font-semibold text-gray-400">Recent Activity</h3>
+                    </div>
+                    <ul className="divide-y divide-white/5">
+                      {allActivities.map((item) => {
+                        const Icon = appIcons[item.app] || Globe;
+                        return (
+                          <li key={`${item.app}-${item.id}`}>
+                            <a
+                              href={item.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="flex items-center px-5 py-3 hover:bg-white/5 transition-colors group"
+                            >
+                              <div className="w-7 h-7 bg-gradient-to-br from-orange-500/20 to-purple-600/20 rounded-lg flex items-center justify-center mr-3 flex-shrink-0">
+                                <Icon className="w-3.5 h-3.5 text-gray-400" />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm truncate">{item.title}</p>
+                                <p className="text-xs text-gray-500">
+                                  {appDisplayNames[item.app] || item.app} &middot; {item.type}
+                                </p>
+                              </div>
+                              <div className="flex items-center space-x-2 ml-3 flex-shrink-0">
+                                <Clock className="w-3 h-3 text-gray-600" />
+                                <span className="text-xs text-gray-600">
+                                  {new Date(item.timestamp).toLocaleDateString()}
+                                </span>
+                                <ExternalLink className="w-3 h-3 text-gray-700 group-hover:text-orange-400 transition-colors" />
+                              </div>
+                            </a>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </div>
+                );
+              })()}
+            </>
+          )}
         </div>
 
         {/* Beta User Banner */}
