@@ -7,6 +7,7 @@
 
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
+import { RECODER_SETTINGS_URLS } from '@recoder/ecosystem-config';
 import { 
   Search, 
   Terminal, 
@@ -32,6 +33,15 @@ interface Command {
   category: string;
   keywords?: string[];
 }
+
+const toAppPath = (href: string) => {
+  try {
+    const url = new URL(href);
+    return `${url.pathname}${url.search}${url.hash}`;
+  } catch {
+    return href;
+  }
+};
 
 export function CommandPalette() {
   const [isOpen, setIsOpen] = useState(false);
@@ -82,7 +92,7 @@ export function CommandPalette() {
       description: 'Open settings',
       icon: Settings,
       category: 'Settings',
-      action: () => router.push('/settings'),
+      action: () => router.push(toAppPath(RECODER_SETTINGS_URLS.home.main)),
     },
     {
       id: 'settings-profile',
@@ -90,7 +100,7 @@ export function CommandPalette() {
       description: 'Edit your profile',
       icon: User,
       category: 'Settings',
-      action: () => router.push('/settings/profile'),
+      action: () => router.push(toAppPath(RECODER_SETTINGS_URLS.home.profile)),
     },
     {
       id: 'settings-security',
@@ -98,7 +108,7 @@ export function CommandPalette() {
       description: 'Manage security',
       icon: Shield,
       category: 'Settings',
-      action: () => router.push('/settings/security'),
+      action: () => router.push(toAppPath(RECODER_SETTINGS_URLS.home.security)),
     },
     {
       id: 'settings-api',
@@ -106,7 +116,7 @@ export function CommandPalette() {
       description: 'Manage API keys',
       icon: Key,
       category: 'Settings',
-      action: () => router.push('/settings/api-keys'),
+      action: () => router.push(toAppPath(RECODER_SETTINGS_URLS.home.apiKeys)),
     },
     {
       id: 'settings-notifications',
@@ -114,7 +124,7 @@ export function CommandPalette() {
       description: 'Configure notifications',
       icon: Bell,
       category: 'Settings',
-      action: () => router.push('/settings/notifications'),
+      action: () => router.push(toAppPath(RECODER_SETTINGS_URLS.home.notifications)),
     },
     {
       id: 'settings-integrations',
@@ -122,7 +132,7 @@ export function CommandPalette() {
       description: 'Connect services',
       icon: Link2,
       category: 'Settings',
-      action: () => router.push('/settings/integrations'),
+      action: () => router.push(toAppPath(RECODER_SETTINGS_URLS.home.integrations)),
     },
     // CLI
     {
