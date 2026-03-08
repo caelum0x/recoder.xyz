@@ -9,9 +9,14 @@ vi.mock("@/lib/prisma", () => ({
     },
     notifications: {
       create: vi.fn(),
+      count: vi.fn().mockResolvedValue(0),
     },
     users: {
       findUnique: vi.fn(),
+    },
+    web_push_subscriptions: {
+      findMany: vi.fn().mockResolvedValue([]),
+      deleteMany: vi.fn(),
     },
   },
 }));
@@ -24,6 +29,18 @@ vi.mock("@/lib/email", () => ({
 // Mock internal service auth
 vi.mock("@/lib/internal-service-auth", () => ({
   verifyInternalServiceRequest: vi.fn().mockReturnValue({ ok: true }),
+}));
+
+// Mock plan limits
+vi.mock("@/lib/plan-limits", () => ({
+  checkPlanLimit: vi.fn().mockResolvedValue({ allowed: true }),
+}));
+
+// Mock push server
+vi.mock("@/lib/push-server", () => ({
+  sendWebPush: vi.fn().mockResolvedValue({ ok: true, endpoint: "test" }),
+  isWebPushEnabled: vi.fn().mockReturnValue(false),
+  isStaleSubscription: vi.fn().mockReturnValue(false),
 }));
 
 import { prisma } from "@/lib/prisma";

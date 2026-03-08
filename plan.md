@@ -180,6 +180,18 @@ Future items:
 - [x] Billing awareness (all apps check subscription, show upgrade prompts) — DONE 2026-03-08: SubscriptionBadge in all 5 apps + PlanLimitError 403 standardization
 - [x] Consistent theme consumption (all apps consume design tokens)
 
+### 14. Platform Hardening & Feature Gaps [COMPLETE]
+
+Post-review hardening pass and missing feature implementation for unified platform features.
+
+- [x] Wire plan limit enforcement into tag/notification API routes — tags POST, tag items POST, and events POST now check `checkPlanLimit()` before writes
+- [x] Implement Web Push notifications — wired `sendWebPush()` into platform events route; existing VAPID infrastructure (sw.js, push-server.ts, push-subscribe endpoints) already complete
+- [x] Add `web` app activity endpoint — `recoder-web/app/routes/api.platform.activity.ts` (Remix loader with service key auth)
+- [x] Backfill @recoder/ui canonical component accessibility — added `type="button"`, `onKeyDown`, `role="button"`, `tabIndex={0}` to canonical + agency NotificationBell
+- [x] Handle tag slug race conditions — retry with random suffix on P2002 unique constraint violation (up to 3 attempts)
+- [x] Add input length validation — tag names (200), event titles (200), event messages (2000), tag item labels (200), tag item URLs (2000)
+- [x] Add itemUrl HTTPS validation — tag items POST now rejects non-HTTPS URLs via `isHttpsUrl()` check
+
 ---
 
 ## Completed Work (Design Unification — 2026-03-06)
