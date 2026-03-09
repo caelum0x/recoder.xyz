@@ -3,6 +3,7 @@ import './globals.css';
 import { Providers } from '@/components/providers';
 import UTMCapture from '@/components/UTMCapture';
 import { roobert, roobertMono } from './fonts/roobert';
+import { MobileAppBanner } from '@/app/components/MobileAppBanner';
 
 export const viewport: Viewport = {
   viewportFit: 'cover',
@@ -110,6 +111,7 @@ export default function RootLayout({
         <a href="#main-content" className="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-[9999] focus:px-4 focus:py-2 focus:bg-orange-500 focus:text-white focus:rounded-lg">Skip to main content</a>
         <UTMCapture />
         <Providers><main id="main-content">{children}</main></Providers>
+        <MobileAppBanner />
       </body>
     </html>
   );
