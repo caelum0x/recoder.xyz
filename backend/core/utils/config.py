@@ -291,7 +291,7 @@ class Configuration:
     ANTHROPIC_API_KEY: Optional[str] = None
     OPENAI_API_KEY: Optional[str] = None
     
-    ENABLE_MEMORY: bool = False
+    ENABLE_MEMORY: bool = True
     ENABLE_KNOWLEDGE_BASE: bool = True
     ENABLE_USER_CONTEXT: bool = True
     MEMORY_EMBEDDING_PROVIDER: Optional[str] = "openai"
