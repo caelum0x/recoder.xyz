@@ -11,6 +11,7 @@ import { NavTriggerRuns } from '@/components/sidebar/nav-trigger-runs';
 import { NavWorkspaces } from '@/components/sidebar/nav-workspaces';
 import { NavUserWithTeams } from '@/components/sidebar/nav-user-with-teams';
 import { RecoderLogo } from '@/components/sidebar/recoder-logo';
+import { AppSwitcher } from '@/components/ui/app-switcher';
 import { siteConfig } from '@/lib/site-config';
 import {
   Sidebar,
@@ -44,6 +45,9 @@ import { Kbd } from '../ui/kbd';
 import { useTranslations } from 'next-intl';
 import { KbdGroup } from '../ui/kbd';
 import { useAuth } from '@/components/AuthProvider';
+import { NotificationBell } from '@/components/notifications/notification-bell';
+import { SubscriptionStatusBadge } from '@/components/billing/subscription-status-badge';
+import { ActiveRunsSection } from '@/components/sidebar/active-runs';
 
 
 function UserProfileSection({ user }: { user: any }) {
@@ -59,7 +63,12 @@ function UserProfileSection({ user }: { user: any }) {
     planIcon: getPlanIcon(planName, isLocal)
   };
 
-  return <NavUserWithTeams user={enhancedUser} />;
+  return (
+    <div className="space-y-2">
+      <NavUserWithTeams user={enhancedUser} />
+      {state !== 'collapsed' && <SubscriptionStatusBadge className="ml-1" />}
+    </div>
+  );
 }
 
 function FloatingMobileMenuButton() {
@@ -250,14 +259,15 @@ export function SidebarLeft({
           )}>
 
             <Link href="/dashboard" onClick={() => isMobile && setOpenMobile(false)} className="flex items-center justify-center">
-              <RecoderLogo 
-                size={20} 
+              <RecoderLogo
+                size={20}
                 className={cn(
                   "flex-shrink-0 transition-[transform,opacity] duration-300 ease-out hover:rotate-180 hover:duration-700 transform-gpu",
                   state === 'collapsed' && "group-hover/logo:opacity-0 group-hover/logo:scale-90"
-                )} 
+                )}
               />
             </Link>
+            {state !== 'collapsed' && <AppSwitcher />}
             {/* Expand button - only shows on hover when collapsed */}
             {state === 'collapsed' && (
               <button
@@ -283,6 +293,7 @@ export function SidebarLeft({
                 : "opacity-100 pointer-events-auto"
             )}
           >
+            <NotificationBell />
             <Button
               variant="ghost"
               size="icon"
@@ -487,6 +498,11 @@ export function SidebarLeft({
                 <NavTriggerRuns />
               </>
             )}
+          </div>
+
+          {/* Active runs monitor */}
+          <div className="px-6">
+            <ActiveRunsSection />
           </div>
         </div>
       </SidebarContent>
