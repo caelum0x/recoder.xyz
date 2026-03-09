@@ -174,6 +174,60 @@ export async function removeLineItem(lineItemId: string, quoteId: string) {
 	revalidatePath(`/quotes/${quoteId}`);
 }
 
+export async function updateLineItem(
+	lineItemId: string,
+	quoteId: string,
+	data: {
+		name?: string;
+		description?: string | null;
+		quantity?: number;
+		unitPriceCents?: number;
+	},
+) {
+	const team = await requireAdminRole();
+
+	const quote = await db.query.quotes.findFirst({
+		where: and(eq(quotes.id, quoteId), eq(quotes.teamDbId, team.dbId)),
+	});
+	if (!quote) {
+		throw new Error("Quote not found");
+	}
+	if (quote.status !== "draft") {
+		throw new Error("Can only edit line items on draft quotes");
+	}
+
+	const existing = await db.query.quoteLineItems.findFirst({
+		where: and(
+			eq(quoteLineItems.id, lineItemId),
+			eq(quoteLineItems.quoteDbId, quote.dbId),
+		),
+	});
+	if (!existing) {
+		throw new Error("Line item not found");
+	}
+
+	const name = data.name?.trim() || existing.name;
+	const description =
+		data.description !== undefined ? data.description : existing.description;
+	const quantity =
+		data.quantity !== undefined
+			? Math.max(1, data.quantity)
+			: existing.quantity;
+	const unitPriceCents =
+		data.unitPriceCents !== undefined
+			? Math.max(0, data.unitPriceCents)
+			: existing.unitPriceCents;
+	const totalCents = quantity * unitPriceCents;
+
+	await db
+		.update(quoteLineItems)
+		.set({ name, description, quantity, unitPriceCents, totalCents })
+		.where(eq(quoteLineItems.id, lineItemId));
+
+	await recalcQuoteTotal(quote.dbId);
+	revalidatePath(`/quotes/${quoteId}`);
+}
+
 export async function convertQuoteToProject(quoteId: string) {
 	const team = await requireAdminRole();
 
