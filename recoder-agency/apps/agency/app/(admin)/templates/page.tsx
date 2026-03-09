@@ -9,6 +9,11 @@ import {
 	upsertDeliveryPlaybookAction,
 	upsertModelRoutingPolicyAction,
 } from "./actions";
+import {
+	PlaybookCard,
+	RoutingPolicyCard,
+	ServiceSkuCard,
+} from "./template-cards";
 
 type DodTemplateRow = {
 	deliverableType: string;
@@ -428,36 +433,7 @@ export default async function TemplatesPage() {
 						</div>
 					) : (
 						serviceSkus.map((sku) => (
-							<div
-								key={sku.id}
-								className="rounded-lg border border-border/70 bg-background p-3 space-y-1"
-							>
-								<div className="flex items-center justify-between gap-2">
-									<p className="text-sm font-medium text-text">
-										{sku.name}{" "}
-										<span className="text-xs text-text-muted">
-											({sku.code})
-										</span>
-									</p>
-									<span
-										className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] ${
-											sku.isActive
-												? "bg-emerald-500/10 text-emerald-400"
-												: "bg-neutral-500/10 text-text-muted"
-										}`}
-									>
-										{sku.isActive ? "active" : "inactive"}
-									</span>
-								</div>
-								<p className="text-xs text-text-muted line-clamp-2">
-									{sku.scope}
-								</p>
-								<p className="text-xs text-text-muted">
-									{sku.currency.toUpperCase()}{" "}
-									{(sku.priceCents / 100).toFixed(2)} • SLA {sku.slaDays}d •
-									Revisions {sku.revisionLimit}
-								</p>
-							</div>
+							<ServiceSkuCard key={sku.id} sku={sku} />
 						))
 					)}
 				</div>
@@ -695,42 +671,15 @@ export default async function TemplatesPage() {
 						</div>
 					) : (
 						playbooks.map((pb) => (
-							<div
+							<PlaybookCard
 								key={pb.dbId}
-								className="rounded-lg border border-border/70 bg-background p-3 space-y-1"
-							>
-								<div className="flex items-center justify-between gap-2">
-									<p className="text-sm font-medium text-text">{pb.name}</p>
-									<span
-										className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] ${
-											pb.isActive
-												? "bg-emerald-500/10 text-emerald-400"
-												: "bg-neutral-500/10 text-text-muted"
-										}`}
-									>
-										{pb.isActive ? "active" : "inactive"}
-									</span>
-								</div>
-								{pb.description && (
-									<p className="text-xs text-text-muted line-clamp-2">
-										{pb.description}
-									</p>
-								)}
-								<p className="text-xs text-text-muted">
-									Budget{" "}
-									{pb.defaultBudgetCents != null
-										? `$${(pb.defaultBudgetCents / 100).toFixed(2)}`
-										: "—"}{" "}
-									• SLA {pb.defaultSlaDays}d
-									{pb.serviceSkuDbId != null
-										? ` • SKU #${pb.serviceSkuDbId}`
-										: " • no SKU"}
-									{pb.namePrefix ? ` • prefix "${pb.namePrefix}"` : ""}
-								</p>
-								<p className="text-xs text-text-muted">
-									Phases {pb.phases.length} • Checklist {pb.checklist.length}
-								</p>
-							</div>
+								pb={pb}
+								serviceSkus={serviceSkus.map((s) => ({
+									dbId: s.dbId,
+									code: s.code,
+									name: s.name,
+								}))}
+							/>
 						))
 					)}
 				</div>
@@ -817,39 +766,7 @@ export default async function TemplatesPage() {
 						</div>
 					) : (
 						routingPolicies.map((rp) => (
-							<div
-								key={rp.dbId}
-								className="rounded-lg border border-border/70 bg-background p-3 space-y-1"
-							>
-								<div className="flex items-center justify-between gap-2">
-									<p className="text-sm font-medium text-text">{rp.name}</p>
-									<span
-										className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] ${
-											rp.isActive
-												? "bg-emerald-500/10 text-emerald-400"
-												: "bg-neutral-500/10 text-text-muted"
-										}`}
-									>
-										{rp.isActive ? "active" : "inactive"}
-									</span>
-								</div>
-								<p className="text-xs text-text-muted">
-									Model: {rp.preferredModelId}
-									{rp.fallbackModelId
-										? ` • fallback: ${rp.fallbackModelId}`
-										: ""}
-								</p>
-								<p className="text-xs text-text-muted">
-									Ceiling:{" "}
-									{rp.costCeilingCentsPerGeneration != null
-										? `${rp.costCeilingCentsPerGeneration}¢/gen`
-										: "none"}{" "}
-									• priority {rp.priority}
-									{rp.projectDbId != null
-										? ` • project #${rp.projectDbId}`
-										: " • team-wide"}
-								</p>
-							</div>
+							<RoutingPolicyCard key={rp.dbId} rp={rp} />
 						))
 					)}
 				</div>
