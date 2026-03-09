@@ -532,6 +532,11 @@ async def compress_thread_context(thread_id: str, request: Request):
         "compressed_count": len(compressed),
     }
 
+@api_router.get("/agents/{agent_id}/cost-estimate", summary="Cost Estimate", operation_id="get_cost_estimate", tags=["agents"])
+async def get_cost_estimate(agent_id: str, prompt_length: int = 500, model: str = "claude-sonnet-4"):
+    from core.ai.cost_estimator import estimate_cost
+    return estimate_cost(model=model, input_tokens=prompt_length)
+
 @api_router.get("/health", summary="Health Check", operation_id="health_check", tags=["system"])
 async def health_check():
     logger.debug("Health check endpoint called")
