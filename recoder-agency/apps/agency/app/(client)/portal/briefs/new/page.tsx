@@ -1,12 +1,83 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { submitBrief } from "./actions";
+
+const DRAFT_KEY = "agency-brief-draft";
+const DEBOUNCE_MS = 500;
+
+interface BriefDraft {
+	serviceType: string;
+	description: string;
+	timeline: string;
+}
 
 export default function SubmitBriefPage() {
 	const [serviceType, setServiceType] = useState("");
 	const [description, setDescription] = useState("");
 	const [timeline, setTimeline] = useState("");
+	const [resumedFromDraft, setResumedFromDraft] = useState(false);
+	const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+	// Restore draft on mount
+	useEffect(() => {
+		try {
+			const saved = localStorage.getItem(DRAFT_KEY);
+			if (saved) {
+				const draft: BriefDraft = JSON.parse(saved);
+				if (draft.serviceType || draft.description || draft.timeline) {
+					setServiceType(draft.serviceType ?? "");
+					setDescription(draft.description ?? "");
+					setTimeline(draft.timeline ?? "");
+					setResumedFromDraft(true);
+				}
+			}
+		} catch {
+			// Ignore corrupt localStorage data
+		}
+	}, []);
+
+	// Debounced save to localStorage
+	const saveDraft = useCallback(
+		(data: BriefDraft) => {
+			if (debounceRef.current) {
+				clearTimeout(debounceRef.current);
+			}
+			debounceRef.current = setTimeout(() => {
+				try {
+					localStorage.setItem(DRAFT_KEY, JSON.stringify(data));
+				} catch {
+					// Storage full or unavailable
+				}
+			}, DEBOUNCE_MS);
+		},
+		[],
+	);
+
+	const handleServiceTypeChange = (value: string) => {
+		setServiceType(value);
+		saveDraft({ serviceType: value, description, timeline });
+	};
+
+	const handleDescriptionChange = (value: string) => {
+		setDescription(value);
+		saveDraft({ serviceType, description: value, timeline });
+	};
+
+	const handleTimelineChange = (value: string) => {
+		setTimeline(value);
+		saveDraft({ serviceType, description, timeline: value });
+	};
+
+	const handleSubmit = async (formData: FormData) => {
+		// Clear draft before submitting (server action will redirect)
+		try {
+			localStorage.removeItem(DRAFT_KEY);
+		} catch {
+			// Ignore
+		}
+		await submitBrief(formData);
+	};
 
 	return (
 		<div className="max-w-2xl space-y-6">
@@ -17,7 +88,43 @@ export default function SubmitBriefPage() {
 				</p>
 			</div>
 
-			<form action={submitBrief} className="space-y-4">
+			{resumedFromDraft && (
+				<div className="flex items-center gap-2 rounded-lg border border-blue-200 bg-blue-50/50 px-3 py-2 text-sm text-blue-700">
+					<svg
+						className="size-4 shrink-0"
+						fill="none"
+						viewBox="0 0 24 24"
+						strokeWidth={1.5}
+						stroke="currentColor"
+					>
+						<path
+							strokeLinecap="round"
+							strokeLinejoin="round"
+							d="M12 9v3.75m9-.75a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 3.75h.008v.008H12v-.008Z"
+						/>
+					</svg>
+					Resumed from draft
+					<button
+						type="button"
+						onClick={() => {
+							setResumedFromDraft(false);
+							setServiceType("");
+							setDescription("");
+							setTimeline("");
+							try {
+								localStorage.removeItem(DRAFT_KEY);
+							} catch {
+								// Ignore
+							}
+						}}
+						className="ml-auto text-xs text-blue-600 hover:text-blue-800 underline"
+					>
+						Discard draft
+					</button>
+				</div>
+			)}
+
+			<form action={handleSubmit} className="space-y-4">
 				<div>
 					<label
 						htmlFor="serviceType"
@@ -29,7 +136,7 @@ export default function SubmitBriefPage() {
 						id="serviceType"
 						name="serviceType"
 						value={serviceType}
-						onChange={(e) => setServiceType(e.target.value)}
+						onChange={(e) => handleServiceTypeChange(e.target.value)}
 						className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-text"
 					>
 						<option value="">Select a service...</option>
@@ -52,7 +159,7 @@ export default function SubmitBriefPage() {
 						id="description"
 						name="description"
 						value={description}
-						onChange={(e) => setDescription(e.target.value)}
+						onChange={(e) => handleDescriptionChange(e.target.value)}
 						required
 						rows={6}
 						placeholder="Describe what you need..."
@@ -72,7 +179,7 @@ export default function SubmitBriefPage() {
 						name="timeline"
 						type="text"
 						value={timeline}
-						onChange={(e) => setTimeline(e.target.value)}
+						onChange={(e) => handleTimelineChange(e.target.value)}
 						placeholder="e.g., 2 weeks, end of month"
 						className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-text placeholder:text-text-muted"
 					/>
