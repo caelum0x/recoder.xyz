@@ -45,5 +45,5 @@ export async function submitBrief(formData: FormData) {
 		status: "draft",
 	});
 
-	redirect("/portal/projects");
+	redirect(`/portal/briefs/confirmation?briefId=${id}`);
 }
