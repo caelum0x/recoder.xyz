@@ -1,35 +1,21 @@
 import { and, asc, eq } from "drizzle-orm";
 import {
 	ArrowLeftIcon,
-	CheckCircleIcon,
 	FolderIcon,
 	PlusIcon,
 	SendIcon,
 	Trash2Icon,
-	XIcon,
 } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import {
-	changeOrders,
-	clients,
-	db,
-	quoteLineItems,
-	quotes,
-	serviceCatalog,
-} from "@/db";
+import { changeOrders, clients, db, quoteLineItems, quotes } from "@/db";
 import { getEffectiveQuoteTotal } from "@/lib/agency/quote-utils";
 import { getActiveServices } from "@/lib/agency/service-catalog";
 import { fetchCurrentTeam } from "@/services/teams";
-import {
-	addLineItem,
-	convertQuoteToProject,
-	deleteQuote,
-	removeLineItem,
-	sendQuote,
-	updateQuote,
-} from "../actions";
+import { addLineItem, deleteQuote, sendQuote, updateQuote } from "../actions";
 import { createChangeOrder } from "./change-order-actions";
+import { ConvertToProjectButton } from "./components/convert-to-project-button";
+import { LineItemsEditor } from "./components/line-items-editor";
 
 function formatCurrency(cents: number, currency: string) {
 	return new Intl.NumberFormat("en-US", {
@@ -125,20 +111,10 @@ export default async function QuoteDetailPage({
 						</form>
 					)}
 					{canConvert && (
-						<form
-							action={async () => {
-								"use server";
-								await convertQuoteToProject(quoteId);
-							}}
-						>
-							<button
-								type="submit"
-								className="inline-flex items-center gap-1 rounded-lg bg-green-600 px-3 py-1.5 text-xs text-white hover:bg-green-700 transition-colors"
-							>
-								<FolderIcon className="size-3.5" />
-								Convert to Project
-							</button>
-						</form>
+						<ConvertToProjectButton
+							quoteId={quoteId}
+							quoteTitle={quote.title}
+						/>
 					)}
 					{quote.projectDbId && (
 						<Link
@@ -246,81 +222,12 @@ export default async function QuoteDetailPage({
 			<div className="rounded-xl border border-border bg-background p-4">
 				<h2 className="text-sm font-medium text-text-muted mb-3">Line Items</h2>
 
-				{lineItems.length > 0 && (
-					<div className="rounded-lg border border-border overflow-hidden mb-4">
-						<table className="w-full text-sm">
-							<thead>
-								<tr className="border-b border-border bg-bg-hover/50">
-									<th className="text-left px-4 py-2 text-text-muted font-medium">
-										Item
-									</th>
-									<th className="text-right px-4 py-2 text-text-muted font-medium">
-										Qty
-									</th>
-									<th className="text-right px-4 py-2 text-text-muted font-medium">
-										Unit Price
-									</th>
-									<th className="text-right px-4 py-2 text-text-muted font-medium">
-										Total
-									</th>
-									{isDraft && (
-										<th className="text-right px-4 py-2 text-text-muted font-medium w-12" />
-									)}
-								</tr>
-							</thead>
-							<tbody>
-								{lineItems.map((item) => (
-									<tr
-										key={item.id}
-										className="border-b border-border last:border-0"
-									>
-										<td className="px-4 py-3">
-											<span className="text-text font-medium">{item.name}</span>
-											{item.description && (
-												<p className="text-xs text-text-muted mt-0.5">
-													{item.description}
-												</p>
-											)}
-										</td>
-										<td className="px-4 py-3 text-right text-text">
-											{item.quantity}
-										</td>
-										<td className="px-4 py-3 text-right text-text">
-											{formatCurrency(item.unitPriceCents, "usd")}
-										</td>
-										<td className="px-4 py-3 text-right text-text font-medium">
-											{formatCurrency(item.totalCents, "usd")}
-										</td>
-										{isDraft && (
-											<td className="px-4 py-3 text-right">
-												<form
-													action={async () => {
-														"use server";
-														await removeLineItem(item.id, quoteId);
-													}}
-												>
-													<button
-														type="submit"
-														className="text-red-400 hover:text-red-600 transition-colors"
-													>
-														<XIcon className="size-3.5" />
-													</button>
-												</form>
-											</td>
-										)}
-									</tr>
-								))}
-							</tbody>
-						</table>
-					</div>
-				)}
-
-				<div className="flex items-center justify-between mb-4">
-					<span className="text-sm text-text-muted">Subtotal</span>
-					<span className="text-lg font-bold text-text">
-						{formatCurrency(quote.priceCents, quote.currency)}
-					</span>
-				</div>
+				<LineItemsEditor
+					quoteId={quoteId}
+					items={lineItems}
+					currency={quote.currency}
+					isDraft={isDraft}
+				/>
 
 				{isDraft && (
 					<form
