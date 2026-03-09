@@ -6,6 +6,7 @@ import {
   agentTeamMessages,
   dispatchQuickTask,
   approveAction,
+  rejectAction,
   type AgentTeamAgent,
   type AgentTeamTask,
   type AgentTeamMessage,
@@ -115,12 +116,12 @@ export function AgentTeamPanel() {
           </button>
         </div>
         <a
-          href="/workspaces"
+          href="/projects"
           target="_blank"
           rel="noopener noreferrer"
           className="block text-center text-[10px] text-recoder-elements-textSecondary hover:text-recoder-elements-textPrimary mt-2"
         >
-          Open in Workspace →
+          Open Projects →
         </a>
       </section>
     </div>
@@ -140,17 +141,54 @@ function AgentRow({ agent }: { agent: AgentTeamAgent }) {
 }
 
 function TaskRow({ task }: { task: AgentTeamTask }) {
+  const [acting, setActing] = useState(false);
+  const needsApproval = task.approvalId && (task.status === 'pending_approval' || task.status === 'escalated');
+
   const statusColor =
     task.status === 'completed' ? 'text-green-500' :
     task.status === 'working' ? 'text-blue-500' :
     task.status === 'failed' ? 'text-red-500' :
+    needsApproval ? 'text-yellow-500' :
     'text-recoder-elements-textSecondary';
+
+  const handleApprove = useCallback(async () => {
+    if (!task.approvalId || acting) return;
+    setActing(true);
+    await approveAction(task.approvalId);
+    setActing(false);
+  }, [task.approvalId, acting]);
+
+  const handleReject = useCallback(async () => {
+    if (!task.approvalId || acting) return;
+    setActing(true);
+    await rejectAction(task.approvalId);
+    setActing(false);
+  }, [task.approvalId, acting]);
 
   return (
     <div className="flex items-center gap-2 px-2 py-1 rounded hover:bg-recoder-elements-background-depth-1">
       <span className={`text-[10px] font-medium ${statusColor}`}>{task.status}</span>
       <span className="text-xs truncate flex-1">{task.prompt.slice(0, 50)}</span>
-      <span className="text-[10px] text-recoder-elements-textSecondary">{task.agentId}</span>
+      {needsApproval ? (
+        <div className="flex gap-1 shrink-0">
+          <button
+            onClick={handleApprove}
+            disabled={acting}
+            className="text-[10px] px-1.5 py-0.5 rounded bg-green-600 text-white hover:bg-green-700 disabled:opacity-50"
+          >
+            Approve
+          </button>
+          <button
+            onClick={handleReject}
+            disabled={acting}
+            className="text-[10px] px-1.5 py-0.5 rounded bg-red-600 text-white hover:bg-red-700 disabled:opacity-50"
+          >
+            Reject
+          </button>
+        </div>
+      ) : (
+        <span className="text-[10px] text-recoder-elements-textSecondary">{task.agentId}</span>
+      )}
     </div>
   );
 }

@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useCallback, useState } from 'react';
 import { useStore } from '@nanostores/react';
 import {
   agentTeamWorkspaceId,
@@ -10,15 +10,22 @@ import {
   type AgentTeamTask,
 } from '~/lib/stores/agent-team';
 
+const MAX_RECONNECT_DELAY_MS = 30_000;
+const BASE_RECONNECT_DELAY_MS = 1_000;
+
 /**
  * SSE hook for real-time agent team updates.
- * Connects to workspace-scoped event stream.
+ * Connects to workspace-scoped event stream with exponential backoff reconnection.
  */
 export function useAgentTeamSSE() {
   const wsId = useStore(agentTeamWorkspaceId);
   const eventSourceRef = useRef<EventSource | null>(null);
+  const reconnectAttemptsRef = useRef(0);
+  const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Trigger re-render for reconnection
+  const [reconnectTick, setReconnectTick] = useState(0);
 
-  useEffect(() => {
+  const connect = useCallback(() => {
     if (!wsId) return;
 
     // Close existing connection
@@ -106,15 +113,45 @@ export function useAgentTeamSSE() {
       } catch { /* ignore */ }
     });
 
+    eventSource.onopen = () => {
+      // Reset reconnect counter on successful connection
+      reconnectAttemptsRef.current = 0;
+    };
+
     eventSource.onerror = () => {
-      // EventSource auto-reconnects
+      // Close the broken connection
+      eventSource.close();
+      eventSourceRef.current = null;
+
+      // Calculate exponential backoff delay: 1s, 2s, 4s, 8s, 16s, 30s (capped)
+      const attempt = reconnectAttemptsRef.current;
+      const delay = Math.min(
+        BASE_RECONNECT_DELAY_MS * Math.pow(2, attempt),
+        MAX_RECONNECT_DELAY_MS,
+      );
+      reconnectAttemptsRef.current = attempt + 1;
+
+      // Schedule reconnection by triggering a re-render
+      reconnectTimerRef.current = setTimeout(() => {
+        reconnectTimerRef.current = null;
+        setReconnectTick((t) => t + 1);
+      }, delay);
     };
 
     eventSourceRef.current = eventSource;
+  }, [wsId]);
+
+  useEffect(() => {
+    connect();
 
     return () => {
-      eventSource.close();
+      eventSourceRef.current?.close();
       eventSourceRef.current = null;
+      if (reconnectTimerRef.current) {
+        clearTimeout(reconnectTimerRef.current);
+        reconnectTimerRef.current = null;
+      }
+      reconnectAttemptsRef.current = 0;
     };
-  }, [wsId]);
+  }, [wsId, reconnectTick, connect]);
 }

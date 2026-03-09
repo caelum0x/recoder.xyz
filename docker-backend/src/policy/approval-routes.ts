@@ -395,6 +395,120 @@ approvalRouter.post('/:approvalId/escalate', (req: AuthenticatedApprovalRequest,
 });
 
 // ---------------------------------------------------------------------------
+// POST /approvals/:approvalId/grant - Grant a pending approval
+// ---------------------------------------------------------------------------
+
+approvalRouter.post('/:approvalId/grant', (req: AuthenticatedApprovalRequest, res: Response) => {
+  try {
+    const { approvalId } = req.params;
+
+    if (!approvalId) {
+      res.status(400).json({
+        success: false,
+        error: {
+          code: 'VALIDATION_ERROR',
+          message: 'approvalId parameter is required.',
+        },
+      });
+      return;
+    }
+
+    const body = req.body as Record<string, unknown>;
+    const resolvedBy = req.userId || (typeof body.resolvedBy === 'string' ? body.resolvedBy : 'anonymous');
+    const gate = getApprovalGateService();
+    const granted = gate.grant(approvalId, resolvedBy);
+
+    if (!granted) {
+      res.status(404).json({
+        success: false,
+        error: {
+          code: 'NOT_FOUND',
+          message: `Approval ${approvalId} not found or not in a pending/escalated state.`,
+        },
+      });
+      return;
+    }
+
+    logger.info(
+      { approvalId, resolvedBy },
+      'approval granted via API',
+    );
+
+    res.status(200).json({
+      success: true,
+      data: { approvalId, status: 'granted' },
+      timestamp: new Date().toISOString(),
+    });
+  } catch (err) {
+    logger.error({ err }, 'error granting approval');
+    res.status(500).json({
+      success: false,
+      error: {
+        code: 'INTERNAL_ERROR',
+        message: 'Failed to grant approval.',
+      },
+    });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// POST /approvals/:approvalId/reject - Reject a pending approval
+// ---------------------------------------------------------------------------
+
+approvalRouter.post('/:approvalId/reject', (req: AuthenticatedApprovalRequest, res: Response) => {
+  try {
+    const { approvalId } = req.params;
+
+    if (!approvalId) {
+      res.status(400).json({
+        success: false,
+        error: {
+          code: 'VALIDATION_ERROR',
+          message: 'approvalId parameter is required.',
+        },
+      });
+      return;
+    }
+
+    const body = req.body as Record<string, unknown>;
+    const resolvedBy = req.userId || (typeof body.resolvedBy === 'string' ? body.resolvedBy : 'anonymous');
+    const gate = getApprovalGateService();
+    const rejected = gate.reject(approvalId, resolvedBy);
+
+    if (!rejected) {
+      res.status(404).json({
+        success: false,
+        error: {
+          code: 'NOT_FOUND',
+          message: `Approval ${approvalId} not found or not in a pending/escalated state.`,
+        },
+      });
+      return;
+    }
+
+    logger.info(
+      { approvalId, resolvedBy },
+      'approval rejected via API',
+    );
+
+    res.status(200).json({
+      success: true,
+      data: { approvalId, status: 'rejected' },
+      timestamp: new Date().toISOString(),
+    });
+  } catch (err) {
+    logger.error({ err }, 'error rejecting approval');
+    res.status(500).json({
+      success: false,
+      error: {
+        code: 'INTERNAL_ERROR',
+        message: 'Failed to reject approval.',
+      },
+    });
+  }
+});
+
+// ---------------------------------------------------------------------------
 // GET /approvals/stats - Approval store diagnostics
 // ---------------------------------------------------------------------------
 

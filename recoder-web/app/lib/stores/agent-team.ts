@@ -21,6 +21,7 @@ export interface AgentTeamTask {
   agentId: string;
   status: string;
   createdAt: string;
+  approvalId?: string;
 }
 
 export interface AgentTeamMessage {
@@ -81,11 +82,14 @@ export async function dispatchQuickTask(prompt: string, agentId?: string): Promi
     });
 
     if (response.ok) {
-      const data = await response.json();
+      const data = (await response.json()) as {
+        id?: string;
+        data?: { id?: string };
+      };
       const tasks = agentTeamTasks.get();
       agentTeamTasks.set([
         {
-          taskId: data.data?.id ?? data.id,
+          taskId: data.data?.id ?? data.id ?? `task_${Date.now()}`,
           prompt,
           agentId: agentId ?? 'auto',
           status: 'submitted',
@@ -102,6 +106,20 @@ export async function dispatchQuickTask(prompt: string, agentId?: string): Promi
 export async function approveAction(approvalId: string): Promise<boolean> {
   try {
     const response = await fetch(`/api/a2a/approvals/${approvalId}/grant`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ resolvedBy: 'user' }),
+    });
+    return response.ok;
+  } catch {
+    return false;
+  }
+}
+
+export async function rejectAction(approvalId: string): Promise<boolean> {
+  try {
+    const response = await fetch(`/api/a2a/approvals/${approvalId}/reject`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
