@@ -33,6 +33,12 @@ const switcherApps = [
 		description: "AI Agent IDE",
 		href: "https://agents.recoder.xyz",
 	},
+	{
+		id: "openclaw",
+		label: "OpenClaw",
+		description: "Open-source AI Tools",
+		href: "https://openclaw.recoder.xyz",
+	},
 ] as const;
 
 export function AppSwitcher() {
@@ -53,6 +59,7 @@ export function AppSwitcher() {
 								<a
 									key={app.id}
 									href={app.href}
+									rel="noopener noreferrer"
 									className={`flex items-center justify-between rounded-md px-3 py-2 text-sm transition-colors ${
 										isCurrent
 											? "text-inverse bg-white/10"
