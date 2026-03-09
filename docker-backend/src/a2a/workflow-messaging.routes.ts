@@ -17,14 +17,111 @@ import { Router, type Request, type Response } from 'express';
 import { getWorkflowEngine } from './workflow-engine.service';
 import { getAgentMessagingService } from './agent-messaging.service';
 import { getDelegationChainService } from './delegation-chain.service';
+import { getAgentRegistryService } from './agent-registry.service';
+import { getTaskLifecycleService } from './task-lifecycle.service';
 
 // ---------------------------------------------------------------------------
-// Stub executor (used until real connector wiring)
+// Stub executor (kept for reference)
 // ---------------------------------------------------------------------------
 
-const stubExecutor = async (agentId: string, prompt: string): Promise<string> => {
-  return '[stub] ' + agentId + ': ' + prompt.substring(0, 100);
-};
+// const stubExecutor = async (agentId: string, prompt: string): Promise<string> => {
+//   return '[stub] ' + agentId + ': ' + prompt.substring(0, 100);
+// };
+
+// ---------------------------------------------------------------------------
+// Real agent task executor
+// ---------------------------------------------------------------------------
+
+/**
+ * Execute a task by delegating to a registered agent.
+ *
+ * For agents with a URL endpoint, POSTs the task and waits up to 30 seconds.
+ * For agents without an endpoint, creates the task and returns a reference
+ * for async polling.
+ */
+async function executeAgentTask(agentId: string, prompt: string): Promise<string> {
+  const registry = getAgentRegistryService();
+  const agent = registry.get(agentId);
+
+  if (!agent) {
+    throw new Error(`Agent "${agentId}" not found in registry`);
+  }
+
+  const health = registry.getHealth(agentId);
+  if (!health?.online) {
+    throw new Error(`Agent "${agentId}" is offline`);
+  }
+
+  const taskService = getTaskLifecycleService();
+
+  // Create task using the legacy input format (compatible with existing service)
+  const task = taskService.createTask({
+    prompt,
+    workspace_id: 'default',
+    thread_id: `workflow-${Date.now()}`,
+    assignee_agent_id: agentId,
+    requester_agent_id: 'workflow-engine',
+  });
+
+  // For REST-based agents with endpoints, POST the task
+  if (agent.card?.url) {
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 30_000);
+
+      const response = await fetch(`${agent.card.url}/tasks`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ taskId: task.id, prompt }),
+        signal: controller.signal,
+      });
+      clearTimeout(timeout);
+
+      if (!response.ok) {
+        taskService.failTask(task.id, {
+          code: 'AGENT_ERROR',
+          category: 'connector',
+          message: `Agent returned ${response.status}`,
+          severity: 'high',
+          retryable: response.status >= 500,
+        });
+        throw new Error(`Agent "${agentId}" returned ${response.status}`);
+      }
+
+      const result = await response.json();
+      taskService.completeTask(task.id, { data: result });
+      return JSON.stringify(result);
+    } catch (e) {
+      if (e instanceof DOMException && e.name === 'AbortError') {
+        taskService.failTask(task.id, {
+          code: 'DELEGATION_TIMEOUT',
+          category: 'connector',
+          message: `Agent "${agentId}" timed out after 30s`,
+          severity: 'high',
+          retryable: true,
+        });
+        throw new Error(`Agent "${agentId}" timed out after 30s`);
+      }
+      const msg = e instanceof Error ? e.message : 'Unknown error';
+      // Only fail the task if it hasn't already been failed above
+      try {
+        taskService.failTask(task.id, {
+          code: 'DELEGATION_ERROR',
+          category: 'connector',
+          message: msg,
+          severity: 'high',
+          retryable: false,
+        });
+      } catch {
+        // Task may already be in a terminal state from the !response.ok branch
+      }
+      throw e;
+    }
+  }
+
+  // For agents without endpoints, return task reference for async polling
+  return JSON.stringify({ taskId: task.id, status: 'submitted', agentId });
+}
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -125,7 +222,7 @@ workflowRouter.post('/:workflowId/execute', async (req: Request, res: Response) 
       return sendError(res, 404, `Workflow not found: ${req.params.workflowId}`);
     }
 
-    const execution = await engine.execute(req.params.workflowId, input, stubExecutor);
+    const execution = await engine.execute(req.params.workflowId, input, executeAgentTask);
     sendSuccess(res, execution, 201);
   } catch (err: any) {
     sendError(res, 500, err?.message ?? 'Internal error');
