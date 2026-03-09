@@ -34,6 +34,7 @@ from core.agents.agent_crud import router as agent_crud_router
 from core.agents.agent_tools import router as agent_tools_router
 from core.agents.agent_json import router as agent_json_router
 from core.agents.agent_setup import router as agent_setup_router
+from core.agents.analytics_api import router as agent_analytics_router
 from core.threads.api import router as threads_router
 from core.categorization.api import router as categorization_router
 from core.endpoints import router as endpoints_router
@@ -442,6 +443,7 @@ api_router.include_router(agent_crud_router)
 api_router.include_router(agent_tools_router)
 api_router.include_router(agent_json_router)
 api_router.include_router(agent_setup_router)
+api_router.include_router(agent_analytics_router)
 api_router.include_router(threads_router)
 api_router.include_router(categorization_router)
 api_router.include_router(endpoints_router)
@@ -500,6 +502,8 @@ api_router.include_router(referrals_router)
 api_router.include_router(memory_router)
 from core.endpoints import realtime_api
 api_router.include_router(realtime_api.router)
+from core.endpoints.website_analysis_api import router as website_analysis_router
+api_router.include_router(website_analysis_router)
 
 from core.test_harness.api import router as test_harness_router, e2e_router
 api_router.include_router(test_harness_router)
@@ -514,6 +518,19 @@ api_router.include_router(stateless_admin_router)
 # Auth OTP endpoint for expired magic links
 api_router.include_router(auth_api.router)
 api_router.include_router(mfa_api.router)
+
+@api_router.post("/threads/{thread_id}/compress", summary="Compress Thread Context", operation_id="compress_thread_context", tags=["threads"])
+async def compress_thread_context(thread_id: str, request: Request):
+    from core.ai.context_compressor import compress_messages
+    data = await request.json()
+    messages = data.get("messages", [])
+    preserve_last_n = data.get("preserve_last_n", 4)
+    compressed = compress_messages(messages, preserve_last_n=preserve_last_n)
+    return {
+        "compressed_messages": compressed,
+        "original_count": len(messages),
+        "compressed_count": len(compressed),
+    }
 
 @api_router.get("/health", summary="Health Check", operation_id="health_check", tags=["system"])
 async def health_check():
