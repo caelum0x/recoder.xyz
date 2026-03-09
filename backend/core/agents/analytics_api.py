@@ -311,7 +311,7 @@ def _aggregate_records(records: List[Dict[str, Any]]) -> AnalyticsOverview:
 # Endpoints
 # ============================================================================
 
-@router.get("/{agent_id}/analytics", response_model=AnalyticsOverview)
+@router.get("/{agent_id}/analytics", response_model=AnalyticsOverview, summary="Get agent analytics overview")
 async def get_agent_analytics(
     agent_id: str,
     auth: AuthorizedAgentAccess = Depends(require_agent_access),
@@ -341,7 +341,7 @@ async def get_agent_analytics(
         raise HTTPException(status_code=500, detail="Failed to fetch agent analytics")
 
 
-@router.get("/{agent_id}/analytics/daily", response_model=List[DailyRecord])
+@router.get("/{agent_id}/analytics/daily", response_model=List[DailyRecord], summary="Get daily analytics breakdown")
 async def get_agent_analytics_daily(
     agent_id: str,
     auth: AuthorizedAgentAccess = Depends(require_agent_access),
@@ -392,7 +392,7 @@ async def get_agent_analytics_daily(
         raise HTTPException(status_code=500, detail="Failed to fetch daily analytics")
 
 
-@router.get("/{agent_id}/analytics/export")
+@router.get("/{agent_id}/analytics/export", summary="Export analytics as CSV")
 async def export_agent_analytics(
     agent_id: str,
     auth: AuthorizedAgentAccess = Depends(require_agent_access),
@@ -455,7 +455,7 @@ async def export_agent_analytics(
         raise HTTPException(status_code=500, detail="Failed to export analytics")
 
 
-@router.post("/{agent_id}/analytics/record", response_model=RecordEventResponse)
+@router.post("/{agent_id}/analytics/record", response_model=RecordEventResponse, summary="Record analytics event")
 async def record_analytics_event(
     agent_id: str,
     body: RecordEventRequest,
@@ -568,7 +568,7 @@ class ModelAnalyticsResponse(BaseModel):
     most_reliable_model: str = ""
 
 
-@router.get("/{agent_id}/analytics/models", response_model=ModelAnalyticsResponse)
+@router.get("/{agent_id}/analytics/models", response_model=ModelAnalyticsResponse, summary="Get model performance analytics")
 async def get_model_analytics(
     agent_id: str,
     auth: AuthorizedAgentAccess = Depends(require_agent_access),

@@ -29,7 +29,7 @@ class EdgeCreateRequest(BaseModel):
     condition: Optional[dict] = None
 
 
-@router.post("")
+@router.post("", summary="Create a workflow")
 async def create_workflow(req: WorkflowCreateRequest, request: Request):
     """Create a new workflow for an agent."""
     return {
@@ -40,7 +40,7 @@ async def create_workflow(req: WorkflowCreateRequest, request: Request):
     }
 
 
-@router.get("/templates/list")
+@router.get("/templates/list", summary="List workflow templates")
 async def list_templates(category: str = None):
     """List available workflow templates."""
     from core.workflows.templates import get_templates
@@ -67,7 +67,7 @@ class WorkflowsOverviewResponse(BaseModel):
     avg_execution_time_seconds: float = 0.0
 
 
-@router.get("/analytics/overview", response_model=WorkflowsOverviewResponse)
+@router.get("/analytics/overview", response_model=WorkflowsOverviewResponse, summary="Get workflows analytics overview")
 async def workflows_overview(request: Request):
     """Aggregate analytics across all workflows for the current user."""
     db = request.app.state.db
@@ -113,7 +113,7 @@ async def workflows_overview(request: Request):
         raise HTTPException(status_code=500, detail="Failed to fetch workflows overview")
 
 
-@router.post("/{workflow_id}/from-template")
+@router.post("/{workflow_id}/from-template", summary="Create workflow from template")
 async def create_from_template(workflow_id: str, request: Request):
     """Apply a template to a workflow, creating nodes and edges from the template definition."""
     data = await request.json()
@@ -131,32 +131,32 @@ async def create_from_template(workflow_id: str, request: Request):
     }
 
 
-@router.get("/{workflow_id}")
+@router.get("/{workflow_id}", summary="Get workflow details")
 async def get_workflow(workflow_id: str, request: Request):
     """Get a workflow with its nodes and edges."""
     return {"workflow": {"id": workflow_id}, "nodes": [], "edges": []}
 
 
-@router.get("/agent/{agent_id}")
+@router.get("/agent/{agent_id}", summary="List workflows for an agent")
 async def list_agent_workflows(agent_id: str, request: Request):
     """List all workflows for an agent."""
     return []
 
 
-@router.put("/{workflow_id}")
+@router.put("/{workflow_id}", summary="Update a workflow")
 async def update_workflow(workflow_id: str, request: Request):
     """Update a workflow."""
     data = await request.json()
     return {"id": workflow_id, "updated": True, **data}
 
 
-@router.delete("/{workflow_id}")
+@router.delete("/{workflow_id}", summary="Delete a workflow")
 async def delete_workflow(workflow_id: str, request: Request):
     """Delete a workflow."""
     return {"deleted": True}
 
 
-@router.post("/{workflow_id}/nodes")
+@router.post("/{workflow_id}/nodes", summary="Add a node to workflow")
 async def add_node(workflow_id: str, req: NodeCreateRequest, request: Request):
     """Add a node to a workflow."""
     return {
@@ -167,7 +167,7 @@ async def add_node(workflow_id: str, req: NodeCreateRequest, request: Request):
     }
 
 
-@router.post("/{workflow_id}/edges")
+@router.post("/{workflow_id}/edges", summary="Add an edge between nodes")
 async def add_edge(workflow_id: str, req: EdgeCreateRequest, request: Request):
     """Add an edge between two nodes."""
     return {
@@ -178,19 +178,19 @@ async def add_edge(workflow_id: str, req: EdgeCreateRequest, request: Request):
     }
 
 
-@router.delete("/nodes/{node_id}")
+@router.delete("/nodes/{node_id}", summary="Delete a workflow node")
 async def delete_node(node_id: str, request: Request):
     """Delete a node."""
     return {"deleted": True}
 
 
-@router.delete("/edges/{edge_id}")
+@router.delete("/edges/{edge_id}", summary="Delete a workflow edge")
 async def delete_edge(edge_id: str, request: Request):
     """Delete an edge."""
     return {"deleted": True}
 
 
-@router.post("/{workflow_id}/execute")
+@router.post("/{workflow_id}/execute", summary="Execute a workflow")
 async def execute_workflow(workflow_id: str, request: Request):
     """Start a workflow execution."""
     data = await request.json() if request.headers.get("content-type") == "application/json" else {}
@@ -203,37 +203,37 @@ async def execute_workflow(workflow_id: str, request: Request):
     }
 
 
-@router.get("/{workflow_id}/executions")
+@router.get("/{workflow_id}/executions", summary="List workflow executions")
 async def list_executions(workflow_id: str, request: Request):
     """List execution history for a workflow."""
     return []
 
 
-@router.get("/executions/{execution_id}")
+@router.get("/executions/{execution_id}", summary="Get execution status")
 async def get_execution(execution_id: str, request: Request):
     """Get details of a specific execution."""
     return {"execution": {"id": execution_id, "status": "completed"}, "node_executions": []}
 
 
-@router.get("/approvals/pending")
+@router.get("/approvals/pending", summary="List pending approvals")
 async def list_pending_approvals(request: Request):
     """List all pending approval gates for the current user."""
     return []
 
 
-@router.post("/approvals/{approval_id}/approve")
+@router.post("/approvals/{approval_id}/approve", summary="Approve an approval gate")
 async def approve_gate(approval_id: str, request: Request):
     """Approve a pending approval gate."""
     return {"id": approval_id, "status": "approved"}
 
 
-@router.post("/approvals/{approval_id}/reject")
+@router.post("/approvals/{approval_id}/reject", summary="Reject an approval gate")
 async def reject_gate(approval_id: str, request: Request):
     """Reject a pending approval gate."""
     return {"id": approval_id, "status": "rejected"}
 
 
-@router.get("/{workflow_id}/analytics", response_model=WorkflowAnalyticsResponse)
+@router.get("/{workflow_id}/analytics", response_model=WorkflowAnalyticsResponse, summary="Get workflow analytics")
 async def workflow_analytics(workflow_id: str, request: Request):
     """Analytics for a specific workflow: execution counts, success rate, bottleneck nodes, failure hotspots."""
     db = request.app.state.db
