@@ -392,6 +392,9 @@ model Contradiction {
   description    String             @db.Text
   confidence     Int                @default(50)
   sources        Json?              @db.Json
+  status         String             @default("active") @db.VarChar(50)
+  snoozedUntil   DateTime?          @db.Timestamptz(6)
+  resolvedAt     DateTime?          @db.Timestamptz(6)
   organization   Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
   @@index([organizationId], map: "idx_33420_contradiction_organizationId_idx")
