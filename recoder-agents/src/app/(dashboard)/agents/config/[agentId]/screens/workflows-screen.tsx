@@ -11,10 +11,12 @@ import {
 } from '@/hooks/workflows/use-workflows';
 import type { WorkflowNode } from '@/lib/api/workflows';
 import { WorkflowCanvas } from '@/components/workflows/WorkflowCanvas';
+import { WorkflowMobileView } from '@/components/workflows/WorkflowMobileView';
 import { WorkflowNodePalette } from '@/components/workflows/WorkflowNodePalette';
 import { WorkflowNodeConfig } from '@/components/workflows/WorkflowNodeConfig';
 import { WorkflowToolbar } from '@/components/workflows/WorkflowToolbar';
 import { WorkflowExecutionView } from '@/components/workflows/WorkflowExecutionView';
+import { useIsMobile } from '@/hooks/utils';
 import { toast } from '@/lib/toast';
 import { cn } from '@/lib/utils';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -134,6 +136,7 @@ function WorkflowSelector({
 // ---------------------------------------------------------------------------
 
 export function WorkflowsScreen({ agentId }: WorkflowsScreenProps) {
+    const isMobile = useIsMobile();
     const { data: workflows, isLoading: isLoadingList } = useWorkflows(agentId);
     const [selectedWorkflowId, setSelectedWorkflowId] = useState<string | null>(null);
     const [selectedNode, setSelectedNode] = useState<WorkflowNode | null>(null);
@@ -313,29 +316,20 @@ export function WorkflowsScreen({ agentId }: WorkflowsScreenProps) {
                 />
             )}
 
-            {/* Editor body */}
-            <div className="flex flex-1 min-h-0 overflow-hidden">
-                {/* Left sidebar — node palette */}
-                <div className="w-64 shrink-0 overflow-y-auto border-r border-zinc-200 dark:border-zinc-800">
-                    <WorkflowNodePalette />
-                </div>
-
-                {/* Center — canvas */}
-                <div className="flex-1 relative">
+            {/* Editor body — mobile card view vs desktop canvas */}
+            {isMobile ? (
+                <div className="flex-1 overflow-y-auto">
                     {activeWorkflowId ? (
-                        <WorkflowCanvas
-                            workflowId={activeWorkflowId}
-                            onNodeSelect={handleNodeSelect}
-                        />
+                        <WorkflowMobileView workflowId={activeWorkflowId} />
                     ) : (
-                        <div className="flex h-full items-center justify-center text-sm text-zinc-400">
+                        <div className="flex h-full items-center justify-center text-sm text-zinc-400 p-6">
                             Select or create a workflow to get started.
                         </div>
                     )}
 
-                    {/* Floating execution overlay */}
+                    {/* Execution overlay — stacked on mobile */}
                     {executionId && (
-                        <div className="absolute bottom-4 right-4 z-20 w-96 rounded-xl border border-zinc-200 bg-white shadow-xl dark:border-zinc-700 dark:bg-zinc-900">
+                        <div className="mx-4 mb-4 rounded-xl border border-zinc-200 bg-white shadow-xl dark:border-zinc-700 dark:bg-zinc-900">
                             <WorkflowExecutionView
                                 executionId={executionId}
                                 onClose={() => setExecutionId(null)}
@@ -343,18 +337,49 @@ export function WorkflowsScreen({ agentId }: WorkflowsScreenProps) {
                         </div>
                     )}
                 </div>
-
-                {/* Right sidebar — node config (conditional) */}
-                {selectedNode && (
-                    <div className="w-80 shrink-0 overflow-y-auto border-l border-zinc-200 dark:border-zinc-800">
-                        <WorkflowNodeConfig
-                            node={selectedNode}
-                            onClose={() => setSelectedNode(null)}
-                            onUpdate={handleNodeUpdate}
-                        />
+            ) : (
+                <div className="flex flex-1 min-h-0 overflow-hidden">
+                    {/* Left sidebar — node palette */}
+                    <div className="w-64 shrink-0 overflow-y-auto border-r border-zinc-200 dark:border-zinc-800">
+                        <WorkflowNodePalette />
                     </div>
-                )}
-            </div>
+
+                    {/* Center — canvas */}
+                    <div className="flex-1 relative">
+                        {activeWorkflowId ? (
+                            <WorkflowCanvas
+                                workflowId={activeWorkflowId}
+                                onNodeSelect={handleNodeSelect}
+                            />
+                        ) : (
+                            <div className="flex h-full items-center justify-center text-sm text-zinc-400">
+                                Select or create a workflow to get started.
+                            </div>
+                        )}
+
+                        {/* Floating execution overlay */}
+                        {executionId && (
+                            <div className="absolute bottom-4 right-4 z-20 w-96 rounded-xl border border-zinc-200 bg-white shadow-xl dark:border-zinc-700 dark:bg-zinc-900">
+                                <WorkflowExecutionView
+                                    executionId={executionId}
+                                    onClose={() => setExecutionId(null)}
+                                />
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Right sidebar — node config (conditional) */}
+                    {selectedNode && (
+                        <div className="w-80 shrink-0 overflow-y-auto border-l border-zinc-200 dark:border-zinc-800">
+                            <WorkflowNodeConfig
+                                node={selectedNode}
+                                onClose={() => setSelectedNode(null)}
+                                onUpdate={handleNodeUpdate}
+                            />
+                        </div>
+                    )}
+                </div>
+            )}
         </div>
     );
 }
