@@ -29,11 +29,11 @@ export function OfflineIndicator() {
     <div className={cn(
       "fixed top-0 left-0 right-0 z-[100]",
       "flex items-center justify-center gap-2 py-1.5 px-4",
-      "bg-amber-500 text-amber-950 text-sm font-medium",
+      "bg-amber-500/90 text-white text-sm font-medium",
       "animate-in slide-in-from-top duration-300"
     )}>
       <WifiOff className="h-4 w-4" />
-      <span>You&apos;re offline — some features may be unavailable</span>
+      <span>You are offline — some features may be unavailable</span>
     </div>
   );
 }
