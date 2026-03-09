@@ -79,6 +79,7 @@ import { patternRouter } from './a2a/patterns/index.js';
 import { approvalRouter } from './policy/index.js';
 import { startA2AIntentWorker } from './a2a-intent-worker.js';
 import { wireAutonomousRouting } from './a2a/autonomous-routing.service.js';
+import type { RedisBackedPersistenceAdapter } from '@recoder/shared/a2a';
 import {
   fetchUserByokProviderKeys,
   buildInternalServiceHeaders,
@@ -13055,6 +13056,9 @@ process.on('uncaughtException', (error) => {
 
 const PORT = process.env.PORT || 3100;
 
+// Redis-backed A2A control plane adapter (set during startup, flushed on shutdown)
+let _a2aRedisAdapter: RedisBackedPersistenceAdapter | null = null;
+
 // NOTE: HTTP server is created at the top of the file along with express-ws initialization
 // This ensures WebSocket routes registered with app.ws() work properly
 
@@ -13110,6 +13114,16 @@ async function gracefulShutdown(signal: string) {
       await containerPool.shutdown();
     } catch (err: any) {
       logger.error({ err }, 'container pool shutdown error');
+    }
+
+    // Flush Redis-backed A2A control plane state
+    if (_a2aRedisAdapter) {
+      logger.info('flushing A2A Redis adapter');
+      try {
+        await _a2aRedisAdapter.flush();
+      } catch (err: any) {
+        logger.error({ err }, 'A2A Redis adapter flush error');
+      }
     }
 
     // Wait for debounced file saves to flush
@@ -13460,6 +13474,32 @@ logger.info('autonomous @mention routing wired');
 
 // Start heartbeat tracker background sweep
 getHeartbeatTracker().start();
+
+// Wire Redis-backed A2A shared control plane (non-blocking)
+// Falls through to existing in-memory behavior if REDIS_URL is not set.
+if (process.env.REDIS_URL) {
+  (async () => {
+    try {
+      const { createProductionA2AControlPlaneFromRedis } = await import('@recoder/shared/a2a');
+      const { controlPlane, adapter } = await createProductionA2AControlPlaneFromRedis({
+        redisUrl: process.env.REDIS_URL!,
+      });
+      _a2aRedisAdapter = adapter;
+      startupInfo('a2a-control-plane', 'Redis-backed control plane active', {
+        redisUrl: process.env.REDIS_URL!.replace(/\/\/.*@/, '//***@'),
+      });
+      // The controlPlane instance is available for downstream consumers that need
+      // the shared-package A2AControlPlane (registry, persistent task store, audit
+      // log, and collaboration service all backed by Redis).
+      // Expose on globalThis so other modules can discover it at runtime.
+      (globalThis as any).__a2aSharedControlPlane = controlPlane;
+    } catch (err) {
+      logger.warn({ err }, 'Failed to initialize Redis-backed A2A control plane; falling back to in-memory');
+    }
+  })();
+} else {
+  startupInfo('a2a-control-plane', 'using in-memory A2A control plane (no REDIS_URL)');
+}
 
 const agentCardBaseUrl = process.env.DOCKER_BACKEND_PUBLIC_URL || process.env.RECODER_DOCKER_BACKEND_URL || 'https://docker.recoder.xyz';
 app.get('/.well-known/agent-card.json', (_req, res) => {
