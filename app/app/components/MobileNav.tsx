@@ -3,15 +3,14 @@
 import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Menu, X, LayoutDashboard, Bot, BarChart3, Settings, Home, Key, FolderOpen, Sparkles, User, Terminal, Globe, Cpu } from 'lucide-react';
+import { Menu, X, LayoutDashboard, Bot, BarChart3, Settings, Key, FolderOpen, Sparkles, User, Terminal, Globe, Cpu } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const bottomTabs = [
-  { href: '/', label: 'Home', icon: Home },
-  { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, exact: true },
-  { href: '/dashboard/overview', label: 'Overview', icon: Bot },
-  { href: '/dashboard/analytics', label: 'Analytics', icon: Cpu },
-  { href: '/settings', label: 'Settings', icon: Settings },
+  { href: '/dashboard/overview', label: 'Overview', icon: LayoutDashboard },
+  { href: '/agents', label: 'Agents', icon: Bot },
+  { href: '/dashboard/analytics', label: 'Analytics', icon: BarChart3 },
+  { href: '/settings/account', label: 'Settings', icon: Settings },
 ];
 
 const drawerLinks = [
@@ -156,11 +155,12 @@ export function MobileNav() {
       )}
 
       {/* Bottom Tab Bar */}
-      <div className="fixed bottom-0 left-0 right-0 z-50 md:hidden bg-black/95 backdrop-blur-sm border-t border-white/10 pb-[env(safe-area-inset-bottom)]">
+      <div className="fixed bottom-0 left-0 right-0 z-50 md:hidden bg-black/95 backdrop-blur-sm border-t border-white/10"
+           style={{ paddingBottom: 'var(--safe-area-bottom, 0px)' }}>
         <div className="flex items-center justify-around h-14">
           {bottomTabs.map((tab) => {
             const Icon = tab.icon;
-            const active = isActive(tab.href, tab.exact);
+            const active = isActive(tab.href);
             return (
               <Link
                 key={tab.href}
