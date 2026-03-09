@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import Image from "next/image";
 import "./globals.css";
 import { NuqsAdapter } from "nuqs/adapters/next/app";
@@ -15,6 +15,10 @@ const url =
 	configuredSiteUrl.includes("agency.recoder.xyz")
 		? configuredSiteUrl
 		: canonicalAgencyUrl;
+
+export const viewport: Viewport = {
+	viewportFit: "cover",
+};
 
 export const metadata: Metadata = {
 	title,
@@ -75,6 +79,7 @@ export default function RootLayout({
 				/>
 			</head>
 			<body>
+				<a href="#main-content" className="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-1/2 focus:-translate-x-1/2 focus:z-[10000] focus:px-4 focus:py-2 focus:bg-orange-500 focus:text-white focus:rounded-lg">Skip to main content</a>
 				<a
 					href="/"
 					aria-label="Recoder Home"
@@ -82,6 +87,7 @@ export default function RootLayout({
 				>
 					<Image src="/logo.png" alt="Recoder logo" width={36} height={36} />
 				</a>
+				<main id="main-content">
 				<ThemeProvider
 					attribute="class"
 					defaultTheme="dark"
@@ -89,6 +95,7 @@ export default function RootLayout({
 				>
 					<NuqsAdapter>{children}</NuqsAdapter>
 				</ThemeProvider>
+				</main>
 			</body>
 		</html>
 	);

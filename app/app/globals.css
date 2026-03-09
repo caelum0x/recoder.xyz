@@ -1,9 +1,16 @@
+@import "@recoder/design-tokens/tokens.css";
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 @layer base {
   :root {
+    /* Safe area support for mobile notch/home indicator */
+    --safe-area-top: env(safe-area-inset-top, 0px);
+    --safe-area-bottom: env(safe-area-inset-bottom, 0px);
+    --safe-area-left: env(safe-area-inset-left, 0px);
+    --safe-area-right: env(safe-area-inset-right, 0px);
+
     /* Roobert font family */
     --font-sans: var(--font-roobert), system-ui, -apple-system, sans-serif;
     --font-mono: var(--font-roobert-mono), Consolas, monospace;
