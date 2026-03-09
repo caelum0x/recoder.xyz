@@ -2698,14 +2698,82 @@ async def get_revenue_summary(
         
         # Calculate ARPU
         arpu = total_mrr / total_paid_subscribers if total_paid_subscribers > 0 else 0.0
-        
+
+        # Calculate MRR month-over-month change from previous month's invoices
+        mrr_change_percent = None
+        try:
+            prev_month_end = month_start  # first day of current month = end of previous month
+            prev_month_start_ts = int(last_month_start.timestamp())
+            prev_month_end_ts = int(prev_month_end.timestamp())
+
+            # Sum recurring subscription revenue from paid invoices in the previous month
+            prev_mrr = 0.0
+            inv_has_more = True
+            inv_starting_after = None
+
+            while inv_has_more:
+                inv_params = {
+                    'status': 'paid',
+                    'created': {'gte': prev_month_start_ts, 'lt': prev_month_end_ts},
+                    'limit': 100,
+                    'expand': ['data.subscription'],
+                }
+                if inv_starting_after:
+                    inv_params['starting_after'] = inv_starting_after
+
+                invoices = await stripe.Invoice.list_async(**inv_params)
+
+                for inv in invoices.data:
+                    # Only count recurring subscription invoices (skip one-off charges)
+                    if not inv.subscription:
+                        continue
+
+                    amount = (inv.amount_paid or 0) / 100
+                    if amount <= 0:
+                        continue
+
+                    # Check subscription metadata to skip free tier
+                    sub = inv.subscription
+                    if hasattr(sub, 'metadata'):
+                        tier = (sub.metadata or {}).get('tier', '')
+                        if tier == 'free':
+                            continue
+
+                    # Normalize to monthly: yearly invoices contribute 1/12 to MRR
+                    sub_interval = 'month'
+                    if hasattr(sub, 'items'):
+                        items_data = sub.get('items', {}).get('data', []) if hasattr(sub, 'get') else []
+                        for item in items_data:
+                            price = item.get('price', {}) if hasattr(item, 'get') else {}
+                            recurring = price.get('recurring', {}) if hasattr(price, 'get') else {}
+                            if recurring.get('interval') == 'year':
+                                sub_interval = 'year'
+                                break
+
+                    if sub_interval == 'year':
+                        prev_mrr += amount / 12
+                    else:
+                        prev_mrr += amount
+
+                inv_has_more = invoices.has_more
+                inv_starting_after = invoices.data[-1].id if inv_has_more and invoices.data else None
+
+            if prev_mrr > 0:
+                mrr_change_percent = round(((total_mrr - prev_mrr) / prev_mrr) * 100, 2)
+                logger.info(f"MRR trending: current=${total_mrr:.2f}, prev=${prev_mrr:.2f}, change={mrr_change_percent}%")
+            else:
+                logger.info("MRR trending: no previous month invoice data available")
+        except Exception as e:
+            logger.warning(f"Failed to calculate MRR change percentage: {e}")
+            mrr_change_percent = None
+
         return RevenueSummary(
             mrr=round(total_mrr, 2),
             arr=round(total_mrr * 12, 2),
             total_paid_subscribers=total_paid_subscribers,
             subscribers_by_tier=subscribers_by_tier,
             arpu=round(arpu, 2),
-            mrr_change_percent=None,  # TODO: Calculate from historical data
+            mrr_change_percent=mrr_change_percent,
             new_paid_this_month=new_paid_this_month,
             churned_this_month=churned_this_month,
         )
@@ -3341,10 +3409,13 @@ async def _fetch_revenuecat_revenue(range_start: datetime, range_end: datetime) 
 
             results['total_revenue'] += revenue
             results['payment_count'] += count
+            # Use actual email addresses as user identifiers for proper deduplication
+            # when combined with Stripe user sets in profitability calculations
+            user_set = set(emails) if emails else set(f"rc_user_{i}" for i in range(users))
             results['by_tier'][tier] = {
                 'revenue': revenue,
                 'count': count,
-                'users': set(range(users)),  # Placeholder set with correct size for len()
+                'users': user_set,
             }
             results['user_emails'].extend(emails)
 
