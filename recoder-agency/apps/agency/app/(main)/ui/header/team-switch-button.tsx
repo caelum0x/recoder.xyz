@@ -25,7 +25,7 @@ export function TeamSwitchButton({
 	return (
 		<button
 			type="button"
-			className="relative flex w-full cursor-default select-none items-center rounded-lg p-1.5 pl-2 pr-8 text-sm outline-hidden hover:bg-white/5 font-geist"
+			className="relative flex w-full cursor-default select-none items-center rounded-lg p-1.5 pl-2 pr-8 text-sm outline-hidden hover:bg-white/5 font-sans"
 			onClick={() => {
 				startTransition(async () => {
 					await changeTeamAction(id);
@@ -41,7 +41,7 @@ export function TeamSwitchButton({
 					className="w-8 h-8 shrink-0"
 					alt={name}
 				/>
-				<span className="truncate max-w-[140px] text-[14px] font-geist text-inverse">
+				<span className="truncate max-w-[140px] text-[14px] font-sans text-inverse">
 					{name}
 				</span>
 				{isPro ? <ProTag /> : <FreeTag />}
