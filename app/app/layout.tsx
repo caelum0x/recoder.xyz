@@ -1,8 +1,12 @@
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import './globals.css';
 import { Providers } from '@/components/providers';
 import UTMCapture from '@/components/UTMCapture';
 import { roobert, roobertMono } from './fonts/roobert';
+
+export const viewport: Viewport = {
+  viewportFit: 'cover',
+};
 
 export const metadata: Metadata = {
   title: 'Recoder.xyz - FREE AI Coding Platform | Web IDE + CLI with 40+ Models',
@@ -103,8 +107,9 @@ export default function RootLayout({
         />
       </head>
       <body className={`${roobert.variable} ${roobertMono.variable} font-sans`}>
+        <a href="#main-content" className="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-[9999] focus:px-4 focus:py-2 focus:bg-orange-500 focus:text-white focus:rounded-lg">Skip to main content</a>
         <UTMCapture />
-        <Providers>{children}</Providers>
+        <Providers><main id="main-content">{children}</main></Providers>
       </body>
     </html>
   );
