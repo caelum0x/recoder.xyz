@@ -40,6 +40,31 @@ async def create_workflow(req: WorkflowCreateRequest, request: Request):
     }
 
 
+@router.get("/templates/list")
+async def list_templates(category: str = None):
+    """List available workflow templates."""
+    from core.workflows.templates import get_templates
+    return get_templates(category)
+
+
+@router.post("/{workflow_id}/from-template")
+async def create_from_template(workflow_id: str, request: Request):
+    """Apply a template to a workflow, creating nodes and edges from the template definition."""
+    data = await request.json()
+    template_name = data.get("template_name")
+    from core.workflows.templates import get_template
+    tmpl = get_template(template_name)
+    if not tmpl:
+        raise HTTPException(404, "Template not found")
+    return {
+        "workflow_id": workflow_id,
+        "template": template_name,
+        "created_nodes": len(tmpl["definition"]["nodes"]),
+        "created_edges": len(tmpl["definition"]["edges"]),
+        "message": "Template applied (placeholder — DB not connected yet)",
+    }
+
+
 @router.get("/{workflow_id}")
 async def get_workflow(workflow_id: str, request: Request):
     """Get a workflow with its nodes and edges."""
