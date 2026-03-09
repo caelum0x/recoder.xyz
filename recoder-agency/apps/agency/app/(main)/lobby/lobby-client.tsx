@@ -13,27 +13,26 @@ import { GreetingHeading } from "./greeting-heading";
 
 interface LobbyClientProps {
 	username: string;
-	recentApps: { title: string; appsCount: number }[];
-	recentWorkflows: { id: string; name: string; updatedAt: Date }[];
+	recentApps?: { title: string; appsCount: number }[];
+	recentWorkflows?: { id: string; name: string; updatedAt: Date }[];
 }
 
-export function LobbyClient({
-	username,
-	recentApps,
-	recentWorkflows,
-}: LobbyClientProps) {
+export function LobbyClient(props: LobbyClientProps) {
+	const { username } = props;
 	const [activeTab, setActiveTab] = useState<"apps" | "workflow">("apps");
 	const [activeAppTab, setActiveAppTab] = useState<string>("Recent");
 	const [activeWorkflowTab, setActiveWorkflowTab] = useState<string>("Recent");
 	const router = useRouter();
 	const [isCreatingWorkspace, setIsCreatingWorkspace] = useState(false);
 
-	const hasRecentApps = recentApps.length > 0;
-	const hasRecentWorkflows = recentWorkflows.length > 0;
+	const hasRecentApps = (props.recentApps ?? []).length > 0;
+	const hasRecentWorkflows = (props.recentWorkflows ?? []).length > 0;
+	const recentApps = props.recentApps ?? [];
+	const recentWorkflows = props.recentWorkflows ?? [];
 
 	// Featured items are not yet implemented; show empty arrays
-	const featuredApps: { title: string; appsCount: number }[] = [];
-	const featuredWorkflows: { id: string; name: string; updatedAt: Date }[] = [];
+	const featuredApps: typeof recentApps = [];
+	const featuredWorkflows: typeof recentWorkflows = [];
 
 	const handleCreateNewAgent = async () => {
 		if (isCreatingWorkspace) return;
@@ -61,7 +60,7 @@ export function LobbyClient({
 	};
 
 	return (
-		<div className="flex flex-col gap-8">
+		<div className="flex flex-col gap-6 sm:gap-8 px-4 sm:px-0">
 			{/* Greeting */}
 			<div className="flex justify-center">
 				<GreetingHeading username={username} />
@@ -71,39 +70,22 @@ export function LobbyClient({
 			<TutorialVideoSection
 				banners={[
 					{
-						label: "New Feature",
-						title: "Stage is here",
+						label: "Get Started",
+						title: "Build AI workflows",
 						description:
-							"Try powerful agents instantly. Ask anything, get answers.",
+							"Create visual AI workflows with drag-and-drop. Connect models, tools, and data sources.",
 						imageSrc: "/stage.jpg",
 						imageAlt: "Stage background",
 						ctaButtons: [
 							{
-								label: "Watch Now",
-								onClick: () => {},
+								label: "Create Workflow",
+								onClick: handleCreateNewAgent,
 								variant: "primary",
 							},
 							{
-								label: "Learn More",
-								onClick: () => {},
+								label: "Browse Apps",
+								onClick: handleAskReview,
 								variant: "secondary",
-							},
-						],
-					},
-					{
-						label: "New Model",
-						title: "Meet our latest AI",
-						description:
-							"More accurate, faster, and more capable than ever before.",
-						imageSrc: "/model.jpg",
-						imageAlt: "Model background",
-						ctaButtons: [
-							{
-								label: "Learn More",
-								onClick: () => {
-									window.open("https://recoder.xyz/blog", "_blank");
-								},
-								variant: "primary",
 							},
 						],
 					},
@@ -182,7 +164,7 @@ export function LobbyClient({
 						)}
 
 						{/* Sub-tab Content */}
-						<div className="flex flex-wrap gap-6">
+						<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
 							{(hasRecentApps && activeAppTab === "Recent"
 								? recentApps
 								: featuredApps
@@ -198,9 +180,17 @@ export function LobbyClient({
 									<Blocks className="w-7 h-7 text-primary-100/60" />
 								</div>
 								<h3 className="text-lg font-medium text-inverse mb-2">No apps yet</h3>
-								<p className="text-sm text-muted-foreground max-w-sm">
+								<p className="text-sm text-muted-foreground max-w-sm mb-4">
 									Create your first agent to get started. Apps you build will appear here.
 								</p>
+								<button
+									type="button"
+									onClick={handleCreateNewAgent}
+									disabled={isCreatingWorkspace}
+									className="px-4 py-2 rounded-lg bg-primary-100 text-inverse text-sm font-medium hover:bg-primary-100/90 transition-colors disabled:opacity-50"
+								>
+									{isCreatingWorkspace ? "Creating..." : "Create your first agent"}
+								</button>
 							</div>
 						)}
 					</>
@@ -218,7 +208,7 @@ export function LobbyClient({
 						)}
 
 						{/* Sub-tab Content */}
-						<div className="flex flex-wrap gap-4">
+						<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
 							{(hasRecentWorkflows && activeWorkflowTab === "Recent"
 								? recentWorkflows
 								: featuredWorkflows
@@ -244,9 +234,17 @@ export function LobbyClient({
 									<SparklesIcon className="w-7 h-7 text-primary-100/60" />
 								</div>
 								<h3 className="text-lg font-medium text-inverse mb-2">No workflows yet</h3>
-								<p className="text-sm text-muted-foreground max-w-sm">
+								<p className="text-sm text-muted-foreground max-w-sm mb-4">
 									Create a workflow to automate tasks. Your workflows will appear here.
 								</p>
+								<button
+									type="button"
+									onClick={handleCreateNewAgent}
+									disabled={isCreatingWorkspace}
+									className="px-4 py-2 rounded-lg bg-primary-100 text-inverse text-sm font-medium hover:bg-primary-100/90 transition-colors disabled:opacity-50"
+								>
+									{isCreatingWorkspace ? "Creating..." : "Create your first workflow"}
+								</button>
 							</div>
 						)}
 					</>

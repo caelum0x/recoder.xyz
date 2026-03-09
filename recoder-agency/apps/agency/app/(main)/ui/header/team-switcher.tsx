@@ -85,7 +85,7 @@ export function TeamSwitcher({
 									key={team.id}
 									id={team.id}
 									name={team.name}
-									avatarUrl={team.avatarUrl}
+									avatarUrl={team.avatarUrl ?? null}
 									isPro={isProPlan(team)}
 									isCurrentTeam={team.id === currentTeam.id}
 									changeTeamAction={changeTeamAction}
