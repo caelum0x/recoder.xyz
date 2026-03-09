@@ -13,12 +13,12 @@ import {
 } from "react";
 import { cn } from "@/lib/utils";
 import { buttonVariants } from "../../../../settings/components/button";
-import { FormInputRenderer } from "../../../(depreacted)/form-input-renderer";
+import { FormInputRenderer } from "../../../form-input-renderer";
 import {
 	createInputsFromTrigger,
 	parseFormInputs,
 	toParameterItems,
-} from "../../../(depreacted)/helpers";
+} from "../../../helpers";
 import { fetchWorkspaceFlowTrigger, runWorkspaceApp } from "../actions";
 
 interface RunModalProps {
@@ -147,7 +147,7 @@ export function RunModal({
 								<h3 className="font-sans text-[16px] font-medium tracking-tight text-text">
 									{appName}
 								</h3>
-								<p className="text-[12px] text-text-muted font-geist">
+								<p className="text-[12px] text-text-muted font-sans">
 									Configure and run
 								</p>
 							</div>
