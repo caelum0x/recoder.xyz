@@ -12,7 +12,9 @@ import { roobertMono } from './fonts/roobert-mono';
 import { Suspense, lazy } from 'react';
 import { I18nProvider } from '@/components/i18n-provider';
 import { featureFlags } from '@/lib/feature-flags';
-import Image from 'next/image';
+import { OfflineIndicator } from '@/components/ui/offline-indicator';
+import { ServiceWorkerRegistration } from '@/components/service-worker-registration';
+
 
 // Lazy load non-critical analytics and global components
 const Analytics = lazy(() => import('@vercel/analytics/react').then(mod => ({ default: mod.Analytics })));
@@ -226,13 +228,9 @@ export default function RootLayout({
       </head>
 
       <body className="antialiased font-sans bg-background">
-        <a
-          href="/"
-          aria-label="Recoder Home"
-          style={{ position: 'fixed', left: 12, top: 12, zIndex: 9999 }}
-        >
-          <Image src="/logo.png" alt="Recoder logo" width={36} height={36} />
-        </a>
+        <OfflineIndicator />
+        <ServiceWorkerRegistration />
+        <a href="#main-content" className="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-1/2 focus:-translate-x-1/2 focus:z-[10000] focus:px-4 focus:py-2 focus:bg-orange-500 focus:text-white focus:rounded-lg">Skip to main content</a>
         <ThemeProvider
           attribute="class"
           defaultTheme="system"
@@ -243,7 +241,7 @@ export default function RootLayout({
             <I18nProvider>
               <PresenceProvider>
               <ReactQueryProvider>
-                {children}
+                <main id="main-content">{children}</main>
                 <Toaster />
                 <Suspense fallback={null}>
                   <PlanSelectionModal />

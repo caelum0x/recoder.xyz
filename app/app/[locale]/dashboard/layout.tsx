@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname, useRouter } from 'next/navigation';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useSession, signOut } from '@/lib/session-provider';
 import { LaunchWebIDEButton } from '@/app/components/LaunchWebIDEButton';
 import {
@@ -9,6 +9,7 @@ import {
   User, ChevronDown, Globe, Terminal, Sparkles, Cpu
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import { MobileNav } from '@/app/components/MobileNav';
 
 const sidebarLinks = [
   { href: '/dashboard', label: 'Overview', icon: LayoutDashboard, exact: true },
@@ -26,16 +27,19 @@ const settingsLinks = [
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const router = useRouter();
   const { data: session, isPending } = useSession();
   const [showUserMenu, setShowUserMenu] = useState(false);
 
   useEffect(() => {
     if (!isPending && !session?.user) {
-      const redirect = encodeURIComponent(pathname || '/dashboard');
+      const query = searchParams.toString();
+      const pathWithQuery = `${pathname || '/dashboard'}${query ? `?${query}` : ''}`;
+      const redirect = encodeURIComponent(pathWithQuery);
       router.replace(`/auth/signin?redirect=${redirect}`);
     }
-  }, [isPending, pathname, router, session?.user]);
+  }, [isPending, pathname, router, searchParams, session?.user]);
 
   // Strip locale prefix for matching
   const pathWithoutLocale = pathname.replace(/^\/[a-z]{2}(?:\/|$)/, '/');
@@ -60,8 +64,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   return (
     <div className="min-h-screen bg-black text-white flex">
-      {/* Sidebar */}
-      <aside className="fixed left-0 top-0 bottom-0 w-64 border-r border-white/10 bg-black/95 backdrop-blur-xl z-30 flex flex-col">
+      {/* Mobile Navigation */}
+      <MobileNav />
+
+      {/* Sidebar — hidden on mobile */}
+      <aside className="hidden md:flex fixed left-0 top-0 bottom-0 w-64 border-r border-white/10 bg-black/95 backdrop-blur-xl z-30 flex-col">
         {/* Logo */}
         <div className="h-16 flex items-center px-6 border-b border-white/10">
           <Link href="/" className="flex items-center space-x-2 group">
@@ -75,7 +82,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         </div>
 
         {/* Nav Links */}
-        <nav className="flex-1 overflow-y-auto py-4 px-3">
+        <nav aria-label="Dashboard navigation" className="flex-1 overflow-y-auto py-4 px-3">
           <div className="space-y-1">
             {sidebarLinks.map((link) => {
               const Icon = link.icon;
@@ -204,7 +211,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 ml-64">
+      <main className="flex-1 ml-0 md:ml-64 pb-16 md:pb-0">
         {children}
       </main>
     </div>
