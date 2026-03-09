@@ -195,6 +195,32 @@ export interface CreateTaskInput {
   tags?: string[];
 }
 
+/**
+ * Legacy create-task shape used by older A2A orchestration code paths.
+ * This is intentionally kept as a compatibility bridge while callers migrate
+ * to the canonical `CreateTaskInput` contract.
+ */
+export interface LegacyCreateTaskInput {
+  prompt: string;
+  workspace_id?: string;
+  thread_id?: string;
+  assignee_agent_id: string;
+  requester_agent_id?: string;
+  priority?: string;
+  metadata?: Record<string, unknown>;
+  tags?: string[];
+}
+
+export interface LegacyTransitionTaskInput {
+  taskId: string;
+  targetState: TaskState | 'succeeded';
+  agent?: {
+    agent_id?: string;
+    platform?: string;
+  };
+  message?: string;
+}
+
 // ---------------------------------------------------------------------------
 // Transition input
 // ---------------------------------------------------------------------------
@@ -296,19 +322,59 @@ export class TaskLifecycleService {
    * trace_id if not provided, persists the envelope, and emits a
    * `task.submitted` audit event.
    */
-  createTask(input: CreateTaskInput): ServiceResult<TaskEnvelope> {
+  createTask(input: CreateTaskInput): ServiceResult<TaskEnvelope>;
+  createTask(input: LegacyCreateTaskInput): TaskEnvelope;
+  createTask(input: CreateTaskInput | LegacyCreateTaskInput): ServiceResult<TaskEnvelope> | TaskEnvelope {
+    if ('prompt' in input && 'assignee_agent_id' in input) {
+      const now = new Date().toISOString();
+      const normalized = this.createTask({
+        workspace_id: input.workspace_id ?? 'legacy-workspace',
+        thread_id: input.thread_id ?? 'legacy-thread',
+        requester: {
+          agent_id: input.requester_agent_id ?? 'legacy-requester',
+          platform: 'recoder_backend',
+        },
+        assignee: {
+          agent_id: input.assignee_agent_id,
+          platform: 'recoder_backend',
+        },
+        connector: {
+          connector_id: `legacy-${input.assignee_agent_id}`,
+          platform: 'recoder_backend',
+          protocol: 'rest',
+        },
+        payload: {
+          kind: 'text',
+          text: input.prompt,
+        },
+        metadata: {
+          ...(input.metadata ?? {}),
+          legacy_input: true,
+          normalized_at: now,
+        },
+        tags: input.tags,
+      });
+
+      if (!normalized.ok) {
+        throw new Error(normalized.error.message);
+      }
+      return normalized.data;
+    }
+
+    const createInput = input;
+
     // Validate required fields
     const missing: string[] = [];
-    if (!input.workspace_id) missing.push('workspace_id');
-    if (!input.thread_id) missing.push('thread_id');
-    if (!input.requester?.agent_id) missing.push('requester.agent_id');
-    if (!input.requester?.platform) missing.push('requester.platform');
-    if (!input.assignee?.agent_id) missing.push('assignee.agent_id');
-    if (!input.assignee?.platform) missing.push('assignee.platform');
-    if (!input.connector?.connector_id) missing.push('connector.connector_id');
-    if (!input.connector?.platform) missing.push('connector.platform');
-    if (!input.connector?.protocol) missing.push('connector.protocol');
-    if (input.payload === undefined || input.payload === null) missing.push('payload');
+    if (!createInput.workspace_id) missing.push('workspace_id');
+    if (!createInput.thread_id) missing.push('thread_id');
+    if (!createInput.requester?.agent_id) missing.push('requester.agent_id');
+    if (!createInput.requester?.platform) missing.push('requester.platform');
+    if (!createInput.assignee?.agent_id) missing.push('assignee.agent_id');
+    if (!createInput.assignee?.platform) missing.push('assignee.platform');
+    if (!createInput.connector?.connector_id) missing.push('connector.connector_id');
+    if (!createInput.connector?.platform) missing.push('connector.platform');
+    if (!createInput.connector?.protocol) missing.push('connector.protocol');
+    if (createInput.payload === undefined || createInput.payload === null) missing.push('payload');
 
     if (missing.length > 0) {
       return {
@@ -323,21 +389,21 @@ export class TaskLifecycleService {
     }
 
     const id = generateId('task');
-    const trace_id = input.trace_id || generateId('trace');
+    const trace_id = createInput.trace_id || generateId('trace');
     const now = new Date().toISOString();
 
     const envelope = createTaskEnvelope({
       id,
-      workspace_id: input.workspace_id,
-      thread_id: input.thread_id,
+      workspace_id: createInput.workspace_id,
+      thread_id: createInput.thread_id,
       trace_id,
-      parent_id: input.parent_id,
-      requester: input.requester,
-      assignee: input.assignee,
-      connector: input.connector,
-      payload: input.payload,
-      metadata: input.metadata,
-      tags: input.tags,
+      parent_id: createInput.parent_id,
+      requester: createInput.requester,
+      assignee: createInput.assignee,
+      connector: createInput.connector,
+      payload: createInput.payload,
+      metadata: createInput.metadata,
+      tags: createInput.tags,
       now,
     });
 
@@ -356,17 +422,17 @@ export class TaskLifecycleService {
         severity: AuditSeverityEnum.Info,
         actor: {
           kind: AuditActorKindEnum.Agent,
-          id: input.requester.agent_id,
-          platform: input.requester.platform,
-          name: input.requester.name,
+          id: createInput.requester.agent_id,
+          platform: createInput.requester.platform,
+          name: createInput.requester.name,
         },
         target: {
           kind: AuditTargetKindEnum.Task,
           id,
         },
         trace_id,
-        workspace_id: input.workspace_id,
-        thread_id: input.thread_id,
+        workspace_id: createInput.workspace_id,
+        thread_id: createInput.thread_id,
         task_id: id,
         metadata: { initial_state: TaskStateEnum.Submitted },
         now,
@@ -374,6 +440,14 @@ export class TaskLifecycleService {
     );
 
     return { ok: true, data: envelope };
+  }
+
+  /**
+   * Legacy list compatibility.
+   */
+  list(filter?: TaskListFilter): TaskEnvelope[] {
+    const result = this.listTasks(filter);
+    return result.ok ? result.data : [];
   }
 
   // -----------------------------------------------------------------------
@@ -436,7 +510,47 @@ export class TaskLifecycleService {
    * 6. Persists the updated envelope.
    * 7. Emits the corresponding audit event.
    */
-  transitionTask(taskId: string, input: TransitionTaskInput): ServiceResult<TaskEnvelope> {
+  transitionTask(taskId: string, input: TransitionTaskInput): ServiceResult<TaskEnvelope>;
+  transitionTask(input: LegacyTransitionTaskInput): ServiceResult<TaskEnvelope>;
+  transitionTask(
+    taskIdOrInput: string | LegacyTransitionTaskInput,
+    input?: TransitionTaskInput,
+  ): ServiceResult<TaskEnvelope> {
+    if (typeof taskIdOrInput !== 'string') {
+      const normalizedTarget =
+        taskIdOrInput.targetState === 'succeeded'
+          ? TaskStateEnum.Completed
+          : taskIdOrInput.targetState;
+      return this.transitionTask(taskIdOrInput.taskId, {
+        target_state: normalizedTarget,
+        triggered_by: taskIdOrInput.agent?.agent_id,
+        ...(taskIdOrInput.message
+          ? {
+              error: {
+                code: 'LEGACY_CONNECTOR_ERROR',
+                category: 'connector',
+                message: taskIdOrInput.message,
+                severity: 'high',
+                retryable: false,
+              },
+            }
+          : {}),
+      });
+    }
+
+    if (!input) {
+      return {
+        ok: false,
+        httpStatus: 400,
+        error: buildA2AError({
+          code: A2AErrorCodeEnum.MissingEnvelopeField,
+          message: 'Missing transition input',
+        }),
+      };
+    }
+
+    const taskId = taskIdOrInput;
+
     // 1. Verify task exists
     const existing = this.store.get(taskId);
     if (!existing) {
@@ -576,6 +690,20 @@ export class TaskLifecycleService {
     return { ok: true, data: updated };
   }
 
+  /**
+   * Legacy transition compatibility.
+   */
+  transition(
+    taskId: string,
+    targetState: TaskState,
+    input: Omit<TransitionTaskInput, 'target_state'> = {},
+  ): ServiceResult<TaskEnvelope> {
+    return this.transitionTask(taskId, {
+      ...input,
+      target_state: targetState,
+    });
+  }
+
   // -----------------------------------------------------------------------
   // Convenience transition methods
   // -----------------------------------------------------------------------
@@ -703,8 +831,8 @@ export class TaskLifecycleService {
     return this.auditTrail.slice(-normalizedLimit).map((item) => item.event);
   }
 
-  private stateToAuditEventType(state: TaskState): string {
-    const map: Record<string, string> = {
+  private stateToAuditEventType(state: TaskState): (typeof AuditEventTypeEnum)[keyof typeof AuditEventTypeEnum] {
+    const map: Record<string, (typeof AuditEventTypeEnum)[keyof typeof AuditEventTypeEnum]> = {
       [TaskStateEnum.Submitted]: AuditEventTypeEnum.TaskSubmitted,
       [TaskStateEnum.Working]: AuditEventTypeEnum.TaskStarted,
       [TaskStateEnum.InputRequired]: AuditEventTypeEnum.TaskInputRequired,
@@ -731,7 +859,18 @@ let _defaultService: TaskLifecycleService | null = null;
 /** Get or create the default singleton instance. */
 export function getTaskLifecycleService(): TaskLifecycleService {
   if (!_defaultService) {
-    _defaultService = new TaskLifecycleService();
+    const redisUrl = process.env.REDIS_URL;
+    if (redisUrl) {
+      // Lazy-require to avoid pulling ioredis when not needed
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const { RedisTaskStore } = require('./redis-task-store') as typeof import('./redis-task-store');
+      const store = new RedisTaskStore({ redisUrl });
+      logger.info('TaskLifecycleService using RedisTaskStore');
+      _defaultService = new TaskLifecycleService(store);
+    } else {
+      logger.info('TaskLifecycleService using InMemoryTaskStore (no REDIS_URL)');
+      _defaultService = new TaskLifecycleService();
+    }
   }
   return _defaultService;
 }
