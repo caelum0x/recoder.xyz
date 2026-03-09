@@ -99,11 +99,6 @@ export async function middleware(request: NextRequest) {
     // Desktop users continue to the full page
   }
 
-  // Block access to WIP /thread/new route - redirect to dashboard
-  if (pathname.includes('/thread/new')) {
-    return NextResponse.redirect(new URL('/dashboard', request.url));
-  }
-  
   // Skip middleware for static files and API routes
   if (
     pathname.startsWith('/_next') ||
@@ -247,7 +242,7 @@ export async function middleware(request: NextRequest) {
     }
 
     if (cachedBillingStatus !== 'active') {
-      const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || '';
+      const backendUrl = process.env.BACKEND_INTERNAL_URL || process.env.NEXT_PUBLIC_BACKEND_URL || '';
       const sessionToken = getSessionToken(request);
 
       if (backendUrl && sessionToken) {
