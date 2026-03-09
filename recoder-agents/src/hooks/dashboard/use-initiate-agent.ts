@@ -1,10 +1,10 @@
 'use client';
 
 import { unifiedAgentStart, UnifiedAgentStartResponse } from "@/lib/api/agents";
-import { 
-  AgentRunLimitError, 
-  BillingError, 
-  ProjectLimitError, 
+import {
+  AgentRunLimitError,
+  BillingError,
+  ProjectLimitError,
   ThreadLimitError,
   AgentCountLimitError,
   TriggerLimitError,
@@ -20,6 +20,11 @@ import { useTranslations } from 'next-intl';
 
 import { projectKeys, threadKeys } from "../threads/keys";
 import { backendApi } from "@/lib/api-client";
+
+// Re-export cost estimate hook so chat input components can access it
+// alongside the agent initiation hooks from this module.
+export { useCostEstimate } from "@/hooks/agents/use-cost-estimate";
+export type { CostEstimate } from "@/lib/api/cost-estimate";
 
 export const useInitiateAgentMutation = () => {
   const t = useTranslations('dashboard');
@@ -40,13 +45,7 @@ export const useInitiateAgentMutation = () => {
       const agent_id = formData.get('agent_id') as string | undefined;
       
       // Debug logging
-      console.log('[useInitiateAgent] Extracted from FormData:', {
-        prompt: prompt ? prompt.substring(0, 100) : prompt === '' ? '(empty string)' : undefined,
-        promptLength: prompt?.length ?? (prompt === '' ? 0 : undefined),
-        promptIsEmptyString: prompt === '',
-        model_name,
-        agent_id,
-      });
+      
       
       return await unifiedAgentStart({
         prompt: prompt !== undefined ? prompt : undefined, // Send empty string if present, undefined if not in FormData
