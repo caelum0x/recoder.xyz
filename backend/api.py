@@ -275,6 +275,12 @@ async def lifespan(app: FastAPI):
         raise
 
 app = FastAPI(
+    title="Recoder Platform API",
+    description="Backend API for the Recoder platform — agent management, workflows, analytics, and AI services.",
+    version="1.0.0",
+    docs_url="/docs",
+    redoc_url="/redoc",
+    openapi_url="/openapi.json",
     lifespan=lifespan,
     swagger_ui_parameters={
         "persistAuthorization": True,  # Keep auth between page refreshes
@@ -504,6 +510,9 @@ from core.endpoints import realtime_api
 api_router.include_router(realtime_api.router)
 from core.endpoints.website_analysis_api import router as website_analysis_router
 api_router.include_router(website_analysis_router)
+
+from core.workflows.workflow_api import router as workflow_router
+api_router.include_router(workflow_router)
 
 from core.test_harness.api import router as test_harness_router, e2e_router
 api_router.include_router(test_harness_router)
