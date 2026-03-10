@@ -1,7 +1,6 @@
 // User subscription management endpoint
 import { NextRequest, NextResponse } from 'next/server';
-import { requireAuth } from "@/lib/auth-helpers";
-import { getUserFromToken } from '@/lib/auth-helper';
+import { requireAuth, getUserFromToken } from "@/lib/auth-helpers";
 import { prisma } from '@/lib/prisma';
 import { userManager } from '@/lib/user-management';
 import { rateLimit, rateLimitConfigs } from '@/lib/middleware/rate-limit';

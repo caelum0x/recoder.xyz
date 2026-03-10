@@ -4,6 +4,7 @@
  */
 
 import { EventEmitter } from 'events';
+import axios from 'axios';
 import { AIProviderRouter, AIRequest, AIResponse, AIRequestOptions, AIRequestMetadata } from './ai-provider-router';
 import { AuthClient } from './auth-client';
 
@@ -71,7 +72,7 @@ export class AIClient extends EventEmitter {
     this.authClient = authClient;
     this.config = {
       platform: config.platform,
-      baseURL: config.baseURL || 'http://localhost:3001',
+      baseURL: config.baseURL || 'http://localhost:3100',
       enableCaching: config.enableCaching ?? true,
       enableAnalytics: config.enableAnalytics ?? true,
       fallbackProviders: config.fallbackProviders || ['anthropic-claude', 'groq-llama'],
@@ -338,35 +339,302 @@ export class AIClient extends EventEmitter {
   ): EventEmitter {
     const requestId = this.generateRequestId();
     const stream = new EventEmitter();
-    
+
     this.activeStreams.set(requestId, stream);
 
-    // Simulate streaming response
-    setTimeout(() => {
-      stream.emit('start', { requestId });
-      
-      const words = 'This is a simulated streaming response from the AI provider.'.split(' ');
-      let wordIndex = 0;
-      
-      const interval = setInterval(() => {
-        if (wordIndex < words.length) {
-          stream.emit('content', {
-            content: words[wordIndex] + ' ',
-            timestamp: new Date().toISOString()
-          });
-          wordIndex++;
-        } else {
-          clearInterval(interval);
-          stream.emit('end', {
-            usage: { inputTokens: 50, outputTokens: 20, totalTokens: 70, cost: 0.01 },
-            timestamp: new Date().toISOString()
-          });
-          this.activeStreams.delete(requestId);
-        }
-      }, 100);
-    }, 100);
+    const request: AIRequest = {
+      id: requestId,
+      provider: '',
+      model: '',
+      platform: this.config.platform,
+      messages: messages.map(m => ({
+        role: m.role,
+        content: m.content
+      })),
+      options: { ...options, stream: true },
+      metadata: {
+        userId: this.authClient.getUser()?.id,
+        deviceId: this.authClient.getDeviceInfo()?.deviceId,
+        platform: this.config.platform,
+        timestamp: new Date().toISOString(),
+        requestType: metadata.requestType || 'chat',
+        ...metadata
+      }
+    };
+
+    const match = this.router.getBestModelFor(
+      options.systemPrompt || 'general',
+      this.config.platform,
+      {
+        requiresCapability: options.functions ? ['function-calling'] : undefined
+      }
+    );
+
+    if (!match) {
+      setTimeout(() => {
+        stream.emit('error', { error: new Error('No suitable AI provider available'), requestId });
+      }, 0);
+      return stream;
+    }
+
+    const { provider, model } = match;
+    request.provider = provider.id;
+    request.model = model.id;
+
+    this.emit('requestStarted', { requestId, request });
+
+    // Dispatch based on provider type
+    if (provider.type === 'anthropic') {
+      this._streamAnthropic(stream, provider, model, request, requestId);
+    } else if (provider.type === 'openai' || provider.type === 'groq') {
+      this._streamOpenAICompatible(stream, provider, model, request, requestId);
+    } else {
+      // Fallback: use non-streaming sendRequest and emit content all at once
+      this._streamFallback(stream, messages, options, metadata, requestId);
+    }
 
     return stream;
+  }
+
+  private _streamAnthropic(
+    stream: EventEmitter,
+    provider: any,
+    model: any,
+    request: AIRequest,
+    requestId: string
+  ): void {
+    const systemMessage = request.messages.find((m: any) => m.role === 'system');
+    const nonSystemMessages = request.messages.filter((m: any) => m.role !== 'system');
+
+    const body: any = {
+      model: model.id,
+      max_tokens: request.options.maxTokens || 4096,
+      stream: true,
+      messages: nonSystemMessages
+    };
+    if (request.options.temperature !== undefined) {
+      body.temperature = request.options.temperature;
+    }
+    if (systemMessage) {
+      body.system = systemMessage.content;
+    }
+
+    axios({
+      method: 'post',
+      url: `${provider.baseURL}/v1/messages`,
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': provider.apiKey || '',
+        'anthropic-version': '2023-06-01'
+      },
+      data: body,
+      responseType: 'stream',
+      timeout: provider.config?.timeout || 60000
+    }).then(response => {
+      stream.emit('start', { requestId, provider: provider.id, model: model.id });
+
+      let buffer = '';
+      let inputTokens = 0;
+      let outputTokens = 0;
+
+      response.data.on('data', (chunk: Buffer) => {
+        buffer += chunk.toString();
+        const lines = buffer.split('\n');
+        // Keep the last potentially incomplete line in the buffer
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed || trimmed.startsWith('event:')) continue;
+          if (!trimmed.startsWith('data:')) continue;
+
+          const jsonStr = trimmed.slice(5).trim();
+          if (!jsonStr || jsonStr === '[DONE]') continue;
+
+          try {
+            const parsed = JSON.parse(jsonStr);
+
+            if (parsed.type === 'message_start' && parsed.message?.usage) {
+              inputTokens = parsed.message.usage.input_tokens || 0;
+            } else if (parsed.type === 'content_block_delta' && parsed.delta?.text) {
+              stream.emit('content', {
+                content: parsed.delta.text,
+                timestamp: new Date().toISOString()
+              });
+            } else if (parsed.type === 'message_delta' && parsed.usage) {
+              outputTokens = parsed.usage.output_tokens || 0;
+            }
+          } catch {
+            // Skip malformed JSON chunks
+          }
+        }
+      });
+
+      response.data.on('end', () => {
+        const totalTokens = inputTokens + outputTokens;
+        const inputCost = (inputTokens / 1000) * (model.inputCostPer1k || 0);
+        const outputCost = (outputTokens / 1000) * (model.outputCostPer1k || 0);
+
+        stream.emit('end', {
+          usage: {
+            inputTokens,
+            outputTokens,
+            totalTokens,
+            cost: inputCost + outputCost
+          },
+          timestamp: new Date().toISOString()
+        });
+        this.activeStreams.delete(requestId);
+      });
+
+      response.data.on('error', (err: Error) => {
+        stream.emit('error', { error: err, requestId });
+        this.activeStreams.delete(requestId);
+      });
+    }).catch(err => {
+      stream.emit('error', { error: err, requestId });
+      this.activeStreams.delete(requestId);
+    });
+  }
+
+  private _streamOpenAICompatible(
+    stream: EventEmitter,
+    provider: any,
+    model: any,
+    request: AIRequest,
+    requestId: string
+  ): void {
+    const body: any = {
+      model: model.id,
+      stream: true,
+      messages: request.messages
+    };
+    if (request.options.maxTokens) {
+      body.max_tokens = request.options.maxTokens;
+    }
+    if (request.options.temperature !== undefined) {
+      body.temperature = request.options.temperature;
+    }
+    if (request.options.functions) {
+      body.functions = request.options.functions;
+    }
+
+    // For providers like groq whose baseURL already ends with /openai/v1,
+    // append /chat/completions. For standard openai, use /v1/chat/completions.
+    const url = provider.baseURL.includes('/v1')
+      ? `${provider.baseURL}/chat/completions`
+      : `${provider.baseURL}/v1/chat/completions`;
+
+    axios({
+      method: 'post',
+      url,
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${provider.apiKey || ''}`
+      },
+      data: body,
+      responseType: 'stream',
+      timeout: provider.config?.timeout || 60000
+    }).then(response => {
+      stream.emit('start', { requestId, provider: provider.id, model: model.id });
+
+      let buffer = '';
+      let totalContent = '';
+      let completionTokens = 0;
+      let promptTokens = 0;
+
+      response.data.on('data', (chunk: Buffer) => {
+        buffer += chunk.toString();
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed || !trimmed.startsWith('data:')) continue;
+
+          const jsonStr = trimmed.slice(5).trim();
+          if (jsonStr === '[DONE]') continue;
+
+          try {
+            const parsed = JSON.parse(jsonStr);
+            const delta = parsed.choices?.[0]?.delta;
+
+            if (delta?.content) {
+              totalContent += delta.content;
+              stream.emit('content', {
+                content: delta.content,
+                timestamp: new Date().toISOString()
+              });
+            }
+
+            // Capture usage if present (some providers include it in the final chunk)
+            if (parsed.usage) {
+              promptTokens = parsed.usage.prompt_tokens || 0;
+              completionTokens = parsed.usage.completion_tokens || 0;
+            }
+          } catch {
+            // Skip malformed JSON chunks
+          }
+        }
+      });
+
+      response.data.on('end', () => {
+        // Estimate tokens if the provider didn't supply usage data
+        if (!promptTokens && !completionTokens) {
+          const msgText = request.messages.map((m: any) => m.content).join(' ');
+          promptTokens = Math.ceil(msgText.length / 4);
+          completionTokens = Math.ceil(totalContent.length / 4);
+        }
+        const totalTokens = promptTokens + completionTokens;
+        const inputCost = (promptTokens / 1000) * (model.inputCostPer1k || 0);
+        const outputCost = (completionTokens / 1000) * (model.outputCostPer1k || 0);
+
+        stream.emit('end', {
+          usage: {
+            inputTokens: promptTokens,
+            outputTokens: completionTokens,
+            totalTokens,
+            cost: inputCost + outputCost
+          },
+          timestamp: new Date().toISOString()
+        });
+        this.activeStreams.delete(requestId);
+      });
+
+      response.data.on('error', (err: Error) => {
+        stream.emit('error', { error: err, requestId });
+        this.activeStreams.delete(requestId);
+      });
+    }).catch(err => {
+      stream.emit('error', { error: err, requestId });
+      this.activeStreams.delete(requestId);
+    });
+  }
+
+  private _streamFallback(
+    stream: EventEmitter,
+    messages: ChatMessage[],
+    options: AIRequestOptions,
+    metadata: Partial<AIRequestMetadata>,
+    requestId: string
+  ): void {
+    this.sendRequest(messages, options, metadata)
+      .then(response => {
+        stream.emit('start', { requestId, provider: response.provider, model: response.model });
+        stream.emit('content', {
+          content: response.content,
+          timestamp: new Date().toISOString()
+        });
+        stream.emit('end', {
+          usage: response.usage,
+          timestamp: new Date().toISOString()
+        });
+        this.activeStreams.delete(requestId);
+      })
+      .catch(err => {
+        stream.emit('error', { error: err, requestId });
+        this.activeStreams.delete(requestId);
+      });
   }
 
   // Task Processing

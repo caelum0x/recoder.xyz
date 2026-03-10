@@ -68,7 +68,17 @@ WORKDIR /app/recoder-agents
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV NEXT_OUTPUT=standalone
 
-RUN corepack enable pnpm && NODE_OPTIONS=--max_old_space_size=4096 pnpm run build
+ARG BUILD_NODE_MAX_OLD_SPACE=3072
+
+# NEXT_PUBLIC_* vars must be declared as ARGs so Next.js can inline them at build time
+ARG NEXT_PUBLIC_APP_URL=https://agents.recoder.xyz
+ARG NEXT_PUBLIC_BACKEND_URL=https://api.recoder.xyz/v1
+ARG NEXT_PUBLIC_AUTH_URL=https://recoder.xyz
+ENV NEXT_PUBLIC_APP_URL=${NEXT_PUBLIC_APP_URL}
+ENV NEXT_PUBLIC_BACKEND_URL=${NEXT_PUBLIC_BACKEND_URL}
+ENV NEXT_PUBLIC_AUTH_URL=${NEXT_PUBLIC_AUTH_URL}
+
+RUN corepack enable pnpm && NODE_OPTIONS=--max_old_space_size=${BUILD_NODE_MAX_OLD_SPACE} pnpm run build
 RUN test -d .next/standalone
 
 

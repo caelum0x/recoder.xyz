@@ -37,17 +37,14 @@ export function PdfPreview({
     React.useEffect(() => {
         if (blobData instanceof Blob) {
             // Debug: Check blob contents
-            console.log('[PdfPreview] Blob received:', {
-                type: blobData.type,
-                size: blobData.size,
-            });
+            
             
             // Read first few bytes to verify it's a PDF
             const reader = new FileReader();
             reader.onload = () => {
                 const arr = new Uint8Array(reader.result as ArrayBuffer);
                 const header = String.fromCharCode(...arr.slice(0, 8));
-                console.log('[PdfPreview] File header:', header);
+                
                 
                 // Check if it starts with %PDF
                 if (!header.startsWith('%PDF')) {
@@ -77,16 +74,7 @@ export function PdfPreview({
     const retryCount = failureCount || 0;
     
     // Debug logging for PDF data
-    console.log('[PdfPreview] State:', {
-        filepath,
-        sandboxId,
-        localPreviewUrl,
-        blobUrl,
-        pdfUrl,
-        isLoading,
-        error: error?.message,
-        retryCount
-    });
+    
     
     // Show loading state while fetching with auth
     if ((isLoading || !blobUrl) && !localPreviewUrl && !error) {

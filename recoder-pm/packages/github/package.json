@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "scripts": {
-    "watch": "gh webhook forward --repo=haydenbleasel/eververse --events=issues,pull_request --url=http://localhost:3004/webhooks/github"
+    "watch": "gh webhook forward --repo=recoder-xyz/recoder-pm --events=issues,pull_request --url=http://localhost:3004/webhooks/github"
   },
   "devDependencies": {
     "@octokit/webhooks": "^14.0.0",

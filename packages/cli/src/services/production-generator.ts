@@ -42,8 +42,8 @@ export class ProductionGenerator {
 
   constructor() {
     this.aiHub = AIHub.getInstance();
-    this.backendUrl = process.env.BACKEND_URL || 'http://localhost:3001';
-    this.engineUrl = process.env.ENGINE_URL || 'http://localhost:3002';
+    this.backendUrl = process.env.BACKEND_URL || 'http://localhost:3100';
+    this.engineUrl = process.env.ENGINE_URL || 'http://localhost:3100';
   }
 
   /**
@@ -103,7 +103,7 @@ export class ProductionGenerator {
 
       return result;
 
-    } catch (error: any) {
+    } catch (error) {
       Logger.error(`❌ Generation failed: ${error.message}`);
       return {
         success: false,
@@ -147,7 +147,7 @@ export class ProductionGenerator {
         validationResults: engineResult.validationResults || []
       };
 
-    } catch (error: any) {
+    } catch (error) {
       Logger.error(`Production engine generation failed: ${error.message}`);
       throw error;
     }
@@ -183,7 +183,7 @@ export class ProductionGenerator {
         validationResults: []
       };
 
-    } catch (error: any) {
+    } catch (error) {
       Logger.error(`Backend API generation failed: ${error.message}`);
       throw error;
     }
@@ -222,7 +222,7 @@ export class ProductionGenerator {
         validationResults: []
       };
 
-    } catch (error: any) {
+    } catch (error) {
       Logger.error(`Local AI generation failed: ${error.message}`);
       throw error;
     }
@@ -583,7 +583,7 @@ Generate production-ready AI code with real model integrations.
         
         writtenFiles.push(file);
         Logger.info(`✅ Created: ${file.path}`);
-      } catch (error: any) {
+      } catch (error) {
         Logger.error(`❌ Failed to write ${file.path}: ${error.message}`);
       }
     }

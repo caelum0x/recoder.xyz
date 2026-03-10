@@ -106,12 +106,10 @@ function createSignInFunction() {
   };
 
   const socialSignIn = async (options: { provider: 'google' | 'github'; callbackURL?: string }) => {
-    console.log('Social login with options:', options);
     const { provider, callbackURL } = options;
-    
+
     // Redirect to OAuth provider
     const redirectUrl = `/api/auth/${provider}`;
-    console.log('Redirecting to:', redirectUrl);
     window.location.href = redirectUrl;
     
     // Return a promise that resolves when redirect happens
@@ -146,8 +144,8 @@ export async function signOut() {
     credentials: 'include',
   });
 
-  // Compatibility fallback for older deployments.
-  if (!response.ok && response.status === 404) {
+  // Compatibility and resilience fallback.
+  if (!response.ok) {
     response = await fetch('/api/auth/logout', {
       method: 'POST',
       credentials: 'include',

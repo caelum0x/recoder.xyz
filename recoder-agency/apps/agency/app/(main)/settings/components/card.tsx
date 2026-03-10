@@ -49,7 +49,7 @@ export const Card: FC<PropsWithChildren<CardProps>> = ({
 						</h2>
 					)}
 					{description && (
-						<p className="text-text-muted text-[12px] leading-[20.4px] tracking-normal font-geist">
+						<p className="text-text-muted text-[12px] leading-[20.4px] tracking-normal font-sans">
 							{description}
 						</p>
 					)}

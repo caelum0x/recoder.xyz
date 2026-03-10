@@ -1002,7 +1002,9 @@ async function push(
   } catch (error: any) {
     // Clean up credential helper on error
     if (options?.token) {
-      await execInContainer(containerId, 'cd /workspace && git config --unset credential.helper 2>/dev/null || true').catch(() => {});
+      await execInContainer(containerId, 'cd /workspace && git config --unset credential.helper 2>/dev/null || true').catch((err: unknown) => {
+        console.warn(`[Git] Failed to clean credential helper in ${containerId}:`, err);
+      });
     }
 
     const msg = error.message || '';
@@ -1074,7 +1076,9 @@ async function pull(
   } catch (error: any) {
     // Clean up credential helper on error
     if (options?.token) {
-      await execInContainer(containerId, 'cd /workspace && git config --unset credential.helper 2>/dev/null || true').catch(() => {});
+      await execInContainer(containerId, 'cd /workspace && git config --unset credential.helper 2>/dev/null || true').catch((err: unknown) => {
+        console.warn(`[Git] Failed to clean credential helper in ${containerId}:`, err);
+      });
     }
 
     const msg = error.message || '';
@@ -1110,7 +1114,9 @@ async function fetchRemote(
     return { success: true };
   } catch (error: any) {
     if (options?.token) {
-      await execInContainer(containerId, 'cd /workspace && git config --unset credential.helper 2>/dev/null || true').catch(() => {});
+      await execInContainer(containerId, 'cd /workspace && git config --unset credential.helper 2>/dev/null || true').catch((err: unknown) => {
+        console.warn(`[Git] Failed to clean credential helper in ${containerId}:`, err);
+      });
     }
     return { success: false, error: error.message };
   }
@@ -1420,7 +1426,9 @@ async function pushForceWithLease(
     return { success: true };
   } catch (error: any) {
     if (token) {
-      await execInContainer(containerId, 'cd /workspace && git config --unset credential.helper 2>/dev/null || true').catch(() => {});
+      await execInContainer(containerId, 'cd /workspace && git config --unset credential.helper 2>/dev/null || true').catch((err: unknown) => {
+        console.warn(`[Git] Failed to clean credential helper in ${containerId}:`, err);
+      });
     }
 
     const msg = error.message || '';

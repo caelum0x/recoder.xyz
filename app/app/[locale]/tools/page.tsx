@@ -13,7 +13,7 @@ export default function DeveloperToolsPage() {
   const cliCommands = [
     {
       title: "Install Recoder CLI",
-      command: "npm install -g recoder-cli",
+      command: "npm install -g recoder-code",
       description: "Get started with our command-line interface"
     },
     {
@@ -166,7 +166,7 @@ export default function DeveloperToolsPage() {
       {/* Hero Section */}
       <section className="relative py-20 px-4 sm:px-6 lg:px-8">
         <div className="max-w-7xl mx-auto text-center">
-          <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold bg-gradient-to-r from-blue-600 via-purple-600 to-indigo-600 bg-clip-text text-transparent mb-6">
+          <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold bg-gradient-to-r from-orange-500 via-purple-600 to-indigo-600 bg-clip-text text-transparent mb-6">
             Developer Tools
           </h1>
           <p className="text-xl text-gray-600 dark:text-gray-300 max-w-3xl mx-auto mb-8">
@@ -174,7 +174,7 @@ export default function DeveloperToolsPage() {
             From CLI tools to SDKs, we've got you covered.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <button className="px-8 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-xl font-medium hover:from-blue-700 hover:to-purple-700 transition-all duration-200 transform hover:scale-105">
+            <button className="px-8 py-3 bg-gradient-to-r from-orange-500 to-purple-600 text-white rounded-xl font-medium hover:from-orange-600 hover:to-purple-700 transition-all duration-200 transform hover:scale-105">
               Get Started
             </button>
             <button className="px-8 py-3 border border-gray-300 dark:border-slate-600 rounded-xl font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-800 transition-all duration-200">
@@ -300,7 +300,7 @@ export default function DeveloperToolsPage() {
                 <div className="flex gap-3">
                   <Link 
                     href={sdk.docsLink}
-                    className="flex-1 px-4 py-2 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg font-medium text-center hover:from-blue-700 hover:to-purple-700 transition-all duration-200"
+                    className="flex-1 px-4 py-2 bg-gradient-to-r from-orange-500 to-purple-600 text-white rounded-lg font-medium text-center hover:from-orange-600 hover:to-purple-700 transition-all duration-200"
                   >
                     Documentation
                   </Link>
@@ -334,7 +334,7 @@ export default function DeveloperToolsPage() {
               >
                 <div className="flex items-start justify-between mb-4">
                   <div className="flex items-center">
-                    <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center mr-4">
+                    <div className="w-12 h-12 bg-gradient-to-br from-orange-500 to-purple-600 rounded-lg flex items-center justify-center mr-4">
                       <tool.icon className="w-6 h-6 text-white" />
                     </div>
                     <div>
@@ -369,7 +369,7 @@ export default function DeveloperToolsPage() {
                 
                 <Link 
                   href={tool.link}
-                  className="inline-flex items-center w-full px-4 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg font-medium text-center justify-center hover:from-blue-700 hover:to-purple-700 transition-all duration-200"
+                  className="inline-flex items-center w-full px-4 py-3 bg-gradient-to-r from-orange-500 to-purple-600 text-white rounded-lg font-medium text-center justify-center hover:from-orange-600 hover:to-purple-700 transition-all duration-200"
                 >
                   {tool.link.startsWith('http') ? 'Download' : 'Try Tool'}
                   <ExternalLink className="ml-2 w-4 h-4" />
@@ -443,7 +443,7 @@ export default function DeveloperToolsPage() {
       {/* Getting Started */}
       <section className="px-4 sm:px-6 lg:px-8 pb-20">
         <div className="max-w-4xl mx-auto">
-          <div className="bg-gradient-to-r from-blue-600 to-purple-600 rounded-2xl p-8 lg:p-12 text-center text-white">
+          <div className="bg-gradient-to-r from-orange-500 to-purple-600 rounded-2xl p-8 lg:p-12 text-center text-white">
             <h2 className="text-3xl lg:text-4xl font-bold mb-4">
               Ready to Build Something Amazing?
             </h2>

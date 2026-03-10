@@ -99,6 +99,8 @@ import { ReferralsTab } from '@/components/referrals/referrals-tab';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { MemorySettings } from '@/components/memory/MemorySettings';
 import { KnowledgeBaseSettings } from './knowledge-base-settings';
+import { useUserPreferences, useUpdatePreferences } from '@/hooks/platform/use-user-preferences';
+import { Cloud, CloudOff } from 'lucide-react';
 
 type TabId = 'general' | 'plan' | 'billing' | 'usage' | 'memory' | 'env-manager' | 'knowledge-base' | 'integrations' | 'api-keys' | 'referrals';
 
@@ -149,7 +151,6 @@ export function UserSettingsModal({
         if (tabId === 'plan') {
             setShowPlanModal(true);
         } else if (tabId === 'knowledge-base') {
-            // Show Coming Soon tab instead of navigating
             setActiveTab('knowledge-base');
         } else if (tabId === 'integrations') {
             onOpenChange(false);
@@ -322,6 +323,10 @@ function GeneralTab({ onClose }: { onClose: () => void }) {
     const requestDeletion = useRequestAccountDeletion();
     const cancelDeletion = useCancelAccountDeletion();
     const deleteImmediately = useDeleteAccountImmediately();
+
+    // Backend-synced preferences
+    const { data: preferences, isLoading: prefsLoading } = useUserPreferences();
+    const updatePreferences = useUpdatePreferences();
 
     useEffect(() => {
         const fetchUserData = async () => {
@@ -593,6 +598,99 @@ function GeneralTab({ onClose }: { onClose: () => void }) {
 
                 <div className="space-y-2">
                     <LanguageSwitcher />
+                </div>
+            </div>
+
+            {/* Appearance Preferences (synced to backend) */}
+            <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                    <h4 className="text-sm font-medium">Appearance</h4>
+                    {preferences && (
+                        <Tooltip>
+                            <TooltipTrigger asChild>
+                                <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                                    {updatePreferences.isPending ? (
+                                        <Cloud className="h-3 w-3 animate-pulse" />
+                                    ) : preferences.updated_at ? (
+                                        <Cloud className="h-3 w-3 text-green-500" />
+                                    ) : (
+                                        <CloudOff className="h-3 w-3" />
+                                    )}
+                                    Synced
+                                </div>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                                {preferences.updated_at
+                                    ? `Last synced: ${new Date(preferences.updated_at).toLocaleString()}`
+                                    : 'Using default preferences'}
+                            </TooltipContent>
+                        </Tooltip>
+                    )}
+                </div>
+
+                <div className="flex items-center justify-between">
+                    <div>
+                        <Label className="font-medium">Compact Mode</Label>
+                        <p className="text-xs text-muted-foreground">Reduce spacing and padding</p>
+                    </div>
+                    <Switch
+                        checked={preferences?.compact_mode ?? false}
+                        onCheckedChange={(checked) =>
+                            updatePreferences.mutate({ compact_mode: checked })
+                        }
+                        disabled={prefsLoading || updatePreferences.isPending}
+                    />
+                </div>
+
+                <div className="flex items-center justify-between">
+                    <div>
+                        <Label className="font-medium">Reduced Animations</Label>
+                        <p className="text-xs text-muted-foreground">Minimize motion for accessibility</p>
+                    </div>
+                    <Switch
+                        checked={preferences?.reduced_animations ?? false}
+                        onCheckedChange={(checked) =>
+                            updatePreferences.mutate({ reduced_animations: checked })
+                        }
+                        disabled={prefsLoading || updatePreferences.isPending}
+                    />
+                </div>
+
+                <div className="space-y-2">
+                    <Label className="font-medium">Font Size</Label>
+                    <RadioGroup
+                        value={preferences?.font_size ?? 'medium'}
+                        onValueChange={(value) =>
+                            updatePreferences.mutate({ font_size: value as 'small' | 'medium' | 'large' })
+                        }
+                        className="flex gap-3"
+                        disabled={prefsLoading || updatePreferences.isPending}
+                    >
+                        {(['small', 'medium', 'large'] as const).map((size) => (
+                            <div key={size} className="flex items-center space-x-2">
+                                <RadioGroupItem value={size} id={`font-${size}`} />
+                                <Label htmlFor={`font-${size}`} className="capitalize cursor-pointer">
+                                    {size}
+                                </Label>
+                            </div>
+                        ))}
+                    </RadioGroup>
+                </div>
+
+                <div className="space-y-2">
+                    <Label className="font-medium">Timezone</Label>
+                    <Input
+                        value={preferences?.timezone ?? 'UTC'}
+                        onChange={(e) =>
+                            updatePreferences.mutate({ timezone: e.target.value })
+                        }
+                        placeholder="e.g. America/New_York"
+                        className="shadow-none"
+                        disabled={prefsLoading || updatePreferences.isPending}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                        Used for scheduling and date display
+                    </p>
                 </div>
             </div>
 
@@ -905,21 +1003,11 @@ function BillingTab({ returnUrl, onOpenPlanModal, isActive }: { returnUrl: strin
     const nonExpiringCredits = accountState?.credits.extra ?? 0;
     const totalCredits = accountState?.credits.total ?? 0;
     
-    console.log('[BillingTab] Credit breakdown:', { 
-        accountState: accountState?.credits,
-        dailyCreditsInfo, 
-        dailyCredits, 
-        monthlyCredits, 
-        nonExpiringCredits, 
-        totalCredits
-    });
-
     // Refetch billing info whenever the billing tab becomes active (only once per activation)
     const prevIsActiveRef = useRef(false);
     useEffect(() => {
         // Only refetch if tab just became active (not on every render)
         if (isActive && !prevIsActiveRef.current && session && !authLoading) {
-            console.log('🔄 Billing tab activated, refetching billing info...');
             // Use centralized invalidation which includes deduplication
             invalidateAccountState(queryClient, true);
         }
@@ -976,7 +1064,6 @@ function BillingTab({ returnUrl, onOpenPlanModal, isActive }: { returnUrl: strin
     };
 
     const handleManageSubscription = () => {
-        console.log('[BillingTab] Creating portal session with return_url:', returnUrl);
         createPortalSessionMutation.mutate({ return_url: returnUrl });
     };
 

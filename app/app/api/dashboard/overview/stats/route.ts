@@ -3,6 +3,7 @@ import { requireAuth } from "@/lib/auth-helpers";
 import { ensureAppUserFromAuthUser } from '@/lib/auth-helpers';
 
 import { prisma } from '@/lib/prisma';
+import { logger } from '@/lib/logger';
 
 export async function GET(request: NextRequest) {
   try {
@@ -98,12 +99,28 @@ export async function GET(request: NextRequest) {
       }
     });
 
-    // Subscription info
+    // Subscription info — look up actual subscription record for renewal date
+    const subscription = await prisma.subscriptions.findFirst({
+      where: { userId: user.id },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    let renewsAt = '';
+    let daysRemaining = 0;
+    let subStatus: string = 'active';
+
+    if (subscription && subscription.status === 'active') {
+      renewsAt = subscription.currentPeriodEnd.toISOString();
+      subStatus = subscription.cancelAtPeriodEnd ? 'cancelled_at_period_end' : subscription.status;
+      const msRemaining = subscription.currentPeriodEnd.getTime() - Date.now();
+      daysRemaining = Math.max(0, Math.ceil(msRemaining / (1000 * 60 * 60 * 24)));
+    }
+
     const subscriptionInfo = {
-      plan: user.subscription || 'free',
-      status: 'active',
-      renewsAt: '',
-      daysRemaining: 0
+      plan: subscription?.planId || user.subscription || 'free',
+      status: subStatus,
+      renewsAt,
+      daysRemaining,
     };
 
     return NextResponse.json({
@@ -129,7 +146,7 @@ export async function GET(request: NextRequest) {
     });
 
   } catch (error) {
-    console.error('Dashboard stats error:', error);
+    logger.error('Dashboard stats error:', { error: error instanceof Error ? error.message : String(error) });
     return NextResponse.json(
       { error: 'Failed to fetch stats' },
       { status: 500 }

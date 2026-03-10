@@ -85,7 +85,7 @@ export async function GET(request: NextRequest) {
   }
 
   // User is logged in - generate authorization code
-  const user = await prisma.user.findUnique({
+  const user = await prisma.users.findUnique({
     where: { email: session.user.email }
   });
 
@@ -268,7 +268,6 @@ async function handleDeviceFlowInit(body: JsonRecord) {
         expiresAt
       }
     });
-    console.log('✅ Device code created:', created.id);
   } catch (error) {
     console.error('❌ Failed to create device code:', error);
     return NextResponse.json(
@@ -613,9 +612,11 @@ async function handleTokenRevoke(body: JsonRecord) {
  */
 function generateUserCode(): string {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // Exclude similar chars
+  const randomBuf = new Uint8Array(8);
+  crypto.getRandomValues(randomBuf);
   let code = '';
   for (let i = 0; i < 8; i++) {
-    code += chars.charAt(Math.floor(Math.random() * chars.length));
+    code += chars.charAt(randomBuf[i] % chars.length);
     if (i === 3) code += '-'; // Format: XXXX-XXXX
   }
   return code;

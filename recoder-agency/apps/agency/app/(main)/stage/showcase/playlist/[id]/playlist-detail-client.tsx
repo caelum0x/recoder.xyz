@@ -15,8 +15,9 @@ import { Edit3, Play, Plus, Star, Trash2 } from "lucide-react";
 
 import { useRouter } from "next/navigation";
 import type React from "react";
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import { Card } from "../../../../settings/components/card";
+import { updatePlaylist, deletePlaylist } from "../actions";
 
 interface App {
 	id: string;
@@ -48,10 +49,6 @@ export function PlaylistDetailClient({ playlist }: PlaylistDetailClientProps) {
 	const [editError, setEditError] = useState("");
 	const [isEditLoading, setIsEditLoading] = useState(false);
 
-	const _handleBackClick = () => {
-		router.push("/stage/showcase?tab=Playlist");
-	};
-
 	const handleEditPlaylist = () => {
 		setIsEditDialogOpen(true);
 		setEditForm({
@@ -66,20 +63,24 @@ export function PlaylistDetailClient({ playlist }: PlaylistDetailClientProps) {
 			setIsEditLoading(true);
 			setEditError("");
 
-			// Validate title
 			if (!editForm.title.trim()) {
 				setEditError("Playlist title is required");
 				setIsEditLoading(false);
 				return;
 			}
 
-			// TODO: Implement actual save functionality
-			console.log("Saving playlist:", editForm);
+			const result = await updatePlaylist(playlist.id, {
+				title: editForm.title,
+				description: editForm.description,
+			});
 
-			// Simulate API call
-			await new Promise((resolve) => setTimeout(resolve, 1000));
+			if (result.error) {
+				setEditError(result.error);
+				return;
+			}
 
 			setIsEditDialogOpen(false);
+			router.refresh();
 		} catch (_error) {
 			setEditError("Failed to save playlist. Please try again.");
 		} finally {
@@ -87,33 +88,17 @@ export function PlaylistDetailClient({ playlist }: PlaylistDetailClientProps) {
 		}
 	};
 
-	const handleDeletePlaylist = () => {
-		// TODO: Implement delete functionality
-		console.log("Delete playlist:", playlist.id);
+	const handleDeletePlaylist = async () => {
+		await deletePlaylist(playlist.id);
+		router.push("/stage/showcase?tab=Playlist");
 	};
 
 	const handleAddApps = () => {
-		// TODO: Implement add apps functionality
-		console.log("Add apps to playlist:", playlist.id);
+		router.push(`/stage/showcase?tab=Apps&addToPlaylist=${playlist.id}`);
 	};
 
 	const handleAppClick = (app: App) => {
-		router.push(`/stage/app-detail/${app.workspaceId}`);
-	};
-
-	const _handleAppKeyDown = (event: React.KeyboardEvent, app: App) => {
-		if (event.key === "Enter" || event.key === " ") {
-			event.preventDefault();
-			handleAppClick(app);
-		}
-	};
-
-	const _formatDate = (date: Date) => {
-		return new Intl.DateTimeFormat("en-US", {
-			year: "numeric",
-			month: "short",
-			day: "numeric",
-		}).format(date);
+		router.push(`/stage/showcase/${app.id}`);
 	};
 
 	return (
@@ -278,7 +263,7 @@ export function PlaylistDetailClient({ playlist }: PlaylistDetailClientProps) {
 											<p className="text-sm md:text-[14px] font-sans text-text truncate">
 												{app.name || "Untitled"}
 											</p>
-											<p className="text-xs md:text-[12px] font-geist text-text-muted">
+											<p className="text-xs md:text-[12px] font-sans text-text-muted">
 												Edited {app.updatedAt.toLocaleDateString("en-US")}
 											</p>
 										</div>
@@ -307,14 +292,7 @@ export function PlaylistDetailClient({ playlist }: PlaylistDetailClientProps) {
 													router.push("/playground");
 												}
 											}}
-											className="rounded-lg px-2 md:px-3 py-1 md:py-1.5 text-text transition-all duration-200 active:scale-[0.98] text-xs md:text-sm"
-											style={{
-												background:
-													"linear-gradient(180deg, #202530 0%, #12151f 100%)",
-												border: "1px solid rgba(0,0,0,0.7)",
-												boxShadow:
-													"inset 0 1px 1px rgba(255,255,255,0.05), 0 2px 8px rgba(5,10,20,0.4), 0 1px 2px rgba(0,0,0,0.3)",
-											}}
+											className="rounded-lg px-2 md:px-3 py-1 md:py-1.5 text-text transition-all duration-200 active:scale-[0.98] text-xs md:text-sm bg-gradient-to-b from-zinc-800 to-zinc-900 border border-black/70 shadow-[inset_0_1px_1px_rgba(255,255,255,0.05),0_2px_8px_rgba(5,10,20,0.4),0_1px_2px_rgba(0,0,0,0.3)]"
 										>
 											Edit
 										</button>

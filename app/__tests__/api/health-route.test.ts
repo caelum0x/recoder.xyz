@@ -6,6 +6,16 @@ vi.mock('@/lib/tracing-middleware', () => ({
   traceRequest: (...args: unknown[]) => mockTraceRequest(...args),
 }));
 
+vi.mock('@/lib/prisma', () => ({
+  prisma: {
+    $queryRaw: vi.fn().mockResolvedValue([{ '?column?': 1 }]),
+  },
+}));
+
+vi.mock('@/lib/billing-health', () => ({
+  detectBillingHealth: vi.fn(() => ({ configured: false, provider: 'none' })),
+}));
+
 describe('/api/health route', () => {
   beforeEach(() => {
     vi.resetModules();

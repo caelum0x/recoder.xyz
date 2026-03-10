@@ -359,7 +359,7 @@ export class AuthService extends EventEmitter {
    */
 
   private generateSecureState(): string {
-    return Buffer.from(Math.random().toString(36).substr(2) + Date.now().toString()).toString('base64');
+    return crypto.randomBytes(32).toString('base64url');
   }
 
   private async startAuthCallbackServer(port: number, expectedState: string): Promise<string> {

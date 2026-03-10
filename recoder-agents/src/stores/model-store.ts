@@ -11,7 +11,6 @@ export const useModelStore = create<ModelStore>()(
     (set) => ({
       selectedModel: '', // Will be set by the hook based on API data
       setSelectedModel: (model: string) => {
-        console.log('🔧 ModelStore: Setting selected model to:', model);
         set({ selectedModel: model });
       },
     }),

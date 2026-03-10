@@ -183,7 +183,7 @@ export class ClearcutLogger {
 
   /** For testing purposes only. */
   static clearInstance(): void {
-    (ClearcutLogger as { instance: ClearcutLogger | undefined }).instance = undefined;
+    ((ClearcutLogger as unknown) as { instance: ClearcutLogger | undefined }).instance = undefined;
   }
 
   enqueueLogEvent(event: LogEvent): void {

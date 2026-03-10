@@ -8,7 +8,7 @@ import { cn } from '@/lib/utils';
 import { useSpreadsheetSync } from './useSpreadsheetSync';
 import { SyncStatusIndicator } from './SyncStatusIndicator';
 import { Button } from '@/components/ui/button';
-import { getSessionAccessToken } from '@/lib/auth/session-token';
+import { getSandboxFileContent } from '@/lib/api/sandbox';
 import { toast } from '@/lib/toast';
 import { useDownloadRestriction } from '@/hooks/billing';
 import { SpreadsheetLoader } from './SpreadsheetLoader';
@@ -116,7 +116,7 @@ export function SpreadsheetViewer({
     let path = filePath;
     
     if (path.startsWith('blob:')) {
-      console.log('[SpreadsheetViewer] Using blob URL:', path);
+      
       return path;
     }
     
@@ -128,12 +128,7 @@ export function SpreadsheetViewer({
       }
     }
     
-    console.log('[SpreadsheetViewer] Resolved path:', {
-      original: filePath,
-      resolved: path,
-      fileName,
-      sandboxId: resolvedSandboxId
-    });
+    
     
     return path;
   })();
@@ -186,31 +181,10 @@ export function SpreadsheetViewer({
       toast.error('Unable to download file');
       return;
     }
-    const token = await getSessionAccessToken();
-    if (!token) {
-      toast.error('Unable to download file');
-      return;
-    }
-
-    console.log('[SpreadsheetViewer] Downloading:', {
-      sandboxId: resolvedSandboxId,
-      filePath: resolvedFilePath,
-      fileName
-    });
-
     setIsDownloading(true);
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/sandboxes/${resolvedSandboxId}/files/content?path=${encodeURIComponent(resolvedFilePath)}`, {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
-
-      if (!response.ok) {
-        throw new Error(`Download failed: ${response.status}`);
-      }
-
-      const blob = await response.blob();
+      const content = await getSandboxFileContent(resolvedSandboxId, resolvedFilePath);
+      const blob = content instanceof Blob ? content : new Blob([content], { type: 'application/octet-stream' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;

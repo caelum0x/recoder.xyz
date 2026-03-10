@@ -5,6 +5,7 @@ import { headers } from 'next/headers';
 
 import { prisma } from '@/lib/prisma';
 import { logger } from '@/lib/logger';
+import { resolveDodoApiKey, resolvePaddleAuthCode, resolvePaddleVendorId } from '@/lib/billing-credentials';
 
 export async function POST(request: NextRequest) {
   try {
@@ -88,8 +89,8 @@ export async function POST(request: NextRequest) {
 
 async function cancelPaddleSubscription(subscriptionId: string) {
   try {
-    const PADDLE_VENDOR_ID = process.env.PADDLE_VENDOR_ID;
-    const PADDLE_API_KEY = process.env.PADDLE_API_KEY;
+    const PADDLE_VENDOR_ID = resolvePaddleVendorId();
+    const PADDLE_API_KEY = resolvePaddleAuthCode();
 
     if (!PADDLE_VENDOR_ID || !PADDLE_API_KEY) {
       logger.error('Paddle credentials not configured', { route: 'api/billing/subscription/cancel' });
@@ -120,7 +121,7 @@ async function cancelPaddleSubscription(subscriptionId: string) {
 
 async function cancelDodoSubscription(subscriptionId: string) {
   try {
-    const DODO_API_KEY = process.env.DODO_API_KEY;
+    const DODO_API_KEY = resolveDodoApiKey();
 
     if (!DODO_API_KEY) {
       logger.error('DODO API key not configured', { route: 'api/billing/subscription/cancel' });

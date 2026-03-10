@@ -35,6 +35,7 @@ export interface OAuthResult {
   user?: any;
   tokens?: any;
   error?: string;
+  errorCode?: 'unsupported_provider' | 'invalid_state' | 'oauth_error' | 'missing_code' | 'auth_failed' | 'timeout';
 }
 
 export class OAuthHandler extends EventEmitter {
@@ -101,7 +102,7 @@ export class OAuthHandler extends EventEmitter {
     // Default redirect URIs per platform
     const defaultRedirectUris = {
       web: `${process.env['RECODER_WEB_URL'] || 'http://localhost:3000'}/auth/callback/${provider}`,
-      cli: `${process.env['RECODER_API_URL'] || 'http://localhost:3001'}/oauth/callback/${provider}`,
+      cli: `${process.env['RECODER_API_URL'] || 'http://localhost:3100'}/oauth/callback/${provider}`,
       mobile: `recoder://oauth/callback/${provider}`,
       desktop: `recoder://oauth/callback/${provider}`,
       extension: `vscode://recoder.extension/oauth/callback/${provider}`
@@ -142,23 +143,44 @@ export class OAuthHandler extends EventEmitter {
     callbackData: OAuthCallbackData
   ): Promise<OAuthResult> {
     try {
+      // Check if provider is supported before proceeding
+      if (!this.isProviderSupported(provider)) {
+        return {
+          success: false,
+          error: `OAuth provider '${provider}' is not supported. Supported providers: ${this.getSupportedProviders().map(p => p.name).join(', ')}`,
+          errorCode: 'unsupported_provider'
+        };
+      }
+
       // Verify state parameter
       if (callbackData.state && !this.verifyState(callbackData.state, provider, platform)) {
-        throw new Error('Invalid state parameter - possible CSRF attack');
+        return {
+          success: false,
+          error: 'Invalid state parameter - possible CSRF attack',
+          errorCode: 'invalid_state'
+        };
       }
 
       // Check for OAuth errors
       if (callbackData.error) {
-        throw new Error(`OAuth error: ${callbackData.error} - ${callbackData.errorDescription || 'Unknown error'}`);
+        return {
+          success: false,
+          error: `OAuth error: ${callbackData.error} - ${callbackData.errorDescription || 'Unknown error'}`,
+          errorCode: 'oauth_error'
+        };
       }
 
       if (!callbackData.code) {
-        throw new Error('No authorization code received');
+        return {
+          success: false,
+          error: 'No authorization code received',
+          errorCode: 'missing_code'
+        };
       }
 
       // Exchange code for tokens and authenticate
       let authResponse: AuthResponse;
-      
+
       switch (provider) {
         case 'google':
           authResponse = await this.authClient.loginWithGoogle(
@@ -166,16 +188,21 @@ export class OAuthHandler extends EventEmitter {
             this.getRedirectUri(provider, platform)
           );
           break;
-          
+
         case 'github':
           authResponse = await this.authClient.loginWithGitHub(
             callbackData.code,
             callbackData.state
           );
           break;
-          
+
         default:
-          throw new Error(`OAuth provider '${provider}' not implemented`);
+          // Provider is registered but token exchange is not implemented yet
+          return {
+            success: false,
+            error: `OAuth callback handling for '${provider}' is not yet implemented. Currently supported: google, github`,
+            errorCode: 'unsupported_provider'
+          };
       }
 
       this.emit('authSuccess', {
@@ -194,7 +221,7 @@ export class OAuthHandler extends EventEmitter {
         }
       };
 
-    } catch (error: any) {
+    } catch (error) {
       this.emit('authError', {
         provider,
         platform,
@@ -203,7 +230,8 @@ export class OAuthHandler extends EventEmitter {
 
       return {
         success: false,
-        error: error.message
+        error: error.message,
+        errorCode: 'auth_failed'
       };
     }
   }
@@ -345,14 +373,14 @@ export class OAuthHandler extends EventEmitter {
   private getRedirectUri(provider: string, platform: string): string {
     const defaultRedirectUris = {
       web: `${process.env['RECODER_WEB_URL'] || 'http://localhost:3000'}/auth/callback/${provider}`,
-      cli: `${process.env['RECODER_API_URL'] || 'http://localhost:3001'}/oauth/callback/${provider}`,
+      cli: `${process.env['RECODER_API_URL'] || 'http://localhost:3100'}/oauth/callback/${provider}`,
       mobile: `recoder://oauth/callback/${provider}`,
       desktop: `recoder://oauth/callback/${provider}`,
       extension: `vscode://recoder.extension/oauth/callback/${provider}`
     };
 
     return defaultRedirectUris[platform as keyof typeof defaultRedirectUris] || 
-           `http://localhost:3001/oauth/callback/${provider}`;
+           `http://localhost:3100/oauth/callback/${provider}`;
   }
 
   /**

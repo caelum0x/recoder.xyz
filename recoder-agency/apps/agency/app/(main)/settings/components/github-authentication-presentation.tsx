@@ -23,10 +23,10 @@ export function GitHubAuthenticationPresentation({
 			{alert && (
 				<Alert variant="destructive" className="p-4 rounded-[12px]">
 					<TriangleAlertIcon className="w-[18px] h-[18px] text-error-900/80" />
-					<AlertTitle className="mb-0 text-error-900 font-bold text-[12px] leading-[20.4px] font-geist">
+					<AlertTitle className="mb-0 text-error-900 font-bold text-[12px] leading-[20.4px] font-sans">
 						Authentication Error
 					</AlertTitle>
-					<AlertDescription className="text-error-900/70 font-medium text-[12px] leading-[20.4px] font-geist">
+					<AlertDescription className="text-error-900/70 font-medium text-[12px] leading-[20.4px] font-sans">
 						{alert}
 					</AlertDescription>
 				</Alert>
@@ -35,11 +35,11 @@ export function GitHubAuthenticationPresentation({
 				<div className="flex items-center gap-4">
 					<SiGithub className="text-inverse h-[20px] w-[20px]" />
 					<div className="flex flex-col">
-						<div className="text-inverse font-medium text-[16px] leading-[22.4px] font-geist">
+						<div className="text-inverse font-medium text-[16px] leading-[22.4px] font-sans">
 							GitHub
 						</div>
 						{gitHubUser && (
-							<div className="text-text-muted font-medium text-[12px] leading-[20.4px] font-geist">
+							<div className="text-text-muted font-medium text-[12px] leading-[20.4px] font-sans">
 								{gitHubUser.name} (
 								<ClickableText asChild>
 									<Link

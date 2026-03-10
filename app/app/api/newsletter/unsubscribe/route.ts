@@ -11,12 +11,18 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { rateLimit, rateLimitConfigs } from '@/lib/middleware/rate-limit';
+
+const publicRateLimiter = rateLimit(rateLimitConfigs.public);
 
 // ---------------------------------------------------------------------------
 // POST /api/newsletter/unsubscribe
 // Body: { email?: string; token?: string }
 // ---------------------------------------------------------------------------
 export async function POST(request: NextRequest) {
+  const rateLimitResponse = await publicRateLimiter(request);
+  if (rateLimitResponse) return rateLimitResponse;
+
   try {
     const body = await request.json();
     const { email, token } = body;
@@ -76,7 +82,7 @@ export async function POST(request: NextRequest) {
       email: subscriber.email,
       accountPreserved: true,
     });
-  } catch (error: any) {
+  } catch (error) {
     console.error('Newsletter unsubscribe error:', error);
     return NextResponse.json(
       { success: false, error: 'Failed to unsubscribe. Please try again.' },
@@ -131,7 +137,7 @@ export async function GET(request: NextRequest) {
       isNewsletterOnly: !subscriber.userId,
       status: subscriber.status,
     });
-  } catch (error: any) {
+  } catch (error) {
     console.error('Newsletter unsubscribe GET error:', error);
     return NextResponse.json(
       { success: false, error: 'Failed to load unsubscribe page' },
@@ -181,14 +187,12 @@ export async function DELETE(request: NextRequest) {
       },
     });
 
-    console.log(`Bulk unsubscribe: ${updateResult.count} newsletter subscribers updated`);
-
     return NextResponse.json({
       success: true,
       message: `Successfully unsubscribed ${updateResult.count} email(s)`,
       count: updateResult.count,
     });
-  } catch (error: any) {
+  } catch (error) {
     console.error('Bulk unsubscribe error:', error);
     return NextResponse.json(
       { success: false, error: 'Failed to process bulk unsubscribe' },

@@ -102,7 +102,7 @@ export default function BlogIndexPage() {
               <Link
                 key={post.slug}
                 href={`/blog/${post.slug}`}
-                className="group relative flex flex-col bg-[#111] border border-white/10 rounded-xl overflow-hidden hover:border-white/25 transition-all"
+                className="group relative flex flex-col bg-zinc-900 border border-white/10 rounded-xl overflow-hidden hover:border-white/25 transition-all"
               >
                 {/* Gradient banner */}
                 <div className="h-2 w-full bg-gradient-to-r from-orange-500 via-purple-500 to-cyan-500" />

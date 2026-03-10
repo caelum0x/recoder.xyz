@@ -98,8 +98,6 @@ export async function POST(request: NextRequest) {
       }
     });
 
-    console.log(`✅ Password changed for ${user.email}`);
-
     return NextResponse.json({
       success: true,
       message: 'Password changed successfully. Please sign in again with your new password.'

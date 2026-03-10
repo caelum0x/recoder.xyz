@@ -45,11 +45,11 @@ export function NavWorkers() {
   }, [agents, searchQuery]);
 
   const recoderAgent = useMemo(() => {
-    return agents.find(a => a.metadata?.is_suna_default === true);
+    return agents.find(a => a.metadata?.is_recoder_default === true || a.metadata?.is_suna_default === true);
   }, [agents]);
 
   const customAgents = useMemo(() => {
-    return filteredAgents.filter(a => !a.metadata?.is_suna_default);
+    return filteredAgents.filter(a => !a.metadata?.is_recoder_default && !a.metadata?.is_suna_default);
   }, [filteredAgents]);
 
   const handleAgentClick = useCallback((agentId: string) => {

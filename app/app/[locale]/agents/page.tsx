@@ -84,7 +84,7 @@ export default function AgentsPage() {
               return (
                 <div
                   key={platform.id}
-                  className="group relative bg-[#111] border border-white/10 rounded-xl p-6 hover:border-white/20 transition-all"
+                  className="group relative bg-zinc-900 border border-white/10 rounded-xl p-6 hover:border-white/20 transition-all"
                 >
                   <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${platform.color} flex items-center justify-center mb-4`}>
                     <Icon className="w-6 h-6 text-white" />
@@ -137,7 +137,7 @@ export default function AgentsPage() {
             </Link>
             <Link
               href="/plan"
-              className="px-6 py-3 bg-[#222] hover:bg-[#333] rounded-lg font-medium transition-colors"
+              className="px-6 py-3 bg-zinc-800 hover:bg-zinc-700 rounded-lg font-medium transition-colors"
             >
               View Plans
             </Link>

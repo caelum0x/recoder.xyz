@@ -115,7 +115,7 @@ describe('docker-backend contract parity', () => {
       '/Users/arhansubasi/recoder.xyz/apps/frontend',
       '/Users/arhansubasi/recoder.xyz/apps/mobile',
       '/Users/arhansubasi/recoder.xyz/recoder-studio',
-      '/Users/arhansubasi/recoder.xyz/apps/ui.giselles.ai',
+      '/Users/arhansubasi/recoder.xyz/recoder-agency',
       '/Users/arhansubasi/recoder.xyz/backend',
       '/Users/arhansubasi/recoder.xyz/docker-backend',
       '/Users/arhansubasi/recoder.xyz/openclaw',

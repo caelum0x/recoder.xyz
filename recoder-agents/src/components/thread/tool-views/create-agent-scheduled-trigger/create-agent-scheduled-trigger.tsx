@@ -29,7 +29,6 @@ export default function CreateAgentScheduledTriggerToolView({
 }: ToolViewProps) {
   // Defensive check - ensure toolCall is defined
   if (!toolCall) {
-    console.warn('CreateAgentScheduledTriggerToolView: toolCall is undefined. Tool views should use structured props.');
     return null;
   }
 

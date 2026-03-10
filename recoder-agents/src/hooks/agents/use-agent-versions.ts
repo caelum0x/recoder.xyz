@@ -95,3 +95,89 @@ export const useUpdateVersionDetails = () => {
 };
 
 export type { AgentVersion, AgentVersionCreateRequest };
+
+// ============================================================================
+// Config Snapshot Version Hooks (Sprint 46)
+// ============================================================================
+
+import { configVersionKeys } from './keys';
+import {
+  listConfigVersions,
+  createConfigVersion,
+  restoreConfigVersion,
+  diffConfigVersions,
+  deleteConfigVersion,
+  type ConfigVersion,
+  type ConfigVersionListResponse,
+  type ConfigVersionDiffResponse,
+} from '@/lib/api/agent-versions';
+
+export const useConfigVersions = (agentId: string) => {
+  return useQuery<ConfigVersionListResponse>({
+    queryKey: configVersionKeys.list(agentId),
+    queryFn: () => listConfigVersions(agentId),
+    enabled: !!agentId,
+    staleTime: 30000,
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: true,
+  });
+};
+
+export const useCreateConfigVersion = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation<ConfigVersion, Error, { agentId: string; data: { name?: string; description?: string } }>({
+    mutationFn: ({ agentId, data }) => createConfigVersion(agentId, data),
+    onSuccess: (_, { agentId }) => {
+      queryClient.invalidateQueries({ queryKey: configVersionKeys.list(agentId) });
+      toast.success('Configuration snapshot saved');
+    },
+    onError: (error: Error) => {
+      toast.error(error.message || 'Failed to save configuration snapshot');
+    },
+  });
+};
+
+export const useRestoreConfigVersion = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation<ConfigVersion, Error, { agentId: string; versionNumber: number }>({
+    mutationFn: ({ agentId, versionNumber }) => restoreConfigVersion(agentId, versionNumber),
+    onSuccess: (_, { agentId }) => {
+      queryClient.invalidateQueries({ queryKey: configVersionKeys.list(agentId) });
+      queryClient.invalidateQueries({ queryKey: versionKeys.list(agentId) });
+      queryClient.invalidateQueries({ queryKey: ['agents', 'detail', agentId] });
+      queryClient.invalidateQueries({ queryKey: ['agents'] });
+      toast.success('Configuration restored from snapshot');
+    },
+    onError: (error: Error) => {
+      toast.error(error.message || 'Failed to restore configuration');
+    },
+  });
+};
+
+export const useConfigVersionDiff = (agentId: string, fromVersion: number, toVersion: number, enabled = false) => {
+  return useQuery<ConfigVersionDiffResponse>({
+    queryKey: configVersionKeys.diff(agentId, fromVersion, toVersion),
+    queryFn: () => diffConfigVersions(agentId, fromVersion, toVersion),
+    enabled: enabled && !!agentId && fromVersion > 0 && toVersion > 0,
+    staleTime: 60000,
+  });
+};
+
+export const useDeleteConfigVersion = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation<{ deleted: boolean; version_number: number }, Error, { agentId: string; versionNumber: number }>({
+    mutationFn: ({ agentId, versionNumber }) => deleteConfigVersion(agentId, versionNumber),
+    onSuccess: (_, { agentId }) => {
+      queryClient.invalidateQueries({ queryKey: configVersionKeys.list(agentId) });
+      toast.success('Config snapshot deleted');
+    },
+    onError: (error: Error) => {
+      toast.error(error.message || 'Failed to delete config snapshot');
+    },
+  });
+};
+
+export type { ConfigVersion, ConfigVersionListResponse, ConfigVersionDiffResponse };

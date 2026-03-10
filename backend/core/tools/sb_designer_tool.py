@@ -3,6 +3,7 @@ from core.agentpress.tool import ToolResult, openapi_schema, tool_metadata
 from core.sandbox.tool_base import SandboxToolsBase
 from core.agentpress.thread_manager import ThreadManager
 from core.services.http_client import get_http_client
+from core.utils.logger import logger
 from io import BytesIO
 import uuid
 from litellm import aimage_generation, aimage_edit
@@ -71,8 +72,8 @@ class SandboxDesignerTool(SandboxToolsBase):
         await self._ensure_sandbox()
         try:
             await self.sandbox.fs.make_dir(self.designs_dir)
-        except:
-            pass
+        except Exception:
+            logger.warning("Failed to create designs directory at %s", self.designs_dir, exc_info=True)
 
     @openapi_schema(
         {

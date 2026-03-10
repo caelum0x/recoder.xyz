@@ -113,7 +113,7 @@ export function AgentConfigurationDialog({
   
   // Debug state changes
   useEffect(() => {
-    console.log('Icon editor open state changed:', isIconEditorOpen);
+    
   }, [isIconEditorOpen]);
   const nameInputRef = useRef<HTMLInputElement>(null);
 
@@ -127,9 +127,9 @@ export function AgentConfigurationDialog({
     name: '',
     system_prompt: '',
     model: undefined as string | undefined,
-    agentpress_tools: {} as Record<string, any>,
-    configured_mcps: [] as any[],
-    custom_mcps: [] as any[],
+    agentpress_tools: {} as Record<string, boolean>,
+    configured_mcps: [] as Array<Record<string, unknown>>,
+    custom_mcps: [] as Array<Record<string, unknown>>,
     is_default: false,
     icon_name: null as string | null,
     icon_color: '#000000',
@@ -172,7 +172,7 @@ export function AgentConfigurationDialog({
     setEditName(configSource.name || '');
   }, [agent, versionData]);
 
-  const isRecoderAgent = agent?.metadata?.is_suna_default || false;
+  const isRecoderAgent = agent?.metadata?.is_recoder_default || agent?.metadata?.is_suna_default || false;
   const restrictions = agent?.metadata?.restrictions || {};
   const isNameEditable = !isViewingOldVersion && (restrictions.name_editable !== false) && !isRecoderAgent;
   const isSystemPromptEditable = !isViewingOldVersion && (restrictions.system_prompt_editable !== false) && !isRecoderAgent;
@@ -413,12 +413,8 @@ export function AgentConfigurationDialog({
                       onClick={(e) => {
                         e.preventDefault();
                         e.stopPropagation();
-                        console.log('🎯 Icon clicked in config dialog - opening editor');
-                        console.log('Current formData:', { 
-                          icon_name: formData.icon_name, 
-                          icon_color: formData.icon_color, 
-                          icon_background: formData.icon_background 
-                        });
+                        
+                        
                         setIsIconEditorOpen(true);
                       }}
                       className="cursor-pointer transition-all hover:scale-105 hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 rounded-lg"
@@ -512,7 +508,7 @@ export function AgentConfigurationDialog({
                                     iconColor={agent.icon_color}
                                     backgroundColor={agent.icon_background}
                                     agentName={agent.name}
-                                    isRecoderDefault={agent.metadata?.is_suna_default}
+                                    isRecoderDefault={agent.metadata?.is_recoder_default || agent.metadata?.is_suna_default}
                                     size={24}
                                     className="flex-shrink-0"
                                   />
@@ -844,7 +840,7 @@ export function AgentConfigurationDialog({
       <AgentIconEditorDialog
         isOpen={isIconEditorOpen}
         onClose={() => {
-          console.log('Icon editor dialog closing');
+          
           setIsIconEditorOpen(false);
         }}
         currentIconName={formData.icon_name}

@@ -14,7 +14,7 @@ const publicBaseUrl =
   process.env.RECODER_PM_WEB_URL ??
   process.env.NEXT_PUBLIC_VERCEL_PROJECT_PRODUCTION_URL ??
   process.env.VERCEL_PROJECT_PRODUCTION_URL ??
-  "http://localhost:3000";
+  (process.env.NODE_ENV === "production" ? "https://pm.recoder.xyz" : "http://localhost:3000");
 
 export const baseUrl = new URL(publicBaseUrl).toString();
 

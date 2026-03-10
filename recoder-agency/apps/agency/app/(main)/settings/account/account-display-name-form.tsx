@@ -25,7 +25,7 @@ export function AccountDisplayNameForm({
 					<span className="text-inverse font-medium text-[16px] leading-[19.2px] font-sans">
 						Display Name
 					</span>
-					<p className="text-text-muted text-[14px] leading-[20.4px] font-geist">
+					<p className="text-text-muted text-[14px] leading-[20.4px] font-sans">
 						Please provide your preferred name or display name that you're
 						comfortable using.
 					</p>
@@ -46,7 +46,7 @@ export function AccountDisplayNameForm({
 						<button
 							type="button"
 							onClick={() => setIsEditModalOpen(true)}
-							className="text-primary-100 font-normal text-[16px] leading-[19.2px] tracking-[-0.011em] font-sans px-3 py-2 rounded-[8px] w-[360px] truncate text-left cursor-pointer bg-[#00020A] hover:bg-[color-mix(in_srgb,var(--color-text-inverse,#fff)_5%,transparent)] focus-visible:outline-none focus-visible:shadow-[0_0_0_1px_var(--color-focused)]"
+							className="text-primary-100 font-normal text-[16px] leading-[19.2px] tracking-[-0.011em] font-sans px-3 py-2 rounded-[8px] w-[360px] truncate text-left cursor-pointer bg-black-900 hover:bg-[color-mix(in_srgb,var(--color-text-inverse,#fff)_5%,transparent)] focus-visible:outline-none focus-visible:shadow-[0_0_0_1px_var(--color-focused)]"
 							style={{
 								boxShadow: "inset 0 1px 4px rgba(0,0,0,0.5)",
 								border: "0.5px solid rgba(255,255,255,0.05)",
@@ -61,8 +61,10 @@ export function AccountDisplayNameForm({
 						onClick={() => setIsEditModalOpen(true)}
 						className="rounded-lg px-4 py-2 text-inverse/80 transition-all duration-200 active:scale-[0.98]"
 						style={{
-							background: "linear-gradient(180deg, #202530 0%, #12151f 100%)",
-							border: "1px solid rgba(0,0,0,0.7)",
+							background:
+								"linear-gradient(180deg, color-mix(in srgb, var(--color-black-820) 92%, transparent) 0%, var(--color-black-900) 100%)",
+							border:
+								"1px solid color-mix(in srgb, var(--color-black-950) 70%, transparent)",
 							boxShadow:
 								"inset 0 1px 1px rgba(255,255,255,0.05), 0 2px 8px rgba(5,10,20,0.4), 0 1px 2px rgba(0,0,0,0.3)",
 						}}

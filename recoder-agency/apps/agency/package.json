@@ -39,6 +39,7 @@
 	},
 	"packageManager": "pnpm@10.16.0",
 	"dependencies": {
+		"@recoder/design-tokens": "file:../../../packages/design-tokens",
 		"@recoder/shared": "file:../../../shared",
 		"@recoder/auth": "file:../../../packages/auth",
 		"@aws-sdk/client-s3": "catalog:",

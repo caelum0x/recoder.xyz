@@ -194,6 +194,9 @@ export function getSignOutCookieAttributes(options?: { production?: boolean }) {
     value: "",
     path: "/",
     maxAge: 0,
+    httpOnly: true,
+    secure: isProd,
+    sameSite: isProd ? ("none" as const) : ("lax" as const),
     ...(domain ? { domain } : {}),
   }));
 }

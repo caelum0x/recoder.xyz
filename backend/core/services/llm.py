@@ -52,14 +52,15 @@ class LLMTimingCallback(CustomLogger):
             if duration > 30.0:
                 model = kwargs.get("model", "unknown")
                 logger.warning(f"[LLM] SLOW: {model} took {duration:.2f}s")
-        except:
-            pass
+        except Exception as e:
+            logger.warning(f"[LLM] Error in success event instrumentation: {e}")
     
     def log_failure_event(self, kwargs, response_obj, start_time, end_time):
         model = kwargs.get("model", "unknown")
         try:
             duration = (end_time - start_time).total_seconds()
-        except:
+        except Exception as e:
+            logger.warning(f"[LLM] Error computing failure event duration: {e}")
             duration = 0
         
         exception = kwargs.get("exception", response_obj)

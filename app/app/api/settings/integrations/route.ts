@@ -7,6 +7,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSession } from '@/lib/auth-helpers';
 import { prisma } from '@/lib/prisma';
+import { logger } from '@/lib/logger';
 
 // GET /api/settings/integrations
 export async function GET(request: NextRequest) {
@@ -53,8 +54,8 @@ export async function GET(request: NextRequest) {
       settings: Array.isArray(settings) ? settings[0] : settings
     });
 
-  } catch (error: any) {
-    console.error('[Integration Settings GET] Error:', error);
+  } catch (error) {
+    logger.error('[Integration Settings GET] Error', { error: error instanceof Error ? error.message : String(error) });
     return NextResponse.json(
       { success: false, error: 'Failed to fetch integration settings' },
       { status: 500 }
@@ -106,8 +107,8 @@ export async function PUT(request: NextRequest) {
       message: 'Integration settings updated successfully'
     });
 
-  } catch (error: any) {
-    console.error('[Integration Settings PUT] Error:', error);
+  } catch (error) {
+    logger.error('[Integration Settings PUT] Error', { error: error instanceof Error ? error.message : String(error) });
     return NextResponse.json(
       { success: false, error: 'Failed to update integration settings' },
       { status: 500 }

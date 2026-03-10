@@ -67,6 +67,24 @@ export async function GET(request: NextRequest) {
         }, { status: 400 });
       }
 
+      // Validate redirect_uri: only allow localhost callbacks (CLI runs a local server)
+      try {
+        const parsedUri = new URL(redirectUri);
+        if (parsedUri.hostname !== 'localhost' && parsedUri.hostname !== '127.0.0.1') {
+          return NextResponse.json({
+            success: false,
+            error: 'invalid_redirect_uri',
+            error_description: 'redirect_uri must be a localhost URL'
+          }, { status: 400 });
+        }
+      } catch {
+        return NextResponse.json({
+          success: false,
+          error: 'invalid_redirect_uri',
+          error_description: 'redirect_uri must be a valid URL'
+        }, { status: 400 });
+      }
+
       // Generate authorization code
       const authCode = nanoid(32);
 
@@ -74,7 +92,7 @@ export async function GET(request: NextRequest) {
       // via the cli-callback page which calls /api/auth/cli-internal/set-user
 
       // Redirect to existing signin page with CLI callback
-      const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+      const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://recoder.xyz';
       const callbackUrl = encodeURIComponent(`/auth/cli-callback?code=${authCode}&state=${state}&redirect_uri=${encodeURIComponent(redirectUri)}`);
       const loginUrl = `${baseUrl}/auth/signin?redirect=${callbackUrl}`;
       
@@ -92,7 +110,7 @@ export async function GET(request: NextRequest) {
       }
     });
 
-  } catch (error: any) {
+  } catch (error) {
     logger.error('CLI auth GET error', { route: 'api/auth/cli', error: error instanceof Error ? error.message : String(error) });
     return NextResponse.json({
       success: false,
@@ -129,7 +147,7 @@ export async function POST(request: NextRequest) {
         }, { status: 400 });
     }
 
-  } catch (error: any) {
+  } catch (error) {
     logger.error('CLI auth POST error', { route: 'api/auth/cli', error: error instanceof Error ? error.message : String(error) });
     return NextResponse.json({
       success: false,
@@ -158,7 +176,7 @@ async function handleDeviceFlow(body: any): Promise<NextResponse> {
   const expiresIn = 15 * 60; // 15 minutes
   const interval = 5; // 5 seconds
 
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://recoder.xyz';
   const verificationUri = `${baseUrl}/auth/device`;
   const verificationUriComplete = `${baseUrl}/auth/device?user_code=${userCode}`;
 
@@ -361,9 +379,22 @@ async function handleAuthentication(body: any): Promise<NextResponse> {
 
       // If not in users table, check Better Auth user table and sync
       if (!user) {
-        const betterAuthUser = await prisma.user.findUnique({
-          where: { email }
-        });
+        const prismaAny = prisma as unknown as {
+          user?: {
+            findUnique: (args: { where: { email: string } }) => Promise<{
+              id: string;
+              email: string;
+              name: string;
+              emailVerified: boolean;
+            } | null>;
+          };
+        };
+
+        const betterAuthUser = prismaAny.user?.findUnique
+          ? await prismaAny.user.findUnique({
+              where: { email }
+            })
+          : null;
 
         if (betterAuthUser) {
           // Sync user from Better Auth to users table
@@ -547,7 +578,7 @@ async function handleCodeExchange(body: any): Promise<NextResponse> {
       }
     });
 
-  } catch (error: any) {
+  } catch (error) {
     logger.error('Code exchange error', { route: 'api/auth/cli', error: error instanceof Error ? error.message : String(error) });
     return NextResponse.json({
       success: false,
@@ -619,7 +650,7 @@ async function handleTokenRefresh(body: any): Promise<NextResponse> {
       }
     });
 
-  } catch (error: any) {
+  } catch (error) {
     logger.error('Token refresh error', { route: 'api/auth/cli', error: error instanceof Error ? error.message : String(error) });
     return NextResponse.json({
       success: false,
@@ -638,7 +669,7 @@ function generateLoginRedirectPage(params: {
   scope: string;
   clientId: string;
 }): string {
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://recoder.xyz';
   const loginUrl = `${baseUrl}/auth/signin?redirect=${encodeURIComponent(`/auth/cli-callback?code=${params.authCode}&state=${params.state}&redirect_uri=${encodeURIComponent(params.redirectUri)}`)}`;
   
   return `
@@ -781,7 +812,7 @@ async function handleDeviceTokenPoll(body: any): Promise<NextResponse> {
 
   try {
     // Forward to internal endpoint for status check
-    const response = await fetch(`${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/auth/cli-internal/authorize-device?device_code=${device_code}`, {
+    const response = await fetch(`${process.env.NEXT_PUBLIC_APP_URL || 'https://recoder.xyz'}/api/auth/cli-internal/authorize-device?device_code=${device_code}`, {
       method: 'GET'
     });
 
@@ -805,7 +836,7 @@ async function handleDeviceTokenPoll(body: any): Promise<NextResponse> {
       }, { status: response.status });
     }
 
-  } catch (error: any) {
+  } catch (error) {
     logger.error('Device token poll error', { route: 'api/auth/cli', error: error instanceof Error ? error.message : String(error) });
     return NextResponse.json({
       success: false,
@@ -819,9 +850,11 @@ async function handleDeviceTokenPoll(body: any): Promise<NextResponse> {
  */
 function generateUserCode(): string {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // Excluding confusing chars
+  const randomBytes = new Uint8Array(8);
+  crypto.getRandomValues(randomBytes);
   let result = '';
   for (let i = 0; i < 8; i++) {
-    result += chars.charAt(Math.floor(Math.random() * chars.length));
+    result += chars.charAt(randomBytes[i] % chars.length);
   }
   return result.slice(0, 4) + '-' + result.slice(4);
 }

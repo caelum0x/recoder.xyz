@@ -64,7 +64,7 @@ export class ApiKeyService {
         },
         warning: 'Save this key securely. It will not be shown again.',
       };
-    } catch (error: any) {
+    } catch (error) {
       logger.error('Create API key error', { error: String(error) });
       throw error;
     }
@@ -97,7 +97,7 @@ export class ApiKeyService {
           masked: `${k.keyPrefix}...`,
         })),
       };
-    } catch (error: any) {
+    } catch (error) {
       logger.error('List API keys error', { error: String(error) });
       throw error;
     }
@@ -134,7 +134,7 @@ export class ApiKeyService {
           rateLimit: key.rateLimit,
         },
       };
-    } catch (error: any) {
+    } catch (error) {
       logger.error('Get API key error', { error: String(error) });
       throw error;
     }
@@ -178,7 +178,7 @@ export class ApiKeyService {
       return {
         message: 'API key revoked successfully',
       };
-    } catch (error: any) {
+    } catch (error) {
       logger.error('Revoke API key error', { error: String(error) });
       throw error;
     }
@@ -226,7 +226,7 @@ export class ApiKeyService {
         newKey: newKey.apiKey,
         message: 'API key rotated successfully. Old key has been revoked.',
       };
-    } catch (error: any) {
+    } catch (error) {
       logger.error('Rotate API key error', { error: String(error) });
       throw error;
     }
@@ -284,7 +284,7 @@ export class ApiKeyService {
         },
         user: key.users,
       };
-    } catch (error: any) {
+    } catch (error) {
       logger.error('Validate API key error', { error: String(error) });
       return { valid: false, error: 'Validation failed' };
     }
@@ -317,7 +317,7 @@ export class ApiKeyService {
       return {
         usage,
       };
-    } catch (error: any) {
+    } catch (error) {
       logger.error('Get key usage error', { error: String(error) });
       throw error;
     }
@@ -361,7 +361,7 @@ export class ApiKeyService {
       return {
         message: 'Permissions updated successfully',
       };
-    } catch (error: any) {
+    } catch (error) {
       logger.error('Update key permissions error', { error: String(error) });
       throw error;
     }
@@ -391,7 +391,7 @@ export class ApiKeyService {
       return {
         message: 'Rate limit updated successfully',
       };
-    } catch (error: any) {
+    } catch (error) {
       logger.error('Set key rate limit error', { error: String(error) });
       throw error;
     }
@@ -428,7 +428,7 @@ export class ApiKeyService {
       return {
         message: 'API key updated successfully',
       };
-    } catch (error: any) {
+    } catch (error) {
       logger.error('Update key metadata error', { error: String(error) });
       throw error;
     }

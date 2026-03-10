@@ -83,8 +83,16 @@ export const DesktopContextMenu = memo(function DesktopContextMenu({
         </ContextMenuItem>
         
         <ContextMenuSeparator className="bg-border/50" />
-    
-        <ContextMenuItem 
+
+        <ContextMenuItem
+          onClick={onDownloadAll}
+          className="focus:bg-background/10 focus:backdrop-blur-xl rounded-lg gap-2"
+        >
+          <Download className="h-4 w-4" />
+          Download All Files
+        </ContextMenuItem>
+
+        <ContextMenuItem
           onClick={onShowInfo}
           className="focus:bg-background/10 focus:backdrop-blur-xl rounded-lg gap-2"
         >

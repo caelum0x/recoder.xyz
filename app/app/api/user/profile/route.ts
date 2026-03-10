@@ -3,6 +3,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from "@/lib/auth-helpers";
 import { prisma } from '@/lib/prisma';
 import { userManager } from '@/lib/user-management';
+import { logger } from '@/lib/logger';
+import { rateLimit, rateLimitConfigs } from '@/lib/middleware/rate-limit';
+
+const apiRateLimiter = rateLimit(rateLimitConfigs.api);
 
 // Helper to extract user from Bearer token
 async function getUserFromToken(request: NextRequest) {
@@ -27,6 +31,9 @@ async function getUserFromToken(request: NextRequest) {
 }
 
 export async function GET(request: NextRequest) {
+  const rateLimitResponse = await apiRateLimiter(request);
+  if (rateLimitResponse) return rateLimitResponse;
+
   try {
     const user = await getUserFromToken(request);
 
@@ -72,7 +79,7 @@ export async function GET(request: NextRequest) {
       }
     });
   } catch (error) {
-    console.error('Profile API error:', error);
+    logger.error('Profile API error:', { error: error instanceof Error ? error.message : String(error) });
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }
@@ -81,6 +88,9 @@ export async function GET(request: NextRequest) {
 }
 
 export async function PUT(request: NextRequest) {
+  const rateLimitResponse = await apiRateLimiter(request);
+  if (rateLimitResponse) return rateLimitResponse;
+
   try {
     const authResult = await requireAuth(request);
     if (authResult.error) return authResult.response;
@@ -94,15 +104,31 @@ export async function PUT(request: NextRequest) {
     }
 
     const updates = await request.json();
-    
-    // Validate allowed fields
-    const allowedFields = ['name', 'username', 'bio', 'location', 'company', 'avatar_url'];
-    const validUpdates = Object.keys(updates)
-      .filter(key => allowedFields.includes(key))
-      .reduce((obj, key) => {
-        obj[key] = updates[key];
-        return obj;
-      }, {} as Record<string, unknown>);
+
+    // Validate allowed fields and enforce length limits
+    const fieldLimits: Record<string, number> = {
+      name: 100,
+      username: 50,
+      bio: 500,
+      location: 100,
+      company: 200,
+      avatar_url: 2048,
+    };
+    const allowedFields = Object.keys(fieldLimits);
+    const validUpdates: Record<string, unknown> = {};
+    for (const key of Object.keys(updates)) {
+      if (!allowedFields.includes(key)) continue;
+      const val = updates[key];
+      if (val !== undefined && val !== null) {
+        if (typeof val !== 'string') {
+          return NextResponse.json({ error: `${key} must be a string` }, { status: 400 });
+        }
+        if (val.length > fieldLimits[key]) {
+          return NextResponse.json({ error: `${key} exceeds maximum length of ${fieldLimits[key]}` }, { status: 400 });
+        }
+      }
+      validUpdates[key] = val;
+    }
 
     const success = await userManager.updateUserProfile(user.id, validUpdates);
     
@@ -117,7 +143,7 @@ export async function PUT(request: NextRequest) {
     const profile = await userManager.getUserProfile(user.id);
     return NextResponse.json(profile);
   } catch (error) {
-    console.error('Profile update error:', error);
+    logger.error('Profile update error:', { error: error instanceof Error ? error.message : String(error) });
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

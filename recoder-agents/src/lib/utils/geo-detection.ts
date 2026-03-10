@@ -168,8 +168,7 @@ export function detectLocaleFromTimezone(): Locale | null {
     }
     
     return null;
-  } catch (error) {
-    console.warn('Failed to detect locale from timezone:', error);
+  } catch {
     return null;
   }
 }
@@ -184,12 +183,12 @@ export function detectLocaleFromBrowser(): Locale | null {
 
   try {
     // Log browser language info for debugging
-    console.log('🌍 Browser navigator.language:', navigator.language);
-    console.log('🌍 Browser navigator.languages:', navigator.languages);
+    
+    
     
     const browserLang = navigator.language.split('-')[0].toLowerCase();
     if (locales.includes(browserLang as Locale)) {
-      console.log('🌍 Matched browser language:', browserLang);
+      
       return browserLang as Locale;
     }
     
@@ -197,15 +196,14 @@ export function detectLocaleFromBrowser(): Locale | null {
     const fullLang = navigator.language.toLowerCase();
     for (const locale of locales) {
       if (fullLang.startsWith(locale)) {
-        console.log('🌍 Matched browser language (full code):', locale);
+        
         return locale;
       }
     }
     
-    console.log('🌍 No match found for browser language');
+    
     return null;
-  } catch (error) {
-    console.warn('Failed to detect locale from browser:', error);
+  } catch {
     return null;
   }
 }

@@ -84,7 +84,7 @@ export class AutonomousRoutingService {
     }
 
     logger.info(
-      { intent: intent.type, from: message.senderId, to: intent.targetAgentId },
+      { intent: intent.type, from: message.senderAgentId, to: intent.targetAgentId },
       'processing autonomous handoff',
     );
 
@@ -97,7 +97,7 @@ export class AutonomousRoutingService {
       const approvalGate = getApprovalGateService();
       const approval = approvalGate.createRequest({
         workspaceId: ws.workspaceId,
-        requestingAgentId: message.senderId,
+        requestingAgentId: message.senderAgentId,
         targetAgentId: intent.targetAgentId,
         action: intent.type,
         details: { prompt: intent.prompt, channelId },
@@ -106,9 +106,10 @@ export class AutonomousRoutingService {
 
       // Post approval request in channel
       try {
-        getCollaborationSvc().sendMessage(channelId, message.threadId, {
-          senderId: 'system',
-          text: `Approval required: ${message.senderId} wants to ${intent.type} to @${intent.targetAgentId}. Approve or reject.`,
+        getCollaborationSvc().sendMessage({
+          threadId: message.threadId,
+          senderAgentId: 'system',
+          text: `Approval required: ${message.senderAgentId} wants to ${intent.type} to @${intent.targetAgentId}. Approve or reject.`,
         });
       } catch { /* ignore */ }
 
@@ -126,7 +127,7 @@ export class AutonomousRoutingService {
     }
 
     // Execute delegation directly
-    await this.executeDelegation(intent, message.senderId, channelId);
+    await this.executeDelegation(intent, message.senderAgentId, channelId);
   }
 
   /**
@@ -191,8 +192,9 @@ export class AutonomousRoutingService {
           const threads = collab.listThreads(channelId);
           const threadId = threads.length > 0 ? threads[threads.length - 1].id : undefined;
           if (threadId) {
-            collab.sendMessage(channelId, threadId, {
-              senderId: 'system',
+            collab.sendMessage({
+              threadId,
+              senderAgentId: 'system',
               text: `${intent.type} from ${fromAgentId} → @${intent.targetAgentId}: "${intent.prompt.slice(0, 100)}"`,
             });
           }

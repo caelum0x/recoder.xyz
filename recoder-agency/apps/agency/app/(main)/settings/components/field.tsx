@@ -3,7 +3,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 
-// FIXME: Consider integrating with shared UI field component when releasing setting-v2
 type FieldProps = {
 	name: string;
 	type: HTMLInputTypeAttribute;
@@ -29,7 +28,7 @@ export const Field: FC<FieldProps> = ({
 	inputClassName,
 }) => (
 	<div className="grid gap-[4px]">
-		<Label htmlFor={name} className="text-text font-geist">
+		<Label htmlFor={name} className="text-text font-sans">
 			{label.includes("*") ? (
 				<>
 					{label.split("*")[0]} <span className="text-error-900">*</span>
@@ -50,7 +49,7 @@ export const Field: FC<FieldProps> = ({
 			onChange={onChange}
 			disabled={disabled}
 			className={cn(
-				"py-2 rounded-[8px] bg-transparent text-text font-medium text-[14px] leading-[23.8px] font-geist disabled:opacity-50",
+				"py-2 rounded-[8px] bg-transparent text-text font-medium text-[14px] leading-[23.8px] font-sans disabled:opacity-50",
 				"placeholder:text-[color-mix(in_srgb,var(--color-text-inverse,#fff)_30%,transparent)]",
 				inputClassName,
 			)}

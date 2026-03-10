@@ -4,6 +4,7 @@ import { auth } from '@/lib/auth-config';
 import { headers } from 'next/headers';
 
 import { PlatformApiKeyService } from '@/lib/services/platform-api-key.service';
+import { logger } from '@/lib/logger';
 import { z } from 'zod';
 
 const createKeySchema = z.object({
@@ -36,8 +37,8 @@ export async function GET(req: NextRequest) {
       success: true,
       keys,
     });
-  } catch (error: any) {
-    console.error('Error listing API keys:', error);
+  } catch (error) {
+    logger.error('Error listing API keys:', { error: error instanceof Error ? error.message : String(error) });
     return NextResponse.json(
       { error: 'Failed to list API keys' },
       { status: 500 }
@@ -110,8 +111,8 @@ export async function POST(req: NextRequest) {
       apiKey: result.apiKey, // Only returned once!
       keyId: result.keyId,
     });
-  } catch (error: any) {
-    console.error('Error generating API key:', error);
+  } catch (error) {
+    logger.error('Error generating API key:', { error: error instanceof Error ? error.message : String(error) });
     return NextResponse.json(
       { error: 'Failed to generate API key' },
       { status: 500 }
@@ -160,8 +161,8 @@ export async function DELETE(req: NextRequest) {
       success: true,
       message: result.message,
     });
-  } catch (error: any) {
-    console.error('Error revoking API key:', error);
+  } catch (error) {
+    logger.error('Error revoking API key:', { error: error instanceof Error ? error.message : String(error) });
     return NextResponse.json(
       { error: 'Failed to revoke API key' },
       { status: 500 }

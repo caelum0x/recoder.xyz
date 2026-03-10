@@ -4,21 +4,169 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { 
-  Plus, 
+import {
+  Plus,
   Shield,
-  Settings
+  Settings,
+  Trash2,
+  Star,
+  Clock,
+  Key
 } from 'lucide-react';
 import { RecoderLoader } from '@/components/ui/recoder-loader';
 import { toast } from '@/lib/toast';
 import { ComposioCredentialProfileSelector } from '@/components/agents/composio/composio-credential-profile-selector';
 import { ComposioConnector } from '@/components/agents/composio/composio-connector';
-import { useCreateCredentialProfile, useCredentialProfiles, type CreateCredentialProfileRequest } from '@/hooks/mcp/use-credential-profiles';
+import {
+  useCreateCredentialProfile,
+  useCredentialProfilesForMcp,
+  useDeleteCredentialProfile,
+  useSetDefaultProfile,
+  type CreateCredentialProfileRequest,
+  type CredentialProfile,
+} from '@/hooks/mcp/use-credential-profiles';
 import { useMCPServerDetails } from '@/hooks/mcp/use-mcp-servers';
-
-import { useCredentialProfilesForMcp } from '@/hooks/mcp/use-credential-profiles';
 import { useComposioToolkits } from '@/hooks/composio/use-composio';
 import type { SetupStep } from './types';
+
+// Format relative time
+function formatRelativeTime(dateStr: string | null): string {
+  if (!dateStr) return 'Never used';
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return 'Just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 30) return `${days}d ago`;
+  return new Date(dateStr).toLocaleDateString();
+}
+
+// MCP credential profile selector for non-Composio MCPs
+const McpProfileSelector: React.FC<{
+  step: SetupStep;
+  selectedProfileId: string | undefined;
+  onProfileSelect: (qualifiedName: string, profileId: string | null) => void;
+  onComplete?: () => void;
+  onCreateNew: () => void;
+}> = ({ step, selectedProfileId, onProfileSelect, onComplete, onCreateNew }) => {
+  const { data: profiles, isLoading } = useCredentialProfilesForMcp(step.qualified_name);
+  const deleteProfile = useDeleteCredentialProfile();
+  const setDefault = useSetDefaultProfile();
+
+  const handleDelete = useCallback((e: React.MouseEvent, profileId: string) => {
+    e.stopPropagation();
+    if (!confirm('Delete this credential profile?')) return;
+    deleteProfile.mutate(profileId);
+    // If deleting the selected profile, clear selection
+    if (selectedProfileId === profileId) {
+      onProfileSelect(step.id, null);
+    }
+  }, [deleteProfile, selectedProfileId, onProfileSelect, step.id]);
+
+  const handleSetDefault = useCallback((e: React.MouseEvent, profileId: string) => {
+    e.stopPropagation();
+    setDefault.mutate(profileId);
+  }, [setDefault]);
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center py-4">
+        <RecoderLoader customSize={20} />
+      </div>
+    );
+  }
+
+  const hasProfiles = profiles && profiles.length > 0;
+
+  return (
+    <div className="space-y-4">
+      {hasProfiles ? (
+        <div className="space-y-2">
+          <Label className="text-sm font-medium">Select a credential profile</Label>
+          {profiles.map((profile: CredentialProfile) => (
+            <div
+              key={profile.profile_id}
+              className={`group relative w-full flex items-start gap-3 p-3 rounded-lg border text-left transition-colors cursor-pointer ${
+                selectedProfileId === profile.profile_id
+                  ? 'border-primary bg-primary/5'
+                  : 'border-border hover:bg-accent/50'
+              }`}
+              onClick={() => {
+                onProfileSelect(step.id, profile.profile_id);
+                onComplete?.();
+              }}
+            >
+              <Shield className="h-4 w-4 text-muted-foreground flex-shrink-0 mt-0.5" />
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <p className="text-sm font-medium truncate">{profile.profile_name || profile.display_name}</p>
+                  {profile.is_default && (
+                    <span className="inline-flex items-center gap-0.5 text-[10px] font-medium text-primary bg-primary/10 px-1.5 py-0.5 rounded-full">
+                      <Star className="h-2.5 w-2.5" />
+                      Default
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-center gap-3 mt-1">
+                  {profile.config_keys && profile.config_keys.length > 0 && (
+                    <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground">
+                      <Key className="h-2.5 w-2.5" />
+                      {profile.config_keys.length} key{profile.config_keys.length !== 1 ? 's' : ''}
+                    </span>
+                  )}
+                  <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground">
+                    <Clock className="h-2.5 w-2.5" />
+                    {formatRelativeTime(profile.last_used_at)}
+                  </span>
+                </div>
+              </div>
+
+              {/* Action buttons - show on hover */}
+              <div className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1 shrink-0">
+                {!profile.is_default && (
+                  <button
+                    type="button"
+                    onClick={(e) => handleSetDefault(e, profile.profile_id)}
+                    className="p-1 rounded hover:bg-accent text-muted-foreground hover:text-primary transition-colors"
+                    title="Set as default"
+                  >
+                    <Star className="h-3.5 w-3.5" />
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={(e) => handleDelete(e, profile.profile_id)}
+                  className="p-1 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
+                  title="Delete profile"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <Alert className="border-primary/20 bg-primary/5">
+          <Shield className="h-4 w-4" />
+          <AlertDescription>
+            No credential profiles found for {step.service_name}. Create one to connect.
+          </AlertDescription>
+        </Alert>
+      )}
+
+      <Button
+        variant={hasProfiles ? 'outline' : 'default'}
+        onClick={onCreateNew}
+        className="w-full"
+      >
+        <Plus className="h-4 w-4" />
+        {hasProfiles ? 'Create Another Profile' : `Create ${step.service_name} Profile`}
+      </Button>
+    </div>
+  );
+};
 
 interface ProfileConnectorProps {
   step: SetupStep;
@@ -83,7 +231,7 @@ export const ProfileConnector: React.FC<ProfileConnectorProps> = ({
     setShowComposioConnector(false);
   }, [step.qualified_name]);
 
-  const mockComposioApp = useMemo(() => {
+  const composioAppConfig = useMemo(() => {
     const actualToolkit = composioToolkits?.toolkits?.find(t => t.slug === step.app_slug);
     return actualToolkit || {
       slug: step.app_slug || step.qualified_name,
@@ -205,25 +353,16 @@ export const ProfileConnector: React.FC<ProfileConnectorProps> = ({
           )}
         </div>
       ) : (
-        <div className="space-y-4">
-          <Alert>
-            <AlertDescription>
-              MCP credential profile selection coming soon. For now, please use Composio integrations.
-            </AlertDescription>
-          </Alert>
-
-          <Button 
-            variant="outline" 
-            onClick={() => {
-              setNewProfileName(`${step.service_name} Profile`);
-              setProfileStep('create');
-            }}
-            className="w-full"
-          >
-            <Plus className="h-4 w-4" />
-            Create New Profile
-          </Button>
-        </div>
+        <McpProfileSelector
+          step={step}
+          selectedProfileId={selectedProfileId}
+          onProfileSelect={onProfileSelect}
+          onComplete={onComplete}
+          onCreateNew={() => {
+            setNewProfileName(`${step.service_name} Profile`);
+            setProfileStep('create');
+          }}
+        />
       )}
     </div>
   ), [
@@ -353,7 +492,7 @@ export const ProfileConnector: React.FC<ProfileConnectorProps> = ({
 
       {isComposioStep && (
         <ComposioConnector
-          app={mockComposioApp}
+          app={composioAppConfig}
           open={showComposioConnector}
           onOpenChange={setShowComposioConnector}
           mode="profile-only"

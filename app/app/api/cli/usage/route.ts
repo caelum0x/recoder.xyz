@@ -64,7 +64,7 @@ export const POST = withCLIAuth(async (request: NextRequest, context) => {
       usageId: usageRecord.id,
       message: 'Usage tracked successfully',
     });
-  } catch (error: any) {
+  } catch (error) {
     return NextResponse.json(
       { error: 'Failed to track usage' },
       { status: 500 }
@@ -120,7 +120,7 @@ export const GET = withCLIAuth(async (request: NextRequest, context) => {
         hasMore: offset + limit < total,
       },
     });
-  } catch (error: any) {
+  } catch (error) {
     return NextResponse.json(
       { error: 'Failed to get usage' },
       { status: 500 }

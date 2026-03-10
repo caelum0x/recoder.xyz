@@ -31,6 +31,12 @@ export default function AccountSettingsPage() {
   const [error, setError] = useState('');
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [initialLoading, setInitialLoading] = useState(true);
+  const redirectToSignIn = () => {
+    const currentPath = typeof window !== 'undefined'
+      ? `${window.location.pathname}${window.location.search}`
+      : '/settings/account';
+    router.push(`/auth/signin?redirect=${encodeURIComponent(currentPath)}`);
+  };
 
   const [accountData, setAccountData] = useState({
     email: '',
@@ -44,14 +50,14 @@ export default function AccountSettingsPage() {
   // Load account data on mount
   useEffect(() => {
     if (!isPending && !session) {
-      router.push('/auth/signin');
+      redirectToSignIn();
       return;
     }
 
     if (!isPending && session) {
       loadAccountData();
     }
-  }, [isPending, session, router]);
+  }, [isPending, session]);
 
   async function loadAccountData() {
     try {
@@ -59,7 +65,7 @@ export default function AccountSettingsPage() {
       const response = await fetch('/api/user/account', { credentials: 'include' });
 
       if (response.status === 401) {
-        router.push('/auth/signin');
+        redirectToSignIn();
         return;
       }
 

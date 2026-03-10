@@ -89,10 +89,10 @@ export const useCreateComposioEventTrigger = () => {
       if (!res.success) {
         throw res.error || new Error('Failed to create trigger');
       }
-      return res.data as any;
+      return res.data as { agent_id?: string };
     },
     onSuccess: (data) => {
-      const agentId = (data?.agent_id as string) || undefined;
+      const agentId = data?.agent_id || undefined;
       if (agentId) {
         queryClient.invalidateQueries({ queryKey: ['agent-triggers', agentId] });
       }

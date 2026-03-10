@@ -7,6 +7,7 @@
  */
 
 import { trackEvent } from './analytics/tracker';
+import { AnalyticsEvents } from './analytics/events';
 
 export { AnalyticsEvents } from './analytics/events';
 export type {
@@ -25,27 +26,27 @@ export { trackEvent, trackServerEvent } from './analytics/tracker';
 // Backward-compatible convenience API used by older auth UI components.
 export const analytics = {
   signUp: (method: 'email' | 'google' | 'github') => {
-    trackEvent('sign_up' as any, { method });
+    trackEvent(AnalyticsEvents.SIGNUP_COMPLETED, { method });
   },
   signIn: (method: 'email' | 'google' | 'github') => {
-    trackEvent('login' as any, { method });
+    trackEvent(AnalyticsEvents.LOGIN_COMPLETED, { method });
   },
   signOut: () => {
-    trackEvent('logout' as any);
+    trackEvent(AnalyticsEvents.LOGOUT);
   },
   launchWebIDE: () => {
-    trackEvent('launch_web_ide' as any);
+    trackEvent(AnalyticsEvents.PLATFORM_PAGE_VIEWED, { platform: 'web-ide' });
   },
   createProject: (type?: string) => {
-    trackEvent('create_project' as any, { project_type: type });
+    trackEvent(AnalyticsEvents.PROJECT_CREATED, { projectId: type });
   },
   apiKeyAdded: (provider: string) => {
-    trackEvent('api_key_added' as any, { provider });
+    trackEvent(AnalyticsEvents.PLATFORM_PAGE_VIEWED, { platform: provider });
   },
   pageView: (pagePath: string, pageTitle?: string) => {
-    trackEvent('page_view' as any, {
-      page_path: pagePath,
-      page_title: pageTitle,
+    trackEvent(AnalyticsEvents.PLATFORM_PAGE_VIEWED, {
+      pagePath,
+      pageTitle,
     });
   },
 };

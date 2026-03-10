@@ -1,14 +1,14 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import {
   ReactFlow,
   Background,
-  BackgroundVariant,
   Controls,
   MiniMap,
   useNodesState,
   useEdgesState,
+  useReactFlow,
   addEdge,
   type Node,
   type Edge,
@@ -85,6 +85,7 @@ export function WorkflowCanvas({ workflowId, onNodeSelect }: WorkflowCanvasProps
   const addEdgeMutation = useAddEdge(workflowId);
 
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
+  const { screenToFlowPosition } = useReactFlow();
 
   // React Flow state
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
@@ -127,13 +128,10 @@ export function WorkflowCanvas({ workflowId, onNodeSelect }: WorkflowCanvasProps
       const nodeType = event.dataTransfer.getData('application/reactflow');
       if (!nodeType) return;
 
-      const wrapperBounds = reactFlowWrapper.current?.getBoundingClientRect();
-      if (!wrapperBounds) return;
-
-      const position = {
-        x: event.clientX - wrapperBounds.left,
-        y: event.clientY - wrapperBounds.top,
-      };
+      const position = screenToFlowPosition({
+        x: event.clientX,
+        y: event.clientY,
+      });
 
       const label =
         nodeType.charAt(0).toUpperCase() + nodeType.slice(1) + ' Node';
@@ -146,7 +144,7 @@ export function WorkflowCanvas({ workflowId, onNodeSelect }: WorkflowCanvasProps
         position_y: position.y,
       });
     },
-    [addNodeMutation],
+    [addNodeMutation, screenToFlowPosition],
   );
 
   // ------ Node click ------
@@ -192,7 +190,7 @@ export function WorkflowCanvas({ workflowId, onNodeSelect }: WorkflowCanvasProps
         fitViewOptions={{ padding: 0.2 }}
         proOptions={{ hideAttribution: true }}
       >
-        <Background variant={BackgroundVariant.Dots} gap={16} size={1} />
+        <Background gap={16} size={1} />
         <Controls />
         <MiniMap
           nodeStrokeWidth={3}

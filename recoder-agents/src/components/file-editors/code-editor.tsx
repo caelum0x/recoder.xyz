@@ -25,14 +25,6 @@ import {
 // Using type assertion because TypeScript types are incomplete
 const langsTyped = langs as Record<string, (() => any) | undefined>;
 
-// Debug: Log available languages in development
-if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
-  const availableLangs = Object.keys(langsTyped).filter(
-    (key) => typeof langsTyped[key] === 'function'
-  );
-  console.log('[CodeEditor] Available languages:', availableLangs);
-}
-
 // Helper function to safely get language extension
 const getLangExtension = (langKey: string): any => {
   try {

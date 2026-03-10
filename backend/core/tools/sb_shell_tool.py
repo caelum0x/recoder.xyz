@@ -229,7 +229,8 @@ Usage notes:
                             marker_idx = current_output.rfind(marker)
                             after_marker = current_output[marker_idx + len(marker):].strip().split()[0]
                             exit_code = int(after_marker) if after_marker.isdigit() else 0
-                        except:
+                        except Exception as e:
+                            logger.warning(f"[sb_shell_tool] Failed to parse exit code from marker output: {e}")
                             exit_code = 0
                         break
                 else:
@@ -239,8 +240,8 @@ Usage notes:
                 # Kill PTY session
                 try:
                     await pty_handle.kill()
-                except:
-                    pass
+                except Exception as e:
+                    logger.debug(f"[sb_shell_tool] Failed to kill PTY session (non-critical): {e}")
                 
                 # Clean output (remove marker line and control sequences)
                 final_output = "".join(output_buffer)
@@ -326,9 +327,9 @@ Usage notes:
             finally:
                 try:
                     await self.sandbox.process.delete_session(session_id)
-                except:
-                    pass
-                    
+                except Exception as e:
+                    logger.debug(f"[sb_shell_tool] Failed to delete fallback session {session_id} (non-critical): {e}")
+
         except Exception as e:
             return self.fail_response(f"Error executing command: {str(e)}")
 
@@ -400,8 +401,8 @@ Usage notes:
         finally:
             try:
                 await self.sandbox.process.delete_session(session_id)
-            except:
-                pass
+            except Exception as e:
+                logger.debug(f"[sb_shell_tool] Failed to delete raw command session {session_id} (non-critical): {e}")
 
     async def cleanup(self):
         """Clean up resources."""

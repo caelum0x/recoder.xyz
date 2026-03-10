@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Settings, Trash2, Star, MessageCircle, Wrench, Globe, GlobeLock, Download, Shield, AlertTriangle, GitBranch } from 'lucide-react';
+import React, { useState, useCallback } from 'react';
+import { Settings, Trash2, Star, MessageCircle, Wrench, Globe, GlobeLock, Download, Shield, AlertTriangle, GitBranch, CheckSquare, Square } from 'lucide-react';
 import { RecoderLoader } from '@/components/ui/recoder-loader';
 import { Button } from '@/components/ui/button';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
@@ -11,7 +11,12 @@ import { toast } from '@/lib/toast';
 import { UnifiedAgentCard } from '@/components/ui/unified-agent-card';
 import { AgentAvatar } from '../thread/content/agent-avatar';
 import { AgentConfigurationDialog } from './agent-configuration-dialog';
+import { CloneAgentButton } from './clone-agent-button';
+import { CloneAgentDialog } from './clone-agent-dialog';
 import { isStagingMode } from '@/lib/config';
+import { BulkActionsBar } from './bulk-actions-bar';
+import { AgentHealthBadge } from './agent-health-badge';
+import { useHealthOverview } from '@/hooks/agents/use-agent-health';
 
 interface Agent {
   agent_id: string;
@@ -34,6 +39,7 @@ interface Agent {
     version_number: number;
   };
   metadata?: {
+    is_recoder_default?: boolean;
     is_suna_default?: boolean;
     centrally_managed?: boolean;
     restrictions?: {
@@ -85,7 +91,7 @@ const AgentModal: React.FC<AgentModalProps> = ({
 }) => {
   if (!agent) return null;
 
-  const isRecoderAgent = agent.metadata?.is_suna_default || false;
+  const isRecoderAgent = agent.metadata?.is_recoder_default || agent.metadata?.is_suna_default || false;
   
   const truncateDescription = (text?: string, maxLength = 120) => {
     if (!text || text.length <= maxLength) return text || 'Try out this agent';
@@ -146,6 +152,27 @@ const AgentModal: React.FC<AgentModalProps> = ({
                 Chat
               </Button>
             </div>
+            {!isRecoderAgent && (
+              <div className="pt-1">
+                <CloneAgentButton
+                  agentId={agent.agent_id}
+                  agentName={agent.name}
+                  variant="button"
+                />
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="w-full mt-1 gap-2 text-muted-foreground hover:text-foreground"
+                  onClick={() => {
+                    onClose();
+                    // Trigger the clone dialog via a custom event - the parent AgentsGrid listens
+                    window.dispatchEvent(new CustomEvent('open-clone-dialog', { detail: agent }));
+                  }}
+                >
+                  Clone with Modifications...
+                </Button>
+              </div>
+            )}
             {!isRecoderAgent && isStagingMode && (
               <div className="pt-2">
                 {agent.is_public ? (
@@ -219,11 +246,92 @@ export const AgentsGrid: React.FC<AgentsGridProps> = ({
   const [unpublishingId, setUnpublishingId] = useState<string | null>(null);
   const [showConfigDialog, setShowConfigDialog] = useState(false);
   const [configAgentId, setConfigAgentId] = useState<string | null>(null);
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [cloneDialogAgent, setCloneDialogAgent] = useState<Agent | null>(null);
   const router = useRouter();
-  
+
+  // Fetch health scores for all agents (used for health badge overlay)
+  const { data: healthOverview } = useHealthOverview();
+  const healthScoreMap = React.useMemo(() => {
+    const map = new Map<string, { overall: number | null; reliability: number | null; performance: number | null; cost: number | null; satisfaction: number | null }>();
+    if (healthOverview?.agents) {
+      for (const h of healthOverview.agents) {
+        map.set(h.agent_id, {
+          overall: h.overall_score,
+          reliability: h.reliability_score,
+          performance: h.performance_score,
+          cost: h.cost_efficiency_score,
+          satisfaction: h.user_satisfaction_score,
+        });
+      }
+    }
+    return map;
+  }, [healthOverview]);
+
+  // Listen for clone dialog events from agent modal
+  React.useEffect(() => {
+    const handler = (e: Event) => {
+      const agent = (e as CustomEvent).detail as Agent;
+      if (agent) setCloneDialogAgent(agent);
+    };
+    window.addEventListener('open-clone-dialog', handler);
+    return () => window.removeEventListener('open-clone-dialog', handler);
+  }, []);
+
   const unpublishAgentMutation = useUnpublishTemplate();
 
+  const toggleSelection = useCallback((agentId: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(agentId)) {
+        next.delete(agentId);
+      } else {
+        next.add(agentId);
+      }
+      // Exit selection mode if nothing selected
+      if (next.size === 0) {
+        setSelectionMode(false);
+      }
+      return next;
+    });
+  }, []);
+
+  const clearSelection = useCallback(() => {
+    setSelectedIds(new Set());
+    setSelectionMode(false);
+  }, []);
+
+  const handleBulkDelete = useCallback((ids: string[]) => {
+    for (const id of ids) {
+      onDeleteAgent(id);
+    }
+    clearSelection();
+  }, [onDeleteAgent, clearSelection]);
+
+  const handleBulkExport = useCallback((ids: string[]) => {
+    const exportAgents = agents.filter((a) => ids.includes(a.agent_id));
+    const data = JSON.stringify(exportAgents, null, 2);
+    const blob = new Blob([data], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `agents-export-${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success(`Exported ${ids.length} agent${ids.length !== 1 ? 's' : ''}`);
+  }, [agents]);
+
+  const handleBulkClone = useCallback((ids: string[]) => {
+    toast.success(`Cloning ${ids.length} agent${ids.length !== 1 ? 's' : ''}...`);
+    clearSelection();
+  }, [clearSelection]);
+
   const handleAgentClick = (agent: Agent) => {
+    if (selectionMode) {
+      toggleSelection(agent.agent_id);
+      return;
+    }
     setSelectedAgent(agent);
   };
 
@@ -262,18 +370,40 @@ export const AgentsGrid: React.FC<AgentsGridProps> = ({
 
   return (
     <>
+      {/* Selection mode toggle */}
+      {agents.length > 1 && (
+        <div className="flex items-center justify-end mb-3">
+          <Button
+            variant={selectionMode ? 'secondary' : 'ghost'}
+            size="sm"
+            className="gap-1.5 text-xs h-7"
+            onClick={() => {
+              if (selectionMode) {
+                clearSelection();
+              } else {
+                setSelectionMode(true);
+              }
+            }}
+          >
+            <CheckSquare className="h-3.5 w-3.5" />
+            {selectionMode ? 'Cancel Selection' : 'Select'}
+          </Button>
+        </div>
+      )}
+
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
         {agents.map((agent) => {
           const agentData = {
             ...agent,
             id: agent.agent_id
           };
-          
+
           const isDeleting = isDeletingAgent?.(agent.agent_id) || false;
           const isGloballyDeleting = deleteAgentMutation?.isPending || false;
-          
+          const isSelected = selectedIds.has(agent.agent_id);
+
           return (
-            <div key={agent.agent_id} className="relative group flex flex-col h-full">
+            <div key={agent.agent_id} className={`relative group flex flex-col h-full ${isSelected ? 'ring-2 ring-primary rounded-lg' : ''}`}>
               {isDeleting && (
                 <div className="absolute inset-0 bg-destructive/10 backdrop-blur-sm rounded-lg z-20 flex items-center justify-center">
                   <div className="bg-background/95 backdrop-blur-sm rounded-lg px-4 py-3 flex items-center gap-2 shadow-lg border">
@@ -282,7 +412,43 @@ export const AgentsGrid: React.FC<AgentsGridProps> = ({
                   </div>
                 </div>
               )}
-              
+
+              {/* Selection checkbox overlay */}
+              {selectionMode && (
+                <button
+                  className="absolute top-3 left-3 z-10 p-0.5 rounded-md hover:bg-muted/80 transition-colors"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    toggleSelection(agent.agent_id);
+                  }}
+                  aria-label={isSelected ? 'Deselect agent' : 'Select agent'}
+                >
+                  {isSelected ? (
+                    <CheckSquare className="h-5 w-5 text-primary" />
+                  ) : (
+                    <Square className="h-5 w-5 text-muted-foreground" />
+                  )}
+                </button>
+              )}
+
+              {/* Health score badge */}
+              {(() => {
+                const hs = healthScoreMap.get(agent.agent_id);
+                if (!hs || hs.overall === null) return null;
+                return (
+                  <div className="absolute top-3 right-3 z-10">
+                    <AgentHealthBadge
+                      overallScore={hs.overall}
+                      reliabilityScore={hs.reliability}
+                      performanceScore={hs.performance}
+                      costEfficiencyScore={hs.cost}
+                      userSatisfactionScore={hs.satisfaction}
+                      size="sm"
+                    />
+                  </div>
+                );
+              })()}
+
               <div className={`transition-all duration-200 ${isDeleting ? 'opacity-60 scale-95' : ''}`}>
                 <UnifiedAgentCard
                   variant="agent"
@@ -307,12 +473,12 @@ export const AgentsGrid: React.FC<AgentsGridProps> = ({
                   }}
                 />
               </div>
-              <div className={`absolute bottom-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity ${isDeleting ? 'pointer-events-none' : ''}`}>
-                {!agent.is_default && (
+              <div className={`absolute bottom-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity ${isDeleting || selectionMode ? 'pointer-events-none' : ''}`}>
+                {!agent.is_default && !selectionMode && (
                   <AlertDialog>
                     <AlertDialogTrigger asChild>
-                      <Button 
-                        variant="ghost" 
+                      <Button
+                        variant="ghost"
                         size="sm"
                         className="h-7 w-7 p-0 hover:bg-destructive/10 hover:text-destructive text-muted-foreground"
                         disabled={isDeleting || isGloballyDeleting}
@@ -369,6 +535,17 @@ export const AgentsGrid: React.FC<AgentsGridProps> = ({
         })}
       </div>
 
+      {/* Bulk actions bar */}
+      <BulkActionsBar
+        selectedCount={selectedIds.size}
+        selectedIds={Array.from(selectedIds)}
+        onDelete={handleBulkDelete}
+        onExport={handleBulkExport}
+        onClone={handleBulkClone}
+        onClearSelection={clearSelection}
+        isDeleting={deleteAgentMutation?.isPending}
+      />
+
       <AgentModal
         agent={selectedAgent}
         isOpen={!!selectedAgent}
@@ -389,6 +566,14 @@ export const AgentsGrid: React.FC<AgentsGridProps> = ({
           onAgentChange={(newAgentId) => {
             setConfigAgentId(newAgentId);
           }}
+        />
+      )}
+
+      {cloneDialogAgent && (
+        <CloneAgentDialog
+          open={!!cloneDialogAgent}
+          onOpenChange={(open) => { if (!open) setCloneDialogAgent(null); }}
+          sourceAgent={cloneDialogAgent}
         />
       )}
     </>

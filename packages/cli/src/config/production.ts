@@ -39,8 +39,8 @@ export const PRODUCTION_CONFIG: ProductionConfig = {
 
 // Development/local configuration
 export const DEVELOPMENT_CONFIG: ProductionConfig = {
-  productionEngineUrl: 'http://localhost:3002',
-  backendUrl: 'http://localhost:3001', 
+  productionEngineUrl: 'http://localhost:3100',
+  backendUrl: 'http://localhost:3100',
   websiteUrl: 'http://localhost:3000',
   centralizedOpenRouterKey: process.env.OPENROUTER_API_KEY || '',
   enableTelemetry: true,

@@ -1,4 +1,4 @@
-import crypto from 'crypto';
+import crypto from 'node:crypto';
 import { NextRequest } from 'next/server';
 
 const MAX_CLOCK_SKEW_MS = 5 * 60 * 1000;

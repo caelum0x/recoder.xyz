@@ -145,7 +145,7 @@ export const useRecoderComputerStore = create<RecoderComputerState>()(
         
         // If sandbox changed, clear all file-related state
         if (currentSandboxId !== sandboxId) {
-          console.log('[RecoderComputerStore] Sandbox context changed:', currentSandboxId, '->', sandboxId);
+          
           set({
             currentSandboxId: sandboxId,
             // Reset all file state when sandbox changes
@@ -156,7 +156,7 @@ export const useRecoderComputerStore = create<RecoderComputerState>()(
       },
       
       clearFileState: () => {
-        console.log('[RecoderComputerStore] Clearing file state');
+        
         set({
           ...initialFileState,
         });
@@ -389,7 +389,7 @@ export const useRecoderComputerStore = create<RecoderComputerState>()(
       },
       
       reset: () => {
-        console.log('[RecoderComputerStore] Full reset');
+        
         set(initialState);
       },
     }),

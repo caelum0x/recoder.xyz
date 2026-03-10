@@ -413,7 +413,7 @@ class AgentEvalRunner:
                                         if isinstance(args, str):
                                             try:
                                                 args = json.loads(args)
-                                            except:
+                                            except (json.JSONDecodeError, ValueError):
                                                 pass
                                         if isinstance(args, dict):
                                             clean_output = args.get('text', args.get('message', ''))
@@ -462,7 +462,7 @@ class AgentEvalRunner:
                                         if isinstance(content_dict, dict):
                                             # Look for text in the tool result
                                             output = content_dict.get('text', content_dict.get('message', ''))
-                                    except:
+                                    except (json.JSONDecodeError, ValueError):
                                         # If not JSON, use as-is
                                         if content.strip():
                                             output = content
@@ -487,7 +487,7 @@ class AgentEvalRunner:
                                                     try:
                                                         import json
                                                         args = json.loads(args)
-                                                    except:
+                                                    except (json.JSONDecodeError, ValueError):
                                                         pass
                                                 if isinstance(args, dict):
                                                     output = args.get('text', args.get('message', ''))

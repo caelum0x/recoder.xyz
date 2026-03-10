@@ -4,6 +4,7 @@
  * Enables centralized billing, analytics, and cost optimization
  */
 
+import crypto from 'crypto';
 import axios, { AxiosInstance } from 'axios';
 import { Logger } from './logger';
 import { EventEmitter } from 'events';
@@ -430,11 +431,11 @@ export class MainBackendConnection extends EventEmitter {
    * Helper methods
    */
   private generateRouterId(): string {
-    return `router_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    return `router_${Date.now()}_${crypto.randomUUID().slice(0, 9)}`;
   }
 
   private generateRequestId(): string {
-    return `req_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
+    return `req_${Date.now()}_${crypto.randomUUID().slice(0, 6)}`;
   }
 
   private getRouterVersion(): string {

@@ -279,7 +279,7 @@ function PricingCard({
           break;
         case 'downgrade_scheduled':
         case 'scheduled':
-          const dateValue = (response as any).effective_date || (response as any).scheduled_date;
+          const dateValue = response.effective_date || response.scheduled_date;
           let effectiveDate = null;
 
           if (dateValue) {
@@ -343,12 +343,11 @@ function PricingCard({
     (isSameBillingPeriod || isRevenueCatSubscription) &&
     (currentStatus === 'active' || currentStatus === 'trialing');
 
-  const isScheduled = isAuthenticated && (currentSubscription as any)?.has_schedule;
+  const isScheduled = isAuthenticated && currentSubscription?.subscription?.has_scheduled_change;
   const isScheduledTargetPlan =
-    isScheduled && (
-      (currentSubscription as any)?.scheduled_tier_key === tier.tierKey ||
-      (currentSubscription as any)?.scheduled_plan_name === tier.tierKey ||
-      (currentSubscription as any)?.scheduled_plan_name === tier.name
+    isScheduled && currentSubscription?.subscription?.scheduled_change && (
+      currentSubscription.subscription.scheduled_change.target_tier?.name === tier.tierKey ||
+      currentSubscription.subscription.scheduled_change.target_tier?.name === tier.name
     );
   const isPlanLoading = isLoading[tier.tierKey];
 
@@ -732,7 +731,7 @@ function PricingCard({
             buttonClassName,
             isPlanLoading && 'animate-pulse',
           )}
-          title={!planChangeValidation.allowed ? (planChangeValidation as any).reason : undefined}
+          title={undefined}
         >
           {buttonText}
         </Button>
@@ -1011,8 +1010,8 @@ export function PricingSection({
       return currentSubscription.subscription.billing_period;
     }
 
-    if ((currentSubscription as any).plan_type) {
-      return (currentSubscription as any).plan_type;
+    if (currentSubscription.subscription.tier_key) {
+      return currentSubscription.subscription.billing_period;
     }
 
     if (commitmentInfo?.has_commitment &&

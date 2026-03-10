@@ -53,7 +53,9 @@ const DEV_ORIGINS = [
   ...PRODUCTION_ORIGINS,
 ];
 
-// Build social providers only when real credentials are configured
+// Build social providers only when real credentials are configured.
+// In production we require at least one OAuth provider so that misconfigured
+// deployments fail fast instead of silently serving a broken sign-in page.
 const githubClientId = process.env.GITHUB_CLIENT_ID || process.env.GITHUB_ID || '';
 const githubClientSecret = process.env.GITHUB_CLIENT_SECRET || process.env.GITHUB_SECRET || '';
 const googleClientId = process.env.GOOGLE_CLIENT_ID || '';
@@ -65,6 +67,41 @@ function isRealCredential(val: string): boolean {
 
 const hasGithub = isRealCredential(githubClientId) && isRealCredential(githubClientSecret);
 const hasGoogle = isRealCredential(googleClientId) && isRealCredential(googleClientSecret);
+
+// Validate: if only one half of a credential pair is set, something is wrong.
+if (isRealCredential(githubClientId) && !isRealCredential(githubClientSecret)) {
+  throw new Error(
+    'GITHUB_CLIENT_ID (or GITHUB_ID) is set but GITHUB_CLIENT_SECRET (or GITHUB_SECRET) is missing. ' +
+    'Both must be provided for GitHub OAuth to work.'
+  );
+}
+if (!isRealCredential(githubClientId) && isRealCredential(githubClientSecret)) {
+  throw new Error(
+    'GITHUB_CLIENT_SECRET (or GITHUB_SECRET) is set but GITHUB_CLIENT_ID (or GITHUB_ID) is missing. ' +
+    'Both must be provided for GitHub OAuth to work.'
+  );
+}
+if (isRealCredential(googleClientId) && !isRealCredential(googleClientSecret)) {
+  throw new Error(
+    'GOOGLE_CLIENT_ID is set but GOOGLE_CLIENT_SECRET is missing. ' +
+    'Both must be provided for Google OAuth to work.'
+  );
+}
+if (!isRealCredential(googleClientId) && isRealCredential(googleClientSecret)) {
+  throw new Error(
+    'GOOGLE_CLIENT_SECRET is set but GOOGLE_CLIENT_ID is missing. ' +
+    'Both must be provided for Google OAuth to work.'
+  );
+}
+
+// In production, require at least one OAuth provider to be fully configured.
+if (process.env.NODE_ENV === 'production' && !hasGithub && !hasGoogle) {
+  throw new Error(
+    'No OAuth providers configured. In production at least one of GitHub or Google OAuth ' +
+    'must be fully configured (both client ID and secret). Set GOOGLE_CLIENT_ID + GOOGLE_CLIENT_SECRET ' +
+    'and/or GITHUB_CLIENT_ID + GITHUB_CLIENT_SECRET.'
+  );
+}
 
 const socialProviders: Record<string, unknown> = {};
 if (hasGithub) {

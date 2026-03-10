@@ -25,7 +25,7 @@ export const ComposioProfileSelector: React.FC<ComposioProfileSelectorProps> = (
   onSelectProfile,
   onCreateNew,
 }) => {
-  const [selectedProfileId, setSelectedProfileId] = useState<string>('');
+  const [selectedProfileId, setSelectedProfileId] = useState<string | undefined>(undefined);
   const [isLoading, setIsLoading] = useState(false);
 
   const handleContinue = () => {

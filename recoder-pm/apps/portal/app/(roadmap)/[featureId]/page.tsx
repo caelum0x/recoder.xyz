@@ -28,7 +28,6 @@ const Editor = dynamic(async () => {
 });
 
 const FeaturePage = async (props: FeatureProperties) => {
-  console.log("Feature ID page");
   const params = await props.params;
   const slug = await getSlug();
   const { featureId } = params;

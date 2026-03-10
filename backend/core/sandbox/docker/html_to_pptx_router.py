@@ -744,7 +744,7 @@ class OptimizedHTMLToPPTXConverter:
                                     containers.forEach(container => container.remove());
                                 }
                             """)
-                        except:
+                        except Exception:
                             pass
                         continue
             
@@ -810,7 +810,7 @@ class OptimizedHTMLToPPTXConverter:
                         elementsWithCaptureId.forEach(el => el.removeAttribute('data-capture-id'));
                     }
                 """)
-            except:
+            except Exception:
                 pass
             return []
 
@@ -1084,7 +1084,7 @@ class OptimizedHTMLToPPTXConverter:
                         else:
                             try:
                                 line_height = float(line_height_str)
-                            except:
+                            except (ValueError, TypeError):
                                 line_height = 1.2
                     
                     # Parse color - handle complex color scenarios
@@ -1205,7 +1205,7 @@ class OptimizedHTMLToPPTXConverter:
                     spacing_px = float(letter_spacing[:-2])
                     if hasattr(font, 'character_spacing'):
                         font.character_spacing = spacing_px
-                except:
+                except (ValueError, TypeError, AttributeError):
                     pass
             
             # Handle text transform

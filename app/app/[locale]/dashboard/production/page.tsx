@@ -47,17 +47,23 @@ export default function ProductionDashboard() {
   const [userStats, setUserStats] = useState<UserStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const redirectToSignIn = () => {
+    const currentPath = typeof window !== 'undefined'
+      ? `${window.location.pathname}${window.location.search}`
+      : '/dashboard/production';
+    router.push(`/auth/signin?redirect=${encodeURIComponent(currentPath)}`);
+  };
 
   useEffect(() => {
     if (!isPending && !session) {
-      router.push('/auth/signin');
+      redirectToSignIn();
       return;
     }
 
     if (!isPending && session) {
       void fetchUserStats();
     }
-  }, [isPending, router, session]);
+  }, [isPending, session]);
 
   const fetchUserStats = async () => {
     try {

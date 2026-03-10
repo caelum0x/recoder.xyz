@@ -67,7 +67,7 @@ export function PlatformDetailPage({ serviceId, longDescription, features, useCa
           <h2 className="text-xl font-semibold mb-4">Features</h2>
           <div className="grid gap-3 md:grid-cols-2">
             {features.map((feature) => (
-              <div key={feature} className="flex items-start space-x-3 p-3 bg-[#111] border border-white/5 rounded-lg">
+              <div key={feature} className="bg-card/50 border-border/50 flex items-start space-x-3 rounded-lg border p-3">
                 <div className="w-1.5 h-1.5 bg-orange-500 rounded-full mt-2 shrink-0" />
                 <span className="text-sm text-gray-300">{feature}</span>
               </div>
@@ -80,7 +80,7 @@ export function PlatformDetailPage({ serviceId, longDescription, features, useCa
           <h2 className="text-xl font-semibold mb-4">Use Cases</h2>
           <div className="space-y-3">
             {useCases.map((useCase) => (
-              <div key={useCase} className="flex items-start space-x-3 p-3 bg-[#0a0a0a] border border-white/5 rounded-lg">
+              <div key={useCase} className="bg-card/40 border-border/50 flex items-start space-x-3 rounded-lg border p-3">
                 <span className="text-sm text-gray-400">{useCase}</span>
               </div>
             ))}

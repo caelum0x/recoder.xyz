@@ -4,7 +4,7 @@ import { auth } from '@/lib/auth-config';
 import { headers } from 'next/headers';
 
 
-const BACKEND_URL = process.env.BACKEND_URL || 'http://localhost:3001';
+const BACKEND_URL = process.env.BACKEND_URL || (process.env.NODE_ENV === 'production' ? undefined : 'http://localhost:3100');
 
 function getAccessToken(session: unknown): string {
   if (!session || typeof session !== 'object') return '';
@@ -20,6 +20,10 @@ export async function DELETE(
   request: NextRequest,
   props: { params: Promise<{ sessionId: string }> }
 ) {
+  if (!BACKEND_URL) {
+    return NextResponse.json({ error: 'Service URL not configured' }, { status: 503 });
+  }
+
   try {
     // In Next.js 15, params is a Promise that must be awaited
     const params = await props.params;

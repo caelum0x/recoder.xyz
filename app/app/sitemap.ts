@@ -133,53 +133,8 @@ const companyPages: SitemapPage[] = [
   { path: '/press',                   changeFrequency: 'monthly',  priority: 0.5 },
 ];
 
-// ── Dashboard pages (authenticated but indexable) ─────────────────────────
-const dashboardPages: SitemapPage[] = [
-  { path: '/dashboard',               changeFrequency: 'daily',    priority: 0.6 },
-  { path: '/dashboard/overview',       changeFrequency: 'daily',    priority: 0.6 },
-  { path: '/dashboard/analytics',      changeFrequency: 'daily',    priority: 0.5 },
-  { path: '/dashboard/api-keys',       changeFrequency: 'weekly',   priority: 0.5 },
-  { path: '/dashboard/production',     changeFrequency: 'weekly',   priority: 0.5 },
-  { path: '/dashboard/usage',          changeFrequency: 'daily',    priority: 0.5 },
-];
-
-// ── Billing pages ─────────────────────────────────────────────────────────
-const billingPages: SitemapPage[] = [
-  { path: '/billing',                 changeFrequency: 'monthly',  priority: 0.5 },
-  { path: '/billing/subscription',    changeFrequency: 'monthly',  priority: 0.5 },
-  { path: '/billing/invoices',        changeFrequency: 'monthly',  priority: 0.4 },
-  { path: '/billing/payment-methods', changeFrequency: 'monthly',  priority: 0.4 },
-  { path: '/billing/upgrade',         changeFrequency: 'monthly',  priority: 0.6 },
-  { path: '/billing/cancel',          changeFrequency: 'monthly',  priority: 0.3 },
-];
-
-// ── Settings pages ────────────────────────────────────────────────────────
-const settingsPages: SitemapPage[] = [
-  { path: '/settings',                changeFrequency: 'monthly',  priority: 0.4 },
-  { path: '/settings/profile',        changeFrequency: 'monthly',  priority: 0.4 },
-  { path: '/settings/account',        changeFrequency: 'monthly',  priority: 0.4 },
-  { path: '/settings/security',       changeFrequency: 'monthly',  priority: 0.4 },
-  { path: '/settings/appearance',     changeFrequency: 'monthly',  priority: 0.3 },
-  { path: '/settings/api',            changeFrequency: 'monthly',  priority: 0.4 },
-  { path: '/settings/api-keys',       changeFrequency: 'monthly',  priority: 0.4 },
-  { path: '/settings/ai-providers',   changeFrequency: 'monthly',  priority: 0.4 },
-  { path: '/settings/claude-code',    changeFrequency: 'monthly',  priority: 0.4 },
-  { path: '/settings/integrations',   changeFrequency: 'monthly',  priority: 0.4 },
-  { path: '/settings/mcp',            changeFrequency: 'monthly',  priority: 0.4 },
-  { path: '/settings/mcp/marketplace',changeFrequency: 'weekly',   priority: 0.4 },
-  { path: '/settings/notifications',  changeFrequency: 'monthly',  priority: 0.3 },
-  { path: '/settings/premium',        changeFrequency: 'monthly',  priority: 0.4 },
-];
-
-// ── Onboarding pages ─────────────────────────────────────────────────────
-const onboardingPages: SitemapPage[] = [
-  { path: '/onboarding',              changeFrequency: 'monthly',  priority: 0.4 },
-  { path: '/onboarding/welcome',      changeFrequency: 'monthly',  priority: 0.4 },
-  { path: '/onboarding/setup-profile',changeFrequency: 'monthly',  priority: 0.3 },
-  { path: '/onboarding/setup-api-key',changeFrequency: 'monthly',  priority: 0.3 },
-  { path: '/onboarding/choose-plan',  changeFrequency: 'monthly',  priority: 0.3 },
-  { path: '/onboarding/complete',     changeFrequency: 'monthly',  priority: 0.3 },
-];
+// NOTE: Dashboard, billing, settings, and onboarding pages are
+// disallowed in robots.txt — do not include them in the sitemap.
 
 // ── Misc pages ────────────────────────────────────────────────────────────
 const miscPages: SitemapPage[] = [
@@ -205,10 +160,6 @@ const allPages: SitemapPage[] = [
   ...supportPages,
   ...legalPages,
   ...companyPages,
-  ...dashboardPages,
-  ...billingPages,
-  ...settingsPages,
-  ...onboardingPages,
   ...miscPages,
 ];
 

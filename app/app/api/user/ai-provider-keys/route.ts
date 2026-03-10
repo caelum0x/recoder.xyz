@@ -208,29 +208,39 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: 'User ID required' }, { status: 400 });
     }
 
-    // Find user by Better Auth ID (web users use 'user' table)
-    const user = await prisma.user.findUnique({
+    // Resolve app user directly by id first (canonical users table).
+    let appUser = await prisma.users.findUnique({
       where: { id: userId },
-      select: { email: true }
+      select: { id: true, email: true },
     });
 
-    if (!user) {
-      return NextResponse.json({
-        keys: {},
-        message: 'User not found'
-      });
+    // Backward-compatible fallback for callers that send a Better Auth user id.
+    if (!appUser) {
+      const prismaAny = prisma as unknown as {
+        user?: {
+          findUnique: (args: { where: { id: string }; select: { email: true } }) => Promise<{ email: string } | null>;
+        };
+      };
+
+      const webUser = prismaAny.user?.findUnique
+        ? await prismaAny.user.findUnique({
+            where: { id: userId },
+            select: { email: true },
+          })
+        : null;
+
+      if (webUser?.email) {
+        appUser = await prisma.users.findUnique({
+          where: { email: webUser.email },
+          select: { id: true, email: true },
+        });
+      }
     }
-
-    // Look up the user in the users table (app uses 'users' table for API keys)
-    const appUser = await prisma.users.findUnique({
-      where: { email: user.email },
-      select: { id: true }
-    });
 
     if (!appUser) {
       return NextResponse.json({
         keys: {},
-        message: 'User not found in app database'
+        message: 'User not found'
       });
     }
 
@@ -262,7 +272,7 @@ export async function PUT(request: NextRequest) {
     return NextResponse.json({
       keys: decryptedKeys,
     });
-  } catch (error: any) {
+  } catch (error) {
     logger.error('Get decrypted AI provider keys error', { route: 'api/user/ai-provider-keys', error: error instanceof Error ? error.message : String(error) });
     return NextResponse.json({ error: 'Failed to get keys' }, { status: 500 });
   }

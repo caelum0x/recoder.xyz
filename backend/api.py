@@ -35,7 +35,33 @@ from core.agents.agent_tools import router as agent_tools_router
 from core.agents.agent_json import router as agent_json_router
 from core.agents.agent_setup import router as agent_setup_router
 from core.agents.analytics_api import router as agent_analytics_router
+from core.agents.agent_metrics_api import router as agent_metrics_router
+from core.agents.agent_comparison_api import router as agent_comparison_router
+from core.agents.execution_logs_api import router as execution_logs_router
+from core.agents.agent_secrets_api import router as agent_secrets_router
+from core.agents.agent_quota_api import router as agent_quota_router
+from core.agents.agent_import_export_api import router as agent_import_export_router
+from core.agents.agent_schedule_api import router as agent_schedule_router
+from core.agents.agent_ab_test_api import router as agent_ab_test_router
+from core.agents.agent_activity_api import router as agent_activity_router
+from core.agents.agent_versioning_api import router as agent_versioning_router
+from core.agents.agent_benchmark_api import router as agent_benchmark_router
+from core.agents.agent_comments_api import router as agent_comments_router
+from core.agents.agent_env_vars_api import router as agent_env_vars_router
+from core.agents.agent_clone_api import router as agent_clone_router
+from core.agents.agent_testing_api import router as agent_testing_router
+from core.agents.agent_replay_api import router as agent_replay_router
+from core.agents.agent_health_api import router as agent_health_router
+from core.agents.agent_changelog_api import router as agent_changelog_router
+from core.prompts.shared_prompts_api import router as shared_prompts_router
 from core.threads.api import router as threads_router
+from core.threads.thread_templates_api import router as thread_templates_router
+from core.threads.thread_pins_api import router as thread_pins_router
+from core.threads.thread_search_api import router as thread_search_router
+from core.threads.thread_analytics_api import router as thread_analytics_router
+from core.threads.thread_tags_api import router as thread_tags_router
+from core.threads.message_bookmarks_api import router as message_bookmarks_router
+from core.threads.response_ratings_api import router as response_ratings_router
 from core.categorization.api import router as categorization_router
 from core.endpoints import router as endpoints_router
 
@@ -55,6 +81,7 @@ from core.services import transcription as transcription_api
 import sys
 from core.triggers import api as triggers_api
 from core.services import api_keys_api
+from core.services.api_usage_api import router as api_usage_router
 from core.notifications import api as notifications_api
 from core.services.orphan_cleanup import cleanup_orphaned_agent_runs
 from auth import api as auth_api
@@ -450,14 +477,55 @@ api_router.include_router(agent_tools_router)
 api_router.include_router(agent_json_router)
 api_router.include_router(agent_setup_router)
 api_router.include_router(agent_analytics_router)
+api_router.include_router(agent_metrics_router)
+api_router.include_router(agent_comparison_router)
+api_router.include_router(execution_logs_router)
+api_router.include_router(agent_secrets_router)
+api_router.include_router(agent_quota_router)
+api_router.include_router(agent_import_export_router)
+api_router.include_router(agent_schedule_router)
+api_router.include_router(agent_ab_test_router)
+api_router.include_router(agent_activity_router)
+api_router.include_router(agent_versioning_router)
+api_router.include_router(agent_benchmark_router)
+api_router.include_router(agent_comments_router)
+api_router.include_router(agent_env_vars_router)
+api_router.include_router(agent_clone_router)
+api_router.include_router(agent_testing_router)
+api_router.include_router(agent_replay_router)
+api_router.include_router(agent_health_router)
+api_router.include_router(agent_changelog_router)
+api_router.include_router(shared_prompts_router)
 api_router.include_router(threads_router)
+api_router.include_router(thread_templates_router)
+api_router.include_router(thread_pins_router)
+api_router.include_router(thread_search_router)
+api_router.include_router(thread_analytics_router)
+api_router.include_router(thread_tags_router)
+api_router.include_router(message_bookmarks_router)
+api_router.include_router(response_ratings_router)
+from core.threads.thread_export_api import router as thread_export_router
+api_router.include_router(thread_export_router)
+from core.threads.thread_bulk_api import router as thread_bulk_router
+api_router.include_router(thread_bulk_router)
 api_router.include_router(categorization_router)
 api_router.include_router(endpoints_router)
 api_router.include_router(sandbox_api.router)
 api_router.include_router(billing_router)
+
+from core.billing.cost_alerts_api import router as cost_alerts_router
+api_router.include_router(cost_alerts_router)
+
+from core.billing.quota_dashboard_api import router as quota_dashboard_router
+api_router.include_router(quota_dashboard_router)
+
+from core.billing.cost_allocation_api import router as cost_allocation_router
+api_router.include_router(cost_allocation_router)
+
 api_router.include_router(setup_router)
 api_router.include_router(webhook_router)  # Webhooks at /api/webhooks/*
 api_router.include_router(api_keys_api.router)
+api_router.include_router(api_usage_router)
 api_router.include_router(billing_admin_router)
 api_router.include_router(admin_router)
 api_router.include_router(feedback_admin_router)
@@ -475,6 +543,10 @@ from core.templates import presentations_api
 
 api_router.include_router(mcp_api.router)
 api_router.include_router(credentials_api.router, prefix="/secure-mcp")
+
+from core.credentials.credential_audit_api import router as credential_audit_router
+api_router.include_router(credential_audit_router)
+
 api_router.include_router(template_api.router, prefix="/templates")
 api_router.include_router(presentations_api.router, prefix="/presentation-templates")
 
@@ -486,9 +558,21 @@ api_router.include_router(voice_api.router)
 from core.knowledge_base import api as knowledge_base_api
 api_router.include_router(knowledge_base_api.router)
 
+from core.knowledge_base.folder_management_api import router as kb_folder_mgmt_router
+api_router.include_router(kb_folder_mgmt_router)
+
 api_router.include_router(triggers_api.router)
 
 api_router.include_router(notifications_api.router)
+
+from core.notifications.notification_stream_api import router as notification_stream_router
+api_router.include_router(notification_stream_router)
+
+from core.notifications.notification_channels_api import router as notification_channels_router
+api_router.include_router(notification_channels_router)
+
+from core.notifications.notification_rules_api import router as notification_rules_router
+api_router.include_router(notification_rules_router)
 
 from core.notifications import presence_api
 api_router.include_router(presence_api.router)
@@ -514,6 +598,9 @@ api_router.include_router(website_analysis_router)
 from core.workflows.workflow_api import router as workflow_router
 api_router.include_router(workflow_router)
 
+from core.agents.agent_pipeline_api import router as pipeline_router
+api_router.include_router(pipeline_router)
+
 from core.test_harness.api import router as test_harness_router, e2e_router
 api_router.include_router(test_harness_router)
 api_router.include_router(e2e_router)
@@ -522,8 +609,138 @@ api_router.include_router(e2e_router)
 from core.sandbox.canvas_ai_api import router as canvas_ai_router
 api_router.include_router(canvas_ai_router)
 
+from core.platform.activity_api import router as platform_activity_router
+api_router.include_router(platform_activity_router)
+
+from core.activity.unified_activity_api import router as unified_activity_router
+api_router.include_router(unified_activity_router)
+
+from core.integrations.integration_api import router as integrations_router
+api_router.include_router(integrations_router)
+
+from core.webhooks.webhook_api import router as webhook_mgmt_router
+api_router.include_router(webhook_mgmt_router)
+
+from core.webhooks.webhook_event_log_api import router as webhook_event_log_router
+api_router.include_router(webhook_event_log_router)
+
+from core.collaboration.sharing_api import router as collaboration_router
+api_router.include_router(collaboration_router)
+
+from core.collaboration.collaboration_rooms_api import router as collaboration_rooms_router
+api_router.include_router(collaboration_rooms_router)
+
+from core.search.search_api import router as search_router
+api_router.include_router(search_router)
+
+from core.search.global_search_api import router as global_search_router
+api_router.include_router(global_search_router)
+
+from core.marketplace.marketplace_api import router as marketplace_router
+api_router.include_router(marketplace_router)
+
+from core.favorites.favorites_api import router as favorites_router
+api_router.include_router(favorites_router)
+
+from core.prompts.saved_prompts_api import router as saved_prompts_router
+api_router.include_router(saved_prompts_router)
+
 from core.admin.stateless_admin_api import router as stateless_admin_router
 api_router.include_router(stateless_admin_router)
+
+from core.admin.health_api import router as health_admin_router
+api_router.include_router(health_admin_router)
+
+from core.reports.reports_api import router as reports_router
+api_router.include_router(reports_router)
+
+from core.reports.scheduled_reports_api import router as scheduled_reports_router
+api_router.include_router(scheduled_reports_router)
+
+from core.teams.team_api import router as team_mgmt_router
+api_router.include_router(team_mgmt_router)
+
+from core.audit.audit_api import router as audit_router
+api_router.include_router(audit_router)
+
+from core.settings.user_preferences_api import router as user_preferences_router
+api_router.include_router(user_preferences_router)
+
+from core.developers.api_playground_api import router as api_playground_router
+api_router.include_router(api_playground_router)
+
+from core.developers.api_key_permissions_api import router as api_key_permissions_router
+api_router.include_router(api_key_permissions_router)
+
+from core.developers.api_key_scopes_api import router as api_key_scopes_router
+api_router.include_router(api_key_scopes_router)
+
+from core.agents.agent_activity_heatmap_api import router as agent_activity_heatmap_router
+api_router.include_router(agent_activity_heatmap_router)
+
+from core.dashboard.custom_charts_api import router as custom_charts_router
+api_router.include_router(custom_charts_router)
+
+from core.dashboard.widget_config_api import router as widget_config_router
+api_router.include_router(widget_config_router)
+
+from core.workspaces.workspace_activity_api import router as workspace_activity_router
+api_router.include_router(workspace_activity_router)
+
+from core.monitoring.run_monitor_api import router as run_monitor_router
+api_router.include_router(run_monitor_router)
+
+from core.monitoring.incident_api import router as incident_router
+api_router.include_router(incident_router)
+
+from core.monitoring.sandbox_monitor_api import router as sandbox_monitor_router
+api_router.include_router(sandbox_monitor_router)
+
+from core.threads.thread_folders_api import router as thread_folders_router
+api_router.include_router(thread_folders_router)
+
+from core.triggers.trigger_templates_api import router as trigger_templates_router
+api_router.include_router(trigger_templates_router)
+
+from core.knowledge_base.kb_relationships_api import router as kb_relationships_router
+api_router.include_router(kb_relationships_router)
+
+from core.agents.agent_dependency_api import router as agent_dependency_router
+api_router.include_router(agent_dependency_router)
+
+from core.threads.conversation_insights_api import router as conversation_insights_router
+api_router.include_router(conversation_insights_router)
+
+from core.agents.agent_bundles_api import router as agent_bundles_router
+api_router.include_router(agent_bundles_router)
+
+from core.threads.thread_bookmarks_api import router as thread_bookmarks_api_router
+api_router.include_router(thread_bookmarks_api_router)
+
+from core.agents.agent_permissions_api import router as agent_permissions_router
+api_router.include_router(agent_permissions_router)
+
+from core.threads.conversation_templates_api import router as conversation_templates_router
+api_router.include_router(conversation_templates_router)
+
+from core.threads.pinned_messages_api import router as pinned_messages_router
+api_router.include_router(pinned_messages_router)
+
+from core.developers.api_usage_heatmap_api import router as api_usage_heatmap_router
+api_router.include_router(api_usage_heatmap_router)
+
+from core.agents.agent_favorites_api import router as agent_favorites_router
+api_router.include_router(agent_favorites_router)
+
+from core.onboarding.onboarding_checklists_api import router as onboarding_checklists_router
+api_router.include_router(onboarding_checklists_router)
+
+from core.agents.agent_run_queue_api import router as agent_run_queue_router
+api_router.include_router(agent_run_queue_router)
+
+from core.threads.thread_sentiment_api import router as thread_sentiment_router
+api_router.include_router(thread_sentiment_router)
+
 # Auth OTP endpoint for expired magic links
 api_router.include_router(auth_api.router)
 api_router.include_router(mfa_api.router)
@@ -814,5 +1031,5 @@ if __name__ == "__main__":
         port=8000,
         workers=workers,
         loop="asyncio",
-        reload=False if is_dev_env else False
+        reload=reload
     )

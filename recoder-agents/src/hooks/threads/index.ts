@@ -23,6 +23,9 @@ export { useMessagesQuery, useAddUserMessageMutation } from '../messages';
 // Agent runs
 export { useAgentRunsQuery, useStartAgentMutation, useStopAgentMutation } from './use-agent-run';
 
+// Thread pinning
+export { usePinnedThreads, useTogglePin } from './use-pinned-threads';
+
 // Optimistic agent start
 export { useOptimisticAgentStart } from './use-optimistic-agent-start';
 export type { 

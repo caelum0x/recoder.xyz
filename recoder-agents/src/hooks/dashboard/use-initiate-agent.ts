@@ -12,15 +12,13 @@ import {
   ModelAccessDeniedError,
   RequestTooLargeError
 } from "@/lib/api/errors";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation } from "@tanstack/react-query";
 import { handleApiSuccess, handleApiError } from "@/lib/error-handler";
 import { dashboardKeys } from "./keys";
 import { useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from 'next-intl';
 
 import { projectKeys, threadKeys } from "../threads/keys";
-import { backendApi } from "@/lib/api-client";
-
 // Re-export cost estimate hook so chat input components can access it
 // alongside the agent initiation hooks from this module.
 export { useCostEstimate } from "@/hooks/agents/use-cost-estimate";
@@ -53,7 +51,7 @@ export const useInitiateAgentMutation = () => {
         agent_id,
       });
     },
-    onSuccess: (data) => {
+    onSuccess: () => {
       handleApiSuccess(t('agentInitiatedSuccessfully'), t('aiAssistantReady'));
     },
     onError: (error) => {
@@ -84,7 +82,7 @@ export const useInitiateAgentWithInvalidation = () => {
   
   return useMutation({
     mutationFn: (formData: FormData) => baseMutation.mutateAsync(formData),
-    onSuccess: (data) => {
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: projectKeys.all });
       queryClient.invalidateQueries({ queryKey: threadKeys.all });
       queryClient.invalidateQueries({ queryKey: dashboardKeys.agents });

@@ -82,7 +82,7 @@ async def convert_and_upload_to_google_docs(
             if not convert_response.is_success:
                 try:
                     error_detail = convert_response.json().get("detail", "Unknown error")
-                except:
+                except (ValueError, AttributeError):
                     error_detail = convert_response.text
                 logger.error(f"Sandbox conversion failed: {error_detail}")
                 raise HTTPException(
@@ -130,8 +130,8 @@ async def convert_and_upload_to_google_docs(
         finally:
             try:
                 temp_docx_path.unlink()
-            except:
-                pass  
+            except OSError:
+                pass
     
     except HTTPException as he:
         raise

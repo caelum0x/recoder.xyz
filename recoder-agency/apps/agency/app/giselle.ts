@@ -373,7 +373,9 @@ const callbacks: GiselleCallbacks = {
 				sessionId: args.generation.context.origin.taskId,
 			});
 			// Non-blocking cost log
-			logCostIfAgencyProject(args.generation, team.dbId).catch(() => {});
+			logCostIfAgencyProject(args.generation, team.dbId).catch((err: unknown) => {
+			console.warn("[Agency] Cost logging failed:", err);
+		});
 			return;
 		}
 		const [currentUser, currentTeam] = await Promise.all([
@@ -388,7 +390,9 @@ const callbacks: GiselleCallbacks = {
 			sessionId: args.generation.context.origin.taskId,
 		});
 		// Non-blocking cost log
-		logCostIfAgencyProject(args.generation, currentTeam.dbId).catch(() => {});
+		logCostIfAgencyProject(args.generation, currentTeam.dbId).catch((err: unknown) => {
+			console.warn("[Agency] Cost logging failed:", err);
+		});
 	},
 	generationError: async (args) => {
 		const requestId = getRequestId();

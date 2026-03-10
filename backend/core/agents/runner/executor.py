@@ -152,8 +152,8 @@ async def execute_agent_run(
                     try:
                         await asyncio.wait_for(redis.expire(stream_key, REDIS_STREAM_TTL_SECONDS), timeout=2.0)
                         stream_ttl_set = True
-                    except:
-                        pass
+                    except Exception:
+                        logger.warning(f"Failed to set TTL on Redis stream {stream_key}")
             except Exception as e:
                 logger.warning(f"Failed to write to stream: {e}")
 
@@ -186,8 +186,8 @@ async def execute_agent_run(
             completion_msg = {"type": "status", "status": "completed", "message": "Completed successfully"}
             try:
                 await redis.stream_add(stream_key, {'data': json.dumps(completion_msg)}, maxlen=200, approximate=True)
-            except:
-                pass
+            except Exception:
+                logger.warning(f"Failed to write completion message to Redis stream {stream_key}")
 
             await send_completion_notification(thread_id, agent_config, complete_tool_called)
 
@@ -196,11 +196,35 @@ async def execute_agent_run(
 
         await update_agent_run_status(agent_run_id, final_status, error=error_message, account_id=account_id)
 
-        logger.info(f"✅ Agent run completed: {agent_run_id} | status={final_status}")
+        # Emit webhook for thread completion / failure (fire-and-forget)
+        try:
+            from core.webhooks.webhook_service import webhook_service
+            wh_event = "thread.completed" if final_status == "completed" else "thread.failed"
+            asyncio.create_task(webhook_service.send(account_id, wh_event, {
+                "thread_id": thread_id,
+                "agent_run_id": agent_run_id,
+                "status": final_status,
+            }))
+        except Exception as wh_err:
+            logger.warning(f"Webhook emission failed for thread status: {wh_err}")
+
+        logger.info(f"Agent run completed: {agent_run_id} | status={final_status}")
 
     except Exception as e:
         logger.error(f"Error in agent run {agent_run_id}: {e}", exc_info=True)
         await update_agent_run_status(agent_run_id, "failed", error=str(e), account_id=account_id)
+
+        # Emit webhook for thread failure (fire-and-forget)
+        try:
+            from core.webhooks.webhook_service import webhook_service
+            asyncio.create_task(webhook_service.send(account_id, "thread.failed", {
+                "thread_id": thread_id,
+                "agent_run_id": agent_run_id,
+                "status": "failed",
+                "error": str(e)[:200],
+            }))
+        except Exception:
+            pass
 
     finally:
         from core.utils.lifecycle_tracker import log_cleanup_error

@@ -282,7 +282,7 @@ export function usePlaybackController({
                                     textToStream = content;
                                 }
                             } else if (typeof content === 'object' && content !== null) {
-                                textToStream = (content as any).content || '';
+                                textToStream = (content as Record<string, unknown>).content as string || '';
                             }
                         }
 
@@ -294,7 +294,7 @@ export function usePlaybackController({
 
                         if (isCancelled) break;
                     } catch (error) {
-                        console.error('Error streaming message:', error);
+                        // Streaming error — continue with next message
                     }
                 } else {
                     // Non-assistant messages: show immediately

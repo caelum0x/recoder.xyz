@@ -4,6 +4,7 @@ import { auth } from '@/lib/auth-config';
 import { headers } from 'next/headers';
 
 import { PlatformApiKeyService } from '@/lib/services/platform-api-key.service';
+import { logger } from '@/lib/logger';
 import { z } from 'zod';
 
 const updateKeySchema = z.object({
@@ -70,8 +71,8 @@ export async function PATCH(
       success: true,
       message: result.message,
     });
-  } catch (error: any) {
-    console.error('Error updating API key:', error);
+  } catch (error) {
+    logger.error('Error updating API key:', { error: error instanceof Error ? error.message : String(error) });
     return NextResponse.json(
       { error: 'Failed to update API key' },
       { status: 500 }

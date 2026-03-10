@@ -10,25 +10,43 @@ export default function GlobalError({
   error: Error & { digest?: string };
   reset: () => void;
 }) {
-  // Must use lowercase html/body tags in app router
   return (
     <html lang="en">
-      <body style={{ padding: '20px', fontFamily: 'sans-serif', textAlign: 'center' }}>
-        <h2>Something went wrong!</h2>
-        <p>An unexpected error occurred.</p>
-        <button
-          onClick={() => reset()}
-          style={{
-            padding: '10px 20px',
-            background: '#667eea',
-            color: 'white',
-            border: 'none',
-            borderRadius: '5px',
-            cursor: 'pointer'
-          }}
-        >
-          Try again
-        </button>
+      <body style={{
+        margin: 0,
+        padding: 0,
+        fontFamily: 'system-ui, -apple-system, sans-serif',
+        backgroundColor: 'var(--color-zinc-950, #0a0a0a)',
+        color: 'var(--color-zinc-50, #fafafa)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        minHeight: '100vh',
+      }}>
+        <div style={{ textAlign: 'center', maxWidth: '400px', padding: '24px' }}>
+          <img src="/logo.png" alt="Recoder" width={48} height={48} style={{ marginBottom: '24px' }} />
+          <h2 style={{ fontSize: '24px', fontWeight: 'bold', marginBottom: '8px' }}>
+            Something went wrong
+          </h2>
+          <p style={{ color: 'var(--color-zinc-400, #a1a1aa)', marginBottom: '24px' }}>
+            A critical error occurred. Please try again.
+          </p>
+          <button
+            onClick={() => reset()}
+            style={{
+              padding: '12px 24px',
+              backgroundColor: 'var(--color-orange-500, #f97316)',
+              color: 'white',
+              border: 'none',
+              borderRadius: '8px',
+              cursor: 'pointer',
+              fontWeight: 500,
+              fontSize: '14px',
+            }}
+          >
+            Try again
+          </button>
+        </div>
       </body>
     </html>
   );

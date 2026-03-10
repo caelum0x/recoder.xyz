@@ -381,3 +381,4 @@ check-errors.sh
 
 # Dolt database files (added by bd init)
 .dolt/
+.env.tmp

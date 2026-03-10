@@ -159,9 +159,6 @@ export const useGetCurrentAgent = () =>
 export const useIsRecoderAgentFn = () =>
   useAgentSelectionStore((state) => state.isRecoderAgent);
 
-/** @deprecated Use useIsRecoderAgentFn */
-export const useIsSunaAgentFn = useIsRecoderAgentFn;
-
 // Legacy hook - kept for backward compatibility but prefer individual selectors
 export const useAgentSelection = () => {
   const store = useAgentSelectionStore();

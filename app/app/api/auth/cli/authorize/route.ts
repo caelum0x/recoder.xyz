@@ -77,7 +77,7 @@ export async function POST(request: NextRequest) {
     const result = await CLIAuthService.authorizeDeviceCode(user_code, user.id);
 
     return NextResponse.json(result, { status: 200 });
-  } catch (error: any) {
+  } catch (error) {
     logger.error('Device authorization error:', { error: String(error), route: 'auth/cli/authorize' });
     return NextResponse.json(
       { error: 'Authorization failed' },
@@ -123,7 +123,7 @@ export async function GET(request: NextRequest) {
     }
 
     return NextResponse.json(info, { status: 200 });
-  } catch (error: any) {
+  } catch (error) {
     logger.error('Get device code error:', { error: String(error), route: 'auth/cli/authorize' });
     return NextResponse.json(
       { error: 'Failed to get device code info' },

@@ -1,8 +1,12 @@
 import { cache } from "react";
-import { getSessionUser } from "./auth/server";
+import { redirect } from "next/navigation";
+import { getSessionUserOrNull } from "./auth/server";
 
 async function _getCurrentUser() {
-	const user = await getSessionUser();
+	const user = await getSessionUserOrNull();
+	if (!user) {
+		redirect("/login");
+	}
 	return {
 		id: user.id,
 		dbId: user.dbId,

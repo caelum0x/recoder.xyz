@@ -71,6 +71,8 @@ def get_tool_info(tool_name: str) -> Optional[Tuple[str, str, str]]:
     for name, module_path, class_name in ALL_TOOLS:
         if name == tool_name:
             return (name, module_path, class_name)
+    from core.utils.logger import logger
+    logger.warning(f"[tool_registry] get_tool_info: tool '{tool_name}' not found in ALL_TOOLS")
     return None
 
 
@@ -88,15 +90,16 @@ def get_tool_usage_guide(tool_name: str) -> Optional[str]:
     info = get_tool_info(tool_name)
     if not info:
         return None
-    
+
     _, module_path, class_name = info
     try:
         tool_class = get_tool_class(module_path, class_name)
         if hasattr(tool_class, '__tool_metadata__') and tool_class.__tool_metadata__.usage_guide:
             return tool_class.__tool_metadata__.usage_guide
-    except (ImportError, AttributeError):
-        pass
-    
+    except (ImportError, AttributeError) as e:
+        from core.utils.logger import logger
+        logger.warning(f"[tool_registry] get_tool_usage_guide: failed to load tool '{tool_name}': {e}")
+
     return None
 
 
@@ -104,7 +107,7 @@ def get_tool_metadata_summary(tool_name: str) -> Optional[Dict[str, str]]:
     info = get_tool_info(tool_name)
     if not info:
         return None
-    
+
     _, module_path, class_name = info
     try:
         tool_class = get_tool_class(module_path, class_name)
@@ -114,9 +117,10 @@ def get_tool_metadata_summary(tool_name: str) -> Optional[Dict[str, str]]:
                 'display_name': metadata.display_name,
                 'description': metadata.description
             }
-    except (ImportError, AttributeError):
-        pass
-    
+    except (ImportError, AttributeError) as e:
+        from core.utils.logger import logger
+        logger.warning(f"[tool_registry] get_tool_metadata_summary: failed to load tool '{tool_name}': {e}")
+
     return None
 
 
@@ -131,6 +135,7 @@ def get_all_tool_summaries() -> Dict[str, Dict[str, str]]:
                     'display_name': metadata.display_name,
                     'description': metadata.description
                 }
-        except (ImportError, AttributeError):
-            pass
+        except (ImportError, AttributeError) as e:
+            from core.utils.logger import logger
+            logger.warning(f"[tool_registry] get_all_tool_summaries: failed to load tool '{tool_name}': {e}")
     return summaries

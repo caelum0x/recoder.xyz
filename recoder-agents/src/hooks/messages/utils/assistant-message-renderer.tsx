@@ -12,6 +12,7 @@ import type { Project } from '@/lib/api/threads';
 import { AppIcon } from '@/components/thread/tool-views/shared/AppIcon';
 import { ToolCard } from '@/components/thread/content/ToolCard';
 import { ApifyApprovalInline } from '@/components/thread/content/ApifyApprovalInline';
+import type { ApifyApproval } from '@/hooks/apify/use-apify-approvals';
 import { MediaGenerationInline } from '@/components/thread/content/MediaGenerationInline';
 import { constructHtmlPreviewUrl } from '@/lib/utils/url';
 import { InlineCheckout, extractInlineCheckout } from '@/components/thread/content/InlineCheckout';
@@ -216,8 +217,8 @@ function extractWebSearchUrls(toolResult: UnifiedMessage | undefined): string[] 
         return extractFromOutput(content.output);
       }
     }
-  } catch (e) {
-    console.error('extractWebSearchUrls error:', e);
+  } catch {
+    // Malformed tool result metadata
   }
   return [];
 }
@@ -257,8 +258,8 @@ function extractImageSearchUrls(toolResult: UnifiedMessage | undefined): string[
     if (content?.images && Array.isArray(content.images)) {
       return content.images;
     }
-  } catch (e) {
-    console.error('extractImageSearchUrls error:', e);
+  } catch {
+    // Malformed tool result metadata
   }
   return [];
 }
@@ -289,8 +290,8 @@ function extractSlideInfo(toolResult: UnifiedMessage | undefined): SlideInfo | u
         totalSlides: output.total_slides || output.slide_number,
       };
     }
-  } catch (e) {
-    console.error('extractSlideInfo error:', e);
+  } catch {
+    // Malformed tool result metadata
   }
   return undefined;
 }
@@ -552,7 +553,7 @@ function renderRegularToolCall(
     paramDisplay = getToolCallDisplayParam(toolCall);
   }
 
-  const baseDisplayName = (toolCall as any)._display_hint || getCompletedToolName(toolName);
+  const baseDisplayName = (toolCall as Record<string, unknown>)._display_hint as string || getCompletedToolName(toolName);
   const displayName = elapsedTime !== undefined
     ? `${baseDisplayName} for ${formatElapsedTime(elapsedTime)}`
     : baseDisplayName;
@@ -711,7 +712,7 @@ export function renderAssistantMessage(props: AssistantMessageRendererProps): Re
           contentParts.push(
             <ApifyApprovalInline
               key={`approval-${toolCall.tool_call_id}`}
-              approval={resultData.output as any}
+              approval={resultData.output as ApifyApproval}
               threadId={threadId}
             />
           );

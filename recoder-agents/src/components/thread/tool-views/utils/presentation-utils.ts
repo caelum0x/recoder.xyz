@@ -109,13 +109,7 @@ export async function downloadPresentation(
 ): Promise<void> {
   try {
     const endpoint = `${sandboxUrl}/presentation/convert-to-${format}`;
-    console.log(`[downloadPresentation] Requesting download:`, {
-      endpoint,
-      format,
-      presentationPath,
-      presentationName,
-      sandboxUrl
-    });
+    
 
     const response = await fetch(endpoint, {
       method: 'POST',
@@ -128,12 +122,7 @@ export async function downloadPresentation(
       })
     });
     
-    console.log(`[downloadPresentation] Response status:`, {
-      status: response.status,
-      statusText: response.statusText,
-      ok: response.ok,
-      headers: Object.fromEntries(response.headers.entries())
-    });
+    
 
     if (!response.ok) {
       // Try to get error details from response
@@ -176,7 +165,7 @@ export async function downloadPresentation(
     
     // Check if response is actually a PDF/PPTX blob
     const contentType = response.headers.get('content-type');
-    console.log(`[downloadPresentation] Response content type:`, contentType);
+    
     
     if (!contentType || (!contentType.includes('pdf') && !contentType.includes('presentation'))) {
       // If not a binary file, might be an error JSON response
@@ -196,10 +185,7 @@ export async function downloadPresentation(
     }
     
     const blob = await response.blob();
-    console.log(`[downloadPresentation] Blob created:`, {
-      size: blob.size,
-      type: blob.type
-    });
+    
     
     if (blob.size === 0) {
       throw new Error(`Downloaded file is empty`);
@@ -214,7 +200,7 @@ export async function downloadPresentation(
     document.body.removeChild(a);
     window.URL.revokeObjectURL(url);
     
-    console.log(`[downloadPresentation] Download completed successfully`);
+    
     toast.success(`Downloaded ${presentationName} as ${format.toUpperCase()}`, {
       duration: 8000,
     });

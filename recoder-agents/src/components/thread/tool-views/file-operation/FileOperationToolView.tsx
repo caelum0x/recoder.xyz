@@ -696,14 +696,7 @@ export function FileOperationToolView({
 
   // Log for debugging file operations (only when it's a presentation slide)
   if (isPresentationSlide) {
-    console.log('[FileOperationToolView] Presentation slide detected:', {
-      operation,
-      processedFilePath,
-      presentationName,
-      slideNumber,
-      isStreaming,
-      hasSandboxUrl: !!project?.sandbox?.sandbox_url,
-    });
+    
   }
 
   const language = getLanguageFromFileName(fileName);

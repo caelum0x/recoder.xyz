@@ -48,12 +48,27 @@ function CLICallbackContent() {
 
         // If redirect_uri and state are provided, redirect back to CLI
         if (redirectUri && state) {
+          const decodedUri = decodeURIComponent(redirectUri);
+          // Validate redirect_uri is localhost only (CLI runs a local server)
+          try {
+            const parsed = new URL(decodedUri);
+            if (parsed.hostname !== 'localhost' && parsed.hostname !== '127.0.0.1') {
+              setStatus('error');
+              setMessage('Invalid redirect URI');
+              return;
+            }
+          } catch {
+            setStatus('error');
+            setMessage('Invalid redirect URI');
+            return;
+          }
+
           const params = new URLSearchParams({
             code: code,
             state: state
           });
 
-          const callbackUrl = `${decodeURIComponent(redirectUri)}?${params.toString()}`;
+          const callbackUrl = `${decodedUri}?${params.toString()}`;
 
           setStatus('success');
           setMessage('Redirecting back to CLI...');
@@ -118,13 +133,13 @@ function CLICallbackContent() {
               <div className="space-y-2 mt-4">
                 <button
                   onClick={() => window.location.href = '/auth/signin'}
-                  className="w-full px-6 py-2 bg-orange-500 hover:bg-orange-600 rounded-lg transition-colors"
+                  className="w-full px-6 py-2 bg-gradient-to-r from-orange-500 to-purple-600 hover:from-orange-600 hover:to-purple-700 rounded-lg transition-colors"
                 >
                   Try Again
                 </button>
                 <button
                   onClick={() => window.close()}
-                  className="w-full px-6 py-2 bg-[#222] hover:bg-[#333] rounded-lg transition-colors"
+                  className="w-full px-6 py-2 bg-zinc-800 hover:bg-zinc-700 rounded-lg transition-colors"
                 >
                   Close Window
                 </button>

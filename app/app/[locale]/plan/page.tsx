@@ -122,7 +122,7 @@ export default function PlanPage() {
                   href={url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="flex items-center space-x-3 p-4 bg-[#111] border border-white/10 rounded-lg hover:border-orange-500/50 transition-all group"
+                  className="flex items-center space-x-3 p-4 bg-zinc-900 border border-white/10 rounded-lg hover:border-orange-500/50 transition-all group"
                 >
                   <div className="w-10 h-10 rounded-lg bg-white/5 flex items-center justify-center shrink-0">
                     <Icon className="w-5 h-5 text-gray-400 group-hover:text-orange-400 transition-colors" />
@@ -151,7 +151,7 @@ export default function PlanPage() {
                 className={`relative p-6 rounded-xl border ${
                   plan.highlight
                     ? 'border-orange-500/50 bg-orange-500/5'
-                    : 'border-white/10 bg-[#111]'
+                    : 'border-white/10 bg-zinc-900'
                 }`}
               >
                 {plan.highlight && (
@@ -178,7 +178,7 @@ export default function PlanPage() {
                 {plan.name === 'Free' ? (
                   <Link
                     href={plan.ctaLink}
-                    className="block text-center px-4 py-2.5 rounded-lg text-sm font-medium transition-colors bg-[#222] hover:bg-[#333]"
+                    className="block text-center px-4 py-2.5 rounded-lg text-sm font-medium transition-colors bg-zinc-800 hover:bg-zinc-700"
                   >
                     {plan.cta}
                   </Link>
@@ -188,7 +188,7 @@ export default function PlanPage() {
                     className={`w-full text-center px-4 py-2.5 rounded-lg text-sm font-medium transition-colors ${
                       plan.highlight
                         ? 'bg-gradient-to-r from-orange-500 to-purple-600 hover:opacity-90'
-                        : 'bg-[#222] hover:bg-[#333]'
+                        : 'bg-zinc-800 hover:bg-zinc-700'
                     }`}
                   >
                     {plan.cta}

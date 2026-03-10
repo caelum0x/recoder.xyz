@@ -261,7 +261,7 @@ function renderMarkdown(raw: string) {
       elements.push(
         <pre
           key={elements.length}
-          className="my-6 rounded-lg bg-[#0d0d0d] border border-white/10 p-4 overflow-x-auto"
+          className="my-6 rounded-lg bg-zinc-950 border border-white/10 p-4 overflow-x-auto"
         >
           <code className="text-sm text-gray-300 font-mono leading-relaxed">
             {codeLines.join('\n')}

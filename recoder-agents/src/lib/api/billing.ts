@@ -205,6 +205,7 @@ export interface CreatePortalSessionRequest {
 
 export interface CreatePortalSessionResponse {
   portal_url: string;
+  url?: string;
 }
 
 export interface PurchaseCreditsRequest {
@@ -466,7 +467,7 @@ export const billingApi = {
         status: data.status || 'checkout_created',
         url: data.checkout_url
       } as CreateCheckoutSessionResponse;
-    } else if ((data as any).success && data.subscription_id) {
+    } else if (data.subscription_id) {
       return {
         ...data,
         status: 'updated',
@@ -594,12 +595,10 @@ export const billingApi = {
         { showErrors: false }
       );
       if (response.error) {
-        console.warn('[Billing] Could not fetch checkout session:', response.error);
         return null;
       }
       return parseCheckoutSessionDetails(response.data) as CheckoutSessionDetails;
-    } catch (error) {
-      console.warn('[Billing] Error fetching checkout session:', error);
+    } catch {
       return null;
     }
   }

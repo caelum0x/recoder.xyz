@@ -64,7 +64,6 @@ export function ExpandMessageToolView({
 
   // Defensive check - handle cases where toolCall might be undefined
   if (!toolCall) {
-    console.warn('ExpandMessageToolView: toolCall is undefined. Tool views should use structured props.');
     return null;
   }
 

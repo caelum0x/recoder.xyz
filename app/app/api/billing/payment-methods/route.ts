@@ -113,16 +113,16 @@ export async function POST(req: NextRequest) {
 
     const paymentMethod = await prisma.payment_methods.create({
       data: {
-        id: `pm_${Math.random().toString(36).substring(7)}`,
+        id: `pm_${crypto.randomUUID().replace(/-/g, '').slice(0, 12)}`,
         type: 'card',
-        providerId: `card_${Math.random().toString(36).substring(7)}`,
+        providerId: `card_${crypto.randomUUID().replace(/-/g, '').slice(0, 12)}`,
         brand,
         last4,
         expMonth: expiryMonth,
         expYear: expiryYear,
         holderName: cardName,
         isDefault: setAsDefault || false,
-        providerToken: `tok_${Math.random().toString(36).substring(7)}`,
+        providerToken: `tok_${crypto.randomUUID().replace(/-/g, '').slice(0, 16)}`,
         updatedAt: new Date(),
         users: {
           connect: { id: user.id }

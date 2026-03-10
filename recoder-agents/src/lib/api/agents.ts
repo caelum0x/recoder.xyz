@@ -1,6 +1,6 @@
 import { getSessionAccessToken } from '@/lib/auth/session-token';
 import { buildTokenizedSSEUrl } from '@/lib/realtime/sse';
-import { handleApiError } from '../error-handler';
+import { handleApiError, type ApiError } from '../error-handler';
 import { backendApi } from '../api-client';
 import { 
   BillingError, 
@@ -270,8 +270,8 @@ export const stopAgent = async (agentRunId: string): Promise<void> => {
     { showErrors: true, cache: 'no-store' }
   );
 
-  if (typeof window !== 'undefined' && (window as any).posthog) {
-    (window as any).posthog.capture('task_abandoned', { agentRunId });
+  if (typeof window !== 'undefined' && window.posthog) {
+    window.posthog.capture('task_abandoned', { agentRunId });
   }
 
   if (response.error) {
@@ -369,8 +369,9 @@ export const getAgentRuns = async (threadId: string): Promise<AgentRun[]> => {
     );
 
     if (response.error) {
-      const error = new Error(`Error getting agent runs: HTTP ${response.error.status}: ${response.error.message}`);
-      (error as any).status = response.error.status;
+      const error: ApiError = Object.assign(new Error(`Error getting agent runs: HTTP ${response.error.status}: ${response.error.message}`), {
+        status: response.error.status,
+      });
       throw error;
     }
 
@@ -388,13 +389,11 @@ export const getActiveAgentRuns = async (): Promise<ActiveAgentRun[]> => {
     );
 
     if (response.error) {
-      console.warn(`Failed to fetch active agent runs: ${response.error.status} ${response.error.message}`);
       return [];
     }
 
     return parseActiveAgentRunsResponse(response.data).active_runs as ActiveAgentRun[];
-  } catch (error) {
-    console.warn('Error fetching active agent runs:', error);
+  } catch {
     return [];
   }
 };
@@ -478,9 +477,11 @@ export const optimisticAgentStart = async (options: {
         
         // If it's not a typed error yet, parse it
         // The error from api-client has: detail, details, code properties
-        const errorDetail = (response.error as any).detail || response.error.details?.detail || { 
+        const detail = response.error.detail;
+        const detailObj = typeof detail === 'object' ? detail : undefined;
+        const errorDetail = detailObj || response.error.details?.detail || {
           message: response.error.message || 'Payment required',
-          error_code: response.error.code || (response.error as any).detail?.error_code
+          error_code: response.error.code || (detailObj as Record<string, unknown> | undefined)?.error_code
         };
         
         const parsedError = parseTierRestrictionError({

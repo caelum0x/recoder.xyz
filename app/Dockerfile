@@ -37,7 +37,15 @@ COPY shared/ ./shared/
 
 # Build the Next.js app (provide dummy DATABASE_URL for page data collection phase)
 WORKDIR /app/app
-RUN SKIP_ENV_VALIDATION=true DATABASE_URL="postgresql://build:build@localhost:5432/build" NODE_OPTIONS=--max_old_space_size=4096 pnpm run build
+ARG BUILD_NODE_MAX_OLD_SPACE=3072
+
+# NEXT_PUBLIC_* vars must be declared as ARGs so Next.js can inline them at build time
+ARG NEXT_PUBLIC_APP_URL=https://recoder.xyz
+ARG NEXT_PUBLIC_RECODER_WEB_URL=https://web.recoder.xyz
+ENV NEXT_PUBLIC_APP_URL=${NEXT_PUBLIC_APP_URL}
+ENV NEXT_PUBLIC_RECODER_WEB_URL=${NEXT_PUBLIC_RECODER_WEB_URL}
+
+RUN SKIP_ENV_VALIDATION=true DATABASE_URL="postgresql://build:build@localhost:5432/build" NODE_OPTIONS=--max_old_space_size=${BUILD_NODE_MAX_OLD_SPACE} pnpm run build
 
 # Production stage
 FROM node:20-slim AS runner

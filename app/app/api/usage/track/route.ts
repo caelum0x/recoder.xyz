@@ -49,7 +49,7 @@ export async function POST(request: NextRequest) {
       quota: updatedQuota,
       platform: detectedPlatform, // Return detected platform for confirmation
     });
-  } catch (error: any) {
+  } catch (error) {
     console.error('Track usage error:', error);
     return NextResponse.json({ error: 'Failed to track usage' }, { status: 500 });
   }

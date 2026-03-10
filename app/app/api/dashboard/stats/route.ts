@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getUserFromToken } from '@/lib/auth-helper';
+import { getUserFromToken } from '@/lib/auth-helpers';
 import { prisma } from '@/lib/prisma';
+import { logger } from '@/lib/logger';
 
-const PRODUCTION_ENGINE_URL = process.env.PRODUCTION_ENGINE_URL || process.env.BACKEND_URL || 'http://localhost:3001';
+const PRODUCTION_ENGINE_URL = process.env.PRODUCTION_ENGINE_URL || process.env.BACKEND_URL || (process.env.NODE_ENV === 'production' ? undefined : 'http://localhost:3100');
 
 export async function GET(request: NextRequest) {
   try {
@@ -86,7 +87,7 @@ export async function GET(request: NextRequest) {
     });
 
   } catch (error) {
-    console.error('Dashboard stats error:', error);
+    logger.error('Dashboard stats error:', { error: error instanceof Error ? error.message : String(error) });
 
     return NextResponse.json({
       success: false,

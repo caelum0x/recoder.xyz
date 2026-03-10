@@ -29,7 +29,6 @@ export function ExposePortToolView({
 }: ToolViewProps) {
   // Defensive check - ensure toolCall is defined
   if (!toolCall) {
-    console.warn('ExposePortToolView: toolCall is undefined. Tool views should use structured props.');
     return (
       <Card className="gap-0 flex border-0 shadow-none p-0 py-0 rounded-none flex-col h-full overflow-hidden bg-card">
         <CardHeader className="h-14 bg-zinc-50/80 dark:bg-zinc-900/80 backdrop-blur-sm border-b p-2 px-4">
@@ -62,18 +61,7 @@ export function ExposePortToolView({
 
   // Debug logging (can be removed in production)
   if (process.env.NODE_ENV === 'development') {
-    console.log('ExposePortToolView data:', {
-      port,
-      url,
-      message,
-      toolCall: toolCall?.function_name,
-      arguments: toolCall?.arguments,
-      toolResult: toolResult ? { 
-        success: toolResult.success, 
-        output: typeof toolResult.output === 'string' ? toolResult.output.substring(0, 100) : toolResult.output 
-      } : null,
-      actualIsSuccess
-    });
+    
   }
 
   const toolTitle = getToolTitle(toolCall.function_name.replace(/_/g, '-'));

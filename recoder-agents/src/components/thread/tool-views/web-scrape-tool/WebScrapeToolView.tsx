@@ -45,7 +45,6 @@ export function WebScrapeToolView({
   const isUrlAnimating = isStreaming && !toolResult && !!toolCall;
 
   if (!toolCall) {
-    console.warn('WebScrapeToolView: toolCall is undefined.');
     return null;
   }
 

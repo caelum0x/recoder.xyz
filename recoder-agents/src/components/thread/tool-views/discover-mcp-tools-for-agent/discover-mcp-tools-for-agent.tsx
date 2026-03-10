@@ -56,7 +56,6 @@ export function DiscoverMcpToolsForAgentToolView({
 
   // Defensive check - ensure toolCall is defined
   if (!toolCall || !extractedData) {
-    console.warn('DiscoverMcpToolsForAgentToolView: toolCall is undefined. Tool views should use structured props.');
     return null;
   }
 

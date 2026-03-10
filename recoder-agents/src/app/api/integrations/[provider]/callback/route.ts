@@ -7,8 +7,17 @@ export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ provider: string }> }
 ) {
+  let provider: string;
   try {
-    const { provider } = await params;
+    ({ provider } = await params);
+  } catch (error) {
+    console.error('Failed to resolve route params:', error);
+    return NextResponse.redirect(
+      new URL('/agents?unknown_error=invalid_route', request.url)
+    );
+  }
+
+  try {
     const searchParams = request.nextUrl.searchParams;
     const code = searchParams.get('code');
     const state = searchParams.get('state');
@@ -69,7 +78,6 @@ export async function GET(
     
   } catch (error) {
     console.error('OAuth callback error:', error);
-    const { provider } = await params;
     return NextResponse.redirect(
       new URL(`/agents?${provider}_error=callback_failed`, request.url)
     );

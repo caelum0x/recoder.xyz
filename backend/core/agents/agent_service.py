@@ -111,8 +111,9 @@ class AgentService:
                     )
                 )
 
-            # Apply sorting for templates
-            sort_direction = "DESC" if filters.sort_order == "desc" else "ASC"
+            # SECURITY: Whitelist sort direction to prevent SQL injection.
+            # Only 'ASC' and 'DESC' are valid SQL ORDER BY directions.
+            sort_direction = filters.sort_order.upper() if filters.sort_order.upper() in ("ASC", "DESC") else "DESC"
             if filters.sort_by == "name":
                 order_sql = f"name {sort_direction}"
             elif filters.sort_by == "download_count":
@@ -172,8 +173,13 @@ class AgentService:
         """Build ORDER BY clause for agents queries."""
         if filters.sort_by == "tools_count":
             return ""  # Handled in post-processing
-        sort_column = filters.sort_by if filters.sort_by in ["name", "created_at", "updated_at"] else "created_at"
-        sort_direction = "DESC" if filters.sort_order == "desc" else "ASC"
+        # SECURITY: Whitelist sort column to prevent SQL injection.
+        # Only known column names are allowed; anything else defaults to 'created_at'.
+        valid_sort_columns = {"name", "created_at", "updated_at"}
+        sort_column = filters.sort_by if filters.sort_by in valid_sort_columns else "created_at"
+        # SECURITY: Whitelist sort direction to prevent SQL injection.
+        # Only 'ASC' and 'DESC' are valid SQL ORDER BY directions.
+        sort_direction = filters.sort_order.upper() if filters.sort_order.upper() in ("ASC", "DESC") else "DESC"
         return f"{sort_column} {sort_direction}"
 
     async def _get_agents_database_paginated(

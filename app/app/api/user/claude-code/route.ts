@@ -17,7 +17,7 @@ function isValidClaudeCodeToken(token: string): boolean {
 }
 
 function userModel() {
-  return (prisma as any).user;
+  return prisma.user;
 }
 
 export async function POST(request: NextRequest) {
@@ -61,14 +61,11 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    console.log(`[Claude Code] Token saved for user ${effectiveUserId}`);
-
     return NextResponse.json({
       success: true,
       message: 'Claude Code token saved successfully. Valid for 1 year.'
     });
-  } catch (error: any) {
-    console.error('Save Claude Code token error:', error);
+  } catch {
     return NextResponse.json({ error: 'Failed to save Claude Code token' }, { status: 500 });
   }
 }
@@ -94,7 +91,7 @@ export async function GET(request: NextRequest) {
     if (!dbUser) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
-    const claudeToken = (dbUser as any).claudeCodeToken as string | null | undefined;
+    const claudeToken = dbUser.claudeCodeToken as string | null | undefined;
 
     let tokenMasked: string | null = null;
     if (claudeToken) {
@@ -111,8 +108,7 @@ export async function GET(request: NextRequest) {
       hasToken: !!claudeToken,
       tokenMasked,
     });
-  } catch (error: any) {
-    console.error('Get Claude Code token status error:', error);
+  } catch {
     return NextResponse.json({ error: 'Failed to get token status' }, { status: 500 });
   }
 }
@@ -136,14 +132,11 @@ export async function DELETE(request: NextRequest) {
       },
     });
 
-    console.log(`[Claude Code] Token removed for user ${effectiveUserId}`);
-
     return NextResponse.json({
       success: true,
       message: 'Claude Code token removed successfully'
     });
-  } catch (error: any) {
-    console.error('Delete Claude Code token error:', error);
+  } catch {
     return NextResponse.json({ error: 'Failed to remove Claude Code token' }, { status: 500 });
   }
 }
@@ -178,7 +171,7 @@ export async function PUT(request: NextRequest) {
         claudeCodeToken: true,
       },
     });
-    const claudeToken = (user as any)?.claudeCodeToken as string | null | undefined;
+    const claudeToken = user?.claudeCodeToken as string | null | undefined;
 
     if (!user || !claudeToken) {
       return NextResponse.json({
@@ -194,8 +187,7 @@ export async function PUT(request: NextRequest) {
       hasToken: true,
       token: decrypted,
     });
-  } catch (error: any) {
-    console.error('Get decrypted Claude Code token error:', error);
+  } catch {
     return NextResponse.json({ error: 'Failed to get token' }, { status: 500 });
   }
 }

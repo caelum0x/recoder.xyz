@@ -122,7 +122,7 @@ export async function POST(request: NextRequest) {
       });
     }
 
-  } catch (error: any) {
+  } catch (error) {
     logger.error('Device authorization error:', { error: String(error), route: 'auth/cli-internal/authorize-device' });
     return NextResponse.json({
       success: false,
@@ -209,7 +209,7 @@ export async function GET(request: NextRequest) {
       }, { status: 400 });
     }
 
-  } catch (error: any) {
+  } catch (error) {
     logger.error('Device status check error:', { error: String(error), route: 'auth/cli-internal/authorize-device' });
     return NextResponse.json({
       success: false,

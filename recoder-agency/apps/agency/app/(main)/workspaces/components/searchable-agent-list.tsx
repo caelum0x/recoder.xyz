@@ -78,10 +78,10 @@ export function SearchableAgentList({
 			{sortedAgents.length === 0 && searchQuery ? (
 				<div className="flex justify-center items-center h-full mt-12">
 					<div className="grid gap-[8px] justify-center text-center">
-						<h3 className="text-[18px] font-geist font-bold text-text/60">
+						<h3 className="text-[18px] font-sans font-bold text-text/60">
 							No workspaces found.
 						</h3>
-						<p className="text-[12px] font-geist text-text/60">
+						<p className="text-[12px] font-sans text-text/60">
 							Try searching with a different keyword.
 						</p>
 					</div>
@@ -96,19 +96,19 @@ export function SearchableAgentList({
 				<Card className="!flex !flex-col gap-0 py-2">
 					{/* Table Header */}
 					<div className="grid grid-cols-[2fr_1fr_1.5fr_1fr_auto] items-center gap-4 px-2 py-2 border-b-[0.5px] border-border-muted">
-						<p className="text-[12px] font-geist font-semibold text-text/60 uppercase tracking-wide">
+						<p className="text-[12px] font-sans font-semibold text-text/60 uppercase tracking-wide">
 							Name
 						</p>
-						<p className="text-[12px] font-geist font-semibold text-text/60 uppercase tracking-wide">
+						<p className="text-[12px] font-sans font-semibold text-text/60 uppercase tracking-wide">
 							Integration
 						</p>
-						<p className="text-[12px] font-geist font-semibold text-text/60 uppercase tracking-wide">
+						<p className="text-[12px] font-sans font-semibold text-text/60 uppercase tracking-wide">
 							Connected
 						</p>
-						<p className="text-[12px] font-geist font-semibold text-text/60 uppercase tracking-wide">
+						<p className="text-[12px] font-sans font-semibold text-text/60 uppercase tracking-wide">
 							Builder
 						</p>
-						<p className="text-[12px] font-geist font-semibold text-text/60 uppercase tracking-wide">
+						<p className="text-[12px] font-sans font-semibold text-text/60 uppercase tracking-wide">
 							Runs
 						</p>
 					</div>

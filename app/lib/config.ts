@@ -22,23 +22,23 @@ export const config = {
 
     // Docker backend API gateway
     api: process.env.NEXT_PUBLIC_API_URL ||
-         (process.env.NODE_ENV === 'production' ? 'https://api.recoder.xyz' : 'http://localhost:3100'),
+         (process.env.NODE_ENV === 'production' ? 'https://docker.recoder.xyz' : 'http://localhost:3100'),
 
-    // Recoder frontend IDE
+    // Recoder Agents (frontend IDE)
     frontend: process.env.RECODER_FRONTEND_URL ||
-         (process.env.NODE_ENV === 'production' ? 'https://frontend.recoder.xyz' : 'http://localhost:3001'),
+         (process.env.NODE_ENV === 'production' ? 'https://agents.recoder.xyz' : 'http://localhost:3001'),
 
     // Python backend
     backend: process.env.RECODER_BACKEND_URL ||
-         (process.env.NODE_ENV === 'production' ? 'https://backend.recoder.xyz' : 'http://localhost:8000'),
+         (process.env.NODE_ENV === 'production' ? 'https://api.recoder.xyz' : 'http://localhost:8000'),
 
     // Project management
     pm: process.env.RECODER_PM_URL ||
          (process.env.NODE_ENV === 'production' ? 'https://pm.recoder.xyz' : 'http://localhost:3004'),
 
-    // Visual workflow designer
+    // Visual workflow designer (redirects to agency)
     studio: process.env.RECODER_STUDIO_URL ||
-         (process.env.NODE_ENV === 'production' ? 'https://studio.recoder.xyz' : 'http://localhost:3005'),
+         (process.env.NODE_ENV === 'production' ? 'https://agency.recoder.xyz' : 'http://localhost:3007'),
 
     // AI agent workflows
     agency: process.env.RECODER_AGENCY_URL ||

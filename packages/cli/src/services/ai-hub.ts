@@ -778,6 +778,181 @@ class GeminiProvider implements AIProvider {
   }
 }
 
+// DeepSeek Provider (OpenAI-compatible)
+class DeepSeekProvider implements AIProvider {
+  name = 'deepseek';
+  specialties = ['reasoning', 'code-generation', 'math', 'cost-effective'];
+  private client: AxiosInstance;
+  private availableModels = ['deepseek-chat', 'deepseek-reasoner'];
+
+  constructor(apiKey?: string) {
+    this.client = axios.create({
+      baseURL: 'https://api.deepseek.com',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey || process.env.DEEPSEEK_API_KEY || ''}`
+      }
+    });
+  }
+
+  async chat(messages: any[], options: any = {}): Promise<AIResponse> {
+    try {
+      const response = await this.client.post('/chat/completions', {
+        model: options.model || this.getOptimalModel(options.taskType || 'coding'),
+        messages,
+        max_tokens: options.maxTokens || 4000,
+        temperature: options.temperature || 0.7
+      });
+
+      const choice = response.data.choices[0];
+      return {
+        content: choice.message.content,
+        model: response.data.model,
+        provider: 'deepseek',
+        tokens: {
+          input: response.data.usage.prompt_tokens,
+          output: response.data.usage.completion_tokens
+        }
+      };
+    } catch (error: any) {
+      Logger.error(`DeepSeek API error: ${error.message}`, '');
+      throw new Error(`DeepSeek API failed: ${error.response?.data?.error?.message || error.message}`);
+    }
+  }
+
+  isAvailable(): boolean {
+    return !!(process.env.DEEPSEEK_API_KEY);
+  }
+
+  private getOptimalModel(taskType: string = 'coding'): string {
+    // Use reasoner for complex reasoning/math tasks
+    if (taskType === 'reasoning' || taskType === 'math' || taskType === 'complex') {
+      return 'deepseek-reasoner';
+    }
+    // Default to V3 chat model for coding and general tasks
+    return 'deepseek-chat';
+  }
+}
+
+// Qwen Provider (OpenAI-compatible via DashScope)
+class QwenProvider implements AIProvider {
+  name = 'qwen';
+  specialties = ['code-generation', 'multilingual', 'fast-generation', 'cost-effective'];
+  private client: AxiosInstance;
+  private availableModels = ['qwen-plus', 'qwen-turbo', 'qwen-max'];
+
+  constructor(apiKey?: string) {
+    this.client = axios.create({
+      baseURL: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey || process.env.QWEN_API_KEY || process.env.DASHSCOPE_API_KEY || ''}`
+      }
+    });
+  }
+
+  async chat(messages: any[], options: any = {}): Promise<AIResponse> {
+    try {
+      const response = await this.client.post('/chat/completions', {
+        model: options.model || this.getOptimalModel(options.taskType || 'coding'),
+        messages,
+        max_tokens: options.maxTokens || 4000,
+        temperature: options.temperature || 0.7
+      });
+
+      const choice = response.data.choices[0];
+      return {
+        content: choice.message.content,
+        model: response.data.model,
+        provider: 'qwen',
+        tokens: {
+          input: response.data.usage.prompt_tokens,
+          output: response.data.usage.completion_tokens
+        }
+      };
+    } catch (error: any) {
+      Logger.error(`Qwen API error: ${error.message}`, '');
+      throw new Error(`Qwen API failed: ${error.response?.data?.error?.message || error.message}`);
+    }
+  }
+
+  isAvailable(): boolean {
+    return !!(process.env.QWEN_API_KEY || process.env.DASHSCOPE_API_KEY);
+  }
+
+  private getOptimalModel(taskType: string = 'coding'): string {
+    // Use max model for complex tasks
+    if (taskType === 'complex' || taskType === 'reasoning') {
+      return 'qwen-max';
+    }
+    // Use turbo for fast/simple tasks
+    if (taskType === 'fast' || taskType === 'simple') {
+      return 'qwen-turbo';
+    }
+    return 'qwen-plus';
+  }
+}
+
+// Kimi Provider (OpenAI-compatible via Moonshot)
+class KimiProvider implements AIProvider {
+  name = 'kimi';
+  specialties = ['long-context', 'reasoning', 'code-generation', 'analysis'];
+  private client: AxiosInstance;
+  private availableModels = ['moonshot-v1-8k', 'moonshot-v1-32k', 'moonshot-v1-128k'];
+
+  constructor(apiKey?: string) {
+    this.client = axios.create({
+      baseURL: 'https://api.moonshot.cn/v1',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey || process.env.KIMI_API_KEY || process.env.MOONSHOT_API_KEY || ''}`
+      }
+    });
+  }
+
+  async chat(messages: any[], options: any = {}): Promise<AIResponse> {
+    try {
+      const response = await this.client.post('/chat/completions', {
+        model: options.model || this.getOptimalModel(options.taskType || 'coding'),
+        messages,
+        max_tokens: options.maxTokens || 4000,
+        temperature: options.temperature || 0.7
+      });
+
+      const choice = response.data.choices[0];
+      return {
+        content: choice.message.content,
+        model: response.data.model,
+        provider: 'kimi',
+        tokens: {
+          input: response.data.usage.prompt_tokens,
+          output: response.data.usage.completion_tokens
+        }
+      };
+    } catch (error: any) {
+      Logger.error(`Kimi API error: ${error.message}`, '');
+      throw new Error(`Kimi API failed: ${error.response?.data?.error?.message || error.message}`);
+    }
+  }
+
+  isAvailable(): boolean {
+    return !!(process.env.KIMI_API_KEY || process.env.MOONSHOT_API_KEY);
+  }
+
+  private getOptimalModel(taskType: string = 'coding'): string {
+    // Use 128k model for long-context/analysis tasks
+    if (taskType === 'analysis' || taskType === 'long-context') {
+      return 'moonshot-v1-128k';
+    }
+    // Use 32k for complex tasks
+    if (taskType === 'complex' || taskType === 'reasoning') {
+      return 'moonshot-v1-32k';
+    }
+    // Default to 8k for fast/coding tasks
+    return 'moonshot-v1-8k';
+  }
+}
+
 export { CustomProviderConfig };
 
 export class AIHub {
@@ -830,9 +1005,9 @@ export class AIHub {
       new OllamaProvider(),  // Prioritize local AI first
       new AnthropicProvider(), // Claude Sonnet 4 - Top performer
       new GeminiProvider(), // Gemini 2.5 Flash - High performance, free tier
-      // new DeepSeekProvider(), // DeepSeek V3 - Free, high coding score (TODO: implement)
-      // new QwenProvider(), // Qwen3 Coder - Free, perfect coding score (TODO: implement)
-      // new KimiProvider(), // Kimi K2 - High performance (TODO: implement)
+      new DeepSeekProvider(), // DeepSeek V3 - Free, high coding score
+      new QwenProvider(), // Qwen3 Coder - Free, perfect coding score
+      new KimiProvider(), // Kimi K2 - High performance
       new GroqProvider(), // Fast generation
       new MistralProvider(),
       new PerplexityProvider(),

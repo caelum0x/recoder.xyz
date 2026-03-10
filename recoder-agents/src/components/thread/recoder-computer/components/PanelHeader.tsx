@@ -35,7 +35,7 @@ function useBatteryStatus() {
           battery.addEventListener('chargingchange', () => updateBatteryInfo(battery));
         }
       } catch (e) {
-        console.log('Battery API not available');
+        
       }
     };
 

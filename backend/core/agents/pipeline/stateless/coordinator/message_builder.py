@@ -125,7 +125,8 @@ class MessageBuilder:
                 args_str = tc.get("function", {}).get("arguments", "{}")
                 try:
                     args_parsed = json.loads(args_str) if isinstance(args_str, str) else args_str
-                except:
+                except Exception:
+                    logger.warning(f"Failed to parse tool call arguments as JSON for function '{func_name}'")
                     args_parsed = args_str
                 
                 display_name, display_args = _transform_mcp_tool_call(func_name, args_parsed)
@@ -305,7 +306,8 @@ class MessageBuilder:
         if isinstance(raw_output, str):
             try:
                 output_for_metadata = json.loads(raw_output)
-            except:
+            except Exception:
+                logger.warning(f"Failed to parse tool output as JSON for tool call '{tc_id}', using raw string")
                 output_for_metadata = raw_output
         
         metadata = {

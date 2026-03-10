@@ -21,11 +21,9 @@ export const ContextUsageIndicator = ({
 }: ContextUsageIndicatorProps) => {
   const contextUsage = useContextUsageStore((state) => state.getUsage(threadId))
   const { allModels } = useModelSelection()
+  const [isCompressing, setIsCompressing] = useState(false)
 
-  if (!contextUsage || !contextUsage.current_tokens) return null
-
-  const { current_tokens } = contextUsage
-  
+  const current_tokens = contextUsage?.current_tokens ?? 0
 
   const modelData = modelName ? allModels.find((m) => m.id === modelName) : null
   const context_window = modelData?.contextWindow || 200000
@@ -41,7 +39,6 @@ export const ContextUsageIndicator = ({
     return "text-red-500"
   }
 
-  const [isCompressing, setIsCompressing] = useState(false)
   const showCompressButton = percentage >= 80
 
   const handleCompress = useCallback(async (e: React.MouseEvent) => {
@@ -70,6 +67,8 @@ export const ContextUsageIndicator = ({
       setIsCompressing(false)
     }
   }, [threadId, isCompressing, current_tokens])
+
+  if (!contextUsage || !current_tokens) return null
 
   const colorClass = getColor(percentage)
   const radius = 8

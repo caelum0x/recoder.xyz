@@ -209,8 +209,8 @@ class SandboxCanvasTool(SandboxToolsBase):
                     logger.debug(f"[Canvas] File verified: {full_path}")
                 else:
                     logger.warning(f"[Canvas] File may not have been saved: {full_path}")
-            except:
-                pass
+            except Exception:
+                logger.warning(f"[Canvas] Could not verify file save for: {full_path}", exc_info=True)
         except Exception as e:
             logger.error(f"[Canvas] Failed to save canvas {full_path}: {e}")
             raise Exception(f"Failed to save canvas: {str(e)}")
@@ -263,7 +263,8 @@ class SandboxCanvasTool(SandboxToolsBase):
             try:
                 await self.sandbox.fs.download_file(full_path)
                 return self.fail_response(f"Canvas '{name}' already exists at {canvas_path}")
-            except:
+            except Exception:
+                logger.debug(f"[Canvas] Canvas file does not exist yet at {full_path}, will create")
                 pass  # File doesn't exist, continue
 
             # Create canvas data (infinite canvas - no dimensions)
@@ -458,7 +459,8 @@ class SandboxCanvasTool(SandboxToolsBase):
                 image_full_path = f"{self.workspace_path}/{image_path}"
                 try:
                     image_data = await self.sandbox.fs.download_file(image_full_path)
-                except:
+                except Exception:
+                    logger.warning(f"[Canvas] Failed to download image at {image_path}", exc_info=True)
                     return self.fail_response(f"Image not found at {image_path}")
                 
                 # Get image bytes to read dimensions (not for embedding)
@@ -1185,7 +1187,8 @@ class SandboxCanvasTool(SandboxToolsBase):
                 img = Image.open(io.BytesIO(result_bytes))
                 result_width, result_height = img.size
                 img.close()
-            except:
+            except Exception:
+                logger.warning("[Canvas] Failed to read result image dimensions, using source element defaults", exc_info=True)
                 result_width = source_element.get("width", 400)
                 result_height = source_element.get("height", 400)
             

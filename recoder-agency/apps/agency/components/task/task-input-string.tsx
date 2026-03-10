@@ -109,7 +109,7 @@ export function TaskInputString({ value }: { value: string }) {
 			{/* #090e17 is an adhoc color to mimic the background color, should be the same color if the background is not transparent */}
 			{shouldShowGradient ? (
 				<div
-					className="pointer-events-none absolute bottom-0 left-0 right-0 h-[27px] bg-gradient-to-t from-[#090e17] to-transparent"
+					className="pointer-events-none absolute bottom-0 left-0 right-0 h-[27px] bg-gradient-to-t from-zinc-950 to-transparent"
 					aria-hidden="true"
 				/>
 			) : null}

@@ -11,6 +11,7 @@ import {
   deleteVerificationsByIdentifiers,
   findValidVerificationByIdentifierPrefixAndHashedValue,
 } from '@/lib/auth/verification-store';
+import { logger } from '@/lib/logger';
 
 /**
  * GET /api/user/account/verify-email-change?token=...
@@ -61,7 +62,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(new URL('/settings/account?emailChanged=true', baseUrl));
 
   } catch (error) {
-    console.error('[verify-email-change] GET error:', error);
+    logger.error('[verify-email-change] GET error:', { error: error instanceof Error ? error.message : String(error) });
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://recoder.xyz';
     return NextResponse.redirect(new URL('/settings/account?error=verification_failed', baseUrl));
   }
@@ -139,7 +140,7 @@ export async function POST(request: NextRequest) {
     });
 
   } catch (error) {
-    console.error('[verify-email-change] POST error:', error);
+    logger.error('[verify-email-change] POST error:', { error: error instanceof Error ? error.message : String(error) });
     return NextResponse.json(
       { error: 'Failed to verify email change' },
       { status: 500 }
@@ -157,13 +158,21 @@ async function executeEmailChange(userId: string, newEmail: string): Promise<{ s
     return { success: false, error: 'email_taken' };
   }
 
-  try {
-    const existingWebUser = await prisma.user.findUnique({ where: { email: newEmail } });
+  const prismaAny = prisma as unknown as {
+    user?: {
+      findUnique: (args: { where: { email: string } }) => Promise<unknown>;
+      update: (args: {
+        where: { email: string };
+        data: { email: string; emailVerified: boolean; updatedAt: Date };
+      }) => Promise<unknown>;
+    };
+  };
+
+  if (prismaAny.user?.findUnique) {
+    const existingWebUser = await prismaAny.user.findUnique({ where: { email: newEmail } });
     if (existingWebUser) {
       return { success: false, error: 'email_taken' };
     }
-  } catch {
-    // user table may not exist
   }
 
   // Get current user for old email
@@ -185,8 +194,8 @@ async function executeEmailChange(userId: string, newEmail: string): Promise<{ s
   });
 
   // Update Better Auth user table if the user exists there
-  try {
-    await prisma.user.update({
+  if (prismaAny.user?.update) {
+    await prismaAny.user.update({
       where: { email: oldEmail },
       data: {
         email: newEmail,
@@ -194,8 +203,6 @@ async function executeEmailChange(userId: string, newEmail: string): Promise<{ s
         updatedAt: new Date(),
       }
     });
-  } catch {
-    // User may not exist in Better Auth table
   }
 
   // Update accounts table if email is used there
@@ -219,8 +226,6 @@ async function executeEmailChange(userId: string, newEmail: string): Promise<{ s
       metadata: { oldEmail, newEmail },
     }
   });
-
-  console.log(`[Account] Email changed: ${oldEmail} -> ${newEmail}`);
 
   return { success: true };
 }

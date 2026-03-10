@@ -155,7 +155,7 @@ const ConnectedAppCard = ({
     >
       <div className="flex items-start gap-3 mb-3">
         {toolkit.logo ? (
-          <img src={toolkit.logo} alt={toolkit.name} className="w-10 h-10 rounded-xl object-cover p-2 bg-muted border" />
+          <img src={toolkit.logo} alt={toolkit.name} loading="lazy" className="w-10 h-10 rounded-xl object-cover p-2 bg-muted border" />
         ) : (
           <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
             <span className="text-primary text-sm font-medium">{toolkit.name.charAt(0)}</span>
@@ -253,7 +253,7 @@ const AppCard = ({ app, profiles, onConnect, onConfigure, isConnectedToAgent, cu
 
       <div className="w-[40px] h-[40px] rounded-xl border border-border bg-background flex items-center justify-center mb-4 relative">
         {app.logo ? (
-          <img src={app.logo} alt={app.name} className="w-5 h-5 object-contain" />
+          <img src={app.logo} alt={app.name} loading="lazy" className="w-5 h-5 object-contain" />
         ) : (
           <span className="text-foreground text-sm font-medium">{app.name.charAt(0)}</span>
         )}
@@ -557,7 +557,7 @@ export const ComposioRegistry: React.FC<ComposioRegistryProps> = ({
                     <AgentSelector
                       selectedAgentId={currentAgentId}
                       onAgentSelect={handleAgentSelect}
-                      isRecoderAgent={agent?.metadata?.is_suna_default}
+                      isRecoderAgent={agent?.metadata?.is_recoder_default || agent?.metadata?.is_suna_default}
                     />
                   )} */}
                 </div>

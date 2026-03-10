@@ -239,7 +239,7 @@ export function RepositoryRegistrationDialog({
 							<span className="sr-only">Close</span>
 						</DialogClose>
 					</div>
-					<DialogDescription className="font-geist mt-2 text-[14px] text-text-muted">
+					<DialogDescription className="font-sans mt-2 text-[14px] text-text-muted">
 						Add a GitHub repository to your Vector Store to use it in GitHub
 						Vector Store Nodes.
 					</DialogDescription>
@@ -265,7 +265,7 @@ export function RepositoryRegistrationDialog({
 									value={ownerId}
 									onValueChange={handleOwnerChange}
 									disabled={isPending}
-									triggerClassName="bg-surface text-text text-[14px] font-geist"
+									triggerClassName="bg-surface text-text text-[14px] font-sans"
 									id="owner"
 								/>
 							</div>
@@ -291,7 +291,7 @@ export function RepositoryRegistrationDialog({
 									value={repositoryId}
 									onValueChange={handleRepositoryChange}
 									disabled={isPending || !ownerId}
-									triggerClassName="bg-surface text-text text-[14px] font-geist"
+									triggerClassName="bg-surface text-text text-[14px] font-sans"
 									id="repository"
 								/>
 							</div>
@@ -407,7 +407,7 @@ export function RepositoryRegistrationDialog({
 																);
 															}
 														}}
-														className="mt-1 w-4 h-4 text-[#1663F3] bg-surface border-border rounded focus:ring-[#1663F3]/20"
+														className="mt-1 w-4 h-4 text-blue-500 bg-surface border-border rounded focus:ring-blue-500/20"
 													/>
 													<div className="flex-1">
 														<div className="text-text text-[14px] font-medium">

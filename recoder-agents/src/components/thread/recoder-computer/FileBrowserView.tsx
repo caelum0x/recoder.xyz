@@ -1312,7 +1312,7 @@ export function FileBrowserView({
         }
       }
       
-      console.log('[FileBrowserView] Loaded workspace history', { count: (data.versions || []).length });
+      
     } catch (error) {
       console.error('[FileBrowserView] Failed to load workspace history', error);
       toast.error('Failed to load workspace history');
@@ -1324,7 +1324,7 @@ export function FileBrowserView({
   // Auto-load workspace history if we have a selected version but no date
   useEffect(() => {
     if (selectedVersion && !selectedVersionDate && sandboxId && workspaceVersions.length === 0) {
-      console.log('[FileBrowserView] Auto-loading workspace history for selected version');
+      
       loadWorkspaceHistory(true);
     }
   }, [selectedVersion, selectedVersionDate, sandboxId, workspaceVersions.length, loadWorkspaceHistory]);
@@ -1426,7 +1426,7 @@ export function FileBrowserView({
       }
 
       const result = await res.json();
-      console.log('[FileBrowserView] Revert result', result);
+      
 
       // Close modal first for better UX
       setRevertModalOpen(false);
@@ -1438,7 +1438,7 @@ export function FileBrowserView({
       setWorkspaceVersions([]);
 
       // Refetch files to show the reverted state
-      console.log('[FileBrowserView] Refetching files after restore');
+      
       await refetchFiles();
 
       toast.success('Version restored successfully');

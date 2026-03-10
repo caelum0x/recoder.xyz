@@ -386,7 +386,12 @@ Click here to get started: ${process.env.MAIN_SITE_URL || 'http://localhost:3000
 
   // Enterprise AI: Try Google Cloud AI first (if available)
   const { generateWithCloudAI, initializeCloudAI } = await import('~/lib/.server/llm/cloud-ai-integration');
-  // PERF: Cloud AI init removed — always fails and falls back to OpenRouter. Saves 1-3s per request.
+  // TODO(cloud-ai): Cloud AI init is disabled because initializeCloudAI requires
+  // `env.googleCloudProject` which is never set in current deployments, so it always
+  // returns false and adds 1-3s of wasted latency per request. To re-enable:
+  //   1. Set GOOGLE_CLOUD_PROJECT in the recoder-web environment
+  //   2. Ensure Google Cloud Code Assist credentials are available
+  //   3. Uncomment the line below and verify the init succeeds in staging first
   // await initializeCloudAI(env).catch(() => {});
   
   // FIX #2: Detect GitHub URL BEFORE AI processing

@@ -101,7 +101,7 @@ export class BillingService {
         },
       });
 
-    } catch (error: any) {
+    } catch (error) {
       logger.error('Create subscription error', { error: String(error) });
       throw error;
     }
@@ -116,7 +116,7 @@ export class BillingService {
         where: { userId },
       });
 
-    } catch (error: any) {
+    } catch (error) {
       logger.error('Get subscription error', { error: String(error) });
       throw error;
     }
@@ -168,7 +168,7 @@ export class BillingService {
         },
       });
 
-    } catch (error: any) {
+    } catch (error) {
       logger.error('Update subscription error', { error: String(error) });
       throw error;
     }
@@ -235,7 +235,7 @@ export class BillingService {
           ? 'Subscription cancelled immediately'
           : 'Subscription will cancel at end of billing period',
       };
-    } catch (error: any) {
+    } catch (error) {
       logger.error('Cancel subscription error', { error: String(error) });
       throw error;
     }
@@ -274,7 +274,7 @@ export class BillingService {
         },
       });
 
-    } catch (error: any) {
+    } catch (error) {
       logger.error('Resume subscription error', { error: String(error) });
       throw error;
     }
@@ -294,7 +294,7 @@ export class BillingService {
         sessionId: `session_${Date.now()}`,
         amount,
       };
-    } catch (error: any) {
+    } catch (error) {
       logger.error('Create checkout session error', { error: String(error) });
       throw error;
     }
@@ -337,7 +337,7 @@ export class BillingService {
           logger.warn('Unhandled webhook event', { eventType });
       }
 
-    } catch (error: any) {
+    } catch (error) {
       logger.error('Handle webhook error', { error: String(error) });
       throw error;
     }
@@ -354,7 +354,7 @@ export class BillingService {
         take: limit,
       });
 
-    } catch (error: any) {
+    } catch (error) {
       logger.error('Get invoices error', { error: String(error) });
       throw error;
     }
@@ -376,7 +376,7 @@ export class BillingService {
         throw new Error('Invoice not found');
       }
 
-    } catch (error: any) {
+    } catch (error) {
       logger.error('Get invoice error', { error: String(error) });
       throw error;
     }
@@ -404,7 +404,7 @@ export class BillingService {
         },
       });
 
-    } catch (error: any) {
+    } catch (error) {
       logger.error('Create invoice error', { error: String(error) });
       throw error;
     }
@@ -438,7 +438,7 @@ export class BillingService {
         },
       });
 
-    } catch (error: any) {
+    } catch (error) {
       logger.error('Add payment method error', { error: String(error) });
       throw error;
     }
@@ -454,7 +454,7 @@ export class BillingService {
         orderBy: { createdAt: 'desc' },
       });
 
-    } catch (error: any) {
+    } catch (error) {
       logger.error('List payment methods error', { error: String(error) });
       throw error;
     }
@@ -477,7 +477,7 @@ export class BillingService {
         data: { isDefault: true },
       });
 
-    } catch (error: any) {
+    } catch (error) {
       logger.error('Set default payment method error', { error: String(error) });
       throw error;
     }
@@ -492,7 +492,7 @@ export class BillingService {
         where: { id: methodId },
       });
 
-    } catch (error: any) {
+    } catch (error) {
       logger.error('Remove payment method error', { error: String(error) });
       throw error;
     }
@@ -533,7 +533,7 @@ export class BillingService {
         newAmount,
         daysRemaining: Math.ceil(daysRemaining),
       };
-    } catch (error: any) {
+    } catch (error) {
       logger.error('Calculate proration error', { error: String(error) });
       throw error;
     }

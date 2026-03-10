@@ -41,7 +41,7 @@ export class DeploymentManager {
 
   constructor(env: any) {
     this.env = env;
-    this.loadDeploymentsFromKV().catch(() => {});
+    this.loadDeploymentsFromKV().catch((err) => { console.warn('[DeploymentManager] Failed to load deployments:', err); });
   }
 
   private async loadDeploymentsFromKV() {

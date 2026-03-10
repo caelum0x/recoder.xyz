@@ -276,12 +276,7 @@ export function useDirectoryQuery(
   // Debug: log query key changes
   useEffect(() => {
     if (sandboxId && normalizedPath) {
-      console.log('[useDirectoryQuery] Query key:', {
-        sandboxId,
-        directoryPath,
-        normalizedPath,
-        queryKey: fileQueryKeys.directory(sandboxId, normalizedPath),
-      });
+      
     }
   }, [sandboxId, directoryPath, normalizedPath]);
   
@@ -293,9 +288,9 @@ export function useDirectoryQuery(
         throw new Error('Missing required parameters');
       }
       // Ensure we're fetching the correct path
-      console.log('[useDirectoryQuery] Fetching files for path:', normalizedPath);
+      
       const result = await listSandboxFiles(sandboxId, normalizedPath);
-      console.log('[useDirectoryQuery] Fetched files:', result.length, 'files');
+      
       return result;
     },
     enabled: Boolean(sandboxId && normalizedPath && (options.enabled !== false)),

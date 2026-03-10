@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useAgent } from '@/hooks/agents/use-agents';
-import { ChevronLeft, Brain, BookOpen, Zap, Wrench, Server, Pencil, MessageCircle } from 'lucide-react';
+import { ChevronLeft, Brain, BookOpen, Zap, Wrench, Server, Pencil, MessageCircle, History, ScrollText, KeyRound, Gauge, Clock, Download, Activity, BarChart3, MessageSquare, Terminal, FlaskConical, HeartPulse, Shield } from 'lucide-react';
 import { RecoderLoader } from '@/components/ui/recoder-loader';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -15,11 +15,27 @@ import { InstructionsScreen } from './screens/instructions-screen';
 import { KnowledgeScreen } from './screens/knowledge-screen';
 import { ToolsScreen } from './screens/tools-screen';
 import { IntegrationsScreen } from './screens/integrations-screen';
+import { VersionsScreen } from './screens/versions-screen';
+import { LogsScreen } from './screens/logs-screen';
+import { SecretsScreen } from './screens/secrets-screen';
+import { QuotaScreen } from './screens/quota-screen';
+import { SchedulesScreen } from './screens/schedules-screen';
+import { ActivityScreen } from './screens/activity-screen';
+import { BenchmarksScreen } from './screens/benchmarks-screen';
+import { EnvVarsScreen } from './screens/env-vars-screen';
+import { TestingScreen } from './screens/testing-screen';
+import { HealthScreen } from './screens/health-screen';
+import { ChangelogScreen } from './screens/changelog-screen';
+import { PermissionsScreen } from './screens/permissions-screen';
+import { CommentPanel } from '@/components/agents/config/comment-panel';
+import { useCommentCounts } from '@/hooks/agents/use-agent-comments';
 import { useUpdateAgent } from '@/hooks/agents/use-agents';
 import { toast } from '@/lib/toast';
 import { useQueryClient } from '@tanstack/react-query';
+import { AgentConfigTour } from '@/components/onboarding/tours/agent-config-tour';
+import { AgentExportDialog } from '@/components/agents/agent-export-dialog';
 
-type ConfigView = 'instructions' | 'knowledge' | 'triggers' | 'tools' | 'integrations';
+type ConfigView = 'instructions' | 'knowledge' | 'triggers' | 'tools' | 'integrations' | 'versions' | 'logs' | 'secrets' | 'environment' | 'quota' | 'schedules' | 'activity' | 'benchmarks' | 'testing' | 'health' | 'changelog' | 'permissions';
 
 export default function AgentConfigPage() {
   const params = useParams();
@@ -28,8 +44,11 @@ export default function AgentConfigPage() {
   const agentId = params.agentId as string;
   const [activeView, setActiveView] = useState<ConfigView>('triggers');
   const [isEditorOpen, setIsEditorOpen] = useState(false);
+  const [isExportOpen, setIsExportOpen] = useState(false);
+  const [isCommentPanelOpen, setIsCommentPanelOpen] = useState(false);
 
   const { data: agent, isLoading } = useAgent(agentId);
+  const { data: commentCounts } = useCommentCounts(agentId);
   const updateAgentMutation = useUpdateAgent();
 
   if (isLoading) {
@@ -72,15 +91,28 @@ export default function AgentConfigPage() {
   };
 
   const menuItems = [
-    { id: 'instructions' as const, label: 'Instructions', icon: Brain },
-    { id: 'tools' as const, label: 'Tools', icon: Wrench },
-    { id: 'integrations' as const, label: 'Integrations', icon: Server },
-    { id: 'knowledge' as const, label: 'Knowledge', icon: BookOpen },
-    { id: 'triggers' as const, label: 'Triggers', icon: Zap },
+    { id: 'instructions' as const, label: 'Instructions', icon: Brain, tourId: 'instructions-tab' },
+    { id: 'tools' as const, label: 'Tools', icon: Wrench, tourId: 'tools-tab' },
+    { id: 'integrations' as const, label: 'Integrations', icon: Server, tourId: 'integrations-tab' },
+    { id: 'knowledge' as const, label: 'Knowledge', icon: BookOpen, tourId: 'knowledge-tab' },
+    { id: 'triggers' as const, label: 'Triggers', icon: Zap, tourId: 'triggers-tab' },
+    { id: 'versions' as const, label: 'Versions', icon: History, tourId: 'versions-tab' },
+    { id: 'logs' as const, label: 'Logs', icon: ScrollText, tourId: 'logs-tab' },
+    { id: 'secrets' as const, label: 'Secrets', icon: KeyRound, tourId: 'secrets-tab' },
+    { id: 'environment' as const, label: 'Environment', icon: Terminal, tourId: 'environment-tab' },
+    { id: 'quota' as const, label: 'Quota', icon: Gauge, tourId: 'quota-tab' },
+    { id: 'schedules' as const, label: 'Schedules', icon: Clock, tourId: 'schedules-tab' },
+    { id: 'activity' as const, label: 'Activity', icon: Activity, tourId: 'activity-tab' },
+    { id: 'benchmarks' as const, label: 'Benchmarks', icon: BarChart3, tourId: 'benchmarks-tab' },
+    { id: 'testing' as const, label: 'Testing', icon: FlaskConical, tourId: 'testing-tab' },
+    { id: 'health' as const, label: 'Health', icon: HeartPulse, tourId: 'health-tab' },
+    { id: 'changelog' as const, label: 'Changelog', icon: History, tourId: 'changelog-tab' },
+    { id: 'permissions' as const, label: 'Permissions', icon: Shield, tourId: 'permissions-tab' },
   ];
 
   return (
     <div className="h-[100dvh] flex flex-col md:flex-row overflow-hidden bg-background px-3 sm:px-4 md:px-7 pt-4 md:pt-7">
+      <AgentConfigTour />
       {/* Left Sidebar Menu */}
       <div className="bg-background flex w-full md:w-48 md:flex-col md:pr-4 pt-14 sm:pt-16 md:pt-0 gap-2">
         {/* Back button - desktop only */}
@@ -119,6 +151,7 @@ export default function AgentConfigPage() {
               >
                 <button
                   onClick={() => setActiveView(item.id)}
+                  data-tour={item.tourId}
                   className={cn(
                     "w-full flex items-center gap-3 px-4 py-3 text-sm",
                     isActive
@@ -144,6 +177,7 @@ export default function AgentConfigPage() {
                 key={item.id}
                 variant="ghost"
                 size="icon"
+                data-tour={item.tourId}
                 className={cn(
                   "h-12 w-12 p-0 cursor-pointer hover:bg-muted/60 hover:border-[1.5px] hover:border-border",
                   isActive ? 'bg-muted/60 border-[1.5px] border-border' : ''
@@ -180,14 +214,39 @@ export default function AgentConfigPage() {
               </div>
             </div>
           </div>
-          <Button
-            onClick={() => router.push(`/dashboard?agent_id=${agentId}`)}
-            className="gap-1.5 sm:gap-2 text-sm h-9 sm:h-10 px-3 sm:px-4 flex-shrink-0"
-          >
-            <MessageCircle className="h-4 w-4" />
-            <span className="hidden sm:inline">Start Chat</span>
-            <span className="sm:hidden">Chat</span>
-          </Button>
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <Button
+              variant="outline"
+              size="icon"
+              className="h-9 w-9 sm:h-10 sm:w-10 relative"
+              onClick={() => setIsCommentPanelOpen(!isCommentPanelOpen)}
+              title="Comments"
+            >
+              <MessageSquare className="h-4 w-4" />
+              {commentCounts && commentCounts.total_unresolved > 0 && (
+                <span className="absolute -top-1 -right-1 h-4 min-w-[16px] px-1 rounded-full bg-destructive text-destructive-foreground text-[10px] flex items-center justify-center">
+                  {commentCounts.total_unresolved}
+                </span>
+              )}
+            </Button>
+            <Button
+              variant="outline"
+              size="icon"
+              className="h-9 w-9 sm:h-10 sm:w-10"
+              onClick={() => setIsExportOpen(true)}
+              title="Export agent config"
+            >
+              <Download className="h-4 w-4" />
+            </Button>
+            <Button
+              onClick={() => router.push(`/dashboard?agent_id=${agentId}`)}
+              className="gap-1.5 sm:gap-2 text-sm h-9 sm:h-10 px-3 sm:px-4"
+            >
+              <MessageCircle className="h-4 w-4" />
+              <span className="hidden sm:inline">Start Chat</span>
+              <span className="sm:hidden">Chat</span>
+            </Button>
+          </div>
         </div>
 
         {/* Dynamic Content Based on Active View */}
@@ -196,6 +255,18 @@ export default function AgentConfigPage() {
         {activeView === 'integrations' && <IntegrationsScreen agentId={agentId} />}
         {activeView === 'knowledge' && <KnowledgeScreen agentId={agentId} />}
         {activeView === 'triggers' && <TriggersScreen agentId={agentId} />}
+        {activeView === 'versions' && <VersionsScreen agentId={agentId} />}
+        {activeView === 'logs' && <LogsScreen agentId={agentId} />}
+        {activeView === 'secrets' && <SecretsScreen agentId={agentId} />}
+        {activeView === 'environment' && <EnvVarsScreen agentId={agentId} />}
+        {activeView === 'quota' && <QuotaScreen agentId={agentId} />}
+        {activeView === 'schedules' && <SchedulesScreen agentId={agentId} />}
+        {activeView === 'activity' && <ActivityScreen agentId={agentId} />}
+        {activeView === 'benchmarks' && <BenchmarksScreen agentId={agentId} />}
+        {activeView === 'testing' && <TestingScreen agentId={agentId} />}
+        {activeView === 'health' && <HealthScreen agentId={agentId} />}
+        {activeView === 'changelog' && <ChangelogScreen agentId={agentId} />}
+        {activeView === 'permissions' && <PermissionsScreen agentId={agentId} />}
       </div>
 
       {/* Agent Editor Dialog */}
@@ -207,6 +278,21 @@ export default function AgentConfigPage() {
         currentIconColor={agent?.icon_color || '#000000'}
         currentBackgroundColor={agent?.icon_background || '#F3F4F6'}
         onSave={handleEditorSave}
+      />
+
+      {/* Agent Export Dialog */}
+      <AgentExportDialog
+        open={isExportOpen}
+        onOpenChange={setIsExportOpen}
+        agentId={agentId}
+        agentName={agent?.name || 'Agent'}
+      />
+
+      {/* Comment Panel */}
+      <CommentPanel
+        agentId={agentId}
+        isOpen={isCommentPanelOpen}
+        onClose={() => setIsCommentPanelOpen(false)}
       />
     </div>
   );

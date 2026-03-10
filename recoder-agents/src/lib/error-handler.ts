@@ -1,7 +1,7 @@
 import { toast } from '@/lib/toast';
-import { 
-  AgentRunLimitError, 
-  ProjectLimitError, 
+import {
+  AgentRunLimitError,
+  ProjectLimitError,
   BillingError,
   TriggerLimitError,
   ModelAccessDeniedError,
@@ -16,7 +16,9 @@ import { usePricingModalStore } from '@/stores/pricing-modal-store';
 export interface ApiError extends Error {
   status?: number;
   code?: string;
-  details?: any;
+  details?: Record<string, unknown>;
+  detail?: Record<string, unknown> | string;
+  data?: Record<string, unknown>;
   response?: Response;
 }
 
@@ -26,14 +28,33 @@ export interface ErrorContext {
   silent?: boolean;
 }
 
+// --- Toast rate-limiting ---
+const TOAST_RATE_WINDOW_MS = 10_000;
+const TOAST_RATE_MAX = 3;
+const recentToastTimestamps: number[] = [];
+
+const isToastRateLimited = (): boolean => {
+  const now = Date.now();
+  // Remove timestamps older than the window
+  while (recentToastTimestamps.length > 0 && now - recentToastTimestamps[0] > TOAST_RATE_WINDOW_MS) {
+    recentToastTimestamps.shift();
+  }
+  if (recentToastTimestamps.length >= TOAST_RATE_MAX) {
+    return true;
+  }
+  recentToastTimestamps.push(now);
+  return false;
+};
+
+// --- User-friendly status messages ---
 const getStatusMessage = (status: number): string => {
   switch (status) {
     case 400:
       return 'Invalid request. Please check your input and try again.';
     case 401:
-      return 'Authentication required. Please sign in again.';
+      return 'Session expired. Please sign in again.';
     case 403:
-      return 'Access denied. You don\'t have permission to perform this action.';
+      return 'You don\'t have permission for this action.';
     case 404:
       return 'The requested resource was not found.';
     case 408:
@@ -43,9 +64,9 @@ const getStatusMessage = (status: number): string => {
     case 422:
       return 'Invalid data provided. Please check your input.';
     case 429:
-      return 'Too many requests. Please wait a moment and try again.';
+      return 'Too many requests. Please wait a moment.';
     case 500:
-      return 'Server error. Our team has been notified.';
+      return 'Something went wrong on our end.';
     case 502:
       return 'Service temporarily unavailable. Please try again in a moment.';
     case 503:
@@ -55,6 +76,41 @@ const getStatusMessage = (status: number): string => {
     default:
       return 'An unexpected error occurred. Please try again.';
   }
+};
+
+// --- Network error detection ---
+const isNetworkErrorMessage = (msg: string): boolean => {
+  const lower = msg.toLowerCase();
+  return (
+    lower.includes('networkerror') ||
+    lower.includes('failed to fetch') ||
+    lower.includes('network request failed') ||
+    lower.includes('network error') ||
+    lower.includes('load failed') ||
+    lower.includes('connection refused') ||
+    lower.includes('err_connection')
+  );
+};
+
+// --- Backend response body parsing ---
+const extractBackendMessage = (error: any): string | null => {
+  // Try to extract `detail` or `message` from backend JSON response bodies
+  if (error?.detail) {
+    if (typeof error.detail === 'string') return error.detail;
+    if (typeof error.detail === 'object' && error.detail.message) {
+      return String(error.detail.message);
+    }
+  }
+  if (error?.data?.detail) {
+    if (typeof error.data.detail === 'string') return error.data.detail;
+    if (typeof error.data.detail === 'object' && error.data.detail.message) {
+      return String(error.data.detail.message);
+    }
+  }
+  if (error?.data?.message && typeof error.data.message === 'string') {
+    return error.data.message;
+  }
+  return null;
 };
 
 const extractErrorMessage = (error: any): string => {
@@ -88,6 +144,17 @@ const extractErrorMessage = (error: any): string => {
 
   if (error instanceof ThreadLimitError) {
     return error.detail?.message || error.message || 'Thread limit exceeded';
+  }
+
+  // Check for network errors before generic Error check
+  if (error instanceof Error && isNetworkErrorMessage(error.message)) {
+    return 'Connection lost. Check your internet.';
+  }
+
+  // Try to parse backend response body fields (detail / message)
+  const backendMsg = extractBackendMessage(error);
+  if (backendMsg) {
+    return backendMsg;
   }
 
   if (error instanceof Error) {
@@ -159,8 +226,6 @@ const formatErrorMessage = (message: string, context?: ErrorContext): string => 
 
 
 export const handleApiError = (error: any, context?: ErrorContext): void => {
-  console.error('API Error:', error, context);
-
   if (!shouldShowError(error, context)) {
     return;
   }
@@ -171,28 +236,42 @@ export const handleApiError = (error: any, context?: ErrorContext): void => {
   // Handle tier restriction errors using shared formatting function
   const errorUI = formatTierErrorForUI(error);
   if (errorUI) {
-    usePricingModalStore.getState().openPricingModal({ 
-      isAlert: true, 
+    usePricingModalStore.getState().openPricingModal({
+      isAlert: true,
       alertTitle: errorUI.alertTitle,
       alertSubtitle: errorUI.alertSubtitle
     });
     return;
   }
 
-  if (error?.status >= 500) {
-    toast.error(formattedMessage, {
-      description: 'Our team has been notified and is working on a fix.',
-      duration: 6000,
-    });
-  } else if (error?.status === 403) {
-    toast.error(formattedMessage, {
-      description: 'Contact support if you believe this is an error.',
-      duration: 6000,
-    });
-  } else if (error?.status === 429) {
-    toast.warning(formattedMessage, {
-      description: 'Please wait a moment before trying again.',
+  // Rate-limit toasts to avoid flooding the UI
+  if (isToastRateLimited()) {
+    toast.warning('Multiple errors occurred', {
+      description: 'Please wait a moment and try again.',
       duration: 5000,
+    });
+    return;
+  }
+
+  const status = error?.status ?? error?.response?.status;
+
+  if (status === 401) {
+    toast.error('Session expired. Please sign in again.', {
+      duration: 6000,
+    });
+  } else if (status === 403) {
+    toast.error(formattedMessage, {
+      description: 'You don\'t have permission for this action.',
+      duration: 6000,
+    });
+  } else if (status === 429) {
+    toast.warning('Too many requests. Please wait a moment.', {
+      duration: 5000,
+    });
+  } else if (status >= 500) {
+    toast.error(formattedMessage, {
+      description: 'Something went wrong on our end. Our team has been notified.',
+      duration: 6000,
     });
   } else {
     toast.error(formattedMessage, {
@@ -202,15 +281,16 @@ export const handleApiError = (error: any, context?: ErrorContext): void => {
 };
 
 export const handleNetworkError = (error: any, context?: ErrorContext): void => {
-  const isNetworkError = 
-    error?.message?.includes('fetch') ||
-    error?.message?.includes('network') ||
-    error?.message?.includes('connection') ||
+  const isNetwork =
+    (error?.message && isNetworkErrorMessage(error.message)) ||
     error?.code === 'NETWORK_ERROR' ||
-    !navigator.onLine;
+    (typeof navigator !== 'undefined' && !navigator.onLine);
 
-  if (isNetworkError) {
-    toast.error('Connection error', {
+  if (isNetwork) {
+    if (isToastRateLimited()) {
+      return;
+    }
+    toast.error('Connection lost. Check your internet.', {
       description: 'Please check your internet connection and try again.',
       duration: 6000,
     });

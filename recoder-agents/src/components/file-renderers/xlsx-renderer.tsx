@@ -63,7 +63,7 @@ function detectExcelFormat(buffer: ArrayBuffer): FileFormat {
 }
 
 interface ParsedWorkbook {
-  sheets: { headers: string[]; data: Record<string, any>[] }[];
+  sheets: { headers: string[]; data: Record<string, unknown>[] }[];
   sheetNames: string[];
 }
 
@@ -86,7 +86,7 @@ async function parseXlsxFormatWithXlsxLib(arrayBuffer: ArrayBuffer): Promise<Par
       const ws = workbook.Sheets[name];
       const rows: any[][] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null, raw: false });
       
-      console.log(`[XlsxRenderer] Parsing XLSX sheet "${name}" (xlsx lib): ${rows?.length || 0} rows`);
+      
       
       if (!rows || rows.length === 0) {
         console.warn(`[XlsxRenderer] XLSX sheet "${name}" has no rows`);
@@ -95,7 +95,7 @@ async function parseXlsxFormatWithXlsxLib(arrayBuffer: ArrayBuffer): Promise<Par
       
       // Extract headers from first row
       const firstRow = rows[0] || [];
-      const headers = (firstRow as any[]).map((h, idx) => {
+      const headers = (firstRow as unknown[]).map((h, idx) => {
         const headerValue = h == null || h === '' ? `Column ${idx + 1}` : String(h);
         return headerValue;
       });
@@ -105,12 +105,12 @@ async function parseXlsxFormatWithXlsxLib(arrayBuffer: ArrayBuffer): Promise<Par
         return row && Array.isArray(row) && row.some((cell) => cell != null && cell !== '');
       });
       
-      console.log(`[XlsxRenderer] XLSX sheet "${name}" (xlsx lib): ${headers.length} headers, ${dataRows.length} data rows`);
+      
       
       const data = dataRows.map((row) => {
-        const obj: Record<string, any> = {};
+        const obj: Record<string, unknown> = {};
         headers.forEach((header, i) => {
-          let value = (row as any[])[i];
+          let value = (row as unknown[])[i];
           if (value instanceof Date) {
             value = value.toLocaleDateString();
           }
@@ -126,10 +126,7 @@ async function parseXlsxFormatWithXlsxLib(arrayBuffer: ArrayBuffer): Promise<Par
     }
   });
   
-  console.log('[XlsxRenderer] Parsed XLSX workbook (xlsx lib):', {
-    sheetCount: sheets.length,
-    sheetsWithData: sheets.filter(s => s.headers.length > 0 || s.data.length > 0).length
-  });
+  
   
   return { sheets, sheetNames };
 }
@@ -155,7 +152,7 @@ async function parseXlsxFormat(file: File, arrayBuffer: ArrayBuffer): Promise<Pa
         try {
           const rows = await readXlsxFile(file, { sheet: sheetName });
           
-          console.log(`[XlsxRenderer] Parsing sheet "${sheetName}": ${rows?.length || 0} rows`);
+          
           
           if (!rows || rows.length === 0) {
             console.warn(`[XlsxRenderer] Sheet "${sheetName}" has no rows`);
@@ -174,10 +171,10 @@ async function parseXlsxFormat(file: File, arrayBuffer: ArrayBuffer): Promise<Pa
             return row && row.some((cell) => cell != null && cell !== '');
           });
           
-          console.log(`[XlsxRenderer] Sheet "${sheetName}": ${headers.length} headers, ${dataRows.length} data rows`);
+          
           
           const data = dataRows.map((row) => {
-            const obj: Record<string, any> = {};
+            const obj: Record<string, unknown> = {};
             headers.forEach((header, i) => {
               let value = row[i];
               if (value instanceof Date) {
@@ -204,10 +201,7 @@ async function parseXlsxFormat(file: File, arrayBuffer: ArrayBuffer): Promise<Pa
       })
     );
     
-    console.log('[XlsxRenderer] Parsed workbook:', {
-      sheetCount: sheets.length,
-      sheetsWithData: sheets.filter(s => s.headers.length > 0 || s.data.length > 0).length
-    });
+    
     
     return { sheets, sheetNames };
   } catch (err: any) {
@@ -242,7 +236,7 @@ async function parseXlsFormat(arrayBuffer: ArrayBuffer): Promise<ParsedWorkbook>
       const ws = workbook.Sheets[name];
       const rows: any[][] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null });
       
-      console.log(`[XlsxRenderer] Parsing XLS sheet "${name}": ${rows?.length || 0} rows`);
+      
       
       if (!rows || rows.length === 0) {
         console.warn(`[XlsxRenderer] XLS sheet "${name}" has no rows`);
@@ -251,7 +245,7 @@ async function parseXlsFormat(arrayBuffer: ArrayBuffer): Promise<ParsedWorkbook>
       
       // Extract headers from first row
       const firstRow = rows[0] || [];
-      const headers = (firstRow as any[]).map((h, idx) => {
+      const headers = (firstRow as unknown[]).map((h, idx) => {
         const headerValue = h == null || h === '' ? `Column ${idx + 1}` : String(h);
         return headerValue;
       });
@@ -261,12 +255,12 @@ async function parseXlsFormat(arrayBuffer: ArrayBuffer): Promise<ParsedWorkbook>
         return row && Array.isArray(row) && row.some((cell) => cell != null && cell !== '');
       });
       
-      console.log(`[XlsxRenderer] XLS sheet "${name}": ${headers.length} headers, ${dataRows.length} data rows`);
+      
       
       const data = dataRows.map((row) => {
-        const obj: Record<string, any> = {};
+        const obj: Record<string, unknown> = {};
         headers.forEach((header, i) => {
-          const value = (row as any[])[i];
+          const value = (row as unknown[])[i];
           obj[header] = value ?? '';
         });
         return obj;
@@ -279,10 +273,7 @@ async function parseXlsFormat(arrayBuffer: ArrayBuffer): Promise<ParsedWorkbook>
     }
   });
   
-  console.log('[XlsxRenderer] Parsed XLS workbook:', {
-    sheetCount: sheets.length,
-    sheetsWithData: sheets.filter(s => s.headers.length > 0 || s.data.length > 0).length
-  });
+  
   
   return { sheets, sheetNames };
 }
@@ -364,7 +355,7 @@ export function XlsxRenderer({
 
         // Detect file format
         const format = detectExcelFormat(arrayBuffer);
-        console.log('[XlsxRenderer] Detected format:', format, 'size:', arrayBuffer.byteLength);
+        
 
         let result: ParsedWorkbook;
         
@@ -383,12 +374,7 @@ export function XlsxRenderer({
         }
 
         if (!cancelled) {
-          console.log('[XlsxRenderer] Parse result:', {
-            sheetCount: result.sheets.length,
-            sheetNames: result.sheetNames,
-            sheetsWithHeaders: result.sheets.filter(s => s.headers.length > 0).length,
-            sheetsWithData: result.sheets.filter(s => s.data.length > 0).length
-          });
+          
           
           // Validate parsed result
           if (!result.sheets || result.sheets.length === 0) {

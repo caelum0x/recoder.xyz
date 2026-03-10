@@ -81,11 +81,11 @@ export default function DashboardOverviewPage() {
       }
 
       if (activitiesRes.success && activitiesRes.data) {
-        setActivities((activitiesRes.data as any).activities || []);
+        const activitiesData = activitiesRes.data as { activities?: unknown[] } | null;
+        setActivities(activitiesData?.activities || []);
       }
-    } catch (err: any) {
-      console.error('Failed to load dashboard:', err);
-      setError(err.message || 'Failed to load dashboard data');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load dashboard data');
     } finally {
       setLoading(false);
     }

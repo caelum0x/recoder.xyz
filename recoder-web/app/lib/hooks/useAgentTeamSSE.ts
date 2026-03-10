@@ -51,7 +51,9 @@ export function useAgentTeamSSE() {
           createdAt: data.timestamp ?? new Date().toISOString(),
         };
         agentTeamTasks.set([newTask, ...tasks.slice(0, 9)]);
-      } catch { /* ignore */ }
+      } catch (e) {
+        console.error('[AgentTeamSSE] Failed to parse task.started event:', e);
+      }
     });
 
     eventSource.addEventListener('task.completed', (event) => {
@@ -67,7 +69,9 @@ export function useAgentTeamSSE() {
         agentTeamTasks.set(
           tasks.map((t) => (t.taskId === taskId ? { ...t, status: 'completed' } : t)),
         );
-      } catch { /* ignore */ }
+      } catch (e) {
+        console.error('[AgentTeamSSE] Failed to parse task.completed event:', e);
+      }
     });
 
     eventSource.addEventListener('task.failed', (event) => {
@@ -77,7 +81,9 @@ export function useAgentTeamSSE() {
         if (agentId) {
           updateAgentStatus(agentId, 'error');
         }
-      } catch { /* ignore */ }
+      } catch (e) {
+        console.error('[AgentTeamSSE] Failed to parse task.failed event:', e);
+      }
     });
 
     eventSource.addEventListener('message.new', (event) => {
@@ -90,7 +96,9 @@ export function useAgentTeamSSE() {
           text: data.data?.text ?? '',
           timestamp: data.timestamp ?? new Date().toISOString(),
         });
-      } catch { /* ignore */ }
+      } catch (e) {
+        console.error('[AgentTeamSSE] Failed to parse message.new event:', e);
+      }
     });
 
     eventSource.addEventListener('agent.online', (event) => {
@@ -100,7 +108,9 @@ export function useAgentTeamSSE() {
         if (agentId) {
           updateAgentStatus(agentId, 'online');
         }
-      } catch { /* ignore */ }
+      } catch (e) {
+        console.error('[AgentTeamSSE] Failed to parse agent.online event:', e);
+      }
     });
 
     eventSource.addEventListener('agent.offline', (event) => {
@@ -110,7 +120,9 @@ export function useAgentTeamSSE() {
         if (agentId) {
           updateAgentStatus(agentId, 'offline');
         }
-      } catch { /* ignore */ }
+      } catch (e) {
+        console.error('[AgentTeamSSE] Failed to parse agent.offline event:', e);
+      }
     });
 
     eventSource.onopen = () => {

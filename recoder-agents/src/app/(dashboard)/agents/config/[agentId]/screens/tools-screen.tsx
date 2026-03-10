@@ -21,7 +21,7 @@ export function ToolsScreen({ agentId }: ToolsScreenProps) {
         }
     }, [agent?.agentpress_tools]);
 
-    const isRecoderAgent = agent?.metadata?.is_suna_default || false;
+    const isRecoderAgent = agent?.metadata?.is_recoder_default || agent?.metadata?.is_suna_default || false;
     const restrictions = agent?.metadata?.restrictions || {};
     const areToolsEditable = (restrictions.tools_editable !== false) && !isRecoderAgent;
 

@@ -2,4 +2,5 @@ export { useAgentTriggers, useCreateTrigger, useUpdateTrigger, useDeleteTrigger,
 export { useTriggerProviders } from './use-trigger-providers';
 export { useInstallOAuthIntegration, useUninstallOAuthIntegration, useOAuthCallbackHandler } from './use-oauth-integrations';
 export { useAllTriggers, type TriggerWithAgent } from './use-all-triggers';
-export { useTriggerExecutions, type TriggerExecution, type TriggerExecutionHistoryResponse } from './use-trigger-executions'; 
+export { useTriggerExecutions, type TriggerExecution, type TriggerExecutionHistoryResponse } from './use-trigger-executions';
+export { useTriggerTemplates, useTriggerTemplate, useCreateTemplate, useApplyTemplate, useSeedTemplates } from './use-trigger-templates'; 

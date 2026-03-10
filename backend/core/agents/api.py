@@ -865,6 +865,19 @@ async def get_active_agent_runs(user_id: str = Depends(verify_and_get_user_id_fr
         raise HTTPException(status_code=500, detail=f"Failed to fetch active runs: {str(e)}")
 
 
+@router.get("/agents/active-runs", summary="List Active Agent Runs (enriched)", operation_id="list_active_agent_runs_enriched")
+async def get_active_agent_runs_enriched(user_id: str = Depends(verify_and_get_user_id_from_jwt)):
+    """List active agent runs with enriched data (agent name, model, tokens, cost)."""
+    from core.agents.repo import get_active_agent_runs as repo_get_active_runs
+
+    try:
+        active_runs = await repo_get_active_runs(user_id)
+        return active_runs
+    except Exception as e:
+        logger.error(f"Error fetching active runs: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to fetch active runs: {str(e)}")
+
+
 @router.get("/thread/{thread_id}/agent-runs", summary="List Thread Agent Runs", operation_id="list_thread_agent_runs")
 async def get_agent_runs(thread_id: str, user_id: str = Depends(verify_and_get_user_id_from_jwt)):
     from core.agents.repo import get_thread_agent_runs as repo_get_thread_runs

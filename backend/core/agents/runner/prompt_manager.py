@@ -710,8 +710,8 @@ Multiple parallel tool calls:
                 import json as j
                 try:
                     first_message_content = j.loads(first_message_content)
-                except:
-                    pass
+                except Exception:
+                    logger.warning(f"Failed to parse first message content as JSON for thread {thread_id}")
             
             query_text = ''
             if isinstance(first_message_content, dict):

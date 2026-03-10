@@ -80,7 +80,7 @@ export class ProductionEngineClient {
     // Use production URLs when available, fallback to local development
     this.engineUrl = process.env.PRODUCTION_ENGINE_URL || 
                      process.env.NEXT_PUBLIC_ENGINE_URL || 
-                     'http://localhost:3002';
+                     'http://localhost:3100';
     
     this.client = axios.create({
       baseURL: this.engineUrl,
@@ -102,7 +102,7 @@ export class ProductionEngineClient {
       
       Logger.info(`Production engine generated ${response.data.files?.length || 0} files`);
       return response.data;
-    } catch (error: any) {
+    } catch (error) {
       Logger.error(`Production engine error: ${error.message}`);
       
       if (error.code === 'ECONNREFUSED') {
@@ -202,7 +202,7 @@ Provide code in proper file structure with full file paths.`
           generationTime: Date.now()
         }
       };
-    } catch (error: any) {
+    } catch (error) {
       Logger.error(`Local AI generation failed: ${error.message}`);
       
       // Final fallback to minimal working example
@@ -512,7 +512,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
       }
 
       Logger.info(`📁 All files written to: ${outputPath}`);
-    } catch (error: any) {
+    } catch (error) {
       Logger.error(`Failed to write files: ${error.message}`);
       throw new Error(`File writing failed: ${error.message}`);
     }

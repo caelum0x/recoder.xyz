@@ -35,6 +35,7 @@ import { cn } from '@/lib/utils';
 import { useCostSummary, useBudgetAlerts, useSetBudgetThreshold } from '@/hooks/billing/use-budget-alerts';
 import { toast } from '@/lib/toast';
 import { format, parseISO } from 'date-fns';
+import { CostAlertManager } from '@/components/billing/cost-alert-manager';
 
 // ---- Types ----
 
@@ -98,7 +99,7 @@ export default function CostDashboardPage() {
   const [period, setPeriod] = useState<Period>('this_month');
   const [budgetInput, setBudgetInput] = useState('');
 
-  const { data: costSummary, isLoading: costLoading, error: costError } = useCostSummary();
+  const { data: costSummary, isLoading: costLoading, error: costError } = useCostSummary(period);
   const { data: alerts, isLoading: alertsLoading } = useBudgetAlerts();
   const setBudgetMutation = useSetBudgetThreshold();
 
@@ -497,6 +498,9 @@ export default function CostDashboardPage() {
             </div>
           </div>
         </SpotlightCard>
+
+        {/* Cost Alert Manager */}
+        <CostAlertManager />
       </div>
     </div>
   );

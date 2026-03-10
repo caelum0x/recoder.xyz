@@ -5,7 +5,7 @@
 
 import { logger } from '@/lib/logger';
 
-const BACKEND_URL = process.env.BACKEND_URL || (process.env.NODE_ENV === 'production' ? 'https://docker.recoder.xyz' : 'http://localhost:3001');
+const BACKEND_URL = process.env.BACKEND_URL || (process.env.NODE_ENV === 'production' ? 'https://docker.recoder.xyz' : 'http://localhost:3100');
 const BACKEND_API_KEY = process.env.BACKEND_API_KEY || (process.env.NODE_ENV === 'production' ? '' : 'dev-internal-key');
 
 interface RequestOptions {

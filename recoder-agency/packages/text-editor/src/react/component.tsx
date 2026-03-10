@@ -132,6 +132,18 @@ export interface ConnectedSource {
 	output: Output;
 }
 
+export interface TextEditorProps {
+	value?: string;
+	onValueChange?: (value: string) => void;
+	tools?: (editor: Editor) => ReactNode;
+	connections?: UIConnection[];
+	placeholder?: string;
+	header?: ReactNode;
+	showToolbar?: boolean;
+	editorClassName?: string;
+	editorContainerProps?: EditorProviderProps["editorContainerProps"];
+}
+
 export function TextEditor({
 	value,
 	onValueChange,
@@ -142,17 +154,7 @@ export function TextEditor({
 	showToolbar = true,
 	editorClassName,
 	editorContainerProps,
-}: {
-	value?: string;
-	onValueChange?: (value: string) => void;
-	tools?: (editor: Editor) => ReactNode;
-	connections?: UIConnection[];
-	placeholder?: string;
-	header?: ReactNode;
-	showToolbar?: boolean;
-	editorClassName?: string;
-	editorContainerProps?: EditorProviderProps["editorContainerProps"];
-}) {
+}: TextEditorProps) {
 	const connectionsSignature = useMemo(
 		() =>
 			connections === undefined

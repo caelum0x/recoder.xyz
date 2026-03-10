@@ -84,7 +84,7 @@ async def find_user_by_email(email: str):
                             'email': email,
                             'account_name': account['name']
                         }
-                except:
+                except Exception:
                     continue
 
             print(f"User with email {email} not found via fallback either")

@@ -3,6 +3,7 @@ import { requireAuth } from "@/lib/auth-helpers";
 import { ensureAppUserFromAuthUser } from '@/lib/auth-helpers';
 
 import { prisma } from '@/lib/prisma';
+import { logger } from '@/lib/logger';
 
 export async function GET(request: NextRequest) {
   try {
@@ -133,7 +134,7 @@ export async function GET(request: NextRequest) {
     });
 
   } catch (error) {
-    console.error('Analytics error:', error);
+    logger.error('Analytics error:', { error: error instanceof Error ? error.message : String(error) });
     return NextResponse.json(
       { error: 'Failed to fetch analytics data' },
       { status: 500 }
@@ -230,7 +231,7 @@ export async function POST(request: NextRequest) {
     }
 
   } catch (error) {
-    console.error('Export error:', error);
+    logger.error('Export error:', { error: error instanceof Error ? error.message : String(error) });
     return NextResponse.json(
       { error: 'Failed to export data' },
       { status: 500 }

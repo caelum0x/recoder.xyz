@@ -48,7 +48,6 @@ export function UploadFileToolView({
   const [copied, setCopied] = useState(false);
 
   if (!toolCall) {
-    console.warn('UploadFileToolView: toolCall is undefined. Tool views should use structured props.');
     return null;
   }
 
@@ -83,12 +82,13 @@ export function UploadFileToolView({
       if (expiresMatch) uploadResult.expires_at = expiresMatch[1];
       if (fileIdMatch) uploadResult.file_id = fileIdMatch[1];
     } else if (typeof output === 'object' && output !== null) {
+      const obj = output as UploadResult;
       uploadResult = {
-        message: (output as any).message || JSON.stringify(output),
-        storage_path: (output as any).storage_path,
-        file_size: (output as any).file_size,
-        secure_url: (output as any).secure_url,
-        expires_at: (output as any).expires_at,
+        message: obj.message || JSON.stringify(output),
+        storage_path: obj.storage_path,
+        file_size: obj.file_size,
+        secure_url: obj.secure_url,
+        expires_at: obj.expires_at,
         success: toolResult?.success !== undefined ? toolResult.success : true,
       };
     }

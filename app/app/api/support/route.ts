@@ -1,5 +1,9 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { sendEmail } from "@/lib/email";
+import { logger } from "@/lib/logger";
+import { rateLimit, rateLimitConfigs } from '@/lib/middleware/rate-limit';
+
+const publicRateLimiter = rateLimit(rateLimitConfigs.public);
 
 const SUPPORT_EMAIL = "support@recoder.xyz";
 const VALID_PRIORITIES = new Set(["low", "normal", "high", "urgent"]);
@@ -54,7 +58,10 @@ function validatePayload(payload: SupportRequestPayload) {
   };
 }
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
+  const rateLimitResponse = await publicRateLimiter(request);
+  if (rateLimitResponse) return rateLimitResponse;
+
   try {
     const payload = (await request.json()) as SupportRequestPayload;
     const validation = validatePayload(payload);
@@ -106,7 +113,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error("Support request failed:", error);
+    logger.error("Support request failed", { error: error instanceof Error ? error.message : String(error) });
     return NextResponse.json({ error: "Failed to submit support request" }, { status: 500 });
   }
 }

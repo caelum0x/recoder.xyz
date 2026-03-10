@@ -12,6 +12,28 @@ const intlMiddleware = createMiddleware({
 const PROTECTED_PREFIXES = ['/dashboard', '/settings', '/billing', '/projects'];
 const ADMIN_PREFIX = '/admin';
 
+/** Cookie name used to cache onboarding completion status at the edge. */
+const ONBOARDING_COMPLETED_COOKIE = 'onboarding_completed';
+/** Cookie name set when user explicitly skips onboarding. */
+const ONBOARDING_SKIPPED_COOKIE = 'onboarding_skipped';
+
+/** Paths that should never trigger the onboarding redirect. */
+const ONBOARDING_BYPASS_PREFIXES = [
+  '/onboarding',
+  '/auth',
+  '/api',
+  '/contact',
+  '/about',
+  '/learn',
+  '/feedback',
+  '/security',
+  '/compliance',
+  '/blog',
+  '/tools',
+  '/plan',
+  '/platform',
+];
+
 function hasSessionCookieInRequest(request: NextRequest): boolean {
   return hasSessionCookie((name) => request.cookies.get(name)?.value);
 }
@@ -23,6 +45,35 @@ function stripLocale(pathname: string): string {
     }
   }
   return pathname;
+}
+
+/**
+ * Check if the user has completed onboarding by calling the status API.
+ * Returns true if completed, false if not, or null if the check failed
+ * (in which case we allow the request through to avoid blocking users).
+ */
+async function checkOnboardingStatus(request: NextRequest): Promise<boolean | null> {
+  try {
+    const statusUrl = new URL('/api/onboarding/save', request.url);
+    const res = await fetch(statusUrl, {
+      method: 'GET',
+      headers: {
+        cookie: request.headers.get('cookie') || '',
+      },
+      cache: 'no-store',
+    });
+
+    if (!res.ok) {
+      // If unauthorized or error, don't block — let the request through
+      return null;
+    }
+
+    const data = await res.json();
+    return data.onboardingCompleted === true;
+  } catch {
+    // Network error or timeout — fail open, don't block
+    return null;
+  }
 }
 
 export default async function middleware(request: NextRequest) {
@@ -46,7 +97,8 @@ export default async function middleware(request: NextRequest) {
   if (isProtected) {
     if (!hasSessionCookieInRequest(request)) {
       const signInUrl = new URL(`/auth/signin`, request.url);
-      signInUrl.searchParams.set('redirect', request.nextUrl.pathname);
+      const redirectTarget = `${request.nextUrl.pathname}${request.nextUrl.search}`;
+      signInUrl.searchParams.set('redirect', redirectTarget);
       return NextResponse.redirect(signInUrl);
     }
   }
@@ -57,7 +109,8 @@ export default async function middleware(request: NextRequest) {
 
     if (!hasSession) {
       const signInUrl = new URL('/auth/signin', request.url);
-      signInUrl.searchParams.set('redirect', request.nextUrl.pathname);
+      const redirectTarget = `${request.nextUrl.pathname}${request.nextUrl.search}`;
+      signInUrl.searchParams.set('redirect', redirectTarget);
       return NextResponse.redirect(signInUrl);
     }
 
@@ -76,6 +129,53 @@ export default async function middleware(request: NextRequest) {
       }
     } catch {
       return NextResponse.redirect(new URL('/dashboard', request.url));
+    }
+  }
+
+  // --- Onboarding redirect for authenticated users ---
+  // Only check on routes that are not already bypassed (onboarding, auth, api, public pages)
+  const isBypassedForOnboarding = ONBOARDING_BYPASS_PREFIXES.some(
+    prefix => stripped === prefix || stripped.startsWith(`${prefix}/`)
+  );
+
+  if (
+    !isBypassedForOnboarding &&
+    stripped !== '/' &&
+    hasSessionCookieInRequest(request)
+  ) {
+    // Handle ?skip_onboarding=true — set cookie and let the request through
+    if (request.nextUrl.searchParams.get('skip_onboarding') === 'true') {
+      response.cookies.set(ONBOARDING_SKIPPED_COOKIE, '1', {
+        path: '/',
+        maxAge: 60 * 60 * 24 * 365, // 1 year
+        httpOnly: true,
+        sameSite: 'lax',
+      });
+      return response;
+    }
+
+    // If user already has either the completed or skipped cookie, no check needed
+    const hasCompletedCookie = request.cookies.get(ONBOARDING_COMPLETED_COOKIE)?.value === '1';
+    const hasSkippedCookie = request.cookies.get(ONBOARDING_SKIPPED_COOKIE)?.value === '1';
+
+    if (!hasCompletedCookie && !hasSkippedCookie) {
+      // Call the onboarding status API to check completion
+      const completed = await checkOnboardingStatus(request);
+
+      if (completed === true) {
+        // Onboarding done — set cookie so we skip this check on future requests
+        response.cookies.set(ONBOARDING_COMPLETED_COOKIE, '1', {
+          path: '/',
+          maxAge: 60 * 60 * 24 * 365, // 1 year
+          httpOnly: true,
+          sameSite: 'lax',
+        });
+      } else if (completed === false) {
+        // Onboarding NOT completed — redirect to welcome
+        const onboardingUrl = new URL('/onboarding/welcome', request.url);
+        return NextResponse.redirect(onboardingUrl);
+      }
+      // If completed === null (check failed), fail open — let request through
     }
   }
 

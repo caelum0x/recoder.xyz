@@ -123,7 +123,7 @@ export function addDomain(
   const verifyToken = generateVerificationToken(projectId, normalizedDomain);
 
   const record: CustomDomain = {
-    id: `dom_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+    id: `dom_${Date.now()}_${crypto.randomUUID().slice(0, 8)}`,
     domain: normalizedDomain,
     projectId,
     userId,
@@ -537,7 +537,7 @@ function generateVerificationToken(projectId: string, domain: string): string {
     hash = ((hash << 5) - hash) + char;
     hash |= 0;
   }
-  return Math.abs(hash).toString(36) + Math.random().toString(36).slice(2, 8);
+  return Math.abs(hash).toString(36) + crypto.randomUUID().slice(0, 8);
 }
 
 /**

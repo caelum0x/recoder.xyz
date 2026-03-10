@@ -57,10 +57,10 @@ function GitHubError({ message }: GitHubErrorProps) {
 	return (
 		<Alert variant="destructive" className="p-4">
 			<TriangleAlertIcon className="w-[18px] h-[18px] text-error-900/80" />
-			<AlertTitle className="mb-0 text-error-900 font-bold text-[12px] leading-[20.4px] font-geist">
+			<AlertTitle className="mb-0 text-error-900 font-bold text-[12px] leading-[20.4px] font-sans">
 				Authentication Error
 			</AlertTitle>
-			<AlertDescription className="text-error-900/70 font-medium text-[12px] leading-[20.4px] font-geist">
+			<AlertDescription className="text-error-900/70 font-medium text-[12px] leading-[20.4px] font-sans">
 				{message}
 			</AlertDescription>
 		</Alert>
@@ -116,15 +116,15 @@ function Header({ account, installed, installationUrl }: HeaderProps) {
 				<div className="flex items-center space-x-4">
 					<SiGithub className="w-8 h-8" />
 					<div>
-						<h2 className="text-text text-[16px] leading-[22.4px] font-medium font-geist">
+						<h2 className="text-text text-[16px] leading-[22.4px] font-medium font-sans">
 							GitHub
 						</h2>
 						{account ? (
-							<div className="text-12px leading-[20.4px] text-text-muted font-medium font-geist">
+							<div className="text-12px leading-[20.4px] text-text-muted font-medium font-sans">
 								Logged in as (<span className="text-blue-80">@{account}</span>)
 							</div>
 						) : (
-							<div className="text-[12px] leading-[20.4px] text-text-muted font-medium font-geist">
+							<div className="text-[12px] leading-[20.4px] text-text-muted font-medium font-sans">
 								Not connected
 							</div>
 						)}
@@ -163,7 +163,7 @@ function Installation({ installation }: InstallationProps) {
 	const avatarUrl = "avatar_url" in account ? account.avatar_url : undefined;
 
 	return (
-		<div className="rounded-lg px-4 pt-4 pb-6 flex flex-col bg-gradient-to-b from-[#202530] to-[#12151f] border border-border-muted shadow-[0_2px_8px_rgba(5,10,20,0.4),0_1px_2px_rgba(0,0,0,0.3)]">
+		<div className="rounded-lg px-4 pt-4 pb-6 flex flex-col bg-gradient-to-b from-zinc-800 to-zinc-900 border border-border-muted shadow-[0_2px_8px_rgba(5,10,20,0.4),0_1px_2px_rgba(0,0,0,0.3)]">
 			<div className="flex items-center gap-x-2">
 				{avatarUrl && (
 					<Image
@@ -174,7 +174,7 @@ function Installation({ installation }: InstallationProps) {
 						className="w-6 h-6 rounded-full"
 					/>
 				)}
-				<span className="text-text font-medium text-[14px] leading-[14px] font-geist">
+				<span className="text-text font-medium text-[14px] leading-[14px] font-sans">
 					{displayName}
 				</span>
 			</div>
@@ -186,11 +186,11 @@ function Installation({ installation }: InstallationProps) {
 							href={repo.html_url}
 							target="_blank"
 							rel="noopener noreferrer"
-							className="text-text font-medium text-[14px] leading-[19.6px] font-geist hover:underline"
+							className="text-text font-medium text-[14px] leading-[19.6px] font-sans hover:underline"
 						>
 							{repo.name}
 						</a>
-						<span className="rounded-full px-2 py-px text-inverse/70 font-medium text-[10px] leading-normal font-geist border border-white/20">
+						<span className="rounded-full px-2 py-px text-inverse/70 font-medium text-[10px] leading-normal font-sans border border-white/20">
 							{repo.private ? "Private" : "Public"}
 						</span>
 					</div>

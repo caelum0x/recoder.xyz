@@ -1979,3 +1979,46 @@ All latest local code synced to Hetzner (77.42.23.19) and all services rebuilt/r
 
 ### Task 21: Status Docs
 - [x] Updated `tasks/todo.md` with Sprint 53 Phase 5 completion status
+
+## Sprint 54 Phase 5 — Workspace Onboarding Checklists (2026-03-10) — COMPLETE
+
+### Task 17: Onboarding Checklists Migration
+- [x] Created `backend/supabase/migrations/20260311300004_onboarding_checklists.sql`
+- [x] `onboarding_checklists` table with UUID PK, user_id, name, description, checklist_type (workspace/agent/team/custom), is_template
+- [x] `onboarding_checklist_items` table with UUID PK, checklist_id FK (CASCADE), user_id, title, description, action_url, sort_order, is_completed, completed_at
+- [x] Indexes on user_id, checklist_type, checklist_id+sort_order, items user_id
+- [x] NO RLS — access control enforced at application layer
+
+### Task 18: Onboarding Checklists API
+- [x] Created `backend/core/onboarding/__init__.py` + `onboarding_checklists_api.py` with router prefix `/onboarding`, tag `onboarding-checklists`:
+  - `POST /onboarding/checklists` — create checklist with optional initial items in one call
+  - `GET /onboarding/checklists` — list checklists with progress (completed/total via lateral join), optional type filter
+  - `GET /onboarding/checklists/{checklist_id}` — detail with all items ordered by sort_order
+  - `DELETE /onboarding/checklists/{checklist_id}` — delete (cascades items)
+  - `POST /onboarding/checklists/{checklist_id}/items` — add item with ownership verification
+  - `PATCH /onboarding/checklists/{checklist_id}/items/{item_id}` — update item (title, description, action_url, is_completed), auto-sets completed_at
+  - `DELETE /onboarding/checklists/{checklist_id}/items/{item_id}` — remove item
+  - `POST /onboarding/checklists/seed` — seed default workspace checklist with 5 items (Create agent, Start thread, Configure tools, Add KB, Invite team)
+- [x] Registered in `backend/api.py`
+
+### Task 19: Frontend API + Hooks
+- [x] Created `recoder-agents/src/lib/api/onboarding-checklists.ts` with typed interfaces (Checklist, ChecklistItem, ChecklistsListResponse) and 8 API functions (listChecklists, getChecklist, createChecklist, deleteChecklist, addChecklistItem, updateChecklistItem, deleteChecklistItem, seedDefaultChecklist)
+- [x] Created `recoder-agents/src/hooks/onboarding/use-onboarding-checklists.ts` with hooks: useOnboardingChecklists, useChecklist, useCreateChecklist, useDeleteChecklist, useAddChecklistItem, useUpdateChecklistItem, useDeleteChecklistItem, useSeedChecklist
+
+### Task 20: Onboarding Checklist UI
+- [x] Created `recoder-agents/src/components/onboarding/onboarding-checklist-card.tsx` — reusable card widget with:
+  - Progress bar with percentage, type badge, template indicator
+  - Item list with checkbox toggle, strikethrough on completion, description, action link
+  - Add item form at bottom
+  - Collapse/expand toggle
+  - Celebration text at 100%
+- [x] Created `recoder-agents/src/app/(dashboard)/onboarding/checklist/page.tsx` — management page with:
+  - Checklist grid with expandable cards, type badges (workspace=blue, agent=purple, team=green, custom=gray), progress bars, template indicators
+  - "New Checklist" dialog with name, description, type selector, template toggle, initial items builder
+  - "Seed Defaults" button shown when no checklists exist
+  - Click card to expand: full item list with inline edit, add/remove items, toggle completion, reorder arrows
+  - Filter by type dropdown
+  - Empty state with seed button and create dialog
+
+### Task 21: Status Docs
+- [x] Updated `tasks/todo.md` with Sprint 54 Phase 5 completion status

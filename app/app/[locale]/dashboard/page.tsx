@@ -84,6 +84,17 @@ function DashboardContent() {
       redirectToSignIn();
       return;
     }
+    if (session && !isPending) {
+      // Check if user has completed onboarding
+      fetch('/api/onboarding/save')
+        .then(r => r.json())
+        .then((data: { onboardingCompleted?: boolean }) => {
+          if (!data.onboardingCompleted) {
+            router.push('/onboarding/welcome');
+          }
+        })
+        .catch(() => {});
+    }
     if (searchParams.get('welcome') === 'true') {
       setShowWelcome(true);
       setTimeout(() => setShowWelcome(false), 5000);

@@ -18,9 +18,10 @@ export interface CostSummary {
   cost_by_model: { model: string; cost: number }[];
 }
 
-export async function getCostSummary(): Promise<CostSummary> {
+export async function getCostSummary(period?: string): Promise<CostSummary> {
   try {
-    const response = await backendApi.get<CostSummary>('/billing/cost-summary', { showErrors: false });
+    const query = period ? `?period=${encodeURIComponent(period)}` : '';
+    const response = await backendApi.get<CostSummary>(`/billing/cost-summary${query}`, { showErrors: false });
     if (response.error) throw new Error(`Error: ${response.error.message}`);
     return response.data!;
   } catch (error) {

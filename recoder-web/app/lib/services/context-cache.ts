@@ -60,7 +60,7 @@ interface CacheResult {
 // Configuration
 // ============================================================================
 
-const DOCKER_BACKEND_URL = import.meta.env.VITE_DOCKER_BACKEND_URL || 'http://localhost:3001';
+const DOCKER_BACKEND_URL = import.meta.env.VITE_DOCKER_BACKEND_URL || 'http://localhost:3100';
 const LOCAL_HASH_CACHE_KEY = 'recoder:context-hashes';
 
 // ============================================================================

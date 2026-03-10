@@ -226,7 +226,7 @@ async def list_categories(
         
     except Exception as e:
         logger.error(f"Failed to fetch categories: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Failed to fetch categories: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to fetch categories")
 
 
 @router.get("/toolkits")
@@ -259,7 +259,7 @@ async def list_toolkits(
         
     except Exception as e:
         logger.error(f"Failed to fetch toolkits: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Failed to fetch toolkits: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to fetch toolkits")
 
 
 @router.get("/toolkits/{toolkit_slug}/details")
@@ -285,7 +285,7 @@ async def get_toolkit_details(
         raise
     except Exception as e:
         logger.error(f"Failed to fetch toolkit details for {toolkit_slug}: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Failed to fetch toolkit details: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to fetch toolkit details")
 
 
 @router.post("/integrate", response_model=IntegrationStatusResponse)
@@ -322,7 +322,7 @@ async def integrate_toolkit(
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         logger.error(f"Integration failed: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Integration failed")
 
 
 @router.post("/profiles", response_model=ProfileResponse)
@@ -377,7 +377,7 @@ async def create_profile(
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         logger.error(f"Failed to create profile: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Failed to create profile")
 
 
 @router.get("/profiles/check-name-availability")
@@ -414,7 +414,7 @@ async def check_profile_name_availability(
         
     except Exception as e:
         logger.error(f"Failed to check profile name availability: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Failed to check profile name availability")
 
 
 @router.get("/profiles")
@@ -438,7 +438,7 @@ async def get_profiles(
         return {
             "success": False,
             "profiles": [],
-            "error": str(e)
+            "error": "Failed to get profiles"
         }
 
 
@@ -459,7 +459,7 @@ async def get_profile_mcp_config(
         
     except Exception as e:
         logger.error(f"Failed to get MCP config for profile {profile_id}: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Failed to get MCP config: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to get MCP config")
 
 
 @router.get("/profiles/{profile_id}")
@@ -488,7 +488,7 @@ async def get_profile_info(
         raise
     except Exception as e:
         logger.error(f"Failed to get profile info for {profile_id}: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Failed to get profile info: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to get profile info")
 
 
 @router.get("/integration/{connected_account_id}/status")
@@ -502,7 +502,7 @@ async def get_integration_status(
         return {"connected_account_id": connected_account_id, **status}
     except Exception as e:
         logger.error(f"Failed to get status: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Failed to get integration status")
 
 
 @router.post("/profiles/{profile_id}/discover-tools")
@@ -545,7 +545,7 @@ async def discover_composio_tools(
         raise
     except Exception as e:
         logger.error(f"Failed to discover tools for profile {profile_id}: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Failed to discover tools")
 
 
 @router.post("/discover-tools/{profile_id}")
@@ -648,7 +648,7 @@ async def list_toolkit_tools(
         
     except Exception as e:
         logger.error(f"Failed to list toolkit tools for {request.toolkit_slug}: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Failed to get toolkit tools: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to get toolkit tools")
 
 
 @router.get("/triggers/apps")
@@ -909,9 +909,8 @@ async def create_composio_trigger(req: CreateComposioTriggerRequest, current_use
     except HTTPException:
         raise
     except Exception as e:
-        error_msg = str(e) if e else "Unknown error"
-        logger.error(f"Failed to create Composio trigger: {error_msg}")
-        raise HTTPException(status_code=500, detail=error_msg)
+        logger.error(f"Failed to create Composio trigger: {e}")
+        raise HTTPException(status_code=500, detail="Failed to create trigger")
 
 
 @router.post("/webhook")
@@ -1107,4 +1106,4 @@ async def health_check() -> Dict[str, str]:
         return {"status": "healthy"}
     except Exception as e:
         logger.error(f"Health check failed: {e}")
-        raise HTTPException(status_code=503, detail=str(e))
+        raise HTTPException(status_code=503, detail="Service unavailable")

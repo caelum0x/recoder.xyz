@@ -1,20 +1,23 @@
 'use client';
 
 import { useEffect } from 'react';
-import { usePathname, useRouter } from 'next/navigation';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useSession } from '@/lib/session-provider';
 
 export default function SettingsLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const router = useRouter();
   const { data: session, isPending } = useSession();
 
   useEffect(() => {
     if (!isPending && !session?.user) {
-      const redirect = encodeURIComponent(pathname || '/settings');
+      const query = searchParams.toString();
+      const pathWithQuery = `${pathname || '/settings'}${query ? `?${query}` : ''}`;
+      const redirect = encodeURIComponent(pathWithQuery);
       router.replace(`/auth/signin?redirect=${redirect}`);
     }
-  }, [isPending, pathname, router, session?.user]);
+  }, [isPending, pathname, router, searchParams, session?.user]);
 
   if (isPending || !session?.user) {
     return (

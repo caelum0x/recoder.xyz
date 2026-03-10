@@ -67,9 +67,8 @@ export function AgentCard({ agent }: AgentCardProps) {
 					</h3>
 
 					{/* Description */}
-					{/* TODO: Render agent descriptions once backend data is available. */}
 					{agent.description ? (
-						<p className="mb-2 font-geist text-[13px] text-link-muted line-clamp-2">
+						<p className="mb-2 font-sans text-[13px] text-link-muted line-clamp-2">
 							{agent.description}
 						</p>
 					) : null}
@@ -93,7 +92,7 @@ export function AgentCard({ agent }: AgentCardProps) {
 													if (!repos) return null;
 													return repos.slice(0, 1).map((repo) => (
 														<div key={repo} className="flex items-center gap-1">
-															<div className="font-geist text-[11px] text-text/60 truncate">
+															<div className="font-sans text-[11px] text-text/60 truncate">
 																{repo}
 															</div>
 															{repos.length > 1 && (
@@ -112,7 +111,7 @@ export function AgentCard({ agent }: AgentCardProps) {
 																>
 																	<button
 																		type="button"
-																		className="relative z-50 font-geist text-[11px] text-text/60 flex-shrink-0 px-1.5 py-0.5 rounded-lg border border-border-muted"
+																		className="relative z-50 font-sans text-[11px] text-text/60 flex-shrink-0 px-1.5 py-0.5 rounded-lg border border-border-muted"
 																		onClick={(e) => {
 																			e.stopPropagation();
 																			e.preventDefault();
@@ -143,7 +142,7 @@ export function AgentCard({ agent }: AgentCardProps) {
 															key={fileName}
 															className="flex items-center gap-1"
 														>
-															<div className="font-geist text-[11px] text-text/60 truncate">
+															<div className="font-sans text-[11px] text-text/60 truncate">
 																{fileName}
 															</div>
 															{files.length > 1 && (
@@ -162,7 +161,7 @@ export function AgentCard({ agent }: AgentCardProps) {
 																>
 																	<button
 																		type="button"
-																		className="relative z-50 font-geist text-[11px] text-text/60 flex-shrink-0 px-1.5 py-0.5 rounded-lg border border-border-muted"
+																		className="relative z-50 font-sans text-[11px] text-text/60 flex-shrink-0 px-1.5 py-0.5 rounded-lg border border-border-muted"
 																		onClick={(e) => {
 																			e.stopPropagation();
 																			e.preventDefault();
@@ -206,7 +205,7 @@ export function AgentCard({ agent }: AgentCardProps) {
 
 						{/* Footer: Creator and Stats */}
 						<div className="flex items-center justify-between">
-							<span className="font-geist text-[12px] text-text/70">
+							<span className="font-sans text-[12px] text-text/70">
 								by{" "}
 								{agent.metadata.sample
 									? "Recoder Team"
@@ -215,11 +214,11 @@ export function AgentCard({ agent }: AgentCardProps) {
 							<div className="flex items-center gap-3">
 								{/* <div className="flex items-center gap-1">
 									<Star className="w-3 h-3 text-text/70" />
-									<span className="font-geist text-[12px] text-text/70">517</span>
+									<span className="font-sans text-[12px] text-text/70">517</span>
 								</div> */}
 								<div className="flex items-center gap-1">
 									<Zap className="w-3 h-3 text-text/70" />
-									<span className="font-geist text-[12px] text-text/70">
+									<span className="font-sans text-[12px] text-text/70">
 										{formatExecutionCount(agent.executionCount)}
 									</span>
 								</div>

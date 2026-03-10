@@ -398,13 +398,6 @@ export const SimplifiedScheduleConfig: React.FC<SimplifiedScheduleConfigProps> =
 
   const handleRecurringScheduleChange = () => {
     const cronExpression = generateCronFromRecurring();
-    console.log('Generated cron expression:', cronExpression, {
-      scheduleType,
-      selectedHour,
-      selectedMinute,
-      selectedWeekdays,
-      selectedMonthDays
-    });
     onChange({
       ...config,
       cron_expression: cronExpression,

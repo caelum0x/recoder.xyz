@@ -78,17 +78,23 @@ export default function UsageDashboardPage() {
   const [usageData, setUsageData] = useState<UsageData | null>(null);
   const [costBreakdown, setCostBreakdown] = useState<any>(null);
   const [recentActivity, setRecentActivity] = useState<any[]>([]);
+  const redirectToSignIn = () => {
+    const currentPath = typeof window !== 'undefined'
+      ? `${window.location.pathname}${window.location.search}`
+      : '/dashboard/usage';
+    router.push(`/auth/signin?redirect=${encodeURIComponent(currentPath)}`);
+  };
 
   useEffect(() => {
     if (!isPending && !session) {
-      router.push('/auth/signin');
+      redirectToSignIn();
       return;
     }
 
     if (!isPending && session) {
       void loadUsageData();
     }
-  }, [timeRange, selectedModel, isPending, router, session]);
+  }, [timeRange, selectedModel, isPending, session]);
 
   const loadUsageData = async () => {
     try {
@@ -126,12 +132,16 @@ export default function UsageDashboardPage() {
     { id: '90d', label: 'Last 90 Days' }
   ];
 
+  const [exportError, setExportError] = useState<string | null>(null);
+
   const handleExport = async () => {
+    setExportError(null);
     try {
       await exportUsageData('csv', timeRange);
     } catch (err) {
       console.error('Export failed:', err);
-      alert('Export failed. Please try again.');
+      setExportError('Export failed. Please try again.');
+      setTimeout(() => setExportError(null), 4000);
     }
   };
 
@@ -480,13 +490,20 @@ export default function UsageDashboardPage() {
               <h1 className="text-3xl font-bold mb-2">Usage Analytics</h1>
               <p className="text-gray-400">Track your API usage, costs, and performance</p>
             </div>
-            <button
-              onClick={handleExport}
-              className="px-4 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg font-medium transition-all flex items-center space-x-2"
-            >
-              <Download className="w-4 h-4" />
-              <span>Export Data</span>
-            </button>
+            <div className="flex flex-col items-end gap-2">
+              <button
+                onClick={handleExport}
+                className="px-4 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg font-medium transition-all flex items-center space-x-2"
+              >
+                <Download className="w-4 h-4" />
+                <span>Export Data</span>
+              </button>
+              {exportError && (
+                <div className="text-sm text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">
+                  {exportError}
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Filters */}

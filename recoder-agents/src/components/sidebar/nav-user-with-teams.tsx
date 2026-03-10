@@ -35,6 +35,7 @@ import {
 } from 'lucide-react';
 import { useAccounts } from '@/hooks/account';
 import { useAccountState } from '@/hooks/billing';
+import { useTeams } from '@/hooks/platform/use-teams';
 
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
@@ -75,6 +76,7 @@ import { TierBadge } from '@/components/billing/tier-badge';
 import { useTranslations } from 'next-intl';
 import { useReferralDialog } from '@/stores/referral-dialog';
 import { ReferralDialog } from '@/components/referrals/referral-dialog';
+import { FeedbackDialog } from '@/components/feedback/feedback-dialog';
 import { Badge } from '@/components/ui/badge';
 import { SpotlightCard } from '@/components/ui/spotlight-card';
 import { trackCtaUpgrade } from '@/lib/analytics/gtm';
@@ -96,9 +98,11 @@ export function NavUserWithTeams({
   const { isMobile } = useSidebar();
   const { data: accounts } = useAccounts();
   const { data: accountState } = useAccountState({ enabled: true });
+  const { data: platformTeams } = useTeams();
   const [showNewTeamDialog, setShowNewTeamDialog] = React.useState(false);
   const [showSettingsModal, setShowSettingsModal] = React.useState(false);
   const [showPlanModal, setShowPlanModal] = React.useState(false);
+  const [showFeedbackDialog, setShowFeedbackDialog] = React.useState(false);
   const [settingsTab, setSettingsTab] = React.useState<'general' | 'billing' | 'usage' | 'env-manager'>('general');
   const { isOpen: isReferralDialogOpen, openDialog: openReferralDialog, closeDialog: closeReferralDialog } = useReferralDialog();
   const { theme, setTheme } = useTheme();
@@ -307,49 +311,79 @@ export function NavUserWithTeams({
 
               {teamAccounts?.length > 0 && (
                 <>
-                  {teamAccounts.map((team, index) => (
-                    <DropdownMenuItem
-                      key={team.account_id}
-                      onClick={() =>
-                        handleTeamSelect({
-                          name: team.name,
-                          logo: AudioWaveform,
-                          plan: 'Team',
-                          account_id: team.account_id,
-                          slug: team.slug,
-                          personal_account: false,
-                        })
-                      }
-                      className="gap-2 p-2"
-                    >
-                      <div className="flex size-6 items-center justify-center rounded-xs border">
-                        <AudioWaveform className="size-4 shrink-0" />
-                      </div>
-                      <span className="flex-1">{team.name}</span>
-                      {activeTeam.account_id === team.account_id && (
-                        <div className="size-4 flex items-center justify-center">
-                          <div className="size-1.5 rounded-full bg-primary" />
+                  {teamAccounts.map((team, index) => {
+                    const platformTeam = platformTeams?.find(
+                      (pt) => pt.name === team.name
+                    );
+                    return (
+                      <DropdownMenuItem
+                        key={team.account_id}
+                        onClick={() =>
+                          handleTeamSelect({
+                            name: team.name,
+                            logo: AudioWaveform,
+                            plan: 'Team',
+                            account_id: team.account_id,
+                            slug: team.slug,
+                            personal_account: false,
+                          })
+                        }
+                        className="gap-2 p-2"
+                      >
+                        <div className="flex size-6 items-center justify-center rounded-xs border">
+                          <AudioWaveform className="size-4 shrink-0" />
                         </div>
-                      )}
+                        <span className="flex-1">{team.name}</span>
+                        {platformTeam && (
+                          <span className="text-xs text-muted-foreground mr-1">
+                            {platformTeam.member_count}
+                          </span>
+                        )}
+                        {activeTeam.account_id === team.account_id && (
+                          <div className="size-4 flex items-center justify-center">
+                            <div className="size-1.5 rounded-full bg-primary" />
+                          </div>
+                        )}
+                      </DropdownMenuItem>
+                    );
+                  })}
+                </>
+              )}
+
+              {/* Platform teams (from backend) */}
+              {platformTeams && platformTeams.length > 0 && !teamAccounts?.length && (
+                <>
+                  {platformTeams.map((pt) => (
+                    <DropdownMenuItem
+                      key={pt.id}
+                      className="gap-2 p-2 opacity-80"
+                      asChild
+                    >
+                      <Link href="/settings/team">
+                        <div className="flex size-6 items-center justify-center rounded-xs border">
+                          <Users className="size-4 shrink-0" />
+                        </div>
+                        <span className="flex-1">{pt.name}</span>
+                        <span className="text-xs text-muted-foreground">
+                          {pt.member_count}
+                        </span>
+                      </Link>
                     </DropdownMenuItem>
                   ))}
                 </>
               )}
 
-              {/* <DropdownMenuSeparator />
-              <DialogTrigger asChild>
-                <DropdownMenuItem 
-                  className="gap-2 p-2"
-                  onClick={() => {
-                    setShowNewTeamDialog(true)
-                  }}
-                >
-                  <div className="bg-background flex size-6 items-center justify-center rounded-md border">
-                    <Plus className="size-4" />
+              {/* Manage Teams link */}
+              <DropdownMenuSeparator className="my-1" />
+              <DropdownMenuItem asChild>
+                <Link href="/settings/team" className="gap-2 p-2">
+                  <div className="flex size-6 items-center justify-center rounded-xs border">
+                    <Settings className="size-4 shrink-0" />
                   </div>
-                  <div className="text-muted-foreground font-medium">Add team</div>
-                </DropdownMenuItem>
-              </DialogTrigger> */}
+                  <span className="text-muted-foreground font-medium">Manage Teams</span>
+                </Link>
+              </DropdownMenuItem>
+
               {(personalAccount || (teamAccounts && teamAccounts.length > 0)) && (
                 <DropdownMenuSeparator className="my-1" />
               )}
@@ -370,7 +404,7 @@ export function NavUserWithTeams({
                   <span>Plan</span>
                 </DropdownMenuItem>
                 <DropdownMenuItem asChild>
-                  <Link href="/knowledge" className="gap-2 p-2">
+                  <Link href="/knowledge" className="gap-2 p-2" data-tour="knowledge-link">
                     <FileText className="h-4 w-4" />
                     <span>Knowledge Base</span>
                   </Link>
@@ -380,6 +414,13 @@ export function NavUserWithTeams({
                     <LifeBuoy className="h-4 w-4" />
                     <span>Support</span>
                   </Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => setShowFeedbackDialog(true)}
+                  className="gap-2 p-2"
+                >
+                  <MessageSquare className="h-4 w-4" />
+                  <span>Send Feedback</span>
                 </DropdownMenuItem>
                 <DropdownMenuItem
                   onClick={() => {
@@ -503,6 +544,14 @@ export function NavUserWithTeams({
                         </Link>
                       </DropdownMenuItem>
                     )}
+                    {user.isAdmin && (
+                      <DropdownMenuItem asChild>
+                        <Link href="/admin/quotas" className="gap-2 p-2">
+                          <BarChart3 className="h-4 w-4" />
+                          <span>Quotas</span>
+                        </Link>
+                      </DropdownMenuItem>
+                    )}
                     {isLocalMode() && (
                       <DropdownMenuItem
                         onClick={() => {
@@ -559,6 +608,12 @@ export function NavUserWithTeams({
       <ReferralDialog
         open={isReferralDialogOpen}
         onOpenChange={closeReferralDialog}
+      />
+
+      {/* Feedback Dialog */}
+      <FeedbackDialog
+        open={showFeedbackDialog}
+        onOpenChange={setShowFeedbackDialog}
       />
     </Dialog>
   );

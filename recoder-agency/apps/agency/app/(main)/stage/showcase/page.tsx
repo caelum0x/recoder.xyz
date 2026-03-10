@@ -5,6 +5,8 @@ import { stageV2Flag } from "@/flags";
 import { fetchCurrentUser } from "@/services/accounts";
 import { fetchCurrentTeam, fetchUserTeams } from "@/services/teams";
 import { fetchFlowTriggers } from "../services";
+import { getFavorites } from "./favorites-actions";
+import { getTeamPlaylists } from "./playlist/actions";
 import { ShowcaseClient } from "./showcase-client";
 
 export default async function StageShowcasePage() {
@@ -116,11 +118,19 @@ export default async function StageShowcasePage() {
 	// Convert map to plain object for client component
 	const teamHistory = Object.fromEntries(teamHistoryMap);
 
+	// Fetch playlists and favorites from DB in parallel
+	const [playlists, serverFavorites] = await Promise.all([
+		getTeamPlaylists(),
+		getFavorites(),
+	]);
+
 	return (
 		<ShowcaseClient
 			teamApps={teamApps}
 			teamHistory={teamHistory}
 			currentTeamId={currentTeam.id}
+			playlists={playlists}
+			initialFavorites={serverFavorites}
 		/>
 	);
 }

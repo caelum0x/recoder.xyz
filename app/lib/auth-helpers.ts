@@ -5,6 +5,9 @@
  * cookie names and parsing logic are kept in a single place.
  * The `user` table (Better Auth web auth) and `users` table (CLI auth)
  * remain SEPARATE by design.
+ *
+ * This module also exports `getUserFromToken` for CLI Bearer-token
+ * authentication (previously in a separate auth-helper.ts file).
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -18,6 +21,36 @@ import {
   extractSessionTokenFromHeader,
   parseSessionToken,
 } from '@recoder/auth/edge';
+
+/**
+ * Extract and validate user from a CLI Bearer token.
+ * Used by API routes that serve CLI clients authenticated via access tokens.
+ */
+export async function getUserFromToken(request: NextRequest) {
+  const authHeader = request.headers.get('authorization');
+  if (!authHeader?.startsWith('Bearer ')) {
+    return null;
+  }
+
+  const token = authHeader.substring(7);
+
+  try {
+    // Find session by access token
+    const session = await prisma.cli_sessions.findUnique({
+      where: { accessToken: token },
+      include: { users: true }
+    });
+
+    if (!session || !session.isActive || session.expiresAt < new Date()) {
+      return null;
+    }
+
+    return session.users;
+  } catch (error) {
+    logger.error('Token validation error', { error: String(error) });
+    return null;
+  }
+}
 
 /**
  * Get session from Better Auth cookie.

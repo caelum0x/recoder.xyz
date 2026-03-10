@@ -25,7 +25,7 @@ import {
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ActWithNavigation, StatusFilter } from "../types";
 
 // GitHub-style search parser
@@ -64,7 +64,7 @@ function matchesSearchFilters(
 		// For now, all acts are considered "open" since archived status doesn't exist yet
 		// This will pass through all acts when is:open is specified
 	}
-	if (filters.isArchived) return false; // No archived status yet, so always false
+	// isArchived filter is handled by the caller with archivedIds state
 
 	// Check free text search
 	if (filters.freeText) {
@@ -115,6 +115,7 @@ export function FilterableActsList({
 		Object.keys(statusLabels) as StatusFilter[],
 	);
 	const [activeTab, setActiveTab] = useState<"open" | "archived">("open");
+	const [archivedIds, setArchivedIds] = useState<Set<string>>(new Set());
 
 	const _statusCounts = useMemo(() => {
 		const counts = acts.reduce(
@@ -142,10 +143,13 @@ export function FilterableActsList({
 			const matchesStatusDropdown = selectedStatuses.includes(act.status);
 			if (!matchesStatusDropdown) return false;
 
+			const isArchived = archivedIds.has(act.id);
+
 			// If there's an explicit is: filter, use it; otherwise use tab filter
 			if (hasExplicitFilter) {
-				// For is:open, show all tasks (since archived doesn't exist yet)
+				// For is:open, show non-archived tasks
 				if (searchFilters.isOpen) {
+					if (isArchived) return false;
 					// Check free text search if exists
 					if (searchFilters.freeText) {
 						const searchText = searchFilters.freeText.toLowerCase();
@@ -154,20 +158,28 @@ export function FilterableActsList({
 							act.teamName.toLowerCase().includes(searchText);
 						return matchesText;
 					}
-					return true; // Show all tasks for is:open
+					return true;
 				}
 
-				// For is:archived, show nothing (not implemented yet)
+				// For is:archived, show only archived tasks
 				if (searchFilters.isArchived) {
-					return false;
+					if (!isArchived) return false;
+					if (searchFilters.freeText) {
+						const searchText = searchFilters.freeText.toLowerCase();
+						const matchesText =
+							act.workspaceName.toLowerCase().includes(searchText) ||
+							act.teamName.toLowerCase().includes(searchText);
+						return matchesText;
+					}
+					return true;
 				}
 
 				// Fallback
 				return matchesSearchFilters(act, searchFilters);
 			} else {
 				// Use tab filter when no explicit is: filter
-				const matchesTab = activeTab === "open";
-				if (!matchesTab) return false;
+				if (activeTab === "open" && isArchived) return false;
+				if (activeTab === "archived" && !isArchived) return false;
 
 				// Check free text search only
 				if (searchFilters.freeText) {
@@ -181,7 +193,7 @@ export function FilterableActsList({
 				return true;
 			}
 		});
-	}, [acts, searchQuery, selectedStatuses, activeTab]);
+	}, [acts, searchQuery, selectedStatuses, activeTab, archivedIds]);
 
 	const searchTags = useMemo(() => {
 		const tags = [];
@@ -290,6 +302,18 @@ export function FilterableActsList({
 		}
 	};
 
+	const handleArchive = useCallback((actId: string) => {
+		setArchivedIds((prev) => {
+			const next = new Set(prev);
+			if (next.has(actId)) {
+				next.delete(actId);
+			} else {
+				next.add(actId);
+			}
+			return next;
+		});
+	}, []);
+
 	// Sync activeTab with searchQuery
 	useEffect(() => {
 		if (searchQuery.includes("is:archived")) {
@@ -337,10 +361,10 @@ export function FilterableActsList({
 				<div className="flex items-center justify-between px-1 mb-6">
 					<div>
 						<h1
-							className="text-[30px] font-sans font-medium text-[hsl(192,73%,84%)] mb-2"
+							className="text-[30px] font-sans font-medium text-sky-200 mb-2"
 							style={{
 								textShadow:
-									"0 0 20px #0087f6, 0 0 40px #0087f6, 0 0 60px #0087f6",
+									"0 0 20px var(--color-blue-950), 0 0 40px var(--color-blue-950), 0 0 60px var(--color-blue-950)",
 							}}
 						>
 							Tasks
@@ -534,10 +558,10 @@ export function FilterableActsList({
 							<div className="mb-4 flex items-center justify-center">
 								<div className="relative drop-shadow-[0_5px_5px_rgba(0,0,255,0.4)]">
 									<ClipboardList
-										className="relative z-10 h-9 w-9 text-[#B8E8F4]"
+										className="relative z-10 h-9 w-9 text-sky-200"
 										strokeWidth={0.8}
 									/>
-									<div className="absolute inset-0 rounded-full bg-[#0087F6] opacity-30 blur-[10px]" />
+									<div className="absolute inset-0 rounded-full bg-blue-500 opacity-30 blur-[10px]" />
 								</div>
 							</div>
 							<h2 className="mb-2 text-lg font-medium text-link-muted">
@@ -574,7 +598,7 @@ export function FilterableActsList({
 													<span className="flex items-center gap-2">
 														Open
 														<span className="bg-gray-700 text-gray-300 px-2 py-0.5 rounded-full text-xs font-semibold">
-															{acts.length}
+															{acts.length - archivedIds.size}
 														</span>
 													</span>
 												</button>
@@ -590,7 +614,7 @@ export function FilterableActsList({
 													<span className="flex items-center gap-2">
 														Archived
 														<span className="bg-gray-700 text-gray-300 px-2 py-0.5 rounded-full text-xs font-semibold">
-															0
+															{archivedIds.size}
 														</span>
 													</span>
 												</button>
@@ -699,11 +723,10 @@ export function FilterableActsList({
 															<button
 																type="button"
 																className="text-white-700 hover:text-inverse transition-colors p-1"
-																title="Archive task"
+																title={archivedIds.has(act.id) ? "Unarchive task" : "Archive task"}
 																onClick={(e) => {
 																	e.stopPropagation();
-																	// TODO: Implement archive functionality
-																	alert(`Archive task: ${act.workspaceName}`);
+																	handleArchive(act.id);
 																}}
 															>
 																<Archive className="w-4 h-4" />

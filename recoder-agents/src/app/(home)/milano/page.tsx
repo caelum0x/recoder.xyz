@@ -70,7 +70,7 @@ export default function MilanoPage() {
   const selectedAgent = selectedAgentId
     ? agents.find(agent => agent.agent_id === selectedAgentId)
     : null;
-  const isRecoderAgent = !user || selectedAgent?.metadata?.is_suna_default || false;
+  const isRecoderAgent = !user || selectedAgent?.metadata?.is_recoder_default || selectedAgent?.metadata?.is_suna_default || false;
 
   const handleChatInputSubmit = useLeadingDebouncedCallback(async (
     message: string,
@@ -85,14 +85,6 @@ export default function MilanoPage() {
     }
 
     setIsSubmitting(true);
-
-    console.log('[Milano] Starting agent with:', {
-      prompt: message.substring(0, 100),
-      promptLength: message.length,
-      model_name: options?.model_name,
-      agent_id: selectedAgentId,
-      filesCount: pendingFiles.length,
-    });
 
     const result = await startAgent({
       message,

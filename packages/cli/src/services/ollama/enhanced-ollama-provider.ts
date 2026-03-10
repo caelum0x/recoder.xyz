@@ -277,7 +277,7 @@ export class EnhancedOllamaProvider extends EventEmitter {
         ...options,
         model,
         smartModelSelection: false, // Already selected
-        temperature: options.temperature || 0.3, // Lower temperature for code
+        temperature: options.temperature !== undefined ? Math.max(0, Math.min(2, options.temperature)) : 0.3, // Lower temperature for code, clamped to 0.0-2.0
         responseFormat: 'code'
       });
 
@@ -589,7 +589,10 @@ export class EnhancedOllamaProvider extends EventEmitter {
     const optimized = { ...options };
 
     // Adjust temperature for different use cases
-    if (!options.temperature) {
+    if (options.temperature !== undefined) {
+      // Clamp user-provided temperature to valid 0.0-2.0 range
+      optimized.temperature = Math.max(0, Math.min(2, options.temperature));
+    } else {
       optimized.temperature = options.responseFormat === 'code' ? 0.3 : 0.7;
     }
 

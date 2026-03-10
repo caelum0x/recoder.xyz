@@ -21,7 +21,7 @@ import { backendApi } from '@/lib/api-client';
 // ---- Types ----
 
 interface WorkflowAnalyticsTabProps {
-  agentId: string;
+  workflowId: string;
 }
 
 interface BottleneckNode {
@@ -54,9 +54,9 @@ interface WorkflowAnalytics {
 
 // ---- Data Fetcher ----
 
-async function fetchWorkflowAnalytics(agentId: string): Promise<WorkflowAnalytics> {
+async function fetchWorkflowAnalytics(workflowId: string): Promise<WorkflowAnalytics> {
   const response = await backendApi.get<WorkflowAnalytics>(
-    `/workflows/${agentId}/analytics`,
+    `/workflows/${workflowId}/analytics`,
     { showErrors: false, cache: 'no-store' }
   );
   if (response.error) {
@@ -83,10 +83,10 @@ function formatCost(cost: number): string {
 
 // ---- Component ----
 
-export default function WorkflowAnalyticsTab({ agentId }: WorkflowAnalyticsTabProps) {
+export default function WorkflowAnalyticsTab({ workflowId }: WorkflowAnalyticsTabProps) {
   const { data, isLoading, isError } = useQuery({
-    queryKey: ['workflow-analytics', agentId],
-    queryFn: () => fetchWorkflowAnalytics(agentId),
+    queryKey: ['workflow-analytics', workflowId],
+    queryFn: () => fetchWorkflowAnalytics(workflowId),
     staleTime: 30_000,
     refetchOnWindowFocus: false,
   });

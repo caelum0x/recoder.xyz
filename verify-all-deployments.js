@@ -26,7 +26,7 @@ const deployments = [
   },
   {
     name: 'Python Backend API',
-    url: 'https://backend.recoder.xyz/v1/health',
+    url: 'https://api.recoder.xyz/v1/health',
     type: 'api'
   },
   {

@@ -91,7 +91,7 @@ export function customPrismaAdapter(prisma: PrismaClient) {
 
           const result = await modelClient.create({ data });
           return result;
-        } catch (error: any) {
+        } catch (error) {
           logger.error('Error creating model', { model: String(model), error: String(error.message) });
           throw error;
         }
@@ -110,7 +110,7 @@ export function customPrismaAdapter(prisma: PrismaClient) {
             where: transformWhere(where) 
           });
           return result;
-        } catch (error: any) {
+        } catch (error) {
           logger.error('Error finding model', { model: String(model), error: String(error.message) });
           return null;
         }
@@ -133,7 +133,7 @@ export function customPrismaAdapter(prisma: PrismaClient) {
           
           const results = await modelClient.findMany(query);
           return results;
-        } catch (error: any) {
+        } catch (error) {
           logger.error('Error finding many models', { model: String(model), error: String(error.message) });
           return [];
         }
@@ -166,7 +166,7 @@ export function customPrismaAdapter(prisma: PrismaClient) {
             data
           });
           return result;
-        } catch (error: any) {
+        } catch (error) {
           logger.error('Error updating model', { model: String(model), error: String(error.message) });
           throw error;
         }
@@ -186,7 +186,7 @@ export function customPrismaAdapter(prisma: PrismaClient) {
             data 
           });
           return result;
-        } catch (error: any) {
+        } catch (error) {
           logger.error('Error updating many models', { model: String(model), error: String(error.message) });
           throw error;
         }
@@ -205,7 +205,7 @@ export function customPrismaAdapter(prisma: PrismaClient) {
             where: transformWhere(where) 
           });
           return result;
-        } catch (error: any) {
+        } catch (error) {
           logger.error('Error deleting model', { model: String(model), error: String(error.message) });
           throw error;
         }
@@ -224,7 +224,7 @@ export function customPrismaAdapter(prisma: PrismaClient) {
             where: transformWhere(where) 
           });
           return result;
-        } catch (error: any) {
+        } catch (error) {
           logger.error('Error deleting many models', { model: String(model), error: String(error.message) });
           return { count: 0 };
         }
@@ -267,7 +267,7 @@ export function customPrismaAdapter(prisma: PrismaClient) {
 
             return await callback(txAdapter);
           });
-        } catch (error: any) {
+        } catch (error) {
           logger.error('Transaction error', { error: String(error.message) });
           throw error;
         }

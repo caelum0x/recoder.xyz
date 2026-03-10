@@ -22,7 +22,7 @@ const links = [
   },
   {
     name: "Contact",
-    href: "https://x.com/haydenbleasel",
+    href: "https://recoder.xyz/contact",
   },
 ];
 
@@ -52,8 +52,7 @@ export const Footer = async () => {
             <Logo showName />
           </Link>
           <p className="text-muted-foreground text-sm">
-            &copy; Haste Ventures, LLC. {new Date().getFullYear()}. All rights
-            reserved.
+            &copy; Recoder.xyz {new Date().getFullYear()}. All rights reserved.
           </p>
           <div className="flex items-center gap-2">
             <a href={env.BETTERSTACK_URL} rel="noreferrer" target="_blank">

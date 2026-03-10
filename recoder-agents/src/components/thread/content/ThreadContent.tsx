@@ -33,6 +33,8 @@ import { isHiddenTool } from "@recoder/shared/tools";
 import { ReasoningSection } from "./ReasoningSection";
 import { StreamingText } from "./StreamingText";
 import { MessageActions } from "./MessageActions";
+import { MessageBookmarkButton } from "../message-bookmark-button";
+import { ResponseRating } from "../response-rating";
 
 export function renderAttachments(
   attachments: string[],
@@ -188,7 +190,7 @@ const UserMessageRow = memo(function UserMessageRow({
     const rawContent =
       Array.isArray(parsedAny)
         ? parsedAny
-        : (parsedAny as any)?.content ?? message.content;
+        : (parsedAny as Record<string, unknown>)?.content ?? message.content;
 
     // Prefer existing helper for legacy/JSON-wrapped formats, but still normalize
     // to handle arrays of blocks.
@@ -1234,10 +1236,40 @@ const AssistantGroupRow = memo(function AssistantGroupRow({
             )}
             {/* Message actions - show once at the end of the entire assistant block, only when done streaming */}
             {!isLastGroup && aggregatedTextContent && (
-              <MessageActions text={aggregatedTextContent} />
+              <div className="flex items-center gap-1 relative">
+                <MessageActions text={aggregatedTextContent} />
+                {threadId && (
+                  <MessageBookmarkButton
+                    threadId={threadId}
+                    messageIndex={groupIndex}
+                    messagePreview={aggregatedTextContent?.slice(0, 200)}
+                  />
+                )}
+                {threadId && lastAssistantMessageId && (
+                  <ResponseRating
+                    threadId={threadId}
+                    messageId={lastAssistantMessageId}
+                  />
+                )}
+              </div>
             )}
             {isLastGroup && aggregatedTextContent && streamHookStatus !== 'streaming' && streamHookStatus !== 'connecting' && (
-              <MessageActions text={aggregatedTextContent} />
+              <div className="flex items-center gap-1 relative">
+                <MessageActions text={aggregatedTextContent} />
+                {threadId && (
+                  <MessageBookmarkButton
+                    threadId={threadId}
+                    messageIndex={groupIndex}
+                    messagePreview={aggregatedTextContent?.slice(0, 200)}
+                  />
+                )}
+                {threadId && lastAssistantMessageId && (
+                  <ResponseRating
+                    threadId={threadId}
+                    messageId={lastAssistantMessageId}
+                  />
+                )}
+              </div>
             )}
           </div>
         </div>

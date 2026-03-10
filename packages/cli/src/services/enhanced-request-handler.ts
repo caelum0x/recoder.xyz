@@ -107,7 +107,7 @@ export class EnhancedRequestHandler {
         model_used: options.model
       };
 
-    } catch (error: any) {
+    } catch (error) {
       this.logger.error('Request failed', { error, options });
       
       // Check if it's a quota/billing error
@@ -135,7 +135,7 @@ export class EnhancedRequestHandler {
     usage: { prompt_tokens: number; completion_tokens: number };
   }> {
     try {
-      const response = await fetch('http://localhost:3002/api/generate', {
+      const response = await fetch(`${process.env.PRODUCTION_ENGINE_URL || 'http://localhost:3100'}/api/generate`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -150,7 +150,7 @@ export class EnhancedRequestHandler {
       }
 
       return await response.json();
-    } catch (error: any) {
+    } catch (error) {
       this.logger.error('Production engine call failed', error);
       throw error;
     }
@@ -218,7 +218,7 @@ export class EnhancedRequestHandler {
       }
 
       // Make streaming request
-      const response = await fetch('http://localhost:3002/api/stream', {
+      const response = await fetch(`${process.env.PRODUCTION_ENGINE_URL || 'http://localhost:3100'}/api/stream`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -293,7 +293,7 @@ export class EnhancedRequestHandler {
         model_used: options.model
       };
 
-    } catch (error: any) {
+    } catch (error) {
       this.logger.error('Streaming request failed', error);
       return {
         success: false,
@@ -333,7 +333,7 @@ export class EnhancedRequestHandler {
         percentage_used: percentageUsed,
         time_until_reset: Math.max(0, timeUntilReset)
       };
-    } catch (error: any) {
+    } catch (error) {
       this.logger.error('Failed to get quota status', error);
       throw error;
     }

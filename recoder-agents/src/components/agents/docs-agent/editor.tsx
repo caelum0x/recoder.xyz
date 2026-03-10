@@ -151,7 +151,7 @@ export const Editor = ({
       indexeddbProvider.current = idbProvider;
       
       idbProvider.on('synced', () => {
-        console.log('Content synced with IndexedDB');
+        
         setIsSynced(true);
         if (onSaveStateChange) {
           onSaveStateChange('saved');

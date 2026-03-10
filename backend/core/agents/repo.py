@@ -6,32 +6,48 @@ from datetime import datetime, timezone
 
 async def get_active_agent_runs(user_id: str) -> List[Dict[str, Any]]:
     sql = """
-    SELECT 
+    SELECT
         ar.id,
         ar.thread_id,
         ar.status,
-        ar.started_at
+        ar.started_at,
+        ar.agent_id,
+        ar.metadata,
+        a.name as agent_name
     FROM agent_runs ar
     INNER JOIN threads t ON ar.thread_id = t.thread_id
+    LEFT JOIN agents a ON ar.agent_id = a.agent_id
     WHERE t.account_id = :user_id
       AND ar.status = 'running'
     ORDER BY ar.started_at DESC
     """
-    
+
     rows = await execute(sql, {"user_id": user_id})
-    
+
     if not rows:
         return []
-    
-    return [
-        {
+
+    results = []
+    for row in rows:
+        metadata = row.get("metadata") or {}
+        if isinstance(metadata, str):
+            try:
+                import json as _json
+                metadata = _json.loads(metadata)
+            except Exception:
+                metadata = {}
+        results.append({
             "id": row["id"],
             "thread_id": row["thread_id"],
+            "agent_id": row.get("agent_id") or "",
+            "agent_name": row.get("agent_name") or "Agent",
+            "model": metadata.get("model_name") or metadata.get("model") or metadata.get("model_id") or "",
             "status": row["status"],
             "started_at": row["started_at"],
-        }
-        for row in rows
-    ]
+            "token_count": metadata.get("token_count") or metadata.get("total_tokens") or 0,
+            "estimated_cost": metadata.get("estimated_cost") or metadata.get("cost") or 0,
+        })
+    return results
 
 
 async def get_thread_agent_runs(thread_id: str) -> List[Dict[str, Any]]:
@@ -80,11 +96,15 @@ async def list_agents(
     sort_by: str = "created_at",
     sort_order: str = "desc"
 ) -> Tuple[List[Dict[str, Any]], int]:
+    # SECURITY: Whitelist sort column to prevent SQL injection.
+    # Only known column names are allowed; anything else defaults to 'created_at'.
     valid_sort_columns = {"name", "created_at", "updated_at"}
     if sort_by not in valid_sort_columns:
         sort_by = "created_at"
-    
-    sort_direction = "DESC" if sort_order.lower() == "desc" else "ASC"
+
+    # SECURITY: Whitelist sort direction to prevent SQL injection.
+    # Only 'ASC' and 'DESC' are valid SQL ORDER BY directions.
+    sort_direction = sort_order.upper() if sort_order.upper() in ("ASC", "DESC") else "DESC"
     
     where_clauses = ["account_id = :account_id"]
     params: Dict[str, Any] = {"account_id": account_id, "limit": limit, "offset": offset}

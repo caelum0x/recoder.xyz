@@ -1,5 +1,6 @@
 import { Background } from "@recoder-internal/workflow-designer-ui";
 import { type Workspace, WorkspaceId } from "@recoder/protocol";
+import type { AgentId } from "@recoder/types";
 import { eq } from "drizzle-orm";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
@@ -8,6 +9,7 @@ import { agents, db, flowTriggers, workspaces } from "@/db";
 import { generateContentNodeFlag } from "@/flags";
 import { logger } from "@/lib/logger";
 import { getGitHubIntegrationState } from "@/packages/lib/github";
+import { copyAgent, deleteAgent } from "../../(main)/workspaces/actions";
 import { dataLoader } from "./data-loader";
 import { Page } from "./page.client";
 
@@ -43,6 +45,33 @@ export default async function ({
 		<Suspense fallback={<Loader />}>
 			<Page
 				dataLoader={dataLoader(workspaceId)}
+				duplicateAction={async () => {
+					"use server";
+
+					const agent = await db.query.agents.findFirst({
+						where: (agents, { eq }) => eq(agents.workspaceId, workspaceId),
+					});
+					if (agent === undefined) {
+						return { workspaceId: null };
+					}
+					const result = await copyAgent(agent.id as AgentId);
+					if (result.result === "success") {
+						return { workspaceId: result.workspaceId };
+					}
+					return { workspaceId: null };
+				}}
+				deleteAction={async () => {
+					"use server";
+
+					const agent = await db.query.agents.findFirst({
+						where: (agents, { eq }) => eq(agents.workspaceId, workspaceId),
+					});
+					if (agent === undefined) {
+						return { success: false };
+					}
+					const result = await deleteAgent(agent.id);
+					return { success: result.result === "success" };
+				}}
 				integrationRefreshAction={async () => {
 					"use server";
 

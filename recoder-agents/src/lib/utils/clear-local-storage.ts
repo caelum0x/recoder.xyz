@@ -16,8 +16,8 @@ export const clearUserLocalStorage = () => {
       }
     });
     
-    console.log('✅ Local storage cleared on logout');
-  } catch (error) {
-    console.error('❌ Error clearing local storage:', error);
+    
+  } catch {
+    // localStorage clear failed — likely private browsing or quota issues
   }
 }; 

@@ -5,24 +5,38 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { sendVerificationEmailWithCode } from '@/lib/email';
+import { resolvePublicAppUrl, sendVerificationEmailWithCode } from '@/lib/email';
 import crypto from 'crypto';
 import { logger } from '@/lib/logger';
+import { rateLimit, rateLimitConfigs } from '@/lib/middleware/rate-limit';
 import {
   consumeVerification,
   createVerificationRecord,
   findValidVerificationByHashedValue,
 } from '@/lib/auth/verification-store';
 
+const authRateLimiter = rateLimit(rateLimitConfigs.auth);
+
 async function markEmailVerifiedAcrossTables(email: string) {
+  const prismaAny = prisma as unknown as {
+    user?: {
+      update: (args: {
+        where: { email: string };
+        data: { emailVerified: boolean; updatedAt: Date };
+      }) => Promise<unknown>;
+    };
+  };
+
   await Promise.allSettled([
-    prisma.user.update({
-      where: { email },
-      data: {
-        emailVerified: true,
-        updatedAt: new Date(),
-      },
-    }),
+    prismaAny.user?.update
+      ? prismaAny.user.update({
+          where: { email },
+          data: {
+            emailVerified: true,
+            updatedAt: new Date(),
+          },
+        })
+      : Promise.resolve(null),
     prisma.users.update({
       where: { email },
       data: {
@@ -35,6 +49,10 @@ async function markEmailVerifiedAcrossTables(email: string) {
 
 export async function GET(request: NextRequest) {
   try {
+    // Rate limit: 5 requests per minute
+    const rateLimitResponse = await authRateLimiter(request);
+    if (rateLimitResponse) return rateLimitResponse;
+
     const { searchParams } = new URL(request.url);
     const token = searchParams.get('token');
 
@@ -73,6 +91,10 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    // Rate limit: 5 requests per minute
+    const rateLimitResponse = await authRateLimiter(request);
+    if (rateLimitResponse) return rateLimitResponse;
+
     const body = await request.json();
     const { email } = body;
 
@@ -114,7 +136,7 @@ export async function POST(request: NextRequest) {
     await createVerificationRecord(`email-code:${email}`, verificationCode, expiresAt);
 
     // Build full verification URL with code
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://recoder.xyz';
+    const baseUrl = resolvePublicAppUrl();
     const verificationUrl = `${baseUrl}/verify?code=${verificationCode}&email=${encodeURIComponent(email)}`;
 
     // Send verification email with code and URL

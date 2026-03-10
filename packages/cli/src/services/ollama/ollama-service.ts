@@ -490,9 +490,8 @@ export class OllamaService extends EventEmitter {
 
     try {
       Logger.info('Starting performance optimization...');
-      // TODO: Implement optimization method
-      const result = { success: true, optimizations: [] };
-      
+      const result = await performanceOptimizer.optimize(config);
+
       if (result.success) {
         Logger.info('Performance optimization completed successfully');
         Logger.info(`Optimizations applied: ${result.optimizations?.length || 0}`);
@@ -516,8 +515,7 @@ export class OllamaService extends EventEmitter {
     }
 
     try {
-      // TODO: Implement getRecommendations method
-      return [];
+      return await performanceOptimizer.getRecommendations();
     } catch (error) {
       Logger.error('Failed to get optimization recommendations:', error);
       return [];

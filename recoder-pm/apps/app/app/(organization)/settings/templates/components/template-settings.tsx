@@ -12,6 +12,7 @@ import { EllipsisIcon } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { deleteTemplate } from "@/actions/template/delete";
+import { duplicateTemplateAsNewVersion } from "@/actions/template/duplicate";
 import { updateTemplate } from "@/actions/template/update";
 
 type TemplateSettingsProps = {
@@ -48,6 +49,29 @@ export const TemplateSettings = ({
 
       toast.success("Template deleted successfully");
       setDeleteOpen(false);
+    } catch (error) {
+      handleError(error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDuplicate = async () => {
+    if (loading) {
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      const result = await duplicateTemplateAsNewVersion(templateId);
+
+      if ("error" in result) {
+        throw new Error(result.error);
+      }
+
+      toast.success("Template duplicated as new version");
+      router.push(`/settings/templates/${result.id}`);
     } catch (error) {
       handleError(error);
     } finally {
@@ -93,6 +117,11 @@ export const TemplateSettings = ({
             onClick: () => router.push(`/settings/templates/${templateId}`),
             disabled: loading,
             children: "Edit",
+          },
+          {
+            onClick: handleDuplicate,
+            disabled: loading,
+            children: "Duplicate as new version",
           },
           {
             onClick: () => setDeleteOpen(true),

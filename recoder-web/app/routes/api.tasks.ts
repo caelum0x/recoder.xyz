@@ -2,6 +2,8 @@
  * Task Operations API
  *
  * Handles task management following giselle HTTP router patterns.
+ * Tasks are persisted to Neon PostgreSQL so they survive restarts.
+ * SSE streams remain in-memory (ephemeral by nature).
  *
  * GET /api/tasks?workspaceId=xxx - Get all tasks for a workspace
  * GET /api/tasks?taskId=xxx - Get a specific task
@@ -13,6 +15,7 @@
  */
 
 import { type ActionFunctionArgs, type LoaderFunctionArgs, json } from '@remix-run/cloudflare';
+import { neon } from '@neondatabase/serverless';
 import { z } from 'zod';
 import { createScopedLogger } from '~/utils/logger';
 
@@ -68,9 +71,70 @@ const PatchTaskInput = z.object({
 
 type TaskType = z.infer<typeof Task>;
 
-// In-memory store (replace with DB in production)
-const taskStore = new Map<string, TaskType>();
+// SSE streams remain in-memory (ephemeral by nature)
 const taskStreams = new Map<string, Set<ReadableStreamDefaultController>>();
+
+// Track whether the tasks table has been ensured for this process
+let tableEnsured = false;
+
+/**
+ * Get a Neon SQL client from request context
+ */
+function getDatabaseUrl(context: any): string | null {
+  const env = context?.cloudflare?.env || process.env || {};
+  return (env as any).DATABASE_URL || process.env.DATABASE_URL || null;
+}
+
+/**
+ * Ensure the workspace_tasks table exists (idempotent, runs once per process)
+ */
+async function ensureTasksTable(sql: ReturnType<typeof neon>): Promise<void> {
+  if (tableEnsured) return;
+  try {
+    await sql`
+      CREATE TABLE IF NOT EXISTS workspace_tasks (
+        id TEXT PRIMARY KEY,
+        workspace_id TEXT NOT NULL,
+        name TEXT,
+        status TEXT NOT NULL DEFAULT 'pending',
+        input JSONB,
+        output JSONB,
+        error TEXT,
+        started_at TIMESTAMPTZ,
+        completed_at TIMESTAMPTZ,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        metadata JSONB
+      )
+    `;
+    await sql`CREATE INDEX IF NOT EXISTS idx_workspace_tasks_workspace ON workspace_tasks(workspace_id)`;
+    await sql`CREATE INDEX IF NOT EXISTS idx_workspace_tasks_status ON workspace_tasks(workspace_id, status)`;
+    tableEnsured = true;
+  } catch (error) {
+    logger.error('[Tasks] Failed to ensure tasks table:', error);
+    throw error;
+  }
+}
+
+/**
+ * Convert a database row to a TaskType object
+ */
+function rowToTask(row: any): TaskType {
+  return {
+    id: row.id,
+    workspaceId: row.workspace_id,
+    name: row.name || undefined,
+    status: row.status,
+    input: row.input || undefined,
+    output: row.output || undefined,
+    error: row.error || undefined,
+    startedAt: row.started_at ? new Date(row.started_at).toISOString() : undefined,
+    completedAt: row.completed_at ? new Date(row.completed_at).toISOString() : undefined,
+    createdAt: new Date(row.created_at).toISOString(),
+    updatedAt: new Date(row.updated_at).toISOString(),
+    metadata: row.metadata || undefined,
+  };
+}
 
 /**
  * Generate a unique task ID
@@ -136,25 +200,34 @@ function broadcastTaskUpdate(taskId: string, data: any) {
 /**
  * GET /api/tasks
  */
-export async function loader({ request }: LoaderFunctionArgs) {
+export async function loader({ request, context }: LoaderFunctionArgs) {
   const session = await verifySession(request);
   if (!session?.user) {
     return json({ success: false, error: 'Authentication required' }, { status: 401 });
   }
 
   try {
+    const databaseUrl = getDatabaseUrl(context);
+    if (!databaseUrl) {
+      return json({ success: false, error: 'Database not configured' }, { status: 500 });
+    }
+
+    const sql = neon(databaseUrl);
+    await ensureTasksTable(sql);
+
     const url = new URL(request.url);
     const taskId = url.searchParams.get('taskId');
     const workspaceId = url.searchParams.get('workspaceId');
     const inprogress = url.searchParams.get('inprogress') === 'true';
     const stream = url.searchParams.get('stream') === 'true';
 
-    // Stream task updates (SSE)
+    // Stream task updates (SSE) - uses DB for initial state, in-memory for live updates
     if (taskId && stream) {
-      const task = taskStore.get(taskId);
-      if (!task) {
+      const rows = await sql`SELECT * FROM workspace_tasks WHERE id = ${taskId}` as any[];
+      if (!rows || rows.length === 0) {
         return json({ success: false, error: 'Task not found' }, { status: 404 });
       }
+      const task = rowToTask(rows[0]);
 
       // Set up SSE stream
       let controller: ReadableStreamDefaultController;
@@ -190,27 +263,33 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
     // Get specific task
     if (taskId) {
-      const task = taskStore.get(taskId);
-      if (!task) {
+      const rows = await sql`SELECT * FROM workspace_tasks WHERE id = ${taskId}` as any[];
+      if (!rows || rows.length === 0) {
         return json({ success: false, error: 'Task not found' }, { status: 404 });
       }
-      return json({ success: true, task });
+      return json({ success: true, task: rowToTask(rows[0]) });
     }
 
     // Get in-progress task for workspace
     if (workspaceId && inprogress) {
-      const task = Array.from(taskStore.values()).find(
-        (t) => t.workspaceId === workspaceId && (t.status === 'running' || t.status === 'queued')
-      );
-      return json({ success: true, task: task || null });
+      const rows = await sql`
+        SELECT * FROM workspace_tasks
+        WHERE workspace_id = ${workspaceId}
+          AND status IN ('running', 'queued')
+        ORDER BY created_at DESC
+        LIMIT 1
+      ` as any[];
+      return json({ success: true, task: rows && rows.length > 0 ? rowToTask(rows[0]) : null });
     }
 
     // Get all tasks for workspace
     if (workspaceId) {
-      const tasks = Array.from(taskStore.values()).filter(
-        (t) => t.workspaceId === workspaceId
-      );
-      return json({ success: true, tasks });
+      const rows = await sql`
+        SELECT * FROM workspace_tasks
+        WHERE workspace_id = ${workspaceId}
+        ORDER BY created_at DESC
+      ` as any[];
+      return json({ success: true, tasks: (rows || []).map(rowToTask) });
     }
 
     return json({ success: false, error: 'workspaceId or taskId required' }, { status: 400 });
@@ -227,13 +306,21 @@ export async function loader({ request }: LoaderFunctionArgs) {
  * POST /api/tasks - Create task
  * PUT /api/tasks - Patch task
  */
-export async function action({ request }: ActionFunctionArgs) {
+export async function action({ request, context }: ActionFunctionArgs) {
   const session = await verifySession(request);
   if (!session?.user) {
     return json({ success: false, error: 'Authentication required' }, { status: 401 });
   }
 
   try {
+    const databaseUrl = getDatabaseUrl(context);
+    if (!databaseUrl) {
+      return json({ success: false, error: 'Database not configured' }, { status: 500 });
+    }
+
+    const sql = neon(databaseUrl);
+    await ensureTasksTable(sql);
+
     const url = new URL(request.url);
     const action = url.searchParams.get('action');
     const body = await request.json();
@@ -252,22 +339,36 @@ export async function action({ request }: ActionFunctionArgs) {
         }
 
         const { taskId, input } = validation.data;
-        const task = taskStore.get(taskId);
 
-        if (!task) {
+        // Read existing task from DB
+        const rows = await sql`SELECT * FROM workspace_tasks WHERE id = ${taskId}` as any[];
+        if (!rows || rows.length === 0) {
           return json({ success: false, error: 'Task not found' }, { status: 404 });
         }
 
-        // Update task status to running
+        const existingTask = rowToTask(rows[0]);
+
+        // Merge input and update status
+        const mergedInput = { ...existingTask.input, ...input };
+        const now = new Date().toISOString();
+
+        await sql`
+          UPDATE workspace_tasks
+          SET status = 'running',
+              input = ${JSON.stringify(mergedInput)},
+              started_at = ${now},
+              updated_at = ${now}
+          WHERE id = ${taskId}
+        `;
+
         const updatedTask: TaskType = {
-          ...task,
+          ...existingTask,
           status: 'running',
-          input: { ...task.input, ...input },
-          startedAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
+          input: mergedInput,
+          startedAt: now,
+          updatedAt: now,
         };
 
-        taskStore.set(taskId, updatedTask);
         broadcastTaskUpdate(taskId, { type: 'status', task: updatedTask });
 
         logger.info(`[Tasks] Started task: ${taskId}`);
@@ -287,6 +388,22 @@ export async function action({ request }: ActionFunctionArgs) {
 
         const taskId = generateTaskId();
         const now = new Date().toISOString();
+        const metadata = { ...validation.data.metadata, userId: session.user.id };
+
+        await sql`
+          INSERT INTO workspace_tasks (id, workspace_id, name, status, input, metadata, started_at, created_at, updated_at)
+          VALUES (
+            ${taskId},
+            ${validation.data.workspaceId},
+            ${validation.data.name || 'Untitled Task'},
+            'running',
+            ${JSON.stringify(validation.data.input || {})},
+            ${JSON.stringify(metadata)},
+            ${now},
+            ${now},
+            ${now}
+          )
+        `;
 
         const newTask: TaskType = {
           id: taskId as any,
@@ -294,16 +411,12 @@ export async function action({ request }: ActionFunctionArgs) {
           name: validation.data.name || 'Untitled Task',
           status: 'running',
           input: validation.data.input,
-          metadata: {
-            ...validation.data.metadata,
-            userId: session.user.id,
-          },
+          metadata,
           startedAt: now,
           createdAt: now,
           updatedAt: now,
         };
 
-        taskStore.set(taskId, newTask);
         broadcastTaskUpdate(taskId, { type: 'created', task: newTask });
 
         logger.info(`[Tasks] Created and started task: ${taskId}`);
@@ -322,6 +435,21 @@ export async function action({ request }: ActionFunctionArgs) {
 
       const taskId = generateTaskId();
       const now = new Date().toISOString();
+      const metadata = { ...validation.data.metadata, userId: session.user.id };
+
+      await sql`
+        INSERT INTO workspace_tasks (id, workspace_id, name, status, input, metadata, created_at, updated_at)
+        VALUES (
+          ${taskId},
+          ${validation.data.workspaceId},
+          ${validation.data.name || 'Untitled Task'},
+          'pending',
+          ${JSON.stringify(validation.data.input || {})},
+          ${JSON.stringify(metadata)},
+          ${now},
+          ${now}
+        )
+      `;
 
       const newTask: TaskType = {
         id: taskId as any,
@@ -329,15 +457,10 @@ export async function action({ request }: ActionFunctionArgs) {
         name: validation.data.name || 'Untitled Task',
         status: 'pending',
         input: validation.data.input,
-        metadata: {
-          ...validation.data.metadata,
-          userId: session.user.id,
-        },
+        metadata,
         createdAt: now,
         updatedAt: now,
       };
-
-      taskStore.set(taskId, newTask);
 
       logger.info(`[Tasks] Created task: ${taskId}`);
       return json({ success: true, task: newTask });
@@ -355,12 +478,14 @@ export async function action({ request }: ActionFunctionArgs) {
       }
 
       const { taskId, patches } = validation.data;
-      const task = taskStore.get(taskId);
 
-      if (!task) {
+      // Read existing task from DB
+      const rows = await sql`SELECT * FROM workspace_tasks WHERE id = ${taskId}` as any[];
+      if (!rows || rows.length === 0) {
         return json({ success: false, error: 'Task not found' }, { status: 404 });
       }
 
+      const task = rowToTask(rows[0]);
       const patchedTask = applyPatches(task, patches as Array<{ op: string; path: string; value?: unknown }>);
       patchedTask.updatedAt = new Date().toISOString();
 
@@ -372,7 +497,21 @@ export async function action({ request }: ActionFunctionArgs) {
         patchedTask.completedAt = new Date().toISOString();
       }
 
-      taskStore.set(taskId, patchedTask);
+      // Write patched task back to DB
+      await sql`
+        UPDATE workspace_tasks
+        SET status = ${patchedTask.status},
+            name = ${patchedTask.name || null},
+            input = ${JSON.stringify(patchedTask.input || {})},
+            output = ${JSON.stringify(patchedTask.output || {})},
+            error = ${patchedTask.error || null},
+            started_at = ${patchedTask.startedAt || null},
+            completed_at = ${patchedTask.completedAt || null},
+            updated_at = ${patchedTask.updatedAt},
+            metadata = ${JSON.stringify(patchedTask.metadata || {})}
+        WHERE id = ${taskId}
+      `;
+
       broadcastTaskUpdate(taskId, { type: 'patched', task: patchedTask });
 
       logger.info(`[Tasks] Patched task: ${taskId}`);
@@ -387,21 +526,30 @@ export async function action({ request }: ActionFunctionArgs) {
         return json({ success: false, error: 'Task ID required' }, { status: 400 });
       }
 
-      const task = taskStore.get(taskId);
-
-      if (!task) {
+      // Read existing task from DB
+      const rows = await sql`SELECT * FROM workspace_tasks WHERE id = ${taskId}` as any[];
+      if (!rows || rows.length === 0) {
         return json({ success: false, error: 'Task not found' }, { status: 404 });
       }
 
-      // Update status to cancelled
+      const now = new Date().toISOString();
+
+      // Update status to cancelled in DB
+      await sql`
+        UPDATE workspace_tasks
+        SET status = 'cancelled',
+            completed_at = ${now},
+            updated_at = ${now}
+        WHERE id = ${taskId}
+      `;
+
       const cancelledTask: TaskType = {
-        ...task,
+        ...rowToTask(rows[0]),
         status: 'cancelled',
-        completedAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
+        completedAt: now,
+        updatedAt: now,
       };
 
-      taskStore.set(taskId, cancelledTask);
       broadcastTaskUpdate(taskId, { type: 'cancelled', task: cancelledTask });
 
       logger.info(`[Tasks] Cancelled task: ${taskId}`);

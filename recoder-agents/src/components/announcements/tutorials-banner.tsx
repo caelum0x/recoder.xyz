@@ -50,7 +50,7 @@ export function TutorialsBanner() {
         className="fixed bottom-4 right-4 z-[100] w-[320px]"
       >
         <Link href="/tutorials" className="block">
-          <div className="relative bg-white dark:bg-[#2a2a2a] rounded-xl shadow-xl overflow-hidden border border-border/60 dark:border-[#232324] hover:border-primary/30 transition-colors group">
+          <div className="relative bg-white dark:bg-zinc-800 rounded-xl shadow-xl overflow-hidden border border-border/60 dark:border-zinc-800 hover:border-primary/30 transition-colors group">
             {/* Close button */}
             <button
               onClick={handleClose}
@@ -71,7 +71,7 @@ export function TutorialsBanner() {
                   initial={{ y: 0 }}
                   animate={{ y: [-2, 2, -2] }}
                   transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
-                  className="w-10 h-10 bg-background dark:bg-[#1a1a1a] rounded-lg flex items-center justify-center shadow-md border border-border/50"
+                  className="w-10 h-10 bg-background dark:bg-zinc-900 rounded-lg flex items-center justify-center shadow-md border border-border/50"
                 >
                   <span className="text-sm font-bold text-primary">1</span>
                 </motion.div>
@@ -79,7 +79,7 @@ export function TutorialsBanner() {
                   initial={{ y: 0 }}
                   animate={{ y: [2, -2, 2] }}
                   transition={{ duration: 3, repeat: Infinity, ease: "easeInOut", delay: 0.5 }}
-                  className="w-10 h-10 bg-background dark:bg-[#1a1a1a] rounded-lg flex items-center justify-center shadow-md border border-border/50"
+                  className="w-10 h-10 bg-background dark:bg-zinc-900 rounded-lg flex items-center justify-center shadow-md border border-border/50"
                 >
                   <span className="text-sm font-bold text-primary">2</span>
                 </motion.div>
@@ -87,7 +87,7 @@ export function TutorialsBanner() {
                   initial={{ y: 0 }}
                   animate={{ y: [-2, 2, -2] }}
                   transition={{ duration: 3, repeat: Infinity, ease: "easeInOut", delay: 1 }}
-                  className="w-10 h-10 bg-background dark:bg-[#1a1a1a] rounded-lg flex items-center justify-center shadow-md border border-border/50"
+                  className="w-10 h-10 bg-background dark:bg-zinc-900 rounded-lg flex items-center justify-center shadow-md border border-border/50"
                 >
                   <span className="text-sm font-bold text-primary">3</span>
                 </motion.div>
@@ -98,7 +98,7 @@ export function TutorialsBanner() {
             </div>
 
             {/* Content area */}
-            <div className="p-4 bg-muted/50 dark:bg-[#161618]">
+            <div className="p-4 bg-muted/50 dark:bg-zinc-900">
               <div className="flex items-start gap-3">
                 <div className="flex-shrink-0 w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
                   <BookOpen className="w-5 h-5 text-primary" />

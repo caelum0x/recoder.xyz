@@ -20,7 +20,7 @@ export function SectionHeader({
 					{title}
 				</h4>
 				{description && (
-					<p className="text-text-muted text-[14px] leading-[20.4px] font-geist mt-1">
+					<p className="text-text-muted text-[14px] leading-[20.4px] font-sans mt-1">
 						{description}
 					</p>
 				)}

@@ -1,8 +1,7 @@
-const SENTRY_URL = new URL(
-  process.env.NEXT_PUBLIC_SENTRY_DSN || 'https://example.com/abc',
-);
-const SENTRY_HOST = SENTRY_URL.hostname;
-const SENTRY_PROJECT_ID = SENTRY_URL.pathname.split('/').pop();
+const SENTRY_DSN = process.env.NEXT_PUBLIC_SENTRY_DSN;
+const SENTRY_URL = SENTRY_DSN ? new URL(SENTRY_DSN) : null;
+const SENTRY_HOST = SENTRY_URL?.hostname;
+const SENTRY_PROJECT_ID = SENTRY_URL?.pathname.split('/').pop();
 
 export const POST = async (req: Request) => {
   try {

@@ -18,9 +18,9 @@ const apps = [
     current: false,
   },
   {
-    label: "Frontend",
+    label: "Agents",
     description: "AI Agent IDE",
-    href: "https://frontend.recoder.xyz",
+    href: "https://agents.recoder.xyz",
     current: false,
   },
   {
@@ -34,12 +34,6 @@ const apps = [
     description: "Product Management",
     href: "https://pm.recoder.xyz",
     current: true,
-  },
-  {
-    label: "Studio",
-    description: "Visual Workflow Designer",
-    href: "https://studio.recoder.xyz",
-    current: false,
   },
   {
     label: "Agency",

@@ -12,7 +12,14 @@ import {
     TrashIcon,
     ChevronDownIcon,
     ChevronRightIcon,
-    MoreVerticalIcon
+    MoreVerticalIcon,
+    SearchIcon,
+    XIcon,
+    CheckSquareIcon,
+    SquareIcon,
+    MoveIcon,
+    DatabaseIcon,
+    HardDriveIcon,
 } from 'lucide-react';
 import {
     DndContext,
@@ -42,6 +49,8 @@ import { KBFilePreviewModal } from './kb-file-preview-modal';
 import { EditSummaryModal } from './edit-summary-modal';
 import { KBDeleteConfirmDialog } from './kb-delete-confirm-dialog';
 import { useKnowledgeFolders, type Folder, type Entry } from '@/hooks/knowledge-base/use-folders';
+import { useKbStats, useBulkDeleteEntries, useBulkMoveEntries, useDuplicateFolder } from '@/hooks/knowledge-base/use-kb-folders';
+import { KbFolderTree } from './kb-folder-tree';
 import { FileNameValidator } from '@/lib/validation';
 import { backendApi } from '@/lib/api-client';
 import { requireSessionAccessToken } from '@/lib/auth/session-token';
@@ -102,6 +111,21 @@ export function KnowledgeBaseManager({
     const [activeId, setActiveId] = useState<string | null>(null);
     const editInputRef = useRef<HTMLInputElement>(null);
 
+    // Search state
+    const [searchQuery, setSearchQuery] = useState('');
+    const [searchResults, setSearchResults] = useState<Array<{
+        entry_id: string;
+        folder_id: string;
+        folder_name: string;
+        filename: string;
+        summary: string;
+        file_size: number;
+        created_at: string;
+        rank: number;
+    }> | null>(null);
+    const [searchLoading, setSearchLoading] = useState(false);
+    const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
     // Assignment state for agent mode
     const [selectedEntries, setSelectedEntries] = useState<Set<string>>(new Set());
     const [assignmentsLoading, setAssignmentsLoading] = useState(false);
@@ -147,6 +171,19 @@ export function KnowledgeBaseManager({
         file: null,
     });
 
+    // Multi-select & bulk operations state
+    const [multiSelectMode, setMultiSelectMode] = useState(false);
+    const [bulkSelectedEntries, setBulkSelectedEntries] = useState<Set<string>>(new Set());
+    const [bulkDeleteDialogOpen, setBulkDeleteDialogOpen] = useState(false);
+    const [bulkMoveDialogOpen, setBulkMoveDialogOpen] = useState(false);
+    const [showFolderTree, setShowFolderTree] = useState(false);
+    const [currentFolderFilter, setCurrentFolderFilter] = useState<string | null>(null);
+
+    const { data: kbStats } = useKbStats();
+    const bulkDeleteMutation = useBulkDeleteEntries();
+    const bulkMoveMutation = useBulkMoveEntries();
+    const duplicateFolderMutation = useDuplicateFolder();
+
     const { folders, recentFiles, loading: foldersLoading, refetch: refetchFolders } = useKnowledgeFolders();
 
     // DND Sensors
@@ -189,12 +226,12 @@ export function KnowledgeBaseManager({
     // Load assignments and auto-fetch all folder entries for assignment mode
     React.useEffect(() => {
         if (enableAssignments && agentId) {
-            console.log('Loading assignments immediately for agent:', agentId);
+            
             loadAssignments();
 
             // Auto-fetch all folder entries in assignment mode
             if (!foldersLoading && folders.length > 0) {
-                console.log('Auto-fetching all folder entries for assignment mode');
+                
                 folders.forEach(folder => {
                     if (!folderEntries[folder.folder_id]) {
                         fetchFolderEntries(folder.folder_id);
@@ -207,12 +244,12 @@ export function KnowledgeBaseManager({
     const loadAssignments = async () => {
         if (!agentId) return;
 
-        console.log('🔄 Starting to load assignments for agent:', agentId);
+        
         setAssignmentsLoading(true);
         try {
             const token = await requireSessionAccessToken();
 
-            console.log('📡 Fetching assignments from API...');
+            
             const response = await fetch(`${API_URL}/knowledge-base/agents/${agentId}/assignments`, {
                 headers: {
                     'Authorization': `Bearer ${token}`,
@@ -220,22 +257,22 @@ export function KnowledgeBaseManager({
                 }
             });
 
-            console.log('📡 Assignments response status:', response.status);
+            
 
             if (response.ok) {
                 const assignments = await response.json();
-                console.log('📊 Raw assignments data:', assignments);
+                
 
                 const selectedSet = new Set<string>();
                 Object.entries(assignments).forEach(([entryId, enabled]) => {
                     if (enabled) {
                         selectedSet.add(entryId);
-                        console.log('✅ Added to selection:', entryId);
+                        
                     } else {
-                        console.log('❌ Not selected:', entryId);
+                        
                     }
                 });
-                console.log('🎯 Final selected entries:', Array.from(selectedSet));
+                
                 setSelectedEntries(selectedSet);
             } else {
                 const errorText = await response.text();
@@ -245,7 +282,52 @@ export function KnowledgeBaseManager({
             console.error('❌ Error loading assignments:', error);
         } finally {
             setAssignmentsLoading(false);
-            console.log('✅ Assignment loading complete');
+            
+        }
+    };
+
+    // Search handler with debounce
+    const handleSearch = (query: string) => {
+        setSearchQuery(query);
+
+        if (searchTimeoutRef.current) {
+            clearTimeout(searchTimeoutRef.current);
+        }
+
+        if (!query.trim() || query.trim().length < 2) {
+            setSearchResults(null);
+            setSearchLoading(false);
+            return;
+        }
+
+        setSearchLoading(true);
+        searchTimeoutRef.current = setTimeout(async () => {
+            try {
+                const params = new URLSearchParams({ q: query.trim(), limit: '20' });
+                if (agentId) {
+                    params.set('agent_id', agentId);
+                }
+                const response = await backendApi.get(`/knowledge-base/search?${params}`, {
+                    showErrors: false,
+                });
+                if (response.success && response.data) {
+                    setSearchResults(response.data);
+                } else {
+                    setSearchResults([]);
+                }
+            } catch {
+                setSearchResults([]);
+            } finally {
+                setSearchLoading(false);
+            }
+        }, 300);
+    };
+
+    const clearSearch = () => {
+        setSearchQuery('');
+        setSearchResults(null);
+        if (searchTimeoutRef.current) {
+            clearTimeout(searchTimeoutRef.current);
         }
     };
 
@@ -637,6 +719,72 @@ export function KnowledgeBaseManager({
         setActiveId(null);
     };
 
+    // Multi-select helpers
+    const toggleBulkSelect = (entryId: string) => {
+        setBulkSelectedEntries((prev) => {
+            const next = new Set(prev);
+            if (next.has(entryId)) {
+                next.delete(entryId);
+            } else {
+                next.add(entryId);
+            }
+            return next;
+        });
+    };
+
+    const handleBulkDelete = async () => {
+        const ids = Array.from(bulkSelectedEntries);
+        try {
+            await bulkDeleteMutation.mutateAsync(ids);
+            toast.success(`Deleted ${ids.length} entries`);
+            setBulkSelectedEntries(new Set());
+            setMultiSelectMode(false);
+            setBulkDeleteDialogOpen(false);
+            refetchFolders();
+            // Re-fetch expanded folder entries
+            for (const folderId of Object.keys(folderEntries)) {
+                fetchFolderEntries(folderId);
+            }
+        } catch {
+            toast.error('Failed to delete entries');
+        }
+    };
+
+    const handleBulkMove = async (targetFolderId: string) => {
+        const ids = Array.from(bulkSelectedEntries);
+        try {
+            await bulkMoveMutation.mutateAsync({ entryIds: ids, targetFolderId });
+            toast.success(`Moved ${ids.length} entries`);
+            setBulkSelectedEntries(new Set());
+            setMultiSelectMode(false);
+            setBulkMoveDialogOpen(false);
+            refetchFolders();
+            for (const folderId of Object.keys(folderEntries)) {
+                fetchFolderEntries(folderId);
+            }
+        } catch {
+            toast.error('Failed to move entries');
+        }
+    };
+
+    const handleDuplicateFolder = async (folderId: string) => {
+        try {
+            const result = await duplicateFolderMutation.mutateAsync(folderId);
+            toast.success(`Folder duplicated as "${result.new_folder_name}" with ${result.duplicated_entries} entries`);
+            refetchFolders();
+        } catch {
+            toast.error('Failed to duplicate folder');
+        }
+    };
+
+    const formatFileSize = (bytes: number): string => {
+        if (bytes === 0) return '0 B';
+        const k = 1024;
+        const sizes = ['B', 'KB', 'MB', 'GB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+    };
+
     // Handle file drops
     const handleNativeFileDrop = async (files: FileList, folderId: string) => {
         try {
@@ -903,6 +1051,157 @@ export function KnowledgeBaseManager({
                 </div>
             )}
 
+            {/* Storage Stats Bar */}
+            {kbStats && !enableAssignments && (
+                <div className="flex items-center gap-4 px-3 py-2 bg-muted/30 rounded-lg border text-xs text-muted-foreground">
+                    <div className="flex items-center gap-1.5">
+                        <HardDriveIcon className="h-3.5 w-3.5" />
+                        <span>{kbStats.total_entries} {kbStats.total_entries === 1 ? 'entry' : 'entries'}</span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                        <DatabaseIcon className="h-3.5 w-3.5" />
+                        <span>{formatFileSize(kbStats.total_size)} used</span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                        <FolderIcon className="h-3.5 w-3.5" />
+                        <span>{kbStats.total_folders} {kbStats.total_folders === 1 ? 'folder' : 'folders'}</span>
+                    </div>
+                    {!enableAssignments && (
+                        <div className="ml-auto">
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-6 text-xs px-2"
+                                onClick={() => setMultiSelectMode(!multiSelectMode)}
+                            >
+                                {multiSelectMode ? (
+                                    <>
+                                        <XIcon className="h-3 w-3 mr-1" />
+                                        Cancel
+                                    </>
+                                ) : (
+                                    <>
+                                        <CheckSquareIcon className="h-3 w-3 mr-1" />
+                                        Select
+                                    </>
+                                )}
+                            </Button>
+                        </div>
+                    )}
+                </div>
+            )}
+
+            {/* Multi-select Floating Action Bar */}
+            {multiSelectMode && bulkSelectedEntries.size > 0 && (
+                <div className="flex items-center gap-2 px-3 py-2 bg-primary/5 border border-primary/20 rounded-lg">
+                    <span className="text-sm font-medium text-primary">
+                        {bulkSelectedEntries.size} selected
+                    </span>
+                    <div className="flex-1" />
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-7 text-xs gap-1"
+                        onClick={() => setBulkMoveDialogOpen(true)}
+                    >
+                        <MoveIcon className="h-3 w-3" />
+                        Move
+                    </Button>
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-7 text-xs gap-1 text-destructive border-destructive/30 hover:bg-destructive/10"
+                        onClick={() => setBulkDeleteDialogOpen(true)}
+                    >
+                        <TrashIcon className="h-3 w-3" />
+                        Delete
+                    </Button>
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 text-xs"
+                        onClick={() => {
+                            setBulkSelectedEntries(new Set());
+                            setMultiSelectMode(false);
+                        }}
+                    >
+                        Clear
+                    </Button>
+                </div>
+            )}
+
+            {/* Search Bar */}
+            {treeData.length > 0 && (
+                <div className="relative">
+                    <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                        placeholder="Search files and summaries..."
+                        value={searchQuery}
+                        onChange={(e) => handleSearch(e.target.value)}
+                        className="pl-9 pr-8"
+                    />
+                    {searchQuery && (
+                        <button
+                            onClick={clearSearch}
+                            className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                        >
+                            <XIcon className="h-4 w-4" />
+                        </button>
+                    )}
+                </div>
+            )}
+
+            {/* Search Results */}
+            {searchResults !== null && (
+                <div className="space-y-2">
+                    {searchLoading ? (
+                        <div className="text-sm text-muted-foreground py-4 text-center">Searching...</div>
+                    ) : searchResults.length === 0 ? (
+                        <div className="text-sm text-muted-foreground py-4 text-center">
+                            No results found for &ldquo;{searchQuery}&rdquo;
+                        </div>
+                    ) : (
+                        <>
+                            <div className="text-xs text-muted-foreground">
+                                {searchResults.length} result{searchResults.length !== 1 ? 's' : ''} found
+                            </div>
+                            {searchResults.map((result) => (
+                                <div
+                                    key={result.entry_id}
+                                    className="flex items-start gap-3 p-3 rounded-lg border border-border/50 hover:border-border hover:bg-muted/30 cursor-pointer transition-colors"
+                                    onClick={() => {
+                                        const entry: Entry = {
+                                            entry_id: result.entry_id,
+                                            filename: result.filename,
+                                            summary: result.summary,
+                                            file_size: result.file_size,
+                                            created_at: result.created_at,
+                                            folder_id: result.folder_id,
+                                        };
+                                        setFilePreviewModal({ isOpen: true, file: entry });
+                                    }}
+                                >
+                                    <div className="w-9 h-9 bg-muted/80 rounded-lg flex items-center justify-center flex-shrink-0">
+                                        <FileIcon className="h-4 w-4 text-foreground/60" />
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-sm font-medium truncate">{result.filename}</span>
+                                            <span className="text-xs text-muted-foreground flex-shrink-0">
+                                                {result.folder_name}
+                                            </span>
+                                        </div>
+                                        <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">
+                                            {result.summary}
+                                        </p>
+                                    </div>
+                                </div>
+                            ))}
+                        </>
+                    )}
+                </div>
+            )}
+
             {/* Recent Files Section */}
             {showRecentFiles && recentFiles.length > 0 && (
                 <div className="mb-8">
@@ -962,7 +1261,7 @@ export function KnowledgeBaseManager({
                 onDragOver={(e) => e.preventDefault()}
                 onDrop={(e) => e.preventDefault()}
             >
-                {treeData.length === 0 ? (
+                {searchResults !== null ? null : treeData.length === 0 ? (
                     emptyStateContent ? emptyStateContent : (
                         <div className="text-center py-12 px-6 bg-muted/30 rounded-xl border-2 border-dashed border-border">
                             <div className="mx-auto w-12 h-12 bg-muted rounded-full flex items-center justify-center mb-4 border">
@@ -1129,6 +1428,75 @@ export function KnowledgeBaseManager({
                     file={filePreviewModal.file}
                     onEditSummary={handleEditSummary}
                 />
+            )}
+
+            {/* Bulk Delete Confirmation Dialog */}
+            {bulkDeleteDialogOpen && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center">
+                    <div className="fixed inset-0 bg-black/50" onClick={() => setBulkDeleteDialogOpen(false)} />
+                    <div className="relative bg-background border rounded-xl shadow-lg p-6 max-w-md w-full mx-4 space-y-4">
+                        <h3 className="text-lg font-semibold">Delete {bulkSelectedEntries.size} entries?</h3>
+                        <p className="text-sm text-muted-foreground">
+                            This will permanently remove the selected entries from your knowledge base. This action cannot be undone.
+                        </p>
+                        <div className="max-h-32 overflow-y-auto space-y-1 bg-muted/30 rounded-lg p-2">
+                            {Array.from(bulkSelectedEntries).map((entryId) => {
+                                const entry = treeData.flatMap(f => f.children || []).find(c => c.id === entryId);
+                                return (
+                                    <div key={entryId} className="text-xs text-muted-foreground flex items-center gap-1.5">
+                                        <FileIcon className="h-3 w-3 shrink-0" />
+                                        <span className="truncate">{entry?.name || entryId}</span>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                        <div className="flex justify-end gap-2">
+                            <Button variant="outline" size="sm" onClick={() => setBulkDeleteDialogOpen(false)}>
+                                Cancel
+                            </Button>
+                            <Button
+                                variant="destructive"
+                                size="sm"
+                                onClick={handleBulkDelete}
+                                disabled={bulkDeleteMutation.isPending}
+                            >
+                                {bulkDeleteMutation.isPending ? 'Deleting...' : `Delete ${bulkSelectedEntries.size} entries`}
+                            </Button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Bulk Move Folder Picker Dialog */}
+            {bulkMoveDialogOpen && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center">
+                    <div className="fixed inset-0 bg-black/50" onClick={() => setBulkMoveDialogOpen(false)} />
+                    <div className="relative bg-background border rounded-xl shadow-lg p-6 max-w-sm w-full mx-4 space-y-4">
+                        <h3 className="text-lg font-semibold">Move to folder</h3>
+                        <p className="text-sm text-muted-foreground">
+                            Choose a destination folder for {bulkSelectedEntries.size} selected entries.
+                        </p>
+                        <div className="space-y-1">
+                            {folders.map((folder) => (
+                                <button
+                                    key={folder.folder_id}
+                                    onClick={() => handleBulkMove(folder.folder_id)}
+                                    disabled={bulkMoveMutation.isPending}
+                                    className="w-full flex items-center gap-2 px-3 py-2 text-sm rounded-lg hover:bg-accent transition-colors text-left"
+                                >
+                                    <FolderIcon className="h-4 w-4 text-amber-500" />
+                                    <span>{folder.name}</span>
+                                    <span className="ml-auto text-xs text-muted-foreground">{folder.entry_count} files</span>
+                                </button>
+                            ))}
+                        </div>
+                        <div className="flex justify-end">
+                            <Button variant="outline" size="sm" onClick={() => setBulkMoveDialogOpen(false)}>
+                                Cancel
+                            </Button>
+                        </div>
+                    </div>
+                </div>
             )}
         </div>
     );

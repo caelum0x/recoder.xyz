@@ -1,4 +1,11 @@
+import os
+import re
+import shutil
+import subprocess
+import tempfile
+import mimetypes
 from typing import List, Optional
+from pathlib import Path
 from fastapi import APIRouter, HTTPException, Depends, UploadFile, File, BackgroundTasks
 from pydantic import BaseModel, Field, validator
 from core.utils.auth_utils import verify_and_get_user_id_from_jwt, require_agent_access, AuthorizedAgentAccess
@@ -91,6 +98,29 @@ class UpdateEntryRequest(BaseModel):
 
 class AgentAssignmentRequest(BaseModel):
     folder_ids: List[str]
+
+class GitCloneRequest(BaseModel):
+    git_url: str = Field(..., min_length=1)
+    branch: str = Field(default="main", min_length=1, max_length=255)
+
+    @validator('git_url')
+    def validate_git_url(cls, v):
+        v = v.strip()
+        # Allow HTTPS git URLs only (no SSH/local paths for security)
+        if not re.match(r'^https?://', v):
+            raise ValueError('Only HTTPS Git URLs are supported')
+        # Basic URL structure validation
+        if not re.match(r'^https?://[a-zA-Z0-9._\-]+\.[a-zA-Z]{2,}/', v):
+            raise ValueError('Invalid Git repository URL')
+        return v
+
+    @validator('branch')
+    def validate_branch(cls, v):
+        v = v.strip()
+        # Reject shell injection characters
+        if re.search(r'[;&|`$(){}]', v):
+            raise ValueError('Invalid branch name')
+        return v
 
 file_processor = FileProcessor()
 
@@ -392,6 +422,157 @@ async def upload_file(
         logger.error(f"Error uploading file: {str(e)}")
         raise HTTPException(status_code=500, detail="Failed to upload file")
 
+# Git clone
+MAX_CLONE_FILES = 200
+MAX_CLONE_TOTAL_SIZE = 50 * 1024 * 1024  # 50MB
+
+@router.post("/folders/{folder_id}/clone-git-repo")
+async def clone_git_repo(
+    folder_id: str,
+    request: GitCloneRequest,
+    background_tasks: BackgroundTasks,
+    user_id: str = Depends(verify_and_get_user_id_from_jwt)
+):
+    """Clone a git repository and import supported files into a KB folder."""
+    if not config.ENABLE_KNOWLEDGE_BASE:
+        raise HTTPException(status_code=503, detail="Knowledge base feature is currently disabled")
+
+    account_id = user_id
+
+    # Verify folder ownership
+    folder_row = await Table("knowledge_base_folders").get_by(
+        filters={"folder_id": folder_id, "account_id": account_id},
+        cols="folder_id"
+    )
+    if not folder_row:
+        raise HTTPException(status_code=404, detail="Folder not found")
+
+    tmp_dir = tempfile.mkdtemp(prefix="kb_git_")
+    try:
+        # Shallow clone (--depth 1) to minimise bandwidth/disk
+        clone_cmd = [
+            "git", "clone", "--depth", "1",
+            "--branch", request.branch,
+            "--single-branch",
+            request.git_url,
+            tmp_dir,
+        ]
+        result = subprocess.run(
+            clone_cmd,
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
+        if result.returncode != 0:
+            err_msg = result.stderr.strip() or "Git clone failed"
+            # Sanitise error — don't leak full paths
+            if "not found" in err_msg.lower() or "could not read" in err_msg.lower():
+                raise HTTPException(status_code=400, detail="Repository not found or not accessible")
+            if "Remote branch" in err_msg and "not found" in err_msg:
+                raise HTTPException(status_code=400, detail=f"Branch '{request.branch}' not found")
+            raise HTTPException(status_code=400, detail="Failed to clone repository")
+
+        # Walk the cloned directory, collect processable files
+        files_to_process = []
+        total_size = 0
+
+        for root, dirs, filenames in os.walk(tmp_dir):
+            # Skip .git directory
+            dirs[:] = [d for d in dirs if d != '.git']
+            for fname in filenames:
+                fpath = os.path.join(root, fname)
+                try:
+                    fsize = os.path.getsize(fpath)
+                except OSError:
+                    continue
+
+                # Skip very large individual files (>10MB)
+                if fsize > 10 * 1024 * 1024:
+                    continue
+                # Skip empty files
+                if fsize == 0:
+                    continue
+
+                ext = Path(fname).suffix.lower()
+                mime, _ = mimetypes.guess_type(fname)
+                mime = mime or 'application/octet-stream'
+
+                # Determine if file is processable
+                is_supported = ext in file_processor.SUPPORTED_EXTENSIONS
+                is_text_mime = mime.startswith('text/') or mime in (
+                    'application/json', 'application/xml', 'text/xml',
+                    'application/javascript', 'application/x-yaml',
+                )
+                # For unknown mime types, try text detection on small sample
+                is_text_file = False
+                if not is_supported and not is_text_mime:
+                    try:
+                        with open(fpath, 'rb') as f:
+                            sample = f.read(1024)
+                        is_text_file = file_processor._is_likely_text_file(sample)
+                    except OSError:
+                        continue
+
+                if is_supported or is_text_mime or is_text_file:
+                    total_size += fsize
+                    if total_size > MAX_CLONE_TOTAL_SIZE:
+                        break
+                    rel_path = os.path.relpath(fpath, tmp_dir)
+                    files_to_process.append((fpath, rel_path, fsize, mime))
+                    if len(files_to_process) >= MAX_CLONE_FILES:
+                        break
+            if len(files_to_process) >= MAX_CLONE_FILES or total_size > MAX_CLONE_TOTAL_SIZE:
+                break
+
+        if not files_to_process:
+            raise HTTPException(status_code=400, detail="No supported files found in repository")
+
+        # Check account total size limit
+        await check_total_file_size_limit(account_id, total_size)
+
+        # Process each file
+        processed = []
+        errors = []
+        for fpath, rel_path, fsize, mime in files_to_process:
+            try:
+                with open(fpath, 'rb') as f:
+                    content = f.read()
+
+                result = await file_processor.process_file_fast(
+                    account_id=account_id,
+                    folder_id=folder_id,
+                    file_content=content,
+                    filename=rel_path,
+                    mime_type=mime,
+                    background_tasks=background_tasks,
+                )
+                if result.get('success'):
+                    processed.append(rel_path)
+                else:
+                    errors.append({"file": rel_path, "error": result.get('error', 'Unknown error')})
+            except Exception as e:
+                errors.append({"file": rel_path, "error": str(e)})
+
+        logger.info(f"Git clone complete for folder {folder_id}: {len(processed)} files processed, {len(errors)} errors")
+
+        return {
+            "success": True,
+            "files_processed": len(processed),
+            "files_failed": len(errors),
+            "errors": errors[:10] if errors else [],
+        }
+
+    except HTTPException:
+        raise
+    except subprocess.TimeoutExpired:
+        raise HTTPException(status_code=408, detail="Repository clone timed out (120s limit)")
+    except Exception as e:
+        logger.error(f"Error cloning git repo: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to clone repository")
+    finally:
+        shutil.rmtree(tmp_dir, ignore_errors=True)
+
+
 # Entries
 @router.get("/folders/{folder_id}/entries", response_model=List[EntryResponse])
 async def get_folder_entries(
@@ -437,6 +618,187 @@ async def get_folder_entries(
     except Exception as e:
         logger.error(f"Error getting folder entries: {str(e)}")
         raise HTTPException(status_code=500, detail="Failed to retrieve entries")
+
+# Bulk assign/unassign entries to agents
+@router.patch("/entries/bulk-assign")
+async def bulk_assign_entries(
+    request: BulkAssignRequest,
+    user_id: str = Depends(verify_and_get_user_id_from_jwt)
+):
+    """Bulk assign or unassign knowledge base entries to agents."""
+    if not config.ENABLE_KNOWLEDGE_BASE:
+        raise HTTPException(status_code=503, detail="Knowledge base feature is currently disabled")
+
+    try:
+        account_id = user_id
+
+        # Validate ownership of all entries
+        owned_entries = await Table("knowledge_base_entries").list(
+            filters={"account_id": account_id, "is_active": True},
+            cols="entry_id",
+            limit=10000
+        )
+        owned_entry_ids = {str(e['entry_id']) for e in owned_entries}
+
+        invalid_entries = [eid for eid in request.entry_ids if eid not in owned_entry_ids]
+        if invalid_entries:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Entries not found or not owned: {invalid_entries[:5]}"
+            )
+
+        updated_count = 0
+        assignments_table = Table("agent_knowledge_entry_assignments")
+        affected_agent_ids = set()
+
+        if request.action == "assign":
+            for agent_id in request.agent_ids:
+                for entry_id in request.entry_ids:
+                    try:
+                        # Check if assignment already exists
+                        existing = await assignments_table.get_by(
+                            filters={"agent_id": agent_id, "entry_id": entry_id},
+                            cols="assignment_id, enabled"
+                        )
+                        if existing:
+                            # Re-enable if disabled
+                            if not existing['enabled']:
+                                await assignments_table.update(
+                                    "assignment_id", existing['assignment_id'],
+                                    {"enabled": True}
+                                )
+                                updated_count += 1
+                                affected_agent_ids.add(agent_id)
+                        else:
+                            await assignments_table.insert({
+                                'agent_id': agent_id,
+                                'entry_id': entry_id,
+                                'account_id': account_id,
+                                'enabled': True
+                            })
+                            updated_count += 1
+                            affected_agent_ids.add(agent_id)
+                    except Exception as e:
+                        logger.warning(f"Failed to assign entry {entry_id} to agent {agent_id}: {e}")
+
+        elif request.action == "unassign":
+            for agent_id in request.agent_ids:
+                for entry_id in request.entry_ids:
+                    try:
+                        existing = await assignments_table.get_by(
+                            filters={"agent_id": agent_id, "entry_id": entry_id},
+                            cols="assignment_id"
+                        )
+                        if existing:
+                            await assignments_table.delete("assignment_id", existing['assignment_id'])
+                            updated_count += 1
+                            affected_agent_ids.add(agent_id)
+                    except Exception as e:
+                        logger.warning(f"Failed to unassign entry {entry_id} from agent {agent_id}: {e}")
+
+        # Invalidate caches for affected agents
+        try:
+            from core.cache.runtime_cache import invalidate_agent_config_cache, invalidate_kb_context_cache
+            for agent_id in affected_agent_ids:
+                await invalidate_agent_config_cache(agent_id)
+                await invalidate_kb_context_cache(agent_id)
+            logger.debug(f"Invalidated cache for {len(affected_agent_ids)} agents after bulk {request.action}")
+        except Exception as e:
+            logger.warning(f"Failed to invalidate caches after bulk {request.action}: {e}")
+
+        return {
+            "success": True,
+            "updated_count": updated_count,
+            "action": request.action
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error bulk assigning entries: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to bulk assign entries")
+
+
+# Bulk move entries between folders
+@router.patch("/entries/bulk-move")
+async def bulk_move_entries(
+    request: BulkMoveRequest,
+    user_id: str = Depends(verify_and_get_user_id_from_jwt)
+):
+    """Bulk move knowledge base entries to a different folder."""
+    if not config.ENABLE_KNOWLEDGE_BASE:
+        raise HTTPException(status_code=503, detail="Knowledge base feature is currently disabled")
+
+    try:
+        account_id = user_id
+
+        # Verify target folder exists and belongs to user
+        target_folder = await Table("knowledge_base_folders").get_by(
+            filters={"folder_id": request.target_folder_id, "account_id": account_id},
+            cols="folder_id"
+        )
+        if not target_folder:
+            raise HTTPException(status_code=404, detail="Target folder not found")
+
+        # Get all entries owned by this user that are in the request list
+        owned_entries = await Table("knowledge_base_entries").list(
+            filters={"account_id": account_id, "is_active": True},
+            cols="entry_id, folder_id, file_path, filename",
+            limit=10000
+        )
+        owned_map = {str(e['entry_id']): e for e in owned_entries}
+
+        invalid_entries = [eid for eid in request.entry_ids if eid not in owned_map]
+        if invalid_entries:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Entries not found or not owned: {invalid_entries[:5]}"
+            )
+
+        moved_count = 0
+        for entry_id in request.entry_ids:
+            entry = owned_map[entry_id]
+
+            # Skip if already in target folder
+            if str(entry['folder_id']) == request.target_folder_id:
+                continue
+
+            current_file_path = entry['file_path']
+            filename = entry['filename']
+
+            # Build new file path
+            sanitized_filename = file_processor.sanitize_filename(filename)
+            new_file_path = f"knowledge-base/{request.target_folder_id}/{entry_id}/{sanitized_filename}"
+
+            # Move file in storage
+            try:
+                storage = await get_storage_client()
+                await storage.from_('file-uploads').copy(current_file_path, new_file_path)
+                await storage.from_('file-uploads').remove([current_file_path])
+            except Exception as storage_error:
+                logger.warning(f"Failed to move file in storage for entry {entry_id}: {storage_error}")
+                continue
+
+            # Update database record
+            await Table("knowledge_base_entries").update(
+                "entry_id", entry_id,
+                {"folder_id": request.target_folder_id, "file_path": new_file_path}
+            )
+            moved_count += 1
+
+        logger.info(f"Bulk moved {moved_count}/{len(request.entry_ids)} entries to folder {request.target_folder_id}")
+
+        return {
+            "success": True,
+            "moved_count": moved_count
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error bulk moving entries: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to bulk move entries")
+
 
 @router.delete("/entries/{entry_id}")
 async def delete_entry(
@@ -626,6 +988,180 @@ class FolderMoveRequest(BaseModel):
     folder_id: str
 
 
+class BulkAssignRequest(BaseModel):
+    entry_ids: List[str] = Field(..., min_length=1)
+    agent_ids: List[str] = Field(..., min_length=1)
+    action: str = Field(..., pattern="^(assign|unassign)$")
+
+    @validator('action')
+    def validate_action(cls, v):
+        if v not in ('assign', 'unassign'):
+            raise ValueError("action must be 'assign' or 'unassign'")
+        return v
+
+
+class BulkMoveRequest(BaseModel):
+    entry_ids: List[str] = Field(..., min_length=1)
+    target_folder_id: str
+
+
+class FolderFileCount(BaseModel):
+    folder_id: str
+    folder_name: str
+    file_count: int
+
+
+class KnowledgeBaseStatsResponse(BaseModel):
+    total_files: int
+    total_folders: int
+    embedded_count: int
+    pending_count: int
+    failed_count: int
+    total_storage_bytes: int
+    per_folder_counts: List[FolderFileCount]
+
+
+# Search
+@router.get("/search")
+async def search_knowledge_base_endpoint(
+    q: str,
+    agent_id: Optional[str] = None,
+    limit: int = 20,
+    mode: Optional[str] = None,
+    user_id: str = Depends(verify_and_get_user_id_from_jwt)
+):
+    """Search knowledge base entries. Uses semantic search when embeddings are available, falls back to full-text."""
+    if not config.ENABLE_KNOWLEDGE_BASE:
+        return []
+
+    q = q.strip()
+    if not q or len(q) < 2:
+        raise HTTPException(status_code=400, detail="Search query must be at least 2 characters")
+
+    if limit < 1 or limit > 100:
+        limit = 20
+
+    try:
+        account_id = user_id
+
+        # Try semantic search first (if mode != 'fulltext')
+        if mode != 'fulltext':
+            try:
+                from core.memory.embedding_service import embedding_service
+                import json
+
+                query_embedding = await embedding_service.embed_text(q)
+                rows = await execute_read(
+                    """SELECT * FROM search_knowledge_base_semantic(
+                        :account_id, CAST(:embedding AS vector), :query_text, :agent_id, :limit, :threshold
+                    )""",
+                    {
+                        "account_id": account_id,
+                        "embedding": json.dumps(query_embedding),
+                        "query_text": q,
+                        "agent_id": agent_id,
+                        "limit": limit,
+                        "threshold": 0.25,
+                    }
+                )
+
+                if rows:
+                    return [
+                        {
+                            "entry_id": str(row["entry_id"]),
+                            "folder_id": str(row["folder_id"]),
+                            "folder_name": row["folder_name"],
+                            "filename": row["filename"],
+                            "summary": row["summary"],
+                            "file_size": row["file_size"],
+                            "created_at": str(row["created_at"]),
+                            "rank": float(row["similarity"]) if row["similarity"] else 0.0,
+                        }
+                        for row in rows
+                    ]
+            except Exception as e:
+                logger.warning(f"Semantic search failed, falling back to full-text: {e}")
+
+        # Fallback to full-text search
+        rows = await execute_read(
+            """SELECT * FROM search_knowledge_base(
+                :account_id, :query, :agent_id, :limit
+            )""",
+            {
+                "account_id": account_id,
+                "query": q,
+                "agent_id": agent_id,
+                "limit": limit,
+            }
+        )
+
+        return [
+            {
+                "entry_id": str(row["entry_id"]),
+                "folder_id": str(row["folder_id"]),
+                "folder_name": row["folder_name"],
+                "filename": row["filename"],
+                "summary": row["summary"],
+                "file_size": row["file_size"],
+                "created_at": str(row["created_at"]),
+                "rank": float(row["rank"]) if row["rank"] else 0.0,
+            }
+            for row in rows
+        ]
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error searching knowledge base: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to search knowledge base")
+
+
+# Backfill embeddings for entries that don't have them
+@router.post("/backfill-embeddings")
+async def backfill_embeddings(
+    background_tasks: BackgroundTasks,
+    user_id: str = Depends(verify_and_get_user_id_from_jwt)
+):
+    """Trigger background embedding generation for entries missing embeddings."""
+    if not config.ENABLE_KNOWLEDGE_BASE:
+        raise HTTPException(status_code=503, detail="Knowledge base feature is currently disabled")
+
+    try:
+        account_id = user_id
+
+        # Find entries without embeddings
+        rows = await execute_read(
+            """SELECT entry_id, filename, summary
+               FROM knowledge_base_entries
+               WHERE account_id = :account_id
+                 AND is_active = TRUE
+                 AND embedding IS NULL
+                 AND summary IS NOT NULL
+                 AND summary != 'Processing...'
+               LIMIT 100""",
+            {"account_id": account_id}
+        )
+
+        if not rows:
+            return {"queued": 0, "message": "All entries already have embeddings"}
+
+        processor = FileProcessor()
+        for row in rows:
+            background_tasks.add_task(
+                processor._generate_and_store_embedding,
+                str(row["entry_id"]),
+                row["filename"],
+                row["summary"],
+                row["summary"]  # Use summary as content fallback
+            )
+
+        return {"queued": len(rows), "message": f"Queued {len(rows)} entries for embedding generation"}
+
+    except Exception as e:
+        logger.error(f"Error backfilling embeddings: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to backfill embeddings")
+
+
 # File download/read
 @router.get("/entries/{entry_id}/content")
 async def get_entry_content(
@@ -672,7 +1208,8 @@ async def get_entry_content(
                 detected = chardet.detect(file_content)
                 encoding = detected.get('encoding', 'utf-8')
                 content_text = file_content.decode(encoding)
-            except:
+            except Exception:
+                logger.warning("Charset detection/decoding failed for entry %s, falling back to utf-8 with replacement", entry.get('entry_id', 'unknown'), exc_info=True)
                 content_text = file_content.decode('utf-8', errors='replace')
         elif entry['filename'].endswith('.pdf'):
             try:
@@ -698,8 +1235,8 @@ async def get_entry_content(
                 if detected.get('confidence', 0) > 0.7:
                     encoding = detected.get('encoding', 'utf-8')
                     content_text = file_content.decode(encoding)
-            except:
-                pass
+            except Exception:
+                logger.warning("Generic text decoding failed for entry %s, treating as binary", entry.get('entry_id', 'unknown'), exc_info=True)
 
         return {
             "entry_id": entry['entry_id'],
@@ -791,3 +1328,93 @@ async def move_file(
     except Exception as e:
         logger.error(f"Error moving file: {str(e)}")
         raise HTTPException(status_code=500, detail="Failed to move file")
+
+
+# Stats
+@router.get("/stats", response_model=KnowledgeBaseStatsResponse)
+async def get_knowledge_base_stats(
+    user_id: str = Depends(verify_and_get_user_id_from_jwt)
+):
+    """Get aggregate statistics for the user's knowledge base."""
+    if not config.ENABLE_KNOWLEDGE_BASE:
+        return KnowledgeBaseStatsResponse(
+            total_files=0, total_folders=0, embedded_count=0,
+            pending_count=0, failed_count=0, total_storage_bytes=0,
+            per_folder_counts=[]
+        )
+
+    try:
+        account_id = user_id
+
+        # Count folders
+        folder_rows = await Table("knowledge_base_folders").list(
+            filters={"account_id": account_id},
+            cols="folder_id, name",
+            limit=1000
+        )
+        total_folders = len(folder_rows)
+
+        # Get all active entries for this account
+        entry_rows = await Table("knowledge_base_entries").list(
+            filters={"account_id": account_id, "is_active": True},
+            cols="entry_id, folder_id, file_size, summary",
+            limit=10000
+        )
+
+        total_files = len(entry_rows)
+        total_storage_bytes = sum(entry['file_size'] for entry in entry_rows)
+
+        # Classify entries by embedding status
+        # Entries with summary == 'Processing...' are still pending
+        # For embedded vs failed, we need to check the embedding column
+        pending_count = sum(1 for e in entry_rows if e['summary'] == 'Processing...')
+        non_pending_entry_ids = [
+            str(e['entry_id']) for e in entry_rows if e['summary'] != 'Processing...'
+        ]
+
+        embedded_count = 0
+        failed_count = 0
+        if non_pending_entry_ids:
+            # Query for entries that have embeddings
+            embedded_rows = await execute_read(
+                """SELECT COUNT(*) as cnt
+                   FROM knowledge_base_entries
+                   WHERE account_id = :account_id
+                     AND is_active = TRUE
+                     AND summary != 'Processing...'
+                     AND embedding IS NOT NULL""",
+                {"account_id": account_id}
+            )
+            embedded_count = embedded_rows[0]['cnt'] if embedded_rows else 0
+            # Failed = non-pending entries without embeddings
+            failed_count = len(non_pending_entry_ids) - embedded_count
+
+        # Per-folder file counts
+        folder_id_to_name = {str(f['folder_id']): f['name'] for f in folder_rows}
+        folder_counts: dict = {}
+        for entry in entry_rows:
+            fid = str(entry['folder_id'])
+            folder_counts[fid] = folder_counts.get(fid, 0) + 1
+
+        per_folder_counts = [
+            FolderFileCount(
+                folder_id=fid,
+                folder_name=folder_id_to_name.get(fid, "Unknown"),
+                file_count=count
+            )
+            for fid, count in folder_counts.items()
+        ]
+
+        return KnowledgeBaseStatsResponse(
+            total_files=total_files,
+            total_folders=total_folders,
+            embedded_count=embedded_count,
+            pending_count=pending_count,
+            failed_count=failed_count,
+            total_storage_bytes=total_storage_bytes,
+            per_folder_counts=per_folder_counts
+        )
+
+    except Exception as e:
+        logger.error(f"Error getting knowledge base stats: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to retrieve knowledge base stats")

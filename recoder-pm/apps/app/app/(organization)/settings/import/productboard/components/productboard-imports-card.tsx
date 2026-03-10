@@ -20,7 +20,18 @@ export const ProductboardImportsCard = async () => {
   });
 
   if (!productboardImports.length) {
-    return null;
+    return (
+      <StackCard
+        className="text-sm"
+        icon={HistoryIcon}
+        title="Previous imports"
+      >
+        <p className="m-0 text-muted-foreground">
+          No imports yet. Use the form above to start your first Productboard
+          import.
+        </p>
+      </StackCard>
+    );
   }
 
   return (

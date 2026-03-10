@@ -537,11 +537,83 @@ export const SandboxDesktop = memo(function SandboxDesktop({
     openFileWindow(path, false);
   }, [openFileWindow]);
 
+  const downloadFolderAsZip = useCallback(async (dirPath: string, folderName: string) => {
+    if (!sandboxId) {
+      toast.error('No sandbox available');
+      return;
+    }
+    const token = await getSessionAccessToken();
+    if (!token) {
+      toast.error('Authentication required');
+      return;
+    }
+
+    const toastId = `download-folder-${folderName}`;
+    toast.loading(`Preparing ${folderName}...`, { id: toastId });
+
+    try {
+      const JSZip = (await import('jszip')).default;
+      const { saveAs } = await import('file-saver');
+      const { listSandboxFiles } = await import('@/lib/api/sandbox');
+
+      const zip = new JSZip();
+      let fileCount = 0;
+      const MAX_FILES = 500;
+
+      const collectFiles = async (currentPath: string) => {
+        if (fileCount >= MAX_FILES) return;
+        const files = await listSandboxFiles(sandboxId, currentPath);
+        for (const file of files) {
+          if (fileCount >= MAX_FILES) break;
+          if (file.name === 'node_modules' || file.name === '.git') continue;
+          if (file.is_dir) {
+            await collectFiles(file.path);
+          } else {
+            try {
+              const blob = await fetchFileContent(sandboxId, file.path, 'blob', token);
+              const relativePath = file.path.replace(dirPath.replace(/\/$/, '') + '/', '');
+              zip.file(relativePath, blob);
+              fileCount++;
+              if (fileCount % 5 === 0) {
+                toast.loading(`Packing ${folderName}... (${fileCount} files)`, { id: toastId });
+              }
+            } catch {
+              // Skip unreadable files
+            }
+          }
+        }
+      };
+
+      await collectFiles(dirPath);
+
+      if (fileCount === 0) {
+        toast.error(`No files in ${folderName}`, { id: toastId });
+        return;
+      }
+
+      toast.loading(`Creating zip (${fileCount} files)...`, { id: toastId });
+      const blob = await zip.generateAsync({ type: 'blob' });
+      saveAs(blob, `${folderName}.zip`);
+      toast.success(`Downloaded ${folderName} (${fileCount} files)`, { id: toastId });
+    } catch {
+      toast.error(`Failed to download ${folderName}`, { id: toastId });
+    }
+  }, [sandboxId]);
+
   const handleFileDownload = useCallback(async (filePath: string) => {
     if (!sandboxId) {
       toast.error('Cannot download file');
       return;
     }
+
+    // Check if this is a directory by looking at desktop files
+    const isDir = desktopFiles.some(f => f.path === filePath && f.is_dir);
+    if (isDir) {
+      const folderName = filePath.split('/').pop() || 'folder';
+      await downloadFolderAsZip(filePath, folderName);
+      return;
+    }
+
     const token = await getSessionAccessToken();
     if (!token) {
       toast.error('Cannot download file');
@@ -549,12 +621,12 @@ export const SandboxDesktop = memo(function SandboxDesktop({
     }
 
     const fileName = filePath.split('/').pop() || 'download';
-    
+
     try {
       toast.loading(`Downloading ${fileName}...`, { id: 'download' });
-      
+
       const blob = await fetchFileContent(sandboxId, filePath, 'blob', token);
-      
+
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
@@ -563,13 +635,13 @@ export const SandboxDesktop = memo(function SandboxDesktop({
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
-      
+
       toast.success(`Downloaded ${fileName}`, { id: 'download' });
     } catch (error) {
       console.error('Download failed:', error);
       toast.error(`Failed to download ${fileName}`, { id: 'download' });
     }
-  }, [sandboxId]);
+  }, [sandboxId, desktopFiles, downloadFolderAsZip]);
 
   const handleUploadFiles = useCallback((files: FileList | File[]) => {
     if (!sandboxId) {
@@ -609,35 +681,16 @@ export const SandboxDesktop = memo(function SandboxDesktop({
       toast.error('Cannot create folder');
       return;
     }
-    const token = await getSessionAccessToken();
-    if (!token) {
-      toast.error('Cannot create folder');
-      return;
-    }
-    
     if (workspaceFiles.some(f => f.name === folderName)) {
       toast.error(`"${folderName}" already exists`);
       return;
     }
     
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/sandboxes/${sandboxId}/terminal/execute`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          command: `mkdir -p "/workspace/${folderName}"`,
-        }),
-      });
-      
-      if (response.ok) {
-        toast.success(`Created "${folderName}"`);
-        queryClient.invalidateQueries({ queryKey: fileQueryKeys.directories() });
-      } else {
-        toast.error('Failed to create folder');
-      }
+      const { executeTerminalCommand } = await import('@/lib/api/sandbox');
+      await executeTerminalCommand(sandboxId, `mkdir -p "/workspace/${folderName}"`);
+      toast.success(`Created "${folderName}"`);
+      queryClient.invalidateQueries({ queryKey: fileQueryKeys.directories() });
     } catch (error) {
       toast.error('Failed to create folder');
     }
@@ -666,8 +719,66 @@ export const SandboxDesktop = memo(function SandboxDesktop({
       toast.error('No sandbox available');
       return;
     }
-    toast.info('Download all functionality coming soon');
-  }, [sandboxId]);
+    const token = await getSessionAccessToken();
+    if (!token) {
+      toast.error('Authentication required');
+      return;
+    }
+
+    const toastId = 'download-all';
+    toast.loading('Preparing download...', { id: toastId });
+
+    try {
+      const JSZip = (await import('jszip')).default;
+      const { saveAs } = await import('file-saver');
+      const { listSandboxFiles } = await import('@/lib/api/sandbox');
+
+      const zip = new JSZip();
+      let fileCount = 0;
+      const MAX_FILES = 500;
+
+      // Recursively collect all files
+      const collectFiles = async (dirPath: string) => {
+        if (fileCount >= MAX_FILES) return;
+        const files = await listSandboxFiles(sandboxId, dirPath);
+        for (const file of files) {
+          if (fileCount >= MAX_FILES) break;
+          if (file.name.startsWith('.') && (file.name === '.git' || file.name === 'node_modules')) continue;
+          if (file.is_dir) {
+            if (file.name === 'node_modules' || file.name === '.git') continue;
+            await collectFiles(file.path);
+          } else {
+            try {
+              const blob = await fetchFileContent(sandboxId, file.path, 'blob', token);
+              const relativePath = file.path.replace(/^\/workspace\/?/, '');
+              zip.file(relativePath, blob);
+              fileCount++;
+              toast.loading(`Packing files... (${fileCount})`, { id: toastId });
+            } catch {
+              // Skip files that can't be read
+            }
+          }
+        }
+      };
+
+      await collectFiles('/workspace');
+
+      if (fileCount === 0) {
+        toast.error('No files to download', { id: toastId });
+        return;
+      }
+
+      toast.loading(`Creating zip (${fileCount} files)...`, { id: toastId });
+      const blob = await zip.generateAsync({ type: 'blob' });
+      const zipName = project?.name
+        ? `${project.name.replace(/[^a-zA-Z0-9_-]/g, '_')}.zip`
+        : `workspace-${sandboxId.slice(0, 8)}.zip`;
+      saveAs(blob, zipName);
+      toast.success(`Downloaded ${fileCount} files`, { id: toastId });
+    } catch (error) {
+      toast.error('Failed to download files', { id: toastId });
+    }
+  }, [sandboxId, project?.name]);
 
   const renderDesktop = () => (
     <>

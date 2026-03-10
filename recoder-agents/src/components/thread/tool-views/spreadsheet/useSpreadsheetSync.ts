@@ -586,7 +586,7 @@ export function useSpreadsheetSync({
               errorMessage: 'File was modified externally',
             }));
           } else {
-            console.log('[SpreadsheetSync] External changes detected, auto-refreshing...');
+            
             lastKnownHashRef.current = hash;
             currentVersionRef.current = hash;
             
