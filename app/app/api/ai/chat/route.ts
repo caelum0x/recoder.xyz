@@ -65,8 +65,8 @@ async function processAIRequest(
 ): Promise<AIResponse> {
   const startTime = Date.now();
 
-  // Default to a good general model if none specified
-  const model = request.model || 'anthropic/claude-3.5-sonnet';
+  // Default to a reliable free model if none specified
+  const model = request.model || 'google/gemma-3-12b-it:free';
 
   try {
     const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
@@ -147,10 +147,10 @@ export async function POST(request: NextRequest) {
 
     try {
       const jwtSecret = process.env.BETTER_AUTH_SECRET || process.env.JWT_SECRET;
-      if (!jwtSecret && process.env.NODE_ENV === 'production') {
-        throw new Error('BETTER_AUTH_SECRET or JWT_SECRET must be set in production');
+      if (!jwtSecret) {
+        throw new Error('BETTER_AUTH_SECRET or JWT_SECRET must be set');
       }
-      const decoded = jwt.verify(token, jwtSecret || 'dev-jwt-secret-not-for-production') as any;
+      const decoded = jwt.verify(token, jwtSecret) as { userId?: string; id?: string };
       userId = decoded.userId || decoded.id;
     } catch (error) {
       return NextResponse.json(
@@ -169,23 +169,28 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Check quota and get API key
-    const requestCheck = await canMakeRequest(userId);
+    // Check quota and get API key (model-aware for free tier enforcement)
+    const requestCheck = await canMakeRequest(userId, body.model);
     if (!requestCheck.allowed) {
       return NextResponse.json(
         {
           error: 'Request not allowed',
           reason: requestCheck.reason,
-          upgradeUrl: '/pricing',
+          upgradeUrl: '/settings/ai-providers',
+          freeModels: requestCheck.reason?.includes('requires your own API key') ? true : undefined,
         },
         { status: 403 }
       );
     }
 
     const apiKey = requestCheck.apiKey!;
+    // Use the enforced model (may be switched to :free variant for platform key)
+    if (requestCheck.model) {
+      body.model = requestCheck.model;
+    }
 
     // Get API key info for logging
-    const apiKeyInfo = await getApiKeyForUser(userId);
+    const apiKeyInfo = await getApiKeyForUser(userId, body.model);
 
     // Load MCP tools for user
     const mcpTools = await getMCPTools(userId);
@@ -207,7 +212,7 @@ export async function POST(request: NextRequest) {
       );
 
       // Handle tool calls if present
-      const data = aiResponse as any;
+      const data = aiResponse as AIResponse & { choices?: Array<{ message?: { tool_calls?: Array<{ function: { name: string; arguments: string } }> } }> };
       if (data.choices?.[0]?.message?.tool_calls) {
         const toolCalls = data.choices[0].message.tool_calls;
         
@@ -217,12 +222,12 @@ export async function POST(request: NextRequest) {
           
           try {
             await executeMCPTool(userId, serverId, toolName, args);
-          } catch (error) {
-            console.error('MCP tool execution failed:', error);
+          } catch {
+            // MCP tool execution failure — non-fatal, response still returned
           }
         }
       }
-    } catch (error: any) {
+    } catch (error) {
       success = false;
       errorMessage = error.message || 'AI request failed';
 
@@ -258,7 +263,7 @@ export async function POST(request: NextRequest) {
       },
     });
 
-  } catch (error: any) {
+  } catch (error) {
     console.error('AI Chat API Error:', error);
     return NextResponse.json(
       {

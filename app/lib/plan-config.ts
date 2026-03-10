@@ -31,21 +31,29 @@ export const PREMIUM_MODELS = [
   'openai/gpt-4'
 ];
 
-// Free models available to all users
+// Free models available to all users (cost $0 on OpenRouter)
+// Ordered by reliability (less popular = less rate-limited)
 export const FREE_MODELS = [
-  'meta-llama/llama-3.3-70b-instruct',
-  'meta-llama/llama-3.1-70b-instruct',
-  'google/gemini-flash-1.5',
-  'anthropic/claude-3-haiku',
-  'openai/gpt-3.5-turbo',
-  'mistralai/mistral-7b-instruct',
-  'mistralai/mixtral-8x7b-instruct'
+  // Reliable (smaller, less contention)
+  'google/gemma-3-4b-it:free',
+  'google/gemma-3n-e4b-it:free',
+  'google/gemma-3-12b-it:free',
+  'liquid/lfm-2.5-1.2b-instruct:free',
+  'nvidia/nemotron-nano-9b-v2:free',
+  'stepfun/step-3.5-flash:free',
+  // Good but may be rate-limited (popular)
+  'google/gemma-3-27b-it:free',
+  'qwen/qwen3-coder:free',
+  'mistralai/mistral-small-3.1-24b-instruct:free',
+  'meta-llama/llama-3.3-70b-instruct:free',
+  'nousresearch/hermes-3-llama-3.1-405b:free',
+  'qwen/qwen3-next-80b-a3b-instruct:free',
 ];
 
 export const PLAN_LIMITS: Record<PlanType, PlanLimits> = {
   free: {
     sessionsPerDay: 6, // 6 sessions per day
-    requiresOwnApiKey: true, // Must provide OpenRouter API key
+    requiresOwnApiKey: false, // Platform key available for free models
     features: [
       'cli_access',
       'web_interface',
@@ -62,10 +70,10 @@ export const PLAN_LIMITS: Record<PlanType, PlanLimits> = {
     monthlyRequests: 180, // Legacy: 6 sessions * 30 days
     tokensPerMonth: 300000 // Legacy
   },
-  
+
   pro: {
     sessionsPerDay: 6, // 6 sessions per day
-    requiresOwnApiKey: true, // BYOK-only beta: all users must provide own keys
+    requiresOwnApiKey: false, // Platform key available, BYOK optional
     features: [
       'cli_access',
       'web_interface',
@@ -89,7 +97,7 @@ export const PLAN_LIMITS: Record<PlanType, PlanLimits> = {
   
   enterprise: {
     sessionsPerDay: 20, // 20 sessions per day
-    requiresOwnApiKey: true, // BYOK-only beta: all users must provide own keys
+    requiresOwnApiKey: false, // Platform key available, BYOK optional
     features: [
       'everything',
       'unlimited_sessions',
