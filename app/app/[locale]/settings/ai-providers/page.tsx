@@ -80,6 +80,12 @@ export default function AIProvidersPage() {
   const searchParams = useSearchParams();
   const { data: session, isPending } = useSession();
   const redirectToWebIDE = searchParams.get('redirect') === 'web-ide';
+  const redirectToSignIn = () => {
+    const currentPath = typeof window !== 'undefined'
+      ? `${window.location.pathname}${window.location.search}`
+      : '/settings/ai-providers';
+    router.push(`/auth/signin?redirect=${encodeURIComponent(currentPath)}`);
+  };
 
   const [apiKeys, setApiKeys] = useState<ApiKey[]>([]);
   const [loading, setLoading] = useState(true);
@@ -94,20 +100,20 @@ export default function AIProvidersPage() {
 
   useEffect(() => {
     if (!isPending && !session) {
-      router.push('/auth/signin');
+      redirectToSignIn();
       return;
     }
 
     if (!isPending && session) {
       void fetchApiKeys();
     }
-  }, [isPending, router, session]);
+  }, [isPending, session]);
 
   const fetchApiKeys = async () => {
     try {
       const response = await fetch('/api/user/ai-provider-keys', { credentials: 'include' });
       if (response.status === 401) {
-        setApiKeys([]);
+        redirectToSignIn();
         return;
       }
       const data = await response.json();
@@ -230,7 +236,7 @@ export default function AIProvidersPage() {
               <div>
                 <h1 className="text-3xl font-bold">AI Provider Keys</h1>
                 <p className="text-gray-400">
-                  Recoder.xyz is 100% free! Just bring your own API key from your preferred AI provider.
+                  AI works out of the box with our platform key. Add your own key for higher limits or to use premium models.
                 </p>
               </div>
             </div>
