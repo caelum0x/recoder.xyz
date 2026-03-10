@@ -141,6 +141,7 @@
     "test:tier1:publisher": "node --test tools/a2a-interop/js/__tests__/publish-tier1-support-status.test.mjs",
     "test:tier2:workflow": "node --test tools/a2a-interop/js/__tests__/tier2-promotion-workflow.test.mjs",
     "test:skill": "node --test tests/recoder-skill-smoke.test.mjs",
+    "test:branding-scan": "node --test tests/branding-drift-scanner.test.mjs",
     "phase3:dispatch-signoff": "bash scripts/phase3-dispatch-signoff.sh",
     "phase3:preflight": "bash scripts/phase3-preflight.sh",
     "phase3:bootstrap-a2a-env": "bash scripts/phase3-bootstrap-a2a-env.sh",
