@@ -99,7 +99,7 @@ async function handler(req: AuthenticatedRequest) {
         duration,
       },
     });
-  } catch (error: any) {
+  } catch (error) {
     console.error('AI proxy error:', error);
 
     // Track failed request
@@ -125,7 +125,20 @@ async function handler(req: AuthenticatedRequest) {
  */
 function getModelsForPlan(plan: string): string[] {
   const modelsByPlan: Record<string, string[]> = {
-    free: [], // Free users can't use AI
+    free: [
+      'google/gemma-3-4b-it:free',
+      'google/gemma-3n-e4b-it:free',
+      'google/gemma-3-12b-it:free',
+      'liquid/lfm-2.5-1.2b-instruct:free',
+      'nvidia/nemotron-nano-9b-v2:free',
+      'stepfun/step-3.5-flash:free',
+      'google/gemma-3-27b-it:free',
+      'qwen/qwen3-coder:free',
+      'mistralai/mistral-small-3.1-24b-instruct:free',
+      'meta-llama/llama-3.3-70b-instruct:free',
+      'nousresearch/hermes-3-llama-3.1-405b:free',
+      'qwen/qwen3-next-80b-a3b-instruct:free',
+    ],
     weekly: [
       'anthropic/claude-3-haiku',
       'google/gemini-flash-1.5',

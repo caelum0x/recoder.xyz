@@ -39,8 +39,9 @@ export interface StreamingOptions {
 /**
  * Model configuration for OpenRouter
  */
-const DEFAULT_MODEL = 'anthropic/claude-3-5-sonnet'; // Best for coding
-const FALLBACK_MODEL = 'google/gemini-2.0-flash-exp:free'; // Free tier fallback
+const DEFAULT_MODEL = 'anthropic/claude-3-5-sonnet'; // Best for coding (BYOK users)
+const FALLBACK_MODEL = 'google/gemma-3-12b-it:free'; // Free tier fallback (reliable)
+const PLATFORM_DEFAULT_MODEL = 'google/gemma-3-12b-it:free'; // Best reliable free model for coding
 
 /**
  * Stream text using native OpenRouter API
@@ -55,13 +56,16 @@ export async function streamTextNative(
   usage: { promptTokens: number; completionTokens: number };
   toAIStream: () => ReadableStream<Uint8Array>;
 }> {
-  // BYOK: Get user's API key
-  const { getAPIKey } = await import('./api-key');
-  const openrouterKey = await getAPIKey(env, options?.request, 'openrouter');
-  
-  if (!openrouterKey) {
+  // Get API key (user BYOK or platform fallback for free models)
+  const { getAPIKeyWithSource } = await import('./api-key');
+  const keyResult = await getAPIKeyWithSource(env, options?.request, 'openrouter');
+
+  if (!keyResult) {
     throw new Error('No API key configured. Add your OpenRouter API key in Settings.');
   }
+
+  const openrouterKey = keyResult.key;
+  const isPlatformKey = keyResult.source === 'platform';
 
   // Get configuration
   const config = getLLMConfig(env);
@@ -180,9 +184,12 @@ export async function streamTextNative(
   // Create OpenRouter client
   const client = createOpenRouterClient(openrouterKey);
 
+  // Select model: platform key users get free models, BYOK users get premium
+  const selectedModel = isPlatformKey ? PLATFORM_DEFAULT_MODEL : DEFAULT_MODEL;
+
   // Prepare request
   const requestPayload: any = {
-    model: DEFAULT_MODEL,
+    model: selectedModel,
     messages: openrouterMessages,
     temperature: options?.temperature ?? 0.7,
     max_tokens: options?.max_tokens ?? config.responseControl.maxTokens ?? 8000,
@@ -196,7 +203,7 @@ export async function streamTextNative(
     }
   }
 
-  logger.info('🌐 Using OpenRouter model:', DEFAULT_MODEL);
+  logger.info(`🌐 Using OpenRouter model: ${selectedModel} (${isPlatformKey ? 'platform' : 'user'} key)`);
 
   // Create streaming response in AI SDK format
   // Format: "0:text\n" for each text chunk
@@ -230,9 +237,9 @@ export async function streamTextNative(
 
         // Store in semantic cache
         if (userId && config.promptOptimization.enabled && fullResponse.length > 100) {
-          const qualityScore = validateResponse(lastUserMessage, fullResponse, DEFAULT_MODEL);
-          
-          logQualityMetrics(DEFAULT_MODEL, qualityScore, false);
+          const qualityScore = validateResponse(lastUserMessage, fullResponse, selectedModel);
+
+          logQualityMetrics(selectedModel, qualityScore, false);
 
           if (qualityScore.passed) {
             await storeInSemanticCache(lastUserMessage, fullResponse, {

@@ -1,15 +1,16 @@
 /**
  * Usage Service - API Key Routing and Management
- * BYOK-only beta: ALL users must provide their own API key.
+ * Users can provide their own API key (BYOK) or use the platform key.
+ * Platform key is restricted to free-tier models ($0 cost).
  */
 
 import { prisma } from './prisma';
-import { getPlanLimits } from './plan-config';
+import { getPlanLimits, FREE_MODELS } from './plan-config';
 import crypto from 'crypto';
 
 export interface ApiKeyInfo {
   apiKey: string;
-  source: 'user';
+  source: 'user' | 'platform';
   tier: string;
 }
 
@@ -24,9 +25,30 @@ export interface QuotaStatus {
 }
 
 /**
- * Get API key for user — BYOK-only beta: all users must provide their own key.
+ * Check if a model is a free-tier model ($0 cost on OpenRouter).
  */
-export async function getApiKeyForUser(userId: string): Promise<ApiKeyInfo | null> {
+export function isFreeModel(model: string): boolean {
+  // Exact match or match without :free suffix
+  return FREE_MODELS.some(fm =>
+    model === fm || model === fm.replace(':free', '') || fm.startsWith(model)
+  );
+}
+
+/**
+ * Get the free-tier variant of a model ID (appends :free if needed).
+ */
+export function toFreeModelId(model: string): string {
+  if (model.endsWith(':free')) return model;
+  const freeVariant = FREE_MODELS.find(fm => fm.startsWith(model));
+  return freeVariant || model;
+}
+
+/**
+ * Get API key for user.
+ * Priority: user's own BYOK key > platform key (free models only).
+ * When using platform key, the model must be a free-tier model.
+ */
+export async function getApiKeyForUser(userId: string, model?: string): Promise<ApiKeyInfo | null> {
   const user = await prisma.users.findUnique({
     where: { id: userId },
     select: {
@@ -40,15 +62,26 @@ export async function getApiKeyForUser(userId: string): Promise<ApiKeyInfo | nul
     throw new Error('User not found');
   }
 
-  if (!user.hasOwnApiKey || !user.openRouterApiKey) {
-    return null; // User needs to add their API key
+  // Priority 1: User's own BYOK key — any model allowed
+  if (user.hasOwnApiKey && user.openRouterApiKey) {
+    return {
+      apiKey: user.openRouterApiKey,
+      source: 'user',
+      tier: user.subscriptionPlan,
+    };
   }
 
-  return {
-    apiKey: user.openRouterApiKey,
-    source: 'user',
-    tier: user.subscriptionPlan,
-  };
+  // Priority 2: Platform key — free models only ($0 cost)
+  const platformKey = process.env.OPENROUTER_API_KEY;
+  if (platformKey) {
+    return {
+      apiKey: platformKey,
+      source: 'platform',
+      tier: user.subscriptionPlan,
+    };
+  }
+
+  return null; // No key available
 }
 
 /**
@@ -121,8 +154,9 @@ export async function getQuotaStatus(userId: string): Promise<QuotaStatus> {
  * @returns Object with allowed status and reason
  */
 export async function canMakeRequest(
-  userId: string
-): Promise<{ allowed: boolean; reason?: string; apiKey?: string }> {
+  userId: string,
+  model?: string
+): Promise<{ allowed: boolean; reason?: string; apiKey?: string; keySource?: 'user' | 'platform'; model?: string }> {
   // Check quota first
   const quotaStatus = await getQuotaStatus(userId);
   if (!quotaStatus.allowed) {
@@ -132,18 +166,38 @@ export async function canMakeRequest(
     };
   }
 
-  // Get API key
-  const apiKeyInfo = await getApiKeyForUser(userId);
+  // Get API key (user BYOK or platform fallback)
+  const apiKeyInfo = await getApiKeyForUser(userId, model);
   if (!apiKeyInfo) {
     return {
       allowed: false,
-      reason: 'No API key configured. Please add your OpenRouter API key.',
+      reason: 'AI service unavailable. No API key configured.',
+    };
+  }
+
+  // Platform key: restrict to free models only ($0 cost)
+  if (apiKeyInfo.source === 'platform') {
+    const requestedModel = model || 'meta-llama/llama-3.3-70b-instruct:free';
+    if (!isFreeModel(requestedModel)) {
+      return {
+        allowed: false,
+        reason: `Model "${requestedModel}" requires your own API key. Add your OpenRouter key in Settings, or use a free model.`,
+      };
+    }
+    // Ensure we use the :free variant
+    return {
+      allowed: true,
+      apiKey: apiKeyInfo.apiKey,
+      keySource: 'platform',
+      model: toFreeModelId(requestedModel),
     };
   }
 
   return {
     allowed: true,
     apiKey: apiKeyInfo.apiKey,
+    keySource: 'user',
+    model,
   };
 }
 
@@ -238,7 +292,7 @@ export async function getUsageSummary(userId: string): Promise<{
       cost: 0,
       periodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
       tier: user.subscriptionPlan,
-      hasApiKey: !!user.hasOwnApiKey,
+      hasApiKey: !!user.hasOwnApiKey || !!process.env.OPENROUTER_API_KEY,
     };
   }
 
@@ -266,6 +320,6 @@ export async function getUsageSummary(userId: string): Promise<{
     cost: 0,
     periodEnd: quota.periodEnd,
     tier: user.subscriptionPlan,
-    hasApiKey: !!user.hasOwnApiKey,
+    hasApiKey: !!user.hasOwnApiKey || !!process.env.OPENROUTER_API_KEY,
   };
 }
