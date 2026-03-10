@@ -35,7 +35,6 @@ export const useMessageQueueStore = create<MessageQueueState>((set, get) => ({
       timestamp: Date.now(),
     };
     
-    console.log('[MessageQueueStore] Queueing message:', queuedMessage);
     set((state) => ({
       queuedMessages: [...state.queuedMessages, queuedMessage],
     }));
@@ -44,14 +43,12 @@ export const useMessageQueueStore = create<MessageQueueState>((set, get) => ({
   },
 
   removeMessage: (id) => {
-    console.log('[MessageQueueStore] Removing message:', id);
     set((state) => ({
       queuedMessages: state.queuedMessages.filter((msg) => msg.id !== id),
     }));
   },
 
   clearQueue: (threadId) => {
-    console.log('[MessageQueueStore] Clearing queue for thread:', threadId);
     if (threadId) {
       set((state) => ({
         queuedMessages: state.queuedMessages.filter((msg) => msg.threadId !== threadId),

@@ -7,6 +7,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from "@/lib/auth-helpers";
 import { prisma } from '@/lib/prisma';
+import { logger } from '@/lib/logger';
 
 export async function DELETE(
   request: NextRequest,
@@ -60,7 +61,7 @@ export async function DELETE(
       message: 'Notification deleted',
     });
   } catch (error) {
-    console.error('Failed to delete notification:', error);
+    logger.error('Failed to delete notification:', { error: error instanceof Error ? error.message : String(error) });
     return NextResponse.json(
       { success: false, error: 'Failed to delete notification' },
       { status: 500 }
@@ -121,7 +122,7 @@ export async function PUT(
       message: 'Notification marked as read',
     });
   } catch (error) {
-    console.error('Failed to update notification:', error);
+    logger.error('Failed to update notification:', { error: error instanceof Error ? error.message : String(error) });
     return NextResponse.json(
       { success: false, error: 'Failed to update notification' },
       { status: 500 }

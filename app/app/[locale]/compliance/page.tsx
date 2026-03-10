@@ -215,7 +215,7 @@ export default function CompliancePage() {
       {/* Hero Section */}
       <section className="py-20 px-4 sm:px-6 lg:px-8">
         <div className="max-w-7xl mx-auto text-center">
-          <h1 className="text-5xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent mb-6">
+          <h1 className="text-5xl font-bold bg-gradient-to-r from-orange-500 to-purple-600 bg-clip-text text-transparent mb-6">
             Compliance & Security
           </h1>
           <p className="text-xl text-gray-600 dark:text-gray-300 max-w-3xl mx-auto mb-12">
@@ -335,7 +335,7 @@ export default function CompliancePage() {
           <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
             {complianceProcess.map((process, index) => (
               <div key={index} className="text-center">
-                <div className="bg-gradient-to-br from-blue-500 to-purple-600 rounded-full w-16 h-16 flex items-center justify-center mx-auto mb-4">
+                <div className="bg-gradient-to-br from-orange-500 to-purple-600 rounded-full w-16 h-16 flex items-center justify-center mx-auto mb-4">
                   <process.icon className="h-8 w-8 text-white" />
                 </div>
                 <div className="bg-blue-600 text-white rounded-full w-8 h-8 flex items-center justify-center mx-auto mb-4">
@@ -421,7 +421,7 @@ export default function CompliancePage() {
       </section>
 
       {/* CTA Section */}
-      <section className="py-16 px-4 sm:px-6 lg:px-8 bg-gradient-to-r from-blue-600 to-purple-600">
+      <section className="py-16 px-4 sm:px-6 lg:px-8 bg-gradient-to-r from-orange-500 to-purple-600">
         <div className="max-w-4xl mx-auto text-center">
           <h2 className="text-3xl font-bold text-white mb-6">Questions About Our Compliance?</h2>
           <p className="text-xl text-blue-100 mb-8">

@@ -29,7 +29,7 @@ export function TextNodePropertiesPanel({ node }: { node: TextNode }) {
 					<TextEditor
 						placeholder="Write or paste text here..."
 						value={node.content.text}
-						onValueChange={(text) => updateNodeDataContent(node, { text })}
+						onValueChange={(text: string) => updateNodeDataContent(node, { text })}
 						showToolbar={false}
 						editorClassName="bg-[color-mix(in_srgb,var(--color-text-inverse,#fff)_10%,transparent)] border-none !pt-[4px] !pr-[8px] !pb-[4px] !pl-[12px] rounded-[8px] min-h-[120px]"
 					/>

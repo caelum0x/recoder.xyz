@@ -1,11 +1,11 @@
 'use client';
 
 import React, { useState, useMemo } from 'react';
-import { Presentation, FileText, Download } from 'lucide-react';
+import { Presentation, FileText, Download, ExternalLink } from 'lucide-react';
 import { RecoderLoader } from '@/components/ui/recoder-loader';
 import { ToolViewProps } from '../types';
 import { formatTimestamp } from '../utils';
-import { downloadPresentation, DownloadFormat } from '../utils/presentation-utils';
+import { downloadPresentation, DownloadFormat, handleGoogleSlidesUpload } from '../utils/presentation-utils';
 import { toast } from '@/lib/toast';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -33,18 +33,19 @@ export function ExportToolView({
   });
   
   const [downloadingFormat, setDownloadingFormat] = useState<ExportFormat | null>(null);
+  const [isUploadingGoogleSlides, setIsUploadingGoogleSlides] = useState(false);
 
   const name = toolCall?.function_name?.replace(/_/g, '-').toLowerCase() || 'export-presentation';
   const isUnifiedExport = name === 'export-presentation' || name === 'export_presentation';
   
   const { presentationName, exports, totalSlides } = useMemo(() => {
-    console.log('[ExportToolView] Parsing:', { toolResult, name, isUnifiedExport });
+    
     
     if (toolResult?.output) {
       try {
         const output = toolResult.output;
         const parsed = typeof output === 'string' ? JSON.parse(output) : output;
-        console.log('[ExportToolView] Parsed output:', parsed);
+        
         
         if (isUnifiedExport && parsed.exports) {
           return {
@@ -77,7 +78,7 @@ export function ExportToolView({
   const hasPptx = !!exports?.pptx;
   const hasPdf = !!exports?.pdf;
   
-  console.log('[ExportToolView] Exports:', { exports, hasPptx, hasPdf });
+  
 
   if (!toolCall) return null;
 
@@ -228,6 +229,47 @@ export function ExportToolView({
             Download PPTX
           </Button>
         </div>
+
+          {/* Google Slides Button */}
+          {hasPptx && project?.sandbox?.sandbox_url && presentationName && (
+            <div className="w-full mt-2">
+              <Button
+                onClick={async () => {
+                  if (isDownloadRestricted) {
+                    openUpgradeModal();
+                    return;
+                  }
+                  setIsUploadingGoogleSlides(true);
+                  try {
+                    const sanitizedName = presentationName.replace(/[^a-zA-Z0-9._-]/g, '_');
+                    const result = await handleGoogleSlidesUpload(
+                      project.sandbox!.sandbox_url,
+                      `/workspace/presentations/${sanitizedName}`
+                    );
+                    if (result?.redirected_to_auth) return;
+                    if (result?.google_slides_url) {
+                      toast.success('Uploaded to Google Slides');
+                      window.open(result.google_slides_url, '_blank', 'noopener,noreferrer');
+                    }
+                  } catch (error) {
+                    toast.error(`Failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+                  } finally {
+                    setIsUploadingGoogleSlides(false);
+                  }
+                }}
+                disabled={!!downloadingFormat || isUploadingGoogleSlides}
+                variant="outline"
+                className="w-full h-10 font-medium"
+              >
+                {isUploadingGoogleSlides ? (
+                  <RecoderLoader customSize={16} className="mr-2" />
+                ) : (
+                  <ExternalLink className="h-4 w-4 mr-2" />
+                )}
+                {isUploadingGoogleSlides ? 'Uploading...' : 'Google Slides'}
+              </Button>
+            </div>
+          )}
 
         {/* Show message if no exports available */}
         {!hasPdf && !hasPptx && (

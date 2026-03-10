@@ -356,8 +356,9 @@ export class AgentBridgeService {
         if (!agentId) break;
         try {
           const collab = getCollaborationSvc();
-          collab.sendMessage(msg.channelId as string, 'default', {
-            senderId: agentId,
+          collab.sendMessage({
+            threadId: 'default',
+            senderAgentId: agentId,
             text: msg.content as string,
           });
         } catch (err) {

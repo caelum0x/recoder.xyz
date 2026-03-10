@@ -53,9 +53,16 @@ export function AppDetailClient({ appDetails }: AppDetailClientProps) {
 	const [isFavorite, setIsFavorite] = useState(appDetails.isFavorite);
 	const [isRunModalOpen, setIsRunModalOpen] = useState(false);
 
-	const toggleFavorite = () => {
-		setIsFavorite(!isFavorite);
-		// TODO: Add API call to update favorite status
+	const toggleFavorite = async () => {
+		const newState = !isFavorite;
+		setIsFavorite(newState);
+		try {
+			await fetch(`/api/showcase/${appDetails.id}/favorite`, {
+				method: "POST",
+			});
+		} catch {
+			setIsFavorite(!newState);
+		}
 	};
 
 	const handleRunClick = () => {
@@ -183,14 +190,7 @@ export function AppDetailClient({ appDetails }: AppDetailClientProps) {
 											? `/workspaces/${appDetails.id}`
 											: "/playground"
 									}
-									className="rounded-lg px-3 py-2 text-text transition-all duration-200 active:scale-[0.98] text-sm flex-1 sm:flex-none text-center"
-									style={{
-										background:
-											"linear-gradient(180deg, #202530 0%, #12151f 100%)",
-										border: "1px solid rgba(0,0,0,0.7)",
-										boxShadow:
-											"inset 0 1px 1px rgba(255,255,255,0.05), 0 2px 8px rgba(5,10,20,0.4), 0 1px 2px rgba(0,0,0,0.3)",
-									}}
+									className="rounded-lg px-3 py-2 text-text transition-all duration-200 active:scale-[0.98] text-sm flex-1 sm:flex-none text-center bg-gradient-to-b from-zinc-800 to-zinc-900 border border-black/70 shadow-[inset_0_1px_1px_rgba(255,255,255,0.05),0_2px_8px_rgba(5,10,20,0.4),0_1px_2px_rgba(0,0,0,0.3)]"
 								>
 									Edit
 								</Link>

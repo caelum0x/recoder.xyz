@@ -39,7 +39,7 @@ const buildHref = (params: Record<string, string | undefined>) => {
 const AnalyticsEventsPage = async ({
   searchParams,
 }: {
-  readonly searchParams?: Record<string, string | string[] | undefined>;
+  readonly searchParams?: Promise<Record<string, string | string[] | undefined>>;
 }) => {
   const organizationId = await currentOrganizationId();
 
@@ -47,9 +47,10 @@ const AnalyticsEventsPage = async ({
     return notFound();
   }
 
-  const providerParam = searchParams?.provider;
-  const queryParam = searchParams?.query;
-  const pageParam = searchParams?.page;
+  const resolvedSearchParams = searchParams ? await searchParams : undefined;
+  const providerParam = resolvedSearchParams?.provider;
+  const queryParam = resolvedSearchParams?.query;
+  const pageParam = resolvedSearchParams?.page;
 
   const provider =
     typeof providerParam === "string" && providers.includes(providerParam)

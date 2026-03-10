@@ -272,8 +272,8 @@ export const StreamlinedInstallDialog: React.FC<StreamlinedInstallDialogProps> =
   const handleInstall = useCallback(async () => {
     if (!item || !instanceName.trim()) return;
     
-    console.log('Dialog handleInstall - triggerVariables:', triggerVariables);
-    console.log('Dialog handleInstall - missingTriggerVariables:', missingTriggerVariables);
+    
+    
     
     // Validate trigger variables if they exist
     if (Object.keys(missingTriggerVariables).length > 0) {

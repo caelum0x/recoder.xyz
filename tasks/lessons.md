@@ -59,3 +59,34 @@
 - Next.js static page generation executes API route handlers during build; if routes access the database, the build needs a live database connection or routes must export `dynamic = "force-dynamic"`.
 - PostHog server SDK (`posthog-node`) throws on `new PostHog("")`; guard instantiation with a key check before constructing.
 - `.env.local` in a Turborepo monorepo must be in the app directory (e.g., `apps/app/.env.local`), not just the monorepo root; Next.js reads env relative to its own working directory.
+- Env validation that rejects localhost DB URLs in production needs an escape hatch (`ALLOW_LOCALHOST_DB=true`) for legitimate setups using local Docker Postgres containers on the same host.
+- The agency monorepo is separate from the root monorepo; packages like `@recoder/ecosystem-config` from the root are not available at build time. Inline static data rather than adding cross-monorepo dependencies.
+- When syncing a Turborepo monorepo to production, remember to rebuild SDK packages (`pnpm build-sdk`) before building the app, as packages may have updated dist files.
+- Local Docker Postgres containers don't support SSL; Prisma's `sslmode=no-verify` still tries TLS and fails with `P1011`. For local DB URLs (`127.0.0.1`/`localhost`), use `sslmode=disable` instead.
+- Turbo build (`npx turbo run build`) does not automatically load `.env.local` for child processes; must `set -a && source .env.local && set +a` before running the build command.
+- PM2 `start node_modules/.bin/next` fails because the `.bin/next` file is a shell script, not a Node module. Use `pm2 start 'npx next start -p PORT'` instead.
+- PM app `apps/app` is the auth-gated workspace; `apps/web` is the marketing surface. PM2 must point to the correct app directory for the `.next` build output to be found.
+
+## 2026-03-08
+- Docker container port mappings may differ from conventional service ports; always verify with `docker ps --format '{{.Names}}\t{{.Ports}}'` before health-checking (e.g., docker-backend is 3100, not 3002; recoder-web is 5173, not 5174).
+- When SSH-piped build commands appear to hang, check server-side for the actual process (`ps aux | grep 'next build'`) and build artifacts (`BUILD_ID`) — the SSH pipe may be the bottleneck, not the build.
+- After syncing code and rebuilding PM2 apps, verify all services both internally (localhost ports) and externally (public HTTPS endpoints through nginx/Cloudflare) to catch proxy-level issues.
+- Landing pages linking to `/docs`, `/changelog`, `/contact` are dead links in this codebase; replace with real routes (`/about`, `/learn`, `/auth/signup`, or external app URLs).
+- `ADMIN_SECRET` is required for E2E verification scripts (BYOK, CLI device flow); generate with `openssl rand -hex 32` and add to `app/.env`, then `pm2 restart --update-env`.
+- In Vite/vitest with jsdom, `import crypto from 'crypto'` fails because Vite can't resolve Node builtins. Use `import crypto from 'node:crypto'` instead, or mock the module.
+- Test files written for Jest (`jest.fn()`, `jest.mock()`) silently fail in vitest even with `globals: true`. Replace all `jest.*` calls with `vi.*`.
+- `recoder-pm` is a separate workspace; root packages like `@recoder/design-tokens` cannot use `workspace:*` there. Use explicit file links (e.g., `file:../../../packages/design-tokens`) when sharing root packages into PM apps.
+
+## 2026-03-09
+- This repo has TWO backend domains: `api.recoder.xyz` routes to the Python FastAPI backend (port 8000), `docker.recoder.xyz` routes to the Express docker-backend (port 3100). Never confuse them — most app API routes talk to docker-backend, not the Python backend.
+- Port 3001 is recoder-agents (correct for that service), NOT docker-backend. Port 3002 never existed. Port 3100 is docker-backend. Many files had wrong port fallbacks causing silent failures.
+- `NEXT_PUBLIC_*` env vars must be declared as `ARG` in Dockerfiles before `next build` runs. Next.js inlines them at build time — runtime env vars are too late for client-side code. Missing build ARGs = empty strings baked into the bundle.
+- When decommissioning an app (like studio), audit: session sync domain lists, auth signin/register marketing copy, app switcher entries, nginx upstream blocks, docker-compose allowed agents, and config.ts service entries. Partial cleanup leaves ghost references.
+- For Docker Compose inter-service communication: `NEXT_PUBLIC_*` vars must use public HTTPS URLs (they execute in the browser). Server-side code can use internal Docker DNS names like `http://recoder-docker-backend:3100`.
+- Always verify domain routing through nginx config before changing production URLs in code. A production URL grep alone can be misleading when nginx rewrites or proxies are involved.
+
+## 2026-03-10
+- In this codebase, all tsconfig files use `strict: false`, so `catch (error)` implicitly types error as `any`. Removing `: any` from catch blocks is a safe no-op that improves code quality without changing behavior.
+- `crypto.randomUUID()` is a Node.js global available since Node 16+ and works in both `.ts` and `.js` files without import. For `.js` files that need `getRandomValues()`, use `const crypto = require("crypto")`.
+- For `.js` utility files (like `packages/shared/src/utils.js`), only fix `Math.random()` in ID/token generation functions (security-sensitive). Leave it in shuffle/random-element/random-int utilities (non-security).
+- When doing batch `catch (error: any)` cleanup, use Edit's `replace_all` flag — it's much faster than individual replacements and safe because the pattern is always syntactically identical.

@@ -134,7 +134,7 @@ async def fix_missing_subscription(user_email: str):
 
     try:
         items_data = subscription.items.data if hasattr(subscription.items, 'data') else []
-    except:
+    except Exception:
         items_data = []
 
     if items_data and len(items_data) > 0:

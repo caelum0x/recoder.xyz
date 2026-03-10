@@ -2,9 +2,13 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth-helpers';
 import { logger } from '@/lib/logger';
 
-const PRODUCTION_ENGINE_URL = process.env.PRODUCTION_ENGINE_URL || 'http://localhost:4567';
+const PRODUCTION_ENGINE_URL = process.env.PRODUCTION_ENGINE_URL || (process.env.NODE_ENV === 'production' ? undefined : 'http://localhost:4567');
 
 export async function GET(request: NextRequest) {
+  if (!PRODUCTION_ENGINE_URL) {
+    return NextResponse.json({ error: 'Service URL not configured' }, { status: 503 });
+  }
+
   const authResult = await requireAuth(request);
   if (authResult.error) return authResult.response;
   const userId = authResult.session.user.id;
@@ -34,6 +38,10 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  if (!PRODUCTION_ENGINE_URL) {
+    return NextResponse.json({ error: 'Service URL not configured' }, { status: 503 });
+  }
+
   const authResult = await requireAuth(request);
   if (authResult.error) return authResult.response;
   const userId = authResult.session.user.id;

@@ -60,16 +60,14 @@ export const FileContextMenu = memo(function FileContextMenu({
           <ContextMenuShortcut>Space</ContextMenuShortcut>
         </ContextMenuItem>
 
-        {!isDirectory && (
-          <ContextMenuItem 
-            onClick={onDownload}
-            className="focus:bg-background/10 focus:backdrop-blur-xl rounded-lg"
-          >
-            <Download className="h-4 w-4 text-muted-foreground" />
-            Download
-            <ContextMenuShortcut>⌘D</ContextMenuShortcut>
-          </ContextMenuItem>
-        )}
+        <ContextMenuItem
+          onClick={onDownload}
+          className="focus:bg-background/10 focus:backdrop-blur-xl rounded-lg"
+        >
+          <Download className="h-4 w-4 text-muted-foreground" />
+          {isDirectory ? 'Download Folder' : 'Download'}
+          <ContextMenuShortcut>⌘D</ContextMenuShortcut>
+        </ContextMenuItem>
         
         <ContextMenuItem 
           onClick={onGetInfo}

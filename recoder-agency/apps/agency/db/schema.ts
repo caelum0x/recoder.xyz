@@ -106,7 +106,7 @@ export const teamRelations = relations(teams, ({ many }) => ({
 export type UserId = `usr_${string}`;
 export const users = pgTable("users", {
 	id: text("id").$type<UserId>().notNull().unique(),
-	email: text("email").unique(), // TODO: Allow null values initially when adding schema, then change to not null after data update
+	email: text("email").unique(),
 	displayName: text("display_name"),
 	avatarUrl: text("avatar_url"),
 	dbId: serial("db_id").primaryKey(),
@@ -266,9 +266,9 @@ export const agents = pgTable(
 			.notNull()
 			.references(() => teams.dbId, { onDelete: "cascade" }),
 		name: text("name"),
-		// TODO: DEPRECATED - graphUrl is legacy field, not used in new architecture, kept only for cleanup of existing data
+		// DEPRECATED: Legacy field from old architecture. Kept for backward compat until data cleanup.
 		graphUrl: text("graph_url"),
-		// TODO: add notNull constrain when new architecture released
+		// NOTE: Should be notNull but existing records may have null. Apply via migration after backfill.
 		workspaceId: text("workspace_id").$type<WorkspaceId>(),
 		createdAt: timestamp("created_at").defaultNow().notNull(),
 		updatedAt: timestamp("updated_at")
@@ -2342,3 +2342,163 @@ export const channelMessageRelations = relations(
 		}),
 	}),
 );
+
+// ── Showcase Playlists ──────────────────────────────────────
+export const showcasePlaylists = pgTable(
+	"showcase_playlists",
+	{
+		dbId: serial("db_id").primaryKey(),
+		id: text("id").notNull().unique(),
+		teamDbId: integer("team_db_id")
+			.notNull()
+			.references(() => teams.dbId, { onDelete: "cascade" }),
+		creatorUserDbId: integer("creator_user_db_id")
+			.notNull()
+			.references(() => users.dbId, { onDelete: "cascade" }),
+		title: text("title").notNull(),
+		description: text("description").notNull().default(""),
+		createdAt: timestamp("created_at").defaultNow().notNull(),
+		updatedAt: timestamp("updated_at")
+			.defaultNow()
+			.notNull()
+			.$onUpdate(() => new Date()),
+	},
+	(table) => [
+		index("showcase_playlists_team_db_id_idx").on(table.teamDbId),
+		index("showcase_playlists_creator_user_db_id_idx").on(
+			table.creatorUserDbId,
+		),
+	],
+);
+
+export const showcasePlaylistRelations = relations(
+	showcasePlaylists,
+	({ one, many }) => ({
+		team: one(teams, {
+			fields: [showcasePlaylists.teamDbId],
+			references: [teams.dbId],
+		}),
+		creator: one(users, {
+			fields: [showcasePlaylists.creatorUserDbId],
+			references: [users.dbId],
+		}),
+		apps: many(showcasePlaylistApps),
+	}),
+);
+
+export const showcasePlaylistApps = pgTable(
+	"showcase_playlist_apps",
+	{
+		dbId: serial("db_id").primaryKey(),
+		playlistDbId: integer("playlist_db_id")
+			.notNull()
+			.references(() => showcasePlaylists.dbId, { onDelete: "cascade" }),
+		flowTriggerDbId: integer("flow_trigger_db_id")
+			.notNull()
+			.references(() => flowTriggers.dbId, { onDelete: "cascade" }),
+		sortOrder: integer("sort_order").notNull().default(0),
+		addedAt: timestamp("added_at").defaultNow().notNull(),
+	},
+	(table) => [
+		index("showcase_playlist_apps_playlist_db_id_idx").on(table.playlistDbId),
+		unique("showcase_playlist_apps_playlist_trigger_uidx").on(
+			table.playlistDbId,
+			table.flowTriggerDbId,
+		),
+	],
+);
+
+export const showcasePlaylistAppRelations = relations(
+	showcasePlaylistApps,
+	({ one }) => ({
+		playlist: one(showcasePlaylists, {
+			fields: [showcasePlaylistApps.playlistDbId],
+			references: [showcasePlaylists.dbId],
+		}),
+		flowTrigger: one(flowTriggers, {
+			fields: [showcasePlaylistApps.flowTriggerDbId],
+			references: [flowTriggers.dbId],
+		}),
+	}),
+);
+
+// ── Showcase Favorites ──────────────────────────────────────
+export const showcaseFavorites = pgTable(
+	"showcase_favorites",
+	{
+		dbId: serial("db_id").primaryKey(),
+		userDbId: integer("user_db_id")
+			.notNull()
+			.references(() => users.dbId, { onDelete: "cascade" }),
+		teamDbId: integer("team_db_id")
+			.notNull()
+			.references(() => teams.dbId, { onDelete: "cascade" }),
+		/** The trigger/app ID that was favorited */
+		itemId: text("item_id").notNull(),
+		createdAt: timestamp("created_at").defaultNow().notNull(),
+	},
+	(table) => [
+		unique("showcase_favorites_user_team_item_uidx").on(
+			table.userDbId,
+			table.teamDbId,
+			table.itemId,
+		),
+		index("showcase_favorites_user_team_idx").on(
+			table.userDbId,
+			table.teamDbId,
+		),
+	],
+);
+
+export const showcaseFavoriteRelations = relations(
+	showcaseFavorites,
+	({ one }) => ({
+		user: one(users, {
+			fields: [showcaseFavorites.userDbId],
+			references: [users.dbId],
+		}),
+		team: one(teams, {
+			fields: [showcaseFavorites.teamDbId],
+			references: [teams.dbId],
+		}),
+	}),
+);
+
+// ── Featured Items (Lobby) ──────────────────────────────────
+export type FeaturedItemType = "app" | "workflow";
+
+export const featuredItems = pgTable(
+	"featured_items",
+	{
+		dbId: serial("db_id").primaryKey(),
+		teamDbId: integer("team_db_id")
+			.notNull()
+			.references(() => teams.dbId, { onDelete: "cascade" }),
+		itemType: text("item_type").$type<FeaturedItemType>().notNull(),
+		/** For apps: apps.id; for workflows: workspaces.id */
+		itemId: text("item_id").notNull(),
+		featuredByUserDbId: integer("featured_by_user_db_id")
+			.notNull()
+			.references(() => users.dbId, { onDelete: "cascade" }),
+		createdAt: timestamp("created_at").defaultNow().notNull(),
+	},
+	(table) => [
+		index("featured_items_team_db_id_idx").on(table.teamDbId),
+		unique("featured_items_team_type_item_uidx").on(
+			table.teamDbId,
+			table.itemType,
+			table.itemId,
+		),
+	],
+);
+
+export const featuredItemRelations = relations(featuredItems, ({ one }) => ({
+	team: one(teams, {
+		fields: [featuredItems.teamDbId],
+		references: [teams.dbId],
+	}),
+	featuredBy: one(users, {
+		fields: [featuredItems.featuredByUserDbId],
+		references: [users.dbId],
+	}),
+}));

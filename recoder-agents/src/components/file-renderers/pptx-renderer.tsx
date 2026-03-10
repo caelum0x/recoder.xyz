@@ -47,7 +47,7 @@ export function PptxRenderer({
     // Priority 1: Build URL from sandbox_url + filePath
     if (project?.sandbox?.sandbox_url && filePath) {
       const url = constructHtmlPreviewUrl(project.sandbox.sandbox_url, filePath);
-      console.log('[PptxRenderer] Public URL:', url);
+      
       return url || null;
     }
     

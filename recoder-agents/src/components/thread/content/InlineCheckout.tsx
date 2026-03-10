@@ -100,11 +100,7 @@ function PaymentForm({
 
       // Handle payment intent status (cards only - no async payment methods)
       if (paymentIntent?.status === 'succeeded') {
-        console.log('[InlineCheckout] Payment succeeded:', {
-          paymentIntentId: paymentIntent.id,
-          subscriptionId,
-          tierKey: selectedPlan.tierKey,
-        });
+        
 
         // Confirm subscription in backend to update tier immediately
         try {
@@ -113,9 +109,9 @@ function PaymentForm({
             tier_key: selectedPlan.tierKey,
             payment_intent_id: paymentIntent.id,
           };
-          console.log('[InlineCheckout] Confirming with payload:', confirmPayload);
+          
           await confirmInlineCheckout(confirmPayload);
-          console.log('[InlineCheckout] Confirmation successful');
+          
         } catch (e: any) {
           console.error('[InlineCheckout] Confirmation failed:', e?.message || e);
         }
@@ -487,7 +483,7 @@ export function InlineCheckout({ options }: { options?: InlineCheckoutOptions })
 
     // Prevent multiple subscriptions from double-click or StrictMode
     if (creatingRef.current) {
-      console.log('[InlineCheckout] Already creating subscription, skipping');
+      
       return;
     }
     creatingRef.current = true;
@@ -500,7 +496,7 @@ export function InlineCheckout({ options }: { options?: InlineCheckoutOptions })
     try {
       // Use only user-provided promo code (no auto-fallback)
       const finalPromoCode = promoCode || undefined;
-      console.log('[InlineCheckout] Creating subscription for', plan.tierKey, period, finalPromoCode ? `with promo ${finalPromoCode}` : '');
+      
       const response = await createInlineCheckout({
         tier_key: plan.tierKey,
         billing_period: period,
@@ -509,7 +505,7 @@ export function InlineCheckout({ options }: { options?: InlineCheckoutOptions })
 
       // Handle upgrade case - payment charged to existing payment method
       if (response.upgraded) {
-        console.log('[InlineCheckout] Upgraded subscription:', response.subscription_id);
+        
         // Redirect to dashboard
         window.location.href = '/dashboard?subscription=success';
         return;
@@ -517,7 +513,7 @@ export function InlineCheckout({ options }: { options?: InlineCheckoutOptions })
 
       // Handle 100% discount case - no payment needed
       if (response.no_payment_required) {
-        console.log('[InlineCheckout] No payment required (100% discount), subscription active:', response.subscription_id);
+        
 
         // Confirm the subscription to update tier in DB
         try {
@@ -535,7 +531,7 @@ export function InlineCheckout({ options }: { options?: InlineCheckoutOptions })
       }
 
       // Show payment form for normal checkout
-      console.log('[InlineCheckout] Created subscription:', response.subscription_id, 'amount:', response.amount);
+      
       setError(null); // Clear any previous error on success
       setClientSecret(response.client_secret!);
       setSubscriptionId(response.subscription_id);

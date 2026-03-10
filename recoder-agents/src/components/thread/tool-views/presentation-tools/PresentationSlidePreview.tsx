@@ -69,7 +69,7 @@ export function PresentationSlidePreview({
       );
 
       const urlWithCacheBust = `${metadataUrl}?t=${Date.now()}`;
-      console.log(`[PresentationSlidePreview] Loading metadata (attempt ${retry + 1}):`, urlWithCacheBust);
+      
       
       const response = await fetch(urlWithCacheBust, {
         cache: 'no-cache',
@@ -78,7 +78,7 @@ export function PresentationSlidePreview({
 
       if (response.ok) {
         const data = await response.json();
-        console.log('[PresentationSlidePreview] Metadata loaded successfully:', data);
+        
         setMetadata(data);
         setIsLoading(false);
         setError(null);
@@ -91,7 +91,7 @@ export function PresentationSlidePreview({
       // Retry with exponential backoff if we haven't exceeded max retries
       if (retry < maxRetries) {
         const delay = Math.min(1000 * Math.pow(1.5, retry), 5000); // Cap at 5 seconds
-        console.log(`[PresentationSlidePreview] Retrying in ${delay}ms...`);
+        
         
         retryTimeoutRef.current = setTimeout(() => {
           loadMetadata(retry + 1);

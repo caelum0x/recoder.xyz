@@ -451,7 +451,7 @@
     "title": "Recoder: あなたの自律型AIワーカー",
     "subtitle": "複雑なタスクのために構築され、すべてのために設計されました。シンプルなリクエストからメガ複雑なプロジェクトまで、すべてを処理する究極のAIアシスタント。",
     "tryItOut": "試してみる",
-    "kortixComputer": "Recoder Computer",
+    "recoderComputer": "Recoder Computer",
     "running": "実行中",
     "workers": {
       "images": {

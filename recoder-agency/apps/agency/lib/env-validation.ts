@@ -135,6 +135,60 @@ function validateDatabaseUrlShape(): void {
 			"[env-validation] DATABASE_URL does not look like a pooled connection string. Consider pooled URLs for production/staging.",
 		);
 	}
+
+	validateDatabaseUrlRuntimeSafety("DATABASE_URL", databaseUrl);
+	validateDatabaseUrlRuntimeSafety(
+		"AUTH_DATABASE_URL",
+		process.env.AUTH_DATABASE_URL,
+	);
+}
+
+function validateDatabaseUrlRuntimeSafety(
+	name: "DATABASE_URL" | "AUTH_DATABASE_URL",
+	value?: string,
+): void {
+	if (!value) return;
+
+	const lower = value.toLowerCase();
+	if (
+		lower.startsWith("file:") ||
+		lower.endsWith(".db") ||
+		lower.endsWith(".sqlite") ||
+		lower.endsWith(".sqlite3") ||
+		lower.includes("sqlite")
+	) {
+		throw new Error(
+			`[env-validation] ${name} looks like a SQLite URL. This app requires PostgreSQL.`,
+		);
+	}
+
+	let parsed: URL;
+	try {
+		parsed = new URL(value);
+	} catch {
+		throw new Error(`[env-validation] ${name} must be a valid URL.`);
+	}
+
+	const protocol = parsed.protocol.toLowerCase();
+	if (protocol !== "postgresql:" && protocol !== "postgres:") {
+		throw new Error(
+			`[env-validation] ${name} must use a PostgreSQL URL (postgresql:// or postgres://).`,
+		);
+	}
+
+	if (isProduction() && process.env.ALLOW_LOCALHOST_DB !== "true") {
+		const host = parsed.hostname.toLowerCase();
+		const isLocalHost =
+			host === "localhost" ||
+			host === "127.0.0.1" ||
+			host === "::1" ||
+			host === "[::1]";
+		if (isLocalHost) {
+			throw new Error(
+				`[env-validation] ${name} must not point to localhost in production. Set ALLOW_LOCALHOST_DB=true to override (e.g. local Docker Postgres).`,
+			);
+		}
+	}
 }
 
 function validateConditionalFeatureEnv(): void {

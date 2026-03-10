@@ -119,11 +119,11 @@ interface ParseResult {
   
       // 4. Extract toolName from metadata if exists
       if (result.output && typeof result.output === 'object') {
-        const md = (result.output as any).mcp_metadata;
+        const md = (result.output as Record<string, unknown>).mcp_metadata as Record<string, string> | undefined;
         if (md) result.toolName = md.full_tool_name || md.tool_name || null;
       }
-    } catch (err: any) {
-      result.error = err.message || String(err);
+    } catch (err) {
+      result.error = err instanceof Error ? err.message : String(err);
     }
   
     return result;
@@ -251,8 +251,7 @@ export function cleanAndParse(messy: string): string {
           throw new Error(`Unexpected ${tk.type}`);
       }
     } catch (e) {
-      console.warn(`Parse error at ${tk.line}:${tk.col}: ${e instanceof Error ? e.message : String(e)}`);
-      // error recovery: skip to next comma or closing delimiter
+      // Error recovery: skip to next comma or closing delimiter
       while (p < tokens.length &&
              !['COMMA','RBRACE','RBRACK','EOF'].includes(peek()!)) {
         advance();
@@ -274,11 +273,11 @@ export function cleanAndParse(messy: string): string {
           ? JSON.parse(advance().value.replace(/^['"]|['"]$/g, '"'))
           : advance().value;
       } else {
-        console.warn(`Expected key at ${tk.line}:${tk.col}`);
+        // Unexpected token where key expected — skip
         advance(); continue;
       }
       if (peek() === 'COLON') advance();
-      else { console.warn(`Missing ':' after key at ${tk.line}:${tk.col}`); }
+      // else: missing colon — continue with best-effort parse
 
       const val = parseValue();
       if (key !== null) {

@@ -20,10 +20,14 @@ export function V2Header({
 	teamName,
 	teamAvatarUrl,
 	onNameChange,
+	onDuplicate,
+	onDelete,
 }: {
 	teamName?: string;
 	teamAvatarUrl?: string | null;
 	onNameChange?: (name: string) => Promise<void>;
+	onDuplicate?: () => Promise<void>;
+	onDelete?: () => Promise<void>;
 }) {
 	const { workspaceId, name } = useAppDesignerStore((s) => ({
 		workspaceId: s.workspaceId,
@@ -135,9 +139,9 @@ export function V2Header({
 								{
 									value: "duplicate",
 									label: "Duplicate",
+									disabled: !onDuplicate,
 									action: () => {
-										// TODO: Implement app duplication functionality
-										console.warn("Duplicate functionality not yet implemented");
+										onDuplicate?.();
 									},
 								},
 								{
@@ -148,9 +152,9 @@ export function V2Header({
 								{
 									value: "delete",
 									label: "Delete",
+									disabled: !onDelete,
 									action: () => {
-										// TODO: Implement app deletion functionality
-										console.warn("Delete functionality not yet implemented");
+										onDelete?.();
 									},
 									destructive: true,
 								},

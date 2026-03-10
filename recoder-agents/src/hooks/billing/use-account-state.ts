@@ -197,14 +197,14 @@ export function useCreatePortalSession() {
   return useMutation({
     mutationFn: (params: CreatePortalSessionRequest) => billingApi.createPortalSession(params),
     onSuccess: (data) => {
-      const portalUrl = data?.portal_url || (data as any)?.url;
+      const portalUrl = data?.portal_url || data?.url;
       if (portalUrl) {
         window.location.href = portalUrl;
       } else {
         toast.error('Failed to create portal session. Please try again.');
       }
     },
-    onError: (error: any) => {
+    onError: (error: Error) => {
       toast.error(error?.message || 'Failed to open subscription portal. Please try again.');
     },
   });

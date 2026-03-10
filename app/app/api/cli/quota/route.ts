@@ -81,7 +81,7 @@ export const GET = withCLIAuth(async (request: NextRequest, context) => {
         ? 'Quota available'
         : 'Daily quota exceeded. Upgrade your plan or wait for reset.',
     });
-  } catch (error: any) {
+  } catch (error) {
     return NextResponse.json(
       { error: 'Failed to get quota' },
       { status: 500 }

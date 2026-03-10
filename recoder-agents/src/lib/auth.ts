@@ -14,7 +14,7 @@ export const auth = createAuth({
       });
     } catch {
       // Fallback: log the magic link for development
-      console.log(`Magic link for ${email}: ${url}`);
+      
     }
   },
   sendResetPassword: async ({ user, url }) => {
@@ -27,7 +27,7 @@ export const auth = createAuth({
         body: JSON.stringify({ email, url }),
       });
     } catch {
-      console.log(`Password reset for ${email}: ${url}`);
+      
     }
   },
   sendVerificationEmail: async ({ user, url }) => {
@@ -40,7 +40,7 @@ export const auth = createAuth({
         body: JSON.stringify({ email, url }),
       });
     } catch {
-      console.log(`Verification email for ${email}: ${url}`);
+      
     }
   },
 });

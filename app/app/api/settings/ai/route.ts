@@ -7,6 +7,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSession } from '@/lib/auth-helpers';
 import { prisma } from '@/lib/prisma';
+import { logger } from '@/lib/logger';
 
 // GET /api/settings/ai
 export async function GET(request: NextRequest) {
@@ -57,8 +58,8 @@ export async function GET(request: NextRequest) {
       settings: Array.isArray(settings) ? settings[0] : settings
     });
 
-  } catch (error: any) {
-    console.error('[AI Settings GET] Error:', error);
+  } catch (error) {
+    logger.error('[AI Settings GET] Error', { error: error instanceof Error ? error.message : String(error) });
     return NextResponse.json(
       { success: false, error: 'Failed to fetch AI settings' },
       { status: 500 }
@@ -120,8 +121,8 @@ export async function PUT(request: NextRequest) {
       message: 'AI settings updated successfully'
     });
 
-  } catch (error: any) {
-    console.error('[AI Settings PUT] Error:', error);
+  } catch (error) {
+    logger.error('[AI Settings PUT] Error', { error: error instanceof Error ? error.message : String(error) });
     return NextResponse.json(
       { success: false, error: 'Failed to update AI settings' },
       { status: 500 }

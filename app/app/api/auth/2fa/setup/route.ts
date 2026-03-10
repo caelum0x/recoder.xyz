@@ -74,7 +74,7 @@ export async function POST(request: NextRequest) {
       message: 'Scan this QR code with your authenticator app, then verify with a code to enable 2FA'
     });
 
-  } catch (error: any) {
+  } catch (error) {
     logger.error('[2FA Setup] Error:', { error: String(error), route: 'auth/2fa/setup' });
     return NextResponse.json(
       { success: false, error: 'Failed to setup 2FA' },

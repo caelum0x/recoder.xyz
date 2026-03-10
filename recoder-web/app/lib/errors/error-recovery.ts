@@ -605,16 +605,16 @@ if (typeof window !== 'undefined') {
     return true;
   });
 
-  // Auth error - redirect to login
+  // Auth error - redirect to centralized sign-in on main site
   registerAutoRecovery('AUTH_REQUIRED', async () => {
-    const loginUrl = `${window.location.origin.replace('app.', '')}/login?redirect=${encodeURIComponent(window.location.href)}`;
+    const loginUrl = `${window.location.origin.replace('app.', '')}/auth/signin?redirect=${encodeURIComponent(window.location.href)}`;
     window.location.href = loginUrl;
     return true;
   });
 
-  // Auth token expired - redirect to login
+  // Auth token expired - redirect to centralized sign-in on main site
   registerAutoRecovery('AUTH_TOKEN_EXPIRED', async () => {
-    const loginUrl = `${window.location.origin.replace('app.', '')}/login?redirect=${encodeURIComponent(window.location.href)}`;
+    const loginUrl = `${window.location.origin.replace('app.', '')}/auth/signin?redirect=${encodeURIComponent(window.location.href)}`;
     window.location.href = loginUrl;
     return true;
   });

@@ -125,7 +125,7 @@ export const POST = withCLIAuth(
         usage: data.usage,
         duration,
       });
-    } catch (error: any) {
+    } catch (error) {
       console.error('[CLI Proxy] Request failed:', error);
       return NextResponse.json(
         { error: 'Proxy request failed' },

@@ -112,7 +112,7 @@ export const usePrefetchComposioIcons = () => {
         });
       }
     } catch (error) {
-      console.debug('Failed to prefetch Composio icons:', error);
+      
     }
   }, [queryClient]);
 

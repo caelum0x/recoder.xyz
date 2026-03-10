@@ -8,7 +8,7 @@
  * PrismaClient directly in route handlers or service files.
  */
 
-import * as crypto from 'crypto';
+import * as crypto from 'node:crypto';
 import { PrismaClient } from './prisma-client';
 
 const globalForPrisma = globalThis as unknown as {
@@ -330,9 +330,11 @@ export const prismaHelpers = {
 // Helper function to generate user-friendly device code
 function generateUserCode(): string {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  const randomBytes = new Uint8Array(8);
+  crypto.getRandomValues(randomBytes);
   let code = '';
   for (let i = 0; i < 8; i++) {
-    code += chars.charAt(Math.floor(Math.random() * chars.length));
+    code += chars.charAt(randomBytes[i] % chars.length);
   }
   return code.slice(0, 4) + '-' + code.slice(4);
 }

@@ -38,7 +38,7 @@ export interface PlatformConfig {
 export const PLATFORMS: Record<string, PlatformConfig> = {
   main: {
     name: 'main',
-    url: process.env.MAIN_WEBSITE_URL || 'http://localhost:3001',
+    url: process.env.MAIN_WEBSITE_URL || 'http://localhost:3000',
     authEndpoint: '/api/auth',
     apiEndpoint: '/api'
   },
@@ -50,7 +50,7 @@ export const PLATFORMS: Record<string, PlatformConfig> = {
   },
   web: {
     name: 'web',
-    url: process.env.WEB_BUILDER_URL || 'http://localhost:3002', 
+    url: process.env.WEB_BUILDER_URL || 'http://localhost:5173',
     authEndpoint: '/api/auth',
     apiEndpoint: '/api'
   }

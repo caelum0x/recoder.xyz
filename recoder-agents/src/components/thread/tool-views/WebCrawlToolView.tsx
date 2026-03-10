@@ -61,7 +61,7 @@ export function WebCrawlToolView({
     typeof rawArguments === 'object' && rawArguments ? rawArguments : {},
     { interval: 50 }
   );
-  const smoothUrl = (smoothFields as any).url || (typeof rawArguments === 'object' ? rawArguments?.url : '') || '';
+  const smoothUrl = (smoothFields as Record<string, unknown>).url as string || (typeof rawArguments === 'object' ? rawArguments?.url : '') || '';
   const isUrlAnimating = isStreaming && !toolResult && !!toolCall;
 
   // Apply smooth text streaming for content - MUST be called unconditionally
@@ -90,7 +90,6 @@ export function WebCrawlToolView({
 
   // Defensive check - handle cases where toolCall might be undefined
   if (!toolCall) {
-    console.warn('WebCrawlToolView: toolCall is undefined. Tool views should use structured props.');
     return null;
   }
 

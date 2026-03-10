@@ -225,13 +225,13 @@ export default async function TaskListPage({
 					<Card className="!flex !flex-col gap-0 py-2 px-0">
 						{/* Header */}
 						<div className="grid grid-cols-[1fr_120px] md:grid-cols-[2fr_120px_1fr] items-center gap-4 px-[24px] py-2 border-b-[0.5px] border-border-muted">
-							<p className="text-[12px] font-geist font-semibold text-text/60">
+							<p className="text-[12px] font-sans font-semibold text-text/60">
 								Task
 							</p>
-							<p className="text-[12px] font-geist font-semibold text-text/60">
+							<p className="text-[12px] font-sans font-semibold text-text/60">
 								Status
 							</p>
-							<p className="hidden md:block text-[12px] font-geist font-semibold text-text/60">
+							<p className="hidden md:block text-[12px] font-sans font-semibold text-text/60">
 								Origin
 							</p>
 						</div>

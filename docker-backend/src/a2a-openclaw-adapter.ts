@@ -134,9 +134,10 @@ function generateTraceId(): string {
   ) {
     return globalThis.crypto.randomUUID().replace(/-/g, '');
   }
-  return Array.from({ length: 32 }, () =>
-    Math.floor(Math.random() * 16).toString(16)
-  ).join('');
+  // Fallback should never be reached on Node 22+, but keep it safe
+  return Date.now().toString(16) + 'x'.repeat(16).replace(/x/g, () =>
+    ((crypto.getRandomValues(new Uint8Array(1))[0]) & 0xf).toString(16)
+  );
 }
 
 /**

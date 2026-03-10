@@ -1,3 +1,4 @@
+import asyncio
 from typing import Optional
 from fastapi import APIRouter, HTTPException, Depends, File, UploadFile, Query, Request
 
@@ -386,9 +387,18 @@ async def update_agent(
         from .agent_loader import get_agent_loader
         loader = await get_agent_loader()
         agent_data_obj = await loader.load_agent(agent_id, user_id, load_config=True)
-        
+
+        # Emit webhook event (fire-and-forget, never break main flow)
+        try:
+            from core.webhooks.webhook_service import webhook_service
+            asyncio.create_task(webhook_service.send(user_id, "agent.updated", {
+                "agent_id": agent_id,
+            }))
+        except Exception as wh_err:
+            logger.warning(f"Webhook emission failed for agent.updated: {wh_err}")
+
         return agent_data_obj.to_pydantic_model()
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -457,8 +467,18 @@ async def delete_agent(agent_id: str, user_id: str = Depends(verify_and_get_user
             logger.warning(f"Cache invalidation failed for user {user_id}: {str(cache_error)}")
         
         logger.debug(f"Successfully deleted agent: {agent_id}")
+
+        # Emit webhook event (fire-and-forget, never break main flow)
+        try:
+            from core.webhooks.webhook_service import webhook_service
+            asyncio.create_task(webhook_service.send(user_id, "agent.deleted", {
+                "agent_id": agent_id,
+            }))
+        except Exception as wh_err:
+            logger.warning(f"Webhook emission failed for agent.deleted: {wh_err}")
+
         return {"message": "Worker deleted successfully"}
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -657,14 +677,24 @@ async def create_agent(
         await Cache.invalidate(f"agent_count_limit:{user_id}")
         
         logger.debug(f"Created agent {agent['agent_id']} with v1 for user: {user_id}")
-        
+
         # Load the created agent with full config
         from .agent_loader import get_agent_loader
         loader = await get_agent_loader()
         agent_data = await loader.load_agent(agent['agent_id'], user_id, load_config=True)
-        
+
+        # Emit webhook event (fire-and-forget, never break main flow)
+        try:
+            from core.webhooks.webhook_service import webhook_service
+            asyncio.create_task(webhook_service.send(user_id, "agent.created", {
+                "agent_id": agent['agent_id'],
+                "name": agent.get('name', ''),
+            }))
+        except Exception as wh_err:
+            logger.warning(f"Webhook emission failed for agent.created: {wh_err}")
+
         return agent_data.to_pydantic_model()
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -698,3 +728,144 @@ async def generate_agent_icon(
     except Exception as e:
         logger.error(f"Error generating agent icon for user {user_id}: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to generate agent icon: {str(e)}")
+
+
+@router.post("/agents/{agent_id}/clone", response_model=AgentResponse, summary="Clone Agent", operation_id="clone_agent")
+async def clone_agent(
+    agent_id: str,
+    user_id: str = Depends(verify_and_get_user_id_from_jwt)
+):
+    """Clone an agent, creating a copy with all configuration but no history."""
+    from core.agents import repo as agents_repo
+
+    logger.debug(f"Cloning agent {agent_id} for user: {user_id}")
+
+    # Check agent count limit
+    from core.utils.limits_checker import check_agent_count_limit
+    limit_check = await check_agent_count_limit(user_id)
+
+    if not limit_check['can_create']:
+        error_detail = {
+            "message": f"Maximum of {limit_check['limit']} agents allowed for your current plan. You have {limit_check['current_count']} agents.",
+            "current_count": limit_check['current_count'],
+            "limit": limit_check['limit'],
+            "tier_name": limit_check['tier_name'],
+            "error_code": "AGENT_LIMIT_EXCEEDED"
+        }
+        logger.warning(f"Agent limit exceeded for account {user_id}: {limit_check['current_count']}/{limit_check['limit']} agents")
+        raise HTTPException(status_code=402, detail=error_detail)
+
+    try:
+        # Get source agent and verify ownership
+        source_agent = await agents_repo.get_agent_by_id(agent_id)
+        if not source_agent:
+            raise HTTPException(status_code=404, detail="Source agent not found")
+
+        if source_agent.get('account_id') != user_id:
+            raise HTTPException(status_code=403, detail="Access denied")
+
+        # Get source agent's active version config
+        source_version_data = None
+        if source_agent.get('current_version_id'):
+            try:
+                version_service = await _get_version_service()
+                source_version = await version_service.get_version(
+                    agent_id=agent_id,
+                    version_id=source_agent['current_version_id'],
+                    user_id=user_id
+                )
+                source_version_data = source_version.to_dict()
+            except Exception as e:
+                logger.warning(f"Failed to get version data for source agent {agent_id}: {e}")
+
+        # Create the cloned agent
+        cloned_name = f"{source_agent.get('name', 'Agent')} (Copy)"
+        new_agent = await agents_repo.create_agent(
+            account_id=user_id,
+            name=cloned_name,
+            description=source_agent.get('description'),
+            icon_name=source_agent.get('icon_name', 'bot'),
+            icon_color=source_agent.get('icon_color', '#000000'),
+            icon_background=source_agent.get('icon_background', '#F3F4F6'),
+            is_default=False
+        )
+
+        if not new_agent:
+            raise HTTPException(status_code=500, detail="Failed to create cloned agent")
+
+        # Create initial version for the cloned agent with source config
+        try:
+            version_service = await _get_version_service()
+
+            system_prompt = ''
+            model_value = None
+            configured_mcps = []
+            custom_mcps = []
+            agentpress_tools = {}
+
+            if source_version_data:
+                system_prompt = source_version_data.get('system_prompt', '')
+                model_value = source_version_data.get('model')
+                configured_mcps = source_version_data.get('configured_mcps', [])
+                custom_mcps = source_version_data.get('custom_mcps', [])
+                agentpress_tools = source_version_data.get('agentpress_tools', {})
+            else:
+                # Fallback: use default config
+                from core.config.recoder_config import SUNA_CONFIG
+                from core.config.config_helper import _get_default_agentpress_tools
+                system_prompt = SUNA_CONFIG["system_prompt"]
+                agentpress_tools = _get_default_agentpress_tools()
+                default_model = await model_manager.get_default_model_for_user(None, user_id)
+                model_value = default_model
+
+            agentpress_tools = ensure_core_tools_enabled(agentpress_tools)
+
+            version = await version_service.create_version(
+                agent_id=new_agent['agent_id'],
+                user_id=user_id,
+                system_prompt=system_prompt,
+                model=model_value,
+                configured_mcps=configured_mcps,
+                custom_mcps=custom_mcps,
+                agentpress_tools=agentpress_tools,
+                version_name="v1",
+                change_description=f"Cloned from {source_agent.get('name', 'agent')}"
+            )
+
+            new_agent['current_version_id'] = version.version_id
+            new_agent['version_count'] = 1
+
+        except Exception as e:
+            logger.error(f"Error creating version for cloned agent: {str(e)}")
+            # Rollback: delete the agent we just created
+            await agents_repo.delete_agent(new_agent['agent_id'], user_id)
+            raise HTTPException(status_code=500, detail="Failed to create cloned agent version")
+
+        # Invalidate caches
+        from core.utils.cache import Cache
+        await Cache.invalidate(f"agent_count_limit:{user_id}")
+
+        # Load the full agent data
+        from .agent_loader import get_agent_loader
+        loader = await get_agent_loader()
+        agent_data = await loader.load_agent(new_agent['agent_id'], user_id, load_config=True)
+
+        # Emit webhook event
+        try:
+            from core.webhooks.webhook_service import webhook_service
+            asyncio.create_task(webhook_service.send(user_id, "agent.cloned", {
+                "agent_id": new_agent['agent_id'],
+                "source_agent_id": agent_id,
+                "name": cloned_name,
+            }))
+        except Exception as wh_err:
+            logger.warning(f"Webhook emission failed for agent.cloned: {wh_err}")
+
+        logger.debug(f"Cloned agent {agent_id} -> {new_agent['agent_id']} for user: {user_id}")
+        return agent_data.to_pydantic_model()
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error cloning agent {agent_id} for user {user_id}: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to clone agent: {str(e)}")

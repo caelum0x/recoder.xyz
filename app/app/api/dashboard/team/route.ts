@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth-helpers';
 import { prisma } from '@/lib/prisma';
+import { logger } from '@/lib/logger';
 
 function normalizeRole(role: string | null | undefined, isCurrentUser: boolean) {
   if (isCurrentUser && (!role || role === 'user')) return 'owner';
@@ -60,12 +61,11 @@ export async function GET(request: NextRequest) {
           joinedDate: member.createdAt.toISOString(),
           lastActive: (member.lastLoginAt || member.updatedAt).toISOString(),
           projects: member.ai_generated_projects.length,
-          commits: 0,
         })),
       },
     });
   } catch (error) {
-    console.error('Team load error:', error);
+    logger.error('Team load error:', { error: error instanceof Error ? error.message : String(error) });
     return NextResponse.json({ success: false, error: 'Failed to load team members' }, { status: 500 });
   }
 }
@@ -120,7 +120,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error('Team invite error:', error);
+    logger.error('Team invite error:', { error: error instanceof Error ? error.message : String(error) });
     return NextResponse.json({ success: false, error: 'Failed to add team member' }, { status: 500 });
   }
 }

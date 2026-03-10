@@ -19,7 +19,6 @@ export function CallStatusToolView({
 }: ToolViewProps) {
   // Defensive check - ensure toolCall is defined
   if (!toolCall) {
-    console.warn('CallStatusToolView: toolCall is undefined. Tool views should use structured props.');
     return null;
   }
 

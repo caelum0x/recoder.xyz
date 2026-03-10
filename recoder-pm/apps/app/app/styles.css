@@ -1,2 +1,3 @@
+@import "@recoder/design-tokens/tokens.css";
 @import "tailwindcss";
 @import "@repo/design-system/styles/globals.css";

@@ -20,8 +20,9 @@ export const metadata: Metadata = createMetadata({
 const ProposalPrdPage = async ({
   params,
 }: {
-  readonly params: { proposal: string };
+  readonly params: Promise<{ proposal: string }>;
 }) => {
+  const { proposal: proposalId } = await params;
   const [user, organizationId] = await Promise.all([
     currentUser(),
     currentOrganizationId(),
@@ -32,7 +33,7 @@ const ProposalPrdPage = async ({
   }
 
   const proposal = await database.proposal.findFirst({
-    where: { id: params.proposal, organizationId },
+    where: { id: proposalId, organizationId },
     select: {
       id: true,
       title: true,
@@ -46,7 +47,7 @@ const ProposalPrdPage = async ({
   const prdJob = await database.aiJob.findFirst({
     where: {
       type: "PROPOSAL_PRD",
-      entityId: params.proposal,
+      entityId: proposalId,
     },
     orderBy: { createdAt: "desc" },
     select: {

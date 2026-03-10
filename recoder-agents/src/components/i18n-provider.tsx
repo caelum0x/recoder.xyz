@@ -88,11 +88,7 @@ export function I18nProvider({ children }: { children: ReactNode }) {
         throw new Error(`Invalid translations object for locale ${targetLocale}`);
       }
       if (!translations.common || !translations.recoder) {
-        console.warn(`Missing sections in ${targetLocale}:`, {
-          hasCommon: !!translations.common,
-          hasRecoder: !!translations.recoder,
-          keys: Object.keys(translations).slice(0, 10)
-        });
+        // Missing expected sections — translations may be incomplete
       }
       setMessages(translations);
       setLocale(targetLocale);
@@ -168,10 +164,10 @@ export function I18nProvider({ children }: { children: ReactNode }) {
       }
     };
 
-    window.addEventListener(LOCALE_CHANGE_EVENT as any, handleLocaleChange as EventListener);
+    window.addEventListener(LOCALE_CHANGE_EVENT, handleLocaleChange as EventListener);
 
     return () => {
-      window.removeEventListener(LOCALE_CHANGE_EVENT as any, handleLocaleChange as EventListener);
+      window.removeEventListener(LOCALE_CHANGE_EVENT, handleLocaleChange as EventListener);
     };
   }, [loadTranslations]);
 

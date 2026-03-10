@@ -247,7 +247,8 @@ def migrate_tool_message(message: Dict[str, Any], assistant_messages: Optional[L
                             "output": parsed_content,
                             "error": None
                         }
-                except:
+                except Exception:
+                    logger.warning("Failed to parse tool result content during message migration")
                     result_data = {
                         "success": True,
                         "output": content_value,
@@ -290,8 +291,9 @@ def migrate_tool_message(message: Dict[str, Any], assistant_messages: Optional[L
                         "output": parsed,
                         "error": None
                     }
-            except:
+            except Exception:
                 # Fallback: use content as-is
+                logger.warning("Failed to parse XML tool execution content during message migration")
                 function_name = "unknown"
                 result_data = {
                     "success": True,

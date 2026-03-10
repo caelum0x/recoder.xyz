@@ -10,21 +10,35 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import crypto from 'crypto';
 import { logger } from '@/lib/logger';
+import { rateLimit, rateLimitConfigs } from '@/lib/middleware/rate-limit';
 import {
   consumeVerification,
   findValidVerificationByIdentifierAndHashedValue,
   findValidVerificationByIdentifierPrefixAndHashedValue,
 } from '@/lib/auth/verification-store';
 
+const authRateLimiter = rateLimit(rateLimitConfigs.auth);
+
 async function markEmailVerifiedAcrossTables(email: string) {
+  const prismaAny = prisma as unknown as {
+    user?: {
+      update: (args: {
+        where: { email: string };
+        data: { emailVerified: boolean; updatedAt: Date };
+      }) => Promise<unknown>;
+    };
+  };
+
   const results = await Promise.allSettled([
-    prisma.user.update({
-      where: { email },
-      data: {
-        emailVerified: true,
-        updatedAt: new Date(),
-      },
-    }),
+    prismaAny.user?.update
+      ? prismaAny.user.update({
+          where: { email },
+          data: {
+            emailVerified: true,
+            updatedAt: new Date(),
+          },
+        })
+      : Promise.resolve(null),
     prisma.users.update({
       where: { email },
       data: {
@@ -47,6 +61,10 @@ async function markEmailVerifiedAcrossTables(email: string) {
 
 export async function POST(request: NextRequest) {
   try {
+    // Rate limit: 5 requests per minute
+    const rateLimitResponse = await authRateLimiter(request);
+    if (rateLimitResponse) return rateLimitResponse;
+
     const body = await request.json();
     const { code, email } = body;
 
@@ -97,7 +115,7 @@ export async function POST(request: NextRequest) {
       email: verifiedEmail
     });
 
-  } catch (error: any) {
+  } catch (error) {
     logger.error('Code verification error', { route: 'api/auth/verify-code', error: error instanceof Error ? error.message : String(error) });
     return NextResponse.json(
       { success: false, error: 'Verification failed. Please try again.' },
@@ -108,6 +126,10 @@ export async function POST(request: NextRequest) {
 
 // GET endpoint to check code status
 export async function GET(request: NextRequest) {
+  // Rate limit: 5 requests per minute
+  const rateLimitResponse = await authRateLimiter(request);
+  if (rateLimitResponse) return rateLimitResponse;
+
   const { searchParams } = new URL(request.url);
   const code = searchParams.get('code');
 

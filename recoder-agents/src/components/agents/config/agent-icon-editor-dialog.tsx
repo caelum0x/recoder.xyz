@@ -49,19 +49,6 @@ export function AgentIconEditorDialog({
   const [iconColor, setIconColor] = useState(currentIconColor || '#000000');
   const [backgroundColor, setBackgroundColor] = useState(currentBackgroundColor || '#e5e5e5');
   
-  // Debug props when dialog opens
-  useEffect(() => {
-    if (isOpen) {
-      console.log('🔧 AgentIconEditorDialog opened with props:', {
-        agentName,
-        currentIconName,
-        currentIconColor,
-        currentBackgroundColor,
-        onIconUpdate: !!onIconUpdate
-      });
-    }
-  }, [isOpen, agentName, currentIconName, currentIconColor, currentBackgroundColor, onIconUpdate]);
-  
   const generateIconMutation = useGenerateAgentIcon();
 
   useEffect(() => {

@@ -14,7 +14,7 @@ export async function POST(request: NextRequest) {
 
     const result = await validateUserApiKey(apiKey, provider);
     return NextResponse.json(result);
-  } catch (error: any) {
+  } catch (error) {
     return NextResponse.json({ 
       valid: false, 
       error: 'Validation failed' 

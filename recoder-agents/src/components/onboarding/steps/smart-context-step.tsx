@@ -8,6 +8,7 @@ import { Label } from '@/components/ui/label';
 import { StepWrapper } from '../shared/step-wrapper';
 import { userContext, updateUserContext } from '../shared/context';
 import type { UserContext } from '../shared/types';
+import { resolveBackendApiUrl } from '@/lib/runtime-urls';
 
 export const SmartContextStep = () => {
   const [localContext, setLocalContext] = useState<UserContext>(userContext);
@@ -19,29 +20,44 @@ export const SmartContextStep = () => {
     updateUserContext(newContext);
   };
 
-  // Simulate website content extraction
-  const extractWebsiteContext = async (url: string) => {
-    if (!url || isExtracting) return;
+  // Extract website context using real backend API
+  const extractWebsiteContext = async (input: string) => {
+    if (!input || isExtracting) return;
+
+    // Check if the input looks like a URL
+    const trimmed = input.trim();
+    const isUrl = /^(https?:\/\/)?[a-zA-Z0-9._\-]+\.[a-zA-Z]{2,}/.test(trimmed);
+    if (!isUrl) return;
 
     setIsExtracting(true);
 
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 2000));
+    try {
+      const backendUrl = resolveBackendApiUrl();
+      const response = await fetch(`${backendUrl}/website-analysis/extract-context`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ url: trimmed }),
+      });
 
-    // Mock extracted data
-    const mockExtracted = {
-      businessType: "Digital Agency",
-      services: ["SEO", "Content Marketing", "Social Media", "Analytics"],
-      size: "Small Agency (10-25 people)"
-    };
+      if (!response.ok) {
+        throw new Error(`Analysis failed: ${response.status}`);
+      }
 
-    updateContext({
-      extractedContext: mockExtracted,
-      industry: mockExtracted.businessType,
-      companySize: mockExtracted.size,
-      primaryGoals: mockExtracted.services
-    });
-    setIsExtracting(false);
+      const extracted = await response.json();
+
+      updateContext({
+        extractedContext: extracted,
+        industry: extracted.businessType,
+        companySize: extracted.size,
+        primaryGoals: extracted.services,
+      });
+    } catch (err) {
+      // Silently fail — the user can still proceed without extraction
+      console.warn('Website analysis unavailable:', err instanceof Error ? err.message : err);
+    } finally {
+      setIsExtracting(false);
+    }
   };
 
   // Auto-progress after context is filled

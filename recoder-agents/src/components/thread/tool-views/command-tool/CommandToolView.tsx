@@ -55,7 +55,7 @@ export function CommandToolView({
     (typeof rawArguments === 'object' && rawArguments) ? rawArguments : {},
     { interval: 50 }
   );
-  const smoothCommand = (smoothFields as any).command || (typeof rawArguments === 'object' ? rawArguments?.command : '') || '';
+  const smoothCommand = (smoothFields as Record<string, unknown>).command as string || (typeof rawArguments === 'object' ? rawArguments?.command : '') || '';
   const isCommandAnimating = isStreaming && !toolResult;
 
   // For terminal output, skip smooth animation - terminal output should feel instant/real-time

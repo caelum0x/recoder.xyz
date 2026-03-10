@@ -218,13 +218,7 @@ export function PresentationViewer({
         currentSlideNumber = output.slide_number;
         presentationTitle = output.presentation_title || output.title;
         
-        console.log('[PresentationViewer] Extracted presentation data:', {
-          presentationName: extractedPresentationName,
-          presentationPath: extractedPresentationPath,
-          slideNumber: currentSlideNumber,
-          presentationTitle,
-          rawOutput: output
-        });
+        
       }
     } catch (e) {
       console.error('Failed to process tool output:', e);
@@ -328,11 +322,7 @@ export function PresentationViewer({
       if (response.ok) {
         const data = await response.json();
         
-        console.log('[PresentationViewer] Metadata loaded successfully:', {
-          presentationName: sanitizedPresentationName,
-          slideCount: Object.keys(data.slides || {}).length,
-          metadata: data
-        });
+        
         
         // Cache the metadata
         metadataCacheRef.current.set(sanitizedPresentationName, data);
@@ -442,11 +432,7 @@ export function PresentationViewer({
       const cachedMetadata = metadataCacheRef.current.get(sanitizedName);
       if (cachedMetadata && !metadata) {
         // Set cached metadata immediately so slides can render right away
-        console.log('[PresentationViewer] Using cached metadata immediately:', {
-          presentationName: sanitizedName,
-          slideCount: Object.keys(cachedMetadata.slides || {}).length,
-          cachedMetadata
-        });
+        
         setMetadata(cachedMetadata);
         setIsLoadingMetadata(false);
         hasLoadedRef.current = true;
@@ -455,12 +441,7 @@ export function PresentationViewer({
     
     // THEN: Start loading fresh data if we have the required data
     if (extractedPresentationName && project?.sandbox?.sandbox_url) {
-      console.log('[PresentationViewer] Starting metadata load:', {
-        presentationName: sanitizedName,
-        sandboxUrl: project.sandbox.sandbox_url,
-        hasCachedMetadata: !!metadataCacheRef.current.get(sanitizedName || ''),
-        currentMetadata: !!metadata
-      });
+      
       loadMetadata();
     } else if (extractedPresentationName && project?.sandbox?.id && !project?.sandbox?.sandbox_url) {
       // Sandbox exists but URL not available yet

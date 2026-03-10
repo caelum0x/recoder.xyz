@@ -100,7 +100,7 @@ export class WorkspaceService {
     const collab = getCollaborationSvc();
     const generalChannel = collab.createChannel({
       name: 'general',
-      scope: 'public',
+      scope: 'channel',
       memberAgentIds: input.memberAgentIds ?? [],
     });
 

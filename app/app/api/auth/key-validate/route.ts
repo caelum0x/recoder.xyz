@@ -48,7 +48,7 @@ export async function POST(req: NextRequest) {
       user: result.user,
       keyInfo: result.keyInfo,
     });
-  } catch (error: any) {
+  } catch (error) {
     logger.error('Error validating API key:', { error: String(error), route: 'auth/key-validate' });
     return NextResponse.json(
       {
@@ -110,7 +110,7 @@ export async function GET(req: NextRequest) {
       user: result.user,
       keyInfo: result.keyInfo,
     });
-  } catch (error: any) {
+  } catch (error) {
     logger.error('Error validating API key:', { error: String(error), route: 'auth/key-validate' });
     return NextResponse.json(
       {

@@ -100,7 +100,7 @@ export function RecoderAppBanners(props: RecoderAppBannersProps) {
     setDesktopPlatform(detectDesktopPlatform());
     
     if (process.env.NODE_ENV !== 'production') {
-      console.log('[RecoderAppBanners] flags', { disableMobileAdvertising });
+      
     }
 
     const desktopDismissed = localStorage.getItem(DESKTOP_STORAGE_KEY);
@@ -176,14 +176,14 @@ export function RecoderAppBanners(props: RecoderAppBannersProps) {
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 5 }}
               transition={{ duration: 0.2, ease: [0.25, 0.1, 0.25, 1] }}
-              className="bg-white dark:bg-[#2a2a2a] rounded-xl shadow-xl border border-border/60 dark:border-[#232324] p-3 cursor-pointer"
+              className="bg-white dark:bg-zinc-800 rounded-xl shadow-xl border border-border/60 dark:border-zinc-800 p-3 cursor-pointer"
             >
               <div className="flex items-center gap-3">
                 <div className="flex -space-x-2">
-                  <div className="w-10 h-10 bg-foreground dark:bg-white rounded-lg flex items-center justify-center border-2 border-white dark:border-[#2a2a2a]">
+                  <div className="w-10 h-10 bg-foreground dark:bg-white rounded-lg flex items-center justify-center border-2 border-white dark:border-zinc-800">
                     <Smartphone className="h-5 w-5 text-background dark:text-black" />
                   </div>
-                  <div className="w-10 h-10 bg-foreground dark:bg-white rounded-lg flex items-center justify-center border-2 border-white dark:border-[#2a2a2a]">
+                  <div className="w-10 h-10 bg-foreground dark:bg-white rounded-lg flex items-center justify-center border-2 border-white dark:border-zinc-800">
                     <Monitor className="h-5 w-5 text-background dark:text-black" />
                   </div>
                 </div>
@@ -216,7 +216,7 @@ export function RecoderAppBanners(props: RecoderAppBannersProps) {
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
                 >
-                  <div className="relative bg-white dark:bg-[#2a2a2a] rounded-xl shadow-xl overflow-hidden border border-border/60 dark:border-[#232324]">
+                  <div className="relative bg-white dark:bg-zinc-800 rounded-xl shadow-xl overflow-hidden border border-border/60 dark:border-zinc-800">
                     {/* Close button */}
                     <button
                       onClick={handleCloseMobile}
@@ -226,7 +226,7 @@ export function RecoderAppBanners(props: RecoderAppBannersProps) {
                     </button>
 
                     {/* QR Code area - single QR that auto-redirects to correct store */}
-                    <div className="relative h-[140px] bg-muted dark:bg-[#e8e4df] flex items-center justify-center p-4">
+                    <div className="relative h-[140px] bg-muted dark:bg-zinc-200 flex items-center justify-center p-4">
                       <a
                         href={APP_DOWNLOAD_URL}
                         target="_blank"
@@ -238,7 +238,7 @@ export function RecoderAppBanners(props: RecoderAppBannersProps) {
                     </div>
 
                     {/* Content area */}
-                    <div className="p-4 bg-muted/50 dark:bg-[#161618]">
+                    <div className="p-4 bg-muted/50 dark:bg-zinc-900">
                       <h3 className="text-foreground dark:text-white text-sm font-semibold mb-1">
                         Recoder for Mobile is here
                       </h3>
@@ -293,7 +293,7 @@ export function RecoderAppBanners(props: RecoderAppBannersProps) {
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1], delay: mobileVisible ? 0.1 : 0 }}
                 >
-                  <div className="relative bg-white dark:bg-[#2a2a2a] rounded-xl shadow-xl overflow-hidden border border-border/60 dark:border-[#232324]">
+                  <div className="relative bg-white dark:bg-zinc-800 rounded-xl shadow-xl overflow-hidden border border-border/60 dark:border-zinc-800">
                     {/* Close button */}
                     <button
                       onClick={handleCloseDesktop}
@@ -303,7 +303,7 @@ export function RecoderAppBanners(props: RecoderAppBannersProps) {
                     </button>
 
                     {/* Illustration area */}
-                    <div className="relative h-[80px] bg-muted dark:bg-[#e8e4df] flex items-center justify-center">
+                    <div className="relative h-[80px] bg-muted dark:bg-zinc-200 flex items-center justify-center">
                       <div className="w-[160px] h-[50px] bg-background dark:bg-white rounded-lg p-2 relative flex items-center justify-center border border-border/40 dark:border-transparent">
                         <div className="flex gap-1 absolute bottom-1.5 left-2">
                           <div className="w-2.5 h-2.5 bg-muted-foreground/30 dark:bg-gray-300 rounded-sm" />
@@ -311,7 +311,7 @@ export function RecoderAppBanners(props: RecoderAppBannersProps) {
                           <div className="w-2.5 h-2.5 bg-muted-foreground/30 dark:bg-gray-300 rounded-sm" />
                         </div>
                         
-                        <div className="w-8 h-8 bg-foreground dark:bg-[#1a1a1a] rounded-lg flex items-center justify-center">
+                        <div className="w-8 h-8 bg-foreground dark:bg-zinc-900 rounded-lg flex items-center justify-center">
                           <RecoderSymbol size={16} className="text-background dark:text-white" />
                         </div>
                         
@@ -324,7 +324,7 @@ export function RecoderAppBanners(props: RecoderAppBannersProps) {
                     </div>
 
                     {/* Content area */}
-                    <div className="p-4 bg-muted/50 dark:bg-[#161618]">
+                    <div className="p-4 bg-muted/50 dark:bg-zinc-900">
                       <h3 className="text-foreground dark:text-white text-sm font-semibold mb-1">
                         Recoder for Desktop is here
                       </h3>

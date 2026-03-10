@@ -404,8 +404,24 @@ async def _build_account_state(account_id: str, skip_cache: bool = False) -> Dic
     from core.utils.limits_checker import get_all_limits_fast
 
     t_limits = time.time()
-    all_limits = await get_all_limits_fast(account_id, tier_info=subscription_tier_info)
-    logger.info(f"[ACCOUNT_STATE] get_all_limits_fast took {(time.time() - t_limits) * 1000:.1f}ms")
+    # Fetch limits and Stripe subscription in parallel
+    async def _noop():
+        return None
+    all_limits, stripe_sub_data = await asyncio.gather(
+        get_all_limits_fast(account_id, tier_info=subscription_tier_info),
+        _get_cached_stripe_subscription(stripe_subscription_id) if stripe_subscription_id and provider == 'stripe' else _noop(),
+    )
+    logger.info(f"[ACCOUNT_STATE] get_all_limits_fast + stripe sub took {(time.time() - t_limits) * 1000:.1f}ms")
+
+    # Extract current_period_end from Stripe subscription
+    current_period_end = None
+    if stripe_sub_data:
+        period_end_ts = stripe_sub_data.get('current_period_end')
+        if period_end_ts:
+            try:
+                current_period_end = datetime.fromtimestamp(period_end_ts, tz=timezone.utc).isoformat()
+            except Exception:
+                pass
     
     if provider == 'revenuecat' and credit_account.get('revenuecat_product_id'):
         product_id_lower = credit_account.get('revenuecat_product_id', '').lower()
@@ -496,7 +512,7 @@ async def _build_account_state(account_id: str, skip_cache: bool = False) -> Dic
             'billing_period': billing_period,
             'provider': provider,
             'subscription_id': stripe_subscription_id,
-            'current_period_end': None,  # TODO: Add stripe_current_period_end column to DB
+            'current_period_end': current_period_end,
             'cancel_at_period_end': is_cancelled,
             'is_trial': is_trial,
             'trial_status': trial_status,

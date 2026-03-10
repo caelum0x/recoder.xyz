@@ -386,15 +386,15 @@ class A2ASloMetricsCollector {
 
       lines.push('# HELP recoder_a2a_queue_running_count Tasks currently running');
       lines.push('# TYPE recoder_a2a_queue_running_count gauge');
-      lines.push(`recoder_a2a_queue_running_count ${queueStats.runningCount}`);
+      lines.push(`recoder_a2a_queue_running_count ${queueStats.processingCount}`);
 
       lines.push('# HELP recoder_a2a_queue_completed_count Tasks completed');
       lines.push('# TYPE recoder_a2a_queue_completed_count counter');
-      lines.push(`recoder_a2a_queue_completed_count ${queueStats.completedCount}`);
+      lines.push(`recoder_a2a_queue_completed_count ${queueStats.totalProcessed}`);
 
       lines.push('# HELP recoder_a2a_queue_failed_count Tasks failed');
       lines.push('# TYPE recoder_a2a_queue_failed_count counter');
-      lines.push(`recoder_a2a_queue_failed_count ${queueStats.failedCount}`);
+      lines.push(`recoder_a2a_queue_failed_count ${queueStats.totalFailed}`);
     } catch { /* queue not initialized */ }
 
     // --- Messaging metrics ---
@@ -406,7 +406,7 @@ class A2ASloMetricsCollector {
 
       lines.push('# HELP recoder_a2a_messages_unread Total unread messages');
       lines.push('# TYPE recoder_a2a_messages_unread gauge');
-      lines.push(`recoder_a2a_messages_unread ${msgStats.totalUnread}`);
+      lines.push(`recoder_a2a_messages_unread ${msgStats.totalSent - msgStats.totalRead}`);
     } catch { /* messaging not initialized */ }
 
     // --- Agent registry metrics ---
@@ -465,4 +465,3 @@ export function resetA2ASloMetrics(): void {
     singleton.reset();
   }
 }
-

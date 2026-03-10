@@ -11,7 +11,7 @@ export default function ProductionEngineBanner() {
   if (dismissed) return null;
 
   return (
-    <div className="relative bg-gradient-to-r from-blue-600 via-purple-600 to-teal-600 text-white">
+    <div className="relative bg-gradient-to-r from-orange-500 via-purple-600 to-teal-600 text-white">
       {/* Background Pattern */}
       <div className="absolute inset-0 bg-black bg-opacity-10 backdrop-blur-sm"></div>
       
@@ -252,7 +252,7 @@ export function ProductionEngineFeatureSection() {
         
         {/* CTA Section */}
         <div className="text-center mt-12">
-          <Card className="bg-gradient-to-r from-blue-600 to-purple-600 text-white border-0">
+          <Card className="bg-gradient-to-r from-orange-500 to-purple-600 text-white border-0">
             <CardContent className="p-8">
               <h3 className="text-2xl font-bold mb-4">
                 Ready to 10x Your Development Speed?

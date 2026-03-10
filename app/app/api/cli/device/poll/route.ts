@@ -8,6 +8,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth-config';
 import { prisma } from '@/lib/prisma';
+import { logger } from '@/lib/logger';
 
 /**
  * GET /api/cli/device/poll?deviceCode=xxx
@@ -111,7 +112,7 @@ export async function GET(request: NextRequest) {
       { status: 400 }
     );
   } catch (error) {
-    console.error('❌ [api/cli/device/poll] Error:', error);
+    logger.error('[api/cli/device/poll] Error:', { error: error instanceof Error ? error.message : String(error) });
     return NextResponse.json(
       {
         error: 'Polling failed',

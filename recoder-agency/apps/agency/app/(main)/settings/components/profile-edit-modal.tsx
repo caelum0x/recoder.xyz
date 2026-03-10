@@ -252,7 +252,7 @@ export function ProfileEditModal({
 							<span className="sr-only">Close</span>
 						</DialogClose>
 					</div>
-					<DialogDescription className="font-geist mt-2 text-[14px] text-text-muted">
+					<DialogDescription className="font-sans mt-2 text-[14px] text-text-muted">
 						Update your display name and avatar.
 					</DialogDescription>
 				</DialogHeader>
@@ -332,7 +332,7 @@ export function ProfileEditModal({
 						{/* Display name input (aligned with team dialogs style) */}
 						<div className="w-full">
 							<div className="grid gap-1">
-								<Label htmlFor="displayName" className="text-text font-geist">
+								<Label htmlFor="displayName" className="text-text font-sans">
 									Your Display Name
 								</Label>
 								<div
@@ -353,7 +353,7 @@ export function ProfileEditModal({
 
 						{/* Error message */}
 						{(error || avatarError) && (
-							<p className="text-[12px] leading-[20.4px] text-error-900 font-geist">
+							<p className="text-[12px] leading-[20.4px] text-error-900 font-sans">
 								{error || avatarError}
 							</p>
 						)}

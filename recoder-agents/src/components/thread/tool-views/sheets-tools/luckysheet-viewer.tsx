@@ -175,7 +175,7 @@ export function LuckysheetViewer({ xlsxPath, sandboxId, className, height }: Luc
         loadStyle('https://cdn.jsdelivr.net/npm/luckysheet@latest/dist/fonts/iconfont.css');
 
         await loadScript('https://cdn.jsdelivr.net/npm/jquery@3.6.4/dist/jquery.min.js');
-        if (!window.$ && (window as any).jQuery) window.$ = (window as any).jQuery;
+        if (!window.$ && window.jQuery) window.$ = window.jQuery;
         await loadScript('https://cdn.jsdelivr.net/npm/jquery-mousewheel@3.1.13/jquery.mousewheel.min.js');
         await loadScript('https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js');
         await loadScript('https://cdn.jsdelivr.net/npm/luckysheet@latest/dist/plugins/js/plugin.js');

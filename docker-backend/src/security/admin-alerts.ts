@@ -107,7 +107,7 @@ export function sendAlert(
   }
 
   const alert: AdminAlert = {
-    id: `alert-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    id: `alert-${Date.now()}-${crypto.randomUUID().slice(0, 8)}`,
     severity,
     category,
     title,

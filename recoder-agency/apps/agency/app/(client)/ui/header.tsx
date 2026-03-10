@@ -3,7 +3,7 @@ import { RecoderLogo } from "@/components/recoder-logo";
 
 export function ClientHeader() {
 	return (
-		<header className="h-[48px] shrink-0 border-b border-border flex items-center justify-between px-4 bg-background">
+		<header className="h-16 shrink-0 border-b border-border flex items-center justify-between px-6 bg-background">
 			<div className="flex items-center gap-3">
 				<Link href="/portal" aria-label="Go to dashboard">
 					<RecoderLogo size={24} />

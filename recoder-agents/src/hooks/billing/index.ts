@@ -86,3 +86,14 @@ export {
 // =============================================================================
 
 export type { AccountState } from '@/lib/api/billing';
+
+// =============================================================================
+// SUBSCRIPTION STATUS - Cross-domain subscription check
+// =============================================================================
+
+export {
+  useSubscriptionStatus,
+  subscriptionStatusKeys,
+} from './use-subscription-status';
+
+export type { SubscriptionStatus } from '@/lib/api/subscription';

@@ -1,11 +1,13 @@
 'use client';
 
-import { FileText, Sparkles } from 'lucide-react';
-import { Alert, AlertDescription } from '@/components/ui/alert';
+import { FileText, ExternalLink, FolderOpen, Upload, Bot } from 'lucide-react';
 import { useTranslations } from 'next-intl';
+import { Button } from '@/components/ui/button';
+import { useRouter } from 'next/navigation';
 
 export function KnowledgeBaseSettings() {
   const t = useTranslations('settings.knowledgeBase');
+  const router = useRouter();
 
   return (
     <div className="p-4 sm:p-6 pb-12 sm:pb-6 space-y-5 sm:space-y-6 min-w-0 max-w-full overflow-x-hidden">
@@ -19,24 +21,57 @@ export function KnowledgeBaseSettings() {
               <div>
                 <h3 className="text-lg font-semibold">{t('title') || 'Knowledge Base'}</h3>
                 <p className="text-sm text-muted-foreground mt-0.5">
-                  {t('description') || 'Upload and manage documents for your agents'}
+                  {t('description') || 'Upload and manage documents for your workers'}
                 </p>
               </div>
             </div>
           </div>
         </div>
 
-        <Alert className="border-primary/20 bg-primary/5">
-          <Sparkles className="h-4 w-4 text-primary" />
-          <AlertDescription className="text-sm">
-            <strong className="text-foreground">Coming Soon</strong>
-            <p className="text-muted-foreground mt-1">
-              Knowledge Base is currently under development. This feature will allow you to upload documents and files that your agents can reference to provide more accurate and context-aware responses.
+        <div className="space-y-4">
+          <p className="text-sm text-muted-foreground leading-relaxed">
+            Upload files and documents that your workers can reference for more accurate, context-aware responses.
+            Each worker can be assigned specific knowledge base entries from their configuration page.
+          </p>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="flex items-start gap-3 p-4 rounded-xl border border-border bg-card">
+              <Upload className="h-5 w-5 text-muted-foreground flex-shrink-0 mt-0.5" />
+              <div>
+                <p className="text-sm font-medium">Upload files</p>
+                <p className="text-xs text-muted-foreground mt-0.5">PDF, DOC, TXT, MD, CSV and more (50MB limit)</p>
+              </div>
+            </div>
+            <div className="flex items-start gap-3 p-4 rounded-xl border border-border bg-card">
+              <FolderOpen className="h-5 w-5 text-muted-foreground flex-shrink-0 mt-0.5" />
+              <div>
+                <p className="text-sm font-medium">Organize in folders</p>
+                <p className="text-xs text-muted-foreground mt-0.5">Group related files for easy management</p>
+              </div>
+            </div>
+            <div className="flex items-start gap-3 p-4 rounded-xl border border-border bg-card">
+              <Bot className="h-5 w-5 text-muted-foreground flex-shrink-0 mt-0.5" />
+              <div>
+                <p className="text-sm font-medium">Assign to workers</p>
+                <p className="text-xs text-muted-foreground mt-0.5">Choose which files each worker can access</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="pt-2">
+            <Button
+              onClick={() => router.push('/agents')}
+              className="gap-2"
+            >
+              <ExternalLink className="h-4 w-4" />
+              Manage Knowledge Base in Worker Config
+            </Button>
+            <p className="text-xs text-muted-foreground mt-2">
+              Open any worker&apos;s configuration and navigate to the Knowledge tab to upload files and manage assignments.
             </p>
-          </AlertDescription>
-        </Alert>
+          </div>
+        </div>
       </div>
     </div>
   );
 }
-

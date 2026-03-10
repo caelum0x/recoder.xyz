@@ -7,7 +7,7 @@ export const Footer = () => (
       <a
         className="underline"
         href="https://pm.recoder.xyz/"
-        rel="noreferrer"
+        rel="noopener noreferrer"
         target="_blank"
       >
         Recoder PM

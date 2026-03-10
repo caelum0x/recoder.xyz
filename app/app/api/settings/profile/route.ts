@@ -7,9 +7,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSession } from '@/lib/auth-helpers';
 import { prisma } from '@/lib/prisma';
+import { logger } from '@/lib/logger';
+import { rateLimit, rateLimitConfigs } from '@/lib/middleware/rate-limit';
+
+const apiRateLimiter = rateLimit(rateLimitConfigs.api);
 
 // GET /api/settings/profile - Get user profile settings
 export async function GET(request: NextRequest) {
+  const rateLimitResponse = await apiRateLimiter(request);
+  if (rateLimitResponse) return rateLimitResponse;
+
   try {
     const session = await getSession(request);
 
@@ -67,8 +74,8 @@ export async function GET(request: NextRequest) {
       profile: Array.isArray(profile) ? profile[0] : profile
     });
 
-  } catch (error: any) {
-    console.error('[Profile Settings GET] Error:', error);
+  } catch (error) {
+    logger.error('[Profile Settings GET] Error', { error: error instanceof Error ? error.message : String(error) });
     return NextResponse.json(
       { success: false, error: 'Failed to fetch profile' },
       { status: 500 }
@@ -78,6 +85,9 @@ export async function GET(request: NextRequest) {
 
 // PUT /api/settings/profile - Update profile settings
 export async function PUT(request: NextRequest) {
+  const rateLimitResponse = await apiRateLimiter(request);
+  if (rateLimitResponse) return rateLimitResponse;
+
   try {
     const session = await getSession(request);
 
@@ -131,8 +141,8 @@ export async function PUT(request: NextRequest) {
       message: 'Profile updated successfully'
     });
 
-  } catch (error: any) {
-    console.error('[Profile Settings PUT] Error:', error);
+  } catch (error) {
+    logger.error('[Profile Settings PUT] Error', { error: error instanceof Error ? error.message : String(error) });
     return NextResponse.json(
       { success: false, error: 'Failed to update profile' },
       { status: 500 }

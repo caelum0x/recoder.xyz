@@ -8,6 +8,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getSession } from '@/lib/auth-helpers';
 import { prisma } from '@/lib/prisma';
 import crypto from 'crypto';
+import { logger } from '@/lib/logger';
 
 // GET /api/settings/editor - Get editor settings
 export async function GET(request: NextRequest) {
@@ -56,8 +57,8 @@ export async function GET(request: NextRequest) {
       settings
     });
 
-  } catch (error: any) {
-    console.error('[Editor Settings GET] Error:', error);
+  } catch (error) {
+    logger.error('[Editor Settings GET] Error', { error: error instanceof Error ? error.message : String(error) });
     return NextResponse.json(
       { success: false, error: 'Failed to fetch editor settings' },
       { status: 500 }
@@ -99,8 +100,8 @@ export async function PUT(request: NextRequest) {
       message: 'Editor settings updated successfully'
     });
 
-  } catch (error: any) {
-    console.error('[Editor Settings PUT] Error:', error);
+  } catch (error) {
+    logger.error('[Editor Settings PUT] Error', { error: error instanceof Error ? error.message : String(error) });
     return NextResponse.json(
       { success: false, error: 'Failed to update editor settings' },
       { status: 500 }

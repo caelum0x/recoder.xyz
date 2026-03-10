@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth-helpers";
 import { fetchAllAppActivity } from "@/lib/services/platform-aggregator";
+import { logger } from "@/lib/logger";
 
 export async function GET() {
   try {
@@ -11,7 +12,7 @@ export async function GET() {
 
     return NextResponse.json({ success: true, data: activity });
   } catch (error) {
-    console.error("Platform activity aggregation error:", error);
+    logger.error("Platform activity aggregation error:", { error: error instanceof Error ? error.message : String(error) });
     return NextResponse.json(
       { error: "Failed to fetch platform activity" },
       { status: 500 },

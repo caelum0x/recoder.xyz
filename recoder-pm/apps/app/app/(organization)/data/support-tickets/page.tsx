@@ -39,7 +39,7 @@ const buildHref = (params: Record<string, string | undefined>) => {
 const SupportTicketsPage = async ({
   searchParams,
 }: {
-  readonly searchParams?: Record<string, string | string[] | undefined>;
+  readonly searchParams?: Promise<Record<string, string | string[] | undefined>>;
 }) => {
   const organizationId = await currentOrganizationId();
 
@@ -47,8 +47,9 @@ const SupportTicketsPage = async ({
     return notFound();
   }
 
-  const sourceParam = searchParams?.source;
-  const pageParam = searchParams?.page;
+  const resolvedSearchParams = searchParams ? await searchParams : undefined;
+  const sourceParam = resolvedSearchParams?.source;
+  const pageParam = resolvedSearchParams?.page;
 
   const source =
     typeof sourceParam === "string" && sources.includes(sourceParam)

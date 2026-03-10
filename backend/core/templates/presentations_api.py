@@ -159,7 +159,7 @@ async def get_slide_html(template_name: str, slide_number: int):
             content=html_content,
             headers={
                 "X-Frame-Options": "SAMEORIGIN",
-                "Content-Security-Policy": "frame-ancestors 'self' http://localhost:* https://*.recoder.xyz https://*.recoder.xyz",
+                "Content-Security-Policy": "frame-ancestors 'self' https://*.recoder.xyz",
             }
         )
     except HTTPException:

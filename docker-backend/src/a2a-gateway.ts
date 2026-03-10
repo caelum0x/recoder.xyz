@@ -1509,7 +1509,7 @@ async function publishOrchestrationHistoryUpdate(input: {
   detail?: Record<string, unknown>;
 }): Promise<void> {
   const key = orchestrationStateKey(input.threadId, input.traceId);
-  const eventId = `hist-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+  const eventId = `hist-${Date.now()}-${crypto.randomUUID().slice(0, 10)}`;
   const at = new Date().toISOString();
   const historyState = await getOrchestrationState({ threadId: input.threadId, traceId: input.traceId });
   const history = historyState
@@ -1692,7 +1692,7 @@ async function listBridgeSessions(): Promise<BridgeSession[]> {
 
 async function emitAuditEvent(event: string, details: Record<string, unknown>): Promise<void> {
   const auditEvent: AuditEvent = {
-    id: `audit-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
+    id: `audit-${Date.now()}-${crypto.randomUUID().slice(0, 10)}`,
     at: new Date().toISOString(),
     event,
     details,

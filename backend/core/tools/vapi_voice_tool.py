@@ -706,7 +706,8 @@ class VapiVoiceTool(Tool):
                     if isinstance(transcript, str):
                         try:
                             transcript = json.loads(transcript)
-                        except:
+                        except Exception:
+                            logger.warning("Failed to parse transcript JSON for call %s", call_id, exc_info=True)
                             transcript = []
                     
                     transcript_count = len(transcript) if isinstance(transcript, list) else 0

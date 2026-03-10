@@ -12,6 +12,7 @@ import type {
 	BlobLike,
 	GetJsonParams,
 	GiselleStorage,
+	ListBlobsParams,
 	SetJsonParams,
 } from "@recoder/storage";
 import type { z } from "zod/v4";
@@ -159,7 +160,7 @@ export function supabaseStorageDriver(
 			return response.ContentLength ?? 0;
 		},
 
-		async listBlobs(params = {}) {
+		async listBlobs(params: ListBlobsParams = {}) {
 			const normalizedPrefix =
 				typeof params.prefix === "string"
 					? params.prefix.replace(/^\/+/, "")

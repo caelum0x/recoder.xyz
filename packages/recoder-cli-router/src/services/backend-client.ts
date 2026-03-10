@@ -41,7 +41,7 @@ export class RouterBackendClient {
   private currentSession: UserSession | null = null;
 
   constructor() {
-    this.baseUrl = process.env.RECODER_BACKEND_URL || 'http://localhost:3001';
+    this.baseUrl = process.env.RECODER_BACKEND_URL || 'http://localhost:3100';
     this.sessionFile = join(homedir(), '.recoder', 'session.json');
     
     // Load existing session
@@ -126,7 +126,7 @@ export class RouterBackendClient {
       
       console.log(`✅ Authenticated as ${this.currentSession.email}`);
       return this.currentSession;
-    } catch (error: any) {
+    } catch (error) {
       throw new Error(`Authentication failed: ${error.message}`);
     }
   }
@@ -157,7 +157,7 @@ export class RouterBackendClient {
       
       console.log(`✅ Registered and authenticated as ${this.currentSession.email}`);
       return this.currentSession;
-    } catch (error: any) {
+    } catch (error) {
       throw new Error(`Registration failed: ${error.message}`);
     }
   }
@@ -211,7 +211,7 @@ export class RouterBackendClient {
       }
 
       return true;
-    } catch (error: any) {
+    } catch (error) {
       console.warn('Could not check quota, proceeding with request');
       return true;
     }

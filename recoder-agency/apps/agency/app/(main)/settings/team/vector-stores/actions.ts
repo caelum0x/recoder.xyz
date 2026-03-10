@@ -66,7 +66,8 @@ async function validateGitHubAccess(
 ): Promise<{ success: true } | { success: false; error: string }> {
 	try {
 		// Check if the user has access to the installation
-		// FIXME: When the installation is managed by the team, we should use the team's installation instead
+		// KNOWN LIMITATION: Validates against user's personal GitHub installations only.
+		// Team-managed installations require GitHub App team-level config (not yet implemented).
 		const githubIdentityState = await getGitHubIdentityState();
 		if (githubIdentityState.status !== "authorized") {
 			return {
@@ -488,7 +489,9 @@ export async function diagnoseRepositoryConnection(
 					validInstallationId = installation.id;
 					break;
 				}
-			} catch (_error) {}
+			} catch (installError) {
+				console.error(`[vector-stores] Failed to check installation ${installation.id}:`, installError);
+			}
 		}
 
 		if (!validInstallationId) {

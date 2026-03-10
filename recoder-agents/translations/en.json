@@ -459,7 +459,7 @@
     "title": "Recoder: Your Autonomous AI Worker",
     "subtitle": "Built for complex tasks, designed for everything. The ultimate AI assistant that handles it all—from simple requests to mega-complex projects.",
     "tryItOut": "Try it out",
-    "kortixComputer": "Recoder Computer",
+    "recoderComputer": "Recoder Computer",
     "running": "Running",
     "workers": {
       "images": {

@@ -24,11 +24,12 @@ export const startScheduler = (
   options: SchedulerOptions = {}
 ) => {
   if (options.enabled === false) {
-    log.info("⏱️ Scheduler disabled.");
+    log.warn("⏱️ Scheduler explicitly disabled via options.");
     return;
   }
 
   if (globalThis[globalKey]) {
+    log.warn("⏱️ Scheduler already started — skipping duplicate startup.");
     return;
   }
 

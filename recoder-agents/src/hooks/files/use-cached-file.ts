@@ -38,8 +38,8 @@ function normalizePath(path: string): string {
     path = path.replace(/\\u([0-9a-fA-F]{4})/g, (_, hexCode) => {
       return String.fromCharCode(parseInt(hexCode, 16));
     });
-  } catch (e) {
-    console.error('Error processing Unicode escapes in path:', e);
+  } catch {
+    // Unicode escape processing is best-effort
   }
   
   return path;
@@ -165,7 +165,7 @@ export function useCachedFile<T = string>(
             
             // Verify the blob is the correct type for PDFs
             if (isPdfFile && !blob.type.includes('pdf') && blob.size > 0) {
-              console.warn(`[FILE CACHE] PDF blob has generic MIME type: ${blob.type} - will correct it automatically`);
+              // PDF blob has generic MIME type — correct it automatically
               
               const firstBytes = await blob.slice(0, 10).text();
               if (firstBytes.startsWith('%PDF')) {
@@ -236,7 +236,7 @@ export function useCachedFile<T = string>(
       if (content instanceof Blob) {
         const newUrl = URL.createObjectURL(content);
         setLocalBlobUrl(newUrl);
-        setData(newUrl as any);
+        setData(newUrl as T);
       } else {
         setLocalBlobUrl(null);
         setData(content);
@@ -254,7 +254,7 @@ export function useCachedFile<T = string>(
         if (Date.now() - cachedItem.timestamp > (options.expiration || CACHE_EXPIRATION)) {
           getCachedFile(cacheKey, true)
             .then(freshData => processContent(freshData))
-            .catch(err => console.error("Background refresh failed:", err));
+            .catch(() => { /* Background refresh is best-effort */ });
         }
       } else {
         // No cache, load fresh
@@ -401,7 +401,7 @@ export const FileCache = {
     
     // Skip preloading if no authentication token available
     if (!token) {
-      console.warn('Cannot preload files: No authentication token available');
+      // No authentication token — skip preloading
       return [];
     }
     

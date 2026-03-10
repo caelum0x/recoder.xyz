@@ -1,7 +1,7 @@
 'use client';
 
 import { Button } from "@/components/ui/button"
-import { Upload, PanelRightOpen, PanelRightClose, Copy, Check, Menu } from "lucide-react"
+import { Upload, PanelRightOpen, PanelRightClose, Copy, Check, Menu, Brain, Download, BarChart3 } from "lucide-react"
 import { toast } from "@/lib/toast"
 import {
   Tooltip,
@@ -14,6 +14,13 @@ import { useIsMobile } from "@/hooks/utils"
 import { SharePopover } from "@/components/sidebar/share-modal"
 import { ModeIndicator } from "@/components/thread/mode-indicator"
 import { useSidebar } from "@/components/ui/sidebar"
+import { useThreadMemorySettings, useUpdateThreadMemorySettings } from "@/hooks/memory/use-memory"
+import { SaveAsTemplateDialog } from "@/components/thread/save-as-template-dialog"
+import { ThreadMessageSearch } from "@/components/thread/thread-message-search"
+import { ThreadExportDialog } from "@/components/thread/thread-export-dialog"
+import { BookmarksPanel } from "@/components/thread/bookmarks-panel"
+import { ConversationInsightsPanel } from "@/components/thread/conversation-insights-panel"
+import { ThreadAnalyticsHeaderButton } from "@/components/thread/thread-analytics-header-button"
 
 interface ThreadSiteHeaderProps {
   threadId?: string;
@@ -25,6 +32,8 @@ interface ThreadSiteHeaderProps {
   onProjectRenamed?: (newName: string) => void;
   isMobileView?: boolean;
   variant?: 'default' | 'shared';
+  agentId?: string;
+  messages?: Array<{ role: string; content: string }>;
 }
 
 export function SiteHeader({
@@ -37,10 +46,14 @@ export function SiteHeader({
   onProjectRenamed,
   isMobileView,
   variant = 'default',
+  agentId,
+  messages = [],
 }: ThreadSiteHeaderProps) {
   const [copied, setCopied] = useState(false);
   const isMobile = useIsMobile() || isMobileView;
   const { setOpen: setSidebarOpen, setOpenMobile } = useSidebar();
+  const { data: threadMemory } = useThreadMemorySettings(threadId ?? null);
+  const updateThreadMemory = useUpdateThreadMemorySettings();
 
   const copyShareLink = async () => {
     try {
@@ -88,6 +101,10 @@ export function SiteHeader({
         {/* Right side - Actions */}
         <div className="flex items-center gap-1 flex-shrink-0">
           <TooltipProvider delayDuration={300}>
+            {threadId && variant !== 'shared' && (
+              <ThreadMessageSearch threadId={threadId} />
+            )}
+
             {variant === 'shared' ? (
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -117,6 +134,71 @@ export function SiteHeader({
                 </Button>
               </SharePopover>
             ) : null}
+
+            {threadId && variant !== 'shared' && (
+              <SaveAsTemplateDialog
+                threadName={projectName}
+                agentId={agentId}
+                messages={messages}
+              />
+            )}
+
+            {threadId && variant !== 'shared' && (
+              <BookmarksPanel threadId={threadId} />
+            )}
+
+            {threadId && variant !== 'shared' && (
+              <div className="relative">
+                <ConversationInsightsPanel threadId={threadId} />
+              </div>
+            )}
+
+            {threadId && variant !== 'shared' && (
+              <div className="relative">
+                <ThreadAnalyticsHeaderButton threadId={threadId} />
+              </div>
+            )}
+
+            {threadId && variant !== 'shared' && (
+              <ThreadExportDialog threadId={threadId} threadName={projectName}>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-9 w-9 cursor-pointer"
+                >
+                  <Download className="h-4 w-4" />
+                </Button>
+              </ThreadExportDialog>
+            )}
+
+            {threadId && variant !== 'shared' && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => {
+                      if (!threadId) return;
+                      updateThreadMemory.mutate({
+                        threadId,
+                        enabled: !(threadMemory?.memory_enabled ?? true),
+                      });
+                    }}
+                    disabled={updateThreadMemory.isPending}
+                    className={`h-9 w-9 cursor-pointer ${
+                      threadMemory?.memory_enabled === false
+                        ? 'text-muted-foreground'
+                        : 'text-primary'
+                    }`}
+                  >
+                    <Brain className="h-4 w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" sideOffset={4}>
+                  <p>Memory {threadMemory?.memory_enabled === false ? 'disabled' : 'enabled'} for this chat</p>
+                </TooltipContent>
+              </Tooltip>
+            )}
 
             <Tooltip>
               <TooltipTrigger asChild>

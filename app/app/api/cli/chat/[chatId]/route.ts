@@ -4,6 +4,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth-config';
 import { neon } from '@neondatabase/serverless';
+import { logger } from '@/lib/logger';
 
 function getSQL() {
   const databaseUrl = process.env.DATABASE_URL;
@@ -47,7 +48,7 @@ export async function GET(
       lastUpdated: chat.updated_at?.toISOString()
     });
   } catch (error) {
-    console.error('[cli/chat/[chatId]] GET error:', error);
+    logger.error('[cli/chat/[chatId]] GET error:', { error: error instanceof Error ? error.message : String(error) });
     return NextResponse.json({ error: 'Failed to load session' }, { status: 500 });
   }
 }
@@ -82,7 +83,7 @@ export async function PUT(
 
     return NextResponse.json({ success: true, chatId });
   } catch (error) {
-    console.error('[cli/chat/[chatId]] PUT error:', error);
+    logger.error('[cli/chat/[chatId]] PUT error:', { error: error instanceof Error ? error.message : String(error) });
     return NextResponse.json({ error: 'Failed to update session' }, { status: 500 });
   }
 }

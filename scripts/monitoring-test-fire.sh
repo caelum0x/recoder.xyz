@@ -7,6 +7,7 @@ ALERT_SEVERITY="${ALERT_SEVERITY:-warning}"
 ALERT_TEAM="${ALERT_TEAM:-platform}"
 ALERT_SUMMARY="${ALERT_SUMMARY:-Synthetic monitoring alert test}"
 ALERT_DESCRIPTION="${ALERT_DESCRIPTION:-This is a synthetic alert used to verify alert routing.}"
+ALLOW_PLACEHOLDER_RECEIVER="${ALLOW_PLACEHOLDER_RECEIVER:-false}"
 
 status_code="$(curl -sS -o /tmp/alertmanager_status.json -w '%{http_code}' "${ALERTMANAGER_URL}/api/v2/status" || true)"
 if [[ "$status_code" != "200" ]]; then
@@ -15,6 +16,24 @@ if [[ "$status_code" != "200" ]]; then
 fi
 
 echo "OK: Alertmanager reachable at ${ALERTMANAGER_URL}"
+
+placeholder_detected=false
+
+# On hosts where Docker is available, inspect rendered runtime config directly.
+if command -v docker >/dev/null 2>&1 && docker ps --format '{{.Names}}' | grep -q '^recoder-alertmanager$'; then
+  if docker exec recoder-alertmanager sh -lc "grep -E \"^[[:space:]]+- url:\" /tmp/alertmanager.yml | grep -Eq 'alertmanager-not-configured|localhost:9095'"; then
+    placeholder_detected=true
+  fi
+fi
+
+if [[ "$placeholder_detected" == "true" ]]; then
+  if [[ "$ALLOW_PLACEHOLDER_RECEIVER" == "true" ]]; then
+    echo "WARN: Alertmanager is still configured with placeholder receiver URLs."
+  else
+    echo "FAIL: Alertmanager receivers still point to placeholder URLs; configure ALERT_WEBHOOK_URL/ALERT_CRITICAL_WEBHOOK_URL first."
+    exit 1
+  fi
+fi
 
 starts_at="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
 ends_at="$(date -u -d '+5 minutes' +'%Y-%m-%dT%H:%M:%SZ' 2>/dev/null || date -u -v+5M +'%Y-%m-%dT%H:%M:%SZ')"

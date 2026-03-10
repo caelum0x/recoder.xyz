@@ -240,7 +240,6 @@ export function SeeImageToolView({
 
   // Defensive check - handle cases where toolCall might be undefined
   if (!toolCall) {
-    console.warn('SeeImageToolView: toolCall is undefined. Tool views should use structured props.');
     return null;
   }
 

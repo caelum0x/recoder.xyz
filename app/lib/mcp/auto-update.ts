@@ -3,6 +3,8 @@ import { getLatestVersion, hasUpdateAvailable, getChangelog } from './versioning
 import type { MCPServerConfig } from './client';
 import { logger } from '@/lib/logger';
 
+type StoredConfig = MCPServerConfig & { version?: string; autoUpdate?: boolean };
+
 export interface UpdateResult {
   serverId: string;
   success: boolean;
@@ -23,7 +25,7 @@ export async function checkForUpdates(userId: string): Promise<Array<{
   });
 
   return servers.map((server) => {
-    const config = server.config as any;
+    const config = server.config as unknown as StoredConfig;
     const currentVersion = config?.version || '1.0.0';
     const latestVersion = getLatestVersion(server.serverId);
 
@@ -50,7 +52,7 @@ export async function updateServer(
       throw new Error(`Server ${serverId} not found`);
     }
 
-    const config = server.config as unknown as MCPServerConfig & { version?: string };
+    const config = server.config as unknown as StoredConfig;
     const oldVersion = config.version || '1.0.0';
     const newVersion = targetVersion || getLatestVersion(serverId);
 
@@ -62,7 +64,7 @@ export async function updateServer(
 
     await prisma.mCPServer.update({
       where: { id: server.id },
-      data: { config: updatedConfig as any },
+      data: { config: updatedConfig as unknown as Record<string, unknown> },
     });
 
     const changelog = getChangelog(serverId, oldVersion, newVersion);
@@ -105,9 +107,8 @@ export async function enableAutoUpdate(userId: string, serverId: string): Promis
     where: { userId, serverId },
     data: {
       config: {
-        // Add auto-update flag to config
         autoUpdate: true,
-      } as any,
+      } as unknown as Record<string, unknown>,
     },
   });
 }
@@ -118,7 +119,7 @@ export async function disableAutoUpdate(userId: string, serverId: string): Promi
     data: {
       config: {
         autoUpdate: false,
-      } as any,
+      } as unknown as Record<string, unknown>,
     },
   });
 }
@@ -132,8 +133,8 @@ export async function runAutoUpdateJob(): Promise<void> {
   });
 
   for (const server of servers) {
-    const config = server.config as any;
-    if (config.autoUpdate) {
+    const config = server.config as unknown as StoredConfig;
+    if (config?.autoUpdate) {
       try {
         const result = await updateServer(server.userId, server.serverId);
         if (result.success) {

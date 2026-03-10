@@ -1,3 +1,4 @@
+import { randomUUID } from "crypto";
 import { existsSync } from "fs";
 import { writeFile } from "fs/promises";
 import { homedir } from "os";
@@ -19,10 +20,7 @@ async function initializeClaudeConfig() {
   const homeDir = homedir();
   const configPath = join(homeDir, ".claude.json");
   if (!existsSync(configPath)) {
-    const userID = Array.from(
-      { length: 64 },
-      () => Math.random().toString(16)[2]
-    ).join("");
+    const userID = randomUUID().replace(/-/g, '') + randomUUID().replace(/-/g, '');
     const configContent = {
       numStartups: 184,
       autoUpdaterStatus: "enabled",

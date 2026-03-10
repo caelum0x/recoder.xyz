@@ -1,18 +1,18 @@
 import { NextRequest } from 'next/server';
 
-const mockRequireAuth = jest.fn();
-const mockFindFirst = jest.fn();
-const mockFindMany = jest.fn();
-const mockDeleteMany = jest.fn();
-const mockCount = jest.fn();
-const mockSendWebPush = jest.fn();
-const mockIsStaleSubscription = jest.fn();
+const mockRequireAuth = vi.fn();
+const mockFindFirst = vi.fn();
+const mockFindMany = vi.fn();
+const mockDeleteMany = vi.fn();
+const mockCount = vi.fn();
+const mockSendWebPush = vi.fn();
+const mockIsStaleSubscription = vi.fn();
 
-jest.mock('@/lib/auth-helpers', () => ({
+vi.mock('@/lib/auth-helpers', () => ({
   requireAuth: (...args: unknown[]) => mockRequireAuth(...args),
 }));
 
-jest.mock('@/lib/prisma', () => ({
+vi.mock('@/lib/prisma', () => ({
   prisma: {
     users: {
       findFirst: (...args: unknown[]) => mockFindFirst(...args),
@@ -25,15 +25,15 @@ jest.mock('@/lib/prisma', () => ({
   },
 }));
 
-jest.mock('@/lib/push-server', () => ({
+vi.mock('@/lib/push-server', () => ({
   sendWebPush: (...args: unknown[]) => mockSendWebPush(...args),
   isStaleSubscription: (...args: unknown[]) => mockIsStaleSubscription(...args),
 }));
 
 describe('/api/push/test route', () => {
   beforeEach(() => {
-    jest.resetModules();
-    jest.clearAllMocks();
+    vi.resetModules();
+    vi.clearAllMocks();
     process.env.ADMIN_SECRET = 'test-admin-secret';
   });
 

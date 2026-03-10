@@ -4,6 +4,7 @@
  * Handles automated migration from LlamaCoder, KiloCode, and other AI coding tools
  */
 
+import * as crypto from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
@@ -659,7 +660,7 @@ export class UserMigrationSystem {
 
   private convertMessages(messages: any[]): any[] {
     return messages.map(msg => ({
-      id: msg.id || `msg-${Date.now()}-${Math.random()}`,
+      id: msg.id || `msg-${crypto.randomUUID()}`,
       timestamp: new Date(msg.timestamp || msg.created || Date.now()).getTime(),
       platform: 'cli',
       type: msg.type || (msg.role === 'user' ? 'user' : 'assistant'),

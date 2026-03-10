@@ -11,7 +11,7 @@ interface IconRendererProps {
 
 export const IconRenderer = ({ iconName, className, size = 24 }: IconRendererProps) => {
   // Get the icon component from Lucide
-  const IconComponent = (LucideIcons as any)[iconName] as LucideIcon;
+  const IconComponent = (LucideIcons as unknown as Record<string, LucideIcon>)[iconName];
   
   // Fallback to a default icon if the specified icon doesn't exist
   if (!IconComponent) {

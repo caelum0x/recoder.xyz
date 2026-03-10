@@ -65,7 +65,7 @@ export class SyncClient extends EventEmitter {
   constructor(config: SyncConfig) {
     super();
     this.config = {
-      baseURL: 'http://localhost:3001',
+      baseURL: 'http://localhost:3100',
       syncInterval: 30000, // 30 seconds
       enableRealTimeSync: true,
       ...config
@@ -209,7 +209,7 @@ export class SyncClient extends EventEmitter {
       this.emit('projectsUpdated', result);
       return result;
 
-    } catch (error: any) {
+    } catch (error) {
       throw this.handleSyncError(error);
     }
   }
@@ -240,7 +240,7 @@ export class SyncClient extends EventEmitter {
       this.emit('settingsUpdated', result);
       return result;
 
-    } catch (error: any) {
+    } catch (error) {
       throw this.handleSyncError(error);
     }
   }
@@ -272,7 +272,7 @@ export class SyncClient extends EventEmitter {
       this.emit('conflictResolved', { dataType, resolution, result });
       return result;
 
-    } catch (error: any) {
+    } catch (error) {
       throw this.handleSyncError(error);
     }
   }
@@ -300,7 +300,7 @@ export class SyncClient extends EventEmitter {
       this.emit('forceSyncCompleted', result);
       return result;
 
-    } catch (error: any) {
+    } catch (error) {
       throw this.handleSyncError(error);
     }
   }
@@ -311,7 +311,7 @@ export class SyncClient extends EventEmitter {
     try {
       const response = await this.api.get('/sync/status');
       return response.data.data;
-    } catch (error: any) {
+    } catch (error) {
       throw this.handleSyncError(error);
     }
   }
@@ -331,7 +331,7 @@ export class SyncClient extends EventEmitter {
       });
 
       return response.data.data;
-    } catch (error: any) {
+    } catch (error) {
       throw this.handleSyncError(error);
     }
   }

@@ -31,6 +31,7 @@ import {
     useTriggerProviders
 } from '@/hooks/triggers';
 import { TriggerCreationDialog } from '@/components/triggers/trigger-creation-dialog';
+import { TriggerTemplateGallery } from '@/components/agents/triggers/trigger-template-gallery';
 
 interface TriggersScreenProps {
     agentId: string;
@@ -162,6 +163,11 @@ export function TriggersScreen({ agentId }: TriggersScreenProps) {
                         </DropdownMenuItem>
                     </DropdownMenuContent>
                 </DropdownMenu>
+            </div>
+
+            {/* Template Gallery */}
+            <div className="px-1 pb-4">
+                <TriggerTemplateGallery agentId={agentId} />
             </div>
 
             {/* Triggers Content */}

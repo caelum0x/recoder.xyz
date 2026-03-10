@@ -2,22 +2,22 @@
 # Deployed alongside Prometheus on monitor.recoder.xyz
 # Server: Hetzner 8 vCPU, 16GB RAM (77.42.23.19)
 #
-# NOTE:
-# This file must remain valid without env expansion, because the current
-# Alertmanager container startup path does not expand ${...} placeholders.
-#
 # REQUIRED BEFORE PRODUCTION:
-# Replace ALL 'http://localhost:9095/alertmanager-not-configured' URLs below
-# with your real webhook endpoint (e.g., Slack incoming webhook, PagerDuty,
-# or internal notification service).
+# Set ALERT_WEBHOOK_URL / ALERT_CRITICAL_WEBHOOK_URL / ALERT_SLACK_API_URL
+# via docker-compose env to route notifications to real channels.
 #
 # The placeholder URL will cause connection-refused errors that are visible
 # in Alertmanager logs, making misconfiguration obvious rather than silent.
 
 global:
-  # No SMTP defaults here; enable email only after explicit SMTP wiring.
-  # PLACEHOLDER — replace with real Slack webhook URL before production use
-  slack_api_url: 'http://localhost:9095/alertmanager-not-configured'
+  # Filled by alertmanager-entrypoint.sh
+  slack_api_url: '${ALERT_SLACK_API_URL}'
+  # Resend SMTP for email alerts — set RESEND_API_KEY in env
+  smtp_from: 'alerts@recoder.xyz'
+  smtp_smarthost: 'smtp.resend.com:587'
+  smtp_auth_username: 'resend'
+  smtp_auth_password: '${SMTP_AUTH_PASSWORD}'
+  smtp_require_tls: true
 
 # ──────────────────────────────────────────────
 # Inhibition Rules
@@ -136,25 +136,35 @@ route:
 # Receivers
 # ──────────────────────────────────────────────
 receivers:
-  # --- Default: webhook only, for warnings ---
-  # REQUIRED: Replace placeholder URL with real webhook endpoint
+  # --- Default: webhook + email, for warnings ---
+  # Resolved from ALERT_WEBHOOK_URL
   - name: 'default-webhook'
     webhook_configs:
-      - url: 'http://localhost:9095/alertmanager-not-configured'
+      - url: '${ALERT_WEBHOOK_URL}'
         send_resolved: true
         http_config:
           follow_redirects: true
         max_alerts: 10
+    email_configs:
+      - to: '${ALERT_EMAIL}'
+        send_resolved: true
+        headers:
+          Subject: '[Recoder Warning] {{ .GroupLabels.alertname }}'
 
-  # --- Critical: webhook only by default ---
-  # REQUIRED: Replace placeholder URL with real webhook endpoint
+  # --- Critical: webhook + email ---
+  # Resolved from ALERT_CRITICAL_WEBHOOK_URL (falls back to ALERT_WEBHOOK_URL)
   - name: 'critical-alerts'
     webhook_configs:
-      - url: 'http://localhost:9095/alertmanager-not-configured'
+      - url: '${ALERT_CRITICAL_WEBHOOK_URL}'
         send_resolved: true
         http_config:
           follow_redirects: true
         max_alerts: 0  # Send all alerts, no limit
+    email_configs:
+      - to: '${ALERT_EMAIL}'
+        send_resolved: true
+        headers:
+          Subject: '[Recoder CRITICAL] {{ .GroupLabels.alertname }}'
 
 # ──────────────────────────────────────────────
 # Templates (optional, for custom notification formatting)

@@ -1268,7 +1268,7 @@ export function createMobileApiRouter(deps: MobileApiDependencies): Router {
     // Use provided apiKey or fall back to BYOK keys
     let resolvedApiKey = apiKey;
     if (!resolvedApiKey) {
-      const appApiUrl = process.env.APP_API_URL || process.env.MAIN_SITE_URL || 'http://localhost:3000';
+      const appApiUrl = process.env.APP_API_URL || process.env.MAIN_SITE_URL || 'https://recoder.xyz';
       // Validated at server startup — guaranteed non-empty in production (see server.ts:265)
       const serviceKey = process.env.INTERNAL_SERVICE_KEY ?? '';
       if (serviceKey) {

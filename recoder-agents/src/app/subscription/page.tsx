@@ -49,7 +49,7 @@ export default function SubscriptionRequiredPage() {
     if (!isLoadingSubscription && subscriptionData) {
       const hasActiveSubscription = subscriptionData.subscription &&
         subscriptionData.subscription.status === 'active' &&
-        !(subscriptionData.subscription as any).cancel_at_period_end;
+        !subscriptionData.subscription.cancel_at_period_end;
 
       const hasActiveTrial = subscriptionData.subscription?.is_trial === true;
       
@@ -94,9 +94,9 @@ export default function SubscriptionRequiredPage() {
     return <SubscriptionSkeleton />;
   }
 
-  const isTrialExpired = (subscriptionData as any)?.trial_status === 'expired' ||
-    (subscriptionData as any)?.trial_status === 'cancelled' ||
-    (subscriptionData as any)?.trial_status === 'used';
+  const isTrialExpired = subscriptionData?.subscription?.trial_status === 'expired' ||
+    subscriptionData?.subscription?.trial_status === 'cancelled' ||
+    subscriptionData?.subscription?.trial_status === 'used';
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-background to-muted/20 py-12 px-4">

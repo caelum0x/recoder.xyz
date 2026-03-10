@@ -50,7 +50,7 @@ export const AgentRunLimitBanner: React.FC<AgentRunLimitBannerProps> = ({
   // Debug logging
   useEffect(() => {
     if (open) {
-      console.log('AgentRunLimitBanner: Dialog opened', { runningCount, runningThreadIds });
+      
     }
   }, [open, runningCount, runningThreadIds]);
 

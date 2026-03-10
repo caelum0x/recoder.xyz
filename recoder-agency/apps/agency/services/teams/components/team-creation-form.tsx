@@ -39,8 +39,9 @@ function Submit({
 	const isDisabled = pending || !teamName || !selectedPlan;
 
 	const buttonStyle: React.CSSProperties = {
-		background: "linear-gradient(180deg, #202530 0%, #12151f 100%)",
-		border: "1px solid rgba(0,0,0,0.7)",
+		background:
+			"linear-gradient(180deg, color-mix(in srgb, var(--color-black-820) 92%, transparent) 0%, var(--color-black-900) 100%)",
+		border: "1px solid color-mix(in srgb, var(--color-black-950) 70%, transparent)",
 		boxShadow:
 			"inset 0 1px 1px rgba(255,255,255,0.05), 0 2px 8px rgba(5,10,20,0.4), 0 1px 2px rgba(0,0,0,0.3)",
 	};
@@ -108,14 +109,14 @@ export function TeamCreationForm({
 						<div className="flex flex-col gap-y-2">
 							<Label
 								htmlFor="teamName"
-								className="text-inverse font-medium text-[12px] leading-[20.4px] font-geist"
+								className="text-inverse font-medium text-[12px] leading-[20.4px] font-sans"
 							>
 								Team Name
 							</Label>
 							<div
 								className="flex flex-col items-start p-2 rounded-[8px] w-full focus-within:ring-1 focus-within:ring-primary-100/50 focus-within:ring-inset transition-all"
 								style={{
-									background: "#00020A",
+									background: "var(--color-black-900)",
 									boxShadow: "inset 0 1px 4px rgba(0,0,0,0.5)",
 									border: "0.5px solid rgba(255,255,255,0.05)",
 								}}
@@ -125,14 +126,14 @@ export function TeamCreationForm({
 									name="teamName"
 									value={teamName}
 									onChange={(e) => setTeamName(e.target.value)}
-									className="w-full bg-transparent text-inverse font-medium text-[14px] leading-[23.8px] font-geist shadow-none focus:text-white border-0 p-0 focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:shadow-none placeholder:text-link-muted"
+									className="w-full bg-transparent text-inverse font-medium text-[14px] leading-[23.8px] font-sans shadow-none focus:text-white border-0 p-0 focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:shadow-none placeholder:text-link-muted"
 									placeholder="Enter team name"
 								/>
 							</div>
 						</div>
 						<div className="space-y-4">
 							<div className="flex flex-col gap-y-2">
-								<Label className="text-inverse font-medium text-[12px] leading-[20.4px] font-geist">
+								<Label className="text-inverse font-medium text-[12px] leading-[20.4px] font-sans">
 									{canCreateFreeTeam ? "Select Plan" : "Pro Plan"}
 								</Label>
 								{canCreateFreeTeam ? (
@@ -161,15 +162,15 @@ export function TeamCreationForm({
 															/>
 															<Label
 																htmlFor="free"
-																className="ml-2 text-inverse font-geist text-[16px]"
+																className="ml-2 text-inverse font-sans text-[16px]"
 															>
 																$0/month
 															</Label>
 														</div>
-														<CardDescription className="text-inverse font-semibold text-[12px] leading-[20.4px] font-geist">
+														<CardDescription className="text-inverse font-semibold text-[12px] leading-[20.4px] font-sans">
 															Basic features for personal use
 														</CardDescription>
-														<CardDescription className="text-text-muted font-medium text-[12px] leading-[20.4px] font-geist">
+														<CardDescription className="text-text-muted font-medium text-[12px] leading-[20.4px] font-sans">
 															Includes 30 minutes of model usage time and access
 															to basic models for your individual projects.
 														</CardDescription>
@@ -192,15 +193,15 @@ export function TeamCreationForm({
 															/>
 															<Label
 																htmlFor="pro"
-																className="ml-2 text-inverse font-geist text-[16px]"
+																className="ml-2 text-inverse font-sans text-[16px]"
 															>
 																{proPlanPrice}/month
 															</Label>
 														</div>
-														<CardDescription className="text-inverse font-semibold text-[12px] leading-[20.4px] font-geist">
+														<CardDescription className="text-inverse font-semibold text-[12px] leading-[20.4px] font-sans">
 															Advanced features & support
 														</CardDescription>
-														<CardDescription className="text-text-muted font-medium text-[12px] leading-[20.4px] font-geist">
+														<CardDescription className="text-text-muted font-medium text-[12px] leading-[20.4px] font-sans">
 															When you create a team, all member seat charges
 															will be billed to you. Share apps with multiple
 															team members and gain access to premium models,

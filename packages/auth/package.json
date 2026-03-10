@@ -14,6 +14,7 @@
     "./keys": "./src/keys.ts"
   },
   "scripts": {
+    "test": "node --import tsx --test src/edge.test.ts src/cross-domain.test.ts",
     "build": "prisma generate --schema=\"./prisma/schema.prisma\" --no-hints",
     "postinstall": "prisma generate --schema=\"./prisma/schema.prisma\" --no-hints"
   },

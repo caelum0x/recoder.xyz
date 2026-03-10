@@ -1,42 +1,37 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import { useOnboarding } from '@/hooks/onboarding';
+import { useAuth } from '@/components/AuthProvider';
 import { NewOnboardingPage } from './new-onboarding-page';
+import { onboardingSteps } from './onboarding-config';
 
 interface OnboardingProviderProps {
   children: React.ReactNode;
 }
 
 export function OnboardingProvider({ children }: OnboardingProviderProps) {
-  const { isOpen, completeOnboarding } = useOnboarding();
+  const { isOpen, hasCompletedOnboarding, startOnboarding, completeOnboarding } = useOnboarding();
+  const { user, isLoading } = useAuth();
+  const hasTriggered = useRef(false);
 
-  // DISABLED: Auto-trigger onboarding after subscription
-  // Onboarding is only accessible via /onboarding-demo route until it's fully ready
-  // useEffect(() => {
-  //   if (!subscription || !user) return;
+  // Auto-trigger onboarding for new users who haven't completed it
+  useEffect(() => {
+    if (isLoading || !user) return;
+    if (hasCompletedOnboarding) return;
+    if (hasTriggered.current) return;
 
-  //   const trialStarted = searchParams?.get('trial') === 'started';
-  //   const subscriptionSuccess = searchParams?.get('subscription') === 'success';
-    
-  //   console.log('🚀 Onboarding Provider - Checking trigger conditions:', {
-  //     trialStarted,
-  //     subscriptionSuccess,
-  //     subscription: subscription,
-  //     shouldTrigger: shouldTriggerOnboarding(subscription)
-  //   });
-    
-  //   if ((trialStarted || subscriptionSuccess) && shouldTriggerOnboarding(subscription)) {
-  //     console.log('✅ Triggering post-subscription onboarding');
-  //     if (triggerPostSubscriptionOnboarding()) {
-  //       console.log('🎯 Starting onboarding with default steps');
-  //       startOnboarding(onboardingSteps);
-  //     }
-  //   }
-  // }, [subscription, user, searchParams, shouldTriggerOnboarding, triggerPostSubscriptionOnboarding, startOnboarding]);
+    hasTriggered.current = true;
+    startOnboarding(onboardingSteps);
+  }, [user, isLoading, hasCompletedOnboarding, startOnboarding]);
 
   // Handle onboarding completion
   const handleOnboardingComplete = () => {
+    completeOnboarding();
+  };
+
+  // Handle onboarding dismissal (also marks as complete so it doesn't reappear)
+  const handleOnboardingClose = () => {
     completeOnboarding();
   };
 
@@ -44,8 +39,9 @@ export function OnboardingProvider({ children }: OnboardingProviderProps) {
     <>
       {children}
       {isOpen && (
-        <NewOnboardingPage 
+        <NewOnboardingPage
           onComplete={handleOnboardingComplete}
+          onClose={handleOnboardingClose}
         />
       )}
     </>

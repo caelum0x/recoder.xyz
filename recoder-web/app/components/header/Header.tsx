@@ -10,6 +10,7 @@ import { openSettingsPanel, closeSettingsPanel, settingsPanelOpen } from '~/lib/
 import { SettingsPanel } from '~/components/settings/SettingsPanel';
 import { openShortcutsPanel, closeShortcutsPanel, shortcutsPanelOpen } from '~/lib/stores/keyboard-shortcuts';
 import { KeyboardShortcutsPanel } from '~/components/ui/KeyboardShortcutsPanel';
+import { AppSwitcher } from './AppSwitcher';
 
 export function Header() {
   const chat = useStore(chatStore);
@@ -102,6 +103,7 @@ export function Header() {
             )}
           </ClientOnly>
         )}
+        <AppSwitcher />
         {/* Settings Button */}
         <button
           onClick={openSettingsPanel}

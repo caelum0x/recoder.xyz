@@ -2,10 +2,10 @@
  * Usage Tracking and Quota Management
  * Track CLI requests, enforce limits, and manage quotas
  */
+import crypto from 'crypto';
 
 import { prisma } from './prisma';
 import { getPlanLimits, canStartSession, canUseModel } from './plan-config';
-import crypto from 'crypto';
 
 export interface UsageMetadata {
   modelUsed?: string;
@@ -369,7 +369,7 @@ export async function bulkTrackUsage(
 ): Promise<void> {
   await prisma.usage_records.createMany({
     data: records.map(record => ({
-      id: `usage_${Date.now()}_${Math.random().toString(36).substring(2)}`,
+      id: `usage_${Date.now()}_${crypto.randomUUID().replace(/-/g, '').slice(0, 9)}`,
       userId: record.userId,
       type: 'usage',
       sessionId: record.sessionId,

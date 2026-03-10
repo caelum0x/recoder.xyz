@@ -12,7 +12,7 @@ Execution tracking note:
 
 ## Plan
 
-Fork [Eververse](https://github.com/haydenbleasel/eververse) or https://github.com/giselles-ai/giselle.git (MIT license, 344 stars)
+Based on [Eververse](https://github.com/haydenbleasel/eververse) (MIT license)
 - Next.js 16, React 19, Prisma 7, Supabase Auth, Vercel AI SDK
 - Complete PM SaaS: feedback, roadmaps, RICE scoring, integrations (Jira, Linear, GitHub, Slack)
 - AI: sentiment analysis, feedback summarization, writing assistant

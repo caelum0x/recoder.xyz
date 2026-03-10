@@ -8,6 +8,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import crypto from 'crypto';
 
 const ADMIN_SECRET = process.env.ADMIN_SECRET;
 if (!ADMIN_SECRET) {
@@ -48,16 +49,39 @@ export async function GET(request: NextRequest) {
     });
 
     // Check user status in both tables
-    const webUser = await prisma.user.findUnique({
-      where: { email },
-      select: {
-        id: true,
-        email: true,
-        name: true,
-        emailVerified: true,
-        createdAt: true
-      }
-    });
+    const prismaAny = prisma as unknown as {
+      user?: {
+        findUnique: (args: {
+          where: { email: string };
+          select: {
+            id: true;
+            email: true;
+            name: true;
+            emailVerified: true;
+            createdAt: true;
+          };
+        }) => Promise<{
+          id: string;
+          email: string;
+          name: string;
+          emailVerified: boolean;
+          createdAt: Date;
+        } | null>;
+      };
+    };
+
+    const webUser = prismaAny.user?.findUnique
+      ? await prismaAny.user.findUnique({
+          where: { email },
+          select: {
+            id: true,
+            email: true,
+            name: true,
+            emailVerified: true,
+            createdAt: true
+          }
+        })
+      : null;
 
     const cliUser = await prisma.users.findUnique({
       where: { email },
@@ -102,7 +126,7 @@ export async function GET(request: NextRequest) {
       }
     });
 
-  } catch (error: any) {
+  } catch (error) {
     console.error('Pending verifications error:', error);
     return NextResponse.json(
       { success: false, error: 'Internal server error' },
@@ -138,8 +162,79 @@ export async function DELETE(request: NextRequest) {
       deletedCount: result.count
     });
 
-  } catch (error: any) {
+  } catch (error) {
     console.error('Delete verifications error:', error);
+    return NextResponse.json(
+      { success: false, error: 'Internal server error' },
+      { status: 500 }
+    );
+  }
+}
+
+// POST endpoint to seed deterministic verification records for smoke tests
+// Body:
+// {
+//   "email": "test@example.com",
+//   "mode": "email-code" | "password-reset"
+// }
+export async function POST(request: NextRequest) {
+  try {
+    // Check admin authorization
+    const authHeader = request.headers.get('x-admin-secret');
+    if (!ADMIN_SECRET || !authHeader || authHeader !== ADMIN_SECRET) {
+      return NextResponse.json(
+        { success: false, error: 'Unauthorized. Provide x-admin-secret header.' },
+        { status: 401 }
+      );
+    }
+
+    const body = await request.json();
+    const email = typeof body?.email === 'string' ? body.email.trim().toLowerCase() : '';
+    const mode = body?.mode === 'password-reset' ? 'password-reset' : 'email-code';
+
+    if (!email) {
+      return NextResponse.json(
+        { success: false, error: 'Email is required' },
+        { status: 400 }
+      );
+    }
+
+    const expiresAt = new Date(Date.now() + 60 * 60 * 1000);
+    const rawValue =
+      mode === 'email-code'
+        ? crypto.randomInt(100000, 999999).toString()
+        : crypto.randomBytes(32).toString('hex');
+    const hashedValue = crypto.createHash('sha256').update(rawValue).digest('hex');
+    const identifier =
+      mode === 'email-code'
+        ? `email-code:${email}`
+        : `password-reset:${email}`;
+
+    await prisma.verifications.deleteMany({
+      where: { identifier },
+    });
+
+    await prisma.verifications.create({
+      data: {
+        id: crypto.randomUUID(),
+        identifier,
+        value: hashedValue,
+        expires_at: expiresAt,
+        created_at: new Date(),
+        updated_at: new Date(),
+      },
+    });
+
+    return NextResponse.json({
+      success: true,
+      email,
+      mode,
+      identifier,
+      value: rawValue,
+      expiresAt,
+    });
+  } catch (error) {
+    console.error('Create verification seed error:', error);
     return NextResponse.json(
       { success: false, error: 'Internal server error' },
       { status: 500 }

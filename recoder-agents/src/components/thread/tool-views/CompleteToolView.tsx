@@ -65,7 +65,6 @@ export function CompleteToolView({
 
   // Defensive check - handle cases where toolCall might be undefined
   if (!toolCall) {
-    console.warn('CompleteToolView: toolCall is undefined. Tool views should use structured props.');
     return null;
   }
 

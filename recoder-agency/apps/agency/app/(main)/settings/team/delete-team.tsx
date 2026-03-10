@@ -34,7 +34,7 @@ export function DeleteTeam() {
 					<h2 className="text-error-900 font-medium text-[16px] leading-[27.2px] tracking-normal font-sans">
 						Delete Team
 					</h2>
-					<p className="text-red-900/50 font-medium text-[12px] leading-[20.4px] tracking-normal font-geist">
+					<p className="text-red-900/50 font-medium text-[12px] leading-[20.4px] tracking-normal font-sans">
 						Permanently remove your Team Account and all of its contents from
 						Recoder Agency. This action is not reversible, so please continue
 						with caution.
@@ -61,7 +61,7 @@ export function DeleteTeam() {
 							<span className="sr-only">Close</span>
 						</DialogClose>
 					</div>
-					<DialogDescription className="font-geist mt-2 text-[14px] text-error-900/50">
+					<DialogDescription className="font-sans mt-2 text-[14px] text-error-900/50">
 						This action cannot be undone. This will permanently delete the team
 						and remove all members.
 					</DialogDescription>
@@ -71,7 +71,7 @@ export function DeleteTeam() {
 						variant="destructive"
 						className="mt-2 border-error-900/20 bg-error-900/5"
 					>
-						<AlertDescription className="font-geist text-[12px] font-medium leading-[20.4px] tracking-normal text-red-900/50">
+						<AlertDescription className="font-sans text-[12px] font-medium leading-[20.4px] tracking-normal text-red-900/50">
 							{state.error}
 						</AlertDescription>
 					</Alert>

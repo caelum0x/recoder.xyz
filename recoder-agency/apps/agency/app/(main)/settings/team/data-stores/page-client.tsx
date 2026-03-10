@@ -140,7 +140,7 @@ function DataStoreItem({ dataStore, onEdit, onDelete }: DataStoreItemProps) {
 					<h5 className="text-inverse font-medium text-[16px] leading-[22.4px] font-sans">
 						{dataStore.name}
 					</h5>
-					<div className="text-text-muted text-[13px] leading-[18px] font-geist mt-1">
+					<div className="text-text-muted text-[13px] leading-[18px] font-sans mt-1">
 						ID: {dataStore.id}
 					</div>
 				</div>

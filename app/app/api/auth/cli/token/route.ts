@@ -1,228 +1,138 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { CLIAuthService } from '@/lib/services/cli-auth.service';
+import { logger } from '@/lib/logger';
 
-function expiresInToIso(expiresIn?: number): string {
-  const seconds = typeof expiresIn === 'number' && expiresIn > 0 ? expiresIn : 90 * 24 * 60 * 60;
-  return new Date(Date.now() + seconds * 1000).toISOString();
-}
+type TokenRequestBody = {
+  grant_type?: string;
+  device_code?: string;
+  refresh_token?: string;
+  client_id?: string;
+};
 
 /**
  * POST /api/auth/cli/token
- * Step 3: CLI polls to get access token
+ * OAuth-style token endpoint used by recoder-code CLI and VS Code extension.
  *
- * Request body (device code flow):
- * {
- *   "grant_type": "urn:ietf:params:oauth:grant-type:device_code",
- *   "device_code": "abc123...",
- *   "client_id": "recoder-cli"
- * }
- *
- * Request body (refresh token):
- * {
- *   "grant_type": "refresh_token",
- *   "refresh_token": "recr_..."
- * }
- *
- * Response (success):
- * {
- *   "status": "authorized",
- *   "access_token": "reco_...",
- *   "refresh_token": "recr_...",
- *   "token_type": "Bearer",
- *   "expires_in": 7776000,
- *   "user": {
- *     "id": "...",
- *     "email": "...",
- *     "name": "...",
- *     "plan": "free"
- *   }
- * }
- *
- * Response (pending):
- * {
- *   "status": "pending",
- *   "message": "Authorization pending"
- * }
+ * Supported grants:
+ * - urn:ietf:params:oauth:grant-type:device_code
+ * - refresh_token
  */
 export async function POST(request: NextRequest) {
+  let body: TokenRequestBody = {};
+
   try {
-    const body = await request.json();
-    const { grant_type, device_code, refresh_token } = body;
-
-    if (!grant_type) {
-      return NextResponse.json(
-        { error: 'Missing grant_type' },
-        { status: 400 }
-      );
-    }
-
-    // Handle refresh token
-    if (grant_type === 'refresh_token') {
-      if (!refresh_token) {
-        return NextResponse.json(
-          { error: 'Missing refresh_token' },
-          { status: 400 }
-        );
-      }
-
-      try {
-        const result = await CLIAuthService.refreshAccessToken(refresh_token);
-        return NextResponse.json(result, { status: 200 });
-      } catch (error: any) {
-        return NextResponse.json(
-          { error: 'Invalid refresh token', message: error.message },
-          { status: 401 }
-        );
-      }
-    }
-
-    // Handle device code flow
-    if (grant_type === 'urn:ietf:params:oauth:grant-type:device_code') {
-      if (!device_code) {
-        return NextResponse.json(
-          { error: 'Missing device_code' },
-          { status: 400 }
-        );
-      }
-
-      try {
-        const result = await CLIAuthService.pollDeviceCode(device_code);
-
-        // If still pending, return 428
-        if (result.status === 'pending') {
-          return NextResponse.json(result, { status: 428 });
-        }
-
-        // If authorized, return tokens
-        return NextResponse.json(result, { status: 200 });
-      } catch (error: any) {
-        const message = error.message.toLowerCase();
-
-        // Return appropriate status codes for different errors
-        if (message.includes('expired')) {
-          return NextResponse.json(
-            { error: 'Device code expired', message: error.message },
-            { status: 410 }
-          );
-        }
-
-        if (message.includes('denied')) {
-          return NextResponse.json(
-            { error: 'Authorization denied', message: error.message },
-            { status: 403 }
-          );
-        }
-
-        return NextResponse.json(
-          { error: 'Invalid device code', message: error.message },
-          { status: 400 }
-        );
-      }
-    }
-
+    body = (await request.json().catch(() => ({}))) as TokenRequestBody;
+  } catch {
     return NextResponse.json(
-      { error: 'Invalid grant_type' },
-      { status: 400 }
-    );
-  } catch (error: any) {
-    console.error('Token request error:', error);
-    return NextResponse.json(
-      { error: 'Token request failed', message: error.message },
-      { status: 500 }
+      { error: 'invalid_request', error_description: 'Invalid JSON body' },
+      { status: 400 },
     );
   }
-}
 
-/**
- * GET /api/auth/cli/token
- * VS Code compatibility polling contract.
- *
- * Headers:
- * - X-Device-Code
- * - X-Client-Id (optional, currently ignored)
- */
-export async function GET(request: NextRequest) {
-  try {
-    const deviceCode = request.headers.get('X-Device-Code') || request.nextUrl.searchParams.get('device_code');
+  const grantType = typeof body.grant_type === 'string' ? body.grant_type : '';
+
+  if (grantType === 'urn:ietf:params:oauth:grant-type:device_code') {
+    const deviceCode =
+      typeof body.device_code === 'string' ? body.device_code : '';
 
     if (!deviceCode) {
       return NextResponse.json(
-        { error: 'Missing device_code', status: 'invalid_request' },
-        { status: 400 }
+        { error: 'invalid_request', error_description: 'device_code is required' },
+        { status: 400 },
       );
     }
 
-    const result = await CLIAuthService.pollDeviceCode(deviceCode);
+    try {
+      const pollResult = await CLIAuthService.pollDeviceCode(deviceCode);
 
-    if (result.status === 'pending') {
+      if (pollResult.status === 'pending') {
+        return NextResponse.json(
+          {
+            error: 'authorization_pending',
+            status: 'pending',
+          },
+          { status: 400 },
+        );
+      }
+
+      // CLIAuthService returns access/refresh token payload on authorization.
+      return NextResponse.json(pollResult, { status: 200 });
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+
+      if (message.toLowerCase().includes('denied')) {
+        return NextResponse.json(
+          { error: 'access_denied', status: 'denied' },
+          { status: 400 },
+        );
+      }
+
+      if (message.toLowerCase().includes('expired')) {
+        return NextResponse.json(
+          { error: 'expired_token', status: 'expired' },
+          { status: 400 },
+        );
+      }
+
+      if (message.toLowerCase().includes('invalid device code')) {
+        return NextResponse.json(
+          { error: 'invalid_grant' },
+          { status: 400 },
+        );
+      }
+
+      logger.error('CLI token device flow polling failed', {
+        route: 'api/auth/cli/token',
+        error: message,
+      });
+      return NextResponse.json({ error: 'server_error' }, { status: 500 });
+    }
+  }
+
+  if (grantType === 'refresh_token') {
+    const refreshToken =
+      typeof body.refresh_token === 'string' ? body.refresh_token : '';
+
+    if (!refreshToken) {
       return NextResponse.json(
         {
-          status: 'pending',
-          error: 'authorization_pending',
-          message: result.message || 'Authorization pending',
+          error: 'invalid_request',
+          error_description: 'refresh_token is required',
         },
-        { status: 428 }
+        { status: 400 },
       );
     }
 
-    if (result.status !== 'authorized') {
+    try {
+      const refreshed = await CLIAuthService.refreshAccessToken(refreshToken);
       return NextResponse.json(
-        { error: 'Unexpected device authorization status', status: result.status },
-        { status: 500 }
-      );
-    }
-
-    if (
-      !('access_token' in result) ||
-      !('refresh_token' in result) ||
-      !('expires_in' in result) ||
-      !('user' in result)
-    ) {
-      return NextResponse.json(
-        { error: 'Authorized device response missing token fields' },
-        { status: 500 }
-      );
-    }
-
-    return NextResponse.json(
-      {
-        status: 'authorized',
-        token: {
-          accessToken: result.access_token,
-          refreshToken: result.refresh_token,
-          expiresAt: expiresInToIso(result.expires_in),
+        {
+          ...refreshed,
+          // Keep compatibility with clients that expect refresh_token in response.
+          refresh_token: refreshToken,
         },
-        user: result.user,
-      },
-      { status: 200 }
-    );
-  } catch (error: any) {
-    const message = String(error?.message || error).toLowerCase();
-
-    if (message.includes('expired')) {
-      return NextResponse.json(
-        { status: 'expired', error: 'expired_token', message: error.message },
-        { status: 410 }
+        { status: 200 },
       );
-    }
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (message.toLowerCase().includes('invalid refresh token')) {
+        return NextResponse.json({ error: 'invalid_grant' }, { status: 400 });
+      }
 
-    if (message.includes('denied')) {
-      return NextResponse.json(
-        { status: 'denied', error: 'access_denied', message: error.message },
-        { status: 403 }
-      );
+      logger.error('CLI token refresh failed', {
+        route: 'api/auth/cli/token',
+        error: message,
+      });
+      return NextResponse.json({ error: 'server_error' }, { status: 500 });
     }
-
-    if (message.includes('invalid')) {
-      return NextResponse.json(
-        { status: 'invalid', error: 'invalid_grant', message: error.message },
-        { status: 400 }
-      );
-    }
-
-    return NextResponse.json(
-      { error: 'Token request failed', message: error?.message || 'Unknown error' },
-      { status: 500 }
-    );
   }
+
+  return NextResponse.json(
+    {
+      error: 'unsupported_grant_type',
+      error_description:
+        'Supported grant_type values: urn:ietf:params:oauth:grant-type:device_code, refresh_token',
+    },
+    { status: 400 },
+  );
 }

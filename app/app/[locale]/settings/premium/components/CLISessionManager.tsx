@@ -26,6 +26,12 @@ interface CLISessionManagerProps {
 export default function CLISessionManager({ sessions, onRefresh }: CLISessionManagerProps) {
   const [loading, setLoading] = useState(false);
   const [revokingId, setRevokingId] = useState<string | null>(null);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  const showError = (msg: string) => {
+    setErrorMsg(msg);
+    setTimeout(() => setErrorMsg(null), 4000);
+  };
 
   const handleRevokeSession = async (sessionId: string, deviceName: string) => {
     if (!confirm(`Are you sure you want to revoke the session for "${deviceName}"?`)) {
@@ -46,8 +52,8 @@ export default function CLISessionManager({ sessions, onRefresh }: CLISessionMan
       }
 
       onRefresh();
-    } catch (error: any) {
-      alert(error.message || 'Failed to revoke CLI session');
+    } catch (error) {
+      showError(error instanceof Error ? error.message : 'Failed to revoke CLI session');
     } finally {
       setLoading(false);
       setRevokingId(null);
@@ -73,7 +79,7 @@ export default function CLISessionManager({ sessions, onRefresh }: CLISessionMan
 
       onRefresh();
     } catch (error: any) {
-      alert(error.message || 'Failed to revoke all CLI sessions');
+      showError(error.message || 'Failed to revoke all CLI sessions');
     } finally {
       setLoading(false);
     }
@@ -132,7 +138,13 @@ export default function CLISessionManager({ sessions, onRefresh }: CLISessionMan
   };
 
   return (
-    <Card className="p-6">
+    <Card className="p-6 relative">
+      {errorMsg && (
+        <div className="absolute top-2 right-2 z-10 px-3 py-2 bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg flex items-center gap-2">
+          <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+          {errorMsg}
+        </div>
+      )}
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-3">
           <Terminal className="w-6 h-6 text-purple-600" />

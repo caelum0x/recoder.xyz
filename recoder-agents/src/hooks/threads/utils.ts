@@ -111,7 +111,7 @@ export const deleteThread = async (threadId: string, sandboxId?: string): Promis
         throw new Error(`Failed to delete thread: ${errorText}`);
       }
 
-      console.log(`Thread ${threadId} deleted successfully`);
+      
     } catch (error) {
       console.error('Error deleting thread:', error);
       throw error;

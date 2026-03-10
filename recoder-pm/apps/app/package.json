@@ -4,7 +4,8 @@
   "scripts": {
     "dev": "next dev -p 3000",
     "build": "POLAR_ACCESS_TOKEN=${POLAR_ACCESS_TOKEN:-build-time-placeholder} POLAR_WEBHOOK_SECRET=${POLAR_WEBHOOK_SECRET:-build-time-placeholder} POLAR_PRODUCT_PRO_ID=${POLAR_PRODUCT_PRO_ID:-build-time-placeholder} POLAR_PRODUCT_ENTERPRISE_ID=${POLAR_PRODUCT_ENTERPRISE_ID:-build-time-placeholder} RESEND_FROM=${RESEND_FROM:-noreply@localhost.test} RESEND_TOKEN=${RESEND_TOKEN:-re_build_placeholder} GITHUB_APP_ID=${GITHUB_APP_ID:-build-placeholder} GITHUB_PRIVATE_KEY=${GITHUB_PRIVATE_KEY:-build-placeholder} GITHUB_APP_SLUG=${GITHUB_APP_SLUG:-build-placeholder} NEXT_PUBLIC_LOGO_DEV_API_KEY=${NEXT_PUBLIC_LOGO_DEV_API_KEY:-build-placeholder} next build",
-    "analyze": "ANALYZE=true pnpm build"
+    "analyze": "ANALYZE=true pnpm build",
+    "analyze:webpack": "ANALYZE=true POLAR_ACCESS_TOKEN=${POLAR_ACCESS_TOKEN:-build-time-placeholder} POLAR_WEBHOOK_SECRET=${POLAR_WEBHOOK_SECRET:-build-time-placeholder} POLAR_PRODUCT_PRO_ID=${POLAR_PRODUCT_PRO_ID:-build-time-placeholder} POLAR_PRODUCT_ENTERPRISE_ID=${POLAR_PRODUCT_ENTERPRISE_ID:-build-time-placeholder} RESEND_FROM=${RESEND_FROM:-noreply@localhost.test} RESEND_TOKEN=${RESEND_TOKEN:-re_build_placeholder} GITHUB_APP_ID=${GITHUB_APP_ID:-build-placeholder} GITHUB_PRIVATE_KEY=${GITHUB_PRIVATE_KEY:-build-placeholder} GITHUB_APP_SLUG=${GITHUB_APP_SLUG:-build-placeholder} NEXT_PUBLIC_LOGO_DEV_API_KEY=${NEXT_PUBLIC_LOGO_DEV_API_KEY:-build-placeholder} next build --webpack"
   },
   "dependencies": {
     "@ai-sdk/react": "^2.0.21",
@@ -13,6 +14,7 @@
     "@emoji-mart/data": "^1.2.1",
     "@hookform/resolvers": "^5.0.1",
     "@number-flow/react": "^0.5.9",
+    "@recoder/design-tokens": "file:../../../packages/design-tokens",
     "@react-hookz/web": "^25.1.1",
     "@repo/analytics": "workspace:*",
     "@repo/atlassian": "workspace:*",

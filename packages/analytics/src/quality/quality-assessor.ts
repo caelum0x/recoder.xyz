@@ -805,9 +805,42 @@ export class QualityAssessor extends EventEmitter {
   }
 
   private calculateConsistency(request: QualityAssessmentRequest): Promise<number> {
-    // This would compare against similar historical requests
-    // For now, return a simulated consistency score
-    return Promise.resolve(85);
+    const code = request.response || '';
+    let score = 70; // Base score
+
+    // Check naming consistency (camelCase vs snake_case mixing)
+    const hasCamelCase = /[a-z][A-Z]/.test(code);
+    const hasSnakeCase = /[a-z]_[a-z]/.test(code);
+    if (hasCamelCase && hasSnakeCase) score -= 15; // Mixed naming conventions
+
+    // Check indentation consistency
+    const lines = code.split('\n').filter(l => l.trim().length > 0);
+    const indentTypes = new Set(lines.map(l => {
+      const match = l.match(/^(\s+)/);
+      if (!match) return 'none';
+      return match[1].includes('\t') ? 'tab' : `space-${match[1].length % 4 === 0 ? 4 : 2}`;
+    }));
+    if (indentTypes.size <= 2) score += 10; // Consistent indentation
+
+    // Check quote consistency (single vs double)
+    const singleQuotes = (code.match(/'/g) || []).length;
+    const doubleQuotes = (code.match(/"/g) || []).length;
+    if (singleQuotes > 0 && doubleQuotes > 0) {
+      const ratio = Math.min(singleQuotes, doubleQuotes) / Math.max(singleQuotes, doubleQuotes);
+      if (ratio > 0.3) score -= 10; // Mixed quote styles
+    } else {
+      score += 10; // Consistent quotes
+    }
+
+    // Check semicolon consistency
+    const withSemicolon = lines.filter(l => l.trim().endsWith(';')).length;
+    const withoutSemicolon = lines.filter(l => !l.trim().endsWith(';') && !l.trim().endsWith('{') && !l.trim().endsWith('}') && l.trim().length > 0).length;
+    if (withSemicolon > 0 && withoutSemicolon > 0) {
+      const semiRatio = withSemicolon / (withSemicolon + withoutSemicolon);
+      if (semiRatio > 0.3 && semiRatio < 0.7) score -= 10; // Inconsistent semicolons
+    }
+
+    return Promise.resolve(Math.max(0, Math.min(100, score)));
   }
 
   private calculateReadability(code: string): number {
@@ -1042,9 +1075,11 @@ export class QualityAssessor extends EventEmitter {
   }
 
   private async getModelResponse(modelName: string, prompt: string, taskType: string): Promise<string> {
-    // This would integrate with the actual model APIs
-    // For now, return simulated responses
-    return `// Generated code for ${taskType}\nfunction example() {\n  return "Hello World";\n}`;
+    // TODO(model-integration): Wire to real AI provider APIs when model routing is available.
+    // Quality assessment of model responses requires calling the actual model.
+    // Without a configured provider, return empty string to signal no response available.
+    console.warn(`[QualityAssessor] No model API configured for ${modelName} — skipping response generation`);
+    return '';
   }
 
   private generateComparisonInsights(results: any[]): string[] {
@@ -1081,7 +1116,8 @@ export class QualityAssessor extends EventEmitter {
   }
 
   private async getRecentAssessments(modelName: string, period: string): Promise<QualityAssessmentResult[]> {
-    // Would query database for recent assessments
+    // No persistence configured — assessments are not stored to a database yet.
+    // When a database is wired, query for assessments within the given period.
     return [];
   }
 

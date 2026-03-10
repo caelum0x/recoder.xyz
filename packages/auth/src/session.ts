@@ -1,5 +1,6 @@
 import { authDatabase } from "./database";
 import { parseSessionToken } from "./edge";
+import { Prisma } from "../prisma/auth-client";
 export { SESSION_COOKIE_NAMES, parseSessionToken } from "./edge";
 
 /**
@@ -39,6 +40,78 @@ export async function verifySessionToken(
 ): Promise<AuthSession | null> {
   const token = parseSessionToken(rawToken);
 
+  // Compatibility bridge: production currently has mixed auth schemas.
+  // Prefer legacy plural tables first (`sessions` + `users`), then fallback
+  // to singular Better Auth tables (`session` + `user`).
+  let legacyRows: Array<{
+    sessionId: string;
+    userId: string;
+    expiresAt: Date;
+    id: string;
+    email: string;
+    emailVerified: boolean;
+    name: string;
+    image: string | null;
+    createdAt: Date;
+    updatedAt: Date;
+  }> = [];
+  try {
+    legacyRows = await authDatabase.$queryRaw<
+      Array<{
+        sessionId: string;
+        userId: string;
+        expiresAt: Date;
+        id: string;
+        email: string;
+        emailVerified: boolean;
+        name: string;
+        image: string | null;
+        createdAt: Date;
+        updatedAt: Date;
+      }>
+    >(Prisma.sql`
+      SELECT
+        s.id AS "sessionId",
+        s."userId" AS "userId",
+        s."expiresAt" AS "expiresAt",
+        u.id AS "id",
+        u.email AS "email",
+        u."emailVerified" AS "emailVerified",
+        u.name AS "name",
+        u.image AS "image",
+        u."createdAt" AS "createdAt",
+        u."updatedAt" AS "updatedAt"
+      FROM "sessions" s
+      INNER JOIN "users" u ON u.id = s."userId"
+      WHERE s.token = ${token}
+      LIMIT 1
+    `);
+  } catch {
+    // Ignore when legacy tables are not present in this environment.
+  }
+
+  const legacy = legacyRows[0];
+  if (legacy) {
+    if (legacy.expiresAt < new Date()) {
+      return null;
+    }
+
+    return {
+      sessionId: legacy.sessionId,
+      userId: legacy.userId,
+      user: {
+        id: legacy.id,
+        email: legacy.email,
+        emailVerified: legacy.emailVerified,
+        name: legacy.name,
+        image: legacy.image,
+        createdAt: legacy.createdAt,
+        updatedAt: legacy.updatedAt,
+      },
+      expiresAt: legacy.expiresAt,
+    };
+  }
+
   const session = await authDatabase.session.findUnique({
     where: { token },
     include: { user: true },
@@ -74,6 +147,49 @@ export async function verifySessionToken(
 export async function getAuthUserById(
   userId: string
 ): Promise<AuthCoreUser | null> {
+  let legacyUsers: Array<{
+    id: string;
+    email: string;
+    emailVerified: boolean;
+    name: string;
+    image: string | null;
+    createdAt: Date;
+    updatedAt: Date;
+  }> = [];
+  try {
+    legacyUsers = await authDatabase.$queryRaw<
+      Array<{
+        id: string;
+        email: string;
+        emailVerified: boolean;
+        name: string;
+        image: string | null;
+        createdAt: Date;
+        updatedAt: Date;
+      }>
+    >(Prisma.sql`
+      SELECT id, email, "emailVerified", name, image, "createdAt", "updatedAt"
+      FROM "users"
+      WHERE id = ${userId}
+      LIMIT 1
+    `);
+  } catch {
+    // Ignore when legacy table is not present in this environment.
+  }
+
+  const legacy = legacyUsers[0];
+  if (legacy) {
+    return {
+      id: legacy.id,
+      email: legacy.email,
+      emailVerified: legacy.emailVerified,
+      name: legacy.name,
+      image: legacy.image,
+      createdAt: legacy.createdAt,
+      updatedAt: legacy.updatedAt,
+    };
+  }
+
   const user = await authDatabase.user.findUnique({
     where: { id: userId },
   });
@@ -99,6 +215,49 @@ export async function getAuthUserById(
 export async function getAuthUserByEmail(
   email: string
 ): Promise<AuthCoreUser | null> {
+  let legacyUsers: Array<{
+    id: string;
+    email: string;
+    emailVerified: boolean;
+    name: string;
+    image: string | null;
+    createdAt: Date;
+    updatedAt: Date;
+  }> = [];
+  try {
+    legacyUsers = await authDatabase.$queryRaw<
+      Array<{
+        id: string;
+        email: string;
+        emailVerified: boolean;
+        name: string;
+        image: string | null;
+        createdAt: Date;
+        updatedAt: Date;
+      }>
+    >(Prisma.sql`
+      SELECT id, email, "emailVerified", name, image, "createdAt", "updatedAt"
+      FROM "users"
+      WHERE email = ${email}
+      LIMIT 1
+    `);
+  } catch {
+    // Ignore when legacy table is not present in this environment.
+  }
+
+  const legacy = legacyUsers[0];
+  if (legacy) {
+    return {
+      id: legacy.id,
+      email: legacy.email,
+      emailVerified: legacy.emailVerified,
+      name: legacy.name,
+      image: legacy.image,
+      createdAt: legacy.createdAt,
+      updatedAt: legacy.updatedAt,
+    };
+  }
+
   const user = await authDatabase.user.findUnique({
     where: { email },
   });

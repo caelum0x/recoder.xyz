@@ -1,9 +1,10 @@
 'use client';
 
+import Link from 'next/link';
 import { useActiveRuns } from '@/hooks/threads/use-active-runs';
 import type { ActiveRun } from '@/lib/api/active-runs';
 import { cn } from '@/lib/utils';
-import { Activity, Bot, ChevronDown, ChevronRight, Loader2 } from 'lucide-react';
+import { Activity, ChevronDown, ChevronRight, Eye, Loader2 } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 import { useSidebar } from '@/components/ui/sidebar';
 import {
@@ -38,13 +39,13 @@ function ActiveRunItem({ run, isCompleted }: { run: ActiveRun; isCompleted?: boo
     return () => clearInterval(interval);
   }, [isCompleted]);
 
-  return (
+  const content = (
     <div
       className={cn(
-        'rounded-lg px-2.5 py-2 transition-all duration-300',
+        'rounded-lg px-2.5 py-2 transition-all duration-300 group/run',
         isCompleted
           ? 'opacity-40 scale-[0.98]'
-          : 'bg-muted/40'
+          : 'bg-muted/40 hover:bg-muted/60'
       )}
     >
       <div className="flex items-center gap-2 min-w-0">
@@ -62,6 +63,13 @@ function ActiveRunItem({ run, isCompleted }: { run: ActiveRun; isCompleted?: boo
         <span className="text-sm font-medium truncate flex-1 min-w-0">
           {run.agent_name}
         </span>
+
+        {/* Watch button - visible on hover for active runs */}
+        {!isCompleted && (
+          <span className="flex-shrink-0 opacity-0 group-hover/run:opacity-100 transition-opacity">
+            <Eye className="h-3.5 w-3.5 text-muted-foreground hover:text-foreground" />
+          </span>
+        )}
       </div>
 
       {/* Details row */}
@@ -78,6 +86,17 @@ function ActiveRunItem({ run, isCompleted }: { run: ActiveRun; isCompleted?: boo
       </div>
     </div>
   );
+
+  // Wrap active runs in a Link to the run detail page
+  if (!isCompleted) {
+    return (
+      <Link href={`/runs/${run.id}`} className="block">
+        {content}
+      </Link>
+    );
+  }
+
+  return content;
 }
 
 export function ActiveRunsSection() {

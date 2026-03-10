@@ -52,7 +52,7 @@ COPY --from=builder /app/apps/agency/.next/standalone ./
 COPY --from=builder /app/apps/agency/.next/static ./apps/agency/.next/static
 COPY --from=builder /app/apps/agency/public ./apps/agency/public
 
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
   CMD wget -qO- http://localhost:3007/api/health || exit 1
 
 USER nextjs

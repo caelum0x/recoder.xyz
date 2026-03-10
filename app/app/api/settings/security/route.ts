@@ -11,6 +11,7 @@ import {
   assertSecuritySettingsPutResponse,
 } from '@/lib/contracts/security-contracts';
 import { prisma } from '@/lib/prisma';
+import { logger } from '@/lib/logger';
 
 function asRecord(value: unknown): Record<string, unknown> {
   if (value && typeof value === 'object' && !Array.isArray(value)) {
@@ -89,8 +90,8 @@ export async function GET(request: NextRequest) {
       settings: normalizedSettings,
     }));
 
-  } catch (error: any) {
-    console.error('[Security Settings GET] Error:', error);
+  } catch (error) {
+    logger.error('[Security Settings GET] Error', { error: error instanceof Error ? error.message : String(error) });
     return NextResponse.json(
       { success: false, error: 'Failed to fetch security settings' },
       { status: 500 }
@@ -144,8 +145,8 @@ export async function PUT(request: NextRequest) {
       message: 'Security settings updated successfully'
     }));
 
-  } catch (error: any) {
-    console.error('[Security Settings PUT] Error:', error);
+  } catch (error) {
+    logger.error('[Security Settings PUT] Error', { error: error instanceof Error ? error.message : String(error) });
     return NextResponse.json(
       { success: false, error: 'Failed to update security settings' },
       { status: 500 }

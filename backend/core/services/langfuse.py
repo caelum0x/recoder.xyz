@@ -11,7 +11,54 @@ host = os.getenv("LANGFUSE_HOST", "https://cloud.langfuse.com")
 # Determine if Langfuse should be enabled
 enabled = bool(public_key and secret_key)
 
-# Initialize client using singleton pattern
+
+# ── Mock classes for disabled/fallback state ─────────────────
+class MockSpan:
+    def __init__(self):
+        self.id = "mock-span-id"
+
+    def __getattr__(self, name):
+        def no_op(*args, **kwargs):
+            pass
+        return no_op
+
+
+class MockTrace:
+    def __init__(self):
+        self.id = "mock-trace-id"
+
+    def span(self, **kwargs):
+        return MockSpan()
+
+    def __getattr__(self, name):
+        def no_op(*args, **kwargs):
+            pass
+        return no_op
+
+
+class MockGeneration:
+    def __init__(self):
+        self.id = "mock-generation-id"
+
+    def __getattr__(self, name):
+        def no_op(*args, **kwargs):
+            pass
+        return no_op
+
+
+class MockLangfuse:
+    def __init__(self):
+        self.enabled = False
+    def trace(self, **kwargs): return MockTrace()
+    def generation(self, **kwargs): return MockGeneration()
+    def span(self, **kwargs): return MockSpan()
+    def event(self, **kwargs): pass
+    def flush(self): pass
+    def shutdown(self): pass
+    def auth_check(self): return False
+
+
+# ── Initialize client using singleton pattern ────────────────
 if enabled:
     logger.debug(f"🔍 Langfuse Environment Check: Public Key: Set, Secret Key: Set, Host: {host}")
     logger.debug(f"🔍 Initializing Langfuse with host: {host}")
@@ -27,7 +74,7 @@ if enabled:
         except Exception as ssl_error:
             logger.debug(f"SSL verification failed, disabling: {ssl_error}")
             httpx_client = httpx.Client(verify=False)
-        
+
         langfuse = Langfuse(
             public_key=public_key,
             secret_key=secret_key,
@@ -36,7 +83,7 @@ if enabled:
         )
         logger.info(f"✅ Langfuse initialized successfully - Host: {host}")
         logger.info(f"🔍 Langfuse Public Key: {public_key[:8]}...{public_key[-4:] if len(public_key) > 12 else public_key}")
-        
+
         # Test the connection
         try:
             logger.debug(f"🔍 Testing authentication with {host}...")
@@ -47,7 +94,7 @@ if enabled:
                 logger.warning(f"❌ Langfuse authentication failed with {host}")
         except Exception as auth_error:
             logger.warning(f"⚠️ Langfuse auth check failed: {auth_error}")
-            
+
             # Try alternative host if authentication fails
             if "us.cloud.langfuse.com" in host:
                 logger.info("🔄 Trying EU host as fallback...")
@@ -57,7 +104,7 @@ if enabled:
                 fallback_host = "https://us.cloud.langfuse.com"
             else:
                 fallback_host = None
-            
+
             if fallback_host:
                 try:
                     logger.info(f"🔄 Testing fallback host: {fallback_host}")
@@ -90,98 +137,10 @@ if enabled:
             httpx_client = httpx.Client(verify=False)
             langfuse = Langfuse(enabled=False, httpx_client=httpx_client)
         except Exception:
-            # Ultimate fallback - create a mock client
-            class MockLangfuse:
-                def __init__(self):
-                    self.enabled = False
-                def trace(self, **kwargs): return MockTrace()
-                def generation(self, **kwargs): return MockGeneration()
-                def span(self, **kwargs): return MockSpan()
-                def event(self, **kwargs): pass
-                def flush(self): pass
-                def shutdown(self): pass
-                def auth_check(self): return False
-            
-            class MockTrace:
-                def __init__(self): 
-                    self.id = "mock-trace-id"
-                
-                # Ensure chained calls like trace.span(...).end(...) are safe no-ops
-                def span(self, **kwargs):
-                    return MockSpan()
-                
-                def __getattr__(self, name):
-                    # Return a no-op function for any method call
-                    def no_op(*args, **kwargs):
-                        pass
-                    return no_op
-            class MockGeneration:
-                def __init__(self): 
-                    self.id = "mock-generation-id"
-                
-                def __getattr__(self, name):
-                    # Return a no-op function for any method call
-                    def no_op(*args, **kwargs):
-                        pass
-                    return no_op
-            class MockSpan:
-                def __init__(self): 
-                    self.id = "mock-span-id"
-                
-                def __getattr__(self, name):
-                    # Return a no-op function for any method call
-                    def no_op(*args, **kwargs):
-                        pass
-                    return no_op
-            
             langfuse = MockLangfuse()
         enabled = False
 else:
     # Langfuse disabled - missing LANGFUSE_PUBLIC_KEY or LANGFUSE_SECRET_KEY
-    # Create mock client for disabled state
-    class MockLangfuse:
-        def __init__(self):
-            self.enabled = False
-        def trace(self, **kwargs): return MockTrace()
-        def generation(self, **kwargs): return MockGeneration()
-        def span(self, **kwargs): return MockSpan()
-        def event(self, **kwargs): pass
-        def flush(self): pass
-        def shutdown(self): pass
-        def auth_check(self): return False
-    
-    class MockTrace:
-        def __init__(self): 
-            self.id = "mock-trace-id"
-        
-        # Ensure chained calls like trace.span(...).end(...) are safe no-ops
-        def span(self, **kwargs):
-            return MockSpan()
-        
-        def __getattr__(self, name):
-            # Return a no-op function for any method call
-            def no_op(*args, **kwargs):
-                pass
-            return no_op
-    class MockGeneration:
-        def __init__(self): 
-            self.id = "mock-generation-id"
-        
-        def __getattr__(self, name):
-            # Return a no-op function for any method call
-            def no_op(*args, **kwargs):
-                pass
-            return no_op
-    class MockSpan:
-        def __init__(self): 
-            self.id = "mock-span-id"
-        
-        def __getattr__(self, name):
-            # Return a no-op function for any method call
-            def no_op(*args, **kwargs):
-                pass
-            return no_op
-    
     langfuse = MockLangfuse()
 
 def get_langfuse_client():

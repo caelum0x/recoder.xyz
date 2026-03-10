@@ -6,7 +6,7 @@
 import { createScopedLogger } from '~/utils/logger';
 const logger = createScopedLogger('SettingsAPI');
 
-const MAIN_SITE_URL = process.env.MAIN_SITE_URL || 'http://localhost:3000';
+const MAIN_SITE_URL = process.env.MAIN_SITE_URL || (process.env.NODE_ENV === 'production' ? 'https://recoder.xyz' : 'http://localhost:3000');
 
 // Types for settings
 export interface ProfileSettings {

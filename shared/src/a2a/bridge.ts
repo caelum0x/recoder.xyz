@@ -14,8 +14,12 @@ import {
 } from './types';
 
 function extractFirstText(envelope: RecoderA2AEnvelope): string {
-  const textPart = envelope.payload.find((part) => part.kind === 'text');
-  return textPart?.kind === 'text' ? textPart.text : '';
+  const payload = envelope.payload as unknown[];
+  const textPart = payload.find((part) => {
+    if (!part || typeof part !== 'object') return false;
+    return (part as { kind?: string }).kind === 'text';
+  }) as { kind?: string; text?: string } | undefined;
+  return textPart?.kind === 'text' ? (textPart.text ?? '') : '';
 }
 
 function roleFromIntent(intent: RecoderIntent): 'system' | 'user' | 'assistant' {

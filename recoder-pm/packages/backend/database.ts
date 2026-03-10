@@ -13,8 +13,9 @@ if (!env.POSTGRES_PRISMA_URL) {
 const url = new URL(env.POSTGRES_PRISMA_URL);
 
 if (process.env.NODE_ENV === "production") {
+  const isLocalDb = url.hostname === "127.0.0.1" || url.hostname === "localhost";
   // Patch issue: https://github.com/prisma/prisma/issues/19209#issuecomment-1575711892
-  url.searchParams.set("sslmode", "no-verify");
+  url.searchParams.set("sslmode", isLocalDb ? "disable" : "no-verify");
 }
 
 const globalForPrisma = global as unknown as {

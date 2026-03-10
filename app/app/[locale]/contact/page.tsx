@@ -67,7 +67,7 @@ export default function ContactPage() {
       response: 'Immediate',
       action: 'Start Chat',
       href: '/chat',
-      priority: 'primary'
+      priority: 'default'
     },
     {
       icon: Mail,
@@ -193,7 +193,7 @@ export default function ContactPage() {
       {/* Hero Section */}
       <section className="py-20 px-4">
         <div className="container mx-auto text-center max-w-4xl">
-          <h1 className="text-4xl md:text-6xl font-bold mb-6 bg-gradient-to-r from-slate-900 via-blue-800 to-slate-900 dark:from-white dark:via-blue-400 dark:to-white bg-clip-text text-transparent">
+          <h1 className="text-4xl md:text-6xl font-bold mb-6 bg-gradient-to-r from-slate-900 via-orange-600 to-slate-900 dark:from-white dark:via-orange-400 dark:to-white bg-clip-text text-transparent">
             Get in Touch
           </h1>
           <p className="text-xl text-slate-600 dark:text-slate-300 mb-12 max-w-3xl mx-auto">
@@ -232,7 +232,7 @@ export default function ContactPage() {
             {contactMethods.map((method, index) => (
               <Card key={index} className="border-0 shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105">
                 <CardHeader className="text-center">
-                  <div className="w-12 h-12 bg-gradient-to-r from-blue-500 to-purple-600 rounded-lg flex items-center justify-center mx-auto mb-4">
+                  <div className="w-12 h-12 bg-gradient-to-r from-orange-500 to-purple-600 rounded-lg flex items-center justify-center mx-auto mb-4">
                     <method.icon className="w-6 h-6 text-white" />
                   </div>
                   <CardTitle className="text-lg">{method.title}</CardTitle>
@@ -250,7 +250,7 @@ export default function ContactPage() {
                     </div>
                   </div>
                   <Button 
-                    variant={method.priority as any} 
+                    variant={method.priority as 'default' | 'secondary' | 'outline'}
                     className="w-full" 
                     asChild
                   >
@@ -358,7 +358,7 @@ export default function ContactPage() {
               <Card key={index} className="border-0 shadow-lg hover:shadow-xl transition-all duration-300">
                 <CardContent className="p-6">
                   <div className="flex items-start space-x-4">
-                    <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-purple-600 rounded-lg flex items-center justify-center flex-shrink-0">
+                    <div className="w-10 h-10 bg-gradient-to-r from-orange-500 to-purple-600 rounded-lg flex items-center justify-center flex-shrink-0">
                       <dept.icon className="w-5 h-5 text-white" />
                     </div>
                     <div className="flex-1">
@@ -475,7 +475,7 @@ export default function ContactPage() {
       </section>
 
       {/* Social & Community */}
-      <section className="py-16 px-4 bg-gradient-to-r from-blue-600 to-purple-600">
+      <section className="py-16 px-4 bg-gradient-to-r from-orange-500 to-purple-600">
         <div className="container mx-auto max-w-4xl text-center text-white">
           <h2 className="text-3xl md:text-4xl font-bold mb-4">Join Our Community</h2>
           <p className="text-lg opacity-90 mb-8">

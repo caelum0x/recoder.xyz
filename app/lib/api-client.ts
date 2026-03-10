@@ -52,6 +52,20 @@ export interface UsageResponse {
   recentActivity: RecentActivity[];
 }
 
+interface UsageRecord {
+  timestamp: string;
+  model?: string;
+  tokens?: number;
+  cost?: number;
+  platform?: string;
+  status?: string;
+}
+
+interface UsageHistoryResponse {
+  records: UsageRecord[];
+  summary: { totalRecords: number; totalTokens: number; totalCost: number };
+}
+
 class ApiClient {
   private baseUrl: string;
   
@@ -137,8 +151,8 @@ class ApiClient {
       params.append('model', model);
     }
 
-    const response = await this.request<any>(`/api/usage/history?${params}`);
-    
+    const response = await this.request<UsageHistoryResponse>(`/api/usage/history?${params}`);
+
     // Transform real data into expected format
     const records = response.records || [];
     const summary = response.summary || { totalRecords: 0, totalTokens: 0, totalCost: 0 };
@@ -202,19 +216,19 @@ class ApiClient {
       limit: '1000'
     });
 
-    const response = await this.request<any>(`/api/usage/history?${params}`);
+    const response = await this.request<UsageHistoryResponse>(`/api/usage/history?${params}`);
     const records = response.records || [];
-    
+
     return {
       totalRequests: records.length,
-      totalTokens: records.reduce((sum: number, r: any) => sum + (r.tokens || 0), 0),
-      totalCost: records.reduce((sum: number, r: any) => sum + (r.cost || 0), 0),
+      totalTokens: records.reduce((sum: number, r: UsageRecord) => sum + (r.tokens || 0), 0),
+      totalCost: records.reduce((sum: number, r: UsageRecord) => sum + (r.cost || 0), 0),
       averageLatency: 0, // Not tracked in current schema
       successRate: 100, // Assume success if recorded
       trend: {
         requests: records.length,
-        tokens: records.reduce((sum: number, r: any) => sum + (r.tokens || 0), 0),
-        cost: records.reduce((sum: number, r: any) => sum + (r.cost || 0), 0)
+        tokens: records.reduce((sum: number, r: UsageRecord) => sum + (r.tokens || 0), 0),
+        cost: records.reduce((sum: number, r: UsageRecord) => sum + (r.cost || 0), 0)
       }
     };
   }
@@ -244,9 +258,9 @@ class ApiClient {
       limit: '1000'
     });
 
-    const response = await this.request<any>(`/api/usage/history?${params}`);
+    const response = await this.request<UsageHistoryResponse>(`/api/usage/history?${params}`);
     const records = response.records || [];
-    
+
     return this.aggregateByModel(records);
   }
 
@@ -267,11 +281,11 @@ class ApiClient {
       }
     });
 
-    return this.request<any>(`/api/usage/history?${searchParams}`);
+    return this.request<UsageHistoryResponse>(`/api/usage/history?${searchParams}`);
   }
 
   // Helper methods for data aggregation
-  private aggregateByDay(records: any[]): any[] {
+  private aggregateByDay(records: UsageRecord[]) {
     const dayMap = new Map();
     
     records.forEach(record => {
@@ -292,7 +306,7 @@ class ApiClient {
     return Array.from(dayMap.values()).slice(-7); // Last 7 days
   }
 
-  private aggregateByModel(records: any[]): any[] {
+  private aggregateByModel(records: UsageRecord[]) {
     const modelMap = new Map();
     const totalRecords = records.length;
     
@@ -320,7 +334,7 @@ class ApiClient {
       .slice(0, 5); // Top 5 models
   }
 
-  private aggregateByPlatform(records: any[]): any[] {
+  private aggregateByPlatform(records: UsageRecord[]) {
     const platformMap = new Map();
     const totalRecords = records.length;
     
@@ -348,7 +362,7 @@ class ApiClient {
       .sort((a, b) => b.requests - a.requests);
   }
 
-  private calculateProjectedCost(records: any[], timeRange: string): number {
+  private calculateProjectedCost(records: UsageRecord[], timeRange: string): number {
     if (records.length === 0) return 0;
     
     const totalCost = records.reduce((sum, r) => sum + (r.cost || 0), 0);
@@ -358,7 +372,7 @@ class ApiClient {
     return dailyAverage * 30; // Project to monthly
   }
 
-  private generateRecommendations(records: any[]): string[] {
+  private generateRecommendations(records: UsageRecord[]): string[] {
     const recommendations = [];
     
     if (records.length === 0) {
@@ -466,47 +480,47 @@ class ApiClient {
    * Get analytics metrics (alternative endpoint)
    */
   async getAnalyticsMetrics(timeRange: string = '7d') {
-    return this.request<any>(`/api/analytics/metrics?range=${timeRange}`);
+    return this.request<Record<string, unknown>>(`/api/analytics/metrics?range=${timeRange}`);
   }
 
   /**
    * Get analytics time series
    */
   async getAnalyticsTimeSeries(timeRange: string = '7d') {
-    return this.request<any>(`/api/analytics/timeseries?range=${timeRange}`);
+    return this.request<Record<string, unknown>>(`/api/analytics/timeseries?range=${timeRange}`);
   }
 
   /**
    * Get provider breakdown
    */
   async getProviderBreakdown(timeRange: string = '7d') {
-    return this.request<any>(`/api/analytics/providers?range=${timeRange}`);
+    return this.request<Record<string, unknown>>(`/api/analytics/providers?range=${timeRange}`);
   }
 
   /**
    * Generic GET request
    */
-  async get<T>(endpoint: string): Promise<{ success: boolean; data: T; error?: string }> {
+  async get<T>(endpoint: string): Promise<{ success: boolean; data: T | null; error?: string }> {
     try {
       const data = await this.request<T>(endpoint);
       return { success: true, data };
-    } catch (error: any) {
-      return { success: false, data: null as any, error: error.message };
+    } catch (error) {
+      return { success: false, data: null, error: error instanceof Error ? error.message : String(error) };
     }
   }
 
   /**
    * Generic POST request
    */
-  async post<T>(endpoint: string, body: any): Promise<{ success: boolean; data: T; error?: string }> {
+  async post<T>(endpoint: string, body: unknown): Promise<{ success: boolean; data: T | null; error?: string }> {
     try {
       const data = await this.request<T>(endpoint, {
         method: 'POST',
         body: JSON.stringify(body),
       });
       return { success: true, data };
-    } catch (error: any) {
-      return { success: false, data: null as any, error: error.message };
+    } catch (error) {
+      return { success: false, data: null, error: error instanceof Error ? error.message : String(error) };
     }
   }
 }

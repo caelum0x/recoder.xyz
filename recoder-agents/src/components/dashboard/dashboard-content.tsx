@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
 import { useIsMobile } from '@/hooks/utils';
 import { useAuth } from '@/components/AuthProvider';
-import { isLocalMode, isStagingMode } from '@/lib/config';
+
 import { useAccountState, accountStateSelectors, invalidateAccountState } from '@/hooks/billing';
 import { usePricingModalStore } from '@/stores/pricing-modal-store';
 import { toast } from '@/lib/toast';
@@ -20,6 +20,9 @@ import { useAgentStartInput } from '@/hooks/dashboard';
 import { ChatInput } from '@/components/thread/chat-input/chat-input';
 import { DynamicGreeting } from '@/components/ui/dynamic-greeting';
 import { Menu } from 'lucide-react';
+import { DashboardTour } from '@/components/onboarding/tours/dashboard-tour';
+import { useDashboardWidgets } from '@/stores/dashboard-widgets-store';
+import { DashboardCustomizer } from './dashboard-customizer';
 
 // Lazy load heavy components that aren't immediately visible
 const UpgradeCelebration = lazy(() => 
@@ -37,8 +40,38 @@ const CreditsDisplay = lazy(() =>
 const ModeIndicator = lazy(() => 
   import('@/components/thread/mode-indicator').then(mod => ({ default: mod.ModeIndicator }))
 );
-const RecoderModesPanel = lazy(() => 
+const RecoderModesPanel = lazy(() =>
   import('@/components/dashboard/recoder-modes-panel').then(mod => ({ default: mod.RecoderModesPanel }))
+);
+const PlatformStats = lazy(() =>
+  import('./platform-stats').then(mod => ({ default: mod.PlatformStats }))
+);
+const QuickActions = lazy(() =>
+  import('./quick-actions').then(mod => ({ default: mod.QuickActions }))
+);
+const ActivityFeed = lazy(() =>
+  import('./activity-feed').then(mod => ({ default: mod.ActivityFeed }))
+);
+const AgentStatusCards = lazy(() =>
+  import('./agent-status-cards').then(mod => ({ default: mod.AgentStatusCards }))
+);
+const QuickResumeBar = lazy(() =>
+  import('./quick-resume-bar').then(mod => ({ default: mod.QuickResumeBar }))
+);
+const RecentRunsWidget = lazy(() =>
+  import('./recent-runs-widget').then(mod => ({ default: mod.RecentRunsWidget }))
+);
+const CostSummaryWidget = lazy(() =>
+  import('./cost-summary-widget').then(mod => ({ default: mod.CostSummaryWidget }))
+);
+const RecentActivityWidget = lazy(() =>
+  import('./recent-activity-widget').then(mod => ({ default: mod.RecentActivityWidget }))
+);
+const ActivityHeatmapWidget = lazy(() =>
+  import('./activity-heatmap-widget').then(mod => ({ default: mod.ActivityHeatmapWidget }))
+);
+const CustomChartsSection = lazy(() =>
+  import('./custom-charts-section').then(mod => ({ default: mod.CustomChartsSection }))
 );
 
 export function DashboardContent() {
@@ -55,12 +88,11 @@ export function DashboardContent() {
   const queryClient = useQueryClient();
   const isMobile = useIsMobile();
   const { user } = useAuth();
-  const { setOpen: setSidebarOpen } = useSidebar();
+  const { setOpen: setSidebarOpen, setOpenMobile } = useSidebar();
   const { isVisible: isWelcomeBannerVisible } = useWelcomeBannerStore();
-  
+
   const { data: accountState, isLoading: isAccountStateLoading } = useAccountState({ enabled: !!user });
   const planName = accountStateSelectors.planName(accountState);
-  const { setOpen: setSidebarOpenState, setOpenMobile } = useSidebar();
   const pricingModalStore = usePricingModalStore();
 
   // Handle tab changes from URL
@@ -88,7 +120,7 @@ export function DashboardContent() {
     
     // If we have checkout/subscription success indicators
     if (subscriptionSuccess === 'success' || checkoutSuccess === 'success' || sessionId || clientSecret) {
-      console.log('🎉 Subscription success detected! Showing celebration...');
+      
       celebrationTriggeredRef.current = true;
       
       // Track purchase event for GTM/GA4
@@ -136,15 +168,7 @@ export function DashboardContent() {
               // Prefer promotion_code (customer-facing like "HEHE2020") over coupon_id
               couponId = stripeSession.promotion_code || stripeSession.coupon_name || stripeSession.coupon_id || '';
               currency = stripeSession.currency.toUpperCase();
-              console.log('[GTM] Using Stripe session data:', {
-                amount_total: stripeSession.amount_total,
-                amount_discount: stripeSession.amount_discount,
-                amount_tax: stripeSession.amount_tax,
-                promotion_code: stripeSession.promotion_code,
-                coupon_name: stripeSession.coupon_name,
-                coupon_id: stripeSession.coupon_id,
-                payment_status: stripeSession.payment_status
-              });
+              
             } else {
               console.warn('[GTM] Stripe session returned null - purchase NOT tracked to avoid false positives');
               return; // Don't track without verified session
@@ -283,10 +307,30 @@ export function DashboardContent() {
     !accountState.subscription.tier_key
   );
 
+  // Dashboard widget system
+  const { widgets } = useDashboardWidgets();
+
+  const widgetRegistry: Record<string, React.ComponentType> = {
+    'agent-status': AgentStatusCards,
+    'quick-resume': QuickResumeBar,
+    'platform-stats': PlatformStats,
+    'quick-actions': QuickActions,
+    'activity-feed': ActivityFeed,
+    'activity-heatmap': ActivityHeatmapWidget,
+    'recent-runs': RecentRunsWidget,
+    'cost-summary': CostSummaryWidget,
+    'recent-activity': RecentActivityWidget,
+  };
+
+  const enabledWidgets = [...widgets]
+    .filter((w) => w.enabled)
+    .sort((a, b) => a.order - b.order);
+
   return (
     <>
       {/* PlanSelectionModal is rendered globally in layout.tsx - no duplicate needed here */}
 
+      <DashboardTour />
       <div className="flex flex-col h-screen w-full overflow-hidden relative">
         {/* Low-contrast product mark background for the dashboard surface */}
         <div 
@@ -310,7 +354,7 @@ export function DashboardContent() {
           {isMobile && (
             <button
               onClick={() => {
-                setSidebarOpenState(true);
+                setSidebarOpen(true);
                 setOpenMobile(true);
               }}
               className="flex items-center justify-center h-9 w-9 -ml-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-accent/50 active:bg-accent transition-colors touch-manipulation"
@@ -329,6 +373,7 @@ export function DashboardContent() {
           "absolute flex items-center gap-1 right-3 sm:right-4 transition-[top] duration-200 z-10",
           isWelcomeBannerVisible ? "top-12" : "top-1.5"
         )}>
+          <DashboardCustomizer />
           <NotificationDropdown />
           <Suspense fallback={<div className="h-9 w-16 bg-muted/30 rounded animate-pulse" />}>
             <CreditsDisplay />
@@ -339,46 +384,67 @@ export function DashboardContent() {
         <div className="flex-1 flex flex-col relative z-[1]">
           {viewMode === 'super-worker' && (
             <>
-              {/* Centered content: Greeting + Subtitle + Modes
-                  - Mobile: shifted up with pb-28 to account for chat input and feel more balanced
-                  - Desktop: true center with no offset */}
-              <div className="absolute inset-0 flex items-center justify-center px-4 pb-28 sm:pb-0 pointer-events-none">
-                <div className="w-full max-w-3xl mx-auto flex flex-col items-center text-center pointer-events-auto">
-                  {/* Greeting */}
-                  <div className="animate-in fade-in-0 slide-in-from-bottom-4 duration-500 fill-mode-both">
-                    <DynamicGreeting className="text-2xl sm:text-3xl md:text-4xl font-medium text-foreground tracking-tight" />
-                  </div>
-                  
-                  {/* Subtitle */}
-                  <p className="mt-2 sm:mt-3 text-sm sm:text-base text-muted-foreground/70 animate-in fade-in-0 slide-in-from-bottom-4 duration-500 delay-75 fill-mode-both">
-                    {t('modeSubtitle')}
-                  </p>
-                  
-                  {/* Modes Panel - always render regardless of agent API state */}
-                  <div className="mt-6 sm:mt-8 w-full animate-in fade-in-0 slide-in-from-bottom-4 duration-500 delay-150 fill-mode-both">
-                    <Suspense fallback={<div className="h-12 bg-muted/10 rounded-lg animate-pulse" />}>
-                      <RecoderModesPanel
-                        selectedMode={selectedMode}
-                        onModeSelect={setSelectedMode}
-                        onSelectPrompt={setInputValue}
-                        isMobile={isMobile}
-                        selectedCharts={selectedCharts}
-                        onChartsChange={setSelectedCharts}
-                        selectedOutputFormat={selectedOutputFormat}
-                        onOutputFormatChange={setSelectedOutputFormat}
-                        selectedTemplate={selectedTemplate}
-                        onTemplateChange={setSelectedTemplate}
-                        isFreeTier={isFreeTier || false}
-                        onUpgradeClick={() => pricingModalStore.openPricingModal()}
-                      />
-                    </Suspense>
+              {/* Scrollable dashboard content with stats, actions, activity, greeting, and chat */}
+              <div className="absolute inset-0 overflow-y-auto pt-12 pb-36 sm:pb-28 px-3 sm:px-4">
+                <div className="w-full max-w-3xl mx-auto flex flex-col gap-6">
+                  {/* Dynamic widgets */}
+                  {enabledWidgets.map((widget, index) => {
+                    const WidgetComponent = widgetRegistry[widget.type];
+                    if (!WidgetComponent) return null;
+                    const delayMs = index * 50;
+                    return (
+                      <div
+                        key={widget.id}
+                        className="animate-in fade-in-0 slide-in-from-bottom-4 duration-500 fill-mode-both"
+                        style={{ animationDelay: `${delayMs}ms` }}
+                      >
+                        <Suspense fallback={<div className="h-20 rounded-lg border bg-card animate-pulse" />}>
+                          <WidgetComponent />
+                        </Suspense>
+                      </div>
+                    );
+                  })}
+
+                  {/* Custom Charts */}
+                  <Suspense fallback={<div className="h-20 rounded-lg border bg-card animate-pulse" />}>
+                    <CustomChartsSection />
+                  </Suspense>
+
+                  {/* Greeting + Modes */}
+                  <div className="flex flex-col items-center text-center">
+                    <div className="animate-in fade-in-0 slide-in-from-bottom-4 duration-500 delay-[250ms] fill-mode-both">
+                      <DynamicGreeting className="text-2xl sm:text-3xl md:text-4xl font-medium text-foreground tracking-tight" />
+                    </div>
+
+                    <p className="mt-2 sm:mt-3 text-sm sm:text-base text-muted-foreground/70 animate-in fade-in-0 slide-in-from-bottom-4 duration-500 delay-[275ms] fill-mode-both">
+                      {t('modeSubtitle')}
+                    </p>
+
+                    <div className="mt-6 sm:mt-8 w-full animate-in fade-in-0 slide-in-from-bottom-4 duration-500 delay-300 fill-mode-both">
+                      <Suspense fallback={<div className="h-12 bg-muted/10 rounded-lg animate-pulse" />}>
+                        <RecoderModesPanel
+                          selectedMode={selectedMode}
+                          onModeSelect={setSelectedMode}
+                          onSelectPrompt={setInputValue}
+                          isMobile={isMobile}
+                          selectedCharts={selectedCharts}
+                          onChartsChange={setSelectedCharts}
+                          selectedOutputFormat={selectedOutputFormat}
+                          onOutputFormatChange={setSelectedOutputFormat}
+                          selectedTemplate={selectedTemplate}
+                          onTemplateChange={setSelectedTemplate}
+                          isFreeTier={isFreeTier || false}
+                          onUpgradeClick={() => pricingModalStore.openPricingModal()}
+                        />
+                      </Suspense>
+                    </div>
                   </div>
                 </div>
               </div>
 
               {/* Chat Input - fixed at bottom
                   - Mobile: safe area padding for iOS home indicator */}
-              <div className="absolute bottom-0 left-0 right-0 px-3 sm:px-4 pb-3 sm:pb-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:pb-4 animate-in fade-in-0 slide-in-from-bottom-4 duration-500 delay-100 fill-mode-both">
+              <div className="absolute bottom-0 left-0 right-0 px-3 sm:px-4 pb-3 sm:pb-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:pb-4 animate-in fade-in-0 slide-in-from-bottom-4 duration-500 delay-100 fill-mode-both z-10">
                 <div className="w-full max-w-3xl mx-auto">
                   <ChatInput
                     ref={chatInputRef}
@@ -407,17 +473,15 @@ export function DashboardContent() {
           {(viewMode === 'worker-templates') && (
             <div className="flex-1 flex items-center justify-center">
               <div className="w-full animate-in fade-in-0 duration-300">
-                {(isStagingMode() || isLocalMode()) && (
-                  <div className="w-full px-4 pb-8">
-                    <div className="max-w-5xl mx-auto">
-                      <Suspense fallback={<div className="h-64 bg-muted/10 rounded-lg animate-pulse" />}>
-                        <CustomAgentsSection
-                          onAgentSelect={() => {}}
-                        />
-                      </Suspense>
-                    </div>
+                <div className="w-full px-4 pb-8">
+                  <div className="max-w-5xl mx-auto">
+                    <Suspense fallback={<div className="h-64 bg-muted/10 rounded-lg animate-pulse" />}>
+                      <CustomAgentsSection
+                        onAgentSelect={() => {}}
+                      />
+                    </Suspense>
                   </div>
-                )}
+                </div>
               </div>
             </div>
           )}

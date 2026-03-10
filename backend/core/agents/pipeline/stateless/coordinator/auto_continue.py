@@ -40,6 +40,7 @@ class AutoContinueChecker:
         if isinstance(field, str):
             try:
                 return json.loads(field)
-            except:
+            except Exception:
+                logger.warning("Failed to parse JSON field in auto-continue checker, returning empty dict")
                 return {}
         return field

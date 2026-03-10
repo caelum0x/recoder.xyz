@@ -144,7 +144,7 @@ export async function POST(request: NextRequest) {
       })
     });
 
-  } catch (error: any) {
+  } catch (error) {
     logger.error('Email signup error:', { error: String(error), route: 'auth/signup-email' });
     return NextResponse.json(
       { success: false, error: 'Failed to create account. Please try again.' },

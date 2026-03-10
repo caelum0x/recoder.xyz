@@ -91,7 +91,7 @@ export function CancelSubscriptionButton({
 							<DialogTitle className="font-sans text-[20px] font-medium tracking-tight text-primary-400">
 								Cancellation Scheduled
 							</DialogTitle>
-							<DialogDescription className="font-geist mt-2 text-[14px] text-white-50">
+							<DialogDescription className="font-sans mt-2 text-[14px] text-white-50">
 								{successData.willCancelAt
 									? `Your subscription will be cancelled on ${formatTimestamp.toLongDate(successData.willCancelAt.getTime())}. The page will refresh shortly.`
 									: "Your subscription cancellation has been scheduled. The page will refresh shortly."}
@@ -111,7 +111,7 @@ export function CancelSubscriptionButton({
 									<span className="sr-only">Close</span>
 								</DialogClose>
 							</div>
-							<DialogDescription className="font-geist mt-2 text-[14px] text-error-900/50">
+							<DialogDescription className="font-sans mt-2 text-[14px] text-error-900/50">
 								Are you sure you want to cancel your subscription? Your team
 								will be downgraded to the Free plan at the end of your current
 								billing period.
@@ -122,7 +122,7 @@ export function CancelSubscriptionButton({
 								variant="destructive"
 								className="mt-2 border-error-900/20 bg-error-900/5"
 							>
-								<AlertDescription className="font-geist text-[12px] font-medium leading-[20.4px] tracking-normal text-error-900/50">
+								<AlertDescription className="font-sans text-[12px] font-medium leading-[20.4px] tracking-normal text-error-900/50">
 									{error}
 								</AlertDescription>
 							</Alert>

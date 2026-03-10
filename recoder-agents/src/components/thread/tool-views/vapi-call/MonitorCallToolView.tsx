@@ -86,12 +86,7 @@ export function MonitorCallToolView({
   const name = toolCall?.function_name?.replace(/_/g, '-').toLowerCase() || 'monitor-call';
   const toolTitle = getToolTitle(name);
   
-  console.log('[MonitorCallToolView] Component rendered with:', {
-    toolResult,
-    extractedData: initialData,
-    callId: initialData?.call_id,
-    initialTranscript: initialData?.transcript
-  });
+  
 
   // Initialize state from initialData - hook must be unconditional
   React.useEffect(() => {
@@ -138,7 +133,7 @@ export function MonitorCallToolView({
 
         // If no data found, return initial data to keep showing something
         if (!data) {
-          console.log('[MonitorCallToolView] No data found, using initial data');
+          
           return {
             call_id: initialData.call_id,
             status: initialData.status || 'queued',
@@ -148,10 +143,7 @@ export function MonitorCallToolView({
           };
         }
 
-        console.log('[MonitorCallToolView] Fetched call data:', {
-          status: data.status,
-          transcriptLength: Array.isArray(data.transcript) ? data.transcript.length : 0
-        });
+        
         return data;
       } catch (error) {
         console.error('[MonitorCallToolView] Error fetching call data:', error);

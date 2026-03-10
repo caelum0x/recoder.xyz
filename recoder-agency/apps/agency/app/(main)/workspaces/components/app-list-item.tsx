@@ -118,7 +118,7 @@ export function AppListItem({
 				<div className="flex flex-col gap-y-1 min-w-0 max-w-[200px]">
 					<p className="text-[14px] font-sans text-inverse truncate">{title}</p>
 					{subtitle ? (
-						<p className="text-[12px] font-geist text-text/60">{subtitle}</p>
+						<p className="text-[12px] font-sans text-text/60">{subtitle}</p>
 					) : null}
 				</div>
 				<div className="flex items-center gap-1.5 flex-shrink-0">
@@ -131,7 +131,7 @@ export function AppListItem({
 							<div className="flex flex-col gap-1 min-w-0 flex-1">
 								{githubRepositories.slice(0, 1).map((repo) => (
 									<div key={repo} className="flex items-center gap-1">
-										<div className="font-geist text-[11px] text-text/60 truncate">
+										<div className="font-sans text-[11px] text-text/60 truncate">
 											{repo}
 										</div>
 										{githubRepositories.length > 1 && (
@@ -148,7 +148,7 @@ export function AppListItem({
 											>
 												<button
 													type="button"
-													className="relative z-50 font-geist text-[11px] text-text/60 flex-shrink-0 px-1.5 py-0.5 rounded-lg border border-border-muted"
+													className="relative z-50 font-sans text-[11px] text-text/60 flex-shrink-0 px-1.5 py-0.5 rounded-lg border border-border-muted"
 													onClick={(e) => {
 														e.stopPropagation();
 														e.preventDefault();
@@ -169,7 +169,7 @@ export function AppListItem({
 							<div className="flex flex-col gap-1 min-w-0 flex-1">
 								{documentVectorStoreFiles.slice(0, 1).map((fileName) => (
 									<div key={fileName} className="flex items-center gap-1">
-										<div className="font-geist text-[11px] text-text/60 truncate">
+										<div className="font-sans text-[11px] text-text/60 truncate">
 											{fileName}
 										</div>
 										{documentVectorStoreFiles.length > 1 && (
@@ -188,7 +188,7 @@ export function AppListItem({
 											>
 												<button
 													type="button"
-													className="relative z-50 font-geist text-[11px] text-text/60 flex-shrink-0 px-1.5 py-0.5 rounded-lg border border-border-muted"
+													className="relative z-50 font-sans text-[11px] text-text/60 flex-shrink-0 px-1.5 py-0.5 rounded-lg border border-border-muted"
 													onClick={(e) => {
 														e.stopPropagation();
 														e.preventDefault();
@@ -206,7 +206,7 @@ export function AppListItem({
 				</div>
 				<div className="min-w-0">
 					{creator ? (
-						<p className="text-[12px] font-geist text-text/60 truncate">
+						<p className="text-[12px] font-sans text-text/60 truncate">
 							{creator}
 						</p>
 					) : null}
@@ -215,7 +215,7 @@ export function AppListItem({
 			<div className="flex items-center gap-3 justify-end min-w-0">
 				<div className="flex items-center gap-1">
 					<Zap className="w-3 h-3 text-text/60 flex-shrink-0" />
-					<span className="text-[12px] font-geist text-text/60">
+					<span className="text-[12px] font-sans text-text/60">
 						{formatExecutionCount(executionCount)}
 					</span>
 				</div>
@@ -284,7 +284,7 @@ export function AppListItem({
 											<span className="sr-only">Close</span>
 										</DialogClose>
 									</div>
-									<DialogDescription className="font-geist mt-2 text-[14px] text-text-muted">
+									<DialogDescription className="font-sans mt-2 text-[14px] text-text-muted">
 										This will create a new workspace with the same settings as
 										the original.
 									</DialogDescription>
@@ -323,7 +323,7 @@ export function AppListItem({
 											<span className="sr-only">Close</span>
 										</DialogClose>
 									</div>
-									<DialogDescription className="font-geist mt-2 text-[14px] text-error-900/50">
+									<DialogDescription className="font-sans mt-2 text-[14px] text-error-900/50">
 										{`This action cannot be undone. This will permanently delete the workspace "${
 											agentName || "Untitled"
 										}".`}

@@ -155,8 +155,8 @@ export default function KPIDashboard() {
         throw new Error(json.error || `HTTP ${res.status}`);
       }
       setData(json as KPIData);
-    } catch (err: any) {
-      setError(err.message ?? 'Failed to load KPI data');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load KPI data');
       setData(null);
     } finally {
       setLoading(false);

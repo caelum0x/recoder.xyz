@@ -36,7 +36,7 @@ export async function GET(req: NextRequest) {
       },
       sessionId: result.sessionId,
     });
-  } catch (error: any) {
+  } catch (error) {
     logger.error('Token validation error:', { error: String(error), route: 'auth/cli/validate' });
     return NextResponse.json(
       { valid: false, error: 'Invalid token' },

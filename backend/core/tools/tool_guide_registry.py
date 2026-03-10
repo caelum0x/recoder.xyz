@@ -173,9 +173,12 @@ class ToolGuideRegistry:
         return tool_name in self._guides
     
     def get_tool_info(self, tool_name: str) -> Optional[Tuple[str, str]]:
+        from core.utils.logger import logger
+
         entry = self._guides.get(tool_name)
         if entry:
             return (entry.display_name, entry.description)
+        logger.warning(f"[ToolGuideRegistry] get_tool_info: tool '{tool_name}' not found in registry")
         return None
 
 _registry: Optional[ToolGuideRegistry] = None

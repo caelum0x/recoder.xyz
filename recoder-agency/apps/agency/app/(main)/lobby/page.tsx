@@ -1,10 +1,13 @@
 import { SearchInput } from "@recoder-internal/ui/search-input";
-import { desc, eq } from "drizzle-orm";
-import { db, workspaces } from "@/db";
-import { fetchCurrentTeam, fetchUserTeams } from "@/services/teams";
-import { fetchCurrentUser } from "@/services/accounts";
-import { fetchFlowTriggers } from "../stage/(depreacted)/services";
+import { fetchCurrentTeam } from "@/services/teams";
 import { getAccountInfo } from "../settings/account/actions";
+import {
+	getFeaturedApps,
+	getFeaturedItemIds,
+	getFeaturedWorkflows,
+	getRecentApps,
+	getRecentWorkflows,
+} from "./actions";
 import { TextBanner } from "./components/text-banner";
 import { LobbyClient } from "./lobby-client";
 
@@ -12,51 +15,50 @@ export default async function LobbyPage() {
 	const accountInfo = await getAccountInfo();
 	const username = accountInfo.displayName || accountInfo.email || "there";
 
-	// Fetch real data for the lobby
 	const currentTeam = await fetchCurrentTeam();
-	const teams = await fetchUserTeams();
-	const user = await fetchCurrentUser();
+	const isAdmin = currentTeam.role === "admin";
 
-	// Fetch recent workspaces (workflows) for current team
-	const recentWorkspacesData = await db
-		.select({
-			id: workspaces.id,
-			name: workspaces.name,
-			updatedAt: workspaces.updatedAt,
-		})
-		.from(workspaces)
-		.where(eq(workspaces.teamDbId, currentTeam.dbId))
-		.orderBy(desc(workspaces.updatedAt))
-		.limit(10);
+	// Fetch recent and featured apps/workflows from DB
+	const [
+		recentAppsData,
+		recentWorkflowsData,
+		featuredAppsData,
+		featuredWorkflowsData,
+		featuredIdMap,
+	] = await Promise.all([
+		getRecentApps(currentTeam.dbId),
+		getRecentWorkflows(currentTeam.dbId),
+		getFeaturedApps(currentTeam.dbId),
+		getFeaturedWorkflows(currentTeam.dbId),
+		isAdmin ? getFeaturedItemIds(currentTeam.dbId) : Promise.resolve(new Map()),
+	]);
 
-	const recentWorkflows = recentWorkspacesData.map((ws) => ({
+	const recentApps = recentAppsData.map((app) => ({
+		title: app.id,
+		appsCount: 1,
+	}));
+
+	const recentWorkflows = recentWorkflowsData.map((ws) => ({
 		id: ws.id,
 		name: ws.name ?? "Untitled",
 		updatedAt: ws.updatedAt,
 	}));
 
-	// Fetch executable apps (flow triggers) for current team
-	let recentApps: { title: string; appsCount: number }[] = [];
-	try {
-		const executableFlowTriggers = await fetchFlowTriggers(teams, "all", user);
-		const teamFlowTriggers = executableFlowTriggers.filter(
-			(trigger) => trigger.teamId === currentTeam.id,
-		);
+	const featuredApps = featuredAppsData.map((app) => ({
+		title: app.id,
+		appsCount: 1,
+	}));
 
-		// Group by workspace name and count
-		const appsByName = new Map<string, number>();
-		for (const trigger of teamFlowTriggers) {
-			const name = trigger.workspaceName;
-			appsByName.set(name, (appsByName.get(name) || 0) + 1);
-		}
+	const featuredWorkflows = featuredWorkflowsData.map((ws) => ({
+		id: ws.id,
+		name: ws.name ?? "Untitled",
+		updatedAt: ws.updatedAt,
+	}));
 
-		recentApps = Array.from(appsByName.entries()).map(([title, appsCount]) => ({
-			title,
-			appsCount,
-		}));
-	} catch {
-		// If flow trigger fetching fails, show empty state
-		recentApps = [];
+	// Convert Map to a plain object for serialization
+	const featuredIds: Record<string, boolean> = {};
+	for (const [key, val] of featuredIdMap) {
+		featuredIds[key] = val;
 	}
 
 	return (
@@ -83,6 +85,11 @@ export default async function LobbyPage() {
 				username={username}
 				recentApps={recentApps}
 				recentWorkflows={recentWorkflows}
+				featuredApps={featuredApps}
+				featuredWorkflows={featuredWorkflows}
+				isAdmin={isAdmin}
+				teamDbId={currentTeam.dbId}
+				featuredIds={featuredIds}
 			/>
 		</div>
 	);

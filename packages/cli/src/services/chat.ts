@@ -54,7 +54,7 @@ class ChatManagementService {
         success: true,
         session,
       };
-    } catch (error: any) {
+    } catch (error) {
       Logger.error(`Chat session creation failed: ${error.response?.data?.message || error.message}`);
       return {
         success: false,
@@ -75,7 +75,7 @@ class ChatManagementService {
         success: true,
         session: response.data.session,
       };
-    } catch (error: any) {
+    } catch (error) {
       Logger.error(`Failed to get chat session: ${error.response?.data?.message || error.message}`);
       return {
         success: false,
@@ -96,7 +96,7 @@ class ChatManagementService {
         success: true,
         sessions: response.data.sessions,
       };
-    } catch (error: any) {
+    } catch (error) {
       Logger.error(`Failed to list chat sessions: ${error.response?.data?.message || error.message}`);
       return {
         success: false,
@@ -122,7 +122,7 @@ class ChatManagementService {
         message: response.data.response,
         usage: response.data.usage,
       };
-    } catch (error: any) {
+    } catch (error) {
       Logger.error(`Failed to send message: ${error.response?.data?.message || error.message}`);
       return {
         success: false,
@@ -165,7 +165,7 @@ class ChatManagementService {
         response.data.on('end', resolve);
         response.data.on('error', reject);
       });
-    } catch (error: any) {
+    } catch (error) {
       Logger.error(`Failed to stream message: ${error.response?.data?.message || error.message}`);
       throw error;
     }
@@ -182,7 +182,7 @@ class ChatManagementService {
       return {
         success: true,
       };
-    } catch (error: any) {
+    } catch (error) {
       Logger.error(`Failed to clear session: ${error.response?.data?.message || error.message}`);
       return {
         success: false,
@@ -204,7 +204,7 @@ class ChatManagementService {
       return {
         success: true,
       };
-    } catch (error: any) {
+    } catch (error) {
       Logger.error(`Failed to delete session: ${error.response?.data?.message || error.message}`);
       return {
         success: false,
@@ -227,7 +227,7 @@ class ChatManagementService {
         success: true,
         deletedCount: response.data.deletedCount,
       };
-    } catch (error: any) {
+    } catch (error) {
       Logger.error(`Failed to clear all sessions: ${error.response?.data?.message || error.message}`);
       return {
         success: false,
@@ -249,7 +249,7 @@ class ChatManagementService {
         success: true,
         content: response.data.content,
       };
-    } catch (error: any) {
+    } catch (error) {
       Logger.error(`Failed to export session: ${error.response?.data?.message || error.message}`);
       return {
         success: false,
@@ -270,7 +270,7 @@ class ChatManagementService {
         success: true,
         usage: response.data.usage,
       };
-    } catch (error: any) {
+    } catch (error) {
       Logger.error(`Failed to get session usage: ${error.response?.data?.message || error.message}`);
       return {
         success: false,
@@ -299,7 +299,7 @@ class ChatManagementService {
         answer: response.data.answer,
         usage: response.data.usage,
       };
-    } catch (error: any) {
+    } catch (error) {
       Logger.error(`Quick ask failed: ${error.response?.data?.message || error.message}`);
       return {
         success: false,
@@ -327,7 +327,7 @@ class ChatManagementService {
         success: true,
         review: response.data.review,
       };
-    } catch (error: any) {
+    } catch (error) {
       Logger.error(`Code review failed: ${error.response?.data?.message || error.message}`);
       return {
         success: false,
@@ -356,7 +356,7 @@ class ChatManagementService {
         explanation: response.data.explanation,
         keypoints: response.data.keypoints,
       };
-    } catch (error: any) {
+    } catch (error) {
       Logger.error(`Code explanation failed: ${error.response?.data?.message || error.message}`);
       return {
         success: false,
@@ -384,7 +384,7 @@ class ChatManagementService {
         success: true,
         debug: response.data.debug,
       };
-    } catch (error: any) {
+    } catch (error) {
       Logger.error(`Debug assistance failed: ${error.response?.data?.message || error.message}`);
       return {
         success: false,
@@ -405,7 +405,7 @@ class ChatManagementService {
         success: true,
         agents: response.data.agents,
       };
-    } catch (error: any) {
+    } catch (error) {
       Logger.error(`Failed to get available agents: ${error.response?.data?.message || error.message}`);
       return {
         success: false,

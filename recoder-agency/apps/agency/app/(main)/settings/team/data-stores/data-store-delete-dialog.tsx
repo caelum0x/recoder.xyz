@@ -61,7 +61,7 @@ export function DataStoreDeleteDialog({
 							<span className="sr-only">Close</span>
 						</DialogClose>
 					</div>
-					<DialogDescription className="font-geist mt-2 text-[14px] text-error-900/50">
+					<DialogDescription className="font-sans mt-2 text-[14px] text-error-900/50">
 						{`This action cannot be undone. This will permanently delete the data store "${dataStore.name}".`}
 					</DialogDescription>
 				</DialogHeader>

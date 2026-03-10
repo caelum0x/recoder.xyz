@@ -1,11 +1,15 @@
 /**
  * MSW (Mock Service Worker) stub
- * This is a stub file to satisfy imports in test files
+ *
+ * This file provides no-op stubs for the MSW server interface.
+ * It exists solely to satisfy imports in test files (e.g. clearcut-logger.test.ts)
+ * that reference MSW without the full msw package being installed.
+ * It is NOT used in any production code path.
  */
 
-// Mock server object for tests
+// No-op server matching the subset of the MSW API consumed by tests
 export const server = {
-  listen: (config?: any) => {},
-  resetHandlers: (...handlers: any[]) => {},
+  listen: (_config?: unknown) => {},
+  resetHandlers: (..._handlers: unknown[]) => {},
   close: () => {},
 };

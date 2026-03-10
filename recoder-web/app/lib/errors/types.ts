@@ -342,7 +342,7 @@ export function getDefaultRecoveryActions(error: AppError): ErrorRecoveryAction[
       label: 'Log In',
       icon: 'i-ph:sign-in',
       action: () => {
-        const loginUrl = `${window.location.origin.replace('app.', '')}/login?redirect=${encodeURIComponent(window.location.href)}`;
+        const loginUrl = `${window.location.origin.replace('app.', '')}/auth/signin?redirect=${encodeURIComponent(window.location.href)}`;
         window.location.href = loginUrl;
       },
       primary: true,

@@ -1,8 +1,19 @@
 "use client";
 
-import { Blocks, SparklesIcon } from "lucide-react";
+import {
+	Blocks,
+	BookOpen,
+	Compass,
+	Lightbulb,
+	Play,
+	SparklesIcon,
+	StarIcon,
+	Workflow,
+} from "lucide-react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useState, useTransition } from "react";
+import { toggleFeaturedItem } from "./actions";
 import { ActionCard } from "./components/action-card";
 import { AppCard } from "./components/app-card";
 import { SubTabs } from "./components/sub-tabs";
@@ -15,24 +26,34 @@ interface LobbyClientProps {
 	username: string;
 	recentApps?: { title: string; appsCount: number }[];
 	recentWorkflows?: { id: string; name: string; updatedAt: Date }[];
+	featuredApps?: { title: string; appsCount: number }[];
+	featuredWorkflows?: { id: string; name: string; updatedAt: Date }[];
+	isAdmin?: boolean;
+	teamDbId?: number;
+	featuredIds?: Record<string, boolean>;
 }
 
 export function LobbyClient(props: LobbyClientProps) {
-	const { username } = props;
+	const { username, isAdmin = false, teamDbId } = props;
 	const [activeTab, setActiveTab] = useState<"apps" | "workflow">("apps");
 	const [activeAppTab, setActiveAppTab] = useState<string>("Recent");
 	const [activeWorkflowTab, setActiveWorkflowTab] = useState<string>("Recent");
 	const router = useRouter();
 	const [isCreatingWorkspace, setIsCreatingWorkspace] = useState(false);
+	const [isTogglingFeatured, startFeaturedTransition] = useTransition();
 
 	const hasRecentApps = (props.recentApps ?? []).length > 0;
 	const hasRecentWorkflows = (props.recentWorkflows ?? []).length > 0;
 	const recentApps = props.recentApps ?? [];
 	const recentWorkflows = props.recentWorkflows ?? [];
 
-	// Featured items are not yet implemented; show empty arrays
-	const featuredApps: typeof recentApps = [];
-	const featuredWorkflows: typeof recentWorkflows = [];
+	const featuredApps = props.featuredApps ?? [];
+	const featuredWorkflows = props.featuredWorkflows ?? [];
+	const hasFeaturedApps = featuredApps.length > 0;
+	const hasFeaturedWorkflows = featuredWorkflows.length > 0;
+	const [localFeaturedIds, setLocalFeaturedIds] = useState<
+		Record<string, boolean>
+	>(props.featuredIds ?? {});
 
 	const handleCreateNewAgent = async () => {
 		if (isCreatingWorkspace) return;
@@ -57,6 +78,47 @@ export function LobbyClient(props: LobbyClientProps) {
 
 	const handleAskReview = () => {
 		router.push("/stage");
+	};
+
+	const handleToggleFeatured = (
+		itemType: "app" | "workflow",
+		itemId: string,
+	) => {
+		if (!teamDbId) return;
+		const key = `${itemType}:${itemId}`;
+		const wasFeatured = !!localFeaturedIds[key];
+
+		setLocalFeaturedIds((prev) => {
+			const next = { ...prev };
+			if (wasFeatured) {
+				delete next[key];
+			} else {
+				next[key] = true;
+			}
+			return next;
+		});
+
+		startFeaturedTransition(async () => {
+			try {
+				await toggleFeaturedItem(teamDbId, itemType, itemId);
+			} catch (error) {
+				console.error("Failed to toggle featured:", error);
+				// Revert optimistic update
+				setLocalFeaturedIds((prev) => {
+					const next = { ...prev };
+					if (wasFeatured) {
+						next[key] = true;
+					} else {
+						delete next[key];
+					}
+					return next;
+				});
+			}
+		});
+	};
+
+	const isItemFeatured = (itemType: "app" | "workflow", itemId: string) => {
+		return !!localFeaturedIds[`${itemType}:${itemId}`];
 	};
 
 	return (
@@ -91,6 +153,58 @@ export function LobbyClient(props: LobbyClientProps) {
 					},
 				]}
 			/>
+
+			{/* Featured Section */}
+			{(hasFeaturedApps || hasFeaturedWorkflows) && (
+				<section className="relative pt-4">
+					<div className="flex items-center gap-2 mb-4">
+						<StarIcon className="size-5 text-amber-400 fill-amber-400" />
+						<h2 className="text-lg font-semibold text-text">Featured</h2>
+					</div>
+					{hasFeaturedApps && (
+						<div className="mb-4">
+							<h3 className="text-sm font-medium text-text-muted mb-3">
+								Apps
+							</h3>
+							<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+								{featuredApps.map((item, index) => (
+									<div key={item.title} className="relative">
+										<div className="absolute -top-2 -right-2 z-20">
+											<StarIcon className="size-4 text-amber-400 fill-amber-400" />
+										</div>
+										<AppCard
+											title={item.title}
+											index={index}
+										/>
+									</div>
+								))}
+							</div>
+						</div>
+					)}
+					{hasFeaturedWorkflows && (
+						<div>
+							<h3 className="text-sm font-medium text-text-muted mb-3">
+								Workflows
+							</h3>
+							<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+								{featuredWorkflows.map((workflow) => (
+									<div key={workflow.id} className="relative">
+										<div className="absolute -top-2 -right-2 z-20">
+											<StarIcon className="size-4 text-amber-400 fill-amber-400" />
+										</div>
+										<WorkflowCard
+											id={workflow.id}
+											name={workflow.name}
+											updatedAt={workflow.updatedAt}
+											isFeatured
+										/>
+									</div>
+								))}
+							</div>
+						</div>
+					)}
+				</section>
+			)}
 
 			{/* Where to start today? */}
 			<section className="relative pt-6">
@@ -169,28 +283,102 @@ export function LobbyClient(props: LobbyClientProps) {
 								? recentApps
 								: featuredApps
 							).map((item, index) => (
-								<AppCard key={item.title} title={item.title} index={index} />
+								<div key={item.title} className="relative group/feature">
+									<AppCard title={item.title} index={index} />
+									{isAdmin && (
+										<button
+											type="button"
+											onClick={() =>
+												handleToggleFeatured("app", item.title)
+											}
+											disabled={isTogglingFeatured}
+											className="absolute top-1 right-1 z-30 p-1.5 rounded-full bg-background/80 border border-border opacity-0 group-hover/feature:opacity-100 transition-opacity hover:bg-bg-hover disabled:opacity-50"
+											aria-label={
+												isItemFeatured("app", item.title)
+													? "Remove from featured"
+													: "Feature this app"
+											}
+										>
+											<StarIcon
+												className={`size-3.5 transition-colors ${
+													isItemFeatured("app", item.title)
+														? "text-amber-400 fill-amber-400"
+														: "text-text-muted"
+												}`}
+											/>
+										</button>
+									)}
+								</div>
 							))}
 						</div>
 
 						{/* Empty state */}
 						{!hasRecentApps && featuredApps.length === 0 && (
-							<div className="flex flex-col items-center justify-center py-16 text-center">
-								<div className="w-14 h-14 rounded-2xl bg-primary-100/10 flex items-center justify-center mb-4">
-									<Blocks className="w-7 h-7 text-primary-100/60" />
+							<div className="py-10">
+								{/* Welcome message */}
+								<div className="text-center mb-8">
+									<div className="w-14 h-14 rounded-2xl bg-primary-100/10 flex items-center justify-center mb-4 mx-auto">
+										<Lightbulb className="w-7 h-7 text-primary-100/60" />
+									</div>
+									<h3 className="text-xl font-semibold text-inverse mb-2">
+										Your apps will live here
+									</h3>
+									<p className="text-sm text-text/60 max-w-md mx-auto">
+										Apps are published workflows that anyone on your team can
+										run. Create a workflow first, then publish it as an app.
+									</p>
 								</div>
-								<h3 className="text-lg font-medium text-inverse mb-2">No apps yet</h3>
-								<p className="text-sm text-muted-foreground max-w-sm mb-4">
-									Create your first agent to get started. Apps you build will appear here.
-								</p>
-								<button
-									type="button"
-									onClick={handleCreateNewAgent}
-									disabled={isCreatingWorkspace}
-									className="px-4 py-2 rounded-lg bg-primary-100 text-inverse text-sm font-medium hover:bg-primary-100/90 transition-colors disabled:opacity-50"
-								>
-									{isCreatingWorkspace ? "Creating..." : "Create your first agent"}
-								</button>
+
+								{/* Quick-start cards */}
+								<div className="grid grid-cols-1 sm:grid-cols-3 gap-4 max-w-3xl mx-auto">
+									<button
+										type="button"
+										onClick={handleCreateNewAgent}
+										disabled={isCreatingWorkspace}
+										className="group text-left p-5 rounded-xl bg-white/[0.02] border-[0.5px] border-border hover:border-primary-100/40 transition-all duration-200 disabled:opacity-50"
+									>
+										<div className="w-9 h-9 rounded-lg bg-primary-100/10 flex items-center justify-center mb-3 group-hover:bg-primary-100/20 transition-colors">
+											<Workflow className="w-5 h-5 text-primary-100" />
+										</div>
+										<h4 className="text-sm font-medium text-inverse mb-1">
+											Create a Workflow
+										</h4>
+										<p className="text-xs text-text/50">
+											Build a visual AI workflow from scratch with
+											drag-and-drop.
+										</p>
+									</button>
+
+									<Link
+										href="/stage/showcase"
+										className="group text-left p-5 rounded-xl bg-white/[0.02] border-[0.5px] border-border hover:border-primary-100/40 transition-all duration-200"
+									>
+										<div className="w-9 h-9 rounded-lg bg-amber-400/10 flex items-center justify-center mb-3 group-hover:bg-amber-400/20 transition-colors">
+											<Compass className="w-5 h-5 text-amber-400" />
+										</div>
+										<h4 className="text-sm font-medium text-inverse mb-1">
+											Browse Showcase
+										</h4>
+										<p className="text-xs text-text/50">
+											Explore published apps and templates from the community.
+										</p>
+									</Link>
+
+									<Link
+										href="/stage"
+										className="group text-left p-5 rounded-xl bg-white/[0.02] border-[0.5px] border-border hover:border-primary-100/40 transition-all duration-200"
+									>
+										<div className="w-9 h-9 rounded-lg bg-emerald-400/10 flex items-center justify-center mb-3 group-hover:bg-emerald-400/20 transition-colors">
+											<Play className="w-5 h-5 text-emerald-400" />
+										</div>
+										<h4 className="text-sm font-medium text-inverse mb-1">
+											Try an App
+										</h4>
+										<p className="text-xs text-text/50">
+											Run a pre-built app to see what Recoder Agency can do.
+										</p>
+									</Link>
+								</div>
 							</div>
 						)}
 					</>
@@ -216,35 +404,120 @@ export function LobbyClient(props: LobbyClientProps) {
 								const isFeatured =
 									!hasRecentWorkflows || activeWorkflowTab === "Featured";
 								return (
-									<WorkflowCard
+									<div
 										key={workflow.id}
-										id={workflow.id}
-										name={workflow.name}
-										updatedAt={workflow.updatedAt}
-										isFeatured={isFeatured}
-									/>
+										className="relative group/feature"
+									>
+										<WorkflowCard
+											id={workflow.id}
+											name={workflow.name}
+											updatedAt={workflow.updatedAt}
+											isFeatured={isFeatured}
+										/>
+										{isAdmin && (
+											<button
+												type="button"
+												onClick={() =>
+													handleToggleFeatured("workflow", workflow.id)
+												}
+												disabled={isTogglingFeatured}
+												className="absolute top-1 right-1 z-30 p-1.5 rounded-full bg-background/80 border border-border opacity-0 group-hover/feature:opacity-100 transition-opacity hover:bg-bg-hover disabled:opacity-50"
+												aria-label={
+													isItemFeatured("workflow", workflow.id)
+														? "Remove from featured"
+														: "Feature this workflow"
+												}
+											>
+												<StarIcon
+													className={`size-3.5 transition-colors ${
+														isItemFeatured("workflow", workflow.id)
+															? "text-amber-400 fill-amber-400"
+															: "text-text-muted"
+													}`}
+												/>
+											</button>
+										)}
+									</div>
 								);
 							})}
 						</div>
 
 						{/* Empty state */}
 						{!hasRecentWorkflows && featuredWorkflows.length === 0 && (
-							<div className="flex flex-col items-center justify-center py-16 text-center">
-								<div className="w-14 h-14 rounded-2xl bg-primary-100/10 flex items-center justify-center mb-4">
-									<SparklesIcon className="w-7 h-7 text-primary-100/60" />
+							<div className="py-10">
+								{/* Welcome message */}
+								<div className="text-center mb-8">
+									<div className="w-14 h-14 rounded-2xl bg-primary-100/10 flex items-center justify-center mb-4 mx-auto">
+										<SparklesIcon className="w-7 h-7 text-primary-100/60" />
+									</div>
+									<h3 className="text-xl font-semibold text-inverse mb-2">
+										Build your first workflow
+									</h3>
+									<p className="text-sm text-text/60 max-w-md mx-auto">
+										Workflows let you chain AI models, tools, and data sources
+										into automated pipelines. Start simple and expand from
+										there.
+									</p>
 								</div>
-								<h3 className="text-lg font-medium text-inverse mb-2">No workflows yet</h3>
-								<p className="text-sm text-muted-foreground max-w-sm mb-4">
-									Create a workflow to automate tasks. Your workflows will appear here.
-								</p>
-								<button
-									type="button"
-									onClick={handleCreateNewAgent}
-									disabled={isCreatingWorkspace}
-									className="px-4 py-2 rounded-lg bg-primary-100 text-inverse text-sm font-medium hover:bg-primary-100/90 transition-colors disabled:opacity-50"
-								>
-									{isCreatingWorkspace ? "Creating..." : "Create your first workflow"}
-								</button>
+
+								{/* Quick-start cards */}
+								<div className="grid grid-cols-1 sm:grid-cols-3 gap-4 max-w-3xl mx-auto mb-8">
+									<button
+										type="button"
+										onClick={handleCreateNewAgent}
+										disabled={isCreatingWorkspace}
+										className="group text-left p-5 rounded-xl bg-white/[0.02] border-[0.5px] border-border hover:border-primary-100/40 transition-all duration-200 disabled:opacity-50"
+									>
+										<div className="w-9 h-9 rounded-lg bg-primary-100/10 flex items-center justify-center mb-3 group-hover:bg-primary-100/20 transition-colors">
+											<Blocks className="w-5 h-5 text-primary-100" />
+										</div>
+										<h4 className="text-sm font-medium text-inverse mb-1">
+											Create a Workflow
+										</h4>
+										<p className="text-xs text-text/50">
+											Open the visual editor and start connecting nodes.
+										</p>
+									</button>
+
+									<Link
+										href="/stage/showcase"
+										className="group text-left p-5 rounded-xl bg-white/[0.02] border-[0.5px] border-border hover:border-primary-100/40 transition-all duration-200"
+									>
+										<div className="w-9 h-9 rounded-lg bg-amber-400/10 flex items-center justify-center mb-3 group-hover:bg-amber-400/20 transition-colors">
+											<Compass className="w-5 h-5 text-amber-400" />
+										</div>
+										<h4 className="text-sm font-medium text-inverse mb-1">
+											Browse Showcase
+										</h4>
+										<p className="text-xs text-text/50">
+											Find workflow templates and remix them for your needs.
+										</p>
+									</Link>
+
+									<Link
+										href="/stage"
+										className="group text-left p-5 rounded-xl bg-white/[0.02] border-[0.5px] border-border hover:border-primary-100/40 transition-all duration-200"
+									>
+										<div className="w-9 h-9 rounded-lg bg-emerald-400/10 flex items-center justify-center mb-3 group-hover:bg-emerald-400/20 transition-colors">
+											<BookOpen className="w-5 h-5 text-emerald-400" />
+										</div>
+										<h4 className="text-sm font-medium text-inverse mb-1">
+											Learn the Basics
+										</h4>
+										<p className="text-xs text-text/50">
+											See how workflows are built with a quick walkthrough.
+										</p>
+									</Link>
+								</div>
+
+								{/* How it works hint */}
+								<div className="max-w-xl mx-auto p-3 rounded-lg bg-white/[0.02] border-[0.5px] border-border text-center">
+									<p className="text-xs text-text/50">
+										Drag nodes onto the canvas, connect them with edges, and
+										hit Run. Workflows execute left to right, passing data
+										between each step.
+									</p>
+								</div>
 							</div>
 						)}
 					</>

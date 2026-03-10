@@ -114,7 +114,7 @@ export function AlertBanner({
           </button>
 
           <div 
-            className={`p-4 bg-muted/50 dark:bg-[#161618] ${statusUrl ? 'cursor-pointer hover:bg-muted dark:hover:bg-[#1a1a1c]' : ''} transition-colors`}
+            className={`p-4 bg-muted/50 dark:bg-zinc-900 ${statusUrl ? 'cursor-pointer hover:bg-muted dark:hover:bg-zinc-900' : ''} transition-colors`}
             onClick={statusUrl ? handleStatusClick : undefined}
           >
             <div className="flex items-start gap-3">

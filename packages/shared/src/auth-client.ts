@@ -56,7 +56,7 @@ export class AuthClient extends EventEmitter {
   private deviceInfo: DeviceInfo | null = null;
   private refreshPromise: Promise<boolean> | null = null;
 
-  constructor(baseURL: string = 'http://localhost:3001') {
+  constructor(baseURL: string = 'http://localhost:3100') {
     super();
     this.baseURL = baseURL;
     
@@ -141,7 +141,7 @@ export class AuthClient extends EventEmitter {
 
       await this.handleAuthSuccess(response.data);
       return response.data;
-    } catch (error: any) {
+    } catch (error) {
       throw this.handleAuthError(error);
     }
   }
@@ -155,7 +155,7 @@ export class AuthClient extends EventEmitter {
 
       await this.handleAuthSuccess(response.data);
       return response.data;
-    } catch (error: any) {
+    } catch (error) {
       throw this.handleAuthError(error);
     }
   }
@@ -169,7 +169,7 @@ export class AuthClient extends EventEmitter {
 
       await this.handleAuthSuccess(response.data);
       return response.data;
-    } catch (error: any) {
+    } catch (error) {
       throw this.handleAuthError(error);
     }
   }
@@ -183,7 +183,7 @@ export class AuthClient extends EventEmitter {
 
       await this.handleAuthSuccess(response.data);
       return response.data;
-    } catch (error: any) {
+    } catch (error) {
       throw this.handleAuthError(error);
     }
   }
@@ -252,7 +252,7 @@ export class AuthClient extends EventEmitter {
       this.saveToStorage();
       this.emit('deviceRegistered', fullDeviceInfo);
       return fullDeviceInfo;
-    } catch (error: any) {
+    } catch (error) {
       throw this.handleAuthError(error);
     }
   }
@@ -261,7 +261,7 @@ export class AuthClient extends EventEmitter {
     try {
       const response: AxiosResponse<{ data: DeviceInfo[] }> = await this.api.get('/devices');
       return response.data.data;
-    } catch (error: any) {
+    } catch (error) {
       throw this.handleAuthError(error);
     }
   }
@@ -282,7 +282,7 @@ export class AuthClient extends EventEmitter {
     try {
       const response: AxiosResponse<{ data: OAuthAccount[] }> = await this.api.get('/oauth/accounts');
       return response.data.data;
-    } catch (error: any) {
+    } catch (error) {
       throw this.handleAuthError(error);
     }
   }
@@ -291,7 +291,7 @@ export class AuthClient extends EventEmitter {
     try {
       await this.api.delete(`/oauth/disconnect/${provider}`);
       this.emit('oauthDisconnected', provider);
-    } catch (error: any) {
+    } catch (error) {
       throw this.handleAuthError(error);
     }
   }
@@ -303,7 +303,7 @@ export class AuthClient extends EventEmitter {
       const response: AxiosResponse<{ data: User }> = await this.api.get('/auth/me');
       this.currentUser = response.data.data;
       return response.data.data;
-    } catch (error: any) {
+    } catch (error) {
       throw this.handleAuthError(error);
     }
   }
@@ -314,7 +314,7 @@ export class AuthClient extends EventEmitter {
       this.currentUser = response.data.data;
       this.emit('profileUpdated', response.data.data);
       return response.data.data;
-    } catch (error: any) {
+    } catch (error) {
       throw this.handleAuthError(error);
     }
   }
@@ -326,7 +326,7 @@ export class AuthClient extends EventEmitter {
         newPassword
       });
       this.emit('passwordChanged');
-    } catch (error: any) {
+    } catch (error) {
       throw this.handleAuthError(error);
     }
   }

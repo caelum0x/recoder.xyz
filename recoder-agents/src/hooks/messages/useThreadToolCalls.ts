@@ -233,7 +233,7 @@ export function useThreadToolCalls(
         navigateToIndex(foundIndex);
         return;
       }
-      console.warn(`[handleToolClick] Could not find tool call with ID: ${toolCallId}`);
+      // Tool call ID not found in current toolCalls — stale reference
     }
 
     // Handle streaming tool calls (message ID is null)
@@ -261,7 +261,7 @@ export function useThreadToolCalls(
         return;
       }
       
-      console.warn("No streaming tool calls found to open.");
+      // No streaming tool calls to open
       return;
     }
 
@@ -273,25 +273,12 @@ export function useThreadToolCalls(
     const toolIndex = assistantMessageToToolIndex.current.get(compositeKey);
 
     // #region debug - tool click debugging
-    console.log('[handleToolClick] Debug', {
-      clickedAssistantMessageId,
-      clickedToolName,
-      normalizedToolName,
-      compositeKey,
-      toolIndex,
-      toolCallsLength: toolCalls.length,
-      mapSize: assistantMessageToToolIndex.current.size,
-      mapKeys: Array.from(assistantMessageToToolIndex.current.keys()).slice(0, 10),
-    });
+    
     // #endregion
 
     if (toolIndex !== undefined) {
       navigateToIndex(toolIndex);
     } else {
-      console.warn(
-        `[PAGE] Could not find matching tool call in toolCalls array for assistant message ID: ${clickedAssistantMessageId}, tool name: ${clickedToolName}`,
-      );
-      
       // Fallback: Try to find by searching through toolCalls array
       // Find the assistant message and match by tool name
       const assistantMessage = messages.find(
@@ -382,8 +369,9 @@ export function useThreadToolCalls(
           })();
 
           // Check if this tool call has a result (from useAgentStream merging)
-          const toolResult = (metadataToolCall as any).tool_result;
-          const isCompleted = (metadataToolCall as any).completed === true;
+          const extendedToolCall = metadataToolCall as Record<string, unknown>;
+          const toolResult = extendedToolCall.tool_result;
+          const isCompleted = extendedToolCall.completed === true;
           
           const newToolCall: ToolCallInput = {
             toolCall: {
@@ -402,7 +390,7 @@ export function useThreadToolCalls(
             } : undefined,
             isSuccess: toolResult ? (toolResult.success !== false) : true,
             assistantTimestamp: toolCall.created_at || new Date().toISOString(),
-            messages: messages as any,
+            messages,
           };
 
           if (existingIndex !== -1) {
@@ -439,7 +427,7 @@ export function useThreadToolCalls(
               // Update tool result if available (real-time merge)
               toolResult: mergedToolResult,
               isSuccess: mergedToolResult ? (mergedToolResult.success !== false) : updated[existingIndex].isSuccess,
-              messages: messages as any,
+              messages,
             };
           } else {
             updated.push(newToolCall);

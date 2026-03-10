@@ -4,10 +4,20 @@ CREATE TABLE IF NOT EXISTS budget_alerts (
   threshold_amount DECIMAL(10,2) NOT NULL,
   alert_type VARCHAR(20) DEFAULT 'warning_80pct',
   notified_at TIMESTAMPTZ DEFAULT NOW(),
-  created_at TIMESTAMPTZ DEFAULT NOW()
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE (user_id, alert_type)
 );
 
 CREATE INDEX IF NOT EXISTS idx_budget_alerts_user ON budget_alerts(user_id);
 
 ALTER TABLE budget_alerts ENABLE ROW LEVEL SECURITY;
-CREATE POLICY budget_alerts_all ON budget_alerts FOR ALL USING (true);
+
+CREATE POLICY budget_alerts_all ON budget_alerts FOR ALL
+  USING (user_id = auth.uid())
+  WITH CHECK (user_id = auth.uid());
+
+-- NOTE: The setBudgetThreshold API should use upsert semantics:
+--   INSERT INTO budget_alerts (user_id, threshold_amount, alert_type, notified_at)
+--   VALUES ($1, $2, $3, NOW())
+--   ON CONFLICT (user_id, alert_type)
+--   DO UPDATE SET threshold_amount = EXCLUDED.threshold_amount, notified_at = NOW();

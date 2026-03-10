@@ -106,6 +106,8 @@ export const A2AErrorCodeEnum = {
   MissingEnvelopeField: 'MISSING_ENVELOPE_FIELD',
   /** The payload kind is unknown or malformed. */
   InvalidPayload: 'INVALID_PAYLOAD',
+  /** Compatibility alias used by older gateway/workspace routes. */
+  InvalidParams: 'INVALID_ENVELOPE',
 
   // -- connector --------------------------------------------------------------
   /** No connector is attached for the target agent. */

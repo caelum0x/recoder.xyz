@@ -143,9 +143,6 @@ export function pushContainerLoad(pathname: string) {
   // Push without 'event' key - this is initialization data
   window.dataLayer?.push(pageContext);
   
-  if (process.env.NODE_ENV === 'development') {
-    console.log('[GTM] Container Load pushed:', pageContext);
-  }
 }
 
 /**
@@ -221,9 +218,6 @@ export function trackRouteChange(pathname: string, searchParams?: string) {
   // Only track documented pages (Homepage, Auth, Dashboard, Plans, Order Confirm)
   // Skip internal navigation like threads, settings, etc.
   if (!shouldTrackRouteChange(effectivePageType)) {
-    if (process.env.NODE_ENV === 'development') {
-      console.log('[GTM] routeChange skipped (not a tracked page):', pathname, effectivePageType);
-    }
     return;
   }
   
@@ -261,9 +255,6 @@ export function trackRouteChange(pathname: string, searchParams?: string) {
   window.dataLayer?.push(routeChangeData);
   
   // Console log for debugging (remove in production if needed)
-  if (process.env.NODE_ENV === 'development') {
-    console.log('[GTM] routeChange pushed:', routeChangeData);
-  }
   
   // Store current page as previous for next navigation
   storePreviousPage();
@@ -327,9 +318,6 @@ export function trackRouteChangeForModal(pageType: 'plans' | 'order_confirm') {
   
   window.dataLayer?.push(routeChangeData);
   
-  if (process.env.NODE_ENV === 'development') {
-    console.log('[GTM] routeChange (modal) pushed:', routeChangeData);
-  }
   
   storePreviousPage();
   markAsTracked();
@@ -357,9 +345,6 @@ export function trackSignUp(method: AuthMethod) {
   
   window.dataLayer?.push(signUpEvent);
   
-  if (process.env.NODE_ENV === 'development') {
-    console.log('[GTM] sign_up pushed:', signUpEvent);
-  }
 }
 
 /**
@@ -378,9 +363,6 @@ export function trackLogin(method: AuthMethod) {
   
   window.dataLayer?.push(loginEvent);
   
-  if (process.env.NODE_ENV === 'development') {
-    console.log('[GTM] login pushed:', loginEvent);
-  }
 }
 
 /**
@@ -398,9 +380,6 @@ export function trackCtaUpgrade() {
   
   window.dataLayer?.push(ctaEvent);
   
-  if (process.env.NODE_ENV === 'development') {
-    console.log('[GTM] cta_upgrade pushed:', ctaEvent);
-  }
 }
 
 /**
@@ -417,9 +396,6 @@ export function trackCtaSignup() {
   
   window.dataLayer?.push(ctaEvent);
   
-  if (process.env.NODE_ENV === 'development') {
-    console.log('[GTM] cta_signup pushed:', ctaEvent);
-  }
 }
 
 /**
@@ -437,9 +413,6 @@ export function trackSendAuthLink() {
   
   window.dataLayer?.push(authLinkEvent);
   
-  if (process.env.NODE_ENV === 'development') {
-    console.log('[GTM] send_auth_link pushed:', authLinkEvent);
-  }
 }
 
 // =============================================================================
@@ -522,9 +495,6 @@ export function trackPurchase(data: PurchaseData) {
   
   window.dataLayer?.push(purchaseEvent);
   
-  if (process.env.NODE_ENV === 'development') {
-    console.log('[GTM] purchase pushed:', purchaseEvent);
-  }
 }
 
 /**
@@ -649,9 +619,6 @@ export function trackSelectItem(item: PlanItemData) {
   
   window.dataLayer?.push(selectItemEvent);
   
-  if (process.env.NODE_ENV === 'development') {
-    console.log('[GTM] select_item pushed:', selectItemEvent);
-  }
 }
 
 /**
@@ -688,9 +655,6 @@ export function trackViewItem(item: PlanItemData, currency: string, value: numbe
   
   window.dataLayer?.push(viewItemEvent);
   
-  if (process.env.NODE_ENV === 'development') {
-    console.log('[GTM] view_item pushed:', viewItemEvent);
-  }
 }
 
 /**
@@ -727,8 +691,5 @@ export function trackAddToCart(item: PlanItemData, currency: string, value: numb
   
   window.dataLayer?.push(addToCartEvent);
   
-  if (process.env.NODE_ENV === 'development') {
-    console.log('[GTM] add_to_cart pushed:', addToCartEvent);
-  }
 }
 

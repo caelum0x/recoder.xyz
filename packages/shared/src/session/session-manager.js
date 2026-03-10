@@ -10,6 +10,7 @@ const tslib_1 = require("tslib");
 const fs = tslib_1.__importStar(require("fs"));
 const path = tslib_1.__importStar(require("path"));
 const os = tslib_1.__importStar(require("os"));
+const crypto = require("crypto");
 const events_1 = require("events");
 class SessionManager extends events_1.EventEmitter {
     constructor(platform) {
@@ -340,13 +341,13 @@ class SessionManager extends events_1.EventEmitter {
      * Generate unique session ID
      */
     generateSessionId() {
-        return `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        return `session_${Date.now()}_${crypto.randomUUID().slice(0, 9)}`;
     }
     /**
      * Generate unique message ID
      */
     generateMessageId() {
-        return `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        return `msg_${Date.now()}_${crypto.randomUUID().slice(0, 9)}`;
     }
     /**
      * Clean up old sessions (older than 30 days)

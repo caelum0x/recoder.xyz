@@ -13,6 +13,15 @@ from core.utils.config import config, EnvMode
 from core.api_models import CreateThreadResponse, MessageCreateRequest
 from core.services.db import Table, execute, execute_read, execute_one, execute_mutate
 
+
+def _emit_thread_webhook(account_id: str, event: str, payload: dict) -> None:
+    """Fire-and-forget webhook emission. Never raises."""
+    try:
+        from core.webhooks.webhook_service import webhook_service
+        asyncio.create_task(webhook_service.send(account_id, event, payload))
+    except Exception as wh_err:
+        logger.warning(f"Webhook emission failed for {event}: {wh_err}")
+
 router = APIRouter(tags=["threads"])
 
 
@@ -35,55 +44,96 @@ async def search_threads_endpoint(
 
     try:
         service = get_thread_search_service()
-        if not service.is_configured:
-            logger.debug("Thread search service not configured, returning empty results")
-            return {
-                "results": [],
-                "total": 0,
-                "configured": False
-            }
+        use_semantic = service.is_configured
 
-        results = await search_threads(q, user_id, limit)
+        if use_semantic:
+            results = await search_threads(q, user_id, limit)
 
-        if not results:
-            return {"results": [], "total": 0, "configured": True}
+            if results:
+                # Enrich results with thread/project metadata
+                result_thread_ids = list({r.thread_id for r in results})
+                enrichment_sql = """
+                SELECT
+                    t.thread_id,
+                    t.project_id,
+                    t.updated_at,
+                    p.name AS project_name,
+                    p.icon_name AS project_icon_name
+                FROM threads t
+                LEFT JOIN projects p ON t.project_id = p.project_id
+                WHERE t.thread_id = ANY(CAST(:thread_ids AS uuid[]))
+                """
+                rows = await execute(enrichment_sql, {"thread_ids": result_thread_ids})
+                thread_meta = {str(row["thread_id"]): row for row in (rows or [])}
 
-        # Enrich results with thread/project metadata so the frontend
-        # can display results for threads beyond the loaded page
-        from core.services.db import execute
+                enriched = []
+                for r in results:
+                    meta = thread_meta.get(r.thread_id, {})
+                    enriched.append({
+                        "thread_id": r.thread_id,
+                        "score": r.score,
+                        "text_preview": r.text_preview,
+                        "project_id": str(meta["project_id"]) if meta.get("project_id") else None,
+                        "project_name": meta.get("project_name") or "Unnamed Project",
+                        "project_icon_name": meta.get("project_icon_name"),
+                        "updated_at": meta["updated_at"].isoformat() if meta.get("updated_at") else None,
+                    })
 
-        result_thread_ids = list({r.thread_id for r in results})
-        enrichment_sql = """
-        SELECT
+                return {
+                    "results": enriched,
+                    "total": len(enriched),
+                    "configured": True,
+                    "search_type": "semantic"
+                }
+
+        # Fallback: text-based search using ILIKE on thread messages and project names
+        logger.debug("Using text-based thread search fallback")
+        fallback_sql = """
+        SELECT DISTINCT ON (t.thread_id)
             t.thread_id,
             t.project_id,
             t.updated_at,
             p.name AS project_name,
-            p.icon_name AS project_icon_name
+            p.icon_name AS project_icon_name,
+            m.content AS text_preview
         FROM threads t
         LEFT JOIN projects p ON t.project_id = p.project_id
-        WHERE t.thread_id = ANY(CAST(:thread_ids AS uuid[]))
+        LEFT JOIN messages m ON m.thread_id = t.thread_id
+        WHERE t.user_id = :user_id
+          AND (
+            m.content ILIKE :query_pattern
+            OR p.name ILIKE :query_pattern
+          )
+        ORDER BY t.thread_id, t.updated_at DESC
+        LIMIT :limit
         """
-        rows = await execute(enrichment_sql, {"thread_ids": result_thread_ids})
-        thread_meta = {str(row["thread_id"]): row for row in (rows or [])}
+        query_pattern = f"%{q}%"
+        rows = await execute(fallback_sql, {
+            "user_id": user_id,
+            "query_pattern": query_pattern,
+            "limit": limit,
+        })
 
-        enriched = []
-        for r in results:
-            meta = thread_meta.get(r.thread_id, {})
-            enriched.append({
-                "thread_id": r.thread_id,
-                "score": r.score,
-                "text_preview": r.text_preview,
-                "project_id": str(meta["project_id"]) if meta.get("project_id") else None,
-                "project_name": meta.get("project_name") or "Unnamed Project",
-                "project_icon_name": meta.get("project_icon_name"),
-                "updated_at": meta["updated_at"].isoformat() if meta.get("updated_at") else None,
+        fallback_results = []
+        for row in (rows or []):
+            preview = row.get("text_preview") or ""
+            if len(preview) > 200:
+                preview = preview[:200] + "..."
+            fallback_results.append({
+                "thread_id": str(row["thread_id"]),
+                "score": 1.0,
+                "text_preview": preview,
+                "project_id": str(row["project_id"]) if row.get("project_id") else None,
+                "project_name": row.get("project_name") or "Unnamed Project",
+                "project_icon_name": row.get("project_icon_name"),
+                "updated_at": row["updated_at"].isoformat() if row.get("updated_at") else None,
             })
 
         return {
-            "results": enriched,
-            "total": len(enriched),
-            "configured": True
+            "results": fallback_results,
+            "total": len(fallback_results),
+            "configured": use_semantic,
+            "search_type": "text"
         }
 
     except Exception as e:
@@ -311,8 +361,14 @@ async def create_thread_in_project(
             pass
         
         logger.debug(f"Successfully created thread {thread_id} in project {project_id}")
+
+        _emit_thread_webhook(account_id, "thread.created", {
+            "thread_id": thread_id,
+            "project_id": project_id,
+        })
+
         return {"thread_id": thread_id, "project_id": project_id}
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -685,6 +741,12 @@ async def create_thread(
             pass
 
         logger.debug(f"Successfully created thread {thread_id} with project {project_id}")
+
+        _emit_thread_webhook(account_id, "thread.created", {
+            "thread_id": thread_id,
+            "project_id": project_id,
+        })
+
         return {"thread_id": thread_id, "project_id": project_id}
 
     except Exception as e:

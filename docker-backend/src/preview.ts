@@ -34,7 +34,12 @@ async function detectFramework(containerId: string): Promise<string> {
   try {
     const pkgRaw = await execInContainer(containerId, 'cat /workspace/package.json 2>/dev/null || echo ""');
     if (!pkgRaw) return 'vite';
-    const pkg = JSON.parse(pkgRaw);
+    let pkg: Record<string, any>;
+    try {
+      pkg = JSON.parse(pkgRaw);
+    } catch {
+      return 'vite';
+    }
     const deps = { ...(pkg.dependencies || {}), ...(pkg.devDependencies || {}) };
     if (deps.next || pkg.scripts?.dev?.includes('next')) return 'next';
     if (deps.vite || pkg.scripts?.dev?.includes('vite')) return 'vite';
@@ -276,9 +281,11 @@ const ERROR_CAPTURE_SCRIPT = `
         window.parent.postMessage({
           type: 'recoder:navigate',
           path: window.location.pathname + window.location.search + window.location.hash
-        }, '*');
+        }, window.location.origin);
       }
-    } catch (e) {}
+    } catch (e) {
+      console.warn('[Preview] Failed to report navigation:', e);
+    }
   }
 
   // Report initial navigation
@@ -315,7 +322,7 @@ export function setupPreviewProxy(app: Express, containers: Map<string, { id: st
     res.setHeader('X-Frame-Options', 'ALLOWALL');
 
     if (!entry) {
-      console.log(`⚠️ Preview request for unknown project: ${projectId}`);
+      console.warn(`[Preview] Request for unknown project: ${projectId}`);
       // Try to recover container info from Docker API
       entry = await recoverContainerFromDocker(projectId, containers);
       
@@ -563,7 +570,7 @@ export function setupPreviewProxy(app: Express, containers: Map<string, { id: st
       entry = await recoverContainerFromDocker(req.params.projectId, containers);
     }
     const port = entry?.port || 0;
-    const baseUrl = process.env.PUBLIC_URL || `http://localhost:${process.env.PORT || 3100}`;
+    const baseUrl = process.env.PUBLIC_URL || `https://web.recoder.xyz`;
     res.json({ url: `${baseUrl}/preview/${req.params.projectId}`, port });
   });
 

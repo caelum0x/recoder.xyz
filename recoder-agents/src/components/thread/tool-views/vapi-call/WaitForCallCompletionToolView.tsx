@@ -19,7 +19,6 @@ export function WaitForCallCompletionToolView({
 }: ToolViewProps) {
   // Defensive check - ensure toolCall is defined
   if (!toolCall) {
-    console.warn('WaitForCallCompletionToolView: toolCall is undefined. Tool views should use structured props.');
     return null;
   }
 

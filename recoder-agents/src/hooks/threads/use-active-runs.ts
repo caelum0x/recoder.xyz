@@ -8,6 +8,7 @@ export function useActiveRuns() {
     queryKey: ['active-runs'],
     queryFn: activeRunsApi.getActiveRuns,
     refetchInterval: 3_000,
+    refetchIntervalInBackground: false,
     staleTime: 2_000,
   });
 }

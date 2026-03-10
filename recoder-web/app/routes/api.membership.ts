@@ -67,6 +67,8 @@ interface UsageStats {
   messagesLimit: number;
   enhancesUsedToday: number;
   enhancesLimit: number;
+  /** False when message/enhance tracking is not yet wired up */
+  usageTrackingAvailable: boolean;
 }
 
 /**
@@ -156,24 +158,17 @@ async function getUserUsage(
 
     const projectsUsed = parseInt(projectsResult[0]?.count || '0', 10);
 
-    // For messages and enhances, we'd query a usage tracking table
-    // For now, return mock data based on time of day to simulate usage
-    const now = new Date();
-    const hourOfDay = now.getHours();
-
-    // Simulate usage pattern (higher during work hours)
-    const usageMultiplier = hourOfDay >= 9 && hourOfDay <= 17 ? 0.4 : 0.1;
-
-    const messagesUsedToday = Math.floor(planFeatures.messagesPerDay * usageMultiplier * Math.random());
-    const enhancesUsedToday = Math.floor(planFeatures.enhancesPerDay * usageMultiplier * Math.random());
-
+    // Messages and enhances usage tracking is not yet implemented.
+    // Return zeros with a flag so the UI can show an honest state
+    // instead of fabricated numbers.
     return {
       projectsUsed,
       projectsLimit: planFeatures.projectLimit,
-      messagesUsedToday,
+      messagesUsedToday: 0,
       messagesLimit: planFeatures.messagesPerDay,
-      enhancesUsedToday,
+      enhancesUsedToday: 0,
       enhancesLimit: planFeatures.enhancesPerDay,
+      usageTrackingAvailable: false,
     };
   } catch (error) {
     logger.error('[Membership] Usage query error:', error);
@@ -184,6 +179,7 @@ async function getUserUsage(
       messagesLimit: planFeatures.messagesPerDay,
       enhancesUsedToday: 0,
       enhancesLimit: planFeatures.enhancesPerDay,
+      usageTrackingAvailable: false,
     };
   }
 }

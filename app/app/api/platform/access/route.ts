@@ -10,8 +10,8 @@ interface PlatformAccessRequest {
 
 const PLATFORM_URLS: Record<string, string> = {
   web: process.env.RECODER_WEB_URL || (process.env.NODE_ENV === 'production' ? 'https://web.recoder.xyz' : 'http://localhost:5173'),
-  frontend: process.env.RECODER_FRONTEND_URL || (process.env.NODE_ENV === 'production' ? 'https://frontend.recoder.xyz' : 'http://localhost:3001'),
-  studio: process.env.RECODER_STUDIO_URL || (process.env.NODE_ENV === 'production' ? 'https://studio.recoder.xyz' : 'http://localhost:3005'),
+  frontend: process.env.RECODER_FRONTEND_URL || (process.env.NODE_ENV === 'production' ? 'https://agents.recoder.xyz' : 'http://localhost:3001'),
+  studio: process.env.RECODER_STUDIO_URL || (process.env.NODE_ENV === 'production' ? 'https://agency.recoder.xyz' : 'http://localhost:3007'),
   pm: process.env.RECODER_PM_URL || (process.env.NODE_ENV === 'production' ? 'https://pm.recoder.xyz' : 'http://localhost:3004'),
   agency: process.env.RECODER_AGENCY_URL || (process.env.NODE_ENV === 'production' ? 'https://agency.recoder.xyz' : 'http://localhost:3007'),
   openclaw: process.env.RECODER_OPENCLAW_URL || (process.env.NODE_ENV === 'production' ? 'https://openclaw.recoder.xyz' : 'http://localhost:18789'),

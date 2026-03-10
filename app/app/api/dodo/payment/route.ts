@@ -7,6 +7,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from "@/lib/auth-helpers";
 import { DodoPaymentsService } from '@/lib/services/dodopayments.service';
 import { logger } from '@/lib/logger';
+import { resolveDodoApiKey } from '@/lib/billing-credentials';
 
 export async function POST(request: NextRequest) {
   try {
@@ -47,7 +48,7 @@ export async function POST(request: NextRequest) {
       }, { status: 400 });
     }
 
-    if (!process.env.DODO_PAYMENTS_API_KEY && !process.env.DODO_API_KEY_LIVE && !process.env.DODO_API_KEY_TEST) {
+    if (!resolveDodoApiKey()) {
       return NextResponse.json({
         success: false,
         error: 'Payment provider not configured. Please contact support.',

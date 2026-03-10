@@ -92,7 +92,7 @@ class AuthenticationService {
         token,
         user,
       };
-    } catch (error: any) {
+    } catch (error) {
       Logger.error(`Login failed: ${error.response?.data?.message || error.message}`);
       return {
         success: false,
@@ -113,7 +113,7 @@ class AuthenticationService {
         success: true,
         user,
       };
-    } catch (error: any) {
+    } catch (error) {
       Logger.error(`Registration failed: ${error.response?.data?.message || error.message}`);
       return {
         success: false,
@@ -139,7 +139,7 @@ class AuthenticationService {
       return {
         success: true,
       };
-    } catch (error: any) {
+    } catch (error) {
       Logger.error(`Logout failed: ${error.response?.data?.message || error.message}`);
       
       // Clear local auth even if server logout fails
@@ -166,7 +166,7 @@ class AuthenticationService {
         success: true,
         user,
       };
-    } catch (error: any) {
+    } catch (error) {
       Logger.error(`Token validation failed: ${error.response?.data?.message || error.message}`);
       return {
         success: false,
@@ -193,7 +193,7 @@ class AuthenticationService {
         success: true,
         user,
       };
-    } catch (error: any) {
+    } catch (error) {
       Logger.error(`Failed to get current user: ${error.response?.data?.message || error.message}`);
       return {
         success: false,
@@ -220,7 +220,7 @@ class AuthenticationService {
         token,
         user,
       };
-    } catch (error: any) {
+    } catch (error) {
       Logger.error(`Token refresh failed: ${error.response?.data?.message || error.message}`);
       return {
         success: false,
@@ -233,7 +233,7 @@ class AuthenticationService {
     try {
       const response = await this.api.get('/auth/browser-url');
       return response.data.authUrl;
-    } catch (error: any) {
+    } catch (error) {
       Logger.error(`Failed to get browser auth URL: ${error.message}`);
       throw new Error('Failed to get browser authentication URL');
     }
@@ -243,7 +243,7 @@ class AuthenticationService {
     try {
       const response = await this.api.get('/auth/browser-register-url');
       return response.data.registerUrl;
-    } catch (error: any) {
+    } catch (error) {
       Logger.error(`Failed to get browser register URL: ${error.message}`);
       throw new Error('Failed to get browser registration URL');
     }
@@ -292,7 +292,7 @@ class AuthenticationService {
         success: false,
         error: 'Browser authentication timed out',
       };
-    } catch (error: any) {
+    } catch (error) {
       Logger.error(`Browser auth polling failed: ${error.message}`);
       return {
         success: false,
@@ -315,7 +315,7 @@ class AuthenticationService {
         success: true,
         token: response.data.token,
       };
-    } catch (error: any) {
+    } catch (error) {
       Logger.error(`Token creation failed: ${error.response?.data?.message || error.message}`);
       return {
         success: false,
@@ -336,7 +336,7 @@ class AuthenticationService {
         success: true,
         tokens: response.data.tokens,
       };
-    } catch (error: any) {
+    } catch (error) {
       Logger.error(`Failed to list tokens: ${error.response?.data?.message || error.message}`);
       return {
         success: false,
@@ -358,7 +358,7 @@ class AuthenticationService {
       return {
         success: true,
       };
-    } catch (error: any) {
+    } catch (error) {
       Logger.error(`Token revocation failed: ${error.response?.data?.message || error.message}`);
       return {
         success: false,
@@ -386,7 +386,7 @@ class AuthenticationService {
       return {
         success: true,
       };
-    } catch (error: any) {
+    } catch (error) {
       Logger.error(`Password change failed: ${error.response?.data?.message || error.message}`);
       return {
         success: false,
@@ -404,7 +404,7 @@ class AuthenticationService {
       return {
         success: true,
       };
-    } catch (error: any) {
+    } catch (error) {
       Logger.error(`Password reset failed: ${error.response?.data?.message || error.message}`);
       return {
         success: false,
@@ -433,7 +433,7 @@ class AuthenticationService {
         success: true,
         user,
       };
-    } catch (error: any) {
+    } catch (error) {
       Logger.error(`Profile update failed: ${error.response?.data?.message || error.message}`);
       return {
         success: false,
@@ -461,7 +461,7 @@ class AuthenticationService {
       return {
         success: true,
       };
-    } catch (error: any) {
+    } catch (error) {
       Logger.error(`Account deletion failed: ${error.response?.data?.message || error.message}`);
       return {
         success: false,
@@ -499,7 +499,7 @@ class AuthenticationService {
           features: this.getFeaturesByPlan(subscription.plan || 'free')
         }
       };
-    } catch (error: any) {
+    } catch (error) {
       Logger.error(`Failed to get subscription: ${error.response?.data?.message || error.message}`);
       
       // Return free plan as fallback
@@ -549,7 +549,7 @@ class AuthenticationService {
       return {
         success: true,
       };
-    } catch (error: any) {
+    } catch (error) {
       Logger.warn(`Failed to update usage: ${error.response?.data?.message || error.message}`);
       return {
         success: false,
@@ -584,7 +584,7 @@ class AuthenticationService {
       }
 
       return { hasAccess: true };
-    } catch (error: any) {
+    } catch (error) {
       Logger.error(`Feature access check failed: ${error.message}`);
       return { hasAccess: false, reason: 'Unable to verify feature access' };
     }
@@ -631,7 +631,7 @@ class AuthenticationService {
       }
 
       return { allowed: true, usage };
-    } catch (error: any) {
+    } catch (error) {
       Logger.error(`Usage limit check failed: ${error.message}`);
       return { allowed: false, reason: 'Unable to verify usage limits' };
     }

@@ -36,7 +36,6 @@ export function DeletePresentationToolView({
 }: ToolViewProps) {
   // Defensive check - handle cases where toolCall might be undefined
   if (!toolCall) {
-    console.warn('DeletePresentationToolView: toolCall is undefined. Tool views should use structured props.');
     return null;
   }
 

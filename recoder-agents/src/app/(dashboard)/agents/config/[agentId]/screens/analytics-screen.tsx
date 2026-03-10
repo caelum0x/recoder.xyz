@@ -28,6 +28,8 @@ import {
   type DailyAnalytics,
 } from '@/lib/api/agent-analytics';
 import { ModelPerformanceTab } from './model-performance-tab';
+import { ToolUsageTab } from './tool-usage-tab';
+import { CostBreakdownTab } from './cost-breakdown-tab';
 import {
   ChartContainer,
   ChartTooltip,
@@ -161,7 +163,7 @@ const PIE_COLORS = [
 
 export function AnalyticsScreen({ agentId }: AnalyticsScreenProps) {
   const [range, setRange] = useState<TimeRange>('30d');
-  const [activeTab, setActiveTab] = useState<'overview' | 'models'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'models' | 'tools' | 'cost'>('overview');
   const [isExporting, setIsExporting] = useState(false);
 
   const { fromDate, toDate } = useMemo(() => getDateRange(range), [range]);
@@ -357,11 +359,41 @@ export function AnalyticsScreen({ agentId }: AnalyticsScreenProps) {
         >
           Model Performance
         </button>
+        <button
+          onClick={() => setActiveTab('tools')}
+          className={cn(
+            'px-4 py-2 text-sm font-medium rounded-lg transition-colors',
+            activeTab === 'tools'
+              ? 'bg-background text-foreground shadow-sm border border-border'
+              : 'text-muted-foreground hover:text-foreground hover:bg-muted/30'
+          )}
+        >
+          Tool Usage
+        </button>
+        <button
+          onClick={() => setActiveTab('cost')}
+          className={cn(
+            'px-4 py-2 text-sm font-medium rounded-lg transition-colors',
+            activeTab === 'cost'
+              ? 'bg-background text-foreground shadow-sm border border-border'
+              : 'text-muted-foreground hover:text-foreground hover:bg-muted/30'
+          )}
+        >
+          Cost Breakdown
+        </button>
       </div>
 
       {activeTab === 'models' ? (
         <div className="px-1">
           <ModelPerformanceTab agentId={agentId} range={range} />
+        </div>
+      ) : activeTab === 'tools' ? (
+        <div className="px-1">
+          <ToolUsageTab agentId={agentId} />
+        </div>
+      ) : activeTab === 'cost' ? (
+        <div className="px-1">
+          <CostBreakdownTab agentId={agentId} />
         </div>
       ) : (
       <div className="px-1 space-y-6">

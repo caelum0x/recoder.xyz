@@ -2,9 +2,18 @@ import { TriggerId, type WorkspaceId } from "@recoder/protocol";
 import { and, avg, count, desc, eq, sum } from "drizzle-orm";
 import { notFound } from "next/navigation";
 import { giselle } from "@/app/giselle";
-import { acts, agentActivities, agents, db, teams, users } from "@/db";
+import {
+	acts,
+	agentActivities,
+	agents,
+	db,
+	showcaseFavorites,
+	teams,
+	users,
+} from "@/db";
 import { stageV2Flag } from "@/flags";
 import { getCurrentUser } from "@/lib/get-current-user";
+import { fetchCurrentTeam } from "@/services/teams/fetch-current-team";
 
 import { AppDetailClient } from "./app-detail-client";
 
@@ -14,7 +23,7 @@ const DEFAULT_VALUES = {
 	teamName: "Unknown Team",
 	creatorName: "Unknown Creator",
 	agentName: "Untitled Agent",
-	favoriteCount: 42,
+	favoriteCount: 0,
 	executionHistoryLimit: 10,
 	recentActivityDays: 7,
 } as const;
@@ -74,8 +83,9 @@ async function getAppDetails(unsafeAppId: string) {
 		if (app === undefined) {
 			return null;
 		}
-		// Get current user
+		// Get current user and team
 		const currentUser = await getCurrentUser();
+		const currentTeam = await fetchCurrentTeam();
 
 		// Get agent with team information
 		const agentWithTeam = await db
@@ -171,6 +181,25 @@ async function getAppDetails(unsafeAppId: string) {
 					.limit(DEFAULT_VALUES.executionHistoryLimit)
 			: [];
 
+		// Check if current user has favorited this app
+		const userFavorite = await db
+			.select({ dbId: showcaseFavorites.dbId })
+			.from(showcaseFavorites)
+			.where(
+				and(
+					eq(showcaseFavorites.userDbId, currentUser.dbId),
+					eq(showcaseFavorites.teamDbId, currentTeam.dbId),
+					eq(showcaseFavorites.itemId, appId),
+				),
+			)
+			.limit(1);
+
+		// Count total favorites for this app across all users in this team
+		const [favCount] = await db
+			.select({ total: count(showcaseFavorites.dbId) })
+			.from(showcaseFavorites)
+			.where(eq(showcaseFavorites.itemId, appId));
+
 		return {
 			id: agentData.id,
 			name: agentData.name || DEFAULT_VALUES.agentName,
@@ -190,8 +219,8 @@ async function getAppDetails(unsafeAppId: string) {
 			totalOutput: "---", // Requires additional metrics tracking
 			tokens: "---", // Requires additional metrics tracking
 			llm: await extractLLMLabels(agentData.workspaceId),
-			isFavorite: false,
-			favoriteCount: DEFAULT_VALUES.favoriteCount,
+			isFavorite: userFavorite.length > 0,
+			favoriteCount: favCount?.total ?? 0,
 			teamId: agentData.teamId || "",
 			workspaceId: agentData.workspaceId || "",
 			creator: {
@@ -206,12 +235,20 @@ async function getAppDetails(unsafeAppId: string) {
 					views: `${executionStats?.totalExecutions || 0}`,
 				},
 			},
-			executionHistory: executionHistory.map((execution) => ({
-				id: execution.id,
-				status: "success", // TODO: Add actual status tracking
-				createdAt: execution.createdAt,
-				duration: "---", // TODO: Get actual duration from agentActivities
-			})),
+			executionHistory: executionHistory.map((execution) => {
+				const durationMs =
+					execution.updatedAt && execution.createdAt
+						? execution.updatedAt.getTime() - execution.createdAt.getTime()
+						: 0;
+				const durationSec = Math.round(durationMs / 1000);
+				const hasCompleted = execution.updatedAt && execution.updatedAt > execution.createdAt;
+				return {
+					id: execution.id,
+					status: hasCompleted ? "success" : "running",
+					createdAt: execution.createdAt,
+					duration: durationSec > 0 ? `${durationSec}s` : "---",
+				};
+			}),
 		};
 	} catch (error) {
 		console.error("Error fetching app details:", error);

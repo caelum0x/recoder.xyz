@@ -1,4 +1,3 @@
-import { isStagingMode } from '@/lib/config';
 import { backendApi } from '../api-client';
 import {
   parseNotificationLogsResponse,
@@ -41,14 +40,9 @@ export interface NotificationLog {
 }
 
 export class NotificationAPI {
-  private checkEnabled() {
-    if (!isStagingMode()) {
-      throw new Error('Notifications are only available in staging mode');
-    }
-  }
 
   async getSettings(): Promise<NotificationSettings> {
-    this.checkEnabled();
+
     const response = await backendApi.get<unknown>('/notifications/settings');
     if (!response.success || !response.data) {
       throw new Error('Failed to fetch notification settings');
@@ -57,7 +51,7 @@ export class NotificationAPI {
   }
 
   async updateSettings(settings: Partial<NotificationSettings>): Promise<NotificationSettings> {
-    this.checkEnabled();
+
     const response = await backendApi.put<unknown>(
       '/notifications/settings',
       settings
@@ -69,7 +63,7 @@ export class NotificationAPI {
   }
 
   async registerDeviceToken(tokenRequest: DeviceTokenRequest): Promise<void> {
-    this.checkEnabled();
+
     const response = await backendApi.post('/notifications/device-token', tokenRequest);
     if (!response.success) {
       throw new Error('Failed to register device token');
@@ -77,7 +71,7 @@ export class NotificationAPI {
   }
 
   async unregisterDeviceToken(deviceToken: string): Promise<void> {
-    this.checkEnabled();
+
     const response = await backendApi.delete(
       `/notifications/device-token/${encodeURIComponent(deviceToken)}`
     );
@@ -91,7 +85,7 @@ export class NotificationAPI {
     message: string = 'This is a test notification',
     channels?: string[]
   ): Promise<void> {
-    this.checkEnabled();
+
     const response = await backendApi.post('/notifications/test', {
       title,
       message,
@@ -103,7 +97,7 @@ export class NotificationAPI {
   }
 
   async getLogs(limit: number = 50, offset: number = 0, eventType?: string): Promise<NotificationLog[]> {
-    this.checkEnabled();
+
     const params = new URLSearchParams({
       limit: limit.toString(),
       offset: offset.toString(),

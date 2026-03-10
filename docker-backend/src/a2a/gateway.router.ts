@@ -195,10 +195,14 @@ export function createA2AGateway(config?: GatewayConfig): Router {
   router.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
     const statusCode = typeof err.status === 'number' ? err.status : 500;
 
-    logger.error(`A2A gateway error: ${err.message ?? 'Unknown error'}`, {
-      status: statusCode,
-      stack: err.stack,
-    });
+    logger.error(
+      {
+        status: statusCode,
+        stack: err.stack,
+        message: err.message ?? 'Unknown error',
+      },
+      'A2A gateway error',
+    );
 
     res.status(statusCode).json({
       success: false,
@@ -209,11 +213,14 @@ export function createA2AGateway(config?: GatewayConfig): Router {
     });
   });
 
-  logger.info('A2A gateway router created', {
-    tracing: enableTracing,
-    rateLimit: enableRateLimit,
-    auth: enableAuth,
-  });
+  logger.info(
+    {
+      tracing: enableTracing,
+      rateLimit: enableRateLimit,
+      auth: enableAuth,
+    },
+    'A2A gateway router created',
+  );
 
   return router;
 }

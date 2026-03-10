@@ -141,7 +141,7 @@ export function processStreamData(
   }
   
   if (jsonData.type === 'summarizing context') {
-    console.log('🗜️ [SUMMARIZING CONTEXT]', jsonData.status, jsonData);
+    
     return { type: 'ignore' };
   }
   

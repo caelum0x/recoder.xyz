@@ -141,7 +141,7 @@ export class AIProviderRouter extends EventEmitter {
     super();
 
     this.config = {
-      baseURL: 'http://localhost:3001',
+      baseURL: 'http://localhost:3100',
       healthCheckInterval: 30000, // 30 seconds
       enableCostTracking: true,
       enableHealthMonitoring: true,
@@ -472,37 +472,187 @@ export class AIProviderRouter extends EventEmitter {
     const requestId = request.id;
 
     try {
-      // This would normally make the actual API call to the provider
-      // For now, simulate the response structure
-      const simulatedResponse = {
+      let content: string;
+      let inputTokens: number;
+      let outputTokens: number;
+
+      switch (provider.type) {
+        case 'anthropic': {
+          const response = await axios.post(
+            `${provider.baseURL}/v1/messages`,
+            {
+              model: model.id,
+              max_tokens: request.options.maxTokens || 4096,
+              messages: request.messages,
+              ...(request.options.temperature !== undefined && { temperature: request.options.temperature }),
+              ...(request.options.systemPrompt && { system: request.options.systemPrompt }),
+            },
+            {
+              headers: {
+                'x-api-key': provider.apiKey,
+                'anthropic-version': '2023-06-01',
+                'Content-Type': 'application/json',
+              },
+              timeout: provider.config.timeout,
+            }
+          );
+          content = response.data.content?.[0]?.text || '';
+          inputTokens = response.data.usage?.input_tokens || 0;
+          outputTokens = response.data.usage?.output_tokens || 0;
+          break;
+        }
+
+        case 'openai':
+        case 'groq':
+        case 'custom': {
+          const messages = request.options.systemPrompt
+            ? [{ role: 'system', content: request.options.systemPrompt }, ...request.messages]
+            : request.messages;
+
+          const response = await axios.post(
+            `${provider.baseURL}/v1/chat/completions`,
+            {
+              model: model.id,
+              max_tokens: request.options.maxTokens || 4096,
+              messages,
+              ...(request.options.temperature !== undefined && { temperature: request.options.temperature }),
+              ...(request.options.functions && { functions: request.options.functions }),
+            },
+            {
+              headers: {
+                'Authorization': `Bearer ${provider.apiKey}`,
+                'Content-Type': 'application/json',
+              },
+              timeout: provider.config.timeout,
+            }
+          );
+          content = response.data.choices?.[0]?.message?.content || '';
+          inputTokens = response.data.usage?.prompt_tokens || 0;
+          outputTokens = response.data.usage?.completion_tokens || 0;
+          break;
+        }
+
+        case 'gemini': {
+          const contents = request.messages.map((msg: any) => ({
+            role: msg.role === 'assistant' ? 'model' : 'user',
+            parts: [{ text: msg.content }],
+          }));
+
+          if (request.options.systemPrompt) {
+            contents.unshift({
+              role: 'user',
+              parts: [{ text: request.options.systemPrompt }],
+            });
+          }
+
+          const response = await axios.post(
+            `${provider.baseURL}/v1beta/models/${model.id}:generateContent`,
+            {
+              contents,
+              generationConfig: {
+                maxOutputTokens: request.options.maxTokens || 4096,
+                ...(request.options.temperature !== undefined && { temperature: request.options.temperature }),
+              },
+            },
+            {
+              params: { key: provider.apiKey },
+              headers: { 'Content-Type': 'application/json' },
+              timeout: provider.config.timeout,
+            }
+          );
+          content = response.data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+          inputTokens = response.data.usageMetadata?.promptTokenCount || 0;
+          outputTokens = response.data.usageMetadata?.candidatesTokenCount || 0;
+          break;
+        }
+
+        case 'ollama': {
+          const ollamaMessages = request.options.systemPrompt
+            ? [{ role: 'system', content: request.options.systemPrompt }, ...request.messages]
+            : request.messages;
+
+          const response = await axios.post(
+            `${provider.baseURL}/api/chat`,
+            {
+              model: model.id,
+              messages: ollamaMessages,
+              stream: false,
+              ...(request.options.temperature !== undefined && {
+                options: { temperature: request.options.temperature },
+              }),
+            },
+            {
+              headers: { 'Content-Type': 'application/json' },
+              timeout: provider.config.timeout,
+            }
+          );
+          content = response.data.message?.content || '';
+          inputTokens = response.data.prompt_eval_count || 0;
+          outputTokens = response.data.eval_count || 0;
+          break;
+        }
+
+        case 'huggingface': {
+          const response = await axios.post(
+            `${provider.baseURL}/models/${model.id}`,
+            {
+              inputs: request.messages.map((m: any) => m.content).join('\n'),
+              parameters: {
+                max_new_tokens: request.options.maxTokens || 4096,
+                ...(request.options.temperature !== undefined && { temperature: request.options.temperature }),
+              },
+            },
+            {
+              headers: {
+                'Authorization': `Bearer ${provider.apiKey}`,
+                'Content-Type': 'application/json',
+              },
+              timeout: provider.config.timeout,
+            }
+          );
+          const hfResult = Array.isArray(response.data) ? response.data[0] : response.data;
+          content = hfResult?.generated_text || '';
+          // HuggingFace Inference API does not return token counts; estimate from content length
+          inputTokens = Math.ceil(request.messages.reduce((sum: number, m: any) => sum + (m.content?.length || 0), 0) / 4);
+          outputTokens = Math.ceil(content.length / 4);
+          break;
+        }
+
+        default:
+          throw new Error(`Unsupported provider type: ${provider.type}`);
+      }
+
+      const totalTokens = inputTokens + outputTokens;
+      const cost = this.calculateCost(model, { inputTokens, outputTokens });
+
+      return {
         id: requestId,
         provider: provider.id,
         model: model.id,
-        content: `Simulated response from ${provider.name} ${model.name}`,
+        content,
         usage: {
-          inputTokens: Math.floor(Math.random() * 1000) + 500,
-          outputTokens: Math.floor(Math.random() * 500) + 100,
-          totalTokens: 0,
-          cost: 0
+          inputTokens,
+          outputTokens,
+          totalTokens,
+          cost,
         },
         metadata: {
           responseTime: Date.now() - startTime,
           timestamp: new Date().toISOString(),
-          cached: false
-        }
+          cached: false,
+        },
       };
-
-      simulatedResponse.usage.totalTokens = simulatedResponse.usage.inputTokens + simulatedResponse.usage.outputTokens;
-      simulatedResponse.usage.cost = this.calculateCost(model, simulatedResponse.usage);
-
-      return simulatedResponse;
 
     } catch (error: any) {
       this.handleProviderError(provider.id, {
         timestamp: new Date().toISOString(),
-        type: 'api_error',
-        message: error.message,
-        context: { request: request.id }
+        type: error.response?.status === 429 ? 'rate_limit'
+            : error.response?.status === 401 || error.response?.status === 403 ? 'auth_error'
+            : error.code === 'ECONNABORTED' ? 'timeout'
+            : error.code === 'ENOTFOUND' || error.code === 'ECONNREFUSED' ? 'network_error'
+            : 'api_error',
+        message: error.response?.data?.error?.message || error.message,
+        context: { request: request.id, status: error.response?.status }
       });
       throw error;
     }
@@ -547,7 +697,7 @@ export class AIProviderRouter extends EventEmitter {
         provider.status = newStatus;
         this.emit('providerHealthUpdated', { providerId: provider.id, status: newStatus });
 
-      } catch (error: any) {
+      } catch (error) {
         this.handleProviderError(provider.id, {
           timestamp: new Date().toISOString(),
           type: 'network_error',

@@ -38,8 +38,3 @@ export const featureFlags = {
     false,
   ),
 } as const;
-
-// Helpful during development/debugging; kept out of production logs.
-if (process.env.NODE_ENV !== 'production') {
-  console.log('[featureFlags]', featureFlags);
-}

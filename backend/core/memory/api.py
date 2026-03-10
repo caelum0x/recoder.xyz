@@ -136,7 +136,8 @@ async def get_memory_stats(
         try:
             tier_info = await subscription_service.get_user_subscription_tier(user_id)
             tier_name = tier_info['name']
-        except:
+        except Exception:
+            logger.warning("Failed to look up subscription tier for user %s, defaulting to 'free'", user_id, exc_info=True)
             tier_name = 'free'
         
         return MemoryStatsResponse(

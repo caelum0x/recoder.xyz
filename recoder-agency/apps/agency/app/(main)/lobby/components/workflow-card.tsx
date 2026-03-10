@@ -85,7 +85,7 @@ export function WorkflowCard({
 							{name}
 						</h3>
 						<div className="flex items-center justify-between mt-1">
-							<span className="max-w-[200px] truncate font-geist text-xs text-text/80">
+							<span className="max-w-[200px] truncate font-sans text-xs text-text/80">
 								Edited <span>{updatedAt.toLocaleDateString()}</span>
 							</span>
 						</div>

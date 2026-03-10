@@ -16,7 +16,7 @@ const FOOTER_LINKS = [
 
 export function SiteFooter() {
   return (
-    <footer className="border-t border-white/10 py-12 px-6">
+    <footer className="border-t border-white/10 px-6 py-10">
       <div className="container mx-auto max-w-6xl">
         <div className="flex flex-col md:flex-row items-center justify-between space-y-4 md:space-y-0">
           <div className="flex items-center space-x-2">
@@ -24,7 +24,7 @@ export function SiteFooter() {
             <span className="font-bold">recoder</span>
           </div>
 
-          <div className="flex items-center flex-wrap gap-x-6 gap-y-2 text-sm text-gray-500">
+          <div className="text-muted-foreground flex items-center flex-wrap gap-x-6 gap-y-2 text-sm">
             {FOOTER_LINKS.map((link) =>
               link.external ? (
                 <a
@@ -32,7 +32,7 @@ export function SiteFooter() {
                   href={link.href}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="hover:text-white transition-colors"
+                  className="text-muted-foreground hover:text-foreground transition-colors"
                 >
                   {link.label}
                 </a>
@@ -40,7 +40,7 @@ export function SiteFooter() {
                 <Link
                   key={link.href}
                   href={link.href}
-                  className="hover:text-white transition-colors"
+                  className="text-muted-foreground hover:text-foreground transition-colors"
                 >
                   {link.label}
                 </Link>
@@ -48,7 +48,7 @@ export function SiteFooter() {
             )}
           </div>
 
-          <div className="text-sm text-gray-500">
+          <div className="text-muted-foreground text-sm">
             &copy; 2024&ndash;2026 Recoder.xyz
           </div>
         </div>

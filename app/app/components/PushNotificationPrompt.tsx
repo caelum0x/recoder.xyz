@@ -81,14 +81,14 @@ export default function PushNotificationPrompt() {
         zIndex: 9999,
         maxWidth: 360,
         width: '100%',
-        background: '#18181b',
-        border: '1px solid #27272a',
+        background: 'var(--color-zinc-900, #18181b)',
+        border: '1px solid var(--color-zinc-800, #27272a)',
         borderRadius: 12,
         padding: '16px 20px',
         boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
         fontFamily:
           '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-        color: '#e4e4e7',
+        color: 'var(--color-zinc-200, #e4e4e7)',
         fontSize: 14,
         lineHeight: 1.5,
         animation: 'pushPromptSlideIn 0.3s ease-out',
@@ -110,7 +110,7 @@ export default function PushNotificationPrompt() {
           height={20}
           viewBox="0 0 24 24"
           fill="none"
-          stroke="#a78bfa"
+          stroke="var(--color-violet-400, #a78bfa)"
           strokeWidth={2}
           strokeLinecap="round"
           strokeLinejoin="round"
@@ -121,10 +121,10 @@ export default function PushNotificationPrompt() {
         </svg>
 
         <div style={{ flex: 1 }}>
-          <p style={{ margin: 0, fontWeight: 600, color: '#fafafa' }}>
+          <p style={{ margin: 0, fontWeight: 600, color: 'var(--color-zinc-50, #fafafa)' }}>
             Stay in the loop
           </p>
-          <p style={{ margin: '4px 0 0', color: '#a1a1aa', fontSize: 13 }}>
+          <p style={{ margin: '4px 0 0', color: 'var(--color-zinc-400, #a1a1aa)', fontSize: 13 }}>
             Get notified about build completions, agent updates, and important
             alerts.
           </p>
@@ -142,9 +142,9 @@ export default function PushNotificationPrompt() {
               onClick={dismiss}
               style={{
                 background: 'transparent',
-                border: '1px solid #3f3f46',
+                border: '1px solid var(--color-zinc-700, #3f3f46)',
                 borderRadius: 6,
-                color: '#a1a1aa',
+                color: 'var(--color-zinc-400, #a1a1aa)',
                 padding: '6px 14px',
                 fontSize: 13,
                 cursor: 'pointer',
@@ -152,7 +152,7 @@ export default function PushNotificationPrompt() {
               }}
               onMouseEnter={(e) =>
                 ((e.currentTarget as HTMLButtonElement).style.background =
-                  '#27272a')
+                  'var(--color-zinc-800, #27272a)')
               }
               onMouseLeave={(e) =>
                 ((e.currentTarget as HTMLButtonElement).style.background =
@@ -167,7 +167,7 @@ export default function PushNotificationPrompt() {
               onClick={enable}
               disabled={loading}
               style={{
-                background: '#6366f1',
+                background: 'var(--color-indigo-500, #6366f1)',
                 border: 'none',
                 borderRadius: 6,
                 color: '#fff',
@@ -181,12 +181,12 @@ export default function PushNotificationPrompt() {
               onMouseEnter={(e) => {
                 if (!loading)
                   (e.currentTarget as HTMLButtonElement).style.background =
-                    '#4f46e5';
+                    'var(--color-indigo-600, #4f46e5)';
               }}
               onMouseLeave={(e) => {
                 if (!loading)
                   (e.currentTarget as HTMLButtonElement).style.background =
-                    '#6366f1';
+                    'var(--color-indigo-500, #6366f1)';
               }}
             >
               {loading ? 'Enabling...' : 'Enable'}

@@ -91,12 +91,12 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
       const now = Date.now();
 
       if (!force && now - lastUpdateTimeRef.current < MIN_UPDATE_INTERVAL) {
-        console.log('[Presence] Rate limited - skipping update');
+        
         return;
       }
 
       if (!force && lastSentThreadRef.current === threadKey && pendingRequestRef.current) {
-        console.log('[Presence] Duplicate call prevented for same thread:', threadKey);
+        
         return;
       }
 
@@ -113,7 +113,7 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
 
       const requestPromise = (async () => {
         try {
-          console.log('[Presence] Sending update:', { threadId, sessionId: sessionId.slice(0, 8) });
+          
           await backendApi.post('/presence/update', {
             session_id: sessionId,
             active_thread_id: threadId,

@@ -96,7 +96,7 @@ const NotificationItem = (notification: Notification) => {
 
     if (url.startsWith('/internal/action/')) {
       const actionType = url.replace('/internal/action/', '');
-      console.log('Trigger action:', actionType, notification.data);
+      
       return;
     }
 
@@ -261,7 +261,7 @@ const MemoizedInbox = memo(function MemoizedInbox({
   // Memoize the render function to prevent unnecessary re-renders
   const renderNotification = useMemo(() => NotificationItem as any, []);
   
-  console.log('[NovuInbox] Rendering with session key:', `${subscriberId}-${applicationIdentifier}`);
+  
   
   return (
     <NotificationErrorBoundary>

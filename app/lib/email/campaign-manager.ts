@@ -5,6 +5,7 @@
  * Includes rate limiting, batch sending, and analytics
  */
 
+import crypto from 'crypto';
 import { sendEmail } from '../email';
 import { logger } from '@/lib/logger';
 import {
@@ -69,7 +70,7 @@ async function sendBatchEmails(
           }
 
           return { success: true, email: recipient.email };
-        } catch (error: any) {
+        } catch (error) {
           return {
             success: false,
             email: recipient.email,
@@ -288,7 +289,7 @@ export async function sendMilestoneEmail(
     logger.info('Milestone email sent', { email: recipient.email, milestoneType });
 
     return { success: true };
-  } catch (error: any) {
+  } catch (error) {
     logger.error('Failed to send milestone email', { email: recipient.email, error: error.message });
     return { success: false, error };
   }
@@ -316,7 +317,7 @@ export function scheduleCampaign(
   recipients: CampaignRecipient[],
   data: any
 ): string {
-  const id = `campaign_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  const id = `campaign_${Date.now()}_${crypto.randomUUID().replace(/-/g, '').slice(0, 9)}`;
 
   const campaign: ScheduledCampaign = {
     id,
@@ -390,7 +391,7 @@ export async function processScheduledCampaigns(): Promise<void> {
         campaign.status = 'completed';
 
         logger.info('Campaign completed', { campaignId: id });
-      } catch (error: any) {
+      } catch (error) {
         logger.error('Campaign failed', { campaignId: id, error: error.message });
         campaign.status = 'failed';
       }

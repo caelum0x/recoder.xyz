@@ -3879,7 +3879,7 @@ async def get_frustrated_conversations(
                                 if email_val:
                                     email_map[acc['id']] = email_val
                             except Exception:
-                                pass
+                                logger.warning(f"Failed to fetch email for account {acc.get('id')}")
             except Exception as e:
                 logger.warning(f"Failed to fetch user emails: {e}")
 
@@ -3891,7 +3891,8 @@ async def get_frustrated_conversations(
                 import json as json_lib
                 try:
                     frustration_signals = json_lib.loads(frustration_signals)
-                except:
+                except Exception:
+                    logger.warning(f"Failed to parse frustration_signals JSON for record {r.get('id')}")
                     frustration_signals = []
 
             items.append(ConversationAnalyticsItem(
@@ -4200,7 +4201,7 @@ async def get_rfm_engagement_summary(
                                 if email_val:
                                     email_map[acc['id']] = email_val
                             except Exception:
-                                pass  # Skip if RPC fails for this user
+                                logger.warning(f"Failed to fetch email for at-risk account {acc.get('id')}")
             except Exception as e:
                 logger.warning(f"Failed to fetch emails for at-risk accounts: {e}")
 
@@ -4385,7 +4386,7 @@ async def get_accounts_by_segment(
                                 if email_val:
                                     email_map[acc['id']] = email_val
                             except Exception:
-                                pass  # Skip if RPC fails for this user
+                                logger.warning(f"Failed to fetch email for segment account {acc.get('id')}")
             except Exception as e:
                 logger.warning(f"Failed to fetch emails for segment accounts: {e}")
 
@@ -4620,7 +4621,7 @@ async def _build_conversation_items(records: List[Dict[str, Any]]) -> List[Conve
                             if email_val:
                                 email_map[acc['id']] = email_val
                         except Exception:
-                            pass
+                            logger.warning(f"Failed to fetch email for account {acc.get('id')}")
         except Exception as e:
             logger.warning(f"Failed to fetch user emails: {e}")
 
@@ -4703,7 +4704,8 @@ async def _build_conversation_items(records: List[Dict[str, Any]]) -> List[Conve
             import json as json_lib
             try:
                 frustration_signals = json_lib.loads(frustration_signals)
-            except:
+            except Exception:
+                logger.warning(f"Failed to parse frustration_signals JSON for record {r.get('id')}")
                 frustration_signals = []
 
         items.append(ConversationAnalyticsItem(

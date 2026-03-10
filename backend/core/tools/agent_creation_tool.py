@@ -557,8 +557,8 @@ class AgentCreationTool(Tool):
                 logger.error(f"Failed to create agent version: {e}")
                 try:
                     await _agents.delete("agent_id", agent_id)
-                except:
-                    pass
+                except Exception:
+                    logger.exception("Failed to clean up agent %s after version creation failure", agent_id)
                 return self.fail_response("Failed to create agent configuration")
 
         except Exception as e:

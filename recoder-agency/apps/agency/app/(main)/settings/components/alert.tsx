@@ -3,7 +3,6 @@ import * as React from "react";
 
 import { cn } from "@/lib/utils";
 
-// FIXME: Consider integrating with shared UI alert component when releasing setting-v2
 const alertVariants = cva(
 	"relative w-full rounded-lg border px-4 py-3 text-sm [&>svg]:absolute [&>svg]:left-4 [&>svg]:top-4 [&>svg~*]:pl-[26px]",
 	{

@@ -34,7 +34,8 @@ function SignUpForm() {
   const [resending, setResending] = useState(false);
   const [resendMessage, setResendMessage] = useState('');
   const searchParams = useSearchParams();
-  const returnUrl = searchParams.get('return');
+  const rawReturn = searchParams.get('return');
+  const returnUrl = rawReturn && rawReturn.startsWith('/') && !rawReturn.startsWith('//') ? rawReturn : null;
 
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -118,7 +119,7 @@ function SignUpForm() {
   const features = [
     'Access to all Recoder platforms',
     'AI Agents IDE (agents.recoder.xyz)',
-    'AI Workflow Studio (studio.recoder.xyz)',
+    'AI Agency Platform (agency.recoder.xyz)',
     'Browser-based IDE (web.recoder.xyz)',
     'BYOK — bring your own AI keys',
     'Community support'

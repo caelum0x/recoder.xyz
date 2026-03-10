@@ -41,7 +41,7 @@ function validateEvent(body: unknown): body is PlatformEvent {
     typeof b.message === "string" &&
     (b.message as string).length <= 2000 &&
     typeof b.sourceApp === "string" &&
-    VALID_SOURCE_APPS.includes(b.sourceApp as any)
+    (VALID_SOURCE_APPS as readonly string[]).includes(b.sourceApp as string)
   );
 }
 

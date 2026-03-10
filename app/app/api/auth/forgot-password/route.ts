@@ -5,11 +5,18 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { sendPasswordResetEmail } from '@/lib/email';
+import { resolvePublicAppUrl, sendPasswordResetEmail } from '@/lib/email';
 import crypto from 'crypto';
+import { rateLimit, rateLimitConfigs } from '@/lib/middleware/rate-limit';
+
+const passwordResetRateLimiter = rateLimit(rateLimitConfigs.passwordReset);
 
 export async function POST(request: NextRequest) {
   try {
+    // Rate limit: 3 requests per hour
+    const rateLimitResponse = await passwordResetRateLimiter(request);
+    if (rateLimitResponse) return rateLimitResponse;
+
     const body = await request.json();
     const { email } = body;
 
@@ -39,7 +46,6 @@ export async function POST(request: NextRequest) {
     // Always return success to prevent email enumeration
     // Even if user doesn't exist, we return success
     if (!userEmail) {
-      console.log(`Password reset requested for non-existent email: ${email}`);
       return NextResponse.json({
         success: true,
         message: 'If an account exists with this email, a password reset link has been sent'
@@ -69,7 +75,7 @@ export async function POST(request: NextRequest) {
       }
     });
 
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://recoder.xyz';
+    const appUrl = resolvePublicAppUrl();
     const resetUrl = `${appUrl}/auth/reset-password?token=${encodeURIComponent(resetToken)}`;
 
     // Send password reset email
@@ -82,8 +88,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    console.log(`✅ Password reset email sent to ${userEmail} via Resend/SMTP`);
-
     return NextResponse.json({
       success: true,
       message: 'If an account exists with this email, a password reset link has been sent'
@@ -91,9 +95,10 @@ export async function POST(request: NextRequest) {
 
   } catch (error) {
     console.error('Forgot password error:', error);
-    return NextResponse.json(
-      { success: false, error: 'Internal server error' },
-      { status: 500 }
-    );
+    // Keep a non-enumerating contract even during transient DB/provider outages.
+    return NextResponse.json({
+      success: true,
+      message: 'If an account exists with this email, a password reset link has been sent'
+    });
   }
 }

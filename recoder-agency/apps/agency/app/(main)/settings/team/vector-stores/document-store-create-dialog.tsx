@@ -165,7 +165,7 @@ export function DocumentVectorStoreCreateDialog({
 							<span className="sr-only">Close</span>
 						</DialogClose>
 					</div>
-					<DialogDescription className="font-geist mt-2 text-[14px] text-text-muted">
+					<DialogDescription className="font-sans mt-2 text-[14px] text-text-muted">
 						Create a new Vector Store for your documents.
 					</DialogDescription>
 				</DialogHeader>
@@ -202,7 +202,7 @@ export function DocumentVectorStoreCreateDialog({
 												checked={isSelected}
 												disabled={isPending || isLastSelected}
 												onChange={() => toggleProfile(profileId)}
-												className="mt-1 w-4 h-4 text-[#1663F3] bg-surface border-border rounded focus:ring-[#1663F3]/20"
+												className="mt-1 w-4 h-4 text-blue-500 bg-surface border-border rounded focus:ring-blue-500/20"
 											/>
 											<div className="flex-1">
 												<div className="text-text text-[14px] font-medium">

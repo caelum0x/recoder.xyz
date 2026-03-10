@@ -385,7 +385,7 @@ export function InviteMemberDialog({
 							<span className="sr-only">Close</span>
 						</DialogClose>
 					</div>
-					<DialogDescription className="font-geist mt-2 text-[14px] text-text-muted">
+					<DialogDescription className="font-sans mt-2 text-[14px] text-text-muted">
 						Invited members will be able to collaborate with your team once they
 						accept.
 					</DialogDescription>

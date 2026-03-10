@@ -137,5 +137,5 @@ class CreditRepository:
                 "transaction_id": transaction_id,
                 "error_message": error_message
             })
-        except:
-            pass
+        except Exception as e:
+            logger.warning(f"[REVENUECAT] Failed to mark credit purchase as failed for transaction {transaction_id}: {e}")

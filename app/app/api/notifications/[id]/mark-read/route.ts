@@ -6,6 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from "@/lib/auth-helpers";
 import { prisma } from '@/lib/prisma';
+import { logger } from '@/lib/logger';
 
 export async function POST(
   request: NextRequest,
@@ -62,7 +63,7 @@ export async function POST(
       message: 'Notification marked as read',
     });
   } catch (error) {
-    console.error('Failed to mark notification as read:', error);
+    logger.error('Failed to mark notification as read:', { error: error instanceof Error ? error.message : String(error) });
     return NextResponse.json(
       { success: false, error: 'Failed to update notification' },
       { status: 500 }

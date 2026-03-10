@@ -51,7 +51,8 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
 async function fetchTeam() {
 	try {
 		return await fetchCurrentTeam();
-	} catch (_error) {
+	} catch (error) {
+		console.error("[vector-store-docs] Failed to fetch team:", error);
 		return null;
 	}
 }
@@ -59,7 +60,8 @@ async function fetchTeam() {
 async function fetchUser() {
 	try {
 		return await fetchCurrentUser();
-	} catch (_error) {
+	} catch (error) {
+		console.error("[vector-store-docs] Failed to fetch user:", error);
 		return null;
 	}
 }

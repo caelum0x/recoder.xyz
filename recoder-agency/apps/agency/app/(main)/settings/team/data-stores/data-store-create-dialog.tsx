@@ -63,7 +63,7 @@ export function DataStoreCreateDialog({
 							<span className="sr-only">Close</span>
 						</DialogClose>
 					</div>
-					<DialogDescription className="font-geist mt-2 text-[14px] text-text-muted">
+					<DialogDescription className="font-sans mt-2 text-[14px] text-text-muted">
 						Add a PostgreSQL database connection to use it in Data Store Nodes.
 					</DialogDescription>
 				</DialogHeader>

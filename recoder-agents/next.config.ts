@@ -1,4 +1,5 @@
 import type { NextConfig } from 'next';
+import bundleAnalyzer from '@next/bundle-analyzer';
 
 // Dynamically determine backend URL based on Vercel environment
 const getBackendUrl = (): string => {
@@ -82,7 +83,11 @@ const buildCsp = () => {
   return directives.join('; ');
 };
 
-const nextConfig = (): NextConfig => ({
+const withBundleAnalyzer = bundleAnalyzer({
+  enabled: process.env.ANALYZE === 'true',
+});
+
+const nextConfig: NextConfig = {
   output: (process.env.NEXT_OUTPUT as 'standalone') || undefined,
 
   // Transpile shared package
@@ -218,6 +223,6 @@ const nextConfig = (): NextConfig => ({
   },
   
   skipTrailingSlashRedirect: true,
-});
+};
 
-export default nextConfig;
+export default withBundleAnalyzer(nextConfig);

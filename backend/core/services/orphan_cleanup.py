@@ -71,7 +71,7 @@ async def cleanup_orphaned_agent_runs(db_client=None) -> int:
             if isinstance(metadata, str):
                 try:
                     metadata = json_lib.loads(metadata)
-                except:
+                except (json_lib.JSONDecodeError, ValueError):
                     metadata = {}
             
             run_instance_id = metadata.get('instance_id')
@@ -89,8 +89,8 @@ async def cleanup_orphaned_agent_runs(db_client=None) -> int:
                             runs_to_cleanup.append(run)
                         else:
                             skipped_recent_legacy += 1
-                    except:
-                        # Can't parse date, skip for safety
+                    except Exception:
+                        logger.warning(f"Failed to parse started_at date for orphan run {run.get('id')}, skipping for safety")
                         skipped_recent_legacy += 1
                 else:
                     skipped_recent_legacy += 1
@@ -124,7 +124,8 @@ async def cleanup_orphaned_agent_runs(db_client=None) -> int:
                 if isinstance(metadata, str):
                     try:
                         metadata = json_lib.loads(metadata)
-                    except:
+                    except Exception:
+                        logger.warning(f"Failed to parse metadata JSON for orphan run {agent_run_id}")
                         metadata = {}
                 account_id = metadata.get('actual_user_id')
                 

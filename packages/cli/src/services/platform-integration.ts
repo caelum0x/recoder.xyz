@@ -3,6 +3,7 @@
  * Connects CLI with web and chat platforms for unified experience
  */
 
+import { randomUUID } from 'crypto';
 import { APIClient } from './api-client';
 import { ConfigManager } from '../utils/config-manager';
 import { Logger } from '../utils/logger';
@@ -448,7 +449,7 @@ export class PlatformIntegration extends EventEmitter {
    * Generate unique ID
    */
   private generateId(): string {
-    return `cli_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    return `cli_${Date.now()}_${randomUUID().replace(/-/g, '').slice(0, 9)}`;
   }
 
   /**

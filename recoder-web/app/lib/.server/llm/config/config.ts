@@ -5,6 +5,7 @@
  */
 
 import type { Content } from '@google/genai';
+import * as fs from 'node:fs';
 import * as path from 'node:path';
 import process from 'node:process';
 import { GeminiClient } from '../core/client.js';
@@ -782,18 +783,21 @@ export class Config {
   }
 
   /**
-   * Gets custom file exclusion patterns from configuration.
-   * TODO: This is a placeholder implementation. In the future, this could
-   * read from settings files, CLI arguments, or environment variables.
+   * Gets custom file exclusion patterns from a `.recoderignore` file
+   * in the project root. Each non-empty, non-comment line is treated
+   * as a glob pattern (same syntax as `.gitignore`).
    */
   getCustomExcludes(): string[] {
-    // Placeholder implementation - returns empty array for now
-    // Future implementation could read from:
-    // - User settings file
-    // - Project-specific configuration
-    // - Environment variables
-    // - CLI arguments
-    return [];
+    try {
+      const ignorePath = path.join(this.targetDir, '.recoderignore');
+      const content = fs.readFileSync(ignorePath, 'utf-8');
+      return content
+        .split('\n')
+        .map((line) => line.trim())
+        .filter((line) => line.length > 0 && !line.startsWith('#'));
+    } catch {
+      return [];
+    }
   }
 
   getCheckpointingEnabled(): boolean {

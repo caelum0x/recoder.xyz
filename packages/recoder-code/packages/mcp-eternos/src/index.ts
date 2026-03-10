@@ -407,9 +407,11 @@ async function generateCode(args: any) {
       case "password":
         const length = options?.length || 16;
         const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*";
+        const randomBuf = new Uint8Array(length);
+        crypto.getRandomValues(randomBuf);
         let password = "";
         for (let j = 0; j < length; j++) {
-          password += chars.charAt(Math.floor(Math.random() * chars.length));
+          password += chars.charAt(randomBuf[j] % chars.length);
         }
         results.push(password);
         break;
@@ -443,30 +445,120 @@ async function analyzeCode(args: any) {
     source = code;
   }
 
-  if (language !== 'javascript' && language !== 'typescript') {
-    throw new Error(`Code analysis for ${language} is not yet implemented.`);
-  }
-
   const results: any = {};
 
-  if (analysis.includes('imports')) {
-    const importRegex = /import(?:["'\s]*([\w*{}\n\r\t, ]+)from\s*)?["'\s]*([@\w/\\.\-]+)["'\s]*/g;
-    results.imports = [...source.matchAll(importRegex)].map(m => m[0]);
-  }
+  if (language === 'javascript' || language === 'typescript') {
+    if (analysis.includes('imports')) {
+      const importRegex = /import(?:["'\s]*([\w*{}\n\r\t, ]+)from\s*)?["'\s]*([@\w/\\.\-]+)["'\s]*/g;
+      results.imports = [...source.matchAll(importRegex)].map(m => m[0]);
+    }
 
-  if (analysis.includes('exports')) {
-    const exportRegex = /export\s+(?:const|let|var|function|class|type|interface)\s+(\w+)/g;
-    results.exports = [...source.matchAll(exportRegex)].map(m => m[1]);
-  }
+    if (analysis.includes('exports')) {
+      const exportRegex = /export\s+(?:const|let|var|function|class|type|interface)\s+(\w+)/g;
+      results.exports = [...source.matchAll(exportRegex)].map(m => m[1]);
+    }
 
-  if (analysis.includes('functions')) {
-    const functionRegex = /(?:async\s+)?function\s+(\w+)\s*\(/g;
-    results.functions = [...source.matchAll(functionRegex)].map(m => m[1]);
-  }
+    if (analysis.includes('functions')) {
+      const functionRegex = /(?:async\s+)?function\s+(\w+)\s*\(/g;
+      results.functions = [...source.matchAll(functionRegex)].map(m => m[1]);
+    }
 
-  if (analysis.includes('classes')) {
-    const classRegex = /class\s+(\w+)/g;
-    results.classes = [...source.matchAll(classRegex)].map(m => m[1]);
+    if (analysis.includes('classes')) {
+      const classRegex = /class\s+(\w+)/g;
+      results.classes = [...source.matchAll(classRegex)].map(m => m[1]);
+    }
+  } else if (language === 'python') {
+    if (analysis.includes('imports')) {
+      const importRegex = /^(?:import\s+[\w.]+(?:\s+as\s+\w+)?|from\s+[\w.]+\s+import\s+[\w.,\s*]+)/gm;
+      results.imports = [...source.matchAll(importRegex)].map(m => m[0]);
+    }
+
+    if (analysis.includes('exports')) {
+      const allRegex = /^__all__\s*=\s*\[([^\]]*)\]/gm;
+      const allMatch = [...source.matchAll(allRegex)];
+      if (allMatch.length > 0) {
+        const nameRegex = /["'](\w+)["']/g;
+        results.exports = [...allMatch[0][1].matchAll(nameRegex)].map(m => m[1]);
+      } else {
+        results.exports = [];
+      }
+    }
+
+    if (analysis.includes('functions')) {
+      const functionRegex = /^(?:async\s+)?def\s+(\w+)\s*\(/gm;
+      results.functions = [...source.matchAll(functionRegex)].map(m => m[1]);
+    }
+
+    if (analysis.includes('classes')) {
+      const classRegex = /^class\s+(\w+)/gm;
+      results.classes = [...source.matchAll(classRegex)].map(m => m[1]);
+    }
+  } else if (language === 'go') {
+    if (analysis.includes('imports')) {
+      const singleImportRegex = /^import\s+"([^"]+)"/gm;
+      const blockImportRegex = /^import\s*\(([\s\S]*?)\)/gm;
+      const singleImports = [...source.matchAll(singleImportRegex)].map(m => m[1]);
+      const blockImports: string[] = [];
+      for (const block of source.matchAll(blockImportRegex)) {
+        const pathRegex = /"([^"]+)"/g;
+        for (const p of block[1].matchAll(pathRegex)) {
+          blockImports.push(p[1]);
+        }
+      }
+      results.imports = [...singleImports, ...blockImports];
+    }
+
+    if (analysis.includes('exports')) {
+      const exportedFuncRegex = /^func\s+([A-Z]\w*)\s*\(/gm;
+      const exportedTypeRegex = /^type\s+([A-Z]\w*)\s+/gm;
+      const exportedVarRegex = /^(?:var|const)\s+([A-Z]\w*)\s+/gm;
+      results.exports = [
+        ...[...source.matchAll(exportedFuncRegex)].map(m => m[1]),
+        ...[...source.matchAll(exportedTypeRegex)].map(m => m[1]),
+        ...[...source.matchAll(exportedVarRegex)].map(m => m[1]),
+      ];
+    }
+
+    if (analysis.includes('functions')) {
+      const functionRegex = /^func\s+(?:\(\s*\w+\s+\*?\w+\s*\)\s+)?(\w+)\s*\(/gm;
+      results.functions = [...source.matchAll(functionRegex)].map(m => m[1]);
+    }
+
+    if (analysis.includes('classes')) {
+      const structRegex = /^type\s+(\w+)\s+struct\s*\{/gm;
+      results.classes = [...source.matchAll(structRegex)].map(m => m[1]);
+    }
+  } else if (language === 'rust') {
+    if (analysis.includes('imports')) {
+      const useRegex = /^use\s+[\w:]+(?:::\{[^}]+\})?(?:::\*)?;/gm;
+      results.imports = [...source.matchAll(useRegex)].map(m => m[0]);
+    }
+
+    if (analysis.includes('exports')) {
+      const pubFnRegex = /^pub\s+(?:async\s+)?fn\s+(\w+)\s*[<(]/gm;
+      const pubStructRegex = /^pub\s+struct\s+(\w+)/gm;
+      const pubEnumRegex = /^pub\s+enum\s+(\w+)/gm;
+      const pubTraitRegex = /^pub\s+trait\s+(\w+)/gm;
+      results.exports = [
+        ...[...source.matchAll(pubFnRegex)].map(m => m[1]),
+        ...[...source.matchAll(pubStructRegex)].map(m => m[1]),
+        ...[...source.matchAll(pubEnumRegex)].map(m => m[1]),
+        ...[...source.matchAll(pubTraitRegex)].map(m => m[1]),
+      ];
+    }
+
+    if (analysis.includes('functions')) {
+      const functionRegex = /^(?:pub\s+)?(?:async\s+)?fn\s+(\w+)\s*[<(]/gm;
+      results.functions = [...source.matchAll(functionRegex)].map(m => m[1]);
+    }
+
+    if (analysis.includes('classes')) {
+      const structRegex = /^(?:pub\s+)?struct\s+(\w+)/gm;
+      const implRegex = /^impl(?:<[^>]+>)?\s+(\w+)/gm;
+      const structs = [...source.matchAll(structRegex)].map(m => m[1]);
+      const impls = [...source.matchAll(implRegex)].map(m => m[1]);
+      results.classes = [...new Set([...structs, ...impls])];
+    }
   }
 
   if (analysis.includes('complexity')) {

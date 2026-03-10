@@ -34,7 +34,7 @@ export function OfficialRepositoryItem({
 						href={`https://github.com/${repositoryIndex.owner}/${repositoryIndex.repo}`}
 						target="_blank"
 						rel="noopener noreferrer"
-						className="font-medium text-[16px] leading-[22.4px] font-geist"
+						className="font-medium text-[16px] leading-[22.4px] font-sans"
 					>
 						{repositoryIndex.owner}/{repositoryIndex.repo}
 					</AccentLink>

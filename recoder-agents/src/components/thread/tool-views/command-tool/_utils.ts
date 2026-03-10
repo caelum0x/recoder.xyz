@@ -53,7 +53,7 @@ export function extractCommandData(
   if (toolResult?.output) {
     // Handle structured output object
     if (typeof toolResult.output === 'object' && toolResult.output !== null) {
-      const outputObj = toolResult.output as any;
+      const outputObj = toolResult.output as Record<string, unknown>;
       output = outputObj.output || outputObj.stdout || outputObj.content || JSON.stringify(outputObj, null, 2);
       exitCode = outputObj.exit_code ?? outputObj.exitCode ?? null;
       completed = outputObj.completed ?? outputObj.finished ?? null;

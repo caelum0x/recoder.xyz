@@ -55,7 +55,7 @@ export default function PlatformPage() {
               const color = serviceColors[service.id] || 'from-gray-500 to-gray-600';
               const url = getServiceUrlClient(service.id);
               return (
-                <div key={service.id} className="bg-[#111] border border-white/10 rounded-xl p-5 hover:border-white/20 transition-all">
+                <div key={service.id} className="bg-zinc-900 border border-white/10 rounded-xl p-5 hover:border-white/20 transition-all">
                   <div className="flex items-start justify-between mb-3">
                     <div className={`w-10 h-10 rounded-lg bg-gradient-to-br ${color} flex items-center justify-center`}>
                       <Icon className="w-5 h-5 text-white" />

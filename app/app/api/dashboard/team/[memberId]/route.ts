@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth-helpers';
 import { prisma } from '@/lib/prisma';
+import { logger } from '@/lib/logger';
 
 export async function DELETE(
   request: NextRequest,
@@ -31,7 +32,7 @@ export async function DELETE(
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error('Team member delete error:', error);
+    logger.error('Team member delete error:', { error: error instanceof Error ? error.message : String(error) });
     return NextResponse.json({ success: false, error: 'Failed to remove team member' }, { status: 500 });
   }
 }

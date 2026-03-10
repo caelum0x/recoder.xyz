@@ -61,10 +61,7 @@ export function MakeCallToolView({
 
         const data = await response.json();
 
-        console.log('[MakeCallToolView] Fetched call data:', {
-          status: data?.status,
-          transcriptLength: Array.isArray(data?.transcript) ? data.transcript.length : 0
-        });
+        
         return data;
       } catch (error) {
         console.error('[MakeCallToolView] Error fetching call:', error);
@@ -83,10 +80,7 @@ export function MakeCallToolView({
 
   useEffect(() => {
     if (realtimeData) {
-      console.log('[MakeCallToolView] Updating from realtime data:', {
-        status: realtimeData.status,
-        transcript: realtimeData.transcript
-      });
+      
 
       setLiveStatus(realtimeData.status);
 
@@ -97,14 +91,14 @@ export function MakeCallToolView({
             : realtimeData.transcript;
 
           const transcriptArray = Array.isArray(parsed) ? parsed : [];
-          console.log('[MakeCallToolView] Setting transcript:', transcriptArray.length, 'messages');
+          
           setLiveTranscript(transcriptArray);
         } catch (e) {
           console.error('[MakeCallToolView] Failed to parse transcript:', e);
           setLiveTranscript([]);
         }
       } else {
-        console.log('[MakeCallToolView] No transcript in realtime data');
+        
       }
     }
   }, [realtimeData]);
@@ -119,7 +113,6 @@ export function MakeCallToolView({
 
   // Defensive check - handle cases where toolCall might be undefined
   if (!toolCall) {
-    console.warn('MakeCallToolView: toolCall is undefined. Tool views should use structured props.');
     return null;
   }
 

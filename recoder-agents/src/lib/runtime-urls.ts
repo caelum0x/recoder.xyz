@@ -1,7 +1,7 @@
 import { RECODER_ECOSYSTEM_URLS } from '@recoder/ecosystem-config';
 
 const PRODUCTION_AGENTS_URL = 'https://agents.recoder.xyz';
-const PRODUCTION_BACKEND_API_URL = 'https://backend.recoder.xyz/v1';
+const PRODUCTION_BACKEND_API_URL = 'https://api.recoder.xyz/v1';
 const PRODUCTION_DOCKER_BACKEND_URL = 'https://docker.recoder.xyz';
 
 export function resolveAgentsSiteUrl(): string {

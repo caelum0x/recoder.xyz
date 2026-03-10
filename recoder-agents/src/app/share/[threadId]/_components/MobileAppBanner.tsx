@@ -9,7 +9,7 @@ import { RecoderLogo } from '@/components/sidebar/recoder-logo';
 function isMobileDevice(): boolean {
   if (typeof window === 'undefined') return false;
 
-  const userAgent = navigator.userAgent || navigator.vendor || (window as any).opera;
+  const userAgent = navigator.userAgent || navigator.vendor || window.opera || '';
   const ua = userAgent.toLowerCase();
 
   // Check for mobile user agents

@@ -18,10 +18,12 @@ const CLIENT_ID = 'recoder-cli';
 // Generate random user code (e.g., "ABCD-1234")
 function generateUserCode(): string {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // No ambiguous chars
+  const randomBytes = new Uint8Array(USER_CODE_LENGTH);
+  crypto.getRandomValues(randomBytes);
   let code = '';
   for (let i = 0; i < USER_CODE_LENGTH; i++) {
     if (i === 4) code += '-';
-    code += chars[Math.floor(Math.random() * chars.length)];
+    code += chars[randomBytes[i] % chars.length];
   }
   return code;
 }

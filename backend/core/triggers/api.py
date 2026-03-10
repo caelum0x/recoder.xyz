@@ -576,7 +576,8 @@ async def trigger_webhook(
         raw_data = {}
         try:
             raw_data = await request.json()
-        except:
+        except Exception:
+            logger.warning(f"Failed to parse JSON body for trigger webhook {trigger_id}")
             pass
         
         # Process trigger event

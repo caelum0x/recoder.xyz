@@ -207,9 +207,10 @@ export class MultiDispatchService {
     let channelThreadId: string | undefined;
     try {
       const collab = getCollaborationSvc();
-      const thread = collab.createThread(ws.defaultChannelId, {
-        title: `Dispatch: ${request.prompt.slice(0, 80)}`,
-      });
+      const thread = collab.createThread(
+        ws.defaultChannelId,
+        `Dispatch: ${request.prompt.slice(0, 80)}`,
+      );
       channelThreadId = thread.id;
 
       // Post system message about the dispatch (include routing reasons when auto-routed)
@@ -222,8 +223,9 @@ export class MultiDispatchService {
           .join('\n');
         dispatchText += `\n\nAuto-routed:\n${reasonLines}`;
       }
-      collab.sendMessage(ws.defaultChannelId, thread.id, {
-        senderId: 'system',
+      collab.sendMessage({
+        threadId: thread.id,
+        senderAgentId: 'system',
         text: dispatchText,
       });
     } catch (err) {

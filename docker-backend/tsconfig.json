@@ -3,6 +3,8 @@
     "target": "ES2022",
     "module": "commonjs",
     "paths": {
+      "@recoder/shared/a2a": ["./node_modules/@recoder/shared/src/a2a/index.ts"],
+      "@recoder/shared/a2a/schemas": ["./node_modules/@recoder/shared/src/a2a/schemas/index.ts"],
       "@recoder/stream/public-task-stream": ["../packages/stream/dist/public-task-stream"],
       "@recoder/vault": ["../packages/vault/dist/index"],
       "@recoder/vault/node-crypto": ["../packages/vault/dist/node-crypto"]

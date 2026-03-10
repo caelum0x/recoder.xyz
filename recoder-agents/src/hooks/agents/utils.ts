@@ -42,6 +42,7 @@ export type Agent = {
     template_name?: string;
     recoder_template_id?: string;
     is_recoder_team?: boolean;
+    is_recoder_default?: boolean;
     is_suna_default?: boolean;
     centrally_managed?: boolean;
     management_version?: string;
@@ -194,7 +195,6 @@ export const getAgents = async (params: AgentsParams = {}): Promise<AgentsRespon
     const result = await response.json();
     return result;
   } catch (err) {
-    console.error('Error fetching agents:', err);
     throw err;
   }
 };
@@ -214,7 +214,6 @@ export const getAgent = async (agentId: string): Promise<Agent> => {
     const agent = await response.json();
     return agent;
   } catch (err) {
-    console.error('Error fetching agent:', err);
     throw err;
   }
 };
@@ -246,7 +245,6 @@ export const createAgent = async (agentData: AgentCreateRequest): Promise<Agent>
     const agent = await response.json();
     return agent;
   } catch (err) {
-    console.error('Error creating agent:', err);
     throw err;
   }
 };
@@ -267,7 +265,6 @@ export const updateAgent = async (agentId: string, agentData: AgentUpdateRequest
     const agent = await response.json();
     return agent;
   } catch (err) {
-    console.error('Error updating agent:', err);
     throw err;
   }
 };
@@ -284,12 +281,28 @@ export const deleteAgent = async (agentId: string): Promise<void> => {
       throw new Error(errorData.message || `HTTP ${response.status}: ${response.statusText}`);
     }
   } catch (err) {
-    console.error('Error deleting agent:', err);
     throw err;
   }
 };
 
+export const cloneAgent = async (agentId: string): Promise<Agent> => {
+  try {
+    const response = await fetch(`${API_URL}/agents/${agentId}/clone`, {
+      method: 'POST',
+      headers: await getAuthHeaders(true),
+    });
 
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ message: 'Unknown error' }));
+      throw new Error(errorData.message || errorData.detail || `HTTP ${response.status}: ${response.statusText}`);
+    }
+
+    const agent = await response.json();
+    return agent;
+  } catch (err) {
+    throw err;
+  }
+};
 
 
 export const getAgentVersions = async (agentId: string): Promise<AgentVersion[]> => {
@@ -306,7 +319,6 @@ export const getAgentVersions = async (agentId: string): Promise<AgentVersion[]>
     const versions = await response.json();
     return versions;
   } catch (err) {
-    console.error('Error fetching agent versions:', err);
     throw err;
   }
 };
@@ -330,7 +342,6 @@ export const createAgentVersion = async (
     const version = await response.json();
     return version;
   } catch (err) {
-    console.error('Error creating agent version:', err);
     throw err;
   }
 };
@@ -353,7 +364,6 @@ export const activateAgentVersion = async (
       throw new Error(errorData.message || `HTTP ${response.status}: ${response.statusText}`);
     }
   } catch (err) {
-    console.error('Error activating agent version:', err);
     throw err;
   }
 };
@@ -378,7 +388,6 @@ export const getAgentVersion = async (
     const version = await response.json();
     return version;
   } catch (err) {
-    console.error('Error fetching agent version:', err);
     throw err;
   }
 };
@@ -406,7 +415,6 @@ export const updateAgentVersionDetails = async (
     const version = await response.json();
     return version;
   } catch (err) {
-    console.error('Error updating version details:', err);
     throw err;
   }
 };

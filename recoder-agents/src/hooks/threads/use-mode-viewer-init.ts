@@ -33,7 +33,7 @@ export function useModeViewerInit(
 
     hasInitialized.current = true;
 
-    console.log('[ModeViewerInit] Auto-opening viewer for mode:', threadMode);
+    
 
     // Clean up sessionStorage
     sessionStorage.removeItem('thread_mode');
@@ -56,37 +56,37 @@ function handleModeInit(mode: Mode, openFileBrowser: () => void) {
     case 'slides':
       // Open Files tab in Recoder Computer to show presentations folder
       openFileBrowser();
-      console.log('[ModeViewerInit] Opening Files panel for presentations');
+      
       break;
 
     case 'sheets':
       // Open Files tab to show spreadsheets
       openFileBrowser();
-      console.log('[ModeViewerInit] Opening Files panel for spreadsheets');
+      
       break;
 
     case 'docs':
       // Open Files tab to show documents
       openFileBrowser();
-      console.log('[ModeViewerInit] Opening Files panel for documents');
+      
       break;
 
     case 'canvas':
       // Open Files tab for canvas files
       openFileBrowser();
-      console.log('[ModeViewerInit] Opening Files panel for canvas');
+      
       break;
 
     case 'video':
       // Open Files tab for video files
       openFileBrowser();
-      console.log('[ModeViewerInit] Opening Files panel for video');
+      
       break;
 
     case 'research':
       // For research mode, just keep the default view
       // The agent will show research results in the chat
-      console.log('[ModeViewerInit] Research mode - keeping default view');
+      
       break;
 
     default:

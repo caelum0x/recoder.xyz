@@ -30,4 +30,7 @@ COPY --from=base /repo/apps/api/.next/standalone ./
 COPY --from=base /repo/apps/api/.next/static ./apps/api/.next/static
 COPY --from=base /repo/apps/api/public ./apps/api/public
 
+HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
+  CMD wget -qO- http://localhost:3004/ || exit 1
+
 CMD ["node", "apps/api/server.js"]

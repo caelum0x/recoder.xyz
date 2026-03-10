@@ -7,7 +7,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth-config';
 import { headers } from 'next/headers';
 
-const BACKEND_URL = process.env.BACKEND_URL || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+const BACKEND_URL = process.env.BACKEND_URL || process.env.NEXT_PUBLIC_API_URL || (process.env.NODE_ENV === 'production' ? 'https://docker.recoder.xyz' : 'http://localhost:3100');
 
 export async function GET(
   request: NextRequest,
@@ -90,7 +90,7 @@ async function proxyRequest(
     return NextResponse.json(data, {
       status: backendResponse.status,
     });
-  } catch (error: any) {
+  } catch (error) {
     console.error('Proxy error:', error);
     return NextResponse.json(
       {

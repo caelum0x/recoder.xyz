@@ -77,8 +77,27 @@ export enum ValidationCategory {
 }
 
 export class RealityValidationSystem {
-  validateGeneration(result: GenerationResult) {
-    throw new Error('Method not implemented.');
+  async validateGeneration(result: GenerationResult): Promise<ValidationReport> {
+    const projectPath = result.request.context.project.rootPath;
+
+    // If the project path doesn't exist yet, return an empty passing report
+    if (!await fs.pathExists(projectPath)) {
+      Logger.warn('Project path does not exist yet, skipping validation', { projectPath });
+      return {
+        projectPath,
+        timestamp: new Date(),
+        categories: {
+          [ValidationCategory.CODE_QUALITY]: { passed: 0, failed: 0, warnings: 0, rules: [] },
+          [ValidationCategory.INTEGRATION]: { passed: 0, failed: 0, warnings: 0, rules: [] },
+          [ValidationCategory.BLOCKCHAIN]: { passed: 0, failed: 0, warnings: 0, rules: [] },
+          [ValidationCategory.PRODUCTION]: { passed: 0, failed: 0, warnings: 0, rules: [] }
+        },
+        summary: { totalRules: 0, passed: 0, failed: 0, warnings: 0, score: 0 },
+        fixes: []
+      };
+    }
+
+    return this.validateProject(projectPath);
   }
   private rules: ValidationRule[] = [];
 

@@ -8,7 +8,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { hashPassword } from '@/lib/crypto';
 import { getPlanLimits } from '@/lib/plan-config';
-import { sendVerificationEmail } from '@/lib/email';
+import { resolvePublicAppUrl, sendVerificationEmail } from '@/lib/email';
 import { scheduleOnboardingEmails } from '@/lib/services/onboarding-email.service';
 import { nanoid } from 'nanoid';
 import crypto from 'crypto';
@@ -97,6 +97,19 @@ export async function POST(request: NextRequest) {
       },
     });
 
+    // Better Auth email sign-in expects a credential account row.
+    // Without this, users created via /api/auth/register cannot log in with signIn.email().
+    await prisma.accounts.create({
+      data: {
+        id: nanoid(),
+        userId: user.id,
+        accountId: user.id,
+        providerId: 'credential',
+        password: passwordHash,
+        updatedAt: new Date(),
+      },
+    });
+
     // Create initial quota based on schema
     const planLimits = getPlanLimits(plan);
     const now = new Date();
@@ -132,7 +145,7 @@ export async function POST(request: NextRequest) {
     await createVerificationRecord(`email-verify:${user.email}`, verificationToken, expiresAt);
 
     // Build verification URL
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://recoder.xyz';
+    const baseUrl = resolvePublicAppUrl();
     const verificationUrl = `${baseUrl}/api/auth/verify-email?token=${verificationToken}`;
 
     // Send verification email (non-blocking)

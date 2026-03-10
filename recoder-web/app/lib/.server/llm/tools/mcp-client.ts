@@ -637,7 +637,8 @@ export async function discoverTools(
   mcpClient: Client,
 ): Promise<DiscoveredMCPTool[]> {
   try {
-    const mcpCallableTool = mcpToTool(mcpClient);
+    // Bridge duplicate SDK type identities when multiple MCP peer graphs are present.
+    const mcpCallableTool = mcpToTool(mcpClient as unknown as Parameters<typeof mcpToTool>[0]);
     const tool = await mcpCallableTool.tool();
 
     if (!Array.isArray(tool.functionDeclarations)) {

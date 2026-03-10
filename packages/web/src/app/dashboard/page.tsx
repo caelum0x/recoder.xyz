@@ -366,7 +366,7 @@ export default function DashboardPage() {
           <CardContent>
             <div className="bg-gray-900 rounded-lg p-4 text-green-400 font-mono text-sm">
               <div># Install the CLI</div>
-              <div>npm install -g recoder-cli</div>
+              <div>npm install -g recoder-code</div>
               <div className="mt-2"># Login to your account</div>
               <div>recoder auth login</div>
               <div className="mt-2"># Generate code naturally</div>

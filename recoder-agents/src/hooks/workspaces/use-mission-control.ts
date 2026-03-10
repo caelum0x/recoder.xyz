@@ -22,15 +22,15 @@ export function useAgentFleet(wsId: string | null) {
       );
       if (res.success && res.data) {
         // Map agent data to team members, using enriched info from bridge when available
-        const members: AgentTeamMember[] = (res.data.agents as any[]).map((a: any) => ({
-          agentId: typeof a === 'string' ? a : a.agentId,
-          name: typeof a === 'string' ? a : a.name ?? a.agentId,
-          platform: typeof a === 'string' ? 'custom' : a.platform ?? 'custom',
-          status: typeof a === 'string' ? ('idle' as const) : (a.status ?? 'idle'),
-          skills: typeof a === 'string' ? [] : a.skills ?? a.capabilities ?? [],
-          isLocal: typeof a === 'string' ? false : a.isLocal ?? false,
-          capabilities: typeof a === 'string' ? [] : a.capabilities ?? [],
-          lastSeen: typeof a === 'string' ? undefined : a.lastSeen,
+        const members: AgentTeamMember[] = (res.data.agents as Array<string | Record<string, unknown>>).map((a) => ({
+          agentId: typeof a === 'string' ? a : (a.agentId as string),
+          name: typeof a === 'string' ? a : (a.name as string) ?? (a.agentId as string),
+          platform: typeof a === 'string' ? 'custom' : (a.platform as string) ?? 'custom',
+          status: typeof a === 'string' ? ('idle' as const) : ((a.status as string) ?? 'idle'),
+          skills: typeof a === 'string' ? [] : (a.skills as string[]) ?? (a.capabilities as string[]) ?? [],
+          isLocal: typeof a === 'string' ? false : (a.isLocal as boolean) ?? false,
+          capabilities: typeof a === 'string' ? [] : (a.capabilities as string[]) ?? [],
+          lastSeen: typeof a === 'string' ? undefined : (a.lastSeen as string | undefined),
         }));
         setAgents(members);
         return members;

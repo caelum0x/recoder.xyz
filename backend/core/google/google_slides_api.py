@@ -232,7 +232,7 @@ async def convert_and_upload_to_google_slides(
             if not convert_response.is_success:
                 try:
                     error_detail = convert_response.json().get("detail", "Unknown error")
-                except:
+                except (ValueError, AttributeError):
                     error_detail = convert_response.text
                 raise HTTPException(
                     status_code=convert_response.status_code,
@@ -288,7 +288,7 @@ async def convert_and_upload_to_google_slides(
             # Clean up temporary file
             try:
                 temp_pptx_path.unlink()
-            except:
+            except OSError:
                 pass  # Ignore cleanup errors
     
     except HTTPException as e:

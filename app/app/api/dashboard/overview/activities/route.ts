@@ -3,6 +3,7 @@ import { requireAuth } from "@/lib/auth-helpers";
 import { ensureAppUserFromAuthUser } from '@/lib/auth-helpers';
 
 import { prisma } from '@/lib/prisma';
+import { logger } from '@/lib/logger';
 
 export async function GET(request: NextRequest) {
   try {
@@ -60,7 +61,7 @@ export async function GET(request: NextRequest) {
     });
 
   } catch (error) {
-    console.error('Dashboard activities error:', error);
+    logger.error('Dashboard activities error:', { error: error instanceof Error ? error.message : String(error) });
     return NextResponse.json(
       { error: 'Failed to fetch activities' },
       { status: 500 }

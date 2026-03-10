@@ -146,7 +146,7 @@ export async function GET(request: NextRequest) {
       data: projects,
       total: projects.length,
     });
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error fetching projects:', error);
     return NextResponse.json({
       success: true,

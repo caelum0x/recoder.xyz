@@ -42,32 +42,20 @@ export function DocxPreview({
 
     // Debug logging
     useEffect(() => {
-        console.log('[DocxPreview] State:', {
-            filepath,
-            sandboxId,
-            localPreviewUrl,
-            isLoading,
-            hasBlobData: blobData instanceof Blob,
-            blobSize: blobData instanceof Blob ? blobData.size : null,
-            error: error?.message,
-            isRendering,
-            isRendered,
-            renderError,
-            containerReady: !!containerRef.current,
-        });
+        
     }, [filepath, sandboxId, localPreviewUrl, isLoading, blobData, error, isRendering, isRendered, renderError]);
 
     // Render DOCX when blob data is available
     const renderDocx = useCallback(async () => {
         // Skip if already rendered or currently rendering
         if (isRendered || isRendering) {
-            console.log('[DocxPreview] Skipping render - already rendering or rendered');
+            
             return;
         }
 
         const container = containerRef.current;
         if (!container) {
-            console.log('[DocxPreview] Container ref not ready');
+            
             return;
         }
 
@@ -80,11 +68,11 @@ export function DocxPreview({
             } else {
                 setIsRendering(true);
                 try {
-                    console.log('[DocxPreview] Fetching from localPreviewUrl:', localPreviewUrl);
+                    
                     const response = await fetch(localPreviewUrl);
                     docxBlob = await response.blob();
                     blobRef.current = docxBlob;
-                    console.log('[DocxPreview] Got blob from localPreviewUrl, size:', docxBlob.size);
+                    
                 } catch (err) {
                     console.error('[DocxPreview] Failed to fetch local preview:', err);
                     setRenderError('Failed to load document');
@@ -93,12 +81,12 @@ export function DocxPreview({
                 }
             }
         } else if (blobData instanceof Blob) {
-            console.log('[DocxPreview] Using blobData, size:', blobData.size);
+            
             docxBlob = blobData;
         }
 
         if (!docxBlob) {
-            console.log('[DocxPreview] No blob available yet');
+            
             return;
         }
 
@@ -106,14 +94,14 @@ export function DocxPreview({
         setRenderError(null);
 
         try {
-            console.log('[DocxPreview] Importing docx-preview library...');
+            
             // Dynamically import docx-preview to avoid SSR issues
             const { renderAsync } = await import('docx-preview');
-            console.log('[DocxPreview] Library imported, rendering...');
+            
 
             // Check container is still mounted
             if (!containerRef.current) {
-                console.log('[DocxPreview] Container unmounted during fetch, aborting');
+                
                 setIsRendering(false);
                 return;
             }
@@ -143,7 +131,7 @@ export function DocxPreview({
                 renderEndnotes: true,
             });
 
-            console.log('[DocxPreview] Rendered successfully');
+            
             setIsRendered(true);
         } catch (err) {
             console.error('[DocxPreview] Render error:', err);
@@ -216,8 +204,8 @@ export function DocxPreview({
                     !isRendered && "invisible" // Hide until rendered
                 )}
                 style={{
-                    ['--docx-preview-bg' as any]: 'white',
-                }}
+                    '--docx-preview-bg': 'white',
+                } as React.CSSProperties}
             />
         </div>
     );

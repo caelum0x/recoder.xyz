@@ -16,8 +16,7 @@ function normalizePathWithUnicode(path: string): string {
     return path.replace(/\\u([0-9a-fA-F]{4})/g, (_, hexCode) => {
       return String.fromCharCode(parseInt(hexCode, 16));
     });
-  } catch (e) {
-    console.error('Error processing Unicode escapes in path:', e);
+  } catch {
     return path;
   }
 }
@@ -50,7 +49,6 @@ export const createSandboxFile = async (
       );
     }
   } catch (error) {
-    console.error('Failed to create sandbox file:', error);
     handleApiError(error, { operation: 'create file', resource: `file ${filePath}` });
     throw error;
   }
@@ -81,7 +79,6 @@ export const createSandboxFileJson = async (
       );
     }
   } catch (error) {
-    console.error('Failed to create sandbox file with JSON:', error);
     handleApiError(error, { operation: 'create file', resource: `file ${filePath}` });
     throw error;
   }
@@ -110,7 +107,6 @@ export const listSandboxFiles = async (
 
     return parseSandboxFilesResponse(response.data).files as FileInfo[];
   } catch (error) {
-    console.error('Failed to list sandbox files:', error);
     throw error;
   }
 };
@@ -139,8 +135,41 @@ export const getSandboxFileContent = async (
     // backendApi handles content-type detection and returns appropriate type
     return response.data!;
   } catch (error) {
-    console.error('Failed to get sandbox file content:', error);
     handleApiError(error, { operation: 'load file content', resource: `file ${path}` });
+    throw error;
+  }
+};
+
+export interface TerminalExecuteResponse {
+  output: string;
+  exit_code: number;
+  success: boolean;
+}
+
+export const executeTerminalCommand = async (
+  sandboxId: string,
+  command: string,
+): Promise<TerminalExecuteResponse> => {
+  if (!sandboxId || sandboxId.trim() === '') {
+    throw new Error('Sandbox ID is required');
+  }
+
+  try {
+    const response = await backendApi.post<TerminalExecuteResponse>(
+      `/sandboxes/${sandboxId}/terminal/execute`,
+      { command },
+      { showErrors: true }
+    );
+
+    if (response.error) {
+      throw new Error(
+        `Error executing terminal command: ${response.error.message} (${'status' in response.error ? response.error.status : 'unknown'})`,
+      );
+    }
+
+    return response.data!;
+  } catch (error) {
+    handleApiError(error, { operation: 'execute terminal command', resource: `sandbox ${sandboxId}` });
     throw error;
   }
 };

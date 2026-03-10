@@ -23,19 +23,20 @@ export default class GitIntegrationPlugin implements Plugin {
   capabilities!: PluginCapabilities;
   configuration?: PluginConfiguration | undefined;
   onActivate?(context: PluginContext): Promise<void> {
-    throw new Error('Method not implemented.');
+    return this.activate(context);
   }
   onDeactivate?(): Promise<void> {
-    throw new Error('Method not implemented.');
+    return this.deactivate();
   }
   onProjectClose?(): Promise<void> {
-    throw new Error('Method not implemented.');
+    /* no cleanup needed */
+    return Promise.resolve();
   }
   onFileCreate?(path: string): Promise<void> {
-    throw new Error('Method not implemented.');
+    return this.onFileChange(path);
   }
   onFileDelete?(path: string): Promise<void> {
-    throw new Error('Method not implemented.');
+    return this.onFileChange(path);
   }
   metadata: PluginMetadata = {
     id: '@craft-code/git-integration',

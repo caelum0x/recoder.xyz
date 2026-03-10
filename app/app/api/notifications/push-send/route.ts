@@ -20,6 +20,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { sendWebPush, isStaleSubscription } from '@/lib/push-server';
+import { logger } from '@/lib/logger';
 import { ensureAdminAccess } from '@/lib/admin-auth';
 import { rateLimit } from '@/lib/middleware/rate-limit';
 import {
@@ -150,7 +151,7 @@ export async function POST(request: NextRequest) {
       prunedStaleSubscriptions: staleEndpoints.length,
     });
   } catch (error) {
-    console.error('[push-send] POST error:', error);
+    logger.error('[push-send] POST error:', { error: error instanceof Error ? error.message : String(error) });
     return NextResponse.json(
       {
         success: false,

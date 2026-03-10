@@ -17,14 +17,17 @@ const getResend = () => {
 const getFromAddress = () =>
   process.env.RESEND_FROM ?? "Recoder PM <noreply@recoder.xyz>";
 
-export const sendMagicLinkEmail = async (email: string, url: string) => {
+export const sendMagicLinkEmail = async (
+  email: string,
+  url: string
+): Promise<{ sent: boolean }> => {
   const resend = getResend();
 
   if (!resend) {
     console.warn(
       "[Auth] RESEND_TOKEN not configured - magic link email not sent"
     );
-    return;
+    return { sent: false };
   }
 
   await resend.emails.send({
@@ -46,14 +49,19 @@ export const sendMagicLinkEmail = async (email: string, url: string) => {
       </div>
     `,
   });
+
+  return { sent: true };
 };
 
-export const sendSignupEmail = async (email: string, url: string) => {
+export const sendSignupEmail = async (
+  email: string,
+  url: string
+): Promise<{ sent: boolean }> => {
   const resend = getResend();
 
   if (!resend) {
     console.warn("[Auth] RESEND_TOKEN not configured - signup email not sent");
-    return;
+    return { sent: false };
   }
 
   await resend.emails.send({
@@ -75,6 +83,8 @@ export const sendSignupEmail = async (email: string, url: string) => {
       </div>
     `,
   });
+
+  return { sent: true };
 };
 
 export const sendDataHealthAlertEmail = async ({
@@ -85,14 +95,14 @@ export const sendDataHealthAlertEmail = async ({
   to: string;
   organizationName: string;
   issues: string[];
-}) => {
+}): Promise<{ sent: boolean }> => {
   const resend = getResend();
 
   if (!resend) {
-    console.info(
-      `[Data Health] Alert for ${organizationName} → ${to}: ${issues.join(" | ")}`
+    console.warn(
+      `[Data Health] RESEND_TOKEN not configured - alert for ${organizationName} → ${to}: ${issues.join(" | ")}`
     );
-    return;
+    return { sent: false };
   }
 
   const list = issues
@@ -118,4 +128,6 @@ export const sendDataHealthAlertEmail = async ({
       </div>
     `,
   });
+
+  return { sent: true };
 };

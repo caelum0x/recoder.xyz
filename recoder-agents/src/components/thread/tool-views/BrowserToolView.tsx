@@ -198,19 +198,13 @@ export function BrowserToolView({
 
   // Log extracted data for debugging
   React.useEffect(() => {
-    console.log('[BrowserToolView] Extracted data:', {
-      screenshotUrl: computedValues.screenshotUrlFinal,
-      browserStateMessageId: computedValues.browserStateMessageId,
-      hasResult: !!computedValues.result,
-      toolResultOutput: toolResult?.output,
-      toolResultOutputType: typeof toolResult?.output,
-    });
+    
   }, [computedValues, toolResult?.output]);
 
   // Reset loading state when screenshot URL changes
   React.useEffect(() => {
     if (computedValues.screenshotUrlFinal) {
-      console.log('[BrowserToolView] Screenshot URL:', computedValues.screenshotUrlFinal);
+      
       setIsImageLoading(true);
       setImageError(false);
     }
@@ -218,7 +212,6 @@ export function BrowserToolView({
 
   // Defensive check - handle cases where toolCall might be undefined
   if (!toolCall) {
-    console.warn('BrowserToolView: toolCall is undefined. Tool views should use structured props.');
     return null;
   }
 

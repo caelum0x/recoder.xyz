@@ -791,7 +791,9 @@ class ContainerPool extends EventEmitter {
       if (this.externalPortReleaser) {
         this.externalPortReleaser(container.port, container.ptyPort);
       }
-      await this.destroyContainer(container.id).catch(() => {});
+      await this.destroyContainer(container.id).catch((err) => {
+        console.warn(`[ContainerPool] Failed to destroy container ${container.id}:`, err);
+      });
     }
     
     this.pool = [];

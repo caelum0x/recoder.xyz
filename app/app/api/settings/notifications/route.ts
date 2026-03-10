@@ -7,6 +7,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSession } from '@/lib/auth-helpers';
 import { prisma } from '@/lib/prisma';
+import { logger } from '@/lib/logger';
 
 // GET /api/settings/notifications
 export async function GET(request: NextRequest) {
@@ -57,8 +58,8 @@ export async function GET(request: NextRequest) {
       settings: Array.isArray(settings) ? settings[0] : settings
     });
 
-  } catch (error: any) {
-    console.error('[Notification Settings GET] Error:', error);
+  } catch (error) {
+    logger.error('[Notification Settings GET] Error', { error: error instanceof Error ? error.message : String(error) });
     return NextResponse.json(
       { success: false, error: 'Failed to fetch notification settings' },
       { status: 500 }
@@ -118,8 +119,8 @@ export async function PUT(request: NextRequest) {
       message: 'Notification settings updated successfully'
     });
 
-  } catch (error: any) {
-    console.error('[Notification Settings PUT] Error:', error);
+  } catch (error) {
+    logger.error('[Notification Settings PUT] Error', { error: error instanceof Error ? error.message : String(error) });
     return NextResponse.json(
       { success: false, error: 'Failed to update notification settings' },
       { status: 500 }

@@ -1,27 +1,29 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Bell, Mail, Smartphone, MessageSquare, CreditCard, Star, Settings as SettingsIcon } from 'lucide-react';
+import { Bell, Mail, Smartphone, MessageSquare, CreditCard, Star, Settings as SettingsIcon, Cloud, CloudOff, Bot, AlertTriangle, MessageCircle } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { toast } from '@/lib/toast';
 import { notificationAPI, type NotificationSettings } from '@/lib/api/notifications';
-import { isStagingMode } from '@/lib/config';
+import { useUserPreferences, useUpdatePreferences } from '@/hooks/platform/use-user-preferences';
+import { NotificationChannelsPanel } from '@/components/notifications/notification-channels';
 
 export function NotificationSettingsPanel() {
   const [settings, setSettings] = useState<NotificationSettings | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
+  // Backend-synced granular preferences
+  const { data: preferences, isLoading: prefsLoading } = useUserPreferences();
+  const updatePreferences = useUpdatePreferences();
+
   useEffect(() => {
-    if (isStagingMode()) {
-      loadSettings();
-    } else {
-      setLoading(false);
-    }
+    loadSettings();
   }, []);
 
   const loadSettings = async () => {
@@ -54,6 +56,13 @@ export function NotificationSettingsPanel() {
     } finally {
       setSaving(false);
     }
+  };
+
+  const updatePreferenceSetting = (key: string, value: boolean) => {
+    updatePreferences.mutate({ [key]: value } as any, {
+      onSuccess: () => toast.success('Preference synced'),
+      onError: () => toast.error('Failed to sync preference'),
+    });
   };
 
   const testNotification = async () => {
@@ -172,13 +181,38 @@ export function NotificationSettingsPanel() {
 
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <SettingsIcon className="h-5 w-5" />
-            Notification Types
-          </CardTitle>
-          <CardDescription>
-            Control which types of notifications you receive
-          </CardDescription>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="flex items-center gap-2">
+                <SettingsIcon className="h-5 w-5" />
+                Notification Types
+              </CardTitle>
+              <CardDescription>
+                Control which types of notifications you receive
+              </CardDescription>
+            </div>
+            {preferences && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                    {updatePreferences.isPending ? (
+                      <Cloud className="h-3 w-3 animate-pulse" />
+                    ) : preferences.updated_at ? (
+                      <Cloud className="h-3 w-3 text-green-500" />
+                    ) : (
+                      <CloudOff className="h-3 w-3" />
+                    )}
+                    Synced
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent>
+                  {preferences.updated_at
+                    ? `Preferences synced to backend`
+                    : 'Using default preferences'}
+                </TooltipContent>
+              </Tooltip>
+            )}
+          </div>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex items-center justify-between">
@@ -198,6 +232,94 @@ export function NotificationSettingsPanel() {
               checked={settings.task_notifications}
               onCheckedChange={(checked) => updateSetting('task_notifications', checked)}
               disabled={saving}
+            />
+          </div>
+
+          <Separator />
+
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <Bot className="h-5 w-5 text-muted-foreground" />
+              <div>
+                <Label htmlFor="pref-agent-completed" className="font-medium">
+                  Agent Completed
+                </Label>
+                <p className="text-sm text-muted-foreground">
+                  When an agent run finishes successfully
+                </p>
+              </div>
+            </div>
+            <Switch
+              id="pref-agent-completed"
+              checked={preferences?.notification_agent_completed ?? true}
+              onCheckedChange={(checked) => updatePreferenceSetting('notification_agent_completed', checked)}
+              disabled={prefsLoading || updatePreferences.isPending}
+            />
+          </div>
+
+          <Separator />
+
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <AlertTriangle className="h-5 w-5 text-muted-foreground" />
+              <div>
+                <Label htmlFor="pref-agent-failed" className="font-medium">
+                  Agent Failed
+                </Label>
+                <p className="text-sm text-muted-foreground">
+                  When an agent run encounters an error
+                </p>
+              </div>
+            </div>
+            <Switch
+              id="pref-agent-failed"
+              checked={preferences?.notification_agent_failed ?? true}
+              onCheckedChange={(checked) => updatePreferenceSetting('notification_agent_failed', checked)}
+              disabled={prefsLoading || updatePreferences.isPending}
+            />
+          </div>
+
+          <Separator />
+
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <MessageCircle className="h-5 w-5 text-muted-foreground" />
+              <div>
+                <Label htmlFor="pref-thread-message" className="font-medium">
+                  Thread Messages
+                </Label>
+                <p className="text-sm text-muted-foreground">
+                  New messages in your threads
+                </p>
+              </div>
+            </div>
+            <Switch
+              id="pref-thread-message"
+              checked={preferences?.notification_thread_message ?? true}
+              onCheckedChange={(checked) => updatePreferenceSetting('notification_thread_message', checked)}
+              disabled={prefsLoading || updatePreferences.isPending}
+            />
+          </div>
+
+          <Separator />
+
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <Bell className="h-5 w-5 text-muted-foreground" />
+              <div>
+                <Label htmlFor="pref-system-alert" className="font-medium">
+                  System Alerts
+                </Label>
+                <p className="text-sm text-muted-foreground">
+                  Important system updates and alerts
+                </p>
+              </div>
+            </div>
+            <Switch
+              id="pref-system-alert"
+              checked={preferences?.notification_system_alert ?? true}
+              onCheckedChange={(checked) => updatePreferenceSetting('notification_system_alert', checked)}
+              disabled={prefsLoading || updatePreferences.isPending}
             />
           </div>
 
@@ -244,30 +366,10 @@ export function NotificationSettingsPanel() {
               disabled={saving}
             />
           </div>
-
-          <Separator />
-
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <Bell className="h-5 w-5 text-muted-foreground" />
-              <div>
-                <Label htmlFor="system-notifications" className="font-medium">
-                  System Notifications
-                </Label>
-                <p className="text-sm text-muted-foreground">
-                  Important system updates and alerts
-                </p>
-              </div>
-            </div>
-            <Switch
-              id="system-notifications"
-              checked={settings.system_notifications}
-              onCheckedChange={(checked) => updateSetting('system_notifications', checked)}
-              disabled={saving}
-            />
-          </div>
         </CardContent>
       </Card>
+
+      <NotificationChannelsPanel />
 
       <Card>
         <CardHeader>
@@ -285,4 +387,3 @@ export function NotificationSettingsPanel() {
     </div>
   );
 }
-

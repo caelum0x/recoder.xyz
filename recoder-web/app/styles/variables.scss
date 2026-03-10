@@ -2,7 +2,7 @@
 :root,
 :root[data-theme='dark'] {
   --recoder-elements-borderColor: rgba(255, 255, 255, 0.1);
-  --recoder-elements-borderColorActive: #F79009;
+  --recoder-elements-borderColorActive: hsl(var(--recoder-orange-500));
 
   --recoder-elements-bg-depth-1: #0A0A0A;
   --recoder-elements-bg-depth-2: #171717;
@@ -22,8 +22,8 @@
   --recoder-elements-code-background: #262626;
   --recoder-elements-code-text: #FFFFFF;
 
-  --recoder-elements-button-primary-background: #F79009;
-  --recoder-elements-button-primary-backgroundHover: #DC6803;
+  --recoder-elements-button-primary-background: hsl(var(--recoder-orange-500));
+  --recoder-elements-button-primary-backgroundHover: hsl(var(--recoder-orange-600));
   --recoder-elements-button-primary-text: #FFFFFF;
 
   --recoder-elements-button-secondary-background: #000000;
@@ -36,7 +36,7 @@
 
   --recoder-elements-item-contentDefault: rgba(255, 255, 255, 0.5);
   --recoder-elements-item-contentActive: #FFFFFF;
-  --recoder-elements-item-contentAccent: #F79009;
+  --recoder-elements-item-contentAccent: hsl(var(--recoder-orange-500));
   --recoder-elements-item-contentDanger: #EF4444;
   --recoder-elements-item-backgroundDefault: rgba(255, 255, 255, 0);
   --recoder-elements-item-backgroundActive: rgba(255, 255, 255, 0.1);
@@ -44,7 +44,7 @@
   --recoder-elements-item-backgroundDanger: rgba(239, 68, 68, 0.1);
 
   --recoder-elements-loader-background: rgba(23, 23, 23, 0.1);
-  --recoder-elements-loader-progress: #F79009;
+  --recoder-elements-loader-progress: hsl(var(--recoder-orange-500));
 
   --recoder-elements-artifacts-background: #171717;
   --recoder-elements-artifacts-backgroundHover: rgba(255, 255, 255, 0.05);
@@ -56,7 +56,7 @@
   --recoder-elements-actions-code-background: #262626;
 
   --recoder-elements-messages-background: #262626;
-  --recoder-elements-messages-linkColor: #F79009;
+  --recoder-elements-messages-linkColor: hsl(var(--recoder-orange-500));
   --recoder-elements-messages-code-background: #171717;
   --recoder-elements-messages-inlineCode-background: #404040;
   --recoder-elements-messages-inlineCode-text: var(--recoder-elements-textPrimary);
@@ -74,7 +74,7 @@
   --recoder-elements-sidebar-dropdownShadow: rgba(23, 23, 23, 0.3);
   --recoder-elements-sidebar-buttonBackgroundDefault: rgba(247, 144, 9, 0.1);
   --recoder-elements-sidebar-buttonBackgroundHover: rgba(247, 144, 9, 0.2);
-  --recoder-elements-sidebar-buttonText: #F79009;
+  --recoder-elements-sidebar-buttonText: hsl(var(--recoder-orange-500));
 
   --recoder-elements-preview-addressBar-background: var(--recoder-elements-bg-depth-1);
   --recoder-elements-preview-addressBar-backgroundHover: rgba(255, 255, 255, 0.05);
@@ -228,8 +228,8 @@
  */
 :root {
   /* Typography */
-  --font-family-sans: 'Roobert', system-ui, -apple-system, sans-serif;
-  --font-family-mono: 'Roobert Mono', Consolas, monospace;
+  --font-family-sans: var(--font-sans);
+  --font-family-mono: var(--font-mono);
   font-family: var(--font-family-sans);
 
   --header-height: 54px;

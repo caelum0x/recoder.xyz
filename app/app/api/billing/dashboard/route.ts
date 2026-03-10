@@ -31,11 +31,27 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    // Fetch subscription
+    // Fetch subscription with its plan details for pricing
     const subscription = await prisma.subscriptions.findFirst({
       where: { userId: user.id },
       orderBy: { createdAt: 'desc' },
     });
+
+    // Look up plan price: prefer subscription.amount, then fall back to subscription_plans table
+    let planAmount = 0;
+    if (subscription) {
+      if (subscription.amount != null && subscription.amount > 0) {
+        planAmount = subscription.amount;
+      } else {
+        const plan = await prisma.subscription_plans.findUnique({
+          where: { id: subscription.planId },
+          select: { price: true },
+        });
+        if (plan?.price) {
+          planAmount = Number(plan.price);
+        }
+      }
+    }
 
     // Fetch current month usage from usage_records
     const startOfMonth = new Date();
@@ -76,8 +92,8 @@ export async function GET(req: NextRequest) {
           status: subscription.status,
           currentPeriodEnd: subscription.currentPeriodEnd.toISOString(),
           cancelAtPeriodEnd: subscription.cancelAtPeriodEnd,
-          amount: 0, // Amount is in subscription_plans, not subscriptions
-          currency: 'USD',
+          amount: planAmount,
+          currency: subscription.currency || 'USD',
         } : {
           plan: 'free',
           status: 'active',
@@ -93,7 +109,7 @@ export async function GET(req: NextRequest) {
         },
         nextPayment: subscription ? {
           date: subscription.currentPeriodEnd.toISOString(),
-          amount: 0,
+          amount: planAmount,
         } : null,
         paymentMethod: paymentMethod ? {
           type: paymentMethod.brand || 'Card',
