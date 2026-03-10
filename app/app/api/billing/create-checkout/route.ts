@@ -9,6 +9,9 @@ import { auth } from '@/lib/auth-config';
 import { headers } from 'next/headers';
 import { rateLimit, rateLimitConfigs } from '@/lib/middleware/rate-limit';
 import { logger } from '@/lib/logger';
+import { resolveDodoApiKey, resolvePaddleAuthCode, resolvePaddleVendorId } from '@/lib/billing-credentials';
+import { DodoPaymentsService } from '@/lib/services/dodopayments.service';
+import { resolvePublicAppUrl } from '@/lib/email';
 
 const billingRateLimiter = rateLimit(rateLimitConfigs.billing);
 
@@ -39,11 +42,23 @@ export async function POST(request: NextRequest) {
     }
 
     // Plan configuration
-    const planConfig: Record<string, { priceId: string; amount: number }> = {
-      weekly: { priceId: 'price_weekly', amount: 1000 }, // $10
-      monthly: { priceId: 'price_monthly', amount: 2000 }, // $20
-      pro: { priceId: 'price_pro', amount: 10000 }, // $100
-      enterprise: { priceId: 'price_enterprise', amount: 50000 }, // $500
+    const planConfig: Record<string, { paddleProductId: string; dodoProductId: string }> = {
+      weekly: {
+        paddleProductId: process.env.PADDLE_PRODUCT_WEEKLY || 'pro_01jrp8y7mhdrng9hhz2e2ksxs3',
+        dodoProductId: process.env.DODO_PRODUCT_WEEKLY || 'prod_weekly',
+      },
+      monthly: {
+        paddleProductId: process.env.PADDLE_PRODUCT_MONTHLY || 'pro_01jrp8zjr8n2pc8ryt4v16qfef',
+        dodoProductId: process.env.DODO_PRODUCT_MONTHLY || 'prod_monthly',
+      },
+      pro: {
+        paddleProductId: process.env.PADDLE_PRODUCT_PRO || 'pro_01jrp90dg3hc0tn6xhm3me6bjk',
+        dodoProductId: process.env.DODO_PRODUCT_PRO || 'prod_pro',
+      },
+      enterprise: {
+        paddleProductId: process.env.PADDLE_PRODUCT_ENTERPRISE || 'pro_enterprise',
+        dodoProductId: process.env.DODO_PRODUCT_ENTERPRISE || 'prod_enterprise',
+      },
     };
 
     const selectedPlan = planConfig[plan];
@@ -54,12 +69,12 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://recoder.xyz';
+    const baseUrl = resolvePublicAppUrl();
 
     if (paymentMethod === 'paddle') {
       // Paddle integration
-      const paddleVendorId = process.env.PADDLE_VENDOR_ID;
-      const paddleAuthCode = process.env.PADDLE_AUTH_CODE;
+      const paddleVendorId = resolvePaddleVendorId();
+      const paddleAuthCode = resolvePaddleAuthCode();
 
       if (!paddleVendorId || !paddleAuthCode) {
         logger.warn('Paddle credentials not configured', { route: 'api/billing/create-checkout' });
@@ -78,14 +93,14 @@ export async function POST(request: NextRequest) {
         body: new URLSearchParams({
           vendor_id: paddleVendorId,
           vendor_auth_code: paddleAuthCode,
-          product_id: selectedPlan.priceId,
+          product_id: selectedPlan.paddleProductId,
           customer_email: user.email,
           passthrough: JSON.stringify({
             userId: user.id,
             plan,
           }),
           return_url: `${baseUrl}/checkout/success?plan=${plan}`,
-          webhook_url: `${baseUrl}/api/paddle/webhooks`,
+          webhook_url: `${baseUrl}/api/webhooks/paddle`,
         }),
       });
 
@@ -102,7 +117,7 @@ export async function POST(request: NextRequest) {
       }
     } else if (paymentMethod === 'dodo') {
       // DODO Payments integration
-      const dodoApiKey = process.env.DODO_API_KEY;
+      const dodoApiKey = resolveDodoApiKey();
 
       if (!dodoApiKey) {
         logger.warn('DODO Payments credentials not configured', { route: 'api/billing/create-checkout' });
@@ -112,42 +127,19 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      // Create DODO checkout
-      const dodoResponse = await fetch('https://api.dodopayments.com/v1/payments', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${dodoApiKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          amount: selectedPlan.amount,
-          currency: 'USD',
-          customer_email: user.email,
-          metadata: {
-            userId: user.id,
-            plan,
-          },
-          success_url: `${baseUrl}/checkout/success?plan=${plan}`,
-          cancel_url: `${baseUrl}/checkout?plan=${plan}`,
-          webhook_url: `${baseUrl}/api/dodo/webhooks`,
-        }),
+      // Create DODO checkout through shared service
+      const session = await DodoPaymentsService.createCheckoutSession(
+        user.id,
+        selectedPlan.dodoProductId,
+        undefined,
+        `${baseUrl}/checkout/success?plan=${plan}`
+      );
+
+      return NextResponse.json({
+        success: true,
+        checkoutUrl: session.checkoutUrl,
+        provider: 'dodo',
       });
-
-      if (!dodoResponse.ok) {
-        throw new Error('Failed to create DODO checkout');
-      }
-
-      const dodoData = await dodoResponse.json();
-
-      if (dodoData.checkout_url) {
-        return NextResponse.json({
-          success: true,
-          checkoutUrl: dodoData.checkout_url,
-          provider: 'dodo',
-        });
-      } else {
-        throw new Error('No checkout URL from DODO');
-      }
     } else {
       return NextResponse.json(
         { error: 'Invalid payment method' },

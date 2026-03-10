@@ -11,6 +11,7 @@ import {
   createVerificationRecord,
   deleteVerificationsByIdentifierPrefixes,
 } from '@/lib/auth/verification-store';
+import { logger } from '@/lib/logger';
 
 function getPreferenceValue(
   value: unknown,
@@ -20,6 +21,48 @@ function getPreferenceValue(
   const record = value as Record<string, unknown>;
   const entry = record[key];
   return typeof entry === 'string' ? entry : undefined;
+}
+
+type SafeAccountUser = {
+  id: string;
+  email: string;
+  name: string | null;
+  image: string | null;
+  organization: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+  emailVerified: boolean;
+  role: string | null;
+  isActive: boolean;
+  twoFactorEnabled: boolean;
+};
+
+function toSafeAccountUser(user: {
+  id: string;
+  email: string;
+  name?: string | null;
+  image?: string | null;
+  organization?: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+  emailVerified?: boolean | null;
+  role?: string | null;
+  isActive?: boolean | null;
+  twoFactorEnabled?: boolean | null;
+}): SafeAccountUser {
+  return {
+    id: user.id,
+    email: user.email,
+    name: user.name ?? null,
+    image: user.image ?? null,
+    organization: user.organization ?? null,
+    createdAt: user.createdAt,
+    updatedAt: user.updatedAt,
+    emailVerified: Boolean(user.emailVerified),
+    role: user.role ?? 'user',
+    isActive: user.isActive ?? true,
+    twoFactorEnabled: Boolean(user.twoFactorEnabled),
+  };
 }
 
 export async function GET(request: NextRequest) {
@@ -66,7 +109,7 @@ export async function GET(request: NextRequest) {
         };
       }
     } catch (userReadError) {
-      console.warn('[Account] primary user read failed, using appUser fallback:', userReadError);
+      logger.warn('[Account] primary user read failed, using appUser fallback:', { detail: userReadError instanceof Error ? userReadError.message : String(userReadError) });
     }
 
     if (!resolvedUser) {
@@ -79,14 +122,16 @@ export async function GET(request: NextRequest) {
         where: { userId: resolvedUser.id }
       });
     } catch (preferencesError) {
-      console.warn('[Account] user_preferences lookup failed, using defaults:', preferencesError);
+      logger.warn('[Account] user_preferences lookup failed, using defaults:', { detail: preferencesError instanceof Error ? preferencesError.message : String(preferencesError) });
     }
+
+    const safeUser = toSafeAccountUser(resolvedUser);
 
     return NextResponse.json({
       success: true,
       data: {
         user: {
-          ...resolvedUser,
+          ...safeUser,
           timezone: getPreferenceValue(preferences?.developerPreferences, 'timezone') || 'America/New_York',
           language: getPreferenceValue(preferences?.languagePreferences, 'language') || 'en'
         }
@@ -94,7 +139,7 @@ export async function GET(request: NextRequest) {
     });
 
   } catch (error) {
-    console.error('Get account error:', error);
+    logger.error('Get account error:', { error: error instanceof Error ? error.message : String(error) });
     return NextResponse.json(
       { error: 'Failed to fetch account data' },
       { status: 500 }
@@ -115,6 +160,20 @@ export async function PUT(request: NextRequest) {
     const body = await request.json();
     const { name, email, timezone, language, organization } = body;
 
+    // Validate input lengths
+    if (name !== undefined && (typeof name !== 'string' || name.length > 100)) {
+      return NextResponse.json({ error: 'Name must be a string of at most 100 characters' }, { status: 400 });
+    }
+    if (organization !== undefined && (typeof organization !== 'string' || organization.length > 200)) {
+      return NextResponse.json({ error: 'Organization must be a string of at most 200 characters' }, { status: 400 });
+    }
+    if (timezone !== undefined && (typeof timezone !== 'string' || timezone.length > 50)) {
+      return NextResponse.json({ error: 'Invalid timezone' }, { status: 400 });
+    }
+    if (language !== undefined && (typeof language !== 'string' || language.length > 10)) {
+      return NextResponse.json({ error: 'Invalid language' }, { status: 400 });
+    }
+
     const user = await ensureAppUserFromAuthUser(authUser);
 
     if (!user) {
@@ -129,8 +188,7 @@ export async function PUT(request: NextRequest) {
     // Email change requires verification on the new address
     if (email && email !== user.email) {
       // Validate email format
-      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-      if (!emailRegex.test(email)) {
+      if (typeof email !== 'string' || email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
         return NextResponse.json(
           { error: 'Invalid email format' },
           { status: 400 }
@@ -148,9 +206,14 @@ export async function PUT(request: NextRequest) {
         );
       }
 
-      // Also check Better Auth user table
-      try {
-        const existingWebUser = await prisma.user.findUnique({
+      // Also check Better Auth user table when available.
+      const prismaAny = prisma as unknown as {
+        user?: {
+          findUnique: (args: { where: { email: string } }) => Promise<unknown>;
+        };
+      };
+      if (prismaAny.user?.findUnique) {
+        const existingWebUser = await prismaAny.user.findUnique({
           where: { email }
         });
         if (existingWebUser) {
@@ -159,8 +222,6 @@ export async function PUT(request: NextRequest) {
             { status: 409 }
           );
         }
-      } catch {
-        // user table may not exist in all environments
       }
 
       // Clean up any previous pending email change verifications for this user
@@ -195,14 +256,12 @@ export async function PUT(request: NextRequest) {
       const emailResult = await sendVerificationEmailWithCode(email, verificationCode, verificationUrl);
 
       if (!emailResult.success) {
-        console.error('[Account] Failed to send email change verification:', emailResult.error);
+        logger.error('[Account] Failed to send email change verification:', { error: emailResult.error instanceof Error ? emailResult.error.message : String(emailResult.error) });
         return NextResponse.json(
           { error: 'Failed to send verification email. Please try again.' },
           { status: 500 }
         );
       }
-
-      console.log(`[Account] Email change verification sent: ${user.email} -> ${email}`);
 
       // Log audit event
       await prisma.audit_logs.create({
@@ -264,7 +323,7 @@ export async function PUT(request: NextRequest) {
         }
       });
     } catch (auditError) {
-      console.warn('[Account] audit log write failed:', auditError);
+      logger.warn('[Account] audit log write failed:', { detail: auditError instanceof Error ? auditError.message : String(auditError) });
     }
 
     return NextResponse.json(assertAccountPutResponse({
@@ -274,7 +333,7 @@ export async function PUT(request: NextRequest) {
     }));
 
   } catch (error) {
-    console.error('Update account error:', error);
+    logger.error('Update account error:', { error: error instanceof Error ? error.message : String(error) });
     return NextResponse.json(
       { error: 'Failed to update account' },
       { status: 500 }
@@ -311,7 +370,7 @@ export async function DELETE(request: NextRequest) {
         }
       });
     } catch (auditError) {
-      console.warn('[Account] audit log write failed during delete:', auditError);
+      logger.warn('[Account] audit log write failed during delete:', { detail: auditError instanceof Error ? auditError.message : String(auditError) });
     }
 
     // Delete user (cascade will handle related records)
@@ -325,7 +384,7 @@ export async function DELETE(request: NextRequest) {
     }));
 
   } catch (error) {
-    console.error('Delete account error:', error);
+    logger.error('Delete account error:', { error: error instanceof Error ? error.message : String(error) });
     return NextResponse.json(
       { error: 'Failed to delete account' },
       { status: 500 }

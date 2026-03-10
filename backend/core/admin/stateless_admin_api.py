@@ -343,7 +343,8 @@ async def get_metrics_history(
                 entry = json.loads(raw)
                 if entry.get("timestamp", 0) >= cutoff:
                     history.append(entry)
-            except:
+            except Exception:
+                logger.warning(f"Failed to parse Redis metrics history entry, skipping")
                 continue
         history.reverse()
     except Exception as e:

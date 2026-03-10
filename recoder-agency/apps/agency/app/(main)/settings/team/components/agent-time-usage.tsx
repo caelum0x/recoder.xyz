@@ -79,7 +79,7 @@ function AgentTimeUsage(props: AgentTimeUsageProps) {
 				<div className="text-right">
 					<div
 						className={cn(
-							"text-sm font-bold text-inverse leading-[23.8px] tracking-normal font-geist",
+							"text-sm font-bold text-inverse leading-[23.8px] tracking-normal font-sans",
 						)}
 					>
 						{isOverLimit ? (
@@ -91,7 +91,7 @@ function AgentTimeUsage(props: AgentTimeUsageProps) {
 							<span>{usedMinutes} min used</span>
 						)}
 					</div>
-					<div className="font-medium text-[12px] leading-[20.4px] tracking-normal font-geist text-primary-200">
+					<div className="font-medium text-[12px] leading-[20.4px] tracking-normal font-sans text-primary-200">
 						{Math.round(percentage)}% of your monthly limit used
 					</div>
 				</div>
@@ -119,7 +119,7 @@ function AgentTimeUsage(props: AgentTimeUsageProps) {
 						)}
 					</div>
 
-					<div className="flex justify-between text-inverse font-medium text-[12px] leading-[20.4px] tracking-normal font-geist">
+					<div className="flex justify-between text-inverse font-medium text-[12px] leading-[20.4px] tracking-normal font-sans">
 						<span>0 min</span>
 						<span>
 							{isOverLimit ? `${usedMinutes} min` : `${includedMinutes} min`}
@@ -127,7 +127,7 @@ function AgentTimeUsage(props: AgentTimeUsageProps) {
 					</div>
 				</div>
 
-				<div className="text-primary-200 font-medium text-[12px] leading-[20.4px] tracking-normal font-geist">
+				<div className="text-primary-200 font-medium text-[12px] leading-[20.4px] tracking-normal font-sans">
 					{includedMinutes} minutes included with your plan
 				</div>
 
@@ -136,13 +136,13 @@ function AgentTimeUsage(props: AgentTimeUsageProps) {
 						<CustumAlertTriangleIcon className="text-warning-900" />
 
 						<div>
-							<AlertTitle className="mb-0 text-warning-900 font-bold text-[12px] leading-[20.4px] tracking-normal font-geist">
+							<AlertTitle className="mb-0 text-warning-900 font-bold text-[12px] leading-[20.4px] tracking-normal font-sans">
 								Only {remainingMinutes}{" "}
 								{remainingMinutes === 1 ? "minute" : "minutes"} remaining in
 								your plan
 							</AlertTitle>
 
-							<AlertDescription className="text-warning-900 opacity-70 font-medium text-[12px] leading-[20.4px] tracking-normal font-geist">
+							<AlertDescription className="text-warning-900 opacity-70 font-medium text-[12px] leading-[20.4px] tracking-normal font-sans">
 								{warningMessage}
 							</AlertDescription>
 						</div>
@@ -154,10 +154,10 @@ function AgentTimeUsage(props: AgentTimeUsageProps) {
 						<CustumAlertTriangleIcon className="text-error-900" />
 
 						<div>
-							<AlertTitle className="mb-0 text-error-900 font-bold text-[12px] leading-[20.4px] tracking-normal font-geist">
+							<AlertTitle className="mb-0 text-error-900 font-bold text-[12px] leading-[20.4px] tracking-normal font-sans">
 								{overMinutes} minutes over your plan limit
 							</AlertTitle>
-							<AlertDescription className="text-error-900 opacity-70 font-medium text-[12px] leading-[20.4px] tracking-normal font-geist">
+							<AlertDescription className="text-error-900 opacity-70 font-medium text-[12px] leading-[20.4px] tracking-normal font-sans">
 								{overLimitMessage}
 							</AlertDescription>
 						</div>

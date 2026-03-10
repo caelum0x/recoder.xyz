@@ -1,9 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyInternalServiceRequest } from '@/lib/internal-service-auth';
+import { logger } from '@/lib/logger';
 
-const RECODER_WEB_URL = process.env.RECODER_WEB_URL || 'http://localhost:5173';
+const RECODER_WEB_URL = process.env.RECODER_WEB_URL || (process.env.NODE_ENV === 'production' ? undefined : 'http://localhost:5173');
 
 export async function POST(request: NextRequest) {
+  if (!RECODER_WEB_URL) {
+    return NextResponse.json({ error: 'Service URL not configured' }, { status: 503 });
+  }
+
   try {
     const rawBody = await request.text();
     let body: { userId?: string; projectId?: string } = {};
@@ -39,8 +44,8 @@ export async function POST(request: NextRequest) {
     const rows = Array.isArray(data?.data) ? data.data : [];
     const isOwner = rows.some((project: any) => project?.id === projectId || project?.urlId === projectId);
     return NextResponse.json({ isOwner });
-  } catch (error: any) {
-    console.error('Project ownership verification error:', error);
+  } catch (error) {
+    logger.error('Project ownership verification error', { error: error instanceof Error ? error.message : String(error) });
     return NextResponse.json({ error: 'Verification failed' }, { status: 500 });
   }
 }

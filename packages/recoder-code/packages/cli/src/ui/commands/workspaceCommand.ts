@@ -13,7 +13,7 @@ import { CommandKind } from './types.js';
 import { RecoderAuthService } from '../../services/RecoderAuthService.js';
 import { AgentBridgeService } from '../../services/AgentBridgeService.js';
 
-const DOCKER_BACKEND_URL = process.env['DOCKER_BACKEND_URL'] || 'http://localhost:3001';
+const DOCKER_BACKEND_URL = process.env['DOCKER_BACKEND_URL'] || 'http://localhost:3100';
 
 // Singleton instances
 const authService = new RecoderAuthService();

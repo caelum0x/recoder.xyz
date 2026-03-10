@@ -314,8 +314,8 @@ services:
       - PORT=3001
       - BETTER_AUTH_URL=https://recoder.xyz
       - NEXT_PUBLIC_APP_URL=https://app.recoder.xyz
-      - NEXT_PUBLIC_API_URL=http://recoder-backend-api:8000
-      - NEXT_PUBLIC_BACKEND_URL=http://recoder-backend-api:8000/v1
+      - NEXT_PUBLIC_BACKEND_URL=https://api.recoder.xyz/v1
+      - BACKEND_INTERNAL_URL=http://recoder-backend-api:8000/v1
     depends_on:
       backend:
         condition: service_healthy

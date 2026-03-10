@@ -53,15 +53,16 @@ export default function CreditUsage() {
   };
 
   const getUsageTypeBadge = (type: string) => {
-    const badges: Record<string, { label: string; variant: any }> = {
+    type BadgeVariant = 'default' | 'secondary' | 'destructive' | 'outline';
+    const badges: Record<string, { label: string; variant: BadgeVariant }> = {
       'usage': { label: 'Usage', variant: 'outline' },
       'debit': { label: 'Debit', variant: 'outline' },
       'expired': { label: 'Expired', variant: 'destructive' },
       'adjustment': { label: 'Adjustment', variant: 'secondary' },
     };
 
-    const badge = badges[type] || { label: type, variant: 'outline' };
-    return <Badge variant={badge.variant as any}>{badge.label}</Badge>;
+    const badge = badges[type] || { label: type, variant: 'outline' as BadgeVariant };
+    return <Badge variant={badge.variant}>{badge.label}</Badge>;
   };
 
   const handlePrevPage = () => {

@@ -36,8 +36,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    console.log(`📧 [Test Email] Sending ${type} email to ${email}...`);
-
     let result;
     const testUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'https://recoder.xyz'}/test-link?token=TEST_TOKEN_123`;
 
@@ -62,7 +60,6 @@ export async function POST(request: NextRequest) {
     }
 
     if (result.success) {
-      console.log(`✅ [Test Email] ${type} email sent to ${email}, messageId: ${result.messageId}`);
       return NextResponse.json({
         success: true,
         message: `Test ${type} email sent to ${email}`,
@@ -78,7 +75,7 @@ export async function POST(request: NextRequest) {
       }, { status: 500 });
     }
 
-  } catch (error: any) {
+  } catch (error) {
     console.error('Test email error:', error);
     return NextResponse.json(
       { success: false, error: 'Internal server error' },

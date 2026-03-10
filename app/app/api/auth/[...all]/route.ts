@@ -2,6 +2,7 @@ import { auth } from "@/lib/auth-config";
 import { toNextJsHandler } from "better-auth/next-js";
 import { NextRequest, NextResponse } from "next/server";
 import { SURFACE_ORIGINS } from "@recoder/auth/edge";
+import { logger } from "@/lib/logger";
 
 /**
  * Allowed CORS origins for auth endpoints.
@@ -57,14 +58,47 @@ const addCorsHeaders = (response: Response, origin: string) => {
   });
 };
 
+const authServiceUnavailable = (origin: string, message: string) => {
+  const response = NextResponse.json(
+    { success: false, error: message },
+    { status: 503 }
+  );
+  return addCorsHeaders(response, origin);
+};
+
 export async function GET(request: NextRequest) {
   const origin = request.headers.get('origin') || '';
-  const response = await originalGET(request);
-  return addCorsHeaders(response, origin);
+  try {
+    const response = await originalGET(request);
+    if (response.status >= 500) {
+      return authServiceUnavailable(origin, 'Authentication service temporarily unavailable');
+    }
+    return addCorsHeaders(response, origin);
+  } catch (error) {
+    logger.error('Auth GET failed', { error: error instanceof Error ? error.message : String(error) });
+    return authServiceUnavailable(origin, 'Authentication service temporarily unavailable');
+  }
 }
 
 export async function POST(request: NextRequest) {
   const origin = request.headers.get('origin') || '';
-  const response = await originalPOST(request);
-  return addCorsHeaders(response, origin);
+  const pathname = request.nextUrl.pathname;
+  const isSocialStart = pathname.includes('/sign-in/social');
+
+  try {
+    const response = await originalPOST(request);
+    if (response.status >= 500) {
+      if (isSocialStart) {
+        return authServiceUnavailable(origin, 'Social sign-in is temporarily unavailable');
+      }
+      return authServiceUnavailable(origin, 'Authentication service temporarily unavailable');
+    }
+    return addCorsHeaders(response, origin);
+  } catch (error) {
+    logger.error('Auth POST failed', { error: error instanceof Error ? error.message : String(error) });
+    if (isSocialStart) {
+      return authServiceUnavailable(origin, 'Social sign-in is temporarily unavailable');
+    }
+    return authServiceUnavailable(origin, 'Authentication service temporarily unavailable');
+  }
 }

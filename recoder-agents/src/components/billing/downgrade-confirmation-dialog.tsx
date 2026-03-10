@@ -89,7 +89,7 @@ export function DowngradeConfirmationDialog({
         },
       });
 
-      console.log('[Downgrade Feedback] Submitted');
+      
     } catch (error) {
       console.error('[Downgrade Feedback] Error:', error);
     } finally {

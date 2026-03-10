@@ -9,7 +9,51 @@ import { logger } from '@/lib/logger';
 const RESEND_FROM = process.env.RESEND_FROM || process.env.EMAIL_FROM || 'noreply@recoder.xyz';
 const SMTP_FROM = process.env.SMTP_FROM || process.env.EMAIL_FROM || 'noreply@recoder.xyz';
 const FROM_NAME = 'Recoder.xyz';
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://recoder.xyz';
+const APP_URL = resolvePublicAppUrl();
+
+export function resolvePublicAppUrl(env: NodeJS.ProcessEnv = process.env): string {
+  const raw = (
+    env.NEXT_PUBLIC_APP_URL ||
+    env.APP_URL ||
+    'https://recoder.xyz'
+  ).trim();
+
+  try {
+    const parsed = new URL(raw);
+    if (env.NODE_ENV === 'production' && (parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1')) {
+      return 'https://recoder.xyz';
+    }
+    return `${parsed.origin}${parsed.pathname.replace(/\/$/, '')}`;
+  } catch {
+    return 'https://recoder.xyz';
+  }
+}
+
+interface SanitizeEmailLinkOptions {
+  appUrl?: string;
+  nodeEnv?: string;
+}
+
+export function sanitizeEmailLink(url: string, fallbackPath: string, options?: SanitizeEmailLinkOptions): string {
+  const appUrl = options?.appUrl || APP_URL;
+  const nodeEnv = options?.nodeEnv || process.env.NODE_ENV;
+  const fallback = `${appUrl}${fallbackPath.startsWith('/') ? fallbackPath : `/${fallbackPath}`}`;
+  if (!url || typeof url !== 'string') return fallback;
+
+  try {
+    const parsed = new URL(url);
+    const isLocalhost = parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1';
+    if (nodeEnv === 'production' && isLocalhost) {
+      return `${appUrl}${parsed.pathname}${parsed.search}${parsed.hash}`;
+    }
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+      return fallback;
+    }
+    return parsed.toString();
+  } catch {
+    return fallback;
+  }
+}
 
 // Initialize SMTP transporter (fallback if Resend is not configured)
 const transporter = nodemailer.createTransport({
@@ -124,9 +168,9 @@ export async function sendWelcomeEmail(email: string, name: string) {
               <li><strong>Web Platform:</strong> Use our browser-based development environment</li>
             </ul>
             
-            <a href="${process.env.NEXT_PUBLIC_APP_URL || 'https://recoder.xyz'}/dashboard" class="button">Go to Dashboard</a>
+            <a href="${APP_URL}/dashboard" class="button">Go to Dashboard</a>
             
-            <p>Need help? Check out our <a href="${process.env.NEXT_PUBLIC_APP_URL || 'https://recoder.xyz'}/docs">documentation</a> or reach out to our support team.</p>
+            <p>Need help? Check out our <a href="${APP_URL}/docs">documentation</a> or reach out to our support team.</p>
             
             <p>Happy coding! 🎉</p>
           </div>
@@ -147,6 +191,7 @@ export async function sendWelcomeEmail(email: string, name: string) {
  */
 export async function sendVerificationEmailWithCode(email: string, code: string, verificationUrl: string) {
   const subject = `${code} is your Recoder.xyz verification code`;
+  const safeVerificationUrl = sanitizeEmailLink(verificationUrl, '/auth/signin?error=invalid_verification_link');
   const html = `
     <!DOCTYPE html>
     <html>
@@ -184,13 +229,13 @@ export async function sendVerificationEmailWithCode(email: string, code: string,
             <p style="text-align: center;">Or click the button below to verify automatically:</p>
 
             <div style="text-align: center;">
-              <a href="${verificationUrl}" class="button">Verify Email Address</a>
+              <a href="${safeVerificationUrl}" class="button">Verify Email Address</a>
             </div>
 
             <div class="divider"></div>
 
             <p style="color: #888; font-size: 14px;">If the button doesn't work, copy and paste this link:</p>
-            <div class="link-box">${verificationUrl}</div>
+            <div class="link-box">${safeVerificationUrl}</div>
 
             <p style="color: #666; font-size: 12px;">If you didn't create an account with Recoder.xyz, please ignore this email.</p>
           </div>
@@ -217,6 +262,7 @@ export async function sendVerificationEmailWithCode(email: string, code: string,
 export async function sendVerificationEmail(email: string, verificationUrl: string) {
   // Note: better-auth passes the full verification URL, not just the token
   const subject = 'Verify Your Email - Recoder.xyz';
+  const safeVerificationUrl = sanitizeEmailLink(verificationUrl, '/auth/signin?error=invalid_verification_link');
   const html = `
     <!DOCTYPE html>
     <html>
@@ -243,11 +289,11 @@ export async function sendVerificationEmail(email: string, verificationUrl: stri
             <p>Please verify your email address to complete your registration and access all features.</p>
 
             <div style="text-align: center;">
-              <a href="${verificationUrl}" class="button">Verify Email Address</a>
+              <a href="${safeVerificationUrl}" class="button">Verify Email Address</a>
             </div>
 
             <p style="color: #888; font-size: 14px;">Or copy and paste this link into your browser:</p>
-            <div class="link-box">${verificationUrl}</div>
+            <div class="link-box">${safeVerificationUrl}</div>
 
             <p style="color: #888; font-size: 14px;">This link will expire in 24 hours for security reasons.</p>
             <p style="color: #666; font-size: 12px;">If you didn't create an account with Recoder.xyz, please ignore this email.</p>
@@ -273,6 +319,7 @@ export async function sendVerificationEmail(email: string, verificationUrl: stri
 export async function sendPasswordResetEmail(email: string, resetUrl: string) {
   // Note: better-auth passes the full reset URL, not just the token
   const subject = 'Reset Your Password - Recoder.xyz';
+  const safeResetUrl = sanitizeEmailLink(resetUrl, '/auth/forgot-password');
   const html = `
     <!DOCTYPE html>
     <html>
@@ -300,11 +347,11 @@ export async function sendPasswordResetEmail(email: string, resetUrl: string) {
             <p>We received a request to reset your password for your Recoder.xyz account. Click the button below to create a new password:</p>
 
             <div style="text-align: center;">
-              <a href="${resetUrl}" class="button">Reset Password</a>
+              <a href="${safeResetUrl}" class="button">Reset Password</a>
             </div>
 
             <p style="color: #888; font-size: 14px;">Or copy and paste this link into your browser:</p>
-            <div class="link-box">${resetUrl}</div>
+            <div class="link-box">${safeResetUrl}</div>
 
             <div class="warning">
               <p style="color: #dc2626; margin: 0; font-size: 14px;">⚠️ This link will expire in 1 hour for security reasons.</p>
@@ -368,7 +415,7 @@ export async function sendSubscriptionConfirmationEmail(
             
             <p>You now have access to all premium features. Start building amazing projects today!</p>
             
-            <a href="${process.env.NEXT_PUBLIC_APP_URL || 'https://recoder.xyz'}/dashboard" class="button">Go to Dashboard</a>
+            <a href="${APP_URL}/dashboard" class="button">Go to Dashboard</a>
             
             <p>Manage your subscription anytime from your dashboard billing section.</p>
           </div>
@@ -499,7 +546,7 @@ If you didn't create an account, please contact support at support@recoder.xyz
  */
 export async function sendGettingStartedEmail(email: string, name: string) {
   const subject = '🚀 Getting Started with Recoder - Quick Tips';
-  const dashboardUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://recoder.xyz';
+  const dashboardUrl = APP_URL;
   const html = `
     <!DOCTYPE html>
     <html>
@@ -574,7 +621,7 @@ export async function sendGettingStartedEmail(email: string, name: string) {
  */
 export async function sendFeatureDeepDiveEmail(email: string, name: string) {
   const subject = '💡 Unlock Recoder\'s Most Powerful Features';
-  const dashboardUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://recoder.xyz';
+  const dashboardUrl = APP_URL;
   const html = `
     <!DOCTYPE html>
     <html>
@@ -646,7 +693,7 @@ export async function sendFeatureDeepDiveEmail(email: string, name: string) {
  */
 export async function sendEngagementEmail(email: string, name: string) {
   const subject = '👋 We miss you! Here\'s what\'s new in Recoder';
-  const dashboardUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://recoder.xyz';
+  const dashboardUrl = APP_URL;
   const html = `
     <!DOCTYPE html>
     <html>
@@ -729,7 +776,7 @@ export async function sendWeeklyTipsEmail(email: string, name: string, tipNumber
 
   const currentTip = tips[(tipNumber - 1) % tips.length];
   const subject = `💡 Weekly Tip: ${currentTip.title}`;
-  const dashboardUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://recoder.xyz';
+  const dashboardUrl = APP_URL;
   const html = `
     <!DOCTYPE html>
     <html>
@@ -787,7 +834,7 @@ export async function sendPaymentFailedEmail(
   retryDate?: string
 ) {
   const subject = 'Action Required: Payment Failed - Recoder.xyz';
-  const dashboardUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://recoder.xyz';
+  const dashboardUrl = APP_URL;
   const retryInfo = retryDate
     ? `<p>We'll automatically retry your payment on <strong style="color: #ffffff;">${retryDate}</strong>. To avoid any interruption, please update your payment method before then.</p>`
     : `<p>Please update your payment method as soon as possible to avoid losing access to your <strong style="color: #f97316;">${planName}</strong> plan features.</p>`;
@@ -861,7 +908,7 @@ export async function sendTrialExpiringEmail(
   planName: string
 ) {
   const subject = `Your trial expires in ${daysLeft} day${daysLeft === 1 ? '' : 's'} - Recoder.xyz`;
-  const dashboardUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://recoder.xyz';
+  const dashboardUrl = APP_URL;
   const urgencyColor = daysLeft <= 1 ? '#ef4444' : '#f97316';
 
   const html = `
@@ -946,7 +993,7 @@ export async function sendSubscriptionCancelledEmail(
   planName: string
 ) {
   const subject = 'Your subscription has been cancelled - Recoder.xyz';
-  const dashboardUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://recoder.xyz';
+  const dashboardUrl = APP_URL;
 
   const html = `
     <!DOCTYPE html>
@@ -1020,7 +1067,7 @@ export async function sendSubscriptionCancelledEmail(
  */
 export async function sendWinBackEmail(to: string, name: string) {
   const subject = 'We miss you! See what\'s new at Recoder.xyz';
-  const dashboardUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://recoder.xyz';
+  const dashboardUrl = APP_URL;
 
   const html = `
     <!DOCTYPE html>
@@ -1114,7 +1161,7 @@ export async function sendRenewalReminderEmail(
   planName: string
 ) {
   const subject = `Your ${planName} plan renews on ${renewalDate} - Recoder.xyz`;
-  const dashboardUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://recoder.xyz';
+  const dashboardUrl = APP_URL;
 
   const html = `
     <!DOCTYPE html>

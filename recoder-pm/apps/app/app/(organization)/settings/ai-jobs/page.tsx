@@ -34,26 +34,27 @@ const typeOptions = [
 const AiJobsSettingsPage = async ({
   searchParams,
 }: {
-  readonly searchParams?: {
+  readonly searchParams?: Promise<{
     status?: string;
     type?: string;
     q?: string;
     page?: string;
-  };
+  }>;
 }) => {
+  const resolvedSearchParams = searchParams ? await searchParams : undefined;
   const organizationId = await currentOrganizationId();
 
   if (!organizationId) {
     return notFound();
   }
 
-  const page = Number(searchParams?.page ?? "1") || 1;
+  const page = Number(resolvedSearchParams?.page ?? "1") || 1;
   const pageSize = 25;
   const skip = (page - 1) * pageSize;
 
-  const statusFilter = searchParams?.status?.toUpperCase();
-  const typeFilter = searchParams?.type?.toUpperCase();
-  const searchQuery = searchParams?.q?.trim();
+  const statusFilter = resolvedSearchParams?.status?.toUpperCase();
+  const typeFilter = resolvedSearchParams?.type?.toUpperCase();
+  const searchQuery = resolvedSearchParams?.q?.trim();
 
   const validStatus =
     statusFilter && (statusOptions as readonly string[]).includes(statusFilter)

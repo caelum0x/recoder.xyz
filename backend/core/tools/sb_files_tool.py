@@ -537,8 +537,8 @@ Usage:
                             try:
                                 new_html_content = json.loads(content_match.group(1).strip())
                                 original_wrapper["content"] = new_html_content
-                            except:
-                                pass
+                            except Exception:
+                                logger.warning("Failed to parse content field from code_edit JSON", exc_info=True)
                     
                     if "metadata" in instructions:
                         metadata_match = re.search(r'"metadata":\s*({[^}]+})', code_edit)
@@ -546,8 +546,8 @@ Usage:
                             try:
                                 new_metadata = json.loads(metadata_match.group(1))
                                 original_wrapper["metadata"] = new_metadata
-                            except:
-                                pass
+                            except Exception:
+                                logger.warning("Failed to parse metadata field from code_edit JSON", exc_info=True)
                     
                     if "updated_at" in instructions:
                         from datetime import datetime
@@ -595,9 +595,9 @@ Usage:
                 full_path_on_error = f"{self.workspace_path}/{self.clean_path(target_file)}"
                 if await self._file_exists(full_path_on_error):
                     original_content_on_error = (await self.sandbox.fs.download_file(full_path_on_error)).decode()
-            except:
-                pass
-            
+            except Exception:
+                logger.warning(f"Failed to read original content during error recovery for {target_file}", exc_info=True)
+
             return ToolResult(success=False, output=json.dumps({
                 "message": f"Error editing file: {str(e)}",
                 "file_path": target_file,

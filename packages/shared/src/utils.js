@@ -4,6 +4,7 @@
  */
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.PerformanceUtils = exports.IdUtils = exports.AsyncUtils = exports.ValidationUtils = exports.NumberUtils = exports.DateUtils = exports.ArrayUtils = exports.ObjectUtils = exports.StringUtils = void 0;
+const crypto = require("crypto");
 const uuid_1 = require("uuid");
 const constants_1 = require("./constants");
 /**
@@ -801,9 +802,10 @@ class IdUtils {
      */
     static nanoId(size = 21) {
         const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+        const bytes = crypto.getRandomValues(new Uint8Array(size));
         let id = '';
         for (let i = 0; i < size; i++) {
-            id += alphabet[Math.floor(Math.random() * alphabet.length)];
+            id += alphabet[bytes[i] % alphabet.length];
         }
         return id;
     }

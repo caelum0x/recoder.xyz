@@ -60,6 +60,8 @@ export interface RestAdapterConfig {
   retryDelayMs: number;
   /** Maximum retry delay in ms. */
   maxRetryDelayMs: number;
+  /** Exponential backoff multiplier between retry attempts. */
+  backoffMultiplier?: number;
   /** Custom headers to include in every request. */
   defaultHeaders?: Record<string, string>;
   /** Health check endpoint path (relative to baseUrl). */

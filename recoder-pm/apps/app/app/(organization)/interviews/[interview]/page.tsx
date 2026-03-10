@@ -22,8 +22,9 @@ export const metadata: Metadata = createMetadata({
 const InterviewPage = async ({
   params,
 }: {
-  readonly params: { interview: string };
+  readonly params: Promise<{ interview: string }>;
 }) => {
+  const { interview: interviewId } = await params;
   const [user, organizationId] = await Promise.all([
     currentUser(),
     currentOrganizationId(),
@@ -35,7 +36,7 @@ const InterviewPage = async ({
 
   const interview = await database.interview.findFirst({
     where: {
-      id: params.interview,
+      id: interviewId,
       organizationId,
     },
     select: {

@@ -45,12 +45,12 @@ export async function POST(request: NextRequest) {
         break;
       
       default:
-        console.log('Unhandled Paddle event:', event.alert_name);
+        break;
     }
 
     return NextResponse.json({ success: true });
 
-  } catch (error: any) {
+  } catch (error) {
     console.error('Paddle webhook error:', error);
     return NextResponse.json({
       success: false,
@@ -82,8 +82,6 @@ async function handleSubscriptionCreated(event: any) {
     return;
   }
 
-  console.log('[Paddle] Subscription created:', { userId, plan, subscription_id, status });
-
   await prisma.subscriptions.upsert({
     where: { userId },
     create: {
@@ -109,7 +107,6 @@ async function handleSubscriptionCreated(event: any) {
 
 async function handleSubscriptionUpdated(event: any) {
   const { subscription_id, status } = event;
-  console.log('[Paddle] Subscription updated:', { subscription_id, status });
 
   const sub = await prisma.subscriptions.findFirst({
     where: { providerId: String(subscription_id), provider: 'paddle' },
@@ -125,7 +122,6 @@ async function handleSubscriptionUpdated(event: any) {
 
 async function handleSubscriptionCancelled(event: any) {
   const { subscription_id } = event;
-  console.log('[Paddle] Subscription cancelled:', { subscription_id });
 
   const sub = await prisma.subscriptions.findFirst({
     where: { providerId: String(subscription_id), provider: 'paddle' },
@@ -144,12 +140,8 @@ async function handleSubscriptionCancelled(event: any) {
   }
 }
 
-async function handlePaymentSucceeded(event: any) {
-  const { subscription_id } = event;
-  console.log('[Paddle] Payment succeeded:', { subscription_id });
+async function handlePaymentSucceeded(_event: any) {
 }
 
-async function handlePaymentFailed(event: any) {
-  const { subscription_id } = event;
-  console.log('[Paddle] Payment failed:', { subscription_id });
+async function handlePaymentFailed(_event: any) {
 }

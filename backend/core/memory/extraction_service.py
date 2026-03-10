@@ -37,8 +37,8 @@ class MemoryExtractionService:
             if isinstance(content, str):
                 try:
                     content = json.loads(content)
-                except:
-                    pass
+                except Exception:
+                    logger.warning("Failed to parse message content as JSON, using raw string")
             
             if msg_type == 'user':
                 if isinstance(content, dict):

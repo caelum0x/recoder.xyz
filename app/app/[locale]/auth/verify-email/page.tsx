@@ -94,12 +94,20 @@ function VerifyEmailContent() {
   };
 
   return (
-    <div className="min-h-screen bg-black text-white">
+    <div className="min-h-screen bg-black text-white relative overflow-hidden">
+      {/* Animated gradient background */}
+      <div className="fixed inset-0 z-0">
+        <div className="absolute inset-0 bg-gradient-to-br from-orange-500/5 via-black to-purple-600/5" />
+        <div className="absolute top-0 left-1/4 w-96 h-96 bg-orange-500/10 rounded-full blur-3xl animate-pulse" style={{ animationDuration: '8s' }} />
+        <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-purple-600/10 rounded-full blur-3xl animate-pulse" style={{ animationDuration: '12s' }} />
+      </div>
+
+      <div className="relative z-10">
       <SiteHeader />
 
       <div className="container mx-auto px-6 py-24">
         <div className="max-w-md mx-auto">
-          <div className="p-8 rounded-2xl border border-white/10 bg-black/50 backdrop-blur-xl">
+          <div className="p-8 rounded-2xl border border-white/10 bg-black/60 backdrop-blur-xl">
             {/* Verifying State */}
             {status === 'verifying' && (
               <div className="text-center space-y-6">
@@ -247,6 +255,7 @@ function VerifyEmailContent() {
             </p>
           </div>
         </div>
+      </div>
       </div>
     </div>
   );

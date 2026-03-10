@@ -14,6 +14,8 @@ import { I18nProvider } from '@/components/i18n-provider';
 import { featureFlags } from '@/lib/feature-flags';
 import { OfflineIndicator } from '@/components/ui/offline-indicator';
 import { ServiceWorkerRegistration } from '@/components/service-worker-registration';
+import { KeyboardShortcutProvider } from '@/components/keyboard-shortcut-provider';
+import { NotificationToastProvider } from '@/components/notifications/notification-toast-provider';
 
 
 // Lazy load non-critical analytics and global components
@@ -26,6 +28,7 @@ const AnnouncementDialog = lazy(() => import('@/components/announcements/announc
 const RouteChangeTracker = lazy(() => import('@/components/analytics/route-change-tracker').then(mod => ({ default: mod.RouteChangeTracker })));
 const AuthEventTracker = lazy(() => import('@/components/analytics/auth-event-tracker').then(mod => ({ default: mod.AuthEventTracker })));
 const CookieVisibility = lazy(() => import('@/components/cookie-visibility').then(mod => ({ default: mod.CookieVisibility })));
+const KeyboardShortcutWiring = lazy(() => import('@/components/keyboard-shortcut-wiring').then(mod => ({ default: mod.KeyboardShortcutWiring })));
 
 
 export const viewport: Viewport = {
@@ -241,14 +244,20 @@ export default function RootLayout({
             <I18nProvider>
               <PresenceProvider>
               <ReactQueryProvider>
-                <main id="main-content">{children}</main>
-                <Toaster />
-                <Suspense fallback={null}>
-                  <PlanSelectionModal />
-                </Suspense>
-                <Suspense fallback={null}>
-                  <PostHogIdentify />
-                </Suspense>
+                <KeyboardShortcutProvider>
+                  <main id="main-content">{children}</main>
+                  <Toaster />
+                  <NotificationToastProvider />
+                  <Suspense fallback={null}>
+                    <KeyboardShortcutWiring />
+                  </Suspense>
+                  <Suspense fallback={null}>
+                    <PlanSelectionModal />
+                  </Suspense>
+                  <Suspense fallback={null}>
+                    <PostHogIdentify />
+                  </Suspense>
+                </KeyboardShortcutProvider>
               </ReactQueryProvider>
               </PresenceProvider>
             </I18nProvider>

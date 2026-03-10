@@ -13,9 +13,11 @@ import { logger } from '@/lib/logger';
 // Generate user-friendly 6-character code (ABC-123)
 function generateUserCode(): string {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // Remove confusing chars
+  const randomBuf = new Uint8Array(6);
+  crypto.getRandomValues(randomBuf);
   let code = '';
   for (let i = 0; i < 6; i++) {
-    code += chars[Math.floor(Math.random() * chars.length)];
+    code += chars[randomBuf[i] % chars.length];
     if (i === 2) code += '-'; // Add dash in middle
   }
   return code;
@@ -206,7 +208,7 @@ export async function PUT(request: NextRequest) {
     }
 
     // Check if email is verified before allowing CLI authorization
-    const user = await prisma.user.findUnique({
+    const user = await prisma.users.findUnique({
       where: { id: session.user.id },
       select: { emailVerified: true }
     });

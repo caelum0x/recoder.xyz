@@ -136,8 +136,8 @@ export function getFileUrl(sandboxId: string | undefined, path: string): string 
         path = path.replace(/\\u([0-9a-fA-F]{4})/g, (_, hexCode) => {
             return String.fromCharCode(parseInt(hexCode, 16));
         });
-    } catch (e) {
-        console.error('Error processing Unicode escapes in path:', e);
+    } catch {
+        // Unicode escape processing failed — use path as-is
     }
 
     const url = new URL(`${process.env.NEXT_PUBLIC_BACKEND_URL}/sandboxes/${sandboxId}/files/content`);

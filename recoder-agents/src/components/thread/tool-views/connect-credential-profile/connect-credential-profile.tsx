@@ -84,7 +84,6 @@ export function ConnectCredentialProfileToolView({
 
   // Defensive check - ensure toolCall is defined
   if (!toolCall || !extractedData) {
-    console.warn('ConnectCredentialProfileToolView: toolCall is undefined. Tool views should use structured props.');
     return null;
   }
 

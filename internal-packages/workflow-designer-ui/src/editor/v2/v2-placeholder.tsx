@@ -15,12 +15,16 @@ export function V2Placeholder({
 	isReadOnly = false,
 	userRole = "viewer",
 	onNameChange,
+	onDuplicate,
+	onDelete,
 	teamName,
 	teamAvatarUrl,
 }: {
 	isReadOnly?: boolean;
 	userRole?: "viewer" | "guest" | "editor" | "owner";
 	onNameChange?: (name: string) => Promise<void>;
+	onDuplicate?: () => Promise<void>;
+	onDelete?: () => Promise<void>;
 	teamName?: string;
 	teamAvatarUrl?: string | null;
 }) {
@@ -79,6 +83,8 @@ export function V2Placeholder({
 			<RootProvider>
 				<V2Header
 					onNameChange={onNameChange}
+					onDuplicate={onDuplicate}
+					onDelete={onDelete}
 					teamName={teamName}
 					teamAvatarUrl={teamAvatarUrl}
 				/>

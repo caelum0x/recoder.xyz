@@ -1,6 +1,7 @@
 import "server-only";
 import { eq } from "drizzle-orm";
 import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
 import { cache } from "react";
 import { verifySession } from "@recoder/auth/verify";
 import { db, type UserId, users } from "@/db";
@@ -16,7 +17,7 @@ type SessionUser = {
 async function _getSessionUser(): Promise<SessionUser> {
 	const user = await getSessionUserOrNull();
 	if (!user) {
-		throw new Error("Not authenticated");
+		redirect("/login");
 	}
 	return user;
 }
@@ -34,12 +35,20 @@ export async function getSessionUserOrNull(): Promise<SessionUser | null> {
 	}
 
 	const userId = session.user.id as UserId;
-	const profile = await ensureProfile({
-		id: userId,
-		name: session.user.name,
-		email: session.user.email,
-		image: session.user.image,
-	});
+	let profile: Awaited<ReturnType<typeof ensureProfile>> | null = null;
+	try {
+		profile = await ensureProfile({
+			id: userId,
+			name: session.user.name,
+			email: session.user.email,
+			image: session.user.image,
+		});
+	} catch {
+		// Compatibility fallback for environments where local agency profile
+		// columns/tables are not fully provisioned yet. Auth still succeeds and
+		// callers can treat dbId=0 as "profile bootstrap required".
+		profile = null;
+	}
 	return {
 		id: userId,
 		dbId: profile?.dbId ?? 0,

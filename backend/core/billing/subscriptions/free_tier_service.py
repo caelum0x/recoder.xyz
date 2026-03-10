@@ -132,8 +132,8 @@ class FreeTierService:
                             from core.utils.auth_utils import get_auth_user_by_id
                             auth_user = await get_auth_user_by_id(user_id)
                             email = auth_user.get('email') if auth_user else None
-                        except:
-                            pass
+                        except Exception as e:
+                            logger.warning(f"[FREE TIER] Failed to look up auth user email for user {user_id}: {e}")
 
                         if not email:
                             email = await billing_repo.get_user_email(user_id)

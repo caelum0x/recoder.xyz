@@ -319,6 +319,7 @@ export default function DevelopersPage() {
           </div>
           <p className="text-sm text-muted-foreground max-w-lg">
             Explore and test the Recoder platform API. Browse available endpoints, view parameters, and prepare requests.
+            {' '}Try the <a href="/developers/playground" className="text-primary hover:underline font-medium">interactive playground</a> to execute requests live.
           </p>
         </div>
 

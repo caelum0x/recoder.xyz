@@ -297,8 +297,8 @@ class ApifyTool(SandboxToolsBase):
                         approval = await self._get_approval_request(approval_id)
                         if approval and approval.get('actual_cost_usd') is not None:
                             return Decimal(str(approval['actual_cost_usd']))
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        logger.warning(f"[apify_tool] Failed to get cost from approval {approval_id} (run_info not dict): {e}")
                 return Decimal("0")
             
             # METHOD 1: Calculate from pricingInfo and dataset item count
@@ -489,8 +489,9 @@ class ApifyTool(SandboxToolsBase):
                 else:
                     pricing_model = getattr(store_actor_info, 'pricingModel', None)
                     pricing_infos = getattr(store_actor_info, 'pricingInfos', None)
-            except Exception:
+            except Exception as e:
                 # If we can't get pricing info, use max_cost_usd as estimate
+                logger.debug(f"[apify_tool] Could not get pricing info for {actor_id}: {e}")
                 logger.debug(f"Could not get pricing info for {actor_id}, using max_cost_usd as estimate")
                 estimated_usd = max_cost_usd
                 estimated_credits = max_cost_usd * TOKEN_PRICE_MULTIPLIER * Decimal("100")  # Convert to credits (1 credit = $0.01)
@@ -638,7 +639,8 @@ class ApifyTool(SandboxToolsBase):
                             if user_id and approval.get('account_id') != user_id:
                                 continue
                             return approval
-                except Exception:
+                except Exception as e:
+                    logger.debug(f"[apify_tool] Error reading approval key {key} while searching for run_id {run_id}: {e}")
                     continue
         except Exception as e:
             logger.debug(f"Error finding approval by run_id {run_id}: {e}")
@@ -678,8 +680,8 @@ class ApifyTool(SandboxToolsBase):
                                 expires_at = datetime.fromisoformat(expires_at_str.replace('Z', '+00:00'))
                                 if datetime.now(timezone.utc) <= expires_at:
                                     return approval_id
-                            except Exception:
-                                pass
+                            except Exception as e:
+                                logger.warning(f"[apify_tool] Failed to parse expires_at '{expires_at_str}' for approval {approval_id}: {e}")
                         else:
                             return approval_id
             

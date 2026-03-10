@@ -284,13 +284,15 @@ export class WebCLIAuthBridge {
    */
   private generateUserCode(): string {
     const chars = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'; // No confusing chars
+    const randomBuf = new Uint8Array(6);
+    crypto.getRandomValues(randomBuf);
     let result = '';
     for (let i = 0; i < 3; i++) {
-      result += chars.charAt(Math.floor(Math.random() * chars.length));
+      result += chars.charAt(randomBuf[i] % chars.length);
     }
     result += '-';
     for (let i = 0; i < 3; i++) {
-      result += chars.charAt(Math.floor(Math.random() * chars.length));
+      result += chars.charAt(randomBuf[i + 3] % chars.length);
     }
     return result;
   }

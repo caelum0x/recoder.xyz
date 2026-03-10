@@ -87,7 +87,7 @@ export function ErrorMessage({ error, onAction, onDismiss, className }: ErrorMes
               onClick={() => onAction?.(action)}
               className={classNames(
                 'flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-all',
-                'bg-[#2563eb] hover:bg-[#1d4ed8]',
+                'bg-blue-600 hover:bg-blue-700',
                 'text-white',
                 'border border-recoder-elements-borderColor',
                 index === 0 && solution.autoFixable ? 'ring-2 ring-accent-500/50' : ''

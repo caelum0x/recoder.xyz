@@ -14,11 +14,13 @@ import DodoPayments from 'dodopayments';
 import { prisma } from '../prisma';
 import crypto from 'crypto';
 import { logger } from '@/lib/logger';
+import { resolveDodoApiKey } from '@/lib/billing-credentials';
+import { resolveSafeCheckoutReturnUrl } from '@/lib/billing-return-url';
 
 function getDodoClient(): DodoPayments {
-  const bearerToken = process.env.DODO_PAYMENTS_API_KEY;
+  const bearerToken = resolveDodoApiKey();
   if (!bearerToken) {
-    throw new Error('DODO_PAYMENTS_API_KEY is not configured');
+    throw new Error('No Dodo API key is configured');
   }
   return new DodoPayments({ bearerToken });
 }
@@ -50,7 +52,7 @@ export class DodoPaymentsService {
           email: user.email,
           name: user.name,
         },
-        return_url: returnUrl || `${process.env.NEXT_PUBLIC_APP_URL}/billing/success`,
+        return_url: resolveSafeCheckoutReturnUrl(returnUrl),
       });
 
       return {
@@ -403,13 +405,18 @@ export class DodoPaymentsService {
         throw new Error('Subscription not found');
       }
 
+      const bearerToken = resolveDodoApiKey();
+      if (!bearerToken) {
+        throw new Error('No Dodo API key is configured');
+      }
+
       // Call Dodo Payments API (use direct fetch until SDK is updated)
       const response = await fetch(
         `https://api.dodopayments.com/subscriptions/${subscription.providerId}/change-plan`,
         {
           method: 'POST',
           headers: {
-            'Authorization': `Bearer ${process.env.DODO_PAYMENTS_API_KEY}`,
+            'Authorization': `Bearer ${bearerToken}`,
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
@@ -453,13 +460,18 @@ export class DodoPaymentsService {
         throw new Error('Subscription not found');
       }
 
+      const bearerToken = resolveDodoApiKey();
+      if (!bearerToken) {
+        throw new Error('No Dodo API key is configured');
+      }
+
       // Update subscription with cancel_at_period_end flag
       const response = await fetch(
         `https://api.dodopayments.com/subscriptions/${subscription.providerId}`,
         {
           method: 'PATCH',
           headers: {
-            'Authorization': `Bearer ${process.env.DODO_PAYMENTS_API_KEY}`,
+            'Authorization': `Bearer ${bearerToken}`,
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
@@ -525,10 +537,15 @@ export class DodoPaymentsService {
         throw new Error('User not found');
       }
 
+      const bearerToken = resolveDodoApiKey();
+      if (!bearerToken) {
+        throw new Error('No Dodo API key is configured');
+      }
+
       const response = await fetch('https://api.dodopayments.com/subscriptions', {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${process.env.DODO_PAYMENTS_API_KEY}`,
+          'Authorization': `Bearer ${bearerToken}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
@@ -593,12 +610,17 @@ export class DodoPaymentsService {
         throw new Error('Subscription not found');
       }
 
+      const bearerToken = resolveDodoApiKey();
+      if (!bearerToken) {
+        throw new Error('No Dodo API key is configured');
+      }
+
       const response = await fetch(
         `https://api.dodopayments.com/subscriptions/${subscription.providerId}/charge`,
         {
           method: 'POST',
           headers: {
-            'Authorization': `Bearer ${process.env.DODO_PAYMENTS_API_KEY}`,
+            'Authorization': `Bearer ${bearerToken}`,
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({

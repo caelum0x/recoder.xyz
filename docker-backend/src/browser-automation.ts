@@ -52,7 +52,9 @@ setInterval(() => {
   for (const [projectId, session] of sessions.entries()) {
     if (now - session.createdAt > SESSION_MAX_AGE) {
       console.log(`[Browser] Cleaning up stale session for ${projectId}`);
-      session.browser.close().catch(() => {});
+      session.browser.close().catch((err: unknown) => {
+        console.warn(`[Browser] Failed to close stale session for ${projectId}:`, err);
+      });
       sessions.delete(projectId);
     }
   }

@@ -109,17 +109,12 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
         hasToken: !!data.token,
       });
     } catch (fetchError) {
-      // Fallback: Return a mock preview URL for development
-      logger.warn('[Preview] Docker backend unavailable, returning mock URL');
-
-      const mockUrl = `http://localhost:5173/?projectId=${projectId}`;
-      const previewURL = buildPreviewUrl(mockUrl, planId);
+      logger.warn('[Preview] Docker backend unavailable, cannot retrieve preview URL');
 
       return json({
-        success: true,
-        previewURL,
-        isMock: true,
-      });
+        success: false,
+        error: 'Preview service is unavailable. The container backend is not reachable.',
+      }, { status: 503 });
     }
   } catch (error) {
     logger.error('[Preview] Get URL error:', error);
@@ -200,17 +195,10 @@ export async function action({ request, context }: ActionFunctionArgs) {
     } catch (fetchError) {
       logger.error('[Preview] Container update error:', fetchError);
 
-      // Return mock for development
-      const mockUrl = `http://localhost:5173/?projectId=${projectId}`;
-      const previewURL = buildPreviewUrl(mockUrl, planId);
-
       return json({
-        success: true,
-        previewURL,
-        planId,
-        isMock: true,
-        warning: 'Container update skipped - development mode',
-      });
+        success: false,
+        error: 'Preview service is unavailable. The container backend is not reachable.',
+      }, { status: 503 });
     }
   } catch (error) {
     logger.error('[Preview] Update error:', error);

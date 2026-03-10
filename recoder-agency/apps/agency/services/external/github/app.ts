@@ -12,6 +12,7 @@ import { Octokit } from "@octokit/core";
  */
 export async function gitHubAppInstallURL(): Promise<string | undefined> {
 	const auth = appAuth();
+	if (!auth) return undefined;
 	const app = await auth({ type: "app" });
 	const octokit = new Octokit({ auth: app.token });
 	try {
@@ -36,6 +37,9 @@ export async function gitHubAppInstallURL(): Promise<string | undefined> {
  */
 export async function buildAppInstallationClient(installationId: number) {
 	const auth = appAuth();
+	if (!auth) {
+		throw new Error("GitHub App credentials are not configured. Set GITHUB_APP_ID, GITHUB_APP_PRIVATE_KEY, GITHUB_APP_CLIENT_ID, and GITHUB_APP_CLIENT_SECRET.");
+	}
 	const installationAuth = await auth({
 		type: "installation",
 		installationId,
@@ -48,27 +52,18 @@ export async function buildAppInstallationClient(installationId: number) {
 
 function appAuth() {
 	const appId = process.env.GITHUB_APP_ID;
-	if (!appId) {
-		throw new Error("GITHUB_APP_ID is empty");
-	}
 	const privateKey = process.env.GITHUB_APP_PRIVATE_KEY;
-	if (!privateKey) {
-		throw new Error("GITHUB_APP_PRIVATE_KEY is empty");
-	}
 	const clientId = process.env.GITHUB_APP_CLIENT_ID;
-	if (!clientId) {
-		throw new Error("GITHUB_APP_CLIENT_ID is empty");
-	}
 	const clientSecret = process.env.GITHUB_APP_CLIENT_SECRET;
-	if (!clientSecret) {
-		throw new Error("GITHUB_APP_CLIENT_SECRET is empty");
+
+	if (!appId || !privateKey || !clientId || !clientSecret) {
+		return null;
 	}
 
-	const auth = createAppAuth({
+	return createAppAuth({
 		appId,
 		privateKey,
 		clientId,
 		clientSecret,
 	});
-	return auth;
 }

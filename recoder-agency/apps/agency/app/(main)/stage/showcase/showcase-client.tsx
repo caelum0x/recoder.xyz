@@ -17,10 +17,12 @@ import { TabNavigation } from "@recoder-internal/ui/tab-navigation";
 import { Play, RotateCcw, Star } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { GlassButton } from "@/components/ui/glass-button";
 import { Card } from "../../settings/components/card";
 import { SearchHeader } from "../../workspaces/components/search-header";
+import { toggleFavorite as toggleFavoriteAction } from "./favorites-actions";
+import { createPlaylist } from "./playlist/actions";
 
 type SortOption = "name-asc" | "name-desc" | "date-desc" | "date-asc";
 
@@ -44,55 +46,13 @@ interface ShowcaseClientProps {
 	teamApps: Record<string, App[]>;
 	teamHistory: Record<string, App[]>;
 	currentTeamId: string;
+	playlists: Playlist[];
+	initialFavorites: string[];
 }
 
-const PLAYLISTS_STORAGE_KEY = "recoder-agency-playlists";
 const FAVORITES_STORAGE_KEY = "recoder-agency-favorites";
 
-function loadPlaylists(): Playlist[] {
-	if (typeof window === "undefined") return [];
-	try {
-		const raw = localStorage.getItem(PLAYLISTS_STORAGE_KEY);
-		if (!raw) return [];
-		const parsed = JSON.parse(raw) as Array<{
-			id: string;
-			title: string;
-			description: string;
-			createdAt: string;
-			updatedAt: string;
-			appsCount: number;
-		}>;
-		return parsed.map((p) => ({
-			...p,
-			createdAt: new Date(p.createdAt),
-			updatedAt: new Date(p.updatedAt),
-		}));
-	} catch {
-		return [];
-	}
-}
-
-function savePlaylists(playlists: Playlist[]) {
-	if (typeof window === "undefined") return;
-	try {
-		localStorage.setItem(PLAYLISTS_STORAGE_KEY, JSON.stringify(playlists));
-	} catch {
-		// Storage full or unavailable — silently ignore
-	}
-}
-
-function loadFavorites(): Set<string> {
-	if (typeof window === "undefined") return new Set();
-	try {
-		const raw = localStorage.getItem(FAVORITES_STORAGE_KEY);
-		if (!raw) return new Set();
-		return new Set(JSON.parse(raw) as string[]);
-	} catch {
-		return new Set();
-	}
-}
-
-function saveFavorites(favorites: Set<string>) {
+function saveFavoritesToLocalStorage(favorites: Set<string>) {
 	if (typeof window === "undefined") return;
 	try {
 		localStorage.setItem(
@@ -108,6 +68,8 @@ export function ShowcaseClient({
 	teamApps,
 	teamHistory,
 	currentTeamId,
+	playlists,
+	initialFavorites,
 }: ShowcaseClientProps) {
 	const router = useRouter();
 	const searchParams = useSearchParams();
@@ -120,22 +82,26 @@ export function ShowcaseClient({
 		{ href: "/stage/showcase?tab=History", label: "History" },
 	] as const;
 
-	// Playlist state — loaded from localStorage
-	const [playlists, setPlaylists] = useState<Playlist[]>([]);
+	// Playlist create dialog
 	const [isPlaylistDialogOpen, setIsPlaylistDialogOpen] = useState(false);
 	const [playlistForm, setPlaylistForm] = useState({
 		title: "",
 		description: "",
 	});
 
-	// Favorites state — loaded from localStorage
-	const [favorites, setFavorites] = useState<Set<string>>(new Set());
+	// Favorites state — initialized from server, cached in localStorage
+	const [favorites, setFavorites] = useState<Set<string>>(
+		() => new Set(initialFavorites),
+	);
 
-	// Load playlists and favorites from localStorage on mount
+	// Sync server favorites to localStorage on mount
+	const didSyncRef = useRef(false);
 	useEffect(() => {
-		setPlaylists(loadPlaylists());
-		setFavorites(loadFavorites());
-	}, []);
+		if (!didSyncRef.current) {
+			didSyncRef.current = true;
+			saveFavoritesToLocalStorage(new Set(initialFavorites));
+		}
+	}, [initialFavorites]);
 
 	// Apps tab states
 	const [searchQuery, setSearchQuery] = useState("");
@@ -151,7 +117,7 @@ export function ShowcaseClient({
 		return teamHistory[currentTeamId] || [];
 	}, [teamHistory, currentTeamId]);
 
-	// Toggle favorite for an app
+	// Toggle favorite for an app — optimistic localStorage + server persistence
 	const toggleFavorite = useCallback(
 		(appId: string) => {
 			const next = new Set(favorites);
@@ -160,29 +126,36 @@ export function ShowcaseClient({
 			} else {
 				next.add(appId);
 			}
+			// Optimistic UI update + localStorage cache
 			setFavorites(next);
-			saveFavorites(next);
+			saveFavoritesToLocalStorage(next);
+
+			// Persist to server in the background
+			toggleFavoriteAction(appId).catch(() => {
+				// Revert on failure
+				const reverted = new Set(next);
+				if (reverted.has(appId)) {
+					reverted.delete(appId);
+				} else {
+					reverted.add(appId);
+				}
+				setFavorites(reverted);
+				saveFavoritesToLocalStorage(reverted);
+			});
 		},
 		[favorites],
 	);
 
 	// Handle playlist form submission
-	const handleSavePlaylist = () => {
+	const handleSavePlaylist = async () => {
 		if (!playlistForm.title.trim()) return;
-		const now = new Date();
-		const newPlaylist: Playlist = {
-			id: `pl_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
+		await createPlaylist({
 			title: playlistForm.title.trim(),
 			description: playlistForm.description.trim(),
-			createdAt: now,
-			updatedAt: now,
-			appsCount: 0,
-		};
-		const updated = [...playlists, newPlaylist];
-		setPlaylists(updated);
-		savePlaylists(updated);
+		});
 		setIsPlaylistDialogOpen(false);
 		setPlaylistForm({ title: "", description: "" });
+		router.refresh();
 	};
 
 	// Filter apps based on search query
@@ -282,10 +255,10 @@ export function ShowcaseClient({
 								searchQuery ? (
 									<div className="flex justify-center items-center h-full mt-12">
 										<div className="grid gap-[8px] justify-center text-center">
-											<h3 className="text-[18px] font-geist font-bold text-text-muted">
+											<h3 className="text-[18px] font-sans font-bold text-text-muted">
 												No apps found.
 											</h3>
-											<p className="text-[12px] font-geist text-text-muted">
+											<p className="text-[12px] font-sans text-text-muted">
 												Try searching with a different keyword.
 											</p>
 										</div>
@@ -293,10 +266,10 @@ export function ShowcaseClient({
 								) : (
 									<div className="flex justify-center items-center h-full mt-12">
 										<div className="grid gap-[8px] justify-center text-center">
-											<h3 className="text-[18px] font-geist font-bold text-text-muted">
+											<h3 className="text-[18px] font-sans font-bold text-text-muted">
 												No apps yet.
 											</h3>
-											<p className="text-[12px] font-geist text-text-muted">
+											<p className="text-[12px] font-sans text-text-muted">
 												Please create a new app with the 'New App +' button.
 											</p>
 										</div>
@@ -331,7 +304,7 @@ export function ShowcaseClient({
 													<p className="text-[14px] font-sans text-text">
 														{app.name || "Untitled"}
 													</p>
-													<p className="text-[12px] font-geist text-text-muted">
+													<p className="text-[12px] font-sans text-text-muted">
 														Edited {app.updatedAt.toLocaleDateString("en-US")}
 													</p>
 												</div>
@@ -356,14 +329,7 @@ export function ShowcaseClient({
 															? `/workspaces/${app.workspaceId}`
 															: "/playground"
 													}
-													className="rounded-lg px-3 py-1.5 text-text transition-all duration-200 active:scale-[0.98] text-sm"
-													style={{
-														background:
-															"linear-gradient(180deg, #202530 0%, #12151f 100%)",
-														border: "1px solid rgba(0,0,0,0.7)",
-														boxShadow:
-															"inset 0 1px 1px rgba(255,255,255,0.05), 0 2px 8px rgba(5,10,20,0.4), 0 1px 2px rgba(0,0,0,0.3)",
-													}}
+													className="rounded-lg px-3 py-1.5 text-text transition-all duration-200 active:scale-[0.98] text-sm bg-gradient-to-b from-zinc-800 to-zinc-900 border border-black/70 shadow-[inset_0_1px_1px_rgba(255,255,255,0.05),0_2px_8px_rgba(5,10,20,0.4),0_1px_2px_rgba(0,0,0,0.3)]"
 													onClick={(e) => {
 														e.stopPropagation();
 													}}
@@ -532,10 +498,10 @@ export function ShowcaseClient({
 							{playlists.length === 0 && (
 								<div className="flex justify-center items-center h-full">
 									<div className="grid gap-[8px] justify-center text-center">
-										<h3 className="text-[18px] font-geist font-bold text-text-muted">
+										<h3 className="text-[18px] font-sans font-bold text-text-muted">
 											No playlists yet.
 										</h3>
-										<p className="text-[12px] font-geist text-text-muted">
+										<p className="text-[12px] font-sans text-text-muted">
 											Please create a new playlist with the 'New Playlist +'
 											button.
 										</p>
@@ -559,10 +525,10 @@ export function ShowcaseClient({
 								searchQuery ? (
 									<div className="flex justify-center items-center h-full mt-12">
 										<div className="grid gap-[8px] justify-center text-center">
-											<h3 className="text-[18px] font-geist font-bold text-text-muted">
+											<h3 className="text-[18px] font-sans font-bold text-text-muted">
 												No history found.
 											</h3>
-											<p className="text-[12px] font-geist text-text-muted">
+											<p className="text-[12px] font-sans text-text-muted">
 												Try searching with a different keyword.
 											</p>
 										</div>
@@ -570,10 +536,10 @@ export function ShowcaseClient({
 								) : (
 									<div className="flex justify-center items-center h-full mt-12">
 										<div className="grid gap-[8px] justify-center text-center">
-											<h3 className="text-[18px] font-geist font-bold text-text-muted">
+											<h3 className="text-[18px] font-sans font-bold text-text-muted">
 												No history yet.
 											</h3>
-											<p className="text-[12px] font-geist text-text-muted">
+											<p className="text-[12px] font-sans text-text-muted">
 												Execute an app to see your history.
 											</p>
 										</div>
@@ -605,7 +571,7 @@ export function ShowcaseClient({
 													<p className="text-[14px] font-sans text-text">
 														{item.name || "Untitled"}
 													</p>
-													<p className="text-[12px] font-geist text-text-muted">
+													<p className="text-[12px] font-sans text-text-muted">
 														Executed{" "}
 														{item.updatedAt.toLocaleDateString("en-US")}
 													</p>

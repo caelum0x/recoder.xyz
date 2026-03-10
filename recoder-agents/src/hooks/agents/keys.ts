@@ -15,3 +15,11 @@ export const versionKeys = {
   details: () => [...versionKeys.all, 'detail'] as const,
   detail: (agentId: string, versionId: string) => [...versionKeys.details(), agentId, versionId] as const,
 };
+
+export const configVersionKeys = {
+  all: ['config-versions'] as const,
+  lists: () => [...configVersionKeys.all, 'list'] as const,
+  list: (agentId: string) => [...configVersionKeys.lists(), agentId] as const,
+  detail: (agentId: string, versionNumber: number) => [...configVersionKeys.all, 'detail', agentId, versionNumber] as const,
+  diff: (agentId: string, from: number, to: number) => [...configVersionKeys.all, 'diff', agentId, from, to] as const,
+};

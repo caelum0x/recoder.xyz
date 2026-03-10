@@ -4,7 +4,7 @@
 
 import { Command } from 'commander';
 import setupAuthCommands from './auth';
-// import { setupAgentCommands } from './agent'; // TODO: Fix agent command setup
+import { createAgentCommand } from './agent';
 import { setupProjectCommands } from './project';
 import { setupChatCommands } from './chat';
 import { setupTemplateCommands } from './templates';
@@ -21,7 +21,7 @@ export function setupCommands(program: Command): void {
   setupAuthCommands();
   
   // Agent management commands
-  // setupAgentCommands(program); // TODO: Fix agent command setup
+  program.addCommand(createAgentCommand());
   
   // Project commands
   setupProjectCommands(program);

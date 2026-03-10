@@ -73,7 +73,7 @@ export async function GET(
         webUrl: `${RECODER_WEB_URL}/chat/${found.urlId}`,
       },
     });
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error fetching project detail:', error);
     return NextResponse.json(
       { success: false, error: 'Internal server error' },

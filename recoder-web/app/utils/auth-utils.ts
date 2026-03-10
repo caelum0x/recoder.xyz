@@ -19,14 +19,14 @@ export interface User {
  */
 export function getMainSiteUrl(): string {
   if (typeof window === 'undefined') {
-    return process.env.NODE_ENV === 'production'
+    return process.env.MAIN_SITE_URL || (process.env.NODE_ENV === 'production'
       ? 'https://recoder.xyz'
-      : 'http://localhost:3000'; // Main app port
+      : 'http://localhost:3000');
   }
 
   // Client-side: check if we're on localhost
   if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-    return 'http://localhost:3000'; // Main app port
+    return 'http://localhost:3000';
   }
 
   return 'https://recoder.xyz';

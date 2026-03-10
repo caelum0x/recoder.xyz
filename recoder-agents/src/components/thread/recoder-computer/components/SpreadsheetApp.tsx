@@ -26,7 +26,7 @@ import { useSpreadsheetSync } from '../../tool-views/spreadsheet/useSpreadsheetS
 import { SyncStatusIndicator } from '../../tool-views/spreadsheet/SyncStatusIndicator';
 import { SpreadsheetLoader } from '../../tool-views/spreadsheet/SpreadsheetLoader';
 import { Button } from '@/components/ui/button';
-import { getSessionAccessToken } from '@/lib/auth/session-token';
+import { getSandboxFileContent } from '@/lib/api/sandbox';
 import { toast } from '@/lib/toast';
 import { useDownloadRestriction } from '@/hooks/billing';
 
@@ -157,25 +157,10 @@ const SpreadsheetEditor = memo(function SpreadsheetEditor({
       toast.error('Unable to download file');
       return;
     }
-    const token = await getSessionAccessToken();
-    if (!token) {
-      toast.error('Unable to download file');
-      return;
-    }
-
     setIsDownloading(true);
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/sandboxes/${sandboxId}/files/content?path=${encodeURIComponent(filePath)}`, {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
-
-      if (!response.ok) {
-        throw new Error(`Download failed: ${response.status}`);
-      }
-
-      const blob = await response.blob();
+      const content = await getSandboxFileContent(sandboxId, filePath);
+      const blob = content instanceof Blob ? content : new Blob([content], { type: 'application/octet-stream' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;

@@ -47,7 +47,6 @@ export default function SettingUpPage() {
         );
 
         if (hasActiveSubscription) {
-          console.log('✅ Account already initialized via webhook, redirecting to dashboard');
           isInitializing.current = false;
           setStatus('success');
           setTimeout(() => {
@@ -57,7 +56,6 @@ export default function SettingUpPage() {
         }
 
         // No subscription found - initialize manually (fallback)
-        console.log('⚠️ No subscription detected - initializing manually (fallback)');
         setStatus('initializing');
         // Double-check mutation isn't already pending before calling
         if (!initializeMutation.isPending) {

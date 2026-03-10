@@ -5,14 +5,17 @@ import {
 	Editor,
 } from "@recoder-internal/workflow-designer-ui";
 import type { Integration } from "@recoder/giselle";
-import type { Trigger, Workspace } from "@recoder/protocol";
+import type { Trigger, Workspace, WorkspaceId } from "@recoder/protocol";
 import { GiselleClientProvider, WorkspaceProvider } from "@recoder/react";
-import { use, useMemo } from "react";
+import { useRouter } from "next/navigation";
+import { use, useCallback, useMemo } from "react";
 import { createInternalGiselleClient } from "@/lib/internal-api/create-giselle-client";
 import type { LoaderData } from "./data-loader";
 
 interface Props {
 	dataLoader: Promise<LoaderData>;
+	duplicateAction: () => Promise<{ workspaceId: WorkspaceId | null }>;
+	deleteAction: () => Promise<{ success: boolean }>;
 	integrationRefreshAction: () => Promise<Partial<Integration>>;
 	triggerUpdateAction: (trigger: Trigger) => Promise<void>;
 	workspaceSaveAction: (workspace: Workspace) => Promise<void>;
@@ -20,15 +23,32 @@ interface Props {
 }
 export function Page({
 	dataLoader,
+	duplicateAction,
+	deleteAction,
 	integrationRefreshAction,
 	triggerUpdateAction: flowTriggerUpdateAction,
 	workspaceNameUpdateAction,
 	workspaceSaveAction,
 }: Props) {
 	const data = use(dataLoader);
+	const router = useRouter();
 	const client = useMemo(() => {
 		return createInternalGiselleClient();
 	}, []);
+
+	const handleDuplicate = useCallback(async () => {
+		const result = await duplicateAction();
+		if (result.workspaceId) {
+			router.push(`/workspaces/${result.workspaceId}`);
+		}
+	}, [duplicateAction, router]);
+
+	const handleDelete = useCallback(async () => {
+		const result = await deleteAction();
+		if (result.success) {
+			router.push("/workspaces");
+		}
+	}, [deleteAction, router]);
 
 	return (
 		<GiselleClientProvider value={client}>
@@ -39,8 +59,9 @@ export function Page({
 				initialWorkspace={data.data}
 			>
 				<WorkspaceProvider
-					// TODO: Make it reference the same timeout setting as in trigger.config.ts
-					generationTimeout={3600 * 1000}
+					generationTimeout={
+						Number(process.env.NEXT_PUBLIC_GENERATION_TIMEOUT_MS) || 3600 * 1000
+					}
 					integration={{
 						value: {
 							github: data.gitHubIntegrationState,
@@ -106,6 +127,8 @@ export function Page({
 						)}
 						<Editor
 							onFlowNameChange={workspaceNameUpdateAction}
+							onDuplicate={handleDuplicate}
+							onDelete={handleDelete}
 							teamName={data.workspaceTeam.name}
 							teamAvatarUrl={data.workspaceTeam.avatarUrl}
 						/>

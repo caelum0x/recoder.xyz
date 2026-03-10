@@ -10,15 +10,12 @@
 
 import { Router, type Request, type Response } from 'express';
 import { createReadStream, existsSync } from 'node:fs';
-import { resolve, dirname } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { resolve } from 'node:path';
 import { createLogger } from '../logger';
 
 const logger = createLogger('a2a-openapi-routes');
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-const OPENAPI_PATH = resolve(__dirname, '../../docs/a2a-openapi.yaml');
+const OPENAPI_PATH = resolve(process.cwd(), 'docs/a2a-openapi.yaml');
 
 export const a2aOpenApiRouter = Router();
 
@@ -77,4 +74,3 @@ a2aOpenApiRouter.get('/docs', (_req: Request, res: Response) => {
   res.setHeader('Content-Type', 'text/html; charset=utf-8');
   res.send(html);
 });
-

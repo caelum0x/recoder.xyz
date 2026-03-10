@@ -14,7 +14,7 @@ export type SubagentWorkflowPlan = {
 
 const UI_RECODER_WORKSPACE_PATH =
   process.env.UI_RECODER_WORKSPACE_PATH ||
-  '/Users/arhansubasi/recoder.xyz/apps/ui.giselles.ai';
+  '/Users/arhansubasi/recoder.xyz/recoder-agency';
 
 const DEFAULT_PATHS = [
   '/Users/arhansubasi/recoder.xyz/app',

@@ -27,7 +27,7 @@ async function handler(req: AuthenticatedRequest) {
       plan: userPlan,
       models: availableModels,
     });
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error fetching models:', error);
     return NextResponse.json(
       { error: 'Failed to fetch models' },

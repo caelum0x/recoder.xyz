@@ -1369,18 +1369,23 @@ model CannyImportJob {
 }
 
 model Template {
-  id             String       @id(map: "idx_33313_PRIMARY") @default(cuid()) @db.VarChar(191)
-  createdAt      DateTime     @default(now()) @db.Timestamptz(6)
-  updatedAt      DateTime     @updatedAt @db.Timestamptz(6)
-  organizationId String       @db.VarChar(191)
-  creatorId      String       @db.VarChar(191)
-  title          String       @db.VarChar(191)
-  description    String?      @db.VarChar(191)
-  content        Json?        @db.Json
-  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  features       Feature[]
+  id               String       @id(map: "idx_33313_PRIMARY") @default(cuid()) @db.VarChar(191)
+  createdAt        DateTime     @default(now()) @db.Timestamptz(6)
+  updatedAt        DateTime     @updatedAt @db.Timestamptz(6)
+  organizationId   String       @db.VarChar(191)
+  creatorId        String       @db.VarChar(191)
+  title            String       @db.VarChar(191)
+  description      String?      @db.VarChar(191)
+  content          Json?        @db.Json
+  version          Int          @default(1)
+  parentTemplateId String?      @db.VarChar(191)
+  organization     Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  features         Feature[]
+  parentTemplate   Template?    @relation("TemplateVersions", fields: [parentTemplateId], references: [id], onDelete: SetNull)
+  childVersions    Template[]   @relation("TemplateVersions")
 
   @@index([organizationId], map: "idx_33313_template_organizationId_idx")
+  @@index([parentTemplateId])
   @@map("template")
 }
 

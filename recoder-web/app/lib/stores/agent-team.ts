@@ -98,8 +98,8 @@ export async function dispatchQuickTask(prompt: string, agentId?: string): Promi
         ...tasks.slice(0, 9), // Keep last 10
       ]);
     }
-  } catch {
-    // Silently fail for quick dispatch
+  } catch (error) {
+    console.error('[AgentTeam] dispatchQuickTask failed:', error instanceof Error ? error.message : error);
   }
 }
 
@@ -111,8 +111,12 @@ export async function approveAction(approvalId: string): Promise<boolean> {
       credentials: 'include',
       body: JSON.stringify({ resolvedBy: 'user' }),
     });
+    if (!response.ok) {
+      console.error(`[AgentTeam] approveAction failed: HTTP ${response.status}`);
+    }
     return response.ok;
-  } catch {
+  } catch (error) {
+    console.error('[AgentTeam] approveAction failed:', error instanceof Error ? error.message : error);
     return false;
   }
 }
@@ -125,8 +129,12 @@ export async function rejectAction(approvalId: string): Promise<boolean> {
       credentials: 'include',
       body: JSON.stringify({ resolvedBy: 'user' }),
     });
+    if (!response.ok) {
+      console.error(`[AgentTeam] rejectAction failed: HTTP ${response.status}`);
+    }
     return response.ok;
-  } catch {
+  } catch (error) {
+    console.error('[AgentTeam] rejectAction failed:', error instanceof Error ? error.message : error);
     return false;
   }
 }

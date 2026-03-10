@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { Suspense, lazy } from 'react';
 import { useAccounts } from '@/hooks/account';
@@ -61,8 +61,12 @@ const TechnicalIssueBanner = lazy(() =>
   import('@/components/announcements/technical-issue-banner').then(mod => ({ default: mod.TechnicalIssueBanner }))
 );
 
-const MaintenanceCountdownBanner = lazy(() => 
+const MaintenanceCountdownBanner = lazy(() =>
   import('@/components/announcements/maintenance-countdown-banner').then(mod => ({ default: mod.MaintenanceCountdownBanner }))
+);
+
+const GlobalSearchCommand = lazy(() =>
+  import('@/components/search/global-search-command').then(mod => ({ default: mod.GlobalSearchCommand }))
 );
 
 // Skeleton shell that renders immediately for FCP
@@ -127,6 +131,16 @@ export default function DashboardLayoutContent({
   // Prefetch popular Composio icons for faster UI
   const { prefetchPopularIcons } = usePrefetchComposioIcons();
 
+  // Global search command palette (Cmd+K)
+  const [searchOpen, setSearchOpen] = useState(false);
+
+  // Listen for shortcut:open-search custom event from KeyboardShortcutWiring
+  useEffect(() => {
+    const handler = () => setSearchOpen(true);
+    window.addEventListener('shortcut:open-search', handler);
+    return () => window.removeEventListener('shortcut:open-search', handler);
+  }, []);
+
   useEffect(() => {
     if (user) {
       backendApi.post('/prewarm', undefined, { showErrors: false });
@@ -142,11 +156,7 @@ export default function DashboardLayoutContent({
   // Log data prefetching for debugging
   useEffect(() => {
     if (isMobile) {
-      console.log('📱 Mobile Layout - Prefetched data:', {
-        projects: projects?.length || 0,
-        accounts: accounts?.length || 0,
-        user: !!user
-      });
+      
     }
   }, [isMobile, projects, accounts, user]);
 
@@ -269,6 +279,11 @@ export default function DashboardLayoutContent({
             <MobileAppInterstitial />
           </Suspense>
         ) : null}
+
+        {/* Global search command palette (Cmd+K) */}
+        <Suspense fallback={null}>
+          <GlobalSearchCommand open={searchOpen} onOpenChange={setSearchOpen} />
+        </Suspense>
       </div>
     </AppProviders>
     </NovuInboxProvider>

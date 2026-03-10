@@ -24,73 +24,87 @@ type InsertPayload = {
 };
 
 export const POST = async (request: Request): Promise<Response> => {
-  const body = (await request.json()) as UpdatePayload | InsertPayload;
-
-  log.info("👨‍✈️ User has been updated or inserted");
-
-  const user = await authAdmin.getUserById(body.record.id);
-  const organizationId = body.record.user_metadata.organization_id;
-
-  if (!organizationId) {
-    return new Response("No organization_id in user metadata", { status: 400 });
+  const webhookSecret = request.headers.get('x-webhook-secret') ?? request.headers.get('authorization');
+  if (webhookSecret !== process.env.WEBHOOK_SECRET) {
+    return new Response('Unauthorized', { status: 401 });
   }
 
-  const organization = await database.organization.findUnique({
-    where: { id: organizationId },
-    select: { name: true },
-  });
+  try {
+    const body = (await request.json()) as UpdatePayload | InsertPayload;
 
-  if (!user) {
-    return new Response("User not found", { status: 404 });
-  }
+    log.info("User has been updated or inserted");
 
-  if (!(user.email && organization)) {
-    return new Response("User or organization not found", { status: 404 });
-  }
+    if (!body.record) {
+      return new Response('Missing record in payload', { status: 400 });
+    }
 
-  const userName = getUserName(user);
-  const [, domain] = user.email.split("@");
+    const user = await authAdmin.getUserById(body.record.id);
+    const organizationId = body.record.user_metadata?.organization_id;
 
-  let feedbackOrganization = await database.feedbackOrganization.findFirst({
-    where: {
-      organizationId,
-      domain,
-      name: organization.name,
-    },
-    select: { id: true },
-  });
+    if (!organizationId) {
+      return new Response("No organization_id in user metadata", { status: 400 });
+    }
 
-  if (!feedbackOrganization) {
-    feedbackOrganization = await database.feedbackOrganization.create({
-      data: {
-        name: organization.name,
+    const organization = await database.organization.findUnique({
+      where: { id: organizationId },
+      select: { name: true },
+    });
+
+    if (!user) {
+      return new Response("User not found", { status: 404 });
+    }
+
+    if (!(user.email && organization)) {
+      return new Response("User or organization not found", { status: 404 });
+    }
+
+    const userName = getUserName(user);
+    const [, domain] = user.email.split("@");
+
+    let feedbackOrganization = await database.feedbackOrganization.findFirst({
+      where: {
+        organizationId,
         domain,
-        organizationId,
+        name: organization.name,
       },
       select: { id: true },
     });
-  }
 
-  const existingFeedbackUser = await database.feedbackUser.findFirst({
-    where: {
-      email: user.email,
-      organizationId,
-    },
-    select: { id: true },
-  });
+    if (!feedbackOrganization) {
+      feedbackOrganization = await database.feedbackOrganization.create({
+        data: {
+          name: organization.name,
+          domain,
+          organizationId,
+        },
+        select: { id: true },
+      });
+    }
 
-  if (!existingFeedbackUser) {
-    await database.feedbackUser.create({
-      data: {
+    const existingFeedbackUser = await database.feedbackUser.findFirst({
+      where: {
         email: user.email,
-        name: userName,
-        imageUrl: user.user_metadata.image_url ?? "",
         organizationId,
-        feedbackOrganizationId: feedbackOrganization.id,
       },
       select: { id: true },
     });
-  }
 
-  return new Response("Membership updated", { status: 201 });
+    if (!existingFeedbackUser) {
+      await database.feedbackUser.create({
+        data: {
+          email: user.email,
+          name: userName,
+          imageUrl: user.user_metadata?.image_url ?? "",
+          organizationId,
+          feedbackOrganizationId: feedbackOrganization.id,
+        },
+        select: { id: true },
+      });
+    }
+
+    return new Response("Membership updated", { status: 201 });
+  } catch (error) {
+    log.error('User upsert webhook failed', { error });
+    return new Response('Internal server error', { status: 500 });
+  }
 };

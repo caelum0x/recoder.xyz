@@ -1,6 +1,7 @@
 "use client";
 
 import {
+	BanknoteIcon,
 	FileTextIcon,
 	FolderKanbanIcon,
 	LayoutDashboardIcon,
@@ -52,6 +53,11 @@ const links = [
 		label: "Margin",
 		href: "/margin",
 		icon: TrendingUpIcon,
+	},
+	{
+		label: "Revenue",
+		href: "/revenue",
+		icon: BanknoteIcon,
 	},
 	{
 		label: "Templates",

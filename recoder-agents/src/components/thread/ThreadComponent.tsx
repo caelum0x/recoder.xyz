@@ -124,7 +124,7 @@ export function ThreadComponent({ projectId, threadId, compact = false, configur
         ? modeStarterParam as ModeStarterType
         : null;
     setModeStarter(newModeStarter);
-    console.log('[ThreadComponent] modeStarter param:', modeStarterParam, '-> state:', newModeStarter);
+    
   }, [modeStarterParam]);
 
   const [isSending, setIsSending] = useState(false);
@@ -191,7 +191,7 @@ export function ThreadComponent({ projectId, threadId, compact = false, configur
       const stored = sessionStorage.getItem('optimistic_prompt');
       const storedThread = sessionStorage.getItem('optimistic_thread');
       if (stored && storedThread === threadId) {
-        console.log('[optimisticPrompt init] Found in sessionStorage:', stored?.slice(0, 50));
+        
         return stored;
       }
       try {
@@ -199,13 +199,15 @@ export function ThreadComponent({ projectId, threadId, compact = false, configur
         if (pendingIntent) {
           const intent = JSON.parse(pendingIntent);
           if (intent.threadId === threadId && intent.prompt) {
-            console.log('[optimisticPrompt init] Found in localStorage:', intent.prompt?.slice(0, 50));
+            
             return intent.prompt;
           }
         }
-      } catch (e) {}
+      } catch (e) {
+        console.warn('[ThreadComponent] Failed to parse pending thread intent:', e);
+      }
     }
-    console.log('[optimisticPrompt init] Not found, returning null');
+
     return null;
   });
   const [showOptimisticUI, setShowOptimisticUI] = useState(() => {
@@ -485,7 +487,7 @@ export function ThreadComponent({ projectId, threadId, compact = false, configur
     
     const softTimeoutId = setTimeout(() => {
       if (showOptimisticUI && initialLoadCompleted && messages.length > 0) {
-        console.log('[ThreadComponent] Soft fallback: transitioning after initialLoadCompleted with messages');
+        
         hasDataLoaded.current = true;
         setShowOptimisticUI(false);
         if (typeof window !== 'undefined') {
@@ -533,7 +535,7 @@ export function ThreadComponent({ projectId, threadId, compact = false, configur
       }
       
       retryAttemptedRef.current = true;
-      console.log('[ThreadComponent] Found pending intent, retrying thread creation:', pendingIntent.threadId);
+      
       
       // Retry the API call
       optimisticAgentStart({
@@ -544,7 +546,7 @@ export function ThreadComponent({ projectId, threadId, compact = false, configur
         agent_id: pendingIntent.agentId,
         mode: pendingIntent.mode,
       }).then((response) => {
-        console.log('[ThreadComponent] Retry succeeded:', response);
+        
         localStorage.removeItem('pending_thread_intent');
         
         if (response.agent_run_id) {
@@ -792,7 +794,7 @@ export function ThreadComponent({ projectId, threadId, compact = false, configur
     template?: string,
     data?: { url?: string; file?: File }
   ) => {
-    console.log('[ThreadComponent] Mode starter action:', method, 'template:', template, 'data:', data);
+    
     
     let prompt = '';
     
@@ -870,7 +872,7 @@ export function ThreadComponent({ projectId, threadId, compact = false, configur
   }, [isSidePanelOpen, toggleSidePanel, formatTemplateName, modeStarter]);
 
   const handleModeStarterTemplate = useCallback((templateId: string) => {
-    console.log('[ThreadComponent] Template selected:', templateId);
+    
     setSelectedTemplate(templateId);
     
     // Format template name nicely
@@ -894,7 +896,7 @@ export function ThreadComponent({ projectId, threadId, compact = false, configur
   }, [isSidePanelOpen, toggleSidePanel, formatTemplateName]);
 
   const handleModeStarterClose = useCallback(() => {
-    console.log('[ThreadComponent] Mode starter closed');
+    
     setModeStarter(null);
     
     // Remove the modeStarter query param from URL
@@ -905,7 +907,7 @@ export function ThreadComponent({ projectId, threadId, compact = false, configur
 
   // Handler for mode starter prompt selection (works for all modes except presentation)
   const handleStarterPrompt = useCallback((prompt: string, placeholderInfo?: { start: number; end: number }) => {
-    console.log('[ThreadComponent] Starter prompt:', prompt, 'placeholder:', placeholderInfo);
+    
 
     // Close the mode starter and remove the query param first
     setModeStarter(null);
@@ -916,7 +918,7 @@ export function ThreadComponent({ projectId, threadId, compact = false, configur
     // Fill the chat input with the selected prompt after a small delay
     // This ensures the mode starter is closed and ChatInput is ready
     setTimeout(() => {
-      console.log('[ThreadComponent] Setting chat input value:', prompt);
+      
       chatInputRef.current?.setValue(prompt);
       chatInputRef.current?.focus();
 
@@ -1044,7 +1046,7 @@ export function ThreadComponent({ projectId, threadId, compact = false, configur
 
           const ENABLE_MESSAGE_QUEUE = false;
           if (ENABLE_MESSAGE_QUEUE && queuedMessages.length > 0) {
-            console.log('[ThreadComponent] Agent stopped, will send queued messages:', queuedMessages.length);
+            
             setTimeout(() => {
               const firstMessage = queuedMessages[0];
               if (firstMessage) {
@@ -1193,7 +1195,7 @@ export function ThreadComponent({ projectId, threadId, compact = false, configur
       const preconnectAgentRunId = preconnectService.getAgentRunIdForThread(threadId);
       
       if (preconnectAgentRunId && !earlyStreamStartedRef.current) {
-        console.log('[ThreadComponent] Early stream start from StreamPreconnect:', preconnectAgentRunId);
+        
         earlyStreamStartedRef.current = true;
         lastStreamStartedRef.current = preconnectAgentRunId;
         
@@ -1289,11 +1291,11 @@ export function ThreadComponent({ projectId, threadId, compact = false, configur
         
         // Files are uploaded as part of agent start - no separate upload needed
         if (pendingFiles.length > 0 && result.sandbox_id) {
-          console.log(`✅ Files uploaded to sandbox ${result.sandbox_id} during agent start`);
+          
         }
 
         if (modeStarter) {
-          console.log('[ThreadComponent] Closing mode starter on first message');
+          
           setModeStarter(null);
           const url = new URL(window.location.href);
           url.searchParams.delete('modeStarter');
@@ -1486,7 +1488,7 @@ export function ThreadComponent({ projectId, threadId, compact = false, configur
     if (shouldAutoStart) {
       if (lastStreamStartedRef.current === agentRunId) return;
       
-      console.log('[ThreadComponent] Starting stream for new/user action:', agentRunId);
+      
       lastStreamStartedRef.current = agentRunId;
       startStreaming(agentRunId);
       setUserInitiatedRun(false);
@@ -1496,7 +1498,7 @@ export function ThreadComponent({ projectId, threadId, compact = false, configur
     if (initialLoadCompleted && agentStatus === 'running') {
       if (lastStreamStartedRef.current === agentRunId) return;
 
-      console.log('[ThreadComponent] Resuming stream for existing thread:', agentRunId);
+      
       lastStreamStartedRef.current = agentRunId;
       startStreaming(agentRunId);
     }

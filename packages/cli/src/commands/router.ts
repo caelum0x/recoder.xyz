@@ -157,9 +157,8 @@ export class RouterCommand {
         // Start in background using spawn
         await this.startInBackground(options);
       } else {
-        // Start in foreground
-        console.log(chalk.yellow('🚧 Foreground router start not implemented yet - use --background'));
-        // TODO: Use CLI spawn for foreground mode
+        // Start in foreground — run the router service directly in this process
+        await this.startInForeground(options);
       }
 
     } catch (error) {
@@ -579,6 +578,57 @@ export class RouterCommand {
         })
         .catch(reject);
     });
+  }
+
+  /**
+   * Start the router service in the foreground (current process)
+   */
+  private async startInForeground(options: RouterCommandOptions): Promise<void> {
+    const port = options.port || 3456;
+
+    if (port) {
+      process.env.SERVICE_PORT = String(port);
+    }
+
+    console.log(chalk.blue(`\n🔧 Starting router in foreground on port ${port}...`));
+    console.log(chalk.gray('Press Ctrl+C to stop.\n'));
+
+    try {
+      // Dynamically import the run function from recoder-cli-router
+      const { run } = await import('../../../recoder-cli-router/src/index');
+      await run({ port });
+    } catch (error) {
+      // If the direct import fails, fall back to spawning in the foreground (attached)
+      console.log(chalk.yellow('Falling back to spawned foreground process...\n'));
+
+      return new Promise<void>((resolve, reject) => {
+        const child = spawn('npx', ['tsx', '../../../recoder-cli-router/src/cli.ts', 'start'], {
+          stdio: 'inherit',
+          env: { ...process.env, SERVICE_PORT: String(port) },
+        });
+
+        // Forward signals to the child for graceful shutdown
+        const forwardSignal = (signal: NodeJS.Signals) => {
+          child.kill(signal);
+        };
+        process.on('SIGINT', () => forwardSignal('SIGINT'));
+        process.on('SIGTERM', () => forwardSignal('SIGTERM'));
+
+        child.on('error', (err) => {
+          console.error(chalk.red('❌ Failed to start router process:'), err.message);
+          reject(err);
+        });
+
+        child.on('exit', (code) => {
+          if (code === 0 || code === null) {
+            console.log(chalk.green('\n✅ Router service stopped.'));
+            resolve();
+          } else {
+            reject(new Error(`Router process exited with code ${code}`));
+          }
+        });
+      });
+    }
   }
 
   private async testModel(model: string): Promise<{ success: boolean; responseTime?: number; error?: string }> {

@@ -87,7 +87,7 @@ function BillingInfoForFreePlan({ team }: BillingInfoProps) {
 						{formatPlanName(team.plan)}
 					</p>
 				</div>
-				<p className="text-link-muted font-medium text-[12px] leading-[20.4px] font-geist">
+				<p className="text-link-muted font-medium text-[12px] leading-[20.4px] font-sans">
 					Have questions about your plan?{" "}
 					<a
 						href="https://recoder.xyz/pricing"
@@ -133,12 +133,12 @@ async function BillingInfoForProPlan({ team }: BillingInfoProps) {
 						</span>
 					</p>
 					{willCancelAt && (
-						<p className="text-black-30 font-medium text-[14px] leading-[20px] font-geist">
+						<p className="text-black-30 font-medium text-[14px] leading-[20px] font-sans">
 							Cancels {formatTimestamp.toLongDate(willCancelAt.getTime())}
 						</p>
 					)}
 				</div>
-				<p className="text-link-muted font-medium text-[12px] leading-[20.4px] font-geist">
+				<p className="text-link-muted font-medium text-[12px] leading-[20.4px] font-sans">
 					Have questions about your plan?{" "}
 					<a
 						href="https://recoder.xyz/pricing"

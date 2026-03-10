@@ -28,3 +28,23 @@ This directory contains Claude Code configuration files. The `settings.local.jso
 - `settings.local.json` - Your local settings with secrets (IGNORED by Git)
 - `settings.local.example.json` - Template file safe to commit
 - `agents/` - Claude Code agent configurations
+- `rules/` - Project-specific operating standards and technical strategy
+- `skills/` - Local skill definitions
+
+## Personas and Swarm Commands
+
+Use these command intents consistently:
+
+- `/architect` - system design, tradeoffs, ADR creation
+- `/builder` - implementation, refactors, bug fixes
+- `/product-manager` - PRDs, user stories, acceptance criteria
+- `/swarm-plan` - parallel exploration and option analysis
+- `/swarm-execute` - parallel implementation with worker split
+- `/swarm-review` - adversarial/multi-angle review
+- `/code-check` - SOLID/DRY/consistency and regression audit
+
+Recommended sequencing:
+
+1. `/architect` or `/swarm-plan`
+2. `/builder` or `/swarm-execute`
+3. `/swarm-review` + `/code-check`

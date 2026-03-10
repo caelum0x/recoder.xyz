@@ -293,7 +293,7 @@ export function TeamProfileEditModal({
 							<span className="sr-only">Close</span>
 						</DialogClose>
 					</div>
-					<DialogDescription className="font-geist mt-2 text-[14px] text-text-muted">
+					<DialogDescription className="font-sans mt-2 text-[14px] text-text-muted">
 						Update your team's name and profile image.
 					</DialogDescription>
 				</DialogHeader>
@@ -364,7 +364,7 @@ export function TeamProfileEditModal({
 						<div className="w-full overflow-visible">
 							<label
 								htmlFor="teamName"
-								className="block text-inverse text-left font-medium text-[12px] leading-[170%] font-geist mb-2"
+								className="block text-inverse text-left font-medium text-[12px] leading-[170%] font-sans mb-2"
 							>
 								Team Name
 							</label>
@@ -381,7 +381,7 @@ export function TeamProfileEditModal({
 
 						{/* Error message */}
 						{(error || profileImageError) && (
-							<p className="text-[12px] leading-[20.4px] text-error-900 font-geist">
+							<p className="text-[12px] leading-[20.4px] text-error-900 font-sans">
 								{error || profileImageError}
 							</p>
 						)}

@@ -88,7 +88,7 @@ export async function POST(request: NextRequest) {
       message: '2FA has been disabled successfully'
     });
 
-  } catch (error: any) {
+  } catch (error) {
     logger.error('[2FA Disable] Error:', { error: String(error), route: 'auth/2fa/disable' });
     return NextResponse.json(
       { success: false, error: 'Failed to disable 2FA' },

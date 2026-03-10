@@ -192,11 +192,6 @@ function AppearanceSettings({ theme }: { theme: 'light' | 'dark' }) {
         </div>
       </div>
 
-      <div className="pt-4 border-t border-recoder-elements-borderColor">
-        <p className="text-sm text-recoder-elements-textTertiary">
-          More appearance options coming soon, including custom accent colors and font preferences.
-        </p>
-      </div>
     </div>
   );
 }

@@ -111,6 +111,22 @@ export const ThreadLayout = memo(function ThreadLayout({
     }
   }, [streamingToolCall]);
 
+  // Derive simple messages and agentId for the Save-as-Template feature
+  const templateMessages = React.useMemo(() => {
+    return messages
+      .filter((m) => m.role === 'user' || m.role === 'assistant')
+      .map((m) => ({
+        role: m.role,
+        content: typeof m.content === 'string' ? m.content : '',
+      }))
+      .filter((m) => m.content.length > 0);
+  }, [messages]);
+
+  const templateAgentId = React.useMemo(() => {
+    const msg = messages.find((m) => (m as any).agent_id);
+    return (msg as any)?.agent_id as string | undefined;
+  }, [messages]);
+
   // Refs for panel APIs to control sizes programmatically
   const mainPanelRef = useRef<ResizablePrimitive.ImperativePanelHandle>(null);
   const sidePanelRef = useRef<ResizablePrimitive.ImperativePanelHandle>(null);
@@ -237,6 +253,8 @@ export const ThreadLayout = memo(function ThreadLayout({
           onProjectRenamed={onProjectRenamed}
           isMobileView={isMobile}
           variant={variant}
+          agentId={templateAgentId}
+          messages={templateMessages}
         />
 
         {/* Main content area - takes remaining space */}
@@ -301,6 +319,8 @@ export const ThreadLayout = memo(function ThreadLayout({
             onProjectRenamed={onProjectRenamed}
             isMobileView={isMobile}
             variant={variant}
+            agentId={templateAgentId}
+            messages={templateMessages}
           />
 
           <div className="flex-1 overflow-hidden min-h-0 flex flex-col">

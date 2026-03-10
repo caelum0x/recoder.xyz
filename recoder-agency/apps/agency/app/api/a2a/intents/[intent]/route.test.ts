@@ -30,7 +30,7 @@ describe('POST /api/a2a/intents/[intent]', () => {
       body: JSON.stringify({ intent: 'plan', envelope: { messageId: 'm1', threadId: 't1' } }),
     });
 
-    const res = await POST(req, { params: { intent: 'plan' } });
+    const res = await POST(req, { params: Promise.resolve({ intent: 'plan' }) });
     expect(res.status).toBe(401);
   });
 
@@ -44,7 +44,7 @@ describe('POST /api/a2a/intents/[intent]', () => {
       body: JSON.stringify({ intent: 'execute', envelope: { messageId: 'm2', threadId: 't2' } }),
     });
 
-    const res = await POST(req, { params: { intent: 'plan' } });
+    const res = await POST(req, { params: Promise.resolve({ intent: 'plan' }) });
     expect(res.status).toBe(400);
   });
 
@@ -57,7 +57,7 @@ describe('POST /api/a2a/intents/[intent]', () => {
       },
       body: JSON.stringify({ intent: 'unknown' }),
     });
-    const res = await POST(req, { params: { intent: 'unknown' } });
+    const res = await POST(req, { params: Promise.resolve({ intent: 'unknown' }) });
     expect(res.status).toBe(400);
   });
 
@@ -70,7 +70,7 @@ describe('POST /api/a2a/intents/[intent]', () => {
       },
       body: '{',
     });
-    const res = await POST(req, { params: { intent: 'plan' } });
+    const res = await POST(req, { params: Promise.resolve({ intent: 'plan' }) });
     expect(res.status).toBe(400);
   });
 
@@ -81,7 +81,7 @@ describe('POST /api/a2a/intents/[intent]', () => {
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ intent: 'plan', envelope: { messageId: 'm-no-token', threadId: 't-no-token' } }),
     });
-    const res = await POST(req, { params: { intent: 'plan' } });
+    const res = await POST(req, { params: Promise.resolve({ intent: 'plan' }) });
     expect(res.status).toBe(202);
   });
 
@@ -96,7 +96,7 @@ describe('POST /api/a2a/intents/[intent]', () => {
         body: JSON.stringify({ intent, envelope: { messageId: `m-${intent}`, threadId: `t-${intent}` } }),
       });
 
-      const res = await POST(req, { params: { intent } });
+      const res = await POST(req, { params: Promise.resolve({ intent }) });
       const json = await res.json();
       expect(res.status).toBe(202);
       expect(json.ok).toBe(true);
@@ -122,7 +122,7 @@ describe('POST /api/a2a/intents/[intent]', () => {
         }),
       });
 
-      const res = await POST(req, { params: { intent } });
+      const res = await POST(req, { params: Promise.resolve({ intent }) });
       const json = await res.json();
       expect(res.status).toBe(202);
       expect(json.executor.executed).toBe(true);
@@ -149,7 +149,7 @@ describe('POST /api/a2a/intents/[intent]', () => {
         }),
       });
 
-      const res = await POST(req, { params: { intent } });
+      const res = await POST(req, { params: Promise.resolve({ intent }) });
       const json = await res.json();
       expect(res.status).toBe(202);
       expect(json.executor.executed).toBe(false);
@@ -173,7 +173,7 @@ describe('POST /api/a2a/intents/[intent]', () => {
         }),
       });
 
-      const res = await POST(req, { params: { intent } });
+      const res = await POST(req, { params: Promise.resolve({ intent }) });
       const json = await res.json();
       expect(res.status).toBe(202);
       expect(json.executor.executed).toBe(false);

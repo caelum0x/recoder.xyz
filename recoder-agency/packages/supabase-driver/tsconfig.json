@@ -2,7 +2,11 @@
 	"extends": "@recoder/tsconfig/node-library.json",
 	"compilerOptions": {
 		"outDir": "./dist",
-		"rootDir": "./src"
+		"rootDir": "./src",
+		"paths": {
+			"@recoder/storage": ["../storage/dist/index.d.ts"],
+			"@recoder/vault": ["../vault/dist/index.d.ts"]
+		}
 	},
 	"include": ["src/**/*.ts"],
 	"exclude": ["node_modules", "dist"]

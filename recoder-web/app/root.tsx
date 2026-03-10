@@ -190,6 +190,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
   return (
     <>
+      <a href="#main-content" className="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-1/2 focus:-translate-x-1/2 focus:z-[10000] focus:px-4 focus:py-2 focus:bg-orange-500 focus:text-white focus:rounded-lg">Skip to main content</a>
       <a
         href="/"
         aria-label="Recoder Home"
@@ -197,7 +198,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
       >
         <img src="/logo.png" alt="Recoder logo" width={36} height={36} />
       </a>
-      {children}
+      <main id="main-content">{children}</main>
       <ScrollRestoration />
       <Scripts />
     </>

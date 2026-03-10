@@ -1,1 +1,0 @@
-ALTER TABLE "agents" ADD COLUMN "graphv2" jsonb DEFAULT '{"nodes":[],"connectors":[]}'::jsonb NOT NULL;

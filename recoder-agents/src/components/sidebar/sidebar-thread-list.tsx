@@ -13,6 +13,11 @@ import {
   Frown,
   ExternalLink,
   Pencil,
+  Pin,
+  PinOff,
+  Archive,
+  CheckSquare,
+  Tag,
 } from 'lucide-react';
 import { RecoderLoader } from '@/components/ui/recoder-loader';
 import { ThreadIcon } from './thread-icon';
@@ -60,6 +65,14 @@ import { useDeleteOperation } from '@/stores/delete-operation-store';
 import { useStartNavigation } from '@/stores/thread-navigation-store';
 import { useUpdateProject } from '@/hooks/threads/use-project';
 import { RenameProjectDialog } from '@/components/sidebar/rename-project-dialog';
+import { usePinnedThreads, useTogglePin } from '@/hooks/threads/use-pinned-threads';
+import { Checkbox } from '@/components/ui/checkbox';
+import { ThreadTagDots, TagSelectorPopover, TagFilterDropdown } from '@/components/thread/thread-tag-manager';
+import { useTaggedThreads } from '@/hooks/threads/use-thread-tags';
+import { ArchivedThreadsSection } from '@/components/sidebar/archived-threads';
+import { useBulkArchiveThreads } from '@/hooks/threads/use-thread-bulk';
+import { ThreadFolderList } from '@/components/sidebar/thread-folder-list';
+import { useFolderThreads } from '@/hooks/threads/use-thread-folders';
 
 // Date group header component - shared across tabs
 const DateGroupHeader: React.FC<{ dateGroup: string }> = ({ dateGroup }) => {
@@ -85,6 +98,12 @@ interface ThreadItemCardProps {
   onCreateNewChat?: (projectId: string) => Promise<void>;
   isCreatingChat?: boolean;
   mode: 'chats' | 'library';
+  isPinned?: boolean;
+  onTogglePin?: (threadId: string, isPinned: boolean) => void;
+  isMultiSelectMode?: boolean;
+  isSelected?: boolean;
+  onToggleSelect?: (threadId: string) => void;
+  onArchive?: (threadId: string) => void;
 }
 
 // Unified thread item card - used by both tabs
@@ -100,15 +119,27 @@ const ThreadItemCard: React.FC<ThreadItemCardProps> = ({
   onCreateNewChat,
   isCreatingChat = false,
   mode,
+  isPinned = false,
+  onTogglePin,
+  isMultiSelectMode = false,
+  isSelected = false,
+  onToggleSelect,
+  onArchive,
 }) => {
   const [isHoveringCard, setIsHoveringCard] = useState(false);
 
   const handleCardClick = (e: React.MouseEvent<HTMLAnchorElement | HTMLDivElement>) => {
+    if (isMultiSelectMode && onToggleSelect) {
+      e.preventDefault();
+      e.stopPropagation();
+      onToggleSelect(thread.threadId);
+      return;
+    }
     onClick(e, thread.threadId, thread.url);
   };
 
   const CardWrapper = mode === 'chats' ? Link : 'div';
-  const cardProps = mode === 'chats' 
+  const cardProps = mode === 'chats'
     ? { href: thread.url, prefetch: true, onClick: handleCardClick }
     : { onClick: handleCardClick };
 
@@ -118,7 +149,8 @@ const ThreadItemCard: React.FC<ThreadItemCardProps> = ({
     <SpotlightCard
       className={cn(
         "transition-colors cursor-pointer",
-        isActive ? "bg-muted" : "bg-transparent"
+        isActive ? "bg-muted" : "bg-transparent",
+        isSelected ? "bg-primary/5 ring-1 ring-primary/20" : ""
       )}
     >
       <CardWrapper
@@ -130,6 +162,16 @@ const ThreadItemCard: React.FC<ThreadItemCardProps> = ({
           onMouseEnter={() => setIsHoveringCard(true)}
           onMouseLeave={() => setIsHoveringCard(false)}
         >
+          {/* Checkbox for multi-select */}
+          {isMultiSelectMode && (
+            <Checkbox
+              checked={isSelected}
+              onCheckedChange={() => onToggleSelect?.(thread.threadId)}
+              onClick={(e) => e.stopPropagation()}
+              className="flex-shrink-0"
+            />
+          )}
+
           {/* Icon */}
           <div className="relative flex items-center justify-center w-10 h-10 rounded-2xl bg-card border-[1.5px] border-border flex-shrink-0">
             {isThreadLoading ? (
@@ -146,8 +188,11 @@ const ThreadItemCard: React.FC<ThreadItemCardProps> = ({
             )}
           </div>
           
-          {/* Name */}
-          <span className="flex-1 truncate">{projectGroup.projectName}</span>
+          {/* Name + Tag dots */}
+          <div className="flex items-center flex-1 min-w-0">
+            <span className="truncate">{projectGroup.projectName}</span>
+            <ThreadTagDots threadId={thread.threadId} />
+          </div>
           
           {/* Date & Menu */}
           <div className="flex-shrink-0 relative">
@@ -217,6 +262,45 @@ const ThreadItemCard: React.FC<ThreadItemCardProps> = ({
                   <Pencil className="mr-2 h-4 w-4" />
                   Rename
                 </DropdownMenuItem>
+                {onTogglePin && (
+                  <DropdownMenuItem
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      onTogglePin(thread.threadId, isPinned);
+                    }}
+                  >
+                    {isPinned ? (
+                      <PinOff className="mr-2 h-4 w-4" />
+                    ) : (
+                      <Pin className="mr-2 h-4 w-4" />
+                    )}
+                    {isPinned ? 'Unpin' : 'Pin to top'}
+                  </DropdownMenuItem>
+                )}
+                <TagSelectorPopover threadId={thread.threadId}>
+                  <DropdownMenuItem
+                    onSelect={(e) => e.preventDefault()}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                    }}
+                  >
+                    <Tag className="mr-2 h-4 w-4" />
+                    Tags
+                  </DropdownMenuItem>
+                </TagSelectorPopover>
+                {onArchive && (
+                  <DropdownMenuItem
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      onArchive(thread.threadId);
+                    }}
+                  >
+                    <Archive className="mr-2 h-4 w-4" />
+                    Archive
+                  </DropdownMenuItem>
+                )}
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
                   onClick={(e) => {
@@ -268,6 +352,57 @@ export function SidebarThreadList({ mode }: SidebarThreadListProps) {
   const [renameProjectId, setRenameProjectId] = useState<string | null>(null);
   const [renameProjectName, setRenameProjectName] = useState('');
   const updateProjectMutation = useUpdateProject();
+
+  // Tag filter state
+  const [filterTagId, setFilterTagId] = useState<string | null>(null);
+  const { data: taggedThreadIds } = useTaggedThreads(filterTagId || '');
+
+  // Folder filter state
+  const [filterFolderId, setFilterFolderId] = useState<string | null>(null);
+  const { data: folderThreadIds } = useFolderThreads(filterFolderId || '');
+
+  // Pinned threads
+  const { data: pinnedThreads = [] } = usePinnedThreads();
+  const togglePinMutation = useTogglePin();
+  const pinnedThreadIds = useMemo(
+    () => new Set(pinnedThreads.map((pt) => pt.thread_id)),
+    [pinnedThreads]
+  );
+
+  // Bulk operations
+  const bulkArchiveMutation = useBulkArchiveThreads();
+
+  const handleTogglePin = (threadId: string, isPinned: boolean) => {
+    togglePinMutation.mutate({ threadId, isPinned });
+  };
+
+  // Archive single thread
+  const handleArchiveThread = (threadId: string) => {
+    bulkArchiveMutation.mutate([threadId], {
+      onSuccess: () => {
+        toast.success('Thread archived');
+      },
+      onError: () => {
+        toast.error('Failed to archive thread');
+      },
+    });
+  };
+
+  // Archive selected threads
+  const handleMultiArchive = () => {
+    if (selectedThreads.size === 0) return;
+    const ids = Array.from(selectedThreads);
+    bulkArchiveMutation.mutate(ids, {
+      onSuccess: (data) => {
+        toast.success(`Archived ${data.archived} thread${data.archived !== 1 ? 's' : ''}`);
+        setSelectedThreads(new Set());
+        setIsMultiSelectMode(false);
+      },
+      onError: () => {
+        toast.error('Failed to archive threads');
+      },
+    });
+  };
 
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
@@ -322,7 +457,7 @@ export function SidebarThreadList({ mode }: SidebarThreadListProps) {
       const project = thread.project;
 
       if (!projectId) {
-        console.debug('Thread without project_id:', thread.thread_id);
+        
         continue;
       }
 
@@ -347,9 +482,33 @@ export function SidebarThreadList({ mode }: SidebarThreadListProps) {
     );
   }, [currentThreads]);
 
-  // Group threads by date, then by project
+  // Apply tag filter to threads
+  const tagFilteredThreads = useMemo(() => {
+    if (!filterTagId || !taggedThreadIds) return combinedThreads;
+    const taggedIds = new Set(taggedThreadIds.map((t) => t.thread_id));
+    return combinedThreads.filter((t) => taggedIds.has(t.threadId));
+  }, [combinedThreads, filterTagId, taggedThreadIds]);
+
+  // Apply folder filter to threads
+  const folderAndTagFilteredThreads = useMemo(() => {
+    if (!filterFolderId || !folderThreadIds) return tagFilteredThreads;
+    const folderIds = new Set(folderThreadIds.map((t) => t.thread_id));
+    return tagFilteredThreads.filter((t) => folderIds.has(t.threadId));
+  }, [tagFilteredThreads, filterFolderId, folderThreadIds]);
+
+  // Split threads into pinned and unpinned
+  const pinnedCombinedThreads = useMemo(
+    () => folderAndTagFilteredThreads.filter((t) => pinnedThreadIds.has(t.threadId)),
+    [folderAndTagFilteredThreads, pinnedThreadIds]
+  );
+  const unpinnedCombinedThreads = useMemo(
+    () => folderAndTagFilteredThreads.filter((t) => !pinnedThreadIds.has(t.threadId)),
+    [folderAndTagFilteredThreads, pinnedThreadIds]
+  );
+
+  // Group unpinned threads by date, then by project
   const groupedByDateThenProject: GroupedByDateThenProject =
-    groupThreadsByDateThenProject(combinedThreads);
+    groupThreadsByDateThenProject(unpinnedCombinedThreads);
 
   // Initialize expanded projects
   useEffect(() => {
@@ -708,54 +867,95 @@ export function SidebarThreadList({ mode }: SidebarThreadListProps) {
 
   return (
     <div>
-      {/* Multi-select header */}
-      {(state !== 'collapsed' || isMobile) && isMultiSelectMode && mode === 'chats' && (
-        <div className="px-2.5 pt-5 mb-1 flex items-center justify-between gap-2">
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-8 px-3 text-xs"
-                onClick={
-                  selectedThreads.size === combinedThreads.length
-                    ? deselectAllThreads
-                    : selectAllThreads
-                }
-              >
-                {selectedThreads.size === combinedThreads.length
-                  ? 'Deselect All'
-                  : 'Select All'}
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>
-              {selectedThreads.size === combinedThreads.length
-                ? 'Deselect all conversations'
-                : 'Select all conversations'}
-            </TooltipContent>
-          </Tooltip>
+      {/* Tag filter + Select toggle - shown when not in multi-select mode */}
+      {(state !== 'collapsed' || isMobile) && !isMultiSelectMode && mode === 'chats' && combinedThreads.length > 1 && (
+        <div className="px-2.5 pt-3 mb-1 flex items-center justify-between">
+          <TagFilterDropdown
+            selectedTagId={filterTagId}
+            onSelectTag={setFilterTagId}
+          />
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 px-2 text-xs text-muted-foreground"
+            onClick={() => setIsMultiSelectMode(true)}
+          >
+            <CheckSquare className="h-3.5 w-3.5 mr-1" />
+            Select
+          </Button>
+        </div>
+      )}
 
-          {selectedThreads.size > 0 && (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-8 w-8 relative"
-                  onClick={handleMultiDelete}
-                >
-                  <Trash2 className="h-4 w-4" />
-                  <span className="absolute bottom-1 right-1 h-3 w-3 rounded-full bg-primary text-primary-foreground text-[8px] font-medium flex items-center justify-center">
-                    {selectedThreads.size}
-                  </span>
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>
-                Delete {selectedThreads.size} conversation
-                {selectedThreads.size > 1 ? 's' : ''}
-              </TooltipContent>
-            </Tooltip>
-          )}
+      {/* Multi-select action bar */}
+      {(state !== 'collapsed' || isMobile) && isMultiSelectMode && mode === 'chats' && (
+        <div className="px-2.5 pt-3 mb-1 flex items-center justify-between gap-2">
+          <div className="flex items-center gap-1.5">
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-7 px-2 text-xs"
+              onClick={
+                selectedThreads.size === combinedThreads.length
+                  ? deselectAllThreads
+                  : selectAllThreads
+              }
+            >
+              {selectedThreads.size === combinedThreads.length
+                ? 'Deselect All'
+                : 'Select All'}
+            </Button>
+            <span className="text-xs text-muted-foreground tabular-nums">
+              {selectedThreads.size > 0 ? `${selectedThreads.size} selected` : ''}
+            </span>
+          </div>
+
+          <div className="flex items-center gap-1">
+            {selectedThreads.size > 0 && (
+              <>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7"
+                      onClick={handleMultiArchive}
+                      disabled={bulkArchiveMutation.isPending}
+                    >
+                      <Archive className="h-3.5 w-3.5" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    Archive {selectedThreads.size} conversation{selectedThreads.size > 1 ? 's' : ''}
+                  </TooltipContent>
+                </Tooltip>
+
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 text-destructive hover:text-destructive"
+                      onClick={handleMultiDelete}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    Delete {selectedThreads.size} conversation{selectedThreads.size > 1 ? 's' : ''}
+                  </TooltipContent>
+                </Tooltip>
+              </>
+            )}
+
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 px-2 text-xs text-muted-foreground"
+              onClick={deselectAllThreads}
+            >
+              Cancel
+            </Button>
+          </div>
         </div>
       )}
 
@@ -777,6 +977,63 @@ export function SidebarThreadList({ mode }: SidebarThreadListProps) {
               </div>
             ) : combinedThreads.length > 0 ? (
               <>
+                {/* Folder filter */}
+                {mode === 'chats' && (
+                  <ThreadFolderList
+                    activeFolderId={filterFolderId}
+                    onFolderSelect={setFilterFolderId}
+                  />
+                )}
+
+                {/* Pinned threads section */}
+                {pinnedCombinedThreads.length > 0 && (
+                  <div>
+                    <div className="py-2 mt-2">
+                      <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground px-2.5">
+                        <Pin className="h-3 w-3" />
+                        Pinned
+                      </div>
+                    </div>
+                    <div className="space-y-1.5">
+                      {pinnedCombinedThreads.map((thread) => {
+                        const projectGroup: ProjectGroup = {
+                          projectId: thread.projectId,
+                          projectName: thread.projectName,
+                          iconName: thread.iconName,
+                          threads: [thread],
+                          latestUpdate: thread.updatedAt,
+                        };
+                        const isActive = isItemActive(thread);
+                        const isThreadLoading = loadingThreadId === thread.threadId;
+                        const isAgentRunning = agentStatusMap.get(thread.threadId) || false;
+
+                        return (
+                          <ThreadItemCard
+                            key={`pinned-${thread.threadId}`}
+                            thread={thread}
+                            projectGroup={projectGroup}
+                            isActive={isActive}
+                            isThreadLoading={isThreadLoading}
+                            isAgentRunning={isAgentRunning}
+                            onClick={handleItemClick}
+                            onDelete={handleDeleteThread}
+                            onRename={handleStartRename}
+                            onCreateNewChat={mode === 'chats' ? handleCreateNewChat : undefined}
+                            isCreatingChat={isCreatingChat}
+                            mode={mode}
+                            isPinned={true}
+                            onTogglePin={handleTogglePin}
+                            isMultiSelectMode={isMultiSelectMode}
+                            isSelected={selectedThreads.has(thread.threadId)}
+                            onToggleSelect={toggleThreadSelection}
+                            onArchive={handleArchiveThread}
+                          />
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
                 {Object.entries(groupedByDateThenProject).map(
                   ([dateGroup, projectsInDate]) => (
                     <div key={dateGroup}>
@@ -812,6 +1069,12 @@ export function SidebarThreadList({ mode }: SidebarThreadListProps) {
                                 onCreateNewChat={mode === 'chats' ? handleCreateNewChat : undefined}
                                 isCreatingChat={isCreatingChat}
                                 mode={mode}
+                                isPinned={pinnedThreadIds.has(singleThread.threadId)}
+                                onTogglePin={handleTogglePin}
+                                isMultiSelectMode={isMultiSelectMode}
+                                isSelected={selectedThreads.has(singleThread.threadId)}
+                                onToggleSelect={toggleThreadSelection}
+                                onArchive={handleArchiveThread}
                               />
                             );
                           }
@@ -991,6 +1254,21 @@ export function SidebarThreadList({ mode }: SidebarThreadListProps) {
                                                 onClick={(e) => {
                                                   e.preventDefault();
                                                   e.stopPropagation();
+                                                  handleTogglePin(thread.threadId, pinnedThreadIds.has(thread.threadId));
+                                                }}
+                                              >
+                                                {pinnedThreadIds.has(thread.threadId) ? (
+                                                  <PinOff className="mr-2 h-3.5 w-3.5" />
+                                                ) : (
+                                                  <Pin className="mr-2 h-3.5 w-3.5" />
+                                                )}
+                                                {pinnedThreadIds.has(thread.threadId) ? 'Unpin' : 'Pin to top'}
+                                              </DropdownMenuItem>
+                                              <DropdownMenuSeparator />
+                                              <DropdownMenuItem
+                                                onClick={(e) => {
+                                                  e.preventDefault();
+                                                  e.stopPropagation();
                                                   handleDeleteThread(
                                                     thread.threadId,
                                                     thread.projectName
@@ -1015,6 +1293,9 @@ export function SidebarThreadList({ mode }: SidebarThreadListProps) {
                     </div>
                   )
                 )}
+
+                {/* Archived threads section */}
+                {mode === 'chats' && <ArchivedThreadsSection />}
 
                 {/* Pagination controls */}
                 {pagination && totalPages > 1 && (

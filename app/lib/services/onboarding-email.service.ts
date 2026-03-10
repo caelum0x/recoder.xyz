@@ -23,6 +23,25 @@ import {
 import { logger } from '@/lib/logger';
 
 const MAX_ATTEMPTS = 3;
+let scheduledEmailsTableAvailable: boolean | null = null;
+
+async function hasScheduledEmailsTable(): Promise<boolean> {
+  if (scheduledEmailsTableAvailable !== null) {
+    return scheduledEmailsTableAvailable;
+  }
+
+  try {
+    const result = await prisma.$queryRaw<Array<{ exists: boolean }>>`
+      SELECT to_regclass('public.scheduled_emails') IS NOT NULL AS exists
+    `;
+    const exists = !!result?.[0]?.exists;
+    scheduledEmailsTableAvailable = exists;
+    return exists;
+  } catch {
+    scheduledEmailsTableAvailable = false;
+    return false;
+  }
+}
 
 /** Email type to sender function mapping */
 const EMAIL_SENDERS: Record<string, (email: string, name: string) => Promise<{ success: boolean; error?: unknown }>> = {
@@ -87,6 +106,15 @@ export async function scheduleOnboardingEmails(
       };
     });
 
+    const canSchedule = await hasScheduledEmailsTable();
+    if (!canSchedule) {
+      logger.warn('scheduled_emails table unavailable; skipping onboarding schedule persistence', {
+        userId,
+        email,
+      });
+      return;
+    }
+
     await prisma.scheduled_emails.createMany({ data: records });
 
     logger.info('Onboarding email sequence scheduled', {
@@ -119,6 +147,12 @@ export async function processScheduledEmails(): Promise<{
   const summary = { processed: 0, sent: 0, failed: 0, errors: [] as string[] };
 
   try {
+    const canSchedule = await hasScheduledEmailsTable();
+    if (!canSchedule) {
+      logger.warn('scheduled_emails table unavailable; skipping scheduled email processor run');
+      return summary;
+    }
+
     // Fetch emails that are due and haven't exceeded max attempts
     const pendingEmails = await prisma.scheduled_emails.findMany({
       where: {
@@ -246,6 +280,11 @@ export async function processScheduledEmails(): Promise<{
  */
 export async function cancelOnboardingEmails(userId: string): Promise<number> {
   try {
+    const canSchedule = await hasScheduledEmailsTable();
+    if (!canSchedule) {
+      return 0;
+    }
+
     const result = await prisma.scheduled_emails.updateMany({
       where: {
         userId,

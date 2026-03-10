@@ -173,7 +173,7 @@ export function DocumentVectorStoreItem({
 					<h5 className="text-inverse font-medium text-[16px] leading-[22.4px] font-sans">
 						{store.name}
 					</h5>
-					<div className="text-text/60 text-[13px] leading-[18px] font-geist mt-1">
+					<div className="text-text/60 text-[13px] leading-[18px] font-sans mt-1">
 						ID: {store.id}
 					</div>
 				</div>
@@ -211,7 +211,7 @@ export function DocumentVectorStoreItem({
 								<span className="sr-only">Close</span>
 							</DialogClose>
 						</div>
-						<DialogDescription className="font-geist mt-2 text-[14px] text-error-900/50">
+						<DialogDescription className="font-sans mt-2 text-[14px] text-error-900/50">
 							{`This action cannot be undone. This will permanently delete the document vector store "${store.name}" and its embedding profiles.`}
 						</DialogDescription>
 					</DialogHeader>
@@ -690,7 +690,7 @@ function DocumentVectorStoreConfigureDialog({
 							<span className="sr-only">Close</span>
 						</DialogClose>
 					</div>
-					<DialogDescription className="font-geist my-2 text-[14px] text-text-muted">
+					<DialogDescription className="font-sans my-2 text-[14px] text-text-muted">
 						Update the name, embedding models, and source files for this vector
 						store.
 					</DialogDescription>

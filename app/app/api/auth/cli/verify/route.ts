@@ -54,7 +54,7 @@ export async function POST(request: NextRequest) {
         valid: true,
         user,
       }, { status: 200 });
-    } catch (error: any) {
+    } catch (error) {
       return NextResponse.json(
         {
           valid: false,
@@ -63,7 +63,7 @@ export async function POST(request: NextRequest) {
         { status: 401 }
       );
     }
-  } catch (error: any) {
+  } catch (error) {
     logger.error('Token verification error:', { error: String(error), route: 'auth/cli/verify' });
     return NextResponse.json(
       { error: 'Verification failed' },

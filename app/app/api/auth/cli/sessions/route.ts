@@ -55,7 +55,7 @@ export async function GET(request: NextRequest) {
     });
 
     return NextResponse.json(payload, { status: 200 });
-  } catch (error: any) {
+  } catch (error) {
     logger.error('List sessions error:', { error: String(error), route: 'auth/cli/sessions' });
     const payload = assertCliSessionErrorResponse({
       contract: APP_CLI_SESSION_CONTRACT,
@@ -124,7 +124,7 @@ export async function DELETE(request: NextRequest) {
     });
 
     return NextResponse.json(payload, { status: 200 });
-  } catch (error: any) {
+  } catch (error) {
     logger.error('Revoke session error:', { error: String(error), route: 'auth/cli/sessions' });
     const payload = assertCliSessionErrorResponse({
       contract: APP_CLI_SESSION_CONTRACT,

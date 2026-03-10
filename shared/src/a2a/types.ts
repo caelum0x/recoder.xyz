@@ -3,6 +3,10 @@ export const RECODER_A2A_ENVELOPE_VERSION = '2026-02-14';
 export const RECODER_A2A_ENVELOPE_TEXT_PREFIX = 'recoder.a2a.envelope:';
 
 export type RecoderAgentPlatform =
+  | 'recoder'
+  | 'cursor'
+  | 'windsurf'
+  | 'replit'
   | 'codex'
   | 'claude_code'
   | 'recoder_web'
@@ -21,7 +25,8 @@ export type RecoderIntent =
   | 'sync'
   | 'tool_call'
   | 'tool_result'
-  | 'error';
+  | 'error'
+  | (string & {});
 
 export interface RecoderAgentIdentity {
   id: string;
@@ -77,7 +82,7 @@ export interface RecoderA2AEnvelope {
   from: RecoderAgentIdentity;
   to: RecoderAgentIdentity;
   intent: RecoderIntent;
-  payload: RecoderPayload[];
+  payload: RecoderPayload[] | unknown[];
   metadata?: Record<string, unknown>;
   trace?: RecoderEnvelopeTrace;
 }
@@ -135,6 +140,10 @@ export interface ClaudeCodeWireMessage {
 }
 
 export const RECODER_AGENT_PLATFORMS = [
+  'recoder',
+  'cursor',
+  'windsurf',
+  'replit',
   'codex',
   'claude_code',
   'recoder_web',
@@ -317,7 +326,7 @@ export function validateRecoderA2AEnvelope(
 
   if (
     !isNonEmptyString(value.intent) ||
-    !RECODER_ENVELOPE_INTENTS.includes(value.intent as RecoderIntent)
+    !RECODER_ENVELOPE_INTENTS.includes(value.intent as (typeof RECODER_ENVELOPE_INTENTS)[number])
   ) {
     issues.push({
       path: 'intent',

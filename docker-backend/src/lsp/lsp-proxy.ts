@@ -136,7 +136,7 @@ export class LSPProxy extends EventEmitter {
     }
 
     // Generate session ID
-    const sessionId = `${projectId}-${languageId}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const sessionId = `${projectId}-${languageId}-${Date.now()}-${crypto.randomUUID().slice(0, 8)}`;
 
     // Create session
     const session: LSPProxySession = {

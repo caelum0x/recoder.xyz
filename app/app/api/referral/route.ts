@@ -14,6 +14,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth } from '@/lib/auth-helpers';
 import crypto from 'crypto';
+import { logger } from '@/lib/logger';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -84,10 +85,10 @@ export async function GET(request: NextRequest) {
             },
           });
           saved = true;
-        } catch (err: any) {
+        } catch (err) {
           // P2002 = unique constraint violation (another user already has this code)
-          if (err?.code === 'P2002') {
-            console.warn(`Referral code collision on attempt ${attempts}: ${candidate}`);
+          if (err instanceof Error && 'code' in err && (err as { code: string }).code === 'P2002') {
+            logger.warn(`Referral code collision on attempt ${attempts}`, { candidate });
             continue;
           }
           throw err;
@@ -113,8 +114,8 @@ export async function GET(request: NextRequest) {
       referredByCode: user.referredByCode ?? null,
       referredCount,
     });
-  } catch (error: any) {
-    console.error('Referral API error:', error);
+  } catch (error) {
+    logger.error('Referral API error', { error: error instanceof Error ? error.message : String(error) });
     return NextResponse.json(
       { success: false, error: 'Failed to retrieve referral information' },
       { status: 500 }

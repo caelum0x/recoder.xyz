@@ -316,16 +316,104 @@ export function ProjectsPage({ initialProjects, error, databaseConfigured = true
           <div className="text-center py-12 text-recoder-elements-textTertiary">
             Loading projects...
           </div>
+        ) : filteredProjects.length === 0 && !searchQuery ? (
+          <div className="py-8">
+            {/* Welcome message */}
+            <div className="text-center mb-10">
+              <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-orange-500/10 mb-4">
+                <div className="i-ph:rocket-launch text-3xl text-orange-400" />
+              </div>
+              <h3 className="text-2xl font-bold text-recoder-elements-textPrimary mb-2">
+                Welcome to Recoder
+              </h3>
+              <p className="text-recoder-elements-textSecondary max-w-md mx-auto">
+                Build full-stack applications with AI assistance. Pick a starting point below and start shipping.
+              </p>
+            </div>
+
+            {/* Quick-start cards */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 max-w-4xl mx-auto mb-10">
+              {/* Start from Scratch */}
+              <button
+                onClick={() => {
+                  setSelectedTemplate(null);
+                  setIsCreateModalOpen(true);
+                }}
+                className="group text-left p-6 rounded-xl bg-recoder-elements-background-depth-2 border border-recoder-elements-borderColor hover:border-orange-500 transition-all duration-200"
+              >
+                <div className="w-10 h-10 rounded-lg bg-orange-500/10 flex items-center justify-center mb-4 group-hover:bg-orange-500/20 transition-colors">
+                  <div className="i-ph:plus-circle text-xl text-orange-400" />
+                </div>
+                <h4 className="font-semibold text-recoder-elements-textPrimary mb-1">Start from Scratch</h4>
+                <p className="text-sm text-recoder-elements-textTertiary">
+                  Create a blank project and describe what you want to build. The AI handles the rest.
+                </p>
+              </button>
+
+              {/* Import from GitHub */}
+              <button
+                onClick={() => {
+                  window.location.href = '/';
+                }}
+                className="group text-left p-6 rounded-xl bg-recoder-elements-background-depth-2 border border-recoder-elements-borderColor hover:border-orange-500 transition-all duration-200"
+              >
+                <div className="w-10 h-10 rounded-lg bg-purple-500/10 flex items-center justify-center mb-4 group-hover:bg-purple-500/20 transition-colors">
+                  <div className="i-ph:git-branch text-xl text-purple-400" />
+                </div>
+                <h4 className="font-semibold text-recoder-elements-textPrimary mb-1">Import from GitHub</h4>
+                <p className="text-sm text-recoder-elements-textTertiary">
+                  Connect an existing repository and continue building with AI assistance.
+                </p>
+              </button>
+
+              {/* Use a Template */}
+              <button
+                onClick={() => {
+                  setIsCreateModalOpen(true);
+                }}
+                className="group text-left p-6 rounded-xl bg-recoder-elements-background-depth-2 border border-recoder-elements-borderColor hover:border-orange-500 transition-all duration-200"
+              >
+                <div className="w-10 h-10 rounded-lg bg-blue-500/10 flex items-center justify-center mb-4 group-hover:bg-blue-500/20 transition-colors">
+                  <div className="i-ph:layout text-xl text-blue-400" />
+                </div>
+                <h4 className="font-semibold text-recoder-elements-textPrimary mb-1">Use a Template</h4>
+                <p className="text-sm text-recoder-elements-textTertiary">
+                  Pick from React, Next.js, Node, and more. Get a running start with pre-configured stacks.
+                </p>
+              </button>
+            </div>
+
+            {/* How it works */}
+            <div className="max-w-2xl mx-auto p-4 rounded-lg bg-recoder-elements-background-depth-2 border border-recoder-elements-borderColor">
+              <h4 className="font-semibold text-recoder-elements-textPrimary mb-3 text-center">How it works</h4>
+              <div className="flex items-center justify-center gap-6 text-sm text-recoder-elements-textSecondary">
+                <div className="flex items-center gap-2">
+                  <span className="flex items-center justify-center w-6 h-6 rounded-full bg-orange-500/20 text-orange-400 text-xs font-bold">1</span>
+                  <span>Describe your idea</span>
+                </div>
+                <div className="i-ph:arrow-right text-recoder-elements-textTertiary" />
+                <div className="flex items-center gap-2">
+                  <span className="flex items-center justify-center w-6 h-6 rounded-full bg-orange-500/20 text-orange-400 text-xs font-bold">2</span>
+                  <span>AI builds it live</span>
+                </div>
+                <div className="i-ph:arrow-right text-recoder-elements-textTertiary" />
+                <div className="flex items-center gap-2">
+                  <span className="flex items-center justify-center w-6 h-6 rounded-full bg-orange-500/20 text-orange-400 text-xs font-bold">3</span>
+                  <span>Preview and deploy</span>
+                </div>
+              </div>
+            </div>
+          </div>
         ) : filteredProjects.length === 0 ? (
           <div className="text-center py-12">
-            <div className="text-6xl mb-4 opacity-30"><div className="i-ph:folder-open" /></div>
-            <h3 className="text-xl font-semibold mb-2 text-recoder-elements-textPrimary">No projects yet</h3>
-            <p className="text-recoder-elements-textTertiary mb-6">Create your first project to get started</p>
+            <div className="text-6xl mb-4 opacity-30"><div className="i-ph:magnifying-glass" /></div>
+            <h3 className="text-xl font-semibold mb-2 text-recoder-elements-textPrimary">No matching projects</h3>
+            <p className="text-recoder-elements-textTertiary mb-6">No projects match "{searchQuery}". Try a different search term.</p>
             <button
-              onClick={() => setIsCreateModalOpen(true)}
-              className="px-6 py-3 bg-orange-500 hover:bg-orange-600 text-white rounded-lg"
+              onClick={() => setSearchQuery('')}
+              className="px-6 py-3 bg-recoder-elements-background-depth-2 border border-recoder-elements-borderColor hover:border-orange-500 text-recoder-elements-textPrimary rounded-lg transition-colors"
             >
-              Create Project
+              Clear search
             </button>
           </div>
         ) : (

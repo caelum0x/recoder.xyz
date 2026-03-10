@@ -6,6 +6,7 @@ import { ExpandableMarkdownEditor } from '@/components/ui/expandable-markdown-ed
 import { Label } from '@/components/ui/label';
 import { toast } from '@/lib/toast';
 import { Skeleton } from '@/components/ui/skeleton';
+import { PromptSnippetPicker } from '@/components/agents/config/prompt-snippet-picker';
 
 interface InstructionsScreenProps {
     agentId: string;
@@ -22,7 +23,7 @@ export function InstructionsScreen({ agentId }: InstructionsScreenProps) {
         }
     }, [agent?.system_prompt]);
 
-    const isRecoderAgent = agent?.metadata?.is_suna_default || false;
+    const isRecoderAgent = agent?.metadata?.is_recoder_default || agent?.metadata?.is_suna_default || false;
     const restrictions = agent?.metadata?.restrictions || {};
     const isEditable = (restrictions.system_prompt_editable !== false) && !isRecoderAgent;
 
@@ -63,9 +64,23 @@ export function InstructionsScreen({ agentId }: InstructionsScreenProps) {
     return (
         <div className="flex-1 overflow-auto pb-6">
             <div className="px-1 pt-1 flex flex-col h-full">
-                <Label className="text-base font-semibold mb-3 block flex-shrink-0">
-                    System Prompt
-                </Label>
+                <div className="flex items-center justify-between mb-3 flex-shrink-0">
+                    <Label className="text-base font-semibold">
+                        System Prompt
+                    </Label>
+                    {isEditable && (
+                        <PromptSnippetPicker
+                            agentId={agentId}
+                            onInsert={(content) => {
+                                const newValue = systemPrompt
+                                    ? `${systemPrompt}\n\n${content}`
+                                    : content;
+                                setSystemPrompt(newValue);
+                                handleSave(newValue);
+                            }}
+                        />
+                    )}
+                </div>
                 <div className="flex-1 min-h-[500px]">
                     <ExpandableMarkdownEditor
                         value={systemPrompt}

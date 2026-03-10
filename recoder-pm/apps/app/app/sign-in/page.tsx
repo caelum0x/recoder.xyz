@@ -15,6 +15,7 @@ import { UrlErrors } from "./components/url-errors";
 
 const title = "Sign in";
 const description = "Sign in to your account.";
+export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = createMetadata({ title, description });
 

@@ -52,9 +52,8 @@ export function constructHtmlPreviewUrl(
           return undefined;
         }
       }
-    } catch (e) {
-      // If URL parsing fails, treat as regular path
-      console.warn('Failed to parse filePath as URL, treating as regular path:', filePath);
+    } catch {
+      // URL parsing failed — treat as regular path
     }
   }
 

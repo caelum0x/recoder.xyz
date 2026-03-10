@@ -32,7 +32,6 @@ export function CreateEventTriggerToolView({
 }: ToolViewProps) {
   // Defensive check - ensure toolCall is defined
   if (!toolCall) {
-    console.warn('CreateEventTriggerToolView: toolCall is undefined. Tool views should use structured props.');
     return null;
   }
 

@@ -32,7 +32,7 @@ export class MCPServerManager {
 
   constructor(env: any) {
     this.env = env;
-    this.loadServersFromKV().catch(() => {});
+    this.loadServersFromKV().catch((err) => { console.warn('[MCPServerManager] Failed to load servers:', err); });
   }
 
   private async loadServersFromKV() {

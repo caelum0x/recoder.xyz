@@ -29,7 +29,7 @@ const links = [
     icon: CreditCardIcon,
   },
   {
-    href: "https://x.com/haydenbleasel",
+    href: "https://recoder.xyz/contact",
     label: "Contact",
     icon: MessageSquareIcon,
   },
@@ -39,7 +39,7 @@ const links = [
     icon: CalendarIcon,
   },
   {
-    href: "https://github.com/haydenbleasel/eververse",
+    href: "https://github.com/recoder-xyz/recoder-pm",
     label: "Source Code",
     icon: CodeIcon,
   },
@@ -48,7 +48,7 @@ const links = [
 export const Navbar = () => (
   <LazyMotion features={domAnimation}>
     <nav className="sticky top-0 z-50 border-b">
-      <Container className="grid grid-cols-[40px_1fr_40px] items-center gap-4 border-x bg-backdrop/90 py-3 backdrop-blur-sm md:grid-cols-[120px_1fr_120px]">
+      <Container className="grid h-16 grid-cols-[40px_1fr_40px] items-center gap-4 border-x bg-backdrop/90 px-4 backdrop-blur-sm md:grid-cols-[120px_1fr_120px] md:px-6">
         <div>
           <Link className="hidden md:block" href="/">
             <Logo showName />

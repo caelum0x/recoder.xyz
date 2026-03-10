@@ -1,5 +1,11 @@
 import { eq } from "drizzle-orm";
-import { ArrowLeftIcon, CheckIcon, ExternalLinkIcon } from "lucide-react";
+import {
+	ArrowLeftIcon,
+	CheckIcon,
+	ClockIcon,
+	ExternalLinkIcon,
+	FlagIcon,
+} from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import {
@@ -89,6 +95,24 @@ export default async function ClientProjectDetailPage({
 					<ArrowLeftIcon className="size-4" />
 				</Link>
 				<h1 className="text-2xl font-bold text-text">{project.name}</h1>
+			</div>
+
+			{/* Quick navigation */}
+			<div className="flex flex-wrap gap-2">
+				<Link
+					href={`/portal/projects/${projectId}/milestones`}
+					className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-text hover:bg-bg-hover transition-colors"
+				>
+					<FlagIcon className="size-3.5" />
+					Milestones
+				</Link>
+				<Link
+					href={`/portal/projects/${projectId}/timeline`}
+					className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-text hover:bg-bg-hover transition-colors"
+				>
+					<ClockIcon className="size-3.5" />
+					Activity Timeline
+				</Link>
 			</div>
 
 			{/* Status timeline */}

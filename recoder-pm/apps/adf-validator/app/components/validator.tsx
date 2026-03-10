@@ -43,7 +43,6 @@ export const Validator = () => {
   const [validationErrors, setValidationErrors] = useState<string>("");
 
   useEffect(() => {
-    console.log("Converting");
     try {
       const parsedSource = JSON.parse(source);
 
@@ -60,7 +59,6 @@ export const Validator = () => {
   }, [source]);
 
   useEffect(() => {
-    console.log("Validating");
     const validate = ajv.compile(schema);
     const isValid = validate(adf);
 

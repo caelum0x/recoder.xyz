@@ -30,7 +30,6 @@ export default function NewThreadPage({
       try {
         const result = await createThreadInProject(projectId);
         preCreatedThreadId.current = result.thread_id;
-        console.log('[NewThreadPage] Pre-created thread:', result.thread_id);
       } catch (error) {
         console.error('[NewThreadPage] Failed to pre-create thread:', error);
       }

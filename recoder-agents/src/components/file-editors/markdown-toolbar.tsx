@@ -384,7 +384,7 @@ export function MarkdownToolbar({
       const blob = await contentResponse.blob();
       const blobUrl = URL.createObjectURL(blob);
       
-      console.log('Image uploaded and blob URL created:', blobUrl);
+      
       return blobUrl;
     } catch (error) {
       console.error('Image upload error:', error);

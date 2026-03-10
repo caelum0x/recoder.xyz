@@ -2,6 +2,7 @@
  * Session Management for Recoder.xyz
  * Track user sessions (6/day for Free & PRO, 20/day for Enterprise)
  */
+import crypto from 'crypto';
 
 import { prisma } from './prisma';
 import { getPlanLimits, canStartSession, canUseModel, isPremiumModel } from './plan-config';
@@ -116,7 +117,7 @@ export async function startSession(
   }
   
   // Create session marker in usage records
-  const sessionId = `sess_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+  const sessionId = `sess_${Date.now()}_${crypto.randomUUID().replace(/-/g, '').slice(0, 9)}`;
   
   await prisma.usage_records.create({
     data: {
@@ -207,7 +208,7 @@ export async function trackSessionUsage(
   // Record usage
   await prisma.usage_records.create({
     data: {
-      id: `usage_${Date.now()}_${Math.random().toString(36).substring(7)}`,
+      id: `usage_${Date.now()}_${crypto.randomUUID().replace(/-/g, '').slice(0, 9)}`,
       userId,
       requestType: 'session_usage',
       type: 'usage',

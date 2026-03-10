@@ -157,7 +157,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const session_data = sessions[0] as any;
+    const session_data = sessions[0] as { url_id: string; title?: string; description?: string; metadata?: { fileSnapshot?: Record<string, unknown> }; updated_at: Date; total_messages?: number };
     const fileSnapshot = session_data.metadata?.fileSnapshot || {};
 
     const project = {

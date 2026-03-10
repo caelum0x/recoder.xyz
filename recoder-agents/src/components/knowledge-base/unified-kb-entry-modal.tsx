@@ -67,7 +67,7 @@ export function UnifiedKbEntryModal({
 }: UnifiedKbEntryModalProps) {
     const [isOpen, setIsOpen] = useState(false);
     const [activeTab, setActiveTab] = useState(defaultTab);
-    const [selectedFolder, setSelectedFolder] = useState<string>('');
+    const [selectedFolder, setSelectedFolder] = useState<string | undefined>(undefined);
 
     // Auto-select folder if only one exists
     React.useEffect(() => {
@@ -562,10 +562,9 @@ export function UnifiedKbEntryModal({
                                 <FileText className="h-4 w-4" />
                                 Text
                             </TabsTrigger>
-                            <TabsTrigger value="git" className="flex-1 gap-1.5" disabled>
+                            <TabsTrigger value="git" className="flex-1 gap-1.5">
                                 <GitBranch className="h-4 w-4" />
                                 Git
-                                <span className="text-xs text-muted-foreground">(soon)</span>
                             </TabsTrigger>
                         </TabsList>
 

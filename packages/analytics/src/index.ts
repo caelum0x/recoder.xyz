@@ -165,14 +165,80 @@ export {
   monitoringSystem 
 } from './monitoring/index';
 
-// A/B Testing system placeholder - TODO: implement
+// A/B Testing system
 export class ABTestingSystem {
-  constructor() {
-    // Placeholder implementation
-  }
-  
-  async runTest(testId: string, variants: any[]): Promise<any> {
-    return { testId, winner: variants[0], confidence: 0.95 };
+  async runTest(testId: string, variants: Array<{ name: string; sampleSize?: number; conversions?: number }>): Promise<{
+    testId: string;
+    winner: any | null;
+    confidence: number;
+    needsMoreData: boolean;
+    results: Array<{ name: string; conversionRate: number }>;
+  }> {
+    if (!variants || variants.length < 2) {
+      return { testId, winner: null, confidence: 0, needsMoreData: true, results: [] };
+    }
+
+    // Calculate conversion rates for each variant
+    const results = variants.map(v => ({
+      name: v.name,
+      sampleSize: v.sampleSize || 0,
+      conversions: v.conversions || 0,
+      conversionRate: v.sampleSize && v.sampleSize > 0 ? (v.conversions || 0) / v.sampleSize : 0,
+    }));
+
+    // Need minimum sample size for meaningful results
+    const minSample = 30;
+    const hasEnoughData = results.every(r => r.sampleSize >= minSample);
+    if (!hasEnoughData) {
+      return {
+        testId,
+        winner: null,
+        confidence: 0,
+        needsMoreData: true,
+        results: results.map(r => ({ name: r.name, conversionRate: r.conversionRate })),
+      };
+    }
+
+    // Find the best performing variant
+    const sorted = [...results].sort((a, b) => b.conversionRate - a.conversionRate);
+    const best = sorted[0];
+    const runnerUp = sorted[1];
+
+    // Calculate z-score for difference in proportions
+    const p1 = best.conversionRate;
+    const p2 = runnerUp.conversionRate;
+    const n1 = best.sampleSize;
+    const n2 = runnerUp.sampleSize;
+
+    if (p1 === p2) {
+      return {
+        testId,
+        winner: null,
+        confidence: 0,
+        needsMoreData: true,
+        results: results.map(r => ({ name: r.name, conversionRate: r.conversionRate })),
+      };
+    }
+
+    const pooledP = (best.conversions + runnerUp.conversions) / (n1 + n2);
+    const se = Math.sqrt(pooledP * (1 - pooledP) * (1 / n1 + 1 / n2));
+    const zScore = se > 0 ? (p1 - p2) / se : 0;
+
+    // Approximate confidence from z-score using normal CDF
+    // P(Z < z) ≈ 1 / (1 + exp(-1.7155277 * z * (1 + 0.0417 * z * z)))
+    const absZ = Math.abs(zScore);
+    const cdf = 1 / (1 + Math.exp(-1.7155277 * absZ * (1 + 0.0417 * absZ * absZ)));
+    const confidence = Math.min(0.9999, Math.max(0, (cdf - 0.5) * 2)); // Convert one-tail to confidence
+
+    const winner = confidence >= 0.5 ? variants.find(v => v.name === best.name) || null : null;
+
+    return {
+      testId,
+      winner,
+      confidence: Math.round(confidence * 10000) / 10000,
+      needsMoreData: confidence < 0.5,
+      results: results.map(r => ({ name: r.name, conversionRate: r.conversionRate })),
+    };
   }
 }
 

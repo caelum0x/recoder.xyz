@@ -7,3 +7,6 @@ export { CreditsDisplay } from './credits-display';
 export { TierBadge } from './tier-badge';
 export { getPlanName, getPlanIcon } from './plan-utils';
 export { UpgradeCelebration } from './upgrade-celebration';
+export { SubscriptionStatusBadge } from './subscription-status-badge';
+export { UpgradeDialog } from './upgrade-dialog';
+export type { UpgradeContext } from './upgrade-dialog';

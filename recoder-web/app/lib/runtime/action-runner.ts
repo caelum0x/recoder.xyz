@@ -796,7 +796,7 @@ export class ActionRunner {
           store.startProposal(this.#chatId!);
           this.#proposalStarted = true;
         }
-      }).catch(() => {});
+      }).catch((err) => { logger.warn('[ActionRunner] Failed to start proposal:', err); });
     }
 
     this.actions.setKey(actionId, {
@@ -4882,7 +4882,7 @@ export class ActionRunner {
             logger.info(`[ActionRunner] 🔍 Proposal finalized: ${proposal.id} with ${proposal.filesChanged.length} files`);
           }
         }
-      }).catch(() => {});
+      }).catch((err) => { logger.warn('[ActionRunner] Failed to finalize proposal:', err); });
     }
 
     // Trigger deferred auto-install now that streaming is done

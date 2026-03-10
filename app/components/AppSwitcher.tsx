@@ -62,6 +62,7 @@ export function AppSwitcher() {
             <a
               key={app.id}
               href={app.href}
+              rel="noopener noreferrer"
               onClick={() => setShowMenu(false)}
               className={`w-full px-4 py-2 flex items-center justify-between hover:bg-white/10 transition-colors ${
                 isCurrent ? 'text-orange-500' : 'text-gray-300'

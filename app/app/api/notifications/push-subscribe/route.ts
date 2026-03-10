@@ -9,6 +9,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth-helpers';
 import { prisma } from '@/lib/prisma';
 import crypto from 'crypto';
+import { logger } from '@/lib/logger';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -79,7 +80,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ success: true, message: 'Push subscription saved' });
   } catch (error) {
-    console.error('[push-subscribe] POST error:', error);
+    logger.error('[push-subscribe] POST error:', { error: error instanceof Error ? error.message : String(error) });
     return NextResponse.json(
       {
         success: false,
@@ -135,7 +136,7 @@ export async function DELETE(request: NextRequest) {
 
     return NextResponse.json({ success: true, message: 'Push subscription removed' });
   } catch (error) {
-    console.error('[push-subscribe] DELETE error:', error);
+    logger.error('[push-subscribe] DELETE error:', { error: error instanceof Error ? error.message : String(error) });
     return NextResponse.json(
       {
         success: false,

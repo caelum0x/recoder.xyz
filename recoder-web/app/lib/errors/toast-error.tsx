@@ -379,8 +379,8 @@ export function showNetworkError(message?: string, onRetry?: () => void) {
  */
 export function showAuthError(isExpired: boolean = false) {
   const loginUrl = typeof window !== 'undefined'
-    ? `${window.location.origin.replace('app.', '')}/login?redirect=${encodeURIComponent(window.location.href)}`
-    : '/login';
+    ? `${window.location.origin.replace('app.', '')}/auth/signin?redirect=${encodeURIComponent(window.location.href)}`
+    : '/auth/signin';
 
   return showErrorWithRecovery(
     {

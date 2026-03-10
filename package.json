@@ -284,7 +284,9 @@
     "overrides": {
       "roo-code-types": "^1.0.1",
       "@types/react": "19.2.7",
-      "@types/react-dom": "19.2.3"
+      "@types/react-dom": "19.2.3",
+      "@codemirror/state": "6.5.4",
+      "@modelcontextprotocol/sdk": "1.23.0"
     }
   },
   "engines": {

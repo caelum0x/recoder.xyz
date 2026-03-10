@@ -338,7 +338,8 @@ class TaskListTool(SandboxToolsBase):
                     if was_repaired:
                         try:
                             task_contents = json.loads(repaired)
-                        except:
+                        except Exception:
+                            logger.warning("Failed to parse repaired JSON for task_contents", exc_info=True)
                             return ToolResult(success=False, output=f"❌ Invalid JSON in task_contents")
                     else:
                         return ToolResult(success=False, output=f"❌ Invalid JSON in task_contents")

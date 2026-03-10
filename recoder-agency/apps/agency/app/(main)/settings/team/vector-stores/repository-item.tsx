@@ -119,7 +119,7 @@ export function RepositoryItem({
 					href={`https://github.com/${repositoryIndex.owner}/${repositoryIndex.repo}`}
 					target="_blank"
 					rel="noopener noreferrer"
-					className="font-medium text-[16px] leading-[22.4px] font-geist"
+					className="font-medium text-[16px] leading-[22.4px] font-sans"
 				>
 					{repositoryIndex.owner}/{repositoryIndex.repo}
 				</AccentLink>
@@ -186,7 +186,7 @@ export function RepositoryItem({
 								<span className="sr-only">Close</span>
 							</DialogClose>
 						</div>
-						<DialogDescription className="font-geist mt-2 text-[14px] text-error-900/50">
+						<DialogDescription className="font-sans mt-2 text-[14px] text-error-900/50">
 							{`This action cannot be undone. This will permanently delete the repository "${repositoryIndex.owner}/${repositoryIndex.repo}" from your Vector Stores.`}
 						</DialogDescription>
 					</DialogHeader>
@@ -300,7 +300,7 @@ function EmbeddingModelCard({
 												showLabel={false}
 											/>
 											<span
-												className={`text-[12px] leading-[14px] font-medium font-geist flex-1 text-center ml-1.5 ${
+												className={`text-[12px] leading-[14px] font-medium font-sans flex-1 text-center ml-1.5 ${
 													blobStatus.status === "failed"
 														? "text-error-900"
 														: "text-text-muted"
@@ -319,7 +319,7 @@ function EmbeddingModelCard({
 												<button
 													type="button"
 													onClick={onShowDiagnostic}
-													className="text-[#1663F3] text-[12px] leading-[14px] font-medium font-geist hover:underline"
+													className="text-blue-500 text-[12px] leading-[14px] font-medium font-sans hover:underline"
 												>
 													Check ↗
 												</button>
@@ -394,7 +394,7 @@ function EmbeddingModelCard({
 												showLabel={false}
 											/>
 											<span
-												className={`text-[12px] leading-[14px] font-medium font-geist flex-1 text-center ml-1.5 ${
+												className={`text-[12px] leading-[14px] font-medium font-sans flex-1 text-center ml-1.5 ${
 													issueStatus.status === "failed"
 														? "text-error-900"
 														: "text-text-muted"
@@ -413,7 +413,7 @@ function EmbeddingModelCard({
 												<button
 													type="button"
 													onClick={onShowDiagnostic}
-													className="text-[#1663F3] text-[12px] leading-[14px] font-medium font-geist hover:underline"
+													className="text-blue-500 text-[12px] leading-[14px] font-medium font-sans hover:underline"
 												>
 													Check ↗
 												</button>
@@ -489,7 +489,7 @@ function EmbeddingModelCard({
 												showLabel={false}
 											/>
 											<span
-												className={`text-[12px] leading-[14px] font-medium font-geist flex-1 text-center ml-1.5 ${
+												className={`text-[12px] leading-[14px] font-medium font-sans flex-1 text-center ml-1.5 ${
 													pullRequestStatus.status === "failed"
 														? "text-error-900"
 														: "text-text-muted"
@@ -508,7 +508,7 @@ function EmbeddingModelCard({
 												<button
 													type="button"
 													onClick={onShowDiagnostic}
-													className="text-[#1663F3] text-[12px] leading-[14px] font-medium font-geist hover:underline"
+													className="text-blue-500 text-[12px] leading-[14px] font-medium font-sans hover:underline"
 												>
 													Check ↗
 												</button>

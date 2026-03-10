@@ -1036,7 +1036,8 @@ Generate, edit, upscale, or remove background from images. Video generation supp
             try:
                 content = await self.sandbox.fs.download_file(full_canvas_path)
                 canvas_data = json.loads(content.decode() if isinstance(content, bytes) else content)
-            except:
+            except Exception:
+                logger.debug(f"Canvas not found at {full_canvas_path}, creating new canvas")
                 # Canvas doesn't exist - create it
                 canvas_name = canvas_path.split('/')[-1].replace('.kanvax', '')
                 canvas_data = {
@@ -1090,7 +1091,8 @@ Generate, edit, upscale, or remove background from images. Video generation supp
                         img = Image.open(BytesIO(image_bytes))
                         actual_width, actual_height = img.size
                         img.close()
-                    except:
+                    except Exception:
+                        logger.warning(f"Failed to read image dimensions for {image_file}, defaulting to 1024x1024", exc_info=True)
                         actual_width, actual_height = 1024, 1024
                     
                     # Calculate element size - use actual size (no cap, canvas is infinite)

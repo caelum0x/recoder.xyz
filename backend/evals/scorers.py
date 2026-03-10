@@ -94,7 +94,7 @@ def AnswerCorrectness(
             result_json = json.loads(result_text)
             score = float(result_json.get("score", 0))
             reason = result_json.get("reason", "")
-        except:
+        except Exception:
             # Fallback: look for score in text
             if "1.0" in result_text or "correct" in result_text.lower():
                 score = 1.0

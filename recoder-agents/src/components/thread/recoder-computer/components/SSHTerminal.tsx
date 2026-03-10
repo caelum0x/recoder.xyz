@@ -144,7 +144,7 @@ export const SSHTerminal = memo(function SSHTerminal({ sandboxId, className }: S
 
   const connectWebSocket = useCallback((accessToken: string, term: XTerm) => {
     if (wsRef.current) {
-      console.log('[SSHTerminal] Already have a WebSocket, skipping');
+      
       return;
     }
 
@@ -155,21 +155,21 @@ export const SSHTerminal = memo(function SSHTerminal({ sandboxId, className }: S
     setStatus('connecting');
     
     const wsUrl = getWebSocketUrl();
-    console.log('[Terminal] Creating WebSocket (id:', myConnectionId, '):', `${wsUrl}/sandboxes/${sandboxId}/terminal/ws`);
+    
     
     const ws = new WebSocket(`${wsUrl}/sandboxes/${sandboxId}/terminal/ws`);
     wsRef.current = ws;
 
     ws.onopen = () => {
       if (connectionIdRef.current !== myConnectionId) {
-        console.log('[SSHTerminal] Stale connection, closing');
+        
         ws.close();
         return;
       }
-      console.log('[SSHTerminal] WebSocket open, sending auth...');
+      
       try {
         ws.send(JSON.stringify({ type: 'auth', access_token: accessToken }));
-        console.log('[SSHTerminal] Auth sent');
+        
       } catch (e) {
         console.error('[SSHTerminal] Failed to send auth:', e);
         setStatus('error');
@@ -181,7 +181,7 @@ export const SSHTerminal = memo(function SSHTerminal({ sandboxId, className }: S
       
       try {
         const message = JSON.parse(event.data);
-        console.log('[SSHTerminal] Message:', message.type, message.message || '');
+        
         
         switch (message.type) {
           case 'status':
@@ -220,7 +220,7 @@ export const SSHTerminal = memo(function SSHTerminal({ sandboxId, className }: S
 
     ws.onclose = (event) => {
       if (connectionIdRef.current !== myConnectionId) return;
-      console.log('[SSHTerminal] WebSocket closed:', event.code);
+      
       wsRef.current = null;
       setStatus('disconnected');
       term.writeln('\x1b[33mConnection closed\x1b[0m');
@@ -335,7 +335,7 @@ export const SSHTerminal = memo(function SSHTerminal({ sandboxId, className }: S
       if (cancelled || !token || !xtermRef.current || wsRef.current) {
         return;
       }
-      console.log('[SSHTerminal] Initiating connection...');
+      
       getSSHCommand();
       connectWebSocket(token, xtermRef.current);
     };

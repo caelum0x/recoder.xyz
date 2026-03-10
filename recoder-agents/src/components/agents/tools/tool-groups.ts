@@ -95,7 +95,6 @@ export function hasGranularControl(toolName: string, toolsData?: Record<string, 
   
   // Only count visible methods for granular control (visible=true or visible=undefined counts as visible)
   const visibleMethods = group.methods.filter(m => m.visible !== false);
-  console.log(`[hasGranularControl] ${toolName}: ${group.methods.length} total methods, ${visibleMethods.length} visible`, group.methods.map(m => ({ name: m.name, visible: m.visible })));
   return visibleMethods.length > 1;
 }
 
@@ -201,31 +200,3 @@ export function validateToolConfig(
   return normalizedConfig;
 }
 
-export function convertLegacyToolConfig(
-  legacyTools: Record<string, boolean | { enabled: boolean; description: string }>,
-  toolsData?: Record<string, any>
-): Record<string, any> {
-  const convertedConfig: Record<string, any> = {};
-
-  for (const [toolName, toolConfig] of Object.entries(legacyTools)) {
-    const toolGroup = getToolGroup(toolName, toolsData);
-    
-    if (!toolGroup) {
-      convertedConfig[toolName] = toolConfig;
-      continue;
-    }
-
-    if (typeof toolConfig === 'boolean') {
-      convertedConfig[toolName] = toolConfig;
-    } else if (typeof toolConfig === 'object' && 'enabled' in toolConfig) {
-      convertedConfig[toolName] = toolConfig.enabled;
-    } else {
-      convertedConfig[toolName] = true;
-    }
-  }
-
-  return convertedConfig;
-}
-
-// Legacy export for backward compatibility - components should pass toolsData
-export const TOOL_GROUPS: Record<string, ToolGroup> = {};

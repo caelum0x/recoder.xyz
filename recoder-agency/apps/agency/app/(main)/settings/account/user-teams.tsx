@@ -54,7 +54,7 @@ export default function UserTeams({
 			<div
 				className="flex items-center gap-x-[11px] mt-4 mb-2 mx-4 py-2 px-3 rounded-[8px]"
 				style={{
-					background: "#00020A",
+					background: "var(--color-black-900)",
 					boxShadow: "inset 0 1px 4px rgba(0,0,0,0.5)",
 					border: "0.5px solid rgba(255,255,255,0.05)",
 				}}
@@ -65,7 +65,7 @@ export default function UserTeams({
 					type="text"
 					value={teamName}
 					placeholder="Search for a team..."
-					className="w-full text-inverse font-medium text-[14px] leading-[23.8px] font-geist placeholder:text-link-muted bg-transparent outline-none"
+					className="w-full text-inverse font-medium text-[14px] leading-[23.8px] font-sans placeholder:text-link-muted bg-transparent outline-none"
 				/>
 			</div>
 			<div>
@@ -130,12 +130,12 @@ function UserTeamsItem({
 				/>
 				<div className="flex flex-col">
 					<div className="flex items-center gap-2">
-						<div className="text-inverse font-medium text-[16px] leading-[22.4px] font-geist">
+						<div className="text-inverse font-medium text-[16px] leading-[22.4px] font-sans">
 							{teamName}
 						</div>
 						{isPro ? <ProTag /> : <FreeTag />}
 					</div>
-					<div className="text-text-muted font-medium text-[12px] leading-[20.4px] font-geist">
+					<div className="text-text-muted font-medium text-[12px] leading-[20.4px] font-sans">
 						{role}
 					</div>
 				</div>

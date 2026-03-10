@@ -109,6 +109,7 @@ CREATE TABLE IF NOT EXISTS approval_gates (
 
 -- Indexes
 CREATE INDEX IF NOT EXISTS idx_workflows_agent ON workflows(agent_id);
+CREATE INDEX IF NOT EXISTS idx_workflows_account ON workflows(account_id);
 CREATE INDEX IF NOT EXISTS idx_workflow_nodes_workflow ON workflow_nodes(workflow_id);
 CREATE INDEX IF NOT EXISTS idx_workflow_edges_workflow ON workflow_edges(workflow_id);
 CREATE INDEX IF NOT EXISTS idx_workflow_executions_workflow ON workflow_executions(workflow_id);
@@ -145,11 +146,58 @@ ALTER TABLE workflow_node_executions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE workflow_templates ENABLE ROW LEVEL SECURITY;
 ALTER TABLE approval_gates ENABLE ROW LEVEL SECURITY;
 
--- Permissive policies
-CREATE POLICY workflows_all ON workflows FOR ALL USING (true);
-CREATE POLICY wf_nodes_all ON workflow_nodes FOR ALL USING (true);
-CREATE POLICY wf_edges_all ON workflow_edges FOR ALL USING (true);
-CREATE POLICY wf_exec_all ON workflow_executions FOR ALL USING (true);
-CREATE POLICY wf_node_exec_all ON workflow_node_executions FOR ALL USING (true);
-CREATE POLICY wf_templates_select ON workflow_templates FOR SELECT USING (true);
-CREATE POLICY approval_gates_all ON approval_gates FOR ALL USING (true);
+-- RLS policies scoped to owning account
+CREATE POLICY workflows_all ON workflows FOR ALL
+  USING (account_id = auth.uid())
+  WITH CHECK (account_id = auth.uid());
+
+CREATE POLICY wf_nodes_all ON workflow_nodes FOR ALL
+  USING (EXISTS (
+    SELECT 1 FROM workflows w WHERE w.id = workflow_nodes.workflow_id AND w.account_id = auth.uid()
+  ))
+  WITH CHECK (EXISTS (
+    SELECT 1 FROM workflows w WHERE w.id = workflow_nodes.workflow_id AND w.account_id = auth.uid()
+  ));
+
+CREATE POLICY wf_edges_all ON workflow_edges FOR ALL
+  USING (EXISTS (
+    SELECT 1 FROM workflows w WHERE w.id = workflow_edges.workflow_id AND w.account_id = auth.uid()
+  ))
+  WITH CHECK (EXISTS (
+    SELECT 1 FROM workflows w WHERE w.id = workflow_edges.workflow_id AND w.account_id = auth.uid()
+  ));
+
+CREATE POLICY wf_exec_all ON workflow_executions FOR ALL
+  USING (EXISTS (
+    SELECT 1 FROM workflows w WHERE w.id = workflow_executions.workflow_id AND w.account_id = auth.uid()
+  ))
+  WITH CHECK (EXISTS (
+    SELECT 1 FROM workflows w WHERE w.id = workflow_executions.workflow_id AND w.account_id = auth.uid()
+  ));
+
+CREATE POLICY wf_node_exec_all ON workflow_node_executions FOR ALL
+  USING (EXISTS (
+    SELECT 1 FROM workflow_executions we
+      JOIN workflows w ON w.id = we.workflow_id
+    WHERE we.id = workflow_node_executions.execution_id AND w.account_id = auth.uid()
+  ))
+  WITH CHECK (EXISTS (
+    SELECT 1 FROM workflow_executions we
+      JOIN workflows w ON w.id = we.workflow_id
+    WHERE we.id = workflow_node_executions.execution_id AND w.account_id = auth.uid()
+  ));
+
+-- Templates are read-only for all authenticated users
+CREATE POLICY wf_templates_select ON workflow_templates FOR SELECT USING (auth.uid() IS NOT NULL);
+
+CREATE POLICY approval_gates_all ON approval_gates FOR ALL
+  USING (EXISTS (
+    SELECT 1 FROM workflow_executions we
+      JOIN workflows w ON w.id = we.workflow_id
+    WHERE we.id = approval_gates.execution_id AND w.account_id = auth.uid()
+  ))
+  WITH CHECK (EXISTS (
+    SELECT 1 FROM workflow_executions we
+      JOIN workflows w ON w.id = we.workflow_id
+    WHERE we.id = approval_gates.execution_id AND w.account_id = auth.uid()
+  ));

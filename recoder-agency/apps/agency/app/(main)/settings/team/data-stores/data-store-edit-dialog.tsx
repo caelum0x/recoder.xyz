@@ -71,7 +71,7 @@ export function DataStoreEditDialog({
 							<span className="sr-only">Close</span>
 						</DialogClose>
 					</div>
-					<DialogDescription className="font-geist mt-2 text-[14px] text-text-muted">
+					<DialogDescription className="font-sans mt-2 text-[14px] text-text-muted">
 						Update the name and connection string for this data store.
 					</DialogDescription>
 				</DialogHeader>

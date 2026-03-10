@@ -3,6 +3,7 @@
  * Manages authentication sessions across web, CLI, and router platforms
  * Enables users to auth once on recoder.xyz and have seamless experience everywhere
  */
+import { randomUUID } from 'crypto';
 import { Logger } from 'recoder-shared';
 import { backendClient } from './backend-client';
 import { webCLIAuthBridge } from './web-cli-auth-bridge';
@@ -445,7 +446,7 @@ export class UnifiedSessionManager extends EventEmitter {
     }
 
     try {
-      const wsUrl = process.env.RECODER_WS_URL || 'ws://localhost:3001';
+      const wsUrl = process.env.RECODER_WS_URL || 'ws://localhost:3100';
       this.websocketConnection = new WebSocket(`${wsUrl}/ws/sessions/${this.localSession.sessionId}`);
 
       this.websocketConnection.onopen = () => {
@@ -612,12 +613,12 @@ export class UnifiedSessionManager extends EventEmitter {
    * Helper methods
    */
   private generateSessionId(): string {
-    return `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    return `session_${Date.now()}_${randomUUID().replace(/-/g, '').slice(0, 9)}`;
   }
 
   private getOrCreateDeviceId(): string {
     // This would use a more sophisticated device fingerprinting in production
-    return `device_${require('os').hostname()}_${Math.random().toString(36).substr(2, 6)}`;
+    return `device_${require('os').hostname()}_${randomUUID().replace(/-/g, '').slice(0, 6)}`;
   }
 
   private getCLIVersion(): string {

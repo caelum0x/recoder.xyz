@@ -60,7 +60,7 @@ export const AgentMCPConfiguration: React.FC<AgentMCPConfigurationProps> = ({
   ];
 
   const handleConfigurationChange = (mcps: any[]) => {
-    console.log('[AgentMCPConfiguration] Configuration changed:', mcps);
+    
     
     const configured = mcps.filter(mcp => !mcp.isCustom);
     const custom = mcps
@@ -88,7 +88,7 @@ export const AgentMCPConfiguration: React.FC<AgentMCPConfigurationProps> = ({
         };
       });
 
-    console.log('[AgentMCPConfiguration] Sending to parent - configured:', configured, 'custom:', custom);
+    
     
     onMCPChange({
       configured_mcps: configured,

@@ -31,7 +31,6 @@ export function UpdateAgentToolView({
 }: ToolViewProps) {
   // Defensive check - ensure toolCall is defined
   if (!toolCall) {
-    console.warn('UpdateAgentToolView: toolCall is undefined. Tool views should use structured props.');
     return null;
   }
 

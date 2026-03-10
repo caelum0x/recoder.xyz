@@ -98,8 +98,8 @@ class CheckoutHandler:
                         status='failed',
                         error_message=str(e)
                     )
-            except:
-                pass
+            except Exception as nested_err:
+                logger.warning(f"[STRIPE CHECKOUT] Failed to mark purchase as failed for account {account_id}: {nested_err}")
             return
         
         final_state = await billing_repo.get_credit_account_balances(account_id)

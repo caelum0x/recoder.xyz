@@ -37,7 +37,7 @@ export async function GET(request: NextRequest) {
     const keys = await CLIAuthService.listApiKeys(user.id);
 
     return NextResponse.json({ keys }, { status: 200 });
-  } catch (error: any) {
+  } catch (error) {
     logger.error('List API keys error:', { error: String(error), route: 'auth/cli/keys' });
     return NextResponse.json(
       { error: 'Failed to list API keys' },
@@ -100,7 +100,7 @@ export async function POST(request: NextRequest) {
     );
 
     return NextResponse.json(key, { status: 201 });
-  } catch (error: any) {
+  } catch (error) {
     logger.error('Create API key error:', { error: String(error), route: 'auth/cli/keys' });
     return NextResponse.json(
       { error: 'Failed to create API key' },
@@ -149,7 +149,7 @@ export async function DELETE(request: NextRequest) {
     const result = await CLIAuthService.revokeApiKey(keyId, user.id);
 
     return NextResponse.json(result, { status: 200 });
-  } catch (error: any) {
+  } catch (error) {
     logger.error('Revoke API key error:', { error: String(error), route: 'auth/cli/keys' });
     return NextResponse.json(
       { error: 'Failed to revoke API key' },

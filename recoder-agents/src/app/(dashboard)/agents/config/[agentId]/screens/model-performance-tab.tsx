@@ -9,7 +9,6 @@ import { cn } from '@/lib/utils';
 import { useQuery } from '@tanstack/react-query';
 import {
   getModelAnalytics,
-  type ModelMetrics,
   type ModelAnalyticsResponse,
 } from '@/lib/api/model-analytics';
 import {

@@ -45,9 +45,26 @@ export async function GET(request: NextRequest) {
 	const targetGitHubRepositories = await fetchIngestTargets();
 	const trigger = createCronIngestTrigger();
 
-	await Promise.all(
+	const results = await Promise.allSettled(
 		targetGitHubRepositories.map((repo) => processRepository(repo, trigger)),
 	);
+
+	const failures = results.filter(
+		(r): r is PromiseRejectedResult => r.status === "rejected",
+	);
+	if (failures.length > 0) {
+		for (const failure of failures) {
+			console.error("[vector-store-cron] Repository ingest failed:", failure.reason);
+		}
+		return new Response(
+			JSON.stringify({
+				ok: false,
+				total: results.length,
+				failed: failures.length,
+			}),
+			{ status: 207, headers: { "Content-Type": "application/json" } },
+		);
+	}
 
 	return new Response("ok", { status: 200 });
 }

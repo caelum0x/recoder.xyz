@@ -199,7 +199,8 @@ class CompanySearchTool(Tool):
                 try:
                     error_str = str(create_error)
                     logger.error(f"Failed to create webset - Error message: {error_str}")
-                except:
+                except Exception:
+                    logger.exception("Failed to convert Exa webset creation error to string")
                     error_str = "Unknown error"
                     logger.error(f"Failed to create webset - Could not convert error to string")
                 

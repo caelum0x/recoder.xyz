@@ -32,7 +32,6 @@ export const siteConfig = {
         { id: 4, title: 'Recoder Web', url: RECODER_ECOSYSTEM_URLS.web },
         { id: 5, title: 'Recoder Agency', url: RECODER_ECOSYSTEM_URLS.agency },
         { id: 6, title: 'Recoder PM', url: RECODER_ECOSYSTEM_URLS.pm },
-        { id: 7, title: 'Recoder Studio', url: RECODER_ECOSYSTEM_URLS.studio },
       ],
     },
     {

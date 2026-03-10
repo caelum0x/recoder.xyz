@@ -54,12 +54,12 @@ export async function POST(request: NextRequest) {
           userId: session.user.id,
           plan: plan
         },
-        successUrl: successUrl || `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/dashboard?payment=success`,
-        cancelUrl: cancelUrl || `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/pricing`
+        successUrl: successUrl || `${process.env.NEXT_PUBLIC_APP_URL || 'https://recoder.xyz'}/dashboard?payment=success`,
+        cancelUrl: cancelUrl || `${process.env.NEXT_PUBLIC_APP_URL || 'https://recoder.xyz'}/pricing`
       }
     });
 
-  } catch (error: any) {
+  } catch (error) {
     console.error('Paddle checkout error:', error);
     return NextResponse.json({
       success: false,

@@ -46,6 +46,10 @@ import { PlanSelectionModal } from '@/components/billing/pricing';
 import { AgentConfigurationDialog } from '@/components/agents/agent-configuration-dialog';
 import { SpotlightCard } from '@/components/ui/spotlight-card';
 import { UnifiedConfigMenu } from './unified-config-menu';
+import { SlashCommandMenu } from './slash-command-menu';
+import { MentionMenu } from './mention-menu';
+import { SuggestionChips } from './suggestion-chips';
+import { SavedPromptsPopover } from './saved-prompts-popover';
 import { useVoicePlayerStore } from '@/stores/voice-player-store';
 
 import posthog from 'posthog-js';
@@ -54,6 +58,13 @@ import { trackCtaUpgrade } from '@/lib/analytics/gtm';
 // ============================================================================
 // ISOLATED TEXTAREA - Manages its own state to prevent parent re-renders
 // ============================================================================
+
+interface MenuTriggerState {
+  slashVisible: boolean;
+  slashQuery: string;
+  mentionVisible: boolean;
+  mentionQuery: string;
+}
 
 interface IsolatedTextareaProps {
   initialValue?: string;
@@ -68,6 +79,7 @@ interface IsolatedTextareaProps {
   isUploading: boolean;
   valueRef: React.MutableRefObject<string>;
   onHasContentChange: (hasContent: boolean) => void;
+  onMenuTriggerChange: (state: MenuTriggerState) => void;
 }
 
 const IsolatedTextarea = memo(forwardRef<HTMLTextAreaElement, IsolatedTextareaProps>(function IsolatedTextarea({
@@ -83,6 +95,7 @@ const IsolatedTextarea = memo(forwardRef<HTMLTextAreaElement, IsolatedTextareaPr
   isUploading,
   valueRef,
   onHasContentChange,
+  onMenuTriggerChange,
 }, ref) {
   const [value, setValue] = useState(initialValue);
   const internalRef = useRef<HTMLTextAreaElement>(null);
@@ -133,8 +146,21 @@ const IsolatedTextarea = memo(forwardRef<HTMLTextAreaElement, IsolatedTextareaPr
   }, [adjustHeight, mounted]);
 
   const handleChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    setValue(e.target.value);
-  }, []);
+    const newValue = e.target.value;
+    setValue(newValue);
+
+    // Detect slash command trigger: "/" at the start of input
+    const slashMatch = newValue.match(/^\/(\S*)$/);
+    // Detect mention trigger: "@" followed by query (look for last "@" that isn't followed by a space-then-more-text)
+    const mentionMatch = newValue.match(/@(\S*)$/);
+
+    onMenuTriggerChange({
+      slashVisible: !!slashMatch,
+      slashQuery: slashMatch ? slashMatch[1] : '',
+      mentionVisible: !!mentionMatch,
+      mentionQuery: mentionMatch ? mentionMatch[1] : '',
+    });
+  }, [onMenuTriggerChange]);
 
   // Detect if we're on a mobile device - only after mount to prevent hydration mismatch
   // Used only for keyboard behavior, not for styling (styling uses CSS media queries)
@@ -169,12 +195,26 @@ const IsolatedTextarea = memo(forwardRef<HTMLTextAreaElement, IsolatedTextareaPr
   useEffect(() => {
     const textarea = internalRef.current;
     if (textarea) {
-      (textarea as any).clearValue = () => setValue('');
+      (textarea as any).clearValue = () => {
+        setValue('');
+        onMenuTriggerChange({ slashVisible: false, slashQuery: '', mentionVisible: false, mentionQuery: '' });
+      };
       (textarea as any).appendValue = (text: string) => {
         setValue(prev => prev ? `${prev} ${text}` : text);
       };
+      (textarea as any).setFullValue = (text: string) => {
+        setValue(text);
+        onMenuTriggerChange({ slashVisible: false, slashQuery: '', mentionVisible: false, mentionQuery: '' });
+      };
+      (textarea as any).replaceLastMention = (mentionQuery: string, replacement: string) => {
+        setValue(prev => {
+          const mentionPattern = new RegExp(`@${mentionQuery.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`);
+          return prev.replace(mentionPattern, replacement);
+        });
+        onMenuTriggerChange({ slashVisible: false, slashQuery: '', mentionVisible: false, mentionQuery: '' });
+      };
     }
-  }, []);
+  }, [onMenuTriggerChange]);
 
   return (
     <div className="flex flex-col gap-1 px-2">
@@ -873,7 +913,14 @@ export const ChatInput = memo(forwardRef<ChatInputHandles, ChatInputProps>(
     const [agentConfigDialog, setAgentConfigDialog] = useState<{ open: boolean; tab: 'instructions' | 'knowledge' | 'triggers' | 'tools' | 'integrations' }>({ open: false, tab: 'instructions' });
     const [mounted, setMounted] = useState(false);
     const [animatedPlaceholder, setAnimatedPlaceholder] = useState('');
-    const [isModeDismissing, setIsModeDismissing] = useState(false);    // Recoder Agent Modes feature flag
+    const [isModeDismissing, setIsModeDismissing] = useState(false);
+    // Slash command and mention menu state
+    const [menuTrigger, setMenuTrigger] = useState<MenuTriggerState>({
+      slashVisible: false, slashQuery: '', mentionVisible: false, mentionQuery: '',
+    });
+    const [showCodePasteBadge, setShowCodePasteBadge] = useState(false);
+    const codePasteTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+    // Recoder Agent Modes feature flag
     const ENABLE_RECODER_AGENT_MODES = false;
     const [recoderAgentModes, setRecoderAgentModes] = useState<'adaptive' | 'autonomous' | 'chat'>('adaptive');
 
@@ -1012,10 +1059,10 @@ export const ChatInput = memo(forwardRef<ChatInputHandles, ChatInputProps>(
     // Check if selected agent is Recoder based on agent data
     // While loading, default to Recoder (assume Recoder is the default agent)
     const selectedAgent = agents.find(agent => agent.agent_id === selectedAgentId);
-    const recoderAgent = agents.find(agent => agent.metadata?.is_suna_default === true);
+    const recoderAgent = agents.find(agent => agent.metadata?.is_recoder_default === true || agent.metadata?.is_suna_default === true);
     const isRecoderAgent = isLoadingAgents 
         ? true // Show Recoder modes while loading
-        : (selectedAgent?.metadata?.is_suna_default || (!selectedAgentId && recoderAgent !== undefined) || false);
+        : (selectedAgent?.metadata?.is_recoder_default || selectedAgent?.metadata?.is_suna_default || (!selectedAgentId && recoderAgent !== undefined) || false);
 
     const { initializeFromAgents } = useAgentSelection();
     useImperativeHandle(ref, () => ({
@@ -1078,6 +1125,10 @@ export const ChatInput = memo(forwardRef<ChatInputHandles, ChatInputProps>(
 
     useEffect(() => {
       setMounted(true);
+      return () => {
+        // Cleanup code paste timeout on unmount
+        if (codePasteTimeoutRef.current) clearTimeout(codePasteTimeoutRef.current);
+      };
     }, []);
 
     useEffect(() => {
@@ -1161,6 +1212,80 @@ export const ChatInput = memo(forwardRef<ChatInputHandles, ChatInputProps>(
       }, 200); // Match animation duration
     }, [onModeDeselect, controlledOnChange]);
 
+    // Stable callback for menu trigger changes from IsolatedTextarea
+    const handleMenuTriggerChange = useCallback((state: MenuTriggerState) => {
+      setMenuTrigger(state);
+    }, []);
+
+    // Slash command selection handler
+    const handleSlashCommandSelect = useCallback((command: string) => {
+      const textarea = textareaRef.current as any;
+      setMenuTrigger(prev => ({ ...prev, slashVisible: false, slashQuery: '' }));
+
+      switch (command) {
+        case 'search':
+          textarea?.setFullValue?.('Search my knowledge base for: ');
+          break;
+        case 'summarize': {
+          const msg = 'Summarize this conversation so far';
+          textarea?.setFullValue?.(msg);
+          valueRef.current = msg;
+          setHasContent(true);
+          // Auto-send after a tick so valueRef is in sync
+          setTimeout(() => {
+            onSubmit(msg, { agent_id: selectedAgentId });
+            textarea?.clearValue?.();
+            valueRef.current = '';
+            setHasContent(false);
+          }, 0);
+          return;
+        }
+        case 'export':
+          textarea?.setFullValue?.('');
+          break;
+        case 'clear':
+          textarea?.setFullValue?.('');
+          break;
+        case 'help':
+          textarea?.setFullValue?.('What commands and features are available?');
+          break;
+        case 'agent':
+          textarea?.setFullValue?.('Switch to agent: ');
+          break;
+        default:
+          textarea?.setFullValue?.('');
+      }
+      textarea?.focus?.();
+    }, [onSubmit, selectedAgentId]);
+
+    // Close slash menu
+    const handleSlashMenuClose = useCallback(() => {
+      setMenuTrigger(prev => ({ ...prev, slashVisible: false, slashQuery: '' }));
+    }, []);
+
+    // Mention selection handler
+    const handleMentionSelect = useCallback((agent: { id: string; name: string }) => {
+      const textarea = textareaRef.current as any;
+      const currentQuery = menuTrigger.mentionQuery;
+      textarea?.replaceLastMention?.(currentQuery, `@${agent.name} `);
+      setMenuTrigger(prev => ({ ...prev, mentionVisible: false, mentionQuery: '' }));
+      textarea?.focus?.();
+    }, [menuTrigger.mentionQuery]);
+
+    // Close mention menu
+    const handleMentionMenuClose = useCallback(() => {
+      setMenuTrigger(prev => ({ ...prev, mentionVisible: false, mentionQuery: '' }));
+    }, []);
+
+    // Suggestion chip selection handler
+    const handleSuggestionSelect = useCallback((text: string) => {
+      const textarea = textareaRef.current as any;
+      textarea?.setFullValue?.(text);
+      valueRef.current = text;
+      setHasContent(text.trim().length > 0);
+      textarea?.focus?.();
+    }, []);
+
     // Auto-focus textarea on mount
     useEffect(() => {
       if (autoFocus && textareaRef.current) {
@@ -1234,29 +1359,29 @@ export const ChatInput = memo(forwardRef<ChatInputHandles, ChatInputProps>(
       // Keep files visible with loading spinner - they'll be cleared when agent starts running
     }, [loading, disabled, isAgentRunning, isUploading, onStopAgent, generateDataOptionsMarkdown, generateSlidesTemplateMarkdown, getActualModelId, selectedModel, onSubmit, selectedAgentId]);
 
-    // Handle paste for image files
+    // Handle paste for image files and code block auto-detection
     const handlePaste = useCallback((e: React.ClipboardEvent<HTMLTextAreaElement>) => {
       if (!e.clipboardData) return;
       const items = Array.from(e.clipboardData.items);
       const imageFiles: File[] = [];
-      
+
       // Check if there's any text content in the paste
       const hasTextContent = items.some(item => item.kind === 'string' && item.type === 'text/plain');
-      
+
       for (const item of items) {
         if (item.kind === 'file' && item.type.startsWith('image/')) {
           const file = item.getAsFile();
           if (file) imageFiles.push(file);
         }
       }
-      
+
       if (imageFiles.length > 0) {
         // If there's also text content, don't prevent default - let the text be pasted normally
         // and just add the images as attachments
         if (!hasTextContent) {
           e.preventDefault();
         }
-        
+
         handleFiles(
           imageFiles,
           sandboxId,
@@ -1267,6 +1392,31 @@ export const ChatInput = memo(forwardRef<ChatInputHandles, ChatInputProps>(
           messages,
           queryClient,
         );
+        return;
+      }
+
+      // Code block auto-detection for pasted text
+      const pastedText = e.clipboardData.getData('text/plain');
+      if (pastedText) {
+        const lines = pastedText.split('\n');
+        if (lines.length >= 3 && lines.some(l => /^\s{2,}/.test(l))) {
+          e.preventDefault();
+          const wrapped = '```\n' + pastedText + '\n```';
+          const textarea = e.currentTarget;
+          const start = textarea.selectionStart;
+          const end = textarea.selectionEnd;
+          const currentValue = textarea.value;
+          const newValue = currentValue.substring(0, start) + wrapped + currentValue.substring(end);
+          // Use the textarea's setFullValue to update
+          const textareaAny = textareaRef.current as any;
+          textareaAny?.setFullValue?.(newValue);
+          valueRef.current = newValue;
+          setHasContent(newValue.trim().length > 0);
+          // Show transient badge
+          if (codePasteTimeoutRef.current) clearTimeout(codePasteTimeoutRef.current);
+          setShowCodePasteBadge(true);
+          codePasteTimeoutRef.current = setTimeout(() => setShowCodePasteBadge(false), 2000);
+        }
       }
     }, [sandboxId, projectId, messages, queryClient]);
 
@@ -1281,6 +1431,16 @@ export const ChatInput = memo(forwardRef<ChatInputHandles, ChatInputProps>(
       if (isControlled && controlledOnChange) {
         const newValue = valueRef.current ? `${valueRef.current} ${transcribedText}` : transcribedText;
         controlledOnChange(newValue);
+      }
+    }, [isControlled, controlledOnChange]);
+
+    const handleInsertPrompt = useCallback((content: string) => {
+      const textarea = textareaRef.current as any;
+      if (textarea?.setFullValue) {
+        textarea.setFullValue(content);
+      }
+      if (isControlled && controlledOnChange) {
+        controlledOnChange(content);
       }
     }, [isControlled, controlledOnChange]);
 
@@ -1360,8 +1520,9 @@ export const ChatInput = memo(forwardRef<ChatInputHandles, ChatInputProps>(
         isUploading={isUploading}
         valueRef={valueRef}
         onHasContentChange={handleHasContentChange}
+        onMenuTriggerChange={handleMenuTriggerChange}
       />
-    ), [animatedPlaceholder, disabled, isDraggingOver, handleTextareaSubmit, handlePaste, hasFiles, loading, isAgentRunning, isUploading, handleHasContentChange]);
+    ), [animatedPlaceholder, disabled, isDraggingOver, handleTextareaSubmit, handlePaste, hasFiles, loading, isAgentRunning, isUploading, handleHasContentChange, handleMenuTriggerChange]);
 
     // Stable callbacks for opening dialogs - don't need to be in deps
     const handleOpenRegistry = useCallback((slug: string | null) => {
@@ -1447,6 +1608,13 @@ export const ChatInput = memo(forwardRef<ChatInputHandles, ChatInputProps>(
           />
         )}
 
+        {isLoggedIn && (
+          <SavedPromptsPopover
+            onInsert={handleInsertPrompt}
+            disabled={loading || (disabled && !isAgentRunning)}
+          />
+        )}
+
         {isLoggedIn && <VoiceRecorder
           onTranscription={handleTranscription}
           disabled={loading || (disabled && !isAgentRunning)}
@@ -1465,7 +1633,7 @@ export const ChatInput = memo(forwardRef<ChatInputHandles, ChatInputProps>(
           pendingFilesCount={pendingFilesCount}
         />
       </div>
-    ), [isLoggedIn, loading, disabled, handleTranscription, isAgentRunning, hasContent, hasFiles, isUploading, onStopAgent, handleSubmit, buttonLoaderVariant, pendingFilesCount, hideAgentSelection, selectedAgentId, onAgentSelect, threadId]);
+    ), [isLoggedIn, loading, disabled, handleTranscription, handleInsertPrompt, isAgentRunning, hasContent, hasFiles, isUploading, onStopAgent, handleSubmit, buttonLoaderVariant, pendingFilesCount, hideAgentSelection, selectedAgentId, onAgentSelect, threadId]);
 
     const renderControls = useMemo(() => (
       <div className="flex items-center justify-between mt-0 mb-1 px-1.5 sm:px-2 gap-1 sm:gap-1.5">
@@ -1608,6 +1776,11 @@ export const ChatInput = memo(forwardRef<ChatInputHandles, ChatInputProps>(
           >
             <div className="w-full text-sm flex flex-col justify-between items-start rounded-lg">
               <CardContent className={`w-full p-1.5 pb-2 ${bgColor} border rounded-[24px]`}>
+                {/* Suggestion chips - shown only when thread has no messages */}
+                <SuggestionChips
+                  onSelect={handleSuggestionSelect}
+                  visible={messages.length === 0 && !hasContent}
+                />
                 {(uploadedFiles.length > 0 || isUploading) && (
                   <div className="relative">
                     <AttachmentGroup
@@ -1621,6 +1794,25 @@ export const ChatInput = memo(forwardRef<ChatInputHandles, ChatInputProps>(
                   </div>
                 )}
                 <div className="relative flex flex-col w-full h-full gap-2 justify-between">
+                  {/* Slash command and mention menus */}
+                  <SlashCommandMenu
+                    query={menuTrigger.slashQuery}
+                    onSelect={handleSlashCommandSelect}
+                    onClose={handleSlashMenuClose}
+                    visible={menuTrigger.slashVisible}
+                  />
+                  <MentionMenu
+                    query={menuTrigger.mentionQuery}
+                    onSelect={handleMentionSelect}
+                    onClose={handleMentionMenuClose}
+                    visible={menuTrigger.mentionVisible}
+                  />
+                  {/* Code paste badge */}
+                  {showCodePasteBadge && (
+                    <div className="absolute top-2 right-3 z-50 px-2.5 py-1 bg-primary/90 text-primary-foreground text-xs font-medium rounded-full animate-in fade-in-0 zoom-in-95 duration-150">
+                      Wrapped as code
+                    </div>
+                  )}
                   {renderTextArea}
                   {renderControls}
                 </div>

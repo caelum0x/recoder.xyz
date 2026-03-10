@@ -7,7 +7,7 @@ import inquirer from 'inquirer';
 import { Logger } from '../../../shared/src/logger';
 import { ConfigManager } from '../utils/config';
 import { AIHub } from './ai-hub';
-// import { AgentManager } from './agent-manager'; // TODO: AgentManager not implemented yet
+// AgentManager available via AIHub agent orchestration
 import { ProjectPlanner } from './project-planner';
 import { CodeGenerator } from './code-generator';
 
@@ -260,35 +260,26 @@ export class ConversationManager {
    */
   private async handleGeneration(parameters: any): Promise<string> {
     console.log(chalk.green('\n🎯 Starting Code Generation...'));
-    
-    try {
-      // const result = await this.codeGenerator.generateFromDescription(
-      const result = { projectPath: './generated', files: ['index.ts', 'package.json'] }; // TODO: Implement generateFromDescription
-      /*
-        parameters.description,
-        {
-          type: parameters.type,
-          outputDir: './generated',
-          features: ['auth', 'database', 'api']
-        }
-      ); */
 
-      console.log(chalk.blue(`\n📁 Generated project: ${result.projectPath}`));
-      console.log(chalk.gray(`Files created: ${result.files.length}`));
-      
-      if (result.files.length > 0) {
-        console.log(chalk.cyan('\n📄 Key files:'));
-        result.files.slice(0, 5).forEach((file: string) => {
-          console.log(chalk.gray(`  • ${file}`));
-        });
-        if (result.files.length > 5) {
-          console.log(chalk.gray(`  ... and ${result.files.length - 5} more files`));
-        }
+    try {
+      const aiHub = AIHub.getInstance();
+      const response = await aiHub.chat(
+        [
+          { role: 'system', content: 'You are an expert code generator. Generate clean, production-ready code based on the user\'s description. Include file structure and implementation details.' },
+          { role: 'user', content: `Generate a ${parameters.type || 'project'} based on this description: ${parameters.description}` }
+        ],
+        { type: 'web', complexity: 'complex', priority: 'quality' }
+      );
+
+      console.log(chalk.blue(`\n✅ Code generation complete`));
+      console.log(chalk.gray(`Provider: ${response.provider} | Model: ${response.model}`));
+      if (response.tokens) {
+        console.log(chalk.gray(`Tokens: ${response.tokens.input + response.tokens.output}`));
       }
 
-      return `Successfully generated ${parameters.type} project with ${result.files.length} files. Ready for development!`;
-      
-    } catch (error: any) {
+      return response.content;
+
+    } catch (error) {
       Logger.error(`Generation failed: ${error}`);
       return `Generation failed: ${error instanceof Error ? error.message : String(error)}`;
     }
@@ -299,26 +290,23 @@ export class ConversationManager {
    */
   private async handlePlanning(parameters: any): Promise<string> {
     console.log(chalk.green('\n📋 Creating Project Plan...'));
-    
-    try {
-      // const plan = await this.projectPlanner.createDetailedPlan(parameters.description);
-      const plan = { name: 'Sample Project', timeline: { total: '4 weeks' }, stack: ['React', 'Node.js'], phases: [{ name: 'Setup', duration: '1 week', tasks: ['Initialize project', 'Setup dependencies'] }] }; // TODO: Implement createDetailedPlan
-      
-      console.log(chalk.blue(`\n📊 Project: ${plan.name}`));
-      console.log(chalk.gray(`Estimated timeline: ${plan.timeline.total}`));
-      console.log(chalk.gray(`Technology stack: ${plan.stack.join(', ')}`));
-      
-      console.log(chalk.cyan('\n🎯 Key phases:'));
-      plan.phases.forEach((phase: any, index: any) => {
-        console.log(chalk.white(`  ${index + 1}. ${phase.name} (${phase.duration})`));
-        phase.tasks.slice(0, 3).forEach((task: any) => {
-          console.log(chalk.gray(`     • ${task}`));
-        });
-      });
 
-      return `Created detailed project plan with ${plan.phases.length} phases. Total estimated time: ${plan.timeline.total}`;
-      
-    } catch (error: any) {
+    try {
+      const aiHub = AIHub.getInstance();
+      const response = await aiHub.chat(
+        [
+          { role: 'system', content: 'You are an expert project planner. Create detailed, actionable project plans with phases, timelines, technology stack recommendations, and task breakdowns.' },
+          { role: 'user', content: `Create a detailed project plan for: ${parameters.description}` }
+        ],
+        { type: 'backend', complexity: 'complex', priority: 'quality' }
+      );
+
+      console.log(chalk.blue(`\n✅ Project plan created`));
+      console.log(chalk.gray(`Provider: ${response.provider} | Model: ${response.model}`));
+
+      return response.content;
+
+    } catch (error) {
       Logger.error(`Planning failed: ${error}`);
       return `Planning failed: ${error instanceof Error ? error.message : String(error)}`;
     }
@@ -329,24 +317,28 @@ export class ConversationManager {
    */
   private async handleAgentConversation(agentName: string, parameters: any): Promise<string> {
     console.log(chalk.green(`\n🤖 Activating ${agentName} Agent...`));
-    
+
     try {
       // Set active agent in context
       if (this.currentContext) {
         this.currentContext.activeAgent = agentName;
       }
 
-      // const result = await this.agentManager.executeAgentTask(agentName, parameters.task);
-      const result = { files: ['updated-file.ts'] }; // TODO: Implement agent execution
-      
-      console.log(chalk.blue(`\n✅ ${agentName} Agent completed the task`));
-      if (result.files && result.files.length > 0) {
-        console.log(chalk.gray(`Files modified: ${result.files.length}`));
-      }
+      const aiHub = AIHub.getInstance();
+      const response = await aiHub.chat(
+        [
+          { role: 'system', content: `You are the ${agentName} agent. You specialize in ${agentName.toLowerCase()} tasks. Complete the requested task thoroughly and provide actionable results.` },
+          { role: 'user', content: parameters.task }
+        ],
+        { type: 'general', complexity: 'medium', priority: 'quality' }
+      );
 
-      return `${agentName} agent successfully completed: ${parameters.task}`;
-      
-    } catch (error: any) {
+      console.log(chalk.blue(`\n✅ ${agentName} Agent completed the task`));
+      console.log(chalk.gray(`Provider: ${response.provider} | Model: ${response.model}`));
+
+      return response.content;
+
+    } catch (error) {
       Logger.error(`Agent execution failed: ${error}`);
       return `${agentName} agent failed: ${error instanceof Error ? error.message : String(error)}`;
     }

@@ -46,17 +46,23 @@ export default function AdvancedAnalyticsDashboard() {
   const [loading, setLoading] = useState(true);
   const [lastUpdate, setLastUpdate] = useState<Date>(new Date());
   const [analytics, setAnalytics] = useState<AnalyticsResponse["data"] | null>(null);
+  const redirectToSignIn = () => {
+    const currentPath = typeof window !== "undefined"
+      ? `${window.location.pathname}${window.location.search}`
+      : "/dashboard/analytics";
+    router.push(`/auth/signin?redirect=${encodeURIComponent(currentPath)}`);
+  };
 
   useEffect(() => {
     if (!isPending && !session) {
-      router.push("/auth/signin");
+      redirectToSignIn();
       return;
     }
 
     if (!isPending && session) {
       void loadAnalytics();
     }
-  }, [timeRange, isPending, router, session]);
+  }, [timeRange, isPending, session]);
 
   const loadAnalytics = async () => {
     try {

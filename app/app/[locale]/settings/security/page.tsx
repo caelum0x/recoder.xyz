@@ -7,6 +7,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { 
   ArrowLeft,
   Terminal,
@@ -35,6 +36,7 @@ interface Session {
 }
 
 export default function SecuritySettingsPage() {
+  const router = useRouter();
   const [pageLoading, setPageLoading] = useState(true);
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState('');
@@ -65,6 +67,12 @@ export default function SecuritySettingsPage() {
     github: true,
     google: false
   });
+  const redirectToSignIn = () => {
+    const currentPath = typeof window !== 'undefined'
+      ? `${window.location.pathname}${window.location.search}`
+      : '/settings/security';
+    router.push(`/auth/signin?redirect=${encodeURIComponent(currentPath)}`);
+  };
 
   // Load security settings on mount
   useEffect(() => {
@@ -77,6 +85,10 @@ export default function SecuritySettingsPage() {
 
       // Load security settings
       const settingsResponse = await fetch('/api/settings/security');
+      if (settingsResponse.status === 401) {
+        redirectToSignIn();
+        return;
+      }
       const settingsData = await settingsResponse.json();
 
       if (settingsData.success && settingsData.settings) {
@@ -86,6 +98,10 @@ export default function SecuritySettingsPage() {
 
       // Load active sessions
       const sessionsResponse = await fetch('/api/auth/sessions');
+      if (sessionsResponse.status === 401) {
+        redirectToSignIn();
+        return;
+      }
       const sessionsData = await sessionsResponse.json();
 
       if (sessionsData.success && sessionsData.sessions) {
@@ -151,7 +167,8 @@ export default function SecuritySettingsPage() {
 
         // Sign out after 2 seconds
         setTimeout(() => {
-          window.location.href = '/auth/signin';
+          const redirectTarget = `${window.location.pathname}${window.location.search}`;
+          window.location.href = `/auth/signin?redirect=${encodeURIComponent(redirectTarget)}`;
         }, 2000);
       } else {
         setError(data.error || 'Failed to change password');

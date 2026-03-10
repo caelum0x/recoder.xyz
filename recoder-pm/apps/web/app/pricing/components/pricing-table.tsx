@@ -420,7 +420,7 @@ export const PricingTable = ({
         yearly: "Custom",
       },
       cta: "Get in touch",
-      link: "https://x.com/haydenbleasel",
+      link: "https://recoder.xyz/contact",
       caption: "Let's chat.",
     },
   ];

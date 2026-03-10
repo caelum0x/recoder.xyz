@@ -38,10 +38,10 @@ function AgentList({
 		return (
 			<div className="flex justify-center items-center h-full">
 				<div className="grid gap-[8px] justify-center text-center">
-					<h3 className="text-[18px] font-geist font-bold text-text/60">
+					<h3 className="text-[18px] font-sans font-bold text-text/60">
 						No workspaces yet.
 					</h3>
-					<p className="text-[12px] font-geist text-text/60">
+					<p className="text-[12px] font-sans text-text/60">
 						Please create a new workspace with the 'New Workspace +' button.
 					</p>
 				</div>

@@ -623,7 +623,7 @@ const Privacy = () => (
     <p>
       For any questions or concerns regarding your privacy, you may{" "}
       <a
-        href="https://x.com/haydenbleasel"
+        href="https://recoder.xyz/contact"
         rel="noreferrer noopener"
         target="_blank"
       >

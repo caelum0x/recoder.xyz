@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 import Link from 'next/link';
-import { Library, Menu, Plus, Zap, MessageCircle, PanelLeftOpen, PanelLeftClose, Search, Users, FolderOpen, Network, Code } from 'lucide-react';
+import { Menu, Plus, Zap, MessageCircle, PanelLeftOpen, PanelLeftClose, Search, Users, FolderOpen, Network, Code, Share2, Clock, Store, LayoutTemplate, CreditCard, FileBarChart, Play, Star, Trophy, BookOpen, GitBranch, CalendarClock, FlaskConical, Activity, ShieldAlert } from 'lucide-react';
 
 import { NavAgents } from '@/components/sidebar/nav-agents';
 import { NavWorkers } from '@/components/sidebar/nav-workers';
@@ -12,7 +12,6 @@ import { NavWorkspaces } from '@/components/sidebar/nav-workspaces';
 import { NavUserWithTeams } from '@/components/sidebar/nav-user-with-teams';
 import { RecoderLogo } from '@/components/sidebar/recoder-logo';
 import { AppSwitcher } from '@/components/ui/app-switcher';
-import { siteConfig } from '@/lib/site-config';
 import {
   Sidebar,
   SidebarContent,
@@ -22,9 +21,10 @@ import {
 } from '@/components/ui/sidebar';
 import { NewAgentDialog } from '@/components/agents/new-agent-dialog';
 import { ThreadSearchModal } from '@/components/sidebar/thread-search-modal';
+import { GlobalSearchDialog } from '@/components/search/global-search-dialog';
 import { useEffect, useState, useMemo } from 'react';
 import { useTheme } from 'next-themes';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import {
   Tooltip,
   TooltipContent,
@@ -33,7 +33,6 @@ import {
 import { Button } from '@/components/ui/button';
 import { useIsMobile } from '@/hooks/utils';
 import { cn } from '@/lib/utils';
-import { usePathname, useSearchParams } from 'next/navigation';
 import { useAdminRole } from '@/hooks/admin';
 import posthog from 'posthog-js';
 import { useDocumentModalStore } from '@/stores/use-document-modal-store';
@@ -41,9 +40,8 @@ import { isLocalMode } from '@/lib/config';
 import { useAccountState, accountStateSelectors } from '@/hooks/billing';
 
 import { getPlanIcon } from '@/components/billing/plan-utils';
-import { Kbd } from '../ui/kbd';
+import { Kbd, KbdGroup } from '../ui/kbd';
 import { useTranslations } from 'next-intl';
-import { KbdGroup } from '../ui/kbd';
 import { useAuth } from '@/components/AuthProvider';
 import { NotificationBell } from '@/components/notifications/notification-bell';
 import { SubscriptionStatusBadge } from '@/components/billing/subscription-status-badge';
@@ -130,6 +128,7 @@ export function SidebarLeft({
   const searchParams = useSearchParams();
   const [showNewAgentDialog, setShowNewAgentDialog] = useState(false);
   const [showSearchModal, setShowSearchModal] = useState(false);
+  const [globalSearchOpen, setGlobalSearchOpen] = useState(false);
   const { isOpen: isDocumentModalOpen } = useDocumentModalStore();
 
   // Extract pathname info
@@ -220,10 +219,10 @@ export function SidebarLeft({
         );
       }
 
-      // CMD+K to open search modal
+      // CMD+K to open global search
       if ((event.metaKey || event.ctrlKey) && event.key === 'k') {
         event.preventDefault();
-        setShowSearchModal(true);
+        setGlobalSearchOpen(true);
       }
 
       // CMD+J to open new chat
@@ -241,6 +240,18 @@ export function SidebarLeft({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [state, setOpen, isDocumentModalOpen, router, isMobile, setOpenMobile]);
 
+  // Listen for custom events from KeyboardShortcutWiring
+  useEffect(() => {
+    const handleOpenSearch = () => setGlobalSearchOpen(true);
+    const handleNewAgent = () => setShowNewAgentDialog(true);
+
+    window.addEventListener('shortcut:open-search', handleOpenSearch);
+    window.addEventListener('shortcut:new-agent', handleNewAgent);
+    return () => {
+      window.removeEventListener('shortcut:open-search', handleOpenSearch);
+      window.removeEventListener('shortcut:new-agent', handleNewAgent);
+    };
+  }, []);
 
 
 
@@ -267,7 +278,7 @@ export function SidebarLeft({
                 )}
               />
             </Link>
-            {state !== 'collapsed' && <AppSwitcher />}
+            {state !== 'collapsed' && <span data-tour="app-switcher"><AppSwitcher /></span>}
             {/* Expand button - only shows on hover when collapsed */}
             {state === 'collapsed' && (
               <button
@@ -298,7 +309,8 @@ export function SidebarLeft({
               variant="ghost"
               size="icon"
               className="h-8 w-8"
-              onClick={() => setShowSearchModal(true)}
+              data-tour="global-search"
+              onClick={() => setGlobalSearchOpen(true)}
             >
               <Search className="!h-5 !w-5" />
             </Button>
@@ -410,6 +422,7 @@ export function SidebarLeft({
                 variant="outline"
                 size="sm"
                 className="w-full shadow-none justify-between h-10 px-3 group/new-chat"
+                data-tour="new-agent-button"
                 asChild
               >
                 <Link
@@ -489,7 +502,7 @@ export function SidebarLeft({
 
           {/* Content area */}
           <div className="px-6 flex-1 overflow-hidden">
-            {activeView === 'chats' && <NavAgents />}
+            {activeView === 'chats' && <div data-tour="sidebar-agents"><NavAgents /></div>}
             {activeView === 'workers' && <NavWorkers />}
             {activeView === 'workspaces' && <NavWorkspaces />}
             {activeView === 'starred' && (
@@ -505,8 +518,188 @@ export function SidebarLeft({
             <ActiveRunsSection />
           </div>
 
-          {/* Developers link */}
-          <div className="px-6 pb-2">
+          {/* Shared + Developers links */}
+          <div className="px-6 pb-2 space-y-0.5">
+            <Link
+              href="/shared"
+              className={cn(
+                "flex items-center gap-2 rounded-lg px-3 py-2 text-sm transition-colors",
+                "text-muted-foreground hover:text-foreground hover:bg-muted/50",
+                pathname === '/shared' && "text-foreground bg-muted/50"
+              )}
+              onClick={() => isMobile && setOpenMobile(false)}
+            >
+              <Share2 className="h-4 w-4" />
+              Shared
+            </Link>
+            <Link
+              href="/favorites"
+              className={cn(
+                "flex items-center gap-2 rounded-lg px-3 py-2 text-sm transition-colors",
+                "text-muted-foreground hover:text-foreground hover:bg-muted/50",
+                pathname === '/favorites' && "text-foreground bg-muted/50"
+              )}
+              onClick={() => isMobile && setOpenMobile(false)}
+            >
+              <Star className="h-4 w-4" />
+              Favorites
+            </Link>
+            <Link
+              href="/marketplace"
+              className={cn(
+                "flex items-center gap-2 rounded-lg px-3 py-2 text-sm transition-colors",
+                "text-muted-foreground hover:text-foreground hover:bg-muted/50",
+                pathname?.startsWith('/marketplace') && "text-foreground bg-muted/50"
+              )}
+              onClick={() => isMobile && setOpenMobile(false)}
+            >
+              <Store className="h-4 w-4" />
+              Marketplace
+            </Link>
+            <Link
+              href="/agents/templates"
+              className={cn(
+                "flex items-center gap-2 rounded-lg px-3 py-2 text-sm transition-colors",
+                "text-muted-foreground hover:text-foreground hover:bg-muted/50",
+                pathname?.startsWith('/agents/templates') && "text-foreground bg-muted/50"
+              )}
+              onClick={() => isMobile && setOpenMobile(false)}
+            >
+              <LayoutTemplate className="h-4 w-4" />
+              Templates
+            </Link>
+            <Link
+              href="/prompts"
+              className={cn(
+                "flex items-center gap-2 rounded-lg px-3 py-2 text-sm transition-colors",
+                "text-muted-foreground hover:text-foreground hover:bg-muted/50",
+                pathname === '/prompts' && "text-foreground bg-muted/50"
+              )}
+              onClick={() => isMobile && setOpenMobile(false)}
+            >
+              <BookOpen className="h-4 w-4" />
+              Prompts
+            </Link>
+            <Link
+              href="/activity"
+              className={cn(
+                "flex items-center gap-2 rounded-lg px-3 py-2 text-sm transition-colors",
+                "text-muted-foreground hover:text-foreground hover:bg-muted/50",
+                pathname === '/activity' && "text-foreground bg-muted/50"
+              )}
+              onClick={() => isMobile && setOpenMobile(false)}
+            >
+              <Clock className="h-4 w-4" />
+              Activity
+            </Link>
+            <Link
+              href="/runs"
+              className={cn(
+                "flex items-center gap-2 rounded-lg px-3 py-2 text-sm transition-colors",
+                "text-muted-foreground hover:text-foreground hover:bg-muted/50",
+                pathname?.startsWith('/runs') && "text-foreground bg-muted/50"
+              )}
+              onClick={() => isMobile && setOpenMobile(false)}
+            >
+              <Play className="h-4 w-4" />
+              Runs
+            </Link>
+            <Link
+              href="/monitoring"
+              className={cn(
+                "flex items-center gap-2 rounded-lg px-3 py-2 text-sm transition-colors",
+                "text-muted-foreground hover:text-foreground hover:bg-muted/50",
+                pathname?.startsWith('/monitoring') && "text-foreground bg-muted/50"
+              )}
+              onClick={() => isMobile && setOpenMobile(false)}
+            >
+              <Activity className="h-4 w-4" />
+              Monitoring
+            </Link>
+            <Link
+              href="/monitoring/incidents"
+              className={cn(
+                "flex items-center gap-2 rounded-lg px-3 py-2 text-sm transition-colors",
+                "text-muted-foreground hover:text-foreground hover:bg-muted/50",
+                pathname === '/monitoring/incidents' && "text-foreground bg-muted/50"
+              )}
+              onClick={() => isMobile && setOpenMobile(false)}
+            >
+              <ShieldAlert className="h-4 w-4" />
+              Incidents
+            </Link>
+            <Link
+              href="/schedules"
+              className={cn(
+                "flex items-center gap-2 rounded-lg px-3 py-2 text-sm transition-colors",
+                "text-muted-foreground hover:text-foreground hover:bg-muted/50",
+                pathname?.startsWith('/schedules') && "text-foreground bg-muted/50"
+              )}
+              onClick={() => isMobile && setOpenMobile(false)}
+            >
+              <CalendarClock className="h-4 w-4" />
+              Schedules
+            </Link>
+            <Link
+              href="/pipelines"
+              className={cn(
+                "flex items-center gap-2 rounded-lg px-3 py-2 text-sm transition-colors",
+                "text-muted-foreground hover:text-foreground hover:bg-muted/50",
+                pathname?.startsWith('/pipelines') && "text-foreground bg-muted/50"
+              )}
+              onClick={() => isMobile && setOpenMobile(false)}
+            >
+              <GitBranch className="h-4 w-4" />
+              Pipelines
+            </Link>
+            <Link
+              href="/agents/leaderboard"
+              className={cn(
+                "flex items-center gap-2 rounded-lg px-3 py-2 text-sm transition-colors",
+                "text-muted-foreground hover:text-foreground hover:bg-muted/50",
+                pathname === '/agents/leaderboard' && "text-foreground bg-muted/50"
+              )}
+              onClick={() => isMobile && setOpenMobile(false)}
+            >
+              <Trophy className="h-4 w-4" />
+              Leaderboard
+            </Link>
+            <Link
+              href="/agents/ab-tests"
+              className={cn(
+                "flex items-center gap-2 rounded-lg px-3 py-2 text-sm transition-colors",
+                "text-muted-foreground hover:text-foreground hover:bg-muted/50",
+                pathname?.startsWith('/agents/ab-tests') && "text-foreground bg-muted/50"
+              )}
+              onClick={() => isMobile && setOpenMobile(false)}
+            >
+              <FlaskConical className="h-4 w-4" />
+              A/B Tests
+            </Link>
+            <Link
+              href="/reports"
+              className={cn(
+                "flex items-center gap-2 rounded-lg px-3 py-2 text-sm transition-colors",
+                "text-muted-foreground hover:text-foreground hover:bg-muted/50",
+                pathname?.startsWith('/reports') && "text-foreground bg-muted/50"
+              )}
+              onClick={() => isMobile && setOpenMobile(false)}
+            >
+              <FileBarChart className="h-4 w-4" />
+              Reports
+            </Link>
+            <Link
+              href="/billing/plans"
+              className={cn(
+                "flex items-center gap-2 rounded-lg px-3 py-2 text-sm transition-colors",
+                "text-muted-foreground hover:text-foreground hover:bg-muted/50",
+                pathname?.startsWith('/billing') && "text-foreground bg-muted/50"
+              )}
+              onClick={() => isMobile && setOpenMobile(false)}
+            >
+              <CreditCard className="h-4 w-4" />
+              Billing
+            </Link>
             <Link
               href="/developers"
               className={cn(
@@ -565,6 +758,10 @@ export function SidebarLeft({
       <ThreadSearchModal
         open={showSearchModal}
         onOpenChange={setShowSearchModal}
+      />
+      <GlobalSearchDialog
+        open={globalSearchOpen}
+        onOpenChange={setGlobalSearchOpen}
       />
     </Sidebar>
   );

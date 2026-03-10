@@ -3,10 +3,10 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getCostSummary, getBudgetAlerts, setBudgetThreshold, type CostSummary, type BudgetAlert } from '@/lib/api/budget-alerts';
 
-export function useCostSummary() {
+export function useCostSummary(period?: string) {
   return useQuery<CostSummary>({
-    queryKey: ['cost-summary'],
-    queryFn: getCostSummary,
+    queryKey: ['cost-summary', period],
+    queryFn: () => getCostSummary(period),
     staleTime: 60_000,
   });
 }

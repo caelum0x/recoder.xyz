@@ -39,9 +39,10 @@ export interface SpreadsheetStreamOperation {
   is_header?: boolean;
   is_totals?: boolean;
   name?: string;
-  columns?: Array<{ width: number }>;
+  columns?: Array<{ width: number }> | Record<string, number>;
   start_cell?: string;
   end_cell?: string;
+  clear_existing?: boolean;
   progress?: number;
   total?: number;
   total_rows?: number;
@@ -177,7 +178,7 @@ export const useSpreadsheetStore = create<SpreadsheetState>()(
         
         switch (action) {
           case 'start': {
-            const shouldClear = (operation as any).clear_existing === true;
+            const shouldClear = operation.clear_existing === true;
             
             if (shouldClear || get().sheets.length === 0 || (get().sheets[0].rows?.length === 0)) {
               const emptySheet = createEmptySheet('Sheet1');
@@ -254,9 +255,9 @@ export const useSpreadsheetStore = create<SpreadsheetState>()(
           }
           
           case 'format_range': {
-            if ((operation as any).start_cell && (operation as any).end_cell && operation.style) {
-              const startCell = (operation as any).start_cell as string;
-              const endCell = (operation as any).end_cell as string;
+            if (operation.start_cell && operation.end_cell && operation.style) {
+              const startCell = operation.start_cell;
+              const endCell = operation.end_cell;
               
               const startMatch = startCell.match(/^([A-Z]+)(\d+)$/i);
               const endMatch = endCell.match(/^([A-Z]+)(\d+)$/i);
@@ -283,9 +284,9 @@ export const useSpreadsheetStore = create<SpreadsheetState>()(
           }
           
           case 'merge_cells': {
-            const startCell = (operation as any).start_cell as string;
-            const endCell = (operation as any).end_cell as string;
-            const value = (operation as any).value;
+            const startCell = operation.start_cell;
+            const endCell = operation.end_cell;
+            const value = operation.value;
             const style = operation.style || {};
             
             if (startCell) {
@@ -316,7 +317,7 @@ export const useSpreadsheetStore = create<SpreadsheetState>()(
           }
           
           case 'set_column_width': {
-            const columns = (operation as any).columns as Record<string, number>;
+            const columns = operation.columns as Record<string, number> | undefined;
             if (columns) {
               set((state) => {
                 const newSheets = [...state.sheets];
@@ -355,8 +356,8 @@ export const useSpreadsheetStore = create<SpreadsheetState>()(
           }
             
           case 'clear_range': {
-            const startCell = (operation as any).start_cell;
-            const endCell = (operation as any).end_cell;
+            const startCell = operation.start_cell;
+            const endCell = operation.end_cell;
             
             if (startCell && endCell) {
               const startMatch = startCell.match(/^([A-Z]+)(\d+)$/i);

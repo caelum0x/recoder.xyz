@@ -65,7 +65,7 @@ let _idCounter = 0;
 export function generateId(prefix: string): string {
   const ts = Date.now().toString(36);
   const counter = (_idCounter++).toString(36).padStart(4, '0');
-  const rand = Math.random().toString(36).slice(2, 6);
+  const rand = crypto.randomUUID().slice(0, 4);
   return `${prefix}_${ts}${counter}${rand}`;
 }
 

@@ -119,8 +119,8 @@ export async function POST(request: NextRequest) {
         name: subscriber.name,
       },
     });
-  } catch (error: any) {
-    console.error('Newsletter subscription error:', error);
+  } catch (error) {
+    logger.error('Newsletter subscription error:', error);
 
     // Handle unique constraint violation (race condition on duplicate email)
     if (error.code === 'P2002') {
@@ -143,7 +143,7 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const email = searchParams.get('email');
 
-    if (!email || !isValidEmail(email)) {
+    if (!email || !z.string().email().max(255).safeParse(email).success) {
       return NextResponse.json(
         { success: false, error: 'Valid email address is required' },
         { status: 400 }
@@ -176,8 +176,8 @@ export async function GET(request: NextRequest) {
       name: subscriber.name,
       subscribedSince: subscriber.subscribedAt,
     });
-  } catch (error: any) {
-    console.error('Newsletter status check error:', error);
+  } catch (error) {
+    logger.error('Newsletter status check error:', error);
     return NextResponse.json(
       { success: false, error: 'Failed to check subscription status' },
       { status: 500 }
@@ -185,8 +185,3 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// Helper function to validate email format
-function isValidEmail(email: string): boolean {
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  return emailRegex.test(email);
-}

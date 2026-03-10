@@ -45,6 +45,8 @@
     "node": ">=18.18.0"
   },
   "dependencies": {
+    "@recoder/design-tokens": "workspace:*",
+    "@recoder/ecosystem-config": "workspace:*",
     "@recoder/shared": "workspace:*",
     "@recoder/stream": "workspace:*",
     "@recoder/vault": "workspace:*",

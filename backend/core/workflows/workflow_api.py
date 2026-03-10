@@ -1,11 +1,13 @@
 """FastAPI CRUD routes for workflows, nodes, and edges."""
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Request, Depends
 from pydantic import BaseModel
 from typing import Optional
-import logging
 
-logger = logging.getLogger(__name__)
+from core.utils.auth_utils import verify_and_get_user_id_from_jwt
+from core.services.db import execute, execute_one
+from core.utils.logger import logger
+
 router = APIRouter(prefix="/workflows", tags=["workflows"])
 
 
@@ -30,7 +32,10 @@ class EdgeCreateRequest(BaseModel):
 
 
 @router.post("", summary="Create a workflow")
-async def create_workflow(req: WorkflowCreateRequest, request: Request):
+async def create_workflow(
+    req: WorkflowCreateRequest,
+    user_id: str = Depends(verify_and_get_user_id_from_jwt),
+):
     """Create a new workflow for an agent."""
     return {
         "id": "placeholder",
@@ -41,7 +46,10 @@ async def create_workflow(req: WorkflowCreateRequest, request: Request):
 
 
 @router.get("/templates/list", summary="List workflow templates")
-async def list_templates(category: str = None):
+async def list_templates(
+    category: str = None,
+    user_id: str = Depends(verify_and_get_user_id_from_jwt),
+):
     """List available workflow templates."""
     from core.workflows.templates import get_templates
     return get_templates(category)
@@ -68,9 +76,10 @@ class WorkflowsOverviewResponse(BaseModel):
 
 
 @router.get("/analytics/overview", response_model=WorkflowsOverviewResponse, summary="Get workflows analytics overview")
-async def workflows_overview(request: Request):
+async def workflows_overview(
+    user_id: str = Depends(verify_and_get_user_id_from_jwt),
+):
     """Aggregate analytics across all workflows for the current user."""
-    db = request.app.state.db
     try:
         sql = """
         SELECT
@@ -81,9 +90,10 @@ async def workflows_overview(request: Request):
             AVG(EXTRACT(EPOCH FROM (we.completed_at - we.started_at))) FILTER (WHERE we.completed_at IS NOT NULL) as avg_duration
         FROM workflows w
         LEFT JOIN workflow_executions we ON w.id = we.workflow_id
+        WHERE w.account_id = :account_id
         """
-        stats = await db.execute(sql)
-        row = stats[0] if stats else {}
+        rows = await execute(sql, {"account_id": user_id})
+        row = rows[0] if rows else {}
 
         total_executions = row.get("total_executions", 0) or 0
         success_count = row.get("success_count", 0) or 0
@@ -93,11 +103,12 @@ async def workflows_overview(request: Request):
         SELECT w.name, COUNT(we.id) as exec_count
         FROM workflows w
         JOIN workflow_executions we ON w.id = we.workflow_id
+        WHERE w.account_id = :account_id
         GROUP BY w.id, w.name
         ORDER BY exec_count DESC
         LIMIT 1
         """
-        most_used = await db.execute(most_used_sql)
+        most_used = await execute(most_used_sql, {"account_id": user_id})
         most_used_name = most_used[0]["name"] if most_used else ""
 
         return WorkflowsOverviewResponse(
@@ -108,13 +119,19 @@ async def workflows_overview(request: Request):
             most_used_workflow=most_used_name,
             avg_execution_time_seconds=round(float(row.get("avg_duration", 0) or 0), 2),
         )
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error fetching workflows overview: {e}")
         raise HTTPException(status_code=500, detail="Failed to fetch workflows overview")
 
 
 @router.post("/{workflow_id}/from-template", summary="Create workflow from template")
-async def create_from_template(workflow_id: str, request: Request):
+async def create_from_template(
+    workflow_id: str,
+    request: Request,
+    user_id: str = Depends(verify_and_get_user_id_from_jwt),
+):
     """Apply a template to a workflow, creating nodes and edges from the template definition."""
     data = await request.json()
     template_name = data.get("template_name")
@@ -132,32 +149,49 @@ async def create_from_template(workflow_id: str, request: Request):
 
 
 @router.get("/{workflow_id}", summary="Get workflow details")
-async def get_workflow(workflow_id: str, request: Request):
+async def get_workflow(
+    workflow_id: str,
+    user_id: str = Depends(verify_and_get_user_id_from_jwt),
+):
     """Get a workflow with its nodes and edges."""
     return {"workflow": {"id": workflow_id}, "nodes": [], "edges": []}
 
 
 @router.get("/agent/{agent_id}", summary="List workflows for an agent")
-async def list_agent_workflows(agent_id: str, request: Request):
+async def list_agent_workflows(
+    agent_id: str,
+    user_id: str = Depends(verify_and_get_user_id_from_jwt),
+):
     """List all workflows for an agent."""
     return []
 
 
 @router.put("/{workflow_id}", summary="Update a workflow")
-async def update_workflow(workflow_id: str, request: Request):
+async def update_workflow(
+    workflow_id: str,
+    request: Request,
+    user_id: str = Depends(verify_and_get_user_id_from_jwt),
+):
     """Update a workflow."""
     data = await request.json()
     return {"id": workflow_id, "updated": True, **data}
 
 
 @router.delete("/{workflow_id}", summary="Delete a workflow")
-async def delete_workflow(workflow_id: str, request: Request):
+async def delete_workflow(
+    workflow_id: str,
+    user_id: str = Depends(verify_and_get_user_id_from_jwt),
+):
     """Delete a workflow."""
     return {"deleted": True}
 
 
 @router.post("/{workflow_id}/nodes", summary="Add a node to workflow")
-async def add_node(workflow_id: str, req: NodeCreateRequest, request: Request):
+async def add_node(
+    workflow_id: str,
+    req: NodeCreateRequest,
+    user_id: str = Depends(verify_and_get_user_id_from_jwt),
+):
     """Add a node to a workflow."""
     return {
         "id": "placeholder",
@@ -168,7 +202,11 @@ async def add_node(workflow_id: str, req: NodeCreateRequest, request: Request):
 
 
 @router.post("/{workflow_id}/edges", summary="Add an edge between nodes")
-async def add_edge(workflow_id: str, req: EdgeCreateRequest, request: Request):
+async def add_edge(
+    workflow_id: str,
+    req: EdgeCreateRequest,
+    user_id: str = Depends(verify_and_get_user_id_from_jwt),
+):
     """Add an edge between two nodes."""
     return {
         "id": "placeholder",
@@ -179,19 +217,29 @@ async def add_edge(workflow_id: str, req: EdgeCreateRequest, request: Request):
 
 
 @router.delete("/nodes/{node_id}", summary="Delete a workflow node")
-async def delete_node(node_id: str, request: Request):
+async def delete_node(
+    node_id: str,
+    user_id: str = Depends(verify_and_get_user_id_from_jwt),
+):
     """Delete a node."""
     return {"deleted": True}
 
 
 @router.delete("/edges/{edge_id}", summary="Delete a workflow edge")
-async def delete_edge(edge_id: str, request: Request):
+async def delete_edge(
+    edge_id: str,
+    user_id: str = Depends(verify_and_get_user_id_from_jwt),
+):
     """Delete an edge."""
     return {"deleted": True}
 
 
 @router.post("/{workflow_id}/execute", summary="Execute a workflow")
-async def execute_workflow(workflow_id: str, request: Request):
+async def execute_workflow(
+    workflow_id: str,
+    request: Request,
+    user_id: str = Depends(verify_and_get_user_id_from_jwt),
+):
     """Start a workflow execution."""
     data = await request.json() if request.headers.get("content-type") == "application/json" else {}
     return {
@@ -204,40 +252,66 @@ async def execute_workflow(workflow_id: str, request: Request):
 
 
 @router.get("/{workflow_id}/executions", summary="List workflow executions")
-async def list_executions(workflow_id: str, request: Request):
+async def list_executions(
+    workflow_id: str,
+    user_id: str = Depends(verify_and_get_user_id_from_jwt),
+):
     """List execution history for a workflow."""
     return []
 
 
 @router.get("/executions/{execution_id}", summary="Get execution status")
-async def get_execution(execution_id: str, request: Request):
+async def get_execution(
+    execution_id: str,
+    user_id: str = Depends(verify_and_get_user_id_from_jwt),
+):
     """Get details of a specific execution."""
     return {"execution": {"id": execution_id, "status": "completed"}, "node_executions": []}
 
 
 @router.get("/approvals/pending", summary="List pending approvals")
-async def list_pending_approvals(request: Request):
+async def list_pending_approvals(
+    user_id: str = Depends(verify_and_get_user_id_from_jwt),
+):
     """List all pending approval gates for the current user."""
     return []
 
 
 @router.post("/approvals/{approval_id}/approve", summary="Approve an approval gate")
-async def approve_gate(approval_id: str, request: Request):
+async def approve_gate(
+    approval_id: str,
+    user_id: str = Depends(verify_and_get_user_id_from_jwt),
+):
     """Approve a pending approval gate."""
     return {"id": approval_id, "status": "approved"}
 
 
 @router.post("/approvals/{approval_id}/reject", summary="Reject an approval gate")
-async def reject_gate(approval_id: str, request: Request):
+async def reject_gate(
+    approval_id: str,
+    user_id: str = Depends(verify_and_get_user_id_from_jwt),
+):
     """Reject a pending approval gate."""
     return {"id": approval_id, "status": "rejected"}
 
 
 @router.get("/{workflow_id}/analytics", response_model=WorkflowAnalyticsResponse, summary="Get workflow analytics")
-async def workflow_analytics(workflow_id: str, request: Request):
+async def workflow_analytics(
+    workflow_id: str,
+    user_id: str = Depends(verify_and_get_user_id_from_jwt),
+):
     """Analytics for a specific workflow: execution counts, success rate, bottleneck nodes, failure hotspots."""
-    db = request.app.state.db
     try:
+        # Verify the workflow belongs to the authenticated user
+        ownership_sql = """
+        SELECT id FROM workflows
+        WHERE id = :workflow_id AND account_id = :account_id
+        LIMIT 1
+        """
+        owner_check = await execute_one(ownership_sql, {"workflow_id": workflow_id, "account_id": user_id})
+        if not owner_check:
+            raise HTTPException(status_code=404, detail="Workflow not found or access denied")
+
         # Get execution stats
         stats_sql = """
         SELECT
@@ -247,10 +321,10 @@ async def workflow_analytics(workflow_id: str, request: Request):
             AVG(EXTRACT(EPOCH FROM (completed_at - started_at))) FILTER (WHERE completed_at IS NOT NULL) as avg_duration,
             COALESCE(SUM(total_cost), 0) as total_cost
         FROM workflow_executions
-        WHERE workflow_id = $1
+        WHERE workflow_id = :workflow_id
         """
-        stats = await db.execute(stats_sql, workflow_id)
-        row = stats[0] if stats else {}
+        rows = await execute(stats_sql, {"workflow_id": workflow_id})
+        row = rows[0] if rows else {}
 
         execution_count = row.get("execution_count", 0) or 0
         success_count = row.get("success_count", 0) or 0
@@ -268,12 +342,12 @@ async def workflow_analytics(workflow_id: str, request: Request):
         FROM workflow_node_executions wne
         JOIN workflow_nodes wn ON wne.node_id = wn.id
         JOIN workflow_executions we ON wne.execution_id = we.id
-        WHERE we.workflow_id = $1 AND wne.completed_at IS NOT NULL
+        WHERE we.workflow_id = :workflow_id AND wne.completed_at IS NOT NULL
         GROUP BY wne.node_id, wn.label, wn.node_type
         ORDER BY avg_seconds DESC
         LIMIT 5
         """
-        bottlenecks = await db.execute(bottleneck_sql, workflow_id)
+        bottlenecks = await execute(bottleneck_sql, {"workflow_id": workflow_id})
         bottleneck_nodes = [
             {"node_id": b["node_id"], "label": b["label"], "node_type": b["node_type"],
              "avg_seconds": round(float(b["avg_seconds"] or 0), 2), "exec_count": b["exec_count"]}
@@ -291,13 +365,13 @@ async def workflow_analytics(workflow_id: str, request: Request):
         FROM workflow_node_executions wne
         JOIN workflow_nodes wn ON wne.node_id = wn.id
         JOIN workflow_executions we ON wne.execution_id = we.id
-        WHERE we.workflow_id = $1
+        WHERE we.workflow_id = :workflow_id
         GROUP BY wne.node_id, wn.label, wn.node_type
         HAVING COUNT(*) FILTER (WHERE wne.status = 'failed') > 0
         ORDER BY failures DESC
         LIMIT 5
         """
-        failures = await db.execute(failure_sql, workflow_id)
+        failures = await execute(failure_sql, {"workflow_id": workflow_id})
         failure_hotspots = [
             {"node_id": f["node_id"], "label": f["label"], "node_type": f["node_type"],
              "total": f["total"], "failures": f["failures"],
@@ -315,6 +389,8 @@ async def workflow_analytics(workflow_id: str, request: Request):
             bottleneck_nodes=bottleneck_nodes,
             failure_hotspots=failure_hotspots,
         )
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error fetching workflow analytics: {e}")
         raise HTTPException(status_code=500, detail="Failed to fetch workflow analytics")

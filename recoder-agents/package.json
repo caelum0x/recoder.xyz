@@ -74,8 +74,8 @@
     "@recoder/auth": "workspace:*",
     "@recoder/design-tokens": "workspace:*",
     "@recoder/ecosystem-config": "workspace:*",
-    "@recoder/ui": "workspace:*",
     "@recoder/shared": "workspace:*",
+    "@recoder/ui": "workspace:*",
     "@shikijs/transformers": "^3.12.0",
     "@silevis/reactgrid": "^4.1.17",
     "@stripe/react-stripe-js": "^5.5.0",
@@ -149,6 +149,7 @@
     "@xterm/addon-fit": "^0.10.0",
     "@xterm/addon-web-links": "^0.11.0",
     "@xterm/xterm": "^5.5.0",
+    "@xyflow/react": "catalog:",
     "autoprefixer": "10.4.17",
     "better-auth": "^1.2.0",
     "canvas-confetti": "^1.9.4",
@@ -234,8 +235,8 @@
     "zustand": "^5.0.3"
   },
   "devDependencies": {
-    "@next/bundle-analyzer": "^15.5.0",
     "@eslint/eslintrc": "^3",
+    "@next/bundle-analyzer": "^15.5.0",
     "@tailwindcss/postcss": "^4.1.4",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",

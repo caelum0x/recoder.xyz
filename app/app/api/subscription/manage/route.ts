@@ -5,8 +5,9 @@ import { headers } from 'next/headers';
 import crypto from 'crypto';
 
 import { prisma } from '@/lib/prisma';
+import { logger } from '@/lib/logger';
 
-const BACKEND_URL = process.env.BACKEND_URL || 'http://localhost:3001';
+const BACKEND_URL = process.env.BACKEND_URL || (process.env.NODE_ENV === 'production' ? undefined : 'http://localhost:3100');
 
 /**
  * GET /api/subscription/manage
@@ -69,7 +70,7 @@ export async function GET(request: NextRequest) {
     });
 
   } catch (error) {
-    console.error('Get subscription error:', error);
+    logger.error('Get subscription error:', { error: error instanceof Error ? error.message : String(error) });
     
     return NextResponse.json(
       { 
@@ -176,7 +177,7 @@ export async function POST(request: NextRequest) {
     });
 
   } catch (error) {
-    console.error('Update subscription error:', error);
+    logger.error('Update subscription error:', { error: error instanceof Error ? error.message : String(error) });
     
     return NextResponse.json(
       { 
@@ -279,7 +280,7 @@ export async function DELETE(request: NextRequest) {
     }
 
   } catch (error) {
-    console.error('Cancel subscription error:', error);
+    logger.error('Cancel subscription error:', { error: error instanceof Error ? error.message : String(error) });
     
     return NextResponse.json(
       { 

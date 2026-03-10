@@ -8,7 +8,7 @@
  * logged and swallowed so they never block the agency workflow.
  */
 
-const DEFAULT_BASE_URL = process.env.DOCKER_BACKEND_URL || 'http://localhost:7777';
+const DEFAULT_BASE_URL = process.env.DOCKER_BACKEND_URL || (process.env.NODE_ENV === 'production' ? 'http://127.0.0.1:3100' : 'http://localhost:7777');
 
 export interface AMBChannel {
   id: string;

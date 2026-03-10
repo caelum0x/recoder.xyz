@@ -8,8 +8,8 @@ import {
 
 export type GiselleOptions = {
 	/**
-	 * Base URL of the Studio instance (e.g. "https://studio.recoder.xyz").
-	 * Defaults to "https://studio.recoder.xyz".
+	 * Base URL of the Agency instance (e.g. "https://agency.recoder.xyz").
+	 * Defaults to "https://agency.recoder.xyz".
 	 */
 	baseUrl?: string;
 	/**
@@ -91,7 +91,7 @@ export type AppListResult = {
 	apps: AppListItem[];
 };
 
-const defaultBaseUrl = "https://studio.recoder.xyz";
+const defaultBaseUrl = "https://agency.recoder.xyz";
 const defaultPollIntervalMs = 1000;
 const defaultTimeoutMs = 20 * 60 * 1000;
 const maxInlineFileDecodedBytes = 1024 * 1024 * 3;

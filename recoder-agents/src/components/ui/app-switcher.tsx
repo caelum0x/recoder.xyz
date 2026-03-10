@@ -32,6 +32,7 @@ export function AppSwitcher() {
             <a
               key={app.id}
               href={app.href}
+              rel="noopener noreferrer"
               className={`flex items-center justify-between rounded-md px-3 py-2 text-sm transition-colors ${
                 isCurrent
                   ? 'bg-accent text-accent-foreground'

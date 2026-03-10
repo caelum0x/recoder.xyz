@@ -38,7 +38,7 @@ export async function POST(request: NextRequest) {
       || process.env.NEXT_PUBLIC_DOCKER_URL
       || process.env.DOCKER_BACKEND_URL
       || process.env.NEXT_PUBLIC_DOCKER_BACKEND_URL
-      || 'http://localhost:3100';
+      || (process.env.NODE_ENV === 'production' ? 'https://docker.recoder.xyz' : 'http://localhost:3100');
 
     try {
       const authHeader = request.headers.get('authorization');

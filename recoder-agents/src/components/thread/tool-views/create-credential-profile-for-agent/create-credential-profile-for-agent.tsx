@@ -54,7 +54,6 @@ export function CreateCredentialProfileForAgentToolView({
 
   // Defensive check - ensure toolCall is defined
   if (!toolCall || !extractedData) {
-    console.warn('CreateCredentialProfileForAgentToolView: toolCall is undefined. Tool views should use structured props.');
     return null;
   }
 

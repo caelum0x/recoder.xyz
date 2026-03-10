@@ -388,7 +388,7 @@ export function createCollaborationServer(server: http.Server, path: string = '/
     // In migration mode, allow anonymous users
     if (!user && !REQUIRE_AUTH) {
       console.warn(`[Collab] WARNING: Anonymous connection to ${projectId}/${filePath}`);
-      user = { userId: 'anonymous-' + Math.random().toString(36).substring(7) };
+      user = { userId: 'anonymous-' + crypto.randomUUID().slice(0, 8) };
     }
 
     // Verify project access

@@ -20,17 +20,23 @@ export default function ProjectsPage() {
   const { data: session, isPending } = useSession();
   const [loading, setLoading] = useState(true);
   const [projects, setProjects] = useState<Project[]>([]);
+  const redirectToSignIn = () => {
+    const currentPath = typeof window !== 'undefined'
+      ? `${window.location.pathname}${window.location.search}`
+      : '/projects';
+    router.push(`/auth/signin?redirect=${encodeURIComponent(currentPath)}`);
+  };
 
   useEffect(() => {
     if (!isPending && !session) {
-      router.push('/auth/signin');
+      redirectToSignIn();
       return;
     }
 
     if (!isPending && session) {
       void loadProjects();
     }
-  }, [isPending, router, session]);
+  }, [isPending, session]);
 
   const loadProjects = async () => {
     try {

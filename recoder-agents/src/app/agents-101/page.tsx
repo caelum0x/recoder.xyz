@@ -863,7 +863,7 @@ const SlideContent = ({ slide }: { slide: Slide }) => {
             </motion.h2>
           </div>
           <motion.div
-            className="bg-[#1a1a1a] rounded-2xl overflow-hidden border border-white/10"
+            className="bg-neutral-900 rounded-2xl overflow-hidden border border-white/10"
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.2 }}

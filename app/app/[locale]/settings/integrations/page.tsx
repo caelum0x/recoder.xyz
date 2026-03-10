@@ -61,11 +61,23 @@ export default function IntegrationsSettingsPage() {
     }
   ]);
 
+  const [webhooks, setWebhooks] = useState<{ url: string; events: string[]; enabled: boolean }[]>([]);
+  const [newWebhookUrl, setNewWebhookUrl] = useState('');
+  const [newWebhookEvents, setNewWebhookEvents] = useState<string[]>(['agent.completed']);
+  const [webhookLoading, setWebhookLoading] = useState(false);
+  const [webhookError, setWebhookError] = useState('');
+
+  const webhookEventTypes = [
+    { id: 'agent.completed', label: 'Agent Completed' },
+    { id: 'agent.failed', label: 'Agent Failed' },
+    { id: 'project.created', label: 'Project Created' },
+    { id: 'project.deployed', label: 'Project Deployed' },
+  ];
+
   const [comingSoon] = useState([
     { name: 'Slack', icon: MessageSquare, description: 'Team notifications and collaboration' },
     { name: 'Discord', icon: MessageSquare, description: 'Community integration and bots' },
     { name: 'GitLab', icon: GitBranch, description: 'Source code management and CI/CD' },
-    { name: 'Webhooks', icon: Webhook, description: 'Custom event triggers and automation' }
   ]);
 
   // Load integration settings on mount
@@ -76,34 +88,98 @@ export default function IntegrationsSettingsPage() {
   async function loadIntegrationSettings() {
     try {
       setPageLoading(true);
-      const response = await fetch('/api/auth/oauth-status');
-      const data = await response.json();
+      const [oauthRes, integrationsRes] = await Promise.all([
+        fetch('/api/auth/oauth-status'),
+        fetch('/api/settings/integrations'),
+      ]);
+      const oauthData = await oauthRes.json();
+      const integrationsData = integrationsRes.ok ? await integrationsRes.json() : null;
 
-      if (data.success && data.providers) {
-        // Update integrations based on actual OAuth connections
+      if (oauthData.success && oauthData.providers) {
         setIntegrations(prev => prev.map(integration => {
           if (integration.id === 'github') {
             return {
               ...integration,
-              connected: data.providers.github || false,
-              lastSync: data.providers.github ? 'Connected' : undefined
+              connected: oauthData.providers.github || false,
+              lastSync: oauthData.providers.github ? 'Connected' : undefined
             };
           }
           if (integration.id === 'google') {
             return {
               ...integration,
-              connected: data.providers.google || false,
-              lastSync: data.providers.google ? 'Connected' : undefined
+              connected: oauthData.providers.google || false,
+              lastSync: oauthData.providers.google ? 'Connected' : undefined
             };
           }
           return integration;
         }));
       }
+
+      if (integrationsData?.success && integrationsData.settings?.webhooks) {
+        setWebhooks(integrationsData.settings.webhooks);
+      }
     } catch (err) {
-      console.error('Failed to load OAuth status:', err);
+      console.error('Failed to load integration settings:', err);
     } finally {
       setPageLoading(false);
     }
+  }
+
+  async function saveWebhooks(updated: typeof webhooks) {
+    try {
+      await fetch('/api/settings/integrations', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ webhooks: updated }),
+      });
+      setWebhooks(updated);
+    } catch (err) {
+      console.error('Failed to save webhooks:', err);
+    }
+  }
+
+  async function handleAddWebhook() {
+    setWebhookError('');
+    const trimmed = newWebhookUrl.trim();
+    if (!trimmed) {
+      setWebhookError('Please enter a webhook URL');
+      return;
+    }
+    try {
+      new URL(trimmed);
+    } catch {
+      setWebhookError('Please enter a valid URL');
+      return;
+    }
+    if (!trimmed.startsWith('https://')) {
+      setWebhookError('Webhook URL must use HTTPS');
+      return;
+    }
+    if (newWebhookEvents.length === 0) {
+      setWebhookError('Select at least one event type');
+      return;
+    }
+
+    setWebhookLoading(true);
+    const updated = [...webhooks, { url: trimmed, events: newWebhookEvents, enabled: true }];
+    await saveWebhooks(updated);
+    setNewWebhookUrl('');
+    setNewWebhookEvents(['agent.completed']);
+    setSuccess('Webhook added successfully');
+    setTimeout(() => setSuccess(''), 3000);
+    setWebhookLoading(false);
+  }
+
+  async function handleDeleteWebhook(index: number) {
+    const updated = webhooks.filter((_, i) => i !== index);
+    await saveWebhooks(updated);
+  }
+
+  async function handleToggleWebhook(index: number) {
+    const updated = webhooks.map((wh, i) =>
+      i === index ? { ...wh, enabled: !wh.enabled } : wh
+    );
+    await saveWebhooks(updated);
   }
 
   const handleToggleIntegration = async (integrationId: string) => {
@@ -237,6 +313,116 @@ export default function IntegrationsSettingsPage() {
                 </div>
               );
             })}
+          </div>
+
+          {/* Webhooks */}
+          <div className="mt-8">
+            <h2 className="text-xl font-bold mb-2">Webhooks</h2>
+            <p className="text-sm text-gray-400 mb-6">
+              Receive HTTP POST notifications when events occur on your account.
+            </p>
+
+            {/* Existing webhooks */}
+            {webhooks.length > 0 && (
+              <div className="space-y-3 mb-6">
+                {webhooks.map((wh, idx) => (
+                  <div
+                    key={idx}
+                    className="p-4 rounded-xl border border-white/10 bg-black/50 backdrop-blur-xl flex items-center justify-between"
+                  >
+                    <div className="flex-1 min-w-0 mr-4">
+                      <div className="flex items-center space-x-2 mb-1">
+                        <Webhook className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                        <span className="text-sm font-mono truncate">{wh.url}</span>
+                      </div>
+                      <div className="flex flex-wrap gap-1.5 ml-6">
+                        {wh.events.map((ev) => (
+                          <span key={ev} className="px-2 py-0.5 rounded text-[10px] bg-white/5 text-gray-400 border border-white/5">
+                            {ev}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="flex items-center space-x-2 flex-shrink-0">
+                      <button
+                        onClick={() => handleToggleWebhook(idx)}
+                        className={`px-3 py-1 text-xs rounded-lg border transition-colors ${
+                          wh.enabled
+                            ? 'border-green-500/30 bg-green-500/10 text-green-400'
+                            : 'border-white/10 bg-white/5 text-gray-500'
+                        }`}
+                      >
+                        {wh.enabled ? 'Active' : 'Paused'}
+                      </button>
+                      <button
+                        onClick={() => handleDeleteWebhook(idx)}
+                        className="p-1.5 hover:bg-red-500/10 rounded-lg text-gray-500 hover:text-red-400 transition-colors"
+                        title="Delete webhook"
+                      >
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Add new webhook */}
+            <div className="p-6 rounded-2xl border border-white/10 bg-black/50 backdrop-blur-xl">
+              <h3 className="text-sm font-medium mb-4">Add Webhook</h3>
+              <div className="space-y-4">
+                <div>
+                  <label htmlFor="webhook-url" className="block text-xs text-gray-400 mb-1.5">Endpoint URL (HTTPS)</label>
+                  <input
+                    id="webhook-url"
+                    type="url"
+                    value={newWebhookUrl}
+                    onChange={(e) => setNewWebhookUrl(e.target.value)}
+                    placeholder="https://example.com/webhook"
+                    className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent text-white placeholder-gray-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-400 mb-1.5">Events</label>
+                  <div className="flex flex-wrap gap-2">
+                    {webhookEventTypes.map((evt) => (
+                      <button
+                        key={evt.id}
+                        onClick={() =>
+                          setNewWebhookEvents((prev) =>
+                            prev.includes(evt.id) ? prev.filter((e) => e !== evt.id) : [...prev, evt.id]
+                          )
+                        }
+                        className={`px-3 py-1.5 text-xs rounded-lg border transition-colors ${
+                          newWebhookEvents.includes(evt.id)
+                            ? 'border-orange-500/50 bg-orange-500/10 text-orange-400'
+                            : 'border-white/10 bg-white/5 text-gray-400 hover:border-white/20'
+                        }`}
+                      >
+                        {evt.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                {webhookError && (
+                  <p className="text-sm text-red-400">{webhookError}</p>
+                )}
+                <button
+                  onClick={handleAddWebhook}
+                  disabled={webhookLoading}
+                  className="px-4 py-2 bg-gradient-to-r from-orange-500 to-purple-600 hover:from-orange-600 hover:to-purple-700 text-white rounded-lg font-medium transition-all text-sm disabled:opacity-50 flex items-center space-x-2"
+                >
+                  {webhookLoading ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Webhook className="w-4 h-4" />
+                  )}
+                  <span>Add Webhook</span>
+                </button>
+              </div>
+            </div>
           </div>
 
           {/* Coming Soon */}

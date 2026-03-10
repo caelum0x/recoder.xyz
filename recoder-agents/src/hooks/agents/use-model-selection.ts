@@ -1,9 +1,36 @@
 'use client';
 
 import { useModelStore } from '@/stores/model-store';
-import { useCallback, useEffect, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAccountState } from '@/hooks/billing';
 import { useAuth } from '@/components/AuthProvider';
+
+const CUSTOM_MODELS_STORAGE_KEY = 'customModels';
+
+interface CustomModel {
+  id: string;
+  label: string;
+}
+
+function loadCustomModels(): CustomModel[] {
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = localStorage.getItem(CUSTOM_MODELS_STORAGE_KEY);
+    if (!raw) return [];
+    return JSON.parse(raw) as CustomModel[];
+  } catch {
+    return [];
+  }
+}
+
+function saveCustomModels(models: CustomModel[]) {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem(CUSTOM_MODELS_STORAGE_KEY, JSON.stringify(models));
+  } catch {
+    // localStorage unavailable
+  }
+}
 
 export interface ModelOption {
   id: string;
@@ -96,7 +123,7 @@ export const useModelSelection = () => {
       const defaultModelId = getDefaultModel(accessibleModels);
 
       if (defaultModelId && defaultModelId !== selectedModel) {
-        console.log('🔧 useModelSelection: Setting default model:', defaultModelId, '(tier:', accountState?.subscription?.tier_key, ')');
+        
         setSelectedModel(defaultModelId);
       }
     }
@@ -112,7 +139,7 @@ export const useModelSelection = () => {
     if (wasFree && isNowPaid && prevTierKey.current !== null) {
       const powerModel = availableModels.find(m => m.id === 'recoder/power' && !m.requiresSubscription);
       if (powerModel) {
-        console.log('🚀 useModelSelection: Upgraded to paid tier! Switching to recoder/power');
+        
         setSelectedModel('recoder/power');
       }
     }
@@ -123,7 +150,7 @@ export const useModelSelection = () => {
   const handleModelChange = useCallback((modelId: string) => {
     const model = accessibleModels.find(m => m.id === modelId);
     if (model) {
-      console.log('🔧 useModelSelection: Changing model to:', modelId);
+      
       setSelectedModel(modelId);
     }
   }, [accessibleModels, setSelectedModel]);
@@ -148,11 +175,47 @@ export const useModelSelection = () => {
   // Stable callback for getting actual model ID
   const getActualModelId = useCallback((modelId: string) => modelId, []);
 
-  // Stable no-op callbacks for custom models (not implemented)
-  const refreshCustomModels = useCallback(() => {}, []);
-  const addCustomModel = useCallback((_model: any) => {}, []);
-  const updateCustomModel = useCallback((_id: string, _model: any) => {}, []);
-  const removeCustomModel = useCallback((_id: string) => {}, []);
+  // Custom model state (localStorage-persisted, local mode only)
+  const [customModels, setCustomModels] = useState<CustomModel[]>([]);
+
+  // Load custom models from localStorage on mount
+  useEffect(() => {
+    setCustomModels(loadCustomModels());
+  }, []);
+
+  const refreshCustomModels = useCallback(() => {
+    setCustomModels(loadCustomModels());
+  }, []);
+
+  const addCustomModel = useCallback((model: unknown) => {
+    const m = model as CustomModel;
+    if (!m?.id) return;
+    setCustomModels(prev => {
+      const updated = [...prev, { id: m.id, label: m.label || m.id }];
+      saveCustomModels(updated);
+      return updated;
+    });
+  }, []);
+
+  const updateCustomModel = useCallback((id: string, model: unknown) => {
+    const m = model as CustomModel;
+    if (!m?.id) return;
+    setCustomModels(prev => {
+      const updated = prev.map(cm =>
+        cm.id === id ? { id: m.id, label: m.label || m.id } : cm
+      );
+      saveCustomModels(updated);
+      return updated;
+    });
+  }, []);
+
+  const removeCustomModel = useCallback((id: string) => {
+    setCustomModels(prev => {
+      const updated = prev.filter(cm => cm.id !== id);
+      saveCustomModels(updated);
+      return updated;
+    });
+  }, []);
 
   return {
     selectedModel,
@@ -165,7 +228,7 @@ export const useModelSelection = () => {
     canAccessModel,
     isSubscriptionRequired,
     handleModelChange,
-    customModels: [] as any[],
+    customModels,
     addCustomModel,
     updateCustomModel,
     removeCustomModel,

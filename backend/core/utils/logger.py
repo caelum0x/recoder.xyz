@@ -263,7 +263,7 @@ class FileDebugLogger:
             if key in self._files:
                 try:
                     self._files[key].close()
-                except:
+                except Exception:
                     pass
                 del self._files[key]
                 if key in self._start_times:
@@ -272,7 +272,7 @@ class FileDebugLogger:
             for f in self._files.values():
                 try:
                     f.close()
-                except:
+                except Exception:
                     pass
             self._files.clear()
             self._start_times.clear()
@@ -282,7 +282,7 @@ class FileDebugLogger:
         for key in keys_to_remove:
             try:
                 self._files[key].close()
-            except:
+            except Exception:
                 pass
             del self._files[key]
             if key in self._start_times:

@@ -48,8 +48,8 @@ export class SessionSyncManager {
   generateSyncUrls(syncToken: string): string[] {
     const domains = [
       'web.recoder.xyz',        // Recoder Web IDE
-      'frontend.recoder.xyz',   // Recoder Frontend IDE
-      'studio.recoder.xyz',     // Visual workflow designer
+      'agents.recoder.xyz',     // Recoder Agents
+      'frontend.recoder.xyz',   // Legacy alias for agents
       'agency.recoder.xyz',     // AI agent workflows
       'pm.recoder.xyz',         // Project management
       'openclaw.recoder.xyz',   // Open-source AI tools
@@ -76,7 +76,7 @@ export class SessionSyncManager {
   // Validate sync token
   validateSyncToken(token: string): { isValid: boolean; data?: SessionData } {
     try {
-      const decoded = jwt.verify(token, this.SYNC_SECRET!) as any;
+      const decoded = jwt.verify(token, this.SYNC_SECRET!) as jwt.JwtPayload & SessionData;
       
       return {
         isValid: true,
@@ -159,8 +159,8 @@ export class SessionSyncManager {
     const recoderDomains = [
       'recoder.xyz',
       'web.recoder.xyz',
+      'agents.recoder.xyz',
       'frontend.recoder.xyz',
-      'studio.recoder.xyz',
       'agency.recoder.xyz',
       'pm.recoder.xyz',
       'openclaw.recoder.xyz',
@@ -216,8 +216,8 @@ export class SessionSyncManager {
     const recoderDomains = [
       'recoder.xyz',
       'web.recoder.xyz',
+      'agents.recoder.xyz',
       'frontend.recoder.xyz',
-      'studio.recoder.xyz',
       'agency.recoder.xyz',
       'pm.recoder.xyz',
       'openclaw.recoder.xyz',
@@ -335,23 +335,6 @@ export async function handleSessionSync(request: NextRequest): Promise<NextRespo
       { status: 500 }
     );
   }
-}
-
-// Middleware to inject session sync
-export function withSessionSync(handler: Function) {
-  return async (request: NextRequest, ...args: any[]) => {
-    const sessionSync = SessionSyncManager.getInstance();
-    
-    // Try to extract synced session
-    const syncedSession = sessionSync.extractSessionFromRequest(request);
-    
-    if (syncedSession) {
-      // Add synced session to request context
-      (request as any).syncedSession = syncedSession;
-    }
-
-    return handler(request, ...args);
-  };
 }
 
 // Client-side session sync utilities

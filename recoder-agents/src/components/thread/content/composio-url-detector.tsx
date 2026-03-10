@@ -199,12 +199,7 @@ function detectComposioUrls(content: string): ComposioUrl[] {
       const { toolkitName, toolkitSlug } = extractToolkitInfoFromContext(content, match.index);
       
       // Debug logging to help identify what's being detected
-      console.log('ComposioUrlDetector Debug:', {
-        url: url.substring(0, 50) + '...',
-        toolkitName,
-        toolkitSlug,
-        contextBefore: content.substring(Math.max(0, match.index - 100), match.index)
-      });
+      
       
       urls.push({
         url,

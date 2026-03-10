@@ -78,7 +78,8 @@ export default function CreditTransactions({ accountId }: Props) {
   };
 
   const getTransactionBadge = (type: string) => {
-    const badges: Record<string, { label: string; variant: any }> = {
+    type BadgeVariant = 'default' | 'secondary' | 'destructive' | 'outline';
+    const badges: Record<string, { label: string; variant: BadgeVariant }> = {
       'tier_grant': { label: 'Tier Grant', variant: 'default' },
       'purchase': { label: 'Purchase', variant: 'default' },
       'admin_grant': { label: 'Admin Grant', variant: 'secondary' },
@@ -89,8 +90,8 @@ export default function CreditTransactions({ accountId }: Props) {
       'expired': { label: 'Expired', variant: 'destructive' },
     };
 
-    const badge = badges[type] || { label: type, variant: 'outline' };
-    return <Badge variant={badge.variant as any}>{badge.label}</Badge>;
+    const badge = badges[type] || { label: type, variant: 'outline' as const };
+    return <Badge variant={badge.variant}>{badge.label}</Badge>;
   };
 
   const handlePrevPage = () => {

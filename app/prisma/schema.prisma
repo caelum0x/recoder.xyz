@@ -2517,6 +2517,8 @@ model users {
   paymentStatus                                      String?
   plan                                               String?
   onboardingStep                                     String?
+  onboardingProfile                                  Json?
+  onboardingCompletedAt                              DateTime?
   preferredModels                                    Json?
   totpSecret                                         String?
   totpSecretTemp                                     String?
@@ -2606,6 +2608,8 @@ model users {
   newsletter_subscribers                             newsletter_subscribers[]
   web_push_subscriptions                             web_push_subscriptions[]
   ecosystem_tags                                     ecosystem_tags[]
+  owned_organizations                                organizations[]           @relation("org_owner")
+  organization_memberships                           organization_members[]
 
   @@index([createdAt])
   @@index([subscription])

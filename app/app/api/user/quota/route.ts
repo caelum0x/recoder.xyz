@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth-helpers';
 import { prisma } from '@/lib/prisma';
+import { logger } from '@/lib/logger';
 
 export async function GET(request: NextRequest) {
   try {
@@ -115,8 +116,8 @@ export async function GET(request: NextRequest) {
         lastResetAt: quota.lastResetAt
       }
     });
-  } catch (error: any) {
-    console.error('Get quota error:', error);
+  } catch (error) {
+    logger.error('Get quota error:', { error: error instanceof Error ? error.message : String(error) });
     return NextResponse.json({ error: 'Failed to get quota' }, { status: 500 });
   }
 }

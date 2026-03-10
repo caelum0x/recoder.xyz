@@ -157,7 +157,6 @@ export class StreamConnection {
       const timeSinceLastMessage = Date.now() - this.lastMessageTime;
       
       if (timeSinceLastMessage > STREAM_CONFIG.HEARTBEAT_TIMEOUT_MS) {
-        console.warn(`[StreamConnection] No message received for ${timeSinceLastMessage}ms`);
         this.handleConnectionError();
       }
     }, STREAM_CONFIG.HEARTBEAT_CHECK_INTERVAL_MS);

@@ -3,17 +3,17 @@ import {
 	Giselle,
 	type GiselleConfig,
 	type GiselleContext,
-} from "@giselles-ai/giselle";
+} from "@recoder/giselle";
 import {
 	GitHubWebhookUnauthorizedError,
 	verifyRequest as verifyRequestAsGitHubWebook,
-} from "@giselles-ai/github-tool";
+} from "@recoder/github-tool";
 import {
 	formDataRoutes,
 	isFormDataRoutePath,
 	isJsonRoutePath,
 	jsonRoutes,
-} from "@giselles-ai/http";
+} from "@recoder/http";
 import { after } from "next/server";
 import { ZodError } from "zod";
 import { type RequestContext, requestContextStore } from "./context";

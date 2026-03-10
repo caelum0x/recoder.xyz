@@ -60,6 +60,15 @@ export interface AgentWithHealth extends RegisteredAgent {
   health: AgentHeartbeat;
 }
 
+interface LegacyRegisterAgentInput {
+  agent_id: string;
+  name: string;
+  platform: RecoderAgentPlatform;
+  url?: string;
+  capabilities?: string[];
+  metadata?: Record<string, unknown>;
+}
+
 // ---------------------------------------------------------------------------
 // Platform defaults for self-registration
 // ---------------------------------------------------------------------------
@@ -74,6 +83,34 @@ const PLATFORM_DEFAULTS: Record<
     defaultSkills: RecoderAgentSkill[];
   }
 > = {
+  recoder: {
+    protocol: 'rest',
+    tier: 'tier1',
+    status: 'supported',
+    description: 'Legacy Recoder agent',
+    defaultSkills: [],
+  },
+  cursor: {
+    protocol: 'jsonrpc',
+    tier: 'tier2',
+    status: 'experimental',
+    description: 'Cursor connector agent',
+    defaultSkills: [],
+  },
+  windsurf: {
+    protocol: 'jsonrpc',
+    tier: 'tier2',
+    status: 'experimental',
+    description: 'Windsurf connector agent',
+    defaultSkills: [],
+  },
+  replit: {
+    protocol: 'rest',
+    tier: 'tier2',
+    status: 'experimental',
+    description: 'Replit connector agent',
+    defaultSkills: [],
+  },
   codex: {
     protocol: 'jsonrpc',
     tier: 'tier1',
@@ -261,6 +298,27 @@ export class AgentRegistryService {
     return agent;
   }
 
+  /**
+   * Legacy API compatibility: older callers use `registerAgent(...)`.
+   */
+  registerAgent(input: RegisterAgentInput | LegacyRegisterAgentInput): RegisteredAgent {
+    if ('agent_id' in input) {
+      return this.selfRegister({
+        agentId: input.agent_id,
+        name: input.name,
+        platform: input.platform,
+        url: input.url,
+        skills: (input.capabilities ?? []).map((cap) => ({
+          id: cap,
+          name: cap,
+          description: cap,
+          tags: [cap],
+        })),
+      });
+    }
+    return this.register(input);
+  }
+
   unregister(agentId: string): boolean {
     const deleted = this.registry.unregister(agentId);
     if (deleted) {
@@ -288,7 +346,7 @@ export class AgentRegistryService {
 
   // -- Discovery ------------------------------------------------------------
 
-  discover(query: AgentDiscoveryQuery): RegisteredAgent[] {
+  discover(query: AgentDiscoveryQuery = {}): RegisteredAgent[] {
     return this.registry.discover(query);
   }
 

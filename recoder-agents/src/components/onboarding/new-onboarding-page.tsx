@@ -80,6 +80,16 @@ export function NewOnboardingPage({ className, onComplete, onClose }: NewOnboard
       className
     )}>
       <div className="h-full w-full flex flex-col">
+        {/* Skip / dismiss button - top right */}
+        <button
+          onClick={handleClose}
+          className="absolute top-4 right-4 z-10 flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors px-3 py-1.5 rounded-md hover:bg-muted"
+          aria-label="Skip onboarding"
+        >
+          Skip
+          <X className="h-4 w-4" />
+        </button>
+
         {/* Progress indicator - top center */}
         <motion.div
           className="flex items-center justify-center px-6 py-6"

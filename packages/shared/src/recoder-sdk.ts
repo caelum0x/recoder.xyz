@@ -67,8 +67,8 @@ export class RecoderSDK extends EventEmitter {
     super();
 
     this.config = {
-      baseURL: config.baseURL || 'http://localhost:3001',
-      webSocketURL: config.webSocketURL || 'http://localhost:3001',
+      baseURL: config.baseURL || 'http://localhost:3100',
+      webSocketURL: config.webSocketURL || 'http://localhost:3100',
       platform: config.platform,
       deviceName: config.deviceName || `${config.platform}-${Date.now()}`,
       enableWebSocket: config.enableWebSocket ?? true,
@@ -277,7 +277,7 @@ export class RecoderSDK extends EventEmitter {
     try {
       const response = await this.api.get('/ai-providers/status');
       return response.data.data;
-    } catch (error: any) {
+    } catch (error) {
       throw this.handleError(error);
     }
   }
@@ -286,7 +286,7 @@ export class RecoderSDK extends EventEmitter {
     try {
       const response = await this.api.post('/ai-providers/health-check');
       return response.data.data;
-    } catch (error: any) {
+    } catch (error) {
       throw this.handleError(error);
     }
   }
@@ -301,7 +301,7 @@ export class RecoderSDK extends EventEmitter {
         priority
       });
       return response.data.data;
-    } catch (error: any) {
+    } catch (error) {
       throw this.handleError(error);
     }
   }
@@ -312,7 +312,7 @@ export class RecoderSDK extends EventEmitter {
         params: { timeframe }
       });
       return response.data.data;
-    } catch (error: any) {
+    } catch (error) {
       throw this.handleError(error);
     }
   }
@@ -325,7 +325,7 @@ export class RecoderSDK extends EventEmitter {
         ...data,
         platform: this.config.platform
       });
-    } catch (error: any) {
+    } catch (error) {
       if (this.config.debug) {
         console.error('Analytics tracking failed:', error);
       }
@@ -341,7 +341,7 @@ export class RecoderSDK extends EventEmitter {
         params: { timeframe, platform: this.config.platform }
       });
       return response.data.data;
-    } catch (error: any) {
+    } catch (error) {
       throw this.handleError(error);
     }
   }
@@ -350,7 +350,7 @@ export class RecoderSDK extends EventEmitter {
     try {
       const response = await this.api.get('/analytics/performance');
       return response.data.data;
-    } catch (error: any) {
+    } catch (error) {
       throw this.handleError(error);
     }
   }
@@ -359,7 +359,7 @@ export class RecoderSDK extends EventEmitter {
     try {
       const response = await this.api.get('/analytics/realtime');
       return response.data.data;
-    } catch (error: any) {
+    } catch (error) {
       throw this.handleError(error);
     }
   }
@@ -379,7 +379,7 @@ export class RecoderSDK extends EventEmitter {
         message,
         data
       });
-    } catch (error: any) {
+    } catch (error) {
       throw this.handleError(error);
     }
   }
@@ -401,7 +401,7 @@ export class RecoderSDK extends EventEmitter {
         message,
         data
       });
-    } catch (error: any) {
+    } catch (error) {
       throw this.handleError(error);
     }
   }

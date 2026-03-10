@@ -37,7 +37,7 @@ export const VerifyEmailForm: FC = () => {
 	return (
 		<div className="grid gap-[8px]">
 			{verifyState && (
-				<div className="text-error-900 bg-error-900/12 border border-error-900/40 rounded-[12px] p-3 text-[12px] font-geist">
+				<div className="text-error-900 bg-error-900/12 border border-error-900/40 rounded-[12px] p-3 text-[12px] font-sans">
 					<div className="flex items-center gap-2">
 						<TriangleAlertIcon className="w-4 h-4" />
 						<span className="font-bold">Authentication Error</span>
@@ -48,7 +48,7 @@ export const VerifyEmailForm: FC = () => {
 				</div>
 			)}
 			{resendState && resendState.code !== "success" && (
-				<div className="text-error-900 bg-error-900/12 border border-error-900/40 rounded-[12px] p-3 text-[12px] font-geist">
+				<div className="text-error-900 bg-error-900/12 border border-error-900/40 rounded-[12px] p-3 text-[12px] font-sans">
 					<div className="flex items-center gap-2">
 						<TriangleAlertIcon className="w-4 h-4" />
 						<span className="font-bold">Authentication Error</span>
@@ -59,7 +59,7 @@ export const VerifyEmailForm: FC = () => {
 				</div>
 			)}
 			{resendState && resendState.code === "success" && (
-				<div className="text-green bg-green/12 border border-green/40 rounded-[12px] p-3 text-[12px] font-geist">
+				<div className="text-green bg-green/12 border border-green/40 rounded-[12px] p-3 text-[12px] font-sans">
 					<div className="flex items-center gap-2">
 						<TriangleAlertIcon className="w-4 h-4" />
 						<span className="font-bold">Success</span>

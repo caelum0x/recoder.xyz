@@ -36,7 +36,7 @@ export const TeamInvitationStep = () => {
   const sendInvites = () => {
     const validEmails = inviteEmails.filter(email => email.trim() && email.includes('@'));
     updateUserContext({ invitedTeammates: validEmails });
-    console.log('Sending invites to:', validEmails);
+    
     setInvitesSent(true);
 
     // Simulate sending invites

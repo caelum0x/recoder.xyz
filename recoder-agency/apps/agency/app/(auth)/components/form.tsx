@@ -27,7 +27,7 @@ export const Form = <T extends Record<string, string | undefined>>({
 	return (
 		<div className="grid gap-6">
 			{authError && (
-				<div className="text-error-900 bg-error-900/12 border border-error-900/40 rounded-[12px] p-3 text-[12px] font-geist">
+				<div className="text-error-900 bg-error-900/12 border border-error-900/40 rounded-[12px] p-3 text-[12px] font-sans">
 					<div className="flex items-center gap-2">
 						<TriangleAlertIcon className="w-4 h-4" />
 						<span className="font-bold">Authentication Error</span>
@@ -79,7 +79,7 @@ export const Form = <T extends Record<string, string | undefined>>({
 						{linkToResetPassword && (
 							<Link
 								href="/password_reset"
-								className="text-[14px] text-text absolute top-0 right-0 font-geist underline hover:text-text/80"
+								className="text-[14px] text-text absolute top-0 right-0 font-sans underline hover:text-text/80"
 							>
 								Forgot your password?
 							</Link>

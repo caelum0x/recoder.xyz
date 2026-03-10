@@ -162,7 +162,7 @@ export function useAgentStartInput(options: UseAgentStartInputOptions = {}): Use
   });
   
   const agents = Array.isArray(agentsResponse?.agents) ? agentsResponse.agents : [];
-  const recoderAgent = agents.find(agent => agent.metadata?.is_suna_default === true);
+  const recoderAgent = agents.find(agent => agent.metadata?.is_recoder_default === true || agent.metadata?.is_suna_default === true);
   const selectedAgent = selectedAgentId
     ? agents.find(agent => agent.agent_id === selectedAgentId)
     : null;
@@ -173,7 +173,7 @@ export function useAgentStartInput(options: UseAgentStartInputOptions = {}): Use
     ? true // Unauthenticated users always see Recoder modes
     : isLoadingAgents 
       ? true // Show Recoder modes while loading
-      : (selectedAgent?.metadata?.is_suna_default || (!selectedAgentId && recoderAgent !== undefined) || false);
+      : (selectedAgent?.metadata?.is_recoder_default || selectedAgent?.metadata?.is_suna_default || (!selectedAgentId && recoderAgent !== undefined) || false);
   
   // Initialize agent selection when agents are loaded
   useEffect(() => {
@@ -269,13 +269,7 @@ export function useAgentStartInput(options: UseAgentStartInputOptions = {}): Use
       }
     }
 
-    console.log(`${logPrefix} Starting agent with:`, {
-      prompt: message.substring(0, 100),
-      promptLength: message.length,
-      model_name: options?.model_name,
-      agent_id: selectedAgentId,
-      filesCount: pendingFiles.length,
-    });
+    
 
     const result = await startAgent({
       message,

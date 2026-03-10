@@ -29,7 +29,7 @@ export async function POST(request: NextRequest) {
     const result = await CLIAuthService.generateDeviceCode(clientId);
 
     return NextResponse.json(result, { status: 200 });
-  } catch (error: any) {
+  } catch (error) {
     logger.error('Device code generation error:', { error: String(error), route: 'auth/cli/device' });
     return NextResponse.json(
       { error: 'Failed to generate device code' },

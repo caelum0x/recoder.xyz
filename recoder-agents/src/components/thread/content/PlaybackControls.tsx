@@ -445,7 +445,7 @@ export const PlaybackControls = ({
             let cleanup: (() => void) | undefined;
             await new Promise<void>((resolve) => {
               cleanup = streamText(textToStream, () => {
-                console.log('Stream completed for message', msgIndex);
+                
                 resolve();
               });
             });

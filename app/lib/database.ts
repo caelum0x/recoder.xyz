@@ -2,6 +2,7 @@
  * Database connection and models for recoder.xyz
  * Handles users, subscriptions, CLI sessions, and billing data
  */
+import crypto from 'crypto';
 
 export type PlanType = 'free' | 'pro' | 'enterprise';
 
@@ -208,7 +209,7 @@ export class DatabaseService {
   // User operations
   async createUser(userData: Omit<User, 'id' | 'created_at' | 'updated_at'>): Promise<User> {
     const user: User = {
-      id: `user_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      id: `user_${Date.now()}_${crypto.randomUUID().replace(/-/g, '').slice(0, 9)}`,
       created_at: new Date(),
       updated_at: new Date(),
       ...userData
@@ -243,7 +244,7 @@ export class DatabaseService {
   // CLI Session operations
   async createCLISession(sessionData: Omit<CLISession, 'id' | 'created_at' | 'last_used'>): Promise<CLISession> {
     const session: CLISession = {
-      id: `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      id: `session_${Date.now()}_${crypto.randomUUID().replace(/-/g, '').slice(0, 9)}`,
       created_at: new Date(),
       last_used: new Date(),
       ...sessionData
@@ -273,7 +274,7 @@ export class DatabaseService {
   // API Key operations
   async createAPIKey(keyData: Omit<APIKey, 'id' | 'created_at'>): Promise<APIKey> {
     const apiKey: APIKey = {
-      id: `api_key_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      id: `api_key_${Date.now()}_${crypto.randomUUID().replace(/-/g, '').slice(0, 9)}`,
       created_at: new Date(),
       ...keyData
     };
@@ -298,7 +299,7 @@ export class DatabaseService {
   // Device Flow operations
   async createDeviceFlow(flowData: Omit<DeviceFlow, 'id' | 'created_at'>): Promise<DeviceFlow> {
     const deviceFlow: DeviceFlow = {
-      id: `device_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      id: `device_${Date.now()}_${crypto.randomUUID().replace(/-/g, '').slice(0, 9)}`,
       created_at: new Date(),
       ...flowData
     };
@@ -336,7 +337,7 @@ export class DatabaseService {
   // Subscription operations
   async createSubscription(subData: Omit<Subscription, 'id' | 'created_at' | 'updated_at'>): Promise<Subscription> {
     const subscription: Subscription = {
-      id: `sub_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      id: `sub_${Date.now()}_${crypto.randomUUID().replace(/-/g, '').slice(0, 9)}`,
       created_at: new Date(),
       updated_at: new Date(),
       ...subData
@@ -367,7 +368,7 @@ export class DatabaseService {
   // Usage tracking
   async recordUsage(usageData: Omit<UsageRecord, 'id' | 'timestamp'>): Promise<UsageRecord> {
     const record: UsageRecord = {
-      id: `usage_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      id: `usage_${Date.now()}_${crypto.randomUUID().replace(/-/g, '').slice(0, 9)}`,
       timestamp: new Date(),
       ...usageData
     };
@@ -388,7 +389,7 @@ export class DatabaseService {
   // Billing events
   async recordBillingEvent(eventData: Omit<BillingEvent, 'id' | 'timestamp'>): Promise<BillingEvent> {
     const event: BillingEvent = {
-      id: `billing_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      id: `billing_${Date.now()}_${crypto.randomUUID().replace(/-/g, '').slice(0, 9)}`,
       timestamp: new Date(),
       ...eventData
     };
@@ -400,7 +401,7 @@ export class DatabaseService {
   // Router session operations
   async createRouterSession(sessionData: Omit<RouterSession, 'id' | 'created_at' | 'last_active'>): Promise<RouterSession> {
     const session: RouterSession = {
-      id: `router_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      id: `router_${Date.now()}_${crypto.randomUUID().replace(/-/g, '').slice(0, 9)}`,
       created_at: new Date(),
       last_active: new Date(),
       ...sessionData

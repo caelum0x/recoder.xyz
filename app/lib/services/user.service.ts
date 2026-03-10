@@ -41,7 +41,7 @@ export class UserService {
           subscription: null,
         },
       };
-    } catch (error: any) {
+    } catch (error) {
       logger.error('Get profile error', { error: String(error) });
       throw error;
     }
@@ -86,7 +86,7 @@ export class UserService {
           image: user.image,
         },
       };
-    } catch (error: any) {
+    } catch (error) {
       logger.error('Update profile error', { error: String(error) });
       throw error;
     }
@@ -115,7 +115,7 @@ export class UserService {
       return {
         avatar: user.image,
       };
-    } catch (error: any) {
+    } catch (error) {
       logger.error('Upload avatar error', { error: String(error) });
       throw error;
     }
@@ -141,7 +141,7 @@ export class UserService {
         },
       });
 
-    } catch (error: any) {
+    } catch (error) {
       logger.error('Delete avatar error', { error: String(error) });
       throw error;
     }
@@ -170,7 +170,7 @@ export class UserService {
       return {
         preferences,
       };
-    } catch (error: any) {
+    } catch (error) {
       logger.error('Get preferences error', { error: String(error) });
       throw error;
     }
@@ -253,7 +253,7 @@ export class UserService {
       return {
         preferences,
       };
-    } catch (error: any) {
+    } catch (error) {
       logger.error('Update preferences error', { error: String(error) });
       throw error;
     }
@@ -302,7 +302,7 @@ export class UserService {
         },
       });
 
-    } catch (error: any) {
+    } catch (error) {
       logger.error('Delete account error', { error: String(error) });
       throw error;
     }
@@ -359,7 +359,7 @@ export class UserService {
       return {
         data: user,
       };
-    } catch (error: any) {
+    } catch (error) {
       logger.error('Export user data error', { error: String(error) });
       throw error;
     }
@@ -429,7 +429,7 @@ export class UserService {
           activeSessions,
         },
       };
-    } catch (error: any) {
+    } catch (error) {
       logger.error('Get user stats error', { error: String(error) });
       throw error;
     }
@@ -462,7 +462,7 @@ export class UserService {
           expiresAt: s.expiresAt,
         })),
       };
-    } catch (error: any) {
+    } catch (error) {
       logger.error('List sessions error', { error: String(error) });
       throw error;
     }
@@ -503,7 +503,7 @@ export class UserService {
         },
       });
 
-    } catch (error: any) {
+    } catch (error) {
       logger.error('Revoke session error', { error: String(error) });
       throw error;
     }
@@ -561,7 +561,7 @@ export class UserService {
       return {
         message: 'Email changed successfully. Please verify your new email.',
       };
-    } catch (error: any) {
+    } catch (error) {
       logger.error('Change email error', { error: String(error) });
       throw error;
     }

@@ -136,7 +136,7 @@ export default async function TeamMembersPage() {
 				<PageTitle>Members</PageTitle>
 				<Card title="" className="gap-0">
 					<SectionHeader title="Member List" />
-					<div className="text-[12px] leading-[20.4px] tracking-normal font-geist">
+					<div className="text-[12px] leading-[20.4px] tracking-normal font-sans">
 						Failed to load team members
 					</div>
 				</Card>
@@ -150,7 +150,7 @@ export default async function TeamMembersPage() {
 				<PageTitle>Members</PageTitle>
 				<Card title="" className="gap-0">
 					<SectionHeader title="Member List" />
-					<div className="text-[12px] leading-[20.4px] tracking-normal font-geist">
+					<div className="text-[12px] leading-[20.4px] tracking-normal font-sans">
 						Failed to get current user role
 					</div>
 				</Card>

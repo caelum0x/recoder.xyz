@@ -62,7 +62,7 @@ export function AgentCreationModal({ open, onOpenChange, onSuccess }: AgentCreat
 
   const handleExploreTemplates = () => {
     onOpenChange(false);
-    router.push('/dashboard?tab=worker-templates');
+    router.push('/agents/templates');
   };
 
   const handleCardClick = (template: any) => {

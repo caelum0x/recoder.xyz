@@ -22,10 +22,7 @@ export async function POST(request: Request) {
     if (payload.data.payload_type === "Subscription") {
       switch (payload.type) {
         case "subscription.active":
-          const subscription = await dodopayments.subscriptions.retrieve(payload.data.subscription_id);
-          console.log("-------SUBSCRIPTION DATA START ---------")
-          console.log(subscription)
-          console.log("-------SUBSCRIPTION DATA END ---------")
+          await dodopayments.subscriptions.retrieve(payload.data.subscription_id);
           break;
         case "subscription.failed":
           break;
@@ -41,10 +38,7 @@ export async function POST(request: Request) {
     } else if (payload.data.payload_type === "Payment") {
         switch (payload.type) {
             case "payment.succeeded":
-              const paymentDataResp = await dodopayments.payments.retrieve(payload.data.payment_id)
-              console.log("-------PAYMENT DATA START ---------")
-              console.log(paymentDataResp)
-              console.log("-------PAYMENT DATA END ---------")
+              await dodopayments.payments.retrieve(payload.data.payment_id)
               break;
             default:
                 break;
@@ -55,11 +49,10 @@ export async function POST(request: Request) {
       { status: 200 }
     );
   } catch (error) {
-    console.log(" ----- webhoook verification failed -----")
-    console.log(error)
+    console.error("Webhook verification failed", error);
     return Response.json(
-      { message: "Webhook processed successfully" },
-      { status: 200 }
+      { message: "Webhook verification failed" },
+      { status: 401 }
     );
   }
 }

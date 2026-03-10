@@ -13,12 +13,12 @@ export default async function AccountAuthenticationPage({
 		typeof params?.oauthError === "string" ? params.oauthError : undefined;
 	return (
 		<div className="flex flex-col gap-[12px]">
-			<p className="text-link-muted text-[12px] leading-[20.4px] tracking-normal font-geist">
+			<p className="text-link-muted text-[12px] leading-[20.4px] tracking-normal font-sans">
 				Connect your Recoder Agency account with a third-party service to use it
 				for login.
 			</p>
 			{oauthError && (
-				<div className="text-error-900 bg-error-900/12 border border-error-900/40 rounded-[12px] p-3 text-[12px] font-geist">
+				<div className="text-error-900 bg-error-900/12 border border-error-900/40 rounded-[12px] p-3 text-[12px] font-sans">
 					OAuth Error: {oauthError}
 				</div>
 			)}

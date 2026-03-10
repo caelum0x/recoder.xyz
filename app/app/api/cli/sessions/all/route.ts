@@ -10,7 +10,7 @@ import {
 import { logger } from '@/lib/logger';
 
 
-const BACKEND_URL = process.env.BACKEND_URL || 'http://localhost:3001';
+const BACKEND_URL = process.env.BACKEND_URL || (process.env.NODE_ENV === 'production' ? undefined : 'http://localhost:3100');
 
 function getAccessToken(session: unknown): string {
   if (!session || typeof session !== 'object') return '';

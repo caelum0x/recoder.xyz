@@ -18,7 +18,8 @@ function SignOutContent() {
   const [status, setStatus] = useState<'signing-out' | 'success' | 'error'>('signing-out');
   const [error, setError] = useState<string | null>(null);
 
-  const redirectUrl = searchParams.get('redirect') || '/';
+  const rawRedirect = searchParams.get('redirect') || '/';
+  const redirectUrl = rawRedirect.startsWith('/') && !rawRedirect.startsWith('//') ? rawRedirect : '/';
 
   useEffect(() => {
     handleSignOut();

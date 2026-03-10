@@ -47,9 +47,7 @@ export default function ChatPlatformPage() {
         setMessage('Session synchronized! Redirecting to Recoder Chat...');
         
         // Session is already synced, redirect directly
-        const chatUrl = process.env.NODE_ENV === 'production' 
-          ? 'https://chat.recoder.xyz'
-          : 'http://localhost:3008';
+        const chatUrl = process.env.NEXT_PUBLIC_AGENTS_URL || 'https://agents.recoder.xyz';
         
         setTimeout(() => {
           window.location.href = `${chatUrl}?synced=true&from=main`;
@@ -95,7 +93,7 @@ export default function ChatPlatformPage() {
           name: data.user?.name || data.user?.email || 'User',
           plan: data.user?.plan || 'free',
           expiresAt: Date.now() + 24 * 60 * 60 * 1000, // 24 hours
-          domains: ['web.recoder.xyz', 'chat.recoder.xyz', 'recoder.xyz']
+          domains: ['web.recoder.xyz', 'agents.recoder.xyz', 'recoder.xyz']
         };
         
         // Trigger cross-platform session sync
@@ -104,13 +102,13 @@ export default function ChatPlatformPage() {
         const syncSuccess = await clientSessionSync.triggerSync(sessionData);
         
         if (syncSuccess) {
-          console.log('Session synchronized across platforms');
+          // Session synchronized across platforms
         }
         
         setMessage('Redirecting to Recoder Chat Platform...');
         
         // Redirect to recoder-chat with authentication token
-        const chatUrl = new URL(data.accessUrl || 'http://localhost:3008');
+        const chatUrl = new URL(data.accessUrl || process.env.NEXT_PUBLIC_AGENTS_URL || 'https://agents.recoder.xyz');
         chatUrl.searchParams.set('token', data.token);
         chatUrl.searchParams.set('from', 'main-site');
         chatUrl.searchParams.set('synced', 'true');

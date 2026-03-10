@@ -328,16 +328,6 @@ export const EventBasedTriggerDialog: React.FC<EventBasedTriggerDialogProps> = (
     const { data: allProfiles } = useComposioProfiles(); // Get all profiles for connection status
     const { data: toolkitDetails } = useComposioToolkitDetails(selectedApp?.slug || '', { enabled: !!selectedApp });
 
-    // Debug logging for trigger data
-    useEffect(() => {
-        if (isEditMode) {
-            console.log('Edit mode - selectedApp changed:', selectedApp);
-            console.log('Edit mode - loadingTriggers:', loadingTriggers);
-            console.log('Edit mode - triggersData:', triggersData);
-            console.log('Edit mode - triggersError:', triggersError);
-        }
-    }, [isEditMode, selectedApp, loadingTriggers, triggersData, triggersError]);
-
     const apps = useMemo(() => (appsData?.items || []).filter((a) => a.name.toLowerCase().includes(search.toLowerCase()) || a.slug.toLowerCase().includes(search.toLowerCase())), [appsData, search]);
 
     // Helper function to check if an app has connected profiles
@@ -405,7 +395,6 @@ export const EventBasedTriggerDialog: React.FC<EventBasedTriggerDialogProps> = (
                 let toolkitSlug = '';
                 if (triggerConfig.qualified_name) {
                     toolkitSlug = triggerConfig.qualified_name.replace(/^composio\./, '').toLowerCase();
-                    console.log('Edit mode - extracted from qualified_name:', toolkitSlug);
                 }
                 
                 if (!toolkitSlug && triggerConfig.trigger_slug) {

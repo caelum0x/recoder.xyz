@@ -64,7 +64,7 @@ export async function GET(request: NextRequest) {
       sessions: sessionsWithInfo
     }));
 
-  } catch (error: any) {
+  } catch (error) {
     logger.error('[Sessions GET] Error:', { error: String(error), route: 'auth/sessions' });
     return NextResponse.json(
       assertAuthSessionsListResponse({ success: false, error: 'Failed to fetch sessions' }),
@@ -129,7 +129,7 @@ export async function DELETE(request: NextRequest) {
       message: 'Session revoked successfully'
     }));
 
-  } catch (error: any) {
+  } catch (error) {
     logger.error('[Sessions DELETE] Error:', { error: String(error), route: 'auth/sessions' });
     return NextResponse.json(
       assertAuthSessionsListResponse({ success: false, error: 'Failed to revoke session' }),

@@ -282,7 +282,6 @@ export default function TemplateSharePage() {
         try {
           const palette = colorThief.getPalette(imageRef.current, 6);
           const colors = palette.map((rgb: number[]) => rgbToHex(rgb[0], rgb[1], rgb[2]));
-          console.log('Extracted colors (hex):', colors);
           setColorPalette(colors);
         } catch (error) {
           console.error('Error extracting colors:', error);

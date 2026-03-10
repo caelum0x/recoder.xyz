@@ -168,9 +168,10 @@ const McpUrlDialog: React.FC<McpUrlDialogProps> = ({
           <DialogTitle className="flex items-center gap-3">
             <div className="h-14 w-14 rounded-lg bg-muted border flex items-center justify-center overflow-hidden">
               {currentToolkit?.icon_url ? (
-                <img 
-                  src={currentToolkit.icon_url} 
+                <img
+                  src={currentToolkit.icon_url}
                   alt={`${toolkitName} icon`}
+                  loading="lazy"
                   className="h-8 w-8 object-contain"
                   onError={(e) => {
                     (e.target as HTMLImageElement).style.display = 'none';
@@ -425,9 +426,10 @@ const ToolkitTable: React.FC<ToolkitTableProps> = ({ toolkit }) => {
         <div className="flex items-center gap-3">
           <div className="h-10 w-10 rounded-lg bg-muted border flex items-center justify-center overflow-hidden">
             {toolkit.icon_url ? (
-              <img 
-                src={toolkit.icon_url} 
+              <img
+                src={toolkit.icon_url}
                 alt={`${toolkit.toolkit_name} icon`}
+                loading="lazy"
                 className="h-6 w-6 object-contain"
                 onError={(e) => {
                   (e.target as HTMLImageElement).style.display = 'none';

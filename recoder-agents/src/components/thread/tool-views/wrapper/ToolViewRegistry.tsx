@@ -337,8 +337,8 @@ export function useToolView(toolName: string): ToolViewComponent {
 const canvasRefreshedToolCalls = new Set<string>();
 
 // Initialize pending events map on window for cross-component communication
-if (typeof window !== 'undefined' && !(window as any).__pendingCanvasRefreshEvents) {
-  (window as any).__pendingCanvasRefreshEvents = new Map<string, number>();
+if (typeof window !== 'undefined' && !window.__pendingCanvasRefreshEvents) {
+  window.__pendingCanvasRefreshEvents = new Map<string, number>();
 }
 
 export function ToolView({ toolCall, toolResult, ...props }: ToolViewProps) {
@@ -350,7 +350,7 @@ export function ToolView({ toolCall, toolResult, ...props }: ToolViewProps) {
   
   // Emit canvas refresh for ANY tool with canvas_path that completes successfully
   const canvasPath = toolCall?.arguments?.canvas_path;
-  const toolCallId = (toolCall as any)?.tool_call_id;
+  const toolCallId = toolCall?.tool_call_id;
   
   useEffect(() => {
     // Only emit once per tool call
@@ -358,15 +358,11 @@ export function ToolView({ toolCall, toolResult, ...props }: ToolViewProps) {
     
     // Only emit if there's a canvas_path and tool completed successfully
     if (canvasPath && toolResult?.success) {
-      console.log('[CANVAS_LIVE_DEBUG] ToolView emitting canvas refresh for:', {
-        toolName: name,
-        canvasPath,
-        toolCallId,
-      });
+      
       canvasRefreshedToolCalls.add(toolCallId);
       
       // Store in pending events queue for canvas-renderer to pick up
-      const pendingEvents = (window as any).__pendingCanvasRefreshEvents as Map<string, number> | undefined;
+      const pendingEvents = window.__pendingCanvasRefreshEvents;
       if (pendingEvents) {
         pendingEvents.set(canvasPath, Date.now());
       }
@@ -424,7 +420,6 @@ export function ToolView({ toolCall, toolResult, ...props }: ToolViewProps) {
 
   // Defensive check - ensure toolCall is defined
   if (!toolCall || !toolCall.function_name) {
-    console.warn('ToolView: toolCall is undefined or missing function_name. Tool views should use structured props.');
     // Fallback to GenericToolView with error handling
     return (
       <div className="h-full w-full max-h-full max-w-full overflow-hidden min-w-0 min-h-0" style={{ contain: 'layout style' }}>
@@ -437,13 +432,7 @@ export function ToolView({ toolCall, toolResult, ...props }: ToolViewProps) {
   let modifiedToolResult = toolResult;
   if (isPresentationSlide && filePath && presentationName && slideNumber && !isAlreadyPresentationTool && toolResult) {
     const viewerContent = createPresentationViewerToolContent(presentationName, filePath, slideNumber);
-    console.log('[ToolViewRegistry] Detected presentation slide in file operation:', {
-      toolName: name,
-      filePath,
-      presentationName,
-      slideNumber,
-      viewerContent: JSON.parse(viewerContent),
-    });
+    
     modifiedToolResult = {
       ...toolResult,
       output: viewerContent,

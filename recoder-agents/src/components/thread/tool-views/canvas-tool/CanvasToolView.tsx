@@ -25,13 +25,6 @@ import { formatTimestamp } from '../utils';
 // Module-level Set to track which tool_call_ids we've already emitted refresh events for
 const refreshedToolCalls = new Set<string>();
 
-// Global pending canvas refresh events (for when event is dispatched before listener is ready)
-declare global {
-  interface Window {
-    __pendingCanvasRefreshEvents?: Map<string, number>;
-  }
-}
-
 // Initialize pending events map
 if (typeof window !== 'undefined' && !window.__pendingCanvasRefreshEvents) {
   window.__pendingCanvasRefreshEvents = new Map();

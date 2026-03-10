@@ -19,12 +19,12 @@ export default function NotFound() {
 				<div className="space-y-3">
 					<Button
 						onClick={() => {
-							window.location.assign("/stage");
+							window.location.assign("/dashboard");
 						}}
 						variant="filled"
 						className="w-full"
 					>
-						Go to Stage
+						Go to Dashboard
 					</Button>
 
 					<Button

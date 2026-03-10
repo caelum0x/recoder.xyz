@@ -1,9 +1,9 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 
 export async function GET() {
   try {
-    const marketplaceAgentsModel = (prisma as any).marketplace_agents;
+    const marketplaceAgentsModel = prisma.marketplace_agents;
     if (!marketplaceAgentsModel?.findMany) {
       return NextResponse.json({ error: 'Agent marketplace is not available in this schema' }, { status: 503 });
     }

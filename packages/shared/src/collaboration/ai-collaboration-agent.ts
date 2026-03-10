@@ -1014,7 +1014,7 @@ class UserService {
     try {
       const hashedPassword = await this.hashPassword(userData.password);
       
-      const user = await prisma.user.create({
+      const user = await prisma.users.create({
         data: {
           name: userData.name,
           email: userData.email,
@@ -1076,7 +1076,7 @@ export const authenticate = async (
     const decoded = jwt.verify(token, process.env.JWT_SECRET!) as any;
     
     // Verify user still exists and is active
-    const user = await prisma.user.findUnique({
+    const user = await prisma.users.findUnique({
       where: { id: decoded.userId },
       select: { id: true, email: true, role: true, isActive: true }
     });
@@ -1441,4 +1441,3 @@ class AsyncUtils {
     Logger.info(`AI Collaboration Agent ${this.name} shut down`);
   }
 }
-

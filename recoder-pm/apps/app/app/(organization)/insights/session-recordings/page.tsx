@@ -48,7 +48,7 @@ const buildHref = (params: Record<string, string | undefined>) => {
 const SessionRecordingsInsightsPage = async ({
   searchParams,
 }: {
-  readonly searchParams?: Record<string, string | string[] | undefined>;
+  readonly searchParams?: Promise<Record<string, string | string[] | undefined>>;
 }) => {
   const organizationId = await currentOrganizationId();
 
@@ -56,9 +56,10 @@ const SessionRecordingsInsightsPage = async ({
     return notFound();
   }
 
-  const typeParam = searchParams?.type;
-  const sourceParam = searchParams?.source;
-  const pageParam = searchParams?.page;
+  const resolvedSearchParams = searchParams ? await searchParams : undefined;
+  const typeParam = resolvedSearchParams?.type;
+  const sourceParam = resolvedSearchParams?.source;
+  const pageParam = resolvedSearchParams?.page;
   const type =
     typeof typeParam === "string" && types.includes(typeParam)
       ? (typeParam as session_recording_insight_type)

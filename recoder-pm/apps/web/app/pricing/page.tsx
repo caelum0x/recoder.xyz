@@ -21,12 +21,13 @@ const isPlaceholderValue = (value: string | undefined) =>
 
 const Pricing = async () => {
   try {
-    if (isPlaceholderValue(env.POLAR_PRODUCT_PRO_ID)) {
+    const productId = env.POLAR_PRODUCT_PRO_ID;
+    if (!productId || isPlaceholderValue(productId)) {
       throw new Error("POLAR_PRODUCT_PRO_ID is not configured");
     }
 
     const product = await polar.products.get({
-      id: env.POLAR_PRODUCT_PRO_ID,
+      id: productId,
     });
 
     const monthlyPrice = product.prices.find(
@@ -96,7 +97,7 @@ const Pricing = async () => {
             </a>
             <a
               className="inline-flex h-10 items-center justify-center rounded-md border px-6 text-sm font-medium"
-              href="https://x.com/haydenbleasel"
+              href="https://recoder.xyz/contact"
               rel="noreferrer"
               target="_blank"
             >

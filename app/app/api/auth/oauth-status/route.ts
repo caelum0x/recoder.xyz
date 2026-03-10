@@ -39,7 +39,7 @@ export async function GET(request: NextRequest) {
       providers: connectedProviders
     });
 
-  } catch (error: any) {
+  } catch (error) {
     logger.error('[OAuth Status] Error:', { error: String(error), route: 'auth/oauth-status' });
     return NextResponse.json(
       { success: false, error: 'Failed to get OAuth status' },

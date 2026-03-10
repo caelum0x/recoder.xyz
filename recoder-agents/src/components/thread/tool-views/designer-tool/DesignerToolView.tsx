@@ -213,19 +213,14 @@ export function DesignerToolView({
       
       // Skip if this is the exact same content we just processed
       if (lastProcessedPath.current === contentKey) {
-        console.log('Designer Tool: Skipping duplicate content');
+        
         return;
       }
       
       lastProcessedPath.current = contentKey;
       const elementId = `design-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
       
-      console.log('Designer Tool: Adding new element', {
-        relativePath,
-        designUrl,
-        elementId,
-        currentCount: elements.length
-      });
+      
       
       setElements(prevElements => {
         let x = 100;
@@ -259,7 +254,7 @@ export function DesignerToolView({
           locked: false,
         };
         
-        console.log('Designer Tool: New elements array', [...prevElements, newElement]);
+        
         return [...prevElements, newElement];
       });
       
@@ -269,7 +264,6 @@ export function DesignerToolView({
 
   // Defensive check - ensure toolCall is defined (after all hooks)
   if (!toolCall) {
-    console.warn('DesignerToolView: toolCall is undefined. Tool views should use structured props.');
     return null;
   }
 

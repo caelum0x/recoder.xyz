@@ -85,7 +85,12 @@ export async function POST(request: NextRequest) {
     // Hash new password
     const hashedPassword = await bcrypt.hash(password, 12);
 
-    // Update password in both compatibility tables.
+    const appUser = await prisma.users.findUnique({
+      where: { email },
+      select: { id: true },
+    });
+
+    // Update compatibility tables and Better Auth credential account password.
     const appUpdate = await prisma.users.updateMany({
       where: { email },
       data: {
@@ -94,10 +99,27 @@ export async function POST(request: NextRequest) {
       }
     });
 
+    const credentialAccountUpdate = appUser
+      ? await prisma.accounts.updateMany({
+          where: {
+            providerId: 'credential',
+            OR: [
+              { userId: appUser.id },
+              { accountId: appUser.id },
+            ],
+          },
+          data: {
+            password: hashedPassword,
+            updatedAt: new Date(),
+          },
+        })
+      : { count: 0 };
+
     const prismaAny = prisma as unknown as {
       user?: { updateMany: (args: unknown) => Promise<{ count: number }> };
+      account?: { updateMany: (args: unknown) => Promise<{ count: number }> };
     };
-    const authUpdate = prismaAny.user
+    const authUserUpdate = prismaAny.user
       ? await prismaAny.user.updateMany({
           where: { email },
           data: {
@@ -106,8 +128,23 @@ export async function POST(request: NextRequest) {
           }
         })
       : { count: 0 };
+    const legacyAccountUpdate = appUser && prismaAny.account
+      ? await prismaAny.account.updateMany({
+          where: {
+            providerId: 'credential',
+            OR: [
+              { userId: appUser.id },
+              { accountId: appUser.id },
+            ],
+          },
+          data: {
+            password: hashedPassword,
+            updatedAt: new Date(),
+          },
+        })
+      : { count: 0 };
 
-    if ((appUpdate.count + authUpdate.count) === 0) {
+    if ((appUpdate.count + authUserUpdate.count + credentialAccountUpdate.count + legacyAccountUpdate.count) === 0) {
       return NextResponse.json(
         { success: false, error: 'Account not found for reset token' },
         { status: 404 }
@@ -127,8 +164,6 @@ export async function POST(request: NextRequest) {
         }
       }
     });
-
-    console.log(`✅ Password reset successfully for ${email}`);
 
     return NextResponse.json({
       success: true,

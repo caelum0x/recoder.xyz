@@ -333,8 +333,8 @@ class SandboxPresentationTool(SandboxToolsBase):
         full_path = f"{self.workspace_path}/{self.presentations_dir}"
         try:
             await self.sandbox.fs.create_folder(full_path, "755")
-        except:
-            pass
+        except Exception as e:
+            logger.debug(f"[sb_presentation_tool] _ensure_presentations_dir: folder may already exist at {full_path}: {e}")
 
     async def _ensure_presentation_dir(self, presentation_name: str):
         """Ensure a specific presentation directory exists"""
@@ -342,8 +342,8 @@ class SandboxPresentationTool(SandboxToolsBase):
         presentation_path = f"{self.workspace_path}/{self.presentations_dir}/{safe_name}"
         try:
             await self.sandbox.fs.create_folder(presentation_path, "755")
-        except:
-            pass
+        except Exception as e:
+            logger.debug(f"[sb_presentation_tool] _ensure_presentation_dir: folder may already exist at {presentation_path}: {e}")
         return safe_name, presentation_path
 
     def _sanitize_filename(self, name: str) -> str:
@@ -392,7 +392,8 @@ class SandboxPresentationTool(SandboxToolsBase):
         try:
             metadata_content = await self.sandbox.fs.download_file(metadata_path)
             return json.loads(metadata_content.decode())
-        except:
+        except Exception as e:
+            logger.debug(f"[sb_presentation_tool] Could not load metadata from {metadata_path}, using defaults: {e}")
             # Create default metadata
             return {
                 "presentation_name": "",
@@ -416,6 +417,7 @@ class SandboxPresentationTool(SandboxToolsBase):
             with open(metadata_path, 'r') as f:
                 return json.load(f)
         except Exception as e:
+            logger.warning(f"[sb_presentation_tool] Failed to load template metadata from {metadata_path}: {e}")
             return {}
 
     def _read_template_slide(self, template_name: str, slide_filename: str) -> str:
@@ -425,6 +427,7 @@ class SandboxPresentationTool(SandboxToolsBase):
             with open(slide_path, 'r') as f:
                 return f.read()
         except Exception as e:
+            logger.warning(f"[sb_presentation_tool] Failed to read template slide {slide_path}: {e}")
             return ""
 
     async def _copy_template_to_workspace(self, template_name: str, presentation_name: str) -> str:
@@ -455,8 +458,8 @@ class SandboxPresentationTool(SandboxToolsBase):
                 target_dir_path = target_dir.replace('\\', '/')  # Normalize path separators
                 try:
                     await self.sandbox.fs.create_folder(target_dir_path, "755")
-                except:
-                    pass  # Directory might already exist
+                except Exception as e:
+                    logger.debug(f"[sb_presentation_tool] Directory may already exist at {target_dir_path}: {e}")
             else:
                 target_dir_path = presentation_path
             
@@ -1106,8 +1109,8 @@ class SandboxPresentationTool(SandboxToolsBase):
             slide_path = f"{presentation_path}/{slide_filename}"
             try:
                 await self.sandbox.fs.delete_file(slide_path)
-            except:
-                pass  # File might not exist
+            except Exception as e:
+                logger.debug(f"[sb_presentation_tool] Could not delete slide file {slide_path} (may not exist): {e}")
             
             # Remove from metadata
             del metadata["slides"][str(slide_number)]

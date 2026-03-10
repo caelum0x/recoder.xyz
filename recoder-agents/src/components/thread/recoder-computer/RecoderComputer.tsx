@@ -41,7 +41,7 @@ export interface ToolCallInput {
   assistantTimestamp?: string;
   toolTimestamp?: string;
   isSuccess?: boolean;
-  messages?: ApiMessageType[];
+  messages?: unknown[];
 }
 
 interface RecoderComputerProps {
@@ -155,7 +155,7 @@ export const RecoderComputer = memo(function RecoderComputer({
     const sandboxChanged = prevSandboxIdRef.current !== null && prevSandboxIdRef.current !== sandboxId && sandboxId !== null;
     
     if (projectChanged || sandboxChanged) {
-      console.log('[RecoderComputer] Project or sandbox changed, resetting local state', { projectId, sandboxId });
+      
       // Reset local component state
       setInternalIndex(0);
       setNavigationMode('live');

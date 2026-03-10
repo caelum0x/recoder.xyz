@@ -146,7 +146,7 @@ export async function POST(request: NextRequest) {
       }
     });
 
-  } catch (error: any) {
+  } catch (error) {
     logger.error('[2FA Login Verify] Error:', { error: String(error), route: 'auth/2fa/verify-login' });
     return NextResponse.json(
       { success: false, error: 'Failed to verify 2FA code' },

@@ -173,8 +173,8 @@ class SandboxGitTool(SandboxToolsBase):
             finally:
                 try:
                     await self.sandbox.fs.delete_file(status_tmp)
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.debug(f"[sb_git_sync] Failed to delete temp status file {status_tmp} (non-critical): {e}")
 
             status_text = status_bytes.decode("utf-8", errors="ignore")
             changed_lines = [
@@ -221,8 +221,8 @@ class SandboxGitTool(SandboxToolsBase):
             finally:
                 try:
                     await self.sandbox.fs.delete_file(hash_tmp)
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.debug(f"[sb_git_sync] Failed to delete temp hash file {hash_tmp} (non-critical): {e}")
 
             commit_hash = hash_bytes.decode("utf-8", errors="ignore").strip()
 
@@ -276,5 +276,5 @@ class SandboxGitTool(SandboxToolsBase):
             try:
                 if hasattr(self.sandbox.process, 'delete_session'):
                     await self.sandbox.process.delete_session(session_id)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"[sb_git_sync] Failed to delete session {session_id} (non-critical): {e}")

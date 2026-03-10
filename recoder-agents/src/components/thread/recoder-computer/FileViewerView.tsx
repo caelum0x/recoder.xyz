@@ -198,7 +198,7 @@ export function FileViewerView({
   useEffect(() => {
     if (prevSandboxIdRef.current !== null && prevSandboxIdRef.current !== sandboxId) {
       // SandboxId changed - reset all file content state
-      console.log('[FileViewerView] Thread switched, resetting file state');
+      
       setRawContent(null);
       setTextContentForRenderer(null);
       setBlobUrlForRenderer(null);
@@ -380,7 +380,7 @@ export function FileViewerView({
         }
       }
 
-      console.log('[FileViewerView] Loaded file history', { count: (data.versions || []).length });
+      
     } catch (error) {
       console.error('[FileViewerView] Failed to load history', error);
       toast.error('Failed to load history');
@@ -392,7 +392,7 @@ export function FileViewerView({
   // Auto-load version history if we have a selected version but no date
   useEffect(() => {
     if (selectedVersion && !selectedVersionDate && sandboxId && filePath && fileVersions.length === 0) {
-      console.log('[FileViewerView] Auto-loading version history for selected version');
+      
       loadVersionHistory(true);
     }
   }, [selectedVersion, selectedVersionDate, sandboxId, filePath, fileVersions.length, loadVersionHistory]);
@@ -410,13 +410,13 @@ export function FileViewerView({
       ['text', 'blob', 'json'].forEach(contentType => {
         const cacheKey = `${sandboxId}:${normalizedPath}:${contentType}`;
         FileCache.delete(cacheKey);
-        console.log('[FileViewerView] Deleted cache key:', cacheKey);
+        
       });
 
       const token = await getSessionAccessToken();
       const blob = await fetchFileByHash(sandboxId, filePath, commit, token ?? undefined);
 
-      console.log('[FileViewerView] Fetched blob:', { size: blob.size, type: blob.type });
+      
 
       // Convert blob to text or keep as blob depending on file type
       const isImageFile = FileCache.isImageFile(filePath);
@@ -431,12 +431,12 @@ export function FileViewerView({
         const blobUrl = URL.createObjectURL(blob);
         setBlobUrlForRenderer(blobUrl);
         setTextContentForRenderer(null);
-        console.log('[FileViewerView] Set binary content:', blobUrl);
+        
       } else {
         const text = await blob.text();
         setTextContentForRenderer(text);
         setBlobUrlForRenderer(null);
-        console.log('[FileViewerView] Set text content, length:', text.length, 'preview:', text.substring(0, 100));
+        
       }
 
       const versionDate = fileVersions.find(v => v.commit === commit)?.date;
@@ -518,7 +518,7 @@ export function FileViewerView({
       }
 
       const result = await res.json();
-      console.log('[FileViewerView] Revert result', result);
+      
 
       // Close modal first for better UX
       setRevertModalOpen(false);
@@ -535,7 +535,7 @@ export function FileViewerView({
       // Always clear caches and refetch after restore
       const normalizedPath = normalizeWorkspacePath(filePath);
 
-      console.log('[FileViewerView] Clearing caches for path:', normalizedPath);
+      
 
       // Clear legacy FileCache
       ['text', 'blob', 'json'].forEach(contentType => {
@@ -551,7 +551,7 @@ export function FileViewerView({
       });
 
       // Refetch the file to get the reverted content
-      console.log('[FileViewerView] Refetching file after restore');
+      
       await refetchFile();
 
       toast.success('Version restored successfully');
@@ -571,7 +571,7 @@ export function FileViewerView({
     if (selectedVersion && filePath && sandboxId) {
       // Only load if version+path combo has changed
       if (lastLoadedRef.current.version !== selectedVersion || lastLoadedRef.current.path !== filePath) {
-        console.log('[FileViewerView] Auto-loading file at version:', selectedVersion, 'for path:', filePath);
+        
         lastLoadedRef.current = { version: selectedVersion, path: filePath };
         // Clear current content
         setTextContentForRenderer(null);
@@ -593,16 +593,11 @@ export function FileViewerView({
 
     // Skip this effect if we're viewing a specific version (handled by loadFileByVersion)
     if (selectedVersion) {
-      console.log('[FileViewerView] Skipping effect - viewing version:', selectedVersion);
+      
       return;
     }
 
-    console.log('[FileViewerView] Effect running for current version:', {
-      filePath,
-      isCachedFileLoading,
-      hasContent: cachedFileContent !== null,
-      contentType: typeof cachedFileContent
-    });
+    
 
     // Handle errors
     if (cachedFileError && !isCachedFileLoading && fileRetryAttempt >= 15) {
@@ -615,7 +610,7 @@ export function FileViewerView({
     // Check for unsaved content first - if it exists, use it instead of cached content
     const unsavedContent = getUnsavedContent(filePath);
     if (unsavedContent !== undefined && canEdit) {
-      console.log('[FileViewerView] Using unsaved content');
+      
       // Use unsaved content if available
       setTextContentForRenderer(unsavedContent);
       setRawContent(unsavedContent);
@@ -625,12 +620,7 @@ export function FileViewerView({
 
     // Handle successful content from cache/server
     if (cachedFileContent !== null && !isCachedFileLoading) {
-      console.log('[FileViewerView] Setting content from cache/server:', {
-        contentType: typeof cachedFileContent,
-        isString: typeof cachedFileContent === 'string',
-        isBlob: cachedFileContent instanceof Blob,
-        preview: typeof cachedFileContent === 'string' ? cachedFileContent.substring(0, 100) : 'N/A'
-      });
+      
       const isImageFile = FileCache.isImageFile(filePath);
       const isPdfFile = FileCache.isPdfFile(filePath);
       const extension = filePath.split('.').pop()?.toLowerCase();
@@ -754,7 +744,7 @@ export function FileViewerView({
       setTextContentForRenderer(newContent);
       setRawContent(newContent);
 
-      console.log('File saved successfully:', filePath);
+      
     } catch (error) {
       console.error('Save error:', error);
       toast.error(`Failed to save: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -1133,7 +1123,7 @@ export function FileViewerView({
                   const isCurrent = index === 0;
                   const isSelected = isCurrent ? !selectedVersion : selectedVersion === version.commit;
                   const parts = (version.message || '').split(':');
-                  console.log('[FileViewerView] history item parts', { commit: version.commit, parts });
+                  
 
                   return (
                     <DropdownMenuItem

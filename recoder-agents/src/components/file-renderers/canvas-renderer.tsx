@@ -27,6 +27,7 @@ import {
 import { RecoderLoader } from '@/components/ui/recoder-loader';
 import { resolveBackendApiUrl } from '@/lib/runtime-urls';
 import { cn } from '@/lib/utils';
+import { useProcessImage, usePerformOCR, useGenerateImages, useConvertToSvg } from '@/hooks/canvas/use-canvas-ai';
 import { Button } from '@/components/ui/button';
 import {
   Tooltip,
@@ -1135,6 +1136,10 @@ function FloatingToolbar({
   });
   const [isCropping, setIsCropping] = useState(false);
 
+  // Canvas AI hooks (replace raw fetch calls)
+  const processImageMutation = useProcessImage();
+  const ocrMutation = usePerformOCR();
+
   // Sync with external selected region (from canvas-level clicks)
   useEffect(() => {
     if (externalSelectedRegion && externalSelectedRegion.id !== selectedTextRegion?.id) {
@@ -1172,23 +1177,8 @@ function FloatingToolbar({
     try {
       const imageBase64 = await getImageAsBase64(element.src);
 
-      // Call backend OCR endpoint
-      const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/canvas-ai/ocr`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(authToken ? { 'Authorization': `Bearer ${authToken}` } : {}),
-        },
-        body: JSON.stringify({ image_base64: imageBase64 }),
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(errorText || 'OCR request failed');
-      }
-
-      const result = await response.json();
-
+      // Call backend OCR endpoint via hook
+      const result = await ocrMutation.mutateAsync({ image_base64: imageBase64 });
       if (!result.success) {
         throw new Error(result.error || 'OCR failed');
       }
@@ -1440,26 +1430,12 @@ function FloatingToolbar({
       // Get actual base64 data (fetch if needed)
       const imageBase64 = await getImageAsBase64(element.src);
 
-      // Call backend Canvas AI API
-      const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/canvas-ai/process`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(authToken ? { 'Authorization': `Bearer ${authToken}` } : {}),
-        },
-        body: JSON.stringify({
-          action,
-          image_base64: imageBase64,
-          prompt: prompt || undefined,
-        }),
+      // Call backend Canvas AI API via hook
+      const result = await processImageMutation.mutateAsync({
+        action,
+        image_base64: imageBase64,
+        prompt: prompt || undefined,
       });
-
-      if (!response.ok) {
-        const error = await response.text();
-        throw new Error(error || 'API request failed');
-      }
-
-      const result = await response.json();
 
       if (result.success && result.image_base64) {
         succeeded = true;
@@ -2484,6 +2460,10 @@ export function CanvasRenderer({ content, filePath, fileName, sandboxId, classNa
 
   const authToken = session?.access_token;
 
+  // React Query mutations for canvas AI operations
+  const generateImagesMutation = useGenerateImages();
+  const convertToSvgMutation = useConvertToSvg();
+
   // Memoized frames for snapping - available to child components
   const frames = useMemo(() =>
     elements.filter(el => el.type === 'frame') as FrameCanvasElement[],
@@ -2578,20 +2558,14 @@ export function CanvasRenderer({ content, filePath, fileName, sandboxId, classNa
     const hasUnsaved = hasUnsavedChangesRef.current;
     const isEditing = isUserEditingRef.current;
     
-    console.log('[CANVAS_LIVE_DEBUG] forceFetch called:', { 
-      sandboxId, 
-      filePath, 
-      hasAuth: !!authToken, 
-      hasUnsaved,
-      isEditing,
-    });
+    
 
     if (!sandboxId || !filePath || !authToken) {
-      console.log('[CANVAS_LIVE_DEBUG] forceFetch skipped - missing required params');
+      
       return;
     }
     if (hasUnsaved || isEditing) {
-      console.log('[CANVAS_LIVE_DEBUG] forceFetch skipped - user editing or unsaved changes');
+      
       return;
     }
 
@@ -2600,7 +2574,7 @@ export function CanvasRenderer({ content, filePath, fileName, sandboxId, classNa
     try {
       const baseUrl = getSandboxFileUrl(sandboxId, filePath);
       const url = `${baseUrl}${baseUrl.includes('?') ? '&' : '?'}_t=${Date.now()}`;
-      console.log('[CANVAS_LIVE_DEBUG] forceFetch fetching:', url);
+      
 
       const response = await fetch(url, {
         headers: authToken ? { 'Authorization': `Bearer ${authToken}` } : {},
@@ -2608,15 +2582,15 @@ export function CanvasRenderer({ content, filePath, fileName, sandboxId, classNa
         cache: 'no-store',
       });
 
-      console.log('[CANVAS_LIVE_DEBUG] forceFetch response status:', response.status);
+      
 
       if (!response.ok) {
-        console.log('[CANVAS_LIVE_DEBUG] forceFetch failed - bad response');
+        
         return;
       }
 
       const newContent = await response.text();
-      console.log('[CANVAS_LIVE_DEBUG] forceFetch content length:', newContent?.length);
+      
 
       if (!newContent) return;
 
@@ -2627,21 +2601,16 @@ export function CanvasRenderer({ content, filePath, fileName, sandboxId, classNa
         const newElementIds = (parsed.elements || []).map(e => e.id).sort().join(',');
         const currentElementIds = elementsRef.current.map(e => e.id).sort().join(',');
 
-        console.log('[CANVAS_LIVE_DEBUG] forceFetch comparing elements:', {
-          serverCount,
-          localCount,
-          changed: newElementIds !== currentElementIds,
-          hasUnsavedNow: hasUnsavedChangesRef.current,
-        });
+        
 
         // Don't overwrite local state if we have more elements locally (user added something)
         if (localCount > serverCount) {
-          console.log('[CANVAS_LIVE_DEBUG] forceFetch SKIPPED - local has MORE elements (user added content)');
+          
           return;
         }
 
         if (newElementIds !== currentElementIds) {
-          console.log('[CANVAS_LIVE_DEBUG] forceFetch updating elements - CHANGE DETECTED!');
+          
           // Only re-center if server has MORE elements (AI added content)
           const shouldRecenter = serverCount > localCount;
           setCanvasData(parsed);
@@ -2650,48 +2619,44 @@ export function CanvasRenderer({ content, filePath, fileName, sandboxId, classNa
             hasCenteredRef.current = false; // Re-center to show new AI-added content
           }
         } else {
-          console.log('[CANVAS_LIVE_DEBUG] forceFetch - no changes detected');
+          
         }
       } catch (parseErr) {
-        console.log('[CANVAS_LIVE_DEBUG] forceFetch parse error:', parseErr);
+        
       }
     } catch (err) {
-      console.log('[CANVAS_LIVE_DEBUG] forceFetch network error:', err);
+      
     }
   }, [sandboxId, filePath, authToken]);
 
   // Listen for canvas-tool-updated events to trigger immediate refresh
   useEffect(() => {
-    console.log('[CANVAS_LIVE_DEBUG] Setting up canvas-tool-updated listener for filePath:', filePath);
+    
 
     const handleCanvasUpdate = (event: CustomEvent<{ canvasPath: string; timestamp: number }>) => {
       const eventPath = event.detail.canvasPath;
-      console.log('[CANVAS_LIVE_DEBUG] Received canvas-tool-updated event:', {
-        eventPath,
-        filePath,
-        timestamp: event.detail.timestamp,
-      });
+      
 
       // Check if this event is for our canvas
       if (filePath && (filePath.includes(eventPath) || eventPath.includes(filePath.replace('canvases/', '')))) {
-        console.log('[CANVAS_LIVE_DEBUG] Event matches our canvas, calling forceFetch');
+        
         forceFetch();
       } else {
-        console.log('[CANVAS_LIVE_DEBUG] Event does NOT match our canvas, ignoring');
+        
       }
     };
 
     window.addEventListener('canvas-tool-updated', handleCanvasUpdate as EventListener);
 
     // Check for any pending events that were dispatched before listener was set up
-    const pendingEvents = (window as any).__pendingCanvasRefreshEvents as Map<string, number> | undefined;
+    const pendingEvents = window.__pendingCanvasRefreshEvents;
     if (pendingEvents && filePath) {
       // Check if any pending event matches our canvas
       for (const [eventPath, timestamp] of pendingEvents.entries()) {
         // Only process events from the last 10 seconds
         if (Date.now() - timestamp < 10000) {
           if (filePath.includes(eventPath) || eventPath.includes(filePath.replace('canvases/', '').replace('/workspace/', ''))) {
-            console.log('[CANVAS_LIVE_DEBUG] Found pending event for our canvas, forcing fetch:', eventPath);
+            
             pendingEvents.delete(eventPath); // Clear after processing
             forceFetch();
             break;
@@ -2704,7 +2669,7 @@ export function CanvasRenderer({ content, filePath, fileName, sandboxId, classNa
     }
 
     return () => {
-      console.log('[CANVAS_LIVE_DEBUG] Removing canvas-tool-updated listener');
+      
       window.removeEventListener('canvas-tool-updated', handleCanvasUpdate as EventListener);
     };
   }, [filePath, forceFetch]);
@@ -2721,7 +2686,7 @@ export function CanvasRenderer({ content, filePath, fileName, sandboxId, classNa
       const isEditing = isUserEditingRef.current;
       
       if (hasUnsaved || isEditing) {
-        console.log('[CANVAS_LIVE_DEBUG] Polling skipped - user editing or unsaved changes', { hasUnsaved, isEditing });
+        
         return;
       }
 
@@ -2730,7 +2695,7 @@ export function CanvasRenderer({ content, filePath, fileName, sandboxId, classNa
       if (now - lastFetchTimeRef.current < POLL_INTERVAL - 200) return;
       lastFetchTimeRef.current = now;
 
-      console.log('[CANVAS_LIVE_DEBUG] Polling: fetching canvas content');
+      
 
       try {
         // Add cache-busting to ensure fresh content from server
@@ -2743,7 +2708,7 @@ export function CanvasRenderer({ content, filePath, fileName, sandboxId, classNa
         });
 
         if (!response.ok) {
-          console.log('[CANVAS_LIVE_DEBUG] Polling: fetch failed with status', response.status);
+          
           return;
         }
 
@@ -2758,22 +2723,17 @@ export function CanvasRenderer({ content, filePath, fileName, sandboxId, classNa
           const newElementIds = (parsed.elements || []).map(e => e.id).sort().join(',');
           const currentElementIds = elementsRef.current.map(e => e.id).sort().join(',');
 
-          console.log('[CANVAS_LIVE_DEBUG] Polling: comparing elements', {
-            serverCount,
-            localCount,
-            changed: newElementIds !== currentElementIds,
-            hasUnsavedNow: hasUnsavedChangesRef.current,
-          });
+          
 
           // Don't overwrite local state if we have more elements locally (user added something)
           if (localCount > serverCount) {
-            console.log('[CANVAS_LIVE_DEBUG] Polling SKIPPED - local has MORE elements (user added content)');
+            
             return;
           }
 
           // Only update if structure actually changed (new/removed elements)
           if (newElementIds !== currentElementIds) {
-            console.log('[CANVAS_LIVE_DEBUG] Polling: UPDATING - new elements detected!');
+            
             // Only re-center if server has MORE elements (AI added content)
             const shouldRecenter = serverCount > localCount;
             setCanvasData(parsed);
@@ -2783,10 +2743,10 @@ export function CanvasRenderer({ content, filePath, fileName, sandboxId, classNa
             }
           }
         } catch (parseErr) {
-          console.log('[CANVAS_LIVE_DEBUG] Polling: parse error', parseErr);
+          
         }
       } catch (err) {
-        console.log('[CANVAS_LIVE_DEBUG] Polling: network error', err);
+        
       }
     };
 
@@ -3023,10 +2983,7 @@ export function CanvasRenderer({ content, filePath, fileName, sandboxId, classNa
 
       // Only log when there's a change to avoid spam
       if (hasChanges !== hasUnsavedChanges) {
-        console.log('[CANVAS_LIVE_DEBUG] hasUnsavedChanges changed to:', hasChanges, {
-          localCount: elements.length,
-          serverCount: canvasData.elements?.length || 0,
-        });
+        
       }
 
       setHasUnsavedChanges(hasChanges);
@@ -3320,26 +3277,11 @@ export function CanvasRenderer({ content, filePath, fileName, sandboxId, classNa
     setGeneratedPreviews([]);
 
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/canvas-ai/generate`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(authToken ? { 'Authorization': `Bearer ${authToken}` } : {}),
-        },
-        body: JSON.stringify({
-          prompt: generatePrompt,
-          num_images: 2,
-          aspect_ratio: '1:1',
-        }),
+      const result = await generateImagesMutation.mutateAsync({
+        prompt: generatePrompt,
+        num_images: 2,
+        aspect_ratio: '1:1',
       });
-
-      if (!response.ok) {
-        const error = await response.text();
-        throw new Error(error || 'Generation failed');
-      }
-
-      const result = await response.json();
-
       if (result.success && result.images?.length > 0) {
         setGeneratedPreviews(result.images);
         toast.success(`Generated ${result.images.length} images!`);
@@ -3716,15 +3658,7 @@ export function CanvasRenderer({ content, filePath, fileName, sandboxId, classNa
           const width = targetEl.width * scale;
           const height = targetEl.height * scale;
 
-          console.log('[SHIMMER_DEBUG] Showing shimmer on:', { 
-            processingId: processingElementId,
-            showingOn: containingFrame ? 'FRAME' : 'IMAGE',
-            frameId: containingFrame?.id,
-            posX, 
-            posY, 
-            width, 
-            height,
-          });
+          
 
           return (
             <div
@@ -3908,26 +3842,11 @@ export function CanvasRenderer({ content, filePath, fileName, sandboxId, classNa
                 }
 
                 // Call backend API for SVG conversion
-                const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/canvas-ai/convert-svg`, {
-                  method: 'POST',
-                  headers: {
-                    'Content-Type': 'application/json',
-                    ...(authToken ? { 'Authorization': `Bearer ${authToken}` } : {}),
-                  },
-                  body: JSON.stringify({
-                    image_base64: imageBase64,
-                    colormode: 'color',
-                    mode: 'spline',
-                  }),
+                const result = await convertToSvgMutation.mutateAsync({
+                  image_base64: imageBase64,
+                  colormode: 'color',
+                  mode: 'spline',
                 });
-
-                if (!response.ok) {
-                  const error = await response.text();
-                  throw new Error(error || 'SVG conversion failed');
-                }
-
-                const result = await response.json();
-
                 if (result.success && result.svg) {
                   // Download the SVG
                   const blob = new Blob([result.svg], { type: 'image/svg+xml' });

@@ -5,7 +5,7 @@ import { toast } from '@/lib/toast';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 
 import { useAgents, useUpdateAgent, useDeleteAgent, useOptimisticAgentUpdate, useAgentDeletionState } from '@/hooks/agents/use-agents';
-import { useInstallTemplate, useMyTemplates, useUnpublishTemplate, usePublishTemplate, useCreateTemplate, useDeleteTemplate } from '@/hooks/secure-mcp/use-secure-mcp';
+import { useInstallTemplate, useMyTemplates, useUnpublishTemplate, usePublishTemplate, useCreateTemplate, useDeleteTemplate, useMarketplaceTemplates } from '@/hooks/secure-mcp/use-secure-mcp';
 import { useAuth } from '@/components/AuthProvider';
 
 import { StreamlinedInstallDialog } from '@/components/agents/installation/streamlined-install-dialog';
@@ -16,12 +16,15 @@ import { AgentsParams } from '@/hooks/agents/utils';
 import { AgentsPageHeader } from '@/components/agents/custom-agents-page/header';
 import { TabsNavigation } from '@/components/agents/custom-agents-page/tabs-navigation';
 import { MyAgentsTab } from '@/components/agents/custom-agents-page/my-agents-tab';
-// MarketplaceTab disabled — marketplace feature is not active in production
+import { MarketplaceTab } from '@/components/agents/custom-agents-page/marketplace-tab';
 import { PublishDialog } from '@/components/agents/custom-agents-page/publish-dialog';
 import { LoadingSkeleton } from '@/components/agents/custom-agents-page/loading-skeleton';
 import { NewAgentDialog } from '@/components/agents/new-agent-dialog';
 import { MarketplaceAgentPreviewDialog } from '@/components/agents/marketplace-agent-preview-dialog';
 import { AgentCountLimitError } from '@/lib/api/errors';
+import { ContextualTip } from '@/components/onboarding/contextual-tip';
+import { AgentQuickActions } from '@/components/agents/agent-quick-actions';
+import { AgentImportDialog } from '@/components/agents/agent-import-dialog';
 
 type ViewMode = 'grid' | 'list';
 type AgentSortOption = 'name' | 'created_at' | 'updated_at' | 'tools_count';
@@ -84,22 +87,12 @@ export default function AgentsPage() {
 
   const [publishingAgentId, setPublishingAgentId] = useState<string | null>(null);
   const [showNewAgentDialog, setShowNewAgentDialog] = useState(false);
+  const [showImportDialog, setShowImportDialog] = useState(false);
 
   const activeTab = useMemo(() => {
     const tab = searchParams.get('tab');
-    if (tab === 'marketplace') {
-      return 'my-agents';
-    }
     return tab || 'my-agents';
   }, [searchParams]);
-
-  useEffect(() => {
-    if (searchParams.get('tab') === 'marketplace') {
-      const params = new URLSearchParams(searchParams.toString());
-      params.set('tab', 'my-agents');
-      router.replace(`${pathname}?${params.toString()}`);
-    }
-  }, [searchParams, pathname, router]);
 
   const agentsQueryParams: AgentsParams = useMemo(() => {
     const params: AgentsParams = {
@@ -128,7 +121,16 @@ export default function AgentsPage() {
   }, [agentsPage, agentsPageSize, agentsSearchQuery, agentsSortBy, agentsSortOrder, agentsFilters]);
 
   const marketplaceQueryParams = useMemo(() => {
-    const params: any = {
+    const params: {
+      page: number;
+      limit: number;
+      search?: string;
+      tags?: string;
+      sort_by: string;
+      sort_order: string;
+      is_recoder_team?: boolean;
+      mine?: boolean;
+    } = {
       page: marketplacePage,
       limit: marketplacePageSize,
       search: marketplaceSearchQuery || undefined,
@@ -136,7 +138,7 @@ export default function AgentsPage() {
       sort_by: "download_count",
       sort_order: "desc"
     };
-    
+
     if (marketplaceFilter === 'recoder') {
       params.is_recoder_team = true;
     } else if (marketplaceFilter === 'community') {
@@ -144,7 +146,7 @@ export default function AgentsPage() {
     } else if (marketplaceFilter === 'mine') {
       params.mine = true;
     }
-    
+
     return params;
   }, [marketplacePage, marketplacePageSize, marketplaceSearchQuery, marketplaceSelectedTags, marketplaceFilter]);
 
@@ -157,9 +159,7 @@ export default function AgentsPage() {
   }), [templatesPage, templatesPageSize, templatesSearchQuery, templatesSortBy, templatesSortOrder]);
 
   const { data: agentsResponse, isLoading: agentsLoading, error: agentsError, refetch: loadAgents } = useAgents(agentsQueryParams);
-  // Marketplace tab is disabled — skip the API call to avoid errors when backend endpoint is unavailable
-  const marketplaceTemplates = undefined;
-  const marketplaceLoading = false;
+  const { data: marketplaceTemplates, isLoading: marketplaceLoading } = useMarketplaceTemplates(marketplaceQueryParams);
 
   const templatesAgentsQueryParams = useMemo(() => ({
     ...agentsQueryParams,
@@ -260,6 +260,22 @@ export default function AgentsPage() {
       }
     }
   }, [searchParams, allMarketplaceItems]);
+
+  // Listen for FAB quick action events
+  useEffect(() => {
+    const handleOpenNewAgentDialog = () => {
+      setShowNewAgentDialog(true);
+    };
+    const handleOpenImportDialog = () => {
+      setShowImportDialog(true);
+    };
+    window.addEventListener('open-new-agent-dialog', handleOpenNewAgentDialog);
+    window.addEventListener('open-import-agent-dialog', handleOpenImportDialog);
+    return () => {
+      window.removeEventListener('open-new-agent-dialog', handleOpenNewAgentDialog);
+      window.removeEventListener('open-import-agent-dialog', handleOpenImportDialog);
+    };
+  }, []);
 
   const handleDeleteAgent = async (agentId: string) => {
     try {
@@ -429,29 +445,30 @@ export default function AgentsPage() {
         toast.error('Unexpected response from server. Please try again.');
         return;
       }
-    } catch (error: any) {
+    } catch (error) {
       console.error('Installation error:', error);
 
       if (error instanceof AgentCountLimitError) {
         return;
       }
 
-      if (error.message?.includes('already in your library')) {
+      const msg = error instanceof Error ? error.message : '';
+      if (msg.includes('already in your library')) {
         toast.error('This agent is already in your library');
-      } else if (error.message?.includes('Credential profile not found')) {
+      } else if (msg.includes('Credential profile not found')) {
         toast.error('One or more selected credential profiles could not be found. Please refresh and try again.');
-      } else if (error.message?.includes('Missing credential profile')) {
+      } else if (msg.includes('Missing credential profile')) {
         toast.error('Please select credential profiles for all required services');
-      } else if (error.message?.includes('Invalid credential profile')) {
+      } else if (msg.includes('Invalid credential profile')) {
         toast.error('One or more selected credential profiles are invalid. Please select valid profiles.');
-      } else if (error.message?.includes('inactive')) {
+      } else if (msg.includes('inactive')) {
         toast.error('One or more selected credential profiles are inactive. Please select active profiles.');
-      } else if (error.message?.includes('Template not found')) {
+      } else if (msg.includes('Template not found')) {
         toast.error('This agent template is no longer available');
-      } else if (error.message?.includes('Access denied')) {
+      } else if (msg.includes('Access denied')) {
         toast.error('You do not have permission to install this agent');
       } else {
-        toast.error(error.message || 'Failed to install Worker. Please try again.');
+        toast.error(msg || 'Failed to install Worker. Please try again.');
       }
     } finally {
       setInstallingItemId(null);
@@ -484,8 +501,8 @@ export default function AgentsPage() {
       setTemplatesActioningId(templateId);
       await unpublishMutation.mutateAsync(templateId);
       toast.success(`${templateName} has been unpublished from the marketplace`);
-    } catch (error: any) {
-      toast.error(error.message || 'Failed to unpublish template');
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to unpublish template');
     } finally {
       setTemplatesActioningId(null);
     }
@@ -498,9 +515,9 @@ export default function AgentsPage() {
       toast.success(`"${item.name}" has been permanently deleted from the marketplace`, {
         description: 'The template is no longer available for installation.'
       });
-    } catch (error: any) {
+    } catch (error) {
       toast.error('Failed to delete template', {
-        description: error.message || 'Please try again later.'
+        description: error instanceof Error ? error.message : 'Please try again later.'
       });
     } finally {
       setTemplatesActioningId(null);
@@ -549,8 +566,8 @@ export default function AgentsPage() {
       }
       
       setPublishDialog(null);
-    } catch (error: any) {
-      toast.error(error.message || 'Failed to publish template');
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to publish template');
     } finally {
       setTemplatesActioningId(null);
       setPublishingAgentId(null);
@@ -568,6 +585,13 @@ export default function AgentsPage() {
       <div className="container mx-auto max-w-7xl px-3 sm:px-4 py-4 sm:py-8">
         <AgentsPageHeader />
       </div>
+      <div className="container mx-auto max-w-7xl px-3 sm:px-4">
+          <ContextualTip
+            tipId="agents-intro"
+            title="AI Agents"
+            description="Agents can search the web, write code, analyze documents, and automate tasks. Create your first one to get started."
+          />
+        </div>
       <div className="sticky top-0 z-50">
         <div className="absolute inset-0 backdrop-blur-md" style={{
           maskImage: 'linear-gradient(to bottom, black 0%, black 60%, transparent 100%)',
@@ -617,7 +641,6 @@ export default function AgentsPage() {
             />
           )}
 
-          {/* Marketplace tab is disabled
           {activeTab === "marketplace" && (
             <MarketplaceTab
               marketplaceSearchQuery={marketplaceSearchQuery}
@@ -639,7 +662,7 @@ export default function AgentsPage() {
               onMarketplacePageSizeChange={handleMarketplacePageSizeChange}
               marketplacePagination={marketplaceTemplates?.pagination}
             />
-          )} */}
+          )}
         </div>
 
         <PublishDialog
@@ -669,7 +692,14 @@ export default function AgentsPage() {
           onInstall={handlePreviewInstall}
           isInstalling={installingItemId === selectedItem?.id}
         />
+
+        <AgentImportDialog
+          open={showImportDialog}
+          onOpenChange={setShowImportDialog}
+        />
       </div>
+
+      <AgentQuickActions />
     </div>
   );
 }

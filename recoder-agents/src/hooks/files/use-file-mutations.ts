@@ -190,7 +190,7 @@ export function useFileDelete() {
       ];
 
       legacyCacheKeys.forEach(key => {
-        const cachedEntry = (FileCache as any).cache?.get(key);
+        const cachedEntry = ('cache' in FileCache ? (FileCache as { cache: Map<string, { type: string; content: unknown }> }).cache?.get(key) : undefined);
         if (cachedEntry) {
           // If it's a blob URL, revoke it before deleting
           if (cachedEntry.type === 'url' && typeof cachedEntry.content === 'string' && cachedEntry.content.startsWith('blob:')) {

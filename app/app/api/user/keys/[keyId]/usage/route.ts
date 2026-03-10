@@ -4,6 +4,7 @@ import { auth } from '@/lib/auth-config';
 import { headers } from 'next/headers';
 
 import { PlatformApiKeyService } from '@/lib/services/platform-api-key.service';
+import { logger } from '@/lib/logger';
 
 /**
  * GET /api/user/keys/[keyId]/usage
@@ -44,8 +45,8 @@ export async function GET(
       success: true,
       stats,
     });
-  } catch (error: any) {
-    console.error('Error fetching key usage stats:', error);
+  } catch (error) {
+    logger.error('Error fetching key usage stats:', { error: error instanceof Error ? error.message : String(error) });
     return NextResponse.json(
       { error: 'Failed to fetch usage statistics' },
       { status: 500 }

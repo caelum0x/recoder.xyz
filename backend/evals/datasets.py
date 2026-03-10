@@ -221,33 +221,88 @@ def create_golden_dataset_from_logs(
 ) -> List[Dict[str, Any]]:
     """
     Create a 'golden' dataset from high-scoring production logs.
-    
-    This is useful for:
-    1. Building regression tests from real usage
-    2. Finding good examples for fine-tuning
-    3. Curating test cases that represent actual user needs
-    
+
+    Loads from three sources in priority order:
+    1. Local golden_dataset.json (hand-curated golden cases)
+    2. Braintrust API logs (if BRAINTRUST_API_KEY is set)
+    3. Fallback to high-quality static test cases
+
     Args:
         project: Braintrust project name
         min_score: Minimum average score to include
         limit: Maximum number of cases to include
-        
+
     Returns:
         List of high-quality input/output pairs
     """
-    try:
-        import braintrust
-        
-        # This would query the Braintrust API for high-scoring logs
-        # Implementation depends on Braintrust API capabilities
-        logger.info(f"Creating golden dataset from {project} logs (min_score={min_score})")
-        
-        # Placeholder - would use Braintrust API to fetch logs
-        return []
-        
-    except Exception as e:
-        logger.error(f"Failed to create golden dataset: {e}")
-        return []
+    # Source 1: Local curated golden dataset file
+    golden_path = Path(__file__).parent / "golden_dataset.json"
+    if golden_path.exists():
+        try:
+            with open(golden_path, 'r') as f:
+                data = json.load(f)
+
+            cases = data if isinstance(data, list) else data.get("cases", [])
+
+            # Filter by min_score if cases have scores
+            filtered = []
+            for case in cases:
+                score = case.get("score", 1.0)
+                if score >= min_score:
+                    filtered.append(case)
+
+            filtered = filtered[:limit]
+            logger.info(f"Loaded {len(filtered)} golden cases from {golden_path} (min_score={min_score})")
+            return filtered
+        except Exception as e:
+            logger.warning(f"Failed to load golden_dataset.json: {e}")
+
+    # Source 2: Braintrust API (if available)
+    if os.getenv("BRAINTRUST_API_KEY"):
+        try:
+            import braintrust
+
+            client = braintrust.init(project=project)
+            logs = client.get_logs()
+
+            scored_cases = []
+            for log_entry in logs:
+                scores = log_entry.get("scores", {})
+                if not scores:
+                    continue
+                avg_score = sum(scores.values()) / len(scores)
+                if avg_score >= min_score:
+                    scored_cases.append({
+                        "input": log_entry.get("input", ""),
+                        "output": log_entry.get("output", ""),
+                        "expected": log_entry.get("expected"),
+                        "score": avg_score,
+                        "scores": scores,
+                        "metadata": log_entry.get("metadata", {}),
+                        "tags": ["golden", "from_logs"],
+                    })
+
+            scored_cases.sort(key=lambda x: x["score"], reverse=True)
+            result = scored_cases[:limit]
+            logger.info(f"Created {len(result)} golden cases from Braintrust logs (min_score={min_score})")
+            return result
+        except Exception as e:
+            logger.warning(f"Braintrust log fetch failed, falling back to static cases: {e}")
+
+    # Source 3: Fallback — curate from static test cases
+    logger.info("No golden dataset file or Braintrust access; using curated static cases")
+    all_static = get_all_static_tests()
+    golden_static = [
+        {
+            "input": case.get("input", ""),
+            "expected_behavior": case.get("expected_behavior", ""),
+            "expected_tools": case.get("expected_tools", []),
+            "tags": case.get("tags", []) + ["golden", "static_fallback"],
+            "score": 1.0,
+        }
+        for case in all_static
+    ]
+    return golden_static[:limit]
 
 
 # ============================================================================

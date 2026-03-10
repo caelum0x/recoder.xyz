@@ -52,8 +52,8 @@ class FileProcessor:
                 # Check if most characters are printable
                 printable_ratio = len([c for c in decoded if c.isprintable() or c.isspace()]) / len(decoded)
                 return printable_ratio > 0.8
-        except:
-            pass
+        except Exception:
+            logger.warning("Text detection heuristic failed for file content sample", exc_info=True)
         return False
     
     async def process_file_fast(
@@ -167,6 +167,9 @@ class FileProcessor:
 
             logger.info(f"Successfully generated summary for entry {entry_id}")
 
+            # Generate vector embedding from summary + filename
+            await self._generate_and_store_embedding(entry_id, filename, summary, content)
+
         except Exception as e:
             logger.error(f"Error generating summary for entry {entry_id}: {str(e)}")
             # Update with error message
@@ -175,8 +178,51 @@ class FileProcessor:
                     "entry_id", entry_id,
                     {"summary": f"Error generating summary: {str(e)}"}
                 )
-            except:
-                pass
+            except Exception:
+                logger.warning("Failed to update summary error status for entry %s", entry_id, exc_info=True)
+
+    async def _generate_and_store_embedding(
+        self,
+        entry_id: str,
+        filename: str,
+        summary: str,
+        content: str
+    ):
+        """Generate a vector embedding for a KB entry and store it."""
+        try:
+            from core.memory.embedding_service import embedding_service
+            import json
+            from core.services.db import execute_mutate
+
+            # Build embedding text from filename + summary + content preview
+            embedding_text = f"File: {filename}\nSummary: {summary}"
+            # Add content preview (first 2000 chars) for richer embeddings
+            if content and not content.startswith('['):
+                preview = content[:2000]
+                embedding_text += f"\nContent: {preview}"
+
+            # Cap at 30000 chars (OpenAI limit)
+            if len(embedding_text) > 30000:
+                embedding_text = embedding_text[:30000]
+
+            vector = await embedding_service.embed_text(embedding_text)
+
+            # Store embedding directly via SQL (pgvector CAST)
+            await execute_mutate(
+                """UPDATE knowledge_base_entries
+                   SET embedding = CAST(:embedding AS vector)
+                   WHERE entry_id = :entry_id""",
+                {
+                    "entry_id": entry_id,
+                    "embedding": json.dumps(vector),
+                }
+            )
+
+            logger.info(f"Generated embedding for KB entry {entry_id}")
+
+        except Exception as e:
+            # Embedding failure is non-fatal — full-text search still works
+            logger.warning(f"Failed to generate embedding for entry {entry_id}: {e}")
 
     async def process_file(
         self, 
@@ -435,9 +481,9 @@ Keep it under 200 words and make it actionable for context injection."""
                     # Only return if it seems to be mostly text content
                     if len([c for c in content[:1000] if c.isprintable() or c.isspace()]) > 800:
                         return content
-                except:
-                    pass
-                
+                except Exception:
+                    logger.warning("Failed to decode file '%s' as text using detected charset", filename, exc_info=True)
+
                 # If we can't extract text content, return a placeholder
                 return f"[Binary file: {filename}] - Content cannot be extracted as text, but file is stored and available for download."
             

@@ -6,6 +6,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth-config';
 import { neon } from '@neondatabase/serverless';
 import { nanoid } from 'nanoid';
+import { logger } from '@/lib/logger';
 
 function getSQL() {
   const databaseUrl = process.env.DATABASE_URL;
@@ -41,7 +42,7 @@ export async function GET(request: NextRequest) {
       }))
     });
   } catch (error) {
-    console.error('[cli/chat] GET error:', error);
+    logger.error('[cli/chat] GET error:', { error: error instanceof Error ? error.message : String(error) });
     return NextResponse.json({ error: 'Failed to list sessions' }, { status: 500 });
   }
 }
@@ -85,7 +86,7 @@ export async function POST(request: NextRequest) {
       url: `${process.env.NEXT_PUBLIC_APP_URL || 'https://recoder.xyz'}/chat/${chatId}`
     });
   } catch (error) {
-    console.error('[cli/chat] POST error:', error);
+    logger.error('[cli/chat] POST error:', { error: error instanceof Error ? error.message : String(error) });
     return NextResponse.json({ error: 'Failed to save session' }, { status: 500 });
   }
 }

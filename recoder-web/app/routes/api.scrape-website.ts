@@ -8,7 +8,7 @@ const logger = createScopedLogger('ScrapeWebsite');
  * POST /api/scrape-website
  * Scrape a website using Firecrawl API
  * Returns markdown, HTML, and screenshot data
- * Supports fallback to mock data if Firecrawl is not configured
+ * Returns an error if Firecrawl is not configured
  */
 
 interface FirecrawlScrapeResult {
@@ -78,31 +78,6 @@ function isValidUrl(urlString: string): boolean {
 }
 
 /**
- * Generate mock data when Firecrawl is not configured
- */
-function getMockData(url: string): ScrapeWebsiteResponse {
-  return {
-    success: true,
-    data: {
-      title: 'Example Website',
-      content: `This is a mock response for ${url}. Configure FIRECRAWL_API_KEY to enable real scraping.`,
-      description: 'A sample website',
-      markdown: `# Example Website\n\nThis is mock content for demonstration purposes.\n\nURL: ${url}`,
-      html: `<h1>Example Website</h1><p>This is mock content for demonstration purposes.</p><p>URL: ${url}</p>`,
-      metadata: {
-        title: 'Example Website',
-        description: 'A sample website',
-        sourceURL: url,
-        statusCode: 200,
-        mock: true,
-      },
-      screenshot: null,
-      links: [],
-    },
-  };
-}
-
-/**
  * Generate error fallback data
  */
 function getErrorFallbackData(url: string, errorMessage: string): ScrapeWebsiteResponse {
@@ -161,10 +136,13 @@ export async function action({ request, context }: ActionFunctionArgs) {
     const env = (context as any)?.cloudflare?.env || process.env;
     const apiKey = env.FIRECRAWL_API_KEY;
 
-    // Return mock data if API key is not configured
+    // Return error if API key is not configured
     if (!apiKey) {
-      logger.warn('[scrape-website] FIRECRAWL_API_KEY not configured, returning mock data');
-      return json(getMockData(url));
+      logger.warn('[scrape-website] FIRECRAWL_API_KEY not configured');
+      return json(
+        { success: false, error: 'Website scraping is not configured. Set FIRECRAWL_API_KEY to enable this feature.' },
+        { status: 503 },
+      );
     }
 
     logger.info('[scrape-website] Scraping with Firecrawl:', url, 'formats:', formats);
@@ -286,7 +264,7 @@ export async function loader() {
   return json({
     status: 'ok',
     service: 'scrape-website',
-    description: 'Website scraping endpoint using Firecrawl API with mock data fallback',
+    description: 'Website scraping endpoint using Firecrawl API',
     methods: ['POST'],
     usage: {
       endpoint: '/api/scrape-website',
@@ -316,8 +294,8 @@ export async function loader() {
       },
     },
     notes: [
-      'Returns mock data if FIRECRAWL_API_KEY is not configured',
-      'Supports fallback data on errors for graceful degradation',
+      'Returns an error if FIRECRAWL_API_KEY is not configured',
+      'Returns fallback error data on scraping failures for graceful degradation',
       'Screenshot format must be included in formats array to receive screenshot',
     ],
   });

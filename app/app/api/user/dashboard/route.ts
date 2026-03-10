@@ -2,6 +2,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { ensureAppUserFromAuthUser, requireAuth } from "@/lib/auth-helpers";
 import { prisma } from '@/lib/prisma';
+import { logger } from '@/lib/logger';
 
 export async function GET(request: NextRequest) {
   try {
@@ -111,7 +112,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json(dashboardData);
   } catch (error) {
-    console.error('Dashboard API error:', error);
+    logger.error('Dashboard API error:', { error: error instanceof Error ? error.message : String(error) });
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

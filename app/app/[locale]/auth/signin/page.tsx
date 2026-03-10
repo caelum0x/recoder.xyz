@@ -33,9 +33,12 @@ function SignInForm() {
   const [emailNotVerified, setEmailNotVerified] = useState(false);
   const [resendingEmail, setResendingEmail] = useState(false);
   const [resendSuccess, setResendSuccess] = useState(false);
+  const [gdprConsent, setGdprConsent] = useState(false);
   const searchParams = useSearchParams();
   const router = useRouter();
-  const returnUrl = searchParams.get('redirect') || searchParams.get('return') || '/dashboard';
+  const rawReturn = searchParams.get('redirect') || searchParams.get('return') || '/dashboard';
+  // Prevent open redirect: only allow relative paths (no protocol-relative //evil.com)
+  const returnUrl = rawReturn.startsWith('/') && !rawReturn.startsWith('//') ? rawReturn : '/dashboard';
 
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -152,295 +155,331 @@ function SignInForm() {
   };
 
   const platforms = [
-    {
-      name: 'Agents',
-      description: 'AI agent IDE',
-      icon: Bot,
-      url: 'https://agents.recoder.xyz'
-    },
-    {
-      name: 'Studio',
-      description: 'AI workflow builder',
-      icon: Workflow,
-      url: 'https://studio.recoder.xyz'
-    },
-    {
-      name: 'Web',
-      description: 'Browser-based IDE',
-      icon: Globe,
-      url: 'https://web.recoder.xyz'
-    },
-    {
-      name: 'PM',
-      description: 'Project management',
-      icon: LayoutDashboard,
-      url: 'https://pm.recoder.xyz'
-    },
-    {
-      name: 'Agency',
-      description: 'AI agency platform',
-      icon: Briefcase,
-      url: 'https://agency.recoder.xyz'
-    },
-    {
-      name: 'CLI',
-      description: 'Terminal access',
-      icon: Terminal,
-      url: null
-    },
+    { name: 'Agents', description: 'AI agent IDE', icon: Bot, url: 'https://agents.recoder.xyz' },
+    { name: 'Web', description: 'Browser-based IDE', icon: Globe, url: 'https://web.recoder.xyz' },
+    { name: 'PM', description: 'Project management', icon: LayoutDashboard, url: 'https://pm.recoder.xyz' },
+    { name: 'Agency', description: 'AI agency platform', icon: Briefcase, url: 'https://agency.recoder.xyz' },
+    { name: 'CLI', description: 'Terminal access', icon: Terminal, url: 'https://recoder.xyz/tools' },
   ];
 
   return (
-    <div className="min-h-screen bg-black text-white">
-      <SiteHeader />
+    <div className="min-h-screen bg-black text-white relative overflow-hidden">
+      {/* Animated gradient background */}
+      <div className="fixed inset-0 z-0">
+        <div className="absolute inset-0 bg-gradient-to-br from-orange-500/5 via-black to-purple-600/5" />
+        <div className="absolute top-0 left-1/4 w-96 h-96 bg-orange-500/10 rounded-full blur-3xl animate-pulse" style={{ animationDuration: '8s' }} />
+        <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-purple-600/10 rounded-full blur-3xl animate-pulse" style={{ animationDuration: '12s' }} />
+      </div>
 
-      <div className="container mx-auto px-6 py-24">
-        <div className="max-w-md mx-auto">
-          {/* Sign In Card */}
-          <div className="mb-8 p-8 rounded-2xl border border-white/10 bg-black/50 backdrop-blur-xl">
-            <div className="text-center space-y-3 mb-8">
-              <h1 className="text-3xl font-bold">Welcome Back</h1>
-              <p className="text-gray-400">
-                Sign in to access the Recoder platform
-              </p>
-            </div>
-            <div className="space-y-4">
-              {searchParams.get('verified') === 'true' && (
-                <div className="p-4 text-sm text-green-400 bg-green-500/10 border border-green-500/20 rounded-lg">
-                  Email verified successfully! You can now sign in.
+      <div className="relative z-10">
+        <SiteHeader />
+
+        <div className="container mx-auto px-6 py-16 lg:py-24">
+          <div className="max-w-5xl mx-auto grid lg:grid-cols-2 gap-12 items-start">
+            {/* Left Column - Sign In Card */}
+            <div>
+              <div className="mb-8 p-8 rounded-2xl border border-white/10 bg-black/60 backdrop-blur-xl">
+                <div className="text-center space-y-3 mb-8">
+                  <h1 className="text-3xl font-bold">Welcome Back</h1>
+                  <p className="text-gray-400">
+                    Sign in to access the Recoder platform
+                  </p>
                 </div>
-              )}
-
-              {/* OAuth Buttons */}
-              <button
-                className="w-full px-6 py-3 border border-white/10 hover:border-white/20 hover:bg-white/5 rounded-lg font-medium transition-all flex items-center justify-center space-x-2"
-                onClick={handleGitHubSignIn}
-                disabled={loading}
-              >
-                <Github className="w-5 h-5" />
-                <span>Continue with GitHub</span>
-              </button>
-
-              <button
-                className="w-full px-6 py-3 border border-white/10 hover:border-white/20 hover:bg-white/5 rounded-lg font-medium transition-all flex items-center justify-center space-x-2"
-                onClick={handleGoogleSignIn}
-                disabled={loading}
-              >
-                <svg className="w-5 h-5" viewBox="0 0 24 24">
-                  <path fill="currentColor" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
-                  <path fill="currentColor" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
-                  <path fill="currentColor" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
-                  <path fill="currentColor" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
-                </svg>
-                <span>Continue with Google</span>
-              </button>
-
-              <div className="relative my-2">
-                <div className="absolute inset-0 flex items-center">
-                  <div className="w-full border-t border-white/10"></div>
-                </div>
-                <div className="relative flex justify-center text-sm">
-                  <span className="px-4 bg-black text-gray-400">
-                    Or sign in with email
-                  </span>
-                </div>
-              </div>
-
-              {!requires2FA ? (
-                <form onSubmit={handleSignIn} className="space-y-4">
-                  {error && (
-                    <div className="p-4 text-sm text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg">
-                      {error}
-                      {emailNotVerified && (
-                        <button
-                          type="button"
-                          onClick={handleResendVerification}
-                          disabled={resendingEmail}
-                          className="mt-2 block w-full text-center text-orange-400 hover:text-orange-300 underline"
-                        >
-                          {resendingEmail ? 'Sending...' : 'Resend verification email'}
-                        </button>
-                      )}
-                    </div>
-                  )}
-                  {resendSuccess && (
-                    <div className="p-4 text-sm text-blue-400 bg-blue-500/10 border border-blue-500/20 rounded-lg">
-                      Verification email sent! Please check your inbox and spam folder.
-                    </div>
-                  )}
-                  {success && (
+                <div className="space-y-4">
+                  {searchParams.get('verified') === 'true' && (
                     <div className="p-4 text-sm text-green-400 bg-green-500/10 border border-green-500/20 rounded-lg">
-                      Authentication successful! Redirecting...
+                      Email verified successfully! You can now sign in.
                     </div>
                   )}
-                  <div className="space-y-2">
-                    <label htmlFor="email" className="block text-sm font-medium text-gray-300">
-                      Email
-                    </label>
-                    <input
-                      id="email"
-                      type="email"
-                      placeholder="your@email.com"
-                      className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent text-white placeholder-gray-500"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      required
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <label htmlFor="password" className="block text-sm font-medium text-gray-300">
-                        Password
-                      </label>
-                      <Link
-                        href="/auth/forgot-password"
-                        className="text-sm text-orange-500 hover:text-orange-400 transition-colors"
-                      >
-                        Forgot password?
-                      </Link>
-                    </div>
-                    <input
-                      id="password"
-                      type="password"
-                      placeholder="••••••••"
-                      className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent text-white placeholder-gray-500"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      required
-                    />
-                  </div>
-                  <div className="flex items-center">
-                    <input
-                      id="rememberMe"
-                      type="checkbox"
-                      checked={rememberMe}
-                      onChange={(e) => setRememberMe(e.target.checked)}
-                      className="w-4 h-4 bg-white/5 border border-white/10 rounded text-orange-500 focus:ring-2 focus:ring-orange-500"
-                    />
-                    <label htmlFor="rememberMe" className="ml-2 text-sm text-gray-300">
-                      Remember me for 30 days
-                    </label>
-                  </div>
+
+                  {/* OAuth Buttons */}
                   <button
-                    className="w-full px-6 py-3 bg-orange-500 hover:bg-orange-600 rounded-lg font-medium transition-all flex items-center justify-center space-x-2"
-                    type="submit"
+                    className="w-full px-6 py-3 border border-white/10 hover:border-white/20 hover:bg-white/5 rounded-lg font-medium transition-all flex items-center justify-center space-x-2"
+                    onClick={handleGitHubSignIn}
                     disabled={loading}
                   >
-                    {loading ? (
-                      <>
-                        <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                        <span>Signing In...</span>
-                      </>
-                    ) : (
-                      <>
-                        <Mail className="w-5 h-5" />
-                        <span>Sign In with Email</span>
-                      </>
-                    )}
+                    <Github className="w-5 h-5" />
+                    <span>Continue with GitHub</span>
                   </button>
-                </form>
-              ) : (
-                <form onSubmit={handleVerify2FA} className="space-y-4">
-                  {error && (
-                    <div className="p-4 text-sm text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg">
-                      {error}
+
+                  <button
+                    className="w-full px-6 py-3 border border-white/10 hover:border-white/20 hover:bg-white/5 rounded-lg font-medium transition-all flex items-center justify-center space-x-2"
+                    onClick={handleGoogleSignIn}
+                    disabled={loading}
+                  >
+                    <svg className="w-5 h-5" viewBox="0 0 24 24">
+                      <path fill="currentColor" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                      <path fill="currentColor" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                      <path fill="currentColor" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+                      <path fill="currentColor" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+                    </svg>
+                    <span>Continue with Google</span>
+                  </button>
+
+                  <div className="relative my-2">
+                    <div className="absolute inset-0 flex items-center">
+                      <div className="w-full border-t border-white/10"></div>
                     </div>
-                  )}
-                  {success && (
-                    <div className="p-4 text-sm text-green-400 bg-green-500/10 border border-green-500/20 rounded-lg">
-                      Authentication successful! Redirecting...
-                    </div>
-                  )}
-                  <div className="p-4 bg-blue-500/10 border border-blue-500/20 rounded-lg">
-                    <div className="text-sm text-blue-200">
-                      Two-factor authentication is enabled for this account. Please enter your 6-digit code from your authenticator app.
+                    <div className="relative flex justify-center text-sm">
+                      <span className="px-4 bg-black text-gray-400">
+                        Or sign in with email
+                      </span>
                     </div>
                   </div>
-                  <div className="space-y-2">
-                    <label htmlFor="twoFactorCode" className="block text-sm font-medium text-gray-300">
-                      Authentication Code
-                    </label>
-                    <input
-                      id="twoFactorCode"
-                      type="text"
-                      placeholder="000000"
-                      maxLength={8}
-                      className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent text-white text-center text-2xl tracking-widest placeholder-gray-500"
-                      value={twoFactorCode}
-                      onChange={(e) => setTwoFactorCode(e.target.value.replace(/\D/g, ''))}
-                      required
-                      autoFocus
-                    />
-                    <p className="text-xs text-gray-400">
-                      Enter your 6-digit code or 8-character backup code
-                    </p>
-                  </div>
-                  <div className="flex space-x-3">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setRequires2FA(false);
-                        setTwoFactorCode('');
-                        setError('');
-                      }}
-                      className="px-6 py-3 border border-white/10 hover:border-white/20 hover:bg-white/5 rounded-lg font-medium transition-all"
-                      disabled={loading}
-                    >
-                      Back
-                    </button>
-                    <button
-                      className="flex-1 px-6 py-3 bg-orange-500 hover:bg-orange-600 rounded-lg font-medium transition-all flex items-center justify-center space-x-2"
-                      type="submit"
-                      disabled={loading || twoFactorCode.length < 6}
-                    >
-                      {loading ? (
-                        <>
-                          <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                          <span>Verifying...</span>
-                        </>
-                      ) : (
-                        <span>Verify & Sign In</span>
+
+                  {!requires2FA ? (
+                    <form onSubmit={handleSignIn} className="space-y-4">
+                      {error && (
+                        <div className="p-4 text-sm text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg">
+                          {error}
+                          {emailNotVerified && (
+                            <button
+                              type="button"
+                              onClick={handleResendVerification}
+                              disabled={resendingEmail}
+                              className="mt-2 block w-full text-center text-orange-400 hover:text-orange-300 underline"
+                            >
+                              {resendingEmail ? 'Sending...' : 'Resend verification email'}
+                            </button>
+                          )}
+                        </div>
                       )}
-                    </button>
-                  </div>
-                </form>
-              )}
+                      {resendSuccess && (
+                        <div className="p-4 text-sm text-blue-400 bg-blue-500/10 border border-blue-500/20 rounded-lg">
+                          Verification email sent! Please check your inbox and spam folder.
+                        </div>
+                      )}
+                      {success && (
+                        <div className="p-4 text-sm text-green-400 bg-green-500/10 border border-green-500/20 rounded-lg">
+                          Authentication successful! Redirecting...
+                        </div>
+                      )}
+                      <div className="space-y-2">
+                        <label htmlFor="email" className="block text-sm font-medium text-gray-300">
+                          Email
+                        </label>
+                        <input
+                          id="email"
+                          type="email"
+                          placeholder="your@email.com"
+                          className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent text-white placeholder-gray-500"
+                          value={email}
+                          onChange={(e) => setEmail(e.target.value)}
+                          required
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <label htmlFor="password" className="block text-sm font-medium text-gray-300">
+                            Password
+                          </label>
+                          <Link
+                            href="/auth/forgot-password"
+                            className="text-sm text-orange-500 hover:text-orange-400 transition-colors"
+                          >
+                            Forgot password?
+                          </Link>
+                        </div>
+                        <input
+                          id="password"
+                          type="password"
+                          placeholder="••••••••"
+                          className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent text-white placeholder-gray-500"
+                          value={password}
+                          onChange={(e) => setPassword(e.target.value)}
+                          required
+                        />
+                      </div>
+                      <div className="flex items-center">
+                        <input
+                          id="rememberMe"
+                          type="checkbox"
+                          checked={rememberMe}
+                          onChange={(e) => setRememberMe(e.target.checked)}
+                          className="w-4 h-4 bg-white/5 border border-white/10 rounded text-orange-500 focus:ring-2 focus:ring-orange-500"
+                        />
+                        <label htmlFor="rememberMe" className="ml-2 text-sm text-gray-300">
+                          Remember me for 30 days
+                        </label>
+                      </div>
 
-              {!requires2FA && (
-                <div className="text-center text-sm pt-4">
-                  <span className="text-gray-400">Don&apos;t have an account? </span>
-                  <Link href="/auth/signup" className="text-orange-500 hover:text-orange-400 transition-colors">
-                    Sign up
-                  </Link>
+                      {/* GDPR Consent */}
+                      <div className="flex items-start">
+                        <input
+                          id="gdprConsent"
+                          type="checkbox"
+                          checked={gdprConsent}
+                          onChange={(e) => setGdprConsent(e.target.checked)}
+                          className="w-4 h-4 mt-0.5 bg-white/5 border border-white/10 rounded text-orange-500 focus:ring-2 focus:ring-orange-500"
+                        />
+                        <label htmlFor="gdprConsent" className="ml-2 text-xs text-gray-400">
+                          I agree to the{' '}
+                          <Link href="/privacy" className="text-orange-500 hover:text-orange-400 underline">
+                            Privacy Policy
+                          </Link>{' '}
+                          and{' '}
+                          <Link href="/cookies" className="text-orange-500 hover:text-orange-400 underline">
+                            Cookie Policy
+                          </Link>
+                        </label>
+                      </div>
+
+                      <button
+                        className="w-full px-6 py-3 bg-gradient-to-r from-orange-500 to-purple-600 hover:from-orange-600 hover:to-purple-700 rounded-lg font-medium transition-all flex items-center justify-center space-x-2 disabled:opacity-50"
+                        type="submit"
+                        disabled={loading || !gdprConsent}
+                      >
+                        {loading ? (
+                          <>
+                            <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                            <span>Signing In...</span>
+                          </>
+                        ) : (
+                          <>
+                            <Mail className="w-5 h-5" />
+                            <span>Sign In with Email</span>
+                          </>
+                        )}
+                      </button>
+                    </form>
+                  ) : (
+                    <form onSubmit={handleVerify2FA} className="space-y-4">
+                      {error && (
+                        <div className="p-4 text-sm text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg">
+                          {error}
+                        </div>
+                      )}
+                      {success && (
+                        <div className="p-4 text-sm text-green-400 bg-green-500/10 border border-green-500/20 rounded-lg">
+                          Authentication successful! Redirecting...
+                        </div>
+                      )}
+                      <div className="p-4 bg-blue-500/10 border border-blue-500/20 rounded-lg">
+                        <div className="text-sm text-blue-200">
+                          Two-factor authentication is enabled for this account. Please enter your 6-digit code from your authenticator app.
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        <label htmlFor="twoFactorCode" className="block text-sm font-medium text-gray-300">
+                          Authentication Code
+                        </label>
+                        <input
+                          id="twoFactorCode"
+                          type="text"
+                          placeholder="000000"
+                          maxLength={8}
+                          className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent text-white text-center text-2xl tracking-widest placeholder-gray-500"
+                          value={twoFactorCode}
+                          onChange={(e) => setTwoFactorCode(e.target.value.replace(/\D/g, ''))}
+                          required
+                          autoFocus
+                        />
+                        <p className="text-xs text-gray-400">
+                          Enter your 6-digit code or 8-character backup code
+                        </p>
+                      </div>
+                      <div className="flex space-x-3">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setRequires2FA(false);
+                            setTwoFactorCode('');
+                            setError('');
+                          }}
+                          className="px-6 py-3 border border-white/10 hover:border-white/20 hover:bg-white/5 rounded-lg font-medium transition-all"
+                          disabled={loading}
+                        >
+                          Back
+                        </button>
+                        <button
+                          className="flex-1 px-6 py-3 bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 rounded-lg font-medium transition-all flex items-center justify-center space-x-2"
+                          type="submit"
+                          disabled={loading || twoFactorCode.length < 6}
+                        >
+                          {loading ? (
+                            <>
+                              <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                              <span>Verifying...</span>
+                            </>
+                          ) : (
+                            <span>Verify & Sign In</span>
+                          )}
+                        </button>
+                      </div>
+                    </form>
+                  )}
+
+                  {!requires2FA && (
+                    <div className="text-center text-sm pt-4">
+                      <span className="text-gray-400">Don&apos;t have an account? </span>
+                      <Link href="/auth/signup" className="text-orange-500 hover:text-orange-400 transition-colors">
+                        Sign up
+                      </Link>
+                    </div>
+                  )}
                 </div>
-              )}
-            </div>
-          </div>
-
-          {/* Platform Access Card */}
-          <div className="p-8 rounded-2xl border border-white/10 bg-black/50 backdrop-blur-xl">
-            <div className="space-y-2 mb-6">
-              <h2 className="text-xl font-bold">One Account. All Platforms.</h2>
-              <p className="text-gray-400 text-sm">
-                Your Recoder account gives you access to every platform
-              </p>
+              </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
-              {platforms.map((platform) => {
-                const Icon = platform.icon;
-                return (
-                  <div key={platform.name} className="flex items-center space-x-3 p-3 rounded-lg border border-white/5 bg-white/5">
-                    <div className="w-8 h-8 bg-gradient-to-br from-orange-500 to-purple-600 rounded-lg flex items-center justify-center flex-shrink-0">
-                      <Icon className="w-4 h-4 text-white" />
+            {/* Right Column - Platform Showcase */}
+            <div className="hidden lg:block">
+              <div className="p-8 rounded-2xl border border-white/10 bg-black/60 backdrop-blur-xl sticky top-24">
+                <div className="space-y-2 mb-6">
+                  <h2 className="text-xl font-bold">One Account. All Platforms.</h2>
+                  <p className="text-gray-400 text-sm">
+                    Your Recoder account gives you access to every platform
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  {platforms.map((platform) => {
+                    const Icon = platform.icon;
+                    return (
+                      <div key={platform.name} className="flex items-center space-x-3 p-3 rounded-lg border border-white/5 bg-white/5 hover:bg-white/10 transition-colors">
+                        <div className="w-8 h-8 bg-gradient-to-br from-orange-500 to-purple-600 rounded-lg flex items-center justify-center flex-shrink-0">
+                          <Icon className="w-4 h-4 text-white" />
+                        </div>
+                        <div className="min-w-0">
+                          <div className="font-medium text-white text-sm">{platform.name}</div>
+                          <div className="text-xs text-gray-500">{platform.description}</div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <div className="mt-6 p-4 rounded-lg border border-orange-500/20 bg-orange-500/5">
+                  <p className="text-sm text-gray-300">
+                    <span className="text-orange-400 font-medium">Unified SSO</span> — Sign in once and access all Recoder apps seamlessly.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Mobile-only Platform Card */}
+            <div className="lg:hidden p-8 rounded-2xl border border-white/10 bg-black/60 backdrop-blur-xl">
+              <div className="space-y-2 mb-6">
+                <h2 className="text-xl font-bold">One Account. All Platforms.</h2>
+                <p className="text-gray-400 text-sm">
+                  Your Recoder account gives you access to every platform
+                </p>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                {platforms.map((platform) => {
+                  const Icon = platform.icon;
+                  return (
+                    <div key={platform.name} className="flex items-center space-x-3 p-3 rounded-lg border border-white/5 bg-white/5">
+                      <div className="w-8 h-8 bg-gradient-to-br from-orange-500 to-purple-600 rounded-lg flex items-center justify-center flex-shrink-0">
+                        <Icon className="w-4 h-4 text-white" />
+                      </div>
+                      <div className="min-w-0">
+                        <div className="font-medium text-white text-sm">{platform.name}</div>
+                        <div className="text-xs text-gray-500">{platform.description}</div>
+                      </div>
                     </div>
-                    <div className="min-w-0">
-                      <div className="font-medium text-white text-sm">{platform.name}</div>
-                      <div className="text-xs text-gray-500">{platform.description}</div>
-                    </div>
-                  </div>
-                );
-              })}
+                  );
+                })}
+              </div>
             </div>
           </div>
         </div>

@@ -1,76 +1,20 @@
+/**
+ * Subscription Plans API Route
+ *
+ * Returns available subscription plans from the canonical plan definitions.
+ * This route exists for backward compatibility with the backend-api client
+ * which calls /api/subscriptions/plans. The canonical source is
+ * /api/billing/plans — both routes serve the same data.
+ */
+
 import { NextResponse } from 'next/server';
+import { SUBSCRIPTION_PLANS } from '@/lib/config/subscription-plans';
 
 export async function GET() {
-  // Hardcoded subscription plans matching the backend
-  const plans = {
-    success: true,
-    plans: [
-      {
-        id: 'weekly',
-        name: 'Weekly Pro',
-        price: 1000, // $10.00 in cents
-        interval: 'week',
-        intervalCount: 1,
-        features: [
-          '10 sessions per day',
-          '30k tokens/session',
-          'All AI models',
-          'Priority support',
-          'Team collaboration (3 members)',
-        ],
-      },
-      {
-        id: 'monthly',
-        name: 'Monthly Pro',
-        price: 2000, // $20.00 in cents
-        interval: 'month',
-        intervalCount: 1,
-        features: [
-          '15 sessions per day',
-          '50k tokens/session',
-          'All AI models',
-          'Priority support',
-          'Team collaboration (5 members)',
-          'API access',
-        ],
-      },
-      {
-        id: 'pro',
-        name: 'Pro',
-        price: 10000, // $100.00 in cents
-        interval: 'month',
-        intervalCount: 1,
-        features: [
-          '20 sessions per day',
-          '100k tokens/session',
-          'All AI models + Beta access',
-          'Priority support + Slack',
-          'Team collaboration (10 members)',
-          'API access',
-          'Custom AI models',
-          'Dedicated account manager',
-        ],
-      },
-      {
-        id: 'enterprise',
-        name: 'Enterprise',
-        price: 50000, // $500.00 in cents
-        interval: 'month',
-        intervalCount: 1,
-        features: [
-          'Unlimited sessions',
-          'Unlimited tokens',
-          'All AI models + Beta access',
-          '24/7 dedicated support',
-          'Unlimited team members',
-          'API access',
-          'Custom AI models',
-          'On-premise deployment',
-          'SLA guarantees',
-        ],
-      },
-    ],
-  };
+  const plans = Object.values(SUBSCRIPTION_PLANS);
 
-  return NextResponse.json(plans);
+  return NextResponse.json({
+    success: true,
+    plans,
+  });
 }

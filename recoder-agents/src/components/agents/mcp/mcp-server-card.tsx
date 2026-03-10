@@ -16,7 +16,7 @@ export const McpServerCard: React.FC<McpServerCardProps> = ({ server, onClick })
     >
       <div className="flex items-start gap-3 flex-shrink-0">
         {server.iconUrl ? (
-          <img src={server.iconUrl} alt={server.displayName || server.name} className="w-6 h-6 rounded" />
+          <img src={server.iconUrl} alt={server.displayName || server.name} loading="lazy" className="w-6 h-6 rounded" />
         ) : (
           <div className="w-6 h-6 rounded bg-primary/10 flex items-center justify-center">
             <Sparkles className="h-3 w-3 text-primary" />
