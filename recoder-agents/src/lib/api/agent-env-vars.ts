@@ -36,6 +36,14 @@ export interface ExportEnvVarsResponse {
   count: number;
 }
 
+export interface EnvVarAuditEntry {
+  id: string;
+  agent_id: string;
+  key: string;
+  action: 'created' | 'updated' | 'deleted' | 'revealed';
+  created_at: string;
+}
+
 export const listEnvVars = async (agentId: string): Promise<AgentEnvVar[]> => {
   const response = await backendApi.get<AgentEnvVar[]>(
     `/agents/${agentId}/env`,
@@ -57,6 +65,18 @@ export const upsertEnvVar = async (
   return response.data!;
 };
 
+export const revealEnvVar = async (
+  agentId: string,
+  key: string
+): Promise<AgentEnvVar> => {
+  const response = await backendApi.get<AgentEnvVar>(
+    `/agents/${agentId}/env/${encodeURIComponent(key)}/reveal`,
+    { showErrors: false }
+  );
+  if (response.error) throw new Error(response.error.message);
+  return response.data!;
+};
+
 export const deleteEnvVar = async (
   agentId: string,
   key: string
@@ -72,6 +92,18 @@ export const bulkSetEnvVars = async (
   const response = await backendApi.post<BulkEnvVarResponse>(
     `/agents/${agentId}/env/bulk`,
     { variables }
+  );
+  if (response.error) throw new Error(response.error.message);
+  return response.data!;
+};
+
+export const getEnvVarAudit = async (
+  agentId: string,
+  limit: number = 50
+): Promise<EnvVarAuditEntry[]> => {
+  const response = await backendApi.get<EnvVarAuditEntry[]>(
+    `/agents/${agentId}/env/audit?limit=${limit}`,
+    { showErrors: false }
   );
   if (response.error) throw new Error(response.error.message);
   return response.data!;

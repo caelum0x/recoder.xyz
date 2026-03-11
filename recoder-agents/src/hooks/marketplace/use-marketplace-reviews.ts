@@ -2,37 +2,25 @@
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
-  createOrUpdateReview,
-  getListingReviewsEnhanced,
-  getReviewSummary,
+  createReview,
+  getMarketplaceReviews,
+  updateReview,
   deleteReview,
   toggleHelpful,
+  getRatingSummary,
+  type MarketplaceReview,
   type ReviewListResponse,
-  type ReviewSummary,
-  type ReviewItem,
+  type RatingSummary,
   type CreateReviewRequest,
-  type HelpfulResponse,
-  type ReviewSortOption,
+  type UpdateReviewRequest,
+  type HelpfulToggleResponse,
+  type ReviewFilters,
 } from '@/lib/api/marketplace-reviews';
 
-export function useListingReviewsEnhanced(
-  listingId: string | null,
-  sort: ReviewSortOption = 'recent',
-  limit: number = 20,
-) {
+export function useMarketplaceReviews(filters?: ReviewFilters) {
   return useQuery<ReviewListResponse>({
-    queryKey: ['marketplace-reviews-enhanced', listingId, sort, limit],
-    queryFn: () => getListingReviewsEnhanced(listingId!, { sort, limit }),
-    enabled: !!listingId,
-    staleTime: 30_000,
-  });
-}
-
-export function useReviewSummary(listingId: string | null) {
-  return useQuery<ReviewSummary>({
-    queryKey: ['marketplace-review-summary', listingId],
-    queryFn: () => getReviewSummary(listingId!),
-    enabled: !!listingId,
+    queryKey: ['marketplace-reviews', filters],
+    queryFn: () => getMarketplaceReviews(filters),
     staleTime: 30_000,
   });
 }
@@ -40,24 +28,34 @@ export function useReviewSummary(listingId: string | null) {
 export function useCreateReview() {
   const queryClient = useQueryClient();
 
+  return useMutation<MarketplaceReview, Error, CreateReviewRequest>({
+    mutationFn: (body) => createReview(body),
+    onSuccess: (_data, body) => {
+      queryClient.invalidateQueries({
+        queryKey: ['marketplace-reviews'],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ['rating-summary', body.agent_id],
+      });
+    },
+  });
+}
+
+export function useUpdateReview() {
+  const queryClient = useQueryClient();
+
   return useMutation<
-    ReviewItem,
+    MarketplaceReview,
     Error,
-    { listingId: string; body: CreateReviewRequest }
+    { reviewId: string; body: UpdateReviewRequest; agentId: string }
   >({
-    mutationFn: ({ listingId, body }) => createOrUpdateReview(listingId, body),
-    onSuccess: (_data, { listingId }) => {
+    mutationFn: ({ reviewId, body }) => updateReview(reviewId, body),
+    onSuccess: (_data, { agentId }) => {
       queryClient.invalidateQueries({
-        queryKey: ['marketplace-reviews-enhanced', listingId],
+        queryKey: ['marketplace-reviews'],
       });
       queryClient.invalidateQueries({
-        queryKey: ['marketplace-review-summary', listingId],
-      });
-      queryClient.invalidateQueries({
-        queryKey: ['marketplace-listing', listingId],
-      });
-      queryClient.invalidateQueries({
-        queryKey: ['marketplace-reviews', listingId],
+        queryKey: ['rating-summary', agentId],
       });
     },
   });
@@ -69,39 +67,38 @@ export function useDeleteReview() {
   return useMutation<
     { deleted: boolean; review_id: string },
     Error,
-    { reviewId: string; listingId: string }
+    { reviewId: string; agentId: string }
   >({
     mutationFn: ({ reviewId }) => deleteReview(reviewId),
-    onSuccess: (_data, { listingId }) => {
+    onSuccess: (_data, { agentId }) => {
       queryClient.invalidateQueries({
-        queryKey: ['marketplace-reviews-enhanced', listingId],
+        queryKey: ['marketplace-reviews'],
       });
       queryClient.invalidateQueries({
-        queryKey: ['marketplace-review-summary', listingId],
-      });
-      queryClient.invalidateQueries({
-        queryKey: ['marketplace-listing', listingId],
-      });
-      queryClient.invalidateQueries({
-        queryKey: ['marketplace-reviews', listingId],
+        queryKey: ['rating-summary', agentId],
       });
     },
   });
 }
 
-export function useMarkHelpful() {
+export function useVoteHelpful() {
   const queryClient = useQueryClient();
 
-  return useMutation<
-    HelpfulResponse,
-    Error,
-    { reviewId: string; isHelpful: boolean; listingId: string }
-  >({
-    mutationFn: ({ reviewId, isHelpful }) => toggleHelpful(reviewId, isHelpful),
-    onSuccess: (_data, { listingId }) => {
+  return useMutation<HelpfulToggleResponse, Error, { reviewId: string }>({
+    mutationFn: ({ reviewId }) => toggleHelpful(reviewId),
+    onSuccess: () => {
       queryClient.invalidateQueries({
-        queryKey: ['marketplace-reviews-enhanced', listingId],
+        queryKey: ['marketplace-reviews'],
       });
     },
+  });
+}
+
+export function useRatingSummary(agentId: string | null) {
+  return useQuery<RatingSummary>({
+    queryKey: ['rating-summary', agentId],
+    queryFn: () => getRatingSummary(agentId!),
+    enabled: !!agentId,
+    staleTime: 30_000,
   });
 }

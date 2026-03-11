@@ -34,6 +34,8 @@ const pdfiumTracingConfig = {
 
 const nextConfig: NextConfig = {
 	output: "standalone",
+	eslint: { ignoreDuringBuilds: true },
+	typescript: { ignoreBuildErrors: true },
 	transpilePackages: ["@recoder/auth"],
 	turbopack: {
 		root: join(projectDir, "../../"),

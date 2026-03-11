@@ -29,6 +29,7 @@ const RouteChangeTracker = lazy(() => import('@/components/analytics/route-chang
 const AuthEventTracker = lazy(() => import('@/components/analytics/auth-event-tracker').then(mod => ({ default: mod.AuthEventTracker })));
 const CookieVisibility = lazy(() => import('@/components/cookie-visibility').then(mod => ({ default: mod.CookieVisibility })));
 const KeyboardShortcutWiring = lazy(() => import('@/components/keyboard-shortcut-wiring').then(mod => ({ default: mod.KeyboardShortcutWiring })));
+const CommandPalette = lazy(() => import('@/components/command-palette/command-palette').then(mod => ({ default: mod.CommandPalette })));
 
 
 export const viewport: Viewport = {
@@ -256,6 +257,9 @@ export default function RootLayout({
                   </Suspense>
                   <Suspense fallback={null}>
                     <PostHogIdentify />
+                  </Suspense>
+                  <Suspense fallback={null}>
+                    <CommandPalette />
                   </Suspense>
                 </KeyboardShortcutProvider>
               </ReactQueryProvider>

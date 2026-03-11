@@ -1,8 +1,8 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from typing import Optional, List
 from core.utils.auth_utils import verify_and_get_user_id_from_jwt
-from core.services.db import execute, execute_one
+from core.services.db import execute, execute_one, execute_mutate, execute_read
 from core.utils.logger import logger
 
 router = APIRouter(tags=["agent-env-vars"])
@@ -42,6 +42,20 @@ def _mask_value(value: str, is_secret: bool) -> str:
     return value[:2] + "*" * (len(value) - 4) + value[-2:]
 
 
+async def _record_audit(user_id: str, agent_id: str, key: str, action: str) -> None:
+    """Record an audit event for an env variable operation."""
+    try:
+        await execute_mutate(
+            """
+            INSERT INTO env_variable_audit (user_id, agent_id, key, action)
+            VALUES (:user_id, :agent_id, :key, :action)
+            """,
+            {"user_id": user_id, "agent_id": agent_id, "key": key, "action": action},
+        )
+    except Exception as e:
+        logger.warning(f"Failed to record env var audit for {action} on {key}: {e}")
+
+
 # ---------------------------------------------------------------------------
 # Endpoints
 # ---------------------------------------------------------------------------
@@ -51,10 +65,10 @@ async def list_env_vars(
     agent_id: str,
     user_id: str = Depends(verify_and_get_user_id_from_jwt),
 ):
-    rows = await execute(
+    rows = await execute_read(
         """
         SELECT id, agent_id, key, value, is_secret, description, created_at, updated_at
-        FROM agent_env_vars
+        FROM agent_env_variables
         WHERE agent_id = :agent_id AND user_id = :user_id
         ORDER BY key
         """,
@@ -78,11 +92,18 @@ async def upsert_env_var(
     if not key:
         raise HTTPException(status_code=400, detail="Key is required")
 
+    # Check if it already exists to determine audit action
+    existing = await execute_one(
+        "SELECT id FROM agent_env_variables WHERE agent_id = :agent_id AND key = :key AND user_id = :user_id",
+        {"agent_id": agent_id, "key": key, "user_id": user_id},
+    )
+    audit_action = "updated" if existing else "created"
+
     row = await execute_one(
         """
-        INSERT INTO agent_env_vars (agent_id, user_id, key, value, is_secret, description)
+        INSERT INTO agent_env_variables (agent_id, user_id, key, value, is_secret, description)
         VALUES (:agent_id, :user_id, :key, :value, :is_secret, :description)
-        ON CONFLICT (agent_id, key) DO UPDATE SET
+        ON CONFLICT (user_id, agent_id, key) DO UPDATE SET
             value = EXCLUDED.value,
             is_secret = EXCLUDED.is_secret,
             description = EXCLUDED.description,
@@ -97,7 +118,31 @@ async def upsert_env_var(
             "is_secret": body.is_secret,
             "description": body.description,
         },
+        commit=True,
     )
+
+    await _record_audit(user_id, agent_id, key, audit_action)
+    return dict(row)
+
+
+@router.get("/agents/{agent_id}/env/{key}/reveal", summary="Reveal a secret env variable value")
+async def reveal_env_var(
+    agent_id: str,
+    key: str,
+    user_id: str = Depends(verify_and_get_user_id_from_jwt),
+):
+    row = await execute_one(
+        """
+        SELECT id, agent_id, key, value, is_secret, description, created_at, updated_at
+        FROM agent_env_variables
+        WHERE agent_id = :agent_id AND key = :key AND user_id = :user_id
+        """,
+        {"agent_id": agent_id, "key": key, "user_id": user_id},
+    )
+    if not row:
+        raise HTTPException(status_code=404, detail="Environment variable not found")
+
+    await _record_audit(user_id, agent_id, key, "revealed")
     return dict(row)
 
 
@@ -108,16 +153,18 @@ async def delete_env_var(
     user_id: str = Depends(verify_and_get_user_id_from_jwt),
 ):
     existing = await execute_one(
-        "SELECT id FROM agent_env_vars WHERE agent_id = :agent_id AND key = :key AND user_id = :user_id",
+        "SELECT id FROM agent_env_variables WHERE agent_id = :agent_id AND key = :key AND user_id = :user_id",
         {"agent_id": agent_id, "key": key, "user_id": user_id},
     )
     if not existing:
         raise HTTPException(status_code=404, detail="Environment variable not found")
 
-    await execute(
-        "DELETE FROM agent_env_vars WHERE agent_id = :agent_id AND key = :key AND user_id = :user_id",
+    await execute_mutate(
+        "DELETE FROM agent_env_variables WHERE agent_id = :agent_id AND key = :key AND user_id = :user_id",
         {"agent_id": agent_id, "key": key, "user_id": user_id},
     )
+
+    await _record_audit(user_id, agent_id, key, "deleted")
     return {"status": "ok"}
 
 
@@ -136,11 +183,18 @@ async def bulk_set_env_vars(
         if not key:
             continue
         try:
+            # Check if it already exists to determine audit action
+            existing = await execute_one(
+                "SELECT id FROM agent_env_variables WHERE agent_id = :agent_id AND key = :key AND user_id = :user_id",
+                {"agent_id": agent_id, "key": key, "user_id": user_id},
+            )
+            audit_action = "updated" if existing else "created"
+
             row = await execute_one(
                 """
-                INSERT INTO agent_env_vars (agent_id, user_id, key, value, is_secret, description)
+                INSERT INTO agent_env_variables (agent_id, user_id, key, value, is_secret, description)
                 VALUES (:agent_id, :user_id, :key, :value, :is_secret, :description)
-                ON CONFLICT (agent_id, key) DO UPDATE SET
+                ON CONFLICT (user_id, agent_id, key) DO UPDATE SET
                     value = EXCLUDED.value,
                     is_secret = EXCLUDED.is_secret,
                     description = EXCLUDED.description,
@@ -155,7 +209,9 @@ async def bulk_set_env_vars(
                     "is_secret": var.is_secret,
                     "description": var.description,
                 },
+                commit=True,
             )
+            await _record_audit(user_id, agent_id, key, audit_action)
             results.append(dict(row))
         except Exception as e:
             logger.warning(f"Failed to upsert env var '{key}' for agent {agent_id}: {e}")
@@ -164,15 +220,34 @@ async def bulk_set_env_vars(
     return {"status": "ok", "count": len(results), "results": results}
 
 
+@router.get("/agents/{agent_id}/env/audit", summary="Get audit log for env variables")
+async def get_env_var_audit(
+    agent_id: str,
+    limit: int = Query(default=50, ge=1, le=200),
+    user_id: str = Depends(verify_and_get_user_id_from_jwt),
+):
+    rows = await execute_read(
+        """
+        SELECT id, agent_id, key, action, created_at
+        FROM env_variable_audit
+        WHERE agent_id = :agent_id AND user_id = :user_id
+        ORDER BY created_at DESC
+        LIMIT :limit
+        """,
+        {"agent_id": agent_id, "user_id": user_id, "limit": limit},
+    )
+    return [dict(r) for r in rows]
+
+
 @router.get("/agents/{agent_id}/env/export", summary="Export environment variables as dotenv format")
 async def export_env_vars(
     agent_id: str,
     user_id: str = Depends(verify_and_get_user_id_from_jwt),
 ):
-    rows = await execute(
+    rows = await execute_read(
         """
         SELECT key, value, is_secret, description
-        FROM agent_env_vars
+        FROM agent_env_variables
         WHERE agent_id = :agent_id AND user_id = :user_id
         ORDER BY key
         """,

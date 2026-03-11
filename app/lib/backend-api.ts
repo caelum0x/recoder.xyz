@@ -375,7 +375,7 @@ class BackendApiClient {
    * Get usage history
    */
   async getUsageHistory(params?: { page?: number; limit?: number }): Promise<unknown> {
-    const queryParams = params ? new URLSearchParams(Object.entries(params).filter((e): e is [string, string] => e[1] != null).map(([k, v]) => [k, String(v)])).toString() : '';
+    const queryParams = params ? new URLSearchParams(Object.entries(params).filter(([, v]) => v != null).map(([k, v]) => [k, String(v)])).toString() : '';
     return this.request(`/api/usage/history${queryParams ? '?' + queryParams : ''}`);
   }
 
@@ -402,7 +402,7 @@ class BackendApiClient {
    * Get billing invoices
    */
   async getInvoices(params?: { page?: number; limit?: number }): Promise<unknown> {
-    const queryParams = params ? new URLSearchParams(Object.entries(params).filter((e): e is [string, string] => e[1] != null).map(([k, v]) => [k, String(v)])).toString() : '';
+    const queryParams = params ? new URLSearchParams(Object.entries(params).filter(([, v]) => v != null).map(([k, v]) => [k, String(v)])).toString() : '';
     return this.request(`/api/billing/invoices${queryParams ? '?' + queryParams : ''}`);
   }
 

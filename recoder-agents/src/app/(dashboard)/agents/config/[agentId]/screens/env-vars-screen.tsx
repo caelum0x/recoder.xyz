@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import {
   Terminal,
   Plus,
@@ -13,8 +13,9 @@ import {
   Upload,
   Copy,
   Check,
-  ShieldCheck,
-  ShieldAlert,
+  Lock,
+  Clock,
+  Shield,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -47,12 +48,16 @@ import { format } from 'date-fns';
 import { toast } from '@/lib/toast';
 import {
   useAgentEnvVars,
-  useUpsertEnvVar,
+  useSetEnvVar,
   useDeleteEnvVar,
+  useRevealEnvVar,
   useBulkSetEnvVars,
+  useEnvVarAudit,
   useExportEnvVars,
 } from '@/hooks/agents/use-agent-env-vars';
-import type { AgentEnvVar } from '@/lib/api/agent-env-vars';
+import type { AgentEnvVar, EnvVarAuditEntry } from '@/lib/api/agent-env-vars';
+
+// ---- Types ----
 
 interface EnvVarsScreenProps {
   agentId: string;
@@ -67,13 +72,30 @@ interface EnvVarFormData {
 
 const EMPTY_FORM: EnvVarFormData = { key: '', value: '', is_secret: false, description: '' };
 
-function parseEnvFile(content: string): Array<{ key: string; value: string }> {
+const AUDIT_ACTION_STYLES: Record<string, { color: string; label: string }> = {
+  created: { color: 'bg-green-500/10 text-green-600 border-green-500/20', label: 'Created' },
+  updated: { color: 'bg-blue-500/10 text-blue-600 border-blue-500/20', label: 'Updated' },
+  deleted: { color: 'bg-red-500/10 text-red-600 border-red-500/20', label: 'Deleted' },
+  revealed: { color: 'bg-amber-500/10 text-amber-600 border-amber-500/20', label: 'Revealed' },
+};
+
+// ---- Helpers ----
+
+function parseEnvFile(content: string): Array<{ key: string; value: string; description?: string }> {
   const lines = content.split('\n');
-  const vars: Array<{ key: string; value: string }> = [];
+  const vars: Array<{ key: string; value: string; description?: string }> = [];
+  let pendingDescription: string | undefined;
 
   for (const line of lines) {
     const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith('#')) continue;
+    if (!trimmed) {
+      pendingDescription = undefined;
+      continue;
+    }
+    if (trimmed.startsWith('#')) {
+      pendingDescription = trimmed.slice(1).trim();
+      continue;
+    }
 
     const eqIndex = trimmed.indexOf('=');
     if (eqIndex === -1) continue;
@@ -87,18 +109,23 @@ function parseEnvFile(content: string): Array<{ key: string; value: string }> {
       value = value.slice(1, -1);
     }
 
-    if (key) {
-      vars.push({ key, value });
+    if (/^[A-Z_][A-Z0-9_]*$/.test(key)) {
+      vars.push({ key, value, description: pendingDescription });
+      pendingDescription = undefined;
     }
   }
 
   return vars;
 }
 
+// ---- Main Component ----
+
 export function EnvVarsScreen({ agentId }: EnvVarsScreenProps) {
   const { data: envVars, isLoading, isError } = useAgentEnvVars(agentId);
-  const upsertMutation = useUpsertEnvVar(agentId);
+  const { data: auditLog } = useEnvVarAudit(agentId);
+  const setEnvVarMutation = useSetEnvVar(agentId);
   const deleteMutation = useDeleteEnvVar(agentId);
+  const revealMutation = useRevealEnvVar(agentId);
   const bulkMutation = useBulkSetEnvVars(agentId);
   const exportMutation = useExportEnvVars(agentId);
 
@@ -109,8 +136,19 @@ export function EnvVarsScreen({ agentId }: EnvVarsScreenProps) {
   const [bulkContent, setBulkContent] = useState('');
   const [deleteTarget, setDeleteTarget] = useState<AgentEnvVar | null>(null);
   const [searchFilter, setSearchFilter] = useState('');
-  const [revealedKeys, setRevealedKeys] = useState<Set<string>>(new Set());
+  const [showAuditTrail, setShowAuditTrail] = useState(false);
+
+  // Track revealed secrets and their auto-hide timers
+  const [revealedValues, setRevealedValues] = useState<Record<string, string>>({});
+  const revealTimers = useRef<Record<string, NodeJS.Timeout>>({});
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
+
+  // Cleanup timers on unmount
+  useEffect(() => {
+    return () => {
+      Object.values(revealTimers.current).forEach(clearTimeout);
+    };
+  }, []);
 
   const filteredVars = useMemo(() => {
     if (!envVars) return [];
@@ -123,6 +161,8 @@ export function EnvVarsScreen({ agentId }: EnvVarsScreenProps) {
     );
   }, [envVars, searchFilter]);
 
+  // ---- Handlers ----
+
   const openAddDialog = useCallback(() => {
     setEditingKey(null);
     setFormData(EMPTY_FORM);
@@ -133,7 +173,7 @@ export function EnvVarsScreen({ agentId }: EnvVarsScreenProps) {
     setEditingKey(envVar.key);
     setFormData({
       key: envVar.key,
-      value: '', // Don't pre-fill value for security
+      value: '',
       is_secret: envVar.is_secret,
       description: envVar.description || '',
     });
@@ -146,9 +186,21 @@ export function EnvVarsScreen({ agentId }: EnvVarsScreenProps) {
       toast.error('Key is required');
       return;
     }
+    if (!/^[A-Z_][A-Z0-9_]*$/.test(key)) {
+      toast.error('Key must be UPPER_SNAKE_CASE (e.g. MY_API_KEY)');
+      return;
+    }
+    if (!formData.value && !editingKey) {
+      toast.error('Value is required');
+      return;
+    }
+    if (!formData.value && editingKey) {
+      toast.error('Please enter a new value');
+      return;
+    }
 
     try {
-      await upsertMutation.mutateAsync({
+      await setEnvVarMutation.mutateAsync({
         key,
         value: formData.value,
         is_secret: formData.is_secret,
@@ -157,30 +209,96 @@ export function EnvVarsScreen({ agentId }: EnvVarsScreenProps) {
       toast.success(editingKey ? 'Variable updated' : 'Variable created');
       setIsDialogOpen(false);
       setFormData(EMPTY_FORM);
+      setEditingKey(null);
     } catch (err: any) {
       toast.error(err.message || 'Failed to save variable');
     }
-  }, [formData, editingKey, upsertMutation]);
+  }, [formData, editingKey, setEnvVarMutation]);
 
   const handleDelete = useCallback(async () => {
     if (!deleteTarget) return;
     try {
       await deleteMutation.mutateAsync(deleteTarget.key);
       toast.success(`Deleted "${deleteTarget.key}"`);
-      setDeleteTarget(null);
+      setRevealedValues((prev) => {
+        const next = { ...prev };
+        delete next[deleteTarget.key];
+        return next;
+      });
     } catch (err: any) {
       toast.error(err.message || 'Failed to delete variable');
+    } finally {
+      setDeleteTarget(null);
     }
   }, [deleteTarget, deleteMutation]);
+
+  const handleReveal = useCallback(
+    async (key: string) => {
+      // If already revealed, hide it
+      if (revealedValues[key]) {
+        setRevealedValues((prev) => {
+          const next = { ...prev };
+          delete next[key];
+          return next;
+        });
+        if (revealTimers.current[key]) {
+          clearTimeout(revealTimers.current[key]);
+          delete revealTimers.current[key];
+        }
+        return;
+      }
+
+      try {
+        const result = await revealMutation.mutateAsync(key);
+        if (result.value) {
+          setRevealedValues((prev) => ({ ...prev, [key]: result.value }));
+          // Auto-hide after 10 seconds
+          revealTimers.current[key] = setTimeout(() => {
+            setRevealedValues((prev) => {
+              const next = { ...prev };
+              delete next[key];
+              return next;
+            });
+            delete revealTimers.current[key];
+          }, 10000);
+        }
+      } catch (err: any) {
+        toast.error(err.message || 'Failed to reveal value');
+      }
+    },
+    [revealedValues, revealMutation]
+  );
+
+  const handleCopy = useCallback(
+    async (key: string) => {
+      const value = revealedValues[key];
+      if (!value) return;
+      try {
+        await navigator.clipboard.writeText(value);
+        setCopiedKey(key);
+        setTimeout(() => setCopiedKey(null), 2000);
+      } catch {
+        toast.error('Failed to copy to clipboard');
+      }
+    },
+    [revealedValues]
+  );
 
   const handleBulkImport = useCallback(async () => {
     const parsed = parseEnvFile(bulkContent);
     if (parsed.length === 0) {
-      toast.error('No valid variables found. Use KEY=VALUE format.');
+      toast.error('No valid KEY=VALUE pairs found');
       return;
     }
     try {
-      const result = await bulkMutation.mutateAsync(parsed);
+      const result = await bulkMutation.mutateAsync(
+        parsed.map((v) => ({
+          key: v.key,
+          value: v.value,
+          is_secret: false,
+          description: v.description,
+        }))
+      );
       toast.success(`Imported ${result.count} variable(s)`);
       setIsBulkDialogOpen(false);
       setBulkContent('');
@@ -192,31 +310,20 @@ export function EnvVarsScreen({ agentId }: EnvVarsScreenProps) {
   const handleExport = useCallback(async () => {
     try {
       const result = await exportMutation.mutateAsync();
-      // Copy to clipboard
-      await navigator.clipboard.writeText(result.content);
-      toast.success(`Exported ${result.count} variable(s) to clipboard`);
+      const blob = new Blob([result.content], { type: 'text/plain' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `agent-${agentId}.env`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success(`Exported ${result.count} variable(s)`);
     } catch (err: any) {
       toast.error(err.message || 'Failed to export variables');
     }
-  }, [exportMutation]);
+  }, [agentId, exportMutation]);
 
-  const toggleReveal = useCallback((key: string) => {
-    setRevealedKeys((prev) => {
-      const next = new Set(prev);
-      if (next.has(key)) {
-        next.delete(key);
-      } else {
-        next.add(key);
-      }
-      return next;
-    });
-  }, []);
-
-  const copyValue = useCallback(async (key: string, value: string) => {
-    await navigator.clipboard.writeText(value);
-    setCopiedKey(key);
-    setTimeout(() => setCopiedKey(null), 2000);
-  }, []);
+  // ---- Loading State ----
 
   if (isLoading) {
     return (
@@ -239,6 +346,8 @@ export function EnvVarsScreen({ agentId }: EnvVarsScreenProps) {
       </div>
     );
   }
+
+  const auditList = auditLog || [];
 
   return (
     <div className="flex-1 overflow-y-auto space-y-4 pb-8">
@@ -271,6 +380,14 @@ export function EnvVarsScreen({ agentId }: EnvVarsScreenProps) {
             <Download className="h-3.5 w-3.5 mr-1.5" />
             Export
           </Button>
+          <Button
+            variant={showAuditTrail ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => setShowAuditTrail(!showAuditTrail)}
+          >
+            <Clock className="h-3.5 w-3.5 mr-1.5" />
+            Audit
+          </Button>
           <Button size="sm" onClick={openAddDialog}>
             <Plus className="h-3.5 w-3.5 mr-1.5" />
             Add Variable
@@ -279,7 +396,7 @@ export function EnvVarsScreen({ agentId }: EnvVarsScreenProps) {
       </div>
 
       {/* Search */}
-      {envVars && envVars.length > 0 && (
+      {envVars && envVars.length > 0 && !showAuditTrail && (
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
@@ -292,7 +409,7 @@ export function EnvVarsScreen({ agentId }: EnvVarsScreenProps) {
       )}
 
       {/* Empty State */}
-      {(!envVars || envVars.length === 0) && (
+      {(!envVars || envVars.length === 0) && !showAuditTrail && (
         <SpotlightCard className="p-8 text-center">
           <Terminal className="h-10 w-10 text-muted-foreground mx-auto mb-3" />
           <h3 className="text-base font-medium mb-1">No environment variables</h3>
@@ -313,89 +430,142 @@ export function EnvVarsScreen({ agentId }: EnvVarsScreenProps) {
       )}
 
       {/* Variables List */}
-      {filteredVars.map((envVar) => (
-        <SpotlightCard key={envVar.id} className="p-4">
-          <div className="flex items-start justify-between gap-3">
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2 mb-1">
-                <code className="text-sm font-mono font-semibold text-foreground">
-                  {envVar.key}
-                </code>
-                {envVar.is_secret && (
-                  <Badge variant="outline" className="text-xs gap-1">
-                    <ShieldCheck className="h-3 w-3" />
-                    Secret
-                  </Badge>
-                )}
-              </div>
-              <div className="flex items-center gap-2 mt-1">
-                <code className={cn(
-                  "text-xs font-mono text-muted-foreground break-all",
-                  envVar.is_secret && !revealedKeys.has(envVar.key) && "blur-sm select-none"
-                )}>
-                  {envVar.value}
-                </code>
-                {envVar.is_secret && (
-                  <button
-                    onClick={() => toggleReveal(envVar.key)}
-                    className="text-muted-foreground hover:text-foreground transition-colors p-0.5"
-                    title={revealedKeys.has(envVar.key) ? "Hide" : "Reveal"}
-                  >
-                    {revealedKeys.has(envVar.key) ? (
-                      <EyeOff className="h-3.5 w-3.5" />
-                    ) : (
-                      <Eye className="h-3.5 w-3.5" />
-                    )}
-                  </button>
-                )}
-                <button
-                  onClick={() => copyValue(envVar.key, envVar.value)}
-                  className="text-muted-foreground hover:text-foreground transition-colors p-0.5"
-                  title="Copy value"
-                >
-                  {copiedKey === envVar.key ? (
-                    <Check className="h-3.5 w-3.5 text-green-500" />
-                  ) : (
-                    <Copy className="h-3.5 w-3.5" />
+      {!showAuditTrail && filteredVars.map((envVar) => {
+        const isRevealed = !!revealedValues[envVar.key];
+        const isCopied = copiedKey === envVar.key;
+
+        return (
+          <SpotlightCard key={envVar.id} className="p-4">
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 mb-1">
+                  <code className="text-sm font-mono font-semibold text-foreground">
+                    {envVar.key}
+                  </code>
+                  {envVar.is_secret && (
+                    <Badge variant="outline" className="text-xs gap-1">
+                      <Lock className="h-3 w-3" />
+                      Secret
+                    </Badge>
                   )}
-                </button>
+                </div>
+                <div className="flex items-center gap-2 mt-1">
+                  <span
+                    className={cn(
+                      'text-xs',
+                      isRevealed
+                        ? 'font-mono text-foreground bg-muted px-2 py-0.5 rounded break-all'
+                        : 'text-muted-foreground'
+                    )}
+                  >
+                    {isRevealed
+                      ? revealedValues[envVar.key]
+                      : envVar.is_secret
+                        ? '\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022'
+                        : envVar.value}
+                  </span>
+                  {envVar.is_secret && (
+                    <button
+                      onClick={() => handleReveal(envVar.key)}
+                      className="text-muted-foreground hover:text-foreground transition-colors p-0.5"
+                      title={isRevealed ? 'Hide' : 'Reveal'}
+                      disabled={revealMutation.isPending}
+                    >
+                      {isRevealed ? (
+                        <EyeOff className="h-3.5 w-3.5" />
+                      ) : (
+                        <Eye className="h-3.5 w-3.5" />
+                      )}
+                    </button>
+                  )}
+                  {isRevealed && (
+                    <button
+                      onClick={() => handleCopy(envVar.key)}
+                      className="text-muted-foreground hover:text-foreground transition-colors p-0.5"
+                      title="Copy value"
+                    >
+                      {isCopied ? (
+                        <Check className="h-3.5 w-3.5 text-green-500" />
+                      ) : (
+                        <Copy className="h-3.5 w-3.5" />
+                      )}
+                    </button>
+                  )}
+                </div>
+                {envVar.description && (
+                  <p className="text-xs text-muted-foreground mt-1.5">{envVar.description}</p>
+                )}
+                <p className="text-xs text-muted-foreground/60 mt-1">
+                  Added {format(new Date(envVar.created_at), 'MMM d, yyyy')}
+                  {envVar.updated_at !== envVar.created_at && (
+                    <> &middot; Updated {format(new Date(envVar.updated_at), 'MMM d, yyyy')}</>
+                  )}
+                </p>
               </div>
-              {envVar.description && (
-                <p className="text-xs text-muted-foreground mt-1.5">{envVar.description}</p>
-              )}
-              <p className="text-xs text-muted-foreground/60 mt-1">
-                Updated {format(new Date(envVar.updated_at), 'MMM d, yyyy HH:mm')}
-              </p>
+              <div className="flex items-center gap-1 flex-shrink-0">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8"
+                  onClick={() => openEditDialog(envVar)}
+                  title="Edit"
+                >
+                  <Pencil className="h-3.5 w-3.5" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 text-destructive hover:text-destructive"
+                  onClick={() => setDeleteTarget(envVar)}
+                  title="Delete"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </Button>
+              </div>
             </div>
-            <div className="flex items-center gap-1 flex-shrink-0">
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8"
-                onClick={() => openEditDialog(envVar)}
-                title="Edit"
-              >
-                <Pencil className="h-3.5 w-3.5" />
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8 text-destructive hover:text-destructive"
-                onClick={() => setDeleteTarget(envVar)}
-                title="Delete"
-              >
-                <Trash2 className="h-3.5 w-3.5" />
-              </Button>
-            </div>
-          </div>
-        </SpotlightCard>
-      ))}
+          </SpotlightCard>
+        );
+      })}
 
       {/* No results from search */}
-      {envVars && envVars.length > 0 && filteredVars.length === 0 && searchFilter && (
+      {!showAuditTrail && envVars && envVars.length > 0 && filteredVars.length === 0 && searchFilter && (
         <p className="text-sm text-muted-foreground text-center py-6">
           No variables matching &ldquo;{searchFilter}&rdquo;
         </p>
+      )}
+
+      {/* Audit Trail */}
+      {showAuditTrail && (
+        <div className="space-y-2">
+          <div className="flex items-center gap-2 mb-3">
+            <Shield className="h-4 w-4 text-muted-foreground" />
+            <h3 className="text-sm font-medium text-foreground">Audit Trail</h3>
+          </div>
+          {auditList.length === 0 ? (
+            <SpotlightCard className="p-6 text-center">
+              <p className="text-xs text-muted-foreground">No audit events recorded yet.</p>
+            </SpotlightCard>
+          ) : (
+            auditList.map((entry: EnvVarAuditEntry) => {
+              const style = AUDIT_ACTION_STYLES[entry.action] || AUDIT_ACTION_STYLES.created;
+              return (
+                <SpotlightCard key={entry.id} className="p-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <Badge variant="outline" className={cn('text-[10px] px-1.5 py-0 border', style.color)}>
+                        {style.label}
+                      </Badge>
+                      <code className="text-xs font-mono text-foreground truncate">{entry.key}</code>
+                    </div>
+                    <span className="text-[10px] text-muted-foreground/60 flex-shrink-0">
+                      {format(new Date(entry.created_at), 'MMM d, yyyy HH:mm')}
+                    </span>
+                  </div>
+                </SpotlightCard>
+              );
+            })
+          )}
+        </div>
       )}
 
       {/* Add/Edit Dialog */}
@@ -415,58 +585,72 @@ export function EnvVarsScreen({ agentId }: EnvVarsScreenProps) {
               <Label htmlFor="env-key">Key</Label>
               <Input
                 id="env-key"
-                placeholder="EXAMPLE_KEY"
+                placeholder="MY_API_KEY"
                 value={formData.key}
-                onChange={(e) => setFormData({ ...formData, key: e.target.value.toUpperCase().replace(/[^A-Z0-9_]/g, '_') })}
+                onChange={(e) =>
+                  setFormData((prev) => ({
+                    ...prev,
+                    key: e.target.value.toUpperCase().replace(/[^A-Z0-9_]/g, ''),
+                  }))
+                }
                 disabled={!!editingKey}
                 className="font-mono"
               />
+              <p className="text-[10px] text-muted-foreground">
+                UPPER_SNAKE_CASE (e.g., DATABASE_URL, API_KEY)
+              </p>
             </div>
 
             <div className="space-y-2">
               <Label htmlFor="env-value">Value</Label>
-              <Input
+              <Textarea
                 id="env-value"
-                placeholder={editingKey ? '(enter new value)' : 'value'}
+                placeholder={editingKey ? 'Enter new value' : 'Enter value...'}
                 value={formData.value}
-                onChange={(e) => setFormData({ ...formData, value: e.target.value })}
-                type={formData.is_secret ? 'password' : 'text'}
-                className="font-mono"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="env-desc">Description (optional)</Label>
-              <Input
-                id="env-desc"
-                placeholder="What this variable is for..."
-                value={formData.description}
-                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                onChange={(e) => setFormData((prev) => ({ ...prev, value: e.target.value }))}
+                rows={3}
+                className="font-mono text-sm resize-none"
               />
             </div>
 
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <ShieldAlert className="h-4 w-4 text-muted-foreground" />
-                <Label htmlFor="env-secret" className="text-sm">Mark as secret</Label>
+              <div className="space-y-0.5">
+                <Label htmlFor="env-secret">Mark as secret</Label>
+                <p className="text-[10px] text-muted-foreground">
+                  Secret values are masked and require reveal
+                </p>
               </div>
               <Switch
                 id="env-secret"
                 checked={formData.is_secret}
-                onCheckedChange={(checked) => setFormData({ ...formData, is_secret: checked })}
+                onCheckedChange={(checked) => setFormData((prev) => ({ ...prev, is_secret: checked }))}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="env-desc">
+                Description <span className="text-muted-foreground font-normal">(optional)</span>
+              </Label>
+              <Textarea
+                id="env-desc"
+                placeholder="What is this variable used for?"
+                value={formData.description}
+                onChange={(e) => setFormData((prev) => ({ ...prev, description: e.target.value }))}
+                rows={2}
+                className="resize-none"
               />
             </div>
           </div>
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
+            <Button variant="outline" onClick={() => setIsDialogOpen(false)} disabled={setEnvVarMutation.isPending}>
               Cancel
             </Button>
             <Button
               onClick={handleSave}
-              disabled={!formData.key.trim() || (!formData.value && !editingKey) || upsertMutation.isPending}
+              disabled={!formData.key.trim() || (!formData.value && !editingKey) || setEnvVarMutation.isPending}
             >
-              {upsertMutation.isPending ? 'Saving...' : editingKey ? 'Update' : 'Add'}
+              {setEnvVarMutation.isPending ? 'Saving...' : editingKey ? 'Update' : 'Add Variable'}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -476,16 +660,16 @@ export function EnvVarsScreen({ agentId }: EnvVarsScreenProps) {
       <Dialog open={isBulkDialogOpen} onOpenChange={setIsBulkDialogOpen}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
-            <DialogTitle>Import Environment Variables</DialogTitle>
+            <DialogTitle>Bulk Import</DialogTitle>
             <DialogDescription>
-              Paste your .env file content below. Each line should be in KEY=VALUE format.
-              Lines starting with # are ignored.
+              Paste environment variables in KEY=VALUE format (one per line).
+              Lines starting with # are treated as descriptions for the next variable.
             </DialogDescription>
           </DialogHeader>
 
           <div className="py-2">
             <Textarea
-              placeholder={`# Database config\nDATABASE_URL=postgres://...\nAPI_KEY=your_key_here`}
+              placeholder={"# Database connection\nDATABASE_URL=postgres://...\n\n# API Keys\nOPENAI_API_KEY=sk-..."}
               value={bulkContent}
               onChange={(e) => setBulkContent(e.target.value)}
               rows={10}
@@ -499,7 +683,7 @@ export function EnvVarsScreen({ agentId }: EnvVarsScreenProps) {
           </div>
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => setIsBulkDialogOpen(false)}>
+            <Button variant="outline" onClick={() => setIsBulkDialogOpen(false)} disabled={bulkMutation.isPending}>
               Cancel
             </Button>
             <Button
@@ -513,19 +697,21 @@ export function EnvVarsScreen({ agentId }: EnvVarsScreenProps) {
       </Dialog>
 
       {/* Delete Confirmation */}
-      <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+      <AlertDialog open={!!deleteTarget} onOpenChange={(open) => { if (!open) setDeleteTarget(null); }}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Delete Variable</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to delete <code className="font-mono font-semibold">{deleteTarget?.key}</code>?
+              Are you sure you want to delete{' '}
+              <code className="font-mono font-semibold">{deleteTarget?.key}</code>?
               This action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel disabled={deleteMutation.isPending}>Cancel</AlertDialogCancel>
             <AlertDialogAction
               onClick={handleDelete}
+              disabled={deleteMutation.isPending}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
               {deleteMutation.isPending ? 'Deleting...' : 'Delete'}
