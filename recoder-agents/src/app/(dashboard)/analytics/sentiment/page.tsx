@@ -198,7 +198,7 @@ function TrendChart({ threadId }: { threadId: string }) {
                     '1': 'Pos',
                     '2': 'V.Pos',
                   };
-                  return labels[String(v) as keyof typeof labels] || String(v);
+                  return labels[String(v) as unknown as keyof typeof labels] || String(v);
                 }}
                 tick={{ fontSize: 10 }}
               />

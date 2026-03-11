@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo, useCallback, useEffect } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import {
   Search,
   Send,
@@ -10,18 +10,28 @@ import {
   RotateCw,
   Copy,
   Check,
+  Star,
+  Save,
+  Play,
+  Plus,
+  X,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   usePlaygroundEndpoints,
   useExecutePlaygroundRequest,
+  usePlaygroundHistory,
+  useSavePlaygroundEntry,
+  useDeletePlaygroundEntry,
 } from '@/hooks/developers/use-api-playground';
 import type {
   PlaygroundEndpoint,
   PlaygroundResponse,
+  PlaygroundHistoryEntry,
 } from '@/lib/api/api-playground';
 
 // ---------------------------------------------------------------------------
@@ -48,37 +58,17 @@ function getStatusColor(status: number): string {
   return STATUS_COLORS[key] || 'bg-muted text-muted-foreground';
 }
 
-// ---------------------------------------------------------------------------
-// History types
-// ---------------------------------------------------------------------------
-
-interface HistoryEntry {
-  method: string;
-  path: string;
-  status: number;
-  responseTimeMs: number;
-  timestamp: string;
-  body?: Record<string, any>;
-  queryParams?: Record<string, string>;
-}
-
-const HISTORY_KEY = 'api-playground-history';
-const MAX_HISTORY = 10;
-
-function loadHistory(): HistoryEntry[] {
-  if (typeof window === 'undefined') return [];
-  try {
-    const raw = localStorage.getItem(HISTORY_KEY);
-    return raw ? JSON.parse(raw) : [];
-  } catch {
-    return [];
-  }
-}
-
-function saveHistory(entries: HistoryEntry[]) {
-  try {
-    localStorage.setItem(HISTORY_KEY, JSON.stringify(entries.slice(0, MAX_HISTORY)));
-  } catch {}
+function timeAgo(dateStr: string): string {
+  const now = Date.now();
+  const then = new Date(dateStr).getTime();
+  const diffMs = now - then;
+  const diffMin = Math.floor(diffMs / 60000);
+  if (diffMin < 1) return 'just now';
+  if (diffMin < 60) return `${diffMin}m ago`;
+  const diffHr = Math.floor(diffMin / 60);
+  if (diffHr < 24) return `${diffHr}h ago`;
+  const diffDay = Math.floor(diffHr / 24);
+  return `${diffDay}d ago`;
 }
 
 // ---------------------------------------------------------------------------
@@ -89,20 +79,22 @@ export default function PlaygroundPage() {
   const { data: endpointsData, isLoading: endpointsLoading } = usePlaygroundEndpoints();
   const executeMutation = useExecutePlaygroundRequest();
 
+  // History tabs
+  const [historyTab, setHistoryTab] = useState<'recent' | 'saved'>('recent');
+  const { data: recentHistory = [], isLoading: recentLoading } = usePlaygroundHistory(false);
+  const { data: savedHistory = [], isLoading: savedLoading } = usePlaygroundHistory(true);
+  const saveMutation = useSavePlaygroundEntry();
+  const deleteMutation = useDeletePlaygroundEntry();
+
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedEndpoint, setSelectedEndpoint] = useState<PlaygroundEndpoint | null>(null);
   const [requestBody, setRequestBody] = useState('');
   const [queryParams, setQueryParams] = useState<Record<string, string>>({});
   const [pathParams, setPathParams] = useState<Record<string, string>>({});
+  const [headerRows, setHeaderRows] = useState<{ key: string; value: string }[]>([]);
   const [response, setResponse] = useState<PlaygroundResponse | null>(null);
-  const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [showHistory, setShowHistory] = useState(false);
   const [copied, setCopied] = useState(false);
-
-  // Load history on mount
-  useEffect(() => {
-    setHistory(loadHistory());
-  }, []);
 
   const endpoints = endpointsData?.endpoints || [];
 
@@ -133,6 +125,7 @@ export default function PlaygroundPage() {
     setRequestBody('');
     setQueryParams({});
     setPathParams({});
+    setHeaderRows([]);
 
     // Pre-populate query params from parameters
     const qp: Record<string, string> = {};
@@ -189,6 +182,14 @@ export default function PlaygroundPage() {
       if (v.trim()) filteredQp[k] = v.trim();
     });
 
+    // Build headers from rows
+    const customHeaders: Record<string, string> = {};
+    headerRows.forEach((row) => {
+      if (row.key.trim() && row.value.trim()) {
+        customHeaders[row.key.trim()] = row.value.trim();
+      }
+    });
+
     // Parse request body
     let parsedBody: Record<string, any> | undefined;
     if (requestBody.trim() && ['POST', 'PUT', 'PATCH'].includes(selectedEndpoint.method)) {
@@ -210,42 +211,40 @@ export default function PlaygroundPage() {
     const result = await executeMutation.mutateAsync({
       method: selectedEndpoint.method,
       path,
+      headers: Object.keys(customHeaders).length > 0 ? customHeaders : undefined,
       body: parsedBody,
       query_params: Object.keys(filteredQp).length > 0 ? filteredQp : undefined,
     });
 
     setResponse(result);
-
-    // Add to history
-    const entry: HistoryEntry = {
-      method: result.method,
-      path: result.path,
-      status: result.status_code,
-      responseTimeMs: result.response_time_ms,
-      timestamp: new Date().toISOString(),
-      body: parsedBody,
-      queryParams: Object.keys(filteredQp).length > 0 ? filteredQp : undefined,
-    };
-    const newHistory = [entry, ...history].slice(0, MAX_HISTORY);
-    setHistory(newHistory);
-    saveHistory(newHistory);
-  }, [selectedEndpoint, pathParams, queryParams, requestBody, executeMutation, history]);
+  }, [selectedEndpoint, pathParams, queryParams, headerRows, requestBody, executeMutation]);
 
   const handleReplayHistory = useCallback(
-    (entry: HistoryEntry) => {
+    (entry: PlaygroundHistoryEntry) => {
       // Find matching endpoint
       const match = endpoints.find(
-        (e) => e.method === entry.method && e.path === entry.path
+        (e) => e.method === entry.method && e.path === entry.endpoint
       );
       if (match) {
-        setSelectedEndpoint(match);
+        handleSelectEndpoint(match);
+      } else {
+        // Set endpoint manually if not in the list
+        setSelectedEndpoint({
+          method: entry.method,
+          path: entry.endpoint,
+          summary: '',
+          description: '',
+          tags: [],
+          parameters: [],
+          request_body: null,
+          operation_id: '',
+        });
       }
       setRequestBody(entry.body ? JSON.stringify(entry.body, null, 2) : '');
-      setQueryParams(entry.queryParams || {});
       setResponse(null);
       setShowHistory(false);
     },
-    [endpoints]
+    [endpoints, handleSelectEndpoint]
   );
 
   const handleCopyResponse = async () => {
@@ -258,6 +257,9 @@ export default function PlaygroundPage() {
       setTimeout(() => setCopied(false), 2000);
     } catch {}
   };
+
+  const displayHistory = historyTab === 'saved' ? savedHistory : recentHistory;
+  const historyLoading = historyTab === 'saved' ? savedLoading : recentLoading;
 
   return (
     <div className="container mx-auto max-w-7xl px-4 sm:px-6 py-6">
@@ -308,78 +310,136 @@ export default function PlaygroundPage() {
                 )}
                 onClick={() => setShowHistory(true)}
               >
-                History ({history.length})
+                History
               </button>
             </div>
 
             {/* Content */}
             <div className="overflow-y-auto max-h-[calc(100vh-280px)]">
               {showHistory ? (
-                <div className="divide-y divide-border">
-                  {history.length === 0 ? (
-                    <div className="p-6 text-center">
-                      <Clock className="h-8 w-8 mx-auto text-muted-foreground/30 mb-2" />
-                      <p className="text-sm text-muted-foreground">
-                        No request history
-                      </p>
-                    </div>
-                  ) : (
-                    history.map((entry, idx) => (
-                      <button
-                        key={idx}
-                        className="w-full px-3 py-2 text-left hover:bg-muted/50 transition-colors"
-                        onClick={() => handleReplayHistory(entry)}
-                      >
-                        <div className="flex items-center gap-2">
-                          <Badge
-                            variant="outline"
-                            className={cn(
-                              'text-[10px] font-mono px-1.5 py-0 h-5 shrink-0',
-                              METHOD_COLORS[entry.method]
-                            )}
+                <div>
+                  {/* Recent / Saved tabs */}
+                  <div className="px-3 pt-2">
+                    <Tabs
+                      value={historyTab}
+                      onValueChange={(v) => setHistoryTab(v as 'recent' | 'saved')}
+                    >
+                      <TabsList className="h-7 w-full">
+                        <TabsTrigger value="recent" className="text-xs h-6 flex-1">
+                          <Clock className="h-3 w-3 mr-1" />
+                          Recent
+                        </TabsTrigger>
+                        <TabsTrigger value="saved" className="text-xs h-6 flex-1">
+                          <Star className="h-3 w-3 mr-1" />
+                          Saved
+                        </TabsTrigger>
+                      </TabsList>
+                    </Tabs>
+                  </div>
+
+                  <div className="divide-y divide-border mt-2">
+                    {historyLoading ? (
+                      <div className="p-3 space-y-2">
+                        {Array.from({ length: 5 }).map((_, i) => (
+                          <Skeleton key={i} className="h-10 w-full" />
+                        ))}
+                      </div>
+                    ) : displayHistory.length === 0 ? (
+                      <div className="p-6 text-center">
+                        <Clock className="h-8 w-8 mx-auto text-muted-foreground/30 mb-2" />
+                        <p className="text-sm text-muted-foreground">
+                          {historyTab === 'saved'
+                            ? 'No saved requests'
+                            : 'No request history yet'}
+                        </p>
+                      </div>
+                    ) : (
+                      displayHistory.map((entry) => (
+                        <div key={entry.id} className="group relative">
+                          <button
+                            className="w-full px-3 py-2 text-left hover:bg-muted/50 transition-colors"
+                            onClick={() => handleReplayHistory(entry)}
                           >
-                            {entry.method}
-                          </Badge>
-                          <span className="text-xs font-mono truncate text-muted-foreground">
-                            {entry.path}
-                          </span>
+                            <div className="flex items-center gap-2">
+                              <Badge
+                                variant="outline"
+                                className={cn(
+                                  'text-[10px] font-mono px-1.5 py-0 h-5 shrink-0',
+                                  METHOD_COLORS[entry.method]
+                                )}
+                              >
+                                {entry.method}
+                              </Badge>
+                              <span className="text-xs font-mono truncate text-muted-foreground">
+                                {entry.endpoint}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-2 mt-1">
+                              {entry.response_status && (
+                                <Badge
+                                  variant="outline"
+                                  className={cn(
+                                    'text-[10px] px-1.5 py-0 h-4',
+                                    getStatusColor(entry.response_status)
+                                  )}
+                                >
+                                  {entry.response_status}
+                                </Badge>
+                              )}
+                              {entry.response_time_ms != null && (
+                                <span className="text-[10px] text-muted-foreground">
+                                  {entry.response_time_ms}ms
+                                </span>
+                              )}
+                              {entry.name && (
+                                <span className="text-[10px] text-primary truncate max-w-[80px]">
+                                  {entry.name}
+                                </span>
+                              )}
+                              <span className="text-[10px] text-muted-foreground/60 ml-auto">
+                                {timeAgo(entry.created_at)}
+                              </span>
+                            </div>
+                          </button>
+                          {/* Action buttons */}
+                          <div className="absolute right-2 top-2 hidden group-hover:flex gap-0.5">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-5 w-5 p-0"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                saveMutation.mutate({
+                                  entryId: entry.id,
+                                  data: { is_saved: !entry.is_saved },
+                                });
+                              }}
+                            >
+                              <Star
+                                className={cn(
+                                  'h-3 w-3',
+                                  entry.is_saved
+                                    ? 'fill-yellow-400 text-yellow-400'
+                                    : 'text-muted-foreground'
+                                )}
+                              />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-5 w-5 p-0 text-destructive"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                deleteMutation.mutate(entry.id);
+                              }}
+                            >
+                              <Trash2 className="h-3 w-3" />
+                            </Button>
+                          </div>
                         </div>
-                        <div className="flex items-center gap-2 mt-1">
-                          <Badge
-                            variant="outline"
-                            className={cn(
-                              'text-[10px] px-1.5 py-0 h-4',
-                              getStatusColor(entry.status)
-                            )}
-                          >
-                            {entry.status}
-                          </Badge>
-                          <span className="text-[10px] text-muted-foreground">
-                            {entry.responseTimeMs}ms
-                          </span>
-                          <span className="text-[10px] text-muted-foreground/60 ml-auto">
-                            {new Date(entry.timestamp).toLocaleTimeString()}
-                          </span>
-                        </div>
-                      </button>
-                    ))
-                  )}
-                  {history.length > 0 && (
-                    <div className="p-2">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="w-full h-7 text-xs text-muted-foreground"
-                        onClick={() => {
-                          setHistory([]);
-                          saveHistory([]);
-                        }}
-                      >
-                        <Trash2 className="h-3 w-3 mr-1" />
-                        Clear History
-                      </Button>
-                    </div>
-                  )}
+                      ))
+                    )}
+                  </div>
                 </div>
               ) : endpointsLoading ? (
                 <div className="p-3 space-y-2">
@@ -432,9 +492,9 @@ export default function PlaygroundPage() {
                     {executeMutation.isPending ? (
                       <RotateCw className="h-3.5 w-3.5 animate-spin" />
                     ) : (
-                      <Send className="h-3.5 w-3.5" />
+                      <Play className="h-3.5 w-3.5" />
                     )}
-                    Send
+                    Send Request
                   </Button>
                 </div>
 
@@ -485,6 +545,76 @@ export default function PlaygroundPage() {
                       </div>
                     </div>
                   )}
+
+                  {/* Headers section */}
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                        Headers
+                      </h4>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-6 text-xs gap-1"
+                        onClick={() =>
+                          setHeaderRows((prev) => [...prev, { key: '', value: '' }])
+                        }
+                      >
+                        <Plus className="h-3 w-3" />
+                        Add
+                      </Button>
+                    </div>
+                    {headerRows.length === 0 ? (
+                      <p className="text-xs text-muted-foreground/60">
+                        No custom headers. Authorization is sent automatically.
+                      </p>
+                    ) : (
+                      <div className="space-y-2">
+                        {headerRows.map((row, idx) => (
+                          <div key={idx} className="flex items-center gap-2">
+                            <input
+                              type="text"
+                              value={row.key}
+                              onChange={(e) =>
+                                setHeaderRows((prev) =>
+                                  prev.map((r, i) =>
+                                    i === idx ? { ...r, key: e.target.value } : r
+                                  )
+                                )
+                              }
+                              placeholder="Header name"
+                              className="w-40 h-8 px-2.5 text-sm font-mono rounded-md border border-input bg-background focus:outline-none focus:ring-1 focus:ring-ring"
+                            />
+                            <input
+                              type="text"
+                              value={row.value}
+                              onChange={(e) =>
+                                setHeaderRows((prev) =>
+                                  prev.map((r, i) =>
+                                    i === idx ? { ...r, value: e.target.value } : r
+                                  )
+                                )
+                              }
+                              placeholder="Value"
+                              className="flex-1 h-8 px-2.5 text-sm font-mono rounded-md border border-input bg-background focus:outline-none focus:ring-1 focus:ring-ring"
+                            />
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive"
+                              onClick={() =>
+                                setHeaderRows((prev) =>
+                                  prev.filter((_, i) => i !== idx)
+                                )
+                              }
+                            >
+                              <X className="h-3.5 w-3.5" />
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
 
                   {/* Query parameters */}
                   {Object.keys(queryParams).length > 0 && (

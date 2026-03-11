@@ -2022,3 +2022,212 @@ All latest local code synced to Hetzner (77.42.23.19) and all services rebuilt/r
 
 ### Task 21: Status Docs
 - [x] Updated `tasks/todo.md` with Sprint 54 Phase 5 completion status
+
+## Sprint 55 Phase 5 — Saved Filters (2026-03-10) — COMPLETE
+
+### Task 17: Saved Filters Migration
+- [x] Created `backend/supabase/migrations/20260311400004_saved_filters.sql`
+- [x] `saved_filters` table with UUID PK, user_id, name, view_type (CHECK constraint for 8 view types), filters (JSONB), is_default, sort_order, created_at
+- [x] Index on (user_id, view_type) for fast lookup
+- [x] NO RLS — access control enforced at application layer
+
+### Task 18: Saved Filters API
+- [x] Created `backend/core/preferences/__init__.py` + `saved_filters_api.py` with router prefix `/filters`, tag `saved-filters`:
+  - `POST /filters` — save filter with name, view_type, filters, optional is_default (auto-unsets previous default)
+  - `GET /filters` — list saved filters with optional view_type query param, ordered by sort_order
+  - `PATCH /filters/{filter_id}` — update filter name, filters, or is_default with ownership check
+  - `DELETE /filters/{filter_id}` — delete with ownership check
+  - `PUT /filters/{filter_id}/default` — set as default for view_type, unsets any other default first
+- [x] Registered in `backend/api.py`
+
+### Task 19: Frontend API + Hooks
+- [x] Created `recoder-agents/src/lib/api/saved-filters.ts` with typed SavedFilter interface and 5 API functions (createFilter, getFilters, updateFilter, deleteFilter, setDefaultFilter)
+- [x] Created `recoder-agents/src/hooks/use-saved-filters.ts` with hooks: useSavedFilters, useCreateFilter, useUpdateFilter, useDeleteFilter, useSetDefaultFilter
+
+### Task 20: Saved Filter Bar UI
+- [x] Created `recoder-agents/src/components/filters/saved-filter-bar.tsx` — reusable saved filter bar component with:
+  - Props: viewType, currentFilters, onApplyFilter callback
+  - Horizontal bar with clickable filter pills as Badge components
+  - Default filter pill highlighted with star icon and amber border
+  - Active filter indicated with check icon and filled background
+  - "Save Current" button opens dialog to name and save current filters
+  - Context menu per pill (MoreHorizontal): Set as Default, Rename, Delete
+  - Rename dialog for inline renaming
+  - Compact design fitting above any list view
+  - Uses shadcn/ui: Button, Dialog, Input, Badge, DropdownMenu
+  - Uses lucide-react: Star, Save, Trash2, MoreHorizontal, Filter, Check
+
+### Task 21: Status Docs
+- [x] Updated `tasks/todo.md` with Sprint 55 Phase 5 completion status
+
+## Sprint 56 Phase 5 — Agent Run Retry System (2026-03-11)
+
+### Task 17: Migration
+- [x] Created `backend/supabase/migrations/20260311500004_run_retry.sql`
+  - `run_retry_policies` table: UUID PK, user_id, agent_id, name, max_retries, retry_delay_seconds, backoff_multiplier, retry_on_errors TEXT[], is_active, UNIQUE(user_id, agent_id)
+  - `run_retry_attempts` table: UUID PK, user_id, original_run_id, retry_run_id, agent_id, attempt_number, error_type, error_message, status CHECK, scheduled_at, executed_at
+  - Indexes on user_id, agent_id, original_run_id, (user_id, created_at DESC)
+  - Access control at application layer (WHERE user_id = :user_id)
+
+### Task 18: Backend API
+- [x] Created `backend/core/agents/agent_retry_api.py` with router tag "agent-retry"
+  - `POST /retry/policies` — upsert retry policy on (user_id, agent_id)
+  - `GET /retry/policies` — list all policies for user
+  - `DELETE /retry/policies/{policy_id}` — delete policy
+  - `POST /runs/{run_id}/retry` — manually retry failed run with optional override input
+  - `GET /runs/{run_id}/retry-attempts` — list retry attempts for a run
+  - `GET /retry/stats` — aggregate stats (total retries, success rate, most retried agent, avg attempts)
+- [x] Registered in `backend/api.py`
+
+### Task 19: Frontend API + Hooks
+- [x] Created `recoder-agents/src/lib/api/agent-retry.ts` with typed interfaces and 6 API functions
+- [x] Created `recoder-agents/src/hooks/agents/use-agent-retry.ts` with hooks: useRetryPolicies, useCreateRetryPolicy, useDeleteRetryPolicy, useRetryRun, useRetryAttempts, useRetryStats
+
+### Task 20: UI Components
+- [x] Created `recoder-agents/src/components/agents/retry-policy-manager.tsx`:
+  - Stats cards: Total Retries, Success Rate, Most Retried Agent, Avg Attempts
+  - Policy list with agent scope badge, max retries, delay, backoff, error type badges, active toggle, delete
+  - "New Policy" dialog with all configurable fields (name, agent_id, max_retries, delay, backoff multiplier, error types)
+  - Empty state with guidance
+- [x] Created `recoder-agents/src/components/agents/run-retry-button.tsx`:
+  - Retry button for failed runs, opens dialog
+  - Shows error info from last run
+  - Optional input override field
+  - Previous retry attempts list with status badges (pending/retrying/succeeded/failed/exhausted)
+
+### Task 21: Status Docs
+- [x] Updated `tasks/todo.md` with Sprint 56 Phase 5 completion status
+
+## Sprint 57 — Agent Model Routing Rules, Thread Annotations, Usage Anomaly Detection, Agent Deployment Slots & Custom Keyboard Shortcuts ✅
+- Phase 1: Agent Model Routing Rules (schema + API + frontend + UI) ✅
+- Phase 2: Thread Annotations (schema + API + frontend + UI) ✅
+- Phase 3: Usage Anomaly Detection (schema + API + frontend + UI) ✅
+- Phase 4: Agent Deployment Slots (schema + API + frontend + UI) ✅
+- Phase 5: Custom Keyboard Shortcuts (schema + API + frontend + UI) ✅
+
+## Sprint 58 — Agent Webhooks Manager, Thread Reactions, System Health Dashboard, Agent Cloning Wizard & Quick Actions Command Palette ✅
+- Phase 1: Agent Webhooks Manager (schema + API + frontend + UI) ✅
+- Phase 2: Thread Reactions (schema + API + frontend + UI) ✅
+- Phase 3: System Health Dashboard (schema + API + frontend + UI) ✅
+- Phase 4: Agent Cloning Wizard (schema + API + frontend + UI) ✅
+- Phase 5: Quick Actions Command Palette (schema + API + frontend + UI) ✅
+
+## Sprint 59 — Agent Environment Variables, Thread Summarization, Rate Limit Dashboard, Agent Dependency Graph & Bulk Operations ✅
+- Phase 1: Agent Environment Variables (schema + API + frontend + UI) ✅
+- Phase 2: Thread Summarization (schema + API + frontend + UI) ✅
+- Phase 3: Rate Limit Dashboard (schema + API + frontend + UI) ✅
+- Phase 4: Agent Dependency Graph (schema + API + frontend + UI) ✅
+- Phase 5: Bulk Operations (schema + API + frontend + UI) ✅
+
+## Sprint 60 — Agent Versioned Configs, Thread Search & Filters, Audit Log Viewer, Agent Performance Benchmarks & Custom Dashboard Layouts ✅
+- Phase 1: Agent Versioned Configs (schema + API + frontend + UI) ✅
+- Phase 2: Thread Search & Filters (schema + API + frontend + UI) ✅
+- Phase 3: Audit Log Viewer (schema + API + frontend + UI) ✅
+- Phase 4: Agent Performance Benchmarks (schema + API + frontend + UI) ✅
+- Phase 5: Custom Dashboard Layouts (schema + API + frontend + UI) ✅
+
+## Sprint 61 — Agent Shared Prompts Library, Thread Branching, Incident Postmortems, Agent Cost Alerts & Data Retention Policies ✅
+- Phase 1: Agent Shared Prompts Library (schema + API + frontend + UI) ✅
+- Phase 2: Thread Branching (schema + API + frontend + UI) ✅
+- Phase 3: Incident Postmortems (schema + API + frontend + UI) ✅
+- Phase 4: Agent Cost Alerts (schema + API + frontend + UI) ✅
+- Phase 5: Data Retention Policies (schema + API + frontend + UI) ✅
+
+## Sprint 62 — Agent Workflow Templates, Thread Labels & Organization, SLA Monitoring, Agent Resource Quotas & User Preferences Sync ✅
+- Phase 1: Agent Workflow Templates (schema + API + frontend + UI) ✅
+- Phase 2: Thread Labels & Organization (schema + API + frontend + UI) ✅
+- Phase 3: SLA Monitoring (schema + API + frontend + UI) ✅
+- Phase 4: Agent Resource Quotas (schema + API + frontend + UI) ✅
+- Phase 5: User Preferences Sync (schema + API + frontend + UI) ✅
+
+## Sprint 63 — Agent Knowledge Graph, Thread Auto-Tagging, Change Impact Analysis, Agent Marketplace Reviews & Session Replay ✅
+- Phase 1: Agent Knowledge Graph (schema + API + frontend + UI) ✅
+- Phase 2: Thread Auto-Tagging (schema + API + frontend + UI) ✅
+- Phase 3: Change Impact Analysis (schema + API + frontend + UI) ✅
+- Phase 4: Agent Marketplace Reviews (schema + API + frontend + UI) ✅
+- Phase 5: Session Replay (schema + API + frontend + UI) ✅
+
+## Sprint 64 — Agent A/B Test Reports, Thread Merge, Error Pattern Detection, Agent Playground Sandbox & Notification Digest ✅
+- Phase 1: Agent A/B Test Reports (schema + API + frontend + UI) ✅
+- Phase 2: Thread Merge (schema + API + frontend + UI) ✅
+- Phase 3: Error Pattern Detection (schema + API + frontend + UI) ✅
+- Phase 4: Agent Playground Sandbox (schema + API + frontend + UI) ✅
+- Phase 5: Notification Digest (schema + API + frontend + UI) ✅
+
+## Sprint 65 — Usage Forecasting, Agent Template Gallery & Activity Feed
+- Phase 5: Activity Feed (schema + API + frontend + UI) ✅
+
+## Sprint 66 Phase 5 — Webhook Payload Templates (2026-03-11)
+
+### Task 17: Schema
+- [x] Created `backend/supabase/migrations/20260312500004_webhook_templates.sql`
+  - `webhook_payload_templates` table: UUID PK, user_id, template_name, description, trigger_event, payload_template JSONB, headers_template JSONB, variable_definitions JSONB, is_active, use_count, created_at, updated_at
+  - `webhook_template_renders` table: UUID PK, template_id FK → webhook_payload_templates(id) ON DELETE CASCADE, user_id, rendered_payload JSONB, variables_used JSONB, rendered_at
+  - Indexes: idx_wh_templates_user, idx_wh_templates_event, idx_wh_renders_template
+  - Access control at application layer (WHERE user_id = :user_id)
+
+### Task 18: Backend API
+- [x] Created `backend/core/integrations/webhook_templates_api.py` with router prefix="/webhook-templates", tags=["webhook-templates"]
+  - `POST /webhook-templates` — create template
+  - `GET /webhook-templates` — list with trigger_event, limit filters
+  - `GET /webhook-templates/{template_id}` — detail
+  - `PATCH /webhook-templates/{template_id}` — partial update
+  - `DELETE /webhook-templates/{template_id}` — delete with ownership check
+  - `POST /webhook-templates/{template_id}/render` — render with {{variable}} substitution, increments use_count, records render
+  - `GET /webhook-templates/{template_id}/renders` — list recent renders
+- [x] Registered in `backend/api.py` (Sprint 66 Phase 5 block)
+
+### Task 19: Frontend API + Hooks
+- [x] Created `recoder-agents/src/lib/api/webhook-templates.ts` with interfaces: WebhookPayloadTemplate, WebhookTemplateRender, RenderResult, CreateTemplateData, UpdateTemplateData, RenderTemplateData; functions: createWebhookTemplate, listWebhookTemplates, getWebhookTemplate, updateWebhookTemplate, deleteWebhookTemplate, renderWebhookTemplate, getTemplateRenders
+- [x] Created `recoder-agents/src/hooks/integrations/use-webhook-templates.ts` with hooks: useWebhookTemplates(triggerEvent?), useWebhookTemplate(templateId), useCreateWebhookTemplate, useUpdateWebhookTemplate, useDeleteWebhookTemplate, useRenderWebhookTemplate, useTemplateRenders(templateId)
+
+### Task 20: UI
+- [x] Created `recoder-agents/src/app/(dashboard)/settings/webhooks/templates/page.tsx`
+  - Template list: name, trigger_event colored badge, description, use_count, active toggle, date
+  - Filter by trigger_event dropdown
+  - "New Template" button → TemplateEditorDialog
+  - TemplateEditorDialog: template_name, trigger_event select (6 events), description, payload_template JSON editor, headers_template JSON editor, variable_definitions (add/remove name+description pairs), save button
+  - RenderPanel (shown on template selection): variable inputs per declared variable, "Render Preview" button → renders and shows formatted JSON, render history (last 5 with timestamp + payload preview, collapsible)
+
+### Task 21: Status Docs
+- [x] Updated `tasks/todo.md` with Sprint 66 Phase 5 completion status
+
+## Sprint 67 Phase 5 — Multi-Language Prompts (2026-03-11)
+
+### Task 17: Schema
+- [x] Created `backend/supabase/migrations/20260312600004_multilang_prompts.sql`
+  - `multilang_prompt_sets` table: UUID PK, user_id, prompt_name, base_language, description, category, created_at, updated_at; UNIQUE (user_id, prompt_name)
+  - `multilang_prompt_variants` table: UUID PK, prompt_set_id FK → multilang_prompt_sets(id) ON DELETE CASCADE, user_id, language_code, content, is_machine_translated, quality_score NUMERIC(3,2), created_at, updated_at; UNIQUE (prompt_set_id, language_code)
+  - Indexes: idx_multilang_sets_user, idx_multilang_variants_set, idx_multilang_variants_lang
+  - Access control at application layer (WHERE user_id = :user_id)
+
+### Task 18: Backend API
+- [x] Created `backend/core/prompts/multilang_prompts_api.py` with router prefix="/prompts/multilang", tags=["multilang-prompts"]
+  - `POST /prompts/multilang` — create prompt set
+  - `GET /prompts/multilang` — list sets with category, search, limit filters
+  - `GET /prompts/multilang/stats` — language distribution, coverage per set, sets needing translation for common languages
+  - `GET /prompts/multilang/{prompt_set_id}` — get set with all variants
+  - `DELETE /prompts/multilang/{prompt_set_id}` — delete set (cascades variants)
+  - `POST /prompts/multilang/{prompt_set_id}/variants` — upsert variant by prompt_set_id + language_code
+  - `GET /prompts/multilang/{prompt_set_id}/variants` — list all variants
+  - `DELETE /prompts/multilang/{prompt_set_id}/variants/{language_code}` — delete specific variant
+  - `GET /prompts/multilang/{prompt_set_id}/variant/{language_code}` — get variant with base-language fallback
+- [x] Registered in `backend/api.py` (Sprint 67 Phase 5 block)
+
+### Task 19: Frontend API + Hooks
+- [x] Created `recoder-agents/src/lib/api/multilang-prompts.ts` with interfaces: MultilangPromptSet, MultilangPromptVariant, CreatePromptSetData, CreateVariantData, MultilangStats, LanguageDistributionEntry, CoveragePerSet, SetNeedingTranslation; functions for all 9 endpoints using backendApi pattern
+- [x] Created `recoder-agents/src/hooks/prompts/use-multilang-prompts.ts` with hooks: useMultilangPromptSets(filters), usePromptSetDetail(promptSetId), useCreatePromptSet(), useDeletePromptSet(), useUpsertVariant(promptSetId), usePromptVariants(promptSetId), useDeleteVariant(promptSetId), usePromptVariant(promptSetId, languageCode), useMultilangStats()
+
+### Task 20: UI
+- [x] Created `recoder-agents/src/app/(dashboard)/prompts/multilang/page.tsx`
+  - Stats header: total prompt sets, languages covered, sets with full coverage, sets needing translation
+  - Language coverage grid: colored dots per language (blue=base, green=translated, red=missing) for en, es, fr, de, ja, zh, pt, ko
+  - Prompt set list: prompt_name, category badge, base_language badge, variant count, coverage bar, date
+  - Click row → expand inline VariantEditor with language tabs + "Add Language" selector
+  - Variant editor: content textarea, machine-translated checkbox, quality star display, Save Variant button
+  - New Prompt Set dialog: prompt_name, base_language select, category select, description
+  - Delete confirmation AlertDialog
+  - Filter by category dropdown + search input
+
+### Task 21: Status Docs
+- [x] Updated `tasks/todo.md` with Sprint 67 Phase 5 completion status

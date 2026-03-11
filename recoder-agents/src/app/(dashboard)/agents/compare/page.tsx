@@ -93,7 +93,7 @@ const RADAR_COLORS = [
 // ============================================================================
 
 function normalizeMetric(value: number, metricKey: string, agents: AgentMetricsSummary[]): number {
-  const allValues = agents.map((a) => (a as Record<string, unknown>)[metricKey] as number);
+  const allValues = agents.map((a) => (a as unknown as Record<string, unknown>)[metricKey] as number);
   const max = Math.max(...allValues, 1);
   const min = Math.min(...allValues, 0);
   if (max === min) return 50;
@@ -114,7 +114,7 @@ function getBestWorst(
 ): { bestIdx: number; worstIdx: number } {
   if (agents.length === 0) return { bestIdx: -1, worstIdx: -1 };
 
-  const values = agents.map((a) => (a as Record<string, unknown>)[metricKey] as number);
+  const values = agents.map((a) => (a as unknown as Record<string, unknown>)[metricKey] as number);
   const bestVal = higherIsBetter ? Math.max(...values) : Math.min(...values);
   const worstVal = higherIsBetter ? Math.min(...values) : Math.max(...values);
 
@@ -258,7 +258,7 @@ function ComparisonTable({ agents }: { agents: AgentMetricsSummary[] }) {
                       </div>
                     </TableCell>
                     {agents.map((agent, idx) => {
-                      const value = (agent as Record<string, unknown>)[metric.key] as number;
+                      const value = (agent as unknown as Record<string, unknown>)[metric.key] as number;
                       const isBest = idx === bestIdx;
                       const isWorst = idx === worstIdx;
 
@@ -291,7 +291,7 @@ function ComparisonRadarChart({ agents }: { agents: AgentMetricsSummary[] }) {
     return METRIC_ROWS.map((metric) => {
       const entry: Record<string, unknown> = { metric: metric.label };
       agents.forEach((agent) => {
-        const value = (agent as Record<string, unknown>)[metric.key] as number;
+        const value = (agent as unknown as Record<string, unknown>)[metric.key] as number;
         entry[agent.agent_id] = Math.round(normalizeMetric(value, metric.key, agents));
       });
       return entry;

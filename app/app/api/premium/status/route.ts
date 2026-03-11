@@ -44,7 +44,7 @@ export async function GET(request: NextRequest) {
 
     if (!response.ok) {
       const error = await response.text();
-      logger.error('Backend premium status error:', { error: error instanceof Error ? error.message : String(error) });
+      logger.error('Backend premium status error:', { error });
       
       return NextResponse.json(
         {

@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useAgent } from '@/hooks/agents/use-agents';
-import { ChevronLeft, Brain, BookOpen, Zap, Wrench, Server, Pencil, MessageCircle, History, ScrollText, KeyRound, Gauge, Clock, Download, Activity, BarChart3, MessageSquare, Terminal, FlaskConical, HeartPulse, Shield } from 'lucide-react';
+import { ChevronLeft, Brain, BookOpen, Zap, Wrench, Server, Pencil, MessageCircle, History, ScrollText, KeyRound, Gauge, Clock, CalendarClock, Download, Activity, BarChart3, MessageSquare, Terminal, FlaskConical, HeartPulse, Shield, Route, Rocket, Lock, GitBranch, Database } from 'lucide-react';
 import { RecoderLoader } from '@/components/ui/recoder-loader';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -27,6 +27,13 @@ import { TestingScreen } from './screens/testing-screen';
 import { HealthScreen } from './screens/health-screen';
 import { ChangelogScreen } from './screens/changelog-screen';
 import { PermissionsScreen } from './screens/permissions-screen';
+import { RoutingScreen } from './screens/routing-screen';
+import { DeploymentScreen } from './screens/deployment-screen';
+import { ConfigVersionsScreen } from './screens/config-versions-screen';
+import { QuotasScreen } from './screens/quotas-screen';
+import { SandboxScreen } from './screens/sandbox-screen';
+import { ScheduledTasksScreen } from './screens/scheduled-tasks-screen';
+import { CacheScreen } from './screens/cache-screen';
 import { CommentPanel } from '@/components/agents/config/comment-panel';
 import { useCommentCounts } from '@/hooks/agents/use-agent-comments';
 import { useUpdateAgent } from '@/hooks/agents/use-agents';
@@ -35,7 +42,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { AgentConfigTour } from '@/components/onboarding/tours/agent-config-tour';
 import { AgentExportDialog } from '@/components/agents/agent-export-dialog';
 
-type ConfigView = 'instructions' | 'knowledge' | 'triggers' | 'tools' | 'integrations' | 'versions' | 'logs' | 'secrets' | 'environment' | 'quota' | 'schedules' | 'activity' | 'benchmarks' | 'testing' | 'health' | 'changelog' | 'permissions';
+type ConfigView = 'instructions' | 'knowledge' | 'triggers' | 'tools' | 'integrations' | 'versions' | 'config-versions' | 'logs' | 'secrets' | 'environment' | 'quota' | 'quotas' | 'schedules' | 'scheduled-tasks' | 'activity' | 'benchmarks' | 'testing' | 'sandbox' | 'health' | 'changelog' | 'permissions' | 'routing' | 'deployment' | 'cache';
 
 export default function AgentConfigPage() {
   const params = useParams();
@@ -97,17 +104,24 @@ export default function AgentConfigPage() {
     { id: 'knowledge' as const, label: 'Knowledge', icon: BookOpen, tourId: 'knowledge-tab' },
     { id: 'triggers' as const, label: 'Triggers', icon: Zap, tourId: 'triggers-tab' },
     { id: 'versions' as const, label: 'Versions', icon: History, tourId: 'versions-tab' },
+    { id: 'config-versions' as const, label: 'Config History', icon: GitBranch, tourId: 'config-versions-tab' },
     { id: 'logs' as const, label: 'Logs', icon: ScrollText, tourId: 'logs-tab' },
     { id: 'secrets' as const, label: 'Secrets', icon: KeyRound, tourId: 'secrets-tab' },
-    { id: 'environment' as const, label: 'Environment', icon: Terminal, tourId: 'environment-tab' },
+    { id: 'environment' as const, label: 'Environment', icon: Lock, tourId: 'environment-tab' },
     { id: 'quota' as const, label: 'Quota', icon: Gauge, tourId: 'quota-tab' },
+    { id: 'quotas' as const, label: 'Quotas', icon: Shield, tourId: 'quotas-tab' },
     { id: 'schedules' as const, label: 'Schedules', icon: Clock, tourId: 'schedules-tab' },
+    { id: 'scheduled-tasks' as const, label: 'Scheduled Tasks', icon: CalendarClock, tourId: 'scheduled-tasks-tab' },
     { id: 'activity' as const, label: 'Activity', icon: Activity, tourId: 'activity-tab' },
-    { id: 'benchmarks' as const, label: 'Benchmarks', icon: BarChart3, tourId: 'benchmarks-tab' },
+    { id: 'benchmarks' as const, label: 'Benchmarks', icon: Gauge, tourId: 'benchmarks-tab' },
     { id: 'testing' as const, label: 'Testing', icon: FlaskConical, tourId: 'testing-tab' },
+    { id: 'sandbox' as const, label: 'Sandbox', icon: FlaskConical, tourId: 'sandbox-tab' },
     { id: 'health' as const, label: 'Health', icon: HeartPulse, tourId: 'health-tab' },
     { id: 'changelog' as const, label: 'Changelog', icon: History, tourId: 'changelog-tab' },
     { id: 'permissions' as const, label: 'Permissions', icon: Shield, tourId: 'permissions-tab' },
+    { id: 'routing' as const, label: 'Routing', icon: Route, tourId: 'routing-tab' },
+    { id: 'deployment' as const, label: 'Deployment', icon: Rocket, tourId: 'deployment-tab' },
+    { id: 'cache' as const, label: 'Cache', icon: Database, tourId: 'cache-tab' },
   ];
 
   return (
@@ -256,17 +270,24 @@ export default function AgentConfigPage() {
         {activeView === 'knowledge' && <KnowledgeScreen agentId={agentId} />}
         {activeView === 'triggers' && <TriggersScreen agentId={agentId} />}
         {activeView === 'versions' && <VersionsScreen agentId={agentId} />}
+        {activeView === 'config-versions' && <ConfigVersionsScreen agentId={agentId} />}
         {activeView === 'logs' && <LogsScreen agentId={agentId} />}
         {activeView === 'secrets' && <SecretsScreen agentId={agentId} />}
         {activeView === 'environment' && <EnvVarsScreen agentId={agentId} />}
         {activeView === 'quota' && <QuotaScreen agentId={agentId} />}
+        {activeView === 'quotas' && <QuotasScreen agentId={agentId} />}
         {activeView === 'schedules' && <SchedulesScreen agentId={agentId} />}
+        {activeView === 'scheduled-tasks' && <ScheduledTasksScreen agentId={agentId} />}
         {activeView === 'activity' && <ActivityScreen agentId={agentId} />}
         {activeView === 'benchmarks' && <BenchmarksScreen agentId={agentId} />}
         {activeView === 'testing' && <TestingScreen agentId={agentId} />}
+        {activeView === 'sandbox' && <SandboxScreen agentId={agentId} />}
         {activeView === 'health' && <HealthScreen agentId={agentId} />}
         {activeView === 'changelog' && <ChangelogScreen agentId={agentId} />}
         {activeView === 'permissions' && <PermissionsScreen agentId={agentId} />}
+        {activeView === 'routing' && <RoutingScreen agentId={agentId} />}
+        {activeView === 'deployment' && <DeploymentScreen agentId={agentId} />}
+        {activeView === 'cache' && <CacheScreen agentId={agentId} />}
       </div>
 
       {/* Agent Editor Dialog */}

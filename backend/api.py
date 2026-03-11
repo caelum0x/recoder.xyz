@@ -49,10 +49,12 @@ from core.agents.agent_benchmark_api import router as agent_benchmark_router
 from core.agents.agent_comments_api import router as agent_comments_router
 from core.agents.agent_env_vars_api import router as agent_env_vars_router
 from core.agents.agent_clone_api import router as agent_clone_router
+from core.agents.agent_clone_wizard_api import router as agent_clone_wizard_router
 from core.agents.agent_testing_api import router as agent_testing_router
 from core.agents.agent_replay_api import router as agent_replay_router
 from core.agents.agent_health_api import router as agent_health_router
 from core.agents.agent_changelog_api import router as agent_changelog_router
+from core.agents.agent_versioned_configs_api import router as agent_versioned_configs_router
 from core.prompts.shared_prompts_api import router as shared_prompts_router
 from core.threads.api import router as threads_router
 from core.threads.thread_templates_api import router as thread_templates_router
@@ -62,6 +64,9 @@ from core.threads.thread_analytics_api import router as thread_analytics_router
 from core.threads.thread_tags_api import router as thread_tags_router
 from core.threads.message_bookmarks_api import router as message_bookmarks_router
 from core.threads.response_ratings_api import router as response_ratings_router
+from core.threads.thread_summaries_api import router as thread_summaries_router
+from core.threads.thread_search_filters_api import router as thread_search_filters_router
+from core.threads.thread_branches_api import router as thread_branches_router
 from core.categorization.api import router as categorization_router
 from core.endpoints import router as endpoints_router
 
@@ -87,6 +92,12 @@ from core.services.orphan_cleanup import cleanup_orphaned_agent_runs
 from auth import api as auth_api
 from auth import mfa_api
 from core.utils.auth_utils import verify_and_get_user_id_from_jwt
+from core.knowledge.knowledge_graph_api import router as knowledge_graph_router
+from core.threads.thread_auto_tagging_api import router as thread_auto_tagging_router
+from core.monitoring.error_patterns_api import router as error_patterns_router
+from core.agents.agent_sandbox_api import router as agent_sandbox_router
+from core.billing.usage_forecasting_api import router as usage_forecasting_router
+from core.agents.agent_template_gallery_api import router as agent_template_gallery_router
 
 
 if sys.platform == "win32":
@@ -491,10 +502,19 @@ api_router.include_router(agent_benchmark_router)
 api_router.include_router(agent_comments_router)
 api_router.include_router(agent_env_vars_router)
 api_router.include_router(agent_clone_router)
+api_router.include_router(agent_clone_wizard_router)
 api_router.include_router(agent_testing_router)
 api_router.include_router(agent_replay_router)
 api_router.include_router(agent_health_router)
 api_router.include_router(agent_changelog_router)
+api_router.include_router(agent_versioned_configs_router)
+
+from core.agents.agent_deployment_api import router as agent_deployment_router
+api_router.include_router(agent_deployment_router)
+
+from core.agents.agent_scheduled_tasks_api import router as agent_scheduled_tasks_router
+api_router.include_router(agent_scheduled_tasks_router)
+
 api_router.include_router(shared_prompts_router)
 api_router.include_router(threads_router)
 api_router.include_router(thread_templates_router)
@@ -502,8 +522,13 @@ api_router.include_router(thread_pins_router)
 api_router.include_router(thread_search_router)
 api_router.include_router(thread_analytics_router)
 api_router.include_router(thread_tags_router)
+from core.threads.thread_labels_api import router as thread_labels_router
+api_router.include_router(thread_labels_router)
 api_router.include_router(message_bookmarks_router)
 api_router.include_router(response_ratings_router)
+api_router.include_router(thread_summaries_router)
+api_router.include_router(thread_search_filters_router)
+api_router.include_router(thread_branches_router)
 from core.threads.thread_export_api import router as thread_export_router
 api_router.include_router(thread_export_router)
 from core.threads.thread_bulk_api import router as thread_bulk_router
@@ -577,6 +602,9 @@ api_router.include_router(notification_rules_router)
 from core.notifications import presence_api
 api_router.include_router(presence_api.router)
 
+from core.notifications.notification_digest_api import router as notification_digest_router
+api_router.include_router(notification_digest_router)
+
 from core.composio_integration import api as composio_api
 api_router.include_router(composio_api.router)
 
@@ -597,6 +625,9 @@ api_router.include_router(website_analysis_router)
 
 from core.workflows.workflow_api import router as workflow_router
 api_router.include_router(workflow_router)
+
+from core.workflows.workflow_templates_api import router as workflow_templates_router
+api_router.include_router(workflow_templates_router)
 
 from core.agents.agent_pipeline_api import router as pipeline_router
 api_router.include_router(pipeline_router)
@@ -696,6 +727,15 @@ api_router.include_router(incident_router)
 from core.monitoring.sandbox_monitor_api import router as sandbox_monitor_router
 api_router.include_router(sandbox_monitor_router)
 
+from core.monitoring.anomaly_detection_api import router as anomaly_detection_router
+api_router.include_router(anomaly_detection_router)
+
+from core.monitoring.system_health_api import router as system_health_router
+api_router.include_router(system_health_router)
+
+from core.monitoring.rate_limit_dashboard_api import router as rate_limit_dashboard_router
+api_router.include_router(rate_limit_dashboard_router)
+
 from core.threads.thread_folders_api import router as thread_folders_router
 api_router.include_router(thread_folders_router)
 
@@ -707,6 +747,9 @@ api_router.include_router(kb_relationships_router)
 
 from core.agents.agent_dependency_api import router as agent_dependency_router
 api_router.include_router(agent_dependency_router)
+
+from core.agents.agent_dependency_graph_api import router as agent_dependency_graph_router
+api_router.include_router(agent_dependency_graph_router)
 
 from core.threads.conversation_insights_api import router as conversation_insights_router
 api_router.include_router(conversation_insights_router)
@@ -735,11 +778,192 @@ api_router.include_router(agent_favorites_router)
 from core.onboarding.onboarding_checklists_api import router as onboarding_checklists_router
 api_router.include_router(onboarding_checklists_router)
 
+from core.preferences.saved_filters_api import router as saved_filters_router
+api_router.include_router(saved_filters_router)
+
 from core.agents.agent_run_queue_api import router as agent_run_queue_router
 api_router.include_router(agent_run_queue_router)
 
 from core.threads.thread_sentiment_api import router as thread_sentiment_router
 api_router.include_router(thread_sentiment_router)
+
+from core.agents.agent_run_logs_api import router as agent_run_logs_router
+api_router.include_router(agent_run_logs_router)
+
+from core.threads.thread_export_system_api import router as thread_export_system_router
+api_router.include_router(thread_export_system_router)
+
+from core.agents.agent_tags_api import router as agent_tags_router
+api_router.include_router(agent_tags_router)
+
+from core.agents.agent_retry_api import router as agent_retry_router
+api_router.include_router(agent_retry_router)
+
+from core.agents.model_routing_api import router as model_routing_router
+api_router.include_router(model_routing_router)
+
+from core.threads.thread_annotations_api import router as thread_annotations_router
+api_router.include_router(thread_annotations_router)
+
+from core.preferences.keyboard_shortcuts_api import router as keyboard_shortcuts_router
+api_router.include_router(keyboard_shortcuts_router)
+
+# Agent Webhooks Manager
+from core.integrations.agent_webhooks_api import router as agent_webhooks_router
+api_router.include_router(agent_webhooks_router)
+
+# Thread Message Reactions
+from core.threads.thread_reactions_api import router as thread_reactions_router
+api_router.include_router(thread_reactions_router)
+
+# Command Palette
+from core.preferences.command_palette_api import router as command_palette_router
+api_router.include_router(command_palette_router)
+
+# Bulk Operations
+from core.agents.bulk_operations_api import router as bulk_operations_router
+api_router.include_router(bulk_operations_router)
+
+# Dashboard Layouts
+from core.preferences.dashboard_layouts_api import router as dashboard_layouts_router
+api_router.include_router(dashboard_layouts_router)
+
+# Data Retention Policies
+from core.preferences.data_retention_api import router as data_retention_router
+api_router.include_router(data_retention_router)
+
+# Audit Log
+from core.monitoring.audit_log_api import router as audit_log_router
+api_router.include_router(audit_log_router)
+
+# Incident Postmortems
+from core.monitoring.incident_postmortems_api import router as postmortems_router
+api_router.include_router(postmortems_router)
+
+# Agent Cost Alerts
+from core.billing.agent_cost_alerts_api import router as agent_cost_alerts_router
+api_router.include_router(agent_cost_alerts_router)
+
+# Agent Benchmarks V2
+from core.agents.agent_benchmarks_api import router as agent_benchmarks_v2_router
+api_router.include_router(agent_benchmarks_v2_router)
+
+# User Preferences Sync
+from core.preferences.user_preferences_sync_api import router as user_preferences_sync_router
+api_router.include_router(user_preferences_sync_router)
+
+# SLA Monitoring
+from core.monitoring.sla_monitoring_api import router as sla_monitoring_router
+api_router.include_router(sla_monitoring_router)
+
+# Agent Resource Quotas
+from core.agents.agent_resource_quotas_api import router as agent_resource_quotas_router
+api_router.include_router(agent_resource_quotas_router)
+
+# Knowledge graph
+api_router.include_router(knowledge_graph_router)
+
+# Thread auto-tagging
+api_router.include_router(thread_auto_tagging_router)
+
+# Change Impact Analysis
+from core.agents.change_impact_api import router as change_impact_router
+api_router.include_router(change_impact_router)
+
+# Marketplace Agent Reviews (with pros/cons)
+from core.marketplace.marketplace_agent_reviews_api import router as marketplace_agent_reviews_router
+api_router.include_router(marketplace_agent_reviews_router)
+
+# Session Replay
+from core.debugging.session_replay_api import router as session_replay_router
+api_router.include_router(session_replay_router)
+
+# A/B Test Reports (Sprint 64)
+from core.agents.ab_test_reports_api import router as ab_test_reports_router
+api_router.include_router(ab_test_reports_router)
+
+# Thread Merge (Sprint 64)
+from core.threads.thread_merge_api import router as thread_merge_router
+api_router.include_router(thread_merge_router)
+
+# Error Patterns (Sprint 64 Phase 3)
+api_router.include_router(error_patterns_router)
+
+# Agent Sandbox (Sprint 64 Phase 4)
+api_router.include_router(agent_sandbox_router)
+
+# Activity Feed (Sprint 65 Phase 5)
+from core.monitoring.activity_feed_api import router as activity_feed_router
+api_router.include_router(activity_feed_router)
+
+# Usage Forecasting (Sprint 65 Phase 3)
+api_router.include_router(usage_forecasting_router)
+
+# Agent Template Gallery (Sprint 65 Phase 4)
+api_router.include_router(agent_template_gallery_router)
+
+# Webhook Payload Templates (Sprint 66 Phase 5)
+from core.integrations.webhook_templates_api import router as webhook_templates_router
+api_router.include_router(webhook_templates_router)
+
+# Resource Monitoring (Sprint 66 Phase 3)
+from core.monitoring.resource_monitoring_api import router as resource_monitoring_router
+api_router.include_router(resource_monitoring_router)
+
+# Custom Metrics (Sprint 66 Phase 4)
+from core.monitoring.custom_metrics_api import router as custom_metrics_router
+api_router.include_router(custom_metrics_router)
+
+# Agent Collaboration Rooms (Sprint 66 Phase 1)
+from core.agents.collaboration_rooms_api import router as agent_collaboration_rooms_router
+api_router.include_router(agent_collaboration_rooms_router)
+
+# Thread Pinning (Sprint 66 Phase 2)
+from core.threads.thread_pinning_api import router as thread_pinning_router
+api_router.include_router(thread_pinning_router)
+
+# Multi-Language Prompts (Sprint 67 Phase 5)
+from core.prompts.multilang_prompts_api import router as multilang_prompts_router
+api_router.include_router(multilang_prompts_router)
+
+# Anomaly Detection Configs (Sprint 67 Phase 3)
+from core.monitoring.anomaly_config_api import router as anomaly_config_router
+api_router.include_router(anomaly_config_router)
+
+# API Rate Limit Tiers (Sprint 67 Phase 4)
+from core.agents.rate_limit_tiers_api import router as rate_limit_tiers_router
+from core.agents.rate_limit_tiers_api import agent_router as rate_limit_agent_router
+api_router.include_router(rate_limit_tiers_router)
+api_router.include_router(rate_limit_agent_router)
+
+# Agent Output Cache (Sprint 67 Phase 1)
+from core.agents.agent_output_cache_api import router as agent_output_cache_router
+api_router.include_router(agent_output_cache_router)
+
+# Thread Message Bookmarks (Sprint 67 Phase 2)
+from core.threads.thread_message_bookmarks_api import router as thread_message_bookmarks_router, bookmarks_router as thread_message_bookmarks_extra_router
+api_router.include_router(thread_message_bookmarks_router)
+api_router.include_router(thread_message_bookmarks_extra_router)
+
+# Approval Workflows (Sprint 68 Phase 1)
+from core.agents.approval_workflows_api import router as approval_workflows_router
+api_router.include_router(approval_workflows_router)
+
+# Thread Comparisons (Sprint 68 Phase 2)
+from core.threads.thread_comparisons_api import router as thread_comparisons_router
+api_router.include_router(thread_comparisons_router)
+
+# Deployment Pipelines (Sprint 68 Phase 5)
+from core.agents.deployment_pipelines_api import router as deployment_pipelines_router
+api_router.include_router(deployment_pipelines_router)
+
+# Log Aggregation (Sprint 68 Phase 3)
+from core.monitoring.log_aggregation_api import router as log_aggregation_router
+api_router.include_router(log_aggregation_router)
+
+# Agent Skill Trees (Sprint 68 Phase 4)
+from core.agents.agent_skill_trees_api import router as agent_skill_trees_router
+api_router.include_router(agent_skill_trees_router)
 
 # Auth OTP endpoint for expired magic links
 api_router.include_router(auth_api.router)

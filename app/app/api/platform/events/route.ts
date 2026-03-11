@@ -51,7 +51,7 @@ export async function POST(request: NextRequest) {
   const authResult = verifyInternalServiceRequest(request, { rawBody });
   if (!authResult.ok) {
     return NextResponse.json(
-      { error: "unauthorized", reason: authResult.reason },
+      { error: "unauthorized", reason: (authResult as { ok: false; reason: string }).reason },
       { status: 401 }
     );
   }

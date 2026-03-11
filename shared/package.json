@@ -12,8 +12,16 @@
     "./tools": "./src/tools/index.ts",
     "./utils": "./src/utils/index.ts",
     "./animations": "./src/animations/index.ts",
-    "./a2a": "./src/a2a/index.ts",
-    "./a2a/schemas": "./src/a2a/schemas/index.ts",
+    "./a2a": {
+      "require": "./src/a2a/index.js",
+      "import": "./src/a2a/index.ts",
+      "default": "./src/a2a/index.js"
+    },
+    "./a2a/schemas": {
+      "require": "./src/a2a/schemas/index.js",
+      "import": "./src/a2a/schemas/index.ts",
+      "default": "./src/a2a/schemas/index.js"
+    },
     "./constants": "./src/constants/upload-limits.ts",
     "./errors": "./src/errors/index.ts"
   },

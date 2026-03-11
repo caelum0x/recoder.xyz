@@ -96,7 +96,7 @@ export default function InvoicesPage() {
     if (!txData?.transactions) return [];
 
     return txData.transactions
-      .filter((tx) => tx.type === 'credit' && tx.amount > 0)
+      .filter((tx) => (tx.type as string) === 'credit' && tx.amount > 0)
       .map((tx) => ({
         id: tx.id,
         date: tx.created_at,

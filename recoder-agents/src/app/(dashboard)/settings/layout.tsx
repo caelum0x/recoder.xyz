@@ -12,6 +12,7 @@ import {
   Database,
   Download,
   Users,
+  Webhook,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -23,6 +24,7 @@ const settingsNav = [
   { label: 'API Keys', href: '/settings/api-keys', icon: Key },
   { label: 'Credentials', href: '/settings/credentials', icon: Database },
   { label: 'Team', href: '/settings/team', icon: Users },
+  { label: 'Webhooks', href: '/settings/webhooks', icon: Webhook },
   { label: 'Data & Privacy', href: '/settings/data-privacy', icon: Download },
 ];
 
