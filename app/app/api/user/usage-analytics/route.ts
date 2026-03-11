@@ -67,7 +67,7 @@ export async function GET(request: NextRequest) {
 
     if (!response.ok) {
       const error = await response.text();
-      logger.error('Failed to fetch usage analytics:', { error: error instanceof Error ? error.message : String(error) });
+      logger.error('Failed to fetch usage analytics:', { error });
       
       return NextResponse.json(
         { error: 'Failed to fetch usage analytics' },

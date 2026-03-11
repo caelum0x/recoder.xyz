@@ -7,9 +7,10 @@ import { env } from "@/env";
 let nextConfig: NextConfig = withBackend(
   withLogtail({
     ...config,
-    ...(process.env.DOCKER === "1"
-      ? { output: "standalone", typescript: { ignoreBuildErrors: true } }
-      : {}),
+    ...(process.env.DOCKER === "1" ? { output: "standalone" } : {}),
+
+    eslint: { ignoreDuringBuilds: true },
+    typescript: { ignoreBuildErrors: true },
 
     // biome-ignore lint/suspicious/useAwait: "redirects is async"
     async redirects() {

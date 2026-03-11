@@ -1,8 +1,14 @@
 import { cn } from "@/lib/utils";
 import { DashboardContent } from "../../../components/dashboard/dashboard-content";
 import { BackgroundAALChecker } from "@/components/auth/background-aal-checker";
-import { Suspense } from "react";
+import { Suspense, lazy } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
+
+const CustomizableDashboard = lazy(() =>
+  import("@/components/dashboard/customizable-dashboard").then((mod) => ({
+    default: mod.CustomizableDashboard,
+  }))
+);
 
 export default async function DashboardPage() {
   return (
@@ -27,6 +33,26 @@ export default async function DashboardPage() {
         }
       >
         <DashboardContent />
+      </Suspense>
+      <Suspense
+        fallback={
+          <div className="px-4 pb-8">
+            <div className="space-y-4">
+              <Skeleton className="h-8 w-48" />
+              <div className="grid grid-cols-12 gap-4">
+                {[...Array(6)].map((_, i) => (
+                  <div key={i} className="col-span-4 h-32">
+                    <Skeleton className="h-full w-full rounded-lg" />
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        }
+      >
+        <div className="px-4 pb-8">
+          <CustomizableDashboard />
+        </div>
       </Suspense>
     </BackgroundAALChecker>
   );

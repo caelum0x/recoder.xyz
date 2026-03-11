@@ -2,6 +2,7 @@ from .novu_service import novu_service
 from .notification_service import NotificationService
 from .models import NotificationChannel, NotificationPreference, NotificationEvent
 from .presence_service import presence_service
+from .notification_digest_api import router as notification_digest_router
 
 __all__ = [
     'novu_service',
@@ -9,5 +10,6 @@ __all__ = [
     'NotificationChannel',
     'NotificationPreference',
     'NotificationEvent',
-    'presence_service'
+    'presence_service',
+    'notification_digest_router',
 ]

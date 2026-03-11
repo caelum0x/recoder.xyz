@@ -1,7 +1,8 @@
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel
 from typing import Optional, Any
 from core.utils.auth_utils import verify_and_get_user_id_from_jwt
+from core.services.db import execute, execute_one, execute_mutate
 from core.utils.logger import logger
 import httpx
 import time
@@ -16,8 +17,14 @@ router = APIRouter(tags=["api-playground"])
 class ExecuteRequest(BaseModel):
     method: str  # GET, POST, PUT, PATCH, DELETE
     path: str  # e.g. /v1/agents
+    headers: Optional[dict[str, str]] = None
     body: Optional[dict[str, Any]] = None
     query_params: Optional[dict[str, str]] = None
+
+
+class UpdateHistoryEntry(BaseModel):
+    name: Optional[str] = None
+    is_saved: Optional[bool] = None
 
 
 class EndpointInfo(BaseModel):
@@ -168,7 +175,7 @@ async def execute_request(
             if val:
                 response_headers[key] = val
 
-        return {
+        result = {
             "status_code": response.status_code,
             "response_time_ms": elapsed_ms,
             "body": response_body,
@@ -176,6 +183,31 @@ async def execute_request(
             "method": method,
             "path": path,
         }
+
+        # Record in history
+        try:
+            await execute_mutate(
+                """
+                INSERT INTO api_playground_history
+                    (user_id, method, endpoint, headers, body, response_status, response_body, response_time_ms)
+                VALUES
+                    (:user_id, :method, :endpoint, :headers, :body, :response_status, :response_body, :response_time_ms)
+                """,
+                {
+                    "user_id": user_id,
+                    "method": method,
+                    "endpoint": path,
+                    "headers": body.headers or {},
+                    "body": body.body,
+                    "response_status": response.status_code,
+                    "response_body": response_body if isinstance(response_body, dict) else {"text": str(response_body)},
+                    "response_time_ms": elapsed_ms,
+                },
+            )
+        except Exception as rec_err:
+            logger.warning(f"Failed to record playground history: {rec_err}")
+
+        return result
     except httpx.TimeoutException:
         elapsed_ms = int((time.time() - start_time) * 1000)
         return {
@@ -197,3 +229,94 @@ async def execute_request(
             "method": method,
             "path": path,
         }
+
+
+# ---------------------------------------------------------------------------
+# History endpoints
+# ---------------------------------------------------------------------------
+
+@router.get("/playground/history", summary="List playground request history")
+async def list_history(
+    saved_only: bool = Query(False),
+    limit: int = Query(20, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    user_id: str = Depends(verify_and_get_user_id_from_jwt),
+):
+    """List playground request history for the current user."""
+    where_clause = "WHERE user_id = :user_id"
+    if saved_only:
+        where_clause += " AND is_saved = true"
+
+    rows = await execute(
+        f"""
+        SELECT id, name, method, endpoint, headers, body,
+               response_status, response_body, response_time_ms,
+               is_saved, created_at
+        FROM api_playground_history
+        {where_clause}
+        ORDER BY created_at DESC
+        LIMIT :limit OFFSET :offset
+        """,
+        {"user_id": user_id, "limit": limit, "offset": offset},
+    )
+    return [dict(r) for r in rows]
+
+
+@router.patch("/playground/history/{entry_id}", summary="Update a history entry")
+async def update_history_entry(
+    entry_id: str,
+    body: UpdateHistoryEntry,
+    user_id: str = Depends(verify_and_get_user_id_from_jwt),
+):
+    """Save/name a playground history entry."""
+    existing = await execute_one(
+        "SELECT id FROM api_playground_history WHERE id = :id AND user_id = :user_id",
+        {"id": entry_id, "user_id": user_id},
+    )
+    if not existing:
+        raise HTTPException(status_code=404, detail="History entry not found")
+
+    updates = []
+    params: dict[str, Any] = {"id": entry_id, "user_id": user_id}
+
+    if body.name is not None:
+        updates.append("name = :name")
+        params["name"] = body.name
+    if body.is_saved is not None:
+        updates.append("is_saved = :is_saved")
+        params["is_saved"] = body.is_saved
+
+    if not updates:
+        raise HTTPException(status_code=400, detail="No fields to update")
+
+    set_clause = ", ".join(updates)
+    row = await execute_one(
+        f"""
+        UPDATE api_playground_history
+        SET {set_clause}
+        WHERE id = :id AND user_id = :user_id
+        RETURNING *
+        """,
+        params,
+        commit=True,
+    )
+    return dict(row) if row else None
+
+
+@router.delete("/playground/history/{entry_id}", summary="Delete a history entry")
+async def delete_history_entry(
+    entry_id: str,
+    user_id: str = Depends(verify_and_get_user_id_from_jwt),
+):
+    """Delete a playground history entry."""
+    rows = await execute_mutate(
+        """
+        DELETE FROM api_playground_history
+        WHERE id = :id AND user_id = :user_id
+        RETURNING id
+        """,
+        {"id": entry_id, "user_id": user_id},
+    )
+    if not rows:
+        raise HTTPException(status_code=404, detail="History entry not found")
+    return {"deleted": True, "id": entry_id}

@@ -81,7 +81,7 @@ export default function DashboardOverviewPage() {
       }
 
       if (activitiesRes.success && activitiesRes.data) {
-        const activitiesData = activitiesRes.data as { activities?: unknown[] } | null;
+        const activitiesData = activitiesRes.data as { activities?: RecentActivity[] } | null;
         setActivities(activitiesData?.activities || []);
       }
     } catch (err) {
