@@ -191,9 +191,9 @@ export function PlatformServiceSchema({
 export function RecoderStudioSchema() {
   return (
     <PlatformServiceSchema
-      name="Recoder Studio"
-      description="Visual AI workflow designer for building, simulating, and deploying AI agent pipelines with drag-and-drop interface, canary deployments, simulation gates, and real-time monitoring."
-      url="https://recoder.xyz/platform/studio"
+      name="Recoder Agency"
+      description="AI agent workflow platform for designing, building, and deploying AI agent pipelines with visual interface, canary deployments, and real-time monitoring."
+      url="https://recoder.xyz/platform/agency"
       applicationCategory="DeveloperApplication"
     />
   );

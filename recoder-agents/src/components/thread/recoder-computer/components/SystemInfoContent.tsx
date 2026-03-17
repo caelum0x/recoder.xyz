@@ -115,7 +115,7 @@ export const SystemInfoContent = memo(function SystemInfoContent({
           <RecoderLogo size={40} />
         </div>
         <div className="flex flex-col items-center justify-center">
-          <h3 className="text-foreground font-semibold text-xl text-center">Recoder Computer</h3>
+          <h3 className="text-foreground font-semibold text-xl text-center">Sandbox</h3>
           <div className="flex items-center justify-center gap-2 mt-1">
             <StatusIndicator status={status} />
             <span className={cn("text-sm font-medium", getStatusColor(status))}>

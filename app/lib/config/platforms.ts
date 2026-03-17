@@ -97,9 +97,9 @@ export const RECODER_SERVICES: RecoderService[] = [
   },
   {
     id: 'studio',
-    label: 'Recoder Studio',
-    description: 'Visual workflow designer',
-    productionUrl: 'https://studio.recoder.xyz',
+    label: 'Recoder Agency',
+    description: 'AI agent workflows',
+    productionUrl: 'https://agency.recoder.xyz',
     devUrl: 'http://localhost:3005',
     port: 3005,
     healthPath: '/',
