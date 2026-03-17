@@ -216,7 +216,7 @@ export function SiteHeader({
                 </Button>
               </TooltipTrigger>
               <TooltipContent side="bottom" sideOffset={4}>
-                <p>{isSidePanelOpen ? 'Close' : 'Open'} Recoder Computer</p>
+                <p>{isSidePanelOpen ? 'Close' : 'Open'} Sandbox</p>
               </TooltipContent>
             </Tooltip>
           </TooltipProvider>

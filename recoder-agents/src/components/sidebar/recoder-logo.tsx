@@ -11,7 +11,7 @@ interface RecoderLogoProps {
 export function RecoderLogo({ size = 24, variant = 'symbol', className }: RecoderLogoProps) {
   if (variant === 'logomark') {
     return (
-      <span className={cn('inline-flex items-center gap-2 flex-shrink-0', className)}>
+      <span className={cn('inline-flex items-center flex-shrink-0', className)}>
         <img
           src="/logo.png"
           alt="Recoder"
@@ -19,9 +19,6 @@ export function RecoderLogo({ size = 24, variant = 'symbol', className }: Recode
           className="object-contain"
           suppressHydrationWarning
         />
-        <span style={{ fontSize: `${size * 0.85}px`, fontWeight: 700, letterSpacing: '-0.02em' }}>
-          recoder
-        </span>
       </span>
     );
   }

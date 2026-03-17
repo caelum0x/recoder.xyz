@@ -64,20 +64,19 @@ export function Header() {
       )}
     >
       <div className="flex items-center gap-2 z-logo text-recoder-elements-textPrimary">
-        {/* History Toggle Button - Black Square with White Icon */}
+        <a href="/" className="text-2xl font-semibold text-accent flex items-center cursor-pointer hover:opacity-80 transition-opacity">
+          <img src="/logo.png" alt="Recoder" className="w-8 h-8 rounded" />
+        </a>
+
+        {/* History Toggle Button */}
         <button
           onClick={handleHistoryToggle}
-          className="p-2.5 bg-transparent hover:bg-recoder-elements-background-depth-3 rounded-md transition-all"
+          className="p-1.5 bg-transparent hover:bg-recoder-elements-background-depth-3 rounded-md transition-all text-recoder-elements-textSecondary hover:text-recoder-elements-textPrimary"
           title="Toggle Chat History"
           aria-label="Toggle chat history sidebar"
         >
-          <div className="i-ph:clock-clockwise text-xl text-recoder-elements-textPrimary" />
+          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 256 256" fill="currentColor"><path d="M136,80v43.47l36.12,21.67a8,8,0,0,1-8.24,13.72l-40-24A8,8,0,0,1,120,128V80a8,8,0,0,1,16,0Zm-8-48A95.44,95.44,0,0,0,60.08,60.15C52.81,67.51,46.35,74.59,40,82V64a8,8,0,0,0-16,0v40a8,8,0,0,0,8,8H72a8,8,0,0,0,0-16H49c7.15-8.42,14.27-16.35,22.39-24.57a80,80,0,1,1,1.66,114.75,8,8,0,1,0-11,11.64A96,96,0,1,0,128,32Z"/></svg>
         </button>
-        
-        <a href="/" className="text-2xl font-semibold text-accent flex items-center gap-2 cursor-pointer hover:opacity-80 transition-opacity">
-          <img src="/logo.png" alt="Recoder" className="w-8 h-8 rounded" />
-          <span className="font-bold hidden sm:inline">Recoder</span>
-        </a>
         
         {/* Navigation Links */}
         <nav className="ml-4 hidden md:flex items-center gap-1">

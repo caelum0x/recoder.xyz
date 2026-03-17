@@ -26,7 +26,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Get all active sessions for the user
-    const sessions = await prisma.session.findMany({
+    const sessions = await prisma.sessions.findMany({
       where: {
         userId: session.user.id,
         expiresAt: {
@@ -97,7 +97,7 @@ export async function DELETE(request: NextRequest) {
     }
 
     // Verify the session belongs to the user
-    const sessionToDelete = await prisma.session.findUnique({
+    const sessionToDelete = await prisma.sessions.findUnique({
       where: { id: sessionId }
     });
 
@@ -120,7 +120,7 @@ export async function DELETE(request: NextRequest) {
     }
 
     // Delete the session
-    await prisma.session.delete({
+    await prisma.sessions.delete({
       where: { id: sessionId }
     });
 

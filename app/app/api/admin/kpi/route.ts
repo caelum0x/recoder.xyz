@@ -275,7 +275,7 @@ export async function GET(request: NextRequest) {
   // Web sessions (Better Auth) this week
   const webSessionsThisWeek = await safe(
     () =>
-      prisma.session.count({
+      prisma.sessions.count({
         where: { createdAt: { gte: thisWeekStart } },
       }),
     0,

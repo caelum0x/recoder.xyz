@@ -57,7 +57,7 @@ export async function GET(request: NextRequest) {
     });
 
     // Fetch sessions
-    const sessions = await prisma.session.findMany({
+    const sessions = await prisma.sessions.findMany({
       where: { userId },
       select: {
         id: true,

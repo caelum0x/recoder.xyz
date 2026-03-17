@@ -136,7 +136,7 @@ export async function getSession(request?: NextRequest) {
     if (betterAuthToken) {
       try {
         // Query Better Auth session
-        const session = await prisma.session.findFirst({
+        const session = await prisma.sessions.findFirst({
           where: {
             token: betterAuthToken,
             expiresAt: {
@@ -144,7 +144,7 @@ export async function getSession(request?: NextRequest) {
             }
           },
           include: {
-            user: {
+            users: {
               select: {
                 id: true,
                 email: true,
@@ -155,15 +155,15 @@ export async function getSession(request?: NextRequest) {
           }
         });
 
-        if (session?.user) {
+        if (session?.users) {
           // Look up corresponding user in 'users' table (API keys are stored with this ID)
           const appUser = await prisma.users.findUnique({
-            where: { email: session.user.email },
+            where: { email: session.users.email },
             select: { id: true }
           });
 
           // Use app user ID for API key lookup, fall back to Better Auth ID
-          const userIdForKeys = appUser?.id || session.user.id;
+          const userIdForKeys = appUser?.id || session.users.id;
 
           // Check if user has any API keys
           const hasApiKey = await prisma.user_api_keys.count({
@@ -175,10 +175,10 @@ export async function getSession(request?: NextRequest) {
 
           return {
             user: {
-              id: session.user.id,
-              email: session.user.email,
-              name: session.user.name,
-              image: session.user.image,
+              id: session.users.id,
+              email: session.users.email,
+              name: session.users.name,
+              image: session.users.image,
               hasApiKey,
               subscription: 'free',
               role: 'user',

@@ -152,7 +152,7 @@ export const SandboxInfoCard = memo(function SandboxInfoCard({
             <RecoderLogo size={32} />
           </div>
           <div className="flex flex-col items-center justify-center">
-            <h3 className="text-foreground font-semibold text-lg text-center">Recoder Computer</h3>
+            <h3 className="text-foreground font-semibold text-lg text-center">Sandbox</h3>
             <div className="flex items-center justify-center gap-2 mt-0.5">
               <StatusIndicator status={status} />
               <span className={cn("text-xs font-medium", getStatusColor(status))}>

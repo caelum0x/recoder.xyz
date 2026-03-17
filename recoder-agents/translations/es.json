@@ -415,7 +415,7 @@
     "running": "Ejecutando",
     "minimizeToFloatingPreview": "Minimizar a vista previa flotante",
     "close": "Cerrar",
-    "noActionsYet": "Recoder Computer",
+    "noActionsYet": "Sandbox",
     "workerActionsDescription": "Iniciando",
     "emptyActionsDescription": "Las acciones del Worker aparecerán aquí",
     "toolIsRunning": "La herramienta está ejecutando",
@@ -451,7 +451,7 @@
     "title": "Recoder: Tu Worker de IA Autónomo",
     "subtitle": "Construido para tareas complejas, diseñado para todo. El asistente de IA definitivo que maneja todo—desde solicitudes simples hasta proyectos mega-complejos.",
     "tryItOut": "Pruébalo",
-    "recoderComputer": "Recoder Computer",
+    "recoderComputer": "Sandbox",
     "running": "Ejecutando",
     "workers": {
       "images": {

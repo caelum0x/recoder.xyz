@@ -41,8 +41,8 @@ const agentPlatforms = [
   },
   {
     id: 'studio',
-    name: 'Recoder Studio',
-    description: 'Visual workflow designer for AI agents. Drag-and-drop interface to build complex agent pipelines without code.',
+    name: 'Recoder Agency',
+    description: 'AI agent workflow platform. Build and deploy complex agent pipelines with visual interface.',
     icon: Sparkles,
     color: 'from-indigo-500 to-violet-500',
     features: ['Visual designer', 'Drag-and-drop', 'Pipeline builder', 'No-code agent creation'],
