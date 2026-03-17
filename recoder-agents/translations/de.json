@@ -416,7 +416,7 @@
     "running": "Läuft",
     "minimizeToFloatingPreview": "Auf schwebende Vorschau minimieren",
     "close": "Schließen",
-    "noActionsYet": "Recoder Computer",
+    "noActionsYet": "Sandbox",
     "workerActionsDescription": "Wird gestartet",
     "emptyActionsDescription": "Worker-Aktionen werden hier angezeigt",
     "toolIsRunning": "Tool läuft",
@@ -835,7 +835,7 @@
     "title": "Recoder: Dein autonomer KI-Worker",
     "subtitle": "Gebaut für komplexe Aufgaben, entwickelt für alles. Der ultimative KI-Assistent, der alles bewältigt—von einfachen Anfragen bis hin zu mega-komplexen Projekten.",
     "tryItOut": "Ausprobieren",
-    "recoderComputer": "Recoder Computer",
+    "recoderComputer": "Sandbox",
     "running": "Läuft",
     "workers": {
       "images": {

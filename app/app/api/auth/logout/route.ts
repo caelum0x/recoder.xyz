@@ -15,7 +15,7 @@ export async function POST() {
   // Best-effort session invalidation. Cookie clearing still proceeds on DB failures.
   if (sessionToken) {
     try {
-      await prisma.session.deleteMany({
+      await prisma.sessions.deleteMany({
         where: { token: sessionToken },
       });
     } catch (error) {

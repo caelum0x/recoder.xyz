@@ -243,22 +243,14 @@ export const PanelHeader = memo(function PanelHeader({
         {/* Left: Logo - compact for mobile */}
         <div className="flex items-center min-w-0">
           <Image
-            src="/recoder-computer-white.svg"
-            alt="Recoder Computer"
-            width={120}
-            height={14}
-            className="hidden dark:block"
+            src="/logo.png"
+            alt="Recoder"
+            width={24}
+            height={24}
+            className="rounded"
             priority
           />
-          <Image
-            src="/recoder-computer-black.svg"
-            alt="Recoder Computer"
-            width={120}
-            height={14}
-            className="block dark:hidden"
-            priority
-          />
-          <DrawerTitle className="sr-only">Recoder Computer</DrawerTitle>
+          <DrawerTitle className="sr-only">Sandbox</DrawerTitle>
         </div>
         
         {/* Right: Switcher + Close - tighter spacing */}
@@ -300,19 +292,11 @@ export const PanelHeader = memo(function PanelHeader({
         className="flex items-center justify-center cursor-pointer select-none hover:opacity-80 transition-opacity"
       >
         <Image
-          src="/recoder-computer-white.svg"
-          alt="Recoder Computer"
-          width={140}
-          height={16}
-          className="hidden dark:block"
-          priority
-        />
-        <Image
-          src="/recoder-computer-black.svg"
-          alt="Recoder Computer"
-          width={140}
-          height={16}
-          className="block dark:hidden"
+          src="/logo.png"
+          alt="Recoder"
+          width={28}
+          height={28}
+          className="rounded"
           priority
         />
       </div>

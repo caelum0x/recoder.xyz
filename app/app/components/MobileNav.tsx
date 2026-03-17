@@ -89,9 +89,8 @@ export function MobileNav() {
           >
             {/* Drawer Header */}
             <div className="flex items-center justify-between h-16 px-4 border-b border-white/10">
-              <Link href="/" className="flex items-center space-x-2">
+              <Link href="/" className="flex items-center">
                 <img src="/logo.png" alt="Recoder" className="w-7 h-7 rounded-lg" />
-                <span className="text-lg font-bold text-white">recoder</span>
               </Link>
               <button
                 type="button"

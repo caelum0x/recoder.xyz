@@ -19,9 +19,8 @@ export function SiteFooter() {
     <footer className="border-t border-white/10 px-6 py-10">
       <div className="container mx-auto max-w-6xl">
         <div className="flex flex-col md:flex-row items-center justify-between space-y-4 md:space-y-0">
-          <div className="flex items-center space-x-2">
+          <div className="flex items-center">
             <img src="/logo.png" alt="Recoder" className="w-6 h-6 rounded-md" />
-            <span className="font-bold">recoder</span>
           </div>
 
           <div className="text-muted-foreground flex items-center flex-wrap gap-x-6 gap-y-2 text-sm">

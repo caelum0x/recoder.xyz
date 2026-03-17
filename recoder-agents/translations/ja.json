@@ -415,7 +415,7 @@
     "running": "実行中",
     "minimizeToFloatingPreview": "フローティングプレビューに最小化",
     "close": "閉じる",
-    "noActionsYet": "Recoder Computer",
+    "noActionsYet": "Sandbox",
     "workerActionsDescription": "起動中",
     "emptyActionsDescription": "ワーカーのアクションがここに表示されます",
     "toolIsRunning": "ツールが実行中です",
@@ -451,7 +451,7 @@
     "title": "Recoder: あなたの自律型AIワーカー",
     "subtitle": "複雑なタスクのために構築され、すべてのために設計されました。シンプルなリクエストからメガ複雑なプロジェクトまで、すべてを処理する究極のAIアシスタント。",
     "tryItOut": "試してみる",
-    "recoderComputer": "Recoder Computer",
+    "recoderComputer": "Sandbox",
     "running": "実行中",
     "workers": {
       "images": {

@@ -12,28 +12,14 @@ export const EmptyState = memo(function EmptyState({ t }: EmptyStateProps) {
     <div className="flex flex-col items-center justify-center h-full w-full">
       {/* Empty state container */}
       <div className="flex flex-col items-center space-y-6">
-        {/* Logo with subtle glow effect */}
+        {/* Logo */}
         <div className="relative">
-          {/* Ambient glow behind logo */}
-          <div className="absolute inset-0 blur-3xl opacity-15 dark:opacity-5 bg-gradient-to-b from-zinc-400 to-transparent scale-150" />
-          
-          {/* Logo - dark mode (white logo) */}
           <Image
-            src="/recoder-computer-white.svg"
-            alt="Recoder Computer"
-            width={240}
-            height={27}
-            className="hidden dark:block relative z-10 "
-            priority
-          />
-          
-          {/* Logo - light mode (black logo) */}
-          <Image
-            src="/recoder-computer-black.svg"
-            alt="Recoder Computer"
-            width={240}
-            height={27}
-            className="block dark:hidden relative z-10"
+            src="/logo.png"
+            alt="Recoder"
+            width={48}
+            height={48}
+            className="relative z-10 rounded"
             priority
           />
         </div>
