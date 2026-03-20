@@ -200,8 +200,9 @@ export async function main() {
   const { RecoderAuthService } = await import('./services/RecoderAuthService.js');
   const authService = new RecoderAuthService();
 
-  // Skip auth check for auth commands themselves
-  const isAuthCommand = process.argv.some(arg => arg === 'auth');
+  // Skip auth check for auth commands themselves and top-level login/logout/whoami
+  const authBypassCommands = ['auth', 'login', 'logout', 'whoami'];
+  const isAuthCommand = process.argv.some(arg => authBypassCommands.includes(arg));
 
   if (!isAuthCommand) {
     const isAuthenticated = await authService.isAuthenticated();
