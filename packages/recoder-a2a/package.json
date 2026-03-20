@@ -1,0 +1,40 @@
+{
+  "name": "recoder-a2a",
+  "version": "1.0.1",
+  "description": "Recoder A2A MCP Server — Connect Claude Code, Codex, and Cursor to the Recoder platform",
+  "bin": {
+    "recoder-a2a": "index.js"
+  },
+  "main": "index.js",
+  "files": [
+    "index.js",
+    "README.md",
+    "LICENSE"
+  ],
+  "keywords": [
+    "mcp",
+    "recoder",
+    "a2a",
+    "claude",
+    "agent",
+    "ai",
+    "claude-code",
+    "codex",
+    "cursor"
+  ],
+  "author": "Recoder Team",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/recoder-xyz/recoder.git"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "ws": "^8.0.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}
