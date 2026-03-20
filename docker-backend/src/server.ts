@@ -74,10 +74,11 @@ import { appKeysRouter } from './public-api/routes/app-keys.js';
 import { domainRouter } from './public-api/routes/domains.js';
 import { a2aRouter, getDockerBackendAgentCard } from './a2a-gateway.js';
 import { openclawAdapterRouter } from './a2a-openclaw-adapter.js';
-import { taskLifecycleRouter, collaborationRouter, heartbeatRouter, getHeartbeatTracker, agentRegistryRouter, sseStreamRouter, wireA2AEventBridge, connectorHealthRouter, claudeConnectorRouter, codexConnectorRouter, cursorConnectorRouter, windsurfConnectorRouter, replitConnectorRouter, contextBridgeRouter, a2aOpenApiRouter, a2aSloMetricsRouter, getA2ASloMetrics, restAdapterRouter, gitAdapterRouter, orchestrationRouter, workflowMessagingRouter, adminRouter, getIntegrationWiringService } from './a2a/index.js';
+import { taskLifecycleRouter, collaborationRouter, heartbeatRouter, getHeartbeatTracker, agentRegistryRouter, sseStreamRouter, wireA2AEventBridge, connectorHealthRouter, claudeConnectorRouter, codexConnectorRouter, cursorConnectorRouter, windsurfConnectorRouter, replitConnectorRouter, contextBridgeRouter, a2aOpenApiRouter, a2aSloMetricsRouter, getA2ASloMetrics, restAdapterRouter, gitAdapterRouter, orchestrationRouter, workflowMessagingRouter, adminRouter, getIntegrationWiringService, disposeTaskLifecycleService } from './a2a/index.js';
 import { patternRouter } from './a2a/patterns/index.js';
 import { approvalRouter } from './policy/index.js';
 import { startA2AIntentWorker } from './a2a-intent-worker.js';
+import { startAgentWorkers } from './a2a-agent-workers.js';
 import { wireAutonomousRouting } from './a2a/autonomous-routing.service.js';
 import type { RedisBackedPersistenceAdapter } from '@recoder/shared/a2a';
 import {
@@ -367,6 +368,8 @@ function getSessionTokenFromRequest(req: express.Request): string | null {
   //   - Production: "__Secure-recoder.session_token"
   return cookies['__Secure-recoder.session_token']  // Production with Secure cookies
     || cookies['recoder.session_token']              // Development
+    || cookies['better-auth.session_token']          // Default Better Auth prefix
+    || cookies['__Secure-better-auth.session_token'] // Default Better Auth prefix (Secure)
     || cookies['__Secure-session_token']             // Production without prefix
     || cookies['recoder_session_token']              // Alternative format
     || cookies['session_token']                      // Fallback
@@ -388,6 +391,8 @@ async function authenticateWebSocket(
     // In production with useSecureCookies=true, cookies are prefixed with "__Secure-"
     token = cookies['__Secure-recoder.session_token']  // Production with Secure cookies
       || cookies['recoder.session_token']              // Development
+      || cookies['better-auth.session_token']          // Default Better Auth prefix
+      || cookies['__Secure-better-auth.session_token'] // Default Better Auth prefix (Secure)
       || cookies['__Secure-session_token']             // Production without prefix
       || cookies['recoder_session_token']              // Alternative format
       || cookies['session_token']                      // Fallback
@@ -3384,7 +3389,7 @@ app.get('/api/workspace-state/:projectId', authenticateRequest, verifyProjectOwn
     });
   } catch (error: any) {
     logger.warn({ err: error, projectId }, 'WorkspaceState: failed to inspect workspace');
-    return res.status(500).json({ hasFiles: false, fileCount: 0, hasPackageJson: false, devServerRunning: false });
+    return res.json({ hasFiles: false, fileCount: 0, hasPackageJson: false, devServerRunning: false });
   }
 });
 
@@ -13116,6 +13121,14 @@ async function gracefulShutdown(signal: string) {
       logger.error({ err }, 'container pool shutdown error');
     }
 
+    // Dispose A2A task lifecycle service (disconnects Redis, stops eviction timers)
+    logger.info('disposing A2A task lifecycle service');
+    try {
+      disposeTaskLifecycleService();
+    } catch (err: any) {
+      logger.error({ err }, 'A2A task lifecycle service dispose error');
+    }
+
     // Flush Redis-backed A2A control plane state
     if (_a2aRedisAdapter) {
       logger.info('flushing A2A Redis adapter');
@@ -15549,5 +15562,18 @@ server.listen(PORT, async () => {
     } else {
       startupInfo('a2a-consumer', 'skipped', { reason: 'redis_not_configured' });
     }
+  }
+
+  // Wire internal agents to the A2A bridge so they appear as connected
+  // and can receive task assignments from the orchestration layer
+  try {
+    startAgentWorkers();
+    startupInfo('a2a-agent-workers', 'started', {
+      agents: ['recoder_backend', 'recoder_web', 'recoder_pm', 'recoder_agency'],
+    });
+  } catch (err) {
+    startupInfo('a2a-agent-workers', 'failed', {
+      error: err instanceof Error ? err.message : 'unknown',
+    });
   }
 });
