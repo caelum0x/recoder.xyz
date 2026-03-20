@@ -44,6 +44,12 @@ import { modelsCommand } from '../commands/models-cmd.js';
 import { configureCommand } from '../commands/configure.js';
 import { connectCommand } from '../commands/connect-cmd.js';
 import { parallelCommand, parallelFinishCommand } from '../commands/parallel.js';
+import { setupMcpCommand } from '../commands/setupMcp.js';
+import {
+  topLevelLoginCommand,
+  topLevelLogoutCommand,
+  topLevelWhoamiCommand,
+} from '../commands/login.js';
 import type { Settings } from './settings.js';
 
 import { resolvePath } from '../utils/resolvePath.js';
@@ -382,7 +388,13 @@ export async function parseArguments(settings: Settings): Promise<CliArgs> {
     .command(connectCommand)
     // Register parallel mode commands for git worktree-based parallel execution
     .command(parallelCommand)
-    .command(parallelFinishCommand);
+    .command(parallelFinishCommand)
+    // Register top-level login/logout/whoami commands for API token auth
+    .command(topLevelLoginCommand)
+    .command(topLevelLogoutCommand)
+    .command(topLevelWhoamiCommand)
+    // Register setup-mcp command for Recoder MCP server auto-configuration
+    .command(setupMcpCommand);
 
   if (settings?.experimental?.extensionManagement ?? false) {
     yargsInstance.command(extensionsCommand);
