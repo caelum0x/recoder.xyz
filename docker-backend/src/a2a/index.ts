@@ -27,6 +27,7 @@ export {
   TaskLifecycleService,
   InMemoryTaskStore,
   getTaskLifecycleService,
+  disposeTaskLifecycleService,
   resetTaskLifecycleService,
   generateId,
   type TaskStore,
@@ -36,6 +37,12 @@ export {
   type ServiceResult,
   type AuditEventSink,
 } from './task-lifecycle.service';
+
+// Redis-backed TaskStore
+export {
+  RedisTaskStore,
+  type RedisTaskStoreOptions,
+} from './redis-task-store';
 
 // Routes
 export { taskLifecycleRouter } from './task-lifecycle.routes';
