@@ -84,6 +84,8 @@ export interface TaskStore {
   delete(taskId: string): boolean;
   has(taskId: string): boolean;
   list(filter?: TaskListFilter): TaskEnvelope[];
+  /** Optional cleanup hook. Called during graceful shutdown. */
+  dispose?(): void;
 }
 
 export interface TaskListFilter {
@@ -848,6 +850,16 @@ export class TaskLifecycleService {
     if (state === TaskStateEnum.Cancelled) return AuditSeverityEnum.Warning;
     return AuditSeverityEnum.Info;
   }
+
+  /**
+   * Dispose the underlying store (e.g. disconnect Redis, stop timers).
+   * Call during graceful shutdown.
+   */
+  dispose(): void {
+    if (typeof this.store.dispose === 'function') {
+      this.store.dispose();
+    }
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -864,8 +876,12 @@ export function getTaskLifecycleService(): TaskLifecycleService {
       // Lazy-require to avoid pulling ioredis when not needed
       // eslint-disable-next-line @typescript-eslint/no-var-requires
       const { RedisTaskStore } = require('./redis-task-store') as typeof import('./redis-task-store');
-      const store = new RedisTaskStore({ redisUrl });
-      logger.info('TaskLifecycleService using RedisTaskStore');
+      const terminalTaskTtlMs = Number(process.env.RECODER_A2A_TASK_TTL_MS) || undefined;
+      const store = new RedisTaskStore({ redisUrl, terminalTaskTtlMs });
+      logger.info(
+        { terminalTaskTtlMs: terminalTaskTtlMs ?? '24h (default)' },
+        'TaskLifecycleService using RedisTaskStore',
+      );
       _defaultService = new TaskLifecycleService(store);
     } else {
       logger.info('TaskLifecycleService using InMemoryTaskStore (no REDIS_URL)');
@@ -875,7 +891,21 @@ export function getTaskLifecycleService(): TaskLifecycleService {
   return _defaultService;
 }
 
+/**
+ * Dispose and reset the singleton. Disconnects Redis, stops eviction timers.
+ * Call during graceful shutdown.
+ */
+export function disposeTaskLifecycleService(): void {
+  if (_defaultService) {
+    _defaultService.dispose();
+    _defaultService = null;
+  }
+}
+
 /** Reset the singleton (for testing). */
 export function resetTaskLifecycleService(): void {
+  if (_defaultService) {
+    _defaultService.dispose();
+  }
   _defaultService = null;
 }
