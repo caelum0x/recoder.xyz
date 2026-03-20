@@ -9,7 +9,11 @@
     ".": "./src/index.ts",
     "./notification-bell": "./src/components/notification-bell.tsx",
     "./subscription-badge": "./src/components/subscription-badge.tsx",
-    "./ecosystem-tag-picker": "./src/components/ecosystem-tag-picker.tsx"
+    "./ecosystem-tag-picker": "./src/components/ecosystem-tag-picker.tsx",
+    "./platform-nav": "./src/components/platform-nav.tsx"
+  },
+  "dependencies": {
+    "@recoder/ecosystem-config": "workspace:*"
   },
   "peerDependencies": {
     "react": ">=18",
