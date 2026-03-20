@@ -57,8 +57,12 @@ const MobileAppInterstitial = lazy(() =>
   import('@/components/announcements/mobile-app-interstitial').then(mod => ({ default: mod.MobileAppInterstitial }))
 );
 
-const TechnicalIssueBanner = lazy(() => 
+const TechnicalIssueBanner = lazy(() =>
   import('@/components/announcements/technical-issue-banner').then(mod => ({ default: mod.TechnicalIssueBanner }))
+);
+
+const PlatformNav = lazy(() =>
+  import('@recoder/ui/platform-nav').then(mod => ({ default: mod.PlatformNav }))
 );
 
 const MaintenanceCountdownBanner = lazy(() =>
@@ -216,8 +220,14 @@ export default function DashboardLayoutContent({
   }
 
   return (
+    <div className="flex flex-col h-screen">
+    {/* Unified platform navigation bar */}
+    <Suspense fallback={null}>
+      <PlatformNav currentApp="agents" />
+    </Suspense>
+    <div className="flex-1 overflow-hidden">
     <NovuInboxProvider>
-    <AppProviders 
+    <AppProviders
       showSidebar={true}
       sidebarSiblings={
         <Suspense fallback={null}>
@@ -287,5 +297,7 @@ export default function DashboardLayoutContent({
       </div>
     </AppProviders>
     </NovuInboxProvider>
+    </div>
+    </div>
   );
 }
