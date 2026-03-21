@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
+import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useSession } from '@/lib/session-provider';
 
@@ -27,5 +28,20 @@ export default function SettingsLayout({ children }: { children: React.ReactNode
     );
   }
 
-  return <>{children}</>;
+  return (
+    <div className="min-h-screen bg-black">
+      <div className="container mx-auto px-6 pt-6">
+        <Link
+          href="/"
+          className="inline-flex items-center text-sm text-gray-400 hover:text-white transition-colors"
+        >
+          <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+          </svg>
+          Back to Recoder
+        </Link>
+      </div>
+      {children}
+    </div>
+  );
 }
