@@ -26,12 +26,12 @@ export function useBillingModal(): UseBillingModalReturn {
     if (error instanceof BillingError) {
       const message = error.detail?.message?.toLowerCase() || '';
       // Check if the error message indicates credits/balance issues
-      isCreditsExhausted = 
-        message.includes('credit') ||
-        message.includes('balance') ||
-        message.includes('insufficient') ||
+      isCreditsExhausted =
+        message.includes('insufficient credits') ||
         message.includes('out of credits') ||
-        message.includes('no credits');
+        message.includes('no credits remaining') ||
+        message.includes('credit balance is 0') ||
+        message.includes('credits exhausted');
     } else if (error instanceof ProjectLimitError) {
       // Project limit errors are not about credits
       isCreditsExhausted = false;
