@@ -1098,10 +1098,13 @@ export function ThreadComponent({ projectId, threadId, compact = false, configur
 
     const isBillingError =
       lower.includes('insufficient credits') ||
-      lower.includes('credit') ||
-      lower.includes('balance') ||
       lower.includes('out of credits') ||
-      lower.includes('no credits');
+      lower.includes('no credits remaining') ||
+      lower.includes('credit balance is 0') ||
+      lower.includes('credits exhausted') ||
+      lower.includes('billing check failed') ||
+      lower.includes('payment required') ||
+      lower.includes('upgrade your plan');
 
     if (isBillingError) {
       console.error(`[PAGE] Agent stopped due to billing error: ${errorMessage}`);

@@ -100,11 +100,12 @@ export function useAgentStream(
 
   const handleBillingError = useMemo(() => (errorMessage: string, balance?: string | null) => {
     const messageLower = errorMessage.toLowerCase();
-    const isCreditsExhausted = 
+    const isCreditsExhausted =
       messageLower.includes('insufficient credits') ||
       messageLower.includes('out of credits') ||
-      messageLower.includes('no credits') ||
-      messageLower.includes('balance');
+      messageLower.includes('no credits remaining') ||
+      messageLower.includes('credit balance is 0') ||
+      messageLower.includes('credits exhausted');
     
     const alertTitle = isCreditsExhausted 
       ? 'You ran out of credits'
