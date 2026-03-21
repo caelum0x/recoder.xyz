@@ -153,6 +153,13 @@ export type DockerSSEConnection = { close: () => void };
  * Token is sent as a query-string parameter so EventSource (which cannot
  * send custom headers) can authenticate.
  */
+/**
+ * Maximum consecutive EventSource failures before switching to fetch-based
+ * SSE streaming. Cloudflare HTTP/3 (QUIC) can break native EventSource but
+ * regular fetch with ReadableStream works fine.
+ */
+const SSE_FETCH_FALLBACK_AFTER = 3;
+
 export function connectDockerSSE(
   path: string,
   events: Record<string, (event: MessageEvent) => void>,
@@ -160,7 +167,10 @@ export function connectDockerSSE(
 ): DockerSSEConnection {
   let eventSource: EventSource | null = null;
   let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  let fetchAbortController: AbortController | null = null;
   let closed = false;
+  let consecutiveFailures = 0;
+  let useFetchFallback = false;
 
   const connect = async () => {
     if (closed) return;
@@ -177,17 +187,108 @@ export function connectDockerSSE(
       if (v) url.searchParams.set(k, v);
     }
 
-    eventSource = new EventSource(url.toString());
+    const fullUrl = url.toString();
+
+    if (useFetchFallback) {
+      connectViaFetch(fullUrl);
+      return;
+    }
+
+    eventSource = new EventSource(fullUrl);
 
     for (const [name, handler] of Object.entries(events)) {
       eventSource.addEventListener(name, handler as EventListener);
     }
 
+    eventSource.onopen = () => {
+      consecutiveFailures = 0;
+    };
+
     eventSource.onerror = () => {
       eventSource?.close();
       eventSource = null;
+      consecutiveFailures++;
+
+      if (consecutiveFailures >= SSE_FETCH_FALLBACK_AFTER) {
+        console.warn(
+          '[connectDockerSSE] EventSource failed %d times, switching to fetch SSE fallback for %s',
+          consecutiveFailures,
+          path
+        );
+        useFetchFallback = true;
+      }
+
       scheduleReconnect();
     };
+  };
+
+  /**
+   * Fetch-based SSE fallback: uses ReadableStream to parse SSE frames.
+   * Works around Cloudflare HTTP/3 QUIC issues that break EventSource.
+   */
+  const connectViaFetch = async (url: string) => {
+    if (closed) return;
+
+    try {
+      fetchAbortController = new AbortController();
+      const response = await fetch(url, {
+        headers: { 'Accept': 'text/event-stream' },
+        signal: fetchAbortController.signal,
+        credentials: 'include',
+      });
+
+      if (!response.ok || !response.body) {
+        scheduleReconnect();
+        return;
+      }
+
+      consecutiveFailures = 0;
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+
+      const readLoop = async () => {
+        try {
+          while (!closed) {
+            const { done, value } = await reader.read();
+            if (done) {
+              if (!closed) scheduleReconnect();
+              return;
+            }
+
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split('\n');
+            buffer = lines.pop() || '';
+
+            let currentEventName = 'message';
+            let currentData = '';
+
+            for (const line of lines) {
+              if (line.startsWith('event: ') || line.startsWith('event:')) {
+                currentEventName = line.slice(line.indexOf(':') + 1).trim() || 'message';
+              } else if (line.startsWith('data: ') || line.startsWith('data:')) {
+                currentData += (currentData ? '\n' : '') + line.slice(line.indexOf(':') + 1).trimStart();
+              } else if (line.trim() === '' && currentData) {
+                const handler = events[currentEventName];
+                if (handler) {
+                  handler(new MessageEvent(currentEventName, { data: currentData }));
+                }
+                currentEventName = 'message';
+                currentData = '';
+              }
+            }
+          }
+        } catch (err) {
+          if (closed) return;
+          if (err instanceof Error && err.name === 'AbortError') return;
+          scheduleReconnect();
+        }
+      };
+
+      readLoop();
+    } catch {
+      if (!closed) scheduleReconnect();
+    }
   };
 
   const scheduleReconnect = () => {
@@ -210,6 +311,10 @@ export function connectDockerSSE(
       if (eventSource) {
         eventSource.close();
         eventSource = null;
+      }
+      if (fetchAbortController) {
+        try { fetchAbortController.abort(); } catch { /* ignore */ }
+        fetchAbortController = null;
       }
     },
   };
