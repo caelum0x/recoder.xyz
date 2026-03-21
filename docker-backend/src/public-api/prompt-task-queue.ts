@@ -1,6 +1,12 @@
 import fs from 'fs';
 import path from 'path';
-import Database from 'better-sqlite3';
+// Dynamic import to avoid crash when native module is unavailable (e.g., in Docker without native build)
+let Database: any;
+try {
+  Database = require('better-sqlite3');
+} catch {
+  // better-sqlite3 not available — Redis backend must be used
+}
 import Redis from 'ioredis';
 import {
   getPromptTaskQueueDiagnosticsFromConfig,
@@ -39,9 +45,12 @@ export interface PromptTaskQueue {
 }
 
 export class PromptTaskQueueStore implements PromptTaskQueue {
-  private readonly db: Database.Database;
+  private readonly db: any;
 
   constructor(dbPath: string) {
+    if (!Database) {
+      throw new Error('better-sqlite3 native module not available. Use PUBLIC_PROMPT_TASK_QUEUE_BACKEND=redis instead.');
+    }
     fs.mkdirSync(path.dirname(dbPath), { recursive: true });
     this.db = new Database(dbPath);
     this.db.pragma('journal_mode = WAL');
