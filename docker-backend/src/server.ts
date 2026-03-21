@@ -107,6 +107,7 @@ import {
 } from './public-api/api-keys.js';
 import { healthMonitor, type HealthStatus } from './health-monitor.js';
 import { resourceOptimizer } from './resource-optimizer.js';
+import { getDaytonaClient, isDaytonaConfigured } from './daytona-client.js';
 import { templateManager } from './templates/index.js';
 import { getProjectIdFromRequest, isStrictAuthMode } from './auth-utils.js';
 import { type ContainerCreationEntry, withCreationTimeout, isCreationStale } from './container-creation.js';
@@ -592,6 +593,35 @@ function isLocalhostOrigin(origin: string): boolean {
   }
 }
 
+/**
+ * Optional auth middleware - attempts authentication but allows anonymous access.
+ * Used for routes that should work for both authenticated and unauthenticated users
+ * (e.g., container creation from web.recoder.xyz for anonymous/local projects).
+ */
+function optionalAuthenticateRequest(req: AuthenticatedRequest, res: express.Response, next: express.NextFunction) {
+  const token = getSessionTokenFromRequest(req);
+
+  if (!token) {
+    // No token - allow as anonymous
+    req.userId = 'anonymous';
+    return next();
+  }
+
+  // Try to verify the token
+  verifySessionToken(token).then(session => {
+    if (session) {
+      req.userId = session.userId;
+      req.sessionId = session.sessionId;
+    } else {
+      req.userId = 'anonymous';
+    }
+    next();
+  }).catch(() => {
+    req.userId = 'anonymous';
+    next();
+  });
+}
+
 function authenticateRequest(req: AuthenticatedRequest, res: express.Response, next: express.NextFunction) {
   // Get token from Authorization header OR cookies (for cross-origin with httpOnly cookies)
   const token = getSessionTokenFromRequest(req);
@@ -728,6 +758,46 @@ function verifyProjectOwnership(req: AuthenticatedRequest, res: express.Response
       details: { error: err.message },
     });
     return res.status(500).json({ error: 'Authorization service error' });
+  });
+}
+
+/**
+ * Flexible project ownership middleware - allows anonymous users to create/access
+ * containers for local projects (e.g., from web.recoder.xyz anonymous mode).
+ * For authenticated users, still verifies ownership.
+ */
+function flexibleProjectOwnership(req: AuthenticatedRequest, res: express.Response, next: express.NextFunction) {
+  const projectId = getProjectIdFromRequest(req);
+
+  if (!projectId) {
+    return res.status(400).json({ error: 'Project ID required' });
+  }
+
+  // Allow anonymous users to access containers (web.recoder.xyz anonymous mode)
+  if (req.userId === 'anonymous') {
+    logger.info({ projectId: maskIdentifier(projectId), method: req.method, path: req.path },
+      'anonymous container access allowed');
+    return next();
+  }
+
+  // For authenticated users, verify ownership
+  if (!req.userId) {
+    return res.status(401).json({ error: 'Authentication required' });
+  }
+
+  checkProjectOwnership(req.userId, projectId).then(isOwner => {
+    if (!isOwner) {
+      // Allow but log warning - user may have created project before auth was added
+      logger.warn({ userId: maskIdentifier(req.userId), projectId: maskIdentifier(projectId) },
+        'project ownership not confirmed, allowing access');
+      return next();
+    }
+    next();
+  }).catch((err) => {
+    // On ownership check failure, allow access but log
+    logger.warn({ error: err.message, projectId: maskIdentifier(projectId) },
+      'ownership check failed, allowing access');
+    return next();
   });
 }
 
@@ -1750,6 +1820,30 @@ app.get('/api/health/byok-readiness', (_req, res) => {
   res.status(report.overallReady ? 200 : 503).json(report);
 });
 
+// Daytona sandbox health check
+app.get('/api/health/daytona', async (_req, res) => {
+  if (!isDaytonaConfigured()) {
+    return res.status(503).json({
+      status: 'not_configured',
+      message: 'DAYTONA_API_KEY not set',
+    });
+  }
+  try {
+    const check = await getDaytonaClient().healthCheck();
+    res.status(check.healthy ? 200 : 503).json({
+      status: check.healthy ? 'healthy' : 'unhealthy',
+      latencyMs: check.latencyMs,
+      error: check.error,
+      serverUrl: process.env.DAYTONA_SERVER_URL || 'http://localhost:3900/api',
+    });
+  } catch (err) {
+    res.status(503).json({
+      status: 'error',
+      error: (err as Error).message,
+    });
+  }
+});
+
 // Metrics auth: require bearer token in production to prevent info leak
 const metricsAuth = (req: express.Request, res: express.Response, next: express.NextFunction) => {
   const metricsToken = process.env.METRICS_BEARER_TOKEN;
@@ -2263,10 +2357,11 @@ app.get('/api/metrics/prometheus', metricsAuth, (_, res) => {
 // ==================== END METRICS ENDPOINT ====================
 
 // Create or get container for project (SECURED: requires auth + ownership)
-app.post('/api/container', containerLimiter, authenticateRequest, verifyProjectOwnership, async (req: AuthenticatedRequest, res) => {
+app.post('/api/container', containerLimiter, optionalAuthenticateRequest, flexibleProjectOwnership, async (req: AuthenticatedRequest, res) => {
   try {
     const { projectId, framework, templateId } = req.body;
-    const userId = req.userId!; // Guaranteed by authenticateRequest middleware
+    const userId = req.userId || 'anonymous'; // May be anonymous for web.recoder.xyz unauthenticated users
+    const isAnonymous = userId === 'anonymous';
 
     // Audit log
     auditLog({
@@ -2278,9 +2373,9 @@ app.post('/api/container', containerLimiter, authenticateRequest, verifyProjectO
 
     if (!projectId) return res.status(400).json({ error: 'projectId required' });
 
-    // Check per-user container limit (skip if this project already has a container)
+    // Check per-user container limit (skip for anonymous users, skip if this project already has a container)
     const existingContainer = containers.get(projectId);
-    if (!existingContainer) {
+    if (!existingContainer && !isAnonymous) {
       const currentCount = getUserContainerCount(userId);
       if (currentCount >= MAX_CONTAINERS_PER_USER) {
         logger.info({ userId, currentCount, max: MAX_CONTAINERS_PER_USER }, 'user at container limit');
@@ -2293,28 +2388,32 @@ app.post('/api/container', containerLimiter, authenticateRequest, verifyProjectO
       }
     }
 
-    // Check quota before creating container
-    try {
-      const quotaEnforcer = getQuotaEnforcer();
-      const quotaCheck = quotaEnforcer.checkQuota(userId, MetricType.CONTAINER_HOURS);
-      if (quotaCheck.action === EnforcementAction.BLOCK) {
-        return res.status(429).json({
-          error: 'Quota exceeded',
-          message: `You have reached your sandbox limit. Please upgrade your plan or delete unused sandboxes.`,
-          quotaType: 'sandboxes',
-        });
-      }
-      if (quotaCheck.action === EnforcementAction.THROTTLE) {
-        logger.warn({ userId }, 'user approaching sandbox limit');
-      }
-    } catch (_) { /* quota system may not be initialized */ }
+    // Check quota before creating container (skip for anonymous users)
+    if (!isAnonymous) {
+      try {
+        const quotaEnforcer = getQuotaEnforcer();
+        const quotaCheck = quotaEnforcer.checkQuota(userId, MetricType.CONTAINER_HOURS);
+        if (quotaCheck.action === EnforcementAction.BLOCK) {
+          return res.status(429).json({
+            error: 'Quota exceeded',
+            message: `You have reached your sandbox limit. Please upgrade your plan or delete unused sandboxes.`,
+            quotaType: 'sandboxes',
+          });
+        }
+        if (quotaCheck.action === EnforcementAction.THROTTLE) {
+          logger.warn({ userId }, 'user approaching sandbox limit');
+        }
+      } catch (_) { /* quota system may not be initialized */ }
+    }
 
-    // Fetch user's Claude Code token and AI provider keys (in parallel)
+    // Fetch user's Claude Code token and AI provider keys (skip for anonymous users)
     const createStartTime = Date.now();
-    const [claudeCodeToken, aiProviderKeys] = await Promise.all([
-      fetchClaudeCodeToken(userId),
-      fetchAIProviderKeys(userId),
-    ]);
+    const [claudeCodeToken, aiProviderKeys] = isAnonymous
+      ? [null, null]
+      : await Promise.all([
+          fetchClaudeCodeToken(userId),
+          fetchAIProviderKeys(userId),
+        ]);
     logger.info({ durationMs: Date.now() - createStartTime, projectId }, 'fetched user credentials');
 
     // Return existing container (after ensuring it's running)
@@ -2506,15 +2605,15 @@ app.post('/api/container', containerLimiter, authenticateRequest, verifyProjectO
             }
 
             // Inject AI provider API keys (for Codex, Gemini CLI, OpenCode, etc.)
-            if (aiProviderKeys.openai) {
+            if (aiProviderKeys?.openai) {
               containerEnv.push(`OPENAI_API_KEY=${aiProviderKeys.openai}`);
               authDebug('injecting OpenAI key into container', { projectId: maskIdentifier(projectId) });
             }
-            if (aiProviderKeys.gemini) {
+            if (aiProviderKeys?.gemini) {
               containerEnv.push(`GEMINI_API_KEY=${aiProviderKeys.gemini}`);
               authDebug('injecting Gemini key into container', { projectId: maskIdentifier(projectId) });
             }
-            if (aiProviderKeys.anthropic) {
+            if (aiProviderKeys?.anthropic) {
               containerEnv.push(`ANTHROPIC_API_KEY=${aiProviderKeys.anthropic}`);
               authDebug('injecting Anthropic key into container', { projectId: maskIdentifier(projectId) });
             }
@@ -2751,7 +2850,7 @@ app.get('/api/containers', authenticateRequest, async (req: AuthenticatedRequest
 });
 
 // Stop container (SECURED)
-app.delete('/api/container/:projectId', authenticateRequest, verifyProjectOwnership, async (req: AuthenticatedRequest, res) => {
+app.delete('/api/container/:projectId', optionalAuthenticateRequest, flexibleProjectOwnership, async (req: AuthenticatedRequest, res) => {
   const projectId = sanitizeProjectId(req.params.projectId);
   try {
     auditLog({
@@ -13343,8 +13442,10 @@ const sandboxDependencies: SandboxDependencies = {
   },
 };
 
-// Initialize sandbox routes with dependencies
-initSandboxRoutes(sandboxDependencies);
+// Initialize sandbox routes — prefer Daytona if configured, fall back to Docker
+import { createDaytonaSandboxDeps } from './daytona-sandbox-deps.js';
+const daytonaDeps = createDaytonaSandboxDeps();
+initSandboxRoutes(daytonaDeps || sandboxDependencies);
 
 // Project dependencies for Public API
 const projectDependencies: ProjectDependencies = {
@@ -13458,6 +13559,18 @@ app.use('/api/a2a', heartbeatRouter);
 app.use('/api/a2a/agents', agentRegistryRouter);
 app.use('/api/a2a/approvals', approvalRouter);
 app.use('/api/a2a/openclaw', openclawAdapterRouter);
+
+// OpenClaw Platform Hub — health + routing preview endpoints
+import { getHubHealth, previewRouting } from './openclaw-platform-hub.js';
+app.get('/api/a2a/openclaw/hub/health', async (_req, res) => {
+  const health = await getHubHealth();
+  res.json({ ok: true, platforms: health });
+});
+app.post('/api/a2a/openclaw/hub/preview', (req, res) => {
+  const targets = previewRouting(req.body);
+  res.json({ ok: true, targets });
+});
+
 app.use('/api/a2a', sseStreamRouter);
 app.use('/api/a2a/connectors/claude', claudeConnectorRouter);
 app.use('/api/a2a/connectors/codex', codexConnectorRouter);
@@ -15510,6 +15623,179 @@ app.delete('/api/git/:projectId/invitations/:invitationId', authenticateRequest,
 });
 
 startupInfo('routes.github-collaborators', 'registered');
+
+// ==================== DAYTONA SANDBOX INTEGRATION ====================
+// REST-based Daytona sandbox management for recoder-web projects.
+// Provides an alternative to local Docker containers using the self-hosted Daytona API.
+
+// POST /api/daytona/sandbox - Create a new Daytona sandbox
+app.post('/api/daytona/sandbox', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  if (!isDaytonaConfigured()) {
+    return sendError(res, createError(ErrorCode.SERVICE_UNAVAILABLE, 'Daytona integration not configured'));
+  }
+
+  const { snapshot, envVars, labels, autoStopInterval, autoArchiveInterval, resources } = req.body;
+
+  try {
+    const sandbox = await getDaytonaClient().createSandbox({
+      snapshot,
+      envVars,
+      labels: { ...(labels || {}), userId: req.userId, source: 'docker-backend' },
+      autoStopInterval,
+      autoArchiveInterval,
+      resources,
+    });
+
+    sendSuccess(res, { sandbox });
+  } catch (err: any) {
+    logger.error({ err, userId: req.userId }, 'Failed to create Daytona sandbox');
+    sendError(res, createError(ErrorCode.INTERNAL_ERROR, `Daytona sandbox creation failed: ${err.message}`));
+  }
+}));
+
+// GET /api/daytona/sandbox - List Daytona sandboxes
+app.get('/api/daytona/sandbox', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  if (!isDaytonaConfigured()) {
+    return sendError(res, createError(ErrorCode.SERVICE_UNAVAILABLE, 'Daytona integration not configured'));
+  }
+
+  try {
+    const sandboxes = await getDaytonaClient().listSandboxes();
+    sendSuccess(res, { sandboxes, total: sandboxes.length });
+  } catch (err: any) {
+    sendError(res, createError(ErrorCode.INTERNAL_ERROR, `Failed to list Daytona sandboxes: ${err.message}`));
+  }
+}));
+
+// GET /api/daytona/sandbox/:sandboxId - Get Daytona sandbox info
+app.get('/api/daytona/sandbox/:sandboxId', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  if (!isDaytonaConfigured()) {
+    return sendError(res, createError(ErrorCode.SERVICE_UNAVAILABLE, 'Daytona integration not configured'));
+  }
+
+  try {
+    const sandbox = await getDaytonaClient().getSandbox(req.params.sandboxId);
+    sendSuccess(res, { sandbox });
+  } catch (err: any) {
+    sendError(res, createError(ErrorCode.INTERNAL_ERROR, `Failed to get Daytona sandbox: ${err.message}`));
+  }
+}));
+
+// POST /api/daytona/sandbox/:sandboxId/start - Start a stopped sandbox
+app.post('/api/daytona/sandbox/:sandboxId/start', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  if (!isDaytonaConfigured()) {
+    return sendError(res, createError(ErrorCode.SERVICE_UNAVAILABLE, 'Daytona integration not configured'));
+  }
+
+  try {
+    await getDaytonaClient().startSandbox(req.params.sandboxId);
+    sendSuccess(res, { started: true, sandboxId: req.params.sandboxId });
+  } catch (err: any) {
+    sendError(res, createError(ErrorCode.INTERNAL_ERROR, `Failed to start Daytona sandbox: ${err.message}`));
+  }
+}));
+
+// POST /api/daytona/sandbox/:sandboxId/stop - Stop a running sandbox
+app.post('/api/daytona/sandbox/:sandboxId/stop', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  if (!isDaytonaConfigured()) {
+    return sendError(res, createError(ErrorCode.SERVICE_UNAVAILABLE, 'Daytona integration not configured'));
+  }
+
+  try {
+    await getDaytonaClient().stopSandbox(req.params.sandboxId);
+    sendSuccess(res, { stopped: true, sandboxId: req.params.sandboxId });
+  } catch (err: any) {
+    sendError(res, createError(ErrorCode.INTERNAL_ERROR, `Failed to stop Daytona sandbox: ${err.message}`));
+  }
+}));
+
+// DELETE /api/daytona/sandbox/:sandboxId - Delete a sandbox
+app.delete('/api/daytona/sandbox/:sandboxId', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  if (!isDaytonaConfigured()) {
+    return sendError(res, createError(ErrorCode.SERVICE_UNAVAILABLE, 'Daytona integration not configured'));
+  }
+
+  try {
+    await getDaytonaClient().deleteSandbox(req.params.sandboxId);
+    sendSuccess(res, { deleted: true, sandboxId: req.params.sandboxId });
+  } catch (err: any) {
+    sendError(res, createError(ErrorCode.INTERNAL_ERROR, `Failed to delete Daytona sandbox: ${err.message}`));
+  }
+}));
+
+// POST /api/daytona/sandbox/:sandboxId/exec - Execute command in sandbox
+app.post('/api/daytona/sandbox/:sandboxId/exec', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  if (!isDaytonaConfigured()) {
+    return sendError(res, createError(ErrorCode.SERVICE_UNAVAILABLE, 'Daytona integration not configured'));
+  }
+
+  const { command, cwd, timeoutSecs } = req.body;
+  if (!command) {
+    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'command is required'));
+  }
+
+  try {
+    const result = await getDaytonaClient().execCommand(req.params.sandboxId, command, { cwd, timeoutSecs });
+    sendSuccess(res, result);
+  } catch (err: any) {
+    sendError(res, createError(ErrorCode.INTERNAL_ERROR, `Command execution failed: ${err.message}`));
+  }
+}));
+
+// POST /api/daytona/sandbox/:sandboxId/files/write - Write file to sandbox
+app.post('/api/daytona/sandbox/:sandboxId/files/write', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  if (!isDaytonaConfigured()) {
+    return sendError(res, createError(ErrorCode.SERVICE_UNAVAILABLE, 'Daytona integration not configured'));
+  }
+
+  const { path: filePath, content } = req.body;
+  if (!filePath || content === undefined) {
+    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'path and content are required'));
+  }
+
+  try {
+    await getDaytonaClient().uploadFile(req.params.sandboxId, filePath, content);
+    sendSuccess(res, { written: true, path: filePath });
+  } catch (err: any) {
+    sendError(res, createError(ErrorCode.INTERNAL_ERROR, `File write failed: ${err.message}`));
+  }
+}));
+
+// GET /api/daytona/sandbox/:sandboxId/files/read - Read file from sandbox
+app.get('/api/daytona/sandbox/:sandboxId/files/read', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  if (!isDaytonaConfigured()) {
+    return sendError(res, createError(ErrorCode.SERVICE_UNAVAILABLE, 'Daytona integration not configured'));
+  }
+
+  const filePath = req.query.path as string;
+  if (!filePath) {
+    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'path query parameter is required'));
+  }
+
+  try {
+    const content = await getDaytonaClient().downloadFile(req.params.sandboxId, filePath);
+    sendSuccess(res, { path: filePath, content });
+  } catch (err: any) {
+    sendError(res, createError(ErrorCode.INTERNAL_ERROR, `File read failed: ${err.message}`));
+  }
+}));
+
+// GET /api/daytona/sandbox/:sandboxId/preview - Get preview URL for a port
+app.get('/api/daytona/sandbox/:sandboxId/preview', authenticateRequest, (req: AuthenticatedRequest, res: express.Response) => {
+  if (!isDaytonaConfigured()) {
+    return sendError(res, createError(ErrorCode.SERVICE_UNAVAILABLE, 'Daytona integration not configured'));
+  }
+
+  const port = parseInt(req.query.port as string, 10);
+  if (!port || isNaN(port)) {
+    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'port query parameter is required'));
+  }
+
+  const url = getDaytonaClient().getPreviewUrl(req.params.sandboxId, port);
+  sendSuccess(res, { url, sandboxId: req.params.sandboxId, port });
+});
+
+startupInfo('routes.daytona-sandbox', isDaytonaConfigured() ? 'registered' : 'registered (not configured - set DAYTONA_API_KEY)');
 
 // ==================== END SPRINT 14 ====================
 

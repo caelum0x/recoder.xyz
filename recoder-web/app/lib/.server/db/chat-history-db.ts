@@ -3,7 +3,7 @@
  * Persists chats to PostgreSQL/Neon instead of IndexedDB
  */
 
-import { neon } from '@neondatabase/serverless';
+import { createSql } from './pg-pool';
 import type { Message } from 'ai';
 import { createScopedLogger } from '~/utils/logger';
 
@@ -52,10 +52,10 @@ export interface ChatMessage {
 }
 
 export class ChatHistoryDB {
-  private sql: ReturnType<typeof neon>;
+  private sql: ReturnType<typeof createSql>;
 
   constructor(databaseUrl: string) {
-    this.sql = neon(databaseUrl);
+    this.sql = createSql(databaseUrl);
   }
 
   /**
@@ -290,7 +290,7 @@ export class ChatHistoryDB {
 
     await this.sql`
       UPDATE chat_messages
-      SET content = ${sanitizedContent}, "updatedAt" = NOW()
+      SET content = ${sanitizedContent}
       WHERE id = ${messageId}
     `;
   }
