@@ -4,21 +4,30 @@ import { requireAuth, getUserFromToken } from "@/lib/auth-helpers";
 import { prisma } from '@/lib/prisma';
 import { userManager } from '@/lib/user-management';
 import { rateLimit, rateLimitConfigs } from '@/lib/middleware/rate-limit';
+import { addCorsHeaders, handlePreflight } from '@/lib/middleware/cors';
 import { logger } from '@/lib/logger';
 
+// GET is read-only, use lenient 'api' config (60/min) instead of strict
+// 'billing' (5/min) to avoid rate-limiting cross-domain subscription badge polls
+const subscriptionReadLimiter = rateLimit(rateLimitConfigs.api);
 const billingRateLimiter = rateLimit(rateLimitConfigs.billing);
 
 type PlanType = 'free' | 'pro' | 'enterprise';
 
+export async function OPTIONS(request: NextRequest) {
+  return handlePreflight(request);
+}
+
 export async function GET(request: NextRequest) {
+  const cors = (res: Response) => addCorsHeaders(res, request);
   try {
-    const rateLimitResponse = await billingRateLimiter(request);
-    if (rateLimitResponse) return rateLimitResponse;
+    const rateLimitResponse = await subscriptionReadLimiter(request);
+    if (rateLimitResponse) return cors(rateLimitResponse);
 
     const user = await getUserFromToken(request);
 
     if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return cors(NextResponse.json({ error: 'Unauthorized' }, { status: 401 }));
     }
 
     // Get user with subscription info
@@ -36,10 +45,10 @@ export async function GET(request: NextRequest) {
     });
 
     if (!userWithInfo) {
-      return NextResponse.json({ error: 'User not found' }, { status: 404 });
+      return cors(NextResponse.json({ error: 'User not found' }, { status: 404 }));
     }
 
-    return NextResponse.json({
+    return cors(NextResponse.json({
       success: true,
       plan: userWithInfo.subscriptionPlan,
       subscription_status: userWithInfo.subscriptionStatus,
@@ -85,23 +94,24 @@ export async function GET(request: NextRequest) {
           ]
         }
       ]
-    });
+    }));
   } catch (error) {
     logger.error('Subscription GET error', { route: 'api/user/subscription', error: error instanceof Error ? error.message : String(error) });
-    return NextResponse.json(
+    return cors(NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }
-    );
+    ));
   }
 }
 
 export async function PUT(request: NextRequest) {
+  const cors = (res: Response) => addCorsHeaders(res, request);
   try {
     const rateLimitResponse = await billingRateLimiter(request);
-    if (rateLimitResponse) return rateLimitResponse;
+    if (rateLimitResponse) return cors(rateLimitResponse);
 
     const authResult = await requireAuth(request);
-    if (authResult.error) return authResult.response;
+    if (authResult.error) return cors(authResult.response);
     const { user } = authResult;
     
     if (!user?.id) {
