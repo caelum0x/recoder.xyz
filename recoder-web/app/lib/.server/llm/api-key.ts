@@ -1,5 +1,10 @@
 import { getUserApiKey, getSessionCookie } from './user-api-key';
 
+// CRITICAL: Use globalThis.process.env to get real Node.js env vars.
+// Vite replaces `import from 'node:process'` with its polyfill shim,
+// which has an empty env object and breaks platform key fallback.
+const env = globalThis.process?.env || {};
+
 export interface APIKeyResult {
   key: string;
   source: 'user' | 'platform';
@@ -29,17 +34,33 @@ export async function getAPIKeyWithSource(
 ): Promise<APIKeyResult | null> {
   // Priority 1: User's own BYOK key
   if (request) {
-    const sessionCookie = getSessionCookie(request);
-    const userApiKey = await getUserApiKey(sessionCookie, provider);
+    try {
+      const sessionCookie = getSessionCookie(request);
+      const userApiKey = await getUserApiKey(sessionCookie, provider);
 
-    if (userApiKey) {
-      return { key: userApiKey, source: 'user' };
+      if (userApiKey) {
+        return { key: userApiKey, source: 'user' };
+      }
+    } catch {
+      // Non-fatal: user key fetch failed, fall through to platform key
     }
   }
 
-  // Priority 2: Platform key from environment (free models only)
-  if (provider === 'openrouter' && process.env.OPENROUTER_API_KEY) {
-    return { key: process.env.OPENROUTER_API_KEY, source: 'platform' };
+  // Priority 2: Platform key from environment
+  if (env.OPENROUTER_API_KEY) {
+    return { key: env.OPENROUTER_API_KEY, source: 'platform' };
+  }
+
+  // Priority 3: Any provider-specific key from environment
+  const envKeyMap: Record<string, string> = {
+    openrouter: 'OPENROUTER_API_KEY',
+    anthropic: 'ANTHROPIC_API_KEY',
+    openai: 'OPENAI_API_KEY',
+    groq: 'GROQ_API_KEY',
+  };
+  const envKey = envKeyMap[provider];
+  if (envKey && env[envKey]) {
+    return { key: env[envKey]!, source: 'platform' };
   }
 
   return null;
