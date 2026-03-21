@@ -6,8 +6,10 @@ export interface BillingProviderHealth {
 
 export interface BillingHealth {
   configured: boolean;
+  activeProvider: string;
   paddle: BillingProviderHealth;
   dodo: BillingProviderHealth;
+  polar: BillingProviderHealth;
 }
 
 function isPlaceholder(value: string): boolean {
@@ -55,11 +57,33 @@ export function detectBillingHealth(env: NodeJS.ProcessEnv = process.env): Billi
     'DODO_PAY_API_KEY',
   ]);
 
+  const polarWebhook = hasAny(env, ['POLAR_WEBHOOK_SECRET']);
+  const polarCheckout = hasAny(env, ['POLAR_API_KEY', 'POLAR_ACCESS_TOKEN']);
+
   const paddleConfigured = paddleCheckout || paddleWebhook;
   const dodoConfigured = dodoCheckout || dodoWebhook;
+  const polarConfigured = polarCheckout || polarWebhook;
+
+  // Determine active provider based on PAYMENT_PROVIDER env or auto-detect
+  const explicit = (env.PAYMENT_PROVIDER || '').toLowerCase().trim();
+  let activeProvider = 'none';
+  if (explicit === 'polar' && polarConfigured) {
+    activeProvider = 'polar';
+  } else if (explicit === 'dodo' && dodoConfigured) {
+    activeProvider = 'dodo';
+  } else if (explicit === 'none' || explicit === 'disabled' || explicit === 'off') {
+    activeProvider = 'none';
+  } else if (polarConfigured) {
+    activeProvider = 'polar';
+  } else if (dodoConfigured) {
+    activeProvider = 'dodo';
+  } else if (paddleConfigured) {
+    activeProvider = 'paddle';
+  }
 
   return {
-    configured: paddleConfigured || dodoConfigured,
+    configured: paddleConfigured || dodoConfigured || polarConfigured,
+    activeProvider,
     paddle: {
       configured: paddleConfigured,
       webhookConfigured: paddleWebhook,
@@ -69,6 +93,11 @@ export function detectBillingHealth(env: NodeJS.ProcessEnv = process.env): Billi
       configured: dodoConfigured,
       webhookConfigured: dodoWebhook,
       checkoutConfigured: dodoCheckout,
+    },
+    polar: {
+      configured: polarConfigured,
+      webhookConfigured: polarWebhook,
+      checkoutConfigured: polarCheckout,
     },
   };
 }
