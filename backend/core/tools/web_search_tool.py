@@ -1,36 +1,46 @@
-from tavily import AsyncTavilyClient
-from dotenv import load_dotenv
-from core.agentpress.tool import Tool, ToolResult, openapi_schema, tool_metadata
-from core.utils.config import config
-from core.sandbox.tool_base import SandboxToolsBase
-from core.agentpress.thread_manager import ThreadManager
-from core.services.http_client import get_http_client
-import json
-import datetime
+"""Free web search, scrape, crawl, and research tool for Recoder agents.
+
+Uses DuckDuckGo (no API key) for search and httpx+BeautifulSoup for scraping.
+Supports deep research (search + scrape top results), site crawling, news search,
+and JS-rendered page extraction via Playwright (with httpx fallback).
+Replaces the previous Tavily/Firecrawl paid implementation.
+"""
+
 import asyncio
+import json
 import logging
 import time
-import base64
-import replicate
-import httpx
+from typing import Optional
+from urllib.parse import urljoin, urlparse
 
-# TODO: add subpages, etc... in filters as sometimes its necessary 
+import httpx
+from bs4 import BeautifulSoup
+
+from core.agentpress.tool import Tool, ToolResult, openapi_schema, tool_metadata
+from core.sandbox.tool_base import SandboxToolsBase
+from core.agentpress.thread_manager import ThreadManager
+
 
 @tool_metadata(
     display_name="WebSearch",
-    description="Search the web and use the results to inform responses with up-to-date information",
+    description="Search the web, research topics, crawl sites, and read web pages — free, no API key needed",
     icon="Search",
     color="bg-green-100 dark:bg-green-800/50",
     weight=30,
     visible=True,
     usage_guide="""
-## WebSearch - Search the web for current information
+## WebSearch - Search the web for current information (FREE)
 
-Allows searching the web and using the results to inform responses. Provides up-to-date information for current events and recent data.
+Search the web using DuckDuckGo and read/scrape web pages using httpx+BeautifulSoup.
+No API keys required — completely free.
 
 ### Available Tools
-- **web_search**: Search the web with single or BATCH queries
-- **scrape_webpage** (WebFetch): Extract full content from web pages
+- **web_search**: Search the web with single or BATCH queries via DuckDuckGo
+- **scrape_webpage**: Extract full text content from web pages
+- **deep_research**: Search + scrape top results for comprehensive research on a topic
+- **crawl_site**: Follow links within a site to discover and extract related content
+- **news_search**: Search recent news via DuckDuckGo News
+- **render_js_page**: Render JS-heavy pages using headless Chromium (falls back to httpx)
 
 ### When to Use
 - Accessing information beyond the knowledge cutoff
@@ -38,17 +48,20 @@ Allows searching the web and using the results to inform responses. Provides up-
 - Researching topics that require up-to-date data
 - Gathering information from multiple sources
 - Fact-checking or verifying claims
+- Reading documentation, articles, or reference pages
+- Deep research on complex topics (use deep_research)
+- Exploring a website's structure and content (use crawl_site)
+- Reading JS-rendered SPAs or dynamic content (use render_js_page)
 
 ### When NOT to Use
 - For information already in the conversation context
 - When the user provides all necessary information
 - For simple calculations or logic that doesn't need external data
 
-### ⚠️ DO NOT OVERRIDE BROWSER-EXTRACTED DATA
+### DO NOT OVERRIDE BROWSER-EXTRACTED DATA
 - If you already visited a SPECIFIC website with browser_tool and extracted content from it, that extracted content is your **PRIMARY SOURCE**
 - Web search results should NOT override or replace information you extracted directly from the target website
-- Use web search only for ADDITIONAL context (reviews, news, competitor comparisons) - NOT to replace first-hand data
-- Example: If user asks "create slides for magicterms.com" and you already browsed/extracted from magicterms.com, USE that extracted data - don't do web searches that might return info about OTHER similar websites
+- Use web search only for ADDITIONAL context — NOT to replace first-hand data
 
 ### CRITICAL REQUIREMENT - Sources
 
@@ -66,8 +79,8 @@ Sources:
 ### Batch Mode
 
 **ALWAYS batch multiple queries into ONE call for efficiency:**
-- ❌ WRONG: 3 separate web_search calls
-- ✅ CORRECT: ONE call with query=["topic 1", "topic 2", "topic 3"]
+- WRONG: 3 separate web_search calls
+- CORRECT: ONE call with query=["topic 1", "topic 2", "topic 3"]
 
 ### Usage Pattern
 
@@ -84,57 +97,159 @@ web_search(query="Tesla stock")  # Wasteful!
 
 IMPORTANT: Use the correct year in search queries. When searching for recent information, documentation, or current events, use the current year (2025+) rather than previous years.
 
-### Content Extraction (WebFetch)
+### Content Extraction (scrape_webpage)
 
 Use scrape_webpage to fetch and analyze web content:
-- Fetches URL content and converts HTML to markdown
-- Use a prompt to describe what information you want to extract
-- For GitHub URLs, prefer using the gh CLI via Bash instead
+- Fetches URL content and converts HTML to clean text
+- Removes scripts, styles, nav, footer clutter
+- Truncates very long pages to fit in context
+- Batch multiple URLs in a single call for efficiency
+
+### Deep Research
+
+Use deep_research for comprehensive topic investigation:
+- Searches DuckDuckGo for the query
+- Scrapes top 3-5 results automatically
+- Returns a combined research output with all sources
+- Great for complex questions that need multiple sources
+
+### Site Crawling
+
+Use crawl_site to explore a website:
+- Starts from a URL and follows links within the same domain
+- Configurable depth and max pages
+- Returns content from all discovered pages
 
 ### Important Notes
 - query parameter: native array ["q1", "q2"], NOT JSON string
 - num_results: integer (5), NOT string ("5")
 - Check publication dates for time-sensitive info
 - Cross-validate information across multiple sources
-- Domain filtering is supported to include or block specific websites
 """
 )
 class SandboxWebSearchTool(SandboxToolsBase):
-    """Tool for performing web searches using Tavily API and web scraping using Firecrawl."""
+    """Tool for performing web searches using DuckDuckGo (free) and scraping with httpx+BeautifulSoup."""
 
     def __init__(self, project_id: str, thread_manager: ThreadManager):
         super().__init__(project_id, thread_manager)
-        # Load environment variables
-        load_dotenv()
-        # Use API keys from config
-        self.tavily_api_key = config.TAVILY_API_KEY
-        self.firecrawl_api_key = config.FIRECRAWL_API_KEY
-        self.firecrawl_url = config.FIRECRAWL_URL
-        
-        if not self.tavily_api_key:
-            logging.warning("TAVILY_API_KEY not configured - Web Search Tool will not be available")
-        if not self.firecrawl_api_key:
-            logging.warning("FIRECRAWL_API_KEY not configured - Web Scraping Tool will not be available")
 
-        # Tavily asynchronous search client
-        self.tavily_client = AsyncTavilyClient(api_key=self.tavily_api_key)
+    # ─── Shared HTTP helpers ───────────────────────────────────────────
+
+    _HTTP_HEADERS = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.5",
+    }
+
+    @staticmethod
+    def _normalize_url(url: str) -> str:
+        """Ensure URL has https:// protocol."""
+        if not (url.startswith('http://') or url.startswith('https://')):
+            url = 'https://' + url
+        if url.startswith('http://'):
+            url = 'https://' + url[7:]
+        return url
+
+    @staticmethod
+    def _extract_text_from_html(html: str, max_chars: int = 12000) -> tuple[str, str]:
+        """Parse HTML, strip boilerplate, return (title, clean_text)."""
+        soup = BeautifulSoup(html, "html.parser")
+
+        # Remove non-content elements
+        for tag in soup(["script", "style", "nav", "footer", "header", "aside",
+                         "noscript", "iframe", "svg", "form", "button"]):
+            tag.decompose()
+
+        # Remove hidden elements
+        for tag in soup.find_all(attrs={"aria-hidden": "true"}):
+            tag.decompose()
+        for tag in soup.find_all(style=lambda s: s and "display:none" in s.replace(" ", "")):
+            tag.decompose()
+        for tag in soup.find_all(style=lambda s: s and "visibility:hidden" in s.replace(" ", "")):
+            tag.decompose()
+
+        title = ""
+        if soup.title and soup.title.string:
+            title = soup.title.string.strip()
+
+        text = soup.get_text(separator="\n", strip=True)
+
+        # Collapse blank lines
+        lines = text.split("\n")
+        cleaned_lines: list[str] = []
+        prev_empty = False
+        for line in lines:
+            line = line.strip()
+            if not line:
+                if not prev_empty:
+                    cleaned_lines.append("")
+                prev_empty = True
+            else:
+                cleaned_lines.append(line)
+                prev_empty = False
+        text = "\n".join(cleaned_lines)
+
+        if len(text) > max_chars:
+            text = text[:max_chars] + "\n\n[Content truncated at {} characters]".format(max_chars)
+
+        return title, text
+
+    @staticmethod
+    def _extract_links_from_html(html: str, base_url: str) -> list[str]:
+        """Extract all absolute links from HTML that belong to the same domain."""
+        soup = BeautifulSoup(html, "html.parser")
+        base_domain = urlparse(base_url).netloc
+        links: list[str] = []
+        seen: set[str] = set()
+        for a_tag in soup.find_all("a", href=True):
+            href = a_tag["href"]
+            # Skip anchors, javascript, mailto
+            if href.startswith(("#", "javascript:", "mailto:", "tel:")):
+                continue
+            abs_url = urljoin(base_url, href)
+            # Strip fragment
+            abs_url = abs_url.split("#")[0]
+            parsed = urlparse(abs_url)
+            if parsed.netloc == base_domain and abs_url not in seen:
+                seen.add(abs_url)
+                links.append(abs_url)
+        return links
+
+    async def _fetch_page(self, url: str, timeout: float = 20.0) -> tuple[bool, str, str]:
+        """Fetch a URL, return (success, html_or_error, final_url)."""
+        url = self._normalize_url(url)
+        try:
+            async with httpx.AsyncClient(
+                timeout=timeout,
+                follow_redirects=True,
+                limits=httpx.Limits(max_connections=10)
+            ) as client:
+                response = await client.get(url, headers=self._HTTP_HEADERS)
+                response.raise_for_status()
+            return True, response.text, str(response.url)
+        except httpx.HTTPStatusError as e:
+            return False, f"HTTP {e.response.status_code}: {e.response.reason_phrase}", url
+        except httpx.TimeoutException:
+            return False, "Request timed out", url
+        except Exception as e:
+            return False, str(e), url
+
+    # ─── 1. web_search (existing) ─────────────────────────────────────
 
     @openapi_schema({
         "type": "function",
         "function": {
             "name": "web_search",
-            "description": """Search the web for up-to-date information.
+            "description": """Search the web for up-to-date information using DuckDuckGo (free, no API key).
 
-Allows searching the web and using the results to inform responses. Provides up-to-date information for current events and recent data. Returns search results including titles, URLs, publication dates, direct answers, and images.
+Returns search results including titles, URLs, and descriptions. Supports both single queries and batch queries (array) for concurrent execution.
 
 CRITICAL REQUIREMENT - After answering the user's question, you MUST include a "Sources:" section listing all relevant URLs from the search results as markdown hyperlinks: [Title](URL)
 
 Usage notes:
 - Supports both single queries and batch queries (array) for concurrent execution
-- Domain filtering is supported to include or block specific websites
 - IMPORTANT: Use the current year in search queries when searching for recent information
-
-IMPORTANT: For batch searches, pass query as a native array of strings, NOT as a JSON string.""",
+- For batch searches, pass query as a native array of strings, NOT as a JSON string.""",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -152,11 +267,11 @@ IMPORTANT: For batch searches, pass query as a native array of strings, NOT as a
                                 "description": "Multiple search queries to execute concurrently. Pass as a native array of strings, NOT as a JSON string."
                             }
                         ],
-                        "description": "**REQUIRED** - The search query to use. Either a single query (string) or multiple queries (array) to execute concurrently."
+                        "description": "**REQUIRED** - The search query. Either a single query (string) or multiple queries (array) to execute concurrently."
                     },
                     "num_results": {
                         "type": "integer",
-                        "description": "**OPTIONAL** - Number of search results to return per query (1-50). Default: 5.",
+                        "description": "**OPTIONAL** - Number of search results to return per query (1-20). Default: 5.",
                         "default": 5
                     }
                 },
@@ -166,32 +281,30 @@ IMPORTANT: For batch searches, pass query as a native array of strings, NOT as a
         }
     })
     async def web_search(
-        self, 
+        self,
         query: str | list[str],
         num_results: int = 5
     ) -> ToolResult:
         """
-        Search the web using the Tavily API to find relevant and up-to-date information.
+        Search the web using DuckDuckGo to find relevant and up-to-date information.
         Supports both single queries and batch queries for concurrent execution.
+        Free — no API key needed.
         """
         try:
-            # Check if Tavily API key is configured
-            if not self.tavily_api_key:
-                return self.fail_response("Web Search is not available. TAVILY_API_KEY is not configured.")
-            
             # Normalize num_results
             if num_results is None:
-                num_results = 10
+                num_results = 5
             elif isinstance(num_results, int):
-                num_results = max(1, min(num_results, 50))
+                num_results = max(1, min(num_results, 20))
             elif isinstance(num_results, str):
                 try:
-                    num_results = max(1, min(int(num_results), 50))
+                    num_results = max(1, min(int(num_results), 20))
                 except ValueError:
-                    num_results = 10
+                    num_results = 5
             else:
-                num_results = 10
+                num_results = 5
 
+            # Handle JSON-encoded array strings
             if isinstance(query, str) and query.strip().startswith('['):
                 try:
                     parsed_query = json.loads(query)
@@ -199,64 +312,55 @@ IMPORTANT: For batch searches, pass query as a native array of strings, NOT as a
                         query = parsed_query
                 except (json.JSONDecodeError, ValueError):
                     pass
-            
+
             is_batch = isinstance(query, list)
-            
+
             if is_batch:
                 if not query or len(query) == 0:
                     return self.fail_response("At least one search query is required in the batch.")
-                
-                # Filter out empty queries
+
                 queries = [q.strip() for q in query if q and isinstance(q, str) and q.strip()]
                 if not queries:
                     return self.fail_response("No valid search queries provided in the batch.")
-                
-                logging.info(f"Executing batch web search for {len(queries)} queries with {num_results} results each")
-                
-                # Execute all searches concurrently
+
+                logging.info(f"[WebSearch] Executing batch DuckDuckGo search for {len(queries)} queries with {num_results} results each")
+
                 start_time = time.time()
                 tasks = [
-                    self._execute_single_search(q, num_results) 
+                    self._execute_single_search(q, num_results)
                     for q in queries
                 ]
                 search_results = await asyncio.gather(*tasks, return_exceptions=True)
                 elapsed_time = time.time() - start_time
-                logging.info(f"Batch search completed in {elapsed_time:.2f}s (concurrent execution)")
-                
-                # Process results and handle exceptions
+                logging.info(f"[WebSearch] Batch search completed in {elapsed_time:.2f}s")
+
                 batch_response = {
                     "batch_mode": True,
                     "total_queries": len(queries),
                     "elapsed_time": round(elapsed_time, 2),
                     "results": []
                 }
-                
+
                 all_successful = True
                 for i, result in enumerate(search_results):
                     if isinstance(result, Exception):
-                        logging.error(f"Error processing query '{queries[i]}': {str(result)}")
+                        logging.error(f"[WebSearch] Error processing query '{queries[i]}': {str(result)}")
                         batch_response["results"].append({
                             "query": queries[i],
                             "success": False,
                             "error": str(result),
-                            "results": [],
-                            "answer": ""
+                            "results": []
                         })
                         all_successful = False
                     else:
                         batch_response["results"].append({
                             "query": queries[i],
                             "success": result.get("success", False),
-                            "results": result.get("results", []),
-                            "answer": result.get("answer", ""),
-                            "images": result.get("images", []),
-                            "response": result.get("response", {})
+                            "results": result.get("results", [])
                         })
                         if not result.get("success", False):
                             all_successful = False
-                
-                logging.info(f"Batch search completed: {len([r for r in batch_response['results'] if r.get('success')])}/{len(queries)} queries successful")
-                
+
                 return ToolResult(
                     success=all_successful,
                     output=json.dumps(batch_response, ensure_ascii=False)
@@ -264,283 +368,111 @@ IMPORTANT: For batch searches, pass query as a native array of strings, NOT as a
             else:
                 if not query or not isinstance(query, str):
                     return self.fail_response("A valid search query is required.")
-                
+
                 query = query.strip()
                 if not query:
                     return self.fail_response("A valid search query is required.")
-                
-                logging.info(f"Executing web search for query: '{query}' with {num_results} results")
+
+                logging.info(f"[WebSearch] Executing DuckDuckGo search for: '{query}' with {num_results} results")
                 start_time = time.time()
                 result = await self._execute_single_search(query, num_results)
                 elapsed_time = time.time() - start_time
-                
-                response = result.get("response", {})
-                response["elapsed_time"] = round(elapsed_time, 2)
-                
+
+                result["elapsed_time"] = round(elapsed_time, 2)
+
                 if result.get("success", False):
                     return ToolResult(
                         success=True,
-                        output=json.dumps(response, ensure_ascii=False)
+                        output=json.dumps(result, ensure_ascii=False)
                     )
                 else:
-                    logging.warning(f"No search results or answer found for query: '{query}'")
                     return ToolResult(
                         success=False,
-                        output=json.dumps(response, ensure_ascii=False)
+                        output=json.dumps(result, ensure_ascii=False)
                     )
-        
+
         except Exception as e:
             error_message = str(e)
             query_str = ", ".join(query) if isinstance(query, list) else str(query)
-            logging.error(f"Error performing web search for '{query_str}': {error_message}")
-            simplified_message = f"Error performing web search: {error_message[:200]}"
-            if len(error_message) > 200:
-                simplified_message += "..."
-            return self.fail_response(simplified_message)
-    
+            logging.error(f"[WebSearch] Error performing web search for '{query_str}': {error_message}")
+            return self.fail_response(f"Error performing web search: {error_message[:200]}")
+
     async def _execute_single_search(self, query: str, num_results: int) -> dict:
         """
-        Helper function to execute a single search query.
-        
-        Parameters:
-        - query: The search query string
-        - num_results: Number of results to return
-        
+        Execute a single DuckDuckGo search query.
+
         Returns:
-        - dict with success status, results, answer, images (with OCR & dimensions), and full response
+            dict with success status and results list
         """
         try:
-            search_response = await self.tavily_client.search(
-                query=query,
-                max_results=num_results,
-                include_images=True,
-                include_answer="advanced",
-                search_depth="advanced",
-            )
-            
-            # Extract results and answer
-            results = search_response.get('results', [])
-            answer = search_response.get('answer', '')
-            raw_images = search_response.get('images', [])
-            
-            # Enrich images with OCR and dimensions
-            enriched_images = await self._enrich_images_with_metadata(raw_images)
-            
-            # Consider search successful if we have either results OR an answer
-            success = len(results) > 0 or (answer and answer.strip())
-            
-            logging.info(f"Retrieved search results for query: '{query}' - {len(results)} results, answer: {'yes' if answer else 'no'}, {len(enriched_images)} images enriched")
-            
-            # Update search_response with enriched images
-            enriched_response = dict(search_response)
-            enriched_response['images'] = enriched_images
-            
+            from ddgs import DDGS
+
+            # Run the synchronous DDGS in a thread to avoid blocking the event loop
+            def _do_search():
+                with DDGS() as ddgs:
+                    return list(ddgs.text(query, max_results=num_results))
+
+            raw_results = await asyncio.to_thread(_do_search)
+
+            if not raw_results:
+                return {
+                    "success": False,
+                    "query": query,
+                    "results": [],
+                    "message": f"No results found for: {query}"
+                }
+
+            results = []
+            for r in raw_results:
+                results.append({
+                    "title": r.get("title", ""),
+                    "url": r.get("href", ""),
+                    "content": r.get("body", ""),
+                })
+
+            logging.info(f"[WebSearch] DuckDuckGo returned {len(results)} results for: '{query}'")
+
             return {
-                "success": success,
-                "results": results,
-                "answer": answer,
-                "images": enriched_images,
-                "response": enriched_response
+                "success": True,
+                "query": query,
+                "results": results
             }
-        
+
         except Exception as e:
             error_message = str(e)
-            logging.error(f"Error executing search for '{query}': {error_message}")
+            logging.error(f"[WebSearch] DuckDuckGo error for '{query}': {error_message}")
             return {
                 "success": False,
+                "query": query,
                 "results": [],
-                "answer": "",
-                "images": [],
-                "response": {},
                 "error": error_message
             }
 
-    async def _enrich_images_with_metadata(self, images: list) -> list:
-        """
-        Enrich image URLs with OCR text and dimensions.
-        Downloads all images and runs OCR IN PARALLEL for speed.
-        
-        Args:
-            images: List of image URLs (strings) or image objects from Tavily
-            
-        Returns:
-            List of enriched image objects with url, width, height, and description
-        """
-        if not images:
-            return []
-        
-        # Collect valid image URLs
-        valid_images = []
-        for img in images:
-            if isinstance(img, str):
-                img_url = img
-            elif isinstance(img, dict):
-                img_url = img.get('url', '')
-            else:
-                continue
-            
-            if img_url:
-                valid_images.append(img_url)
-        
-        if not valid_images:
-            return []
-        
-        logging.info(f"[WebSearch] Starting parallel image enrichment for {len(valid_images)} images")
-        
-        # Process all images in parallel
-        async with get_http_client() as client:
-            tasks = [self._enrich_single_image(img_url, client) for img_url in valid_images]
-            results = await asyncio.gather(*tasks, return_exceptions=True)
-        
-        # Collect results, handling any exceptions
-        enriched = []
-        for i, result in enumerate(results):
-            if isinstance(result, Exception):
-                logging.debug(f"[WebSearch] Error enriching image {i}: {result}")
-                enriched.append({
-                    "url": valid_images[i],
-                    "width": 0,
-                    "height": 0,
-                    "description": ""
-                })
-            else:
-                enriched.append(result)
-        
-        logging.info(f"[WebSearch] Completed parallel enrichment for {len(enriched)} images")
-        return enriched
-    
-    async def _enrich_single_image(self, img_url: str, client) -> dict:
-        """
-        Download and enrich a single image with dimensions and description.
-        Uses Moondream2 vision model for image understanding.
-        
-        Args:
-            img_url: URL of the image
-            client: HTTP client for downloading
-            
-        Returns:
-            Enriched image data dict
-        """
-        image_data = {
-            "url": img_url,
-            "width": 0,
-            "height": 0,
-            "description": ""
-        }
-        
-        try:
-            headers = {
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-            }
-            
-            response = await client.get(img_url, headers=headers, timeout=15.0, follow_redirects=True)
-            
-            if response.status_code == 200:
-                image_bytes = response.content
-                content_type = response.headers.get("content-type", "")
-                
-                if content_type.startswith("image/"):
-                    # Get dimensions using PIL
-                    try:
-                        from PIL import Image
-                        from io import BytesIO
-                        img_pil = Image.open(BytesIO(image_bytes))
-                        image_data["width"] = img_pil.width
-                        image_data["height"] = img_pil.height
-                        logging.debug(f"[WebSearch] Image dimensions: {img_pil.width}x{img_pil.height}")
-                    except Exception as dim_err:
-                        logging.debug(f"[WebSearch] Could not get dimensions: {dim_err}")
-                    
-                    # Get image description using Moondream2
-                    description = await self._describe_image(image_bytes, content_type)
-                    image_data["description"] = description
-        
-        except Exception as e:
-            logging.debug(f"[WebSearch] Error enriching image {img_url[:50]}...: {str(e)[:100]}")
-        
-        return image_data
-    
-    async def _describe_image(self, image_bytes: bytes, content_type: str) -> str:
-        """
-        Get image description using Moondream2 vision model.
-        Runs in ~2 seconds on Replicate GPU, includes text extraction.
-        Skipped if REPLICATE_API_TOKEN is not configured.
-        
-        Args:
-            image_bytes: Raw image bytes
-            content_type: MIME type of the image
-            
-        Returns:
-            Image description, or empty string if processing fails or token not configured
-        """
-        try:
-            # Skip if Replicate token not configured
-            from core.utils.config import get_config
-            replicate_token = get_config().REPLICATE_API_TOKEN
-            if not replicate_token:
-                logging.debug("[WebSearch] Skipping Moondream2: REPLICATE_API_TOKEN not configured")
-                return ""
-            
-            import os
-            os.environ["REPLICATE_API_TOKEN"] = replicate_token
-            
-            logging.debug(f"[WebSearch] Running Moondream2 on image ({len(image_bytes)} bytes)")
-            
-            # Convert to base64 data URL
-            image_b64 = base64.b64encode(image_bytes).decode("utf-8")
-            data_url = f"data:{content_type};base64,{image_b64}"
-            
-            # Call Moondream2 vision model
-            def run_moondream(data_url: str) -> str:
-                output = replicate.run(
-                    "lucataco/moondream2:72ccb656353c348c1385df54b237eeb7bfa874bf11486cf0b9473e691b662d31",
-                    input={
-                        "image": data_url,
-                        "prompt": "Describe this image in detail. Include any text visible in the image."
-                    }
-                )
-                # Output is a generator, consume it to get the full text
-                if hasattr(output, '__iter__') and not isinstance(output, (str, bytes)):
-                    return "".join(str(chunk) for chunk in output)
-                return str(output) if output else ""
-            
-            description = await asyncio.to_thread(run_moondream, data_url)
-            
-            logging.debug(f"[WebSearch] Got description: {len(description)} chars")
-            return description.strip()
-            
-        except Exception as e:
-            logging.debug(f"[WebSearch] Moondream2 error: {e}")
-            return ""
+    # ─── 2. scrape_webpage (existing) ──────────────────────────────────
 
     @openapi_schema({
         "type": "function",
         "function": {
             "name": "scrape_webpage",
-            "description": """Fetches content from specified URLs and processes it.
+            "description": """Fetch and extract text content from web pages.
 
-Takes URLs as input, fetches the URL content, converts HTML to markdown, and returns the processed content. Use this tool when you need to retrieve and analyze web content.
+Uses httpx + BeautifulSoup to download pages and extract clean text content. Free, no API key needed.
+Removes scripts, styles, navigation, and other clutter. Returns clean readable text.
 
 Usage notes:
-- IMPORTANT: If an MCP-provided web fetch tool is available, prefer using that tool instead.
 - The URLs must be fully-formed valid URLs.
 - HTTP URLs will be automatically upgraded to HTTPS.
-- Results may be summarized if the content is very large.
-- For GitHub URLs, prefer using the gh CLI via Bash instead (e.g., gh pr view, gh issue view).
+- Content is truncated to ~12000 characters per page to fit in context.
 - Batch multiple URLs in a single call for efficiency.
+- For GitHub URLs, prefer using the gh CLI via Bash instead.
 
-IMPORTANT: You should ALWAYS collect multiple relevant URLs from web-search results and scrape them all in a single call for efficiency.""",
+IMPORTANT: Collect multiple relevant URLs from web-search results and scrape them all in a single call for efficiency.""",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "urls": {
                         "type": "string",
                         "description": "**REQUIRED** - URLs to scrape, separated by commas. Example: 'https://example.com/page1,https://example.com/page2'"
-                    },
-                    "include_html": {
-                        "type": "boolean",
-                        "description": "**OPTIONAL** - Whether to include the full raw HTML content alongside the extracted markdown. Default: false.",
-                        "default": False
                     }
                 },
                 "required": ["urls"],
@@ -550,58 +482,32 @@ IMPORTANT: You should ALWAYS collect multiple relevant URLs from web-search resu
     })
     async def scrape_webpage(
         self,
-        urls: str,
-        include_html: bool = False
+        urls: str
     ) -> ToolResult:
         """
-        Retrieve the complete text content of multiple webpages in a single efficient operation.
-        
-        ALWAYS collect multiple relevant URLs from search results and scrape them all at once
-        rather than making separate calls for each URL. This is much more efficient.
-        
-        Parameters:
-        - urls: Multiple URLs to scrape, separated by commas
-        - include_html: Whether to include full HTML content alongside markdown (default: False)
+        Retrieve and extract text content from web pages.
+        Uses httpx + BeautifulSoup — free, no API key needed.
         """
         try:
-            # Check if Firecrawl API key is configured
-            if not self.firecrawl_api_key:
-                return self.fail_response("Web Scraping is not available. FIRECRAWL_API_KEY is not configured.")
-            
-            logging.info(f"Starting to scrape webpages: {urls}")
-            
-            # Ensure sandbox is initialized
-            await self._ensure_sandbox()
-            
-            # Parse the URLs parameter
             if not urls:
-                logging.warning("Scrape attempt with empty URLs")
                 return self.fail_response("Valid URLs are required.")
-            
-            # Split the URLs string into a list
+
             url_list = [url.strip() for url in urls.split(',') if url.strip()]
-            
             if not url_list:
-                logging.warning("No valid URLs found in the input")
                 return self.fail_response("No valid URLs provided.")
-                
-            if len(url_list) == 1:
-                logging.warning("Only a single URL provided - for efficiency you should scrape multiple URLs at once")
-            
-            logging.info(f"Processing {len(url_list)} URLs: {url_list}")
-            
-            # Process each URL concurrently and collect results
+
+            logging.info(f"[WebSearch] Scraping {len(url_list)} URLs")
+
             start_time = time.time()
-            tasks = [self._scrape_single_url(url, include_html) for url in url_list]
+            tasks = [self._scrape_single_url(url) for url in url_list]
             results = await asyncio.gather(*tasks, return_exceptions=True)
             elapsed_time = time.time() - start_time
-            logging.info(f"Scraped {len(url_list)} URLs in {elapsed_time:.2f}s (concurrent execution)")
+            logging.info(f"[WebSearch] Scraped {len(url_list)} URLs in {elapsed_time:.2f}s")
 
-            # Process results, handling exceptions
             processed_results = []
             for i, result in enumerate(results):
                 if isinstance(result, Exception):
-                    logging.error(f"Error processing URL {url_list[i]}: {str(result)}")
+                    logging.error(f"[WebSearch] Error scraping {url_list[i]}: {str(result)}")
                     processed_results.append({
                         "url": url_list[i],
                         "success": False,
@@ -609,192 +515,558 @@ IMPORTANT: You should ALWAYS collect multiple relevant URLs from web-search resu
                     })
                 else:
                     processed_results.append(result)
-            
-            results = processed_results
 
-            
-            # Summarize results
-            successful = sum(1 for r in results if r.get("success", False))
-            failed = len(results) - successful
-            
-            # Create success/failure message
-            if successful == len(results):
-                message = f"Successfully scraped all {len(results)} URLs. Results saved to:"
-                for r in results:
-                    if r.get("file_path"):
-                        message += f"\n- {r.get('file_path')}"
-            elif successful > 0:
-                message = f"Scraped {successful} URLs successfully and {failed} failed. Results saved to:"
-                for r in results:
-                    if r.get("success", False) and r.get("file_path"):
-                        message += f"\n- {r.get('file_path')}"
-                message += "\n\nFailed URLs:"
-                for r in results:
-                    if not r.get("success", False):
-                        message += f"\n- {r.get('url')}: {r.get('error', 'Unknown error')}"
-            else:
-                error_details = "; ".join([f"{r.get('url')}: {r.get('error', 'Unknown error')}" for r in results])
-                return self.fail_response(f"Failed to scrape all {len(results)} URLs. Errors: {error_details}")
-            
+            successful = sum(1 for r in processed_results if r.get("success", False))
+            failed = len(processed_results) - successful
+
+            if successful == 0:
+                error_details = "; ".join([
+                    f"{r.get('url')}: {r.get('error', 'Unknown error')}"
+                    for r in processed_results
+                ])
+                return self.fail_response(f"Failed to scrape all {len(processed_results)} URLs. Errors: {error_details}")
+
+            # Build output with scraped content inline
+            output_parts = []
+            for r in processed_results:
+                if r.get("success"):
+                    output_parts.append(
+                        f"--- Page: {r.get('title', 'No title')} ---\n"
+                        f"URL: {r.get('url')}\n\n"
+                        f"{r.get('content', '')}\n"
+                    )
+                else:
+                    output_parts.append(
+                        f"--- FAILED: {r.get('url')} ---\n"
+                        f"Error: {r.get('error', 'Unknown error')}\n"
+                    )
+
+            summary = f"Scraped {successful}/{len(processed_results)} URLs in {elapsed_time:.2f}s\n\n"
+            output = summary + "\n".join(output_parts)
+
             return ToolResult(
                 success=True,
-                output=message
+                output=output
             )
-        
+
         except Exception as e:
             error_message = str(e)
-            logging.error(f"Error in scrape_webpage: {error_message}")
+            logging.error(f"[WebSearch] Error in scrape_webpage: {error_message}")
             return self.fail_response(f"Error processing scrape request: {error_message[:200]}")
-    
-    async def _scrape_single_url(self, url: str, include_html: bool = False) -> dict:
-        """
-        Helper function to scrape a single URL and return the result information.
-        
-        Parameters:
-        - url: URL to scrape
-        - include_html: Whether to include full HTML content alongside markdown
-        """
-        
-        # # Add protocol if missing
-        # if not (url.startswith('http://') or url.startswith('https://')):
-        #     url = 'https://' + url
-        #     logging.info(f"Added https:// protocol to URL: {url}")
-            
-        logging.info(f"Scraping single URL: {url}")
-        
-        try:
-            # ---------- Firecrawl scrape endpoint ----------
-            logging.info(f"Sending request to Firecrawl for URL: {url}")
-            async with get_http_client() as client:
-                headers = {
-                    "Authorization": f"Bearer {self.firecrawl_api_key}",
-                    "Content-Type": "application/json",
-                }
-                # Determine formats to request based on include_html flag
-                formats = ["markdown"]
-                if include_html:
-                    formats.append("html")
-                
-                payload = {
-                    "url": url,
-                    "formats": formats
-                }
-                
-                # Use longer timeout and retry logic for more reliability
-                max_retries = 3
-                timeout_seconds = 30
-                retry_count = 0
-                
-                while retry_count < max_retries:
-                    try:
-                        logging.info(f"Sending request to Firecrawl (attempt {retry_count + 1}/{max_retries})")
-                        response = await client.post(
-                            f"{self.firecrawl_url}/v1/scrape",
-                            json=payload,
-                            headers=headers,
-                            timeout=timeout_seconds,
-                        )
-                        response.raise_for_status()
-                        data = response.json()
-                        logging.info(f"Successfully received response from Firecrawl for {url}")
-                        break
-                    except (httpx.ReadTimeout, httpx.ConnectTimeout, httpx.ReadError) as timeout_err:
-                        retry_count += 1
-                        logging.warning(f"Request timed out (attempt {retry_count}/{max_retries}): {str(timeout_err)}")
-                        if retry_count >= max_retries:
-                            raise Exception(f"Request timed out after {max_retries} attempts with {timeout_seconds}s timeout")
-                        # Exponential backoff
-                        logging.info(f"Waiting {2 ** retry_count}s before retry")
-                        await asyncio.sleep(2 ** retry_count)
-                    except Exception as e:
-                        # Don't retry on non-timeout errors
-                        logging.error(f"Error during scraping: {str(e)}")
-                        raise e
 
-            # Format the response
-            title = data.get("data", {}).get("metadata", {}).get("title", "")
-            markdown_content = data.get("data", {}).get("markdown", "")
-            html_content = data.get("data", {}).get("html", "") if include_html else ""
-            
-            logging.info(f"Extracted content from {url}: title='{title}', content length={len(markdown_content)}" + 
-                        (f", HTML length={len(html_content)}" if html_content else ""))
-            
-            formatted_result = {
-                "title": title,
-                "url": url,
-                "text": markdown_content
+    async def _scrape_single_url(self, url: str) -> dict:
+        """
+        Scrape a single URL and return extracted text content.
+        """
+        url = self._normalize_url(url)
+        logging.info(f"[WebSearch] Scraping: {url}")
+
+        ok, html_or_err, final_url = await self._fetch_page(url)
+        if not ok:
+            return {"url": url, "success": False, "error": html_or_err}
+
+        title, text = self._extract_text_from_html(html_or_err)
+        logging.info(f"[WebSearch] Scraped {url}: title='{title}', {len(text)} chars")
+
+        return {
+            "url": final_url,
+            "success": True,
+            "title": title,
+            "content": text,
+            "content_length": len(text)
+        }
+
+    # ─── 3. deep_research (NEW) ───────────────────────────────────────
+
+    @openapi_schema({
+        "type": "function",
+        "function": {
+            "name": "deep_research",
+            "description": """Perform deep research on a topic by searching DuckDuckGo and then scraping the top results.
+
+Combines search + scrape into a single action for comprehensive research. Searches for the query,
+then fetches and extracts content from the top 3-5 results, returning a combined research output.
+
+Best for complex questions that need information from multiple sources. Returns structured output
+with content from each source clearly attributed.
+
+Usage notes:
+- Use for topics that need comprehensive, multi-source answers
+- max_pages controls how many search results to scrape (default: 3, max: 5)
+- Each page is truncated to ~8000 chars to fit multiple sources in context
+- Returns all sources with URLs for citation""",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "**REQUIRED** - The research query / topic to investigate."
+                    },
+                    "max_pages": {
+                        "type": "integer",
+                        "description": "**OPTIONAL** - Number of top search results to scrape (1-5). Default: 3.",
+                        "default": 3
+                    }
+                },
+                "required": ["query"],
+                "additionalProperties": False
             }
-            
-            # Add HTML content if requested and available
-            if include_html and html_content:
-                formatted_result["html"] = html_content
-            
-            # Add metadata if available
-            if "metadata" in data.get("data", {}):
-                formatted_result["metadata"] = data["data"]["metadata"]
-                logging.info(f"Added metadata: {data['data']['metadata'].keys()}")
-            
-            # Create a simple filename from the URL domain and date
-            timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-            
-            # Extract domain from URL for the filename
-            from urllib.parse import urlparse
-            parsed_url = urlparse(url)
-            domain = parsed_url.netloc.replace("www.", "")
-            
-            # Clean up domain for filename
-            domain = "".join([c if c.isalnum() else "_" for c in domain])
-            safe_filename = f"{timestamp}_{domain}.json"
-            
-            logging.info(f"Generated filename: {safe_filename}")
-            
-            # Save results to a file in the /workspace/scrape directory
-            scrape_dir = f"{self.workspace_path}/scrape"
-            await self.sandbox.fs.create_folder(scrape_dir, "755")
-            
-            results_file_path = f"{scrape_dir}/{safe_filename}"
-            json_content = json.dumps(formatted_result, ensure_ascii=False, indent=2)
-            logging.info(f"Saving content to file: {results_file_path}, size: {len(json_content)} bytes")
-            
-            await self.sandbox.fs.upload_file(
-                json_content.encode(),
-                results_file_path,
-            )
-            
-            return {
-                "url": url,
+        }
+    })
+    async def deep_research(
+        self,
+        query: str,
+        max_pages: int = 3
+    ) -> ToolResult:
+        """Search + scrape top results for comprehensive research on a topic."""
+        try:
+            if not query or not isinstance(query, str) or not query.strip():
+                return self.fail_response("A valid research query is required.")
+            query = query.strip()
+
+            # Clamp max_pages
+            if not isinstance(max_pages, int):
+                try:
+                    max_pages = int(max_pages)
+                except (ValueError, TypeError):
+                    max_pages = 3
+            max_pages = max(1, min(max_pages, 5))
+
+            logging.info(f"[WebSearch] Deep research: '{query}', max_pages={max_pages}")
+            start_time = time.time()
+
+            result = await self._deep_research(query, max_pages)
+
+            elapsed_time = time.time() - start_time
+            logging.info(f"[WebSearch] Deep research completed in {elapsed_time:.2f}s")
+
+            return ToolResult(success=True, output=result)
+
+        except Exception as e:
+            logging.error(f"[WebSearch] Deep research error: {e}")
+            return self.fail_response(f"Deep research error: {str(e)[:200]}")
+
+    async def _deep_research(self, query: str, max_pages: int = 3) -> str:
+        """Search + scrape top results for comprehensive research."""
+        # 1. Search DuckDuckGo
+        search_result = await self._execute_single_search(query, num_results=max_pages + 2)
+        if not search_result.get("success"):
+            return f"Search failed for '{query}': {search_result.get('error', 'No results')}"
+
+        results = search_result.get("results", [])
+        if not results:
+            return f"No search results found for: {query}"
+
+        # 2. Scrape top N pages concurrently
+        urls_to_scrape = [r["url"] for r in results[:max_pages] if r.get("url")]
+        if not urls_to_scrape:
+            # Return search snippets if no URLs
+            parts = [f"## Research: {query}\n\nSearch results (snippets only):\n"]
+            for r in results:
+                parts.append(f"- **{r.get('title', '')}**: {r.get('content', '')}\n  URL: {r.get('url', '')}\n")
+            return "\n".join(parts)
+
+        scrape_tasks = []
+        for url in urls_to_scrape:
+            scrape_tasks.append(self._fetch_page(url))
+
+        scrape_results = await asyncio.gather(*scrape_tasks, return_exceptions=True)
+
+        # 3. Combine into structured research output
+        output_parts = [f"## Deep Research: {query}\n"]
+        output_parts.append(f"Searched and scraped {len(urls_to_scrape)} sources.\n")
+
+        sources = []
+        for i, scrape in enumerate(scrape_results):
+            url = urls_to_scrape[i]
+            search_entry = results[i] if i < len(results) else {}
+            search_title = search_entry.get("title", "")
+
+            if isinstance(scrape, Exception):
+                output_parts.append(f"\n### Source {i+1}: {search_title}\n")
+                output_parts.append(f"URL: {url}\n")
+                output_parts.append(f"*Failed to fetch: {scrape}*\n")
+                output_parts.append(f"Search snippet: {search_entry.get('content', 'N/A')}\n")
+                continue
+
+            ok, html_or_err, final_url = scrape
+            if not ok:
+                output_parts.append(f"\n### Source {i+1}: {search_title}\n")
+                output_parts.append(f"URL: {url}\n")
+                output_parts.append(f"*Failed to fetch: {html_or_err}*\n")
+                output_parts.append(f"Search snippet: {search_entry.get('content', 'N/A')}\n")
+                continue
+
+            # Use shorter truncation per page to fit multiple sources
+            per_page_limit = max(4000, 12000 // max_pages)
+            title, text = self._extract_text_from_html(html_or_err, max_chars=per_page_limit)
+            display_title = title or search_title or "Untitled"
+
+            output_parts.append(f"\n### Source {i+1}: {display_title}\n")
+            output_parts.append(f"URL: {final_url}\n\n")
+            output_parts.append(text)
+            output_parts.append("\n")
+
+            sources.append({"title": display_title, "url": final_url})
+
+        # Add sources section
+        if sources:
+            output_parts.append("\n---\n## Sources\n")
+            for s in sources:
+                output_parts.append(f"- [{s['title']}]({s['url']})\n")
+
+        return "\n".join(output_parts)
+
+    # ─── 4. crawl_site (NEW) ──────────────────────────────────────────
+
+    @openapi_schema({
+        "type": "function",
+        "function": {
+            "name": "crawl_site",
+            "description": """Crawl a website: start from a URL, follow links within the same domain, and extract content from discovered pages.
+
+Useful for exploring documentation sites, blogs, or any website where you need content from multiple linked pages.
+
+Usage notes:
+- Only follows links within the same domain (no external links)
+- max_depth controls how many levels deep to follow links (default: 1)
+- max_pages limits total pages fetched (default: 5, max: 10)
+- Content from each page is truncated to fit in context
+- Returns content from all successfully crawled pages""",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "url": {
+                        "type": "string",
+                        "description": "**REQUIRED** - The starting URL to begin crawling from."
+                    },
+                    "max_depth": {
+                        "type": "integer",
+                        "description": "**OPTIONAL** - How many link-levels deep to crawl (0 = start page only, 1 = start + linked pages). Default: 1, max: 2.",
+                        "default": 1
+                    },
+                    "max_pages": {
+                        "type": "integer",
+                        "description": "**OPTIONAL** - Maximum total pages to fetch. Default: 5, max: 10.",
+                        "default": 5
+                    }
+                },
+                "required": ["url"],
+                "additionalProperties": False
+            }
+        }
+    })
+    async def crawl_site(
+        self,
+        url: str,
+        max_depth: int = 1,
+        max_pages: int = 5
+    ) -> ToolResult:
+        """Crawl a site: start URL, follow links, extract content."""
+        try:
+            if not url or not isinstance(url, str) or not url.strip():
+                return self.fail_response("A valid URL is required.")
+            url = url.strip()
+
+            # Clamp params
+            if not isinstance(max_depth, int):
+                try:
+                    max_depth = int(max_depth)
+                except (ValueError, TypeError):
+                    max_depth = 1
+            max_depth = max(0, min(max_depth, 2))
+
+            if not isinstance(max_pages, int):
+                try:
+                    max_pages = int(max_pages)
+                except (ValueError, TypeError):
+                    max_pages = 5
+            max_pages = max(1, min(max_pages, 10))
+
+            logging.info(f"[WebSearch] Crawl: '{url}', depth={max_depth}, max_pages={max_pages}")
+            start_time = time.time()
+
+            result = await self._crawl(url, max_depth, max_pages)
+
+            elapsed_time = time.time() - start_time
+            logging.info(f"[WebSearch] Crawl completed in {elapsed_time:.2f}s")
+
+            return ToolResult(success=True, output=result)
+
+        except Exception as e:
+            logging.error(f"[WebSearch] Crawl error: {e}")
+            return self.fail_response(f"Crawl error: {str(e)[:200]}")
+
+    async def _crawl(self, url: str, max_depth: int = 1, max_pages: int = 5) -> str:
+        """Crawl a site: start URL, follow links, extract content."""
+        url = self._normalize_url(url)
+        base_domain = urlparse(url).netloc
+
+        visited: set[str] = set()
+        # Queue: list of (url, depth)
+        queue: list[tuple[str, int]] = [(url, 0)]
+        pages_fetched: list[dict] = []
+
+        while queue and len(pages_fetched) < max_pages:
+            current_url, depth = queue.pop(0)
+            if current_url in visited:
+                continue
+            visited.add(current_url)
+
+            ok, html_or_err, final_url = await self._fetch_page(current_url)
+            if not ok:
+                pages_fetched.append({
+                    "url": current_url,
+                    "success": False,
+                    "error": html_or_err
+                })
+                continue
+
+            per_page_limit = max(3000, 12000 // max_pages)
+            title, text = self._extract_text_from_html(html_or_err, max_chars=per_page_limit)
+            pages_fetched.append({
+                "url": final_url,
                 "success": True,
                 "title": title,
-                "file_path": results_file_path,
-                "content_length": len(markdown_content)
+                "content": text,
+                "depth": depth
+            })
+
+            # Discover links for next depth level
+            if depth < max_depth and len(pages_fetched) < max_pages:
+                links = self._extract_links_from_html(html_or_err, final_url)
+                for link in links:
+                    if link not in visited and len(queue) + len(pages_fetched) < max_pages * 3:
+                        queue.append((link, depth + 1))
+
+        # Build output
+        successful = [p for p in pages_fetched if p.get("success")]
+        failed = [p for p in pages_fetched if not p.get("success")]
+
+        output_parts = [f"## Site Crawl: {url}\n"]
+        output_parts.append(f"Crawled {len(successful)} pages successfully, {len(failed)} failed.\n")
+        output_parts.append(f"Domain: {base_domain}\n")
+
+        for i, page in enumerate(successful):
+            output_parts.append(f"\n### Page {i+1} (depth {page.get('depth', 0)}): {page.get('title', 'Untitled')}\n")
+            output_parts.append(f"URL: {page['url']}\n\n")
+            output_parts.append(page.get("content", ""))
+            output_parts.append("\n")
+
+        if failed:
+            output_parts.append("\n### Failed pages\n")
+            for f_page in failed:
+                output_parts.append(f"- {f_page['url']}: {f_page.get('error', 'Unknown error')}\n")
+
+        return "\n".join(output_parts)
+
+    # ─── 5. news_search (NEW) ─────────────────────────────────────────
+
+    @openapi_schema({
+        "type": "function",
+        "function": {
+            "name": "news_search",
+            "description": """Search recent news using DuckDuckGo News. Free, no API key needed.
+
+Returns recent news articles with titles, URLs, descriptions, dates, and sources.
+Best for finding current events, breaking news, and recent developments.
+
+Usage notes:
+- Returns news-specific results (more recent than regular search)
+- max_results controls number of results (default: 5, max: 20)
+- Results include publication date and source name""",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "**REQUIRED** - The news search query."
+                    },
+                    "max_results": {
+                        "type": "integer",
+                        "description": "**OPTIONAL** - Number of news results to return (1-20). Default: 5.",
+                        "default": 5
+                    }
+                },
+                "required": ["query"],
+                "additionalProperties": False
             }
-        
+        }
+    })
+    async def news_search(
+        self,
+        query: str,
+        max_results: int = 5
+    ) -> ToolResult:
+        """Search recent news using DuckDuckGo News."""
+        try:
+            if not query or not isinstance(query, str) or not query.strip():
+                return self.fail_response("A valid news search query is required.")
+            query = query.strip()
+
+            if not isinstance(max_results, int):
+                try:
+                    max_results = int(max_results)
+                except (ValueError, TypeError):
+                    max_results = 5
+            max_results = max(1, min(max_results, 20))
+
+            logging.info(f"[WebSearch] News search: '{query}', max_results={max_results}")
+            start_time = time.time()
+
+            result = await self._news_search(query, max_results)
+
+            elapsed_time = time.time() - start_time
+            logging.info(f"[WebSearch] News search completed in {elapsed_time:.2f}s")
+
+            return ToolResult(
+                success=True,
+                output=json.dumps(result, ensure_ascii=False)
+            )
+
+        except Exception as e:
+            logging.error(f"[WebSearch] News search error: {e}")
+            return self.fail_response(f"News search error: {str(e)[:200]}")
+
+    async def _news_search(self, query: str, max_results: int = 5) -> dict:
+        """Search recent news using DuckDuckGo News."""
+        try:
+            from ddgs import DDGS
+
+            def _do_news_search():
+                with DDGS() as ddgs:
+                    return list(ddgs.news(query, max_results=max_results))
+
+            raw_results = await asyncio.to_thread(_do_news_search)
+
+            if not raw_results:
+                return {
+                    "success": False,
+                    "query": query,
+                    "results": [],
+                    "message": f"No news results found for: {query}"
+                }
+
+            results = []
+            for r in raw_results:
+                results.append({
+                    "title": r.get("title", ""),
+                    "url": r.get("url", "") or r.get("href", ""),
+                    "body": r.get("body", ""),
+                    "date": r.get("date", ""),
+                    "source": r.get("source", ""),
+                    "image": r.get("image", ""),
+                })
+
+            logging.info(f"[WebSearch] News search returned {len(results)} results for: '{query}'")
+
+            return {
+                "success": True,
+                "query": query,
+                "type": "news",
+                "results": results
+            }
+
         except Exception as e:
             error_message = str(e)
-            logging.error(f"Error scraping URL '{url}': {error_message}")
-            
-            # Create an error result
+            logging.error(f"[WebSearch] DuckDuckGo news error for '{query}': {error_message}")
             return {
-                "url": url,
                 "success": False,
+                "query": query,
+                "results": [],
                 "error": error_message
             }
 
+    # ─── 6. render_js_page (NEW) ──────────────────────────────────────
 
-if __name__ == "__main__":
-    async def test_web_search():
-        """Test function for the web search tool"""
-        # This test function is not compatible with the sandbox version
-        logging.info("Test function needs to be updated for sandbox version")
-    
-    async def test_scrape_webpage():
-        """Test function for the webpage scrape tool"""
-        # This test function is not compatible with the sandbox version
-        logging.info("Test function needs to be updated for sandbox version")
-    
-    async def run_tests():
-        """Run all test functions"""
-        await test_web_search()
-        await test_scrape_webpage()
-        
-    asyncio.run(run_tests())
+    @openapi_schema({
+        "type": "function",
+        "function": {
+            "name": "render_js_page",
+            "description": """Render a JavaScript-heavy web page using headless Chromium (Playwright).
+
+Some pages (SPAs, dynamic sites) require JavaScript to render content. This tool uses
+a headless browser to fully render the page before extracting text.
+
+Falls back to regular httpx scraping if Playwright is not available.
+
+Usage notes:
+- Slower than scrape_webpage (~5-15s per page) but handles JS-rendered content
+- Use only when scrape_webpage returns empty/incomplete content
+- Content is truncated to ~12000 characters
+- Single URL per call (use scrape_webpage for batch)""",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "url": {
+                        "type": "string",
+                        "description": "**REQUIRED** - The URL of the JS-heavy page to render."
+                    }
+                },
+                "required": ["url"],
+                "additionalProperties": False
+            }
+        }
+    })
+    async def render_js_page(
+        self,
+        url: str
+    ) -> ToolResult:
+        """Render a JS-heavy page using headless Chromium, with httpx fallback."""
+        try:
+            if not url or not isinstance(url, str) or not url.strip():
+                return self.fail_response("A valid URL is required.")
+            url = url.strip()
+
+            logging.info(f"[WebSearch] Render JS page: '{url}'")
+            start_time = time.time()
+
+            result = await self._render_js(url)
+
+            elapsed_time = time.time() - start_time
+            logging.info(f"[WebSearch] Render JS completed in {elapsed_time:.2f}s")
+
+            return ToolResult(success=True, output=result)
+
+        except Exception as e:
+            logging.error(f"[WebSearch] Render JS error: {e}")
+            return self.fail_response(f"Render JS error: {str(e)[:200]}")
+
+    async def _render_js(self, url: str) -> str:
+        """Render a JS-heavy page using headless Chromium."""
+        url = self._normalize_url(url)
+        try:
+            from playwright.async_api import async_playwright
+            async with async_playwright() as p:
+                browser = await p.chromium.launch(headless=True)
+                page = await browser.new_page()
+                await page.goto(url, timeout=15000)
+                try:
+                    await page.wait_for_load_state("networkidle", timeout=10000)
+                except Exception:
+                    # networkidle may time out on some pages; continue with what we have
+                    pass
+                content = await page.content()
+                await browser.close()
+
+            title, text = self._extract_text_from_html(content)
+            return f"JS-Rendered page: {url}\nTitle: {title}\n\n{text}"
+
+        except ImportError:
+            logging.warning("[WebSearch] Playwright not installed, falling back to httpx scraping")
+            return await self._fallback_scrape(url, reason="Playwright not installed")
+        except Exception as e:
+            logging.warning(f"[WebSearch] Playwright failed ({e}), falling back to httpx scraping")
+            return await self._fallback_scrape(url, reason=str(e))
+
+    async def _fallback_scrape(self, url: str, reason: str = "") -> str:
+        """Fallback to httpx scraping when Playwright is unavailable."""
+        ok, html_or_err, final_url = await self._fetch_page(url)
+        if not ok:
+            return f"Failed to fetch {url}: {html_or_err}" + (f"\n(Playwright fallback reason: {reason})" if reason else "")
+
+        title, text = self._extract_text_from_html(html_or_err)
+        header = f"Page: {url} (fetched with httpx — JS may not be rendered)"
+        if reason:
+            header += f"\nNote: Playwright unavailable ({reason}), used httpx fallback"
+        return f"{header}\nTitle: {title}\n\n{text}"
