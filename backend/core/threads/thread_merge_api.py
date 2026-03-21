@@ -73,7 +73,7 @@ async def _count_thread_messages(thread_id: str, user_id: str) -> int:
         FROM messages m
         JOIN threads t ON m.thread_id = t.thread_id
         WHERE m.thread_id = :thread_id
-          AND t.user_id = :user_id
+          AND t.account_id = :user_id
         """,
         {"thread_id": thread_id, "user_id": user_id},
     )
@@ -83,7 +83,7 @@ async def _count_thread_messages(thread_id: str, user_id: str) -> int:
 async def _verify_thread_ownership(thread_id: str, user_id: str) -> bool:
     """Verify the user owns the thread."""
     row = await execute_one(
-        "SELECT thread_id FROM threads WHERE thread_id = :thread_id AND user_id = :user_id",
+        "SELECT thread_id FROM threads WHERE thread_id = :thread_id AND account_id = :user_id",
         {"thread_id": thread_id, "user_id": user_id},
     )
     return row is not None

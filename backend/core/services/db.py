@@ -763,7 +763,7 @@ class Table:
         self._check_keys(data, "data column")
         data = self._prep_json(data)
         col_list = ", ".join(f'"{c}"' for c in data)
-        placeholders = ", ".join(f":{c}::jsonb" if c in self._json_cols else f":{c}" for c in data)
+        placeholders = ", ".join(f"CAST(:{c} AS jsonb)" if c in self._json_cols else f":{c}" for c in data)
         async with get_session() as s:
             r = await s.execute(text(f'INSERT INTO "{self.name}" ({col_list}) VALUES ({placeholders}) RETURNING *'), data)
             await s.commit()
@@ -776,7 +776,7 @@ class Table:
             return await self.get(id_col, id_val)
         self._check_keys(data, "data column")
         data = self._prep_json(data)
-        set_clause = ", ".join(f'"{k}" = :{k}::jsonb' if k in self._json_cols else f'"{k}" = :{k}' for k in data)
+        set_clause = ", ".join(f'"{k}" = CAST(:{k} AS jsonb)' if k in self._json_cols else f'"{k}" = :{k}' for k in data)
         async with get_session() as s:
             r = await s.execute(text(f'UPDATE "{self.name}" SET {set_clause} WHERE "{id_col}" = :id RETURNING *'), {**data, "id": id_val})
             await s.commit()
@@ -788,7 +788,7 @@ class Table:
         self._check_keys(data, "data column")
         data = self._prep_json(data)
         col_list = ", ".join(f'"{c}"' for c in data)
-        placeholders = ", ".join(f":{c}::jsonb" if c in self._json_cols else f":{c}" for c in data)
+        placeholders = ", ".join(f"CAST(:{c} AS jsonb)" if c in self._json_cols else f":{c}" for c in data)
         update_cols = [c for c in data if c != conflict_col]
         update_clause = ", ".join(f'"{c}" = EXCLUDED."{c}"' for c in update_cols)
         sql = f'INSERT INTO "{self.name}" ({col_list}) VALUES ({placeholders}) ON CONFLICT ("{conflict_col}") DO UPDATE SET {update_clause} RETURNING *'

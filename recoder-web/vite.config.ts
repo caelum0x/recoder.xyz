@@ -37,8 +37,9 @@ export default defineConfig((config) => {
         stream: 'node:stream',
         // Skip ajv JSON schema files that cause build issues
         'ajv/dist/refs/json-schema-draft-07.json': resolve(__dirname, 'app/lib/empty-json.js'),
-        // Resolve vault polyfill shim to Node.js buffer for SSR
+        // Resolve vault polyfill shims to real Node.js modules for SSR
         'vite-plugin-node-polyfills/shims/buffer': 'node:buffer',
+        'vite-plugin-node-polyfills/shims/process': 'node:process',
       },
     },
     build: {
@@ -152,7 +153,6 @@ export default defineConfig((config) => {
         'crypto',
         'shiki',
         'knex',
-        '@neondatabase/serverless',
         'pg',
         'better-sqlite3',
         'ajv',
@@ -195,7 +195,6 @@ export default defineConfig((config) => {
       // Externalize backend-specific packages for SSR (NOT React - causes duplicate instance)
       external: [
         'knex',
-        '@neondatabase/serverless',
         'pg',
         'better-sqlite3',
         'ajv',

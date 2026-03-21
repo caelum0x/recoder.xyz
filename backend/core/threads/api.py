@@ -95,13 +95,13 @@ async def search_threads_endpoint(
             t.updated_at,
             p.name AS project_name,
             p.icon_name AS project_icon_name,
-            m.content AS text_preview
+            m.content::text AS text_preview
         FROM threads t
         LEFT JOIN projects p ON t.project_id = p.project_id
         LEFT JOIN messages m ON m.thread_id = t.thread_id
-        WHERE t.user_id = :user_id
+        WHERE t.account_id = :user_id
           AND (
-            m.content ILIKE :query_pattern
+            m.content::text ILIKE :query_pattern
             OR p.name ILIKE :query_pattern
           )
         ORDER BY t.thread_id, t.updated_at DESC
@@ -478,11 +478,14 @@ async def get_thread(
     thread_id: str,
     request: Request
 ):
+    import re
+    if not re.match(r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$', thread_id, re.I):
+        raise HTTPException(status_code=404, detail="Thread not found")
     logger.debug(f"Fetching thread: {thread_id}")
     from core.threads import repo as threads_repo
     from core.utils.auth_utils import get_optional_user_id
     from core.cache.runtime_cache import get_pending_thread
-    
+
     user_id = await get_optional_user_id(request)
     
     try:
