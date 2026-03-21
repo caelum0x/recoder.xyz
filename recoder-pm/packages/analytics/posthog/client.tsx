@@ -9,7 +9,18 @@ type PostHogProviderProps = {
   children: ReactNode;
 };
 
-export const identify = posthog.identify;
+/** Safe wrapper — only calls posthog.identify after the SDK is loaded */
+export const identify = (
+  ...args: Parameters<typeof posthog.identify>
+) => {
+  try {
+    if (posthog.__loaded) {
+      posthog.identify(...args);
+    }
+  } catch {
+    // PostHog not initialized yet — silently ignore
+  }
+};
 
 const isUsablePostHogKey = (value: string | undefined) =>
   Boolean(
@@ -43,10 +54,17 @@ export const PostHogProvider = ({ children }: PostHogProviderProps) => {
 };
 
 export const pageview = (pathname: string, searchParams: URLSearchParams) => {
-  let url = window.origin + pathname;
-  const search = searchParams.toString();
-  if (search) {
-    url += `?${search}`;
+  try {
+    if (!posthog.__loaded) {
+      return;
+    }
+    let url = window.origin + pathname;
+    const search = searchParams.toString();
+    if (search) {
+      url += `?${search}`;
+    }
+    posthog.capture("$pageview", { $current_url: url });
+  } catch {
+    // PostHog not initialized yet — silently ignore
   }
-  posthog.capture("$pageview", { $current_url: url });
 };
