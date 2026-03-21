@@ -101,6 +101,7 @@ export class BillingService {
         },
       });
 
+      return subscription;
     } catch (error) {
       logger.error('Create subscription error', { error: String(error) });
       throw error;
@@ -116,6 +117,7 @@ export class BillingService {
         where: { userId },
       });
 
+      return subscription;
     } catch (error) {
       logger.error('Get subscription error', { error: String(error) });
       throw error;
@@ -168,6 +170,7 @@ export class BillingService {
         },
       });
 
+      return updated;
     } catch (error) {
       logger.error('Update subscription error', { error: String(error) });
       throw error;
@@ -274,6 +277,7 @@ export class BillingService {
         },
       });
 
+      return { message: 'Subscription resumed' };
     } catch (error) {
       logger.error('Resume subscription error', { error: String(error) });
       throw error;
@@ -282,16 +286,88 @@ export class BillingService {
 
   /**
    * Create checkout session
+   *
+   * Uses the payment provider abstraction to support Polar.sh, DodoPayments,
+   * or any future provider. When no provider is configured, returns a
+   * "free mode" response so the caller can handle it gracefully.
    */
   async createCheckoutSession(userId: string, planId: string) {
     try {
-      // This would integrate with Paddle or DODO
-      // For now, return mock data
       const amount = this.getPlanAmount(planId);
 
+      // Use the unified payment provider abstraction
+      const { getPaymentProvider } = await import('@/lib/services/payment-providers');
+      const provider = getPaymentProvider();
+
+      if (provider) {
+        const user = await prisma.users.findUnique({
+          where: { id: userId },
+          select: { email: true, name: true },
+        });
+
+        if (!user) {
+          throw new Error('User not found');
+        }
+
+        const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://recoder.xyz';
+        const session = await provider.createCheckoutSession({
+          planId,
+          userId,
+          userEmail: user.email,
+          userName: user.name || undefined,
+          successUrl: `${appUrl}/billing/success`,
+          cancelUrl: `${appUrl}/billing/cancel`,
+        });
+
+        return {
+          sessionId: session.sessionId,
+          checkoutUrl: session.checkoutUrl,
+          provider: session.provider,
+          amount,
+          providerConfigured: true,
+        };
+      }
+
+      // Fallback: try legacy DodoPayments direct integration
+      if (process.env.DODO_PAYMENTS_API_KEY) {
+        const productIdMap: Record<string, string | undefined> = {
+          pro: process.env.DODO_PRODUCT_PRO,
+          enterprise: process.env.DODO_PRODUCT_ENTERPRISE,
+          monthly: process.env.DODO_PRODUCT_MONTHLY,
+          weekly: process.env.DODO_PRODUCT_WEEKLY,
+        };
+
+        const productId = productIdMap[planId];
+        if (!productId) {
+          logger.warn('No DODO product ID mapped for plan', { planId });
+          return {
+            providerConfigured: false,
+            error: `No product ID configured for plan: ${planId}`,
+            amount,
+          };
+        }
+
+        try {
+          const { DodoPaymentsService } = await import('@/lib/services/dodopayments.service');
+          const session = await DodoPaymentsService.createCheckoutSession(
+            userId,
+            productId,
+          );
+          return {
+            ...session,
+            amount,
+            providerConfigured: true,
+          };
+        } catch (dodoError) {
+          logger.error('DodoPayments checkout failed', { error: String(dodoError) });
+          throw dodoError;
+        }
+      }
+
+      // No payment provider configured — free mode
       return {
-        checkoutUrl: `https://checkout.paddle.com/...`, // Would be real URL
-        sessionId: `session_${Date.now()}`,
+        providerConfigured: false,
+        error: 'No payment provider configured. Set PAYMENT_PROVIDER and provider API key to enable checkout.',
         amount,
       };
     } catch (error) {
@@ -354,6 +430,7 @@ export class BillingService {
         take: limit,
       });
 
+      return invoices;
     } catch (error) {
       logger.error('Get invoices error', { error: String(error) });
       throw error;
@@ -376,6 +453,7 @@ export class BillingService {
         throw new Error('Invoice not found');
       }
 
+      return invoice;
     } catch (error) {
       logger.error('Get invoice error', { error: String(error) });
       throw error;
@@ -404,6 +482,7 @@ export class BillingService {
         },
       });
 
+      return invoice;
     } catch (error) {
       logger.error('Create invoice error', { error: String(error) });
       throw error;
@@ -416,11 +495,15 @@ export class BillingService {
   async addPaymentMethod(
     userId: string,
     token: string,
-    provider: string = 'paddle'
+    provider: string = 'paddle',
+    cardDetails?: { last4?: string; brand?: string; expMonth?: number; expYear?: number }
   ) {
     try {
-      // This would integrate with payment provider
-      // For now, create mock payment method
+      // Unset existing default payment methods for this user
+      await prisma.payment_methods.updateMany({
+        where: { userId, isDefault: true },
+        data: { isDefault: false },
+      });
 
       const paymentMethod = await prisma.payment_methods.create({
         data: {
@@ -428,16 +511,17 @@ export class BillingService {
           userId,
           type: 'card',
           provider,
-          providerId: `pm_${Date.now()}`,
-          last4: '4242',
-          brand: 'visa',
-          expMonth: 12,
-          expYear: 2025,
+          providerId: token,
+          last4: cardDetails?.last4 || 'xxxx',
+          brand: cardDetails?.brand || 'unknown',
+          expMonth: cardDetails?.expMonth || 0,
+          expYear: cardDetails?.expYear || 0,
           isDefault: true,
           updatedAt: new Date(),
         },
       });
 
+      return paymentMethod;
     } catch (error) {
       logger.error('Add payment method error', { error: String(error) });
       throw error;
@@ -454,6 +538,7 @@ export class BillingService {
         orderBy: { createdAt: 'desc' },
       });
 
+      return methods;
     } catch (error) {
       logger.error('List payment methods error', { error: String(error) });
       throw error;
@@ -477,6 +562,7 @@ export class BillingService {
         data: { isDefault: true },
       });
 
+      return { success: true };
     } catch (error) {
       logger.error('Set default payment method error', { error: String(error) });
       throw error;
@@ -492,6 +578,7 @@ export class BillingService {
         where: { id: methodId },
       });
 
+      return { success: true };
     } catch (error) {
       logger.error('Remove payment method error', { error: String(error) });
       throw error;
@@ -592,6 +679,10 @@ export class BillingService {
     signature: string
   ): Promise<boolean> {
     try {
+      // When called from the unified webhook endpoint, signature is
+      // already verified by the payment provider abstraction.
+      if (signature === '__already_verified__') return true;
+
       const rawPayload = typeof payload === 'string' ? payload : JSON.stringify(payload);
 
       switch (provider) {
@@ -638,21 +729,97 @@ export class BillingService {
     }
   }
 
+  private extractUserId(payload: any): string | undefined {
+    return payload.data?.customer_id || payload.customer_id || payload.meta?.custom_data?.user_id;
+  }
+
   private async handlePaymentSuccess(payload: any) {
-    // Extract user ID and create/update subscription
     logger.info('Payment success', { payload: JSON.stringify(payload) });
+
+    const userId = this.extractUserId(payload);
+    if (!userId) {
+      logger.warn('handlePaymentSuccess: no userId found in payload');
+      return;
+    }
+
+    const plan = payload.data?.plan_id || payload.plan_id || 'pro';
+    const provider = payload.data?.provider || 'unknown';
+    const providerId = payload.data?.subscription_id || payload.subscription_id || `sub_${Date.now()}`;
+    const amount = payload.data?.amount || this.getPlanAmount(plan);
+    const interval = payload.data?.interval || 'month';
+
+    await this.createSubscription(userId, plan, provider, providerId, amount, interval);
+
+    const description = `Payment for ${plan} plan`;
+    await this.createInvoice(userId, amount, description);
   }
 
   private async handleSubscriptionUpdate(payload: any) {
     logger.info('Subscription update', { payload: JSON.stringify(payload) });
+
+    const userId = this.extractUserId(payload);
+    if (!userId) {
+      logger.warn('handleSubscriptionUpdate: no userId found in payload');
+      return;
+    }
+
+    const newPlanId = payload.data?.plan_id || payload.plan_id;
+    if (!newPlanId) {
+      logger.warn('handleSubscriptionUpdate: no plan_id found in payload');
+      return;
+    }
+
+    await this.updateSubscription(userId, newPlanId);
   }
 
   private async handleSubscriptionCancelled(payload: any) {
     logger.info('Subscription cancelled', { payload: JSON.stringify(payload) });
+
+    const userId = this.extractUserId(payload);
+    if (!userId) {
+      logger.warn('handleSubscriptionCancelled: no userId found in payload');
+      return;
+    }
+
+    await this.cancelSubscription(userId, true);
   }
 
   private async handlePaymentFailed(payload: any) {
     logger.error('Payment failed', { payload: JSON.stringify(payload) });
+
+    const userId = this.extractUserId(payload);
+    if (!userId) {
+      logger.warn('handlePaymentFailed: no userId found in payload');
+      return;
+    }
+
+    // Update subscription status to past_due
+    await prisma.subscriptions.updateMany({
+      where: { userId, status: 'active' },
+      data: {
+        status: 'past_due',
+        updatedAt: new Date(),
+      },
+    });
+
+    // Update user subscription status
+    await prisma.users.update({
+      where: { id: userId },
+      data: { subscriptionStatus: 'past_due' },
+    });
+
+    // Create audit log entry
+    await prisma.audit_logs.create({
+      data: {
+        id: randomUUID(),
+        userId,
+        action: 'payment_failed',
+        resource: 'subscription',
+        metadata: {
+          reason: payload.data?.failure_reason || payload.failure_reason || 'unknown',
+        },
+      },
+    });
   }
 }
 

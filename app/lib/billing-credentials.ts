@@ -48,3 +48,11 @@ export function resolveDodoApiKey(): string | null {
 
   return firstSet(['DODO_API_KEY_TEST', 'DODO_API_KEY_LIVE', 'DODO_PAY_API_KEY']);
 }
+
+export function resolvePolarApiKey(): string | null {
+  return firstSet(['POLAR_API_KEY', 'POLAR_ACCESS_TOKEN']);
+}
+
+export function resolvePolarWebhookSecret(): string | null {
+  return firstSet(['POLAR_WEBHOOK_SECRET']);
+}
