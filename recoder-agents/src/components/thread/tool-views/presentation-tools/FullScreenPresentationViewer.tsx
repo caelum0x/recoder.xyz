@@ -20,7 +20,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { constructHtmlPreviewUrl } from '@/lib/utils/url';
+import { buildSandboxFileUrl } from '@/lib/utils/url';
 import { downloadPresentation, DownloadFormat, handleGoogleSlidesUpload } from '../utils/presentation-utils';
 import { useDownloadRestriction } from '@/hooks/billing';
 
@@ -46,6 +46,7 @@ interface FullScreenPresentationViewerProps {
   onClose: () => void;
   presentationName?: string;
   sandboxUrl?: string;
+  sandboxId?: string;
   initialSlide?: number;
 }
 
@@ -54,6 +55,7 @@ export function FullScreenPresentationViewer({
   onClose,
   presentationName,
   sandboxUrl,
+  sandboxId,
   initialSlide = 1,
 }: FullScreenPresentationViewerProps) {
   const [metadata, setMetadata] = useState<PresentationMetadata | null>(null);
@@ -98,22 +100,22 @@ export function FullScreenPresentationViewer({
       return;
     }
     
-    // If sandbox URL isn't available yet, wait and don't set loading state
-    if (!presentationName || !sandboxUrl) {
+    // If sandbox ID isn't available yet, wait and don't set loading state
+    if (!presentationName || !sandboxId) {
       setIsLoading(false);
       return;
     }
-    
+
     setIsLoading(true);
     setError(null);
     setRetryAttempt(retryCount);
-    
+
     try {
       // Sanitize the presentation name to match backend directory creation
       const sanitizedPresentationName = sanitizeFilename(presentationName);
-      
-      const metadataUrl = constructHtmlPreviewUrl(
-        sandboxUrl, 
+
+      const metadataUrl = buildSandboxFileUrl(
+        sandboxId,
         `presentations/${sanitizedPresentationName}/metadata.json`
       );
       
@@ -160,7 +162,7 @@ export function FullScreenPresentationViewer({
       
       return; // Keep loading state, don't set error
     }
-  }, [presentationName, sandboxUrl]);
+  }, [presentationName, sandboxId]);
 
   // Sync currentSlide with initialSlide when modal opens (not on every initialSlide change)
   useEffect(() => {
@@ -181,7 +183,7 @@ export function FullScreenPresentationViewer({
       }
       
       // Only start loading if we have the required data
-      if (presentationName && sandboxUrl) {
+      if (presentationName && sandboxId) {
         loadMetadata();
       } else {
         setIsLoading(false);
@@ -193,7 +195,7 @@ export function FullScreenPresentationViewer({
         retryTimeoutRef.current = null;
       }
     }
-  }, [isOpen, presentationName, sandboxUrl, initialSlide, loadMetadata]);
+  }, [isOpen, presentationName, sandboxId, initialSlide, loadMetadata]);
 
   // Cleanup retry timeout on unmount
   useEffect(() => {
@@ -366,7 +368,7 @@ export function FullScreenPresentationViewer({
         }
       }, [containerRef, scale]);
 
-      if (!sandboxUrl) {
+      if (!sandboxId) {
         return (
           <div className="flex items-center justify-center h-full">
             <div className="text-center">
@@ -377,7 +379,7 @@ export function FullScreenPresentationViewer({
         );
       }
 
-      const slideUrl = constructHtmlPreviewUrl(sandboxUrl, slide.file_path);
+      const slideUrl = buildSandboxFileUrl(sandboxId, slide.file_path);
       // Add cache-busting to iframe src to ensure fresh content
       const slideUrlWithCacheBust = `${slideUrl}?t=${refreshTimestamp}`;
 
@@ -427,14 +429,14 @@ export function FullScreenPresentationViewer({
     
     SlideIframeComponent.displayName = 'SlideIframeComponent';
     return SlideIframeComponent;
-  }, [sandboxUrl, refreshTimestamp, showEditor]);
+  }, [sandboxId, sandboxUrl, refreshTimestamp, showEditor]);
 
   // Render slide iframe with proper scaling
   const renderSlide = useMemo(() => {
-    if (!currentSlideData || !sandboxUrl) return null;
+    if (!currentSlideData || !sandboxId) return null;
 
     return <SlideIframe slide={currentSlideData} />;
-  }, [currentSlideData, sandboxUrl, SlideIframe]);
+  }, [currentSlideData, sandboxId, SlideIframe]);
 
   if (!isOpen) return null;
 

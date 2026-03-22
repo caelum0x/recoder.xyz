@@ -1,3 +1,24 @@
+const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'https://api.recoder.xyz/v1';
+
+/**
+ * Build a URL to serve sandbox file content through the backend API proxy.
+ * Replaces direct sandbox URL access (which is unreachable from browser).
+ */
+export function buildSandboxFileUrl(
+  sandboxId: string | undefined,
+  filePath: string | undefined,
+): string | undefined {
+  if (!sandboxId || !filePath) return undefined;
+
+  let processedPath = filePath;
+  processedPath = processedPath.replace(/^\/workspace\//, '');
+  if (!processedPath.startsWith('/home/daytona/') && !processedPath.startsWith('home/daytona/')) {
+    processedPath = `/home/daytona/${processedPath.replace(/^\//, '')}`;
+  }
+
+  return `${BACKEND_URL}/sandboxes/${sandboxId}/files/content?path=${encodeURIComponent(processedPath)}`;
+}
+
 /**
  * Constructs a preview URL for HTML files in the sandbox environment.
  * Properly handles URL encoding of file paths by encoding each path segment individually.
