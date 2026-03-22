@@ -6,6 +6,13 @@ Last updated: 2026-03-23
 
 ## RECODER AGENTS (agents.recoder.xyz) — MOSTLY BROKEN
 
+### E2E Test Results (2026-03-23):
+- **Sandbox upload**: WORKS in fresh test — Python `create_sandbox()` + `upload_file()` succeeded. File server starts on port 8080. Both bracket and dot notation return 200 from Daytona proxy.
+- **Root cause of previous 400s**: Sandboxes were stopped/stale when upload attempted. Fresh sandboxes work.
+- **Dashboard crash**: Code fix deployed (null guard on `codeToHtml`). Users need hard refresh (Ctrl+Shift+R) to clear cached old JS bundles.
+- **Feedback API**: Fixed — `message_id` column added to DB via migration.
+- **Bulk upload format**: Both `files[0].path` and `files[0][path]` return 200 from Daytona proxy. Current production uses bracket notation.
+
 ### What works:
 - Text chat responses
 - Web search (fetches first 5 websites only)

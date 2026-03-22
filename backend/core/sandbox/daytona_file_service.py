@@ -1,101 +1,100 @@
-import httpx
-import io
-import os
+import base64
 import asyncio
 from typing import Optional
 from core.utils.logger import logger
-from core.utils.config import config
+from core.sandbox.sandbox import get_or_start_sandbox
 
 
 class DaytonaFileService:
-    """Direct HTTP integration with Daytona toolbox API.
-    Bypasses the broken SDK upload_file() method.
-    Uses bracket notation and explicit auth header."""
+    """File operations via Daytona SDK exec.
 
-    def __init__(
-        self,
-        api_key: Optional[str] = None,
-        proxy_url: str = "http://localhost:4000",
-        max_retries: int = 3,
-        timeout: int = 30,
-    ):
-        self.api_key = api_key or config.DAYTONA_API_KEY
-        self.proxy_url = proxy_url.rstrip("/")
+    The Daytona toolbox HTTP proxy (port 4000) can't resolve container IPs,
+    so all file operations use sandbox.process.exec() instead.
+    This is reliable and works with all sandbox images.
+    """
+
+    def __init__(self, max_retries: int = 3, timeout: int = 60):
         self.max_retries = max_retries
         self.timeout = timeout
 
-    def _toolbox_url(self, sandbox_id: str, path: str) -> str:
-        return f"{self.proxy_url}/toolbox/{sandbox_id}/{path.lstrip('/')}"
-
-    def _auth_headers(self) -> dict:
-        return {"Authorization": f"Bearer {self.api_key}"}
+    async def _get_sandbox(self, sandbox_id: str):
+        """Get a started sandbox instance."""
+        return await get_or_start_sandbox(sandbox_id)
 
     async def write_file(self, sandbox_id: str, path: str, content: bytes) -> bool:
-        """Write a single file to the sandbox. Returns True on success."""
-        return await self.write_files(sandbox_id, [(path, content)])
-
-    async def write_files(self, sandbox_id: str, files: list[tuple[str, bytes]]) -> bool:
-        """Write multiple files to the sandbox in a single batch. Returns True on success."""
-        url = self._toolbox_url(sandbox_id, "files/bulk-upload")
-
+        """Write a single file to the sandbox via exec. Returns True on success."""
         for attempt in range(self.max_retries):
             try:
-                data_fields = {}
-                file_fields = {}
-                for i, (path, content) in enumerate(files):
-                    # MUST use dot notation (files[0].path) — bracket notation returns 200
-                    # but files don't actually persist in the sandbox
-                    data_fields[f"files[{i}].path"] = path
-                    fname = os.path.basename(path) or "file"
-                    file_fields[f"files[{i}].file"] = (fname, io.BytesIO(content))
+                sandbox = await self._get_sandbox(sandbox_id)
 
-                async with httpx.AsyncClient(timeout=self.timeout) as client:
-                    response = await client.post(
-                        url,
-                        data=data_fields,
-                        files=file_fields,
-                        headers=self._auth_headers(),
+                # Ensure parent directory exists
+                parent_dir = "/".join(path.rsplit("/", 1)[:-1]) or "/"
+                await sandbox.process.exec(f"mkdir -p '{parent_dir}'", timeout=10)
+
+                # Write file via base64 to handle binary content safely
+                b64_content = base64.b64encode(content).decode("ascii")
+
+                # Split into chunks for very large files (shell arg limit ~128KB)
+                chunk_size = 65000
+                if len(b64_content) <= chunk_size:
+                    await sandbox.process.exec(
+                        f"echo '{b64_content}' | base64 -d > '{path}'",
+                        timeout=self.timeout,
                     )
-                    if response.status_code == 200:
-                        return True
-                    logger.warning(
-                        f"[DaytonaFileService] write_files attempt {attempt+1} failed: "
-                        f"{response.status_code} {response.text[:200]}"
-                    )
+                else:
+                    # Write in chunks for large files
+                    await sandbox.process.exec(f"> '{path}'", timeout=10)
+                    for i in range(0, len(b64_content), chunk_size):
+                        chunk = b64_content[i:i + chunk_size]
+                        await sandbox.process.exec(
+                            f"echo '{chunk}' | base64 -d >> '{path}'",
+                            timeout=self.timeout,
+                        )
+
+                # Verify
+                verify = await sandbox.process.exec(f"test -f '{path}' && echo OK", timeout=10)
+                if "OK" in (verify.result or ""):
+                    return True
+
+                logger.warning(f"[DaytonaFileService] write_file verify failed for {path}")
             except Exception as e:
-                logger.warning(f"[DaytonaFileService] write_files attempt {attempt+1} error: {e}")
+                logger.warning(f"[DaytonaFileService] write_file attempt {attempt+1} error: {e}")
 
             if attempt < self.max_retries - 1:
                 await asyncio.sleep(2 ** attempt)
 
-        logger.error(f"[DaytonaFileService] write_files failed after {self.max_retries} retries")
+        logger.error(f"[DaytonaFileService] write_file failed after {self.max_retries} retries: {path}")
         return False
 
+    async def write_files(self, sandbox_id: str, files: list[tuple[str, bytes]]) -> bool:
+        """Write multiple files to the sandbox. Returns True if all succeed."""
+        success = True
+        for path, content in files:
+            if not await self.write_file(sandbox_id, path, content):
+                success = False
+        return success
+
     async def read_file(self, sandbox_id: str, path: str) -> Optional[bytes]:
-        """Read a file from the sandbox. Returns None on failure."""
-        url = self._toolbox_url(sandbox_id, f"files?path={path}")
+        """Read a file from the sandbox via exec. Returns None on failure."""
         try:
-            async with httpx.AsyncClient(timeout=self.timeout) as client:
-                response = await client.get(url, headers=self._auth_headers())
-                if response.status_code == 200:
-                    return response.content
-                logger.warning(f"[DaytonaFileService] read_file failed: {response.status_code}")
-                return None
+            sandbox = await self._get_sandbox(sandbox_id)
+            result = await sandbox.process.exec(
+                f"base64 '{path}'",
+                timeout=self.timeout,
+            )
+            if result.result:
+                return base64.b64decode(result.result.strip())
+            return None
         except Exception as e:
             logger.warning(f"[DaytonaFileService] read_file error: {e}")
             return None
 
     async def create_folder(self, sandbox_id: str, path: str) -> bool:
         """Create a folder in the sandbox."""
-        url = self._toolbox_url(sandbox_id, "files/folder")
         try:
-            async with httpx.AsyncClient(timeout=self.timeout) as client:
-                response = await client.post(
-                    url,
-                    json={"path": path, "mode": "755"},
-                    headers=self._auth_headers(),
-                )
-                return response.status_code in (200, 201)
+            sandbox = await self._get_sandbox(sandbox_id)
+            await sandbox.process.exec(f"mkdir -p '{path}'", timeout=10)
+            return True
         except Exception as e:
             logger.warning(f"[DaytonaFileService] create_folder error: {e}")
             return False
