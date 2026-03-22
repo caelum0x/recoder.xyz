@@ -501,6 +501,43 @@ Generate, edit, upscale, or remove background from images. Video generation supp
         os.environ["REPLICATE_API_TOKEN"] = token
         return token
 
+    async def _generate_image_openrouter(self, prompt: str) -> Optional[str]:
+        """Generate image via OpenRouter API. Returns base64 data URL or None."""
+        import httpx
+
+        config = get_config()
+        api_key = config.OPENROUTER_API_KEY
+        if not api_key:
+            logger.warning("No OPENROUTER_API_KEY configured for image generation")
+            return None
+
+        try:
+            async with httpx.AsyncClient(timeout=60) as client:
+                response = await client.post(
+                    "https://openrouter.ai/api/v1/chat/completions",
+                    headers={
+                        "Authorization": f"Bearer {api_key}",
+                        "Content-Type": "application/json",
+                    },
+                    json={
+                        "model": "google/gemini-2.5-flash-image-preview",
+                        "messages": [{"role": "user", "content": prompt}],
+                        "modalities": ["image", "text"],
+                    },
+                )
+                if response.status_code != 200:
+                    logger.warning(f"OpenRouter image gen failed: {response.status_code}")
+                    return None
+
+                data = response.json()
+                images = data.get("choices", [{}])[0].get("message", {}).get("images", [])
+                if images:
+                    return images[0].get("image_url", {}).get("url")
+                return None
+        except Exception as e:
+            logger.warning(f"OpenRouter image gen error: {e}")
+            return None
+
     async def _execute_single_image_operation(
         self,
         mode: str,
@@ -540,6 +577,31 @@ Generate, edit, upscale, or remove background from images. Video generation supp
                     return image_filename
                 return image_filename
             
+            # Check if Replicate is configured; if not, fall back to OpenRouter
+            config = get_config()
+            if not config.REPLICATE_API_TOKEN and mode == "generate":
+                logger.info("REPLICATE_API_TOKEN not set, falling back to OpenRouter for image generation")
+                image_url = await self._generate_image_openrouter(prompt)
+                if image_url:
+                    if image_url.startswith("data:"):
+                        b64_data = image_url.split(",", 1)[1]
+                        result_bytes = base64.b64decode(b64_data)
+                    else:
+                        async with get_http_client() as http_client:
+                            dl_response = await http_client.get(image_url)
+                            dl_response.raise_for_status()
+                            result_bytes = dl_response.content
+
+                    smart_filename = await generate_smart_filename(
+                        prompt=prompt,
+                        file_type="image",
+                        extension="png"
+                    )
+                    sandbox_path = f"{self.workspace_path}/{smart_filename}"
+                    await self.write_file(sandbox_path, result_bytes)
+                    return smart_filename
+                return self.fail_response("Image generation not available (no REPLICATE_API_TOKEN or OPENROUTER_API_KEY configured)")
+
             # Ensure Replicate token is set
             self._get_replicate_token()
 
