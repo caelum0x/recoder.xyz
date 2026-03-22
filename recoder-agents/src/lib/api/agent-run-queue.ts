@@ -85,7 +85,7 @@ export const listQueueEntries = async (filters?: QueueFilters): Promise<QueueEnt
   const url = `/queue${query ? `?${query}` : ''}`;
 
   const response = await backendApi.get<QueueEntry[]>(url, {
-    showErrors: false,
+    showErrors: true,
     cache: 'no-store',
   });
 
@@ -123,7 +123,7 @@ export const updateQueuePriority = async (
 
 export const getQueueStats = async (): Promise<QueueStats> => {
   const response = await backendApi.get<QueueStats>('/queue/stats', {
-    showErrors: false,
+    showErrors: true,
     cache: 'no-store',
   });
 
@@ -136,7 +136,7 @@ export const getQueueStats = async (): Promise<QueueStats> => {
 
 export const getQueueSettings = async (): Promise<QueueSettings> => {
   const response = await backendApi.get<QueueSettings>('/queue/settings', {
-    showErrors: false,
+    showErrors: true,
     cache: 'no-store',
   });
 

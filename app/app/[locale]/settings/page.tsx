@@ -61,8 +61,8 @@ export default function SettingsPage() {
       color: 'from-indigo-500 to-blue-500'
     },
     {
-      title: 'AI Providers',
-      description: 'Manage your AI provider API keys (OpenRouter, Anthropic, OpenAI)',
+      title: 'AI Provider Keys',
+      description: 'Required — add your OpenRouter, Anthropic, or OpenAI key to use Recoder',
       icon: Key,
       href: '/settings/ai-providers',
       color: 'from-orange-500 to-purple-600'

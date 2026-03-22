@@ -76,7 +76,7 @@ export const getAgentClones = async (
 ): Promise<CloneHistoryResponse> => {
   const response = await backendApi.get<CloneHistoryResponse>(
     `/agents/${agentId}/clones?limit=${limit}&offset=${offset}`,
-    { showErrors: false, cache: 'no-store' }
+    { showErrors: true, cache: 'no-store' }
   );
 
   if (response.error) {
@@ -92,7 +92,7 @@ export const getAgentDiff = async (
 ): Promise<AgentDiffResponse> => {
   const response = await backendApi.get<AgentDiffResponse>(
     `/agents/clone-diff?agent_a=${agentA}&agent_b=${agentB}`,
-    { showErrors: false, cache: 'no-store' }
+    { showErrors: true, cache: 'no-store' }
   );
 
   if (response.error) {

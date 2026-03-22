@@ -275,3 +275,83 @@ export async function toggleBillableMilestone(
 
 	revalidatePath(`/projects/${projectId}`);
 }
+
+/**
+ * AI-powered deliverable content generation.
+ * Generates a professional draft based on deliverable type, project context, and brief.
+ */
+export async function generateDeliverableContentWithAI(
+	deliverableId: string,
+	projectId: string,
+) {
+	const team = await requireAdminRole();
+
+	const project = await db.query.projects.findFirst({
+		where: and(eq(projects.id, projectId), eq(projects.teamDbId, team.dbId)),
+	});
+	if (!project) {
+		throw new Error("Project not found");
+	}
+
+	const deliverable = await db.query.deliverables.findFirst({
+		where: and(
+			eq(deliverables.id, deliverableId),
+			eq(deliverables.projectDbId, project.dbId),
+		),
+	});
+	if (!deliverable) {
+		throw new Error("Deliverable not found");
+	}
+
+	const apiKey = process.env.OPENROUTER_API_KEY;
+	if (!apiKey) {
+		throw new Error("No AI API key configured");
+	}
+
+	const typePrompts: Record<string, string> = {
+		document: "Generate a professional document with executive summary, detailed sections, key findings, and next steps.",
+		code: "Generate a technical specification with architecture overview, implementation plan, API design, and code structure.",
+		design: "Generate a design brief with user requirements, visual direction, component list, and accessibility notes.",
+		other: "Generate a comprehensive deliverable with objectives, approach, key details, and acceptance criteria.",
+	};
+
+	const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+		method: "POST",
+		headers: {
+			Authorization: `Bearer ${apiKey}`,
+			"Content-Type": "application/json",
+		},
+		body: JSON.stringify({
+			model: "openai/gpt-4o-mini",
+			messages: [
+				{
+					role: "system",
+					content: `You are a professional agency deliverable writer. ${typePrompts[deliverable.type] || typePrompts.other} Write in markdown. Be specific and professional. 500-800 words.`,
+				},
+				{
+					role: "user",
+					content: `Generate content for:\n\nDeliverable: ${deliverable.name}\nType: ${deliverable.type}\nProject: ${project.name}\nBrief: ${project.brief || "No brief provided"}\n\nWrite the full deliverable content in markdown.`,
+				},
+			],
+			max_tokens: 2000,
+			temperature: 0.4,
+		}),
+	});
+
+	if (!response.ok) {
+		throw new Error(`AI generation failed: ${response.statusText}`);
+	}
+
+	const data = await response.json();
+	const content = data.choices?.[0]?.message?.content?.trim();
+	if (!content) {
+		throw new Error("AI returned empty response");
+	}
+
+	await db
+		.update(deliverables)
+		.set({ content })
+		.where(eq(deliverables.dbId, deliverable.dbId));
+
+	revalidatePath(`/projects/${projectId}`);
+}

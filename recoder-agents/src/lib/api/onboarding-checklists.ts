@@ -64,7 +64,7 @@ export async function listChecklists(checklistType?: string): Promise<Checklists
 
   const response = await backendApi.get<ChecklistsListResponse>(
     `/onboarding/checklists${query}`,
-    { showErrors: false, cache: 'no-store' }
+    { showErrors: true, cache: 'no-store' }
   );
 
   if (response.error) {
@@ -78,7 +78,7 @@ export async function listChecklists(checklistType?: string): Promise<Checklists
 export async function getChecklist(checklistId: string): Promise<Checklist> {
   const response = await backendApi.get<Checklist>(
     `/onboarding/checklists/${checklistId}`,
-    { showErrors: false, cache: 'no-store' }
+    { showErrors: true, cache: 'no-store' }
   );
 
   if (response.error) {

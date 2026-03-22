@@ -50,46 +50,60 @@ export interface TopThreadsResponse {
 
 export const getThreadAnalytics = async (
   threadId: string
-): Promise<ThreadAnalytics> => {
-  const response = await backendApi.get<ThreadAnalytics>(
-    `/threads/${threadId}/analytics`,
-    { showErrors: false, cache: 'no-store' }
-  );
+): Promise<ThreadAnalytics | null> => {
+  try {
+    const response = await backendApi.get<ThreadAnalytics>(
+      `/threads/${threadId}/analytics`,
+      { showErrors: false, cache: 'no-store' }
+    );
 
-  if (response.error) {
-    throw new Error(`Failed to fetch thread analytics: ${response.error.message}`);
+    if (response.error) {
+      console.warn(`Thread analytics unavailable: ${response.error.message}`);
+      return null;
+    }
+
+    return response.data ?? null;
+  } catch {
+    return null;
   }
-
-  return response.data!;
 };
 
 export const calculateThreadAnalytics = async (
   threadId: string
-): Promise<ThreadAnalytics> => {
-  const response = await backendApi.post<ThreadAnalytics>(
-    `/threads/${threadId}/analytics/calculate`,
-    {},
-    { showErrors: true }
-  );
+): Promise<ThreadAnalytics | null> => {
+  try {
+    const response = await backendApi.post<ThreadAnalytics>(
+      `/threads/${threadId}/analytics/calculate`,
+      {},
+      { showErrors: false }
+    );
 
-  if (response.error) {
-    throw new Error(`Failed to calculate thread analytics: ${response.error.message}`);
+    if (response.error) {
+      console.warn(`Thread analytics calculation failed: ${response.error.message}`);
+      return null;
+    }
+
+    return response.data ?? null;
+  } catch {
+    return null;
   }
-
-  return response.data!;
 };
 
-export const getThreadsAnalyticsOverview = async (): Promise<ThreadAnalyticsOverview> => {
-  const response = await backendApi.get<ThreadAnalyticsOverview>(
-    `/threads/analytics/overview`,
-    { showErrors: false, cache: 'no-store' }
-  );
+export const getThreadsAnalyticsOverview = async (): Promise<ThreadAnalyticsOverview | null> => {
+  try {
+    const response = await backendApi.get<ThreadAnalyticsOverview>(
+      `/threads/analytics/overview`,
+      { showErrors: false, cache: 'no-store' }
+    );
 
-  if (response.error) {
-    throw new Error(`Failed to fetch thread analytics overview: ${response.error.message}`);
+    if (response.error) {
+      return null;
+    }
+
+    return response.data ?? null;
+  } catch {
+    return null;
   }
-
-  return response.data!;
 };
 
 export const getTopThreads = async (
@@ -98,7 +112,7 @@ export const getTopThreads = async (
 ): Promise<TopThreadsResponse> => {
   const response = await backendApi.get<TopThreadsResponse>(
     `/threads/analytics/top?metric=${metric}&limit=${limit}`,
-    { showErrors: false, cache: 'no-store' }
+    { showErrors: true, cache: 'no-store' }
   );
 
   if (response.error) {

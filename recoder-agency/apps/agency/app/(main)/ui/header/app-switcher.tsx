@@ -3,9 +3,6 @@
 import { PopoverContent } from "@recoder-internal/ui/popover";
 import { ArrowUpRight } from "lucide-react";
 import { Popover } from "radix-ui";
-import { NotificationBell } from "./notification-bell";
-import { SubscriptionBadge } from "./subscription-badge";
-
 const currentAppId = "agency";
 
 const switcherApps = [
@@ -43,9 +40,6 @@ const switcherApps = [
 
 export function AppSwitcher() {
 	return (
-		<div className="flex items-center gap-2">
-			<SubscriptionBadge />
-			<NotificationBell />
 		<Popover.Root>
 			<Popover.Trigger className="flex items-center gap-1 rounded-md px-2 py-1 text-[12px] font-medium text-inverse/50 hover:text-inverse/80 hover:bg-white/5 transition-colors outline-none focus:ring-0">
 				<span>Apps</span>
@@ -82,6 +76,5 @@ export function AppSwitcher() {
 				</Popover.Content>
 			</Popover.Portal>
 		</Popover.Root>
-		</div>
 	);
 }

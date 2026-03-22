@@ -80,24 +80,30 @@ export const appConfig = {
   // AI Model Configuration
   ai: {
     // Default AI model (via OpenRouter)
-    defaultModel: 'google/gemini-2.0-flash-exp:free',
+    defaultModel: 'openai/gpt-4o-mini',
 
     // Available models (OpenRouter model IDs)
     availableModels: [
+      'openai/gpt-4o-mini',
       'google/gemini-2.0-flash-exp:free',
       'google/gemini-2.5-flash-preview-05-20',
+      'anthropic/claude-3.5-haiku',
       'anthropic/claude-sonnet-4-20250514',
       'openai/gpt-4o',
       'deepseek/deepseek-chat',
+      'x-ai/grok-code-fast-1',
     ],
 
     // Model display names for UI
     modelDisplayNames: {
+      'openai/gpt-4o-mini': 'GPT-4o Mini (128K)',
       'google/gemini-2.0-flash-exp:free': 'Gemini 2.0 Flash (Free)',
       'google/gemini-2.5-flash-preview-05-20': 'Gemini 2.5 Flash',
+      'anthropic/claude-3.5-haiku': 'Claude 3.5 Haiku (200K)',
       'anthropic/claude-sonnet-4-20250514': 'Claude Sonnet 4',
       'openai/gpt-4o': 'GPT-4o',
       'deepseek/deepseek-chat': 'DeepSeek Chat',
+      'x-ai/grok-code-fast-1': 'Grok Code Fast',
     } as Record<string, string>,
 
     // Model API configuration (for provider-specific routing)

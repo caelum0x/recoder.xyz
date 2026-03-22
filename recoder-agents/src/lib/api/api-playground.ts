@@ -62,7 +62,7 @@ export const getPlaygroundEndpoints = async (): Promise<{
   const response = await backendApi.get<{
     endpoints: PlaygroundEndpoint[];
     total: number;
-  }>('/playground/endpoints', { showErrors: false });
+  }>('/playground/endpoints', { showErrors: true });
   if (response.error) throw new Error(response.error.message);
   return response.data!;
 };
@@ -90,7 +90,7 @@ export const getPlaygroundHistory = async (
   params.set('offset', String(offset));
   const response = await backendApi.get<PlaygroundHistoryEntry[]>(
     `/playground/history?${params.toString()}`,
-    { showErrors: false }
+    { showErrors: true }
   );
   if (response.error) throw new Error(response.error.message);
   return response.data!;

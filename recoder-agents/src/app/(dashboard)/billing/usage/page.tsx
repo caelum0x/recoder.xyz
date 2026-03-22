@@ -113,7 +113,7 @@ export default function UsagePage() {
     const byModel: Record<string, { model: string; tokens: number; cost: number }> = {};
 
     txData.transactions
-      .filter((tx) => (tx.type as string) === 'debit' && tx.reference_type === 'model_usage')
+      .filter((tx) => (tx.type as string) === 'debit' && tx.metadata?.reference_type === 'model_usage')
       .forEach((tx) => {
         const model = tx.description?.match(/Model: (.+)/)?.[1] || 'Unknown';
         if (!byModel[model]) {

@@ -15,6 +15,8 @@ import {
 import { CONFIG_FILE } from "./constants";
 import { routerBackendClient } from "./services/backend-client";
 import { unifiedRouterAI } from "./services/unified-router-ai";
+import { daytonaSandbox } from "./integrations/daytona-sandbox";
+import { a2aBridge } from "./integrations/a2a-bridge";
 
 async function initializeClaudeConfig() {
   const homeDir = homedir();
@@ -37,7 +39,7 @@ interface RunOptions {
   port?: number;
 }
 
-async function run(options: RunOptions = {}) {
+async function run(_options: RunOptions = {}) {
   // Check if service is already running
   if (isServiceRunning()) {
     console.log("✅ Service is already running in the background.");
@@ -55,6 +57,21 @@ async function run(options: RunOptions = {}) {
     console.log(`✅ Unified AI initialized with ${status.availableProviders.length} providers: ${status.availableProviders.join(', ')}`);
   } catch (error) {
     console.warn("⚠️ Failed to initialize unified AI system:", error);
+  }
+
+  // Initialize execution pipeline (Daytona sandbox + A2A bridge)
+  console.log("⚡ Initializing execution pipeline...");
+  if (daytonaSandbox.isConfigured()) {
+    const sandboxStatus = daytonaSandbox.getStatus();
+    console.log(`✅ Daytona sandbox enabled: ${sandboxStatus.apiUrl}`);
+  } else {
+    console.log("📴 Daytona sandbox not configured (set DAYTONA_API_KEY to enable)");
+  }
+  if (a2aBridge.isConfigured()) {
+    const a2aStatus = a2aBridge.getStatus();
+    console.log(`✅ A2A bridge enabled: ${a2aStatus.apiUrl}`);
+  } else {
+    console.log("📴 A2A bridge not configured (set RECODER_API_TOKEN to enable)");
   }
 
   // Initialize backend client and check connection
@@ -88,6 +105,7 @@ async function run(options: RunOptions = {}) {
   // Handle SIGINT (Ctrl+C) to clean up PID file
   process.on("SIGINT", async () => {
     console.log("Received SIGINT, cleaning up...");
+    await daytonaSandbox.destroyAll();
     await routerBackendClient.updatePlatformStatus('router', false);
     cleanupPidFile();
     process.exit(0);
@@ -95,6 +113,7 @@ async function run(options: RunOptions = {}) {
 
   // Handle SIGTERM to clean up PID file
   process.on("SIGTERM", async () => {
+    await daytonaSandbox.destroyAll();
     await routerBackendClient.updatePlatformStatus('router', false);
     cleanupPidFile();
     process.exit(0);
@@ -120,7 +139,7 @@ async function run(options: RunOptions = {}) {
     },
   });
   server.addHook("preHandler", apiKeyAuth(config));
-  server.addHook("preHandler", async (req, reply) =>
+  server.addHook("preHandler", async (req: any, reply: any) =>
     router(req, reply, config)
   );
   server.start();
@@ -141,12 +160,22 @@ async function startInteractiveChat() {
   try {
     const status = unifiedRouterAI.getRouterStatus();
     console.log(`✅ Router initialized with ${status.availableProviders.length} providers: ${status.availableProviders.join(', ')}`);
-    
+
     if (status.quotaInfo) {
       console.log(`👤 Logged in as ${status.quotaInfo.user} (${status.quotaInfo.plan} plan)`);
       console.log(`📊 Quota: ${status.quotaInfo.remaining}/${status.quotaInfo.total} requests remaining`);
     } else {
       console.log("📴 Not authenticated - some features may be limited");
+    }
+
+    // Show execution pipeline status
+    if (status.execution) {
+      if (status.execution.sandbox.configured) {
+        console.log(`⚡ Sandbox: ${status.execution.sandbox.apiUrl}`);
+      }
+      if (status.execution.a2a.configured) {
+        console.log(`🔗 A2A: ${status.execution.a2a.apiUrl}`);
+      }
     }
   } catch (error) {
     console.warn("⚠️ Failed to initialize router AI system:", error);
@@ -198,7 +227,24 @@ async function startInteractiveChat() {
         if (response.quotaInfo) {
           console.log(`Quota: ${response.quotaInfo.remaining}/${response.quotaInfo.total} remaining`);
         }
-        
+
+        // Show execution pipeline results if any
+        if (response.execution?.executed) {
+          console.log(`Execution: ${response.execution.summary}`);
+          if (response.execution.sandboxResult) {
+            const sr = response.execution.sandboxResult;
+            console.log(`Sandbox output (exit ${sr.exitCode}, ${sr.executionTimeMs}ms):`);
+            if (sr.output) console.log(sr.output);
+          }
+          if (response.execution.delegationResult) {
+            const dr = response.execution.delegationResult;
+            console.log(`Delegated to: ${JSON.stringify(dr.task)}`);
+            if (dr.thread) {
+              console.log(`Thread: ${dr.thread.viewUrl}`);
+            }
+          }
+        }
+
         console.log();
         
       } catch (error: any) {

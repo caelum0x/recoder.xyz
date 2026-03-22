@@ -22,9 +22,12 @@ export function updateSession(request: NextRequest) {
     request.nextUrl.pathname.startsWith("/api/auth");
 
   if (!(sessionToken || isAuthRoute)) {
-    const url = request.nextUrl.clone();
-    url.pathname = "/sign-in";
-    return NextResponse.redirect(url);
+    const host = request.headers.get("x-forwarded-host") || request.headers.get("host") || "pm.recoder.xyz";
+    const proto = request.headers.get("x-forwarded-proto") || "https";
+    const returnTo = `${proto}://${host}${request.nextUrl.pathname}${request.nextUrl.search}`;
+    const signInUrl = new URL("https://recoder.xyz/auth/signin");
+    signInUrl.searchParams.set("redirect", returnTo);
+    return NextResponse.redirect(signInUrl);
   }
 
   return NextResponse.next({ request });

@@ -93,8 +93,8 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
     const headers = createDockerAuthHeaders(request);
 
     try {
-      const data = await dockerFetchJson<{ url: string; token?: string }>(
-        `${dockerBackendUrl}/preview/${projectId}`,
+      const data = await dockerFetchJson<{ url: string; port?: number; token?: string }>(
+        `${dockerBackendUrl}/api/preview/${projectId}/url`,
         { method: 'GET' },
         headers,
       );
@@ -177,8 +177,8 @@ export async function action({ request, context }: ActionFunctionArgs) {
       );
 
       // Get the new preview URL
-      const data = await dockerFetchJson<{ url: string; token?: string }>(
-        `${dockerBackendUrl}/preview/${projectId}`,
+      const data = await dockerFetchJson<{ url: string; port?: number; token?: string }>(
+        `${dockerBackendUrl}/api/preview/${projectId}/url`,
         { method: 'GET' },
         headers,
       );

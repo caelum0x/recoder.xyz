@@ -68,7 +68,7 @@ export interface UpdateAutoTagRuleData {
 
 export const getAutoTagRules = async (): Promise<AutoTagRule[]> => {
   const response = await backendApi.get<AutoTagRule[]>('/auto-tags/rules', {
-    showErrors: false,
+    showErrors: true,
   });
   if (response.error) throw new Error(response.error.message);
   return response.data!;
@@ -110,7 +110,7 @@ export const applyAllAutoTags = async (): Promise<ApplyAllResult> => {
 export const getThreadAutoTags = async (threadId: string): Promise<ThreadAutoTag[]> => {
   const response = await backendApi.get<ThreadAutoTag[]>(
     `/auto-tags/threads/${threadId}`,
-    { showErrors: false }
+    { showErrors: true }
   );
   if (response.error) throw new Error(response.error.message);
   return response.data!;
@@ -118,7 +118,7 @@ export const getThreadAutoTags = async (threadId: string): Promise<ThreadAutoTag
 
 export const getAutoTagStats = async (): Promise<AutoTagStats> => {
   const response = await backendApi.get<AutoTagStats>('/auto-tags/stats', {
-    showErrors: false,
+    showErrors: true,
   });
   if (response.error) throw new Error(response.error.message);
   return response.data!;

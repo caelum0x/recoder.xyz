@@ -2,9 +2,9 @@ import { vercel } from "@t3-oss/env-core/presets-zod";
 import { createEnv } from "@t3-oss/env-nextjs";
 import { z } from "zod/v3";
 
-const defaultWebUrl = "http://localhost:3000";
-const defaultApiUrl = "http://localhost:3001";
-const defaultPortalUrl = "http://localhost:3002";
+const defaultWebUrl = process.env.DOCKER === "1" ? "https://pm.recoder.xyz" : "http://localhost:3000";
+const defaultApiUrl = process.env.DOCKER === "1" ? "https://pm.recoder.xyz/api" : "http://localhost:3001";
+const defaultPortalUrl = process.env.DOCKER === "1" ? "https://pm.recoder.xyz/portal" : "http://localhost:3002";
 const defaultAdminOrganizationId = "local-dev-admin-org";
 
 export const keys = () =>

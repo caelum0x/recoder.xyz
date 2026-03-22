@@ -1,6 +1,6 @@
 "use server";
 
-import { and, eq } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import {
@@ -285,4 +285,119 @@ export async function deleteQuote(quoteId: string) {
 
 	revalidatePath("/quotes");
 	redirect("/quotes");
+}
+
+/**
+ * AI-powered line item generation from quote scope description.
+ * Uses OpenRouter to analyze the scope and generate appropriate line items.
+ */
+export async function generateLineItemsWithAI(quoteId: string) {
+	const team = await requireAdminRole();
+
+	const quote = await db.query.quotes.findFirst({
+		where: and(eq(quotes.id, quoteId), eq(quotes.teamDbId, team.dbId)),
+	});
+	if (!quote) {
+		throw new Error("Quote not found");
+	}
+	if (!quote.scopeSnapshot?.trim()) {
+		throw new Error("Add a scope description first so AI can generate line items");
+	}
+
+	// Get client info for context
+	const client = await db.query.clients.findFirst({
+		where: eq(clients.dbId, quote.clientDbId),
+	});
+
+	// Get existing service catalog for pricing reference
+	const catalog = await db
+		.select()
+		.from(serviceCatalog)
+		.where(eq(serviceCatalog.teamDbId, team.dbId))
+		.orderBy(asc(serviceCatalog.name));
+
+	const catalogContext = catalog.length > 0
+		? `\nAvailable services for reference:\n${catalog.map(s => `- ${s.name}: $${(s.priceCents / 100).toFixed(2)} (${s.description || "no description"})`).join("\n")}`
+		: "";
+
+	// Call OpenRouter API
+	const apiKey = process.env.OPENROUTER_API_KEY;
+	if (!apiKey) {
+		throw new Error("No AI API key configured. Set OPENROUTER_API_KEY.");
+	}
+
+	const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+		method: "POST",
+		headers: {
+			Authorization: `Bearer ${apiKey}`,
+			"Content-Type": "application/json",
+		},
+		body: JSON.stringify({
+			model: "openai/gpt-4o-mini",
+			messages: [
+				{
+					role: "system",
+					content: `You are a professional agency project estimator. Given a project scope, generate line items for a quote. Return ONLY a JSON array of line items. Each item must have: name (string), description (string), quantity (number), unitPriceCents (number, price in cents). Be realistic with pricing for a professional agency. Keep items specific and actionable.${catalogContext}`,
+				},
+				{
+					role: "user",
+					content: `Generate quote line items for this project:\n\nTitle: ${quote.title}\nScope: ${quote.scopeSnapshot}\nClient: ${client?.name || "Unknown"}\n\nReturn a JSON array only, no explanation.`,
+				},
+			],
+			max_tokens: 1000,
+			temperature: 0.3,
+		}),
+	});
+
+	if (!response.ok) {
+		throw new Error(`AI generation failed: ${response.statusText}`);
+	}
+
+	const data = await response.json();
+	const content = data.choices?.[0]?.message?.content?.trim();
+
+	if (!content) {
+		throw new Error("AI returned empty response");
+	}
+
+	// Parse JSON from response (handle markdown code blocks)
+	let items: Array<{
+		name: string;
+		description: string;
+		quantity: number;
+		unitPriceCents: number;
+	}>;
+
+	try {
+		const jsonStr = content.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
+		items = JSON.parse(jsonStr);
+	} catch {
+		throw new Error("AI returned invalid format. Try again.");
+	}
+
+	if (!Array.isArray(items) || items.length === 0) {
+		throw new Error("AI generated no line items. Try adding more detail to the scope.");
+	}
+
+	// Insert generated line items
+	for (const item of items) {
+		const quantity = Math.max(1, item.quantity || 1);
+		const unitPriceCents = Math.max(0, item.unitPriceCents || 0);
+
+		await db.insert(quoteLineItems).values({
+			id: crypto.randomUUID(),
+			quoteDbId: quote.dbId,
+			serviceCatalogDbId: null,
+			name: item.name,
+			description: item.description || null,
+			quantity,
+			unitPriceCents,
+			totalCents: quantity * unitPriceCents,
+		});
+	}
+
+	await recalcQuoteTotal(quote.dbId);
+	revalidatePath(`/quotes/${quoteId}`);
+
+	return { count: items.length };
 }

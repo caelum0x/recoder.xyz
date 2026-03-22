@@ -659,8 +659,8 @@ function PricingCard({
                 }
               }
 
-              // Handle Recoder Advanced mode
-              if (feature.includes('Advanced mode') || feature.includes('ADVANCED Mode')) {
+              // Handle Recoder mode feature
+              if (feature.includes('Recoder -') || feature.includes('Advanced mode') || feature.includes('ADVANCED Mode')) {
                 const description = feature.split(' - ')[1];
                 return (
                   <li key={feature} className="flex items-start gap-2 sm:gap-3">
@@ -669,12 +669,10 @@ function PricingCard({
                     </div>
                     <div className="flex-1">
                       <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
-                        <span className="text-[10px] sm:text-xs text-muted-foreground/60 line-through">Basic</span>
-                        <span className="text-muted-foreground/40 text-xs">→</span>
                         <span className="inline-flex items-center gap-1 sm:gap-1.5 px-1.5 sm:px-2 py-0.5 bg-primary/10 dark:bg-primary/15 rounded-md">
                           <RecoderLogo size={10} variant="symbol" className="sm:hidden" />
                           <RecoderLogo size={12} variant="symbol" className="hidden sm:block" />
-                          <span className="text-[10px] sm:text-xs font-semibold text-primary">Advanced</span>
+                          <span className="text-[10px] sm:text-xs font-semibold text-primary">Recoder</span>
                         </span>
                       </div>
                       {description && (

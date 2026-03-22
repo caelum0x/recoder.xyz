@@ -175,7 +175,7 @@ export const PROVIDER_CONFIGS: Record<ProviderType, ProviderConfig> = {
     type: 'openrouter',
     name: 'OpenRouter',
     baseUrl: 'https://openrouter.ai/api/v1',
-    defaultModel: 'x-ai/grok-code-fast-1',
+    defaultModel: 'openai/gpt-4o-mini',
     apiKeyEnvVar: 'OPENROUTER_API_KEY',
     supportsStreaming: true,
     requiresApiKey: true,
@@ -833,7 +833,7 @@ class ProviderRegistry {
         ],
         stream: true,
         temperature: options.temperature ?? 0.7,
-        max_tokens: options.max_tokens ?? 8000,
+        max_tokens: options.max_tokens ?? 16000,
         top_p: options.top_p,
         frequency_penalty: options.frequency_penalty,
         presence_penalty: options.presence_penalty,
@@ -892,7 +892,7 @@ class ProviderRegistry {
         messages: anthropicMessages,
         stream: true,
         temperature: options.temperature ?? 0.7,
-        max_tokens: options.max_tokens ?? 8000,
+        max_tokens: options.max_tokens ?? 16000,
         // Thinking options for extended thinking models (best-effort)
         ...(options.thinking ? { thinking: options.thinking } : {}),
         // Provider-native tools (web search, etc.)
@@ -946,7 +946,7 @@ class ProviderRegistry {
           contents: geminiMessages,
           generationConfig: {
             temperature: options.temperature ?? 0.7,
-            maxOutputTokens: options.max_tokens ?? 8000,
+            maxOutputTokens: options.max_tokens ?? 16000,
             topP: options.top_p ?? 0.95,
             // Thinking config for Gemini thinking models (best-effort)
             ...(options.thinking?.budget_tokens
@@ -995,7 +995,7 @@ class ProviderRegistry {
         ],
         stream: true,
         temperature: options.temperature ?? 0.5, // Groq default
-        max_tokens: options.max_tokens ?? 8000,
+        max_tokens: options.max_tokens ?? 16000,
       }),
     });
 
@@ -1037,7 +1037,7 @@ class ProviderRegistry {
         ],
         stream: true,
         temperature: options.temperature ?? 0.7,
-        max_tokens: options.max_tokens ?? 8000,
+        max_tokens: options.max_tokens ?? 16000,
         // Enable thinking mode for reasoning models - use configured budget if provided, else default
         ...(options.thinking
           ? { thinking: options.thinking }
@@ -1087,7 +1087,7 @@ class ProviderRegistry {
         stream: true,
         options: {
           temperature: options.temperature ?? 0.7,
-          num_predict: options.max_tokens ?? 8000,
+          num_predict: options.max_tokens ?? 16000,
         },
       }),
     });

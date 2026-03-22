@@ -185,6 +185,7 @@ export const getAgents = async (params: AgentsParams = {}): Promise<AgentsRespon
     const response = await fetch(url, {
       method: 'GET',
       headers: await getAuthHeaders(true),
+      credentials: 'include',
     });
 
     if (!response.ok) {
@@ -204,6 +205,7 @@ export const getAgent = async (agentId: string): Promise<Agent> => {
     const response = await fetch(`${API_URL}/agents/${agentId}`, {
       method: 'GET',
       headers: await getAuthHeaders(true),
+      credentials: 'include',
     });
 
     if (!response.ok) {
@@ -274,6 +276,7 @@ export const deleteAgent = async (agentId: string): Promise<void> => {
     const response = await fetch(`${API_URL}/agents/${agentId}`, {
       method: 'DELETE',
       headers: await getAuthHeaders(true),
+      credentials: 'include',
     });
 
     if (!response.ok) {
@@ -290,6 +293,7 @@ export const cloneAgent = async (agentId: string): Promise<Agent> => {
     const response = await fetch(`${API_URL}/agents/${agentId}/clone`, {
       method: 'POST',
       headers: await getAuthHeaders(true),
+      credentials: 'include',
     });
 
     if (!response.ok) {
@@ -309,6 +313,7 @@ export const getAgentVersions = async (agentId: string): Promise<AgentVersion[]>
   try {
     const response = await fetch(`${API_URL}/agents/${agentId}/versions`, {
       headers: await getAuthHeaders(),
+      credentials: 'include',
     });
 
     if (!response.ok) {

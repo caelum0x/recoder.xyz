@@ -79,7 +79,7 @@ export function PromptSnippetPicker({ agentId, onInsert }: PromptSnippetPickerPr
   const { data: snippetsData, isLoading } = usePromptSnippets(filters);
   const recordUsageMutation = useRecordSnippetUsage();
 
-  const snippets = snippetsData?.snippets || [];
+  const snippets = snippetsData?.prompts || [];
 
   const handleSelect = async (snippet: PromptSnippet) => {
     onInsert(snippet.content);
@@ -167,7 +167,7 @@ export function PromptSnippetPicker({ agentId, onInsert }: PromptSnippetPickerPr
                   </p>
                   <div className="flex items-center gap-2 mt-1 text-[10px] text-muted-foreground">
                     <TrendingUp className="h-2.5 w-2.5" />
-                    {snippet.usage_count} uses
+                    {snippet.use_count} uses
                     {snippet.is_public ? (
                       <Globe className="h-2.5 w-2.5 ml-1" />
                     ) : (

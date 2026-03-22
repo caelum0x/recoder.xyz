@@ -50,8 +50,8 @@ const roobertMono = localFont({
 });
 
 const siteUrl = env.RECODER_PM_API_URL;
-const title = "Recoder PM App";
-const description = "Recoder PM workspace for product operations, feature management, and internal workflows.";
+const title = "Recoder PM — Cursor for Product Managers";
+const description = "AI-first product management. Automated feedback analysis, intelligent feature prioritization, insight synthesis, and roadmap planning. The way PMs should work.";
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
@@ -98,7 +98,7 @@ const RootLayout = ({ children }: RootLayoutProperties) => (
     lang="en"
     suppressHydrationWarning
   >
-    <body className="min-h-screen bg-backdrop">
+    <body className="min-h-screen bg-backdrop" suppressHydrationWarning>
       <div className="fixed left-4 top-4 z-[9999] flex items-center gap-1.5 rounded-lg border border-border/60 bg-background/80 px-1.5 py-1 backdrop-blur-sm">
         <a href="/" aria-label="Recoder Home">
           <Image src="/logo.png" alt="Recoder logo" width={36} height={36} />

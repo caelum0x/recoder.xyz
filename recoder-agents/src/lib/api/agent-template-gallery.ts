@@ -121,7 +121,7 @@ export async function getTemplates(
 
     const response = await backendApi.get<AgentTemplate[]>(
       `/templates${qs ? `?${qs}` : ''}`,
-      { showErrors: false },
+      { showErrors: true },
     );
     if (response.error) throw new Error(response.error.message);
     return response.data!;
@@ -137,7 +137,7 @@ export async function getTemplateDetail(
   try {
     const response = await backendApi.get<AgentTemplate>(
       `/templates/${templateId}`,
-      { showErrors: false },
+      { showErrors: true },
     );
     if (response.error) throw new Error(response.error.message);
     return response.data!;
@@ -214,7 +214,7 @@ export async function getTemplateCategories(): Promise<CategoryCount[]> {
   try {
     const response = await backendApi.get<CategoryCount[]>(
       '/templates/categories',
-      { showErrors: false },
+      { showErrors: true },
     );
     if (response.error) throw new Error(response.error.message);
     return response.data!;

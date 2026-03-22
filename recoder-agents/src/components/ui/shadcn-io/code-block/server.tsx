@@ -26,8 +26,8 @@ export const CodeBlockContent = async ({
   syntaxHighlighting = true,
   ...props
 }: CodeBlockContentProps) => {
-  const html = syntaxHighlighting
-    ? await codeToHtml(children as string, {
+  const html = syntaxHighlighting && children && typeof children === 'string'
+    ? await codeToHtml(children, {
         lang: language ?? 'typescript',
         themes: themes ?? {
           light: 'vitesse-light',

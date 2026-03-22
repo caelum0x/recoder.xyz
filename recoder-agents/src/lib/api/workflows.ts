@@ -97,7 +97,7 @@ async function listWorkflows(agentId: string): Promise<Workflow[]> {
   try {
     const response = await backendApi.get<Workflow[]>(
       `/workflows/agent/${agentId}`,
-      { showErrors: false },
+      { showErrors: true },
     );
 
     if (response.error) {
@@ -117,7 +117,7 @@ async function getWorkflow(id: string): Promise<WorkflowDetail> {
   try {
     const response = await backendApi.get<WorkflowDetail>(
       `/workflows/${id}`,
-      { showErrors: false },
+      { showErrors: true },
     );
 
     if (response.error) {
@@ -278,7 +278,7 @@ async function listExecutions(workflowId: string): Promise<WorkflowExecution[]> 
   try {
     const response = await backendApi.get<WorkflowExecution[]>(
       `/workflows/${workflowId}/executions`,
-      { showErrors: false },
+      { showErrors: true },
     );
 
     if (response.error) {
@@ -298,7 +298,7 @@ async function getExecution(executionId: string): Promise<WorkflowExecution> {
   try {
     const response = await backendApi.get<WorkflowExecution>(
       `/workflows/executions/${executionId}`,
-      { showErrors: false },
+      { showErrors: true },
     );
 
     if (response.error) {
@@ -318,7 +318,7 @@ async function pendingApprovals(): Promise<ApprovalGate[]> {
   try {
     const response = await backendApi.get<ApprovalGate[]>(
       '/workflows/approvals/pending',
-      { showErrors: false },
+      { showErrors: true },
     );
 
     if (response.error) {

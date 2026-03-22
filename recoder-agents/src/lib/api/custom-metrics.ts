@@ -86,7 +86,7 @@ export const createMetricDefinition = async (
 
 export const getMetricDefinitions = async (): Promise<MetricDefinition[]> => {
   const response = await backendApi.get<MetricDefinition[]>('/custom-metrics/definitions', {
-    showErrors: false,
+    showErrors: true,
   });
   if (response.error) throw new Error(response.error.message);
   return response.data!;
@@ -132,7 +132,7 @@ export const getMetricValues = async (
   const qs = params.toString();
   const response = await backendApi.get<MetricValue[]>(
     `/custom-metrics/${metricId}/values${qs ? `?${qs}` : ''}`,
-    { showErrors: false }
+    { showErrors: true }
   );
   if (response.error) throw new Error(response.error.message);
   return response.data!;
@@ -147,7 +147,7 @@ export const getMetricAggregate = async (
   const qs = params.toString();
   const response = await backendApi.get<MetricAggregate>(
     `/custom-metrics/${metricId}/aggregate${qs ? `?${qs}` : ''}`,
-    { showErrors: false }
+    { showErrors: true }
   );
   if (response.error) throw new Error(response.error.message);
   return response.data!;
@@ -155,7 +155,7 @@ export const getMetricAggregate = async (
 
 export const getMetricsDashboard = async (): Promise<MetricDashboardItem[]> => {
   const response = await backendApi.get<MetricDashboardItem[]>('/custom-metrics/dashboard', {
-    showErrors: false,
+    showErrors: true,
   });
   if (response.error) throw new Error(response.error.message);
   return response.data!;

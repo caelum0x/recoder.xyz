@@ -62,7 +62,7 @@ export async function getRateLimitUsage(): Promise<UsageResponse> {
   try {
     const response = await backendApi.get<UsageResponse>(
       '/rate-limits/usage',
-      { showErrors: false },
+      { showErrors: true },
     );
     if (response.error) throw new Error(`Error: ${response.error.message}`);
     return response.data!;
@@ -84,7 +84,7 @@ export async function getRateLimitHistory(
 
     const response = await backendApi.get<HistoryResponse>(
       `/rate-limits/history${qs ? `?${qs}` : ''}`,
-      { showErrors: false },
+      { showErrors: true },
     );
     if (response.error) throw new Error(`Error: ${response.error.message}`);
     return response.data!;
@@ -106,7 +106,7 @@ export async function getRateLimitViolations(
 
     const response = await backendApi.get<ViolationsResponse>(
       `/rate-limits/violations${qs ? `?${qs}` : ''}`,
-      { showErrors: false },
+      { showErrors: true },
     );
     if (response.error) throw new Error(`Error: ${response.error.message}`);
     return response.data!;
@@ -128,7 +128,7 @@ export async function getTopEndpoints(
 
     const response = await backendApi.get<TopEndpointsResponse>(
       `/rate-limits/top-endpoints${qs ? `?${qs}` : ''}`,
-      { showErrors: false },
+      { showErrors: true },
     );
     if (response.error) throw new Error(`Error: ${response.error.message}`);
     return response.data!;

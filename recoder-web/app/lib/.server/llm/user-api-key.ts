@@ -7,7 +7,19 @@ import { createScopedLogger } from '~/utils/logger';
 
 const logger = createScopedLogger('UserAPIKey');
 
-const MAIN_APP_URL = process.env.MAIN_SITE_URL || process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+// CRITICAL: Access real Node.js env vars at runtime, not build time.
+// Vite's node-polyfills plugin replaces ALL `process` references with a shim
+// that has empty env. We use a dynamic property access on globalThis to bypass.
+function getEnv(): Record<string, string | undefined> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const g = globalThis as any;
+  return g['process']?.env || {};
+}
+
+function getMainAppUrl(): string {
+  const env = getEnv();
+  return env.MAIN_SITE_URL || env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+}
 
 interface UserApiKeyResponse {
   success: boolean;
@@ -31,7 +43,8 @@ export async function getUserApiKey(
   }
 
   try {
-    const mainAppUrl = process.env.APP_API_URL || MAIN_APP_URL;
+    const env = getEnv();
+    const mainAppUrl = env.APP_API_URL || getMainAppUrl();
     const requestUrl = `${mainAppUrl}/api/user/ai-provider-keys/decrypt?provider=${encodeURIComponent(provider)}`;
 
     const response = await fetch(requestUrl, {
@@ -76,7 +89,7 @@ export async function hasUserApiKey(sessionCookie: string | null): Promise<boole
   }
 
   try {
-    const url = `${MAIN_APP_URL}/api/user/ai-provider-keys`;
+    const url = `${getMainAppUrl()}/api/user/ai-provider-keys`;
 
     const response = await fetch(url, {
       method: 'GET',

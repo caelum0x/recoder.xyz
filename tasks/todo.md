@@ -2,6 +2,54 @@
 
 Code-level mock cleanup, security hardening, deep type safety sweep, and production hardening are complete. Remaining items focus on billing activation, onboarding UX, and feature completion.
 
+## Sprint 68 — Approval Workflows, Thread Comparisons, Log Aggregation, Skill Trees & Deployment Pipelines (2026-03-11) — COMPLETE
+
+- [x] Approval workflows: approval_workflows + approval_requests tables, 11-endpoint API, frontend hooks, approvals page with inbox and workflow config
+- [x] Thread comparisons: thread_comparisons + comparison_evaluations tables, 7-endpoint API, frontend hooks, side-by-side comparison page with scoring
+- [x] Log aggregation: aggregated_logs (GIN tags) + log_saved_filters tables, 9-endpoint API, frontend hooks, log viewer with hourly chart and trace modal
+- [x] Agent skill trees: skill_tree_nodes (self-ref) + skill_xp_events + agent_skill_progress tables, 7-endpoint API, frontend hooks, skills-screen wired as Zap tab
+- [x] Deployment pipelines: deployment_pipelines + pipeline_runs + pipeline_gates tables, 13-endpoint API, frontend hooks, pipeline-screen wired as Workflow tab in agent config
+
+## Sprint 69 — Agent Config Snapshots, Thread Export Templates, Cost Tracking, Agent Health Checks & Task Queue (2026-03-11) — COMPLETE
+
+- [x] Agent config snapshots: agent_config_snapshots + snapshot_restore_log tables, 8-endpoint API, frontend hooks, config-snapshot-screen wired as Camera tab in agent config
+- [x] Thread export templates: thread_export_templates + thread_exports tables, 8-endpoint API, frontend hooks, export templates settings page with format selector and preview
+- [x] Cost tracking: cost_records + cost_budgets tables, 10-endpoint API, frontend hooks, costs page with daily area chart and budget progress bars
+- [x] Agent health checks: health_check_configs + health_check_results + agent_uptime_summary tables, 8-endpoint API, frontend hooks, health overview page with uptime grid
+- [x] Task queue: queued_tasks + task_queue_stats tables, 9-endpoint API, frontend hooks, task queue page with status kanban and auto-refresh
+
+## Sprint 70 — Agent Personas, Thread Summarization, Quota Alerts, Agent Benchmarks & Plugin Registry (2026-03-11) — COMPLETE
+
+- [x] Agent personas: agent_personas + agent_persona_assignments tables, 8-endpoint API, frontend hooks, personas page with tone selector and agent assignment
+- [x] Thread summarization: thread_summaries + summarization_configs tables, 7-endpoint API, frontend hooks, summarization settings page with demo panel
+- [x] Quota alerts: quota_alert_rules + quota_alert_events tables, 9-endpoint API, frontend hooks, quota alerts page with rule list and event feed
+- [x] Agent benchmarks: benchmark_suites + benchmark_runs tables, 9-endpoint API, frontend hooks, benchmarks page with leaderboard and test results
+- [x] Plugin registry: plugins + agent_plugin_installs + plugin_ratings tables, 10-endpoint API, frontend hooks, plugin marketplace page with ratings and install manager
+
+## Sprint 71 — Agent Secrets Vault, Thread Labels, Execution Traces, A/B Testing & Notification Templates (2026-03-11) — COMPLETE
+
+- [x] Agent secrets vault: agent_secrets + secret_access_log tables, 8-endpoint API, frontend hooks, secrets page with masked values and reveal confirmation
+- [x] Thread labels: thread_label_definitions + thread_label_assignments tables, 9-endpoint API, frontend hooks, labels settings page with color picker and bulk assign
+- [x] Execution traces: execution_traces + trace_steps tables, 8-endpoint API, frontend hooks, traces page with step timeline visualization
+- [x] A/B testing: ab_experiments + ab_experiment_results tables, 10-endpoint API, frontend hooks, experiments page with variant comparison and result recording
+- [x] Notification templates: notification_templates + notification_sends tables, 8-endpoint API, frontend hooks, templates page with render preview and send history
+
+## Sprint 72 — Agent Feedback, Thread Search, Alert Escalation, Audit Log & Data Pipelines (2026-03-11) — COMPLETE
+
+- [x] Agent feedback: agent_feedback + feedback_categories tables, 9-endpoint API, frontend hooks, feedback page with rating histogram and resolve workflow
+- [x] Thread search: thread_search_index (GIN tsvector) + search_history tables, 7-endpoint API, frontend hooks, search page with full-text results and history
+- [x] Alert escalation: escalation_policies + escalation_incidents + escalation_actions tables, 11-endpoint API, frontend hooks, escalation page with incident feed and timeline
+- [x] Agent audit log: agent_audit_events + audit_retention_policies tables, 8-endpoint API, frontend hooks, audit page with filters and retention settings
+- [x] Data pipelines: data_pipelines + pipeline_executions tables, 9-endpoint API, frontend hooks, pipelines page with source→transform→destination flow diagram
+
+## Sprint 73 — Agent Memory Profiles, Thread Replay, Capacity Planning, Marketplace Reviews & Integration Health (2026-03-11) — COMPLETE
+
+- [x] Agent memory profiles: agent_memory_profiles + memory_slots + memory_access_log tables, 10-endpoint API, frontend hooks, memory profiles page with slot key-value editor and access log
+- [x] Thread replay: thread_checkpoints + thread_replays tables, 8-endpoint API, frontend hooks, replay page with checkpoint list and comparison notes
+- [x] Capacity planning: capacity_metrics + capacity_plans + capacity_alerts tables, 11-endpoint API, frontend hooks, capacity page with metric gauges and plans list
+- [x] Marketplace reviews: marketplace_agent_listings + marketplace_reviews tables, 9-endpoint API, frontend hooks, marketplace page with star ratings and review submission
+- [x] Integration health: integration_endpoints + integration_health_checks + integration_uptime tables, 8-endpoint API, frontend hooks, integration dashboard with uptime cards and check-now buttons
+
 ## Production Hardening (2026-03-09) — COMPLETE
 
 - [x] Fixed ~50 files with wrong port mappings (3001/3002 → 3100 for docker-backend)
@@ -2231,3 +2279,72 @@ All latest local code synced to Hetzner (77.42.23.19) and all services rebuilt/r
 
 ### Task 21: Status Docs
 - [x] Updated `tasks/todo.md` with Sprint 67 Phase 5 completion status
+
+## Sprint 68 Phase 5 — Deployment Pipelines (2026-03-11)
+
+### Task 17: Schema
+- [x] Created `backend/supabase/migrations/20260312700004_deployment_pipelines.sql`
+  - `deployment_pipelines` table: UUID PK, user_id, pipeline_name, agent_id, stages JSONB, is_active, auto_promote, created_at, updated_at
+  - `pipeline_runs` table: UUID PK, pipeline_id FK → deployment_pipelines(id) ON DELETE CASCADE, user_id, agent_id, current_stage_index, status CHECK (running/paused/completed/failed/cancelled), stage_results JSONB, started_at, completed_at
+  - `pipeline_gates` table: UUID PK, pipeline_id FK → deployment_pipelines(id) ON DELETE CASCADE, user_id, stage_index, gate_type CHECK (manual/auto/approval), conditions JSONB, status CHECK (pending/passed/failed/skipped), evaluated_at
+  - Indexes: idx_pipelines_user, idx_pipelines_agent, idx_pipeline_runs_pipeline, idx_pipeline_runs_user, idx_pipeline_gates_pipeline
+  - Access control at application layer (WHERE user_id = :user_id)
+
+### Task 18: Backend API
+- [x] Created `backend/core/agents/deployment_pipelines_api.py` with router prefix="/deployment", tags=["deployment-pipelines"]
+  - `POST /deployment/pipelines` — create pipeline with stages array
+  - `GET /deployment/pipelines` — list, query: agent_id, limit filters
+  - `GET /deployment/pipelines/{pipeline_id}` — detail with ownership check
+  - `PATCH /deployment/pipelines/{pipeline_id}` — partial update (pipeline_name, stages, is_active, auto_promote)
+  - `DELETE /deployment/pipelines/{pipeline_id}` — delete with ownership check (cascades runs + gates)
+  - `POST /deployment/pipelines/{pipeline_id}/run` — start run, copies agent_id from pipeline
+  - `GET /deployment/pipelines/{pipeline_id}/runs` — list runs ordered by started_at DESC
+  - `GET /deployment/runs/{run_id}` — run detail with stage_results
+  - `POST /deployment/runs/{run_id}/advance` — increment current_stage_index, append stage_result, auto-complete when all stages done
+  - `POST /deployment/runs/{run_id}/cancel` — mark cancelled, rejects terminal state runs
+  - `GET /deployment/pipelines/{pipeline_id}/gates` — list gates ordered by stage_index
+  - `POST /deployment/gates/{gate_id}/pass` — mark gate passed (pending only)
+  - `POST /deployment/gates/{gate_id}/fail` — mark gate failed (pending only)
+- [x] Registered in `backend/api.py` (Sprint 68 Phase 5 block)
+
+### Task 19: Frontend API + Hooks
+- [x] Created `recoder-agents/src/lib/api/deployment-pipelines.ts`
+  - Interfaces: DeploymentPipeline, PipelineRun, StageResult, PipelineGate, PipelineStage, CreatePipelineData, UpdatePipelineData
+  - Functions for all 13 endpoints using backendApi pattern with error propagation
+- [x] Created `recoder-agents/src/hooks/agents/use-deployment-pipelines.ts`
+  - `useDeploymentPipelines(agentId?)` — list with optional agent filter
+  - `usePipelineDetail(pipelineId)` — single pipeline
+  - `useCreatePipeline()` — invalidates deployment-pipelines list
+  - `useUpdatePipeline()` — invalidates list + detail
+  - `useDeletePipeline()` — invalidates list
+  - `useStartPipelineRun()` — invalidates pipeline-runs list
+  - `usePipelineRuns(pipelineId)` — list with 15s staleTime
+  - `usePipelineRunDetail(runId)` — detail with 10s staleTime
+  - `useAdvanceRun()` — invalidates run detail + pipeline runs list
+  - `useCancelRun()` — invalidates run detail + pipeline runs list
+  - `usePipelineGates(pipelineId)` — list with 20s staleTime
+  - `usePassGate()` — invalidates pipeline-gates by pipeline_id
+  - `useFailGate()` — invalidates pipeline-gates by pipeline_id
+
+### Task 20: UI
+- [x] Created `recoder-agents/src/app/(dashboard)/agents/config/[agentId]/screens/pipeline-screen.tsx`
+  - Pipeline list: SpotlightCard per pipeline with name, auto-promote badge, StageFlow visualization (horizontal boxes connected by arrows, current stage in blue, completed in green)
+  - Active toggle (Switch) + Run button + Edit + Delete per pipeline
+  - "New Pipeline" dialog: pipeline_name, auto-promote toggle, stages builder (add/remove stages with name, type select: test/build/deploy/validate, config JSON textarea)
+  - Edit Pipeline dialog: same form pre-populated
+  - Delete confirmation: AlertDialog with cascade warning
+  - Expandable run history per pipeline: RunStatusBadge (running=blue+spinner, paused=amber, completed=green, failed=red, cancelled=gray), stage progress bar, started_at/completed_at timestamps
+  - Advance + Cancel buttons on active runs; expandable stage results JSON per stage via `<details>`
+  - Gate controls panel: gate type badge (manual/auto/approval), status badge, Pass Gate + Fail Gate buttons for pending gates
+  - Empty state with pipeline icon + CTA
+- [x] Wired into agent config page as new "Pipeline" tab (Workflow icon) — added to ConfigView type, menuItems array, and render section
+
+### Task 21: Status Docs
+- [x] Updated `tasks/todo.md` with Sprint 68 Phase 5 completion status
+
+## Sprint 74 — COMPLETE
+- [x] Agent Response Templates (migration, API, frontend, UI page)
+- [x] Thread Analytics (migration, API, frontend, UI page)
+- [x] Error Recovery Playbooks (migration, API, frontend, UI page)
+- [x] Agent Comparison (migration, API, frontend, UI page)
+- [x] Workspace Management (migration, API, frontend, UI page)

@@ -73,7 +73,7 @@ export const getScheduledTasks = async (
 ): Promise<ScheduledTask[]> => {
   const response = await backendApi.get<ScheduledTask[]>(
     `/agents/${agentId}/scheduled-tasks`,
-    { showErrors: false }
+    { showErrors: true }
   );
   if (response.error) throw new Error(response.error.message);
   return response.data!;
@@ -125,7 +125,7 @@ export const getTaskRuns = async (
   const qs = params.toString();
   const response = await backendApi.get<TaskRunsResponse>(
     `/agents/${agentId}/scheduled-tasks/${taskId}/runs${qs ? `?${qs}` : ''}`,
-    { showErrors: false }
+    { showErrors: true }
   );
   if (response.error) throw new Error(response.error.message);
   return response.data!;
@@ -134,7 +134,7 @@ export const getTaskRuns = async (
 export const getUpcomingRuns = async (): Promise<ScheduledTask[]> => {
   const response = await backendApi.get<ScheduledTask[]>(
     `/scheduled-tasks/upcoming`,
-    { showErrors: false }
+    { showErrors: true }
   );
   if (response.error) throw new Error(response.error.message);
   return response.data!;

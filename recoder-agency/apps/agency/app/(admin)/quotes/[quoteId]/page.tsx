@@ -4,6 +4,7 @@ import {
 	FolderIcon,
 	PlusIcon,
 	SendIcon,
+	SparklesIcon,
 	Trash2Icon,
 } from "lucide-react";
 import Link from "next/link";
@@ -12,7 +13,7 @@ import { changeOrders, clients, db, quoteLineItems, quotes } from "@/db";
 import { getEffectiveQuoteTotal } from "@/lib/agency/quote-utils";
 import { getActiveServices } from "@/lib/agency/service-catalog";
 import { fetchCurrentTeam } from "@/services/teams";
-import { addLineItem, deleteQuote, sendQuote, updateQuote } from "../actions";
+import { addLineItem, deleteQuote, generateLineItemsWithAI, sendQuote, updateQuote } from "../actions";
 import { createChangeOrder } from "./change-order-actions";
 import { ConvertToProjectButton } from "./components/convert-to-project-button";
 import { LineItemsEditor } from "./components/line-items-editor";
@@ -220,7 +221,25 @@ export default async function QuoteDetailPage({
 
 			{/* Line Items */}
 			<div className="rounded-xl border border-border bg-background p-4">
-				<h2 className="text-sm font-medium text-text-muted mb-3">Line Items</h2>
+				<div className="flex items-center justify-between mb-3">
+					<h2 className="text-sm font-medium text-text-muted">Line Items</h2>
+					{isDraft && (
+						<form
+							action={async () => {
+								"use server";
+								await generateLineItemsWithAI(quoteId);
+							}}
+						>
+							<button
+								type="submit"
+								className="inline-flex items-center gap-1 rounded-lg bg-gradient-to-r from-purple-600 to-blue-600 px-3 py-1.5 text-xs text-white hover:from-purple-700 hover:to-blue-700 transition-all"
+							>
+								<SparklesIcon className="size-3.5" />
+								AI Generate
+							</button>
+						</form>
+					)}
+				</div>
 
 				<LineItemsEditor
 					quoteId={quoteId}

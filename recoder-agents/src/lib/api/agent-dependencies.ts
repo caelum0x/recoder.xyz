@@ -57,7 +57,7 @@ export const getAgentDependencies = async (
   const query = agentId ? `?agent_id=${agentId}` : '';
   const response = await backendApi.get<AgentDependency[]>(
     `/agents/dependencies${query}`,
-    { showErrors: false, cache: 'no-store' }
+    { showErrors: true, cache: 'no-store' }
   );
 
   if (response.error) {
@@ -101,7 +101,7 @@ export const deleteAgentDependency = async (
 export const getAgentDependencyGraph = async (): Promise<DependencyGraph> => {
   const response = await backendApi.get<DependencyGraph>(
     '/agents/dependency-graph',
-    { showErrors: false, cache: 'no-store' }
+    { showErrors: true, cache: 'no-store' }
   );
 
   if (response.error) {

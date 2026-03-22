@@ -24,7 +24,7 @@ import * as pty from 'node-pty';
 import { WebSocketRPC } from './websocket-rpc.js';
 import { devServerManager, detectFrameworkFromContainer, getInstallCommand, getDevCommand, getExpectedPorts, setExpoPublicHostname } from './dev-server.js';
 import { ContainerLifecycleManager } from './container-lifecycle.js';
-import { snapshotManager } from './snapshot-manager.js';
+import { snapshotManager, registerDaytonaId, unregisterDaytonaId } from './snapshot-manager.js';
 import { contextCache, computeFileHash, computeFileHashes, type ContextDiff } from './context-cache.js';
 import { autoRestoreManager, parseAllErrors, hasBlockingErrors } from './auto-restore.js';
 import { languageServerManager } from './language-server.js';
@@ -108,6 +108,23 @@ import {
 import { healthMonitor, type HealthStatus } from './health-monitor.js';
 import { resourceOptimizer } from './resource-optimizer.js';
 import { getDaytonaClient, isDaytonaConfigured } from './daytona-client.js';
+import {
+  type ContainerEntry,
+  isDaytonaSandbox,
+  daytonaWriteFile,
+  daytonaWriteFiles,
+  daytonaReadFile,
+  daytonaDeleteFile,
+  daytonaRenameFile,
+  daytonaCreateFolder,
+  daytonaListFiles,
+  daytonaExec,
+  daytonaExecBackground,
+  daytonaGetWorkspaceState,
+  ensureDaytonaSandboxRunning,
+  daytonaDeleteSandbox,
+  daytonaGetLogs,
+} from './daytona-file-ops.js';
 import { templateManager } from './templates/index.js';
 import { getProjectIdFromRequest, isStrictAuthMode } from './auth-utils.js';
 import { type ContainerCreationEntry, withCreationTimeout, isCreationStale } from './container-creation.js';
@@ -1500,15 +1517,9 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
 }));
 
-app.use((req, res, next) => {
+app.use((_req, res, next) => {
   res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
-  // SECURITY FIX: Only set allowed origin, never wildcard
-  const origin = req.headers.origin;
-  if (origin && ALLOWED_ORIGINS.includes(origin)) {
-    res.setHeader('Access-Control-Allow-Origin', origin);
-  }
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+  // CORS headers handled by cors() middleware above — do NOT set them here to avoid duplicates with nginx
   next();
 });
 // Keep raw JSON text for signed A2A payload verification
@@ -1553,7 +1564,8 @@ app.use((req: express.Request, res: express.Response, next: express.NextFunction
 
 // Container registry: projectId -> containerId + port + ptyPort
 // Added backgroundDev flag so we can auto-tail dev server logs into the PTY when users attach
-const containers = new Map<string, { id: string; lastActive: number; port: number; ptyPort: number; backgroundDev?: boolean; userId?: string }>();
+// Daytona sandboxes are stored with daytona: true so all file/exec routes can route correctly
+const containers = new Map<string, ContainerEntry>();
 
 // Track containers being created to prevent race conditions
 type ContainerCreationResult = { containerId: string; port: number; ptyPort: number; fromPool?: boolean };
@@ -1680,7 +1692,23 @@ async function runHostCommand(cmd: string, args: string[]): Promise<void> {
 /**
  * Execute a command inside a container and return stdout
  */
+/**
+ * Track known Daytona sandbox IDs so execInContainer can route correctly.
+ * Populated when Daytona sandboxes are created; cleaned when deleted.
+ */
+const daytonaSandboxIds = new Set<string>();
+// Expose to git-operations.ts (avoids circular import)
+(global as any).__daytonaSandboxIds = daytonaSandboxIds;
+
 async function execInContainer(containerId: string, cmd: string): Promise<string> {
+  // Route through Daytona toolbox exec if this is a known sandbox
+  if (daytonaSandboxIds.has(containerId)) {
+    // Daytona workspace is /home/daytona/, not /workspace/
+    const daytonaCmd = cmd.replace(/\/workspace\//g, '/home/daytona/').replace(/\/workspace(?=["'\s]|$)/g, '/home/daytona');
+    const result = await daytonaExec(containerId, daytonaCmd, { timeoutSecs: 30 });
+    return result.output;
+  }
+
   const container = docker.getContainer(containerId);
   const exec = await container.exec({
     Cmd: ['/bin/bash', '-c', cmd],
@@ -1728,9 +1756,14 @@ async function execInContainer(containerId: string, cmd: string): Promise<string
  * Returns true if container is running, false if it needs to be recreated
  */
 async function ensureContainerRunning(
-  entry: { id: string; lastActive: number; port: number; ptyPort: number; backgroundDev?: boolean; userId?: string },
+  entry: ContainerEntry,
   projectId: string
 ): Promise<{ running: boolean; restarted: boolean; error?: string }> {
+  // Daytona sandboxes: check/start via Daytona API instead of Docker
+  if (isDaytonaSandbox(entry)) {
+    return ensureDaytonaSandboxRunning(entry.id);
+  }
+
   try {
     const container = docker.getContainer(entry.id);
     const info = await container.inspect();
@@ -2373,6 +2406,56 @@ app.post('/api/container', containerLimiter, optionalAuthenticateRequest, flexib
 
     if (!projectId) return res.status(400).json({ error: 'projectId required' });
 
+    // Daytona-first: if USE_DAYTONA_CONTAINERS is set, create via Daytona
+    if (isDaytonaConfigured() && process.env.USE_DAYTONA_CONTAINERS === 'true') {
+      const existingDaytona = containers.get(projectId);
+      if (existingDaytona) {
+        existingDaytona.lastActive = Date.now();
+        return res.json({
+          containerId: existingDaytona.id,
+          reused: true,
+          fromPool: false,
+          port: existingDaytona.port,
+          urls: { preview: existingDaytona.daytonaPreviewUrl || `http://localhost:${existingDaytona.port}` },
+        });
+      }
+      try {
+        const dc = getDaytonaClient();
+        const sandbox = await dc.createSandbox({
+          labels: { projectId, source: 'web-ide' },
+          autoStopInterval: 60,
+          autoArchiveInterval: 120,
+          public: true,
+        });
+        const previewUrl = dc.getPreviewUrl(sandbox.id, 3000);
+        containers.set(projectId, {
+          id: sandbox.id,
+          lastActive: Date.now(),
+          port: 3000,
+          ptyPort: 0,
+          backgroundDev: false,
+          userId,
+          daytona: true,
+          daytonaPreviewUrl: previewUrl,
+        });
+        daytonaSandboxIds.add(sandbox.id);
+        registerDaytonaId(sandbox.id);
+        registerUserContainer(userId, projectId);
+        logger.info({ sandboxId: sandbox.id, projectId, previewUrl }, 'Daytona sandbox created for web IDE');
+        return res.json({
+          containerId: sandbox.id,
+          reused: false,
+          fromPool: false,
+          port: 3000,
+          urls: { preview: previewUrl },
+          daytona: true,
+        });
+      } catch (err: any) {
+        logger.error({ err: err.message, projectId }, 'Daytona sandbox creation failed, falling back to Docker');
+        // Fall through to Docker container creation
+      }
+    }
+
     // Check per-user container limit (skip for anonymous users, skip if this project already has a container)
     const existingContainer = containers.get(projectId);
     if (!existingContainer && !isAnonymous) {
@@ -2868,10 +2951,20 @@ app.delete('/api/container/:projectId', optionalAuthenticateRequest, flexiblePro
     try { healthMonitor.unregisterContainer(entry.id); } catch (_) {}
     try { resourceOptimizer.unregisterContainer(entry.id); } catch (_) {}
 
-    const container = docker.getContainer(entry.id);
-    await container.stop().catch(() => {});
-    await container.remove().catch(() => {});
-    releasePorts(entry.port, entry.ptyPort);
+    if (isDaytonaSandbox(entry)) {
+      // Daytona sandbox — delete via Daytona API
+      daytonaSandboxIds.delete(entry.id);
+      unregisterDaytonaId(entry.id);
+      await daytonaDeleteSandbox(entry.id).catch((err: any) => {
+        logger.warn({ sandboxId: entry.id, err: err.message }, 'Daytona sandbox delete failed');
+      });
+    } else {
+      // Docker container — stop and remove
+      const container = docker.getContainer(entry.id);
+      await container.stop().catch(() => {});
+      await container.remove().catch(() => {});
+      releasePorts(entry.port, entry.ptyPort);
+    }
     if (entry.userId) {
       unregisterUserContainer(entry.userId, projectId);
     }
@@ -2901,6 +2994,12 @@ app.post('/api/mount/:projectId', authenticateRequest, verifyProjectOwnership, a
     });
 
     entry.lastActive = Date.now();
+
+    // Daytona sandboxes don't support local file mounts (they're remote)
+    if (isDaytonaSandbox(entry)) {
+      return res.status(400).json({ error: 'File mounting not supported for Daytona sandboxes. Use the file upload API instead.' });
+    }
+
     const mounted = await mountFiles(entry.id, files);
     res.json({ mounted });
   } catch (err: any) {
@@ -2956,31 +3055,36 @@ app.post('/api/file/:projectId', authenticateRequest, verifyProjectOwnership, as
 
     entry.lastActive = Date.now();
 
-    // FAST FILE WRITE: Use tar-based upload (10x faster than exec-based)
-    // This avoids process spawning, shell parsing, and base64 encoding overhead
-    try {
-      await fastWriteFile(entry.id, safePath, content);
-    } catch (tarError: any) {
-      // Fallback to exec-based write if tar fails (e.g., permission issues)
-      logger.warn({ err: tarError }, 'FastWrite: tar-based write failed, falling back to exec');
-      const container = docker.getContainer(entry.id);
-      const b64 = Buffer.from(content).toString('base64');
-      const fullPath = `/workspace/${safePath}`;
-      const dir = safePath.substring(0, safePath.lastIndexOf('/'));
-      const mkdirCmd = dir ? `mkdir -p '/workspace/${dir.replace(/'/g, "'\\''")}' && ` : '';
-      const writeCmd = `${mkdirCmd}echo '${b64}' | base64 -d > '${fullPath.replace(/'/g, "'\\''")}'`;
-      
-      const writeExec = await container.exec({
-        Cmd: ['sh', '-c', writeCmd],
-        AttachStdout: true,
-        AttachStderr: true,
-      });
-      const writeStream = await writeExec.start({});
-      await new Promise<void>((resolve) => {
-        writeStream.on('end', resolve);
-        writeStream.on('close', resolve);
-        setTimeout(resolve, 5000);
-      });
+    // Daytona sandbox — write via toolbox API
+    if (isDaytonaSandbox(entry)) {
+      await daytonaWriteFile(entry.id, safePath, content);
+    } else {
+      // FAST FILE WRITE: Use tar-based upload (10x faster than exec-based)
+      // This avoids process spawning, shell parsing, and base64 encoding overhead
+      try {
+        await fastWriteFile(entry.id, safePath, content);
+      } catch (tarError: any) {
+        // Fallback to exec-based write if tar fails (e.g., permission issues)
+        logger.warn({ err: tarError }, 'FastWrite: tar-based write failed, falling back to exec');
+        const container = docker.getContainer(entry.id);
+        const b64 = Buffer.from(content).toString('base64');
+        const fullPath = `/workspace/${safePath}`;
+        const dir = safePath.substring(0, safePath.lastIndexOf('/'));
+        const mkdirCmd = dir ? `mkdir -p '/workspace/${dir.replace(/'/g, "'\\''")}' && ` : '';
+        const writeCmd = `${mkdirCmd}echo '${b64}' | base64 -d > '${fullPath.replace(/'/g, "'\\''")}'`;
+
+        const writeExec = await container.exec({
+          Cmd: ['sh', '-c', writeCmd],
+          AttachStdout: true,
+          AttachStderr: true,
+        });
+        const writeStream = await writeExec.start({});
+        await new Promise<void>((resolve) => {
+          writeStream.on('end', resolve);
+          writeStream.on('close', resolve);
+          setTimeout(resolve, 5000);
+        });
+      }
     }
 
     logger.info({ projectId, path: safePath, durationMs: Date.now() - fileOpStartTime }, 'file write complete');
@@ -3005,13 +3109,14 @@ app.post('/api/file/:projectId', authenticateRequest, verifyProjectOwnership, as
 
     res.json({ success: true });
   } catch (err: any) {
+    logger.error({ projectId, path: safePath, error: err.message, stack: err.stack?.split('\n')[1]?.trim() }, 'file write failed');
     metricsCollector.recordFileOperation({
       operation: 'write',
       projectId,
       success: false,
       durationMs: Date.now() - fileOpStartTime,
     });
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: err.message || 'File write failed' });
   }
 });
 
@@ -3057,61 +3162,68 @@ app.post('/api/files/:projectId/batch', authenticateRequest, verifyProjectOwners
 
     const failedFiles: Array<{ path: string; error: string }> = [];
 
-    // FAST BATCH WRITE: Use tar-based upload (10x faster than exec-based)
-    // Single network round trip for all files
-    try {
-      await fastWriteFiles(entry.id, sanitizedFiles);
-      logger.info({ projectId, fileCount: sanitizedFiles.length, durationMs: Date.now() - batchOpStartTime }, 'batch write complete');
-    } catch (tarError: any) {
-      // Fallback to exec-based write if tar fails
-      logger.warn({ err: tarError }, 'FastWrite: tar-based batch write failed, falling back to exec');
-      const container = docker.getContainer(entry.id);
-      
-      // Create all directories first
-      const dirs = new Set<string>();
-      for (const file of sanitizedFiles) {
-        const dir = file.path.substring(0, file.path.lastIndexOf('/'));
-        if (dir) dirs.add(dir);
-      }
-      
-      if (dirs.size > 0) {
-        const mkdirExec = await container.exec({
-          Cmd: ['mkdir', '-p', ...Array.from(dirs).map(d => `/workspace/${d}`)],
-          AttachStdout: false,
-          AttachStderr: false,
-        });
-        await mkdirExec.start({ Detach: true });
-        await new Promise(resolve => setTimeout(resolve, 100));
-      }
+    if (isDaytonaSandbox(entry)) {
+      // Daytona sandbox — write files via toolbox exec
+      const { failed } = await daytonaWriteFiles(entry.id, sanitizedFiles);
+      failedFiles.push(...failed);
+      logger.info({ projectId, fileCount: sanitizedFiles.length, failedCount: failed.length, durationMs: Date.now() - batchOpStartTime }, 'Daytona batch write complete');
+    } else {
+      // FAST BATCH WRITE: Use tar-based upload (10x faster than exec-based)
+      // Single network round trip for all files
+      try {
+        await fastWriteFiles(entry.id, sanitizedFiles);
+        logger.info({ projectId, fileCount: sanitizedFiles.length, durationMs: Date.now() - batchOpStartTime }, 'batch write complete');
+      } catch (tarError: any) {
+        // Fallback to exec-based write if tar fails
+        logger.warn({ err: tarError }, 'FastWrite: tar-based batch write failed, falling back to exec');
+        const container = docker.getContainer(entry.id);
 
-      // Write files in parallel batches
-      const batchSize = 10;
-      for (let i = 0; i < sanitizedFiles.length; i += batchSize) {
-        const batch = sanitizedFiles.slice(i, i + batchSize);
-        const results = await Promise.all(batch.map(async (file: { path: string; content: string }) => {
-          try {
-            const b64 = Buffer.from(file.content).toString('base64');
-            const fullPath = `/workspace/${file.path}`;
-            const writeExec = await container.exec({
-              Cmd: ['sh', '-c', `echo '${b64}' | base64 -d > '${fullPath.replace(/'/g, "'\\''")}'`],
-              AttachStdout: true,
-              AttachStderr: true,
-            });
-            const writeStream = await writeExec.start({});
-            await new Promise<void>((resolve) => {
-              writeStream.on('end', resolve);
-              writeStream.on('close', resolve);
-              setTimeout(resolve, 10000);
-            });
-            return { path: file.path, success: true as const };
-          } catch (err: any) {
-            return { path: file.path, success: false as const, error: err?.message || 'Write failed' };
-          }
-        }));
+        // Create all directories first
+        const dirs = new Set<string>();
+        for (const file of sanitizedFiles) {
+          const dir = file.path.substring(0, file.path.lastIndexOf('/'));
+          if (dir) dirs.add(dir);
+        }
 
-        for (const result of results) {
-          if (!result.success) {
-            failedFiles.push({ path: result.path, error: result.error });
+        if (dirs.size > 0) {
+          const mkdirExec = await container.exec({
+            Cmd: ['mkdir', '-p', ...Array.from(dirs).map(d => `/workspace/${d}`)],
+            AttachStdout: false,
+            AttachStderr: false,
+          });
+          await mkdirExec.start({ Detach: true });
+          await new Promise(resolve => setTimeout(resolve, 100));
+        }
+
+        // Write files in parallel batches
+        const batchSize = 10;
+        for (let i = 0; i < sanitizedFiles.length; i += batchSize) {
+          const batch = sanitizedFiles.slice(i, i + batchSize);
+          const results = await Promise.all(batch.map(async (file: { path: string; content: string }) => {
+            try {
+              const b64 = Buffer.from(file.content).toString('base64');
+              const fullPath = `/workspace/${file.path}`;
+              const writeExec = await container.exec({
+                Cmd: ['sh', '-c', `echo '${b64}' | base64 -d > '${fullPath.replace(/'/g, "'\\''")}'`],
+                AttachStdout: true,
+                AttachStderr: true,
+              });
+              const writeStream = await writeExec.start({});
+              await new Promise<void>((resolve) => {
+                writeStream.on('end', resolve);
+                writeStream.on('close', resolve);
+                setTimeout(resolve, 10000);
+              });
+              return { path: file.path, success: true as const };
+            } catch (err: any) {
+              return { path: file.path, success: false as const, error: err?.message || 'Write failed' };
+            }
+          }));
+
+          for (const result of results) {
+            if (!result.success) {
+              failedFiles.push({ path: result.path, error: result.error });
+            }
           }
         }
       }
@@ -3202,34 +3314,43 @@ app.get('/api/file/:projectId', authenticateRequest, verifyProjectOwnership, asy
     }
 
     entry.lastActive = Date.now();
-    const container = docker.getContainer(entry.id);
 
-    // Use array-based exec to prevent injection
-    const catExec = await container.exec({
-      Cmd: ['cat', `/workspace/${safePath}`],
-      AttachStdout: true,
-      AttachStderr: true,
-    });
-    const stream = await catExec.start({});
-    const chunks: Buffer[] = [];
+    let content: string;
 
-    await new Promise<void>((resolve) => {
-      stream.on('data', (chunk: Buffer) => chunks.push(chunk));
-      stream.on('end', resolve);
-    });
+    if (isDaytonaSandbox(entry)) {
+      // Daytona sandbox — read file via toolbox exec
+      content = await daytonaReadFile(entry.id, safePath);
+    } else {
+      // Docker container — exec cat
+      const container = docker.getContainer(entry.id);
 
-    // Parse Docker multiplexed stream
-    const raw = Buffer.concat(chunks);
-    let content = '';
-    let i = 0;
-    while (i < raw.length) {
-      if (i + 8 <= raw.length) {
-        const size = raw.readUInt32BE(i + 4);
-        if (i + 8 + size <= raw.length) {
-          content += raw.slice(i + 8, i + 8 + size).toString();
-          i += 8 + size;
+      // Use array-based exec to prevent injection
+      const catExec = await container.exec({
+        Cmd: ['cat', `/workspace/${safePath}`],
+        AttachStdout: true,
+        AttachStderr: true,
+      });
+      const stream = await catExec.start({});
+      const chunks: Buffer[] = [];
+
+      await new Promise<void>((resolve) => {
+        stream.on('data', (chunk: Buffer) => chunks.push(chunk));
+        stream.on('end', resolve);
+      });
+
+      // Parse Docker multiplexed stream
+      const raw = Buffer.concat(chunks);
+      content = '';
+      let i = 0;
+      while (i < raw.length) {
+        if (i + 8 <= raw.length) {
+          const size = raw.readUInt32BE(i + 4);
+          if (i + 8 + size <= raw.length) {
+            content += raw.slice(i + 8, i + 8 + size).toString();
+            i += 8 + size;
+          } else break;
         } else break;
-      } else break;
+      }
     }
 
     // PERFORMANCE: Cache the result for future reads
@@ -3264,18 +3385,25 @@ app.delete('/api/file/:projectId', authenticateRequest, verifyProjectOwnership, 
     if (!entry) return res.status(404).json({ error: 'Container not found' });
 
     entry.lastActive = Date.now();
-    const container = docker.getContainer(entry.id);
 
-    // Create snapshot before delete
-    await snapshotManager.createSnapshot(entry.id, projectId, `Before delete: ${safePath}`, 'auto');
+    if (isDaytonaSandbox(entry)) {
+      // Daytona sandbox — delete via toolbox exec
+      await daytonaDeleteFile(entry.id, safePath);
+    } else {
+      // Docker container
+      const container = docker.getContainer(entry.id);
 
-    // Delete file or folder using array-based exec
-    const rmExec = await container.exec({
-      Cmd: ['rm', '-rf', `/workspace/${safePath}`],
-      AttachStdout: true,
-      AttachStderr: true,
-    });
-    await rmExec.start({});
+      // Create snapshot before delete
+      await snapshotManager.createSnapshot(entry.id, projectId, `Before delete: ${safePath}`, 'auto');
+
+      // Delete file or folder using array-based exec
+      const rmExec = await container.exec({
+        Cmd: ['rm', '-rf', `/workspace/${safePath}`],
+        AttachStdout: true,
+        AttachStderr: true,
+      });
+      await rmExec.start({});
+    }
 
     // PERFORMANCE: Invalidate cache on delete
     fileCache.invalidate(projectId, safePath);
@@ -3309,29 +3437,36 @@ app.put('/api/file/:projectId/rename', authenticateRequest, verifyProjectOwnersh
     if (!entry) return res.status(404).json({ error: 'Container not found' });
 
     entry.lastActive = Date.now();
-    const container = docker.getContainer(entry.id);
 
-    // Create snapshot before rename
-    await snapshotManager.createSnapshot(entry.id, projectId, `Before rename: ${safeOldPath}`, 'auto');
+    if (isDaytonaSandbox(entry)) {
+      // Daytona sandbox — rename via toolbox exec
+      await daytonaRenameFile(entry.id, safeOldPath, safeNewPath);
+    } else {
+      // Docker container
+      const container = docker.getContainer(entry.id);
 
-    // Create parent directory if needed
-    const dir = safeNewPath.substring(0, safeNewPath.lastIndexOf('/'));
-    if (dir) {
-      const mkdirExec = await container.exec({
-        Cmd: ['mkdir', '-p', `/workspace/${dir}`],
+      // Create snapshot before rename
+      await snapshotManager.createSnapshot(entry.id, projectId, `Before rename: ${safeOldPath}`, 'auto');
+
+      // Create parent directory if needed
+      const dir = safeNewPath.substring(0, safeNewPath.lastIndexOf('/'));
+      if (dir) {
+        const mkdirExec = await container.exec({
+          Cmd: ['mkdir', '-p', `/workspace/${dir}`],
+          AttachStdout: true,
+          AttachStderr: true,
+        });
+        await mkdirExec.start({});
+      }
+
+      // Move/rename using array-based exec
+      const mvExec = await container.exec({
+        Cmd: ['mv', `/workspace/${safeOldPath}`, `/workspace/${safeNewPath}`],
         AttachStdout: true,
         AttachStderr: true,
       });
-      await mkdirExec.start({});
+      await mvExec.start({});
     }
-
-    // Move/rename using array-based exec
-    const mvExec = await container.exec({
-      Cmd: ['mv', `/workspace/${safeOldPath}`, `/workspace/${safeNewPath}`],
-      AttachStdout: true,
-      AttachStderr: true,
-    });
-    await mvExec.start({});
 
     res.json({ success: true });
   } catch (err: any) {
@@ -3353,15 +3488,22 @@ app.post('/api/folder/:projectId', authenticateRequest, verifyProjectOwnership, 
     if (!entry) return res.status(404).json({ error: 'Container not found' });
 
     entry.lastActive = Date.now();
-    const container = docker.getContainer(entry.id);
 
-    // Use array-based exec to prevent injection
-    const mkdirExec = await container.exec({
-      Cmd: ['mkdir', '-p', `/workspace/${safePath}`],
-      AttachStdout: true,
-      AttachStderr: true,
-    });
-    await mkdirExec.start({});
+    if (isDaytonaSandbox(entry)) {
+      // Daytona sandbox — mkdir via toolbox exec
+      await daytonaCreateFolder(entry.id, safePath);
+    } else {
+      // Docker container
+      const container = docker.getContainer(entry.id);
+
+      // Use array-based exec to prevent injection
+      const mkdirExec = await container.exec({
+        Cmd: ['mkdir', '-p', `/workspace/${safePath}`],
+        AttachStdout: true,
+        AttachStderr: true,
+      });
+      await mkdirExec.start({});
+    }
 
     res.json({ success: true });
   } catch (err: any) {
@@ -3386,34 +3528,44 @@ app.get('/api/files/read', authenticateRequest, verifyProjectOwnership, async (r
     if (!entry) return res.status(404).json({ error: 'Container not found' });
 
     entry.lastActive = Date.now();
-    const container = docker.getContainer(entry.id);
-    const safePath = `/workspace/${sanitizePath(filePath)}`;
+    const safePath = sanitizePath(filePath);
 
-    const exec = await container.exec({
-      Cmd: ['cat', safePath],
-      AttachStdout: true,
-      AttachStderr: true,
-    });
-    const stream = await exec.start({});
-    const chunks: Buffer[] = [];
+    let content: string;
 
-    await new Promise<void>((resolve) => {
-      stream.on('data', (chunk: Buffer) => chunks.push(chunk));
-      stream.on('end', resolve);
-    });
+    if (isDaytonaSandbox(entry)) {
+      // Daytona sandbox — read via toolbox exec
+      content = await daytonaReadFile(entry.id, safePath);
+    } else {
+      // Docker container
+      const container = docker.getContainer(entry.id);
+      const fullPath = `/workspace/${safePath}`;
 
-    // Parse Docker multiplexed stream
-    const raw = Buffer.concat(chunks);
-    let content = '';
-    let i = 0;
-    while (i < raw.length) {
-      if (i + 8 <= raw.length) {
-        const size = raw.readUInt32BE(i + 4);
-        if (i + 8 + size <= raw.length) {
-          content += raw.slice(i + 8, i + 8 + size).toString();
-          i += 8 + size;
+      const exec = await container.exec({
+        Cmd: ['cat', fullPath],
+        AttachStdout: true,
+        AttachStderr: true,
+      });
+      const stream = await exec.start({});
+      const chunks: Buffer[] = [];
+
+      await new Promise<void>((resolve) => {
+        stream.on('data', (chunk: Buffer) => chunks.push(chunk));
+        stream.on('end', resolve);
+      });
+
+      // Parse Docker multiplexed stream
+      const raw = Buffer.concat(chunks);
+      content = '';
+      let i = 0;
+      while (i < raw.length) {
+        if (i + 8 <= raw.length) {
+          const size = raw.readUInt32BE(i + 4);
+          if (i + 8 + size <= raw.length) {
+            content += raw.slice(i + 8, i + 8 + size).toString();
+            i += 8 + size;
+          } else break;
         } else break;
-      } else break;
+      }
     }
 
     res.json({ content });
@@ -3432,6 +3584,13 @@ app.get('/api/workspace-state/:projectId', authenticateRequest, verifyProjectOwn
   }
 
   try {
+    // Daytona sandbox — get workspace state via toolbox exec
+    if (isDaytonaSandbox(entry)) {
+      const state = await daytonaGetWorkspaceState(entry.id, entry.daytonaPreviewUrl);
+      return res.json(state);
+    }
+
+    // Docker container
     const container = docker.getContainer(entry.id);
 
     const countExec = await container.exec({
@@ -3499,22 +3658,43 @@ app.post('/api/typecheck/:projectId', authenticateRequest, verifyProjectOwnershi
   if (!entry) return res.status(404).json({ error: 'Container not found' });
 
   try {
-    const container = docker.getContainer(entry.id);
     entry.lastActive = Date.now();
 
-    const tsconfig = await execCommand(
-      container,
-      'cd /workspace && (test -f tsconfig.app.json && echo "tsconfig.app.json" || (test -f tsconfig.json && echo "tsconfig.json" || echo ""))'
-    );
+    let tsconfig: string;
+    let rawOutput: string;
 
-    if (!tsconfig) {
-      return res.json({ problems: [], summary: 'No TypeScript config found' });
+    if (isDaytonaSandbox(entry)) {
+      // Daytona sandbox — typecheck via exec
+      const tsconfigResult = await daytonaExec(entry.id,
+        'cd /workspace && (test -f tsconfig.app.json && echo "tsconfig.app.json" || (test -f tsconfig.json && echo "tsconfig.json" || echo ""))',
+        { timeoutSecs: 10 },
+      );
+      tsconfig = tsconfigResult.output.trim();
+      if (!tsconfig) {
+        return res.json({ problems: [], summary: 'No TypeScript config found' });
+      }
+      const rawResult = await daytonaExec(entry.id,
+        `cd /workspace && tsc --noEmit --pretty false -p ${tsconfig} 2>&1 || true`,
+        { timeoutSecs: 60 },
+      );
+      rawOutput = rawResult.output;
+    } else {
+      // Docker container
+      const container = docker.getContainer(entry.id);
+      tsconfig = await execCommand(
+        container,
+        'cd /workspace && (test -f tsconfig.app.json && echo "tsconfig.app.json" || (test -f tsconfig.json && echo "tsconfig.json" || echo ""))'
+      );
+
+      if (!tsconfig) {
+        return res.json({ problems: [], summary: 'No TypeScript config found' });
+      }
+
+      rawOutput = await execCommand(
+        container,
+        `cd /workspace && tsc --noEmit --pretty false -p ${tsconfig} 2>&1 || true`
+      );
     }
-
-    const rawOutput = await execCommand(
-      container,
-      `cd /workspace && tsc --noEmit --pretty false -p ${tsconfig} 2>&1 || true`
-    );
 
     const stripAnsi = (str: string) => str.replace(/\x1B\[[0-9;]*[a-zA-Z]/g, '');
     const lines = stripAnsi(rawOutput).split('\n').map(l => l.trim()).filter(Boolean);
@@ -3570,6 +3750,14 @@ app.get('/api/files/:projectId', authenticateRequest, verifyProjectOwnership, as
     if (!entry) return res.status(404).json({ error: 'Container not found' });
 
     entry.lastActive = Date.now();
+
+    if (isDaytonaSandbox(entry)) {
+      // Daytona sandbox — list files via toolbox exec
+      const files = await daytonaListFiles(entry.id, safePath);
+      return res.json({ files });
+    }
+
+    // Docker container
     const container = docker.getContainer(entry.id);
 
     // Use array-based exec for find command
@@ -3800,7 +3988,6 @@ app.get('/api/export/:projectId', authenticateRequest, verifyProjectOwnership, a
     }
 
     entry.lastActive = Date.now();
-    const container = docker.getContainer(entry.id);
 
     // Get exclude patterns from query (comma-separated)
     const excludePatterns = (req.query.exclude as string)?.split(',') || [
@@ -3814,101 +4001,131 @@ app.get('/api/export/:projectId', authenticateRequest, verifyProjectOwnership, a
       '*.log',
     ];
 
-    // Build find command with exclusions
-    // Use find to get all files, excluding common build artifacts
-    const excludeArgs: string[] = [];
-    excludePatterns.forEach((pattern) => {
-      excludeArgs.push('-not', '-path', `*/${pattern}/*`, '-not', '-name', pattern);
-    });
-
-    const findExec = await container.exec({
-      Cmd: ['find', '/workspace', '-type', 'f', ...excludeArgs, '-size', '-1M'],
-      AttachStdout: true,
-      AttachStderr: true,
-    });
-
-    const findStream = await findExec.start({});
-    const findChunks: Buffer[] = [];
-
-    await new Promise<void>((resolve) => {
-      findStream.on('data', (chunk: Buffer) => findChunks.push(chunk));
-      findStream.on('end', resolve);
-    });
-
-    // Parse Docker multiplexed stream
-    const rawFind = Buffer.concat(findChunks);
-    let findOutput = '';
-    let idx = 0;
-    while (idx < rawFind.length) {
-      if (idx + 8 <= rawFind.length) {
-        const size = rawFind.readUInt32BE(idx + 4);
-        if (idx + 8 + size <= rawFind.length) {
-          findOutput += rawFind.slice(idx + 8, idx + 8 + size).toString();
-          idx += 8 + size;
-        } else break;
-      } else break;
-    }
-
-    const filePaths = findOutput.split('\n').filter(Boolean);
-
     // Read file contents in batches
     const files: Array<{ path: string; content: string; type: 'file' }> = [];
     const failed: Array<{ path: string; error: string }> = [];
 
-    // Process files in batches of 20
-    const batchSize = 20;
-    for (let i = 0; i < filePaths.length; i += batchSize) {
-      const batch = filePaths.slice(i, i + batchSize);
+    if (isDaytonaSandbox(entry)) {
+      // Daytona sandbox — use exec to find and read files
+      const excludeArgs = excludePatterns.map(p => `-not -path "*/${p}/*" -not -name "${p}"`).join(' ');
+      const findResult = await daytonaExec(entry.id,
+        `find /workspace -type f ${excludeArgs} -size -1M 2>/dev/null`,
+        { timeoutSecs: 30 },
+      );
+      const filePaths = findResult.output.split('\n').filter(Boolean);
 
-      const batchPromises = batch.map(async (fullPath) => {
-        const relativePath = fullPath.replace('/workspace/', '');
-
-        try {
-          const catExec = await container.exec({
-            Cmd: ['cat', fullPath],
-            AttachStdout: true,
-            AttachStderr: true,
-          });
-          const catStream = await catExec.start({});
-          const catChunks: Buffer[] = [];
-
-          await new Promise<void>((resolve) => {
-            catStream.on('data', (chunk: Buffer) => catChunks.push(chunk));
-            catStream.on('end', resolve);
-          });
-
-          // Parse Docker multiplexed stream
-          const rawCat = Buffer.concat(catChunks);
-          let content = '';
-          let j = 0;
-          while (j < rawCat.length) {
-            if (j + 8 <= rawCat.length) {
-              const size = rawCat.readUInt32BE(j + 4);
-              if (j + 8 + size <= rawCat.length) {
-                content += rawCat.slice(j + 8, j + 8 + size).toString();
-                j += 8 + size;
-              } else break;
-            } else break;
-          }
-
-          // Skip binary files (check for null bytes)
-          if (content.includes('\x00')) {
+      const batchSize = 20;
+      for (let i = 0; i < filePaths.length; i += batchSize) {
+        const batch = filePaths.slice(i, i + batchSize);
+        const batchPromises = batch.map(async (fullPath) => {
+          const relativePath = fullPath.replace('/workspace/', '');
+          try {
+            const content = await daytonaReadFile(entry.id, relativePath);
+            if (content.includes('\x00')) return null; // Skip binary
+            return { path: '/' + relativePath, content, type: 'file' as const };
+          } catch (err: any) {
+            failed.push({ path: relativePath, error: err.message });
             return null;
           }
+        });
+        const results = await Promise.all(batchPromises);
+        files.push(...results.filter((f): f is NonNullable<typeof f> => f !== null));
+      }
+    } else {
+      // Docker container
+      const container = docker.getContainer(entry.id);
 
-          return {
-            path: '/' + relativePath,
-            content,
-            type: 'file' as const,
-          };
-        } catch (err: any) {
-          failed.push({ path: relativePath, error: err.message });
-          return null;
-        }
+      // Build find command with exclusions
+      const excludeArgs: string[] = [];
+      excludePatterns.forEach((pattern) => {
+        excludeArgs.push('-not', '-path', `*/${pattern}/*`, '-not', '-name', pattern);
       });
 
-      const results = await Promise.all(batchPromises);
-      files.push(...results.filter((f): f is NonNullable<typeof f> => f !== null));
+      const findExec = await container.exec({
+        Cmd: ['find', '/workspace', '-type', 'f', ...excludeArgs, '-size', '-1M'],
+        AttachStdout: true,
+        AttachStderr: true,
+      });
+
+      const findStream = await findExec.start({});
+      const findChunks: Buffer[] = [];
+
+      await new Promise<void>((resolve) => {
+        findStream.on('data', (chunk: Buffer) => findChunks.push(chunk));
+        findStream.on('end', resolve);
+      });
+
+      // Parse Docker multiplexed stream
+      const rawFind = Buffer.concat(findChunks);
+      let findOutput = '';
+      let idx = 0;
+      while (idx < rawFind.length) {
+        if (idx + 8 <= rawFind.length) {
+          const size = rawFind.readUInt32BE(idx + 4);
+          if (idx + 8 + size <= rawFind.length) {
+            findOutput += rawFind.slice(idx + 8, idx + 8 + size).toString();
+            idx += 8 + size;
+          } else break;
+        } else break;
+      }
+
+      const filePaths = findOutput.split('\n').filter(Boolean);
+
+      // Process files in batches of 20
+      const batchSize = 20;
+      for (let i = 0; i < filePaths.length; i += batchSize) {
+        const batch = filePaths.slice(i, i + batchSize);
+
+        const batchPromises = batch.map(async (fullPath) => {
+          const relativePath = fullPath.replace('/workspace/', '');
+
+          try {
+            const catExec = await container.exec({
+              Cmd: ['cat', fullPath],
+              AttachStdout: true,
+              AttachStderr: true,
+            });
+            const catStream = await catExec.start({});
+            const catChunks: Buffer[] = [];
+
+            await new Promise<void>((resolve) => {
+              catStream.on('data', (chunk: Buffer) => catChunks.push(chunk));
+              catStream.on('end', resolve);
+            });
+
+            // Parse Docker multiplexed stream
+            const rawCat = Buffer.concat(catChunks);
+            let content = '';
+            let j = 0;
+            while (j < rawCat.length) {
+              if (j + 8 <= rawCat.length) {
+                const size = rawCat.readUInt32BE(j + 4);
+                if (j + 8 + size <= rawCat.length) {
+                  content += rawCat.slice(j + 8, j + 8 + size).toString();
+                  j += 8 + size;
+                } else break;
+              } else break;
+            }
+
+            // Skip binary files (check for null bytes)
+            if (content.includes('\x00')) {
+              return null;
+            }
+
+            return {
+              path: '/' + relativePath,
+              content,
+              type: 'file' as const,
+            };
+          } catch (err: any) {
+            failed.push({ path: relativePath, error: err.message });
+            return null;
+          }
+        });
+
+        const results = await Promise.all(batchPromises);
+        files.push(...results.filter((f): f is NonNullable<typeof f> => f !== null));
+      }
     }
 
     const exportDuration = Date.now() - exportStartTime;
@@ -4008,6 +4225,51 @@ app.post('/api/exec/:projectId', authenticateRequest, verifyProjectOwnership, as
     }
 
     entry.lastActive = Date.now();
+
+    // ─── Daytona sandbox exec ───
+    if (isDaytonaSandbox(entry)) {
+      if (background) {
+        // Kill existing dev server, then start in background
+        const dayCwd = cwd.replace(/\/workspace/g, '/home/daytona');
+        await daytonaExec(entry.id, 'pkill -f "npm run dev|vite|next dev" || true', { timeoutSecs: 5 }).catch(() => {});
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        await daytonaExec(entry.id, `mkdir -p "${dayCwd}"`, { timeoutSecs: 5 });
+        await daytonaExecBackground(entry.id, command.replace(/\/workspace\//g, '/home/daytona/'), dayCwd);
+        logger.info({ projectId }, 'Daytona: dev server started in background');
+
+        // Wait for startup
+        await new Promise(resolve => setTimeout(resolve, 3000));
+
+        // Check via curl inside sandbox
+        let ready = false;
+        try {
+          const curlResult = await daytonaExec(entry.id,
+            'curl -sf -o /dev/null -w "%{http_code}" http://localhost:3000 2>/dev/null || curl -sf -o /dev/null -w "%{http_code}" http://localhost:5173 2>/dev/null || echo "000"',
+            { timeoutSecs: 5 },
+          );
+          const code = parseInt(curlResult.output.trim(), 10);
+          ready = code > 0 && code < 500;
+        } catch {}
+
+        const currentEntry = containers.get(req.params.projectId);
+        if (currentEntry) currentEntry.backgroundDev = true;
+
+        return res.json({
+          output: ready ? 'Started in background' : 'Started in background (building...)',
+          background: true,
+          ready,
+          port: entry.port,
+        });
+      }
+
+      // Foreground exec — convert /workspace/ paths to /home/daytona/ for Daytona sandboxes
+      const dayCwd = cwd.replace(/\/workspace/g, '/home/daytona');
+      const dayCmd = command.replace(/\/workspace\//g, '/home/daytona/').replace(/\/workspace(?=["'\s]|$)/g, '/home/daytona');
+      const result = await daytonaExec(entry.id, `cd "${dayCwd}" && ${dayCmd}`, { cwd: dayCwd, timeoutSecs: 60 });
+      return res.json({ output: result.output, success: result.exitCode === 0, exitCode: result.exitCode });
+    }
+
+    // ─── Docker container exec ───
     const container = docker.getContainer(entry.id);
 
     // For background commands (like dev servers), start and return immediately
@@ -4059,8 +4321,8 @@ app.post('/api/exec/:projectId', authenticateRequest, verifyProjectOwnership, as
 
       logger.info('dev server process started, performing health check');
 
-      // 🔧 FIX: Wait for dev server to actually respond (up to 30 seconds)
-      const portsToCheck = [entry.port + 1, entry.port, entry.port + 4, entry.port + 5, entry.port + 2]; // Vite (5173), Next.js (3000), Expo (8081), Expo legacy (19006), Other (8080)
+      // Wait for dev server to actually respond (up to 30 seconds)
+      const portsToCheck = [entry.port + 1, entry.port, entry.port + 4, entry.port + 5, entry.port + 2];
       const healthCheck = await waitForDevServer(portsToCheck, 30000);
 
       if (healthCheck.ready) {
@@ -4146,6 +4408,13 @@ app.get('/api/logs/:projectId', authenticateRequest, verifyProjectOwnership, asy
     entry.lastActive = Date.now();
     const tail = Math.min(parseInt(req.query.tail as string) || 100, 1000); // Cap at 1000 lines
     const source = req.query.source as string | undefined;
+
+    // Daytona sandbox — get logs via exec
+    if (isDaytonaSandbox(entry)) {
+      const logs = await daytonaGetLogs(entry.id, tail);
+      return res.json({ logs });
+    }
+
     const logs = await devServerManager.getLogs(entry.id, projectId, tail, source);
 
     res.json({ logs });
@@ -4164,7 +4433,14 @@ app.get('/api/logs/:projectId/parsed', authenticateRequest, verifyProjectOwnersh
     entry.lastActive = Date.now();
     const tail = Math.min(parseInt(req.query.tail as string) || 100, 1000);
     const source = req.query.source as string | undefined;
-    const logs = await devServerManager.getLogs(entry.id, projectId, tail, source);
+
+    // Daytona sandbox — get logs via exec
+    let logs: string;
+    if (isDaytonaSandbox(entry)) {
+      logs = await daytonaGetLogs(entry.id, tail);
+    } else {
+      logs = await devServerManager.getLogs(entry.id, projectId, tail, source);
+    }
 
     // Parse errors from logs
     const errors = parseAllErrors(logs);
@@ -4192,7 +4468,12 @@ app.get('/api/errors/:projectId', authenticateRequest, verifyProjectOwnership, a
 
     // Get recent logs
     const tail = Math.min(parseInt(req.query.tail as string) || 200, 1000); // Cap at 1000 lines
-    const logs = await devServerManager.getLogs(entry.id, projectId, tail);
+    let logs: string;
+    if (isDaytonaSandbox(entry)) {
+      logs = await daytonaGetLogs(entry.id, tail);
+    } else {
+      logs = await devServerManager.getLogs(entry.id, projectId, tail);
+    }
 
     // Parse errors from logs
     const errors = parseAllErrors(logs);
@@ -4302,7 +4583,10 @@ app.post('/api/dev-server/start', authenticateRequest, async (req: Authenticated
       ip: req.ip,
     });
 
-    const result = await devServerManager.start(entry.id, safeProjectId, framework, ports);
+    const result = await devServerManager.start(entry.id, safeProjectId, framework, ports, {
+      daytona: isDaytonaSandbox(entry),
+      daytonaPreviewUrl: (entry as any).daytonaPreviewUrl,
+    });
     entry.backgroundDev = true;
 
     res.json(result);
@@ -4334,7 +4618,7 @@ app.post('/api/dev-server/stop', authenticateRequest, async (req: AuthenticatedR
       ip: req.ip,
     });
 
-    const success = await devServerManager.stop(entry.id, safeProjectId);
+    const success = await devServerManager.stop(entry.id, safeProjectId, isDaytonaSandbox(entry));
     entry.backgroundDev = false;
 
     res.json({ success });
@@ -4921,9 +5205,15 @@ lifecycleManager.setCleanupHandler(async (projectId, containerId) => {
     try { healthMonitor.unregisterContainer(containerId); } catch (_) {}
     try { resourceOptimizer.unregisterContainer(containerId); } catch (_) {}
 
-    const container = docker.getContainer(containerId);
-    await container.stop().catch(() => {});
-    await container.remove().catch(() => {});
+    // Route cleanup through Daytona if this is a known sandbox
+    if (daytonaSandboxIds.has(containerId)) {
+      await daytonaDeleteSandbox(containerId).catch(() => {});
+      daytonaSandboxIds.delete(containerId);
+    } else {
+      const container = docker.getContainer(containerId);
+      await container.stop().catch(() => {});
+      await container.remove().catch(() => {});
+    }
     const entry = containers.get(projectId);
     if (entry) {
       releasePorts(entry.port, entry.ptyPort);
@@ -5038,6 +5328,304 @@ app.ws('/terminal/:projectId', async (ws: WebSocket, req: express.Request) => {
   let session = terminalSessions.get(terminalId);
   
   if (!session) {
+    // Daytona sandbox — use native session/PTY API for real terminal experience.
+    // Falls back to exec-based pseudo-terminal if the session API is unavailable (404).
+    if (isDaytonaSandbox(entry)) {
+      const dc = getDaytonaClient();
+      const sandboxId = entry.id;
+      let useSessionApi = false;
+      let daytonaSessionId = '';
+
+      // ── Try to create a native Daytona session ──
+      try {
+        daytonaSessionId = await dc.createSession(sandboxId, `terminal-${terminalId}`);
+        if (daytonaSessionId) {
+          useSessionApi = true;
+          logger.info({ projectId, terminalId, daytonaSessionId }, 'Terminal: using Daytona native session/PTY');
+        } else {
+          logger.warn({ projectId, terminalId }, 'Terminal: createSession returned empty id, falling back to exec');
+        }
+      } catch (sessionErr: any) {
+        logger.warn(
+          { projectId, terminalId, error: sessionErr.message },
+          'Terminal: Daytona session API unavailable, falling back to exec-based pseudo-terminal',
+        );
+      }
+
+      const sendOutput = (text: string) => {
+        if (ws.readyState === ws.OPEN) {
+          ws.send(Buffer.from(text, 'utf-8'));
+        }
+      };
+
+      if (useSessionApi && daytonaSessionId) {
+        // ════════════════════════════════════════════════════════════
+        // Native Daytona Session/PTY Mode
+        // ════════════════════════════════════════════════════════════
+
+        // Start a shell in the session so it's interactive
+        let lastCmdId = '';
+        let lastLogOffset = 0;
+        let pollTimer: ReturnType<typeof setInterval> | null = null;
+
+        // Initialize the session with a bash shell
+        try {
+          const initResult = await dc.execInSession(sandboxId, daytonaSessionId, 'cd /home/daytona && exec bash --login');
+          lastCmdId = initResult.cmdId;
+        } catch (initErr: any) {
+          logger.warn({ error: initErr.message }, 'Terminal: session init bash failed, will exec per-command');
+        }
+
+        sendOutput('\r\n$ ');
+
+        // Poll for new output from the session
+        const pollSessionLogs = async () => {
+          if (ws.readyState !== ws.OPEN) {
+            if (pollTimer) clearInterval(pollTimer);
+            return;
+          }
+
+          try {
+            const logs = await dc.getSessionLogs(sandboxId, daytonaSessionId, lastCmdId || undefined);
+            if (logs && logs.length > lastLogOffset) {
+              const newOutput = logs.slice(lastLogOffset);
+              lastLogOffset = logs.length;
+              // Convert \n to \r\n for terminal display
+              sendOutput(newOutput.replace(/\n/g, '\r\n'));
+            }
+          } catch {
+            // Polling failure is non-fatal — just skip this tick
+          }
+        };
+
+        // Start polling at 200ms intervals for responsive output
+        pollTimer = setInterval(pollSessionLogs, 200);
+
+        // Register RPC handlers
+        rpc.register('terminal.resize', async ({ cols, rows }) => {
+          if (cols && rows) {
+            await dc.resizeSession(sandboxId, daytonaSessionId, cols, rows);
+          }
+          return { success: true };
+        });
+        rpc.register('terminal.clear', async () => {
+          try {
+            await dc.execInSession(sandboxId, daytonaSessionId, 'clear');
+          } catch { /* ignore */ }
+          sendOutput('\x1bc');
+          return { success: true };
+        });
+        rpc.register('terminal.kill', async () => {
+          try {
+            await dc.execInSession(sandboxId, daytonaSessionId, '\x03');
+          } catch { /* ignore */ }
+          return { success: true };
+        });
+        rpc.register('terminal.saveHistory', async () => ({ success: true }));
+        rpc.register('terminal.getHistory', async () => ({ history: [] }));
+        rpc.register('resetTimer', async () => { lifecycleManager.resetTimer(projectId); return { success: true }; });
+
+        let cmdBuffer = '';
+
+        ws.on('message', async (data: Buffer | string) => {
+          if (!terminalRateLimiter.allowMessage(ws as any)) return;
+          entry!.lastActive = Date.now();
+          lifecycleManager.resetTimer(projectId);
+
+          const text = typeof data === 'string' ? data : data.toString('utf-8');
+
+          // Handle JSON messages (ping/pong, RPC)
+          if (typeof data === 'string') {
+            try {
+              const parsed = JSON.parse(data);
+              if (parsed.type === 'ping') {
+                ws.send(JSON.stringify({ type: 'pong', timestamp: Date.now() }));
+                return;
+              }
+              const handled = await rpc.handleMessage(JSON.stringify(parsed));
+              if (handled) return;
+            } catch {
+              // Not JSON — treat as terminal input
+            }
+          }
+
+          // Accumulate characters and execute on Enter
+          for (const ch of text) {
+            if (ch === '\r' || ch === '\n') {
+              sendOutput('\r\n');
+              const cmd = cmdBuffer.trim();
+              cmdBuffer = '';
+
+              if (cmd) {
+                try {
+                  // Reset log offset for new command output
+                  lastLogOffset = 0;
+                  const execResult = await dc.execInSession(sandboxId, daytonaSessionId, cmd);
+                  lastCmdId = execResult.cmdId;
+                  // Give a moment for output, then poll will pick it up
+                  await new Promise(resolve => setTimeout(resolve, 150));
+                  await pollSessionLogs();
+                } catch (err: any) {
+                  sendOutput(`Error: ${err.message}\r\n`);
+                }
+              }
+
+              // Fetch cwd for prompt
+              try {
+                const cwdResult = await dc.execInSession(sandboxId, daytonaSessionId, 'pwd');
+                if (cwdResult.cmdId) {
+                  await new Promise(resolve => setTimeout(resolve, 100));
+                  const cwdLogs = await dc.getSessionLogs(sandboxId, daytonaSessionId, cwdResult.cmdId);
+                  const cwd = cwdLogs.trim().split('\n').pop()?.trim() || '/home/daytona';
+                  const shortCwd = cwd === '/home/daytona' ? '~' : cwd.replace('/home/daytona/', '~/');
+                  sendOutput(`${shortCwd} $ `);
+                } else {
+                  sendOutput('$ ');
+                }
+              } catch {
+                sendOutput('$ ');
+              }
+            } else if (ch === '\x7f' || ch === '\b') {
+              if (cmdBuffer.length > 0) {
+                cmdBuffer = cmdBuffer.slice(0, -1);
+                sendOutput('\b \b');
+              }
+            } else if (ch === '\x03') {
+              cmdBuffer = '';
+              try {
+                await dc.execInSession(sandboxId, daytonaSessionId, '\x03');
+              } catch { /* ignore */ }
+              sendOutput('^C\r\n$ ');
+            } else {
+              cmdBuffer += ch;
+              sendOutput(ch);
+            }
+          }
+        });
+
+        ws.on('close', () => {
+          logger.info({ terminalId, projectId, daytonaSessionId }, 'Daytona session terminal closed');
+          if (pollTimer) clearInterval(pollTimer);
+          // Best-effort cleanup of the Daytona session
+          dc.deleteSession(sandboxId, daytonaSessionId).catch(() => {});
+          terminalSessions.delete(terminalId);
+          wsKeepalive.unregister(ws as any);
+          terminalRateLimiter.untrack(ws as any);
+        });
+
+        session = { pty: null as any, projectId, rpc };
+        terminalSessions.set(terminalId, session);
+        return; // Skip the Docker terminal setup below
+      }
+
+      // ════════════════════════════════════════════════════════════
+      // Exec-based Fallback (original pseudo-terminal when session API fails)
+      // ════════════════════════════════════════════════════════════
+      logger.info({ projectId, terminalId }, 'Terminal: using Daytona exec-based pseudo-terminal (fallback)');
+
+      let currentCwd = '/workspace';
+
+      sendOutput('$ ');
+
+      // Register RPC handlers
+      rpc.register('terminal.resize', async () => ({ success: true }));
+      rpc.register('terminal.clear', async () => { sendOutput('\x1bc'); return { success: true }; });
+      rpc.register('terminal.kill', async () => ({ success: true }));
+      rpc.register('terminal.saveHistory', async () => ({ success: true }));
+      rpc.register('terminal.getHistory', async () => ({ history: [] }));
+      rpc.register('resetTimer', async () => { lifecycleManager.resetTimer(projectId); return { success: true }; });
+
+      let cmdBuffer = '';
+
+      ws.on('message', async (data: Buffer | string) => {
+        if (!terminalRateLimiter.allowMessage(ws as any)) return;
+        entry!.lastActive = Date.now();
+        lifecycleManager.resetTimer(projectId);
+
+        const text = typeof data === 'string' ? data : data.toString('utf-8');
+
+        // Handle JSON messages (ping/pong)
+        if (typeof data === 'string') {
+          try {
+            const parsed = JSON.parse(data);
+            if (parsed.type === 'ping') {
+              ws.send(JSON.stringify({ type: 'pong', timestamp: Date.now() }));
+              return;
+            }
+            // RPC dispatch
+            const handled = await rpc.handleMessage(JSON.stringify(parsed));
+            if (handled) return;
+          } catch {
+            // Not JSON — treat as terminal input
+          }
+        }
+
+        // Accumulate characters until Enter
+        for (const ch of text) {
+          if (ch === '\r' || ch === '\n') {
+            sendOutput('\r\n');
+            const cmd = cmdBuffer.trim();
+            cmdBuffer = '';
+
+            if (cmd) {
+              try {
+                // Handle cd specially to track cwd
+                const cdMatch = cmd.match(/^cd\s+(.*)/);
+                if (cdMatch) {
+                  const target = cdMatch[1].replace(/^['"]|['"]$/g, '');
+                  const absTarget = target.startsWith('/') ? target : `${currentCwd}/${target}`;
+                  const checkResult = await daytonaExec(entry!.id, `cd "${absTarget}" && pwd`, { cwd: currentCwd, timeoutSecs: 5 });
+                  if (checkResult.exitCode === 0) {
+                    currentCwd = checkResult.output.trim();
+                  } else {
+                    sendOutput(`bash: cd: ${target}: No such file or directory\r\n`);
+                  }
+                } else {
+                  const result = await daytonaExec(entry!.id, `cd "${currentCwd}" && ${cmd}`, { cwd: currentCwd, timeoutSecs: 30 });
+                  if (result.output) {
+                    // Convert \n to \r\n for terminal
+                    sendOutput(result.output.replace(/\n/g, '\r\n'));
+                    if (!result.output.endsWith('\n')) sendOutput('\r\n');
+                  }
+                }
+              } catch (err: any) {
+                sendOutput(`Error: ${err.message}\r\n`);
+              }
+            }
+
+            // Show prompt
+            const shortCwd = currentCwd === '/workspace' ? '~' : currentCwd.replace('/workspace/', '~/');
+            sendOutput(`${shortCwd} $ `);
+          } else if (ch === '\x7f' || ch === '\b') {
+            // Backspace
+            if (cmdBuffer.length > 0) {
+              cmdBuffer = cmdBuffer.slice(0, -1);
+              sendOutput('\b \b');
+            }
+          } else if (ch === '\x03') {
+            // Ctrl+C
+            cmdBuffer = '';
+            sendOutput('^C\r\n$ ');
+          } else {
+            cmdBuffer += ch;
+            sendOutput(ch); // Echo
+          }
+        }
+      });
+
+      ws.on('close', () => {
+        logger.info({ terminalId, projectId }, 'Daytona terminal session closed');
+        terminalSessions.delete(terminalId);
+        wsKeepalive.unregister(ws as any);
+        terminalRateLimiter.untrack(ws as any);
+      });
+
+      // Store a minimal session
+      session = { pty: null as any, projectId, rpc };
+      terminalSessions.set(terminalId, session);
+      return; // Skip the Docker terminal setup below
+    }
+
     // Create new independent PTY session via docker exec
     const container = docker.getContainer(entry.id);
 
@@ -6743,8 +7331,13 @@ app.post('/api/visual-edit/:projectId/apply', authenticateRequest, verifyProject
     // Dynamically import visual editing transform (avoid loading babel unless needed)
     const { transformContent } = await import('./visual-editing-transform.js');
 
-    // Helper: read file from container
+    // Helper: read file from container (routes through Daytona for sandboxes)
     const readFileFromContainer = async (containerId: string, filePath: string): Promise<string> => {
+      if (isDaytonaSandbox(entry)) {
+        // filePath is absolute like /workspace/src/App.tsx — convert to relative
+        const relativePath = filePath.startsWith('/workspace/') ? filePath.slice('/workspace/'.length) : filePath.startsWith('/home/daytona/') ? filePath.slice('/home/daytona/'.length) : filePath;
+        return daytonaReadFile(containerId, relativePath);
+      }
       const container = docker.getContainer(containerId);
       const exec = await container.exec({
         Cmd: ['cat', filePath],
@@ -6760,8 +7353,13 @@ app.post('/api/visual-edit/:projectId/apply', authenticateRequest, verifyProject
       });
     };
 
-    // Helper: write file to container
+    // Helper: write file to container (routes through Daytona for sandboxes)
     const writeFileToContainer = async (containerId: string, filePath: string, content: string): Promise<void> => {
+      if (isDaytonaSandbox(entry)) {
+        const relativePath = filePath.startsWith('/workspace/') ? filePath.slice('/workspace/'.length) : filePath.startsWith('/home/daytona/') ? filePath.slice('/home/daytona/'.length) : filePath;
+        await daytonaWriteFile(containerId, relativePath, content);
+        return;
+      }
       const container = docker.getContainer(containerId);
       const exec = await container.exec({
         Cmd: ['sh', '-c', `mkdir -p "$(dirname "${filePath}")" && cat > "${filePath}"`],
@@ -7073,7 +7671,8 @@ app.ws('/sync/:projectId', async (ws: WebSocket, req: express.Request) => {
     return;
   }
 
-  const container = docker.getContainer(entry.id);
+  const useDaytona = isDaytonaSandbox(entry);
+  const container = useDaytona ? null : docker.getContainer(entry.id);
 
   ws.on('message', async (data) => {
     // Rate limit check
@@ -7086,26 +7685,48 @@ app.ws('/sync/:projectId', async (ws: WebSocket, req: express.Request) => {
       entry.lastActive = Date.now();
       const msg = JSON.parse(data.toString());
 
+      if (useDaytona) {
+        // Route all file sync operations through Daytona helpers
+        if (msg.action === 'write') {
+          const relativePath = (msg.path as string).startsWith('/workspace/') ? (msg.path as string).slice('/workspace/'.length) : (msg.path as string).startsWith('/home/daytona/') ? (msg.path as string).slice('/home/daytona/'.length) : msg.path;
+          await daytonaWriteFile(entry.id, relativePath, msg.content);
+          ws.send(JSON.stringify({ action: 'written', path: msg.path }));
+        } else if (msg.action === 'read') {
+          const relativePath = (msg.path as string).startsWith('/workspace/') ? (msg.path as string).slice('/workspace/'.length) : (msg.path as string).startsWith('/home/daytona/') ? (msg.path as string).slice('/home/daytona/'.length) : msg.path;
+          const content = await daytonaReadFile(entry.id, relativePath).catch(() => '');
+          ws.send(JSON.stringify({ action: 'content', path: msg.path, content }));
+        } else if (msg.action === 'delete') {
+          const relativePath = (msg.path as string).startsWith('/workspace/') ? (msg.path as string).slice('/workspace/'.length) : (msg.path as string).startsWith('/home/daytona/') ? (msg.path as string).slice('/home/daytona/'.length) : msg.path;
+          await daytonaDeleteFile(entry.id, relativePath);
+          ws.send(JSON.stringify({ action: 'deleted', path: msg.path }));
+        } else if (msg.action === 'list') {
+          const dirPath = msg.path || '/home/daytona';
+          const files = await daytonaListFiles(entry.id, dirPath);
+          ws.send(JSON.stringify({ action: 'files', files }));
+        }
+        return;
+      }
+
       if (msg.action === 'write') {
         const dir = msg.path.substring(0, msg.path.lastIndexOf('/'));
-        if (dir) await execCommand(container, `mkdir -p "${dir}"`);
+        if (dir) await execCommand(container!, `mkdir -p "${dir}"`);
         const b64 = Buffer.from(msg.content).toString('base64');
-        await execCommand(container, `echo "${b64}" | base64 -d > "${msg.path}"`);
+        await execCommand(container!, `echo "${b64}" | base64 -d > "${msg.path}"`);
         ws.send(JSON.stringify({ action: 'written', path: msg.path }));
       }
 
       if (msg.action === 'read') {
-        const content = await execCommand(container, `cat "${msg.path}" 2>/dev/null || echo ""`);
+        const content = await execCommand(container!, `cat "${msg.path}" 2>/dev/null || echo ""`);
         ws.send(JSON.stringify({ action: 'content', path: msg.path, content }));
       }
 
       if (msg.action === 'delete') {
-        await execCommand(container, `rm -rf "${msg.path}"`);
+        await execCommand(container!, `rm -rf "${msg.path}"`);
         ws.send(JSON.stringify({ action: 'deleted', path: msg.path }));
       }
 
       if (msg.action === 'list') {
-        const output = await execCommand(container, `find "${msg.path || '/workspace'}" -maxdepth 3 2>/dev/null | head -500`);
+        const output = await execCommand(container!, `find "${msg.path || '/workspace'}" -maxdepth 3 2>/dev/null | head -500`);
         ws.send(JSON.stringify({ action: 'files', files: output.split('\n').filter(Boolean) }));
       }
     } catch (err: any) {
@@ -7347,15 +7968,24 @@ setInterval(async () => {
         try { healthMonitor.unregisterContainer(entry.id); } catch (_) {}
         try { resourceOptimizer.unregisterContainer(entry.id); } catch (_) {}
 
-        const container = docker.getContainer(entry.id);
-        await container.stop().catch(() => {});
-        await container.remove().catch(() => {});
-        releasePorts(entry.port, entry.ptyPort);
+        if (isDaytonaSandbox(entry)) {
+          // Daytona sandbox — stop via Daytona API (don't delete, just stop to save resources)
+          daytonaSandboxIds.delete(entry.id);
+          unregisterDaytonaId(entry.id);
+          await daytonaDeleteSandbox(entry.id).catch(() => {});
+        } else {
+          // Docker container — stop and remove
+          const container = docker.getContainer(entry.id);
+          await container.stop().catch(() => {});
+          await container.remove().catch(() => {});
+          releasePorts(entry.port, entry.ptyPort);
+        }
+
         if (entry.userId) {
           unregisterUserContainer(entry.userId, projectId);
         }
         containers.delete(projectId);
-        logger.info({ projectId }, 'cleaned up idle container');
+        logger.info({ projectId, daytona: !!entry.daytona }, 'cleaned up idle container');
       } catch {}
     }
   }
@@ -13272,14 +13902,28 @@ const sandboxDependencies: SandboxDependencies = {
     return { containerId: pooledContainer.id, port: pooledContainer.port };
   },
   startContainer: async (containerId: string) => {
+    if (daytonaSandboxIds.has(containerId)) {
+      const dc = getDaytonaClient();
+      await dc.startSandbox(containerId);
+      return;
+    }
     const container = docker.getContainer(containerId);
     await container.start();
   },
   stopContainer: async (containerId: string) => {
+    if (daytonaSandboxIds.has(containerId)) {
+      const dc = getDaytonaClient();
+      await dc.stopSandbox(containerId);
+      return;
+    }
     const container = docker.getContainer(containerId);
     await container.stop();
   },
   deleteContainer: async (containerId: string) => {
+    if (daytonaSandboxIds.has(containerId)) {
+      await daytonaDeleteSandbox(containerId);
+      return;
+    }
     await docker.getContainer(containerId).remove({ force: true });
   },
   execInContainer: async (containerId: string, command: string, options?: {
@@ -13287,6 +13931,36 @@ const sandboxDependencies: SandboxDependencies = {
     env?: Record<string, string>;
     timeoutMs?: number;
   }) => {
+    // Route through Daytona if this is a known sandbox
+    if (daytonaSandboxIds.has(containerId)) {
+      const startTime = Date.now();
+      try {
+        const fullCmd = options?.cwd
+          ? `cd "${options.cwd.replace(/"/g, '\\"')}" && ${command}`
+          : command;
+        const result = await daytonaExec(containerId, fullCmd, {
+          timeoutSecs: options?.timeoutMs ? Math.ceil(options.timeoutMs / 1000) : 30,
+        });
+        return {
+          exitCode: result.exitCode,
+          stdout: result.output,
+          stderr: '',
+          executionTimeMs: Date.now() - startTime,
+          timedOut: false,
+          killed: false,
+        };
+      } catch (err: any) {
+        return {
+          exitCode: -1,
+          stdout: '',
+          stderr: err.message || 'Daytona exec failed',
+          executionTimeMs: Date.now() - startTime,
+          timedOut: false,
+          killed: false,
+        };
+      }
+    }
+
     const container = docker.getContainer(containerId);
     const startTime = Date.now();
 
@@ -13347,6 +14021,11 @@ const sandboxDependencies: SandboxDependencies = {
     });
   },
   writeFile: async (containerId: string, filePath: string, content: string) => {
+    if (daytonaSandboxIds.has(containerId)) {
+      const relativePath = filePath.startsWith('/home/daytona/') ? filePath.slice('/home/daytona/'.length) : filePath.startsWith('/workspace/') ? filePath.slice('/workspace/'.length) : filePath;
+      await daytonaWriteFile(containerId, relativePath, content);
+      return;
+    }
     const container = docker.getContainer(containerId);
     const exec = await container.exec({
       Cmd: ['sh', '-c', `mkdir -p "$(dirname "${filePath}")" && cat > "${filePath}"`],
@@ -13359,6 +14038,27 @@ const sandboxDependencies: SandboxDependencies = {
     stream.end();
   },
   readFile: async (containerId: string, filePath: string) => {
+    if (daytonaSandboxIds.has(containerId)) {
+      const relativePath = filePath.startsWith('/home/daytona/') ? filePath.slice('/home/daytona/'.length) : filePath.startsWith('/workspace/') ? filePath.slice('/workspace/'.length) : filePath;
+      const fileContent = await daytonaReadFile(containerId, relativePath);
+      const ext = filePath.split('.').pop()?.toLowerCase() || '';
+      const mimeTypes: Record<string, string> = {
+        'js': 'application/javascript',
+        'ts': 'application/typescript',
+        'tsx': 'application/typescript',
+        'jsx': 'application/javascript',
+        'json': 'application/json',
+        'html': 'text/html',
+        'css': 'text/css',
+        'md': 'text/markdown',
+        'txt': 'text/plain',
+      };
+      return {
+        content: fileContent,
+        size: Buffer.byteLength(fileContent),
+        mimeType: mimeTypes[ext] || 'text/plain',
+      };
+    }
     const container = docker.getContainer(containerId);
     const exec = await container.exec({
       Cmd: ['cat', filePath],
@@ -13396,6 +14096,11 @@ const sandboxDependencies: SandboxDependencies = {
     });
   },
   deleteFile: async (containerId: string, filePath: string) => {
+    if (daytonaSandboxIds.has(containerId)) {
+      const relativePath = filePath.startsWith('/home/daytona/') ? filePath.slice('/home/daytona/'.length) : filePath.startsWith('/workspace/') ? filePath.slice('/workspace/'.length) : filePath;
+      await daytonaDeleteFile(containerId, relativePath);
+      return;
+    }
     const container = docker.getContainer(containerId);
     const exec = await container.exec({
       Cmd: ['rm', '-f', filePath],
@@ -13405,6 +14110,21 @@ const sandboxDependencies: SandboxDependencies = {
     await exec.start({ hijack: true, stdin: false });
   },
   listFiles: async (containerId: string, dirPath: string) => {
+    if (daytonaSandboxIds.has(containerId)) {
+      const result = await daytonaExec(containerId, `find '${dirPath}' -maxdepth 1 -printf '%y|%s|%T@|%f\\n' 2>/dev/null`, { timeoutSecs: 15 });
+      const files = result.output.trim().split('\n').filter(Boolean).map((line: string) => {
+        const [type, size, mtime, name] = line.split('|');
+        const isDir = type === 'd';
+        return {
+          name: name || '',
+          path: `${dirPath}/${name}`,
+          size: parseInt(size) || 0,
+          modifiedAt: Math.floor(parseFloat(mtime) * 1000),
+          isDirectory: isDir,
+        };
+      });
+      return files;
+    }
     const container = docker.getContainer(containerId);
     const exec = await container.exec({
       Cmd: ['find', dirPath, '-maxdepth', '1', '-printf', '%y|%s|%T@|%f\\n'],
@@ -13457,14 +14177,28 @@ const projectDependencies: ProjectDependencies = {
     return { containerId: pooledContainer.id, port: pooledContainer.port };
   },
   startContainer: async (containerId: string) => {
+    if (daytonaSandboxIds.has(containerId)) {
+      const dc = getDaytonaClient();
+      await dc.startSandbox(containerId);
+      return;
+    }
     const container = docker.getContainer(containerId);
     await container.start();
   },
   stopContainer: async (containerId: string) => {
+    if (daytonaSandboxIds.has(containerId)) {
+      const dc = getDaytonaClient();
+      await dc.stopSandbox(containerId);
+      return;
+    }
     const container = docker.getContainer(containerId);
     await container.stop();
   },
   deleteContainer: async (containerId: string) => {
+    if (daytonaSandboxIds.has(containerId)) {
+      await daytonaDeleteSandbox(containerId);
+      return;
+    }
     await docker.getContainer(containerId).remove({ force: true });
   },
   getPreviewUrl: (port: number) => {
@@ -13586,7 +14320,21 @@ app.use('/api/a2a', a2aOpenApiRouter);
 app.use('/api/a2a', a2aSloMetricsRouter);
 app.use('/api/a2a/orchestration', orchestrationRouter);
 app.use('/api/a2a', workflowMessagingRouter);
+
+// Cross-app A2A workflows (agents↔PM↔agency)
+import { crossAppWorkflowRouter } from './a2a-cross-app-workflows.js';
+app.use('/api/a2a/workflows', crossAppWorkflowRouter);
 app.use('/api/a2a/admin', adminRouter);
+
+// Daytona LSP integration for code intelligence
+import { daytonaLspRouter } from './daytona-lsp.js';
+app.use('/api/daytona/lsp', authenticateRequest, daytonaLspRouter);
+
+// Unified activity feed + dashboard metrics
+import { activityFeedRouter } from './unified-activity-feed.js';
+import { dashboardRouter } from './unified-dashboard.js';
+app.use('/api/a2a/activity', activityFeedRouter);
+app.use('/api/a2a/dashboard', dashboardRouter);
 
 // Wire the A2A event bridge (TaskLifecycleService audit -> SSE event bus)
 wireA2AEventBridge();
@@ -14654,6 +15402,36 @@ app.post('/api/integrations/supabase/:projectId/deploy-functions', authenticateR
   }
 
   // Read supabase/functions directory
+  if (isDaytonaSandbox(entry)) {
+    // Daytona sandbox — use Daytona helpers for file listing and reading
+    const listOutput = await execInContainer(entry.id, 'ls -d /home/daytona/supabase/functions/*/ 2>/dev/null || echo ""');
+    const output = listOutput.trim();
+
+    if (!output) {
+      return sendError(res, createError(ErrorCode.NOT_FOUND, 'No edge functions found in supabase/functions/'));
+    }
+
+    const functionDirs = output.split('\n').filter(Boolean).map(d => d.replace('/home/daytona/supabase/functions/', '').replace(/\/$/, ''));
+    const results: Array<{ name: string; status: string; error?: string }> = [];
+
+    for (const funcName of functionDirs) {
+      try {
+        const content = await daytonaReadFile(entry.id, `supabase/functions/${funcName}/index.ts`);
+        await supabaseClient.deployEdgeFunction(
+          creds.supabase.accessToken,
+          links.supabase.projectId,
+          funcName,
+          new Uint8Array(Buffer.from(content)),
+        );
+        results.push({ name: funcName, status: 'deployed' });
+      } catch (err: any) {
+        results.push({ name: funcName, status: 'failed', error: err.message });
+      }
+    }
+
+    return sendSuccess(res, { deployed: results });
+  }
+
   const docker = new Docker();
   const container = docker.getContainer(entry.id);
   const exec = await container.exec({
@@ -14832,6 +15610,19 @@ app.post('/api/integrations/neon/:projectId/set-env', authenticateRequest, verif
   const entry = containers.get(req.params.projectId);
   if (!entry) {
     return sendError(res, createError(ErrorCode.CONTAINER_NOT_FOUND, 'Container not found'));
+  }
+
+  if (isDaytonaSandbox(entry)) {
+    // Daytona sandbox — use Daytona helpers for file read/write
+    const existingEnv = await daytonaReadFile(entry.id, '.env').catch(() => '');
+
+    const lines = existingEnv.split('\n').filter(l => !l.startsWith('POSTGRES_URL=') && !l.startsWith('DATABASE_URL='));
+    lines.push(`POSTGRES_URL=${uri}`);
+    lines.push(`DATABASE_URL=${uri}`);
+    const newEnv = lines.filter(Boolean).join('\n') + '\n';
+
+    await daytonaWriteFile(entry.id, '.env', newEnv);
+    return sendSuccess(res, { set: true, branchId });
   }
 
   const docker = new Docker();
@@ -15242,64 +16033,85 @@ app.post('/api/integrations/vercel/:projectId/deploy', authenticateRequest, veri
   // Collect files from the container's output directory
   // Use the container exec to list and read files
   const buildDir = req.body.buildDir || 'dist';
-
-  // Exec tar in the container to get all files
-  const exec = await docker.getContainer(container.id).exec({
-    Cmd: ['tar', '-cf', '-', '-C', `/app/${buildDir}`, '.'],
-    AttachStdout: true,
-    AttachStderr: true,
-  });
-  const stream = await exec.start({ hijack: true, stdin: false });
-
-  const chunks: Buffer[] = [];
-  await new Promise<void>((resolve, reject) => {
-    stream.on('data', (chunk: Buffer) => chunks.push(chunk));
-    stream.on('end', resolve);
-    stream.on('error', reject);
-  });
-
-  // For Vercel, we deploy using their Files API
-  // Get file list from container
-  const listExec = await docker.getContainer(container.id).exec({
-    Cmd: ['find', `/app/${buildDir}`, '-type', 'f', '-not', '-path', '*/node_modules/*', '-not', '-path', '*/.git/*'],
-    AttachStdout: true,
-    AttachStderr: true,
-  });
-  const listStream = await listExec.start({ hijack: true, stdin: false });
-
-  let fileListStr = '';
-  await new Promise<void>((resolve, reject) => {
-    listStream.on('data', (chunk: Buffer) => { fileListStr += chunk.toString(); });
-    listStream.on('end', resolve);
-    listStream.on('error', reject);
-  });
-
-  const filePaths = fileListStr.trim().split('\n').filter(Boolean);
   const files: Array<{ file: string; data: string }> = [];
 
-  for (const fp of filePaths.slice(0, 5000)) { // Max 5000 files
-    const relativePath = fp.replace(`/app/${buildDir}/`, '');
-    if (!relativePath || relativePath.startsWith('.')) continue;
-    try {
-      const readExec = await docker.getContainer(container.id).exec({
-        Cmd: ['base64', '-w', '0', fp],
-        AttachStdout: true,
-        AttachStderr: true,
-      });
-      const readStream = await readExec.start({ hijack: true, stdin: false });
-      let content = '';
-      await new Promise<void>((resolve, reject) => {
-        readStream.on('data', (chunk: Buffer) => { content += chunk.toString(); });
-        readStream.on('end', resolve);
-        readStream.on('error', reject);
-      });
-      // Strip docker stream header bytes
-      const cleanContent = content.replace(/^[\x00-\x1f]/g, '').trim();
-      if (cleanContent) {
-        files.push({ file: relativePath, data: cleanContent });
+  if (isDaytonaSandbox(container)) {
+    // Daytona sandbox — list and read files via Daytona helpers
+    const listOutput = await execInContainer(container.id, `find /home/daytona/${buildDir} -type f -not -path '*/node_modules/*' -not -path '*/.git/*' | head -5000`);
+    const filePaths = listOutput.trim().split('\n').filter(Boolean);
+
+    for (const fp of filePaths) {
+      const relativePath = fp.replace(`/home/daytona/${buildDir}/`, '');
+      if (!relativePath || relativePath.startsWith('.')) continue;
+      try {
+        const content = await daytonaReadFile(container.id, `${buildDir}/${relativePath}`);
+        const b64 = Buffer.from(content).toString('base64');
+        if (b64) {
+          files.push({ file: relativePath, data: b64 });
+        }
+      } catch {
+        // Skip files we can't read
       }
-    } catch {
-      // Skip files we can't read
+    }
+  } else {
+    // Docker container — use Docker API directly
+    // Exec tar in the container to get all files
+    const exec = await docker.getContainer(container.id).exec({
+      Cmd: ['tar', '-cf', '-', '-C', `/app/${buildDir}`, '.'],
+      AttachStdout: true,
+      AttachStderr: true,
+    });
+    const stream = await exec.start({ hijack: true, stdin: false });
+
+    const chunks: Buffer[] = [];
+    await new Promise<void>((resolve, reject) => {
+      stream.on('data', (chunk: Buffer) => chunks.push(chunk));
+      stream.on('end', resolve);
+      stream.on('error', reject);
+    });
+
+    // For Vercel, we deploy using their Files API
+    // Get file list from container
+    const listExec = await docker.getContainer(container.id).exec({
+      Cmd: ['find', `/app/${buildDir}`, '-type', 'f', '-not', '-path', '*/node_modules/*', '-not', '-path', '*/.git/*'],
+      AttachStdout: true,
+      AttachStderr: true,
+    });
+    const listStream = await listExec.start({ hijack: true, stdin: false });
+
+    let fileListStr = '';
+    await new Promise<void>((resolve, reject) => {
+      listStream.on('data', (chunk: Buffer) => { fileListStr += chunk.toString(); });
+      listStream.on('end', resolve);
+      listStream.on('error', reject);
+    });
+
+    const filePaths = fileListStr.trim().split('\n').filter(Boolean);
+
+    for (const fp of filePaths.slice(0, 5000)) { // Max 5000 files
+      const relativePath = fp.replace(`/app/${buildDir}/`, '');
+      if (!relativePath || relativePath.startsWith('.')) continue;
+      try {
+        const readExec = await docker.getContainer(container.id).exec({
+          Cmd: ['base64', '-w', '0', fp],
+          AttachStdout: true,
+          AttachStderr: true,
+        });
+        const readStream = await readExec.start({ hijack: true, stdin: false });
+        let content = '';
+        await new Promise<void>((resolve, reject) => {
+          readStream.on('data', (chunk: Buffer) => { content += chunk.toString(); });
+          readStream.on('end', resolve);
+          readStream.on('error', reject);
+        });
+        // Strip docker stream header bytes
+        const cleanContent = content.replace(/^[\x00-\x1f]/g, '').trim();
+        if (cleanContent) {
+          files.push({ file: relativePath, data: cleanContent });
+        }
+      } catch {
+        // Skip files we can't read
+      }
     }
   }
 
@@ -15798,6 +16610,85 @@ app.get('/api/daytona/sandbox/:sandboxId/preview', authenticateRequest, (req: Au
 startupInfo('routes.daytona-sandbox', isDaytonaConfigured() ? 'registered' : 'registered (not configured - set DAYTONA_API_KEY)');
 
 // ==================== END SPRINT 14 ====================
+
+// ==================== SEARXNG WEB SEARCH PROXY ====================
+//
+// Forwards authenticated requests to the self-hosted SearXNG instance
+// so that docker-backend's own TypeScript tools can call it, and so that
+// any client inside the Docker network can use it via this API.
+//
+// SEARXNG_URL env var is set to http://searxng:8080 in docker-compose.
+// Falls back to http://127.0.0.1:8888 for local dev (host-level).
+
+const SEARXNG_BASE_URL = process.env.SEARXNG_URL || 'http://127.0.0.1:8888';
+
+/**
+ * GET /api/web-search
+ * Query params: q (required), limit (default 10), categories (default general),
+ *               time_range (optional: day|week|month|year), language (default en-US)
+ */
+app.get('/api/web-search', asyncHandler(async (req: express.Request, res: express.Response) => {
+  const query = req.query.q as string | undefined;
+  if (!query || query.trim().length === 0) {
+    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'Query parameter "q" is required'));
+  }
+
+  const limit = Math.min(parseInt((req.query.limit as string) || '10', 10), 50);
+  const categories = (req.query.categories as string) || 'general';
+  const language = (req.query.language as string) || 'en-US';
+  const timeRange = req.query.time_range as string | undefined;
+
+  const params = new URLSearchParams({
+    q: query,
+    format: 'json',
+    pageno: '1',
+    language,
+    categories,
+  });
+  if (timeRange) params.set('time_range', timeRange);
+
+  try {
+    const response = await fetch(`${SEARXNG_BASE_URL}/search?${params.toString()}`);
+    if (!response.ok) {
+      logger.error(`SearXNG returned ${response.status} for query: ${query}`);
+      return sendError(res, createError(ErrorCode.SERVICE_UNAVAILABLE, `Search backend returned ${response.status}`));
+    }
+
+    const data = await response.json() as {
+      results?: Array<{
+        title: string;
+        url: string;
+        content?: string;
+        engine?: string;
+        publishedDate?: string;
+        score?: number;
+      }>;
+    };
+
+    const results = (data.results || []).slice(0, limit).map(r => ({
+      title: r.title || '',
+      url: r.url || '',
+      content: r.content,
+      engine: r.engine,
+      published_date: r.publishedDate,
+      score: r.score,
+    }));
+
+    sendSuccess(res, {
+      query,
+      total: results.length,
+      results,
+      searxng_url: SEARXNG_BASE_URL,
+    });
+  } catch (err) {
+    logger.error(`Web search proxy error (SEARXNG_URL=${SEARXNG_BASE_URL}):`, err);
+    return sendError(res, createError(ErrorCode.SERVICE_UNAVAILABLE, 'Search backend is unreachable'));
+  }
+}));
+
+startupInfo('routes.web-search', `registered (SearXNG at ${SEARXNG_BASE_URL})`);
+
+// ==================== END SEARXNG WEB SEARCH PROXY ====================
 
 // Register shutdown handlers
 process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));

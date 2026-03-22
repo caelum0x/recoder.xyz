@@ -3,7 +3,7 @@
  * Seeds the database with sample data for testing
  */
 
-import { neon } from '@neondatabase/serverless';
+import { createSql } from '../app/lib/.server/db/pg-pool';
 
 const DATABASE_URL = process.env.DATABASE_URL;
 if (!DATABASE_URL) {
@@ -14,7 +14,7 @@ if (!DATABASE_URL) {
 async function seedDatabase() {
   console.log('🌱 Seeding Recoder Web Database...\n');
 
-  const sql = neon(DATABASE_URL);
+  const sql = createSql(DATABASE_URL);
 
   try {
     // Create sample users

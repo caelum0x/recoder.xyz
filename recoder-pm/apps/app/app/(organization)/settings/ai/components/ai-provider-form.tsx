@@ -35,18 +35,18 @@ const providerHints: Record<
   }
 > = {
   openrouter: {
-    modelPlaceholder: "openai/gpt-5-nano",
-    examples: ["openai/gpt-5-nano", "anthropic/claude-3.5-sonnet"],
+    modelPlaceholder: "openai/gpt-4o-mini",
+    examples: ["openai/gpt-4o-mini", "anthropic/claude-3.5-sonnet"],
     help: "Use any OpenRouter model slug.",
     docsUrl: "https://openrouter.ai/models",
-    recommended: "openai/gpt-5-nano",
+    recommended: "openai/gpt-4o-mini",
   },
   openai: {
-    modelPlaceholder: "gpt-5-nano",
-    examples: ["gpt-5-nano", "gpt-4.1-mini"],
+    modelPlaceholder: "gpt-4o-mini",
+    examples: ["gpt-4o-mini", "gpt-4o"],
     help: "Use OpenAI model IDs (no provider prefix).",
     docsUrl: "https://platform.openai.com/docs/models",
-    recommended: "gpt-5-nano",
+    recommended: "gpt-4o-mini",
   },
   anthropic: {
     modelPlaceholder: "claude-3.5-sonnet-latest",
@@ -77,7 +77,7 @@ const getModelWarning = (
   }
 
   if (targetProvider === "openrouter" && !modelValue.includes("/")) {
-    return "OpenRouter models should include a provider prefix (example: openai/gpt-5-nano).";
+    return "OpenRouter models should include a provider prefix (example: openai/gpt-4o-mini).";
   }
 
   if (targetProvider !== "openrouter" && modelValue.includes("/")) {

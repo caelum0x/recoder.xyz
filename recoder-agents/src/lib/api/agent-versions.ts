@@ -17,7 +17,7 @@ export interface VersionComparisonResponse {
 export const getAgentVersions = async (agentId: string): Promise<AgentVersion[]> => {
   const response = await backendApi.get<AgentVersion[]>(
     `/agents/${agentId}/versions`,
-    { showErrors: false, cache: 'no-store' }
+    { showErrors: true, cache: 'no-store' }
   );
 
   if (response.error) {
@@ -34,7 +34,7 @@ export const getVersionComparison = async (
 ): Promise<VersionComparisonResponse> => {
   const response = await backendApi.get<VersionComparisonResponse>(
     `/agents/${agentId}/versions/${v1Id}/compare/${v2Id}`,
-    { showErrors: false, cache: 'no-store' }
+    { showErrors: true, cache: 'no-store' }
   );
 
   if (response.error) {
@@ -135,7 +135,7 @@ export const listConfigVersions = async (
 ): Promise<ConfigVersionListResponse> => {
   const response = await backendApi.get<ConfigVersionListResponse>(
     `/agents/${agentId}/config-versions?limit=${limit}&offset=${offset}`,
-    { showErrors: false, cache: 'no-store' }
+    { showErrors: true, cache: 'no-store' }
   );
 
   if (response.error) {
@@ -151,7 +151,7 @@ export const getConfigVersion = async (
 ): Promise<ConfigVersion> => {
   const response = await backendApi.get<ConfigVersion>(
     `/agents/${agentId}/config-versions/${versionNumber}`,
-    { showErrors: false, cache: 'no-store' }
+    { showErrors: true, cache: 'no-store' }
   );
 
   if (response.error) {
@@ -202,7 +202,7 @@ export const diffConfigVersions = async (
 ): Promise<ConfigVersionDiffResponse> => {
   const response = await backendApi.get<ConfigVersionDiffResponse>(
     `/agents/${agentId}/config-versions/diff?from_version=${fromVersion}&to_version=${toVersion}`,
-    { showErrors: false, cache: 'no-store' }
+    { showErrors: true, cache: 'no-store' }
   );
 
   if (response.error) {

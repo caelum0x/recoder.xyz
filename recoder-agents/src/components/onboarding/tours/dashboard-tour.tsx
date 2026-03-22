@@ -27,12 +27,6 @@ const DASHBOARD_TOUR_STEPS: TourStep[] = [
     description: 'Press Cmd+K to search across everything — agents, threads, workflows, and more.',
     position: 'bottom',
   },
-  {
-    target: '[data-tour="app-switcher"]',
-    title: 'Switch Apps',
-    description: 'Switch between Recoder apps — Agents, Agency, PM, and more — all from here.',
-    position: 'bottom',
-  },
 ];
 
 interface DashboardTourProps {

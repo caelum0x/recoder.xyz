@@ -1,6 +1,7 @@
 import { requireSessionAccessToken } from '@/lib/auth/session-token';
 
-const PLATFORM_URL = process.env.NEXT_PUBLIC_URL || 'https://recoder.xyz';
+// Always call the main recoder.xyz app for platform-level endpoints
+const PLATFORM_URL = 'https://recoder.xyz';
 
 export interface PlatformNotification {
   id: string;

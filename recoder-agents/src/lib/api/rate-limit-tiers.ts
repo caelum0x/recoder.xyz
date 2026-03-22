@@ -75,7 +75,7 @@ export const createRateTier = async (data: CreateRateTierData): Promise<RateLimi
 
 export const getRateTiers = async (): Promise<RateLimitTier[]> => {
   const response = await backendApi.get<RateLimitTier[]>('/rate-tiers', {
-    showErrors: false,
+    showErrors: true,
   });
   if (response.error) throw new Error(response.error.message);
   return response.data ?? [];
@@ -113,7 +113,7 @@ export const assignRateTier = async (
 
 export const getAgentRateTier = async (agentId: string): Promise<AgentRateAssignment> => {
   const response = await backendApi.get<AgentRateAssignment>(`/agents/${agentId}/rate-tier`, {
-    showErrors: false,
+    showErrors: true,
   });
   if (response.error) throw new Error(response.error.message);
   return response.data!;
@@ -130,7 +130,7 @@ export const removeAgentRateTier = async (agentId: string): Promise<void> => {
 
 export const getRateTierUsage = async (): Promise<RateTierUsage[]> => {
   const response = await backendApi.get<RateTierUsage[]>('/rate-tiers/usage', {
-    showErrors: false,
+    showErrors: true,
   });
   if (response.error) throw new Error(response.error.message);
   return response.data ?? [];

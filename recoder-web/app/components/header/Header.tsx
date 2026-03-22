@@ -10,7 +10,6 @@ import { openSettingsPanel, closeSettingsPanel, settingsPanelOpen } from '~/lib/
 import { SettingsPanel } from '~/components/settings/SettingsPanel';
 import { openShortcutsPanel, closeShortcutsPanel, shortcutsPanelOpen } from '~/lib/stores/keyboard-shortcuts';
 import { KeyboardShortcutsPanel } from '~/components/ui/KeyboardShortcutsPanel';
-import { AppSwitcher } from './AppSwitcher';
 
 export function Header() {
   const chat = useStore(chatStore);
@@ -64,18 +63,20 @@ export function Header() {
       )}
     >
       <div className="flex items-center gap-2 z-logo text-recoder-elements-textPrimary">
-        <a href="/" className="text-2xl font-semibold text-accent flex items-center cursor-pointer hover:opacity-80 transition-opacity">
+        <a href="/" className="text-2xl font-semibold text-accent flex items-center gap-2 cursor-pointer hover:opacity-80 transition-opacity">
           <img src="/logo.png" alt="Recoder" className="w-8 h-8 rounded" />
+          <span className="text-base font-semibold text-recoder-elements-textPrimary hidden sm:inline">Recoder</span>
         </a>
 
         {/* History Toggle Button */}
+        <div className="w-px h-4 bg-recoder-elements-borderColor/30 mx-1" />
         <button
           onClick={handleHistoryToggle}
           className="p-1.5 bg-transparent hover:bg-recoder-elements-background-depth-3 rounded-md transition-all text-recoder-elements-textSecondary hover:text-recoder-elements-textPrimary"
           title="Toggle Chat History"
           aria-label="Toggle chat history sidebar"
         >
-          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 256 256" fill="currentColor"><path d="M136,80v43.47l36.12,21.67a8,8,0,0,1-8.24,13.72l-40-24A8,8,0,0,1,120,128V80a8,8,0,0,1,16,0Zm-8-48A95.44,95.44,0,0,0,60.08,60.15C52.81,67.51,46.35,74.59,40,82V64a8,8,0,0,0-16,0v40a8,8,0,0,0,8,8H72a8,8,0,0,0,0-16H49c7.15-8.42,14.27-16.35,22.39-24.57a80,80,0,1,1,1.66,114.75,8,8,0,1,0-11,11.64A96,96,0,1,0,128,32Z"/></svg>
+          <div className="i-ph:clock-counter-clockwise text-lg" />
         </button>
         
         {/* Navigation Links */}
@@ -102,7 +103,6 @@ export function Header() {
             )}
           </ClientOnly>
         )}
-        <AppSwitcher />
         {/* Settings Button */}
         <button
           onClick={openSettingsPanel}

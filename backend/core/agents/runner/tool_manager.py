@@ -27,6 +27,7 @@ DEFAULT_CORE_TOOLS = [
     'sb_upload_file_tool',  # File uploads
     'sb_expose_tool',       # Port exposure
     'sb_kb_tool',           # Knowledge base operations
+    'sb_code_interpreter_tool',  # Code execution (Python/JS/TS)
     'agent_config_tool',
     'agent_creation_tool',
     'mcp_search_tool',
@@ -111,8 +112,8 @@ class ToolManager:
         self.thread_manager.add_tool(MessageTool)
         self.thread_manager.add_tool(TaskListTool, project_id=self.project_id, thread_manager=self.thread_manager, thread_id=self.thread_id)
         
-        # Search tools (if API keys configured AND enabled in config)
-        if (config.TAVILY_API_KEY or config.FIRECRAWL_API_KEY) and self._is_tool_enabled('web_search_tool'):
+        # Search tools - DuckDuckGo-based, no API key required
+        if self._is_tool_enabled('web_search_tool'):
             enabled_methods = self._get_enabled_methods_for_tool('web_search_tool')
             self.thread_manager.add_tool(SandboxWebSearchTool, function_names=enabled_methods, thread_manager=self.thread_manager, project_id=self.project_id)
         

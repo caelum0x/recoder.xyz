@@ -1054,10 +1054,9 @@ export class Config {
     registerCoreTool(TodoWriteTool, this);
     registerCoreTool(ExitPlanModeTool, this);
     registerCoreTool(WebFetchTool, this);
-    // Conditionally register web search tool only if Tavily API key is set
-    if (this.getTavilyApiKey()) {
-      registerCoreTool(WebSearchTool, this);
-    }
+    // Web search always registered — uses SearXNG (self-hosted, no API key needed)
+    // Falls back to Tavily if TAVILY_API_KEY is set, then DuckDuckGo
+    registerCoreTool(WebSearchTool, this);
 
     await registry.discoverAllTools();
     return registry;

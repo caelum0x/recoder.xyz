@@ -318,7 +318,7 @@ export const EventBasedTriggerDialog: React.FC<EventBasedTriggerDialogProps> = (
     const [name, setName] = useState('');
     const [prompt, setPrompt] = useState('');
     const [profileId, setProfileId] = useState('');
-    const [model, setModel] = useState('recoder/basic');
+    const [model, setModel] = useState('recoder/power');
     const [executionType] = useState<'agent'>('agent');
     const [showComposioConnector, setShowComposioConnector] = useState(false);
 
@@ -355,7 +355,7 @@ export const EventBasedTriggerDialog: React.FC<EventBasedTriggerDialogProps> = (
             setName('');
             setPrompt('');
             setProfileId('');
-            setModel('recoder/basic');
+            setModel('recoder/power');
             setShowComposioConnector(false);
         }
     }, [open, isEditMode]);
@@ -385,7 +385,7 @@ export const EventBasedTriggerDialog: React.FC<EventBasedTriggerDialogProps> = (
             setName(existingTrigger.name || '');
             setPrompt(triggerConfig.agent_prompt || '');
             setProfileId(triggerConfig.profile_id || '');
-            setModel(triggerConfig.model || 'recoder/basic');
+            setModel(triggerConfig.model || 'recoder/power');
 
             const { agent_prompt, profile_id, provider_id, trigger_slug, qualified_name, model: _, ...triggerSpecificConfig } = triggerConfig;
             setConfig(triggerSpecificConfig);
@@ -503,8 +503,8 @@ export const EventBasedTriggerDialog: React.FC<EventBasedTriggerDialogProps> = (
                 const result = await createTrigger.mutateAsync(payload);
                 toast.success('Task created');
 
-                if (onTriggerCreated && result?.trigger_id) {
-                    onTriggerCreated(result.trigger_id);
+                if (onTriggerCreated && result?.agent_id) {
+                    onTriggerCreated(result.agent_id);
                 }
             }
 

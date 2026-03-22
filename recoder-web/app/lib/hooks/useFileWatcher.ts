@@ -23,7 +23,10 @@ import { createScopedLogger } from '~/utils/logger';
 
 const logger = createScopedLogger('FileWatcher');
 
-const DOCKER_URL = import.meta.env.VITE_DOCKER_BACKEND_URL || 'https://docker.recoder.xyz';
+let DOCKER_URL = import.meta.env.VITE_DOCKER_BACKEND_URL || 'https://docker.recoder.xyz';
+if (typeof window !== 'undefined' && window.location.hostname !== 'localhost' && DOCKER_URL.includes('localhost')) {
+  DOCKER_URL = 'https://docker.recoder.xyz';
+}
 
 // Reconnection configuration
 const INITIAL_RECONNECT_DELAY = 2000;  // Start at 2 seconds (slower to avoid spam)

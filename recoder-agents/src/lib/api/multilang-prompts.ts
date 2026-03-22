@@ -97,7 +97,7 @@ export const listPromptSets = async (filters?: {
   const qs = params.toString();
   const response = await backendApi.get<MultilangPromptSet[]>(
     `/prompts/multilang${qs ? `?${qs}` : ''}`,
-    { showErrors: false }
+    { showErrors: true }
   );
   if (response.error) throw new Error(response.error.message);
   return response.data!;
@@ -137,7 +137,7 @@ export const listVariants = async (
 ): Promise<MultilangPromptVariant[]> => {
   const response = await backendApi.get<MultilangPromptVariant[]>(
     `/prompts/multilang/${promptSetId}/variants`,
-    { showErrors: false }
+    { showErrors: true }
   );
   if (response.error) throw new Error(response.error.message);
   return response.data!;
@@ -159,7 +159,7 @@ export const getVariant = async (
 ): Promise<MultilangPromptVariant> => {
   const response = await backendApi.get<MultilangPromptVariant>(
     `/prompts/multilang/${promptSetId}/variant/${languageCode}`,
-    { showErrors: false }
+    { showErrors: true }
   );
   if (response.error) throw new Error(response.error.message);
   return response.data!;
@@ -168,7 +168,7 @@ export const getVariant = async (
 export const getMultilangStats = async (): Promise<MultilangStats> => {
   const response = await backendApi.get<MultilangStats>(
     '/prompts/multilang/stats',
-    { showErrors: false }
+    { showErrors: true }
   );
   if (response.error) throw new Error(response.error.message);
   return response.data!;

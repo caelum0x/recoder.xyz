@@ -4,6 +4,7 @@ export default defineConfig([
 	{
 		entry: [
 			"src/index.ts",
+			"src/schemas/index.ts",
 			"src/state-mapping.ts",
 			"src/error-mapping.ts",
 			"src/envelope-builders.ts",

@@ -65,7 +65,7 @@ export const getAnomalies = async (filters?: AnomalyFilters): Promise<Anomaly[]>
   const url = `/anomalies${query ? `?${query}` : ''}`;
 
   const response = await backendApi.get<Anomaly[]>(url, {
-    showErrors: false,
+    showErrors: true,
     cache: 'no-store',
   });
 
@@ -110,7 +110,7 @@ export const runAnomalyScan = async (): Promise<AnomalyScanResult> => {
 export const getAnomalyStats = async (): Promise<AnomalyStats> => {
   const response = await backendApi.get<AnomalyStats>(
     '/anomalies/stats',
-    { showErrors: false, cache: 'no-store' }
+    { showErrors: true, cache: 'no-store' }
   );
 
   if (response.error) {

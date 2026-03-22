@@ -3,7 +3,7 @@
  * Manages project storage in PostgreSQL/Neon
  */
 
-import { neon } from '@neondatabase/serverless';
+import { createSql } from './pg-pool';
 import { sanitizePostgresText } from './postgres-text-safety';
 import { createScopedLogger } from '~/utils/logger';
 
@@ -66,7 +66,7 @@ export interface CreateProjectData {
 }
 
 export class ProjectsDB {
-  private sql: ReturnType<typeof neon>;
+  private sql: ReturnType<typeof createSql>;
 
   constructor(databaseUrl?: string) {
     const url = databaseUrl || process.env.DATABASE_URL;
@@ -75,7 +75,7 @@ export class ProjectsDB {
       throw new Error('DATABASE_URL is required');
     }
 
-    this.sql = neon(url);
+    this.sql = createSql(url);
   }
 
   /**

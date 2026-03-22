@@ -51,7 +51,7 @@ export interface RoutingRuleStat {
 export const listRoutingRules = async (agentId: string): Promise<RoutingRule[]> => {
   const response = await backendApi.get<RoutingRule[]>(
     `/agents/${agentId}/routing-rules`,
-    { showErrors: false }
+    { showErrors: true }
   );
   if (response.error) throw new Error(response.error.message);
   return response.data!;
@@ -109,7 +109,7 @@ export const getRoutingStats = async (
 ): Promise<RoutingRuleStat[]> => {
   const response = await backendApi.get<RoutingRuleStat[]>(
     `/agents/${agentId}/routing-rules/stats`,
-    { showErrors: false }
+    { showErrors: true }
   );
   if (response.error) throw new Error(response.error.message);
   return response.data!;

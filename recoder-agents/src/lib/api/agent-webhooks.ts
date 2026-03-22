@@ -91,7 +91,7 @@ export const listWebhooks = async (agentId?: string): Promise<Webhook[]> => {
   const query = agentId ? `?agent_id=${encodeURIComponent(agentId)}` : '';
   const response = await backendApi.get<{ webhooks: Webhook[] }>(
     `/agent-webhooks/webhooks${query}`,
-    { showErrors: false }
+    { showErrors: true }
   );
   if (response.error) {
     throw new Error(`Failed to list webhooks: ${response.error.message}`);
@@ -142,7 +142,7 @@ export const listDeliveries = async (
   const query = params.toString() ? `?${params.toString()}` : '';
   const response = await backendApi.get<{ deliveries: WebhookDelivery[]; total: number }>(
     `/agent-webhooks/webhooks/${webhookId}/deliveries${query}`,
-    { showErrors: false }
+    { showErrors: true }
   );
   if (response.error) {
     throw new Error(`Failed to list deliveries: ${response.error.message}`);

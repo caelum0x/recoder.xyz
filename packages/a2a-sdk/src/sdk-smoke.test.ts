@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   A2AErrorCodeEnum,
   TaskStateEnum,
-} from '@recoder/shared/a2a/schemas';
+} from './schemas';
 
 import {
   mapCodexState,

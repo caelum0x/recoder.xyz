@@ -51,7 +51,7 @@ export const getAgentComments = async (
   const qs = params.toString() ? `?${params.toString()}` : '';
   const response = await backendApi.get<CommentListResponse>(
     `/agents/${agentId}/comments${qs}`,
-    { showErrors: false, cache: 'no-store' }
+    { showErrors: true, cache: 'no-store' }
   );
 
   if (response.error) {
@@ -117,7 +117,7 @@ export const getAgentCommentCounts = async (
 ): Promise<CommentCountResponse> => {
   const response = await backendApi.get<CommentCountResponse>(
     `/agents/${agentId}/comments/count`,
-    { showErrors: false, cache: 'no-store' }
+    { showErrors: true, cache: 'no-store' }
   );
 
   if (response.error) {

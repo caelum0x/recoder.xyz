@@ -32,7 +32,7 @@ export interface UpdatePinRequest {
 // ============================================================================
 
 export async function listPinnedMessages(threadId: string): Promise<PinnedMessage[]> {
-  const response = await backendApi.get<PinnedMessage[]>(`/threads/${threadId}/pins`, { showErrors: false });
+  const response = await backendApi.get<PinnedMessage[]>(`/threads/${threadId}/pins`, { showErrors: true });
   if (response.error) throw new Error(`Failed to list pinned messages: ${response.error.message}`);
   return response.data || [];
 }
@@ -55,7 +55,7 @@ export async function updatePin(threadId: string, pinId: string, data: UpdatePin
 }
 
 export async function getRecentPins(limit = 10): Promise<PinnedMessage[]> {
-  const response = await backendApi.get<PinnedMessage[]>(`/pins/recent?limit=${limit}`, { showErrors: false });
+  const response = await backendApi.get<PinnedMessage[]>(`/pins/recent?limit=${limit}`, { showErrors: true });
   if (response.error) throw new Error(`Failed to get recent pins: ${response.error.message}`);
   return response.data || [];
 }

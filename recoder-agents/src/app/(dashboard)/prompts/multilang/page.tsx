@@ -173,7 +173,7 @@ function NewPromptSetDialog({
       setBaseLang('en');
       onClose();
     } catch (err) {
-      handleApiError(err, 'Failed to create prompt set');
+      handleApiError(err, { operation: 'create prompt set' });
     }
   };
 
@@ -284,7 +284,7 @@ function VariantEditor({ promptSetId }: { promptSetId: string }) {
       });
       toast.success(`Variant saved for ${selectedLang}`);
     } catch (err) {
-      handleApiError(err, 'Failed to save variant');
+      handleApiError(err, { operation: 'save variant' });
     }
   };
 
@@ -575,7 +575,7 @@ export default function MultilangPromptsPage() {
       await deleteSet.mutateAsync(deleteId);
       toast.success('Prompt set deleted');
     } catch (err) {
-      handleApiError(err, 'Failed to delete prompt set');
+      handleApiError(err, { operation: 'delete prompt set' });
     } finally {
       setDeleteId(null);
     }

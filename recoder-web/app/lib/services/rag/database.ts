@@ -1,4 +1,4 @@
-import { neon } from "@neondatabase/serverless";
+import { createSql } from "~/lib/.server/db/pg-pool";
 import type { DatabaseConfig } from "./types";
 
 /**
@@ -21,7 +21,7 @@ function getConnection(config: DatabaseConfig): NeonClient {
 
   let connection = connections.get(key);
   if (!connection) {
-    const sql = neon(config.connectionString);
+    const sql = createSql(config.connectionString);
 
     // Wrap the Neon function to support raw SQL with parameters
     connection = {

@@ -80,7 +80,7 @@ export async function getArchivedThreads(
 
   const response = await backendApi.get<ArchivedThreadsResponse>(
     `/threads/archived?${params.toString()}`,
-    { showErrors: false }
+    { showErrors: true }
   );
 
   if (response.error) {

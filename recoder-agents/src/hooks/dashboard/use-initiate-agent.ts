@@ -55,9 +55,8 @@ export const useInitiateAgentMutation = () => {
       handleApiSuccess(t('agentInitiatedSuccessfully'), t('aiAssistantReady'));
     },
     onError: (error) => {
-      // Let all limit/billing errors bubble up to be handled by components
-      // This ensures a single source of truth for error handling
-      if (error instanceof BillingError || 
+      // Silently handle limit errors — don't show upgrade popups
+      if (error instanceof BillingError ||
           error instanceof AgentRunLimitError ||
           error instanceof ProjectLimitError ||
           error instanceof ThreadLimitError ||
@@ -66,7 +65,8 @@ export const useInitiateAgentMutation = () => {
           error instanceof CustomWorkerLimitError ||
           error instanceof ModelAccessDeniedError ||
           error instanceof RequestTooLargeError) {
-        throw error;
+        console.warn('[InitiateAgent] Limit error suppressed:', error?.message || error);
+        return;
       }
       if (error instanceof Error && error.message.toLowerCase().includes("payment required")) {
         return;
@@ -88,7 +88,7 @@ export const useInitiateAgentWithInvalidation = () => {
       queryClient.invalidateQueries({ queryKey: dashboardKeys.agents });
     },
     onError: (error) => {
-      if (error instanceof BillingError || 
+      if (error instanceof BillingError ||
           error instanceof AgentRunLimitError ||
           error instanceof ProjectLimitError ||
           error instanceof ThreadLimitError ||
@@ -97,7 +97,8 @@ export const useInitiateAgentWithInvalidation = () => {
           error instanceof CustomWorkerLimitError ||
           error instanceof ModelAccessDeniedError ||
           error instanceof RequestTooLargeError) {
-        throw error;
+        console.warn('[InitiateAgent] Limit error suppressed:', error?.message || error);
+        return;
       }
       if (error instanceof Error) {
         const errorMessage = error.message;

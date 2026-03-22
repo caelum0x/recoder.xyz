@@ -16,6 +16,14 @@ from core.utils.logger import logger
 from core.utils.config import config
 from .validation import FileNameValidator, ValidationError, validate_folder_name_unique, validate_file_name_unique_in_folder
 
+def _to_str(val) -> str:
+    """Convert UUID/datetime/other DB values to string for Pydantic v2 str fields."""
+    if val is None:
+        return ""
+    if hasattr(val, "isoformat"):
+        return val.isoformat()
+    return str(val)
+
 # Constants
 MAX_TOTAL_FILE_SIZE = 50 * 1024 * 1024  # 50MB total limit per user
 
@@ -122,6 +130,27 @@ class GitCloneRequest(BaseModel):
             raise ValueError('Invalid branch name')
         return v
 
+class FolderMoveRequest(BaseModel):
+    folder_id: str
+
+
+class BulkAssignRequest(BaseModel):
+    entry_ids: List[str] = Field(..., min_length=1)
+    agent_ids: List[str] = Field(..., min_length=1)
+    action: str = Field(..., pattern="^(assign|unassign)$")
+
+    @validator('action')
+    def validate_action(cls, v):
+        if v not in ('assign', 'unassign'):
+            raise ValueError("action must be 'assign' or 'unassign'")
+        return v
+
+
+class BulkMoveRequest(BaseModel):
+    entry_ids: List[str] = Field(..., min_length=1)
+    target_folder_id: str
+
+
 file_processor = FileProcessor()
 
 # Folder management
@@ -149,11 +178,11 @@ async def get_folders(user_id: str = Depends(verify_and_get_user_id_from_jwt)):
             )
 
             folders.append(FolderResponse(
-                folder_id=folder_data['folder_id'],
+                folder_id=_to_str(folder_data['folder_id']),
                 name=folder_data['name'],
                 description=folder_data['description'],
                 entry_count=entry_count,
-                created_at=folder_data['created_at']
+                created_at=_to_str(folder_data['created_at'])
             ))
 
         return folders
@@ -197,11 +226,11 @@ async def create_folder(
             raise HTTPException(status_code=500, detail="Failed to create folder")
 
         return FolderResponse(
-            folder_id=created_folder['folder_id'],
+            folder_id=_to_str(created_folder['folder_id']),
             name=created_folder['name'],
             description=created_folder['description'],
             entry_count=0,
-            created_at=created_folder['created_at']
+            created_at=_to_str(created_folder['created_at'])
         )
 
     except ValidationError:
@@ -250,11 +279,11 @@ async def update_folder(
             )
 
             return FolderResponse(
-                folder_id=current_folder['folder_id'],
+                folder_id=_to_str(current_folder['folder_id']),
                 name=current_folder['name'],
                 description=current_folder['description'],
                 entry_count=entry_count,
-                created_at=current_folder['created_at']
+                created_at=_to_str(current_folder['created_at'])
             )
 
         # Update folder
@@ -271,11 +300,11 @@ async def update_folder(
         )
 
         return FolderResponse(
-            folder_id=updated_folder['folder_id'],
+            folder_id=_to_str(updated_folder['folder_id']),
             name=updated_folder['name'],
             description=updated_folder['description'],
             entry_count=entry_count,
-            created_at=updated_folder['created_at']
+            created_at=_to_str(updated_folder['created_at'])
         )
 
     except ValidationError:
@@ -604,11 +633,11 @@ async def get_folder_entries(
 
         return [
             EntryResponse(
-                entry_id=entry['entry_id'],
+                entry_id=_to_str(entry['entry_id']),
                 filename=entry['filename'],
                 summary=entry['summary'],
                 file_size=entry['file_size'],
-                created_at=entry['created_at']
+                created_at=_to_str(entry['created_at'])
             )
             for entry in entry_rows
         ]
@@ -903,11 +932,11 @@ async def update_entry(
 
         # Return the updated entry
         return EntryResponse(
-            entry_id=updated_entry['entry_id'],
+            entry_id=_to_str(updated_entry['entry_id']),
             filename=updated_entry['filename'],
             summary=updated_entry['summary'],
             file_size=updated_entry['file_size'],
-            created_at=updated_entry['created_at']
+            created_at=_to_str(updated_entry['created_at'])
         )
 
     except HTTPException:
@@ -983,27 +1012,6 @@ async def update_agent_assignments(
     except Exception as e:
         logger.error(f"Error updating agent assignments: {str(e)}")
         raise HTTPException(status_code=500, detail="Failed to update assignments")
-
-class FolderMoveRequest(BaseModel):
-    folder_id: str
-
-
-class BulkAssignRequest(BaseModel):
-    entry_ids: List[str] = Field(..., min_length=1)
-    agent_ids: List[str] = Field(..., min_length=1)
-    action: str = Field(..., pattern="^(assign|unassign)$")
-
-    @validator('action')
-    def validate_action(cls, v):
-        if v not in ('assign', 'unassign'):
-            raise ValueError("action must be 'assign' or 'unassign'")
-        return v
-
-
-class BulkMoveRequest(BaseModel):
-    entry_ids: List[str] = Field(..., min_length=1)
-    target_folder_id: str
-
 
 class FolderFileCount(BaseModel):
     folder_id: str

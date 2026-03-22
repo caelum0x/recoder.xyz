@@ -1,14 +1,14 @@
 generator client {
   provider        = "prisma-client-js"
+  binaryTargets   = ["native", "debian-openssl-3.0.x"]
   extensions      = ["vector"]
   previewFeatures = ["postgresqlExtensions", "fullTextSearchPostgres"]
   output          = "client"
 }
 
 datasource db {
-  provider     = "postgresql"
-  relationMode = "prisma"
-  extensions   = [uuid_ossp(map: "uuid-ossp", schema: "extensions")]
+  provider   = "postgresql"
+  extensions = [uuid_ossp(map: "uuid-ossp", schema: "extensions")]
 }
 
 // ─── Auth Profile (PM) ───────────────────────────────────────────────────────

@@ -72,7 +72,13 @@ export async function fetchAllAppActivity(): Promise<AppActivity[]> {
         if (!res.ok) {
           return emptyActivity(app, "unavailable");
         }
-        return (await res.json()) as AppActivity;
+        const json = await res.json();
+        return {
+          app,
+          stats: json.stats ?? { totalItems: 0, activeItems: 0, lastActivityAt: null },
+          recentActivity: Array.isArray(json.recentActivity) ? json.recentActivity : [],
+          ...(json.error ? { error: json.error } : {}),
+        } as AppActivity;
       } catch {
         return emptyActivity(app, "unavailable");
       }

@@ -67,7 +67,7 @@ export interface CostAlertHistoryFilters {
 export const getCostAlertRules = async (): Promise<CostAlertRule[]> => {
   const response = await backendApi.get<CostAlertRule[]>(
     '/agent-cost-alerts/rules',
-    { showErrors: false, cache: 'no-store' }
+    { showErrors: true, cache: 'no-store' }
   );
 
   if (response.error) {
@@ -147,7 +147,7 @@ export const getCostAlertHistory = async (
   const url = `/agent-cost-alerts/history${query ? `?${query}` : ''}`;
 
   const response = await backendApi.get<CostAlertHistoryEntry[]>(url, {
-    showErrors: false,
+    showErrors: true,
     cache: 'no-store',
   });
 

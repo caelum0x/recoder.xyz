@@ -28,7 +28,7 @@ const validateModelFormat = (provider: AiProvider, model?: string) => {
 
   if (provider === "openrouter" && !trimmed.includes("/")) {
     throw new Error(
-      "OpenRouter models should include a provider prefix (example: openai/gpt-5-nano)."
+      "OpenRouter models should include a provider prefix (example: openai/gpt-4o-mini)."
     );
   }
 

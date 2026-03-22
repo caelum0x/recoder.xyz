@@ -14,6 +14,7 @@ const fetchAgentTriggers = async (agentId: string): Promise<TriggerConfiguration
   const headers = await getHeaders();
     const response = await fetch(`${API_URL}/triggers/agents/${agentId}/triggers`, {
     headers,
+    credentials: 'include' as RequestCredentials,
   });
   if (!response.ok) {
     throw new Error('Failed to fetch agent triggers');
@@ -32,6 +33,7 @@ const createTrigger = async (data: {
     const response = await fetch(`${API_URL}/triggers/agents/${data.agentId}/triggers`, {
     method: 'POST',
     headers,
+    credentials: 'include',
     body: JSON.stringify({
       provider_id: data.provider_id,
       name: data.name,
@@ -65,6 +67,7 @@ const updateTrigger = async (data: {
     const response = await fetch(`${API_URL}/triggers/${data.triggerId}`, {
     method: 'PUT',
     headers,
+    credentials: 'include',
     body: JSON.stringify({
       name: data.name,
       description: data.description,
@@ -86,6 +89,7 @@ const deleteTrigger = async (data: { triggerId: string; agentId: string }): Prom
   const response = await fetch(`${API_URL}/triggers/${data.triggerId}`, {
     method: 'DELETE',
     headers,
+    credentials: 'include',
   });
   
   if (!response.ok) {

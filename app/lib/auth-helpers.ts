@@ -3,8 +3,8 @@
  *
  * Uses `@recoder/auth` shared helpers for cookie extraction so that
  * cookie names and parsing logic are kept in a single place.
- * The `user` table (Better Auth web auth) and `users` table (CLI auth)
- * remain SEPARATE by design.
+ * The `user` model was unified into `users` — the custom Prisma adapter
+ * maps Better Auth's "user" model to the "users" table.
  *
  * This module also exports `getUserFromToken` for CLI Bearer-token
  * authentication (previously in a separate auth-helper.ts file).
@@ -27,29 +27,76 @@ import {
  * Used by API routes that serve CLI clients authenticated via access tokens.
  */
 export async function getUserFromToken(request: NextRequest) {
+  // Try Bearer token first (CLI sessions)
   const authHeader = request.headers.get('authorization');
-  if (!authHeader?.startsWith('Bearer ')) {
-    return null;
-  }
+  if (authHeader?.startsWith('Bearer ')) {
+    const token = authHeader.substring(7);
+    try {
+      const session = await prisma.cli_sessions.findUnique({
+        where: { accessToken: token },
+        include: { users: true }
+      });
 
-  const token = authHeader.substring(7);
-
-  try {
-    // Find session by access token
-    const session = await prisma.cli_sessions.findUnique({
-      where: { accessToken: token },
-      include: { users: true }
-    });
-
-    if (!session || !session.isActive || session.expiresAt < new Date()) {
-      return null;
+      if (session?.isActive && session.expiresAt >= new Date()) {
+        return session.users;
+      }
+    } catch (error) {
+      logger.error('Token validation error', { error: String(error) });
     }
 
-    return session.users;
-  } catch (error) {
-    logger.error('Token validation error', { error: String(error) });
-    return null;
+    // Also check Better Auth session tables directly (handles cross-service Bearer tokens)
+    // The custom adapter maps session -> sessions, so sessions is the primary table.
+    // The legacy "session" table is checked as a fallback.
+    try {
+      const sessionToken = token.includes('.') ? token.split('.')[0] : token;
+
+      // Primary: check "sessions" table (where the adapter writes)
+      const baSession = await prisma.sessions.findFirst({
+        where: {
+          token: sessionToken,
+          expiresAt: { gt: new Date() },
+        },
+        include: {
+          users: {
+            select: { id: true, email: true, name: true, image: true },
+          },
+        },
+      });
+      if (baSession?.users) {
+        return baSession.users;
+      }
+
+      // Fallback: check legacy "session" table
+      const legacySession = await prisma.session.findFirst({
+        where: {
+          token: sessionToken,
+          expiresAt: { gt: new Date() },
+        },
+        include: {
+          user: {
+            select: { id: true, email: true, name: true, image: true },
+          },
+        },
+      });
+      if (legacySession?.user) {
+        return legacySession.user;
+      }
+    } catch (error) {
+      logger.error('Better Auth session lookup error', { error: String(error) });
+    }
   }
+
+  // Fall back to session cookie (web auth via Better Auth)
+  try {
+    const session = await getSession(request);
+    if (session?.user) {
+      return session.user;
+    }
+  } catch {
+    // getSession logs its own errors
+  }
+
+  return null;
 }
 
 /**
@@ -68,18 +115,25 @@ export async function getSession(request?: NextRequest) {
       const betterAuthSession = await auth.api.getSession({ headers: resolvedHeaders });
 
       if (betterAuthSession?.user) {
-        const appUser = await prisma.users.findUnique({
-          where: { email: betterAuthSession.user.email },
-          select: { id: true }
-        });
+        let hasApiKey = false;
+        try {
+          const appUser = await prisma.users.findUnique({
+            where: { email: betterAuthSession.user.email },
+            select: { id: true }
+          });
 
-        const userIdForKeys = appUser?.id || betterAuthSession.user.id;
-        const hasApiKey = await prisma.user_api_keys.count({
-          where: {
-            userId: userIdForKeys,
-            isActive: true,
-          }
-        }) > 0;
+          const userIdForKeys = appUser?.id || betterAuthSession.user.id;
+          hasApiKey = await prisma.user_api_keys.count({
+            where: {
+              userId: userIdForKeys,
+              isActive: true,
+            }
+          }) > 0;
+        } catch (keyCheckError) {
+          // Non-fatal: if user_api_keys table is missing or query fails,
+          // we still want auth to succeed — just report hasApiKey as false.
+          logger.warn('API key check failed (non-fatal)', { error: String(keyCheckError) });
+        }
 
         return {
           user: {
@@ -132,46 +186,63 @@ export async function getSession(request?: NextRequest) {
       }
     }
 
-    // Try Better Auth first
+    // Try session lookup (check both "sessions" and "session" tables)
     if (betterAuthToken) {
       try {
-        // Query Better Auth session
-        const session = await prisma.sessions.findFirst({
+        // First try "sessions" table (app sessions)
+        let session = await prisma.sessions.findFirst({
           where: {
             token: betterAuthToken,
-            expiresAt: {
-              gt: new Date()
-            }
+            expiresAt: { gt: new Date() }
           },
           include: {
             users: {
-              select: {
-                id: true,
-                email: true,
-                name: true,
-                image: true,
-              }
+              select: { id: true, email: true, name: true, image: true }
             }
           }
         });
 
-        if (session?.users) {
-          // Look up corresponding user in 'users' table (API keys are stored with this ID)
-          const appUser = await prisma.users.findUnique({
-            where: { email: session.users.email },
-            select: { id: true }
-          });
-
-          // Use app user ID for API key lookup, fall back to Better Auth ID
-          const userIdForKeys = appUser?.id || session.users.id;
-
-          // Check if user has any API keys
-          const hasApiKey = await prisma.user_api_keys.count({
+        // If not found, try "session" table (Better Auth creates sessions here)
+        if (!session) {
+          const baSession = await prisma.session.findFirst({
             where: {
-              userId: userIdForKeys,
-              isActive: true
+              token: betterAuthToken,
+              expiresAt: { gt: new Date() }
+            },
+            include: {
+              user: {
+                select: { id: true, email: true, name: true, image: true }
+              }
             }
-          }) > 0;
+          });
+          if (baSession?.user) {
+            // Normalize to same shape as sessions table result
+            session = { ...baSession, users: baSession.user } as typeof session;
+          }
+        }
+
+        if (session?.users) {
+          let hasApiKey = false;
+          try {
+            // Look up corresponding user in 'users' table (API keys are stored with this ID)
+            const appUser = await prisma.users.findUnique({
+              where: { email: session.users.email },
+              select: { id: true }
+            });
+
+            // Use app user ID for API key lookup, fall back to Better Auth ID
+            const userIdForKeys = appUser?.id || session.users.id;
+
+            // Check if user has any API keys
+            hasApiKey = await prisma.user_api_keys.count({
+              where: {
+                userId: userIdForKeys,
+                isActive: true
+              }
+            }) > 0;
+          } catch (keyCheckError) {
+            logger.warn('API key check failed (non-fatal)', { error: String(keyCheckError) });
+          }
 
           return {
             user: {
@@ -187,7 +258,7 @@ export async function getSession(request?: NextRequest) {
           };
         }
       } catch (error) {
-        logger.error('Better Auth session check failed', { error: String(error) });
+        logger.error('Session lookup failed', { error: String(error) });
       }
     }
 
@@ -247,8 +318,20 @@ export async function ensureAppUserFromAuthUser(authUser: {
  * Returns session or throws 401 response
  */
 export async function requireAuth(request?: NextRequest) {
-  const session = await getSession(request);
-  
+  // Try cookie-based session first
+  let session = await getSession(request);
+
+  // If no cookie session, try Bearer token auth (used by cross-origin calls from agents.recoder.xyz)
+  if (!session?.user && request) {
+    const authHeader = request.headers.get('authorization');
+    if (authHeader?.startsWith('Bearer ')) {
+      const tokenResult = await getUserFromToken(request);
+      if (tokenResult) {
+        session = { user: tokenResult, expires: new Date(Date.now() + 86400000).toISOString() };
+      }
+    }
+  }
+
   if (!session?.user) {
     return {
       error: true,
@@ -258,7 +341,7 @@ export async function requireAuth(request?: NextRequest) {
       )
     };
   }
-  
+
   return {
     error: false,
     session,

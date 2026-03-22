@@ -79,7 +79,7 @@ export const createSkillNode = async (
 
 export const getSkillTreeNodes = async (agentId: string): Promise<SkillTreeNode[]> => {
   const response = await backendApi.get<SkillTreeNode[]>(`/agents/${agentId}/skills`, {
-    showErrors: false,
+    showErrors: true,
   });
   if (response.error) throw new Error(response.error.message);
   return response.data!;
@@ -113,7 +113,7 @@ export const getXPEvents = async (
 ): Promise<SkillXPEvent[]> => {
   const params = limit != null ? `?limit=${limit}` : '';
   const response = await backendApi.get<SkillXPEvent[]>(`/agents/${agentId}/xp${params}`, {
-    showErrors: false,
+    showErrors: true,
   });
   if (response.error) throw new Error(response.error.message);
   return response.data!;
@@ -121,7 +121,7 @@ export const getXPEvents = async (
 
 export const getSkillProgress = async (agentId: string): Promise<SkillProgress> => {
   const response = await backendApi.get<SkillProgress>(`/agents/${agentId}/progress`, {
-    showErrors: false,
+    showErrors: true,
   });
   if (response.error) throw new Error(response.error.message);
   return response.data!;

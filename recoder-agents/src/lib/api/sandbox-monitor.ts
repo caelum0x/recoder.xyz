@@ -50,7 +50,7 @@ export interface ResourceSummary {
 export const getActiveSandboxes = async (): Promise<ActiveSandbox[]> => {
   const response = await backendApi.get<ActiveSandbox[]>(
     '/sandbox/resources',
-    { showErrors: false, cache: 'no-store' }
+    { showErrors: true, cache: 'no-store' }
   );
 
   if (response.error) {
@@ -66,7 +66,7 @@ export const getSandboxResourceHistory = async (
 ): Promise<SandboxResourceSnapshot[]> => {
   const response = await backendApi.get<SandboxResourceSnapshot[]>(
     `/sandbox/${sandboxId}/resources/history?hours=${hours}`,
-    { showErrors: false, cache: 'no-store' }
+    { showErrors: true, cache: 'no-store' }
   );
 
   if (response.error) {
@@ -79,7 +79,7 @@ export const getSandboxResourceHistory = async (
 export const getSandboxResourceSummary = async (): Promise<ResourceSummary> => {
   const response = await backendApi.get<ResourceSummary>(
     '/sandbox/resources/summary',
-    { showErrors: false, cache: 'no-store' }
+    { showErrors: true, cache: 'no-store' }
   );
 
   if (response.error) {
@@ -106,7 +106,7 @@ export const recordSandboxSnapshot = async (
     success: boolean;
     id?: string;
     captured_at?: string;
-  }>(`/sandbox/${sandboxId}/resources/snapshot`, data, { showErrors: false });
+  }>(`/sandbox/${sandboxId}/resources/snapshot`, data, { showErrors: true });
 
   if (response.error) {
     throw new Error(`Failed to record snapshot: ${response.error.message}`);

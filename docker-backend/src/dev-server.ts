@@ -1,6 +1,7 @@
 import Docker from 'dockerode';
 import http from 'http';
 import { autoRestoreManager } from './auto-restore.js';
+import { getDaytonaClient } from './daytona-client.js';
 
 const docker = new Docker();
 
@@ -36,40 +37,48 @@ export class DevServerManager {
    * Start a dev server in background for a project
    */
   async start(
-    containerId: string, 
-    projectId: string, 
+    containerId: string,
+    projectId: string,
     framework: string = 'vite',
-    ports: number[]
+    ports: number[],
+    options?: { daytona?: boolean; daytonaPreviewUrl?: string }
   ): Promise<{ ready: boolean; port?: number; logs?: string }> {
-    const container = docker.getContainer(containerId);
+    const isDaytona = options?.daytona === true;
     const command = this.getStartCommand(framework);
 
-    console.log(`[DevServer] Starting ${framework} for project ${projectId}`);
+    console.log(`[DevServer] Starting ${framework} for project ${projectId} (${isDaytona ? 'Daytona' : 'Docker'})`);
+
+    const exec = isDaytona
+      ? (cmd: string) => this.daytonaExec(containerId, cmd)
+      : (cmd: string) => this.execCommand(docker.getContainer(containerId), cmd);
 
     // Kill any existing dev server first
     try {
       const killPattern = this.getKillPattern(framework);
-      await this.execCommand(container, `pkill -f "${killPattern}" || true`);
+      await exec(`pkill -f "${killPattern}" || true`);
       await new Promise(resolve => setTimeout(resolve, 1000));
     } catch {}
 
     // Ensure workspace directory exists
-    await this.execCommand(container, 'mkdir -p /workspace');
-    // Ensure log file exists so we can read errors even if startup fails early
-    await this.execCommand(container, 'mkdir -p /tmp && : > /tmp/dev.log');
+    const workDir = isDaytona ? '/home/daytona' : '/workspace';
+    await exec(`mkdir -p ${workDir}`);
+    await exec('mkdir -p /tmp && : > /tmp/dev.log');
 
-    // Start the dev server using setsid for proper daemonization
-    // BROWSER=none prevents Vite from trying to open xdg-open (which doesn't exist in Docker)
-    const startScript = `cd /workspace && BROWSER=none exec setsid ${command} > /tmp/dev.log 2>&1 < /dev/null`;
+    // Start the dev server in background
+    const startScript = `cd ${workDir} && BROWSER=none nohup ${command} > /tmp/dev.log 2>&1 &`;
 
-    const exec = await container.exec({
-      Cmd: ['/bin/bash', '-c', startScript],
-      AttachStdout: false,
-      AttachStderr: false,
-      Tty: false,
-    });
-
-    await exec.start({ Detach: true });
+    if (isDaytona) {
+      await exec(startScript);
+    } else {
+      const container = docker.getContainer(containerId);
+      const dockerExec = await container.exec({
+        Cmd: ['/bin/bash', '-c', `cd ${workDir} && BROWSER=none exec setsid ${command} > /tmp/dev.log 2>&1 < /dev/null`],
+        AttachStdout: false,
+        AttachStderr: false,
+        Tty: false,
+      });
+      await dockerExec.start({ Detach: true });
+    }
 
     this.servers.set(projectId, {
       projectId,
@@ -81,7 +90,12 @@ export class DevServerManager {
     console.log(`[DevServer] Process started for ${projectId}, waiting for ready...`);
 
     // Wait for server to be ready
-    const healthCheck = await this.waitForReady(ports, 30000);
+    let healthCheck: { ready: boolean; port?: number };
+    if (isDaytona && options?.daytonaPreviewUrl) {
+      healthCheck = await this.waitForDaytonaReady(options.daytonaPreviewUrl, 30000);
+    } else {
+      healthCheck = await this.waitForReady(ports, 30000);
+    }
 
     if (healthCheck.ready) {
       const info = this.servers.get(projectId);
@@ -89,12 +103,12 @@ export class DevServerManager {
         info.status = 'running';
         info.port = healthCheck.port;
       }
-      console.log(`[DevServer] ✅ Ready on port ${healthCheck.port}`);
-      return { ready: true, port: healthCheck.port };
+      console.log(`[DevServer] ✅ Ready on port ${healthCheck.port || 3000}`);
+      return { ready: true, port: healthCheck.port || 3000 };
     }
 
     // Check if there's an error
-    const logs = await this.getLogs(containerId, projectId, 50);
+    const logs = await this.getLogs(containerId, projectId, 50, undefined, isDaytona);
     console.log(`[DevServer] ⚠️ Not ready yet, logs:\n${logs}`);
 
     return { ready: false, logs };
@@ -103,14 +117,18 @@ export class DevServerManager {
   /**
    * Stop the dev server for a project
    */
-  async stop(containerId: string, projectId: string): Promise<boolean> {
-    const container = docker.getContainer(containerId);
+  async stop(containerId: string, projectId: string, isDaytona?: boolean): Promise<boolean> {
     const info = this.servers.get(projectId);
     const framework = info?.framework || 'vite';
 
     try {
       const killPattern = this.getKillPattern(framework);
-      await this.execCommand(container, `pkill -f "${killPattern}" || true`);
+      const cmd = `pkill -f "${killPattern}" || true`;
+      if (isDaytona) {
+        await this.daytonaExec(containerId, cmd);
+      } else {
+        await this.execCommand(docker.getContainer(containerId), cmd);
+      }
       this.servers.delete(projectId);
       console.log(`[DevServer] Stopped for ${projectId}`);
       return true;
@@ -151,7 +169,15 @@ export class DevServerManager {
    * Get dev server logs
    * @param source - optional hint: 'expo' reads /tmp/expo-dev.log
    */
-  async getLogs(containerId: string, projectId: string, tail: number = 100, source?: string): Promise<string> {
+  async getLogs(containerId: string, projectId: string, tail: number = 100, source?: string, isDaytona?: boolean): Promise<string> {
+    if (isDaytona) {
+      try {
+        const result = await this.daytonaExec(containerId, `tail -n ${tail} /tmp/dev.log 2>/dev/null || echo "No logs found"`);
+        return result;
+      } catch {
+        return 'Failed to read logs (Daytona)';
+      }
+    }
     const container = docker.getContainer(containerId);
 
     // Determine the correct log file
@@ -287,14 +313,13 @@ export class DevServerManager {
   }
 
   private getStartCommand(framework: string): string {
-    // Prefer bun for 10x faster startup for Node.js projects
     const commands: Record<string, string> = {
-      // Node.js frameworks
-      vite: 'bun run dev -- --host 0.0.0.0 2>/dev/null || npm run dev -- --host 0.0.0.0',
-      next: 'bun run dev -- --hostname 0.0.0.0 2>/dev/null || npm run dev -- --hostname 0.0.0.0',
-      react: 'bun start 2>/dev/null || npm start',
-      vue: 'bun run serve 2>/dev/null || npm run serve',
-      bun: 'bun run dev',
+      // Node.js frameworks — use npm (bun not available in Daytona sandbox)
+      vite: 'npm run dev -- --host 0.0.0.0',
+      next: 'npm run dev -- --hostname 0.0.0.0',
+      react: 'npm start',
+      vue: 'npm run serve',
+      bun: 'npm run dev',
       // REACT_NATIVE_PACKAGER_HOSTNAME: hostname for QR codes/connection URLs (container IP is unreachable from phones)
       // EXPO_DEVTOOLS_LISTEN_ADDRESS: allow connections from outside the container
       // BROWSER=none: don't try to open a browser inside the container
@@ -318,7 +343,7 @@ export class DevServerManager {
       'java-spring': 'mvn spring-boot:run -Dspring-boot.run.arguments=--server.port=8080',
       java: 'mvn exec:java',
     };
-    return commands[framework] || 'bun run dev -- --host 0.0.0.0 2>/dev/null || npm run dev -- --host 0.0.0.0';
+    return commands[framework] || 'npm run dev -- --host 0.0.0.0';
   }
 
   /**
@@ -349,7 +374,7 @@ export class DevServerManager {
       'java-spring': 'spring-boot:run|java.*-jar',
       java: 'mvn exec:java|java.*-jar',
     };
-    return patterns[framework] || 'npm run dev|vite|next dev|bun run dev';
+    return patterns[framework] || 'npm run dev|vite|next dev';
   }
 
   private async waitForReady(ports: number[], maxWaitMs: number = 60000): Promise<{ ready: boolean; port?: number }> {
@@ -380,6 +405,42 @@ export class DevServerManager {
         console.log(`[DevServer] Still waiting... (${Math.round(elapsed / 1000)}s elapsed)`);
       }
 
+      await new Promise(resolve => setTimeout(resolve, checkInterval));
+    }
+
+    return { ready: false };
+  }
+
+  private async daytonaExec(sandboxId: string, cmd: string): Promise<string> {
+    const dc = getDaytonaClient();
+    const result = await dc.execCommand(sandboxId, cmd, { timeoutSecs: 30 });
+    return result.output;
+  }
+
+  private async waitForDaytonaReady(previewUrl: string, maxWaitMs: number = 30000): Promise<{ ready: boolean; port?: number }> {
+    const startTime = Date.now();
+    const checkInterval = 2000;
+    console.log(`[DevServer] Waiting for Daytona preview ready: ${previewUrl}`);
+
+    while (Date.now() - startTime < maxWaitMs) {
+      try {
+        const ctrl = new AbortController();
+        const timeout = setTimeout(() => ctrl.abort(), 3000);
+        const prevTls = process.env.NODE_TLS_REJECT_UNAUTHORIZED;
+        process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
+        const resp = await fetch(previewUrl, { method: 'HEAD', signal: ctrl.signal }).catch(() => null);
+        process.env.NODE_TLS_REJECT_UNAUTHORIZED = prevTls ?? '1';
+        clearTimeout(timeout);
+
+        if (resp && resp.status < 500) {
+          return { ready: true, port: 3000 };
+        }
+      } catch {}
+
+      const elapsed = Date.now() - startTime;
+      if (elapsed % 5000 < checkInterval) {
+        console.log(`[DevServer] Daytona preview not ready yet... (${Math.round(elapsed / 1000)}s)`);
+      }
       await new Promise(resolve => setTimeout(resolve, checkInterval));
     }
 

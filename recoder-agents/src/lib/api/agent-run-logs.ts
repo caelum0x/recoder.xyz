@@ -65,7 +65,7 @@ export const getRunLogs = async (
   const query = params.toString() ? `?${params}` : '';
   const response = await backendApi.get<RunLogEntry[]>(
     `/runs/${runId}/logs${query}`,
-    { showErrors: false }
+    { showErrors: true }
   );
   if (response.error) throw new Error(response.error.message || 'Failed to fetch run logs');
   return response.data!;
@@ -78,7 +78,7 @@ export const createRunLog = async (
   const response = await backendApi.post<{ id: string; run_id: string; agent_id: string; created_at: string }>(
     `/runs/${runId}/logs`,
     entry,
-    { showErrors: false }
+    { showErrors: true }
   );
   if (response.error) throw new Error(response.error.message || 'Failed to create log entry');
   return response.data!;
@@ -87,7 +87,7 @@ export const createRunLog = async (
 export const getRunLogSummary = async (runId: string): Promise<RunLogSummary> => {
   const response = await backendApi.get<RunLogSummary>(
     `/runs/${runId}/logs/summary`,
-    { showErrors: false }
+    { showErrors: true }
   );
   if (response.error) throw new Error(response.error.message || 'Failed to fetch log summary');
   return response.data!;
@@ -103,7 +103,7 @@ export const searchLogs = async (params: LogSearchParams): Promise<RunLogEntry[]
   const query = searchParams.toString() ? `?${searchParams}` : '';
   const response = await backendApi.get<RunLogEntry[]>(
     `/logs/search${query}`,
-    { showErrors: false }
+    { showErrors: true }
   );
   if (response.error) throw new Error(response.error.message || 'Failed to search logs');
   return response.data!;
@@ -119,7 +119,7 @@ export const getErrorFrequency = async (
   const query = params.toString() ? `?${params}` : '';
   const response = await backendApi.get<ErrorFrequencyEntry[]>(
     `/logs/error-frequency${query}`,
-    { showErrors: false }
+    { showErrors: true }
   );
   if (response.error) throw new Error(response.error.message || 'Failed to fetch error frequency');
   return response.data!;

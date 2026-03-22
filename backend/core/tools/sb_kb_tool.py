@@ -58,13 +58,11 @@ Files must be ENABLED for this agent before they can sync. Use:
 """
 )
 class SandboxKbTool(SandboxToolsBase):
-    """Tool for knowledge base operations using kb-fusion binary in a Daytona sandbox.
+    """Tool for knowledge base operations using PostgreSQL full-text + vector search.
     Provides search capabilities and maintenance operations for knowledge bases."""
 
     def __init__(self, project_id: str, thread_manager: ThreadManager):
         super().__init__(project_id, thread_manager)
-        self.kb_version = "0.1.2"
-        self.kb_download_url = f"https://github.com/recoder-xyz/kb-fusion/releases/download/v{self.kb_version}/kb"
         self._kb_synced = False  # Track if KB has been synced this session
 
     async def _auto_sync_kb_if_needed(self) -> bool:
@@ -102,56 +100,15 @@ class SandboxKbTool(SandboxToolsBase):
             logger.warning(f"[KB] Auto-sync error: {e}")
             return False
 
-    async def _execute_kb_command(self, command: str, cwd: str = None) -> dict:
-        await self._ensure_sandbox()
-
-        env = {}
-        if config.OPENAI_API_KEY:
-            env["OPENAI_API_KEY"] = config.OPENAI_API_KEY
-        
-        # Let kb use its default location (~/.config/kb/ or ~/knowledge-base/)
-        # Don't force KB_DIR so file watcher and direct commands use same DB
-        
-        response = await self.sandbox.process.exec(command, env=env, cwd=cwd or self.workspace_path)
-        
-        return {
-            "output": response.result,
-            "exit_code": response.exit_code
-        }
-
-    async def _ensure_kb_initialized(self) -> dict:
-        """Internal method to ensure kb-fusion is installed and up to date."""
-        try:
-            await self._ensure_sandbox()
-            
-            # kb will create its default directory automatically when first used
-            
-            # Check if kb exists and get version using _execute_kb_command (has OPENAI_API_KEY)
-            check_result = await self._execute_kb_command("kb -v 2>&1")
-            
-            if check_result["exit_code"] == 0:
-                output = check_result["output"].strip()
-                if f"kb-fusion {self.kb_version}" in output:
-                    # Already installed and up to date
-                    return {"success": True, "already_installed": True}
-            
-            # Need to install or update - download doesn't need env vars
-            download_result = await self.sandbox.process.exec(
-                f"curl -L -f {self.kb_download_url} -o /tmp/kb && chmod +x /tmp/kb && mv /tmp/kb /usr/local/bin/kb"
-            )
-            
-            if download_result.exit_code != 0:
-                return {"success": False, "error": f"Failed to download kb: {download_result.result}"}
-            
-            # Verify installation using _execute_kb_command (has OPENAI_API_KEY)
-            verify_result = await self._execute_kb_command("kb -v")
-            if verify_result["exit_code"] != 0:
-                return {"success": False, "error": f"kb installation verification failed: {verify_result['output']}"}
-            
-            return {"success": True, "installed": True, "version": self.kb_version}
-            
-        except Exception as e:
-            return {"success": False, "error": f"Error installing kb: {str(e)}"}
+    async def _get_agent_account_id(self):
+        """Get agent ID and account ID from thread manager."""
+        from core.services.db import Table
+        agent_id = getattr(self.thread_manager, 'agent_config', {}).get('agent_id') if hasattr(self.thread_manager, 'agent_config') else None
+        if not agent_id:
+            return None, None
+        agent_row = await Table("agents").get("agent_id", agent_id, cols="account_id")
+        account_id = agent_row['account_id'] if agent_row else None
+        return agent_id, account_id
 
     @openapi_schema({
         "type": "function",
@@ -185,67 +142,114 @@ class SandboxKbTool(SandboxToolsBase):
 
         try:
             # Handle both 'query' (single string) and 'queries' (array) parameters
-            # This provides flexibility for different calling conventions
             if query and not queries:
-                # Single query string provided
                 queries = [query]
             elif isinstance(queries, str):
-                # Handle case where queries might be passed as a JSON string instead of a list
                 try:
                     queries = json.loads(queries)
                 except json.JSONDecodeError:
-                    # If it's a plain string, wrap it in a list
                     queries = [queries]
 
             if not queries:
                 return self.fail_response("At least one query is required for search. Use 'query' for a single search or 'queries' for multiple searches.")
 
-            # Ensure all queries are strings
             queries = [str(q) for q in queries]
 
-            # Ensure kb-fusion is initialized
-            init_result = await self._ensure_kb_initialized()
-            if not init_result.get("success"):
-                return self.fail_response(f"Failed to initialize kb-fusion: {init_result.get('error', 'Unknown error')}")
+            agent_id, account_id = await self._get_agent_account_id()
+            if not account_id:
+                return self.fail_response("No agent/account found for knowledge base search")
 
-            # Auto-sync KB files from cloud storage if not already done
-            await self._auto_sync_kb_if_needed()
-            
-            # Default to workspace_path if no path provided
-            search_path = path or self.workspace_path
-            
-            # Verify path exists in sandbox
-            check_path = await self.sandbox.process.exec(f"test -e {search_path} && echo 'exists' || echo 'not_found'")
-            if "not_found" in check_path.result:
-                return self.fail_response(f"Path not found: {search_path}")
-            
-            # Build search command with proper escaping
-            # kb-fusion will auto-index files on first search
-            query_args = " ".join([f'"{query}"' for query in queries])
-            search_command = f'kb search "{search_path}" {query_args} -k 18 --json'
-            
-            result = await self._execute_kb_command(search_command)
-            
-            if result["exit_code"] != 0:
-                return self.fail_response(f"Search failed: {result['output']}")
-            
-            # Parse results to check if any hits were found
-            try:
-                results_data = json.loads(result["output"])
-                total_hits = sum(len(query_result.get("hits", [])) for query_result in results_data)
-                
-                response = {"results": result["output"]}
-                
-                if total_hits == 0:
-                    response["note"] = "No results found. Files may still be indexing in the background. Use ls_kb to check which files are currently indexed."
-                
-                return self.success_response(response)
-            except json.JSONDecodeError:
-                # If parsing fails, just return raw results
-                return self.success_response({
-                    "results": result["output"]
-                })
-            
+            from core.services.db import execute_read
+
+            all_results = []
+            for q in queries:
+                query_results = []
+
+                # Try semantic search first (if embeddings exist)
+                try:
+                    from core.memory.embedding_service import embedding_service
+                    query_embedding = await embedding_service.embed_text(q)
+                    if query_embedding:
+                        rows = await execute_read(
+                            """SELECT * FROM search_knowledge_base_semantic(
+                                :account_id, CAST(:embedding AS vector), :query_text, :agent_id, :limit, :threshold
+                            )""",
+                            {
+                                "account_id": account_id,
+                                "embedding": json.dumps(query_embedding),
+                                "query_text": q,
+                                "agent_id": agent_id,
+                                "limit": 10,
+                                "threshold": 0.2,
+                            }
+                        )
+                        for row in rows:
+                            query_results.append({
+                                "entry_id": str(row["entry_id"]),
+                                "filename": row["filename"],
+                                "folder_name": row.get("folder_name", ""),
+                                "summary": row.get("summary", "")[:300],
+                                "similarity": float(row.get("similarity", 0)),
+                                "match_type": row.get("match_type", "semantic"),
+                            })
+                except Exception as e:
+                    logger.warning(f"[KB] Semantic search failed, falling back to full-text: {e}")
+
+                # Fallback to full-text search if no semantic results
+                if not query_results:
+                    try:
+                        rows = await execute_read(
+                            """SELECT * FROM search_knowledge_base(
+                                :account_id, :query, :agent_id, :limit
+                            )""",
+                            {
+                                "account_id": account_id,
+                                "query": q,
+                                "agent_id": agent_id,
+                                "limit": 10,
+                            }
+                        )
+                        for row in rows:
+                            query_results.append({
+                                "entry_id": str(row["entry_id"]),
+                                "filename": row.get("filename", ""),
+                                "summary": row.get("summary", "")[:300] if row.get("summary") else "",
+                                "match_type": "fulltext",
+                            })
+                    except Exception as e:
+                        logger.warning(f"[KB] Full-text search also failed: {e}")
+
+                # Final fallback: ILIKE search on filename and content
+                if not query_results:
+                    try:
+                        rows = await execute_read(
+                            """SELECT entry_id, filename, summary, file_size
+                            FROM knowledge_base_entries
+                            WHERE account_id = :account_id AND is_active = true
+                              AND (filename ILIKE :pattern OR summary ILIKE :pattern OR content ILIKE :pattern)
+                            ORDER BY created_at DESC LIMIT 10""",
+                            {"account_id": account_id, "pattern": f"%{q}%"}
+                        )
+                        for row in rows:
+                            query_results.append({
+                                "entry_id": str(row["entry_id"]),
+                                "filename": row.get("filename", ""),
+                                "summary": row.get("summary", "")[:300] if row.get("summary") else "",
+                                "match_type": "keyword",
+                            })
+                    except Exception as e:
+                        logger.warning(f"[KB] Keyword search also failed: {e}")
+
+                all_results.append({"query": q, "hits": query_results})
+
+            total_hits = sum(len(r["hits"]) for r in all_results)
+            response = {"results": all_results, "total_hits": total_hits}
+
+            if total_hits == 0:
+                response["note"] = "No results found in knowledge base. Make sure files are uploaded to the knowledge base first."
+
+            return self.success_response(response)
+
         except Exception as e:
             return self.fail_response(f"Error performing search: {str(e)}")
 
@@ -284,39 +288,51 @@ class SandboxKbTool(SandboxToolsBase):
     })
     async def cleanup_kb(self, operation: str, file_paths: Optional[List[str]] = None, days: Optional[int] = None, retention_days: int = 30) -> ToolResult:
         try:
-            # Ensure kb-fusion is initialized
-            init_result = await self._ensure_kb_initialized()
-            if not init_result.get("success"):
-                return self.fail_response(f"Failed to initialize kb-fusion: {init_result.get('error', 'Unknown error')}")
-            
+            agent_id, account_id = await self._get_agent_account_id()
+            if not account_id:
+                return self.fail_response("No agent/account found")
+
+            from core.services.db import execute_mutate, execute_read
+
             if operation == "default":
-                command = f"kb sweep --retention-days {retention_days}"
+                # Clean up synced files in sandbox
+                await self._ensure_sandbox()
+                kb_dir = f"{self.workspace_path}/downloads/global-knowledge"
+                await self.sandbox.process.exec(f"rm -rf {kb_dir}/*")
+                self._kb_synced = False
+                return self.success_response({"message": "Cleared local KB cache. Run global_kb_sync to re-download."})
+
             elif operation == "remove_files":
                 if not file_paths:
                     return self.fail_response("file_paths is required for remove_files operation.")
-                paths_str = " ".join([f'"{path}"' for path in file_paths])
-                command = f"kb sweep --remove {paths_str}"
+                # Remove synced files from sandbox
+                await self._ensure_sandbox()
+                removed = 0
+                for fp in file_paths:
+                    result = await self.sandbox.process.exec(f'rm -f "{fp}"')
+                    if result.exit_code == 0:
+                        removed += 1
+                return self.success_response({"message": f"Removed {removed} files from sandbox.", "removed": removed})
+
             elif operation == "clear_embeddings":
-                if days is not None:
-                    command = f"kb sweep --clear-embeddings {days}"
-                else:
-                    command = "kb sweep --clear-embeddings 0"
+                # Clear embeddings in DB
+                await execute_mutate(
+                    "UPDATE knowledge_base_entries SET embedding = NULL WHERE account_id = :account_id",
+                    {"account_id": account_id}
+                )
+                return self.success_response({"message": "Cleared all embeddings for account. They will be regenerated on next file upload."})
+
             elif operation == "clear_all":
-                command = "kb sweep --clear-all"
+                # Clear local sandbox KB directory
+                await self._ensure_sandbox()
+                kb_dir = f"{self.workspace_path}/downloads/global-knowledge"
+                await self.sandbox.process.exec(f"rm -rf {kb_dir}")
+                self._kb_synced = False
+                return self.success_response({"message": "Cleared all local KB data."})
+
             else:
                 return self.fail_response(f"Unknown operation: {operation}")
-            
-            result = await self._execute_kb_command(command)
-            
-            if result["exit_code"] != 0:
-                return self.fail_response(f"Cleanup operation failed: {result['output']}")
-            
-            return self.success_response({
-                "message": f"Cleanup operation '{operation}' completed successfully.",
-                "output": result["output"],
-                "command": command
-            })
-            
+
         except Exception as e:
             return self.fail_response(f"Error performing cleanup: {str(e)}")
 
@@ -335,21 +351,52 @@ class SandboxKbTool(SandboxToolsBase):
     })
     async def ls_kb(self) -> ToolResult:
         try:
-            # Ensure kb-fusion is initialized
-            init_result = await self._ensure_kb_initialized()
-            if not init_result.get("success"):
-                return self.fail_response(f"Failed to initialize kb-fusion: {init_result.get('error', 'Unknown error')}")
-            
-            result = await self._execute_kb_command("kb ls")
-            if result["exit_code"] != 0:
-                return self.fail_response(f"List operation failed: {result['output']}")
-            
+            agent_id, account_id = await self._get_agent_account_id()
+            if not account_id:
+                return self.fail_response("No agent/account found")
+
+            from core.services.db import execute_read
+
+            rows = await execute_read(
+                """SELECT e.entry_id, e.filename, e.file_size, e.content_type, e.created_at::text,
+                          f.name AS folder_name,
+                          CASE WHEN e.embedding IS NOT NULL THEN true ELSE false END AS has_embedding,
+                          CASE WHEN e.search_vector IS NOT NULL THEN true ELSE false END AS has_fulltext
+                   FROM knowledge_base_entries e
+                   JOIN knowledge_base_folders f ON f.folder_id = e.folder_id
+                   WHERE e.account_id = :account_id AND e.is_active = true
+                   ORDER BY f.name, e.filename""",
+                {"account_id": account_id}
+            )
+
+            if not rows:
+                return self.success_response({
+                    "message": "No files in knowledge base.",
+                    "files": [],
+                    "total": 0
+                })
+
+            files = []
+            for row in rows:
+                files.append({
+                    "entry_id": str(row["entry_id"]),
+                    "filename": row["filename"],
+                    "folder": row["folder_name"],
+                    "size": row["file_size"],
+                    "type": row.get("content_type", ""),
+                    "created": row["created_at"],
+                    "indexed": bool(row.get("has_embedding") or row.get("has_fulltext")),
+                })
+
+            total_size = sum(f["size"] or 0 for f in files)
+
             return self.success_response({
-                "message": "Successfully listed indexed files.",
-                "output": result["output"],
-                "command": "kb ls"
+                "message": f"Knowledge base has {len(files)} files ({total_size / 1024:.1f} KB total).",
+                "files": files,
+                "total": len(files),
+                "total_size_kb": round(total_size / 1024, 1)
             })
-            
+
         except Exception as e:
             return self.fail_response(f"Error listing files: {str(e)}")
 

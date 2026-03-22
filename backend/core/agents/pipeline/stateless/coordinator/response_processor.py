@@ -246,6 +246,8 @@ class ResponseProcessor:
                 tool_calls if tool_calls else None,
                 self._message_builder._get_thread_run_id()
             )
+            # Ensure the assistant message is flushed to DB
+            self._state.trigger_flush()
             yield self._message_builder.build_assistant_complete(
                 assistant_message_id, accumulated_content, tool_calls if tool_calls else None, stream_start,
                 reasoning_content=accumulated_reasoning if accumulated_reasoning else None

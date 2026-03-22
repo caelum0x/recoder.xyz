@@ -111,7 +111,7 @@ export const getResourceSnapshots = async (
   const qs = params.toString();
   const response = await backendApi.get<ResourceSnapshot[]>(
     `/resources/snapshots${qs ? `?${qs}` : ''}`,
-    { showErrors: false }
+    { showErrors: true }
   );
   if (response.error) throw new Error(response.error.message);
   return response.data!;
@@ -119,7 +119,7 @@ export const getResourceSnapshots = async (
 
 export const getCurrentResources = async (): Promise<ResourceSnapshot[]> => {
   const response = await backendApi.get<ResourceSnapshot[]>('/resources/current', {
-    showErrors: false,
+    showErrors: true,
   });
   if (response.error) throw new Error(response.error.message);
   return response.data!;
@@ -137,7 +137,7 @@ export const getResourceHistory = async (
   const qs = params.toString();
   const response = await backendApi.get<ResourceHistoryBucket[]>(
     `/resources/history${qs ? `?${qs}` : ''}`,
-    { showErrors: false }
+    { showErrors: true }
   );
   if (response.error) throw new Error(response.error.message);
   return response.data!;
@@ -153,7 +153,7 @@ export const createAlertRule = async (
 
 export const getAlertRules = async (): Promise<ResourceAlertRule[]> => {
   const response = await backendApi.get<ResourceAlertRule[]>('/resources/alert-rules', {
-    showErrors: false,
+    showErrors: true,
   });
   if (response.error) throw new Error(response.error.message);
   return response.data!;

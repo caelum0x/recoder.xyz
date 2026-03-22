@@ -8,7 +8,7 @@ export type TierBadgeSize = 'xxs' | 'xs' | 'sm' | 'md' | 'lg';
 export type TierBadgeVariant = 'default' | 'circle';
 
 interface TierBadgeProps {
-  /** Plan name (e.g., 'Basic', 'Plus', 'Pro', 'Ultra') */
+  /** Plan name (e.g., 'Free', 'Plus', 'Pro', 'Ultra') */
   planName: string;
   /** Size variant */
   size?: TierBadgeSize;
@@ -80,7 +80,7 @@ export function TierBadge({
     }
     return (
       <span className={cn('text-[13px] font-medium text-muted-foreground leading-tight', className)}>
-        {planName || 'Basic'}
+        {planName || 'Free'}
       </span>
     );
   }

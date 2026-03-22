@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useAgent } from '@/hooks/agents/use-agents';
-import { ChevronLeft, Brain, BookOpen, Zap, Wrench, Server, Pencil, MessageCircle, History, ScrollText, KeyRound, Gauge, Clock, CalendarClock, Download, Activity, BarChart3, MessageSquare, Terminal, FlaskConical, HeartPulse, Shield, Route, Rocket, Lock, GitBranch, Database } from 'lucide-react';
+import { ChevronLeft, Brain, BookOpen, Zap, Wrench, Server, Pencil, MessageCircle, History, ScrollText, KeyRound, Gauge, Clock, CalendarClock, Download, Activity, BarChart3, MessageSquare, Terminal, FlaskConical, HeartPulse, Shield, Route, Rocket, Lock, GitBranch, Database, Workflow, Camera } from 'lucide-react';
 import { RecoderLoader } from '@/components/ui/recoder-loader';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -34,6 +34,9 @@ import { QuotasScreen } from './screens/quotas-screen';
 import { SandboxScreen } from './screens/sandbox-screen';
 import { ScheduledTasksScreen } from './screens/scheduled-tasks-screen';
 import { CacheScreen } from './screens/cache-screen';
+import { PipelineScreen } from './screens/pipeline-screen';
+import { SkillsScreen } from './screens/skills-screen';
+import { ConfigSnapshotScreen } from './screens/config-snapshot-screen';
 import { CommentPanel } from '@/components/agents/config/comment-panel';
 import { useCommentCounts } from '@/hooks/agents/use-agent-comments';
 import { useUpdateAgent } from '@/hooks/agents/use-agents';
@@ -42,7 +45,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { AgentConfigTour } from '@/components/onboarding/tours/agent-config-tour';
 import { AgentExportDialog } from '@/components/agents/agent-export-dialog';
 
-type ConfigView = 'instructions' | 'knowledge' | 'triggers' | 'tools' | 'integrations' | 'versions' | 'config-versions' | 'logs' | 'secrets' | 'environment' | 'quota' | 'quotas' | 'schedules' | 'scheduled-tasks' | 'activity' | 'benchmarks' | 'testing' | 'sandbox' | 'health' | 'changelog' | 'permissions' | 'routing' | 'deployment' | 'cache';
+type ConfigView = 'instructions' | 'knowledge' | 'triggers' | 'tools' | 'integrations' | 'versions' | 'config-versions' | 'logs' | 'secrets' | 'environment' | 'quota' | 'quotas' | 'schedules' | 'scheduled-tasks' | 'activity' | 'benchmarks' | 'testing' | 'sandbox' | 'health' | 'changelog' | 'permissions' | 'routing' | 'deployment' | 'cache' | 'pipeline' | 'skills' | 'config-snapshots';
 
 export default function AgentConfigPage() {
   const params = useParams();
@@ -122,6 +125,9 @@ export default function AgentConfigPage() {
     { id: 'routing' as const, label: 'Routing', icon: Route, tourId: 'routing-tab' },
     { id: 'deployment' as const, label: 'Deployment', icon: Rocket, tourId: 'deployment-tab' },
     { id: 'cache' as const, label: 'Cache', icon: Database, tourId: 'cache-tab' },
+    { id: 'pipeline' as const, label: 'Pipeline', icon: Workflow, tourId: 'pipeline-tab' },
+    { id: 'skills' as const, label: 'Skills', icon: Zap, tourId: 'skills-tab' },
+    { id: 'config-snapshots' as const, label: 'Snapshots', icon: Camera, tourId: 'config-snapshots-tab' },
   ];
 
   return (
@@ -288,6 +294,9 @@ export default function AgentConfigPage() {
         {activeView === 'routing' && <RoutingScreen agentId={agentId} />}
         {activeView === 'deployment' && <DeploymentScreen agentId={agentId} />}
         {activeView === 'cache' && <CacheScreen agentId={agentId} />}
+        {activeView === 'pipeline' && <PipelineScreen agentId={agentId} />}
+        {activeView === 'skills' && <SkillsScreen agentId={agentId} />}
+        {activeView === 'config-snapshots' && <ConfigSnapshotScreen agentId={agentId} />}
       </div>
 
       {/* Agent Editor Dialog */}

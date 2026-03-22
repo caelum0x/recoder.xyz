@@ -370,9 +370,9 @@ export function useThreadToolCalls(
 
           // Check if this tool call has a result (from useAgentStream merging)
           const extendedToolCall = metadataToolCall as Record<string, unknown>;
-          const toolResult = extendedToolCall.tool_result;
+          const toolResult = extendedToolCall.tool_result as { success?: boolean; output?: any; error?: string | null } | undefined;
           const isCompleted = extendedToolCall.completed === true;
-          
+
           const newToolCall: ToolCallInput = {
             toolCall: {
               tool_call_id: metadataToolCall.tool_call_id,
@@ -411,10 +411,11 @@ export function useThreadToolCalls(
             }
             
             // Merge tool result if available (real-time update)
-            const mergedToolResult = toolResult ? {
-              success: toolResult.success !== false,
-              output: toolResult.output,
-              error: toolResult.error || null,
+            const existingToolResult = toolResult as { success?: boolean; output?: any; error?: string | null } | undefined;
+            const mergedToolResult = existingToolResult ? {
+              success: existingToolResult.success !== false,
+              output: existingToolResult.output,
+              error: existingToolResult.error || null,
             } : updated[existingIndex].toolResult;
             
             updated[existingIndex] = {

@@ -99,11 +99,11 @@ const nextConfig: NextConfig = {
 						key: "Content-Security-Policy",
 						value: [
 							"default-src 'self'",
-							"script-src 'self' 'unsafe-inline'",
+							"script-src 'self' 'unsafe-inline' 'unsafe-eval' https://static.cloudflareinsights.com https://api.recoder.xyz https://recoder.xyz",
 							"style-src 'self' 'unsafe-inline'",
 							"img-src 'self' data: blob: https://avatars.githubusercontent.com https://lh3.googleusercontent.com",
 							"font-src 'self'",
-							"connect-src 'self' https://*.ingest.us.sentry.io https://*.posthog.com https://*.supabase.co wss://*.supabase.co https://*.recoder.xyz wss://*.recoder.xyz https://www.google-analytics.com https://region1.google-analytics.com",
+							"connect-src 'self' https://*.ingest.us.sentry.io https://*.posthog.com https://*.supabase.co wss://*.supabase.co https://recoder.xyz https://*.recoder.xyz wss://recoder.xyz wss://*.recoder.xyz https://www.google-analytics.com https://region1.google-analytics.com",
 							"frame-ancestors 'none'",
 							"base-uri 'self'",
 							"form-action 'self'",

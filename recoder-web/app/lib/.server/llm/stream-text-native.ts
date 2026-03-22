@@ -40,8 +40,8 @@ export interface StreamingOptions {
  * Model configuration for OpenRouter
  */
 const DEFAULT_MODEL = 'anthropic/claude-3-5-sonnet'; // Best for coding (BYOK users)
-const FALLBACK_MODEL = 'google/gemma-3-12b-it:free'; // Free tier fallback (reliable)
-const PLATFORM_DEFAULT_MODEL = 'google/gemma-3-12b-it:free'; // Best reliable free model for coding
+const FALLBACK_MODEL = 'openai/gpt-4o-mini'; // Fallback with 128K context, 16K output
+const PLATFORM_DEFAULT_MODEL = 'openrouter/auto'; // Free auto-router — zero cost for platform key users
 
 /**
  * Stream text using native OpenRouter API
@@ -192,7 +192,7 @@ export async function streamTextNative(
     model: selectedModel,
     messages: openrouterMessages,
     temperature: options?.temperature ?? 0.7,
-    max_tokens: options?.max_tokens ?? config.responseControl.maxTokens ?? 8000,
+    max_tokens: options?.max_tokens ?? config.responseControl.maxTokens ?? 16000,
   };
 
   // Add tools if provided

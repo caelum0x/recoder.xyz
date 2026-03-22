@@ -29,6 +29,8 @@ const TYPE_ICONS: Record<AnnotationType, React.ComponentType<any>> = {
   action: CheckSquare,
   bug: Bug,
   insight: Lightbulb,
+  warning: Bug,
+  action_item: CheckSquare,
 };
 
 const TYPE_COLORS: Record<AnnotationType, string> = {
@@ -38,6 +40,8 @@ const TYPE_COLORS: Record<AnnotationType, string> = {
   action: 'text-green-500',
   bug: 'text-red-500',
   insight: 'text-orange-500',
+  warning: 'text-amber-500',
+  action_item: 'text-emerald-500',
 };
 
 const TYPE_LABELS: Record<AnnotationType, string> = {
@@ -47,6 +51,8 @@ const TYPE_LABELS: Record<AnnotationType, string> = {
   action: 'Action',
   bug: 'Bug',
   insight: 'Insight',
+  warning: 'Warning',
+  action_item: 'Action Item',
 };
 
 export function AnnotationMarker({ annotations, onClick }: AnnotationMarkerProps) {

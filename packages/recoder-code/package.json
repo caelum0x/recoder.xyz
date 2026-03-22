@@ -10,8 +10,12 @@
     "setup:global": "node setup-global-npm.js",
     "setup:enterprise": "node setup.js --enterprise",
     "validate": "node validate.js",
-    "build": "tsc",
-    "build:production": "tsc --project tsconfig.prod.json",
+    "build": "npm run build:core && npm run build:mcp-eternos && npm run build:cli && npm run build:vscode",
+    "build:core": "npm run build --workspace=packages/core",
+    "build:mcp-eternos": "npm run build --workspace=packages/mcp-eternos",
+    "build:cli": "npm run build --workspace=packages/cli",
+    "build:vscode": "npm run compile --workspace=packages/vscode-ide-companion",
+    "build:production": "npm run build",
     "test": "jest",
     "test:integration": "node test-integration.js",
     "test:e2e": "bash test-end-to-end-integration.sh",
@@ -63,7 +67,7 @@
     "typeorm": "^0.3.27",
     "ws": "^8.18.0",
     "zod": "^3.25.76",
-    "recoder-code-core": "^2.4.2"
+    "recoder-code-core": "^2.4.4"
   },
   "optionalDependencies": {
     "@google-cloud/speech": "^7.2.0",

@@ -37,7 +37,7 @@ export const getAgentAnalytics = async (
 ): Promise<AnalyticsMetrics> => {
   const response = await backendApi.get<AnalyticsMetrics>(
     `/agents/${agentId}/analytics?range=${range}`,
-    { showErrors: false, cache: 'no-store' }
+    { showErrors: true, cache: 'no-store' }
   );
 
   if (response.error) {
@@ -54,7 +54,7 @@ export const getAgentAnalyticsDaily = async (
 ): Promise<DailyAnalytics[]> => {
   const response = await backendApi.get<DailyAnalytics[]>(
     `/agents/${agentId}/analytics/daily?from_date=${fromDate}&to_date=${toDate}`,
-    { showErrors: false, cache: 'no-store' }
+    { showErrors: true, cache: 'no-store' }
   );
 
   if (response.error) {

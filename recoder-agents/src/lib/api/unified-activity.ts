@@ -80,7 +80,7 @@ export const getActivityTimeline = async (
   const qs = params.toString();
   const response = await backendApi.get<TimelineResponse>(
     `/activity/timeline${qs ? `?${qs}` : ''}`,
-    { showErrors: false, cache: 'no-store' }
+    { showErrors: true, cache: 'no-store' }
   );
 
   if (response.error) {
@@ -93,7 +93,7 @@ export const getActivityTimeline = async (
 export const getActivityStats = async (): Promise<ActivityStatsResponse> => {
   const response = await backendApi.get<ActivityStatsResponse>(
     '/activity/stats',
-    { showErrors: false, cache: 'no-store' }
+    { showErrors: true, cache: 'no-store' }
   );
 
   if (response.error) {
@@ -108,7 +108,7 @@ export const getActivityHeatmap = async (
 ): Promise<HeatmapResponse> => {
   const response = await backendApi.get<HeatmapResponse>(
     `/activity/heatmap?days=${days}`,
-    { showErrors: false, cache: 'no-store' }
+    { showErrors: true, cache: 'no-store' }
   );
 
   if (response.error) {

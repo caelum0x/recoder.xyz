@@ -120,7 +120,7 @@ function CreateReportDialog() {
                 <SelectValue placeholder="Select agent" />
               </SelectTrigger>
               <SelectContent>
-                {(agents || []).map((agent: any) => (
+                {(agents?.agents || []).map((agent: any) => (
                   <SelectItem key={agent.agent_id || agent.id} value={agent.agent_id || agent.id}>
                     {agent.name || agent.agent_id || agent.id}
                   </SelectItem>
@@ -429,7 +429,7 @@ export default function AbTestReportsPage() {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All Agents</SelectItem>
-            {(agents || []).map((agent: any) => (
+            {(agents?.agents || []).map((agent: any) => (
               <SelectItem key={agent.agent_id || agent.id} value={agent.agent_id || agent.id}>
                 {agent.name || agent.agent_id || agent.id}
               </SelectItem>

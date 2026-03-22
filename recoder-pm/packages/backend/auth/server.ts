@@ -55,6 +55,26 @@ const ensureProfile = async (
     return existing;
   }
 
+  // Auto-create organization for new users (no "Create workspace" screen)
+  const orgName = coreUser.name
+    ? `${coreUser.name}'s Workspace`
+    : coreUser.email.split("@")[0] + "'s Workspace";
+
+  const newOrg = await database.organization.create({
+    data: {
+      name: orgName,
+      featureStatuses: {
+        createMany: {
+          data: [
+            { name: "Backlog", color: "#94a3b8", order: 0, complete: false },
+            { name: "In Progress", color: "#f59e0b", order: 1, complete: false },
+            { name: "Completed", color: "#22c55e", order: 2, complete: true },
+          ],
+        },
+      },
+    },
+  });
+
   return database.authUser.create({
     data: {
       id: coreUser.id,
@@ -62,7 +82,8 @@ const ensureProfile = async (
       emailVerified: coreUser.emailVerified,
       name: coreUser.name,
       imageUrl: coreUser.image,
-      organizationRole: "MEMBER",
+      organizationId: newOrg.id,
+      organizationRole: "ADMIN",
     },
   });
 };

@@ -587,6 +587,10 @@ export const CodeBlockContent = ({
       try {
         const { codeToHtml } = await import('shiki');
         
+        if (!children || typeof children !== 'string') {
+          setIsLoading(false);
+          return;
+        }
         const html = await codeToHtml(children, {
           lang: language,
           themes: {

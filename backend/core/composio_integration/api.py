@@ -413,8 +413,12 @@ async def check_profile_name_availability(
         }
         
     except Exception as e:
-        logger.error(f"Failed to check profile name availability: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Failed to check profile name availability")
+        logger.warning(f"Failed to check profile name availability (returning available=true as fallback): {e}")
+        return {
+            "available": True,
+            "message": "Profile name is available (fallback)",
+            "suggestions": []
+        }
 
 
 @router.get("/profiles")
@@ -563,7 +567,7 @@ async def get_toolkit_icon(
     try:
         toolkit_service = ToolkitService()
         icon_url = await toolkit_service.get_toolkit_icon(toolkit_slug)
-        
+
         if icon_url:
             return {
                 "success": True,
@@ -577,10 +581,15 @@ async def get_toolkit_icon(
                 "icon_url": None,
                 "message": "Icon not found"
             }
-    
+
     except Exception as e:
-        logger.error(f"Error getting toolkit icon: {e}")
-        raise HTTPException(status_code=500, detail="Internal server error")
+        logger.debug(f"Composio icon unavailable for {toolkit_slug}: {e}")
+        return {
+            "success": False,
+            "toolkit_slug": toolkit_slug,
+            "icon_url": None,
+            "message": "Composio not configured"
+        }
 
 
 @router.post("/toolkits/icons/batch")
@@ -618,8 +627,12 @@ async def get_toolkit_icons_batch(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error getting toolkit icons batch: {e}")
-        raise HTTPException(status_code=500, detail="Internal server error")
+        logger.debug(f"Composio batch icons unavailable: {e}")
+        return {
+            "success": False,
+            "icons": {},
+            "message": "Composio not configured"
+        }
 
 
 @router.post("/tools/list")

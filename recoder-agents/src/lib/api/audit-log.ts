@@ -65,7 +65,7 @@ export const getAuditLogs = async (
   const qs = params.toString() ? `?${params.toString()}` : '';
   const response = await backendApi.get<AuditLogListResponse>(
     `/audit/logs${qs}`,
-    { showErrors: false, cache: 'no-store' }
+    { showErrors: true, cache: 'no-store' }
   );
 
   if (response.error) {
@@ -80,7 +80,7 @@ export const getAuditSummary = async (
 ): Promise<AuditSummaryResponse> => {
   const response = await backendApi.get<AuditSummaryResponse>(
     `/audit/logs/summary?days=${days}`,
-    { showErrors: false, cache: 'no-store' }
+    { showErrors: true, cache: 'no-store' }
   );
 
   if (response.error) {
@@ -103,7 +103,7 @@ export const exportAuditLogs = async (
   const qs = params.toString() ? `?${params.toString()}` : '';
   const response = await backendApi.get<AuditLogEntry[]>(
     `/audit/logs/export${qs}`,
-    { showErrors: false, cache: 'no-store' }
+    { showErrors: true, cache: 'no-store' }
   );
 
   if (response.error) {
@@ -118,7 +118,7 @@ export const getAuditTimeline = async (
 ): Promise<AuditTimelineEntry[]> => {
   const response = await backendApi.get<AuditTimelineEntry[]>(
     `/audit/logs/timeline?days=${days}`,
-    { showErrors: false, cache: 'no-store' }
+    { showErrors: true, cache: 'no-store' }
   );
 
   if (response.error) {

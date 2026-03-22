@@ -25,7 +25,13 @@ import {
   parseUnifiedAgentStartResponse,
 } from './contracts';
 
-const API_URL = process.env.NEXT_PUBLIC_BACKEND_URL || '';
+const _envUrl = process.env.NEXT_PUBLIC_BACKEND_URL || '';
+// Guard: never use a localhost backend URL in production (can leak in via .env.local at build time)
+const API_URL = (_envUrl && !_envUrl.includes('localhost'))
+  ? _envUrl
+  : (typeof window !== 'undefined' && window.location.hostname !== 'localhost'
+    ? 'https://api.recoder.xyz/v1'
+    : _envUrl);
 
 export type AgentRun = {
   id: string;
@@ -133,7 +139,7 @@ export const unifiedAgentStart = async (options: {
     const response = await backendApi.upload<unknown>(
       '/agent/start',
       formData,
-      { showErrors: false, cache: 'no-store' }
+      { showErrors: true, cache: 'no-store' }
     );
 
     if (response.error) {
@@ -146,9 +152,9 @@ export const unifiedAgentStart = async (options: {
       
       if (status === 402) {
         // Check error_code to determine the correct error type
-        const errorDetail = response.error.details?.detail || { message: response.error.message || 'Payment required' };
+        const errorDetail = (response.error.details?.detail || { message: response.error.message || 'Payment required' }) as Record<string, any>;
         const errorCode = errorDetail.error_code || response.error.code;
-        
+
         // Handle concurrent agent run limit (should be AgentRunLimitError, not BillingError)
         if (errorCode === 'AGENT_RUN_LIMIT_EXCEEDED') {
           const detail = {
@@ -159,38 +165,35 @@ export const unifiedAgentStart = async (options: {
           };
           throw new AgentRunLimitError(status, detail);
         }
-        
+
         // For other 402 errors, use parseTierRestrictionError to get the correct error type
         const parsedError = parseTierRestrictionError({
           status,
           detail: errorDetail,
           response: { data: { detail: errorDetail } },
         });
-        
+
         // If parseTierRestrictionError returned a different error type, throw that
         if (!(parsedError instanceof BillingError) && parsedError instanceof Error) {
           throw parsedError;
         }
-        
+
         // Otherwise, throw BillingError
-        throw new BillingError(status, errorDetail);
+        throw new BillingError(status, errorDetail as { message: string; [key: string]: any });
       }
 
       if (status === 429) {
-        const detail = response.error.details?.detail || { 
+        const rawDetail = (response.error.details?.detail || {
           message: 'Too many agent runs running',
           running_thread_ids: [],
           running_count: 0,
+        }) as Record<string, any>;
+        const detail = {
+          message: typeof rawDetail.message === 'string' ? rawDetail.message : 'Too many agent runs running',
+          running_thread_ids: Array.isArray(rawDetail.running_thread_ids) ? rawDetail.running_thread_ids : [],
+          running_count: typeof rawDetail.running_count === 'number' ? rawDetail.running_count : 0,
+          limit: typeof rawDetail.limit === 'number' ? rawDetail.limit : 1,
         };
-        if (typeof detail.message !== 'string') {
-          detail.message = 'Too many agent runs running';
-        }
-        if (!Array.isArray(detail.running_thread_ids)) {
-          detail.running_thread_ids = [];
-        }
-        if (typeof detail.running_count !== 'number') {
-          detail.running_count = 0;
-        }
         throw new AgentRunLimitError(status, detail);
       }
 
@@ -289,7 +292,7 @@ export const getAgentStatus = async (agentRunId: string): Promise<AgentRun> => {
   try {
     const response = await backendApi.get<unknown>(
       `/agent-run/${agentRunId}`,
-      { showErrors: false, cache: 'no-store' }
+      { showErrors: true, cache: 'no-store' }
     );
 
     if (response.error) {
@@ -365,7 +368,7 @@ export const getAgentRuns = async (threadId: string): Promise<AgentRun[]> => {
   try {
     const response = await backendApi.get<unknown>(
       `/thread/${threadId}/agent-runs`,
-      { showErrors: false, cache: 'no-store' }
+      { showErrors: true, cache: 'no-store' }
     );
 
     if (response.error) {
@@ -385,7 +388,7 @@ export const getActiveAgentRuns = async (): Promise<ActiveAgentRun[]> => {
   try {
     const response = await backendApi.get<unknown>(
       '/agent-runs/active',
-      { showErrors: false, cache: 'no-store' }
+      { showErrors: true, cache: 'no-store' }
     );
 
     if (response.error) {
@@ -450,7 +453,7 @@ export const optimisticAgentStart = async (options: {
     const response = await backendApi.upload<unknown>(
       '/agent/start',  // Now using unified endpoint
       formData,
-      { showErrors: false, cache: 'no-store' }
+      { showErrors: true, cache: 'no-store' }
     );
 
     if (response.error) {
@@ -478,19 +481,19 @@ export const optimisticAgentStart = async (options: {
         // If it's not a typed error yet, parse it
         // The error from api-client has: detail, details, code properties
         const detail = response.error.detail;
-        const detailObj = typeof detail === 'object' ? detail : undefined;
-        const errorDetail = detailObj || response.error.details?.detail || {
+        const detailObj = (typeof detail === 'object' ? detail : undefined) as Record<string, any> | undefined;
+        const errorDetail = (detailObj || response.error.details?.detail || {
           message: response.error.message || 'Payment required',
-          error_code: response.error.code || (detailObj as Record<string, unknown> | undefined)?.error_code
-        };
-        
+          error_code: response.error.code || detailObj?.error_code
+        }) as Record<string, any>;
+
         const parsedError = parseTierRestrictionError({
           status,
           detail: errorDetail,
           code: errorDetail.error_code || response.error.code,
-          response: { 
-            data: { 
-              detail: errorDetail 
+          response: {
+            data: {
+              detail: errorDetail
             },
             status: status
           },
@@ -499,12 +502,17 @@ export const optimisticAgentStart = async (options: {
       }
 
       if (status === 429) {
-        const detail = response.error.details?.detail || { 
+        const rawDetail = (response.error.details?.detail || {
           message: 'Too many agent runs running',
           running_thread_ids: [],
           running_count: 0,
-        };
-        throw new AgentRunLimitError(status, detail);
+        }) as Record<string, any>;
+        throw new AgentRunLimitError(status, {
+          message: rawDetail.message || 'Too many agent runs running',
+          running_thread_ids: rawDetail.running_thread_ids || [],
+          running_count: rawDetail.running_count || 0,
+          limit: rawDetail.limit || 1,
+        });
       }
 
       if (status === 431 || response.error instanceof RequestTooLargeError) {
@@ -544,13 +552,14 @@ export const optimisticAgentStart = async (options: {
     }
 
     // Log error with more detail for debugging
+    const errObj = error as Record<string, any> | null | undefined;
     console.error('[API] Failed to start agent optimistically:', {
       error,
-      errorName: error?.name,
-      errorMessage: error?.message,
-      errorStatus: error?.status,
-      errorDetail: error?.detail,
-      errorCode: error?.code || error?.detail?.error_code,
+      errorName: errObj?.name,
+      errorMessage: errObj?.message,
+      errorStatus: errObj?.status,
+      errorDetail: errObj?.detail,
+      errorCode: errObj?.code || errObj?.detail?.error_code,
       isThreadLimitError: error instanceof ThreadLimitError,
       isBillingError: error instanceof BillingError,
     });

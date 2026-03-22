@@ -46,8 +46,8 @@ export interface KBCloneGitRepoPayload {
 
 export const listFolders = async (): Promise<KBFolder[]> => {
   const response = await backendApi.get<KBFolder[]>(
-    '/v1/knowledge-base/folders',
-    { showErrors: false, cache: 'no-store' },
+    '/knowledge-base/folders',
+    { showErrors: true, cache: 'no-store' },
   );
   if (response.error) throw new Error(`Failed to list folders: ${response.error.message}`);
   return response.data!;
@@ -55,7 +55,7 @@ export const listFolders = async (): Promise<KBFolder[]> => {
 
 export const createFolder = async (name: string, parentId?: string): Promise<KBFolder> => {
   const response = await backendApi.post<KBFolder>(
-    '/v1/knowledge-base/folders',
+    '/knowledge-base/folders',
     { name, parent_id: parentId ?? null },
     { showErrors: true },
   );
@@ -65,7 +65,7 @@ export const createFolder = async (name: string, parentId?: string): Promise<KBF
 
 export const updateFolder = async (folderId: string, name: string): Promise<KBFolder> => {
   const response = await backendApi.put<KBFolder>(
-    `/v1/knowledge-base/folders/${folderId}`,
+    `/knowledge-base/folders/${folderId}`,
     { name },
     { showErrors: true },
   );
@@ -75,7 +75,7 @@ export const updateFolder = async (folderId: string, name: string): Promise<KBFo
 
 export const deleteFolder = async (folderId: string): Promise<void> => {
   const response = await backendApi.delete(
-    `/v1/knowledge-base/folders/${folderId}`,
+    `/knowledge-base/folders/${folderId}`,
     { showErrors: true },
   );
   if (response.error) throw new Error(`Failed to delete folder: ${response.error.message}`);
@@ -85,8 +85,8 @@ export const deleteFolder = async (folderId: string): Promise<void> => {
 
 export const listEntries = async (folderId: string): Promise<KBEntry[]> => {
   const response = await backendApi.get<KBEntry[]>(
-    `/v1/knowledge-base/folders/${folderId}/entries`,
-    { showErrors: false, cache: 'no-store' },
+    `/knowledge-base/folders/${folderId}/entries`,
+    { showErrors: true, cache: 'no-store' },
   );
   if (response.error) throw new Error(`Failed to list entries: ${response.error.message}`);
   return response.data!;
@@ -96,7 +96,7 @@ export const uploadFile = async (folderId: string, file: File): Promise<KBEntry>
   const formData = new FormData();
   formData.append('file', file);
   const response = await backendApi.upload<KBEntry>(
-    `/v1/knowledge-base/folders/${folderId}/upload`,
+    `/knowledge-base/folders/${folderId}/upload`,
     formData,
     { showErrors: true, timeout: 120000 },
   );
@@ -106,7 +106,7 @@ export const uploadFile = async (folderId: string, file: File): Promise<KBEntry>
 
 export const deleteEntry = async (entryId: string): Promise<void> => {
   const response = await backendApi.delete(
-    `/v1/knowledge-base/entries/${entryId}`,
+    `/knowledge-base/entries/${entryId}`,
     { showErrors: true },
   );
   if (response.error) throw new Error(`Failed to delete entry: ${response.error.message}`);
@@ -116,8 +116,8 @@ export const deleteEntry = async (entryId: string): Promise<void> => {
 
 export const searchEntries = async (query: string): Promise<KBSearchResult> => {
   const response = await backendApi.get<KBSearchResult>(
-    `/v1/knowledge-base/search?q=${encodeURIComponent(query)}`,
-    { showErrors: false, cache: 'no-store' },
+    `/knowledge-base/search?q=${encodeURIComponent(query)}`,
+    { showErrors: true, cache: 'no-store' },
   );
   if (response.error) throw new Error(`Failed to search entries: ${response.error.message}`);
   return response.data!;
@@ -130,7 +130,7 @@ export const cloneGitRepo = async (
   payload: KBCloneGitRepoPayload,
 ): Promise<KBEntry[]> => {
   const response = await backendApi.post<KBEntry[]>(
-    `/v1/knowledge-base/folders/${folderId}/clone-git-repo`,
+    `/knowledge-base/folders/${folderId}/clone-git-repo`,
     payload,
     { showErrors: true, timeout: 300000 },
   );
@@ -142,8 +142,8 @@ export const cloneGitRepo = async (
 
 export const getStats = async (): Promise<KBStats> => {
   const response = await backendApi.get<KBStats>(
-    '/v1/knowledge-base/stats',
-    { showErrors: false, cache: 'no-store' },
+    '/knowledge-base/stats',
+    { showErrors: true, cache: 'no-store' },
   );
   if (response.error) throw new Error(`Failed to get stats: ${response.error.message}`);
   return response.data!;
@@ -156,7 +156,7 @@ export const bulkAssignAgents = async (
   agentIds: string[],
 ): Promise<void> => {
   const response = await backendApi.patch(
-    '/v1/knowledge-base/entries/bulk-assign',
+    '/knowledge-base/entries/bulk-assign',
     { entry_ids: entryIds, agent_ids: agentIds },
     { showErrors: true },
   );
@@ -168,7 +168,7 @@ export const bulkMoveEntries = async (
   targetFolderId: string,
 ): Promise<void> => {
   const response = await backendApi.patch(
-    '/v1/knowledge-base/entries/bulk-move',
+    '/knowledge-base/entries/bulk-move',
     { entry_ids: entryIds, target_folder_id: targetFolderId },
     { showErrors: true },
   );
@@ -179,7 +179,7 @@ export const bulkMoveEntries = async (
 
 export const backfillEmbeddings = async (): Promise<{ queued: number }> => {
   const response = await backendApi.post<{ queued: number }>(
-    '/v1/knowledge-base/backfill-embeddings',
+    '/knowledge-base/backfill-embeddings',
     {},
     { showErrors: true },
   );

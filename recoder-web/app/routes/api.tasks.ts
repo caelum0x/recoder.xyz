@@ -15,7 +15,7 @@
  */
 
 import { type ActionFunctionArgs, type LoaderFunctionArgs, json } from '@remix-run/cloudflare';
-import { neon } from '@neondatabase/serverless';
+import { createSql } from '~/lib/.server/db/pg-pool';
 import { z } from 'zod';
 import { createScopedLogger } from '~/utils/logger';
 
@@ -88,7 +88,7 @@ function getDatabaseUrl(context: any): string | null {
 /**
  * Ensure the workspace_tasks table exists (idempotent, runs once per process)
  */
-async function ensureTasksTable(sql: ReturnType<typeof neon>): Promise<void> {
+async function ensureTasksTable(sql: ReturnType<typeof createSql>): Promise<void> {
   if (tableEnsured) return;
   try {
     await sql`
@@ -212,7 +212,7 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
       return json({ success: false, error: 'Database not configured' }, { status: 500 });
     }
 
-    const sql = neon(databaseUrl);
+    const sql = createSql(databaseUrl);
     await ensureTasksTable(sql);
 
     const url = new URL(request.url);
@@ -318,7 +318,7 @@ export async function action({ request, context }: ActionFunctionArgs) {
       return json({ success: false, error: 'Database not configured' }, { status: 500 });
     }
 
-    const sql = neon(databaseUrl);
+    const sql = createSql(databaseUrl);
     await ensureTasksTable(sql);
 
     const url = new URL(request.url);

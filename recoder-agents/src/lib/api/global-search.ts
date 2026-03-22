@@ -55,7 +55,7 @@ export async function indexedSearch(
 
   const response = await backendApi.get<IndexedSearchResponse>(
     `/global-search?${params.toString()}`,
-    { showErrors: false },
+    { showErrors: true },
   );
 
   if (response.error) {
@@ -95,7 +95,7 @@ export async function searchSuggestions(
 
   const response = await backendApi.get<SuggestionsResponse>(
     `/global-search/suggestions?${params.toString()}`,
-    { showErrors: false },
+    { showErrors: true },
   );
 
   if (response.error) {

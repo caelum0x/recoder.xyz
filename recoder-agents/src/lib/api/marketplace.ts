@@ -105,7 +105,7 @@ export async function getMarketplaceListings(
     const qs = searchParams.toString();
     const response = await backendApi.get<ListingsResponse>(
       `/marketplace/listings${qs ? `?${qs}` : ''}`,
-      { showErrors: false },
+      { showErrors: true },
     );
     if (response.error) throw new Error(`Error: ${response.error.message}`);
     return response.data!;
@@ -121,7 +121,7 @@ export async function getMarketplaceListing(
   try {
     const response = await backendApi.get<MarketplaceListing>(
       `/marketplace/listings/${listingId}`,
-      { showErrors: false },
+      { showErrors: true },
     );
     if (response.error) throw new Error(`Error: ${response.error.message}`);
     return response.data!;
@@ -138,7 +138,7 @@ export async function publishAgent(
     const response = await backendApi.post<PublishResponse>(
       '/marketplace/publish',
       body,
-      { showErrors: false },
+      { showErrors: true },
     );
     if (response.error) throw new Error(`Error: ${response.error.message}`);
     return response.data!;
@@ -155,7 +155,7 @@ export async function installAgent(
     const response = await backendApi.post<InstallResponse>(
       `/marketplace/listings/${listingId}/install`,
       {},
-      { showErrors: false },
+      { showErrors: true },
     );
     if (response.error) throw new Error(`Error: ${response.error.message}`);
     return response.data!;
@@ -173,7 +173,7 @@ export async function reviewListing(
     const response = await backendApi.post<ReviewItem>(
       `/marketplace/listings/${listingId}/review`,
       body,
-      { showErrors: false },
+      { showErrors: true },
     );
     if (response.error) throw new Error(`Error: ${response.error.message}`);
     return response.data!;
@@ -194,7 +194,7 @@ export async function getListingReviews(
     const qs = searchParams.toString();
     const response = await backendApi.get<ReviewsResponse>(
       `/marketplace/listings/${listingId}/reviews${qs ? `?${qs}` : ''}`,
-      { showErrors: false },
+      { showErrors: true },
     );
     if (response.error) throw new Error(`Error: ${response.error.message}`);
     return response.data!;
@@ -208,7 +208,7 @@ export async function getMyListings(): Promise<ListingsResponse> {
   try {
     const response = await backendApi.get<ListingsResponse>(
       '/marketplace/my-listings',
-      { showErrors: false },
+      { showErrors: true },
     );
     if (response.error) throw new Error(`Error: ${response.error.message}`);
     return response.data!;
@@ -226,7 +226,7 @@ export async function updateListing(
     const response = await backendApi.patch<MarketplaceListing>(
       `/marketplace/listings/${listingId}`,
       body,
-      { showErrors: false },
+      { showErrors: true },
     );
     if (response.error) throw new Error(`Error: ${response.error.message}`);
     return response.data!;
@@ -242,7 +242,7 @@ export async function deleteListing(
   try {
     const response = await backendApi.delete<{ deleted: boolean }>(
       `/marketplace/listings/${listingId}`,
-      { showErrors: false },
+      { showErrors: true },
     );
     if (response.error) throw new Error(`Error: ${response.error.message}`);
     return response.data!;

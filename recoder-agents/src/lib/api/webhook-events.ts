@@ -69,7 +69,7 @@ export async function listWebhookEvents(
 
     const response = await backendApi.get<WebhookEventListResponse>(
       `/webhooks/${webhookId}/events${qs ? `?${qs}` : ''}`,
-      { showErrors: false },
+      { showErrors: true },
     );
     if (response.error) throw new Error(`Error: ${response.error.message}`);
     return response.data!;
@@ -93,7 +93,7 @@ export async function listRecentWebhookEvents(
 
     const response = await backendApi.get<WebhookEventListResponse>(
       `/webhooks/events/recent${qs ? `?${qs}` : ''}`,
-      { showErrors: false },
+      { showErrors: true },
     );
     if (response.error) throw new Error(`Error: ${response.error.message}`);
     return response.data!;
@@ -110,7 +110,7 @@ export async function retryWebhookEvent(
     const response = await backendApi.post<RetryEventResponse>(
       `/webhooks/events/${eventId}/retry`,
       undefined,
-      { showErrors: false },
+      { showErrors: true },
     );
     if (response.error) throw new Error(`Error: ${response.error.message}`);
     return response.data!;
@@ -130,7 +130,7 @@ export async function getWebhookEventStats(
 
     const response = await backendApi.get<WebhookEventStats>(
       `/webhooks/events/stats${qs ? `?${qs}` : ''}`,
-      { showErrors: false },
+      { showErrors: true },
     );
     if (response.error) throw new Error(`Error: ${response.error.message}`);
     return response.data!;

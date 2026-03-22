@@ -401,7 +401,6 @@ const AssistantGroupRow = memo(function AssistantGroupRow({
   const displayStreamingText = useSmoothStream(
     rawTextContent,
     isActivelyStreaming,
-    300 // animation delay in ms
   );
 
   // Determine reasoning content to display (same logic as text)

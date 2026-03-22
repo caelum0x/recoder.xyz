@@ -3,7 +3,7 @@
  * Runs the chat history schema on Neon database
  */
 
-import { neon } from '@neondatabase/serverless';
+import { createSql } from './app/lib/.server/db/pg-pool.js';
 import { readFileSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
@@ -22,7 +22,7 @@ async function setupDatabase() {
   }
 
   console.log('🔗 Connecting to Neon database...');
-  const sql = neon(DATABASE_URL);
+  const sql = createSql(DATABASE_URL);
 
   // Read schema file
   const schemaPath = join(__dirname, 'app/lib/.server/db/chat-history-schema.sql');

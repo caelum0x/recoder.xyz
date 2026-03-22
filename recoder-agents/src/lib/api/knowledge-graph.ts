@@ -69,7 +69,7 @@ export interface CreateEdgeData {
 export const getKnowledgeGraph = async (nodeType?: string): Promise<KnowledgeGraph> => {
   const params = nodeType ? `?node_type=${encodeURIComponent(nodeType)}` : '';
   const response = await backendApi.get<KnowledgeGraph>(`/knowledge-graph${params}`, {
-    showErrors: false,
+    showErrors: true,
   });
   if (response.error) throw new Error(response.error.message);
   return response.data!;
@@ -90,7 +90,7 @@ export const addEdge = async (data: CreateEdgeData): Promise<KnowledgeGraphEdge>
 export const getNodeConnections = async (nodeId: string): Promise<NodeConnections> => {
   const response = await backendApi.get<NodeConnections>(
     `/knowledge-graph/node/${nodeId}/connections`,
-    { showErrors: false }
+    { showErrors: true }
   );
   if (response.error) throw new Error(response.error.message);
   return response.data!;
@@ -116,7 +116,7 @@ export const autoDiscover = async (): Promise<AutoDiscoverResult> => {
 
 export const getGraphStats = async (): Promise<GraphStats> => {
   const response = await backendApi.get<GraphStats>('/knowledge-graph/stats', {
-    showErrors: false,
+    showErrors: true,
   });
   if (response.error) throw new Error(response.error.message);
   return response.data!;

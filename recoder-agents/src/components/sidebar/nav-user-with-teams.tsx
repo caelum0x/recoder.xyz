@@ -9,7 +9,6 @@ import {
   BookOpen,
   ChevronDown,
   ChevronsUpDown,
-  ChevronRight,
   Command,
   CreditCard,
   Key,
@@ -29,7 +28,6 @@ import {
   FileText,
   TrendingDown,
   MessageSquare,
-  Heart,
   LifeBuoy,
   AlertTriangle,
 } from 'lucide-react';
@@ -68,17 +66,14 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog';
 import { useTheme } from 'next-themes';
-import { isLocalMode, isProductionMode } from '@/lib/config';
+import { isLocalMode } from '@/lib/config';
 import { clearUserLocalStorage } from '@/lib/utils/clear-local-storage';
 import { UserSettingsModal } from '@/components/settings/user-settings-modal';
 import { PlanSelectionModal } from '@/components/billing/pricing';
 import { TierBadge } from '@/components/billing/tier-badge';
 import { useTranslations } from 'next-intl';
-import { useReferralDialog } from '@/stores/referral-dialog';
-import { ReferralDialog } from '@/components/referrals/referral-dialog';
 import { FeedbackDialog } from '@/components/feedback/feedback-dialog';
 import { Badge } from '@/components/ui/badge';
-import { SpotlightCard } from '@/components/ui/spotlight-card';
 import { trackCtaUpgrade } from '@/lib/analytics/gtm';
 
 export function NavUserWithTeams({
@@ -104,7 +99,6 @@ export function NavUserWithTeams({
   const [showPlanModal, setShowPlanModal] = React.useState(false);
   const [showFeedbackDialog, setShowFeedbackDialog] = React.useState(false);
   const [settingsTab, setSettingsTab] = React.useState<'general' | 'billing' | 'usage' | 'env-manager'>('general');
-  const { isOpen: isReferralDialogOpen, openDialog: openReferralDialog, closeDialog: closeReferralDialog } = useReferralDialog();
   const { theme, setTheme } = useTheme();
 
   // Check if user is on free tier
@@ -216,23 +210,7 @@ export function NavUserWithTeams({
         <SidebarMenuItem className="relative">
           {/* Buttons Container - Above user card */}
           <div className="absolute bottom-full left-0 right-0 mb-2 px-0 group-data-[collapsible=icon]:hidden z-50 flex flex-col gap-2">
-            {/* Referral Button - Above Upgrade */}
-            {!isProductionMode() && (
-              <SpotlightCard className="bg-zinc-200/60 dark:bg-zinc-800/60 backdrop-blur-md cursor-pointer">
-                <div
-                  onClick={openReferralDialog}
-                  className="flex items-center gap-3 px-3 py-2.5"
-                >
-                  <Heart className="h-4 w-4 text-zinc-700 dark:text-zinc-300 flex-shrink-0" />
-                  <div className="flex-1 text-left">
-                    <div className="text-sm font-medium text-zinc-900 dark:text-zinc-100">{t('referralShareTitle')}</div>
-                    <div className="text-xs text-zinc-600 dark:text-zinc-400">{t('referralShareSubtitle')}</div>
-                  </div>
-                  <ChevronRight className="h-4 w-4 text-zinc-500 flex-shrink-0" />
-                </div>
-              </SpotlightCard>
-            )}
-            {/* Upgrade Button - Closest to user card */}
+            {/* Upgrade Button */}
             {isFreeTier && (
               <Button
                 onClick={() => {
@@ -261,7 +239,7 @@ export function NavUserWithTeams({
                 </Avatar>
                 <div className="flex flex-col justify-between flex-1 min-w-0 h-10 group-data-[collapsible=icon]:hidden">
                   <span className="truncate font-medium text-sm leading-tight">{user.name}</span>
-                  {user.planName ? (
+                  {user.planName && !['free', 'basic'].includes(user.planName.toLowerCase()) ? (
                     <TierBadge planName={user.planName} size="xs" variant="default" />
                   ) : (
                     <span className="truncate text-xs text-muted-foreground leading-tight">{user.email}</span>
@@ -604,12 +582,6 @@ export function NavUserWithTeams({
         returnUrl={typeof window !== 'undefined' ? window?.location?.href || '/' : '/'}
       />
       
-      {/* Referral Dialog */}
-      <ReferralDialog
-        open={isReferralDialogOpen}
-        onOpenChange={closeReferralDialog}
-      />
-
       {/* Feedback Dialog */}
       <FeedbackDialog
         open={showFeedbackDialog}

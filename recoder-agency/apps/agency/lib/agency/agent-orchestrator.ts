@@ -139,7 +139,17 @@ async function handleCreateBrief(params: {
 		})
 		.returning({ dbId: projects.dbId });
 
-	// Trigger async quote generation (fire and forget)
+	// Trigger async brief analysis + quote generation (fire and forget)
+	import("./workflows/brief-analyzer").then(({ analyzeBrief }) =>
+		analyzeBrief({
+			projectDbId: inserted.dbId,
+			projectId,
+			brief: params.description,
+			clientName: params.name,
+			model: params.model,
+		}).catch(() => {})
+	);
+
 	triggerQuoteGeneration({
 		projectDbId: inserted.dbId,
 		projectId,

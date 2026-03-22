@@ -13,7 +13,6 @@ import { ModelSelector } from './ModelSelector';
 import { ProjectGallery } from '~/components/gallery/ProjectGallery';
 import type { TemplateRepo } from '~/lib/.server/github/types';
 
-import { ChatModeSelector } from './ChatModeSelector';
 import { ModelProfileSelector } from './ModelProfileSelector';
 import { SlashCommandMenu } from './SlashCommandMenu';
 import { CommandPalette, useCommandPalette } from './CommandPalette';
@@ -25,7 +24,6 @@ import { DragDropOverlay } from './DragDropOverlay';
 import { FileDropZone, DropHint } from './FileDropZone';
 import { ContextFilesPanel, ContextFilesPill } from './ContextFilesPanel';
 import { ParameterPanelToggle } from './ParameterPanel';
-import { ThemeSelector } from '~/components/workbench/ThemeSelector';
 import { PromptMentionMenu } from './PromptMentionMenu';
 
 import { formatFileSize, MAX_FILE_SIZE, MAX_TOTAL_SIZE } from '~/lib/services/attachments';
@@ -77,7 +75,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
       messages,
       input = '',
       selectedProvider = 'openrouter',
-      selectedModel = 'x-ai/grok-code-fast-1',
+      selectedModel = 'openai/gpt-4o-mini',
       onProviderChange = () => {},
       onModelChange = () => {},
       onSettingsClick = () => {},
@@ -290,8 +288,6 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                               onModelChange={onModelChange}
                               onSettingsClick={onSettingsClick}
                             />
-                            <ChatModeSelector compact />
-                            <ThemeSelector />
                           </div>
                           <div className="flex items-center gap-2">
                             <ParameterPanelToggle />

@@ -42,8 +42,8 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
     
     if (databaseUrl) {
       try {
-        const { neon } = await import('@neondatabase/serverless');
-        const sql = neon(databaseUrl);
+        const { createSql } = await import('~/lib/.server/db/pg-pool');
+        const sql = createSql(databaseUrl);
         
         // Get project details including framework and templateId for container config
         const projects = await sql`

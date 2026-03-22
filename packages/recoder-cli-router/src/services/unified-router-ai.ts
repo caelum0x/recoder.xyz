@@ -6,8 +6,10 @@
  */
 
 import { buildApiHandler, type ApiHandler } from '../api';
-import { routerBackendClient, type RequestUsage } from './backend-client';
+import { routerBackendClient } from './backend-client';
 import type { ApiHandlerOptions } from 'recoder-shared';
+import { executionPipeline } from '../integrations/execution-pipeline';
+import type { AgentId } from '../integrations/a2a-bridge';
 
 export interface RouterAIOptions {
   preferredProvider?: string;
@@ -15,6 +17,14 @@ export interface RouterAIOptions {
   temperature?: number;
   priority?: 'cost' | 'quality' | 'speed';
   contextType?: 'default' | 'background' | 'think' | 'longContext' | 'webSearch';
+  /** Run code blocks from the response in a Daytona sandbox */
+  autoExecute?: boolean;
+  /** Delegate to another agent if the task is better suited for it */
+  autoDelegate?: boolean;
+  /** Explicitly run a command in a Daytona sandbox */
+  sandboxCommand?: string;
+  /** Explicitly delegate to a specific agent */
+  delegateTo?: AgentId;
 }
 
 export interface RouterAIResponse {
@@ -31,6 +41,8 @@ export interface RouterAIResponse {
     total: number;
     remaining: number;
   };
+  /** Execution pipeline result (sandbox or A2A delegation) */
+  execution?: ExecutionResult;
 }
 
 export interface RouterConfig {
@@ -292,6 +304,25 @@ export class UnifiedRouterAI {
         console.log(`🎯 Quota: ${quotaInfo.remaining}/${quotaInfo.total} remaining`);
       }
 
+      // Run execution pipeline (sandbox / A2A) if requested
+      let execution: ExecutionResult | undefined;
+      if (options.sandboxCommand || options.delegateTo || options.autoExecute || options.autoDelegate) {
+        try {
+          execution = await executionPipeline.process({
+            prompt: options.sandboxCommand ? prompt : fullContent,
+            autoExecute: options.autoExecute,
+            autoDelegate: options.autoDelegate,
+            sandboxCommand: options.sandboxCommand,
+            delegateTo: options.delegateTo,
+          });
+          if (execution.executed) {
+            console.log(`⚡ Execution pipeline: ${execution.summary}`);
+          }
+        } catch (error: any) {
+          console.warn(`⚠️ Execution pipeline error: ${error.message}`);
+        }
+      }
+
       return {
         content: fullContent,
         model: modelUsed,
@@ -301,7 +332,8 @@ export class UnifiedRouterAI {
           output: usage.outputTokens
         },
         cost: usage.totalCost,
-        quotaInfo
+        quotaInfo,
+        execution,
       };
 
     } catch (error) {
@@ -315,8 +347,6 @@ export class UnifiedRouterAI {
    * Implements 60/25/15% distribution for maximum profit
    */
   private selectProviderByContext(options: RouterAIOptions): string {
-    const contextType = options.contextType || 'default';
-    
     // Always use OpenRouter for smart model selection unless specifically overridden
     let preferredProvider = 'openrouter';
     
@@ -449,9 +479,13 @@ WEB SEARCH PRINCIPLES:
     availableProviders: string[];
     config: RouterConfig;
     quotaInfo?: any;
+    execution?: {
+      sandbox: { configured: boolean; apiUrl: string; activeSandboxes: number };
+      a2a: { configured: boolean; apiUrl: string; dockerUrl: string };
+    };
   } {
     const session = routerBackendClient.getCurrentSession();
-    
+
     return {
       enabled: this.config.enabled,
       availableProviders: Array.from(this.handlers.keys()),
@@ -463,7 +497,8 @@ WEB SEARCH PRINCIPLES:
         total: session.quotas.totalRequests,
         remaining: session.quotas.totalRequests - session.quotas.usedRequests,
         resetDate: session.quotas.resetDate
-      } : undefined
+      } : undefined,
+      execution: executionPipeline.getStatus(),
     };
   }
 
@@ -479,6 +514,68 @@ WEB SEARCH PRINCIPLES:
       this.initialized = false;
       this.initializeHandlers();
     }
+  }
+
+  // ── Daytona Sandbox Methods ──
+
+  /**
+   * Run a command in a Daytona sandbox (one-shot ephemeral)
+   */
+  async sandboxRun(command: string, options?: { image?: string; timeoutMs?: number }): Promise<SandboxExecResult> {
+    return executionPipeline.runInSandbox(command, options);
+  }
+
+  /**
+   * Run a multi-file script in a Daytona sandbox
+   */
+  async sandboxRunScript(steps: {
+    files?: Array<{ path: string; content: string }>;
+    installCommand?: string;
+    runCommand: string;
+    image?: string;
+    timeoutMs?: number;
+  }): Promise<SandboxExecResult> {
+    return executionPipeline.runScript(steps);
+  }
+
+  // ── A2A Agent Methods ──
+
+  /**
+   * List agents on the A2A platform
+   */
+  async listAgents(): Promise<A2AAgent[]> {
+    return a2aBridge.listAgents();
+  }
+
+  /**
+   * List tasks on the A2A platform
+   */
+  async listTasks(): Promise<A2ATask[]> {
+    return a2aBridge.listTasks();
+  }
+
+  /**
+   * Send a task to another agent
+   */
+  async sendTask(targetAgent: AgentId, task: string, capability?: 'execute' | 'plan' | 'edit'): Promise<A2ATask> {
+    return a2aBridge.sendTask({ targetAgent, task, capability });
+  }
+
+  /**
+   * Create a new agent thread with Daytona sandbox
+   */
+  async createAgentThread(prompt: string, agentId?: string): Promise<A2AThread> {
+    return a2aBridge.createThread({ prompt, agentId });
+  }
+
+  /**
+   * Get execution pipeline status (sandbox + A2A)
+   */
+  getExecutionStatus(): {
+    sandbox: { configured: boolean; apiUrl: string; activeSandboxes: number };
+    a2a: { configured: boolean; apiUrl: string; dockerUrl: string };
+  } {
+    return executionPipeline.getStatus();
   }
 
   /**

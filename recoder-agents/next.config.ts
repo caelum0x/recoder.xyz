@@ -1,26 +1,36 @@
 import type { NextConfig } from 'next';
 import bundleAnalyzer from '@next/bundle-analyzer';
+import { withSentryConfig } from '@sentry/nextjs';
 
-// Dynamically determine backend URL based on Vercel environment
+// Dynamically determine backend URL based on environment
 const getBackendUrl = (): string => {
-  // If explicitly set via Vercel dashboard/env, use that (highest priority)
   const explicitUrl = process.env.NEXT_PUBLIC_BACKEND_URL;
+  const isProduction = process.env.NODE_ENV === 'production';
+
+  // In production builds, never allow localhost URLs to leak into the bundle.
+  // .env.local can accidentally override .env.production — this guard prevents that.
+  if (isProduction) {
+    if (explicitUrl && explicitUrl.trim() !== '' && !explicitUrl.includes('localhost')) {
+      return explicitUrl;
+    }
+    // Hard production default — ignores any localhost value from .env.local
+    return 'https://api.recoder.xyz/v1';
+  }
+
+  // Development: honour the explicit URL (typically http://localhost:8000/v1)
   if (explicitUrl && explicitUrl.trim() !== '') {
     return explicitUrl;
   }
-  
-  // Vercel environment detection
+
+  // Vercel environment detection (preview/staging deployments)
   const vercelEnv = process.env.VERCEL_ENV; // 'production', 'preview', or 'development'
   const gitRef = process.env.VERCEL_GIT_COMMIT_REF || ''; // Branch name
-  
-  // Production environment
+
   if (vercelEnv === 'production') {
     return 'https://api.recoder.xyz/v1';
   }
-  
-  // Preview deployments (non-main branches)
+
   if (vercelEnv === 'preview' && gitRef && gitRef !== 'main') {
-    // Sanitize branch name for URL
     const sanitizedBranch = gitRef
       .toLowerCase()
       .replace(/[^a-z0-9-]/g, '-')
@@ -29,7 +39,7 @@ const getBackendUrl = (): string => {
     return `https://${sanitizedBranch}.staging-api.recoder.xyz/v1`;
   }
 
-  // Main branch / staging (default)
+  // Fallback for non-Vercel local dev without explicit URL
   return 'https://staging-api.recoder.xyz/v1';
 };
 
@@ -46,6 +56,8 @@ const buildCsp = () => {
       'https://tagmanager.google.com',
       'https://js.stripe.com',
       'https://static.cloudflareinsights.com',
+      'https://api.recoder.xyz',
+      'https://*.recoder.xyz',
     ].join(' '),
     [
       "script-src-elem",
@@ -56,28 +68,23 @@ const buildCsp = () => {
       'https://tagmanager.google.com',
       'https://js.stripe.com',
       'https://static.cloudflareinsights.com',
+      'https://api.recoder.xyz',
+      'https://*.recoder.xyz',
     ].join(' '),
-    "style-src 'self' 'unsafe-inline'",
-    "img-src 'self' data: blob: https:",
-    "font-src 'self' data:",
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+    "img-src 'self' data: blob: https: https://logos.composio.dev",
+    "font-src 'self' data: https://fonts.gstatic.com",
     [
       'connect-src',
       "'self'",
-      'https://recoder.xyz',
-      'https://www.recoder.xyz',
-      'https://*.recoder.xyz',
-      'wss://*.recoder.xyz',
-      'https://www.google-analytics.com',
-      'https://region1.google-analytics.com',
-      'https://www.googletagmanager.com',
-      'https://*.posthog.com',
-      'https://*.i.posthog.com',
-      'https://api.stripe.com',
-      'https://r.stripe.com',
-      'https://m.stripe.network',
+      'https:',
+      'wss:',
+      'ws:',
+      'https://*.ingest.sentry.io',
     ].join(' '),
-    "frame-src 'self' https://js.stripe.com https://hooks.stripe.com https://checkout.stripe.com",
+    "frame-src 'self' blob: https://*.recoder.xyz https://*.sandbox.recoder.xyz https://js.stripe.com https://hooks.stripe.com https://checkout.stripe.com",
     "frame-ancestors 'none'",
+    "worker-src 'self'",
   ];
 
   return directives.join('; ');
@@ -228,4 +235,36 @@ const nextConfig: NextConfig = {
   skipTrailingSlashRedirect: true,
 };
 
-export default withBundleAnalyzer(nextConfig);
+// Wrap with Sentry only if DSN is configured (no-op otherwise)
+const configWithAnalyzer = withBundleAnalyzer(nextConfig);
+
+export default process.env.NEXT_PUBLIC_SENTRY_DSN
+  ? withSentryConfig(configWithAnalyzer, {
+      // Suppresses source map uploading logs during build
+      silent: true,
+
+      // For all available options, see:
+      // https://github.com/getsentry/sentry-webpack-plugin#options
+      org: process.env.SENTRY_ORG,
+      project: process.env.SENTRY_PROJECT,
+
+      // Upload source maps for better stack traces
+      // Requires SENTRY_AUTH_TOKEN env var
+      sourcemaps: {
+        disable: !process.env.SENTRY_AUTH_TOKEN,
+      },
+
+      // Automatically tree-shake Sentry logger statements to reduce bundle size
+      disableLogger: true,
+
+      // Route browser requests to Sentry through a Next.js rewrite to circumvent ad-blockers
+      // Using /monitoring-sentry to avoid conflict with the /monitoring dashboard route
+      tunnelRoute: '/monitoring-sentry',
+
+      // Hides source maps from generated client bundles
+      hideSourceMaps: true,
+
+      // Prevents Sentry webpack plugin from widening the build target
+      transpileClientSDK: false,
+    })
+  : configWithAnalyzer;

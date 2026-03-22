@@ -19,6 +19,11 @@ vi.mock('@/lib/api/errors', () => ({
   },
 }));
 
+// Mock getSessionAccessToken so it doesn't trigger extra fetch calls
+vi.mock('@/lib/auth/session-token', () => ({
+  getSessionAccessToken: vi.fn().mockResolvedValue(null),
+}));
+
 import { backendApi } from '@/lib/api-client';
 import { handleApiError, handleNetworkError } from '@/lib/error-handler';
 

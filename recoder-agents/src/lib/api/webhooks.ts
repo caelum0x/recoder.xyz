@@ -86,7 +86,7 @@ export async function createWebhook(
     const response = await backendApi.post<WebhookEndpoint>(
       '/webhooks',
       payload,
-      { showErrors: false },
+      { showErrors: true },
     );
     if (response.error) throw new Error(`Error: ${response.error.message}`);
     return response.data!;
@@ -100,7 +100,7 @@ export async function listWebhooks(): Promise<WebhookEndpointListItem[]> {
   try {
     const response = await backendApi.get<WebhookEndpointListItem[]>(
       '/webhooks',
-      { showErrors: false },
+      { showErrors: true },
     );
     if (response.error) throw new Error(`Error: ${response.error.message}`);
     return response.data!;
@@ -114,7 +114,7 @@ export async function getWebhook(webhookId: string): Promise<WebhookEndpoint> {
   try {
     const response = await backendApi.get<WebhookEndpoint>(
       `/webhooks/${webhookId}`,
-      { showErrors: false },
+      { showErrors: true },
     );
     if (response.error) throw new Error(`Error: ${response.error.message}`);
     return response.data!;
@@ -132,7 +132,7 @@ export async function updateWebhook(
     const response = await backendApi.patch<WebhookEndpoint>(
       `/webhooks/${webhookId}`,
       payload,
-      { showErrors: false },
+      { showErrors: true },
     );
     if (response.error) throw new Error(`Error: ${response.error.message}`);
     return response.data!;
@@ -146,7 +146,7 @@ export async function deleteWebhook(webhookId: string): Promise<void> {
   try {
     const response = await backendApi.delete(
       `/webhooks/${webhookId}`,
-      { showErrors: false },
+      { showErrors: true },
     );
     if (response.error) throw new Error(`Error: ${response.error.message}`);
   } catch (error) {
@@ -162,7 +162,7 @@ export async function testWebhook(
     const response = await backendApi.post<{ success: boolean; message: string }>(
       `/webhooks/${webhookId}/test`,
       undefined,
-      { showErrors: false },
+      { showErrors: true },
     );
     if (response.error) throw new Error(`Error: ${response.error.message}`);
     return response.data!;
@@ -182,7 +182,7 @@ export async function getDeliveries(
     const qs = searchParams.toString();
     const response = await backendApi.get<DeliveryListResponse>(
       `/webhooks/${webhookId}/deliveries${qs ? `?${qs}` : ''}`,
-      { showErrors: false },
+      { showErrors: true },
     );
     if (response.error) throw new Error(`Error: ${response.error.message}`);
     return response.data!;
@@ -199,7 +199,7 @@ export async function retryDelivery(
     const response = await backendApi.post<{ success: boolean; message: string }>(
       `/webhooks/deliveries/${deliveryId}/retry`,
       undefined,
-      { showErrors: false },
+      { showErrors: true },
     );
     if (response.error) throw new Error(`Error: ${response.error.message}`);
     return response.data!;
@@ -223,7 +223,7 @@ export async function getSigningSecret(
   try {
     const response = await backendApi.get<SigningSecretResponse>(
       `/webhooks/${webhookId}/signing-secret`,
-      { showErrors: false },
+      { showErrors: true },
     );
     if (response.error) throw new Error(`Error: ${response.error.message}`);
     return response.data!;
@@ -240,7 +240,7 @@ export async function rotateSigningSecret(
     const response = await backendApi.post<SigningSecretResponse>(
       `/webhooks/${webhookId}/rotate-secret`,
       undefined,
-      { showErrors: false },
+      { showErrors: true },
     );
     if (response.error) throw new Error(`Error: ${response.error.message}`);
     return response.data!;

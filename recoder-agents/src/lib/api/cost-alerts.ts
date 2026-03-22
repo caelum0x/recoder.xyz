@@ -103,7 +103,7 @@ export async function createCostAlert(
     const response = await backendApi.post<CostAlertRule>(
       '/cost-alerts',
       payload,
-      { showErrors: false },
+      { showErrors: true },
     );
     if (response.error) throw new Error(`Error: ${response.error.message}`);
     return response.data!;
@@ -123,7 +123,7 @@ export async function listCostAlerts(
 
     const response = await backendApi.get<CostAlertRule[]>(
       `/cost-alerts${qs ? `?${qs}` : ''}`,
-      { showErrors: false },
+      { showErrors: true },
     );
     if (response.error) throw new Error(`Error: ${response.error.message}`);
     return response.data!;
@@ -141,7 +141,7 @@ export async function updateCostAlert(
     const response = await backendApi.patch<CostAlertRule>(
       `/cost-alerts/${ruleId}`,
       payload,
-      { showErrors: false },
+      { showErrors: true },
     );
     if (response.error) throw new Error(`Error: ${response.error.message}`);
     return response.data!;
@@ -157,7 +157,7 @@ export async function deleteCostAlert(
   try {
     const response = await backendApi.delete(
       `/cost-alerts/${ruleId}`,
-      { showErrors: false },
+      { showErrors: true },
     );
     if (response.error) throw new Error(`Error: ${response.error.message}`);
   } catch (error) {
@@ -178,7 +178,7 @@ export async function getCostAlertHistory(
 
     const response = await backendApi.get<CostAlertHistoryResponse>(
       `/cost-alerts/history${qs ? `?${qs}` : ''}`,
-      { showErrors: false },
+      { showErrors: true },
     );
     if (response.error) throw new Error(`Error: ${response.error.message}`);
     return response.data!;
@@ -193,7 +193,7 @@ export async function checkCostAlertsNow(): Promise<CheckResult> {
     const response = await backendApi.post<CheckResult>(
       '/cost-alerts/check',
       undefined,
-      { showErrors: false },
+      { showErrors: true },
     );
     if (response.error) throw new Error(`Error: ${response.error.message}`);
     return response.data!;

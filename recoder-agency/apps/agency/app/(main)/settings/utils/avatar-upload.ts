@@ -144,15 +144,21 @@ export async function uploadAvatar(
  */
 export async function deleteAvatar(avatarUrl: string): Promise<void> {
 	// Extract file path from URL
-	// From: https://xxx.supabase.co/storage/v1/object/public/public-assets/avatars/user-id.jpg
-	// To: avatars/user-id.jpg
-	const parts = avatarUrl.split("/public-assets/");
+	// Supabase format: https://xxx.supabase.co/storage/v1/object/public/public-assets/avatars/user-id.jpg
+	// Local format: https://agency.recoder.xyz/api/storage/avatars/user-id.jpg
+	let path: string | undefined;
 
-	if (parts.length !== 2 || !parts[1]) {
-		throw new Error(`Invalid avatar URL format: ${avatarUrl}`);
+	if (avatarUrl.includes("/public-assets/")) {
+		const parts = avatarUrl.split("/public-assets/");
+		path = parts[1];
+	} else if (avatarUrl.includes("/api/storage/")) {
+		const parts = avatarUrl.split("/api/storage/");
+		path = parts[1];
 	}
 
-	const path = parts[1];
+	if (!path) {
+		throw new Error(`Invalid avatar URL format: ${avatarUrl}`);
+	}
 
 	await appStorage().remove([path]);
 }

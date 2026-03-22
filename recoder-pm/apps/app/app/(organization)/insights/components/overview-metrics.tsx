@@ -2,6 +2,7 @@ import { currentOrganizationId, currentUser } from "@repo/backend/auth/utils";
 import { Link } from "@repo/design-system/components/link";
 import { StackCard } from "@repo/design-system/components/stack-card";
 import { database } from "@/lib/database";
+import { GenerateSampleData } from "./generate-sample-data";
 
 export const OverviewMetrics = async () => {
   const [user, organizationId] = await Promise.all([
@@ -117,20 +118,25 @@ export const OverviewMetrics = async () => {
     },
   ];
 
+  const totalCount = cards.reduce((sum, card) => sum + card.count, 0);
+
   return (
-    <StackCard className="grid divide-y p-0 sm:grid-cols-4 sm:divide-x sm:divide-y-0">
-      {cards.map((card) => (
-        <Link
-          className="flex flex-col items-center gap-1 p-4 transition-colors hover:bg-card"
-          href={card.href}
-          key={card.title}
-        >
-          <p className="m-0 text-center font-semibold text-lg">{card.count}</p>
-          <p className="m-0 text-center text-muted-foreground text-sm">
-            {card.title}
-          </p>
-        </Link>
-      ))}
-    </StackCard>
+    <div className="space-y-4">
+      <StackCard className="grid divide-y p-0 sm:grid-cols-4 sm:divide-x sm:divide-y-0">
+        {cards.map((card) => (
+          <Link
+            className="flex flex-col items-center gap-1 p-4 transition-colors hover:bg-card"
+            href={card.href}
+            key={card.title}
+          >
+            <p className="m-0 text-center font-semibold text-lg">{card.count}</p>
+            <p className="m-0 text-center text-muted-foreground text-sm">
+              {card.title}
+            </p>
+          </Link>
+        ))}
+      </StackCard>
+      {totalCount === 0 && <GenerateSampleData />}
+    </div>
   );
 };

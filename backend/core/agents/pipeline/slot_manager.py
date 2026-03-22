@@ -105,7 +105,11 @@ async def reserve_slot(account_id: str, agent_run_id: str, skip: bool = False) -
     try:
         tier = await get_tier_limits(account_id)
         limit = tier['concurrent_runs']
-        
+
+        # If limit is 0 or not set, don't block — allow the run
+        if limit <= 0:
+            return SlotReservation(True, 0, 0, "no_limit_configured")
+
         count = await asyncio.wait_for(
             redis.incr(key),
             timeout=SLOT_OP_TIMEOUT
@@ -141,18 +145,33 @@ async def reserve_slot(account_id: str, agent_run_id: str, skip: bool = False) -
 async def release_slot(account_id: str, agent_run_id: str) -> bool:
     if config.ENV_MODE == EnvMode.LOCAL:
         return True
-    
+
+    for attempt in range(3):
+        try:
+            key = _slot_key(account_id)
+            count = await asyncio.wait_for(redis.decr(key), timeout=SLOT_OP_TIMEOUT)
+
+            if count < 0:
+                await redis.set(key, "0", ex=SLOT_KEY_TTL)
+
+            logger.debug(f"[SLOT] Released {agent_run_id}: now {max(0, count)}")
+            return True
+        except Exception as e:
+            logger.error(f"[SLOT] Release attempt {attempt+1} failed for {agent_run_id}: {e}")
+            if attempt < 2:
+                await asyncio.sleep(0.5 * (attempt + 1))
+
+    # Last resort: reset counter from DB
     try:
+        from core.utils.limits_repo import count_running_agent_runs
+        db_result = await count_running_agent_runs(account_id)
+        db_count = db_result.get('running_count', 0) if isinstance(db_result, dict) else 0
         key = _slot_key(account_id)
-        count = await asyncio.wait_for(redis.decr(key), timeout=SLOT_OP_TIMEOUT)
-        
-        if count < 0:
-            await redis.set(key, "0", ex=SLOT_KEY_TTL)
-        
-        logger.debug(f"[SLOT] Released {agent_run_id}: now {max(0, count)}")
+        await redis.set(key, str(db_count), ex=SLOT_KEY_TTL)
+        logger.warning(f"[SLOT] Reset counter from DB for {account_id}: {db_count}")
         return True
-    except Exception as e:
-        logger.error(f"[SLOT] Release failed for {agent_run_id}: {e}")
+    except Exception as e2:
+        logger.error(f"[SLOT] DB reset also failed: {e2}")
         return False
 
 
@@ -200,13 +219,17 @@ async def _set_ttl(key: str) -> None:
 async def check_thread_limit(account_id: str, skip: bool = False) -> ResourceReservation:
     if skip or config.ENV_MODE == EnvMode.LOCAL:
         return ResourceReservation(True, 0, 999, "skipped")
-    
+
     start = time.time()
     key = _thread_count_key(account_id)
-    
+
     try:
         tier = await get_tier_limits(account_id)
         thread_limit = tier['thread_limit']
+
+        # If limit is 0 or negative, allow unlimited threads (free tier default)
+        if thread_limit <= 0:
+            return ResourceReservation(True, 0, 999, "unlimited")
         current = await redis.get(key)
         
         if current is None:

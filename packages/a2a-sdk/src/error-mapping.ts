@@ -27,7 +27,7 @@ import {
   type A2AErrorCode,
   A2AErrorCodeEnum,
   buildA2AError,
-} from '@recoder/shared/a2a/schemas';
+} from './schemas';
 
 import type { ConnectorPlatform } from './state-mapping';
 

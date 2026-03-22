@@ -41,7 +41,7 @@ export const exportThreadV2 = async (
         include_timestamps: request.options?.include_timestamps ?? true,
       },
     },
-    { showErrors: false }
+    { showErrors: true }
   );
   if (response.error) throw new Error(response.error.message || 'Failed to export thread');
   return response.data!;
@@ -50,7 +50,7 @@ export const exportThreadV2 = async (
 export const getThreadExports = async (threadId: string): Promise<ExportRecord[]> => {
   const response = await backendApi.get<ExportRecord[]>(
     `/threads/${threadId}/exports-v2`,
-    { showErrors: false }
+    { showErrors: true }
   );
   if (response.error) throw new Error(response.error.message || 'Failed to fetch thread exports');
   return response.data!;
@@ -59,7 +59,7 @@ export const getThreadExports = async (threadId: string): Promise<ExportRecord[]
 export const getExportDetail = async (exportId: string): Promise<ExportRecord> => {
   const response = await backendApi.get<ExportRecord>(
     `/exports-v2/${exportId}`,
-    { showErrors: false }
+    { showErrors: true }
   );
   if (response.error) throw new Error(response.error.message || 'Failed to fetch export');
   return response.data!;
@@ -68,7 +68,7 @@ export const getExportDetail = async (exportId: string): Promise<ExportRecord> =
 export const deleteExport = async (exportId: string): Promise<{ deleted: boolean; id: string }> => {
   const response = await backendApi.delete<{ deleted: boolean; id: string }>(
     `/exports-v2/${exportId}`,
-    { showErrors: false }
+    { showErrors: true }
   );
   if (response.error) throw new Error(response.error.message || 'Failed to delete export');
   return response.data!;
@@ -77,7 +77,7 @@ export const deleteExport = async (exportId: string): Promise<{ deleted: boolean
 export const getRecentExports = async (limit: number = 10): Promise<ExportRecord[]> => {
   const response = await backendApi.get<ExportRecord[]>(
     `/exports-v2/recent?limit=${limit}`,
-    { showErrors: false }
+    { showErrors: true }
   );
   if (response.error) throw new Error(response.error.message || 'Failed to fetch recent exports');
   return response.data!;

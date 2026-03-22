@@ -58,7 +58,7 @@ export interface ReportHistory {
 // ============================================================================
 
 export async function listScheduledReports(): Promise<ScheduledReport[]> {
-  const response = await backendApi.get<ScheduledReport[]>('/reports/scheduled', { showErrors: false });
+  const response = await backendApi.get<ScheduledReport[]>('/reports/scheduled', { showErrors: true });
   if (response.error) throw new Error(`Failed to list scheduled reports: ${response.error.message}`);
   return response.data || [];
 }
@@ -89,14 +89,14 @@ export async function generateReport(reportId: string): Promise<ReportHistory> {
 export async function listReportHistory(reportId: string, limit = 20, offset = 0): Promise<ReportHistory[]> {
   const response = await backendApi.get<ReportHistory[]>(
     `/reports/scheduled/${reportId}/history?limit=${limit}&offset=${offset}`,
-    { showErrors: false }
+    { showErrors: true }
   );
   if (response.error) throw new Error(`Failed to list report history: ${response.error.message}`);
   return response.data || [];
 }
 
 export async function getReportData(historyId: string): Promise<ReportHistory> {
-  const response = await backendApi.get<ReportHistory>(`/reports/scheduled/history/${historyId}`, { showErrors: false });
+  const response = await backendApi.get<ReportHistory>(`/reports/scheduled/history/${historyId}`, { showErrors: true });
   if (response.error) throw new Error(`Failed to get report data: ${response.error.message}`);
   return response.data!;
 }

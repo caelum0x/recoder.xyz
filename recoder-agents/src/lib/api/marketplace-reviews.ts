@@ -76,7 +76,7 @@ export async function createReview(
     const response = await backendApi.post<MarketplaceReview>(
       '/marketplace/reviews',
       body,
-      { showErrors: false },
+      { showErrors: true },
     );
     if (response.error) throw new Error(`Error: ${response.error.message}`);
     return response.data!;
@@ -100,7 +100,7 @@ export async function getMarketplaceReviews(
 
     const response = await backendApi.get<ReviewListResponse>(
       `/marketplace/reviews${qs ? `?${qs}` : ''}`,
-      { showErrors: false },
+      { showErrors: true },
     );
     if (response.error) throw new Error(`Error: ${response.error.message}`);
     return response.data!;
@@ -118,7 +118,7 @@ export async function updateReview(
     const response = await backendApi.patch<MarketplaceReview>(
       `/marketplace/reviews/${reviewId}`,
       body,
-      { showErrors: false },
+      { showErrors: true },
     );
     if (response.error) throw new Error(`Error: ${response.error.message}`);
     return response.data!;
@@ -134,7 +134,7 @@ export async function deleteReview(
   try {
     const response = await backendApi.delete<{ deleted: boolean; review_id: string }>(
       `/marketplace/reviews/${reviewId}`,
-      { showErrors: false },
+      { showErrors: true },
     );
     if (response.error) throw new Error(`Error: ${response.error.message}`);
     return response.data!;
@@ -151,7 +151,7 @@ export async function toggleHelpful(
     const response = await backendApi.post<HelpfulToggleResponse>(
       `/marketplace/reviews/${reviewId}/helpful`,
       {},
-      { showErrors: false },
+      { showErrors: true },
     );
     if (response.error) throw new Error(`Error: ${response.error.message}`);
     return response.data!;
@@ -167,7 +167,7 @@ export async function getRatingSummary(
   try {
     const response = await backendApi.get<RatingSummary>(
       `/marketplace/agents/${agentId}/rating-summary`,
-      { showErrors: false },
+      { showErrors: true },
     );
     if (response.error) throw new Error(`Error: ${response.error.message}`);
     return response.data!;
@@ -176,3 +176,155 @@ export async function getRatingSummary(
     throw error;
   }
 }
+
+// ============================================================================
+// Listing-based marketplace API (Sprint 73 Phase 4)
+// ============================================================================
+
+export interface MarketplaceListing {
+  id: string;
+  user_id: string;
+  agent_id: string;
+  listing_title: string;
+  listing_description: string | null;
+  category: string;
+  tags: string[];
+  price_type: 'free' | 'paid' | 'freemium';
+  is_published: boolean;
+  install_count: number;
+  view_count: number;
+  rating_avg: number;
+  rating_count: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ListingReview {
+  id: string;
+  listing_id: string;
+  reviewer_user_id: string;
+  rating: number;
+  title: string | null;
+  body: string | null;
+  is_verified_purchase: boolean;
+  helpful_count: number;
+  created_at: string;
+}
+
+export interface CreateListingData {
+  agent_id: string;
+  listing_title: string;
+  listing_description?: string;
+  category?: string;
+  tags?: string[];
+  price_type?: 'free' | 'paid' | 'freemium';
+  is_published?: boolean;
+}
+
+export interface UpdateListingData {
+  listing_title?: string;
+  listing_description?: string;
+  category?: string;
+  tags?: string[];
+  price_type?: 'free' | 'paid' | 'freemium';
+  is_published?: boolean;
+}
+
+export interface SubmitReviewData {
+  rating: number;
+  title?: string;
+  body?: string;
+}
+
+export interface MarketplaceFilters {
+  category?: string;
+  price_type?: string;
+  search?: string;
+  limit?: number;
+}
+
+export const listListings = async (filters?: MarketplaceFilters): Promise<MarketplaceListing[]> => {
+  const params = new URLSearchParams();
+  if (filters?.category) params.set('category', filters.category);
+  if (filters?.price_type) params.set('price_type', filters.price_type);
+  if (filters?.search) params.set('search', filters.search);
+  if (filters?.limit !== undefined) params.set('limit', String(filters.limit));
+  const qs = params.toString();
+  const response = await backendApi.get<MarketplaceListing[]>(
+    `/marketplace/listings${qs ? `?${qs}` : ''}`,
+    { showErrors: true }
+  );
+  if (response.error) throw new Error(response.error.message);
+  return response.data!;
+};
+
+export const createListing = async (data: CreateListingData): Promise<MarketplaceListing> => {
+  const response = await backendApi.post<MarketplaceListing>('/marketplace/listings', data);
+  if (response.error) throw new Error(response.error.message);
+  return response.data!;
+};
+
+export const getListing = async (id: string): Promise<MarketplaceListing> => {
+  const response = await backendApi.get<MarketplaceListing>(`/marketplace/listings/${id}`, {
+    showErrors: true,
+  });
+  if (response.error) throw new Error(response.error.message);
+  return response.data!;
+};
+
+export const updateListing = async (
+  id: string,
+  data: UpdateListingData
+): Promise<MarketplaceListing> => {
+  const response = await backendApi.patch<MarketplaceListing>(`/marketplace/listings/${id}`, data);
+  if (response.error) throw new Error(response.error.message);
+  return response.data!;
+};
+
+export const deleteListing = async (id: string): Promise<void> => {
+  const response = await backendApi.delete(`/marketplace/listings/${id}`);
+  if (response.error) throw new Error(response.error.message);
+};
+
+export const installListing = async (
+  id: string
+): Promise<{ success: boolean; listing_id: string }> => {
+  const response = await backendApi.post<{ success: boolean; listing_id: string }>(
+    `/marketplace/listings/${id}/install`,
+    {}
+  );
+  if (response.error) throw new Error(response.error.message);
+  return response.data!;
+};
+
+export const submitListingReview = async (
+  listingId: string,
+  data: SubmitReviewData
+): Promise<ListingReview> => {
+  const response = await backendApi.post<ListingReview>(
+    `/marketplace/listings/${listingId}/reviews`,
+    data
+  );
+  if (response.error) throw new Error(response.error.message);
+  return response.data!;
+};
+
+export const getListingReviews = async (listingId: string): Promise<ListingReview[]> => {
+  const response = await backendApi.get<ListingReview[]>(
+    `/marketplace/listings/${listingId}/reviews`,
+    { showErrors: true }
+  );
+  if (response.error) throw new Error(response.error.message);
+  return response.data!;
+};
+
+export const markReviewHelpful = async (
+  reviewId: string
+): Promise<{ success: boolean; review_id: string }> => {
+  const response = await backendApi.post<{ success: boolean; review_id: string }>(
+    `/marketplace/reviews/${reviewId}/helpful`,
+    {}
+  );
+  if (response.error) throw new Error(response.error.message);
+  return response.data!;
+};

@@ -39,13 +39,15 @@
     "**/*.test.tsx",
     "packages/cli/**/*",
     "packages/core/**/*",
+    "packages/mcp-eternos/**/*",
     "packages/vscode-ide-companion/**/*",
     "**/vitest.config.ts",
     "**/test-setup.ts",
     "scripts/tests/**/*"
   ],
   "references": [
-    { "path": "./packages/cli" },
-    { "path": "./packages/core" }
+    { "path": "./packages/core" },
+    { "path": "./packages/mcp-eternos" },
+    { "path": "./packages/cli" }
   ]
 }

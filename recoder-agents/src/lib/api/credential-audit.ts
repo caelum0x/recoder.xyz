@@ -59,7 +59,7 @@ export const getCredentialAuditLog = async (
   const url = `/credentials/audit-log${query ? `?${query}` : ''}`;
 
   const response = await backendApi.get<AuditLogEntry[]>(url, {
-    showErrors: false,
+    showErrors: true,
     cache: 'no-store',
   });
 
@@ -73,7 +73,7 @@ export const getCredentialAuditLog = async (
 export const getCredentialAuditSummary = async (): Promise<AuditSummary> => {
   const response = await backendApi.get<AuditSummary>(
     '/credentials/audit-log/summary',
-    { showErrors: false, cache: 'no-store' }
+    { showErrors: true, cache: 'no-store' }
   );
 
   if (response.error) {
@@ -86,7 +86,7 @@ export const getCredentialAuditSummary = async (): Promise<AuditSummary> => {
 export const getCredentialAnomalies = async (): Promise<AnomalyEntry[]> => {
   const response = await backendApi.get<AnomalyEntry[]>(
     '/credentials/audit-log/anomalies',
-    { showErrors: false, cache: 'no-store' }
+    { showErrors: true, cache: 'no-store' }
   );
 
   if (response.error) {
@@ -107,7 +107,7 @@ export const recordCredentialAccess = async (data: {
     success: boolean;
     id?: string;
     created_at?: string;
-  }>('/credentials/audit-log', data, { showErrors: false });
+  }>('/credentials/audit-log', data, { showErrors: true });
 
   if (response.error) {
     throw new Error(`Failed to record access: ${response.error.message}`);

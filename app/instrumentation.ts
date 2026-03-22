@@ -1,14 +1,24 @@
 /**
  * Next.js Instrumentation Hook
  *
- * Runs once on server startup. Initializes OpenTelemetry distributed tracing
- * when the runtime is Node.js. Edge runtime is excluded to avoid bundling
- * Node-only dependencies.
+ * Runs once on server startup. Initializes:
+ * - Sentry error monitoring (if NEXT_PUBLIC_SENTRY_DSN is set)
+ * - OpenTelemetry distributed tracing (if OTEL_ENABLED=true)
  *
- * Tracing is opt-in: set OTEL_ENABLED=true or OTEL_EXPORTER_OTLP_ENDPOINT
- * in your environment to activate.
+ * Edge runtime is excluded from OTel to avoid bundling Node-only dependencies.
  */
 export async function register() {
+  // Sentry server-side initialization (works in both nodejs and edge runtimes)
+  if (process.env.NEXT_PUBLIC_SENTRY_DSN) {
+    if (process.env.NEXT_RUNTIME === 'nodejs') {
+      await import('./sentry.server.config');
+    }
+
+    if (process.env.NEXT_RUNTIME === 'edge') {
+      await import('./sentry.edge.config');
+    }
+  }
+
   if (process.env.NEXT_RUNTIME === 'nodejs') {
     // Validate required configuration in production
     if (process.env.NODE_ENV === 'production') {

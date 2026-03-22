@@ -114,6 +114,25 @@ const COLOR_PRIMITIVES = {
 };
 
 export default defineConfig({
+  safelist: [
+    // Model profile icons (applied dynamically via profile.icon)
+    'i-ph:lightning-bold',
+    'i-ph:scales-bold',
+    'i-ph:brain-bold',
+    // Chat mode icons (applied dynamically via mode.icon)
+    'i-ph:hammer',
+    'i-ph:question',
+    'i-ph:robot',
+    // Common icons used in dynamic contexts
+    'i-ph:house',
+    'i-ph:user',
+    'i-ph:gear',
+    'i-ph:sign-out',
+    'i-ph:caret-down',
+    'i-ph:folder',
+    'i-ph:check',
+    'i-ph:palette',
+  ],
   shortcuts: {
     'recoder-ease-cubic-bezier': 'ease-[cubic-bezier(0.4,0,0.2,1)]',
     'transition-theme': 'transition-[background-color,border-color,color] duration-150 recoder-ease-cubic-bezier',

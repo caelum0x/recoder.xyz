@@ -25,7 +25,7 @@ export interface TeamMember {
 }
 
 export const getTeams = async (): Promise<Team[]> => {
-  const response = await backendApi.get<Team[]>('/teams', { showErrors: false });
+  const response = await backendApi.get<Team[]>('/teams', { showErrors: true });
   if (response.error) throw new Error(response.error.message);
   return response.data!;
 };
@@ -37,7 +37,7 @@ export const createTeam = async (data: { name: string; description?: string }): 
 };
 
 export const getTeamDetail = async (teamId: string): Promise<TeamDetail> => {
-  const response = await backendApi.get<TeamDetail>(`/teams/${teamId}`, { showErrors: false });
+  const response = await backendApi.get<TeamDetail>(`/teams/${teamId}`, { showErrors: true });
   if (response.error) throw new Error(response.error.message);
   return response.data!;
 };

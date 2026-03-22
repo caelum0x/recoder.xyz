@@ -292,7 +292,17 @@ export async function webSearch(
   const allowedDomains = parseDomainList(options?.allowedDomains);
   const blockedDomains = parseDomainList(options?.blockedDomains);
 
-  // Try Tavily first if API key is available
+  // Try SearXNG first (self-hosted, no rate limits, no API key)
+  try {
+    const searxResult = await searchWithSearXNG(query, maxResults);
+    if (searxResult.success && searxResult.results.length > 0) {
+      return filterSearchResults(searxResult, allowedDomains, blockedDomains, maxResults);
+    }
+  } catch (e) {
+    logger.warn('SearXNG search failed, falling back:', e);
+  }
+
+  // Try Tavily if API key is available
   if (options?.tavilyApiKey) {
     try {
       const tavilyResult = await searchWithTavily(query, options.tavilyApiKey, maxResults);
@@ -356,6 +366,42 @@ function filterSearchResults(
     success: true,
     results: filtered,
   };
+}
+
+/**
+ * Search using SearXNG (self-hosted meta search, free, no rate limits)
+ * SearXNG aggregates results from Google, Bing, DuckDuckGo, Brave, and 70+ engines
+ */
+async function searchWithSearXNG(
+  query: string,
+  maxResults: number
+): Promise<{ success: boolean; results: Array<{ title: string; url: string; snippet: string }> }> {
+  const searxngUrl = process.env.SEARXNG_URL || 'http://127.0.0.1:8888';
+  const params = new URLSearchParams({
+    q: query,
+    format: 'json',
+    pageno: '1',
+  });
+
+  const response = await fetch(`${searxngUrl}/search?${params.toString()}`, {
+    signal: AbortSignal.timeout(15000),
+  });
+
+  if (!response.ok) {
+    throw new Error(`SearXNG error: ${response.status}`);
+  }
+
+  const data = await response.json() as {
+    results: Array<{ title: string; url: string; content: string; engine: string }>;
+  };
+
+  const results = (data.results || []).slice(0, maxResults).map(r => ({
+    title: r.title || '',
+    url: r.url || '',
+    snippet: (r.content || '').substring(0, 300),
+  }));
+
+  return { success: results.length > 0, results };
 }
 
 /**

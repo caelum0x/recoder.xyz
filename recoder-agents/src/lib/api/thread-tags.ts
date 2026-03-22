@@ -39,7 +39,7 @@ export const createTag = async (data: CreateTagData): Promise<ThreadTag> => {
 
 export const getTags = async (): Promise<ThreadTag[]> => {
   const response = await backendApi.get<ThreadTag[]>('/tags', {
-    showErrors: false,
+    showErrors: true,
   });
   if (response.error) throw new Error(response.error.message);
   return response.data!;
@@ -82,7 +82,7 @@ export const removeTag = async (threadId: string, tagId: string) => {
 export const getThreadTags = async (threadId: string): Promise<ThreadTag[]> => {
   const response = await backendApi.get<ThreadTag[]>(
     `/threads/${threadId}/tags`,
-    { showErrors: false }
+    { showErrors: true }
   );
   if (response.error) throw new Error(response.error.message);
   return response.data!;
@@ -93,7 +93,7 @@ export const getTaggedThreads = async (
 ): Promise<TaggedThread[]> => {
   const response = await backendApi.get<TaggedThread[]>(
     `/tags/${tagId}/threads`,
-    { showErrors: false }
+    { showErrors: true }
   );
   if (response.error) throw new Error(response.error.message);
   return response.data!;

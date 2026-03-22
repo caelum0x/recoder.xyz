@@ -11,7 +11,7 @@ import { NavTriggerRuns } from '@/components/sidebar/nav-trigger-runs';
 import { NavWorkspaces } from '@/components/sidebar/nav-workspaces';
 import { NavUserWithTeams } from '@/components/sidebar/nav-user-with-teams';
 import { RecoderLogo } from '@/components/sidebar/recoder-logo';
-import { AppSwitcher } from '@/components/ui/app-switcher';
+// AppSwitcher removed from sidebar header to avoid duplicate icons — accessible via user menu
 import {
   Sidebar,
   SidebarContent,
@@ -43,7 +43,6 @@ import { getPlanIcon } from '@/components/billing/plan-utils';
 import { Kbd, KbdGroup } from '../ui/kbd';
 import { useTranslations } from 'next-intl';
 import { useAuth } from '@/components/AuthProvider';
-import { NotificationBell } from '@/components/notifications/notification-bell';
 import { SubscriptionStatusBadge } from '@/components/billing/subscription-status-badge';
 import { ActiveRunsSection } from '@/components/sidebar/active-runs';
 
@@ -278,7 +277,7 @@ export function SidebarLeft({
                 )}
               />
             </Link>
-            {state !== 'collapsed' && <span data-tour="app-switcher"><AppSwitcher /></span>}
+            {/* AppSwitcher removed — was causing duplicate grid icon in header */}
             {/* Expand button - only shows on hover when collapsed */}
             {state === 'collapsed' && (
               <button
@@ -304,7 +303,6 @@ export function SidebarLeft({
                 : "opacity-100 pointer-events-auto"
             )}
           >
-            <NotificationBell />
             <Button
               variant="ghost"
               size="icon"
@@ -331,7 +329,7 @@ export function SidebarLeft({
           </div>
         </div>
       </SidebarHeader>
-      <SidebarContent className="[&::-webkit-scrollbar]:hidden [-ms-overflow-style:'none'] [scrollbar-width:'none'] relative overflow-hidden">
+      <SidebarContent className="[&::-webkit-scrollbar]:hidden [-ms-overflow-style:'none'] [scrollbar-width:'none'] relative overflow-y-auto">
         {/* Collapsed layout: + button and state buttons only */}
         <div
           className={cn(

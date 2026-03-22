@@ -4,10 +4,10 @@ import { getAllServices } from "@/lib/agency/service-catalog";
 import { fetchCurrentTeam } from "@/services/teams";
 import { archiveService, createService, restoreService } from "./actions";
 
-function formatCurrency(cents: number, currency: string) {
+function formatCurrency(cents: number, currency?: string | null) {
 	return new Intl.NumberFormat("en-US", {
 		style: "currency",
-		currency: currency.toUpperCase(),
+		currency: (currency ?? "USD").toUpperCase(),
 	}).format(cents / 100);
 }
 
@@ -18,7 +18,12 @@ export default async function ServicesPage({
 }) {
 	const query = await searchParams;
 	const team = await fetchCurrentTeam();
-	const allServices = await getAllServices(team.dbId);
+	let allServices: Awaited<ReturnType<typeof getAllServices>> = [];
+	try {
+		allServices = await getAllServices(team.dbId);
+	} catch {
+		// service_catalog table may not exist yet
+	}
 	const showArchived = query.showArchived === "1";
 	const services = showArchived
 		? allServices

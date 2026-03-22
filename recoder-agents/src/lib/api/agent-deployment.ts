@@ -59,7 +59,7 @@ export const getDeploymentSlots = async (
 ): Promise<DeploymentSlot[]> => {
   const response = await backendApi.get<DeploymentSlot[]>(
     `/agents/${agentId}/slots`,
-    { showErrors: false, cache: 'no-store' }
+    { showErrors: true, cache: 'no-store' }
   );
 
   if (response.error) {
@@ -126,7 +126,7 @@ export const getDeploymentHistory = async (
   const url = `/agents/${agentId}/deployment-history${query ? `?${query}` : ''}`;
 
   const response = await backendApi.get<DeploymentHistoryEntry[]>(url, {
-    showErrors: false,
+    showErrors: true,
     cache: 'no-store',
   });
 

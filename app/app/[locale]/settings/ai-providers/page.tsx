@@ -236,7 +236,7 @@ export default function AIProvidersPage() {
               <div>
                 <h1 className="text-3xl font-bold">AI Provider Keys</h1>
                 <p className="text-gray-400">
-                  AI works out of the box with our platform key. Add your own key for higher limits or to use premium models.
+                  Connect your AI provider key to use Recoder. We use your key to power AI across all Recoder apps.
                 </p>
               </div>
             </div>
@@ -256,6 +256,34 @@ export default function AIProvidersPage() {
               {redirectToWebIDE && success.includes('Redirecting') && (
                 <Loader2 className="w-5 h-5 animate-spin ml-2" />
               )}
+            </div>
+          )}
+
+          {/* No Keys Warning */}
+          {apiKeys.length === 0 && !showAddForm && (
+            <div className="mb-8 p-6 rounded-2xl bg-orange-500/10 border border-orange-500/30">
+              <div className="flex items-start gap-4">
+                <div className="w-10 h-10 bg-orange-500/20 rounded-lg flex items-center justify-center flex-shrink-0">
+                  <KeyIcon className="w-5 h-5 text-orange-400" />
+                </div>
+                <div>
+                  <h3 className="font-semibold text-orange-400 text-lg mb-1">Add an AI key to get started</h3>
+                  <p className="text-gray-300 text-sm mb-3">
+                    Recoder needs an AI provider key to power the AI features across all apps — agents, web IDE, and more.
+                    We recommend <strong className="text-white">OpenRouter</strong> for the widest model selection.
+                  </p>
+                  <button
+                    onClick={() => {
+                      setShowAddForm(true);
+                      setSelectedProvider('openrouter');
+                    }}
+                    className="px-5 py-2.5 bg-gradient-to-r from-orange-500 to-purple-600 hover:from-orange-600 hover:to-purple-700 rounded-lg font-medium transition-all text-sm flex items-center gap-2"
+                  >
+                    <Plus className="w-4 h-4" />
+                    Add OpenRouter Key
+                  </button>
+                </div>
+              </div>
             </div>
           )}
 

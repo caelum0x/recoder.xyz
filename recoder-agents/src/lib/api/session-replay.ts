@@ -72,7 +72,7 @@ export async function startRecording(
     const response = await backendApi.post<SessionRecording>(
       '/sessions/recordings',
       body,
-      { showErrors: false },
+      { showErrors: true },
     );
     if (response.error) throw new Error(response.error.message);
     return response.data!;
@@ -90,7 +90,7 @@ export async function appendEvents(
     const response = await backendApi.post<{ id: string; event_count: number; duration_ms: number }>(
       `/sessions/recordings/${recordingId}/events`,
       body,
-      { showErrors: false },
+      { showErrors: true },
     );
     if (response.error) throw new Error(response.error.message);
     return response.data!;
@@ -107,7 +107,7 @@ export async function completeRecording(
     const response = await backendApi.post<SessionRecording>(
       `/sessions/recordings/${recordingId}/complete`,
       {},
-      { showErrors: false },
+      { showErrors: true },
     );
     if (response.error) throw new Error(response.error.message);
     return response.data!;
@@ -130,7 +130,7 @@ export async function getRecordings(
 
     const response = await backendApi.get<SessionRecording[]>(
       `/sessions/recordings${qs ? `?${qs}` : ''}`,
-      { showErrors: false },
+      { showErrors: true },
     );
     if (response.error) throw new Error(response.error.message);
     return response.data!;
@@ -146,7 +146,7 @@ export async function getRecordingDetail(
   try {
     const response = await backendApi.get<SessionRecordingDetail>(
       `/sessions/recordings/${recordingId}`,
-      { showErrors: false },
+      { showErrors: true },
     );
     if (response.error) throw new Error(response.error.message);
     return response.data!;
@@ -164,7 +164,7 @@ export async function addBookmark(
     const response = await backendApi.post<SessionBookmark>(
       `/sessions/recordings/${recordingId}/bookmarks`,
       body,
-      { showErrors: false },
+      { showErrors: true },
     );
     if (response.error) throw new Error(response.error.message);
     return response.data!;
@@ -180,7 +180,7 @@ export async function getRecordingBookmarks(
   try {
     const response = await backendApi.get<SessionBookmark[]>(
       `/sessions/recordings/${recordingId}/bookmarks`,
-      { showErrors: false },
+      { showErrors: true },
     );
     if (response.error) throw new Error(response.error.message);
     return response.data!;

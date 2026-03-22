@@ -130,7 +130,7 @@ export function Page({
 							onDuplicate={handleDuplicate}
 							onDelete={handleDelete}
 							teamName={data.workspaceTeam.name}
-							teamAvatarUrl={data.workspaceTeam.avatarUrl}
+							teamAvatarUrl={data.workspaceTeam.avatarUrl ?? undefined}
 						/>
 					</div>
 				</WorkspaceProvider>

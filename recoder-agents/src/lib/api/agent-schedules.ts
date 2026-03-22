@@ -73,7 +73,7 @@ export const getAgentSchedules = async (
 ): Promise<AgentSchedule[]> => {
   const response = await backendApi.get<AgentSchedule[]>(
     `/agents/${agentId}/schedules`,
-    { showErrors: false }
+    { showErrors: true }
   );
   if (response.error) throw new Error(response.error.message);
   return response.data!;
@@ -82,7 +82,7 @@ export const getAgentSchedules = async (
 export const getAllSchedules = async (): Promise<AgentSchedule[]> => {
   const response = await backendApi.get<AgentSchedule[]>(
     `/schedules`,
-    { showErrors: false }
+    { showErrors: true }
   );
   if (response.error) throw new Error(response.error.message);
   return response.data!;
@@ -127,7 +127,7 @@ export const getScheduleExecutions = async (
   const qs = params.toString();
   const response = await backendApi.get<ScheduleExecutionsResponse>(
     `/schedules/${scheduleId}/executions${qs ? `?${qs}` : ''}`,
-    { showErrors: false }
+    { showErrors: true }
   );
   if (response.error) throw new Error(response.error.message);
   return response.data!;

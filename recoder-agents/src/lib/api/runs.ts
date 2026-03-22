@@ -53,7 +53,7 @@ async function listRuns(params?: {
     const url = `/agents/runs${queryString ? `?${queryString}` : ''}`;
 
     const response = await backendApi.get<RunsListResponse>(url, {
-      showErrors: false,
+      showErrors: true,
     });
 
     if (response.error) {
@@ -72,7 +72,7 @@ async function getRunDetail(runId: string): Promise<RunDetail | null> {
   try {
     const response = await backendApi.get<RunDetail>(
       `/agents/runs/${runId}`,
-      { showErrors: false },
+      { showErrors: true },
     );
     if (response.error) {
       return null;

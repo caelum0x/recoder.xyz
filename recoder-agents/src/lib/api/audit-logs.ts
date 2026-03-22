@@ -56,7 +56,7 @@ export const getAuditLogs = async (
   const query = params.toString() ? `?${params}` : '';
   const response = await backendApi.get<AuditLogsResponse>(
     `/audit/logs${query}`,
-    { showErrors: false }
+    { showErrors: true }
   );
   if (response.error) throw new Error(response.error.message);
   return response.data!;
@@ -65,7 +65,7 @@ export const getAuditLogs = async (
 export const getAuditSummary = async (): Promise<AuditSummary> => {
   const response = await backendApi.get<AuditSummary>(
     '/audit/logs/summary',
-    { showErrors: false }
+    { showErrors: true }
   );
   if (response.error) throw new Error(response.error.message);
   return response.data!;
@@ -81,7 +81,7 @@ export const exportAuditLogs = async (
   });
   const response = await backendApi.get<AuditExportResponse>(
     `/audit/logs/export?${params}`,
-    { showErrors: false }
+    { showErrors: true }
   );
   if (response.error) throw new Error(response.error.message);
   return response.data!;

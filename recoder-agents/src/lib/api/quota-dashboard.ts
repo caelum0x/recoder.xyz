@@ -79,7 +79,7 @@ export const getQuotaUsageDaily = async (
 
   const response = await backendApi.get<DailyUsageResponse>(
     `/quota/usage/daily?${params.toString()}`,
-    { showErrors: false, cache: 'no-store' }
+    { showErrors: true, cache: 'no-store' }
   );
 
   if (response.error) {
@@ -92,7 +92,7 @@ export const getQuotaUsageDaily = async (
 export const getQuotaUsageSummary = async (): Promise<UsageSummary> => {
   const response = await backendApi.get<UsageSummary>(
     '/quota/usage/summary',
-    { showErrors: false, cache: 'no-store' }
+    { showErrors: true, cache: 'no-store' }
   );
 
   if (response.error) {
@@ -105,7 +105,7 @@ export const getQuotaUsageSummary = async (): Promise<UsageSummary> => {
 export const getQuotaForecast = async (): Promise<UsageForecast> => {
   const response = await backendApi.get<UsageForecast>(
     '/quota/forecast',
-    { showErrors: false, cache: 'no-store' }
+    { showErrors: true, cache: 'no-store' }
   );
 
   if (response.error) {
@@ -121,7 +121,7 @@ export const getTopConsumers = async (
 ): Promise<TopConsumersResponse> => {
   const response = await backendApi.get<TopConsumersResponse>(
     `/quota/top-consumers?metric=${metric}&limit=${limit}`,
-    { showErrors: false, cache: 'no-store' }
+    { showErrors: true, cache: 'no-store' }
   );
 
   if (response.error) {

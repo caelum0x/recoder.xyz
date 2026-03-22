@@ -26,7 +26,7 @@ import {
   TaskStateEnum,
   isValidTransition,
   isTerminalState,
-} from '@recoder/shared/a2a/schemas';
+} from './schemas';
 
 // ---------------------------------------------------------------------------
 // Connector platform identifier

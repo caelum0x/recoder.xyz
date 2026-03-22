@@ -34,9 +34,9 @@ import {
   TaskStateEnum,
   createTaskEnvelope,
   transitionTaskEnvelope,
-} from '@recoder/shared/a2a/schemas';
+} from './schemas';
 
-import type { RecoderPayload, RecoderAgentPlatform } from '@recoder/shared/a2a';
+import type { RecoderPayload, RecoderAgentPlatform } from './schemas';
 
 // ---------------------------------------------------------------------------
 // Shared input type for connector envelope builders

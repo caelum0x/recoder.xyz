@@ -16,12 +16,12 @@ const DEFAULT_SECURITY_HEADERS: SecurityHeadersConfig = {
   // Content Security Policy
   contentSecurityPolicy: [
     "default-src 'self'",
-    "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net",
-    "style-src 'self' 'unsafe-inline'",
+    "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://api.recoder.xyz https://static.cloudflareinsights.com",
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
     "img-src 'self' data: https: blob:",
-    "font-src 'self' data:",
-    "connect-src 'self' https://api.anthropic.com https://openrouter.ai wss:",
-    "frame-src 'self'",
+    "font-src 'self' data: https://fonts.gstatic.com",
+    "connect-src 'self' https://docker.recoder.xyz wss://docker.recoder.xyz https://api.recoder.xyz https://api.anthropic.com https://openrouter.ai https: wss: ws:",
+    "frame-src 'self' https://docker.recoder.xyz https://*.recoder.xyz https://*.sandbox.recoder.xyz",
     "worker-src 'self' blob:",
     "child-src 'self' blob:",
   ].join('; '),
@@ -30,7 +30,7 @@ const DEFAULT_SECURITY_HEADERS: SecurityHeadersConfig = {
   strictTransportSecurity: 'max-age=31536000; includeSubDomains; preload',
 
   // Prevent clickjacking
-  xFrameOptions: 'SAMEORIGIN',
+  xFrameOptions: '', // Disabled — using CSP frame-ancestors instead to allow cross-subdomain iframes
 
   // Prevent MIME sniffing
   xContentTypeOptions: 'nosniff',
@@ -110,7 +110,7 @@ export interface CORSConfig {
 }
 
 const DEFAULT_CORS_CONFIG: CORSConfig = {
-  allowedOrigins: ['http://localhost:5173', 'http://localhost:5174'],
+  allowedOrigins: ['http://localhost:5173', 'http://localhost:5174', 'https://web.recoder.xyz', 'https://recoder.xyz', 'https://docker.recoder.xyz'],
   allowedMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-User-ID'],
   exposedHeaders: ['X-RateLimit-Limit', 'X-RateLimit-Remaining', 'X-RateLimit-Reset'],

@@ -39,9 +39,9 @@ import {
   AuditTargetKindEnum,
   AuditSeverityEnum,
   createAuditEvent,
-} from '@recoder/shared/a2a/schemas';
+} from './schemas';
 
-import type { RecoderAgentPlatform } from '@recoder/shared/a2a';
+import type { RecoderAgentPlatform } from './schemas';
 
 // ---------------------------------------------------------------------------
 // Common input base

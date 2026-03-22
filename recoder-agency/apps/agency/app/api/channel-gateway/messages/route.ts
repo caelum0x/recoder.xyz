@@ -1773,24 +1773,29 @@ export async function POST(request: Request) {
 				)
 				.limit(5);
 
-			// Use OpenAI-compatible model for intent detection if available
+			// Use OpenRouter-compatible model for intent detection if available
 			let intent: DetectedIntent = { type: "unknown" };
 			try {
-				const { openai } = await import("@ai-sdk/openai");
-				intent = await detectIntent({
-					message: payload.text,
-					conversationHistory: history,
-					clientContext: {
-						activeProjects: activeProjectList.map((p) => ({
-							id: p.id,
-							name: p.name,
-							status: p.status,
-						})),
-						pendingDeliverables: pendingDeliverableList,
-						pendingQuotes: pendingQuoteCount.length,
-					},
-					model: openai("gpt-4o-mini"),
-				});
+				const { createOpenRouterModel } = await import(
+					"@/lib/agency/openrouter-model"
+				);
+				const model = createOpenRouterModel("openai/gpt-4o-mini");
+				if (model) {
+					intent = await detectIntent({
+						message: payload.text,
+						conversationHistory: history,
+						clientContext: {
+							activeProjects: activeProjectList.map((p) => ({
+								id: p.id,
+								name: p.name,
+								status: p.status,
+							})),
+							pendingDeliverables: pendingDeliverableList,
+							pendingQuotes: pendingQuoteCount.length,
+						},
+						model,
+					});
+				}
 			} catch {
 				// No AI model available; fall through to unknown
 			}
@@ -1823,14 +1828,16 @@ export async function POST(request: Request) {
 			};
 			let orchestratorFailed = false;
 			try {
-				const { openai: openaiProvider } = await import("@ai-sdk/openai");
+				const { requireOpenRouterModel } = await import(
+					"@/lib/agency/openrouter-model"
+				);
 				orchestratorResult = await executeIntent({
 					intent,
 					clientDbId: client.dbId,
 					teamDbId: client.teamDbId,
 					provider: payload.provider as ChannelProvider,
 					conversationHistory: history,
-					model: openaiProvider("gpt-4o-mini"),
+					model: requireOpenRouterModel("openai/gpt-4o-mini"),
 				});
 				if (ambDispatcher) {
 					void ambDispatcher.onTaskCompleted(
@@ -1915,13 +1922,20 @@ function triggerAsyncQuoteGeneration(params: {
 }): void {
 	(async () => {
 		try {
-			const { openai } = await import("@ai-sdk/openai");
+			const { createOpenRouterModel } = await import(
+				"@/lib/agency/openrouter-model"
+			);
+			const model = createOpenRouterModel("openai/gpt-4o-mini");
+			if (!model) {
+				console.warn("Skipping quote generation: OPENROUTER_API_KEY not set");
+				return;
+			}
 			const { generateQuoteFromBrief } = await import(
 				"@/lib/agency/workflows/quote-generator"
 			);
 			await generateQuoteFromBrief({
 				...params,
-				model: openai("gpt-4o-mini"),
+				model,
 			});
 		} catch (error) {
 			console.error("Async quote generation failed:", error);

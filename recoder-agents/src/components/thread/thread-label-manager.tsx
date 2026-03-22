@@ -6,8 +6,6 @@ import {
   Plus,
   Pencil,
   Trash2,
-  ChevronRight,
-  ChevronDown,
   X,
   Check,
   Loader2,
@@ -31,16 +29,16 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import {
+  useLabels,
   useThreadLabels,
-  useCreateThreadLabel,
-  useUpdateThreadLabel,
-  useDeleteThreadLabel,
+  useCreateLabel,
+  useUpdateLabel,
+  useDeleteLabel,
   useAssignLabel,
   useRemoveLabel,
-  useThreadLabelsList,
   useLabelThreads,
 } from '@/hooks/threads/use-thread-labels';
-import type { ThreadLabel, CreateLabelData, UpdateLabelData } from '@/lib/api/thread-labels';
+import type { LabelDefinition, CreateLabelData, UpdateLabelData } from '@/lib/api/thread-labels';
 
 // ---------------------------------------------------------------------------
 // Color presets
@@ -66,7 +64,7 @@ export function LabelPill({
   onRemove,
   size = 'sm',
 }: {
-  label: ThreadLabel;
+  label: LabelDefinition;
   onRemove?: () => void;
   size?: 'xs' | 'sm';
 }) {
@@ -90,7 +88,7 @@ export function LabelPill({
           height: size === 'xs' ? 6 : 8,
         }}
       />
-      {label.name}
+      {label.label_name}
       {onRemove && (
         <button
           onClick={(e) => {
@@ -117,20 +115,28 @@ export function ThreadLabelPills({
   threadId: string;
   compact?: boolean;
 }) {
-  const { data: labels = [] } = useThreadLabelsList(threadId);
+  const { data: labels = [] } = useThreadLabels(threadId);
   const removeLabelMutation = useRemoveLabel();
 
   if (labels.length === 0) return null;
 
   return (
     <div className="flex items-center gap-1 flex-wrap">
-      {labels.map((label) => (
+      {labels.map((assignment) => (
         <LabelPill
-          key={label.id}
-          label={label}
+          key={assignment.id}
+          label={{
+            id: assignment.label_id,
+            user_id: assignment.user_id,
+            label_name: assignment.label_name || '',
+            color: assignment.color || '#6366f1',
+            description: assignment.description ?? null,
+            icon: assignment.icon || '',
+            created_at: assignment.assigned_at,
+          }}
           size={compact ? 'xs' : 'sm'}
           onRemove={() =>
-            removeLabelMutation.mutate({ threadId, labelId: label.id })
+            removeLabelMutation.mutate({ threadId, labelId: assignment.label_id })
           }
         />
       ))}
@@ -150,30 +156,15 @@ export function AssignLabelDropdown({
   trigger?: React.ReactNode;
 }) {
   const [open, setOpen] = useState(false);
-  const { data: allLabels = [] } = useThreadLabels();
-  const { data: threadLabels = [] } = useThreadLabelsList(threadId);
+  const { data: allLabels = [] } = useLabels();
+  const { data: threadLabels = [] } = useThreadLabels(threadId);
   const assignMutation = useAssignLabel();
   const removeMutation = useRemoveLabel();
 
   const assignedIds = useMemo(
-    () => new Set(threadLabels.map((l) => l.id)),
+    () => new Set(threadLabels.map((l) => l.label_id)),
     [threadLabels]
   );
-
-  // Flatten tree for dropdown
-  const flatLabels = useMemo(() => {
-    const flat: (ThreadLabel & { depth: number })[] = [];
-    const walk = (items: ThreadLabel[], depth: number) => {
-      for (const item of items) {
-        flat.push({ ...item, depth });
-        if (item.children && item.children.length > 0) {
-          walk(item.children, depth + 1);
-        }
-      }
-    };
-    walk(allLabels, 0);
-    return flat;
-  }, [allLabels]);
 
   const handleToggle = (labelId: string) => {
     if (assignedIds.has(labelId)) {
@@ -194,23 +185,22 @@ export function AssignLabelDropdown({
         )}
       </PopoverTrigger>
       <PopoverContent className="w-52 p-1" align="start">
-        {flatLabels.length === 0 ? (
+        {allLabels.length === 0 ? (
           <p className="text-xs text-muted-foreground p-2 text-center">
             No labels. Create one first.
           </p>
         ) : (
-          flatLabels.map((label) => (
+          allLabels.map((label) => (
             <button
               key={label.id}
               className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-accent text-xs text-left"
-              style={{ paddingLeft: `${8 + label.depth * 16}px` }}
               onClick={() => handleToggle(label.id)}
             >
               <span
                 className="inline-block w-2.5 h-2.5 rounded-full flex-shrink-0"
                 style={{ backgroundColor: label.color }}
               />
-              <span className="flex-1 truncate">{label.name}</span>
+              <span className="flex-1 truncate">{label.label_name}</span>
               {assignedIds.has(label.id) && (
                 <Check className="h-3 w-3 text-primary flex-shrink-0" />
               )}
@@ -233,23 +223,9 @@ export function LabelFilter({
   selectedLabelId: string | null;
   onSelect: (labelId: string | null) => void;
 }) {
-  const { data: labels = [] } = useThreadLabels();
+  const { data: labels = [] } = useLabels();
 
-  const flatLabels = useMemo(() => {
-    const flat: (ThreadLabel & { depth: number })[] = [];
-    const walk = (items: ThreadLabel[], depth: number) => {
-      for (const item of items) {
-        flat.push({ ...item, depth });
-        if (item.children && item.children.length > 0) {
-          walk(item.children, depth + 1);
-        }
-      }
-    };
-    walk(labels, 0);
-    return flat;
-  }, [labels]);
-
-  if (flatLabels.length === 0) return null;
+  if (labels.length === 0) return null;
 
   return (
     <Popover>
@@ -261,7 +237,7 @@ export function LabelFilter({
         >
           <Filter className="h-3 w-3" />
           {selectedLabelId
-            ? flatLabels.find((l) => l.id === selectedLabelId)?.name || 'Label'
+            ? labels.find((l) => l.id === selectedLabelId)?.label_name || 'Label'
             : 'Label'}
         </Button>
       </PopoverTrigger>
@@ -275,21 +251,20 @@ export function LabelFilter({
         >
           All threads
         </button>
-        {flatLabels.map((label) => (
+        {labels.map((label) => (
           <button
             key={label.id}
             className={cn(
               'w-full flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-accent text-xs',
               selectedLabelId === label.id && 'bg-accent'
             )}
-            style={{ paddingLeft: `${8 + label.depth * 16}px` }}
             onClick={() => onSelect(label.id)}
           >
             <span
               className="inline-block w-2.5 h-2.5 rounded-full flex-shrink-0"
               style={{ backgroundColor: label.color }}
             />
-            <span className="flex-1 truncate">{label.name}</span>
+            <span className="flex-1 truncate">{label.label_name}</span>
             {label.thread_count != null && label.thread_count > 0 && (
               <span className="text-muted-foreground">{label.thread_count}</span>
             )}
@@ -305,9 +280,9 @@ export function LabelFilter({
 // ---------------------------------------------------------------------------
 
 export default function ThreadLabelManager() {
-  const { data: labels = [], isLoading } = useThreadLabels();
+  const { data: labels = [], isLoading } = useLabels();
   const [showNewDialog, setShowNewDialog] = useState(false);
-  const [editingLabel, setEditingLabel] = useState<ThreadLabel | null>(null);
+  const [editingLabel, setEditingLabel] = useState<LabelDefinition | null>(null);
 
   return (
     <div className="space-y-4">
@@ -327,7 +302,7 @@ export default function ThreadLabelManager() {
         </Button>
       </div>
 
-      {/* Tree display */}
+      {/* Label list */}
       {isLoading ? (
         <div className="flex items-center justify-center py-12">
           <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
@@ -342,10 +317,9 @@ export default function ThreadLabelManager() {
       ) : (
         <div className="space-y-0.5">
           {labels.map((label) => (
-            <LabelTreeNode
+            <LabelRow
               key={label.id}
               label={label}
-              depth={0}
               onEdit={setEditingLabel}
             />
           ))}
@@ -362,104 +336,67 @@ export default function ThreadLabelManager() {
           }
         }}
         editLabel={editingLabel}
-        allLabels={labels}
       />
     </div>
   );
 }
 
 // ---------------------------------------------------------------------------
-// Tree node
+// Label row (flat, no hierarchy)
 // ---------------------------------------------------------------------------
 
-function LabelTreeNode({
+function LabelRow({
   label,
-  depth,
   onEdit,
 }: {
-  label: ThreadLabel;
-  depth: number;
-  onEdit: (label: ThreadLabel) => void;
+  label: LabelDefinition;
+  onEdit: (label: LabelDefinition) => void;
 }) {
-  const [expanded, setExpanded] = useState(true);
-  const deleteMutation = useDeleteThreadLabel();
-  const hasChildren = label.children && label.children.length > 0;
+  const deleteMutation = useDeleteLabel();
 
   return (
-    <div>
-      <div
-        className="group flex items-center gap-2 py-1.5 px-2 rounded-md hover:bg-accent/50 transition-colors"
-        style={{ paddingLeft: `${8 + depth * 20}px` }}
-      >
-        {/* Expand toggle */}
-        <button
-          className={cn(
-            'h-4 w-4 flex items-center justify-center flex-shrink-0',
-            !hasChildren && 'invisible'
-          )}
-          onClick={() => setExpanded(!expanded)}
-        >
-          {expanded ? (
-            <ChevronDown className="h-3 w-3 text-muted-foreground" />
-          ) : (
-            <ChevronRight className="h-3 w-3 text-muted-foreground" />
-          )}
-        </button>
+    <div
+      className="group flex items-center gap-2 py-1.5 px-2 rounded-md hover:bg-accent/50 transition-colors"
+    >
+      {/* Color dot */}
+      <span
+        className="inline-block w-3 h-3 rounded-full flex-shrink-0"
+        style={{ backgroundColor: label.color }}
+      />
 
-        {/* Color dot */}
-        <span
-          className="inline-block w-3 h-3 rounded-full flex-shrink-0"
-          style={{ backgroundColor: label.color }}
-        />
+      {/* Name */}
+      <span className="text-sm flex-1 truncate">{label.label_name}</span>
 
-        {/* Name */}
-        <span className="text-sm flex-1 truncate">{label.name}</span>
-
-        {/* Thread count */}
-        {label.thread_count != null && label.thread_count > 0 && (
-          <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
-            {label.thread_count}
-          </Badge>
-        )}
-
-        {/* Actions */}
-        <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-6 w-6"
-            onClick={() => onEdit(label)}
-          >
-            <Pencil className="h-3 w-3" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-6 w-6 text-destructive"
-            onClick={() => {
-              if (confirm(`Delete label "${label.name}"?`)) {
-                deleteMutation.mutate(label.id);
-              }
-            }}
-          >
-            <Trash2 className="h-3 w-3" />
-          </Button>
-        </div>
-      </div>
-
-      {/* Children */}
-      {hasChildren && expanded && (
-        <div>
-          {label.children!.map((child) => (
-            <LabelTreeNode
-              key={child.id}
-              label={child}
-              depth={depth + 1}
-              onEdit={onEdit}
-            />
-          ))}
-        </div>
+      {/* Thread count */}
+      {label.thread_count != null && label.thread_count > 0 && (
+        <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
+          {label.thread_count}
+        </Badge>
       )}
+
+      {/* Actions */}
+      <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-6 w-6"
+          onClick={() => onEdit(label)}
+        >
+          <Pencil className="h-3 w-3" />
+        </Button>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-6 w-6 text-destructive"
+          onClick={() => {
+            if (confirm(`Delete label "${label.label_name}"?`)) {
+              deleteMutation.mutate(label.id);
+            }
+          }}
+        >
+          <Trash2 className="h-3 w-3" />
+        </Button>
+      </div>
     </div>
   );
 }
@@ -472,84 +409,35 @@ function LabelFormDialog({
   open,
   onOpenChange,
   editLabel,
-  allLabels,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
-  editLabel: ThreadLabel | null;
-  allLabels: ThreadLabel[];
+  editLabel: LabelDefinition | null;
 }) {
-  const createMutation = useCreateThreadLabel();
-  const updateMutation = useUpdateThreadLabel();
+  const createMutation = useCreateLabel();
+  const updateMutation = useUpdateLabel();
 
-  const [name, setName] = useState(editLabel?.name || '');
+  const [name, setName] = useState(editLabel?.label_name || '');
   const [color, setColor] = useState(editLabel?.color || COLOR_PRESETS[0]);
-  const [parentId, setParentId] = useState<string>(editLabel?.parent_id || '');
 
   // Sync form when editLabel changes
   const editId = editLabel?.id;
   const [prevEditId, setPrevEditId] = useState(editId);
   if (editId !== prevEditId) {
     setPrevEditId(editId);
-    setName(editLabel?.name || '');
+    setName(editLabel?.label_name || '');
     setColor(editLabel?.color || COLOR_PRESETS[0]);
-    setParentId(editLabel?.parent_id || '');
   }
-
-  // Flatten labels for parent selector (excluding self and descendants)
-  const parentOptions = useMemo(() => {
-    const flat: { id: string; name: string; depth: number }[] = [];
-    const descendantIds = new Set<string>();
-
-    // Collect all descendants of current label to prevent circular refs
-    if (editLabel) {
-      const collectDesc = (items: ThreadLabel[]) => {
-        for (const item of items) {
-          if (item.id !== editLabel.id) {
-            // skip
-          }
-          descendantIds.add(item.id);
-          if (item.children) collectDesc(item.children);
-        }
-      };
-      // Find editLabel's subtree
-      const findAndCollect = (items: ThreadLabel[]) => {
-        for (const item of items) {
-          if (item.id === editLabel.id) {
-            if (item.children) collectDesc(item.children);
-          } else if (item.children) {
-            findAndCollect(item.children);
-          }
-        }
-      };
-      findAndCollect(allLabels);
-      descendantIds.add(editLabel.id);
-    }
-
-    const walk = (items: ThreadLabel[], depth: number) => {
-      for (const item of items) {
-        if (!descendantIds.has(item.id)) {
-          flat.push({ id: item.id, name: item.name, depth });
-        }
-        if (item.children) walk(item.children, depth + 1);
-      }
-    };
-    walk(allLabels, 0);
-    return flat;
-  }, [allLabels, editLabel]);
 
   const handleSubmit = () => {
     if (!name.trim()) return;
 
     if (editLabel) {
       const data: UpdateLabelData = {};
-      if (name.trim() !== editLabel.name) data.name = name.trim();
+      if (name.trim() !== editLabel.label_name) data.label_name = name.trim();
       if (color !== editLabel.color) data.color = color;
-      if (parentId !== (editLabel.parent_id || '')) {
-        data.parent_id = parentId || null;
-      }
       updateMutation.mutate(
-        { labelId: editLabel.id, data },
+        { id: editLabel.id, data },
         {
           onSuccess: () => {
             onOpenChange(false);
@@ -559,9 +447,8 @@ function LabelFormDialog({
       );
     } else {
       const data: CreateLabelData = {
-        name: name.trim(),
+        label_name: name.trim(),
         color,
-        parent_id: parentId || undefined,
       };
       createMutation.mutate(data, {
         onSuccess: () => {
@@ -575,7 +462,6 @@ function LabelFormDialog({
   const resetForm = () => {
     setName('');
     setColor(COLOR_PRESETS[0]);
-    setParentId('');
   };
 
   const isPending = createMutation.isPending || updateMutation.isPending;
@@ -620,24 +506,6 @@ function LabelFormDialog({
             </div>
           </div>
 
-          {/* Parent selector */}
-          <div className="space-y-1.5">
-            <label className="text-xs font-medium">Parent Label (optional)</label>
-            <select
-              value={parentId}
-              onChange={(e) => setParentId(e.target.value)}
-              className="w-full h-9 rounded-md border border-input bg-background px-3 text-sm"
-            >
-              <option value="">None (root level)</option>
-              {parentOptions.map((opt) => (
-                <option key={opt.id} value={opt.id}>
-                  {'  '.repeat(opt.depth)}
-                  {opt.name}
-                </option>
-              ))}
-            </select>
-          </div>
-
           {/* Preview */}
           <div className="space-y-1.5">
             <label className="text-xs font-medium text-muted-foreground">
@@ -649,10 +517,10 @@ function LabelFormDialog({
                   label={{
                     id: '',
                     user_id: '',
-                    name: name.trim(),
+                    label_name: name.trim(),
                     color,
-                    parent_id: null,
-                    sort_order: 0,
+                    description: null,
+                    icon: '',
                     created_at: '',
                   }}
                 />

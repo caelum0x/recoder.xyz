@@ -48,8 +48,8 @@ function extractCheckCommandOutputData(
     if (toolResult?.output) {
         if (typeof toolResult.output === 'object' && toolResult.output !== null) {
             const outputObj = toolResult.output as Record<string, unknown>;
-            output = outputObj.output || outputObj.stdout || null;
-            status = outputObj.status || null;
+            output = (outputObj.output as string) || (outputObj.stdout as string) || null;
+            status = (outputObj.status as string) || null;
         } else if (typeof toolResult.output === 'string') {
             output = toolResult.output;
         }

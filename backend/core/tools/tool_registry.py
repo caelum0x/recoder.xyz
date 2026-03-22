@@ -21,6 +21,10 @@ SANDBOX_TOOLS = [
     ('sb_spreadsheet_tool', 'core.tools.sb_spreadsheet_tool', 'SandboxSpreadsheetTool'),
     ('sb_upload_file_tool', 'core.tools.sb_upload_file_tool', 'SandboxUploadFileTool'),
     ('sb_git_sync', 'core.tools.sb_git_sync', 'SandboxGitTool'),
+    ('sb_code_interpreter_tool', 'core.tools.sb_code_interpreter_tool', 'SandboxCodeInterpreterTool'),
+    ('sb_computer_use_tool', 'core.tools.sb_computer_use_tool', 'SandboxComputerUseTool'),
+    ('sb_session_exec_tool', 'core.tools.session_exec_tool', 'SandboxSessionExecTool'),
+    ('sb_git_ops_tool', 'core.tools.git_ops_tool', 'SandboxGitOpsTool'),
 ]
 
 SEARCH_TOOLS = [

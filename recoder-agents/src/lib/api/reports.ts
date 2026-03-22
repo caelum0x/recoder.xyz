@@ -56,7 +56,7 @@ export async function getUsageSummary(period: ReportPeriod): Promise<UsageSummar
   try {
     const response = await backendApi.get<UsageSummary>(
       `/reports/usage-summary?period=${period}`,
-      { showErrors: false },
+      { showErrors: true },
     );
     if (response.error) throw new Error(`Error: ${response.error.message}`);
     return response.data!;
@@ -70,7 +70,7 @@ export async function getUsageByAgent(period: ReportPeriod): Promise<AgentUsage[
   try {
     const response = await backendApi.get<AgentUsage[]>(
       `/reports/usage-by-agent?period=${period}`,
-      { showErrors: false },
+      { showErrors: true },
     );
     if (response.error) throw new Error(`Error: ${response.error.message}`);
     return response.data!;
@@ -84,7 +84,7 @@ export async function getUsageByModel(period: ReportPeriod): Promise<ModelUsage[
   try {
     const response = await backendApi.get<ModelUsage[]>(
       `/reports/usage-by-model?period=${period}`,
-      { showErrors: false },
+      { showErrors: true },
     );
     if (response.error) throw new Error(`Error: ${response.error.message}`);
     return response.data!;
@@ -101,7 +101,7 @@ export async function getUsageByDay(
   try {
     const response = await backendApi.get<DailyUsage[]>(
       `/reports/usage-by-day?period=${period}&granularity=${granularity}`,
-      { showErrors: false },
+      { showErrors: true },
     );
     if (response.error) throw new Error(`Error: ${response.error.message}`);
     return response.data!;
@@ -118,7 +118,7 @@ export async function exportReportCsv(
   try {
     const response = await backendApi.get<Blob>(
       `/reports/export/csv?period=${period}&report_type=${reportType}`,
-      { showErrors: false },
+      { showErrors: true },
     );
     if (response.error) throw new Error(`Error: ${response.error.message}`);
     const blob = response.data!;

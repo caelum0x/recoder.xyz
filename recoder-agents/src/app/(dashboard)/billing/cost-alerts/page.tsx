@@ -123,7 +123,7 @@ function CreateRuleDialog({ open, onClose }: { open: boolean; onClose: () => voi
             <label className="text-sm font-medium text-muted-foreground">Period</label>
             <select
               value={form.threshold_period}
-              onChange={(e) => setForm({ ...form, threshold_period: e.target.value })}
+              onChange={(e) => setForm({ ...form, threshold_period: e.target.value as CreateCostAlertRuleData['threshold_period'] })}
               className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
             >
               <option value="hourly">Hourly</option>
@@ -137,7 +137,7 @@ function CreateRuleDialog({ open, onClose }: { open: boolean; onClose: () => voi
             <label className="text-sm font-medium text-muted-foreground">Alert Type</label>
             <select
               value={form.alert_type}
-              onChange={(e) => setForm({ ...form, alert_type: e.target.value })}
+              onChange={(e) => setForm({ ...form, alert_type: e.target.value as CreateCostAlertRuleData['alert_type'] })}
               className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
             >
               <option value="info">Info</option>
@@ -171,8 +171,8 @@ function EditRuleDialog({ rule, onClose }: { rule: CostAlertRule; onClose: () =>
   const [form, setForm] = useState({
     name: rule.name,
     threshold_amount: rule.threshold_amount,
-    threshold_period: rule.threshold_period,
-    alert_type: rule.alert_type,
+    threshold_period: rule.threshold_period as string,
+    alert_type: rule.alert_type as string,
   });
 
   const handleSubmit = async () => {

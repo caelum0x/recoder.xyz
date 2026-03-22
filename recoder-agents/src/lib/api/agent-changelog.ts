@@ -66,7 +66,7 @@ export const getAgentChangelog = async (
   const query = params.toString() ? `?${params.toString()}` : '';
   const response = await backendApi.get<ChangelogListResponse>(
     `/agents/${agentId}/changelog${query}`,
-    { showErrors: false, cache: 'no-store' }
+    { showErrors: true, cache: 'no-store' }
   );
 
   if (response.error) {
@@ -99,7 +99,7 @@ export const getChangelogSummary = async (
 ): Promise<ChangelogSummaryResponse> => {
   const response = await backendApi.get<ChangelogSummaryResponse>(
     `/agents/${agentId}/changelog/summary?days=${days}`,
-    { showErrors: false, cache: 'no-store' }
+    { showErrors: true, cache: 'no-store' }
   );
 
   if (response.error) {
@@ -115,7 +115,7 @@ export const getChangelogDiff = async (
 ): Promise<ChangelogEntry> => {
   const response = await backendApi.get<ChangelogEntry>(
     `/agents/${agentId}/changelog/diff/${changeId}`,
-    { showErrors: false, cache: 'no-store' }
+    { showErrors: true, cache: 'no-store' }
   );
 
   if (response.error) {

@@ -88,7 +88,7 @@ export async function getAgentImpactAnalyses(
   try {
     const response = await backendApi.get<ImpactAnalysis[]>(
       `/agents/${agentId}/impact-analyses`,
-      { showErrors: false, cache: 'no-store' },
+      { showErrors: true, cache: 'no-store' },
     );
     if (response.error) throw new Error(`Error: ${response.error.message}`);
     return response.data!;
@@ -104,7 +104,7 @@ export async function getImpactAnalysisDetail(
   try {
     const response = await backendApi.get<ImpactAnalysis>(
       `/impact-analyses/${analysisId}`,
-      { showErrors: false, cache: 'no-store' },
+      { showErrors: true, cache: 'no-store' },
     );
     if (response.error) throw new Error(`Error: ${response.error.message}`);
     return response.data!;
@@ -136,7 +136,7 @@ export async function getImpactStats(): Promise<ImpactStats> {
   try {
     const response = await backendApi.get<ImpactStats>(
       '/impact-analyses/stats',
-      { showErrors: false, cache: 'no-store' },
+      { showErrors: true, cache: 'no-store' },
     );
     if (response.error) throw new Error(`Error: ${response.error.message}`);
     return response.data!;

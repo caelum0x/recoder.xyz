@@ -290,7 +290,7 @@ export class CloudflareDeployer {
     if (!hasHeaders) {
       const headersContent = `/*
   X-Content-Type-Options: nosniff
-  X-Frame-Options: DENY
+  X-Frame-Options: SAMEORIGIN
   Referrer-Policy: strict-origin-when-cross-origin
 
 /assets/*

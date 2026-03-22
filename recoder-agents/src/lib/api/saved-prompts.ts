@@ -33,7 +33,7 @@ export const getPrompts = async (
   if (search) params.set('search', search);
   const query = params.toString() ? `?${params}` : '';
   const response = await backendApi.get<SavedPrompt[]>(`/prompts${query}`, {
-    showErrors: false,
+    showErrors: true,
   });
   if (response.error) throw new Error(response.error.message);
   return response.data!;

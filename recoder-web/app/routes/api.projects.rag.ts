@@ -1,6 +1,6 @@
 import { type ActionFunctionArgs } from '@remix-run/cloudflare';
 import { Octokit } from '@octokit/rest';
-import { neon } from '@neondatabase/serverless';
+import { createSql } from '~/lib/.server/db/pg-pool';
 import * as z from 'zod/v4';
 import { verifySession } from '~/lib/auth/session.server';
 import { JsonResponse } from '~/lib/http/json-response';
@@ -123,7 +123,7 @@ async function resolveGitHubAccessToken(
   if (!databaseUrl) return null;
 
   try {
-    const sql = neon(databaseUrl);
+    const sql = createSql(databaseUrl);
     const rows = await sql`
       SELECT "accessToken" FROM oauth_accounts
       WHERE "userId" = ${userId} AND provider = 'github'
