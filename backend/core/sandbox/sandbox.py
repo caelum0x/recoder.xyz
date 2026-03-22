@@ -31,47 +31,6 @@ else:
 
 daytona = AsyncDaytona(daytona_config)
 
-# Monkey-patch: Daytona SDK's upload_files() doesn't pass auth headers to httpx.
-# The _upload_files_serialize() method returns headers from the toolbox client,
-# but the toolbox client's host is set lazily and its default_headers (including
-# Authorization) are not included in the serialized output. We patch the
-# AsyncFileSystem class to inject the API key into upload requests.
-def _patch_sandbox_upload_auth(sandbox: AsyncSandbox):
-    """Ensure sandbox.fs.upload_file sends the Daytona API key."""
-    import httpx as _httpx, io as _io
-    from contextlib import AsyncExitStack as _AES
-
-    original_upload = sandbox.fs.upload_files.__func__ if hasattr(sandbox.fs.upload_files, '__func__') else None
-
-    async def _patched_upload_files(self_fs, files, timeout=30*60):
-        data_fields = {}
-        file_fields = {}
-        for i, f in enumerate(files):
-            # Use bracket notation: files[0][path] — Daytona proxy requires this format
-            data_fields[f"files[{i}][path]"] = f.destination
-            src = f.source
-            fname = f.destination.split("/")[-1] or "file"
-            if isinstance(src, (bytes, bytearray)):
-                file_fields[f"files[{i}][file]"] = (fname, _io.BytesIO(src))
-            else:
-                file_fields[f"files[{i}][file]"] = (fname, open(src, "rb"))
-
-        await self_fs._ensure_toolbox_url()
-        toolbox_host = self_fs._api_client.api_client.configuration.host
-        url = toolbox_host + "/files/bulk-upload"
-        headers = {"Authorization": f"Bearer {config.DAYTONA_API_KEY}"}
-
-        async with _httpx.AsyncClient(timeout=timeout or None) as client:
-            response = await client.post(url, data=data_fields, files=file_fields, headers=headers)
-            response.raise_for_status()
-
-    sandbox.fs.upload_files = lambda files, timeout=30*60: _patched_upload_files(sandbox.fs, files, timeout)
-    sandbox.fs.upload_file = lambda src, dst, timeout=30*60: _patched_upload_files(
-        sandbox.fs,
-        [type('FU', (), {'source': src, 'destination': dst})()],
-        timeout
-    )
-
 async def get_or_start_sandbox(sandbox_id: str) -> AsyncSandbox:
     """Retrieve a sandbox by ID, check its state, and start it if needed."""
     
@@ -100,8 +59,6 @@ async def get_or_start_sandbox(sandbox_id: str) -> AsyncSandbox:
                 raise e
         
         logger.info(f"Sandbox {sandbox_id} is ready")
-        _patch_sandbox_upload_auth(sandbox)
-        await start_file_server(sandbox)
         return sandbox
 
     except Exception as e:
@@ -121,26 +78,6 @@ async def start_supervisord_session(sandbox: AsyncSandbox):
     except Exception as e:
         # Don't fail if supervisord already running
         logger.warning(f"Could not start supervisord: {str(e)}")
-
-async def start_file_server(sandbox: AsyncSandbox):
-    """Start a simple HTTP file server on port 8080 to serve workspace files (presentations, etc.).
-    Daytona sandboxes use /home/daytona/ as the workspace root.
-    Also creates /workspace symlink for compatibility."""
-    session_id = "file-server"
-    try:
-        # Kill any existing server on 8080, then start fresh from correct dir
-        try:
-            await sandbox.process.exec("kill $(lsof -t -i:8080) 2>/dev/null; sleep 1")
-        except Exception:
-            pass
-        await sandbox.process.create_session(session_id)
-        await sandbox.process.execute_session_command(session_id, SessionExecuteRequest(
-            command="ln -sf /home/daytona /workspace 2>/dev/null; python3 -m http.server 8080 --directory /home/daytona --bind 0.0.0.0",
-            var_async=True
-        ))
-        logger.info("File server started on port 8080 serving /home/daytona/")
-    except Exception as e:
-        logger.warning(f"Could not start file server: {str(e)}")
 
 async def create_sandbox(password: str, project_id: str = None) -> AsyncSandbox:
     """Create a new sandbox with all required services configured and running."""
@@ -192,10 +129,8 @@ async def create_sandbox(password: str, project_id: str = None) -> AsyncSandbox:
 
     # Start supervisord in a session for new sandbox
     await start_supervisord_session(sandbox)
-    
+
     logger.info(f"Sandbox environment successfully initialized")
-    _patch_sandbox_upload_auth(sandbox)
-    await start_file_server(sandbox)
     return sandbox
 
 async def delete_sandbox(sandbox_id: str) -> bool:
