@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Maximize2, Presentation } from 'lucide-react';
-import { constructHtmlPreviewUrl } from '@/lib/utils/url';
+import { buildSandboxFileUrl } from '@/lib/utils/url';
 import { Project } from '@/lib/api/threads';
 
 interface SlideMetadata {
@@ -34,10 +34,10 @@ export function PresentationSlideCard({
   const [scale, setScale] = useState(1);
 
   const slidePreviewUrl = useMemo(() => {
-    if (!project?.sandbox?.sandbox_url) return null;
-    const url = constructHtmlPreviewUrl(project.sandbox.sandbox_url, slide.file_path);
+    if (!project?.sandbox?.id) return null;
+    const url = buildSandboxFileUrl(project?.sandbox?.id, slide.file_path);
     return refreshTimestamp ? `${url}?t=${refreshTimestamp}` : url;
-  }, [project?.sandbox?.sandbox_url, slide.file_path, refreshTimestamp]);
+  }, [project?.sandbox?.id, slide.file_path, refreshTimestamp]);
 
   useEffect(() => {
     if (!containerRef) return;

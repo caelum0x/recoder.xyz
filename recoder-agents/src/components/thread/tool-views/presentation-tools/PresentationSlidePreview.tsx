@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { PresentationSlideCard } from './PresentationSlideCard';
-import { constructHtmlPreviewUrl } from '@/lib/utils/url';
+import { buildSandboxFileUrl } from '@/lib/utils/url';
 import { Project } from '@/lib/api/threads';
 import { RefreshCw, Presentation } from 'lucide-react';
 import { RecoderLoader } from '@/components/ui/recoder-loader';
@@ -52,7 +52,7 @@ export function PresentationSlidePreview({
   const maxRetries = 10; // Retry up to 10 times
 
   const loadMetadata = useCallback(async (retry: number = 0) => {
-    if (!presentationName || !project?.sandbox?.sandbox_url) {
+    if (!presentationName || !project?.sandbox?.id) {
       setIsLoading(false);
       return;
     }
@@ -63,8 +63,8 @@ export function PresentationSlidePreview({
 
     try {
       const sanitizedName = sanitizeFilename(presentationName);
-      const metadataUrl = constructHtmlPreviewUrl(
-        project.sandbox.sandbox_url,
+      const metadataUrl = buildSandboxFileUrl(
+        project.sandbox?.id,
         `presentations/${sanitizedName}/metadata.json`
       );
 
@@ -101,7 +101,7 @@ export function PresentationSlidePreview({
         setIsLoading(false);
       }
     }
-  }, [presentationName, project?.sandbox?.sandbox_url]);
+  }, [presentationName, project?.sandbox?.id]);
 
   useEffect(() => {
     loadMetadata(0);
@@ -168,7 +168,7 @@ export function PresentationSlidePreview({
       onFullScreenClick(slideNumber);
     } else if (openPresentation && project?.sandbox?.sandbox_url) {
       // Open full screen presentation viewer directly using shared context
-      openPresentation(presentationName, project.sandbox.sandbox_url, slideNumber);
+      openPresentation(presentationName, project.sandbox.sandbox_url, slideNumber, project.sandbox.id);
     }
   };
 

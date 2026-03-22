@@ -31,7 +31,7 @@ import { RecoderLoader } from '@/components/ui/recoder-loader';
 import { ToolViewProps } from '../types';
 import { formatTimestamp, getToolTitle } from '../utils';
 import { downloadPresentation, handleGoogleSlidesUpload } from '../utils/presentation-utils';
-import { constructHtmlPreviewUrl } from '@/lib/utils/url';
+import { buildSandboxFileUrl } from '@/lib/utils/url';
 import { CodeBlockCode } from '@/components/ui/code-block';
 import { FullScreenPresentationViewer } from './FullScreenPresentationViewer';
 import { DownloadFormat } from '../utils/presentation-utils';
@@ -282,30 +282,30 @@ export function PresentationViewer({
       setMetadata(cachedMetadata);
       setIsLoadingMetadata(false);
       hasLoadedRef.current = true;
-      // Still refresh in background to get latest data if we have sandbox URL
-      if (project?.sandbox?.sandbox_url) {
+      // Still refresh in background to get latest data if we have sandbox ID
+      if (project?.sandbox?.id) {
         loadMetadata(0, maxRetries, true);
       }
       return;
     }
     
-    // If sandbox URL isn't available yet, wait and don't set loading state
+    // If sandbox ID isn't available yet, wait and don't set loading state
     // But if we have cached data, we already returned above
-    if (!project?.sandbox?.sandbox_url) {
+    if (!project?.sandbox?.id) {
       setIsLoadingMetadata(false);
       return;
     }
-    
+
     // Only show loading if we don't have any cached data
     if (!cachedMetadata) {
       setIsLoadingMetadata(true);
     }
     setError(null);
     setRetryAttempt(retryCount);
-    
+
     try {
-      const metadataUrl = constructHtmlPreviewUrl(
-        project.sandbox.sandbox_url, 
+      const metadataUrl = buildSandboxFileUrl(
+        project.sandbox.id,
         `presentations/${sanitizedPresentationName}/metadata.json`
       );
       
@@ -370,7 +370,7 @@ export function PresentationViewer({
       
       return;
     }
-  }, [extractedPresentationName, project?.sandbox?.sandbox_url, ensureSandboxActive]);
+  }, [extractedPresentationName, project?.sandbox?.id, ensureSandboxActive]);
 
   // Poll for sandbox URL availability and listen for sandbox-active events
   useEffect(() => {
@@ -477,12 +477,12 @@ export function PresentationViewer({
     // Only poll during streaming when we have a presentation name and sandbox URL
     const presentationToLoad = streamingPresentationName || extractedPresentationName;
     
-    if (isStreaming && presentationToLoad && project?.sandbox?.sandbox_url) {
+    if (isStreaming && presentationToLoad && project?.sandbox?.id) {
       // Poll every 2 seconds during streaming
       const pollMetadata = async () => {
         const sanitizedName = sanitizeFilename(presentationToLoad);
-        const metadataUrl = constructHtmlPreviewUrl(
-          project.sandbox!.sandbox_url!, 
+        const metadataUrl = buildSandboxFileUrl(
+          project.sandbox!.id!,
           `presentations/${sanitizedName}/metadata.json`
         );
         
@@ -521,7 +521,7 @@ export function PresentationViewer({
       clearInterval(streamingPollingRef.current);
       streamingPollingRef.current = null;
     }
-  }, [isStreaming, streamingPresentationName, extractedPresentationName, project?.sandbox?.sandbox_url]);
+  }, [isStreaming, streamingPresentationName, extractedPresentationName, project?.sandbox?.id]);
 
   // Create a unique key for this tool call to track scroll state
   const toolCallKey = useMemo(() => {
@@ -715,7 +715,8 @@ export function PresentationViewer({
                       openPresentation(
                         extractedPresentationName,
                         project.sandbox.sandbox_url,
-                        visibleSlide || currentSlideNumber || slides[0]?.number || 1
+                        visibleSlide || currentSlideNumber || slides[0]?.number || 1,
+                        project.sandbox.id
                       );
                     }
                   }}
@@ -790,7 +791,7 @@ export function PresentationViewer({
                     project={project}
                     onFullScreenClick={(slideNumber) => {
                       if (openPresentation && project?.sandbox?.sandbox_url && (extractedPresentationName || streamingPresentationName)) {
-                        openPresentation(extractedPresentationName || streamingPresentationName!, project.sandbox.sandbox_url, slideNumber);
+                        openPresentation(extractedPresentationName || streamingPresentationName!, project.sandbox.sandbox_url, slideNumber, project.sandbox.id);
                       }
                     }}
                     className={currentSlideNumber === slide.number ? 'ring-2 ring-blue-500/20 shadow-md' : ''}
@@ -881,7 +882,7 @@ export function PresentationViewer({
                     project={project}
                     onFullScreenClick={(slideNumber) => {
                       if (openPresentation && project?.sandbox?.sandbox_url && extractedPresentationName) {
-                        openPresentation(extractedPresentationName, project.sandbox.sandbox_url, slideNumber);
+                        openPresentation(extractedPresentationName, project.sandbox.sandbox_url, slideNumber, project.sandbox.id);
                       }
                     }}
                     className={currentSlideNumber === slide.number ? 'ring-2 ring-blue-500/20 shadow-md' : ''}
