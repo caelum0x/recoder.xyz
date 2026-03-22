@@ -235,7 +235,7 @@ class SandboxCodeInterpreterTool(SandboxToolsBase):
             full_code = existing_state + "\n" + code if existing_state else code
 
             # Write combined code to exec file
-            await self.sandbox.fs.upload_file(full_code.encode('utf-8'), exec_file)
+            await self.write_file(exec_file, full_code.encode('utf-8'))
 
             # Execute
             if language == "python":
@@ -250,7 +250,7 @@ class SandboxCodeInterpreterTool(SandboxToolsBase):
 
             # If successful, save the state (append new code to state file)
             if exit_code == 0:
-                await self.sandbox.fs.upload_file(full_code.encode('utf-8'), state_file)
+                await self.write_file(state_file, full_code.encode('utf-8'))
 
             result = {
                 "session": session_name,

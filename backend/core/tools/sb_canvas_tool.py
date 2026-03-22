@@ -200,8 +200,8 @@ class SandboxCanvasTool(SandboxToolsBase):
             full_path = f"{self.workspace_path}/{normalized_path}"
             
             logger.debug(f"[Canvas] Saving canvas to: {full_path} (original: {canvas_path})")
-            await self.sandbox.fs.upload_file(content.encode(), full_path)
-            
+            await self.write_file(full_path, content.encode())
+
             # Verify file was saved
             try:
                 verify = await self.sandbox.process.exec(f"test -f '{full_path}' && echo 'SAVED'")
@@ -1180,7 +1180,7 @@ class SandboxCanvasTool(SandboxToolsBase):
             result_filename = f"{action_prefix}_{uuid.uuid4().hex[:8]}.{output_ext}"
             result_path = f"{self.images_dir}/{result_filename}"
             full_result_path = f"{self.workspace_path}/{result_path}"
-            await self.sandbox.fs.upload_file(result_bytes, full_result_path)
+            await self.write_file(full_result_path, result_bytes)
             
             # Get dimensions of result image
             try:
