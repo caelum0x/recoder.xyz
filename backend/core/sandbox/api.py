@@ -15,6 +15,7 @@ from pydantic import BaseModel
 from daytona_sdk import AsyncSandbox, SessionExecuteRequest
 
 from core.sandbox.sandbox import get_or_start_sandbox, delete_sandbox, create_sandbox, daytona
+from core.sandbox.daytona_file_service import get_file_service
 from core.utils.logger import logger
 from core.utils.auth_utils import get_optional_user_id, verify_and_get_user_id_from_jwt, verify_sandbox_access, verify_sandbox_access_optional
 from core.services.db import Table, execute, execute_read, execute_one, execute_mutate
@@ -268,13 +269,13 @@ async def create_file(
         # Read file content directly from the uploaded file
         content = await file.read()
         
-        # Create file using raw binary content
-        await sandbox.fs.upload_file(content, final_path)
+        # Create file using DaytonaFileService
+        await get_file_service().write_file(sandbox_id, final_path, content)
         logger.info(f"File uploaded successfully: {final_path} in sandbox {sandbox_id}")
-        
+
         return {
-            "status": "success", 
-            "created": True, 
+            "status": "success",
+            "created": True,
             "path": final_path,
             "original_filename": original_filename,
             "final_filename": unique_filename,
@@ -303,7 +304,7 @@ async def update_file_binary(
         
         content = await file.read()
         
-        await sandbox.fs.upload_file(content, path)
+        await get_file_service().write_file(sandbox_id, path, content)
         logger.info(f"Binary file updated successfully: {path} in sandbox {sandbox_id}")
         
         return {
@@ -338,7 +339,7 @@ async def update_file(
         sandbox = await get_sandbox_by_id_safely(sandbox_id)
         
         content_bytes = content.encode('utf-8') if isinstance(content, str) else content
-        await sandbox.fs.upload_file(content_bytes, path)
+        await get_file_service().write_file(sandbox_id, path, content_bytes)
         logger.debug(f"File updated at {path} in sandbox {sandbox_id}")
         
         return {"status": "success", "updated": True, "path": path}
@@ -1356,7 +1357,7 @@ async def create_file_in_project(
         content = await file.read()
         
         # Upload file to sandbox
-        await sandbox.fs.upload_file(content, final_path)
+        await get_file_service().write_file(sandbox_id, final_path, content)
         logger.info(f"File uploaded successfully: {final_path} in sandbox {sandbox_id}")
         
         return {

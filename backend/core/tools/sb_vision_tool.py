@@ -410,7 +410,7 @@ Images remain in the sandbox and can be loaded again anytime. SVG files are auto
                 
                 try:
                     # Save converted PNG to sandbox
-                    await self.sandbox.fs.upload_file(compressed_bytes, png_full_path)
+                    await self.write_file(png_full_path, compressed_bytes)
                     cleaned_path = png_filename
                     logger.info(f"[SeeImage] Saved converted PNG to sandbox as '{png_filename}' for frontend display")
                 except Exception as e:

@@ -2041,7 +2041,7 @@ class ApifyTool(SandboxToolsBase):
             json_bytes = json_content.encode('utf-8')
             
             # Save to file - this is a regular sandbox operation, should always work
-            await sandbox.fs.upload_file(json_bytes, file_path)
+            await self.write_file(file_path, json_bytes)
             logger.info(f"✅ Saved {len(all_items)} items to {file_path} ({len(json_bytes)} bytes)")
             
             # Return both absolute and relative paths

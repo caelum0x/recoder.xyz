@@ -10,6 +10,7 @@ from core.utils.logger import logger
 from core.utils.sandbox_utils import generate_unique_filename, get_uploads_directory
 from core.utils.files_utils import normalize_filename
 from core.sandbox.resolver import resolve_sandbox
+from core.sandbox.daytona_file_service import get_file_service
 
 
 async def fast_parse_files(files: List[UploadFile], prompt: str = "") -> Tuple[str, List[Tuple[str, bytes, str, Optional[str]]]]:
@@ -108,10 +109,9 @@ async def upload_files_to_sandbox(
                 unique_filename = await generate_unique_filename(sandbox_info.sandbox, uploads_dir, filename)
                 target_path = f"{uploads_dir}/{unique_filename}"
                 
-                if hasattr(sandbox_info.sandbox, 'fs') and hasattr(sandbox_info.sandbox.fs, 'upload_file'):
-                    await sandbox_info.sandbox.fs.upload_file(content_bytes, target_path)
-                    uploaded_count += 1
-                    logger.debug(f"[UPLOAD] Complete: {filename} -> {target_path}")
+                await get_file_service().write_file(sandbox_info.sandbox_id, target_path, content_bytes)
+                uploaded_count += 1
+                logger.debug(f"[UPLOAD] Complete: {filename} -> {target_path}")
             except Exception as e:
                 logger.warning(f"[UPLOAD] Failed for {filename}: {str(e)}")
         

@@ -408,7 +408,7 @@ class SandboxPresentationTool(SandboxToolsBase):
         """Save presentation metadata"""
         metadata["updated_at"] = datetime.now().isoformat()
         metadata_path = f"{presentation_path}/metadata.json"
-        await self.sandbox.fs.upload_file(json.dumps(metadata, indent=2).encode(), metadata_path)
+        await self.write_file(metadata_path, json.dumps(metadata, indent=2).encode())
 
     def _load_template_metadata(self, template_name: str) -> Dict:
         """Load metadata from a template on the backend filesystem"""
@@ -472,7 +472,7 @@ class SandboxPresentationTool(SandboxToolsBase):
                 try:
                     with open(source_file, 'rb') as f:
                         file_content = f.read()
-                    await self.sandbox.fs.upload_file(file_content, target_file)
+                    await self.write_file(target_file, file_content)
                     copied_files.append(rel_file_path)
                 except Exception as e:
                     # Log error but continue with other files
@@ -934,7 +934,7 @@ class SandboxPresentationTool(SandboxToolsBase):
             # Save slide file
             slide_filename = f"slide_{slide_number:02d}.html"
             slide_path = f"{presentation_path}/{slide_filename}"
-            await self.sandbox.fs.upload_file(slide_html.encode(), slide_path)
+            await self.write_file(slide_path, slide_html.encode())
             
             # Update metadata
             if "slides" not in metadata:
@@ -1455,7 +1455,7 @@ class SandboxPresentationTool(SandboxToolsBase):
                 
                 try:
                     file_content = await self.sandbox.fs.download_file(downloads_path)
-                    await self.sandbox.fs.upload_file(file_content, presentation_file_path)
+                    await self.write_file(presentation_file_path, file_content)
                 except Exception:
                     pass
                 

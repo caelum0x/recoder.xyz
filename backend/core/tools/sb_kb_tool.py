@@ -450,7 +450,7 @@ class SandboxKbTool(SandboxToolsBase):
                         logger.debug(f"[KB_SYNC] Directory create note: {dir_err}")
 
                 # Upload the file using SDK method
-                await self.sandbox.fs.upload_file(file_content, destination)
+                await self.write_file(destination, file_content)
                 logger.debug(f"[KB_SYNC] Upload call completed for: {destination}")
 
                 # Small delay to ensure filesystem sync

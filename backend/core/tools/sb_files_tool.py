@@ -198,9 +198,9 @@ Usage:
                 file_contents = json.dumps(file_contents, indent=4)
 
             # Write the file content
-            await self.sandbox.fs.upload_file(file_contents.encode(), full_path)
+            await self.write_file(full_path, file_contents.encode())
             await self.sandbox.fs.set_file_permissions(full_path, permissions)
-            
+
             message = f"File '{file_path}' created successfully."
             
             if file_path.lower().endswith('.html'):
@@ -279,8 +279,8 @@ Usage:
                 return self.fail_response(f"Multiple occurrences found in lines {lines}. Use replace_all=true or provide more context to make it unique")
 
             new_content = content.replace(old_str, new_str)
-            await self.sandbox.fs.upload_file(new_content.encode(), full_path)
-            
+            await self.write_file(full_path, new_content.encode())
+
             return ToolResult(success=True, output=json.dumps({
                 "message": f"Replacement successful.",
                 "file_path": file_path,
@@ -327,9 +327,9 @@ Usage:
             if not await self._file_exists(full_path):
                 return self.fail_response(f"File '{file_path}' does not exist. Use create_file to create a new file.")
 
-            await self.sandbox.fs.upload_file(file_contents.encode(), full_path)
+            await self.write_file(full_path, file_contents.encode())
             await self.sandbox.fs.set_file_permissions(full_path, permissions)
-            
+
             message = f"File '{file_path}' completely rewritten successfully."
             
             if file_path.lower().endswith('.html'):
@@ -578,8 +578,8 @@ Usage:
                     "updated_content": original_content
                 }))
 
-            await self.sandbox.fs.upload_file(new_content.encode(), full_path)
-            
+            await self.write_file(full_path, new_content.encode())
+
             return ToolResult(success=True, output=json.dumps({
                 "message": f"File '{target_file}' edited successfully.",
                 "file_path": target_file,
@@ -665,11 +665,11 @@ Usage:
 
                     # Ensure downloads directory exists
                     try:
-                        await self.sandbox.fs.upload_file(pdf_bytes, output_path)
+                        await self.write_file(output_path, pdf_bytes)
                     except Exception:
                         # Directory might not exist, create it
                         await self.sandbox.process.start(f"mkdir -p {downloads_path}")
-                        await self.sandbox.fs.upload_file(pdf_bytes, output_path)
+                        await self.write_file(output_path, pdf_bytes)
 
                     logger.info(f"[export_to_pdf] Success: {output_path}")
 
