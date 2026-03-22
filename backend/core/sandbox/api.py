@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 from enum import Enum
 
 import httpx
-from fastapi import FastAPI, UploadFile, File, HTTPException, APIRouter, Form, Depends, Request, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, UploadFile, File, HTTPException, APIRouter, Form, Depends, Request, WebSocket, WebSocketDisconnect, Query
 from fastapi.responses import Response
 from pydantic import BaseModel
 from daytona_sdk import AsyncSandbox, SessionExecuteRequest
@@ -2672,3 +2672,54 @@ async def trigger_pool_replenish(
     except Exception as e:
         logger.error(f"Error triggering pool replenish: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/sandboxes/{sandbox_id}/files/content")
+async def get_sandbox_file_content(
+    sandbox_id: str,
+    path: str = Query(..., description="File path in sandbox"),
+    request: Request = None,
+):
+    """Serve sandbox file content through the API. Used for presentation previews."""
+    import mimetypes
+    from pathlib import PurePosixPath
+
+    ALLOWED_EXTENSIONS = {'.html', '.json', '.css', '.js', '.ts', '.tsx', '.jsx',
+                          '.png', '.jpg', '.jpeg', '.svg', '.gif', '.webp',
+                          '.pdf', '.md', '.txt', '.xml', '.csv'}
+
+    # Auth
+    user_id = await verify_and_get_user_id_from_jwt(request)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+    # Path traversal protection
+    normalized = str(PurePosixPath(path))
+    if ".." in normalized:
+        raise HTTPException(status_code=400, detail="Invalid path")
+    if not normalized.startswith("/home/daytona"):
+        normalized = f"/home/daytona/{normalized.lstrip('/')}"
+
+    # Extension check
+    ext = PurePosixPath(normalized).suffix.lower()
+    if ext not in ALLOWED_EXTENSIONS:
+        raise HTTPException(status_code=400, detail=f"File type {ext} not allowed")
+
+    # Read file
+    content = await get_file_service().read_file(sandbox_id, normalized)
+    if content is None:
+        raise HTTPException(status_code=404, detail="File not found")
+
+    # MIME type
+    mime_type, _ = mimetypes.guess_type(normalized)
+    if mime_type is None:
+        mime_type = "application/octet-stream"
+
+    return Response(
+        content=content,
+        media_type=mime_type,
+        headers={
+            "Access-Control-Allow-Origin": "*",
+            "Cache-Control": "no-cache",
+        },
+    )
