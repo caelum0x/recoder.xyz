@@ -97,8 +97,8 @@ export function PresentationViewer({
   });
   
   // Use shared modal store for full screen viewer
-  const { isOpen, presentationName, sandboxUrl, initialSlide, openPresentation, closePresentation } = usePresentationViewerStore();
-  const viewerState = { isOpen, presentationName, sandboxUrl, initialSlide };
+  const { isOpen, presentationName, sandboxUrl, sandboxId: storeSandboxId, initialSlide, openPresentation, closePresentation } = usePresentationViewerStore();
+  const viewerState = { isOpen, presentationName, sandboxUrl, sandboxId: storeSandboxId, initialSlide };
 
   // Helper function to sanitize filename (matching backend logic)
   const sanitizeFilename = (name: string): string => {
@@ -917,6 +917,7 @@ export function PresentationViewer({
         onClose={closePresentation}
         presentationName={viewerState.presentationName}
         sandboxUrl={viewerState.sandboxUrl}
+        sandboxId={viewerState.sandboxId}
         initialSlide={viewerState.initialSlide}
       />
     </Card>
