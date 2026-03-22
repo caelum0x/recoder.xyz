@@ -43,9 +43,11 @@ class DaytonaFileService:
                 data_fields = {}
                 file_fields = {}
                 for i, (path, content) in enumerate(files):
-                    data_fields[f"files[{i}][path]"] = path
+                    # MUST use dot notation (files[0].path) — bracket notation returns 200
+                    # but files don't actually persist in the sandbox
+                    data_fields[f"files[{i}].path"] = path
                     fname = os.path.basename(path) or "file"
-                    file_fields[f"files[{i}][file]"] = (fname, io.BytesIO(content))
+                    file_fields[f"files[{i}].file"] = (fname, io.BytesIO(content))
 
                 async with httpx.AsyncClient(timeout=self.timeout) as client:
                     response = await client.post(
