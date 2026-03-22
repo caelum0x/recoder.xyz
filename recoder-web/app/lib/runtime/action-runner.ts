@@ -1202,7 +1202,7 @@ export class ActionRunner {
     const isNpmCommand = /npm|yarn|pnpm|bun/.test(normalizedContent);
 
     // 🔧 CRITICAL FIX: For restored chats, skip ALL install/dev commands
-    // useChatHistory handles file restoration, bun install, and dev server start
+    // useChatHistory handles file restoration, npm install, and dev server start
     if (this.#isRestoredChat && (isInstallCommand || isDevServer)) {
       logger.debug('⏭️ Skipping install/dev command - restored chat (handled by useChatHistory)');
       return;

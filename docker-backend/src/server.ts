@@ -3338,18 +3338,36 @@ app.get('/api/file/:projectId', authenticateRequest, verifyProjectOwnership, asy
         stream.on('end', resolve);
       });
 
-      // Parse Docker multiplexed stream
+      // Parse Docker multiplexed stream (with fallback for unexpected formats)
       const raw = Buffer.concat(chunks);
       content = '';
-      let i = 0;
-      while (i < raw.length) {
-        if (i + 8 <= raw.length) {
+      try {
+        let i = 0;
+        while (i < raw.length) {
+          if (i + 8 > raw.length) break;
+          const streamType = raw[i]; // 0=stdin, 1=stdout, 2=stderr
+          if (streamType > 2) {
+            // Not a valid multiplexed header — treat entire buffer as plain text
+            content = raw.toString('utf-8');
+            break;
+          }
           const size = raw.readUInt32BE(i + 4);
-          if (i + 8 + size <= raw.length) {
-            content += raw.slice(i + 8, i + 8 + size).toString();
-            i += 8 + size;
-          } else break;
-        } else break;
+          if (size > raw.length || i + 8 + size > raw.length) {
+            // Size exceeds buffer — likely not multiplexed, treat as plain text
+            content = raw.toString('utf-8');
+            break;
+          }
+          content += raw.slice(i + 8, i + 8 + size).toString('utf-8');
+          i += 8 + size;
+        }
+      } catch (parseErr) {
+        // Stream parsing failed entirely — fall back to raw text
+        content = raw.toString('utf-8');
+      }
+
+      // If demux produced nothing but raw buffer had data, use raw text
+      if (!content && raw.length > 0) {
+        content = raw.toString('utf-8');
       }
     }
 
@@ -3553,18 +3571,32 @@ app.get('/api/files/read', authenticateRequest, verifyProjectOwnership, async (r
         stream.on('end', resolve);
       });
 
-      // Parse Docker multiplexed stream
+      // Parse Docker multiplexed stream (with fallback for unexpected formats)
       const raw = Buffer.concat(chunks);
       content = '';
-      let i = 0;
-      while (i < raw.length) {
-        if (i + 8 <= raw.length) {
+      try {
+        let i = 0;
+        while (i < raw.length) {
+          if (i + 8 > raw.length) break;
+          const streamType = raw[i];
+          if (streamType > 2) {
+            content = raw.toString('utf-8');
+            break;
+          }
           const size = raw.readUInt32BE(i + 4);
-          if (i + 8 + size <= raw.length) {
-            content += raw.slice(i + 8, i + 8 + size).toString();
-            i += 8 + size;
-          } else break;
-        } else break;
+          if (size > raw.length || i + 8 + size > raw.length) {
+            content = raw.toString('utf-8');
+            break;
+          }
+          content += raw.slice(i + 8, i + 8 + size).toString('utf-8');
+          i += 8 + size;
+        }
+      } catch (parseErr) {
+        content = raw.toString('utf-8');
+      }
+
+      if (!content && raw.length > 0) {
+        content = raw.toString('utf-8');
       }
     }
 
