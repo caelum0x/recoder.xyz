@@ -44,7 +44,7 @@ export const createPipeline = async (data: {
 
 export const getPipelines = async (): Promise<Pipeline[]> => {
   const response = await backendApi.get<Pipeline[]>('/pipelines', {
-    showErrors: false,
+    showErrors: true,
   });
   if (response.error) throw new Error(response.error.message);
   return response.data!;
@@ -52,7 +52,7 @@ export const getPipelines = async (): Promise<Pipeline[]> => {
 
 export const getPipeline = async (id: string): Promise<Pipeline> => {
   const response = await backendApi.get<Pipeline>(`/pipelines/${id}`, {
-    showErrors: false,
+    showErrors: true,
   });
   if (response.error) throw new Error(response.error.message);
   return response.data!;
@@ -90,7 +90,7 @@ export const getPipelineRuns = async (
 ): Promise<PipelineRun[]> => {
   const response = await backendApi.get<PipelineRun[]>(
     `/pipelines/${id}/runs`,
-    { showErrors: false },
+    { showErrors: true },
   );
   if (response.error) throw new Error(response.error.message);
   return response.data!;

@@ -39,10 +39,19 @@
  */
 
 // ---------------------------------------------------------------------------
-// Re-export canonical schemas from @recoder/shared/a2a/schemas
+// Re-export canonical schemas (inlined from @recoder/shared/a2a/schemas)
 // ---------------------------------------------------------------------------
 
 export {
+  // -- shared types -----------------------------------------------------------
+  type RecoderAgentPlatform,
+  type RecoderPayload,
+  type RecoderTextPayload,
+  type RecoderJsonPayload,
+  type RecoderCommandPayload,
+  type RecoderArtifactPayload,
+  type A2AProtocolKind,
+
   // -- task-envelope ----------------------------------------------------------
   TASK_ENVELOPE_VERSION,
   TaskStateEnum,
@@ -96,7 +105,7 @@ export {
   type A2AErrorCode,
   type A2AErrorCodeMeta,
   type A2AError,
-} from '@recoder/shared/a2a/schemas';
+} from './schemas';
 
 // ---------------------------------------------------------------------------
 // SDK helpers: State mapping

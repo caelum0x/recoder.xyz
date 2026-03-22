@@ -54,7 +54,7 @@ export const getAgentActivity = async (
   const qs = params.toString();
   const response = await backendApi.get<AgentActivityResponse>(
     `/agents/${agentId}/activity${qs ? `?${qs}` : ''}`,
-    { showErrors: false }
+    { showErrors: true }
   );
   if (response.error) throw new Error(response.error.message);
   return response.data!;
@@ -65,7 +65,7 @@ export const getRecentActivity = async (
 ): Promise<AgentActivity[]> => {
   const response = await backendApi.get<AgentActivity[]>(
     `/agents/activity/recent?limit=${limit}`,
-    { showErrors: false }
+    { showErrors: true }
   );
   if (response.error) throw new Error(response.error.message);
   return response.data!;
@@ -76,7 +76,7 @@ export const getAgentActivitySummary = async (
 ): Promise<AgentActivitySummary> => {
   const response = await backendApi.get<AgentActivitySummary>(
     `/agents/${agentId}/activity/summary`,
-    { showErrors: false }
+    { showErrors: true }
   );
   if (response.error) throw new Error(response.error.message);
   return response.data!;

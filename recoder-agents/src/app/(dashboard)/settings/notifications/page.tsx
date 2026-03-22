@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { Bell, Mail, Smartphone, AppWindow } from 'lucide-react';
+import { Mail, Smartphone, AppWindow } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
@@ -14,6 +14,7 @@ import {
 } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { toast } from '@/lib/toast';
+import { backendApi } from '@/lib/api-client';
 
 const STORAGE_KEY = 'recoder-notification-preferences';
 
@@ -62,12 +63,66 @@ function loadPreferences(): NotificationPreferences {
   return defaultPreferences;
 }
 
+// Flatten nested preferences to API keys: email.agentRunCompleted -> email_agentRunCompleted
+function flattenPrefs(prefs: NotificationPreferences): Array<{ preference_key: string; preference_value: boolean; category: string }> {
+  const entries: Array<{ preference_key: string; preference_value: boolean; category: string }> = [];
+  for (const [group, values] of Object.entries(prefs)) {
+    for (const [key, value] of Object.entries(values as Record<string, boolean>)) {
+      entries.push({ preference_key: `${group}_${key}`, preference_value: value, category: 'notifications' });
+    }
+  }
+  return entries;
+}
+
+// Unflatten API keys back to nested structure
+function unflattenPrefs(apiRows: Array<{ preference_key: string; preference_value: any }>): Partial<NotificationPreferences> {
+  const result: Record<string, Record<string, boolean>> = {};
+  for (const row of apiRows) {
+    const underscoreIdx = row.preference_key.indexOf('_');
+    if (underscoreIdx === -1) continue;
+    const group = row.preference_key.slice(0, underscoreIdx);
+    const key = row.preference_key.slice(underscoreIdx + 1);
+    if (!result[group]) result[group] = {};
+    result[group][key] = Boolean(row.preference_value);
+  }
+  return result as Partial<NotificationPreferences>;
+}
+
+async function loadPreferencesFromApi(): Promise<NotificationPreferences> {
+  try {
+    const res = await backendApi.get<Array<{ preference_key: string; preference_value: any }>>(
+      '/preferences?category=notifications',
+      { showErrors: false },
+    );
+    if (res.success && Array.isArray(res.data) && res.data.length > 0) {
+      const partial = unflattenPrefs(res.data);
+      const prefs: NotificationPreferences = {
+        email: { ...defaultPreferences.email, ...(partial.email || {}) },
+        push: { ...defaultPreferences.push, ...(partial.push || {}) },
+        inApp: { ...defaultPreferences.inApp, ...(partial.inApp || {}) },
+      };
+      try { localStorage.setItem(STORAGE_KEY, JSON.stringify(prefs)); } catch {}
+      return prefs;
+    }
+  } catch {
+    // API unavailable — fall back to localStorage
+  }
+  return loadPreferences();
+}
+
+function persistPrefsToApi(prefs: NotificationPreferences): void {
+  backendApi.put('/preferences/batch', { preferences: flattenPrefs(prefs) }, { showErrors: false }).catch(() => {});
+}
+
 export default function NotificationsSettingsPage() {
   const [prefs, setPrefs] = useState<NotificationPreferences>(defaultPreferences);
   const [hasChanges, setHasChanges] = useState(false);
 
   useEffect(() => {
+    // Show cached prefs immediately
     setPrefs(loadPreferences());
+    // Then hydrate from API
+    loadPreferencesFromApi().then((loaded) => setPrefs(loaded));
   }, []);
 
   const updatePref = useCallback(
@@ -96,6 +151,7 @@ export default function NotificationsSettingsPage() {
     } catch {
       toast.warning('Failed to save notification preferences');
     }
+    persistPrefsToApi(prefs);
   };
 
   return (

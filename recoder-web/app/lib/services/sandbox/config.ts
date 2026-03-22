@@ -165,7 +165,7 @@ export class SandboxConfigBuilder {
         ? import.meta.env?.VITE_DOCKER_BACKEND_URL
         : undefined;
     this.addDockerProvider({
-      apiUrl: dockerUrl || 'http://localhost:3100',
+      apiUrl: dockerUrl || 'https://docker.recoder.xyz',
     });
 
     // Configure E2B from environment

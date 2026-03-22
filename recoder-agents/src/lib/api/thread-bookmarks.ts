@@ -74,7 +74,7 @@ export const createCollection = async (
 export const getCollections = async (): Promise<BookmarkCollection[]> => {
   const response = await backendApi.get<BookmarkCollection[]>(
     '/bookmarks/collections',
-    { showErrors: false }
+    { showErrors: true }
   );
   if (response.error) throw new Error(response.error.message);
   return response.data!;
@@ -128,7 +128,7 @@ export const getThreadBookmarks = async (
   const qs = params.toString();
   const response = await backendApi.get<BookmarkListResponse>(
     `/bookmarks/threads${qs ? `?${qs}` : ''}`,
-    { showErrors: false }
+    { showErrors: true }
   );
   if (response.error) throw new Error(response.error.message);
   return response.data!;

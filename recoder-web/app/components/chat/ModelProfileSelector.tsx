@@ -23,18 +23,18 @@ import { AVAILABLE_MODELS, type ModelMetadata } from '~/lib/stores/model-selecti
 
 const PROFILE_COLORS: Record<string, { active: string; hover: string; text: string }> = {
   green: {
-    active: 'bg-black border-green-500/40 text-white',
-    hover: 'hover:bg-black/80',
+    active: 'bg-recoder-elements-background-depth-3 border-green-500/40 text-recoder-elements-textPrimary',
+    hover: 'hover:bg-recoder-elements-background-depth-2',
     text: 'text-green-400',
   },
   blue: {
-    active: 'bg-black border-blue-500/40 text-white',
-    hover: 'hover:bg-black/80',
+    active: 'bg-recoder-elements-background-depth-3 border-blue-500/40 text-recoder-elements-textPrimary',
+    hover: 'hover:bg-recoder-elements-background-depth-2',
     text: 'text-blue-400',
   },
   purple: {
-    active: 'bg-black border-purple-500/40 text-white',
-    hover: 'hover:bg-black/80',
+    active: 'bg-recoder-elements-background-depth-3 border-purple-500/40 text-recoder-elements-textPrimary',
+    hover: 'hover:bg-recoder-elements-background-depth-2',
     text: 'text-purple-400',
   },
 };
@@ -107,7 +107,7 @@ export function ModelProfileSelector() {
   return (
     <div ref={dropdownRef} className="relative flex items-center">
       {/* Pill group */}
-      <div className="flex items-center rounded-lg border border-white/10 bg-black overflow-hidden">
+      <div className="flex items-center rounded-lg border border-recoder-elements-borderColor bg-recoder-elements-background-depth-1 overflow-hidden">
         {profileIds.map((id) => {
           const profile = profiles[id];
           const isActive = id === activeId;
@@ -119,8 +119,8 @@ export function ModelProfileSelector() {
               onClick={() => handleProfileClick(id)}
               className={`
                 relative flex items-center gap-1 px-2 py-1 text-xs font-medium transition-colors
-                ${isActive ? colors.active : `text-white/60 ${colors.hover}`}
-                ${id !== 'fast' ? 'border-l border-white/10' : ''}
+                ${isActive ? colors.active : `text-recoder-elements-textTertiary ${colors.hover}`}
+                ${id !== 'fast' ? 'border-l border-recoder-elements-borderColor' : ''}
               `}
               title={`${profile.label}: ${profile.description} (${profile.modelId})`}
             >
@@ -140,34 +140,34 @@ export function ModelProfileSelector() {
       {/* Customize dropdown */}
       {customizeOpen && (
         <div
-          className="absolute top-full left-0 mt-1 w-72 rounded-lg shadow-lg z-50 overflow-hidden bg-black border border-white/10"
+          className="absolute top-full left-0 mt-1 w-72 rounded-lg shadow-lg z-50 overflow-hidden bg-recoder-elements-background-depth-1 border border-recoder-elements-borderColor"
         >
           {/* Header */}
-          <div className="px-3 py-2 border-b border-white/10">
+          <div className="px-3 py-2 border-b border-recoder-elements-borderColor">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-medium text-white">
+              <span className="text-xs font-medium text-recoder-elements-textPrimary">
                 Customize {profiles[customizeOpen].label} Profile
               </span>
               <button
                 onClick={() => handleReset(customizeOpen)}
-                className="text-[10px] text-white/40 hover:text-white/70 transition-colors"
+                className="text-[10px] text-recoder-elements-textPrimary/40 hover:text-recoder-elements-textPrimary/70 transition-colors"
               >
                 Reset
               </button>
             </div>
-            <div className="text-[10px] text-white/40 mt-0.5">
+            <div className="text-[10px] text-recoder-elements-textPrimary/40 mt-0.5">
               Current: {profiles[customizeOpen].modelId}
             </div>
           </div>
 
           {/* Search */}
-          <div className="px-3 py-2 border-b border-white/10">
+          <div className="px-3 py-2 border-b border-recoder-elements-borderColor">
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search models..."
-              className="w-full bg-white/5 text-white text-xs rounded px-2 py-1.5 border border-white/10 outline-none focus:border-white/30 placeholder:text-white/30"
+              className="w-full bg-recoder-elements-background-depth-3 text-recoder-elements-textPrimary text-xs rounded px-2 py-1.5 border border-recoder-elements-borderColor outline-none focus:border-recoder-elements-borderColor/80 placeholder:text-recoder-elements-textPrimary/30"
               autoFocus
             />
           </div>
@@ -209,26 +209,31 @@ function ModelOption({
   return (
     <button
       onClick={onSelect}
-      className={`w-full flex items-center gap-2 px-3 py-2 text-left transition-colors hover:bg-white/10 ${
-        isSelected ? 'bg-white/10' : ''
+      className={`w-full flex items-center gap-2 px-3 py-2 text-left transition-colors hover:bg-recoder-elements-background-depth-3 ${
+        isSelected ? 'bg-recoder-elements-background-depth-3' : ''
       }`}
     >
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-1.5">
-          <span className="text-xs font-medium text-white truncate">
+          <span className="text-xs font-medium text-recoder-elements-textPrimary truncate">
             {model.name}
           </span>
+          {model.isFree && (
+            <span className="text-[10px] px-1.5 py-0.5 bg-green-500/20 text-green-400 rounded-full font-medium ml-1">
+              FREE
+            </span>
+          )}
           {model.new && (
             <span className="text-[9px] px-1 py-0 rounded bg-blue-500/20 text-blue-400 font-medium">
               NEW
             </span>
           )}
         </div>
-        <div className="text-[10px] text-white/40 truncate mt-0.5">
+        <div className="text-[10px] text-recoder-elements-textPrimary/40 truncate mt-0.5">
           {model.id}
         </div>
       </div>
-      <span className={`text-[10px] ${speedColors[model.speed] || 'text-white/40'}`}>
+      <span className={`text-[10px] ${speedColors[model.speed] || 'text-recoder-elements-textPrimary/40'}`}>
         {model.speed}
       </span>
       {isSelected && <div className="i-ph:check text-green-400 text-sm flex-shrink-0" />}

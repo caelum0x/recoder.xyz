@@ -48,7 +48,7 @@ export const moveFolder = async (
   const response = await backendApi.post<MoveFolderResponse>(
     `/knowledge-base/folders/${folderId}/move`,
     { parent_folder_id: parentFolderId },
-    { showErrors: false }
+    { showErrors: true }
   );
   if (response.error) throw new Error(response.error.message || 'Failed to move folder');
   return response.data!;
@@ -60,7 +60,7 @@ export const duplicateFolder = async (
   const response = await backendApi.post<DuplicateFolderResponse>(
     `/knowledge-base/folders/${folderId}/duplicate`,
     {},
-    { showErrors: false }
+    { showErrors: true }
   );
   if (response.error) throw new Error(response.error.message || 'Failed to duplicate folder');
   return response.data!;
@@ -73,7 +73,7 @@ export const bulkMoveEntries = async (
   const response = await backendApi.post<BulkMoveResponse>(
     `/knowledge-base/entries/bulk-move`,
     { entry_ids: entryIds, target_folder_id: targetFolderId },
-    { showErrors: false }
+    { showErrors: true }
   );
   if (response.error) throw new Error(response.error.message || 'Failed to move entries');
   return response.data!;
@@ -85,7 +85,7 @@ export const bulkDeleteEntries = async (
   const response = await backendApi.post<BulkDeleteResponse>(
     `/knowledge-base/entries/bulk-delete`,
     { entry_ids: entryIds },
-    { showErrors: false }
+    { showErrors: true }
   );
   if (response.error) throw new Error(response.error.message || 'Failed to delete entries');
   return response.data!;
@@ -94,7 +94,7 @@ export const bulkDeleteEntries = async (
 export const getKbStats = async (): Promise<KbStats> => {
   const response = await backendApi.get<KbStats>(
     `/knowledge-base/stats`,
-    { showErrors: false }
+    { showErrors: true }
   );
   if (response.error) throw new Error(response.error.message || 'Failed to fetch KB stats');
   return response.data!;

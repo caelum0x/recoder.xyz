@@ -3,7 +3,7 @@
  * Real Neon/Postgres implementation
  */
 
-import { neon } from '@neondatabase/serverless';
+import { createSql } from './pg-pool';
 
 export interface Subscription {
   id: string;
@@ -41,10 +41,10 @@ export interface UsageLog {
 }
 
 export class SubscriptionDB {
-  private sql: ReturnType<typeof neon>;
+  private sql: ReturnType<typeof createSql>;
 
   constructor(databaseUrl: string) {
-    this.sql = neon(databaseUrl);
+    this.sql = createSql(databaseUrl);
   }
 
   /**

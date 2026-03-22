@@ -1,6 +1,6 @@
 import { json, type LoaderFunctionArgs } from '@remix-run/cloudflare';
 import { verifySession } from '~/lib/auth/session.server';
-import { neon } from '@neondatabase/serverless';
+import { createSql } from '~/lib/.server/db/pg-pool';
 
 export async function loader({ request, context }: LoaderFunctionArgs) {
   try {
@@ -13,7 +13,7 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
       }, { status: 500 });
     }
 
-    const sql = neon(env.DATABASE_URL);
+    const sql = createSql(env.DATABASE_URL);
     const session = await verifySession(request);
     
     if (!session) {

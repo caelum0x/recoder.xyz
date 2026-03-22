@@ -8,14 +8,12 @@ RUN apt-get update && apt-get install -y \
     python3 make g++ curl \
     && rm -rf /var/lib/apt/lists/*
 
-RUN corepack enable pnpm && corepack prepare pnpm@9.4.0 --activate
+RUN corepack enable pnpm && corepack prepare pnpm@10.30.3 --activate
 
 COPY pnpm-lock.yaml pnpm-workspace.yaml package.json .npmrc* ./
 
-RUN echo 'onlyBuiltDependencies[]=esbuild' >> .npmrc && \
-    echo 'onlyBuiltDependencies[]=@swc/core' >> .npmrc && \
-    echo 'onlyBuiltDependencies[]=node-pty' >> .npmrc && \
-    echo 'onlyBuiltDependencies[]=better-sqlite3' >> .npmrc
+# Allow all native dependencies to build (pnpm 10 requires explicit opt-in)
+RUN echo 'onlyBuiltDependencies[]=' >> .npmrc || true
 
 COPY docker-backend/package*.json ./docker-backend/
 COPY shared/package.json ./shared/
@@ -52,7 +50,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     docker.io curl \
     && rm -rf /var/lib/apt/lists/*
 
-RUN corepack enable pnpm && corepack prepare pnpm@9.4.0 --activate
+RUN corepack enable pnpm && corepack prepare pnpm@10.30.3 --activate
 
 # Copy only production artifacts from builder
 COPY --from=builder /app/package.json /app/pnpm-workspace.yaml /app/.npmrc* ./
@@ -63,11 +61,13 @@ COPY --from=builder /app/packages ./packages
 
 WORKDIR /app/docker-backend
 
-# Run as non-root
+# Run as non-root with docker group access
 RUN addgroup --system --gid 1001 backend && \
     adduser --system --uid 1001 --ingroup backend --home /home/backend backend && \
     mkdir -p /home/backend/.cache/node/corepack && \
-    chown -R backend:backend /app /home/backend
+    chown -R backend:backend /app /home/backend && \
+    groupadd -g 119 hostdocker 2>/dev/null || true && \
+    usermod -aG hostdocker backend 2>/dev/null || true
 USER backend
 
 EXPOSE 3100

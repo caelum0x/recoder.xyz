@@ -51,12 +51,12 @@ const isPaidTier = (tierKey: string | undefined): boolean => {
 
 const getDefaultModel = (accessibleModels: ModelOption[]): string => {
   // Pick the first accessible model (sorted by priority)
-  // recoder/basic should be first for free users since power is not accessible
-  const basicModel = accessibleModels.find(m => m.id === 'recoder/basic');
-  if (basicModel) return basicModel.id;
-
+  // recoder/power is the default for all users (free and paid)
   const powerModel = accessibleModels.find(m => m.id === 'recoder/power');
   if (powerModel) return powerModel.id;
+
+  const basicModel = accessibleModels.find(m => m.id === 'recoder/basic');
+  if (basicModel) return basicModel.id;
 
   // Fallback: pick from accessible models sorted by priority
   if (accessibleModels.length > 0) {
@@ -149,11 +149,12 @@ export const useModelSelection = () => {
 
   const handleModelChange = useCallback((modelId: string) => {
     const model = accessibleModels.find(m => m.id === modelId);
-    if (model) {
-      
+    // In BYOK mode (tier_key === 'byok'), allow any model selection
+    const isByok = accountState?.subscription?.tier_key === 'byok';
+    if (model || isByok) {
       setSelectedModel(modelId);
     }
-  }, [accessibleModels, setSelectedModel]);
+  }, [accessibleModels, accountState?.subscription?.tier_key, setSelectedModel]);
 
   // subscriptionStatus for UI purposes - based on tier, not status
   const subscriptionStatus = hasPaidSubscription ? 'active' as const : 'no_subscription' as const;

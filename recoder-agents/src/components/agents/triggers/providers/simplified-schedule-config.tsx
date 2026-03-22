@@ -1050,7 +1050,7 @@ export const SimplifiedScheduleConfig: React.FC<SimplifiedScheduleConfigProps> =
                       <p className="text-sm text-muted-foreground">Choose which model to use for this scheduled task</p>
                     </div>
                     <AgentModelSelector
-                      value={config.model || 'recoder/basic'}
+                      value={config.model || 'recoder/power'}
                       onChange={(model) => onChange({ ...config, model })}
                     />
                   </div>

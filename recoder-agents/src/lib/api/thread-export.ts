@@ -26,7 +26,7 @@ export const exportThread = async (
       include_tool_calls: options.include_tool_calls ?? false,
       include_metadata: options.include_metadata ?? false,
     },
-    { showErrors: false }
+    { showErrors: true }
   );
   if (response.error) throw new Error(response.error.message || 'Failed to export thread');
   return response.data!;

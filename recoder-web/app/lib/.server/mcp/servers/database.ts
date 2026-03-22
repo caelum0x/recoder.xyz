@@ -4,7 +4,7 @@
  */
 
 import type { MCPServer, MCPTool, QueryResult } from '../types';
-import { neon } from '@neondatabase/serverless';
+import { createSql } from '~/lib/.server/db/pg-pool';
 
 export class DatabaseMCPServer {
   private readonly serverId = 'database';
@@ -221,7 +221,7 @@ export class DatabaseMCPServer {
     const startTime = Date.now();
 
     try {
-      const db = neon(this.connectionString);
+      const db = createSql(this.connectionString);
 
       // Execute query
       // Note: neon accepts raw SQL strings despite the type signature

@@ -82,7 +82,7 @@ export async function exportAgent(
 
   const response = await backendApi.get<AgentExportConfig>(
     `/agents/${agentId}/export${qs ? `?${qs}` : ''}`,
-    { showErrors: false }
+    { showErrors: true }
   );
   if (response.error) throw new Error(response.error.message);
   return response.data!;
@@ -105,7 +105,7 @@ export async function downloadAgentExport(
   const response = await backendApi.post<any>(
     `/agents/${agentId}/export/download${qs ? `?${qs}` : ''}`,
     undefined,
-    { showErrors: false }
+    { showErrors: true }
   );
   if (response.error) throw new Error(response.error.message);
 
@@ -122,7 +122,7 @@ export async function importAgent(
   const response = await backendApi.post<AgentImportResult>(
     '/agents/import',
     { config, name_override: nameOverride },
-    { showErrors: false }
+    { showErrors: true }
   );
   if (response.error) throw new Error(response.error.message);
   return response.data!;

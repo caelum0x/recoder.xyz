@@ -63,7 +63,7 @@ export const analyzeSentiment = async (threadId: string): Promise<AnalyzeResult>
 export const getThreadSentiment = async (threadId: string): Promise<SentimentScore[]> => {
   const response = await backendApi.get<SentimentScore[]>(
     `/threads/${threadId}/sentiment`,
-    { showErrors: false, cache: 'no-store' }
+    { showErrors: true, cache: 'no-store' }
   );
 
   if (response.error) {
@@ -76,7 +76,7 @@ export const getThreadSentiment = async (threadId: string): Promise<SentimentSco
 export const getSentimentTrend = async (threadId: string): Promise<SentimentTrendPoint[]> => {
   const response = await backendApi.get<SentimentTrendPoint[]>(
     `/threads/${threadId}/sentiment/trend`,
-    { showErrors: false, cache: 'no-store' }
+    { showErrors: true, cache: 'no-store' }
   );
 
   if (response.error) {
@@ -89,7 +89,7 @@ export const getSentimentTrend = async (threadId: string): Promise<SentimentTren
 export const getSentimentOverview = async (): Promise<SentimentOverview> => {
   const response = await backendApi.get<SentimentOverview>(
     '/sentiment/overview',
-    { showErrors: false, cache: 'no-store' }
+    { showErrors: true, cache: 'no-store' }
   );
 
   if (response.error) {

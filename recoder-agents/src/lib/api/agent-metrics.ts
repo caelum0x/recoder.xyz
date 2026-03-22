@@ -42,7 +42,7 @@ export async function getMetricsOverview(agentId: string): Promise<MetricsOvervi
   try {
     const response = await backendApi.get<MetricsOverview>(
       `/agents/${agentId}/metrics/overview`,
-      { showErrors: false },
+      { showErrors: true },
     );
     if (response.error) {
       throw new Error(`Error fetching metrics overview: ${response.error.message}`);
@@ -58,7 +58,7 @@ export async function getToolMetrics(agentId: string): Promise<ToolMetrics> {
   try {
     const response = await backendApi.get<ToolMetrics>(
       `/agents/${agentId}/metrics/tools`,
-      { showErrors: false },
+      { showErrors: true },
     );
     if (response.error) {
       throw new Error(`Error fetching tool metrics: ${response.error.message}`);
@@ -74,7 +74,7 @@ export async function getCostBreakdown(agentId: string): Promise<CostBreakdown> 
   try {
     const response = await backendApi.get<CostBreakdown>(
       `/agents/${agentId}/metrics/cost-breakdown`,
-      { showErrors: false },
+      { showErrors: true },
     );
     if (response.error) {
       throw new Error(`Error fetching cost breakdown: ${response.error.message}`);

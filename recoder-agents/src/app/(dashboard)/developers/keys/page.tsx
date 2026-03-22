@@ -91,6 +91,15 @@ const ENDPOINT_CATEGORIES = [
 ];
 
 // ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+function maskKey(key: string) {
+  if (key.length <= 8) return key;
+  return `${key.slice(0, 6)}${'*'.repeat(Math.min(key.length - 10, 20))}${key.slice(-4)}`;
+}
+
+// ---------------------------------------------------------------------------
 // Main component
 // ---------------------------------------------------------------------------
 
@@ -106,7 +115,7 @@ export default function ApiKeysPage() {
   const { data: keys, isLoading } = useQuery({
     queryKey: ['api-keys'],
     queryFn: async () => {
-      const res = await apiKeysApi.list({ showErrors: false, cache: 'no-store' });
+      const res = await apiKeysApi.list({ showErrors: false });
       if (res.error) throw new Error(res.error.message);
       return res.data!;
     },
@@ -144,11 +153,6 @@ export default function ApiKeysPage() {
       setTimeout(() => setCopiedKeyId(null), 2000);
     });
   }, []);
-
-  const maskKey = (key: string) => {
-    if (key.length <= 8) return key;
-    return `${key.slice(0, 6)}${'*'.repeat(Math.min(key.length - 10, 20))}${key.slice(-4)}`;
-  };
 
   return (
     <TooltipProvider>

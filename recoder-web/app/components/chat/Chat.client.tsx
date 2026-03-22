@@ -28,7 +28,6 @@ import { createScopedLogger, renderLogger } from '~/utils/logger';
 import { showSmartError } from '~/lib/errors/toast-error';
 import { projectContextCache } from '~/lib/services/project-context-cache';
 import { BaseChat } from './BaseChat';
-import { QuickActions } from './QuickActions';
 import { CloneUrlModal } from './CloneUrlModal';
 import { commandPaletteOpen } from '~/lib/stores/command-palette';
 
@@ -123,7 +122,6 @@ export const ChatImpl = memo(({ chatId, projectId, projectName, projectFramework
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const [chatStarted, setChatStarted] = useState(initialMessages.length > 0);
-  const [showQuickActions, setShowQuickActions] = useState(false);
   const [showShortcutsDialog, setShowShortcutsDialog] = useState(false);
   const [showCloneModal, setShowCloneModal] = useState(false);
   const [showGitHubModal, setShowGitHubModal] = useState(false);
@@ -182,9 +180,9 @@ export const ChatImpl = memo(({ chatId, projectId, projectName, projectFramework
   });
   const [selectedModel, setSelectedModel] = useState(() => {
     if (typeof window !== 'undefined') {
-      return localStorage.getItem('selectedModel') || 'x-ai/grok-code-fast-1';
+      return localStorage.getItem('selectedModel') || 'openai/gpt-4o-mini';
     }
-    return 'x-ai/grok-code-fast-1';
+    return 'openai/gpt-4o-mini';
   });
 
   // When the active profile's model changes, sync to component state.
@@ -471,14 +469,6 @@ export const ChatImpl = memo(({ chatId, projectId, projectName, projectFramework
       },
     },
     {
-      ...COMMON_SHORTCUTS.QUICK_ACTIONS,
-      action: () => setShowQuickActions(!showQuickActions),
-    },
-    {
-      ...COMMON_SHORTCUTS.QUICK_ACTIONS_CTRL,
-      action: () => setShowQuickActions(!showQuickActions),
-    },
-    {
       ...COMMON_SHORTCUTS.CLEAR_CHAT,
       action: () => {
         if (confirm('Clear chat history?')) {
@@ -507,8 +497,6 @@ export const ChatImpl = memo(({ chatId, projectId, projectName, projectFramework
       action: () => {
         if (isLoading) {
           abort();
-        } else if (showQuickActions) {
-          setShowQuickActions(false);
         } else if (showShortcutsDialog) {
           setShowShortcutsDialog(false);
         }
@@ -1043,15 +1031,7 @@ export const ChatImpl = memo(({ chatId, projectId, projectName, projectFramework
       {/* Save Indicator */}
       <SaveIndicator isSaving={isSaving} lastSaved={lastSaved} />
 
-      <QuickActions
-        onSelectAction={(prompt) => sendMessage({} as React.UIEvent, prompt)}
-        disabled={isLoading}
-        open={showQuickActions}
-        onOpenChange={setShowQuickActions}
-        onCloneWebsite={() => setShowCloneModal(true)}
-        onImportGitHub={() => setShowGitHubModal(true)}
-        onDeploy={() => setShowDeployModal(true)}
-      />
+      {/* QuickActions FAB removed — cluttered the UI */}
 
       {/* Clone Website Modal */}
       <CloneUrlModal

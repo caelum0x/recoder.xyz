@@ -82,7 +82,7 @@ export const createAnomalyConfig = async (
 
 export const getAnomalyConfigs = async (): Promise<AnomalyDetectionConfig[]> => {
   const response = await backendApi.get<AnomalyDetectionConfig[]>('/anomaly/configs', {
-    showErrors: false,
+    showErrors: true,
   });
   if (response.error) throw new Error(response.error.message);
   return response.data ?? [];
@@ -131,7 +131,7 @@ export const getDetectedAnomalies = async (
   const qs = params.toString();
   const response = await backendApi.get<DetectedAnomaly[]>(
     `/anomaly/detected${qs ? `?${qs}` : ''}`,
-    { showErrors: false }
+    { showErrors: true }
   );
   if (response.error) throw new Error(response.error.message);
   return response.data ?? [];
@@ -151,7 +151,7 @@ export const updateDetectedAnomalyStatus = async (
 
 export const getAnomalyDetectionStats = async (): Promise<AnomalyDetectionStats> => {
   const response = await backendApi.get<AnomalyDetectionStats>('/anomaly/stats', {
-    showErrors: false,
+    showErrors: true,
   });
   if (response.error) throw new Error(response.error.message);
   return response.data!;

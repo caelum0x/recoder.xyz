@@ -216,9 +216,24 @@ function friendlyPreviewPage(projectId: string, message: string, options: { show
 </html>`;
 }
 
+// Resolve the host for user project containers.
+// When docker-backend runs inside a Docker container, user project containers bind
+// their ports to the HOST via docker-proxy (e.g. 0.0.0.0:10001 on the host).
+// From inside the container, 127.0.0.1 is the container loopback — NOT the host.
+// We must use host.docker.internal to reach the host's docker-proxy port bindings.
+// Fall back to 127.0.0.1 for local/non-containerised development.
+const PREVIEW_TARGET_HOST = (() => {
+  const h = process.env.PREVIEW_TARGET_HOST;
+  if (h) return h;
+  // Auto-detect: if host.docker.internal is resolvable (Docker environment), use it
+  // We check at module load time by testing whether we're containerised
+  const isDocker = require('fs').existsSync('/.dockerenv');
+  return isDocker ? 'host.docker.internal' : '127.0.0.1';
+})();
+
 async function checkPort(port: number): Promise<boolean> {
   return new Promise((resolve) => {
-    const req = http.get(`http://127.0.0.1:${port}`, { timeout: 500 }, (res) => {
+    const req = http.get(`http://${PREVIEW_TARGET_HOST}:${port}`, { timeout: 500 }, (res) => {
       resolve(res.statusCode !== undefined);
     });
     req.on('error', () => resolve(false));
@@ -335,22 +350,30 @@ export function setupPreviewProxy(app: Express, containers: Map<string, { id: st
       entry.lastActive = Date.now();
     }
 
+    // Daytona preview: if container has a Daytona preview URL, redirect to it
+    // This MUST be checked BEFORE trying local ports (Daytona sandboxes are remote)
+    const daytonaUrl = (entry as any).daytonaPreviewUrl;
+    if (daytonaUrl) {
+      console.log(`[Preview] Daytona preview redirect for ${projectId}: ${daytonaUrl}`);
+      return res.redirect(daytonaUrl);
+    }
+
     // Check ports in order: Vite (5173), Next.js (3000), Expo (8081), Expo legacy (19006), Other (8080)
     const basePorts = [entry.port + 1, entry.port, entry.port + 4, entry.port + 5, entry.port + 2];
     let targetPort = 0;
 
-    console.log(`🔍 Checking ports for ${projectId}: ${basePorts.join(', ')}`);
+    console.log(`Checking ports for ${projectId}: ${basePorts.join(', ')}`);
 
     for (const port of basePorts) {
       if (await checkPort(port)) {
         targetPort = port;
-        console.log(`✅ Found dev server on port ${port}`);
+        console.log(`Found dev server on port ${port}`);
         break;
       }
     }
 
     if (!targetPort) {
-      console.log(`❌ No dev server found on any port for ${projectId}`);
+      console.log(`No dev server found on any port for ${projectId}`);
 
       // Get error info from dev server manager
       const errorInfo = devServerManager.getErrorInfo(projectId);
@@ -363,10 +386,10 @@ export function setupPreviewProxy(app: Express, containers: Map<string, { id: st
         try {
           await ensureDependencies(entry.id, projectId);
           const framework = await detectFramework(entry.id);
-          console.log(`🚀 [Preview] Auto-starting dev server for ${projectId} (${framework})`);
+          console.log(`[Preview] Auto-starting dev server for ${projectId} (${framework})`);
           await devServerManager.start(entry.id, projectId, framework, basePorts);
         } catch (err) {
-          console.warn(`⚠️ [Preview] Auto-start failed for ${projectId}:`, err);
+          console.warn(`[Preview] Auto-start failed for ${projectId}:`, err);
         }
       }
 
@@ -399,9 +422,9 @@ export function setupPreviewProxy(app: Express, containers: Map<string, { id: st
     let proxy = proxyCache.get(cacheKey);
 
     if (!proxy) {
-      console.log(`📦 Creating new proxy for ${projectId} targeting port ${targetPort}`);
+      console.log(`📦 Creating new proxy for ${projectId} targeting port ${targetPort} via ${PREVIEW_TARGET_HOST}`);
       proxy = createProxyMiddleware({
-        target: `http://127.0.0.1:${targetPort}`,
+        target: `http://${PREVIEW_TARGET_HOST}:${targetPort}`,
         changeOrigin: true,
         pathRewrite: { [`^/preview/${projectId}`]: '' },
         ws: true,
@@ -569,6 +592,11 @@ export function setupPreviewProxy(app: Express, containers: Map<string, { id: st
     if (!entry) {
       entry = await recoverContainerFromDocker(req.params.projectId, containers);
     }
+    // For Daytona sandboxes, return the Daytona preview URL directly
+    const daytonaUrl = (entry as any)?.daytonaPreviewUrl;
+    if (daytonaUrl) {
+      return res.json({ url: daytonaUrl, port: entry?.port || 3000, daytona: true });
+    }
     const port = entry?.port || 0;
     const baseUrl = process.env.PUBLIC_URL || `https://web.recoder.xyz`;
     res.json({ url: `${baseUrl}/preview/${req.params.projectId}`, port });
@@ -582,6 +610,35 @@ export function setupPreviewProxy(app: Express, containers: Map<string, { id: st
     }
     if (!entry) {
       return res.status(404).json({ error: 'Container not found' });
+    }
+
+    // For Daytona sandboxes, check if the preview URL is accessible via HTTP HEAD
+    const daytonaUrl = (entry as any)?.daytonaPreviewUrl;
+    if (daytonaUrl) {
+      try {
+        const ctrl = new AbortController();
+        const to = setTimeout(() => ctrl.abort(), 3000);
+        // preview URLs use a self-signed wildcard cert — bypass TLS verification for internal health checks
+        const prevRejectUnauthorized = process.env.NODE_TLS_REJECT_UNAUTHORIZED;
+        process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
+        const resp = await fetch(daytonaUrl, { method: 'HEAD', signal: ctrl.signal }).catch(() => null);
+        process.env.NODE_TLS_REJECT_UNAUTHORIZED = prevRejectUnauthorized ?? '1';
+        clearTimeout(to);
+        const responding = resp !== null && resp.status < 500;
+        return res.json({
+          projectId: req.params.projectId,
+          daytona: true,
+          previewUrl: daytonaUrl,
+          ports: [{ port: entry.port || 3000, responding, type: 'Daytona preview' }],
+        });
+      } catch (_e) {
+        return res.json({
+          projectId: req.params.projectId,
+          daytona: true,
+          previewUrl: daytonaUrl,
+          ports: [{ port: entry.port || 3000, responding: false, type: 'Daytona preview' }],
+        });
+      }
     }
 
     const basePorts = [entry.port + 1, entry.port, entry.port + 4, entry.port + 5, entry.port + 2];

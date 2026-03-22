@@ -6,7 +6,7 @@ import {
   Archive,
   Download,
   Tag,
-  TagX,
+  XCircle,
   Loader2,
   CheckCircle2,
   AlertTriangle,
@@ -63,7 +63,7 @@ const ACTION_META: Record<OpAction, { label: string; icon: React.ReactNode; vari
   archive: { label: 'Archive', icon: <Archive className="h-3.5 w-3.5" />, variant: 'outline' },
   export: { label: 'Export', icon: <Download className="h-3.5 w-3.5" />, variant: 'outline' },
   tag_assign: { label: 'Assign Tag', icon: <Tag className="h-3.5 w-3.5" />, variant: 'outline' },
-  tag_remove: { label: 'Remove Tag', icon: <TagX className="h-3.5 w-3.5" />, variant: 'outline' },
+  tag_remove: { label: 'Remove Tag', icon: <XCircle className="h-3.5 w-3.5" />, variant: 'outline' },
 };
 
 // ============================================================================

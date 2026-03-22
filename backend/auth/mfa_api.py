@@ -165,7 +165,7 @@ async def _get_user_factors(engine, user_id: str) -> list[dict]:
 async def _get_user_created_at(engine, user_id: str) -> Optional[str]:
     async with engine.connect() as conn:
         row = await conn.execute(
-            text('SELECT "createdAt" FROM "user" WHERE "id" = :uid'),
+            text('SELECT "createdAt" FROM "users" WHERE "id" = :uid'),
             {"uid": user_id},
         )
         result = row.fetchone()

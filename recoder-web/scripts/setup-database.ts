@@ -8,7 +8,7 @@
  *   npx tsx scripts/setup-database.ts
  */
 
-import { neon } from '@neondatabase/serverless';
+import { createSql } from '../app/lib/.server/db/pg-pool';
 import { readFileSync } from 'fs';
 import { join } from 'path';
 
@@ -30,7 +30,7 @@ async function setupDatabase() {
   console.log(`   Host: ${new URL(databaseUrl).host}`);
   console.log();
 
-  const sql = neon(databaseUrl);
+  const sql = createSql(databaseUrl);
 
   try {
     // Test connection

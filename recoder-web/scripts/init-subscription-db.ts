@@ -4,7 +4,7 @@
  * Creates tables for subscriptions, payments, usage tracking
  */
 
-import { neon } from '@neondatabase/serverless';
+import { createSql } from '../app/lib/.server/db/pg-pool';
 import { readFileSync } from 'fs';
 import { join } from 'path';
 
@@ -21,7 +21,7 @@ async function initDatabase() {
   console.log('🚀 Initializing subscription database...\n');
 
   try {
-    const sql = neon(databaseUrl);
+    const sql = createSql(databaseUrl);
 
     // Read and execute schema
     const schemaPath = join(process.cwd(), 'app/lib/.server/db/schema.sql');

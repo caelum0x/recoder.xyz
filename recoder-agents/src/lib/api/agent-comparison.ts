@@ -74,7 +74,7 @@ export interface LiveComparisonResponse {
 export const compareAgents = async (agentIds: string[]): Promise<AgentComparisonData[]> => {
   const response = await backendApi.get<AgentComparisonData[]>(
     `/agents/compare?agent_ids=${agentIds.join(',')}`,
-    { showErrors: false }
+    { showErrors: true }
   );
   if (response.error) throw new Error(response.error.message);
   return response.data!;
@@ -84,12 +84,19 @@ export const getAgentLeaderboard = async (
   metric: string = 'runs',
   limit: number = 10
 ): Promise<LeaderboardEntry[]> => {
-  const response = await backendApi.get<LeaderboardEntry[]>(
-    `/agents/leaderboard?metric=${metric}&limit=${limit}`,
-    { showErrors: false }
-  );
-  if (response.error) throw new Error(response.error.message);
-  return response.data!;
+  try {
+    const response = await backendApi.get<LeaderboardEntry[]>(
+      `/agents/leaderboard?metric=${metric}&limit=${limit}`,
+      { showErrors: false }
+    );
+    if (response.error) {
+      console.warn('Leaderboard unavailable:', response.error.message);
+      return [];
+    }
+    return response.data ?? [];
+  } catch {
+    return [];
+  }
 };
 
 // ============================================================================
@@ -116,7 +123,7 @@ export async function createComparison(
 export async function listSavedComparisons(): Promise<SavedComparison[]> {
   const response = await backendApi.get<SavedComparison[]>(
     '/agents/comparisons',
-    { showErrors: false }
+    { showErrors: true }
   );
 
   if (response.error) {
@@ -130,7 +137,7 @@ export async function listSavedComparisons(): Promise<SavedComparison[]> {
 export async function getComparison(comparisonId: string): Promise<SavedComparison> {
   const response = await backendApi.get<SavedComparison>(
     `/agents/comparisons/${comparisonId}`,
-    { showErrors: false, cache: 'no-store' }
+    { showErrors: true, cache: 'no-store' }
   );
 
   if (response.error) {
@@ -164,7 +171,7 @@ export async function liveCompare(
   const response = await backendApi.post<LiveComparisonResponse>(
     '/agents/compare/live',
     { agent_ids: agentIds, period },
-    { showErrors: false }
+    { showErrors: true }
   );
 
   if (response.error) {

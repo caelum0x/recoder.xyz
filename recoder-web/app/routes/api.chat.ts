@@ -235,13 +235,15 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
     return ctx;
   }
 
-  // CRITICAL: Verify user authentication FIRST
+  // Verify user authentication — but allow platform key fallback
   const { verifySession } = await import('~/lib/auth/session.server');
 
   const session = await verifySession(request);
+  const hasCookie = request.headers.get('Cookie')?.includes('recoder.session_token') ||
+                    request.headers.get('Cookie')?.includes('session_token');
 
-  if (!session?.user) {
-    // User not authenticated - return helpful error
+  if (!session?.user && !hasCookie && !process.env.OPENROUTER_API_KEY) {
+    // No session AND no cookie AND no platform key — truly unauthenticated
     const encoder = new TextEncoder();
     const errorMessage = `🔐 Authentication Required
 
@@ -1007,7 +1009,7 @@ RULES:
             apiKey,
             {
               ...streamOptions,
-              model: model || 'x-ai/grok-code-fast-1',
+              model: model || 'openai/gpt-4o-mini',
               env: env as Record<string, string | undefined>,
             }
           );

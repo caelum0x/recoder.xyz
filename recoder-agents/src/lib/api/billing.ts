@@ -346,16 +346,67 @@ export const billingApi = {
    * Get unified account state - the single source of truth for all billing data.
    * This replaces getSubscription, getCreditBalance, and getAvailableModels.
    */
-  async getAccountState(skipCache = false): Promise<AccountState> {
-    const params = skipCache ? '?skip_cache=true' : '';
-    const response = await backendApi.get<unknown>(`/billing/account-state${params}`, {
-      showErrors: false,
-    });
-    if (response.error && response.error.status !== 401) {
-      throw response.error;
-    }
-    if (response.error) {
-      // Return default state for unauthenticated users
+  async getAccountState(_skipCache = false): Promise<AccountState> {
+    // Platform is BYOK — no subscription system. Return full access for all users.
+    return {
+      credits: {
+        total: 999999,
+        daily: 999999,
+        monthly: 999999,
+        extra: 0,
+        can_run: true,
+        daily_refresh: null,
+      },
+      subscription: {
+        tier_key: 'byok',
+        tier_display_name: 'BYOK',
+        status: 'active',
+        billing_period: null,
+        provider: 'local',
+        subscription_id: null,
+        current_period_end: null,
+        cancel_at_period_end: false,
+        is_trial: false,
+        trial_status: null,
+        trial_ends_at: null,
+        is_cancelled: false,
+        cancellation_effective_date: null,
+        has_scheduled_change: false,
+        scheduled_change: null,
+        commitment: {
+          has_commitment: false,
+          can_cancel: false,
+        },
+        can_purchase_credits: false,
+      },
+      models: [
+        { id: 'recoder/power', name: 'Recoder', provider: 'openrouter', allowed: true, context_window: 200000, capabilities: ['chat', 'code', 'reasoning'], priority: 2, recommended: true },
+      ],
+      limits: {
+        projects: { current: 0, max: 99999, can_create: true, tier_name: 'BYOK' },
+        threads: { current: 0, max: 99999, can_create: true, tier_name: 'BYOK' },
+        concurrent_runs: { running_count: 0, limit: 99999, can_start: true, tier_name: 'BYOK' },
+        ai_worker_count: { current_count: 0, limit: 99999, can_create: true, tier_name: 'BYOK' },
+        custom_mcp_count: { current_count: 0, limit: 99999, can_create: true, tier_name: 'BYOK' },
+        trigger_count: {
+          scheduled: { current_count: 0, limit: 99999, can_create: true },
+          app: { current_count: 0, limit: 99999, can_create: true },
+          tier_name: 'BYOK',
+        },
+      },
+      tier: {
+        name: 'byok',
+        display_name: 'BYOK',
+        monthly_credits: 999999,
+        can_purchase_credits: false,
+      },
+      _cache: { cached: false, local_mode: true },
+    };
+
+    // OLD CODE: was calling billing API
+    // const response = await backendApi.get<unknown>(`/billing/account-state${params}`, ...);
+    // This is dead code now but kept as reference for when billing is re-enabled.
+    if (false as boolean) {
       return {
         credits: {
           total: 0,
@@ -592,7 +643,7 @@ export const billingApi = {
     try {
       const response = await backendApi.get<unknown>(
         `/billing/checkout-session/${sessionId}`,
-        { showErrors: false }
+        { showErrors: true }
       );
       if (response.error) {
         return null;

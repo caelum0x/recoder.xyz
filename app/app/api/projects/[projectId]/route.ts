@@ -3,7 +3,7 @@ import { auth } from '@/lib/auth-config';
 import { headers } from 'next/headers';
 import { verifyInternalServiceRequest } from '@/lib/internal-service-auth';
 
-const RECODER_WEB_URL = process.env.RECODER_WEB_URL || 'http://localhost:5173';
+const RECODER_WEB_URL = process.env.RECODER_WEB_URL || (process.env.NODE_ENV === 'production' ? 'https://web.recoder.xyz' : 'http://localhost:5173');
 
 export async function GET(
   request: NextRequest,

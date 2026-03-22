@@ -38,7 +38,7 @@ export const CHANNEL_EVENTS = [
 export const getNotificationChannels = async (): Promise<NotificationChannel[]> => {
   const response = await backendApi.get<NotificationChannel[]>(
     '/notification-channels',
-    { showErrors: false }
+    { showErrors: true }
   );
   if (response.error) throw new Error(response.error.message);
   return response.data!;

@@ -635,7 +635,7 @@ async def create_agent(
             agentpress_tools = agent_data.agentpress_tools if agent_data.agentpress_tools else _get_default_agentpress_tools()
             agentpress_tools = ensure_core_tools_enabled(agentpress_tools)
             
-            default_model = await model_manager.get_default_model_for_user(client, user_id)
+            default_model = await model_manager.get_default_model_for_user(None, user_id)
             
             version = await version_service.create_version(
                 agent_id=agent['agent_id'],

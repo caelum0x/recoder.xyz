@@ -39,9 +39,9 @@ async def list_pinned_threads(
 ):
     rows = await execute(
         """
-        SELECT p.thread_id, p.pinned_at, t.name, t.agent_id, t.updated_at
+        SELECT p.thread_id, p.pinned_at, t.name, t.updated_at
         FROM user_pinned_threads p
-        LEFT JOIN threads t ON t.thread_id = p.thread_id
+        LEFT JOIN threads t ON t.thread_id = p.thread_id::uuid
         WHERE p.user_id = :user_id
         ORDER BY p.pinned_at DESC
         """,

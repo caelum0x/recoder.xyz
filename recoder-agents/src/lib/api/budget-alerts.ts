@@ -21,7 +21,7 @@ export interface CostSummary {
 export async function getCostSummary(period?: string): Promise<CostSummary> {
   try {
     const query = period ? `?period=${encodeURIComponent(period)}` : '';
-    const response = await backendApi.get<CostSummary>(`/billing/cost-summary${query}`, { showErrors: false });
+    const response = await backendApi.get<CostSummary>(`/billing/cost-summary${query}`, { showErrors: true });
     if (response.error) throw new Error(`Error: ${response.error.message}`);
     return response.data!;
   } catch (error) {
@@ -32,7 +32,7 @@ export async function getCostSummary(period?: string): Promise<CostSummary> {
 
 export async function getBudgetAlerts(): Promise<BudgetAlert[]> {
   try {
-    const response = await backendApi.get<BudgetAlert[]>('/billing/budget-alerts', { showErrors: false });
+    const response = await backendApi.get<BudgetAlert[]>('/billing/budget-alerts', { showErrors: true });
     if (response.error) throw new Error(`Error: ${response.error.message}`);
     return response.data!;
   } catch (error) {

@@ -56,7 +56,7 @@ export async function shareThread(
     const response = await backendApi.post<Collaborator>(
       `/collaboration/threads/${threadId}/share`,
       { email, role },
-      { showErrors: false },
+      { showErrors: true },
     );
     if (response.error) throw new Error(`Error: ${response.error.message}`);
     return response.data!;
@@ -72,7 +72,7 @@ export async function getThreadCollaborators(
   try {
     const response = await backendApi.get<Collaborator[]>(
       `/collaboration/threads/${threadId}/collaborators`,
-      { showErrors: false },
+      { showErrors: true },
     );
     if (response.error) throw new Error(`Error: ${response.error.message}`);
     return response.data!;
@@ -89,7 +89,7 @@ export async function removeThreadCollaborator(
   try {
     const response = await backendApi.delete(
       `/collaboration/threads/${threadId}/collaborators/${collaboratorId}`,
-      { showErrors: false },
+      { showErrors: true },
     );
     if (response.error) throw new Error(`Error: ${response.error.message}`);
   } catch (error) {
@@ -111,7 +111,7 @@ export async function shareAgent(
     const response = await backendApi.post<AgentAccess>(
       `/collaboration/agents/${agentId}/share`,
       { email, role },
-      { showErrors: false },
+      { showErrors: true },
     );
     if (response.error) throw new Error(`Error: ${response.error.message}`);
     return response.data!;
@@ -125,7 +125,7 @@ export async function getAgentTeam(agentId: string): Promise<AgentAccess[]> {
   try {
     const response = await backendApi.get<AgentAccess[]>(
       `/collaboration/agents/${agentId}/team`,
-      { showErrors: false },
+      { showErrors: true },
     );
     if (response.error) throw new Error(`Error: ${response.error.message}`);
     return response.data!;
@@ -142,7 +142,7 @@ export async function removeAgentAccess(
   try {
     const response = await backendApi.delete(
       `/collaboration/agents/${agentId}/team/${accessId}`,
-      { showErrors: false },
+      { showErrors: true },
     );
     if (response.error) throw new Error(`Error: ${response.error.message}`);
   } catch (error) {
@@ -159,7 +159,7 @@ export async function getSharedWithMe(): Promise<SharedWithMeResponse> {
   try {
     const response = await backendApi.get<SharedWithMeResponse>(
       '/collaboration/shared-with-me',
-      { showErrors: false },
+      { showErrors: true },
     );
     if (response.error) throw new Error(`Error: ${response.error.message}`);
     return response.data!;

@@ -38,7 +38,7 @@ export interface PermissionAuditEntry {
 // ── Roles CRUD ──────────────────────────────────────────────────────────
 
 export const listRoles = async (): Promise<AgentRole[]> => {
-  const response = await backendApi.get<AgentRole[]>('/roles', { showErrors: false });
+  const response = await backendApi.get<AgentRole[]>('/roles', { showErrors: true });
   if (response.error) throw new Error(response.error.message);
   return response.data!;
 };
@@ -79,7 +79,7 @@ export const seedRoles = async (): Promise<{ status: string; roles: AgentRole[] 
 export const listAgentRoles = async (agentId: string): Promise<AgentRoleAssignment[]> => {
   const response = await backendApi.get<AgentRoleAssignment[]>(
     `/agents/${agentId}/roles`,
-    { showErrors: false }
+    { showErrors: true }
   );
   if (response.error) throw new Error(response.error.message);
   return response.data!;
@@ -112,7 +112,7 @@ export const getPermissionAudit = async (
   const qs = query.toString() ? `?${query.toString()}` : '';
   const response = await backendApi.get<PermissionAuditEntry[]>(
     `/agents/${agentId}/permissions/audit${qs}`,
-    { showErrors: false }
+    { showErrors: true }
   );
   if (response.error) throw new Error(response.error.message);
   return response.data!;

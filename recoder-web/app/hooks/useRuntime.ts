@@ -42,11 +42,13 @@ export function useRuntime(projectId: string) {
     async function init() {
       try {
         if (DOCKER_URL) {
-          const health = await dockerFetch('/health', {
-            signal: AbortSignal.timeout(3000),
-          }).catch(() => null) as Response | null;
+          // dockerFetch returns parsed JSON, not a Response object
+          const health = await dockerFetch<{ status?: string }>('/health', {
+            timeout: 3000,
+            skipRetry: true,
+          }).catch(() => null);
 
-          if (health?.ok) {
+          if (health && (health.status === 'ok' || health.status === 'healthy')) {
             // Use centralized container creation to avoid duplicates
             const { ensureContainerExists } = await import('~/lib/stores/workbench');
             const containerReady = await ensureContainerExists(projectId);
@@ -177,10 +179,11 @@ export function useRuntime(projectId: string) {
     [state.mode, projectId]
   );
 
-  // Get preview URL
+  // Get preview URL — use same-origin proxy to avoid cross-origin iframe issues
   const getPreviewUrl = useCallback(() => {
     if (state.mode === 'docker' && DOCKER_URL) {
-      return `${DOCKER_URL}/preview/${projectId}`;
+      const origin = typeof window !== 'undefined' ? window.location.origin : '';
+      return `${origin}/preview/${projectId}`;
     }
     return null;
   }, [state.mode, projectId]);

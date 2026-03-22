@@ -50,20 +50,29 @@ export async function buildAppInstallationClient(installationId: number) {
 	});
 }
 
+function isPlaceholder(val: string | undefined): boolean {
+	return !val || val === "placeholder" || val.length < 8;
+}
+
 function appAuth() {
 	const appId = process.env.GITHUB_APP_ID;
 	const privateKey = process.env.GITHUB_APP_PRIVATE_KEY;
 	const clientId = process.env.GITHUB_APP_CLIENT_ID;
 	const clientSecret = process.env.GITHUB_APP_CLIENT_SECRET;
 
-	if (!appId || !privateKey || !clientId || !clientSecret) {
+	if (isPlaceholder(appId) || isPlaceholder(clientId) || isPlaceholder(clientSecret)) {
+		return null;
+	}
+
+	// Private key must look like a PEM key, not a placeholder string
+	if (!privateKey || (!privateKey.includes("-----BEGIN") && !privateKey.includes("\\n"))) {
 		return null;
 	}
 
 	return createAppAuth({
-		appId,
+		appId: appId!,
 		privateKey,
-		clientId,
-		clientSecret,
+		clientId: clientId!,
+		clientSecret: clientSecret!,
 	});
 }

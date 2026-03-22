@@ -31,7 +31,7 @@ export function getDockerBackendUrl(
     || process.env.VITE_DOCKER_URL
     || process.env.DOCKER_BACKEND_URL
     || process.env.VITE_DOCKER_BACKEND_URL
-    || 'http://localhost:3100'
+    || 'https://docker.recoder.xyz'
   );
 }
 

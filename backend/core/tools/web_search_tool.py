@@ -1,14 +1,15 @@
 """Free web search, scrape, crawl, and research tool for Recoder agents.
 
-Uses DuckDuckGo (no API key) for search and httpx+BeautifulSoup for scraping.
+Uses SearXNG (self-hosted meta search engine, no API key, no rate limits) for search
+and crawl4ai + httpx+BeautifulSoup for scraping/content extraction.
 Supports deep research (search + scrape top results), site crawling, news search,
-and JS-rendered page extraction via Playwright (with httpx fallback).
-Replaces the previous Tavily/Firecrawl paid implementation.
+and JS-rendered page extraction via crawl4ai/Playwright.
 """
 
 import asyncio
 import json
 import logging
+import os
 import time
 from typing import Optional
 from urllib.parse import urljoin, urlparse
@@ -23,7 +24,7 @@ from core.agentpress.thread_manager import ThreadManager
 
 @tool_metadata(
     display_name="WebSearch",
-    description="Search the web, research topics, crawl sites, and read web pages — free, no API key needed",
+    description="Search the web via SearXNG (self-hosted), research topics, crawl sites, and read web pages — free, no rate limits",
     icon="Search",
     color="bg-green-100 dark:bg-green-800/50",
     weight=30,
@@ -128,7 +129,11 @@ Use crawl_site to explore a website:
 """
 )
 class SandboxWebSearchTool(SandboxToolsBase):
-    """Tool for performing web searches using DuckDuckGo (free) and scraping with httpx+BeautifulSoup."""
+    """Tool for performing web searches using SearXNG (self-hosted) and scraping with crawl4ai + httpx."""
+
+    # SearXNG URL — reads from env so it works both on host (localhost:8888)
+    # and inside Docker containers (http://searxng:8080 via Docker network).
+    SEARXNG_URL = os.environ.get("SEARXNG_URL", "http://127.0.0.1:8888")
 
     def __init__(self, project_id: str, thread_manager: ThreadManager):
         super().__init__(project_id, thread_manager)
@@ -399,28 +404,51 @@ Usage notes:
 
     async def _execute_single_search(self, query: str, num_results: int) -> dict:
         """
-        Execute a single DuckDuckGo search query.
-
-        Returns:
-            dict with success status and results list
+        Execute a single search query via SearXNG (self-hosted meta search).
+        Falls back to DuckDuckGo if SearXNG is unavailable.
         """
+        # Try SearXNG first (self-hosted, no rate limits)
+        try:
+            async with httpx.AsyncClient(timeout=15.0) as client:
+                response = await client.get(
+                    f"{self.SEARXNG_URL}/search",
+                    params={"q": query, "format": "json", "pageno": 1},
+                )
+                response.raise_for_status()
+                data = response.json()
+
+            raw_results = data.get("results", [])
+            if not raw_results:
+                return await self._ddg_fallback_search(query, num_results)
+
+            results = []
+            for r in raw_results[:num_results]:
+                results.append({
+                    "title": r.get("title", ""),
+                    "url": r.get("url", ""),
+                    "content": r.get("content", ""),
+                    "engine": r.get("engine", ""),
+                })
+
+            logging.info(f"[WebSearch] SearXNG returned {len(results)} results for: '{query}'")
+            return {"success": True, "query": query, "results": results, "source": "searxng"}
+
+        except Exception as e:
+            logging.warning(f"[WebSearch] SearXNG error for '{query}': {e}, falling back to DuckDuckGo")
+            return await self._ddg_fallback_search(query, num_results)
+
+    async def _ddg_fallback_search(self, query: str, num_results: int) -> dict:
+        """Fallback to DuckDuckGo if SearXNG is unavailable."""
         try:
             from ddgs import DDGS
 
-            # Run the synchronous DDGS in a thread to avoid blocking the event loop
             def _do_search():
                 with DDGS() as ddgs:
                     return list(ddgs.text(query, max_results=num_results))
 
             raw_results = await asyncio.to_thread(_do_search)
-
             if not raw_results:
-                return {
-                    "success": False,
-                    "query": query,
-                    "results": [],
-                    "message": f"No results found for: {query}"
-                }
+                return {"success": False, "query": query, "results": [], "message": f"No results found for: {query}"}
 
             results = []
             for r in raw_results:
@@ -430,23 +458,12 @@ Usage notes:
                     "content": r.get("body", ""),
                 })
 
-            logging.info(f"[WebSearch] DuckDuckGo returned {len(results)} results for: '{query}'")
-
-            return {
-                "success": True,
-                "query": query,
-                "results": results
-            }
+            logging.info(f"[WebSearch] DuckDuckGo fallback returned {len(results)} results for: '{query}'")
+            return {"success": True, "query": query, "results": results, "source": "duckduckgo"}
 
         except Exception as e:
-            error_message = str(e)
-            logging.error(f"[WebSearch] DuckDuckGo error for '{query}': {error_message}")
-            return {
-                "success": False,
-                "query": query,
-                "results": [],
-                "error": error_message
-            }
+            logging.error(f"[WebSearch] DuckDuckGo fallback also failed for '{query}': {e}")
+            return {"success": False, "query": query, "results": [], "error": str(e)}
 
     # ─── 2. scrape_webpage (existing) ──────────────────────────────────
 
@@ -929,7 +946,35 @@ Usage notes:
             return self.fail_response(f"News search error: {str(e)[:200]}")
 
     async def _news_search(self, query: str, max_results: int = 5) -> dict:
-        """Search recent news using DuckDuckGo News."""
+        """Search recent news using SearXNG with news category. Falls back to DuckDuckGo News."""
+        # Try SearXNG news category first
+        try:
+            async with httpx.AsyncClient(timeout=15.0) as client:
+                response = await client.get(
+                    f"{self.SEARXNG_URL}/search",
+                    params={"q": query, "format": "json", "categories": "news", "pageno": 1},
+                )
+                response.raise_for_status()
+                data = response.json()
+
+            raw_results = data.get("results", [])
+            if raw_results:
+                results = []
+                for r in raw_results[:max_results]:
+                    results.append({
+                        "title": r.get("title", ""),
+                        "url": r.get("url", ""),
+                        "body": r.get("content", ""),
+                        "date": r.get("publishedDate", ""),
+                        "source": r.get("engine", ""),
+                    })
+
+                logging.info(f"[WebSearch] SearXNG news returned {len(results)} results for: '{query}'")
+                return {"success": True, "query": query, "type": "news", "results": results, "source": "searxng"}
+        except Exception as e:
+            logging.warning(f"[WebSearch] SearXNG news error for '{query}': {e}")
+
+        # Fallback to DuckDuckGo News
         try:
             from ddgs import DDGS
 
@@ -938,14 +983,8 @@ Usage notes:
                     return list(ddgs.news(query, max_results=max_results))
 
             raw_results = await asyncio.to_thread(_do_news_search)
-
             if not raw_results:
-                return {
-                    "success": False,
-                    "query": query,
-                    "results": [],
-                    "message": f"No news results found for: {query}"
-                }
+                return {"success": False, "query": query, "results": [], "message": f"No news results found for: {query}"}
 
             results = []
             for r in raw_results:
@@ -955,27 +994,14 @@ Usage notes:
                     "body": r.get("body", ""),
                     "date": r.get("date", ""),
                     "source": r.get("source", ""),
-                    "image": r.get("image", ""),
                 })
 
-            logging.info(f"[WebSearch] News search returned {len(results)} results for: '{query}'")
-
-            return {
-                "success": True,
-                "query": query,
-                "type": "news",
-                "results": results
-            }
+            logging.info(f"[WebSearch] DuckDuckGo news fallback returned {len(results)} results for: '{query}'")
+            return {"success": True, "query": query, "type": "news", "results": results, "source": "duckduckgo"}
 
         except Exception as e:
-            error_message = str(e)
-            logging.error(f"[WebSearch] DuckDuckGo news error for '{query}': {error_message}")
-            return {
-                "success": False,
-                "query": query,
-                "results": [],
-                "error": error_message
-            }
+            logging.error(f"[WebSearch] News search completely failed for '{query}': {e}")
+            return {"success": False, "query": query, "results": [], "error": str(e)}
 
     # ─── 6. render_js_page (NEW) ──────────────────────────────────────
 
@@ -1033,8 +1059,24 @@ Usage notes:
             return self.fail_response(f"Render JS error: {str(e)[:200]}")
 
     async def _render_js(self, url: str) -> str:
-        """Render a JS-heavy page using headless Chromium."""
+        """Render a JS-heavy page using crawl4ai (Playwright-based) for clean Markdown output."""
         url = self._normalize_url(url)
+        # Try crawl4ai first (clean Markdown output, JS rendering)
+        try:
+            from crawl4ai import AsyncWebCrawler
+            async with AsyncWebCrawler(headless=True, verbose=False) as crawler:
+                result = await crawler.arun(url=url)
+                if result.success and result.markdown:
+                    md = result.markdown
+                    if len(md) > 12000:
+                        md = md[:12000] + "\n\n[Content truncated at 12000 characters]"
+                    return f"JS-Rendered page: {url}\nTitle: {result.title or 'Untitled'}\n\n{md}"
+        except ImportError:
+            logging.warning("[WebSearch] crawl4ai not installed, trying Playwright directly")
+        except Exception as e:
+            logging.warning(f"[WebSearch] crawl4ai failed ({e}), trying Playwright directly")
+
+        # Fallback to raw Playwright
         try:
             from playwright.async_api import async_playwright
             async with async_playwright() as p:
@@ -1044,7 +1086,6 @@ Usage notes:
                 try:
                     await page.wait_for_load_state("networkidle", timeout=10000)
                 except Exception:
-                    # networkidle may time out on some pages; continue with what we have
                     pass
                 content = await page.content()
                 await browser.close()

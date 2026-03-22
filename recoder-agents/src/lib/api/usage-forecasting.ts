@@ -99,7 +99,7 @@ export async function generateForecast(
     const response = await backendApi.post<GenerateForecastResponse>(
       '/usage/forecast/generate',
       payload,
-      { showErrors: false },
+      { showErrors: true },
     );
     if (response.error) throw new Error(`Error: ${response.error.message}`);
     return response.data!;
@@ -122,7 +122,7 @@ export async function listForecasts(
 
     const response = await backendApi.get<UsageForecast[]>(
       `/usage/forecasts${qs ? `?${qs}` : ''}`,
-      { showErrors: false },
+      { showErrors: true },
     );
     if (response.error) throw new Error(`Error: ${response.error.message}`);
     return response.data!;
@@ -139,7 +139,7 @@ export async function getForecastDetail(
   try {
     const response = await backendApi.get<UsageForecast>(
       `/usage/forecasts/${metricType}?forecast_period=${forecastPeriod}`,
-      { showErrors: false, cache: 'no-store' },
+      { showErrors: true, cache: 'no-store' },
     );
     if (response.error) throw new Error(`Error: ${response.error.message}`);
     return response.data!;
@@ -156,7 +156,7 @@ export async function recordSnapshot(
     const response = await backendApi.post<UsageSnapshot>(
       '/usage/snapshots',
       payload,
-      { showErrors: false },
+      { showErrors: true },
     );
     if (response.error) throw new Error(`Error: ${response.error.message}`);
     return response.data!;
@@ -178,7 +178,7 @@ export async function listSnapshots(
 
     const response = await backendApi.get<UsageSnapshot[]>(
       `/usage/snapshots${qs ? `?${qs}` : ''}`,
-      { showErrors: false },
+      { showErrors: true },
     );
     if (response.error) throw new Error(`Error: ${response.error.message}`);
     return response.data!;
@@ -192,7 +192,7 @@ export async function getUsageTrends(): Promise<UsageTrendsResponse> {
   try {
     const response = await backendApi.get<UsageTrendsResponse>(
       '/usage/trends',
-      { showErrors: false },
+      { showErrors: true },
     );
     if (response.error) throw new Error(`Error: ${response.error.message}`);
     return response.data!;

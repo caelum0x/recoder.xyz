@@ -4,6 +4,8 @@ import { RecoderLogo } from "@/components/recoder-logo";
 import { AccountMenu, getCurrentUser } from "./account-menu";
 import { AppSwitcher } from "./app-switcher";
 import { MobileMenu } from "./mobile-menu";
+import { NotificationBell } from "./notification-bell";
+import { SubscriptionBadge } from "./subscription-badge";
 import { getTeamContext, TeamSwitcher } from "./team-switcher";
 import { getUpgradeButtonContext, UpgradeButton } from "./upgrade-button";
 
@@ -11,7 +13,7 @@ export function Header() {
 	return (
 		<header className="h-16 shrink-0 border-b border-border flex items-center justify-between px-4 md:px-6 bg-background">
 			{/* Left side: Logo + App Switcher + Team Selection */}
-			<div className="flex items-center gap-[3px]">
+			<div className="flex items-center gap-2">
 				<Link href="/" aria-label="Go to home" className="group">
 					<RecoderLogo size={24} />
 				</Link>
@@ -35,6 +37,8 @@ export function Header() {
 
 			{/* Right side: Desktop nav (hidden on mobile) */}
 			<div className="hidden md:flex items-center gap-4">
+				<SubscriptionBadge />
+				<NotificationBell />
 				<Suspense
 					fallback={
 						<div className="w-16 h-6 bg-inverse/20 animate-pulse rounded-md" />
@@ -44,12 +48,12 @@ export function Header() {
 						getUpgradeButtonContextPromise={getUpgradeButtonContext()}
 					/>
 				</Suspense>
-				<Link
-					href="/docs"
+				<a
+					href="https://agency.recoder.xyz/docs"
 					className="text-link-muted hover:text-accent text-sm transition-colors"
 				>
 					Docs
-				</Link>
+				</a>
 				<div className="flex items-center">
 					<Suspense
 						fallback={

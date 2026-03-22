@@ -69,7 +69,7 @@ export const getThreadMessageBookmarks = async (
 ): Promise<MessageBookmark[]> => {
   const response = await backendApi.get<MessageBookmark[]>(
     `/threads/${threadId}/bookmarks`,
-    { showErrors: false }
+    { showErrors: true }
   );
   if (response.error) throw new Error(response.error.message);
   return response.data!;
@@ -102,7 +102,7 @@ export const getAllMessageBookmarks = async (options?: {
   const qs = params.toString();
   const response = await backendApi.get<AllMessageBookmarksResponse>(
     `/bookmarks${qs ? `?${qs}` : ''}`,
-    { showErrors: false }
+    { showErrors: true }
   );
   if (response.error) throw new Error(response.error.message);
   return response.data!;
@@ -122,7 +122,7 @@ export const createMessageBookmarkCollection = async (
 export const getMessageBookmarkCollections = async (): Promise<MessageBookmarkCollection[]> => {
   const response = await backendApi.get<MessageBookmarkCollection[]>(
     '/bookmark-collections',
-    { showErrors: false }
+    { showErrors: true }
   );
   if (response.error) throw new Error(response.error.message);
   return response.data!;

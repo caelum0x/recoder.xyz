@@ -61,10 +61,10 @@ const createAnthropicClient = async (apiKey?: string) => {
 };
 
 const getOpenAiTextModelName = () =>
-  process.env.OPENAI_TEXT_MODEL ?? "gpt-5-nano";
+  process.env.OPENAI_TEXT_MODEL ?? "gpt-4o-mini";
 
 const getOpenRouterTextModelName = () =>
-  process.env.OPENROUTER_TEXT_MODEL ?? "openai/gpt-5-nano";
+  process.env.OPENROUTER_TEXT_MODEL ?? "openai/gpt-4o-mini";
 
 const getAnthropicTextModelName = () => process.env.ANTHROPIC_TEXT_MODEL;
 
@@ -76,7 +76,7 @@ export const getTextModel = (): any => {
       throw new Error("OPENROUTER_API_KEY is not set");
     }
 
-    return openrouterClient(getOpenRouterTextModelName());
+    return openrouterClient.chat(getOpenRouterTextModelName());
   }
 
   if (provider === "anthropic") {
@@ -97,7 +97,7 @@ export const getTextModel = (): any => {
     throw new Error("OPENAI_API_KEY is not set");
   }
 
-  return openai(getOpenAiTextModelName());
+  return createOpenAiClient().chat(getOpenAiTextModelName());
 };
 
 export const getOrganizationTextModel = async (
@@ -144,7 +144,7 @@ export const getOrganizationTextModel = async (
     }
 
     const client = createOpenRouterClient(apiKey ?? undefined);
-    return client(aiModel ?? getOpenRouterTextModelName());
+    return client.chat(aiModel ?? getOpenRouterTextModelName());
   }
 
   if (provider === "anthropic") {
@@ -167,7 +167,7 @@ export const getOrganizationTextModel = async (
   }
 
   const client = createOpenAiClient(apiKey ?? undefined);
-  return client(aiModel ?? getOpenAiTextModelName());
+  return client.chat(aiModel ?? getOpenAiTextModelName());
 };
 
 export const getTranscriptionModel = (): any => {

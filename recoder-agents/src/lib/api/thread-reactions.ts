@@ -54,7 +54,7 @@ export const getMessageReactions = async (
 ): Promise<ReactionGroup[]> => {
   const response = await backendApi.get<{ reactions: ReactionGroup[] }>(
     `/threads/${threadId}/messages/${messageIndex}/reactions`,
-    { showErrors: false }
+    { showErrors: true }
   );
   if (response.error) {
     throw new Error(`Failed to get reactions: ${response.error.message}`);
@@ -67,7 +67,7 @@ export const getThreadReactions = async (
 ): Promise<Record<number, ReactionGroup[]>> => {
   const response = await backendApi.get<{ reactions_by_message: Record<number, ReactionGroup[]> }>(
     `/threads/${threadId}/reactions`,
-    { showErrors: false }
+    { showErrors: true }
   );
   if (response.error) {
     throw new Error(`Failed to get thread reactions: ${response.error.message}`);
@@ -80,7 +80,7 @@ export const getFrequentEmojis = async (
 ): Promise<FrequentEmoji[]> => {
   const response = await backendApi.get<{ emojis: FrequentEmoji[] }>(
     `/reactions/frequent?limit=${limit}`,
-    { showErrors: false }
+    { showErrors: true }
   );
   if (response.error) {
     throw new Error(`Failed to get frequent emojis: ${response.error.message}`);

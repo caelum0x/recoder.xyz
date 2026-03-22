@@ -78,7 +78,7 @@ export const getAbTestReports = async (
   const qs = params.toString();
   const response = await backendApi.get<AbTestReport[]>(
     `/ab-tests/reports${qs ? `?${qs}` : ''}`,
-    { showErrors: false, cache: 'no-store' },
+    { showErrors: true, cache: 'no-store' },
   );
   if (response.error) {
     throw new Error(`Failed to fetch reports: ${response.error.message}`);
@@ -91,7 +91,7 @@ export const getAbTestReport = async (
 ): Promise<AbTestReport> => {
   const response = await backendApi.get<AbTestReport>(
     `/ab-tests/reports/${reportId}`,
-    { showErrors: false, cache: 'no-store' },
+    { showErrors: true, cache: 'no-store' },
   );
   if (response.error) {
     throw new Error(`Failed to fetch report: ${response.error.message}`);
@@ -131,7 +131,7 @@ export const completeAbTestReport = async (
 export const getAbTestSummary = async (): Promise<AbTestSummary> => {
   const response = await backendApi.get<AbTestSummary>(
     '/ab-tests/reports/summary',
-    { showErrors: false, cache: 'no-store' },
+    { showErrors: true, cache: 'no-store' },
   );
   if (response.error) {
     throw new Error(`Failed to fetch summary: ${response.error.message}`);

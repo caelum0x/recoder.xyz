@@ -9,6 +9,27 @@ import { createScopedLogger } from '~/utils/logger';
 
 const logger = createScopedLogger('ChatHistory');
 
+// CRITICAL: Access real Node.js env vars at runtime, not build time.
+// Vite's node-polyfills plugin replaces ALL `process` references with a shim
+// that has empty env. We use a dynamic property access on globalThis to bypass.
+function getEnv(): Record<string, string | undefined> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const g = globalThis as any;
+  return g['process']?.env || {};
+}
+
+/**
+ * Safely resolve env from context, falling back to real Node.js process.env.
+ * Avoids the Vite shim that replaces `process.env` with an empty object.
+ */
+function resolveEnv(context: any): Record<string, string | undefined> {
+  const cfEnv = (context as any)?.cloudflare?.env;
+  if (cfEnv && (cfEnv.DATABASE_URL || cfEnv.NEON_DATABASE_URL)) {
+    return cfEnv;
+  }
+  return getEnv();
+}
+
 /**
  * GET /api/chat-history - Get user's chat history
  * Query params:
@@ -19,7 +40,8 @@ const logger = createScopedLogger('ChatHistory');
 export async function loader({ request, context }: LoaderFunctionArgs) {
   try {
     // Support both Cloudflare and Node.js environments
-    const env = (context as any)?.cloudflare?.env || process.env;
+    // CRITICAL: Use resolveEnv() to bypass Vite's process.env shim
+    const env = resolveEnv(context);
     const url = new URL(request.url);
 
     const userId = url.searchParams.get('userId');
@@ -35,6 +57,15 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
       hasEnv: !!env,
       hasDatabaseUrl: !!env.DATABASE_URL,
     });
+
+    // Gracefully handle missing DATABASE_URL instead of throwing
+    if (!env.DATABASE_URL && !env.NEON_DATABASE_URL) {
+      logger.warn('📋 [api.chat-history.loader] DATABASE_URL not configured');
+      return json({
+        success: false,
+        error: 'Database not configured',
+      }, { status: 503 });
+    }
 
     const chatDB = createChatHistoryDB(env);
 
@@ -101,7 +132,18 @@ export async function action({ request, context }: ActionFunctionArgs) {
 
   try {
     // Support both Cloudflare and Node.js environments
-    const env = (context as any)?.cloudflare?.env || process.env;
+    // CRITICAL: Use resolveEnv() to bypass Vite's process.env shim
+    const env = resolveEnv(context);
+
+    // Gracefully handle missing DATABASE_URL instead of throwing
+    if (!env.DATABASE_URL && !env.NEON_DATABASE_URL) {
+      logger.warn('💾 [api.chat-history.action] DATABASE_URL not configured');
+      return json({
+        success: false,
+        error: 'Database not configured',
+      }, { status: 503 });
+    }
+
     const chatDB = createChatHistoryDB(env);
     const url = new URL(request.url);
 

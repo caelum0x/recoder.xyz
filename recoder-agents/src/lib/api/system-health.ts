@@ -68,7 +68,7 @@ export const runHealthCheck = async (): Promise<HealthCheckResponse> => {
 export const getHealthStatus = async (): Promise<HealthStatusResponse> => {
   const response = await backendApi.get<HealthStatusResponse>(
     '/health-dashboard/status',
-    { showErrors: false, cache: 'no-store' }
+    { showErrors: true, cache: 'no-store' }
   );
 
   if (response.error) {
@@ -90,7 +90,7 @@ export const getHealthHistory = async (
   const url = `/health-dashboard/history${query ? `?${query}` : ''}`;
 
   const response = await backendApi.get<HealthHistoryResponse>(url, {
-    showErrors: false,
+    showErrors: true,
     cache: 'no-store',
   });
 
@@ -104,7 +104,7 @@ export const getHealthHistory = async (
 export const getServiceUptime = async (): Promise<UptimeResponse> => {
   const response = await backendApi.get<UptimeResponse>(
     '/health-dashboard/uptime',
-    { showErrors: false, cache: 'no-store' }
+    { showErrors: true, cache: 'no-store' }
   );
 
   if (response.error) {

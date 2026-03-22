@@ -1,16 +1,19 @@
 import { type GitHubAuthConfig, octokit } from "@recoder/github-tool";
 
+function isValidGitHubPrivateKey(key: string | undefined): key is string {
+	return !!key && (key.includes("-----BEGIN") || key.includes("\\n"));
+}
+
 /**
- * Build GitHub App Octokit client with installation authentication
+ * Build GitHub App Octokit client with installation authentication.
+ * Returns null if GitHub App credentials are not properly configured.
  */
 export function buildOctokit(installationId: number) {
 	const appId = process.env.GITHUB_APP_ID;
-	if (!appId) {
-		throw new Error("GITHUB_APP_ID is empty");
-	}
 	const privateKey = process.env.GITHUB_APP_PRIVATE_KEY;
-	if (!privateKey) {
-		throw new Error("GITHUB_APP_PRIVATE_KEY is empty");
+
+	if (!appId || appId === "placeholder" || !isValidGitHubPrivateKey(privateKey)) {
+		return null;
 	}
 
 	return octokit({
@@ -22,18 +25,17 @@ export function buildOctokit(installationId: number) {
 }
 
 /**
- * Build GitHub auth config for loaders
+ * Build GitHub auth config for loaders.
+ * Returns null if GitHub App credentials are not properly configured.
  */
 export function buildGitHubAuthConfig(
 	installationId: number,
-): GitHubAuthConfig {
+): GitHubAuthConfig | null {
 	const appId = process.env.GITHUB_APP_ID;
-	if (!appId) {
-		throw new Error("GITHUB_APP_ID is empty");
-	}
 	const privateKey = process.env.GITHUB_APP_PRIVATE_KEY;
-	if (!privateKey) {
-		throw new Error("GITHUB_APP_PRIVATE_KEY is empty");
+
+	if (!appId || appId === "placeholder" || !isValidGitHubPrivateKey(privateKey)) {
+		return null;
 	}
 
 	return {

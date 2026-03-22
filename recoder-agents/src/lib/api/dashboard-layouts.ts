@@ -56,7 +56,7 @@ export interface UpdateLayoutData {
 
 export const getDashboardLayouts = async (): Promise<DashboardLayout[]> => {
   const response = await backendApi.get<DashboardLayout[]>('/dashboard/layouts', {
-    showErrors: false,
+    showErrors: true,
   });
   if (response.error) throw new Error(response.error.message);
   return response.data!;
@@ -65,7 +65,7 @@ export const getDashboardLayouts = async (): Promise<DashboardLayout[]> => {
 export const getLayoutDetail = async (layoutId: string): Promise<DashboardLayout> => {
   const response = await backendApi.get<DashboardLayout>(
     `/dashboard/layouts/${layoutId}`,
-    { showErrors: false }
+    { showErrors: true }
   );
   if (response.error) throw new Error(response.error.message);
   return response.data!;
@@ -112,7 +112,7 @@ export const setLayoutWidgets = async (
 export const getLayoutTemplates = async (): Promise<DashboardLayout[]> => {
   const response = await backendApi.get<DashboardLayout[]>(
     '/dashboard/layouts/templates',
-    { showErrors: false }
+    { showErrors: true }
   );
   if (response.error) throw new Error(response.error.message);
   return response.data!;

@@ -5,6 +5,20 @@ import { createScopedLogger } from '~/utils/logger';
 
 const logger = createScopedLogger('PreviewsStore');
 
+/**
+ * Compute the same-origin preview base URL.
+ * In production, the Express server proxies /preview/* to the docker-backend,
+ * so we use the current origin (e.g. https://web.recoder.xyz) instead of DOCKER_URL.
+ * This eliminates cross-origin iframe issues (CSP frame-src, X-Frame-Options, COEP).
+ */
+function getPreviewOrigin(): string {
+  if (typeof window !== 'undefined') {
+    return window.location.origin;
+  }
+  // SSR fallback
+  return '';
+}
+
 
 export interface PreviewInfo {
   port: number;
@@ -83,10 +97,11 @@ export class PreviewsStore {
     logger.info(`📺 [PreviewsStore] Initializing Docker preview for ${this.#projectId}`);
 
     // Don't set ready: true immediately - wait for containerReady
+    // Use same-origin URL so the iframe avoids cross-origin CSP / X-Frame-Options blocks
     const previewInfo: PreviewInfo = {
       port: 3000,
       ready: false, // ✅ Not ready until containerReady is true
-      baseUrl: `${DOCKER_URL}/preview/${this.#projectId}`,
+      baseUrl: `${getPreviewOrigin()}/preview/${this.#projectId}`,
       projectId: this.#projectId,
     };
     this.#availablePreviews.set(3000, previewInfo);
@@ -146,12 +161,30 @@ export class PreviewsStore {
     const previewInfo: PreviewInfo = {
       port: 3000,
       ready: true,
-      baseUrl: `${DOCKER_URL}/preview/${this.#projectId}`,
+      baseUrl: `${getPreviewOrigin()}/preview/${this.#projectId}`,
       projectId: this.#projectId,
     };
     this.#availablePreviews.set(3000, previewInfo);
     this.previews.set([previewInfo]);
     logger.info('✅ [PreviewsStore] Preview enabled:', previewInfo.baseUrl);
+  }
+
+  /** Enable preview with an explicit URL (used for Daytona sandboxes). */
+  #enablePreviewWithUrl(url: string, port: number = 3000) {
+    if (!this.#projectId) {
+      logger.warn('⚠️ [PreviewsStore] Cannot enable preview without projectId');
+      return;
+    }
+
+    const previewInfo: PreviewInfo = {
+      port,
+      ready: true,
+      baseUrl: url,
+      projectId: this.#projectId,
+    };
+    this.#availablePreviews.set(port, previewInfo);
+    this.previews.set([previewInfo]);
+    logger.info('✅ [PreviewsStore] Daytona preview enabled:', url);
   }
 
   async #pollForDevServer() {
@@ -166,19 +199,32 @@ export class PreviewsStore {
       attempts++;
       try {
         // dockerGet returns parsed JSON directly, not a Response object
-        const data = await dockerGet<{ ports: Array<{ port: number; responding: boolean }> }>(
-          `/api/preview/${this.#projectId}/health`, 
+        const data = await dockerGet<{
+          ports: Array<{ port: number; responding: boolean }>;
+          daytona?: boolean;
+          previewUrl?: string;
+        }>(
+          `/api/preview/${this.#projectId}/health`,
           { timeout: 10000, skipRetry: true }
         );
-        
-        logger.info(`🔍 [PreviewsStore] Health check attempt ${attempts}:`, data);
-        
-        const respondingPort = data?.ports?.find((p) => p.responding);
 
-        if (respondingPort) {
-          logger.info(`✅ [PreviewsStore] Dev server responding on port ${respondingPort.port}`);
-          this.#enablePreview();
-          return; // Stop polling
+        logger.info(`🔍 [PreviewsStore] Health check attempt ${attempts}:`, data);
+
+        // For Daytona sandboxes, use the previewUrl from the health response
+        if (data?.daytona && data.previewUrl) {
+          const respondingPort = data.ports?.find((p) => p.responding);
+          if (respondingPort) {
+            logger.info(`✅ [PreviewsStore] Daytona dev server responding, url: ${data.previewUrl}`);
+            this.#enablePreviewWithUrl(data.previewUrl, respondingPort.port);
+            return; // Stop polling
+          }
+        } else {
+          const respondingPort = data?.ports?.find((p) => p.responding);
+          if (respondingPort) {
+            logger.info(`✅ [PreviewsStore] Dev server responding on port ${respondingPort.port}`);
+            this.#enablePreview();
+            return; // Stop polling
+          }
         }
       } catch (e) {
         logger.info(`⚠️ [PreviewsStore] Health check attempt ${attempts} failed:`, e);
@@ -236,7 +282,7 @@ export class PreviewsStore {
     const previewInfo: PreviewInfo = {
       port,
       ready: true,
-      baseUrl: `${DOCKER_URL}/preview/${projectId}`,
+      baseUrl: `${getPreviewOrigin()}/preview/${projectId}`,
     };
     this.#availablePreviews.set(port, previewInfo);
     this.previews.set([previewInfo]);

@@ -93,7 +93,7 @@ export interface UpsertQuotaData {
 export const getAgentQuota = async (agentId: string): Promise<AgentQuotaResponse> => {
   const response = await backendApi.get<AgentQuotaResponse>(
     `/agents/${agentId}/quota`,
-    { showErrors: false }
+    { showErrors: true }
   );
   if (response.error) throw new Error(response.error.message);
   return response.data!;
@@ -120,7 +120,7 @@ export const deleteAgentQuota = async (agentId: string) => {
 export const getQuotasOverview = async (): Promise<QuotaOverviewItem[]> => {
   const response = await backendApi.get<QuotaOverviewItem[]>(
     `/agents/quotas/overview`,
-    { showErrors: false }
+    { showErrors: true }
   );
   if (response.error) throw new Error(response.error.message);
   return response.data!;
@@ -129,7 +129,7 @@ export const getQuotasOverview = async (): Promise<QuotaOverviewItem[]> => {
 export const getQuotaAlerts = async (): Promise<QuotaAlert[]> => {
   const response = await backendApi.get<QuotaAlert[]>(
     `/agents/quotas/alerts`,
-    { showErrors: false }
+    { showErrors: true }
   );
   if (response.error) throw new Error(response.error.message);
   return response.data!;

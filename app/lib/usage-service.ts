@@ -301,10 +301,37 @@ export async function getUsageSummary(userId: string): Promise<{
       ? 0
       : (quota.requestsUsed / planLimits.monthlyRequests) * 100;
 
-  // Note: tokensUsed and costThisPeriod fields don't exist in current schema
-  // Using 0 as placeholder
-  const tokensUsed = 0;
-  const tokensPercentage = 0;
+  // Aggregate real token usage and cost from usage_records for the current billing period
+  let tokensUsed = 0;
+  let totalCost = 0;
+  try {
+    const usageAgg = await prisma.usage_records.aggregate({
+      where: {
+        userId,
+        timestamp: { gte: quota.periodStart },
+      },
+      _sum: {
+        tokensUsed: true,
+        cost: true,
+      },
+    });
+    tokensUsed = usageAgg._sum.tokensUsed ?? 0;
+    totalCost = usageAgg._sum.cost ?? 0;
+  } catch {
+    // Fall back to zeros if aggregation fails
+    tokensUsed = 0;
+    totalCost = 0;
+  }
+
+  // If no recorded cost but tokens were used, estimate at a rough free-tier rate
+  if (totalCost === 0 && tokensUsed > 0) {
+    totalCost = (tokensUsed / 1000) * 0.002;
+  }
+
+  const tokensPercentage =
+    planLimits.tokensPerMonth === -1 || planLimits.tokensPerMonth === 0
+      ? 0
+      : (tokensUsed / planLimits.tokensPerMonth) * 100;
 
   return {
     requests: {
@@ -317,7 +344,7 @@ export async function getUsageSummary(userId: string): Promise<{
       limit: planLimits.tokensPerMonth,
       percentage: tokensPercentage,
     },
-    cost: 0,
+    cost: totalCost,
     periodEnd: quota.periodEnd,
     tier: user.subscriptionPlan,
     hasApiKey: !!user.hasOwnApiKey || !!process.env.OPENROUTER_API_KEY,

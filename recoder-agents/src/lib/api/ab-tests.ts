@@ -99,7 +99,7 @@ export const getAbTests = async (status?: string): Promise<AbTest[]> => {
   const params = status ? `?status=${status}` : '';
   const response = await backendApi.get<AbTest[]>(
     `/ab-tests${params}`,
-    { showErrors: false }
+    { showErrors: true }
   );
   if (response.error) throw new Error(response.error.message);
   return response.data!;
@@ -108,7 +108,7 @@ export const getAbTests = async (status?: string): Promise<AbTest[]> => {
 export const getAbTest = async (testId: string): Promise<AbTestDetail> => {
   const response = await backendApi.get<AbTestDetail>(
     `/ab-tests/${testId}`,
-    { showErrors: false }
+    { showErrors: true }
   );
   if (response.error) throw new Error(response.error.message);
   return response.data!;
@@ -149,7 +149,7 @@ export const getAbTestResults = async (
 ): Promise<AbTestResults> => {
   const response = await backendApi.get<AbTestResults>(
     `/ab-tests/${testId}/results`,
-    { showErrors: false }
+    { showErrors: true }
   );
   if (response.error) throw new Error(response.error.message);
   return response.data!;

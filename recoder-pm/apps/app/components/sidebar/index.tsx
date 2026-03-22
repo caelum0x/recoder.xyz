@@ -87,7 +87,6 @@ export const Sidebar = ({ user, organization }: SidebarProps) => {
                   />
                 )}
               </div>
-              <AppSwitcher />
             </div>
             <div
               className={cn(
@@ -106,6 +105,7 @@ export const Sidebar = ({ user, organization }: SidebarProps) => {
           <SidebarMenuItem>
             <OrganizationSwitcher />
           </SidebarMenuItem>
+          {/* AppSwitcher is rendered in root layout — don't duplicate here */}
         </SidebarMenu>
       </SidebarHeader>
       <SidebarContent>

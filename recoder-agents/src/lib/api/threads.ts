@@ -133,7 +133,7 @@ export const getProjectThreads = async (projectId: string, page: number = 1, lim
     });
     
     const response = await backendApi.get<unknown>(`/projects/${projectId}/threads?${params.toString()}`, {
-      showErrors: false,
+      showErrors: true,
     });
 
     if (response.error) {
@@ -214,6 +214,7 @@ export const createThreadInProject = async (projectId: string): Promise<{ thread
       'Content-Type': 'application/json',
       'Authorization': `Bearer ${token}`,
     },
+    credentials: 'include',
   });
 
   if (!response.ok) {
@@ -297,7 +298,7 @@ export const updateProject = async (
 export const getThreads = async (projectId?: string): Promise<Thread[]> => {
   try {
     const response = await backendApi.get<unknown>('/threads', {
-      showErrors: false,
+      showErrors: true,
     });
 
     if (response.error) {
@@ -343,7 +344,7 @@ export const getThreadsPaginated = async (projectId?: string, page: number = 1, 
     });
     
     const response = await backendApi.get<unknown>(`/threads?${params.toString()}`, {
-      showErrors: false,
+      showErrors: true,
     });
 
     if (response.error) {
@@ -420,7 +421,7 @@ export const getThreadsPaginated = async (projectId?: string, page: number = 1, 
 export const getThread = async (threadId: string): Promise<Thread> => {
   try {
     const response = await backendApi.get<Thread>(`/threads/${threadId}`, {
-      showErrors: false,
+      showErrors: true,
     });
 
     if (response.error) {
@@ -470,6 +471,7 @@ export const createThread = async (projectId?: string): Promise<Thread> => {
       'Content-Type': 'application/json',
       'Authorization': `Bearer ${token}`,
     },
+    credentials: 'include',
   });
 
   if (!response.ok) {
@@ -512,6 +514,7 @@ export const addUserMessage = async (
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${token}`,
       },
+      credentials: 'include',
       body: JSON.stringify({ message: content }),
     });
 
@@ -561,6 +564,7 @@ export const getMessages = async (threadId: string): Promise<Message[]> => {
       `${API_URL}/threads/${threadId}/messages?order=asc&optimized=${useOptimized}`,
       {
       headers,
+      credentials: 'include',
       cache: 'no-store',
       }
     );
@@ -600,7 +604,7 @@ export const searchThreads = async (
 
     const response = await backendApi.get<unknown>(
       `/threads/search?${params.toString()}`,
-      { showErrors: false }
+      { showErrors: true }
     );
 
     if (response.error) {

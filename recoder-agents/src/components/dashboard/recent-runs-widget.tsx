@@ -18,7 +18,7 @@ function useRecentRuns() {
   return useQuery({
     queryKey: ['recent-runs-widget'],
     queryFn: async () => {
-      const response = await backendApi.get<any>('/runs?limit=5&sort=started_at', { showErrors: false });
+      const response = await backendApi.get<any>('/agents/active-runs?limit=5', { showErrors: false });
       if (response.error) return [];
       const data = response.data;
       if (Array.isArray(data)) return data.slice(0, 5);

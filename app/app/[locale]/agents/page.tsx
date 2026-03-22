@@ -32,20 +32,20 @@ const agentPlatforms = [
     features: ['In-browser development', 'Real-time preview', 'Full-stack support', 'Instant deploy'],
   },
   {
+    id: 'pm',
+    name: 'Recoder PM',
+    description: 'AI-first project management. RICE scoring, feedback analysis, PRD generation, and intelligent insights — built for product teams.',
+    icon: Sparkles,
+    color: 'from-indigo-500 to-violet-500',
+    features: ['AI insights', 'RICE scoring', 'PRD generation', 'Feedback analysis'],
+  },
+  {
     id: 'openclaw',
     name: 'OpenClaw',
     description: 'Open-source AI tools and agent framework. Build custom agents, manage workflows, and extend the ecosystem with plugins.',
     icon: Terminal,
     color: 'from-green-500 to-emerald-500',
     features: ['Open-source agents', 'Plugin system', 'CLI tools', 'Workflow automation'],
-  },
-  {
-    id: 'studio',
-    name: 'Recoder Agency',
-    description: 'AI agent workflow platform. Build and deploy complex agent pipelines with visual interface.',
-    icon: Sparkles,
-    color: 'from-indigo-500 to-violet-500',
-    features: ['Visual designer', 'Drag-and-drop', 'Pipeline builder', 'No-code agent creation'],
   },
 ];
 
@@ -69,7 +69,7 @@ export default function AgentsPage() {
           </h1>
           <p className="text-xl text-gray-400 max-w-2xl mx-auto mb-12">
             Five specialized platforms for building, deploying, and managing AI agents.
-            From autonomous coding to visual workflow design.
+            From autonomous coding to AI-first project management.
           </p>
         </div>
       </section>

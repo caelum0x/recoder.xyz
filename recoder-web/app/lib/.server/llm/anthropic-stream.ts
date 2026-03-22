@@ -48,7 +48,7 @@ export async function streamAnthropicResponse(
       messages: anthropicMessages,
       stream: true,
       temperature: options.temperature ?? 0.7,
-      max_tokens: options.max_tokens ?? 8000,
+      max_tokens: options.max_tokens ?? 16000,
     }),
   });
 

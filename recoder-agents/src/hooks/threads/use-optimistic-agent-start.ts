@@ -230,26 +230,17 @@ export function useOptimisticAgentStart(
           localStorage.removeItem('pending_thread_intent');
         }
         
-        // Handle AgentRunLimitError first (needs special banner handling)
+        // AgentRunLimitError / concurrent limit — show the limit banner
         if (error instanceof AgentRunLimitError) {
+          console.warn('[AgentStart] Concurrent limit hit');
           handleAgentRunLimitError(error);
           return;
         }
-        
-        // Check for error code in case instanceof check fails (fallback for AgentRunLimitError)
-        if (error?.detail?.error_code === 'AGENT_RUN_LIMIT_EXCEEDED' || 
+        if (error?.detail?.error_code === 'AGENT_RUN_LIMIT_EXCEEDED' ||
             error?.code === 'AGENT_RUN_LIMIT_EXCEEDED' ||
             (error?.status === 402 && error?.detail?.running_count !== undefined)) {
-          const running_thread_ids = error.detail?.running_thread_ids || [];
-          const running_count = error.detail?.running_count || 0;
-          // Notify parent to reset loading states
+          console.warn('[AgentStart] Concurrent limit hit');
           onBackgroundError?.();
-          setAgentLimitData({
-            runningCount: running_count,
-            runningThreadIds: running_thread_ids,
-          });
-          setShowAgentLimitBanner(true);
-          router.replace(redirectOnError);
           return;
         }
         

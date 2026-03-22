@@ -1,5 +1,7 @@
+import { currentOrganizationId } from "@repo/backend/auth/utils";
 import type { Metadata } from "next";
 import { Suspense } from "react";
+import { AiCopilotChat } from "./components/ai-copilot-chat";
 import { AiInsightsSection } from "./components/ai-insights";
 import { ContradictionsSection } from "./components/contradictions";
 import { DataHealthSection } from "./components/data-health";
@@ -19,27 +21,32 @@ export const metadata: Metadata = {
   description,
 };
 
-const Insights = () => (
-  <div className="divide-y">
-    <Suspense fallback={null}>
-      <TrackInsightsView />
-    </Suspense>
-    <section className="space-y-4 p-4 sm:p-8">
-      <div className="space-y-2">
-        <h1 className="m-0 font-semibold text-4xl tracking-tight">{title}</h1>
-        <p className="text-muted-foreground">{description}</p>
-      </div>
-      <OverviewMetrics />
-    </section>
-    <DataHealthSection />
-    <FeedbackSection />
-    <AiInsightsSection />
-    <ContradictionsSection />
-    <SessionRecordingsSection />
-    <FeaturesSection />
-    <InitiativesSection />
-    <RoadmapSection />
-  </div>
-);
+const Insights = async () => {
+  const organizationId = await currentOrganizationId();
+
+  return (
+    <div className="divide-y">
+      <Suspense fallback={null}>
+        <TrackInsightsView />
+      </Suspense>
+      <section className="space-y-4 p-4 sm:p-8">
+        <div className="space-y-2">
+          <h1 className="m-0 font-semibold text-4xl tracking-tight">{title}</h1>
+          <p className="text-muted-foreground">{description}</p>
+        </div>
+        <OverviewMetrics />
+      </section>
+      <DataHealthSection />
+      <FeedbackSection />
+      <AiInsightsSection />
+      <ContradictionsSection />
+      <SessionRecordingsSection />
+      <FeaturesSection />
+      <InitiativesSection />
+      <RoadmapSection />
+      {organizationId && <AiCopilotChat organizationId={organizationId} />}
+    </div>
+  );
+};
 
 export default Insights;

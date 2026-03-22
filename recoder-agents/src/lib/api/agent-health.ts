@@ -28,7 +28,7 @@ export interface HealthOverviewResponse {
 export const getAgentHealth = async (agentId: string): Promise<HealthScore> => {
   const response = await backendApi.get<HealthScore>(
     `/agents/${agentId}/health`,
-    { showErrors: false, cache: 'no-store' }
+    { showErrors: true, cache: 'no-store' }
   );
 
   if (response.error) {
@@ -58,7 +58,7 @@ export const getAgentHealthHistory = async (
 ): Promise<HealthHistoryResponse> => {
   const response = await backendApi.get<HealthHistoryResponse>(
     `/agents/${agentId}/health/history?limit=${limit}`,
-    { showErrors: false, cache: 'no-store' }
+    { showErrors: true, cache: 'no-store' }
   );
 
   if (response.error) {
@@ -71,7 +71,7 @@ export const getAgentHealthHistory = async (
 export const getAgentsHealthOverview = async (): Promise<HealthOverviewResponse> => {
   const response = await backendApi.get<HealthOverviewResponse>(
     `/agents/health/overview`,
-    { showErrors: false, cache: 'no-store' }
+    { showErrors: true, cache: 'no-store' }
   );
 
   if (response.error) {

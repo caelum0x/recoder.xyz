@@ -91,7 +91,7 @@ async def send_otp_email_endpoint(request: SendOtpRequest):
     # Verify the email belongs to an existing user
     async with engine.connect() as conn:
         result = await conn.execute(
-            text('SELECT "id" FROM "user" WHERE "email" = :email LIMIT 1'),
+            text('SELECT "id" FROM "users" WHERE "email" = :email LIMIT 1'),
             {"email": request.email},
         )
         user_row = result.fetchone()
@@ -202,7 +202,7 @@ async def verify_otp_endpoint(request: VerifyOtpRequest):
     # Look up the user
     async with engine.connect() as conn:
         result = await conn.execute(
-            text('SELECT "id" FROM "user" WHERE "email" = :email LIMIT 1'),
+            text('SELECT "id" FROM "users" WHERE "email" = :email LIMIT 1'),
             {"email": request.email},
         )
         user_row = result.fetchone()
@@ -220,7 +220,7 @@ async def verify_otp_endpoint(request: VerifyOtpRequest):
     async with engine.begin() as conn:
         await conn.execute(
             text(
-                'INSERT INTO "session" '
+                'INSERT INTO "sessions" '
                 '("id", "userId", "token", "expiresAt", "createdAt", "updatedAt") '
                 "VALUES (:id, :user_id, :token, :expires_at, :created_at, :updated_at)"
             ),

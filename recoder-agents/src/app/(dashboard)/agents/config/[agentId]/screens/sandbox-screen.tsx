@@ -398,8 +398,8 @@ function TestCaseRow({
 }: {
   testCase: SandboxTestCase;
   agentId: string;
-  onRun: () => Promise<void>;
-  onDelete: () => Promise<void>;
+  onRun: () => Promise<unknown>;
+  onDelete: () => Promise<unknown>;
   isRunning: boolean;
 }) {
   const [expanded, setExpanded] = useState(false);

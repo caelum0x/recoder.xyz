@@ -76,6 +76,7 @@ export class ModelTracker extends EventEmitter {
   private qualityHistory: Map<string, QualityMetrics[]> = new Map();
   private reliabilityData: Map<string, ModelReliability> = new Map();
   private benchmarks: Map<string, ModelBenchmark[]> = new Map();
+  private availabilityHistory: Map<string, { available: boolean; timestamp: Date }[]> = new Map();
   private performanceWindow = 24 * 60 * 60 * 1000; // 24 hours
 
   constructor() {
@@ -480,30 +481,101 @@ export class ModelTracker extends EventEmitter {
   }
 
   private async updateAvailabilityTracking(modelName: string, isAvailable: boolean, timestamp: Date): Promise<void> {
-    // Store availability data points for reliability calculations
-    // This would typically use a time-series database
+    const history = this.availabilityHistory.get(modelName) || [];
+    history.push({ available: isAvailable, timestamp });
+
+    // Keep only records within the performance window (last 24 hours)
+    const cutoff = new Date(Date.now() - this.performanceWindow);
+    const trimmed = history.filter(r => r.timestamp >= cutoff);
+
+    this.availabilityHistory.set(modelName, trimmed);
     Logger.debug(`Availability update for ${modelName}: ${isAvailable}`);
   }
 
   private async calculateUptimePercentage(modelName: string): Promise<number> {
-    // Calculate uptime percentage over the last 24 hours
-    // This would query actual availability data
-    return 99.5; // Simulated value
+    const history = this.availabilityHistory.get(modelName);
+    if (!history || history.length === 0) {
+      return 100;
+    }
+
+    const upCount = history.filter(r => r.available).length;
+    const total = history.length;
+    return Math.round((upCount / total) * 1000) / 10; // Rounded to 1 decimal
   }
 
   private async calculateMTBF(modelName: string): Promise<number> {
-    // Mean Time Between Failures calculation
-    return 720; // 12 hours (simulated)
+    const history = this.availabilityHistory.get(modelName);
+    if (!history || history.length === 0) {
+      return 0;
+    }
+
+    // Find failure records (unavailable entries) sorted by time
+    const failures = history
+      .filter(r => !r.available)
+      .sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
+
+    if (failures.length < 2) {
+      return 0;
+    }
+
+    // Calculate average time gap between consecutive failures in hours
+    let totalGapMs = 0;
+    for (let i = 1; i < failures.length; i++) {
+      totalGapMs += failures[i].timestamp.getTime() - failures[i - 1].timestamp.getTime();
+    }
+
+    const avgGapMs = totalGapMs / (failures.length - 1);
+    return Math.round((avgGapMs / (1000 * 60 * 60)) * 100) / 100; // Convert to hours, 2 decimal places
   }
 
   private async calculateMTTR(modelName: string): Promise<number> {
-    // Mean Time To Recovery calculation
-    return 15; // 15 minutes (simulated)
+    const history = this.availabilityHistory.get(modelName);
+    if (!history || history.length < 2) {
+      return 0;
+    }
+
+    // Sort by timestamp to find recovery transitions (unavailable -> available)
+    const sorted = [...history].sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
+
+    let totalRecoveryMs = 0;
+    let recoveryCount = 0;
+
+    for (let i = 1; i < sorted.length; i++) {
+      if (!sorted[i - 1].available && sorted[i].available) {
+        // Recovery transition found
+        totalRecoveryMs += sorted[i].timestamp.getTime() - sorted[i - 1].timestamp.getTime();
+        recoveryCount++;
+      }
+    }
+
+    if (recoveryCount === 0) {
+      return 0;
+    }
+
+    const avgRecoveryMs = totalRecoveryMs / recoveryCount;
+    return Math.round((avgRecoveryMs / (1000 * 60)) * 100) / 100; // Convert to minutes, 2 decimal places
   }
 
   private async calculateSLACompliance(modelName: string): Promise<number> {
-    // SLA compliance percentage
-    return 99.9; // Simulated value
+    const metrics = this.modelMetrics.get(modelName);
+    if (!metrics) {
+      return 99.9;
+    }
+
+    const slaThresholdMs = 5000; // 5-second SLA threshold for p95 latency
+    const p95Latency = metrics.avgLatency * 1.5; // Approximate p95 from average
+
+    if (p95Latency <= slaThresholdMs) {
+      return 99.9;
+    }
+
+    // Scale down as latency exceeds threshold
+    // For every 1s over threshold, reduce compliance by ~2%
+    const excessMs = p95Latency - slaThresholdMs;
+    const penaltyPercent = (excessMs / 1000) * 2;
+    const compliance = Math.max(0, 99.9 - penaltyPercent);
+
+    return Math.round(compliance * 10) / 10; // 1 decimal place
   }
 
   private async runModelBenchmark(modelName: string, taskType: string): Promise<ModelBenchmark> {

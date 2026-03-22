@@ -204,6 +204,7 @@ const uploadFiles = async (
         headers: {
           Authorization: `Bearer ${token}`,
         },
+        credentials: 'include',
         body: formData,
       });
 

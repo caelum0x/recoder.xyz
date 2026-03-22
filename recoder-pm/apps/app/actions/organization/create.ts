@@ -75,6 +75,15 @@ export const createOrganization = async ({
       organizationRole: RecoderPmRole.Admin,
     });
 
+    // Auto-seed sample data so new orgs don't start empty
+    try {
+      const { createExampleContent } = await import("@/actions/example-content/create");
+      // Fire and forget — don't block org creation if seeding fails
+      createExampleContent().catch(() => {});
+    } catch {
+      // Silently ignore if example content module not available
+    }
+
     return { id: organization.id };
   } catch (error) {
     const message = parseError(error);

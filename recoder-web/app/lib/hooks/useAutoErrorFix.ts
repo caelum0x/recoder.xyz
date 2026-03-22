@@ -499,15 +499,12 @@ export function useAutoErrorFix(options: UseAutoErrorFixOptions = {}) {
     }
 
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const dockerHost = import.meta.env.VITE_DOCKER_BACKEND_URL || '';
-    let wsUrl: string;
-
-    if (dockerHost) {
-      const host = dockerHost.replace(/^https?:\/\//, '');
-      wsUrl = `${protocol}//${host}/build-errors/${projectId}`;
-    } else {
-      wsUrl = `ws://localhost:3100/build-errors/${projectId}`;
+    let dockerHost = import.meta.env.VITE_DOCKER_BACKEND_URL || 'https://docker.recoder.xyz';
+    if (typeof window !== 'undefined' && window.location.hostname !== 'localhost' && dockerHost.includes('localhost')) {
+      dockerHost = 'https://docker.recoder.xyz';
     }
+    const host = dockerHost.replace(/^https?:\/\//, '');
+    const wsUrl = `${protocol}//${host}/build-errors/${projectId}`;
 
     try {
       const token = getSessionToken();

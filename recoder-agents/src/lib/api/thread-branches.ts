@@ -69,7 +69,7 @@ export const getThreadBranches = async (
 ): Promise<BranchListResponse> => {
   const response = await backendApi.get<BranchListResponse>(
     `/threads/${threadId}/branches`,
-    { showErrors: false, cache: 'no-store' },
+    { showErrors: true, cache: 'no-store' },
   );
   if (response.error) {
     throw new Error(`Failed to fetch branches: ${response.error.message}`);
@@ -82,7 +82,7 @@ export const getBranchDetail = async (
 ): Promise<ThreadBranch> => {
   const response = await backendApi.get<ThreadBranch>(
     `/branches/${branchId}`,
-    { showErrors: false, cache: 'no-store' },
+    { showErrors: true, cache: 'no-store' },
   );
   if (response.error) {
     throw new Error(`Failed to fetch branch: ${response.error.message}`);
@@ -123,7 +123,7 @@ export const getBranchTree = async (
 ): Promise<BranchTreeResponse> => {
   const response = await backendApi.get<BranchTreeResponse>(
     `/branches/tree/${threadId}`,
-    { showErrors: false, cache: 'no-store' },
+    { showErrors: true, cache: 'no-store' },
   );
   if (response.error) {
     throw new Error(`Failed to fetch branch tree: ${response.error.message}`);

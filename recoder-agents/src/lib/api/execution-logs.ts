@@ -40,7 +40,7 @@ export const getAgentLogs = async (
   const query = params.toString() ? `?${params}` : '';
   const response = await backendApi.get<ExecutionLog[]>(
     `/agents/${agentId}/logs${query}`,
-    { showErrors: false }
+    { showErrors: true }
   );
   if (response.error) throw new Error(response.error.message);
   return response.data!;
@@ -56,7 +56,7 @@ export const getRunLogs = async (
   const query = params.toString() ? `?${params}` : '';
   const response = await backendApi.get<ExecutionLog[]>(
     `/runs/${runId}/logs${query}`,
-    { showErrors: false }
+    { showErrors: true }
   );
   if (response.error) throw new Error(response.error.message);
   return response.data!;
@@ -65,7 +65,7 @@ export const getRunLogs = async (
 export const getLogSummary = async (agentId: string): Promise<LogSummary> => {
   const response = await backendApi.get<LogSummary>(
     `/agents/${agentId}/logs/summary`,
-    { showErrors: false }
+    { showErrors: true }
   );
   if (response.error) throw new Error(response.error.message);
   return response.data!;

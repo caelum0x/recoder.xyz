@@ -12,7 +12,7 @@ import os
 import time
 import traceback
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Optional, List, Dict, Any, Tuple
 
 from fastapi import APIRouter, HTTPException, Depends, Request, File, UploadFile, Form
@@ -129,17 +129,17 @@ async def _check_billing_and_limits(
         
         return {
             'agent_runs': {
-                'can_start': counts['running_runs_count'] < concurrent_limit,
+                'can_start': concurrent_limit <= 0 or counts['running_runs_count'] < concurrent_limit,
                 'running_count': counts['running_runs_count'],
                 'limit': concurrent_limit,
             },
             'projects': {
-                'can_create': counts['project_count'] < project_limit,
+                'can_create': project_limit <= 0 or counts['project_count'] < project_limit,
                 'current_count': counts['project_count'],
                 'limit': project_limit,
             },
             'threads': {
-                'can_create': counts['thread_count'] < thread_limit,
+                'can_create': thread_limit <= 0 or counts['thread_count'] < thread_limit,
                 'current_count': counts['thread_count'],
                 'limit': thread_limit,
             }
@@ -215,7 +215,11 @@ async def _check_concurrent_runs_limit(account_id: str):
         concurrent_limit = 1
     else:
         concurrent_limit = tier_info.get('concurrent_runs', 1)
-    
+
+    # If limit is 0 or not set, don't block — allow the run
+    if concurrent_limit <= 0:
+        return
+
     cached_runs = await get_cached_running_runs(account_id)
     if cached_runs is not None:
         running_count = len(cached_runs) if isinstance(cached_runs, list) else cached_runs
@@ -254,6 +258,64 @@ async def _get_effective_model(model_name: Optional[str], agent_config: Optional
         return agent_config['model']
     else:
         return await model_manager.get_default_model_for_user(None, account_id)
+
+
+async def _cleanup_stale_runs(account_id: str):
+    """Auto-close agent runs stuck in 'running' status for more than 10 minutes.
+
+    This prevents the concurrent run limit from blocking new runs when a previous
+    run failed to update its status (e.g., due to a crash or timeout).
+    """
+    from core.services.db import execute_mutate
+
+    stale_cutoff = datetime.now(timezone.utc) - timedelta(minutes=10)
+
+    try:
+        cleaned = await execute_mutate(
+            """
+            UPDATE agent_runs
+            SET status = 'failed',
+                completed_at = :now,
+                error = 'Auto-cleaned: stale run exceeded 10 min timeout'
+            WHERE id IN (
+                SELECT ar.id
+                FROM agent_runs ar
+                INNER JOIN threads t ON ar.thread_id = t.thread_id
+                WHERE t.account_id = :account_id
+                  AND ar.status = 'running'
+                  AND ar.started_at < :stale_cutoff
+            )
+            RETURNING id
+            """,
+            {
+                "account_id": account_id,
+                "now": datetime.now(timezone.utc),
+                "stale_cutoff": stale_cutoff,
+            }
+        )
+
+        if cleaned:
+            cleaned_ids = [str(row['id']) for row in cleaned]
+            logger.warning(
+                f"[STALE_CLEANUP] Auto-closed {len(cleaned)} stale runs for account {account_id}: {cleaned_ids}"
+            )
+
+            # Release Redis slots for cleaned runs so slot counter stays accurate
+            from core.agents.pipeline.slot_manager import release_slot
+            for run_id in cleaned_ids:
+                try:
+                    await release_slot(account_id, run_id)
+                except Exception:
+                    pass
+
+            # Invalidate caches after cleanup
+            try:
+                from core.cache.runtime_cache import invalidate_running_runs_cache
+                await invalidate_running_runs_cache(account_id)
+            except Exception:
+                pass
+    except Exception as e:
+        logger.error(f"[STALE_CLEANUP] Failed to clean stale runs for {account_id}: {e}")
 
 
 async def _create_agent_run_record(
@@ -408,7 +470,7 @@ async def start_agent_run(
                 logger.debug(f"Project check/creation skipped: {e}")
         
         # Resolve sandbox (creates if needed, starts it) - BLOCKING
-        sandbox_info = await resolve_sandbox(project_id, account_id, client, require_started=True)
+        sandbox_info = await resolve_sandbox(project_id, account_id, None, require_started=True)
         sandbox_id = sandbox_info.sandbox_id if sandbox_info else None
         
         if sandbox_id:
@@ -442,9 +504,12 @@ async def start_agent_run(
                 logger.error(f"❌ [BACKGROUND] Error creating sandbox for project {proj_id}: {e}")
         
         # Fire and forget - don't wait for sandbox creation
-        asyncio.create_task(create_sandbox_background(project_id, account_id, client))
+        asyncio.create_task(create_sandbox_background(project_id, account_id, None))
         logger.info(f"🚀 [AGENT_START] Started background sandbox creation for new project {project_id}")
     
+    # Clean up stale runs before checking slot availability
+    await _cleanup_stale_runs(account_id)
+
     slot_reservation = await reserve_slot(
         account_id=account_id,
         agent_run_id=agent_run_id,
@@ -768,8 +833,8 @@ async def unified_agent_start(
         from core.cache.runtime_cache import get_cached_tier_info
         tier_info = await get_cached_tier_info(account_id) or await subscription_service.get_user_subscription_tier(account_id)
         if tier_info.get('name') in ('free', 'none'):
-            logger.info(f"⚡ [MODEL_OVERRIDE] Free tier user {account_id} - using minimax instead of basic")
-            model_name = "recoder/minimax"
+            logger.info(f"⚡ [MODEL_OVERRIDE] Free tier user {account_id} - using gpt4o-mini instead of basic")
+            model_name = "recoder/gpt4o-mini"
 
     memory_enabled_bool = memory_enabled.lower() == 'true' if memory_enabled else None
     
@@ -790,7 +855,7 @@ async def unified_agent_start(
                 raise HTTPException(status_code=404, detail="Thread not found")
             project_id = thread_data['project_id']
             if thread_data['account_id'] != user_id:
-                await verify_and_authorize_thread_access(client, thread_id, user_id, require_write_access=True)
+                await verify_and_authorize_thread_access(None, thread_id, user_id, require_write_access=True)
         
         # Parse files if present
         files_data = []

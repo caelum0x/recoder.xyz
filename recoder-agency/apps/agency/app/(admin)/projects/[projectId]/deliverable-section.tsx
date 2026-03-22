@@ -1,11 +1,12 @@
 "use client";
 
-import { PlusIcon, SendIcon, TrashIcon } from "lucide-react";
+import { PlusIcon, SendIcon, SparklesIcon, TrashIcon } from "lucide-react";
 import { useState } from "react";
 import {
 	createDeliverable,
 	deleteDeliverable,
 	forceSendForReview,
+	generateDeliverableContentWithAI,
 	sendForReview,
 	toggleBillableMilestone,
 } from "./deliverables-actions";
@@ -304,6 +305,17 @@ export function DeliverableSection({
 											)}
 											{d.status === "draft" && (
 												<>
+													<button
+														type="button"
+														onClick={() =>
+															generateDeliverableContentWithAI(d.id, projectId)
+														}
+														className="inline-flex items-center gap-1 rounded-lg bg-gradient-to-r from-purple-600 to-blue-600 px-2 py-1 text-xs text-white hover:from-purple-700 hover:to-blue-700 transition-all"
+														title="Generate content with AI"
+													>
+														<SparklesIcon className="size-3" />
+														AI Draft
+													</button>
 													<button
 														type="button"
 														onClick={() =>

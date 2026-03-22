@@ -168,7 +168,7 @@ export function ChartBuilderDialog({ open, onOpenChange, editChart }: ChartBuild
           {/* Data Source */}
           <div className="space-y-2">
             <Label>Data Source</Label>
-            <Select value={dataSource} onValueChange={setDataSource}>
+            <Select value={dataSource} onValueChange={(value) => setDataSource(value as typeof dataSource)}>
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
@@ -199,7 +199,7 @@ export function ChartBuilderDialog({ open, onOpenChange, editChart }: ChartBuild
           {/* Time Range */}
           <div className="space-y-2">
             <Label>Time Range</Label>
-            <Select value={timeRange} onValueChange={setTimeRange}>
+            <Select value={timeRange} onValueChange={(value) => setTimeRange(value as typeof timeRange)}>
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>

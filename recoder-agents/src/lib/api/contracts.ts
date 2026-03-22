@@ -263,8 +263,8 @@ const unifiedAgentStartResponseSchema = z.object({
   thread_id: z.string(),
   agent_run_id: z.string(),
   status: z.string(),
-  project_id: z.string().optional(),
-  sandbox_id: z.string().optional(),
+  project_id: z.string().nullable().optional(),
+  sandbox_id: z.string().nullable().optional(),
 });
 
 const optimisticAgentStartResponseSchema = z.object({

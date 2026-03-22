@@ -3,7 +3,10 @@ import { withResolvers } from './promises';
 import { getSessionToken } from '~/lib/services/docker-api';
 import { updateTerminalStatus } from '~/lib/stores/connection';
 
-const DOCKER_URL = import.meta.env.VITE_DOCKER_BACKEND_URL || 'http://localhost:3100';
+let DOCKER_URL = import.meta.env.VITE_DOCKER_BACKEND_URL || 'https://docker.recoder.xyz';
+if (typeof window !== 'undefined' && window.location.hostname !== 'localhost' && DOCKER_URL.includes('localhost')) {
+  DOCKER_URL = 'https://docker.recoder.xyz';
+}
 
 let terminalCounter = 0;
 

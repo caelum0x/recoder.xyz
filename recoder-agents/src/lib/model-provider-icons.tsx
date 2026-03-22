@@ -14,7 +14,7 @@ export type ModelProvider =
   | 'recoder';
 
 /**
- * Check if a model ID corresponds to a Recoder mode (Basic, Advanced, or Test)
+ * Check if a model ID corresponds to a Recoder mode (Recoder Basic, Recoder Power, or Test)
  */
 export function isRecoderMode(modelId: string): boolean {
   // New Recoder registry IDs

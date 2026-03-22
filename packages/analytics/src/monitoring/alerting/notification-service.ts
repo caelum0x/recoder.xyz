@@ -470,10 +470,20 @@ export class NotificationService extends EventEmitter {
     const subject = lines[0].replace('Subject: ', '');
     const body = lines.slice(1).join('\n');
 
-    // In a real implementation, you would use nodemailer or similar
-    Logger.info(`Would send email to ${channel.config.to}: ${subject}`);
-    
-    return true; // Simulated success
+    const endpoint = channel.config.settings?.endpoint || process.env.ALERT_EMAIL_ENDPOINT;
+    if (!endpoint) {
+      Logger.warn(`No email endpoint configured for channel ${channel.id}. Set config.settings.endpoint or ALERT_EMAIL_ENDPOINT env var.`);
+      return false;
+    }
+
+    const payload = {
+      to: channel.config.to,
+      from: channel.config.from,
+      subject,
+      body,
+    };
+
+    return this.sendHttpRequest(endpoint, 'POST', payload);
   }
 
   private async sendWebhookNotification(alert: any, channel: NotificationChannel, type: 'alert' | 'resolution'): Promise<boolean> {
@@ -496,15 +506,83 @@ export class NotificationService extends EventEmitter {
   }
 
   private async sendTeamsNotification(alert: any, channel: NotificationChannel, type: 'alert' | 'resolution'): Promise<boolean> {
-    // Microsoft Teams webhook implementation
-    Logger.info(`Would send Teams notification for alert ${alert.id}`);
-    return true; // Simulated success
+    const webhookUrl = channel.config.settings?.webhookUrl || process.env.TEAMS_WEBHOOK_URL;
+    if (!webhookUrl) {
+      Logger.warn(`No Teams webhook URL configured for channel ${channel.id}. Set config.settings.webhookUrl or TEAMS_WEBHOOK_URL env var.`);
+      return false;
+    }
+
+    const severityColor = alert.severity === 'critical' ? 'FF0000'
+      : alert.severity === 'high' ? 'FF8C00'
+      : alert.severity === 'medium' ? 'FFD700'
+      : '00FF00';
+
+    const payload = {
+      '@type': 'MessageCard',
+      '@context': 'http://schema.org/extensions',
+      themeColor: severityColor,
+      summary: `[${(alert.severity || 'info').toUpperCase()}] ${alert.title || 'Alert'}`,
+      sections: [
+        {
+          activityTitle: `[${(alert.severity || 'info').toUpperCase()}] ${alert.title || 'Alert'}`,
+          activitySubtitle: `Source: ${alert.source || 'unknown'}`,
+          facts: [
+            { name: 'Severity', value: (alert.severity || 'info').toUpperCase() },
+            { name: 'Type', value: type },
+            { name: 'Model', value: alert.modelName || 'N/A' },
+            { name: 'Provider', value: alert.provider || 'N/A' },
+            { name: 'Time', value: alert.timestamp ? new Date(alert.timestamp).toISOString() : new Date().toISOString() },
+          ],
+          text: alert.message || '',
+        },
+      ],
+      potentialAction: [
+        {
+          '@type': 'OpenUri',
+          name: 'View Dashboard',
+          targets: [{ os: 'default', uri: `https://dashboard.recoder.xyz/alerts/${alert.id}` }],
+        },
+      ],
+    };
+
+    return this.sendHttpRequest(webhookUrl, 'POST', payload);
   }
 
   private async sendDiscordNotification(alert: any, channel: NotificationChannel, type: 'alert' | 'resolution'): Promise<boolean> {
-    // Discord webhook implementation
-    Logger.info(`Would send Discord notification for alert ${alert.id}`);
-    return true; // Simulated success
+    const webhookUrl = channel.config.settings?.webhookUrl || process.env.DISCORD_WEBHOOK_URL;
+    if (!webhookUrl) {
+      Logger.warn(`No Discord webhook URL configured for channel ${channel.id}. Set config.settings.webhookUrl or DISCORD_WEBHOOK_URL env var.`);
+      return false;
+    }
+
+    const severityColor = alert.severity === 'critical' ? 0xFF0000
+      : alert.severity === 'high' ? 0xFF8C00
+      : alert.severity === 'medium' ? 0xFFD700
+      : 0x00FF00;
+
+    const payload = {
+      embeds: [
+        {
+          title: `[${(alert.severity || 'info').toUpperCase()}] ${alert.title || 'Alert'}`,
+          description: alert.message || '',
+          color: severityColor,
+          fields: [
+            { name: 'Severity', value: (alert.severity || 'info').toUpperCase(), inline: true },
+            { name: 'Type', value: type, inline: true },
+            { name: 'Source', value: alert.source || 'unknown', inline: true },
+            { name: 'Model', value: alert.modelName || 'N/A', inline: true },
+            { name: 'Provider', value: alert.provider || 'N/A', inline: true },
+          ],
+          timestamp: alert.timestamp ? new Date(alert.timestamp).toISOString() : new Date().toISOString(),
+          footer: {
+            text: 'Recoder Health Monitor',
+          },
+          url: `https://dashboard.recoder.xyz/alerts/${alert.id}`,
+        },
+      ],
+    };
+
+    return this.sendHttpRequest(webhookUrl, 'POST', payload);
   }
 
   private async sendHttpRequest(

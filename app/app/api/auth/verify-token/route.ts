@@ -65,6 +65,7 @@ function jsonError(message: string, status: number, extra?: Record<string, unkno
 }
 
 async function resolveSessionFromToken(token: string) {
+  // Try Better Auth's getSession first
   let session: Awaited<ReturnType<typeof auth.api.getSession>> | null = null;
   for (const cookieName of SESSION_COOKIE_CANDIDATES) {
     session = await auth.api.getSession({
@@ -75,6 +76,52 @@ async function resolveSessionFromToken(token: string) {
     if (session?.user) {
       return session;
     }
+  }
+
+  // Fallback: direct DB lookup (handles cases where Better Auth cookie
+  // prefix mismatch prevents getSession from finding valid sessions).
+  // Check "sessions" (primary, where adapter writes) then "session" (legacy).
+  try {
+    const { Pool } = await import('pg');
+    const dbUrl = process.env.DATABASE_URL;
+    if (dbUrl) {
+      const pool = new Pool({ connectionString: dbUrl, max: 1 });
+      try {
+        const sessionToken = token.includes('.') ? token.split('.')[0] : token;
+
+        // Primary: "sessions" table joined with "users" table
+        let result = await pool.query(
+          `SELECT s."userId", s."expiresAt", u.id, u.email, u.name, u.image
+           FROM "sessions" s JOIN "users" u ON s."userId" = u.id
+           WHERE s.token = $1 AND s."expiresAt" > NOW()
+           LIMIT 1`,
+          [sessionToken]
+        );
+
+        // Fallback: legacy "session" table joined with "users" table
+        if (!result.rows[0]) {
+          result = await pool.query(
+            `SELECT s."userId", s."expiresAt", u.id, u.email, u.name, u.image
+             FROM "session" s JOIN "users" u ON s."userId" = u.id
+             WHERE s.token = $1 AND s."expiresAt" > NOW()
+             LIMIT 1`,
+            [sessionToken]
+          );
+        }
+
+        if (result.rows[0]) {
+          const row = result.rows[0];
+          return {
+            user: { id: row.id, email: row.email, name: row.name, image: row.image },
+            session: { userId: row.userId, expiresAt: row.expiresAt, token: sessionToken },
+          };
+        }
+      } finally {
+        await pool.end();
+      }
+    }
+  } catch (e) {
+    console.error('Direct DB session lookup fallback failed:', e);
   }
 
   return null;

@@ -8,7 +8,7 @@
 
 import { type ActionFunctionArgs, type LoaderFunctionArgs, json } from '@remix-run/cloudflare';
 import { verifySession } from '~/lib/auth/session.server';
-import { neon } from '@neondatabase/serverless';
+import { createSql } from '~/lib/.server/db/pg-pool';
 import { createScopedLogger } from '~/utils/logger';
 
 const logger = createScopedLogger('Deployments');
@@ -90,7 +90,7 @@ export async function loader({ params, request, context }: LoaderFunctionArgs) {
       return json({ success: false, error: 'Database not configured' }, { status: 500 });
     }
 
-    const sql = neon(databaseUrl);
+    const sql = createSql(databaseUrl);
 
     // Get project with deployment info
     const projects = await sql`
@@ -166,7 +166,7 @@ export async function action({ params, request, context }: ActionFunctionArgs) {
       }, { status: 400 });
     }
 
-    const sql = neon(databaseUrl);
+    const sql = createSql(databaseUrl);
 
     // Verify project ownership
     const projects = await sql`

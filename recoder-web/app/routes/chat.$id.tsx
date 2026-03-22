@@ -14,8 +14,8 @@ export async function loader({ params, context }: LoaderFunctionArgs) {
 
   if (databaseUrl && chatId) {
     try {
-      const { neon } = await import('@neondatabase/serverless');
-      const sql = neon(databaseUrl);
+      const { createSql } = await import('~/lib/.server/db/pg-pool');
+      const sql = createSql(databaseUrl);
 
       // Look up chat session -> project -> framework/templateId
       const results = await sql`

@@ -32,7 +32,11 @@ import {
 import { createScopedLogger, DEBUG, createTimer } from '~/utils/logger';
 
 const logger = createScopedLogger('DockerAPI');
-const DOCKER_URL = import.meta.env.VITE_DOCKER_BACKEND_URL || 'http://localhost:3100';
+let DOCKER_URL = import.meta.env.VITE_DOCKER_BACKEND_URL || 'https://docker.recoder.xyz';
+// Runtime override: if build baked in localhost but we're running in production, use production URL
+if (typeof window !== 'undefined' && window.location.hostname !== 'localhost' && DOCKER_URL.includes('localhost')) {
+  DOCKER_URL = 'https://docker.recoder.xyz';
+}
 const CONTAINER_CREATE_TIMEOUT_MS = Number(import.meta.env.VITE_CONTAINER_CREATE_TIMEOUT_MS || 120000);
 
 // Request ID counter for tracing

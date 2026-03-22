@@ -1,9 +1,13 @@
 import { getUserApiKey, getSessionCookie } from './user-api-key';
 
-// CRITICAL: Use globalThis.process.env to get real Node.js env vars.
-// Vite replaces `import from 'node:process'` with its polyfill shim,
-// which has an empty env object and breaks platform key fallback.
-const env = globalThis.process?.env || {};
+// CRITICAL: Access real Node.js env vars at runtime, not build time.
+// Vite's node-polyfills plugin replaces ALL `process` references with a shim
+// that has empty env. We use a dynamic property access on globalThis to bypass.
+function getEnv(): Record<string, string | undefined> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const g = globalThis as any;
+  return g['process']?.env || {};
+}
 
 export interface APIKeyResult {
   key: string;
@@ -47,6 +51,7 @@ export async function getAPIKeyWithSource(
   }
 
   // Priority 2: Platform key from environment
+  const env = getEnv();
   if (env.OPENROUTER_API_KEY) {
     return { key: env.OPENROUTER_API_KEY, source: 'platform' };
   }

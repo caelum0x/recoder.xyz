@@ -61,7 +61,7 @@ export const listAnnotations = async (
   const qs = params.toString();
   const response = await backendApi.get<ThreadAnnotation[]>(
     `/threads/${threadId}/annotations${qs ? `?${qs}` : ''}`,
-    { showErrors: false }
+    { showErrors: true }
   );
   if (response.error) throw new Error(response.error.message);
   return response.data!;
@@ -107,7 +107,7 @@ export const getRecentAnnotations = async (
 ): Promise<ThreadAnnotation[]> => {
   const response = await backendApi.get<ThreadAnnotation[]>(
     `/annotations/recent?limit=${limit}`,
-    { showErrors: false }
+    { showErrors: true }
   );
   if (response.error) throw new Error(response.error.message);
   return response.data!;
@@ -116,7 +116,7 @@ export const getRecentAnnotations = async (
 export const getAnnotationSummary = async (): Promise<AnnotationSummary> => {
   const response = await backendApi.get<AnnotationSummary>(
     '/annotations/summary',
-    { showErrors: false }
+    { showErrors: true }
   );
   if (response.error) throw new Error(response.error.message);
   return response.data!;

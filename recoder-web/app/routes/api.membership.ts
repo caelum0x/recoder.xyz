@@ -5,7 +5,7 @@
 
 import { type LoaderFunctionArgs, json } from '@remix-run/cloudflare';
 import { verifySession } from '~/lib/auth/session.server';
-import { neon } from '@neondatabase/serverless';
+import { createSql } from '~/lib/.server/db/pg-pool';
 import { createScopedLogger } from '~/utils/logger';
 
 const logger = createScopedLogger('Membership');
@@ -147,7 +147,7 @@ async function getUserUsage(
   planFeatures: typeof PLAN_FEATURES[PlanType]
 ): Promise<UsageStats> {
   try {
-    const sql = neon(databaseUrl);
+    const sql = createSql(databaseUrl);
 
     // Get project count
     const projectsResult = await sql`

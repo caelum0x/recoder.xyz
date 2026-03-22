@@ -1,7 +1,18 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState, useEffect, useMemo } from 'react';
 import { searchThreads, ThreadSearchResponse } from '@/lib/api/threads';
 import { threadKeys } from './keys';
+import { toast } from '@/lib/toast';
+import {
+  searchThreadsIndex,
+  indexThreadForSearch,
+  indexThreadsBatch,
+  removeFromIndex,
+  getSearchHistoryV2,
+  getSearchStats,
+  type SearchFilters,
+  type IndexThreadData,
+} from '@/lib/api/thread-search';
 
 const DEBOUNCE_DELAY = 400; // ms
 const MIN_QUERY_LENGTH = 2;
@@ -74,3 +85,98 @@ export const useThreadSearch = (query: string, limit: number = 10) => {
     shouldSearch,
   };
 };
+
+// ============================================================================
+// Sprint 72 Phase 2 — Thread Search Index Hooks
+// ============================================================================
+
+export function useSearchThreads(filters: SearchFilters) {
+  return useQuery({
+    queryKey: ['thread-search-index', filters],
+    queryFn: () => searchThreadsIndex(filters),
+    staleTime: 20000,
+    enabled: true,
+  });
+}
+
+export function useIndexThread() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (data: IndexThreadData) => indexThreadForSearch(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['thread-search-index'] });
+      queryClient.invalidateQueries({ queryKey: ['thread-search-stats'] });
+      toast.success('Thread indexed successfully');
+    },
+    onError: (error: Error) => {
+      toast.error(error.message || 'Failed to index thread');
+    },
+  });
+}
+
+export function useBatchIndex() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (threads: IndexThreadData[]) => indexThreadsBatch(threads),
+    onSuccess: (result) => {
+      queryClient.invalidateQueries({ queryKey: ['thread-search-index'] });
+      queryClient.invalidateQueries({ queryKey: ['thread-search-stats'] });
+      toast.success(`Indexed ${result.indexed} thread(s)`);
+    },
+    onError: (error: Error) => {
+      toast.error(error.message || 'Failed to batch index threads');
+    },
+  });
+}
+
+export function useRemoveFromIndex() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (threadId: string) => removeFromIndex(threadId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['thread-search-index'] });
+      queryClient.invalidateQueries({ queryKey: ['thread-search-stats'] });
+      toast.success('Thread removed from index');
+    },
+    onError: (error: Error) => {
+      toast.error(error.message || 'Failed to remove thread from index');
+    },
+  });
+}
+
+export function useSearchHistory(limit?: number) {
+  return useQuery({
+    queryKey: ['thread-search-history', limit],
+    queryFn: () => getSearchHistoryV2(limit),
+    staleTime: 15000,
+  });
+}
+
+export function useClearSearchHistory() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async () => {
+      const { clearSearchHistory } = await import('@/lib/api/thread-search');
+      return clearSearchHistory();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['thread-search-history'] });
+      toast.success('Search history cleared');
+    },
+    onError: (error: Error) => {
+      toast.error(error.message || 'Failed to clear search history');
+    },
+  });
+}
+
+export function useSearchStats() {
+  return useQuery({
+    queryKey: ['thread-search-stats'],
+    queryFn: getSearchStats,
+    staleTime: 60000,
+  });
+}

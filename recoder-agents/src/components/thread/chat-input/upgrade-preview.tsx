@@ -67,7 +67,7 @@ export const UpgradePreview: React.FC<UpgradePreviewProps> = ({
                 </motion.div>
 
                 <span className="text-xs text-muted-foreground truncate block">
-                    Recoder Advanced mode, 100+ Integrations, Triggers, Custom AI Workers & more
+                    Recoder, 100+ Integrations, Triggers, Custom AI Workers & more
                 </span>
             </div>
 

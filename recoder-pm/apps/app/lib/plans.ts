@@ -7,6 +7,12 @@ import { database } from "@/lib/database";
 export type PlanName = "ENTERPRISE" | "FREE" | "PRO";
 
 export const currentPlan = async (): Promise<PlanName> => {
+  // BYOK platform — all users get PRO features (they bring their own AI keys)
+  const byokMode = process.env.BYOK_MODE !== 'false';
+  if (byokMode) {
+    return "PRO";
+  }
+
   const organizationId = await currentOrganizationId();
 
   if (!organizationId) {

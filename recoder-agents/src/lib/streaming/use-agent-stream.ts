@@ -38,7 +38,19 @@ import {
 } from './stream-preconnect';
 import { getSessionAccessToken } from '@/lib/auth/session-token';
 
-const API_URL = process.env.NEXT_PUBLIC_BACKEND_URL || '';
+const _envUrl = process.env.NEXT_PUBLIC_BACKEND_URL || '';
+// Guard: never use localhost/stale URLs in production
+const _isValidBackendUrl = (url: string) => {
+  if (!url) return false;
+  if (url.includes('localhost') || url.includes('127.0.0.1')) return false;
+  if (url.includes('neon.tech')) return false;
+  return url.includes('recoder.xyz') || url.includes('recoder.xyz');
+};
+const API_URL = _isValidBackendUrl(_envUrl)
+  ? _envUrl
+  : (typeof window !== 'undefined' && window.location.hostname !== 'localhost'
+    ? 'https://api.recoder.xyz/v1'
+    : _envUrl);
 
 export interface AgentStreamCallbacks {
   onMessage: (message: UnifiedMessage) => void;
@@ -292,6 +304,7 @@ export function useAgentStream(
       headers: {
         'Authorization': `Bearer ${await getAuthToken()}`,
       },
+      credentials: 'include',
     });
     
     if (!response.ok) {
@@ -676,6 +689,7 @@ export function useAgentStream(
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${token}`,
           },
+          credentials: 'include',
         });
         
         optionsRef.current.showToast?.('Worker stopped.', 'success');

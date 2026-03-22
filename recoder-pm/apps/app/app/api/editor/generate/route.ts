@@ -24,14 +24,10 @@ export const POST = async (request: Request): Promise<Response> => {
     return new Response("Unauthorized", { status: 401 });
   }
 
-  if (!organization.polarSubscriptionId) {
-    return new Response(
-      "You need to upgrade your account to use the AI Assistant.",
-      {
-        status: 402,
-      }
-    );
-  }
+  // BYOK platform — skip subscription check (users bring their own AI keys)
+  // if (!organization.polarSubscriptionId) {
+  //   return new Response("You need to upgrade your account to use the AI Assistant.", { status: 402 });
+  // }
 
   let system: string;
 

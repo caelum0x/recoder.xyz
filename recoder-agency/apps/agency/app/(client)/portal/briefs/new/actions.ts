@@ -36,13 +36,35 @@ export async function submitBrief(formData: FormData) {
 
 	const id = crypto.randomUUID();
 
-	await db.insert(projects).values({
-		id,
-		teamDbId: client.teamDbId,
-		clientDbId: client.dbId,
-		name: projectName,
-		brief: briefText,
-		status: "draft",
+	const [inserted] = await db
+		.insert(projects)
+		.values({
+			id,
+			teamDbId: client.teamDbId,
+			clientDbId: client.dbId,
+			name: projectName,
+			brief: briefText,
+			status: "draft",
+		})
+		.returning({ dbId: projects.dbId });
+
+	// Async AI brief analysis (fire and forget — enhances the brief in background)
+	import("@/lib/agency/workflows/brief-analyzer").then(async ({ analyzeBrief }) => {
+		try {
+			const { createOpenRouterModel } = await import(
+				"@/lib/agency/openrouter-model"
+			);
+			const model = createOpenRouterModel("openai/gpt-4o-mini");
+			if (model) {
+				await analyzeBrief({
+					projectDbId: inserted.dbId,
+					projectId: id,
+					brief: briefText,
+					clientName: client.name,
+					model,
+				});
+			}
+		} catch {}
 	});
 
 	redirect(`/portal/briefs/confirmation?briefId=${id}`);

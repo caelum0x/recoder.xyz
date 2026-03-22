@@ -41,7 +41,7 @@ export function ScheduledDowngradeCard({
 
   const getFrontendTierName = (tierKey: string) => {
     const tier = siteConfig.cloudPricingItems.find(p => p.tierKey === tierKey);
-    return tier?.name || tierKey || 'Basic';
+    return tier?.name || tierKey || 'Free';
   };
 
   const currentTierName = getFrontendTierName(scheduledChange.current_tier.name);

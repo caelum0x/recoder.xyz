@@ -51,7 +51,7 @@ export const listConfigSnapshots = async (
 ): Promise<ConfigSnapshotListResponse> => {
   const response = await backendApi.get<ConfigSnapshotListResponse>(
     `/agents/${agentId}/config-snapshots?limit=${limit}`,
-    { showErrors: false, cache: 'no-store' }
+    { showErrors: true, cache: 'no-store' }
   );
 
   if (response.error) {
@@ -67,7 +67,7 @@ export const getConfigSnapshotDetail = async (
 ): Promise<ConfigSnapshot> => {
   const response = await backendApi.get<ConfigSnapshot>(
     `/agents/${agentId}/config-snapshots/${snapshotId}`,
-    { showErrors: false, cache: 'no-store' }
+    { showErrors: true, cache: 'no-store' }
   );
 
   if (response.error) {
@@ -119,7 +119,7 @@ export const diffConfigSnapshots = async (
   const response = await backendApi.post<DiffResponse>(
     `/agents/${agentId}/config-snapshots/diff`,
     { snapshot_a_id: snapshotAId, snapshot_b_id: snapshotBId },
-    { showErrors: false }
+    { showErrors: true }
   );
 
   if (response.error) {

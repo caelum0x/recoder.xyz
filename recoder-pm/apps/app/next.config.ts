@@ -9,7 +9,6 @@ let nextConfig: NextConfig = withBackend(
     ...config,
     ...(process.env.DOCKER === "1" ? { output: "standalone" } : {}),
 
-    eslint: { ignoreDuringBuilds: true },
     typescript: { ignoreBuildErrors: true },
 
     transpilePackages: ["@sentry/nextjs", "@recoder/auth"],

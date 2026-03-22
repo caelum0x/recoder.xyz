@@ -92,7 +92,7 @@ export async function getBulkOperations(
 
     const response = await backendApi.get<BulkOperation[]>(
       `/bulk/operations${qs ? `?${qs}` : ''}`,
-      { showErrors: false, cache: 'no-store' },
+      { showErrors: true, cache: 'no-store' },
     );
     if (response.error) throw new Error(`Error: ${response.error.message}`);
     return response.data!;
@@ -108,7 +108,7 @@ export async function getBulkOperationDetail(
   try {
     const response = await backendApi.get<BulkOperation>(
       `/bulk/operations/${opId}`,
-      { showErrors: false, cache: 'no-store' },
+      { showErrors: true, cache: 'no-store' },
     );
     if (response.error) throw new Error(`Error: ${response.error.message}`);
     return response.data!;
@@ -125,7 +125,7 @@ export async function previewBulkOperation(
     const response = await backendApi.post<BulkPreviewResponse>(
       '/bulk/preview',
       request,
-      { showErrors: false },
+      { showErrors: true },
     );
     if (response.error) throw new Error(`Error: ${response.error.message}`);
     return response.data!;
@@ -139,7 +139,7 @@ export async function getBulkOpStats(): Promise<BulkOpStats> {
   try {
     const response = await backendApi.get<BulkOpStats>(
       '/bulk/stats',
-      { showErrors: false, cache: 'no-store' },
+      { showErrors: true, cache: 'no-store' },
     );
     if (response.error) throw new Error(`Error: ${response.error.message}`);
     return response.data!;

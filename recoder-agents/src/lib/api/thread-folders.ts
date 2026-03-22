@@ -34,7 +34,7 @@ export interface UpdateFolderData {
 
 export const getThreadFolders = async (): Promise<ThreadFolder[]> => {
   const response = await backendApi.get<ThreadFolder[]>('/thread-folders', {
-    showErrors: false,
+    showErrors: true,
   });
   if (response.error) throw new Error(response.error.message);
   return response.data!;
@@ -78,7 +78,7 @@ export const removeThreadFromFolder = async (threadId: string, folderId: string)
 export const getFolderThreads = async (folderId: string): Promise<FolderThread[]> => {
   const response = await backendApi.get<FolderThread[]>(
     `/thread-folders/${folderId}/threads`,
-    { showErrors: false }
+    { showErrors: true }
   );
   if (response.error) throw new Error(response.error.message);
   return response.data!;

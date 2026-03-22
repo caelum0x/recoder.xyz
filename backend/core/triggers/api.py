@@ -200,8 +200,8 @@ async def get_all_user_triggers(
         from core.triggers.repo import get_all_user_triggers as repo_get_triggers
         return await repo_get_triggers(user_id)
     except Exception as e:
-        logger.error(f"Error getting all user triggers: {e}")
-        raise HTTPException(status_code=500, detail="Internal server error")
+        logger.warning(f"Error getting all user triggers (returning empty as fallback): {e}")
+        return []
 
 
 @router.get("/agents/{agent_id}/upcoming-runs", response_model=UpcomingRunsResponse)

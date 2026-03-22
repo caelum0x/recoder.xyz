@@ -11,7 +11,9 @@ import {
   FileText,
   Video,
   Github,
-  Sparkles
+  Sparkles,
+  Network,
+  Boxes
 } from 'lucide-react';
 import { SiteHeader } from '@/components/SiteHeader';
 import { SiteFooter } from '@/components/SiteFooter';
@@ -104,6 +106,28 @@ export default function DocsPage() {
         { title: 'Authentication', href: '/docs/api/auth', status: 'available' },
         { title: 'WebSocket Events', href: '/docs/api/websocket', status: 'available' },
         { title: 'Rate Limits', href: '/docs/api/rate-limits', status: 'available' }
+      ]
+    },
+    {
+      title: 'A2A (Agent-to-Agent)',
+      description: 'Connect AI tools through the A2A protocol',
+      icon: Network,
+      articles: [
+        { title: 'A2A Overview', href: '/docs/a2a', status: 'available' },
+        { title: 'Claude Code MCP Setup', href: '/docs/a2a/mcp-setup', status: 'available' },
+        { title: 'SDK Reference', href: '/docs/a2a/sdk', status: 'available' },
+        { title: 'Cross-App Workflows', href: '/docs/a2a/workflows', status: 'available' }
+      ]
+    },
+    {
+      title: 'Platform Integration',
+      description: 'Connect agents, PM, agency, and social channels',
+      icon: Boxes,
+      articles: [
+        { title: 'Agents Platform', href: '/docs/platform/agents', status: 'available' },
+        { title: 'Project Management', href: '/docs/platform/pm', status: 'available' },
+        { title: 'Agency Workflows', href: '/docs/platform/agency', status: 'available' },
+        { title: 'OpenClaw Channels', href: '/docs/platform/openclaw', status: 'available' }
       ]
     }
   ];

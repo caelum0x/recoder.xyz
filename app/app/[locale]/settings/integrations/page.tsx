@@ -218,6 +218,13 @@ export default function IntegrationsSettingsPage() {
         <div className="max-w-4xl mx-auto">
           {/* Page Header */}
           <div className="mb-8">
+            <Link
+              href="/settings"
+              className="inline-flex items-center gap-2 text-sm text-gray-400 hover:text-white transition-colors mb-4"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              Back to Settings
+            </Link>
             <h1 className="text-3xl font-bold mb-2">Integrations</h1>
             <p className="text-gray-400">Connect third-party services to enhance your workflow</p>
           </div>

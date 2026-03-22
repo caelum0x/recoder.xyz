@@ -1,4 +1,5 @@
 import {
+	ArrowLeftIcon,
 	BlocksIcon,
 	ChevronDownIcon,
 	SettingsIcon,
@@ -201,7 +202,14 @@ export async function Sidebar() {
 			<div className="px-4">
 				<div className="px-0 flex flex-col h-full">
 					<div className="flex flex-col">
-						<div className="px-1 pt-3 pb-3">
+						<a
+							href="/dashboard"
+							className="flex items-center gap-2 px-2 py-2 mt-2 mb-1 text-[12px] font-medium text-inverse/50 hover:text-inverse/80 hover:bg-white/5 rounded-md transition-colors"
+						>
+							<ArrowLeftIcon className="size-3.5" />
+							Back to Dashboard
+						</a>
+						<div className="px-1 pt-1 pb-3">
 							<CreateAppButton />
 						</div>
 

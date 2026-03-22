@@ -191,7 +191,7 @@ The loader layout now matches ReasoningSection header layout for smooth visual t
 {/* Match ReasoningSection header layout for smooth transition */}
 <div className="flex items-center gap-3">
   <img
-    src="/kortix-logomark-white.svg"
+    src="/logo.png"
     alt="Recoder"
     className="dark:invert-0 invert flex-shrink-0 animate-pulse"
     style={{ height: '14px', width: 'auto' }}

@@ -53,6 +53,8 @@ const ANNOTATION_TYPE_CONFIG: Record<
   action: { label: 'Action', icon: CheckSquare, color: 'text-green-500' },
   bug: { label: 'Bug', icon: Bug, color: 'text-red-500' },
   insight: { label: 'Insight', icon: Lightbulb, color: 'text-orange-500' },
+  warning: { label: 'Warning', icon: Bug, color: 'text-amber-500' },
+  action_item: { label: 'Action Item', icon: CheckSquare, color: 'text-emerald-500' },
 };
 
 const COLOR_PRESETS = [

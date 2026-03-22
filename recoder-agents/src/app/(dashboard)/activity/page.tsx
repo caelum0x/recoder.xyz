@@ -10,7 +10,6 @@ import {
   useUpdateActivityPreferences,
   type ActivityEvent,
   type ActivityFeedFilters,
-  type ActivityEventType,
 } from '@/hooks/monitoring/use-activity-feed';
 import { cn } from '@/lib/utils';
 import {
@@ -64,7 +63,7 @@ const EVENT_TYPE_CONFIG: Record<
   annotation_added: { label: 'Annotation', icon: StickyNote, color: 'text-yellow-500' },
 };
 
-const ALL_EVENT_TYPES = Object.keys(EVENT_TYPE_CONFIG) as ActivityEventType[];
+const ALL_EVENT_TYPES = Object.keys(EVENT_TYPE_CONFIG);
 
 // ---------------------------------------------------------------------------
 // Helpers

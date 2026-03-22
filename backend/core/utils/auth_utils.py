@@ -54,7 +54,7 @@ async def _get_auth_engine():
 
 async def get_auth_user_by_id(user_id: str) -> Optional[Dict]:
     """
-    Get user info (id, email, name) from the better-auth user table.
+    Get user info (id, email, name) from the users table.
 
     Returns dict with 'id', 'email', 'name' keys, or None if not found.
     """
@@ -62,18 +62,15 @@ async def get_auth_user_by_id(user_id: str) -> Optional[Dict]:
     if engine is None:
         return None
 
-    from sqlalchemy import text
-
     try:
         async with engine.connect() as conn:
-            result = await conn.execute(
-                text(
-                    'SELECT "id", "email", "name" '
-                    'FROM "user" '
-                    'WHERE "id" = :user_id '
-                    'LIMIT 1'
-                ),
-                {"user_id": user_id},
+            # Try "users" table first (primary, where the adapter writes)
+            result = await conn.exec_driver_sql(
+                'SELECT "id", "email", "name" '
+                'FROM "users" '
+                'WHERE "id" = $1 '
+                'LIMIT 1',
+                (user_id,),
             )
             row = result.fetchone()
 
@@ -102,32 +99,46 @@ async def _verify_session_token(token: str) -> Optional[str]:
     # Extract the token value (before any signature suffix)
     session_token = token.split(".")[0] if "." in token else token
 
-    from sqlalchemy import text
+    try:
+        # Use exec_driver_sql with positional params ($1) to preserve
+        # double-quoted camelCase column names (asyncpg text() strips them).
+        # Check "sessions" (primary, where adapter writes) then "session" (legacy).
+        async with engine.connect() as conn:
+            result = await conn.exec_driver_sql(
+                'SELECT "userId", "expiresAt" '
+                'FROM "sessions" '
+                'WHERE "token" = $1 '
+                'LIMIT 1',
+                (session_token,),
+            )
+            row = result.fetchone()
 
-    async with engine.connect() as conn:
-        result = await conn.execute(
-            text(
-                'SELECT s."userId", s."expiresAt" '
-                'FROM "session" s '
-                'WHERE s."token" = :token '
-                'LIMIT 1'
-            ),
-            {"token": session_token},
-        )
-        row = result.fetchone()
+            # Fallback: legacy "session" table
+            if not row:
+                result = await conn.exec_driver_sql(
+                    'SELECT "userId", "expiresAt" '
+                    'FROM "session" '
+                    'WHERE "token" = $1 '
+                    'LIMIT 1',
+                    (session_token,),
+                )
+                row = result.fetchone()
 
-    if not row:
+        if not row:
+            return None
+
+        user_id, expires_at = row
+
+        # Check expiration
+        if expires_at.tzinfo is None:
+            expires_at = expires_at.replace(tzinfo=timezone.utc)
+        if expires_at < datetime.now(timezone.utc):
+            return None
+
+        return user_id
+    except Exception as e:
+        logger.error(f"Session token verification failed: {e}")
         return None
-
-    user_id, expires_at = row
-
-    # Check expiration
-    if expires_at.tzinfo is None:
-        expires_at = expires_at.replace(tzinfo=timezone.utc)
-    if expires_at < datetime.now(timezone.utc):
-        return None
-
-    return user_id
 
 
 # Session token cache (in-memory, short TTL)
@@ -311,9 +322,12 @@ async def verify_and_get_user_id_from_jwt(request: Request) -> str:
 
     if not auth_header or not auth_header.startswith('Bearer '):
         # Also check for session token in cookies (better-auth cross-subdomain)
+        # Support both "recoder" prefix (configured) and "better-auth" prefix (default)
         session_token = (
             request.cookies.get("recoder.session_token")
             or request.cookies.get("__Secure-recoder.session_token")
+            or request.cookies.get("better-auth.session_token")
+            or request.cookies.get("__Secure-better-auth.session_token")
         )
         if session_token:
             user_id = await verify_session_token_cached(session_token)
@@ -398,9 +412,12 @@ async def get_user_id_from_stream_auth(
 
 async def get_optional_user_id(request: Request) -> Optional[str]:
     # Check session cookies first (better-auth)
+    # Support both "recoder" prefix (configured) and "better-auth" prefix (default)
     session_token = (
         request.cookies.get("recoder.session_token")
         or request.cookies.get("__Secure-recoder.session_token")
+        or request.cookies.get("better-auth.session_token")
+        or request.cookies.get("__Secure-better-auth.session_token")
     )
     if session_token:
         user_id = await verify_session_token_cached(session_token)

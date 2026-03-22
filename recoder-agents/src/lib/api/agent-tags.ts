@@ -43,7 +43,7 @@ export const createAgentTag = async (data: CreateTagData): Promise<AgentTag> => 
 
 export const getAgentTags = async (): Promise<AgentTag[]> => {
   const response = await backendApi.get<AgentTag[]>('/agent-tags', {
-    showErrors: false,
+    showErrors: true,
   });
   if (response.error) throw new Error(response.error.message);
   return response.data!;
@@ -92,7 +92,7 @@ export const getAgentTagsForAgent = async (
 ): Promise<AgentTag[]> => {
   const response = await backendApi.get<AgentTag[]>(
     `/agents/${agentId}/tags`,
-    { showErrors: false }
+    { showErrors: true }
   );
   if (response.error) throw new Error(response.error.message);
   return response.data!;
@@ -103,7 +103,7 @@ export const getTagAgents = async (
 ): Promise<TagAssignment[]> => {
   const response = await backendApi.get<TagAssignment[]>(
     `/agent-tags/${tagId}/agents`,
-    { showErrors: false }
+    { showErrors: true }
   );
   if (response.error) throw new Error(response.error.message);
   return response.data!;

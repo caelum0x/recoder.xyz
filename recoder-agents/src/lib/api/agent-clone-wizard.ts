@@ -61,7 +61,7 @@ export const getClonePreview = async (agentId: string): Promise<ClonePreviewResp
   const response = await backendApi.post<ClonePreviewResponse>(
     `/agents/${agentId}/clone-preview`,
     {},
-    { showErrors: false }
+    { showErrors: true }
   );
 
   if (response.error) {
@@ -93,7 +93,7 @@ export const getCloneHistory = async (
 ): Promise<CloneHistoryWizardResponse> => {
   const response = await backendApi.get<CloneHistoryWizardResponse>(
     `/agents/clone-history?limit=${limit}`,
-    { showErrors: false, cache: 'no-store' }
+    { showErrors: true, cache: 'no-store' }
   );
 
   if (response.error) {
@@ -106,7 +106,7 @@ export const getCloneHistory = async (
 export const getCloneSuggestions = async (agentId: string): Promise<CloneSuggestion> => {
   const response = await backendApi.get<CloneSuggestion>(
     `/agents/${agentId}/clone-suggestions`,
-    { showErrors: false, cache: 'no-store' }
+    { showErrors: true, cache: 'no-store' }
   );
 
   if (response.error) {

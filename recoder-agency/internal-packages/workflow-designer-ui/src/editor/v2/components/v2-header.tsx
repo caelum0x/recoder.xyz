@@ -4,7 +4,7 @@ import { DropdownMenu } from "@recoder-internal/ui/dropdown-menu";
 import { useFeatureFlag } from "@recoder/react";
 import Avatar from "boring-avatars";
 import clsx from "clsx/lite";
-import { ChevronDownIcon } from "lucide-react";
+import { ArrowLeftIcon, ChevronDownIcon } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRef } from "react";
@@ -12,7 +12,6 @@ import {
 	useAppDesignerStore,
 	useUpdateWorkspaceName,
 } from "../../../app-designer";
-import { GiselleIcon } from "../../../icons";
 import { EditableText, type EditableTextRef } from "../../properties-panel/ui";
 import { RunButton } from "./run-button";
 
@@ -20,10 +19,14 @@ export function V2Header({
 	teamName,
 	teamAvatarUrl,
 	onNameChange,
+	onDuplicate,
+	onDelete,
 }: {
 	teamName?: string;
 	teamAvatarUrl?: string | null;
 	onNameChange?: (name: string) => Promise<void>;
+	onDuplicate?: () => void;
+	onDelete?: () => void;
 }) {
 	const { workspaceId, name } = useAppDesignerStore((s) => ({
 		workspaceId: s.workspaceId,
@@ -48,16 +51,16 @@ export function V2Header({
 				"shrink-0",
 			)}
 		>
-			{/* Left section: Logo + Team/App names */}
+			{/* Left section: Back + Agency branding + Team/App names */}
 			<div className="flex items-center gap-[3px] min-w-0">
 				<Link
-					href="/"
-					className="flex items-center gap-[3px] group"
-					aria-label="Go to home"
+					href="/workspaces"
+					className="flex items-center gap-[6px] group mr-[2px]"
+					aria-label="Back to workspaces"
 				>
-					<GiselleIcon className="text-inverse w-[24px] h-[24px] group-hover:text-primary-100 transition-colors" />
+					<ArrowLeftIcon className="text-inverse/60 w-[16px] h-[16px] group-hover:text-inverse transition-colors" />
 					<span className="text-inverse text-[13px] font-semibold group-hover:text-primary-100 transition-colors">
-						Studio
+						Agency
 					</span>
 				</Link>
 				<span className="text-inverse/20 text-[18px] font-[250] leading-none ml-[4px]">
@@ -135,10 +138,8 @@ export function V2Header({
 								{
 									value: "duplicate",
 									label: "Duplicate",
-									action: () => {
-										// TODO: Implement app duplication functionality
-										console.warn("Duplicate functionality not yet implemented");
-									},
+									action: onDuplicate,
+									disabled: !onDuplicate,
 								},
 								{
 									value: "template",
@@ -148,10 +149,8 @@ export function V2Header({
 								{
 									value: "delete",
 									label: "Delete",
-									action: () => {
-										// TODO: Implement app deletion functionality
-										console.warn("Delete functionality not yet implemented");
-									},
+									action: onDelete,
+									disabled: !onDelete,
 									destructive: true,
 								},
 							]}

@@ -70,7 +70,7 @@ export const getAgentBundles = async (params?: {
   const qs = searchParams.toString();
   const response = await backendApi.get<BundleListResponse>(
     `/bundles${qs ? `?${qs}` : ''}`,
-    { showErrors: false }
+    { showErrors: true }
   );
   if (response.error) throw new Error(response.error.message);
   return response.data!;
@@ -80,7 +80,7 @@ export const getBundleDetail = async (
   bundleId: string
 ): Promise<AgentBundle> => {
   const response = await backendApi.get<AgentBundle>(`/bundles/${bundleId}`, {
-    showErrors: false,
+    showErrors: true,
   });
   if (response.error) throw new Error(response.error.message);
   return response.data!;
@@ -104,7 +104,7 @@ export const getPublicBundles = async (params?: {
   const qs = searchParams.toString();
   const response = await backendApi.get<BundleListResponse>(
     `/bundles/public${qs ? `?${qs}` : ''}`,
-    { showErrors: false }
+    { showErrors: true }
   );
   if (response.error) throw new Error(response.error.message);
   return response.data!;

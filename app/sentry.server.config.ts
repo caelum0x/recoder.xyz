@@ -4,39 +4,37 @@
 
 import * as Sentry from "@sentry/nextjs";
 
-Sentry.init({
-  dsn: process.env.NEXT_PUBLIC_SENTRY_DSN,
+const dsn = process.env.NEXT_PUBLIC_SENTRY_DSN;
 
-  // Adjust this value in production, or use tracesSampler for greater control
-  tracesSampleRate: 1.0,
+// Only initialize Sentry if a DSN is provided — completely no-op otherwise
+if (dsn) {
+  Sentry.init({
+    dsn,
 
-  // Setting this option to true will print useful information to the console while you're setting up Sentry.
-  debug: false,
+    // Disable performance monitoring to stay within free tier limits
+    tracesSampleRate: 0,
 
-  // Environment
-  environment: process.env.NODE_ENV || 'development',
+    // Setting this option to true will print useful information to the console while you're setting up Sentry.
+    debug: false,
 
-  // Enable performance monitoring
-  enabled: process.env.NODE_ENV === 'production',
+    // Environment and release
+    environment: process.env.NODE_ENV || "development",
+    release: process.env.NEXT_PUBLIC_APP_VERSION || "unknown",
 
-  // Filter sensitive data
-  beforeSend(event, hint) {
-    // Don't send errors in development
-    if (process.env.NODE_ENV === 'development') {
-      return null;
-    }
+    // Filter sensitive data before sending
+    beforeSend(event) {
+      // Remove sensitive headers
+      if (event.request?.headers) {
+        delete event.request.headers["authorization"];
+        delete event.request.headers["cookie"];
+      }
 
-    // Remove sensitive data
-    if (event.request?.headers) {
-      delete event.request.headers['authorization'];
-      delete event.request.headers['cookie'];
-    }
+      // Remove user IP
+      if (event.user?.ip_address) {
+        delete event.user.ip_address;
+      }
 
-    // Remove user IP
-    if (event.user?.ip_address) {
-      delete event.user.ip_address;
-    }
-
-    return event;
-  },
-});
+      return event;
+    },
+  });
+}

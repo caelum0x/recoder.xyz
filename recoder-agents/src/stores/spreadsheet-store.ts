@@ -346,7 +346,7 @@ export const useSpreadsheetStore = create<SpreadsheetState>()(
             if (operation.name) {
               const newSheet = createEmptySheet(operation.name);
               if (operation.columns) {
-                newSheet.columns = operation.columns;
+                newSheet.columns = Array.isArray(operation.columns) ? operation.columns : Object.entries(operation.columns).map(([, width]) => ({ width }));
               }
               set((state) => ({
                 sheets: [...state.sheets, newSheet]

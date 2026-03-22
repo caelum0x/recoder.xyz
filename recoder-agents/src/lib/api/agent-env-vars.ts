@@ -47,7 +47,7 @@ export interface EnvVarAuditEntry {
 export const listEnvVars = async (agentId: string): Promise<AgentEnvVar[]> => {
   const response = await backendApi.get<AgentEnvVar[]>(
     `/agents/${agentId}/env`,
-    { showErrors: false }
+    { showErrors: true }
   );
   if (response.error) throw new Error(response.error.message);
   return response.data!;
@@ -71,7 +71,7 @@ export const revealEnvVar = async (
 ): Promise<AgentEnvVar> => {
   const response = await backendApi.get<AgentEnvVar>(
     `/agents/${agentId}/env/${encodeURIComponent(key)}/reveal`,
-    { showErrors: false }
+    { showErrors: true }
   );
   if (response.error) throw new Error(response.error.message);
   return response.data!;
@@ -103,7 +103,7 @@ export const getEnvVarAudit = async (
 ): Promise<EnvVarAuditEntry[]> => {
   const response = await backendApi.get<EnvVarAuditEntry[]>(
     `/agents/${agentId}/env/audit?limit=${limit}`,
-    { showErrors: false }
+    { showErrors: true }
   );
   if (response.error) throw new Error(response.error.message);
   return response.data!;
@@ -114,7 +114,7 @@ export const exportEnvVars = async (
 ): Promise<ExportEnvVarsResponse> => {
   const response = await backendApi.get<ExportEnvVarsResponse>(
     `/agents/${agentId}/env/export`,
-    { showErrors: false }
+    { showErrors: true }
   );
   if (response.error) throw new Error(response.error.message);
   return response.data!;

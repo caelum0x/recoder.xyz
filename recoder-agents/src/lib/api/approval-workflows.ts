@@ -83,7 +83,7 @@ export const createWorkflow = async (
 export const getWorkflows = async (): Promise<ApprovalWorkflow[]> => {
   const response = await backendApi.get<ApprovalWorkflow[]>(
     '/approval/workflows',
-    { showErrors: false }
+    { showErrors: true }
   );
   if (response.error) throw new Error(response.error.message);
   return response.data!;
@@ -131,7 +131,7 @@ export const getApprovalRequests = async (
   const qs = params.toString();
   const response = await backendApi.get<ApprovalRequest[]>(
     `/approval/requests${qs ? `?${qs}` : ''}`,
-    { showErrors: false }
+    { showErrors: true }
   );
   if (response.error) throw new Error(response.error.message);
   return response.data!;
@@ -142,7 +142,7 @@ export const getApprovalRequest = async (
 ): Promise<ApprovalRequest> => {
   const response = await backendApi.get<ApprovalRequest>(
     `/approval/requests/${requestId}`,
-    { showErrors: false }
+    { showErrors: true }
   );
   if (response.error) throw new Error(response.error.message);
   return response.data!;
@@ -185,7 +185,7 @@ export const cancelRequest = async (
 export const getApprovalStats = async (): Promise<ApprovalStats> => {
   const response = await backendApi.get<ApprovalStats>(
     '/approval/stats',
-    { showErrors: false }
+    { showErrors: true }
   );
   if (response.error) throw new Error(response.error.message);
   return response.data!;

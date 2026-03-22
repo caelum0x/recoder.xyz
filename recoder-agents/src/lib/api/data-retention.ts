@@ -91,7 +91,7 @@ export async function getRetentionPolicies(): Promise<RetentionPolicy[]> {
   try {
     const response = await backendApi.get<RetentionPolicy[]>(
       '/retention/policies',
-      { showErrors: false },
+      { showErrors: true },
     );
     if (response.error) throw new Error(`Error: ${response.error.message}`);
     return response.data ?? [];
@@ -108,7 +108,7 @@ export async function setRetentionPolicy(
     const response = await backendApi.put<RetentionPolicy>(
       '/retention/policies',
       payload,
-      { showErrors: false },
+      { showErrors: true },
     );
     if (response.error) throw new Error(`Error: ${response.error.message}`);
     return response.data!;
@@ -124,7 +124,7 @@ export async function deleteRetentionPolicy(
   try {
     const response = await backendApi.delete(
       `/retention/policies/${policyId}`,
-      { showErrors: false },
+      { showErrors: true },
     );
     if (response.error) throw new Error(`Error: ${response.error.message}`);
   } catch (error) {
@@ -138,7 +138,7 @@ export async function runCleanup(): Promise<CleanupRunResponse> {
     const response = await backendApi.post<CleanupRunResponse>(
       '/retention/cleanup',
       undefined,
-      { showErrors: false },
+      { showErrors: true },
     );
     if (response.error) throw new Error(`Error: ${response.error.message}`);
     return response.data!;
@@ -159,7 +159,7 @@ export async function getCleanupLog(
 
     const response = await backendApi.get<CleanupLogEntry[]>(
       `/retention/cleanup-log${qs ? `?${qs}` : ''}`,
-      { showErrors: false },
+      { showErrors: true },
     );
     if (response.error) throw new Error(`Error: ${response.error.message}`);
     return response.data ?? [];
@@ -173,7 +173,7 @@ export async function getCleanupPreview(): Promise<CleanupPreviewItem[]> {
   try {
     const response = await backendApi.get<CleanupPreviewItem[]>(
       '/retention/preview',
-      { showErrors: false },
+      { showErrors: true },
     );
     if (response.error) throw new Error(`Error: ${response.error.message}`);
     return response.data ?? [];

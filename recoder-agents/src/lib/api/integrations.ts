@@ -20,7 +20,7 @@ export async function listIntegrations(): Promise<IntegrationListResponse> {
   try {
     const response = await backendApi.get<IntegrationListResponse>(
       '/integrations',
-      { showErrors: false },
+      { showErrors: true },
     );
     if (response.error) throw new Error(`Error: ${response.error.message}`);
     return response.data!;
@@ -34,7 +34,7 @@ export async function getIntegration(provider: string): Promise<IntegrationStatu
   try {
     const response = await backendApi.get<IntegrationStatus>(
       `/integrations/${provider}`,
-      { showErrors: false },
+      { showErrors: true },
     );
     if (response.error) throw new Error(`Error: ${response.error.message}`);
     return response.data!;
@@ -48,7 +48,7 @@ export async function disconnectIntegration(provider: string): Promise<{ status:
   try {
     const response = await backendApi.delete<{ status: string; provider: string }>(
       `/integrations/${provider}`,
-      { showErrors: false },
+      { showErrors: true },
     );
     if (response.error) throw new Error(`Error: ${response.error.message}`);
     return response.data!;
@@ -63,7 +63,7 @@ export async function refreshIntegration(provider: string): Promise<{ status: st
     const response = await backendApi.post<{ status: string; provider: string }>(
       `/integrations/${provider}/refresh`,
       {},
-      { showErrors: false },
+      { showErrors: true },
     );
     if (response.error) throw new Error(`Error: ${response.error.message}`);
     return response.data!;

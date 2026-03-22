@@ -71,7 +71,7 @@ export const listRatings = async (params: ListRatingsParams = {}): Promise<Ratin
   const qs = searchParams.toString();
   const response = await backendApi.get<RatingsListResponse>(
     `/ratings${qs ? `?${qs}` : ''}`,
-    { showErrors: false }
+    { showErrors: true }
   );
   if (response.error) throw new Error(response.error.message);
   return response.data!;
@@ -81,7 +81,7 @@ export const getRatingsSummary = async (agentId?: string): Promise<RatingsSummar
   const qs = agentId ? `?agent_id=${agentId}` : '';
   const response = await backendApi.get<RatingsSummary>(
     `/ratings/summary${qs}`,
-    { showErrors: false }
+    { showErrors: true }
   );
   if (response.error) throw new Error(response.error.message);
   return response.data!;

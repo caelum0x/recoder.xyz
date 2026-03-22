@@ -17,7 +17,7 @@ import { renderLogger } from '~/utils/logger';
 import { EditorPanel } from './EditorPanel';
 import { Preview } from './Preview';
 import { VersionHistoryPanel } from './VersionHistoryPanel';
-import { BuildProgressIndicator } from './BuildProgressIndicator';
+// BuildProgressIndicator removed
 import { CompactActionStatus } from './ActionStatusPanel';
 import { SupabasePanel } from './SupabasePanel';
 import { NeonPanel } from './NeonPanel';
@@ -88,8 +88,8 @@ export const Workbench = memo(({ chatStarted, isStreaming }: WorkspaceProps) => 
   const containerReady = useStore(workbenchStore.containerReady);
   const isAgentActive = useStore(agentSessionActive);
 
-  // Connect to LSP diagnostics WebSocket
-  useLSPDiagnostics(projectId);
+  // Connect to Daytona LSP diagnostics for the active file
+  useLSPDiagnostics(projectId, selectedFile ?? null);
 
   // File watcher for CLI tool integration (claude, recoder-code)
   // Auto-refreshes preview and file tree when files change
@@ -387,7 +387,7 @@ export const Workbench = memo(({ chatStarted, isStreaming }: WorkspaceProps) => 
           isOpen={showVersionHistory}
           onClose={() => setShowVersionHistory(false)}
         />
-        <BuildProgressIndicator />
+        {/* BuildProgressIndicator removed — was showing "Creating files..." mock UI */}
       </motion.div>
     )
   );

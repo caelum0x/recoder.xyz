@@ -5,6 +5,12 @@ from .providers.anthropic import BedrockProvider
 from core.utils.config import config, EnvMode
 from core.utils.logger import logger
 
+import httpx
+import asyncio
+import time
+import logging
+import os
+
 
 class BedrockConfig:
     REGION = "us-west-2"
@@ -89,7 +95,7 @@ class PricingPresets:
     )
 
 
-FREE_MODEL_ID = "recoder/minimax"
+FREE_MODEL_ID = "recoder/power"
 PREMIUM_MODEL_ID = "recoder/power"
 IMAGE_MODEL_ID = "recoder/haiku"
 
@@ -161,19 +167,16 @@ class ModelFactory:
     
     @staticmethod
     def create_minimax_m2(use_openrouter: bool = True) -> Model:
-        if use_openrouter:
-            litellm_id = "openrouter/minimax/minimax-m2.1"
-            provider = ModelProvider.OPENROUTER
-        else:
-            litellm_id = "minimax/MiniMax-M2.1"
-            provider = ModelProvider.MINIMAX
-        
+        # Use OpenRouter paid model — low cost, 262K context, coding-focused
+        litellm_id = "openrouter/qwen/qwen3-coder"
+        provider = ModelProvider.OPENROUTER
+
         return Model(
             id="recoder/minimax",
-            name="MiniMax M2.1",
+            name="Recoder Free",
             litellm_model_id=litellm_id,
             provider=provider,
-            aliases=["minimax-m2", "minimax-m2.1"],
+            aliases=["minimax-m2", "minimax-m2.1", "recoder-free", "free"],
             context_window=200_000,
             capabilities=[
                 ModelCapability.CHAT,
@@ -195,10 +198,10 @@ class ModelFactory:
         default_models = {
             "bedrock": BedrockConfig.get_haiku_arn(),
             "anthropic": "anthropic/claude-haiku-4-5-20251001",
-            "grok": "openrouter/x-ai/grok-4.1-fast",
-            "openai": "openrouter/openai/gpt-4o-mini",
-            "minimax": "openrouter/minimax/minimax-m2.1",
-            "kimi": "openrouter/moonshotai/kimi-k2.5",
+            "grok": "openrouter/qwen/qwen3-coder",
+            "openai": "openrouter/qwen/qwen3-coder",
+            "minimax": "openrouter/qwen/qwen3-coder",
+            "kimi": "openrouter/qwen/qwen3-coder",
         }
 
         if main_llm == "kimi":
@@ -351,19 +354,19 @@ class ModelFactory:
         default_models = {
             "bedrock": BedrockConfig.get_haiku_arn(),
             "anthropic": "anthropic/claude-haiku-4-5-20251001",
-            "grok": "openrouter/x-ai/grok-4.1-fast",
-            "openai": "openrouter/openai/gpt-4o-mini",
-            "minimax": "openrouter/minimax/minimax-m2.1",
-            "kimi": "openrouter/moonshotai/kimi-k2.5",
+            "grok": "openrouter/qwen/qwen3-coder",
+            "openai": "openrouter/qwen/qwen3-coder",
+            "minimax": "openrouter/qwen/qwen3-coder",
+            "kimi": "openrouter/qwen/qwen3-coder",
         }
 
         if main_llm == "kimi":
             return Model(
                 id="recoder/power",
-                name="Recoder Advanced Mode",
+                name="Recoder",
                 litellm_model_id=custom_model or default_models["kimi"],
                 provider=ModelProvider.OPENROUTER,
-                aliases=["recoder-power", "Recoder POWER Mode", "Recoder Power", "Recoder Advanced Mode"],
+                aliases=["recoder-power", "Recoder POWER Mode", "Recoder Power", "Recoder Advanced Mode", "Recoder"],
                 context_window=262_144,
                 capabilities=[
                     ModelCapability.CHAT,
@@ -373,7 +376,7 @@ class ModelFactory:
                     ModelCapability.PROMPT_CACHING,
                 ],
                 pricing=PricingPresets.KIMI_K2_5,
-                tier_availability=["paid"],
+                tier_availability=["free", "paid"],
                 priority=101,
                 recommended=True,
                 enabled=True,
@@ -382,10 +385,10 @@ class ModelFactory:
         elif main_llm == "bedrock":
             return Model(
                 id="recoder/power",
-                name="Recoder Advanced Mode",
+                name="Recoder",
                 litellm_model_id=custom_model or default_models["bedrock"],
                 provider=ModelProvider.BEDROCK,
-                aliases=["recoder-power", "Recoder POWER Mode", "Recoder Power", "Recoder Advanced Mode"],
+                aliases=["recoder-power", "Recoder POWER Mode", "Recoder Power", "Recoder Advanced Mode", "Recoder"],
                 context_window=200_000,
                 capabilities=[
                     ModelCapability.CHAT,
@@ -395,7 +398,7 @@ class ModelFactory:
                     ModelCapability.PROMPT_CACHING,
                 ],
                 pricing=PricingPresets.HAIKU_4_5,
-                tier_availability=["paid"],
+                tier_availability=["free", "paid"],
                 priority=101,
                 recommended=True,
                 enabled=True,
@@ -404,10 +407,10 @@ class ModelFactory:
         elif main_llm == "anthropic":
             return Model(
                 id="recoder/power",
-                name="Recoder Advanced Mode",
+                name="Recoder",
                 litellm_model_id=custom_model or default_models["anthropic"],
                 provider=ModelProvider.ANTHROPIC,
-                aliases=["recoder-power", "Recoder POWER Mode", "Recoder Power", "Recoder Advanced Mode"],
+                aliases=["recoder-power", "Recoder POWER Mode", "Recoder Power", "Recoder Advanced Mode", "Recoder"],
                 context_window=200_000,
                 capabilities=[
                     ModelCapability.CHAT,
@@ -417,7 +420,7 @@ class ModelFactory:
                     ModelCapability.PROMPT_CACHING,
                 ],
                 pricing=PricingPresets.HAIKU_4_5,
-                tier_availability=["paid"],
+                tier_availability=["free", "paid"],
                 priority=101,
                 recommended=True,
                 enabled=True,
@@ -426,10 +429,10 @@ class ModelFactory:
         elif main_llm == "grok":
             return Model(
                 id="recoder/power",
-                name="Recoder Advanced Mode",
+                name="Recoder",
                 litellm_model_id=custom_model or default_models["grok"],
                 provider=ModelProvider.OPENROUTER,
-                aliases=["recoder-power", "Recoder POWER Mode", "Recoder Power", "Recoder Advanced Mode"],
+                aliases=["recoder-power", "Recoder POWER Mode", "Recoder Power", "Recoder Advanced Mode", "Recoder"],
                 context_window=2_000_000,
                 capabilities=[
                     ModelCapability.CHAT,
@@ -439,7 +442,7 @@ class ModelFactory:
                     ModelCapability.PROMPT_CACHING,
                 ],
                 pricing=PricingPresets.GROK_4_1_FAST,
-                tier_availability=["paid"],
+                tier_availability=["free", "paid"],
                 priority=101,
                 recommended=True,
                 enabled=True,
@@ -447,10 +450,10 @@ class ModelFactory:
         elif main_llm == "openai":
             return Model(
                 id="recoder/power",
-                name="Recoder Advanced Mode",
+                name="Recoder",
                 litellm_model_id=custom_model or default_models["openai"],
                 provider=ModelProvider.OPENROUTER,
-                aliases=["recoder-power", "Recoder POWER Mode", "Recoder Power", "Recoder Advanced Mode"],
+                aliases=["recoder-power", "Recoder POWER Mode", "Recoder Power", "Recoder Advanced Mode", "Recoder"],
                 context_window=128_000,
                 capabilities=[
                     ModelCapability.CHAT,
@@ -458,7 +461,7 @@ class ModelFactory:
                     ModelCapability.VISION,
                 ],
                 pricing=PricingPresets.GPT_4O_MINI,
-                tier_availability=["paid"],
+                tier_availability=["free", "paid"],
                 priority=101,
                 recommended=True,
                 enabled=True,
@@ -467,17 +470,17 @@ class ModelFactory:
             # Generic OpenRouter - use custom model or fallback to minimax
             return Model(
                 id="recoder/power",
-                name="Recoder Advanced Mode",
+                name="Recoder",
                 litellm_model_id=custom_model or default_models["minimax"],
                 provider=ModelProvider.OPENROUTER,
-                aliases=["recoder-power", "Recoder POWER Mode", "Recoder Power", "Recoder Advanced Mode"],
+                aliases=["recoder-power", "Recoder POWER Mode", "Recoder Power", "Recoder Advanced Mode", "Recoder"],
                 context_window=200_000,
                 capabilities=[
                     ModelCapability.CHAT,
                     ModelCapability.FUNCTION_CALLING,
                     ModelCapability.VISION,
                 ],
-                tier_availability=["paid"],
+                tier_availability=["free", "paid"],
                 priority=101,
                 recommended=True,
                 enabled=True,
@@ -485,10 +488,10 @@ class ModelFactory:
         else:  # minimax or unknown
             return Model(
                 id="recoder/power",
-                name="Recoder Advanced Mode",
+                name="Recoder",
                 litellm_model_id=custom_model or default_models["minimax"],
                 provider=ModelProvider.OPENROUTER,
-                aliases=["recoder-power", "Recoder POWER Mode", "Recoder Power", "Recoder Advanced Mode"],
+                aliases=["recoder-power", "Recoder POWER Mode", "Recoder Power", "Recoder Advanced Mode", "Recoder"],
                 context_window=200_000,
                 capabilities=[
                     ModelCapability.CHAT,
@@ -497,7 +500,7 @@ class ModelFactory:
                     ModelCapability.PROMPT_CACHING,
                 ],
                 pricing=PricingPresets.MINIMAX_M2,
-                tier_availability=["paid"],
+                tier_availability=["free", "paid"],
                 priority=101,
                 recommended=True,
                 enabled=True,
@@ -702,8 +705,66 @@ class ModelFactory:
             config=_create_kimi_model_config(),
         )
 
+    @staticmethod
+    def create_openrouter_free() -> Model:
+        return Model(
+            id="openrouter/free",
+            name="Auto (Free)",
+            litellm_model_id="openrouter/openrouter/auto",
+            provider=ModelProvider.OPENROUTER,
+            aliases=["free", "Auto Free", "openrouter/auto"],
+            context_window=200_000,
+            capabilities=[
+                ModelCapability.CHAT,
+                ModelCapability.FUNCTION_CALLING,
+                ModelCapability.VISION,
+            ],
+            pricing=ModelPricing(input_cost_per_million_tokens=0, output_cost_per_million_tokens=0),
+            tier_availability=["free", "paid"],
+            priority=200,  # Highest priority for free users
+            recommended=True,
+            enabled=True,
+        )
+
+# ── Unified model catalog for /v1/models API ──────────────────────────
+
+UNIFIED_PREMIUM_MODELS = [
+    {"id": "anthropic/claude-sonnet-4.5", "name": "Claude Sonnet 4.5", "provider": "anthropic", "context_length": 200000, "pricing": {"prompt": 3.0, "completion": 15.0}, "tier": "paid", "speed_tier": "balanced", "recommended": True},
+    {"id": "anthropic/claude-opus-4", "name": "Claude Opus 4", "provider": "anthropic", "context_length": 200000, "pricing": {"prompt": 15.0, "completion": 75.0}, "tier": "paid", "speed_tier": "powerful", "recommended": True},
+    {"id": "anthropic/claude-haiku-4.5", "name": "Claude Haiku 4.5", "provider": "anthropic", "context_length": 200000, "pricing": {"prompt": 0.80, "completion": 4.0}, "tier": "paid", "speed_tier": "fast", "recommended": False},
+    {"id": "openai/gpt-4o", "name": "GPT-4o", "provider": "openai", "context_length": 128000, "pricing": {"prompt": 2.50, "completion": 10.0}, "tier": "paid", "speed_tier": "balanced", "recommended": True},
+    {"id": "openai/gpt-4o-mini", "name": "GPT-4o Mini", "provider": "openai", "context_length": 128000, "pricing": {"prompt": 0.15, "completion": 0.60}, "tier": "paid", "speed_tier": "fast", "recommended": False},
+    {"id": "openai/gpt-4.1", "name": "GPT-4.1", "provider": "openai", "context_length": 1047576, "pricing": {"prompt": 2.0, "completion": 8.0}, "tier": "paid", "speed_tier": "balanced", "recommended": False},
+    {"id": "google/gemini-2.5-pro", "name": "Gemini 2.5 Pro", "provider": "google", "context_length": 2097152, "pricing": {"prompt": 1.25, "completion": 10.0}, "tier": "paid", "speed_tier": "powerful", "recommended": True},
+    {"id": "google/gemini-2.5-flash", "name": "Gemini 2.5 Flash", "provider": "google", "context_length": 1048576, "pricing": {"prompt": 0.15, "completion": 0.60}, "tier": "paid", "speed_tier": "fast", "recommended": True},
+    {"id": "deepseek/deepseek-r1", "name": "DeepSeek R1", "provider": "deepseek", "context_length": 163840, "pricing": {"prompt": 0.55, "completion": 2.19}, "tier": "paid", "speed_tier": "balanced", "recommended": True},
+    {"id": "deepseek/deepseek-chat", "name": "DeepSeek V3", "provider": "deepseek", "context_length": 131072, "pricing": {"prompt": 0.14, "completion": 0.28}, "tier": "paid", "speed_tier": "fast", "recommended": False},
+    {"id": "x-ai/grok-4", "name": "Grok 4", "provider": "xai", "context_length": 2097152, "pricing": {"prompt": 2.0, "completion": 10.0}, "tier": "paid", "speed_tier": "powerful", "recommended": False},
+    {"id": "meta-llama/llama-3.3-70b-instruct", "name": "Llama 3.3 70B", "provider": "meta", "context_length": 131072, "pricing": {"prompt": 0.10, "completion": 0.10}, "tier": "paid", "speed_tier": "fast", "recommended": False},
+    {"id": "mistralai/mistral-large", "name": "Mistral Large", "provider": "mistral", "context_length": 128000, "pricing": {"prompt": 2.0, "completion": 6.0}, "tier": "paid", "speed_tier": "balanced", "recommended": False},
+    {"id": "qwen/qwen-2.5-coder-32b-instruct", "name": "Qwen 2.5 Coder 32B", "provider": "qwen", "context_length": 131072, "pricing": {"prompt": 0.07, "completion": 0.16}, "tier": "paid", "speed_tier": "balanced", "recommended": False},
+]
+
+FREE_ROUTER = {
+    "id": "openrouter/free",
+    "name": "Auto (Free)",
+    "provider": "openrouter",
+    "context_length": 200000,
+    "pricing": {"prompt": 0, "completion": 0},
+    "tier": "free",
+    "speed_tier": "balanced",
+    "recommended": True,
+    "is_free_router": True,
+    "description": "Automatically picks the best available free model",
+}
+
+
 class ModelRegistry:
-    
+
+    _free_models_cache: list = []
+    _last_free_sync: float = 0
+    _FREE_SYNC_INTERVAL = 3600  # 1 hour
+
     def __init__(self):
         self._models: Dict[str, Model] = {}
         self._aliases: Dict[str, str] = {}
@@ -736,6 +797,7 @@ class ModelRegistry:
         self.register(ModelFactory.create_minimax_m2())
         self.register(ModelFactory.create_haiku_3_5())
         self.register(ModelFactory.create_deepseek_v3())
+        self.register(ModelFactory.create_openrouter_free())
 
         if config.ENV_MODE != EnvMode.PRODUCTION:
             self.register(ModelFactory.create_test_model())
@@ -1040,8 +1102,74 @@ class ModelRegistry:
         
         return [self.format_model_info(m.id) for m in models]
 
+    # ── Unified /v1/models API methods ─────────────────────────────────
+
+    async def sync_free_models(self):
+        """Fetch all free models from OpenRouter API."""
+        try:
+            api_key = os.environ.get("OPENROUTER_API_KEY", "")
+            headers = {}
+            if api_key:
+                headers["Authorization"] = f"Bearer {api_key}"
+
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                resp = await client.get(
+                    "https://openrouter.ai/api/v1/models",
+                    headers=headers,
+                )
+                resp.raise_for_status()
+                data = resp.json()
+
+            free_models = []
+            for model in data.get("data", []):
+                pricing = model.get("pricing", {})
+                prompt_cost = float(pricing.get("prompt", "1") or "1")
+                completion_cost = float(pricing.get("completion", "1") or "1")
+
+                if prompt_cost == 0 and completion_cost == 0:
+                    model_id = model.get("id", "")
+                    free_models.append({
+                        "id": model_id,
+                        "name": model.get("name", model_id),
+                        "provider": model_id.split("/")[0] if "/" in model_id else "unknown",
+                        "context_length": model.get("context_length", 4096),
+                        "pricing": {"prompt": 0, "completion": 0},
+                        "tier": "free",
+                        "speed_tier": "fast",
+                        "recommended": False,
+                    })
+
+            ModelRegistry._free_models_cache = free_models
+            ModelRegistry._last_free_sync = time.time()
+            logging.info(f"[ModelRegistry] Synced {len(free_models)} free models from OpenRouter")
+
+        except Exception as e:
+            logging.error(f"[ModelRegistry] Failed to sync free models: {e}")
+            # Keep existing cache if available
+
+    def get_unified_models(self) -> list:
+        """Return all models: free router + dynamic free + static premium."""
+        models: list = [FREE_ROUTER]
+        models.extend(ModelRegistry._free_models_cache)
+        models.extend(UNIFIED_PREMIUM_MODELS)
+        return models
+
+    @property
+    def last_free_sync_time(self) -> Optional[str]:
+        if ModelRegistry._last_free_sync:
+            from datetime import datetime, timezone
+            return datetime.fromtimestamp(ModelRegistry._last_free_sync, tz=timezone.utc).isoformat()
+        return None
+
 
 registry = ModelRegistry()
+
+
+async def start_free_model_sync():
+    """Background task to sync free models periodically."""
+    while True:
+        await registry.sync_free_models()
+        await asyncio.sleep(ModelRegistry._FREE_SYNC_INTERVAL)
 
 
 HAIKU_BEDROCK_ARN = BedrockConfig.get_haiku_arn()

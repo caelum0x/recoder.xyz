@@ -10,8 +10,8 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
-  title: 'Recoder.xyz - FREE AI Coding Platform | Web IDE + CLI with 40+ Models',
-  description: 'The only platform with seamless Web IDE + Terminal CLI sync. 100% FREE beta with BYOK (Bring Your Own Key). Access Claude, GPT-4, Gemini & 40+ AI models. Start in browser, continue in terminal.',
+  title: 'Recoder.xyz - The AI Platform | Agents + Web IDE + PM + Agency',
+  description: 'Build AI agents, code in the browser, manage products, and deliver client work — all powered by AI. Free beta with 40+ models. Cursor for everything.',
   icons: {
     icon: [
       { url: '/favicon.png', sizes: '32x32', type: 'image/png' },

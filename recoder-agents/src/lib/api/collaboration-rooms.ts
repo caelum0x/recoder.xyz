@@ -113,14 +113,14 @@ export const listRooms = async (params?: {
   if (params?.status && params.status !== 'all') qs.set('status', params.status);
   if (params?.limit) qs.set('limit', String(params.limit));
   const url = `/collaboration/rooms${qs.toString() ? `?${qs}` : ''}`;
-  const response = await backendApi.get<CollaborationRoom[]>(url, { showErrors: false });
+  const response = await backendApi.get<CollaborationRoom[]>(url, { showErrors: true });
   if (response.error) throw new Error(response.error.message);
   return response.data!;
 };
 
 export const getRoom = async (roomId: string): Promise<CollaborationRoom> => {
   const response = await backendApi.get<CollaborationRoom>(`/collaboration/rooms/${roomId}`, {
-    showErrors: false,
+    showErrors: true,
   });
   if (response.error) throw new Error(response.error.message);
   return response.data!;
@@ -170,7 +170,7 @@ export const listMessages = async (
   if (params?.limit) qs.set('limit', String(params.limit));
   if (params?.offset) qs.set('offset', String(params.offset));
   const url = `/collaboration/rooms/${roomId}/messages${qs.toString() ? `?${qs}` : ''}`;
-  const response = await backendApi.get<CollaborationMessage[]>(url, { showErrors: false });
+  const response = await backendApi.get<CollaborationMessage[]>(url, { showErrors: true });
   if (response.error) throw new Error(response.error.message);
   return response.data!;
 };
@@ -212,7 +212,7 @@ export const listTasks = async (
   if (params?.status) qs.set('status', params.status);
   if (params?.limit) qs.set('limit', String(params.limit));
   const url = `/collaboration/rooms/${roomId}/tasks${qs.toString() ? `?${qs}` : ''}`;
-  const response = await backendApi.get<CollaborationTask[]>(url, { showErrors: false });
+  const response = await backendApi.get<CollaborationTask[]>(url, { showErrors: true });
   if (response.error) throw new Error(response.error.message);
   return response.data!;
 };

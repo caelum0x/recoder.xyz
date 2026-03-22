@@ -67,7 +67,7 @@ export const getAgentBenchmarksV2 = async (
 ): Promise<BenchmarkListResponse> => {
   const response = await backendApi.get<BenchmarkListResponse>(
     `/agents/${agentId}/benchmarks/v2`,
-    { showErrors: false, cache: 'no-store' }
+    { showErrors: true, cache: 'no-store' }
   );
 
   if (response.error) {
@@ -132,7 +132,7 @@ export const getBenchmarkResultsV2 = async (
 ): Promise<BenchmarkResultsResponse> => {
   const response = await backendApi.get<BenchmarkResultsResponse>(
     `/agents/${agentId}/benchmarks/v2/${benchmarkId}/results?limit=${limit}`,
-    { showErrors: false, cache: 'no-store' }
+    { showErrors: true, cache: 'no-store' }
   );
 
   if (response.error) {
@@ -147,7 +147,7 @@ export const getBenchmarkSummaryV2 = async (
 ): Promise<BenchmarkSummaryResponse> => {
   const response = await backendApi.get<BenchmarkSummaryResponse>(
     `/agents/${agentId}/benchmark-summary/v2`,
-    { showErrors: false, cache: 'no-store' }
+    { showErrors: true, cache: 'no-store' }
   );
 
   if (response.error) {

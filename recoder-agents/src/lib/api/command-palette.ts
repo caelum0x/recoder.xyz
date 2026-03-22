@@ -49,7 +49,7 @@ export interface PinCommandPayload {
 // ---------------------------------------------------------------------------
 
 export async function recordCommand(payload: RecordCommandPayload): Promise<CommandHistoryEntry> {
-  const response = await backendApi.post<CommandHistoryEntry>('/commands/history', payload, { showErrors: false });
+  const response = await backendApi.post<CommandHistoryEntry>('/commands/history', payload, { showErrors: true });
   if (response.error) throw new Error(response.error.message);
   return response.data!;
 }
@@ -62,7 +62,7 @@ export async function getCommandHistory(limit?: number, commandType?: CommandTyp
 
   const response = await backendApi.get<CommandHistoryEntry[]>(
     `/commands/history${qs ? `?${qs}` : ''}`,
-    { showErrors: false },
+    { showErrors: true },
   );
   if (response.error) throw new Error(response.error.message);
   return response.data!;
@@ -75,25 +75,25 @@ export async function getFrequentCommands(limit?: number): Promise<FrequentComma
 
   const response = await backendApi.get<FrequentCommand[]>(
     `/commands/frequent${qs ? `?${qs}` : ''}`,
-    { showErrors: false },
+    { showErrors: true },
   );
   if (response.error) throw new Error(response.error.message);
   return response.data!;
 }
 
 export async function pinCommand(payload: PinCommandPayload): Promise<CommandPin> {
-  const response = await backendApi.post<CommandPin>('/commands/pins', payload, { showErrors: false });
+  const response = await backendApi.post<CommandPin>('/commands/pins', payload, { showErrors: true });
   if (response.error) throw new Error(response.error.message);
   return response.data!;
 }
 
 export async function getCommandPins(): Promise<CommandPin[]> {
-  const response = await backendApi.get<CommandPin[]>('/commands/pins', { showErrors: false });
+  const response = await backendApi.get<CommandPin[]>('/commands/pins', { showErrors: true });
   if (response.error) throw new Error(response.error.message);
   return response.data!;
 }
 
 export async function unpinCommand(pinId: string): Promise<void> {
-  const response = await backendApi.delete(`/commands/pins/${pinId}`, { showErrors: false });
+  const response = await backendApi.delete(`/commands/pins/${pinId}`, { showErrors: true });
   if (response.error) throw new Error(response.error.message);
 }

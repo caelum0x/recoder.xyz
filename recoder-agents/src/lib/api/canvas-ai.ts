@@ -150,7 +150,7 @@ export async function performOCR(request: OCRRequest): Promise<OCRResponse> {
 
 export async function getCanvasAIHealth(): Promise<CanvasAIHealth> {
   const response = await backendApi.get<unknown>('/canvas-ai/health', {
-    showErrors: false,
+    showErrors: true,
   });
 
   if (response.error) {
