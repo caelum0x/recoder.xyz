@@ -498,12 +498,11 @@ async def read_file(
             logger.error(f"Error retrieving sandbox {sandbox_id}: {str(sandbox_err)}")
             raise HTTPException(status_code=500, detail=f"Failed to retrieve sandbox: {str(sandbox_err)}")
         
-        # Read file with retry logic for transient errors (502, 503, 504)
+        # Read file using DaytonaFileService (direct HTTP, bypasses broken SDK)
         try:
-            content = await retry_with_backoff(
-                operation=lambda: sandbox.fs.download_file(path),
-                operation_name=f"download_file({path}) from sandbox {sandbox_id}"
-            )
+            content = await get_file_service().read_file(sandbox_id, path)
+            if content is None:
+                raise Exception(f"File not found or read failed: {path}")
         except Exception as download_err:
             error_msg = str(download_err)
             logger.error(f"Error downloading file {path} from sandbox {sandbox_id}: {error_msg}")
@@ -2674,52 +2673,5 @@ async def trigger_pool_replenish(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/sandboxes/{sandbox_id}/files/content")
-async def get_sandbox_file_content(
-    sandbox_id: str,
-    path: str = Query(..., description="File path in sandbox"),
-    request: Request = None,
-):
-    """Serve sandbox file content through the API. Used for presentation previews."""
-    import mimetypes
-    from pathlib import PurePosixPath
-
-    ALLOWED_EXTENSIONS = {'.html', '.json', '.css', '.js', '.ts', '.tsx', '.jsx',
-                          '.png', '.jpg', '.jpeg', '.svg', '.gif', '.webp',
-                          '.pdf', '.md', '.txt', '.xml', '.csv'}
-
-    # Auth
-    user_id = await verify_and_get_user_id_from_jwt(request)
-    if not user_id:
-        raise HTTPException(status_code=401, detail="Unauthorized")
-
-    # Path traversal protection
-    normalized = str(PurePosixPath(path))
-    if ".." in normalized:
-        raise HTTPException(status_code=400, detail="Invalid path")
-    if not normalized.startswith("/home/daytona"):
-        normalized = f"/home/daytona/{normalized.lstrip('/')}"
-
-    # Extension check
-    ext = PurePosixPath(normalized).suffix.lower()
-    if ext not in ALLOWED_EXTENSIONS:
-        raise HTTPException(status_code=400, detail=f"File type {ext} not allowed")
-
-    # Read file
-    content = await get_file_service().read_file(sandbox_id, normalized)
-    if content is None:
-        raise HTTPException(status_code=404, detail="File not found")
-
-    # MIME type
-    mime_type, _ = mimetypes.guess_type(normalized)
-    if mime_type is None:
-        mime_type = "application/octet-stream"
-
-    return Response(
-        content=content,
-        media_type=mime_type,
-        headers={
-            "Access-Control-Allow-Origin": "*",
-            "Cache-Control": "no-cache",
-        },
-    )
+## Duplicate endpoint removed — files/content is handled by read_file() above (line 441)
+## which now uses DaytonaFileService.read_file() instead of broken SDK download_file()
