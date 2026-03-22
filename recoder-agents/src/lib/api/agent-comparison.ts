@@ -72,12 +72,19 @@ export interface LiveComparisonResponse {
 // ============================================================================
 
 export const compareAgents = async (agentIds: string[]): Promise<AgentComparisonData[]> => {
-  const response = await backendApi.get<AgentComparisonData[]>(
-    `/agents/compare?agent_ids=${agentIds.join(',')}`,
-    { showErrors: true }
-  );
-  if (response.error) throw new Error(response.error.message);
-  return response.data!;
+  try {
+    const response = await backendApi.get<AgentComparisonData[]>(
+      `/agents/compare?agent_ids=${agentIds.join(',')}`,
+      { showErrors: false }
+    );
+    if (response.error) {
+      console.warn('compareAgents failed:', response.error.message);
+      return [];
+    }
+    return response.data ?? [];
+  } catch {
+    return [];
+  }
 };
 
 export const getAgentLeaderboard = async (
@@ -105,79 +112,89 @@ export const getAgentLeaderboard = async (
 
 export async function createComparison(
   data: CreateComparisonRequest
-): Promise<CreateComparisonResponse> {
-  const response = await backendApi.post<CreateComparisonResponse>(
-    '/agents/compare',
-    data,
-    { showErrors: true }
-  );
-
-  if (response.error) {
-    handleApiError(response.error, { operation: 'create agent comparison' });
-    throw new Error(response.error.message || 'Failed to create comparison');
+): Promise<CreateComparisonResponse | null> {
+  try {
+    const response = await backendApi.post<CreateComparisonResponse>(
+      '/agents/compare',
+      data,
+      { showErrors: false }
+    );
+    if (response.error) {
+      console.warn('createComparison failed:', response.error.message);
+      return null;
+    }
+    return response.data ?? null;
+  } catch {
+    return null;
   }
-
-  return response.data as CreateComparisonResponse;
 }
 
 export async function listSavedComparisons(): Promise<SavedComparison[]> {
-  const response = await backendApi.get<SavedComparison[]>(
-    '/agents/comparisons',
-    { showErrors: true }
-  );
-
-  if (response.error) {
-    handleApiError(response.error, { operation: 'list saved comparisons' });
-    throw new Error(response.error.message || 'Failed to list comparisons');
+  try {
+    const response = await backendApi.get<SavedComparison[]>(
+      '/agents/comparisons',
+      { showErrors: false }
+    );
+    if (response.error) {
+      console.warn('listSavedComparisons failed:', response.error.message);
+      return [];
+    }
+    return response.data ?? [];
+  } catch {
+    return [];
   }
-
-  return response.data as SavedComparison[];
 }
 
-export async function getComparison(comparisonId: string): Promise<SavedComparison> {
-  const response = await backendApi.get<SavedComparison>(
-    `/agents/comparisons/${comparisonId}`,
-    { showErrors: true, cache: 'no-store' }
-  );
-
-  if (response.error) {
-    handleApiError(response.error, { operation: 'get comparison' });
-    throw new Error(response.error.message || 'Failed to get comparison');
+export async function getComparison(comparisonId: string): Promise<SavedComparison | null> {
+  try {
+    const response = await backendApi.get<SavedComparison>(
+      `/agents/comparisons/${comparisonId}`,
+      { showErrors: false, cache: 'no-store' }
+    );
+    if (response.error) {
+      console.warn('getComparison failed:', response.error.message);
+      return null;
+    }
+    return response.data ?? null;
+  } catch {
+    return null;
   }
-
-  return response.data as SavedComparison;
 }
 
 export async function deleteComparison(
   comparisonId: string
-): Promise<{ deleted: boolean; comparison_id: string }> {
-  const response = await backendApi.delete<{ deleted: boolean; comparison_id: string }>(
-    `/agents/comparisons/${comparisonId}`,
-    { showErrors: true }
-  );
-
-  if (response.error) {
-    handleApiError(response.error, { operation: 'delete comparison' });
-    throw new Error(response.error.message || 'Failed to delete comparison');
+): Promise<{ deleted: boolean; comparison_id: string } | null> {
+  try {
+    const response = await backendApi.delete<{ deleted: boolean; comparison_id: string }>(
+      `/agents/comparisons/${comparisonId}`,
+      { showErrors: false }
+    );
+    if (response.error) {
+      console.warn('deleteComparison failed:', response.error.message);
+      return null;
+    }
+    return response.data ?? null;
+  } catch {
+    return null;
   }
-
-  return response.data as { deleted: boolean; comparison_id: string };
 }
 
 export async function liveCompare(
   agentIds: string[],
   period: string = '30d'
-): Promise<LiveComparisonResponse> {
-  const response = await backendApi.post<LiveComparisonResponse>(
-    '/agents/compare/live',
-    { agent_ids: agentIds, period },
-    { showErrors: true }
-  );
-
-  if (response.error) {
-    handleApiError(response.error, { operation: 'live agent comparison' });
-    throw new Error(response.error.message || 'Failed to compare agents');
+): Promise<LiveComparisonResponse | null> {
+  try {
+    const response = await backendApi.post<LiveComparisonResponse>(
+      '/agents/compare/live',
+      { agent_ids: agentIds, period },
+      { showErrors: false }
+    );
+    if (response.error) {
+      console.warn('liveCompare failed:', response.error.message);
+      return null;
+    }
+    return response.data ?? null;
+  } catch {
+    return null;
   }
-
-  return response.data as LiveComparisonResponse;
 }
