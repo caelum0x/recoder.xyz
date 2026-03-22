@@ -528,15 +528,32 @@ async def read_file(
         filename = os.path.basename(path)
         logger.debug(f"Successfully read file {filename} from sandbox {sandbox_id}")
         
-        # Ensure proper encoding by explicitly using UTF-8 for the filename in Content-Disposition header
-        # This applies RFC 5987 encoding for the filename to support non-ASCII characters
+        # Detect MIME type from file extension for proper browser rendering
         import urllib.parse
+        import mimetypes as _mimetypes
         encoded_filename = urllib.parse.quote(filename, safe='')
+
+        mime_type, _ = _mimetypes.guess_type(path)
+        if mime_type is None:
+            mime_type = "application/octet-stream"
+
+        # For renderable types (HTML, JSON, CSS, JS, images), serve inline
+        # For others, serve as download
+        renderable = mime_type.startswith(('text/', 'application/json', 'application/javascript', 'image/'))
+        if renderable:
+            return Response(
+                content=content,
+                media_type=mime_type,
+                headers={
+                    "Access-Control-Allow-Origin": "*",
+                    "Cache-Control": "no-cache",
+                },
+            )
+
         content_disposition = f"attachment; filename*=UTF-8''{encoded_filename}"
-        
         return Response(
             content=content,
-            media_type="application/octet-stream",
+            media_type=mime_type,
             headers={"Content-Disposition": content_disposition}
         )
     except HTTPException:
