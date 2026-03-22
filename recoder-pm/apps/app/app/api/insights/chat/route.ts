@@ -1,10 +1,34 @@
 import { getOrganizationTextModel } from "@repo/backend/ai";
 import { withOrganizationSystemPrompt } from "@repo/backend/ai-prompts";
 import { log } from "@repo/observability/log";
-import { convertToModelMessages, streamText } from "ai";
+import { streamText } from "ai";
 import { database } from "@/lib/database";
 
 export const maxDuration = 30;
+
+/**
+ * Convert UIMessage[] (from useChat) to CoreMessage[] (for streamText).
+ * Extracts text from parts array, handles both v3 and v5 message formats.
+ */
+function toModelMessages(
+  messages: Array<{ role: string; parts?: Array<{ type: string; text?: string }>; content?: string }>
+): Array<{ role: "user" | "assistant" | "system"; content: string }> {
+  return messages
+    .filter((m) => m.role === "user" || m.role === "assistant" || m.role === "system")
+    .map((m) => {
+      let content = "";
+      if (m.parts && Array.isArray(m.parts)) {
+        content = m.parts
+          .filter((p) => p.type === "text" && typeof p.text === "string")
+          .map((p) => p.text!)
+          .join("");
+      } else if (typeof m.content === "string") {
+        content = m.content;
+      }
+      return { role: m.role as "user" | "assistant" | "system", content };
+    })
+    .filter((m) => m.content.length > 0);
+}
 
 export const POST = async (req: Request) => {
   let body: { messages?: unknown; organizationId?: string };
@@ -28,14 +52,6 @@ export const POST = async (req: Request) => {
   if (messages.length === 0) {
     return new Response("Messages array must not be empty", { status: 400 });
   }
-
-  // Log incoming message format for debugging
-  log.info("Insights chat request", {
-    organizationId,
-    messageCount: messages.length,
-    firstMessageKeys: messages[0] ? Object.keys(messages[0]) : [],
-    firstMessageRole: messages[0]?.role,
-  });
 
   try {
     // Gather product context: features, feedback, insights, releases
@@ -110,15 +126,11 @@ ${context}
 Be concise, data-driven, and actionable. When asked about priorities, reference the actual features and feedback. When asked about trends, analyze the sentiment data. Always suggest specific next steps.`
     );
 
-    let modelMessages;
-    try {
-      modelMessages = convertToModelMessages(messages);
-    } catch (conversionError) {
-      log.error("Message conversion error", { error: conversionError, organizationId });
-      return new Response(
-        "Failed to process messages. Please try sending a new message.",
-        { status: 400 }
-      );
+    // Convert UIMessages to simple {role, content} format for streamText
+    const modelMessages = toModelMessages(messages);
+
+    if (modelMessages.length === 0) {
+      return new Response("No valid message content found", { status: 400 });
     }
 
     const result = streamText({
@@ -129,10 +141,9 @@ Be concise, data-driven, and actionable. When asked about priorities, reference 
 
     return result.toUIMessageStreamResponse();
   } catch (error) {
+    const errMsg = error instanceof Error ? error.message : String(error);
+    console.error("[insights/chat] ERROR:", errMsg);
     log.error("Insights chat error", { error, organizationId });
-    return new Response(
-      error instanceof Error ? error.message : "Internal server error",
-      { status: 500 }
-    );
+    return new Response(errMsg || "Internal server error", { status: 500 });
   }
 };

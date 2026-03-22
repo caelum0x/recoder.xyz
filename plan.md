@@ -1,104 +1,57 @@
 # Recoder Platform — Current State & Plan
 
-Last updated: 2026-03-23
+Last updated: 2026-03-23 (post-deployment test)
 
 ---
 
-## RECODER AGENTS (agents.recoder.xyz) — MOSTLY BROKEN
-
-### E2E Test Results (2026-03-23):
-- **Sandbox upload**: WORKS in fresh test — Python `create_sandbox()` + `upload_file()` succeeded. File server starts on port 8080. Both bracket and dot notation return 200 from Daytona proxy.
-- **Root cause of previous 400s**: Sandboxes were stopped/stale when upload attempted. Fresh sandboxes work.
-- **Dashboard crash**: Code fix deployed (null guard on `codeToHtml`). Users need hard refresh (Ctrl+Shift+R) to clear cached old JS bundles.
-- **Feedback API**: Fixed — `message_id` column added to DB via migration.
-- **Bulk upload format**: Both `files[0].path` and `files[0][path]` return 200 from Daytona proxy. Current production uses bracket notation.
+## RECODER AGENTS (agents.recoder.xyz)
 
 ### What works:
-- Text chat responses
-- Web search (fetches first 5 websites only)
+- Text chat
+- Web search
+- Slides ARE CREATED (files written to sandbox) but preview is BLANK
+- Dashboard loads (leaderboard error handled gracefully)
 
-### What does NOT work — every "useful" feature:
-- **Slides** — fails. Sandbox upload returns 400, even if upload works slides show blank (no file server)
-- **Data/Excel** — fails. Same sandbox upload issue
-- **Docs** — fails. Same sandbox upload issue
-- **Canvas** — fails. Same sandbox upload issue
-- **Video** — fails. Same sandbox upload issue
-- **Research** — only web search works (first 5 links). No deep research, no document generation
-- **Image** — fails. No image generation configured
-- **Computer use** — loading forever. Slim sandbox snapshot has no VNC/Xvfb
-- **Coding** — fails. Sandbox file creation broken
-- **Dashboard** — crashes immediately. Leaderboard API 500 → undefined.length → infinite error loop
+### Still broken after deployment:
+- **Slides show BLANK** — files created but content not visible in preview. MIME type fix deployed but needs testing in new thread.
+- **"Upgrade Recoder" prompt** — fix deployed (BYOK mode skips promo injection). Needs new thread to test.
+- **503 intermittent** on thread pages
+- **Computer use** — needs full snapshot (0.5.0 not slim)
+- **Image gen** — OpenRouter fallback deployed, untested
 
-### Console errors on every page load:
-1. `/agents/leaderboard` → 500 → crashes dashboard with "Something went wrong"
-2. `/threads/archived` → 404 → no backend endpoint exists
-3. `DialogContent` missing `aria-describedby` → triggers warning
-4. Above errors cascade into **infinite uE/ux render loop** (hundreds of recursive React re-renders, freezes browser)
-5. 503 intermittent on thread pages
-
-### Root causes (all file tools broken):
-1. **Sandbox upload 400** — `sandbox.py` monkey-patch uses dot notation `files[0].path` but Daytona proxy needs bracket notation `files[0][path]`. Every tool that writes files fails.
-2. **No file server in sandbox** — even when upload works, no HTTP server (port 8080) serves the files. Presentations show blank.
-3. **Leaderboard 500** — backend endpoint crashes, component doesn't handle error, triggers infinite re-render
-4. **Computer use** — `daytonaio/sandbox:0.5.0-slim` has no VNC. Need full snapshot `0.5.0`
-
-### Navigation items status:
-| Item | Status |
-|------|--------|
-| Files | Broken (upload 400) |
-| Chats | Works (text only) |
-| Workers | Works (can list) |
-| Spaces | Works (can list) |
-| Triggers | Works (empty) |
-| Active Runs | Shows runs |
-| Shared | Works (empty) |
-| Favorites | Works (empty) |
-| Marketplace | Works |
-| Templates | Works (static) |
-| Prompts | Works |
-| Activity | Works |
-| Runs | Works |
-| Monitoring | Works |
-| Incidents | Works |
-| Schedules | Works |
-| Pipelines | Works |
-| Leaderboard | **CRASHES** (500) |
-| A/B Tests | Works |
-| Reports | Works |
-| Billing | Works (BYOK) |
-| Developers | Works (docs) |
-
-### Mode buttons status:
-| Mode | Status |
-|------|--------|
-| Slides | **BROKEN** — upload 400 + blank preview |
-| Data | **BROKEN** — upload 400 |
-| Docs | **BROKEN** — upload 400 |
-| Canvas | **BROKEN** — upload 400 |
-| Video | **BROKEN** — upload 400 |
-| Research | Partial — web search only |
-| Image | **BROKEN** — no image gen |
+### Fixes deployed this session:
+- [x] DaytonaFileService (exec-based, all tools migrated)
+- [x] File content proxy API (correct MIME types)
+- [x] Frontend error resilience (leaderboard, comparison)
+- [x] Presentation components route through API proxy
+- [x] Upgrade prompt disabled in BYOK mode
+- [x] OpenRouter image gen fallback
 
 ---
 
 ## RECODER WEB (web.recoder.xyz) — PARTIALLY WORKING
 
 ### What works:
-- File/folder creation (26 files created via Daytona exec)
+- File/folder creation (22+ files created successfully)
 - npm install works
 - File tree shows in workbench
 - AI generates full project code
 
-### What's broken:
-- **No live preview** — sandbox URL unreachable from browser
-- **Dev server won't start** — `/api/dev-server/start` returns 403, exec fallback times out at 60s
-- **File reads return 500** — files written but can't read back
-- **Auto-install loop spam** — hundreds of "Streaming still active" messages
+### Still broken:
+- **No live preview** — sandbox URL `https://3000-{id}.sandbox.recoder.xyz/` unreachable
+- **Dev server start 403** — `/api/dev-server/start` returns Access denied
+- **File reads 500** — `docker.recoder.xyz/api/file/*` returns 500 on every file read
+- **Preview iframe empty** — health check times out after 30 attempts, shows loading forever then `chrome-error://chromewebdata/`
+
+### Root causes (docker-backend TypeScript):
+1. `/api/dev-server/start` requires auth the frontend doesn't send → 403
+2. `/api/file/{projectId}` file read endpoint returns 500 (docker-backend side, not Python)
+3. Sandbox preview URL unreachable — dev server never starts so nothing on port 3000
 
 ---
 
-## PM (pm.recoder.xyz) — DOWN ON SERVER
-## AGENCY (agency.recoder.xyz) — DOWN ON SERVER
+## PM (pm.recoder.xyz) — RUNNING
+## AGENCY (agency.recoder.xyz) — RUNNING
 ## OPENCLAW — CHANNELS UNCONFIGURED (expected)
 
 ---
@@ -109,5 +62,5 @@ Last updated: 2026-03-23
 |-----------|---------|
 | **Server** | Hetzner 77.42.23.19, 16GB RAM |
 | **Database** | PostgreSQL 17 @ 127.0.0.1:5432 |
-| **Sandbox** | Daytona localhost:3900, proxy localhost:4000, workspace `/home/daytona/` |
+| **Sandbox** | Daytona localhost:3900, workspace `/home/daytona/` |
 | **SSH** | `ssh -i ~/.ssh/id_ed25519_hetzner root@77.42.23.19` |

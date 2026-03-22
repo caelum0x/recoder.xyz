@@ -352,7 +352,7 @@ export class DevServerManager {
   private getKillPattern(framework: string): string {
     const patterns: Record<string, string> = {
       // Node.js
-      vite: 'npm run dev|vite|bun run dev',
+      vite: 'npm run dev|vite',
       next: 'next dev',
       react: 'react-scripts start',
       vue: 'vue-cli-service serve',
@@ -574,18 +574,18 @@ export async function detectFrameworkFromContainer(containerId: string): Promise
  */
 export function getInstallCommand(framework: string): string {
   const commands: Record<string, string> = {
-    // Node.js - prefer bun for speed
-    'node': 'bun install 2>/dev/null || npm install',
-    'vite': 'bun install 2>/dev/null || npm install',
-    'next': 'bun install 2>/dev/null || npm install',
-    'react': 'bun install 2>/dev/null || npm install',
-    'vue': 'bun install 2>/dev/null || npm install',
-    'svelte': 'bun install 2>/dev/null || npm install',
-    'sveltekit': 'bun install 2>/dev/null || npm install',
-    'angular': 'npm install', // Angular has issues with bun
-    'nuxt': 'bun install 2>/dev/null || npm install',
-    'expo': 'bun install 2>/dev/null || npm install',
-    'node-server': 'bun install 2>/dev/null || npm install',
+    // Node.js - use npm (bun not available in Daytona sandbox)
+    'node': 'npm install --legacy-peer-deps',
+    'vite': 'npm install --legacy-peer-deps',
+    'next': 'npm install --legacy-peer-deps',
+    'react': 'npm install --legacy-peer-deps',
+    'vue': 'npm install --legacy-peer-deps',
+    'svelte': 'npm install --legacy-peer-deps',
+    'sveltekit': 'npm install --legacy-peer-deps',
+    'angular': 'npm install --legacy-peer-deps',
+    'nuxt': 'npm install --legacy-peer-deps',
+    'expo': 'npm install --legacy-peer-deps',
+    'node-server': 'npm install --legacy-peer-deps',
     
     // Python
     'python': 'pip install -r requirements.txt 2>/dev/null || pip install -e . 2>/dev/null || echo "No deps"',
@@ -620,17 +620,17 @@ export function getInstallCommand(framework: string): string {
 export function getDevCommand(framework: string): string {
   const commands: Record<string, string> = {
     // Node.js frameworks
-    'node': 'bun run dev -- --host 0.0.0.0 2>/dev/null || npm run dev -- --host 0.0.0.0',
-    'vite': 'bun run dev -- --host 0.0.0.0 2>/dev/null || npm run dev -- --host 0.0.0.0',
-    'next': 'bun run dev 2>/dev/null || npm run dev',
-    'react': 'bun start 2>/dev/null || npm start',
-    'vue': 'bun run serve 2>/dev/null || npm run serve',
-    'svelte': 'bun run dev -- --host 0.0.0.0 2>/dev/null || npm run dev -- --host 0.0.0.0',
-    'sveltekit': 'bun run dev -- --host 0.0.0.0 2>/dev/null || npm run dev -- --host 0.0.0.0',
+    'node': 'npm run dev -- --host 0.0.0.0',
+    'vite': 'npm run dev -- --host 0.0.0.0',
+    'next': 'npm run dev',
+    'react': 'npm start',
+    'vue': 'npm run serve',
+    'svelte': 'npm run dev -- --host 0.0.0.0',
+    'sveltekit': 'npm run dev -- --host 0.0.0.0',
     'angular': 'npm start -- --host 0.0.0.0',
-    'nuxt': 'bun run dev 2>/dev/null || npm run dev',
+    'nuxt': 'npm run dev',
     'expo': `REACT_NATIVE_PACKAGER_HOSTNAME=${expoPublicHostname} EXPO_DEVTOOLS_LISTEN_ADDRESS=0.0.0.0 BROWSER=none CI=1 npx expo start --host 0.0.0.0 --port 8081`,
-    'node-server': 'bun run start 2>/dev/null || npm start || node index.js || node server.js',
+    'node-server': 'npm start || node index.js || node server.js',
     
     // Python frameworks
     'python': 'python main.py 2>/dev/null || python app.py 2>/dev/null || python server.py',

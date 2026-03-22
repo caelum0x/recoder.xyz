@@ -72,7 +72,7 @@ async function ensureDependencies(containerId: string, projectId: string): Promi
   console.log(`📦 [Preview] Installing dependencies for ${projectId}...`);
   await execInContainer(
     containerId,
-    'cd /workspace && (bun install --force || npm install --legacy-peer-deps --no-audit --no-fund)'
+    'cd /workspace && npm install --legacy-peer-deps --no-audit --no-fund'
   );
 }
 
