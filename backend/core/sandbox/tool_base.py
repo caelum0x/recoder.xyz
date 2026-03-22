@@ -6,6 +6,7 @@ if TYPE_CHECKING:
     from core.agentpress.thread_manager import ThreadManager
 from daytona_sdk import AsyncSandbox
 from core.sandbox.resolver import resolve_sandbox, SandboxInfo
+from core.sandbox.daytona_file_service import get_file_service
 from core.utils.logger import logger
 from core.utils.files_utils import clean_path
 from core.services.db import Table
@@ -20,6 +21,7 @@ class SandboxToolsBase(Tool):
         self.thread_manager = thread_manager
         self.workspace_path = "/workspace"
         self._sandbox_info: Optional[SandboxInfo] = None
+        self.file_service = get_file_service()
 
     async def _ensure_sandbox(self) -> AsyncSandbox:
         if self._sandbox_info is None:
@@ -75,6 +77,16 @@ class SandboxToolsBase(Tool):
         if self._sandbox_info is None:
             return ""
         return self._sandbox_info.password
+
+    async def write_file(self, path: str, content: bytes) -> bool:
+        """Write file to sandbox using DaytonaFileService."""
+        await self._ensure_sandbox()
+        return await self.file_service.write_file(self._sandbox_info.sandbox_id, path, content)
+
+    async def read_file_content(self, path: str) -> Optional[bytes]:
+        """Read file from sandbox using DaytonaFileService."""
+        await self._ensure_sandbox()
+        return await self.file_service.read_file(self._sandbox_info.sandbox_id, path)
 
     def clean_path(self, path: str) -> str:
         cleaned_path = clean_path(path, self.workspace_path)
