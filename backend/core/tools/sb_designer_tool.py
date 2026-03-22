@@ -381,7 +381,7 @@ class SandboxDesignerTool(SandboxToolsBase):
             
             full_path = f"{self.designs_dir}/{smart_filename}"
 
-            await self.sandbox.fs.upload_file(image_data, full_path)
+            await self.write_file(full_path, image_data)
             
             return full_path
 

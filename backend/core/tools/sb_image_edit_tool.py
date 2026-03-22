@@ -608,8 +608,8 @@ Generate, edit, upscale, or remove background from images. Video generation supp
                 extension="png"
             )
             sandbox_path = f"{self.workspace_path}/{smart_filename}"
-            await self.sandbox.fs.upload_file(result_bytes, sandbox_path)
-            
+            await self.write_file(sandbox_path, result_bytes)
+
             return smart_filename
 
         except Exception as e:
@@ -741,8 +741,8 @@ Generate, edit, upscale, or remove background from images. Video generation supp
                 extension="mp4"
             )
             sandbox_path = f"{self.workspace_path}/{smart_filename}"
-            await self.sandbox.fs.upload_file(result_bytes, sandbox_path)
-            
+            await self.write_file(sandbox_path, result_bytes)
+
             logger.info(f"Video saved: {smart_filename}")
             return smart_filename
 
@@ -808,8 +808,8 @@ Generate, edit, upscale, or remove background from images. Video generation supp
                 clean_stem = "Image"
             smart_filename = f"{clean_stem} Upscaled.webp"
             sandbox_path = f"{self.workspace_path}/{smart_filename}"
-            await self.sandbox.fs.upload_file(result_bytes, sandbox_path)
-            
+            await self.write_file(sandbox_path, result_bytes)
+
             logger.info(f"Upscaled image saved: {smart_filename}")
             return smart_filename
             
@@ -873,8 +873,8 @@ Generate, edit, upscale, or remove background from images. Video generation supp
                 clean_stem = "Image"
             smart_filename = f"{clean_stem} Transparent.png"
             sandbox_path = f"{self.workspace_path}/{smart_filename}"
-            await self.sandbox.fs.upload_file(result_bytes, sandbox_path)
-            
+            await self.write_file(sandbox_path, result_bytes)
+
             logger.info(f"Background removed, saved: {smart_filename}")
             return smart_filename
             
@@ -976,7 +976,7 @@ Generate, edit, upscale, or remove background from images. Video generation supp
             sandbox_path = f"{self.workspace_path}/{smart_filename}"
 
             # Save image to sandbox
-            await self.sandbox.fs.upload_file(image_data, sandbox_path)
+            await self.write_file(sandbox_path, image_data)
             return smart_filename
 
         except Exception as e:
@@ -1000,7 +1000,7 @@ Generate, edit, upscale, or remove background from images. Video generation supp
             sandbox_path = f"{self.workspace_path}/{mock_filename}"
             
             # Save to sandbox
-            await self.sandbox.fs.upload_file(image_data, sandbox_path)
+            await self.write_file(sandbox_path, image_data)
             return mock_filename
             
         except Exception as e:
@@ -1156,7 +1156,7 @@ Generate, edit, upscale, or remove background from images. Video generation supp
             # Update timestamp and save
             canvas_data["updated_at"] = datetime.utcnow().isoformat() + "Z"
             content = json.dumps(canvas_data, indent=2)
-            await self.sandbox.fs.upload_file(content.encode(), full_canvas_path)
+            await self.write_file(full_canvas_path, content.encode())
             
             return {
                 "canvas_path": canvas_path,

@@ -9,6 +9,7 @@ import uuid
 import base64
 from typing import Optional, List, Tuple
 from core.services.llm import make_llm_api_call
+from core.sandbox.daytona_file_service import get_file_service
 from .logger import logger
 
 
@@ -408,7 +409,7 @@ async def rename_ugly_files(
                         new_path = f"{workspace_path}/{new_name}"
                         
                         # Upload with new name, then delete old
-                        await sandbox.fs.upload_file(file_bytes, new_path)
+                        await get_file_service().write_file(sandbox.id, new_path, file_bytes)
                         await sandbox.fs.delete_file(old_path)
                         logger.info(f"Renamed: {filename} → {new_name}")
                         
