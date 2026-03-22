@@ -785,12 +785,10 @@ Multiple parallel tool calls:
             if config.ENV_MODE == EnvMode.LOCAL:
                 logger.debug(f"[PROMO] Local mode - showing promo for testing")
             else:
-                tier_info = await subscription_service.get_user_subscription_tier(user_id)
-                tier_name = tier_info.get('name', 'free')
-
-                if tier_name not in ('free', 'none'):
-                    logger.debug(f"[PROMO] User {user_id} is on {tier_name} tier - skipping promo")
-                    return None
+                # BYOK mode — no subscription system, skip upgrade promos for all users
+                # The platform runs in BYOK mode where all features are unlimited
+                logger.debug(f"[PROMO] BYOK mode - skipping upgrade promo for {user_id}")
+                return None
 
         except Exception as e:
             logger.warning(f"[PROMO] Failed to check tier for {user_id}: {e} - skipping promo (fail safe)")
