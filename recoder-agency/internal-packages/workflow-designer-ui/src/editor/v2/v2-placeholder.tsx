@@ -17,12 +17,16 @@ export function V2Placeholder({
 	onNameChange,
 	teamName,
 	teamAvatarUrl,
+	onDuplicate,
+	onDelete,
 }: {
 	isReadOnly?: boolean;
 	userRole?: "viewer" | "guest" | "editor" | "owner";
 	onNameChange?: (name: string) => Promise<void>;
 	teamName?: string;
 	teamAvatarUrl?: string | null;
+	onDuplicate?: () => void;
+	onDelete?: () => void;
 }) {
 	const defaultTour = useAppDesignerStore(
 		useShallow((s) => s.nodes.length === 0),
@@ -81,6 +85,8 @@ export function V2Placeholder({
 					onNameChange={onNameChange}
 					teamName={teamName}
 					teamAvatarUrl={teamAvatarUrl}
+					onDuplicate={onDuplicate}
+					onDelete={onDelete}
 				/>
 				{layoutV3 ? (
 					<>

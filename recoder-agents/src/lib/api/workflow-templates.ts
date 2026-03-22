@@ -85,7 +85,7 @@ export const getWorkflowTemplates = async (
   const qs = params.toString();
   const url = `/workflows/templates${qs ? `?${qs}` : ''}`;
   const response = await backendApi.get<WorkflowTemplate[]>(url, {
-    showErrors: false,
+    showErrors: true,
   });
   if (response.error) throw new Error(response.error.message);
   return response.data!;
@@ -96,7 +96,7 @@ export const getWorkflowTemplate = async (
 ): Promise<WorkflowTemplate> => {
   const response = await backendApi.get<WorkflowTemplate>(
     `/workflows/templates/${templateId}`,
-    { showErrors: false }
+    { showErrors: true }
   );
   if (response.error) throw new Error(response.error.message);
   return response.data!;
@@ -148,7 +148,7 @@ export const getWorkflowTemplateRuns = async (
 ): Promise<WorkflowTemplateRun[]> => {
   const response = await backendApi.get<WorkflowTemplateRun[]>(
     `/workflows/templates/${templateId}/runs`,
-    { showErrors: false }
+    { showErrors: true }
   );
   if (response.error) throw new Error(response.error.message);
   return response.data!;

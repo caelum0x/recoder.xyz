@@ -1,11 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getUserFromToken } from "@/lib/auth-helpers";
+import { addCorsHeaders, handlePreflight } from "@/lib/middleware/cors";
+
+export async function OPTIONS(request: NextRequest) {
+  return handlePreflight(request);
+}
 
 export async function GET(request: NextRequest) {
+  const cors = (res: Response) => addCorsHeaders(res, request);
   const user = await getUserFromToken(request);
   if (!user) {
-    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+    return cors(NextResponse.json({ error: "unauthorized" }, { status: 401 }));
   }
 
   const url = new URL(request.url);
@@ -24,5 +30,5 @@ export async function GET(request: NextRequest) {
     }),
   ]);
 
-  return NextResponse.json({ notifications, unreadCount });
+  return cors(NextResponse.json({ notifications, unreadCount }));
 }

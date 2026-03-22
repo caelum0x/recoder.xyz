@@ -10,6 +10,7 @@ import { Logger } from '@recoder/shared';
 import { EventEmitter } from 'events';
 import * as fs from 'fs/promises';
 import * as path from 'path';
+import * as https from 'https';
 import { exec } from 'child_process';
 import { promisify } from 'util';
 
@@ -1075,11 +1076,71 @@ export class QualityAssessor extends EventEmitter {
   }
 
   private async getModelResponse(modelName: string, prompt: string, taskType: string): Promise<string> {
-    // TODO(model-integration): Wire to real AI provider APIs when model routing is available.
-    // Quality assessment of model responses requires calling the actual model.
-    // Without a configured provider, return empty string to signal no response available.
-    console.warn(`[QualityAssessor] No model API configured for ${modelName} — skipping response generation`);
-    return '';
+    const apiKey = process.env.OPENROUTER_API_KEY;
+    if (!apiKey) {
+      Logger.warn(`[QualityAssessor] No OPENROUTER_API_KEY configured — skipping response generation for ${modelName}`);
+      return '';
+    }
+
+    try {
+      const requestBody = JSON.stringify({
+        model: modelName,
+        messages: [
+          { role: 'user', content: prompt },
+        ],
+        max_tokens: 1024,
+      });
+
+      const response = await new Promise<string>((resolve, reject) => {
+        const options: https.RequestOptions = {
+          hostname: 'openrouter.ai',
+          port: 443,
+          path: '/api/v1/chat/completions',
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${apiKey}`,
+            'Content-Length': Buffer.byteLength(requestBody),
+          },
+          timeout: 30000,
+        };
+
+        const req = https.request(options, (res) => {
+          let data = '';
+          res.on('data', (chunk) => { data += chunk; });
+          res.on('end', () => {
+            try {
+              const parsed = JSON.parse(data);
+              const content = parsed?.choices?.[0]?.message?.content || '';
+              resolve(content);
+            } catch {
+              Logger.warn(`[QualityAssessor] Failed to parse OpenRouter response for ${modelName}`);
+              resolve('');
+            }
+          });
+        });
+
+        req.on('error', (err) => {
+          Logger.warn(`[QualityAssessor] OpenRouter request failed for ${modelName}: ${err.message}`);
+          resolve('');
+        });
+
+        req.on('timeout', () => {
+          req.destroy();
+          Logger.warn(`[QualityAssessor] OpenRouter request timed out for ${modelName}`);
+          resolve('');
+        });
+
+        req.write(requestBody);
+        req.end();
+      });
+
+      return response;
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : 'Unknown error';
+      Logger.warn(`[QualityAssessor] getModelResponse failed for ${modelName}: ${errorMsg}`);
+      return '';
+    }
   }
 
   private generateComparisonInsights(results: any[]): string[] {

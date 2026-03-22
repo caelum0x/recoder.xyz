@@ -229,65 +229,8 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  // Billing enforcement for authenticated private routes.
-  // We use a short-lived cookie cache to avoid calling billing on every request.
-  if (pathname !== BILLING_BLOCKED_REDIRECT) {
-    const cachedBillingStatus = request.cookies.get(BILLING_STATUS_COOKIE)?.value;
-
-    if (cachedBillingStatus === 'blocked') {
-      const blockedUrl = request.nextUrl.clone();
-      blockedUrl.pathname = BILLING_BLOCKED_REDIRECT;
-      blockedUrl.searchParams.set('redirect', pathname);
-      return NextResponse.redirect(blockedUrl);
-    }
-
-    if (cachedBillingStatus !== 'active') {
-      const backendUrl = process.env.BACKEND_INTERNAL_URL || process.env.NEXT_PUBLIC_BACKEND_URL || '';
-      const sessionToken = getSessionToken(request);
-
-      if (backendUrl && sessionToken) {
-        try {
-          const billingResponse = await fetch(`${backendUrl}/billing/account-state/minimal`, {
-            headers: {
-              Authorization: `Bearer ${sessionToken}`,
-            },
-            cache: 'no-store',
-          });
-
-          if (billingResponse.ok) {
-            const billing = await billingResponse.json();
-            const tierKey = billing?.subscription?.tier_key || billing?.tier?.name;
-            const hasSubscription =
-              billing?.has_subscription === true ||
-              (typeof tierKey === 'string' && tierKey !== 'none');
-
-            if (!hasSubscription) {
-              const blockedUrl = request.nextUrl.clone();
-              blockedUrl.pathname = BILLING_BLOCKED_REDIRECT;
-              blockedUrl.searchParams.set('redirect', pathname);
-
-              const redirectResponse = NextResponse.redirect(blockedUrl);
-              redirectResponse.cookies.set(BILLING_STATUS_COOKIE, 'blocked', {
-                path: '/',
-                maxAge: BILLING_STATUS_MAX_AGE_BLOCKED_SECONDS,
-                sameSite: 'lax',
-              });
-              return redirectResponse;
-            }
-
-            response.cookies.set(BILLING_STATUS_COOKIE, 'active', {
-              path: '/',
-              maxAge: BILLING_STATUS_MAX_AGE_ACTIVE_SECONDS,
-              sameSite: 'lax',
-            });
-          }
-        } catch (error) {
-          // Non-fatal: if billing check is temporarily unavailable, let request proceed.
-          console.warn('Billing check failed in middleware:', error);
-        }
-      }
-    }
-  }
+  // Billing enforcement DISABLED — platform is BYOK (no subscription system).
+  // All authenticated users get full access.
 
   return response;
 }

@@ -196,7 +196,7 @@ export function PresentationViewer({
       // Handle string output
       if (typeof output === 'string') {
         // Check if the string looks like an error message
-        if (output.startsWith('Error') || output.includes('exec')) {
+        if (output.startsWith('Error') || output.startsWith('Failed') || output.includes('exec') || output.includes('error') || output.includes('Error')) {
           console.error('Tool execution error:', output);
           toolExecutionError = output;
         } else {

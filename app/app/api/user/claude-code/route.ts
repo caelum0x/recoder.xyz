@@ -17,7 +17,7 @@ function isValidClaudeCodeToken(token: string): boolean {
 }
 
 function userModel() {
-  return prisma.user;
+  return prisma.users;
 }
 
 export async function POST(request: NextRequest) {

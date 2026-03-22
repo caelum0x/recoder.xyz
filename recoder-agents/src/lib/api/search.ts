@@ -23,7 +23,7 @@ export async function globalSearch(query: string, types?: string[]): Promise<Sea
     if (types?.length) params.set('types', types.join(','));
     const response = await backendApi.get<SearchResponse>(
       `/search?${params.toString()}`,
-      { showErrors: false },
+      { showErrors: true },
     );
     if (response.error) throw new Error(`Error: ${response.error.message}`);
     return response.data!;

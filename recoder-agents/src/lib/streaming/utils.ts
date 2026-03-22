@@ -37,11 +37,11 @@ export function isBillingError(message: string): boolean {
 
 export function extractBillingErrorContext(errorMessage: string): BillingErrorContext {
   const messageLower = errorMessage.toLowerCase();
-  const isCreditsExhausted = 
+  const isCreditsExhausted =
     messageLower.includes('insufficient credits') ||
     messageLower.includes('out of credits') ||
-    messageLower.includes('no credits') ||
-    messageLower.includes('balance');
+    messageLower.includes('no credits remaining') ||
+    messageLower.includes('credits exhausted');
   
   const balanceMatch = errorMessage.match(/balance is (-?\d+)\s*credits/i);
   const balance = balanceMatch ? balanceMatch[1] : null;

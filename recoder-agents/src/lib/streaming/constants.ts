@@ -27,10 +27,12 @@ export const TERMINAL_STATUSES = [
 export const BILLING_ERROR_KEYWORDS = [
   'insufficient credits',
   'out of credits',
-  'no credits',
-  'balance',
-  'credit',
+  'no credits remaining',
+  'credit balance is 0',
+  'credits exhausted',
   'billing check failed',
+  'payment required',
+  'upgrade your plan',
 ] as const;
 
 export const COMPLETION_MESSAGE_PATTERNS = [

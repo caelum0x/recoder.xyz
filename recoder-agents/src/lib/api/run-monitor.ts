@@ -45,7 +45,7 @@ export interface MonitorStats {
 export const getActiveRuns = async (): Promise<ActiveRun[]> => {
   const response = await backendApi.get<ActiveRun[]>(
     '/monitor/runs/active',
-    { showErrors: false, cache: 'no-store' }
+    { showErrors: true, cache: 'no-store' }
   );
 
   if (response.error) {
@@ -61,7 +61,7 @@ export const getRunTimeline = async (
 ): Promise<RunSnapshot[]> => {
   const response = await backendApi.get<RunSnapshot[]>(
     `/monitor/runs/${runId}/timeline?limit=${limit}`,
-    { showErrors: false, cache: 'no-store' }
+    { showErrors: true, cache: 'no-store' }
   );
 
   if (response.error) {
@@ -74,7 +74,7 @@ export const getRunTimeline = async (
 export const getMonitorStats = async (): Promise<MonitorStats> => {
   const response = await backendApi.get<MonitorStats>(
     '/monitor/stats',
-    { showErrors: false, cache: 'no-store' }
+    { showErrors: true, cache: 'no-store' }
   );
 
   if (response.error) {
@@ -100,7 +100,7 @@ export const recordRunSnapshot = async (
   const response = await backendApi.post<{ success: boolean; id?: string; captured_at?: string }>(
     `/monitor/runs/${runId}/snapshot`,
     data,
-    { showErrors: false }
+    { showErrors: true }
   );
 
   if (response.error) {

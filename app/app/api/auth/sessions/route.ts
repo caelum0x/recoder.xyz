@@ -5,18 +5,15 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { auth } from '@/lib/auth-config';
-import { headers } from 'next/headers';
 import { prisma } from '@/lib/prisma';
 import { UAParser } from 'ua-parser-js';
 import { assertAuthSessionsListResponse } from '@/lib/contracts/auth-session-contracts';
 import { logger } from '@/lib/logger';
+import { getSession } from '@/lib/auth-helpers';
 
 export async function GET(request: NextRequest) {
   try {
-    const session = await auth.api.getSession({
-      headers: await headers()
-    });
+    const session = await getSession(request);
 
     if (!session?.user) {
       return NextResponse.json(
@@ -25,21 +22,28 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Get all active sessions for the user
-    const sessions = await prisma.sessions.findMany({
-      where: {
-        userId: session.user.id,
-        expiresAt: {
-          gt: new Date() // Only active sessions
-        }
-      },
-      orderBy: {
-        createdAt: 'desc'
-      }
+    // Get all active sessions for the user from both tables
+    const [appSessions, baSessions] = await Promise.all([
+      prisma.sessions.findMany({
+        where: { userId: session.user.id, expiresAt: { gt: new Date() } },
+        orderBy: { createdAt: 'desc' }
+      }),
+      prisma.session.findMany({
+        where: { userId: session.user.id, expiresAt: { gt: new Date() } },
+        orderBy: { createdAt: 'desc' }
+      })
+    ]);
+
+    // Deduplicate by token
+    const seenTokens = new Set<string>();
+    const allSessions = [...appSessions, ...baSessions].filter(s => {
+      if (seenTokens.has(s.token)) return false;
+      seenTokens.add(s.token);
+      return true;
     });
 
     // Parse user agent and IP for each session
-    const sessionsWithInfo = sessions.map(sess => {
+    const sessionsWithInfo = allSessions.map(sess => {
       const parser = new UAParser(sess.userAgent || '');
       const browser = parser.getBrowser();
       const os = parser.getOS();
@@ -52,10 +56,10 @@ export async function GET(request: NextRequest) {
         os: os.name || 'Unknown',
         deviceType: device.type || 'desktop',
         ipAddress: sess.ipAddress || 'Unknown',
-        location: 'Unknown', // Would need IP geolocation service
+        location: 'Unknown',
         lastActive: sess.updatedAt || sess.createdAt,
         createdAt: sess.createdAt,
-        current: sess.id === session.session.id
+        current: false // Cannot determine current session without session ID
       };
     });
 
@@ -75,9 +79,7 @@ export async function GET(request: NextRequest) {
 
 export async function DELETE(request: NextRequest) {
   try {
-    const session = await auth.api.getSession({
-      headers: await headers()
-    });
+    const session = await getSession(request);
 
     if (!session?.user) {
       return NextResponse.json(
@@ -96,10 +98,9 @@ export async function DELETE(request: NextRequest) {
       );
     }
 
-    // Verify the session belongs to the user
-    const sessionToDelete = await prisma.sessions.findUnique({
-      where: { id: sessionId }
-    });
+    // Verify the session belongs to the user (check both tables)
+    const sessionToDelete = await prisma.sessions.findUnique({ where: { id: sessionId } })
+      ?? await prisma.session.findUnique({ where: { id: sessionId } });
 
     if (!sessionToDelete || sessionToDelete.userId !== session.user.id) {
       return NextResponse.json(
@@ -108,21 +109,10 @@ export async function DELETE(request: NextRequest) {
       );
     }
 
-    // Don't allow deleting current session
-    if (sessionId === session.session.id) {
-      return NextResponse.json(
-        assertAuthSessionsListResponse({
-          success: false,
-          error: 'Cannot revoke current session. Please sign out instead.',
-        }),
-        { status: 400 }
-      );
+    // Delete the session from whichever table it's in
+    try { await prisma.sessions.delete({ where: { id: sessionId } }); } catch {
+      await prisma.session.delete({ where: { id: sessionId } });
     }
-
-    // Delete the session
-    await prisma.sessions.delete({
-      where: { id: sessionId }
-    });
 
     return NextResponse.json(assertAuthSessionsListResponse({
       success: true,

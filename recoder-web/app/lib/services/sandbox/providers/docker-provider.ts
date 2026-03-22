@@ -27,10 +27,14 @@ const logger = createScopedLogger('DockerProviderService');
 
 // Docker backend URL from environment
 const getDockerUrl = (): string => {
+  let url = 'https://docker.recoder.xyz';
   if (typeof import.meta !== 'undefined' && import.meta.env?.VITE_DOCKER_BACKEND_URL) {
-    return import.meta.env.VITE_DOCKER_BACKEND_URL;
+    url = import.meta.env.VITE_DOCKER_BACKEND_URL;
   }
-  return 'http://localhost:3100';
+  if (typeof window !== 'undefined' && window.location.hostname !== 'localhost' && url.includes('localhost')) {
+    url = 'https://docker.recoder.xyz';
+  }
+  return url;
 };
 
 /**

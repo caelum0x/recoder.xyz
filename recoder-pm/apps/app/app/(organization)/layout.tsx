@@ -29,7 +29,7 @@ const OrganizationLayout = async ({
   ]);
 
   if (!user) {
-    redirect("/sign-in");
+    redirect("https://recoder.xyz/auth/signin?redirect=https://pm.recoder.xyz");
   }
 
   if (!organizationId) {

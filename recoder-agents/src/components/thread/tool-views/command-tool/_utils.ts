@@ -54,9 +54,9 @@ export function extractCommandData(
     // Handle structured output object
     if (typeof toolResult.output === 'object' && toolResult.output !== null) {
       const outputObj = toolResult.output as Record<string, unknown>;
-      output = outputObj.output || outputObj.stdout || outputObj.content || JSON.stringify(outputObj, null, 2);
-      exitCode = outputObj.exit_code ?? outputObj.exitCode ?? null;
-      completed = outputObj.completed ?? outputObj.finished ?? null;
+      output = (outputObj.output as string) || (outputObj.stdout as string) || (outputObj.content as string) || JSON.stringify(outputObj, null, 2);
+      exitCode = (outputObj.exit_code as number) ?? (outputObj.exitCode as number) ?? null;
+      completed = (outputObj.completed as boolean) ?? (outputObj.finished as boolean) ?? null;
     } else if (typeof toolResult.output === 'string') {
       output = toolResult.output;
     }

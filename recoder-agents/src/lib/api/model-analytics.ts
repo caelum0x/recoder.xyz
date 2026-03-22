@@ -25,7 +25,7 @@ export async function getModelAnalytics(agentId: string, range: string = '30d'):
   try {
     const response = await backendApi.get<ModelAnalyticsResponse>(
       `/agents/${agentId}/analytics/models?range=${range}`,
-      { showErrors: false },
+      { showErrors: true },
     );
     if (response.error) {
       throw new Error(`Error fetching model analytics: ${response.error.message}`);

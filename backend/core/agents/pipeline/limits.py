@@ -42,7 +42,11 @@ class LimitEnforcer:
             
             tier_info = await get_cached_tier_info(account_id)
             concurrent_limit = tier_info.get('concurrent_runs', 1) if tier_info else 1
-            
+
+            # If limit is 0 or not set, don't block — allow the run
+            if concurrent_limit <= 0:
+                return {'can_run': True, 'type': 'concurrent'}
+
             cached_runs = await get_cached_running_runs(account_id)
             if cached_runs is not None:
                 running_count = len(cached_runs) if isinstance(cached_runs, list) else cached_runs
@@ -50,7 +54,7 @@ class LimitEnforcer:
                 from core.utils.limits_repo import count_running_agent_runs
                 run_details = await count_running_agent_runs(account_id)
                 running_count = run_details.get('count', 0)
-            
+
             if running_count >= concurrent_limit:
                 return {
                     'can_run': False,
@@ -149,13 +153,17 @@ class LimitEnforcer:
             
             tier_info = await get_cached_tier_info(account_id)
             limit = tier_info.get('concurrent_runs', 1) if tier_info else 1
-            
+
+            # If limit is 0 or not set, don't block — allow the run
+            if limit <= 0:
+                return True, "No concurrent limit configured"
+
             cached = await get_cached_running_runs(account_id)
             if cached is not None:
                 count = len(cached) if isinstance(cached, list) else cached
                 if count >= limit:
                     return False, f"Concurrent limit ({limit}) reached"
-            
+
             return True, "OK"
         except Exception as e:
             logger.warning(f"Concurrent check failed: {e}")

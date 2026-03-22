@@ -70,7 +70,7 @@ async function getUsageLogs(
         tokens?: { prompt_tokens?: number; completion_tokens?: number };
       }>;
       pagination: { total: number; has_more: boolean };
-    }>(`/billing/credit-usage?${params.toString()}`, { showErrors: false });
+    }>(`/billing/credit-usage?${params.toString()}`, { showErrors: true });
 
     if (response.error) throw new Error(response.error.message);
 
@@ -112,7 +112,7 @@ async function getUsageHistory(
   try {
     const response = await backendApi.get<UsageHistoryResponse>(
       `/billing/usage-history?days=${days}`,
-      { showErrors: false },
+      { showErrors: true },
     );
     if (response.error) throw new Error(response.error.message);
     return response.data!;
@@ -131,7 +131,7 @@ async function getTransactionsSummary(
   try {
     const response = await backendApi.get<TransactionsSummaryResponse>(
       `/billing/transactions/summary?days=${days}`,
-      { showErrors: false },
+      { showErrors: true },
     );
     if (response.error) throw new Error(response.error.message);
     return response.data!;

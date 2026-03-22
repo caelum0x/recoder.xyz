@@ -73,7 +73,7 @@ export const lookupCacheEntry = async (
 ): Promise<CacheEntry> => {
   const response = await backendApi.get<CacheEntry>(
     `/agents/${agentId}/cache/${encodeURIComponent(cacheKey)}`,
-    { showErrors: false }
+    { showErrors: true }
   );
   if (response.error) throw new Error(response.error.message);
   return response.data!;
@@ -100,7 +100,7 @@ export const clearAgentCache = async (agentId: string): Promise<CleanupResult> =
 export const getCacheStats = async (agentId: string): Promise<CacheStats> => {
   const response = await backendApi.get<CacheStats>(
     `/agents/${agentId}/cache/stats`,
-    { showErrors: false }
+    { showErrors: true }
   );
   if (response.error) throw new Error(response.error.message);
   return response.data!;
@@ -109,7 +109,7 @@ export const getCacheStats = async (agentId: string): Promise<CacheStats> => {
 export const getCachePolicy = async (agentId: string): Promise<CachePolicy> => {
   const response = await backendApi.get<CachePolicy>(
     `/agents/${agentId}/cache/policy`,
-    { showErrors: false }
+    { showErrors: true }
   );
   if (response.error) throw new Error(response.error.message);
   return response.data!;

@@ -285,7 +285,7 @@ function TagPickerContent({
 
 function CreateTagInline({ onDone }: { onDone: () => void }) {
   const [name, setName] = useState('');
-  const [color, setColor] = useState(TAG_COLORS[5]); // default: blue
+  const [color, setColor] = useState<string>(TAG_COLORS[5]); // default: blue
   const nameRef = useRef<HTMLInputElement>(null);
   const createMutation = useCreateTag();
 

@@ -17,7 +17,7 @@ export interface ShortcutInput {
 
 export const getShortcuts = async (): Promise<KeyboardShortcut[]> => {
   const response = await backendApi.get<KeyboardShortcut[]>('/shortcuts', {
-    showErrors: false,
+    showErrors: true,
   });
   if (response.error) throw new Error(response.error.message);
   return response.data!;

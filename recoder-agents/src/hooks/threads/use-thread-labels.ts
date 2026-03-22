@@ -2,131 +2,117 @@
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
-  createThreadLabel,
-  getThreadLabels,
-  updateThreadLabel,
-  deleteThreadLabel,
+  listLabels,
+  createLabel,
+  updateLabel,
+  deleteLabel,
   assignLabel,
   removeLabel,
-  getThreadLabelsList,
+  getThreadLabels,
   getLabelThreads,
+  bulkAssignLabel,
+  type LabelDefinition,
+  type LabelAssignment,
   type CreateLabelData,
   type UpdateLabelData,
+  type BulkAssignData,
 } from '@/lib/api/thread-labels';
 
-// ---------------------------------------------------------------------------
-// Query keys
-// ---------------------------------------------------------------------------
+const labelsKey = ['thread-labels'] as const;
+const labelThreadsKey = (labelId: string) => ['label-threads', labelId] as const;
+const threadLabelsKey = (threadId: string) => ['thread-label-assignments', threadId] as const;
 
-const labelKeys = {
-  all: ['thread-labels'] as const,
-  lists: () => [...labelKeys.all, 'list'] as const,
-  thread: (threadId: string) =>
-    [...labelKeys.all, 'thread', threadId] as const,
-  labelThreads: (labelId: string) =>
-    [...labelKeys.all, 'label-threads', labelId] as const,
-};
-
-// ---------------------------------------------------------------------------
-// Query hooks
-// ---------------------------------------------------------------------------
-
-export function useThreadLabels() {
-  return useQuery({
-    queryKey: labelKeys.lists(),
-    queryFn: getThreadLabels,
-    staleTime: 60_000,
-  });
-}
-
-export function useThreadLabelsList(threadId: string) {
-  return useQuery({
-    queryKey: labelKeys.thread(threadId),
-    queryFn: () => getThreadLabelsList(threadId),
-    enabled: !!threadId,
+export function useLabels() {
+  return useQuery<LabelDefinition[]>({
+    queryKey: labelsKey,
+    queryFn: () => listLabels(),
     staleTime: 30_000,
   });
 }
 
-export function useLabelThreads(labelId: string) {
-  return useQuery({
-    queryKey: labelKeys.labelThreads(labelId),
-    queryFn: () => getLabelThreads(labelId),
-    enabled: !!labelId,
-    staleTime: 30_000,
-  });
-}
+export function useCreateLabel() {
+  const queryClient = useQueryClient();
 
-// ---------------------------------------------------------------------------
-// Mutation hooks
-// ---------------------------------------------------------------------------
-
-export function useCreateThreadLabel() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (data: CreateLabelData) => createThreadLabel(data),
+  return useMutation<LabelDefinition, Error, CreateLabelData>({
+    mutationFn: (data) => createLabel(data),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: labelKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: labelsKey });
     },
   });
 }
 
-export function useUpdateThreadLabel() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: ({
-      labelId,
-      data,
-    }: {
-      labelId: string;
-      data: UpdateLabelData;
-    }) => updateThreadLabel(labelId, data),
+export function useUpdateLabel() {
+  const queryClient = useQueryClient();
+
+  return useMutation<LabelDefinition, Error, { id: string; data: UpdateLabelData }>({
+    mutationFn: ({ id, data }) => updateLabel(id, data),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: labelKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: labelsKey });
     },
   });
 }
 
-export function useDeleteThreadLabel() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (labelId: string) => deleteThreadLabel(labelId),
+export function useDeleteLabel() {
+  const queryClient = useQueryClient();
+
+  return useMutation<{ deleted: boolean }, Error, string>({
+    mutationFn: (id) => deleteLabel(id),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: labelKeys.all });
+      queryClient.invalidateQueries({ queryKey: labelsKey });
     },
   });
 }
 
 export function useAssignLabel() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: ({
-      threadId,
-      labelId,
-    }: {
-      threadId: string;
-      labelId: string;
-    }) => assignLabel(threadId, labelId),
-    onSuccess: (_data, { threadId }) => {
-      qc.invalidateQueries({ queryKey: labelKeys.thread(threadId) });
-      qc.invalidateQueries({ queryKey: labelKeys.lists() });
+  const queryClient = useQueryClient();
+
+  return useMutation<LabelAssignment, Error, { threadId: string; labelId: string }>({
+    mutationFn: ({ threadId, labelId }) => assignLabel(threadId, labelId),
+    onSuccess: (_, { threadId }) => {
+      queryClient.invalidateQueries({ queryKey: labelsKey });
+      queryClient.invalidateQueries({ queryKey: threadLabelsKey(threadId) });
     },
   });
 }
 
 export function useRemoveLabel() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: ({
-      threadId,
-      labelId,
-    }: {
-      threadId: string;
-      labelId: string;
-    }) => removeLabel(threadId, labelId),
-    onSuccess: (_data, { threadId }) => {
-      qc.invalidateQueries({ queryKey: labelKeys.thread(threadId) });
-      qc.invalidateQueries({ queryKey: labelKeys.lists() });
+  const queryClient = useQueryClient();
+
+  return useMutation<{ deleted: boolean }, Error, { threadId: string; labelId: string }>({
+    mutationFn: ({ threadId, labelId }) => removeLabel(threadId, labelId),
+    onSuccess: (_, { threadId }) => {
+      queryClient.invalidateQueries({ queryKey: labelsKey });
+      queryClient.invalidateQueries({ queryKey: threadLabelsKey(threadId) });
+    },
+  });
+}
+
+export function useThreadLabels(threadId: string) {
+  return useQuery<LabelAssignment[]>({
+    queryKey: threadLabelsKey(threadId),
+    queryFn: () => getThreadLabels(threadId),
+    staleTime: 30_000,
+    enabled: !!threadId,
+  });
+}
+
+export function useLabelThreads(labelId: string) {
+  return useQuery<{ thread_id: string; assigned_at: string }[]>({
+    queryKey: labelThreadsKey(labelId),
+    queryFn: () => getLabelThreads(labelId),
+    staleTime: 30_000,
+    enabled: !!labelId,
+  });
+}
+
+export function useBulkAssignLabel() {
+  const queryClient = useQueryClient();
+
+  return useMutation<{ assigned_count: number }, Error, BulkAssignData>({
+    mutationFn: (data) => bulkAssignLabel(data),
+    onSuccess: (_, { label_id }) => {
+      queryClient.invalidateQueries({ queryKey: labelsKey });
+      queryClient.invalidateQueries({ queryKey: labelThreadsKey(label_id) });
     },
   });
 }

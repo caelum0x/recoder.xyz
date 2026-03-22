@@ -264,10 +264,10 @@ function DashboardContent() {
               <p className="text-sm text-gray-400">View and manage your projects</p>
             </Link>
 
-            <Link href="/dashboard/api-keys" className="p-6 rounded-2xl border border-white/10 bg-white/5 hover:border-white/20 hover:bg-white/10 transition-all group">
+            <Link href="/settings/ai-providers" className="p-6 rounded-2xl border border-orange-500/30 bg-orange-500/5 hover:border-orange-500/50 hover:bg-orange-500/10 transition-all group">
               <Sparkles className="w-8 h-8 text-orange-500 mb-3 group-hover:scale-110 transition-transform" />
-              <h3 className="font-bold mb-2">API Keys</h3>
-              <p className="text-sm text-gray-400">Manage your API keys and tokens</p>
+              <h3 className="font-bold mb-2">AI Provider Keys</h3>
+              <p className="text-sm text-gray-400">Add your OpenRouter or Anthropic key to use AI</p>
             </Link>
 
             <Link href="/dashboard/usage" className="p-6 rounded-2xl border border-white/10 bg-white/5 hover:border-white/20 hover:bg-white/10 transition-all group">
@@ -352,7 +352,7 @@ function DashboardContent() {
               {(() => {
                 const allActivities = platformActivity
                   .flatMap((entry) =>
-                    entry.recentActivity.map((item) => ({
+                    (entry.recentActivity || []).map((item) => ({
                       ...item,
                       app: entry.app,
                     })),

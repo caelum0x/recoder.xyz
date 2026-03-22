@@ -1,34 +1,12 @@
 // User profile API endpoint
 import { NextRequest, NextResponse } from 'next/server';
-import { requireAuth } from "@/lib/auth-helpers";
+import { requireAuth, getUserFromToken } from "@/lib/auth-helpers";
 import { prisma } from '@/lib/prisma';
 import { userManager } from '@/lib/user-management';
 import { logger } from '@/lib/logger';
 import { rateLimit, rateLimitConfigs } from '@/lib/middleware/rate-limit';
 
 const apiRateLimiter = rateLimit(rateLimitConfigs.api);
-
-// Helper to extract user from Bearer token
-async function getUserFromToken(request: NextRequest) {
-  const authHeader = request.headers.get('authorization');
-  if (!authHeader?.startsWith('Bearer ')) {
-    return null;
-  }
-
-  const token = authHeader.substring(7);
-
-  // Find session by access token
-  const session = await prisma.cli_sessions.findUnique({
-    where: { accessToken: token },
-    include: { users: true }
-  });
-
-  if (!session || !session.isActive || session.expiresAt < new Date()) {
-    return null;
-  }
-
-  return session.users;
-}
 
 export async function GET(request: NextRequest) {
   const rateLimitResponse = await apiRateLimiter(request);

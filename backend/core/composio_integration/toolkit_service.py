@@ -76,6 +76,7 @@ class ToolsListResponse(BaseModel):
 class ToolkitService:
     def __init__(self, api_key: Optional[str] = None):
         self.client = ComposioClient.get_client(api_key)
+        self.available = self.client is not None
     
     async def list_categories(self) -> List[CategoryInfo]:
         try:
@@ -247,12 +248,15 @@ class ToolkitService:
     
     async def get_toolkit_icon(self, toolkit_slug: str) -> Optional[str]:
         """Get toolkit icon with Redis caching (24h TTL).
-        
+
         Uses asyncio.to_thread for the sync Composio SDK call to enable
         true parallel execution when called via asyncio.gather.
         """
         import asyncio
-        
+
+        if not self.available:
+            return None
+
         try:
             from core.services import redis
 

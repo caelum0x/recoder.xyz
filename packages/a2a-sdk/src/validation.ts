@@ -33,7 +33,7 @@ import {
   AUDIT_EVENT_TYPES,
   AUDIT_EVENT_VERSION,
   isA2AErrorCode,
-} from '@recoder/shared/a2a/schemas';
+} from './schemas';
 
 // ---------------------------------------------------------------------------
 // Validation result types

@@ -3,7 +3,7 @@
  * Sets up all tables and functions in Neon database
  */
 
-import { neon } from '@neondatabase/serverless';
+import { createSql } from '../app/lib/.server/db/pg-pool';
 import { readFileSync } from 'fs';
 import { join } from 'path';
 import * as dotenv from 'dotenv';
@@ -24,7 +24,7 @@ async function initDatabase() {
   }
 
   console.log('✅ Database URL loaded from environment\n');
-  const sql = neon(DATABASE_URL);
+  const sql = createSql(DATABASE_URL);
 
   try {
     // Test connection

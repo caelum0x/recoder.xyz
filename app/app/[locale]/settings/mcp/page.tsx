@@ -1,6 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import Link from 'next/link';
+import { ArrowLeft } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -116,6 +118,13 @@ export default function MCPSettingsPage() {
 
   return (
     <div className="container mx-auto p-6 space-y-6">
+      <Link
+        href="/settings"
+        className="inline-flex items-center gap-2 text-sm text-gray-400 hover:text-white transition-colors mb-4"
+      >
+        <ArrowLeft className="w-4 h-4" />
+        Back to Settings
+      </Link>
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold">MCP Servers</h1>

@@ -1,17 +1,39 @@
 /**
  * Git-based Snapshot Manager
  * Handles project snapshots using Git for instant rollback/restore
- * 
+ *
  * Each snapshot is a Git commit in the project's /workspace directory.
  * This enables:
  * - Instant restore to any previous state
  * - Diff comparison between snapshots
  * - Auto-save at key moments (before AI changes, after user saves)
+ *
+ * Daytona sandboxes: snapshot operations are skipped for Daytona-backed
+ * containers because Daytona manages its own sandbox state. All public
+ * methods check isDaytonaId() and return safe no-op results.
  */
 
 import Docker from 'dockerode';
 
 const docker = new Docker();
+
+/**
+ * Set of container/sandbox IDs that are Daytona-backed.
+ * Populated by server.ts via registerDaytonaId / unregisterDaytonaId.
+ */
+const _daytonaIds = new Set<string>();
+
+export function registerDaytonaId(id: string): void {
+  _daytonaIds.add(id);
+}
+
+export function unregisterDaytonaId(id: string): void {
+  _daytonaIds.delete(id);
+}
+
+export function isDaytonaId(id: string): boolean {
+  return _daytonaIds.has(id);
+}
 
 export interface Snapshot {
   id: string;           // Git commit hash (short)
@@ -50,7 +72,7 @@ async function execInContainer(containerId: string, cmd: string): Promise<string
 
   const stream = await exec.start({});
   const chunks: Buffer[] = [];
-  
+
   return new Promise<string>((resolve, reject) => {
     stream.on('data', (chunk: Buffer) => chunks.push(chunk));
     stream.on('end', () => {
@@ -85,19 +107,22 @@ export class SnapshotManager {
   private autoSaveEnabled = new Map<string, boolean>();
 
   /**
-   * Initialize Git repository in container if not exists
+   * Initialize Git repository in container if not exists.
+   * No-op for Daytona sandboxes.
    */
   async initRepo(containerId: string): Promise<void> {
+    if (isDaytonaId(containerId)) return;
+
     try {
       // Check if .git exists
-      const hasGit = await execInContainer(containerId, 
+      const hasGit = await execInContainer(containerId,
         'cd /workspace && test -d .git && echo "yes" || echo "no"'
       );
 
       if (hasGit.includes('no')) {
         // Initialize git repo
         await execInContainer(containerId, `
-          cd /workspace && 
+          cd /workspace &&
           git init --initial-branch=main &&
           git config user.email "recoder@recoder.xyz" &&
           git config user.name "Recoder" &&
@@ -114,7 +139,8 @@ export class SnapshotManager {
   }
 
   /**
-   * Create a new snapshot (Git commit)
+   * Create a new snapshot (Git commit).
+   * Returns a stub for Daytona sandboxes (Daytona manages its own state).
    */
   async createSnapshot(
     containerId: string,
@@ -123,6 +149,19 @@ export class SnapshotManager {
     author: 'user' | 'ai' | 'auto' = 'user',
     options?: { neonDbTimestamp?: string }
   ): Promise<Snapshot> {
+    if (isDaytonaId(containerId)) {
+      return {
+        id: 'daytona',
+        fullHash: 'daytona-managed',
+        message,
+        timestamp: Date.now(),
+        author,
+        filesChanged: 0,
+        additions: 0,
+        deletions: 0,
+      };
+    }
+
     try {
       await this.initRepo(containerId);
 
@@ -191,9 +230,12 @@ export class SnapshotManager {
   }
 
   /**
-   * Get current HEAD snapshot
+   * Get current HEAD snapshot.
+   * Returns null for Daytona sandboxes.
    */
   async getCurrentSnapshot(containerId: string): Promise<Snapshot | null> {
+    if (isDaytonaId(containerId)) return null;
+
     try {
       const commitInfo = await execInContainer(containerId,
         'cd /workspace && git log -1 --format="%H|%h|%s|%at" 2>/dev/null || echo ""'
@@ -225,9 +267,12 @@ export class SnapshotManager {
   }
 
   /**
-   * List all snapshots (Git commits)
+   * List all snapshots (Git commits).
+   * Returns empty list for Daytona sandboxes.
    */
   async listSnapshots(containerId: string, limit: number = 50): Promise<Snapshot[]> {
+    if (isDaytonaId(containerId)) return [];
+
     try {
       await this.initRepo(containerId);
 
@@ -266,9 +311,12 @@ export class SnapshotManager {
   }
 
   /**
-   * Restore to a specific snapshot
+   * Restore to a specific snapshot.
+   * No-op for Daytona sandboxes (Daytona manages its own state).
    */
   async restoreSnapshot(containerId: string, projectId: string, snapshotId: string): Promise<boolean> {
+    if (isDaytonaId(containerId)) return true;
+
     try {
       // Use git checkout to restore files from specific commit
       await execInContainer(containerId,
@@ -284,9 +332,12 @@ export class SnapshotManager {
   }
 
   /**
-   * Get neonDbTimestamp for a specific snapshot (public, for restore route)
+   * Get neonDbTimestamp for a specific snapshot (public, for restore route).
+   * Returns undefined for Daytona sandboxes.
    */
   async getSnapshotDbTimestamp(containerId: string, snapshotId: string): Promise<string | undefined> {
+    if (isDaytonaId(containerId)) return undefined;
+
     try {
       // Resolve short hash to full hash
       const fullHash = await execInContainer(containerId,
@@ -300,9 +351,11 @@ export class SnapshotManager {
   }
 
   /**
-   * Read neonDbTimestamp from git notes for a single commit
+   * Read neonDbTimestamp from git notes for a single commit.
    */
   private async readNoteTimestamp(containerId: string, commitHash: string): Promise<string | undefined> {
+    if (isDaytonaId(containerId)) return undefined;
+
     try {
       const note = await execInContainer(containerId,
         `cd /workspace && git notes show ${commitHash} 2>/dev/null || echo ""`
@@ -316,10 +369,12 @@ export class SnapshotManager {
   }
 
   /**
-   * Batch-read all git notes (hash → neonDbTimestamp) for efficiency
+   * Batch-read all git notes (hash -> neonDbTimestamp) for efficiency.
    */
   private async readAllNotes(containerId: string): Promise<Map<string, string>> {
     const map = new Map<string, string>();
+    if (isDaytonaId(containerId)) return map;
+
     try {
       const notesOutput = await execInContainer(containerId,
         'cd /workspace && git notes list 2>/dev/null || echo ""'
@@ -352,13 +407,18 @@ export class SnapshotManager {
   }
 
   /**
-   * Get diff between two snapshots
+   * Get diff between two snapshots.
+   * Returns empty diff for Daytona sandboxes.
    */
   async getDiff(
     containerId: string,
     fromSnapshot: string,
     toSnapshot: string = 'HEAD'
   ): Promise<SnapshotDiff> {
+    if (isDaytonaId(containerId)) {
+      return { files: [], summary: { filesChanged: 0, additions: 0, deletions: 0 } };
+    }
+
     try {
       // Get file-level diff stats
       const statsOutput = await execInContainer(containerId,
@@ -416,7 +476,8 @@ export class SnapshotManager {
   }
 
   /**
-   * Get unified diff for a specific file between snapshots
+   * Get unified diff for a specific file between snapshots.
+   * Returns empty string for Daytona sandboxes.
    */
   async getFileDiff(
     containerId: string,
@@ -424,6 +485,8 @@ export class SnapshotManager {
     fromSnapshot: string,
     toSnapshot: string = 'HEAD'
   ): Promise<string> {
+    if (isDaytonaId(containerId)) return '';
+
     try {
       const diff = await execInContainer(containerId,
         `cd /workspace && git diff ${fromSnapshot} ${toSnapshot} -- "${filePath}" 2>/dev/null || echo ""`
@@ -435,13 +498,16 @@ export class SnapshotManager {
   }
 
   /**
-   * Enable auto-save for a project
+   * Enable auto-save for a project.
+   * No-op for Daytona sandboxes.
    */
   startAutoSave(
     containerId: string,
     projectId: string,
     intervalMs: number = 5 * 60 * 1000 // Default: 5 minutes
   ): void {
+    if (isDaytonaId(containerId)) return;
+
     // Clear any existing interval
     this.stopAutoSave(projectId);
 
@@ -482,11 +548,14 @@ export class SnapshotManager {
   }
 
   /**
-   * Check if there are unsaved changes
+   * Check if there are unsaved changes.
+   * Returns false for Daytona sandboxes.
    */
   async hasUnsavedChanges(containerId: string): Promise<boolean> {
+    if (isDaytonaId(containerId)) return false;
+
     try {
-      const status = await execInContainer(containerId, 
+      const status = await execInContainer(containerId,
         'cd /workspace && git status --porcelain'
       );
       return status.trim().length > 0;
@@ -496,13 +565,16 @@ export class SnapshotManager {
   }
 
   /**
-   * Get file content at a specific snapshot
+   * Get file content at a specific snapshot.
+   * Returns null for Daytona sandboxes.
    */
   async getFileAtSnapshot(
     containerId: string,
     filePath: string,
     snapshotId: string
   ): Promise<string | null> {
+    if (isDaytonaId(containerId)) return null;
+
     try {
       const content = await execInContainer(containerId,
         `cd /workspace && git show ${snapshotId}:"${filePath}" 2>/dev/null`
@@ -514,10 +586,12 @@ export class SnapshotManager {
   }
 
   /**
-   * Compress Git repository to save space
-   * Git already compresses objects, but gc --aggressive optimizes further
+   * Compress Git repository to save space.
+   * No-op for Daytona sandboxes.
    */
   async compress(containerId: string): Promise<{ before: string; after: string }> {
+    if (isDaytonaId(containerId)) return { before: 'n/a', after: 'n/a' };
+
     try {
       // Get size before
       const before = await execInContainer(containerId,
@@ -543,9 +617,12 @@ export class SnapshotManager {
   }
 
   /**
-   * Prune old snapshots, keeping only the last N
+   * Prune old snapshots, keeping only the last N.
+   * No-op for Daytona sandboxes.
    */
   async pruneOldSnapshots(containerId: string, keepCount: number = 50): Promise<number> {
+    if (isDaytonaId(containerId)) return 0;
+
     try {
       // Get total commit count
       const countStr = await execInContainer(containerId,
@@ -582,7 +659,8 @@ export class SnapshotManager {
   }
 
   /**
-   * Get repository stats
+   * Get repository stats.
+   * Returns zeroed stats for Daytona sandboxes.
    */
   async getStats(containerId: string): Promise<{
     totalSnapshots: number;
@@ -590,6 +668,10 @@ export class SnapshotManager {
     oldestSnapshot: string | null;
     newestSnapshot: string | null;
   }> {
+    if (isDaytonaId(containerId)) {
+      return { totalSnapshots: 0, repoSize: 'n/a', oldestSnapshot: null, newestSnapshot: null };
+    }
+
     try {
       const [countStr, size, oldest, newest] = await Promise.all([
         execInContainer(containerId, 'cd /workspace && git rev-list --count HEAD 2>/dev/null || echo "0"'),

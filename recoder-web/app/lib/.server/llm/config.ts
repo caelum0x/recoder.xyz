@@ -41,7 +41,7 @@ export const DEFAULT_LLM_CONFIG: LLMConfig = {
     conversationTTL: 300,   // 5 minutes
   },
   responseControl: {
-    maxTokens: 8000,
+    maxTokens: 16000,
     encourageConciseness: true,
     artifactFirst: true,
   },
@@ -65,7 +65,7 @@ export const getLLMConfig = (env?: Env): LLMConfig => {
       },
       responseControl: {
         ...DEFAULT_LLM_CONFIG.responseControl,
-        maxTokens: 6000, // Reduced for production
+        maxTokens: 16000, // gpt-4o-mini supports 16K output — use full capacity for code generation
         encourageConciseness: true,
       }
     };

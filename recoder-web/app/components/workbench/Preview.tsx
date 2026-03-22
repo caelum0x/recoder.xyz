@@ -802,24 +802,32 @@ export const Preview = memo(() => {
       ready: activePreview.ready,
     });
 
+    // Always update the URL bar display
     setUrl(baseUrl);
-    setIframeUrl(baseUrl);
-    setPreviewError(null);
-    
-    // Verify WebContainer is healthy
+
+    // Verify URL is valid
     if (!baseUrl || baseUrl === 'about:blank') {
       const errorMsg = 'Preview not ready. Make sure the development server is running.';
       setPreviewError(errorMsg);
+      setIframeUrl(undefined);
       logger.warn('⚠️ [Preview] Preview URL is not valid:', baseUrl);
-      logger.warn('⚠️ [Preview] This usually means:');
-      logger.warn('  1. WebContainer has not initialized');
-      logger.warn('  2. Dev server has not started');
-      logger.warn('  3. Port has not been exposed');
-      logger.warn('  Check workbench store for preview state');
-    } else {
-      logger.info('✅ [Preview] Preview URL is valid:', baseUrl);
+      return;
     }
-  }, [activePreview, iframeUrl]);
+
+    // Only load the iframe when the preview is marked as ready (dev server responding)
+    // or when the preview URL has changed (allows loading the friendly "starting" page)
+    if (activePreview.ready) {
+      setIframeUrl(baseUrl);
+      setPreviewError(null);
+      logger.info('✅ [Preview] Preview ready, loading iframe:', baseUrl);
+    } else {
+      // Dev server not ready yet — set the iframe URL anyway so the user sees
+      // the docker-backend's friendly "starting up" page with auto-refresh
+      setIframeUrl(baseUrl);
+      setPreviewError(null);
+      logger.info('🔄 [Preview] Preview not ready yet, showing loading page:', baseUrl);
+    }
+  }, [activePreview]);
 
   const validateUrl = useCallback(
     (value: string) => {

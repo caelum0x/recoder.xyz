@@ -22,9 +22,9 @@ export default function CLIDocsPage() {
             <h2 className="text-2xl font-bold mb-4">Installation</h2>
             <div className="bg-gray-900 rounded-xl p-6 font-mono text-sm">
               <div className="text-gray-400 mb-2"># Install globally via npm</div>
-              <div className="text-green-400">npm install -g @recoder/cli</div>
-              <div className="text-gray-400 mt-4 mb-2"># Or using pnpm</div>
-              <div className="text-green-400">pnpm add -g @recoder/cli</div>
+              <div className="text-green-400">npm install -g recoder-code</div>
+              <div className="text-gray-400 mt-4 mb-2"># Or run directly with npx</div>
+              <div className="text-green-400">npx recoder-code</div>
             </div>
           </section>
 
@@ -34,7 +34,7 @@ export default function CLIDocsPage() {
               Login to sync your API keys and settings from recoder.xyz:
             </p>
             <div className="bg-gray-900 rounded-xl p-6 font-mono text-sm">
-              <div className="text-green-400">recoder login</div>
+              <div className="text-green-400">recoder-code login</div>
               <div className="text-gray-500 mt-2"># Opens browser for authentication</div>
             </div>
           </section>
@@ -44,15 +44,15 @@ export default function CLIDocsPage() {
             <div className="space-y-4">
               <div className="bg-gray-900 rounded-xl p-6 font-mono text-sm">
                 <div className="text-gray-400 mb-2"># Start interactive chat</div>
-                <div className="text-green-400">recoder</div>
+                <div className="text-green-400">recoder-code</div>
               </div>
               <div className="bg-gray-900 rounded-xl p-6 font-mono text-sm">
                 <div className="text-gray-400 mb-2"># Generate code with a prompt</div>
-                <div className="text-green-400">recoder "create a REST API with Express"</div>
+                <div className="text-green-400">recoder-code "create a REST API with Express"</div>
               </div>
               <div className="bg-gray-900 rounded-xl p-6 font-mono text-sm">
                 <div className="text-gray-400 mb-2"># Generate in current directory</div>
-                <div className="text-green-400">recoder "add authentication to this project"</div>
+                <div className="text-green-400">recoder-code "add authentication to this project"</div>
               </div>
             </div>
           </section>
@@ -68,13 +68,13 @@ export default function CLIDocsPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-white/10">
-                  <tr><td className="p-4 font-mono text-orange-400">recoder</td><td className="p-4 text-gray-300">Start interactive mode</td></tr>
-                  <tr><td className="p-4 font-mono text-orange-400">recoder "prompt"</td><td className="p-4 text-gray-300">Generate code from prompt</td></tr>
-                  <tr><td className="p-4 font-mono text-orange-400">recoder login</td><td className="p-4 text-gray-300">Authenticate with recoder.xyz</td></tr>
-                  <tr><td className="p-4 font-mono text-orange-400">recoder logout</td><td className="p-4 text-gray-300">Sign out</td></tr>
-                  <tr><td className="p-4 font-mono text-orange-400">recoder config</td><td className="p-4 text-gray-300">View/edit configuration</td></tr>
-                  <tr><td className="p-4 font-mono text-orange-400">recoder models</td><td className="p-4 text-gray-300">List available AI models</td></tr>
-                  <tr><td className="p-4 font-mono text-orange-400">recoder --help</td><td className="p-4 text-gray-300">Show help</td></tr>
+                  <tr><td className="p-4 font-mono text-orange-400">recoder-code</td><td className="p-4 text-gray-300">Start interactive mode</td></tr>
+                  <tr><td className="p-4 font-mono text-orange-400">recoder-code "prompt"</td><td className="p-4 text-gray-300">Generate code from prompt</td></tr>
+                  <tr><td className="p-4 font-mono text-orange-400">recoder-code login</td><td className="p-4 text-gray-300">Authenticate with recoder.xyz</td></tr>
+                  <tr><td className="p-4 font-mono text-orange-400">recoder-code logout</td><td className="p-4 text-gray-300">Sign out</td></tr>
+                  <tr><td className="p-4 font-mono text-orange-400">recoder-code config</td><td className="p-4 text-gray-300">View/edit configuration</td></tr>
+                  <tr><td className="p-4 font-mono text-orange-400">recoder-code models</td><td className="p-4 text-gray-300">List available AI models</td></tr>
+                  <tr><td className="p-4 font-mono text-orange-400">recoder-code --help</td><td className="p-4 text-gray-300">Show help</td></tr>
                 </tbody>
               </table>
             </div>
@@ -87,9 +87,9 @@ export default function CLIDocsPage() {
             </p>
             <div className="bg-gray-900 rounded-xl p-6 font-mono text-sm">
               <div className="text-gray-400 mb-2"># Set default model</div>
-              <div className="text-green-400">recoder config set model claude-3-5-sonnet</div>
+              <div className="text-green-400">recoder-code config set model claude-3-5-sonnet</div>
               <div className="text-gray-400 mt-4 mb-2"># View current config</div>
-              <div className="text-green-400">recoder config list</div>
+              <div className="text-green-400">recoder-code config list</div>
             </div>
           </section>
 
@@ -98,15 +98,15 @@ export default function CLIDocsPage() {
             <div className="space-y-4">
               <div className="bg-gray-900 rounded-xl p-6 font-mono text-sm">
                 <div className="text-gray-400 mb-2"># Create a new Next.js project</div>
-                <div className="text-green-400">recoder "create a Next.js app with Tailwind and TypeScript"</div>
+                <div className="text-green-400">recoder-code "create a Next.js app with Tailwind and TypeScript"</div>
               </div>
               <div className="bg-gray-900 rounded-xl p-6 font-mono text-sm">
                 <div className="text-gray-400 mb-2"># Add features to existing project</div>
-                <div className="text-green-400">recoder "add user authentication with JWT"</div>
+                <div className="text-green-400">recoder-code "add user authentication with JWT"</div>
               </div>
               <div className="bg-gray-900 rounded-xl p-6 font-mono text-sm">
                 <div className="text-gray-400 mb-2"># Fix bugs</div>
-                <div className="text-green-400">recoder "fix the TypeScript errors in src/api"</div>
+                <div className="text-green-400">recoder-code "fix the TypeScript errors in src/api"</div>
               </div>
             </div>
           </section>

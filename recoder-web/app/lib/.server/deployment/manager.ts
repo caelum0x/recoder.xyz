@@ -9,7 +9,7 @@ import { createVercelDeployer } from './platforms/vercel';
 import { createNetlifyDeployer } from './platforms/netlify';
 import { createRailwayDeployer } from './platforms/railway';
 import { createCloudflareDeployer } from './platforms/cloudflare';
-import { neon } from '@neondatabase/serverless';
+import { createSql } from '~/lib/.server/db/pg-pool';
 import { createScopedLogger } from '~/utils/logger';
 const logger = createScopedLogger('DeployManager');
 
@@ -140,7 +140,7 @@ export class DeploymentManager {
     result: DeploymentResult
   ): Promise<void> {
     try {
-      const sql = neon(this.env.DATABASE_URL);
+      const sql = createSql(this.env.DATABASE_URL);
 
       await sql`
         INSERT INTO deployments (
@@ -192,7 +192,7 @@ export class DeploymentManager {
     }
 
     try {
-      const sql = neon(this.env.DATABASE_URL);
+      const sql = createSql(this.env.DATABASE_URL);
 
       const result = await sql`
         SELECT

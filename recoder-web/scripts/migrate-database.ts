@@ -3,7 +3,7 @@
  * Run this to set up all required database tables
  */
 
-import { neon } from '@neondatabase/serverless';
+import { createSql } from '../app/lib/.server/db/pg-pool';
 
 async function migrate() {
   const databaseUrl = process.env.DATABASE_URL || process.env.NEON_DATABASE_URL;
@@ -15,7 +15,7 @@ async function migrate() {
 
   console.log('🚀 Starting database migration...');
 
-  const sql = neon(databaseUrl);
+  const sql = createSql(databaseUrl);
 
   try {
     // Read schema files

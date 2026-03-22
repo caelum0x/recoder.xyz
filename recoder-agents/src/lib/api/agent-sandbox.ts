@@ -117,7 +117,7 @@ export const getSandboxSession = async (
 ): Promise<SandboxSession> => {
   const response = await backendApi.get<SandboxSession>(
     `/agents/${agentId}/sandbox/${sessionId}`,
-    { showErrors: false, cache: 'no-store' }
+    { showErrors: true, cache: 'no-store' }
   );
 
   if (response.error) {
@@ -169,7 +169,7 @@ export const getSandboxTestCases = async (
 ): Promise<{ test_cases: SandboxTestCase[] }> => {
   const response = await backendApi.get<{ test_cases: SandboxTestCase[] }>(
     `/agents/${agentId}/test-cases`,
-    { showErrors: false, cache: 'no-store' }
+    { showErrors: true, cache: 'no-store' }
   );
 
   if (response.error) {

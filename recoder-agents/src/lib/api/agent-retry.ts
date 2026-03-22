@@ -61,7 +61,7 @@ export interface RetryStats {
 
 export const listRetryPolicies = async (): Promise<RetryPolicy[]> => {
   const response = await backendApi.get<RetryPolicy[]>('/retry/policies', {
-    showErrors: false,
+    showErrors: true,
     cache: 'no-store',
   });
 
@@ -120,7 +120,7 @@ export const listRetryAttempts = async (
 ): Promise<RetryAttempt[]> => {
   const response = await backendApi.get<RetryAttempt[]>(
     `/runs/${runId}/retry-attempts`,
-    { showErrors: false, cache: 'no-store' }
+    { showErrors: true, cache: 'no-store' }
   );
 
   if (response.error) {
@@ -132,7 +132,7 @@ export const listRetryAttempts = async (
 
 export const getRetryStats = async (): Promise<RetryStats> => {
   const response = await backendApi.get<RetryStats>('/retry/stats', {
-    showErrors: false,
+    showErrors: true,
     cache: 'no-store',
   });
 

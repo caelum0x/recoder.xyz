@@ -204,12 +204,18 @@ services:
       - NODE_OPTIONS=--max_old_space_size=1536
       - REDIS_URL=redis://:${REDIS_PASSWORD}@recoder-redis:6379/0
       - PUBLIC_PROMPT_TASK_QUEUE_BACKEND=redis
+      # Auth: allow web.recoder.xyz cross-origin requests + anonymous container creation
+      - STRICT_AUTH=false
+      - ALLOW_LOCALHOST_ORIGIN=true
+      - AUTH_DATABASE_URL=postgresql://recoder:recoder_prod_2026@host.docker.internal:5432/recoder_main
       # --- A2A inter-service communication ---
       - RECODER_A2A_SHARED_SECRET=${RECODER_A2A_SHARED_SECRET}
       - RECODER_A2A_REDIS_URL=redis://:${REDIS_PASSWORD}@recoder-redis:6379/0
       - RECODER_A2A_ENABLE_CONSUMER=true
       - RECODER_A2A_CONSUMER_SERVICE=recoder_backend
       - RECODER_A2A_CONSUME_UNTARGETED=true
+      - OPENROUTER_API_KEY=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
+      - MAIN_LLM_MODEL=openrouter/openai/gpt-4o-mini
       - RECODER_A2A_PLAN_HANDLER_URL=http://recoder-web:5173/api/a2a/intents/plan
       - RECODER_A2A_EXECUTE_HANDLER_URL=http://recoder-web:5173/api/a2a/intents/execute
       - RECODER_A2A_HANDOFF_HANDLER_URL=http://recoder-web:5173/api/a2a/intents/handoff
@@ -225,9 +231,21 @@ services:
       # Tier-1 connector flags
       - RECODER_A2A_ENABLE_CODEX=${RECODER_A2A_ENABLE_CODEX:-true}
       - RECODER_A2A_ENABLE_CLAUDE_CODE=${RECODER_A2A_ENABLE_CLAUDE_CODE:-true}
+      # Daytona sandbox integration — preview URLs via *.sandbox.recoder.xyz
+      - DAYTONA_API_KEY=dyt_8532c63d57a211830b617731b30787d913870bfc0d82479a3ad6ff6e916e1946
+      - DAYTONA_SERVER_URL=http://host.docker.internal:3900/api
+      - USE_DAYTONA_CONTAINERS=true
+      # Public URL for preview proxy (same-origin via web.recoder.xyz/preview/)
+      - PUBLIC_URL=https://web.recoder.xyz
+      # SearXNG self-hosted search (same Docker network, port 8080 internally)
+      - SEARXNG_URL=http://host.docker.internal:8888
+    ports:
+      - "3100:3100"
     depends_on:
       redis:
         condition: service_healthy
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     networks:
       - recoder
     healthcheck:
@@ -252,6 +270,10 @@ services:
     build:
       context: .
       dockerfile: recoder-web/Dockerfile
+      args:
+        - VITE_DOCKER_BACKEND_URL=https://docker.recoder.xyz
+        - VITE_MAIN_SITE_URL=https://recoder.xyz
+        - VITE_RUNTIME_MODE=docker
     container_name: recoder-web
     <<: *restart-policy
     env_file:
@@ -260,9 +282,12 @@ services:
       - NODE_ENV=production
       - PORT=5173
       - DOCKER_BACKEND_URL=http://recoder-docker-backend:3100
-      - VITE_DOCKER_BACKEND_URL=http://recoder-docker-backend:3100
+      - DOCKER_URL=http://recoder-docker-backend:3100
       - MAIN_SITE_URL=https://recoder.xyz
       - VITE_MAIN_SITE_URL=https://recoder.xyz
+      - DATABASE_URL=postgresql://recoder:recoder_prod_2026@host.docker.internal:5432/recoder_main
+      - INTERNAL_SERVICE_KEY=recoder_internal_service_key_2026
+      - OPENROUTER_API_KEY=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
       # A2A
       - RECODER_A2A_SHARED_SECRET=${RECODER_A2A_SHARED_SECRET}
       - RECODER_A2A_AGENT_ID=recoder-web
@@ -273,6 +298,12 @@ services:
       - RECODER_A2A_TOOL_CALL_HANDLER_URL=http://recoder-docker-backend:3100/api/a2a/intent/tool_call
       - RECODER_A2A_WORKER_TOKEN=${RECODER_A2A_WORKER_TOKEN}
       - RECODER_A2A_EGRESS_ALLOWLIST=http://recoder-docker-backend:3100
+      # SearXNG self-hosted search (same Docker network, port 8080 internally)
+      - SEARXNG_URL=http://host.docker.internal:8888
+    ports:
+      - "5173:5173"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
       docker-backend:
         condition: service_healthy
@@ -367,6 +398,8 @@ services:
       - NEXT_PUBLIC_SITE_URL=https://agency.recoder.xyz
       - DATABASE_URL=${DATABASE_URL}
       - REDIS_URL=redis://:${REDIS_PASSWORD}@recoder-redis:6379/0
+      # SearXNG self-hosted search (same Docker network, port 8080 internally)
+      - SEARXNG_URL=http://host.docker.internal:8888
     depends_on:
       redis:
         condition: service_healthy
@@ -393,7 +426,7 @@ services:
   recoder-pm:
     build:
       context: .
-      dockerfile: recoder-pm/Dockerfile.api
+      dockerfile: recoder-pm/Dockerfile.app
     container_name: recoder-pm
     <<: *restart-policy
     env_file:
@@ -405,6 +438,7 @@ services:
       - DOCKER=1
       - NEXT_TELEMETRY_DISABLED=1
       - BETTER_AUTH_URL=https://recoder.xyz
+      - BETTER_AUTH_SECRET=${BETTER_AUTH_SECRET}
       - NEXT_PUBLIC_VERCEL_PROJECT_PRODUCTION_URL=pm.recoder.xyz
       - RECODER_PM_WEB_URL=https://pm.recoder.xyz
       - RECODER_PM_API_URL=https://pm.recoder.xyz/api
@@ -418,13 +452,15 @@ services:
       - OPENROUTER_API_KEY=
       - OPENAI_API_KEY=
       - ANTHROPIC_API_KEY=
+      # SearXNG self-hosted search (same Docker network, port 8080 internally)
+      - SEARXNG_URL=http://host.docker.internal:8888
     depends_on:
       redis:
         condition: service_healthy
     networks:
       - recoder
     healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://localhost:3004',{redirect:'manual'}).then(r=>process.exit(r.status<400?0:1)).catch(()=>process.exit(1))"]
+      test: ["CMD", "wget", "-qO-", "http://localhost:3004/api/health"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -440,11 +476,13 @@ services:
           memory: 512M
     stop_grace_period: 30s
 
-  # OpenClaw A2A Gateway — internal only
+  # OpenClaw A2A Gateway — openclaw.recoder.xyz
   openclaw-gateway:
     build: ./openclaw
     container_name: openclaw-gateway
     <<: *restart-policy
+    ports:
+      - "18789:18789"
     environment:
       - HOME=/home/node
       - TERM=xterm-256color
@@ -480,6 +518,8 @@ services:
     ports:
       - "80:80"
       - "443:443"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       - ./nginx/nginx-production.conf:/etc/nginx/nginx.conf:ro
       - ./nginx/ssl:/etc/nginx/ssl:ro

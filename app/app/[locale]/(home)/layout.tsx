@@ -11,7 +11,7 @@ export const metadata: Metadata = {
       'Build, deploy, and orchestrate AI agents across code, projects, clients, and voice.',
     url: 'https://recoder.xyz',
     siteName: 'Recoder',
-    images: [{ url: 'https://recoder.xyz/logo.png', width: 512, height: 512, alt: 'Recoder' }],
+    images: [{ url: 'https://recoder.xyz/og-image.png', width: 1200, height: 630, alt: 'Recoder — Your AI Agent Platform' }],
     type: 'website',
   },
   twitter: {
@@ -19,7 +19,7 @@ export const metadata: Metadata = {
     title: 'Recoder — Your AI Agent Platform',
     description:
       'Build, deploy, and orchestrate AI agents across code, projects, clients, and voice.',
-    images: ['https://recoder.xyz/logo.png'],
+    images: ['https://recoder.xyz/og-image.png'],
   },
 };
 

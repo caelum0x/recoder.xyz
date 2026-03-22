@@ -29,7 +29,7 @@ export const getFilters = async (
   if (viewType) params.set('view_type', viewType);
   const query = params.toString() ? `?${params}` : '';
   const response = await backendApi.get<SavedFilter[]>(`/filters${query}`, {
-    showErrors: false,
+    showErrors: true,
   });
   if (response.error) throw new Error(response.error.message);
   return response.data!;

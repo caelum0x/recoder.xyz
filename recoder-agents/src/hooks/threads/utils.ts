@@ -37,6 +37,7 @@ export type Thread = {
     // Use backend API endpoint with auth handling
     const response = await fetch(`${API_URL}/threads/${threadId}`, {
       headers,
+      credentials: 'include',
       cache: 'no-store',
     });
 
@@ -62,6 +63,7 @@ export const updateThread = async (
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${token}`,
       },
+      credentials: 'include',
       body: JSON.stringify(data),
       cache: 'no-store',
     });
@@ -103,6 +105,7 @@ export const deleteThread = async (threadId: string, sandboxId?: string): Promis
       const response = await fetch(`${API_URL}/threads/${threadId}`, {
         method: 'DELETE',
         headers,
+        credentials: 'include',
       });
 
       if (!response.ok) {

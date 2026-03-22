@@ -533,8 +533,8 @@ async def create_thread_with_message_and_run(
         RETURNING project_id
     ),
     new_thread AS (
-        INSERT INTO threads (thread_id, project_id, account_id, name, status, memory_enabled, created_at, updated_at)
-        SELECT :thread_id, project_id, :account_id, :thread_name, 'ready', :memory_enabled, :created_at, :updated_at
+        INSERT INTO threads (thread_id, project_id, account_id, name, memory_enabled, created_at, updated_at)
+        SELECT :thread_id, project_id, :account_id, :thread_name, :memory_enabled, :created_at, :updated_at
         FROM new_project
         RETURNING thread_id
     ),

@@ -16,7 +16,7 @@ async function getActiveRuns(): Promise<ActiveRun[]> {
   try {
     const response = await backendApi.get<ActiveRun[]>(
       '/agents/active-runs',
-      { showErrors: false },
+      { showErrors: true },
     );
     if (response.error) {
       throw new Error(`Error fetching active runs: ${response.error.message}`);

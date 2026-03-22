@@ -1,31 +1,60 @@
 'use client';
 
-import { useState, useMemo, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Activity,
   CheckCircle2,
   AlertTriangle,
   XCircle,
-  HelpCircle,
   RefreshCw,
   Loader2,
   Clock,
-  Server,
-  Database,
   Bot,
-  Filter,
-  BarChart3,
-  Shield,
+  Plus,
+  Play,
+  ChevronDown,
+  ChevronUp,
   Timer,
 } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { Button } from '@/components/ui/button';
 import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Skeleton } from '@/components/ui/skeleton';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { Switch } from '@/components/ui/switch';
+import { cn } from '@/lib/utils';
+import { toast } from '@/lib/toast';
+import {
+  useHealthOverview,
+  useHealthChecks,
+  useCreateHealthCheck,
+  useDeleteHealthCheck,
   useRunHealthCheck,
-  useHealthStatus,
-  useHealthHistory,
-  useServiceUptime,
-} from '@/hooks/monitoring/use-system-health';
-import type { ServiceHealth, HealthHistoryItem, UptimeItem } from '@/lib/api/system-health';
+  useHealthResults,
+} from '@/hooks/agents/use-agent-health-checks';
+import type { UptimeSummary, HealthCheckConfig, HealthCheckResult } from '@/lib/api/agent-health-checks';
 
 // ============================================================================
 // Constants
@@ -35,364 +64,192 @@ const STATUS_CONFIG = {
   healthy: {
     label: 'Healthy',
     color: 'bg-green-500/10 text-green-600 dark:text-green-400 border-green-500/20',
-    dot: 'bg-green-500',
     icon: CheckCircle2,
-    bannerBg: 'bg-green-500/5 border-green-500/20',
+    dot: 'bg-green-500',
   },
   degraded: {
     label: 'Degraded',
     color: 'bg-yellow-500/10 text-yellow-600 dark:text-yellow-400 border-yellow-500/20',
-    dot: 'bg-yellow-500',
     icon: AlertTriangle,
-    bannerBg: 'bg-yellow-500/5 border-yellow-500/20',
+    dot: 'bg-yellow-500',
   },
-  down: {
-    label: 'Down',
+  unhealthy: {
+    label: 'Unhealthy',
     color: 'bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/20',
-    dot: 'bg-red-500',
     icon: XCircle,
-    bannerBg: 'bg-red-500/5 border-red-500/20',
+    dot: 'bg-red-500',
   },
-  unknown: {
-    label: 'Unknown',
-    color: 'bg-muted text-muted-foreground border-border',
-    dot: 'bg-muted-foreground',
-    icon: HelpCircle,
-    bannerBg: 'bg-muted/50 border-border',
+  timeout: {
+    label: 'Timeout',
+    color: 'bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/20',
+    icon: Timer,
+    dot: 'bg-red-500',
   },
 } as const;
 
-const SERVICE_CONFIG: Record<string, { label: string; icon: typeof Database }> = {
-  database: { label: 'Database', icon: Database },
-  backend_api: { label: 'Backend API', icon: Server },
-  agent_runtime: { label: 'Agent Runtime', icon: Bot },
-};
+type StatusKey = keyof typeof STATUS_CONFIG;
 
-// ============================================================================
-// Overall Status Banner
-// ============================================================================
-
-function OverallStatusBanner({ status }: { status: string }) {
-  const config = STATUS_CONFIG[status as keyof typeof STATUS_CONFIG] ?? STATUS_CONFIG.unknown;
-  const Icon = config.icon;
-
-  return (
-    <div className={cn('rounded-xl border p-4 flex items-center gap-3', config.bannerBg)}>
-      <Icon className="h-6 w-6 shrink-0" />
-      <div>
-        <p className="text-sm font-medium">System Status</p>
-        <p className="text-xs text-muted-foreground">
-          {status === 'healthy' && 'All systems operational'}
-          {status === 'degraded' && 'Some services are experiencing issues'}
-          {status === 'down' && 'One or more services are down'}
-          {status === 'unknown' && 'Run a health check to see current status'}
-        </p>
-      </div>
-      <span
-        className={cn(
-          'ml-auto text-xs px-2.5 py-1 rounded-full font-medium border',
-          config.color
-        )}
-      >
-        {config.label}
-      </span>
-    </div>
-  );
+function uptimeColor(pct: number): string {
+  if (pct >= 99) return 'text-green-600 dark:text-green-400';
+  if (pct >= 95) return 'text-yellow-600 dark:text-yellow-400';
+  return 'text-red-600 dark:text-red-400';
 }
 
-// ============================================================================
-// Service Card
-// ============================================================================
-
-function ServiceCard({
-  service,
-  uptime,
-}: {
-  service?: ServiceHealth;
-  uptime?: UptimeItem;
-}) {
-  const name = service?.service_name ?? uptime?.service_name ?? 'unknown';
-  const svcConfig = SERVICE_CONFIG[name] ?? { label: name, icon: Server };
-  const Icon = svcConfig.icon;
-  const status = (service?.status ?? 'unknown') as keyof typeof STATUS_CONFIG;
-  const statusConfig = STATUS_CONFIG[status] ?? STATUS_CONFIG.unknown;
-  const StatusIcon = statusConfig.icon;
-
-  const checkedAt = service?.checked_at
-    ? new Date(service.checked_at).toLocaleTimeString()
-    : '--';
-
-  const uptimePct = uptime?.uptime_percentage ?? null;
-
+function StatusBadge({ status }: { status: string }) {
+  const cfg = STATUS_CONFIG[status as StatusKey] ?? {
+    label: status,
+    color: 'bg-muted text-muted-foreground border-border',
+    icon: Activity,
+    dot: 'bg-muted-foreground',
+  };
+  const Icon = cfg.icon;
   return (
-    <div className="rounded-xl border border-border bg-card p-5 flex flex-col gap-3">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2.5">
-          <div className="flex items-center justify-center h-9 w-9 rounded-lg bg-muted">
-            <Icon className="h-4.5 w-4.5 text-muted-foreground" />
-          </div>
-          <span className="font-medium text-sm">{svcConfig.label}</span>
-        </div>
-        <StatusIcon className={cn('h-5 w-5', status === 'healthy' ? 'text-green-500' : status === 'degraded' ? 'text-yellow-500' : status === 'down' ? 'text-red-500' : 'text-muted-foreground')} />
-      </div>
-
-      <div className="grid grid-cols-3 gap-2 text-xs">
-        <div>
-          <p className="text-muted-foreground mb-0.5">Status</p>
-          <span
-            className={cn(
-              'inline-block px-2 py-0.5 rounded-full font-medium border',
-              statusConfig.color
-            )}
-          >
-            {statusConfig.label}
-          </span>
-        </div>
-        <div>
-          <p className="text-muted-foreground mb-0.5">Response</p>
-          <p className="font-medium tabular-nums">
-            {service?.response_time_ms != null ? `${service.response_time_ms}ms` : '--'}
-          </p>
-        </div>
-        <div>
-          <p className="text-muted-foreground mb-0.5">Last Check</p>
-          <p className="font-medium tabular-nums">{checkedAt}</p>
-        </div>
-      </div>
-
-      {uptimePct !== null && (
-        <div className="mt-1">
-          <div className="flex items-center justify-between text-xs mb-1">
-            <span className="text-muted-foreground">30-day uptime</span>
-            <span className="font-medium tabular-nums">{uptimePct}%</span>
-          </div>
-          <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden">
-            <div
-              className={cn(
-                'h-full rounded-full transition-all',
-                uptimePct >= 99 ? 'bg-green-500' : uptimePct >= 95 ? 'bg-yellow-500' : 'bg-red-500'
-              )}
-              style={{ width: `${Math.min(uptimePct, 100)}%` }}
-            />
-          </div>
-        </div>
+    <span
+      className={cn(
+        'inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium border',
+        cfg.color
       )}
-    </div>
+    >
+      <Icon className="h-3 w-3" />
+      {cfg.label}
+    </span>
   );
 }
 
 // ============================================================================
-// Response Time Chart (simplified bar chart)
+// Result History Table
 // ============================================================================
 
-function ResponseTimeChart({ history }: { history: HealthHistoryItem[] }) {
-  // Group by service, get last 50 entries per service
-  const grouped = useMemo(() => {
-    const map = new Map<string, HealthHistoryItem[]>();
-    for (const item of history) {
-      if (!map.has(item.service_name)) map.set(item.service_name, []);
-      map.get(item.service_name)!.push(item);
-    }
-    // Limit and sort chronologically
-    for (const [key, items] of map) {
-      map.set(key, items.slice(0, 50).reverse());
-    }
-    return map;
-  }, [history]);
+function ResultHistory({ agentId, configId }: { agentId: string; configId: string }) {
+  const { data: results, isLoading } = useHealthResults(agentId, configId, { limit: 20 });
 
-  if (grouped.size === 0) {
+  if (isLoading) return <Skeleton className="h-32 w-full" />;
+
+  if (!results?.length) {
     return (
-      <div className="rounded-xl border border-border bg-card p-5">
-        <h3 className="text-sm font-medium mb-3 flex items-center gap-2">
-          <BarChart3 className="h-4 w-4 text-muted-foreground" />
-          Response Times (24h)
-        </h3>
-        <p className="text-xs text-muted-foreground">No history data yet. Run a health check to start collecting data.</p>
-      </div>
+      <p className="text-xs text-muted-foreground text-center py-3">
+        No results yet. Run a check to see history.
+      </p>
     );
   }
 
-  const SERVICE_COLORS: Record<string, string> = {
-    database: 'bg-blue-500',
-    backend_api: 'bg-purple-500',
-    agent_runtime: 'bg-emerald-500',
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full text-xs">
+        <thead>
+          <tr className="border-b text-muted-foreground">
+            <th className="text-left py-1.5 pr-3 font-medium">Checked At</th>
+            <th className="text-left py-1.5 pr-3 font-medium">Status</th>
+            <th className="text-right py-1.5 pr-3 font-medium">Response (ms)</th>
+            <th className="text-left py-1.5 font-medium">Error</th>
+          </tr>
+        </thead>
+        <tbody>
+          {results.map((r) => (
+            <tr key={r.id} className="border-b last:border-0 hover:bg-muted/30">
+              <td className="py-1.5 pr-3 text-muted-foreground">
+                {new Date(r.checked_at).toLocaleString()}
+              </td>
+              <td className="py-1.5 pr-3">
+                <StatusBadge status={r.status} />
+              </td>
+              <td className="py-1.5 pr-3 text-right">
+                {r.response_time_ms !== null ? `${r.response_time_ms}ms` : '--'}
+              </td>
+              <td className="py-1.5 text-muted-foreground truncate max-w-[160px]">
+                {r.error_message ?? '--'}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+// ============================================================================
+// Health Check Config Row
+// ============================================================================
+
+function HealthCheckRow({
+  config,
+  agentId,
+}: {
+  config: HealthCheckConfig;
+  agentId: string;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const runCheck = useRunHealthCheck(agentId);
+  const deleteCheck = useDeleteHealthCheck(agentId);
+
+  const handleRun = async () => {
+    try {
+      const result = await runCheck.mutateAsync(config.id);
+      toast.success(`Check completed: ${result.status} (${result.response_time_ms}ms)`);
+    } catch {
+      toast.error('Failed to run health check');
+    }
+  };
+
+  const handleDelete = async () => {
+    try {
+      await deleteCheck.mutateAsync(config.id);
+      toast.success('Health check deleted');
+    } catch {
+      toast.error('Failed to delete health check');
+    }
   };
 
   return (
-    <div className="rounded-xl border border-border bg-card p-5">
-      <h3 className="text-sm font-medium mb-3 flex items-center gap-2">
-        <BarChart3 className="h-4 w-4 text-muted-foreground" />
-        Response Times (24h)
-      </h3>
-
-      <div className="flex items-center gap-4 mb-3 flex-wrap">
-        {Array.from(grouped.keys()).map((svc) => (
-          <div key={svc} className="flex items-center gap-1.5 text-xs">
-            <div className={cn('h-2.5 w-2.5 rounded-full', SERVICE_COLORS[svc] ?? 'bg-gray-500')} />
-            <span className="text-muted-foreground">{SERVICE_CONFIG[svc]?.label ?? svc}</span>
-          </div>
-        ))}
-      </div>
-
-      {Array.from(grouped.entries()).map(([svc, items]) => {
-        const maxMs = Math.max(...items.map((i) => i.response_time_ms ?? 0), 1);
-        return (
-          <div key={svc} className="mb-3 last:mb-0">
-            <p className="text-xs text-muted-foreground mb-1">{SERVICE_CONFIG[svc]?.label ?? svc}</p>
-            <div className="flex items-end gap-0.5 h-12">
-              {items.map((item, idx) => {
-                const ms = item.response_time_ms ?? 0;
-                const height = Math.max((ms / maxMs) * 100, 4);
-                return (
-                  <div
-                    key={item.id ?? idx}
-                    className={cn(
-                      'flex-1 rounded-t-sm transition-all min-w-[2px]',
-                      item.status === 'down'
-                        ? 'bg-red-500'
-                        : item.status === 'degraded'
-                          ? 'bg-yellow-500'
-                          : (SERVICE_COLORS[svc] ?? 'bg-gray-500')
-                    )}
-                    style={{ height: `${height}%` }}
-                    title={`${ms}ms - ${item.status} at ${item.checked_at}`}
-                  />
-                );
-              })}
-            </div>
-            <div className="flex justify-between text-[10px] text-muted-foreground mt-0.5">
-              <span>{items[0]?.checked_at ? new Date(items[0].checked_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}</span>
-              <span>{items[items.length - 1]?.checked_at ? new Date(items[items.length - 1].checked_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}</span>
-            </div>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
-// ============================================================================
-// Uptime Bars
-// ============================================================================
-
-function UptimeBars({ uptimes }: { uptimes: UptimeItem[] }) {
-  if (uptimes.length === 0) {
-    return (
-      <div className="rounded-xl border border-border bg-card p-5">
-        <h3 className="text-sm font-medium mb-3 flex items-center gap-2">
-          <Shield className="h-4 w-4 text-muted-foreground" />
-          30-Day Uptime
-        </h3>
-        <p className="text-xs text-muted-foreground">No uptime data yet.</p>
-      </div>
-    );
-  }
-
-  return (
-    <div className="rounded-xl border border-border bg-card p-5">
-      <h3 className="text-sm font-medium mb-4 flex items-center gap-2">
-        <Shield className="h-4 w-4 text-muted-foreground" />
-        30-Day Uptime
-      </h3>
-      <div className="space-y-3">
-        {uptimes.map((u) => {
-          const pct = u.uptime_percentage;
-          return (
-            <div key={u.service_name}>
-              <div className="flex items-center justify-between text-xs mb-1.5">
-                <span className="font-medium">
-                  {SERVICE_CONFIG[u.service_name]?.label ?? u.service_name}
-                </span>
-                <span className="tabular-nums font-medium">
-                  {pct}%
-                  <span className="text-muted-foreground ml-1">
-                    ({u.healthy_checks}/{u.total_checks})
-                  </span>
-                </span>
-              </div>
-              <div className="h-2.5 w-full bg-muted rounded-full overflow-hidden">
-                <div
-                  className={cn(
-                    'h-full rounded-full transition-all duration-500',
-                    pct >= 99.5
-                      ? 'bg-green-500'
-                      : pct >= 95
-                        ? 'bg-yellow-500'
-                        : 'bg-red-500'
-                  )}
-                  style={{ width: `${Math.min(pct, 100)}%` }}
-                />
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-// ============================================================================
-// History Log
-// ============================================================================
-
-function HistoryLog({ history, serviceFilter, onServiceFilterChange }: {
-  history: HealthHistoryItem[];
-  serviceFilter: string;
-  onServiceFilterChange: (v: string) => void;
-}) {
-  return (
-    <div className="rounded-xl border border-border bg-card p-5">
-      <div className="flex items-center justify-between mb-3">
-        <h3 className="text-sm font-medium flex items-center gap-2">
-          <Timer className="h-4 w-4 text-muted-foreground" />
-          Health History Log
-        </h3>
-        <div className="flex items-center gap-2">
-          <Filter className="h-3.5 w-3.5 text-muted-foreground" />
-          <select
-            value={serviceFilter}
-            onChange={(e) => onServiceFilterChange(e.target.value)}
-            className="h-7 rounded-md border border-input bg-background px-2 text-xs focus:outline-none focus:ring-1 focus:ring-ring"
-          >
-            <option value="">All Services</option>
-            <option value="database">Database</option>
-            <option value="backend_api">Backend API</option>
-            <option value="agent_runtime">Agent Runtime</option>
-          </select>
+    <div className="border rounded-lg overflow-hidden">
+      <div
+        className="flex items-center gap-3 px-4 py-3 bg-muted/20 cursor-pointer hover:bg-muted/40 transition-colors"
+        onClick={() => setExpanded((e) => !e)}
+      >
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-medium">{config.check_name}</p>
+          <p className="text-xs text-muted-foreground capitalize">
+            {config.check_type} · every {config.interval_minutes}min · timeout {config.timeout_seconds}s
+          </p>
         </div>
+        {config.last_status && <StatusBadge status={config.last_status} />}
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-7 px-2 shrink-0"
+          onClick={(e) => {
+            e.stopPropagation();
+            handleRun();
+          }}
+          disabled={runCheck.isPending}
+        >
+          {runCheck.isPending ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          ) : (
+            <Play className="h-3.5 w-3.5" />
+          )}
+        </Button>
+        {expanded ? (
+          <ChevronUp className="h-4 w-4 text-muted-foreground shrink-0" />
+        ) : (
+          <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0" />
+        )}
       </div>
 
-      {history.length === 0 ? (
-        <p className="text-xs text-muted-foreground">No history entries yet.</p>
-      ) : (
-        <div className="max-h-64 overflow-y-auto space-y-1">
-          {history.slice(0, 100).map((item) => {
-            const statusCfg = STATUS_CONFIG[item.status as keyof typeof STATUS_CONFIG] ?? STATUS_CONFIG.unknown;
-            return (
-              <div
-                key={item.id}
-                className="flex items-center gap-3 px-2 py-1.5 rounded-md hover:bg-muted/50 text-xs"
-              >
-                <span className="text-muted-foreground tabular-nums w-[140px] shrink-0">
-                  {new Date(item.checked_at).toLocaleString()}
-                </span>
-                <span className="w-[100px] shrink-0 font-medium">
-                  {SERVICE_CONFIG[item.service_name]?.label ?? item.service_name}
-                </span>
-                <span
-                  className={cn(
-                    'px-2 py-0.5 rounded-full font-medium border w-[80px] text-center shrink-0',
-                    statusCfg.color
-                  )}
-                >
-                  {statusCfg.label}
-                </span>
-                <span className="text-muted-foreground tabular-nums">
-                  {item.response_time_ms != null ? `${item.response_time_ms}ms` : '--'}
-                </span>
-              </div>
-            );
-          })}
+      {expanded && (
+        <div className="px-4 py-3 border-t space-y-3">
+          <ResultHistory agentId={agentId} configId={config.id} />
+          <div className="flex justify-end">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-destructive hover:text-destructive h-7 text-xs"
+              onClick={handleDelete}
+              disabled={deleteCheck.isPending}
+            >
+              Delete Check
+            </Button>
+          </div>
         </div>
       )}
     </div>
@@ -400,156 +257,308 @@ function HistoryLog({ history, serviceFilter, onServiceFilterChange }: {
 }
 
 // ============================================================================
-// Main Page
+// Add Health Check Dialog
 // ============================================================================
 
-export default function SystemHealthPage() {
-  const [autoRefresh, setAutoRefresh] = useState(true);
-  const [serviceFilter, setServiceFilter] = useState('');
-
-  const { data: statusData, isLoading: statusLoading } = useHealthStatus({
-    refetchInterval: autoRefresh ? 60_000 : undefined,
+function AddHealthCheckDialog({ agentId: defaultAgentId }: { agentId?: string }) {
+  const [open, setOpen] = useState(false);
+  const [form, setForm] = useState({
+    agent_id: defaultAgentId ?? '',
+    check_name: '',
+    check_type: 'ping' as 'ping' | 'api_call' | 'response_quality' | 'latency',
+    interval_minutes: '60',
+    timeout_seconds: '30',
+    failure_threshold: '3',
   });
-  const { data: historyData, isLoading: historyLoading } = useHealthHistory(
-    serviceFilter || undefined,
-    24
-  );
-  const { data: uptimeData, isLoading: uptimeLoading } = useServiceUptime();
-  const healthCheckMutation = useRunHealthCheck();
 
-  const handleRunCheck = useCallback(() => {
-    healthCheckMutation.mutate();
-  }, [healthCheckMutation]);
+  const createCheck = useCreateHealthCheck(form.agent_id);
 
-  const services = statusData?.services ?? [];
-  const overallStatus = statusData?.overall_status ?? 'unknown';
-  const history = historyData?.history ?? [];
-  const uptimes = uptimeData?.uptimes ?? [];
-
-  // Map uptimes by service for service cards
-  const uptimeMap = useMemo(() => {
-    const map: Record<string, UptimeItem> = {};
-    for (const u of uptimes) {
-      map[u.service_name] = u;
+  const handleSubmit = async () => {
+    if (!form.agent_id || !form.check_name) {
+      toast.error('Agent ID and check name are required');
+      return;
     }
-    return map;
-  }, [uptimes]);
-
-  // Ensure all three service cards show even if no data yet
-  const serviceNames = ['database', 'backend_api', 'agent_runtime'];
-  const serviceMap = useMemo(() => {
-    const map: Record<string, ServiceHealth> = {};
-    for (const s of services) {
-      map[s.service_name] = s;
+    try {
+      await createCheck.mutateAsync({
+        check_name: form.check_name,
+        check_type: form.check_type,
+        interval_minutes: parseInt(form.interval_minutes, 10),
+        timeout_seconds: parseInt(form.timeout_seconds, 10),
+        failure_threshold: parseInt(form.failure_threshold, 10),
+      });
+      toast.success('Health check created');
+      setOpen(false);
+      setForm((f) => ({ ...f, check_name: '' }));
+    } catch {
+      toast.error('Failed to create health check');
     }
-    return map;
-  }, [services]);
+  };
 
   return (
-    <div className="container mx-auto max-w-6xl py-6 px-4 space-y-6">
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button size="sm" variant="outline">
+          <Plus className="h-4 w-4 mr-1.5" />
+          Add Health Check
+        </Button>
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Add Health Check</DialogTitle>
+          <DialogDescription>Configure a periodic health check for an agent.</DialogDescription>
+        </DialogHeader>
+        <div className="space-y-3 py-2">
+          <div className="space-y-1.5">
+            <Label>Agent ID</Label>
+            <Input
+              value={form.agent_id}
+              onChange={(e) => setForm((f) => ({ ...f, agent_id: e.target.value }))}
+              placeholder="agent_abc123"
+              disabled={!!defaultAgentId}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Check Name</Label>
+            <Input
+              value={form.check_name}
+              onChange={(e) => setForm((f) => ({ ...f, check_name: e.target.value }))}
+              placeholder="ping-check"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Check Type</Label>
+            <Select
+              value={form.check_type}
+              onValueChange={(v) => setForm((f) => ({ ...f, check_type: v as typeof form.check_type }))}
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ping">Ping</SelectItem>
+                <SelectItem value="api_call">API Call</SelectItem>
+                <SelectItem value="response_quality">Response Quality</SelectItem>
+                <SelectItem value="latency">Latency</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="grid grid-cols-3 gap-3">
+            <div className="space-y-1.5">
+              <Label>Interval (min)</Label>
+              <Input
+                type="number"
+                value={form.interval_minutes}
+                onChange={(e) => setForm((f) => ({ ...f, interval_minutes: e.target.value }))}
+                min="1"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Timeout (s)</Label>
+              <Input
+                type="number"
+                value={form.timeout_seconds}
+                onChange={(e) => setForm((f) => ({ ...f, timeout_seconds: e.target.value }))}
+                min="1"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Fail Threshold</Label>
+              <Input
+                type="number"
+                value={form.failure_threshold}
+                onChange={(e) => setForm((f) => ({ ...f, failure_threshold: e.target.value }))}
+                min="1"
+              />
+            </div>
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setOpen(false)}>
+            Cancel
+          </Button>
+          <Button onClick={handleSubmit} disabled={createCheck.isPending}>
+            {createCheck.isPending ? 'Creating...' : 'Create'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ============================================================================
+// Agent Uptime Card
+// ============================================================================
+
+function AgentUptimeCard({ summary }: { summary: UptimeSummary }) {
+  const [expanded, setExpanded] = useState(false);
+  const { data: checks, isLoading: checksLoading } = useHealthChecks(
+    expanded ? summary.agent_id : ''
+  );
+
+  const pctColor = uptimeColor(summary.uptime_pct);
+
+  return (
+    <Card className="overflow-hidden">
+      <CardHeader className="pb-3">
+        <div className="flex items-start justify-between">
+          <div className="flex items-center gap-2.5">
+            <div className="h-9 w-9 rounded-lg bg-muted flex items-center justify-center">
+              <Bot className="h-4.5 w-4.5 text-muted-foreground" />
+            </div>
+            <div>
+              <CardTitle className="text-sm font-mono truncate max-w-[180px]">
+                {summary.agent_id}
+              </CardTitle>
+              <div className="flex items-center gap-1.5 mt-0.5">
+                <StatusBadge status={summary.last_status ?? 'healthy'} />
+              </div>
+            </div>
+          </div>
+          <p className={cn('text-2xl font-bold tabular-nums', pctColor)}>
+            {summary.uptime_pct.toFixed(1)}%
+          </p>
+        </div>
+      </CardHeader>
+
+      <CardContent className="pt-0">
+        <div className="grid grid-cols-3 gap-3 text-xs text-center mb-3">
+          <div>
+            <p className="text-muted-foreground mb-0.5">Avg Response</p>
+            <p className="font-medium">{summary.avg_response_ms}ms</p>
+          </div>
+          <div>
+            <p className="text-muted-foreground mb-0.5">Total Checks</p>
+            <p className="font-medium">{summary.total_checks}</p>
+          </div>
+          <div>
+            <p className="text-muted-foreground mb-0.5">Failures</p>
+            <p className="font-medium">{summary.failed_checks}</p>
+          </div>
+        </div>
+
+        {summary.last_checked_at && (
+          <p className="text-xs text-muted-foreground flex items-center gap-1 mb-3">
+            <Clock className="h-3 w-3" />
+            Last checked: {new Date(summary.last_checked_at).toLocaleString()}
+          </p>
+        )}
+
+        <Button
+          variant="ghost"
+          size="sm"
+          className="w-full h-7 text-xs"
+          onClick={() => setExpanded((e) => !e)}
+        >
+          {expanded ? (
+            <>
+              <ChevronUp className="h-3.5 w-3.5 mr-1" /> Hide Details
+            </>
+          ) : (
+            <>
+              <ChevronDown className="h-3.5 w-3.5 mr-1" /> Details
+            </>
+          )}
+        </Button>
+
+        {expanded && (
+          <div className="mt-3 space-y-3 border-t pt-3">
+            <div className="flex items-center justify-between">
+              <p className="text-xs font-medium text-muted-foreground">Health Checks</p>
+              <AddHealthCheckDialog agentId={summary.agent_id} />
+            </div>
+            {checksLoading ? (
+              <Skeleton className="h-20 w-full" />
+            ) : !checks?.length ? (
+              <p className="text-xs text-muted-foreground text-center py-2">
+                No checks configured.
+              </p>
+            ) : (
+              <div className="space-y-2">
+                {checks.map((c) => (
+                  <HealthCheckRow key={c.id} config={c} agentId={summary.agent_id} />
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+// ============================================================================
+// Page
+// ============================================================================
+
+export default function AgentHealthPage() {
+  const { data: overview, isLoading, refetch } = useHealthOverview();
+  const [autoRefresh, setAutoRefresh] = useState(false);
+
+  const doRefetch = useCallback(() => {
+    refetch();
+  }, [refetch]);
+
+  useEffect(() => {
+    if (!autoRefresh) return;
+    const interval = setInterval(doRefetch, 30_000);
+    return () => clearInterval(interval);
+  }, [autoRefresh, doRefetch]);
+
+  return (
+    <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-semibold flex items-center gap-2">
-            <Activity className="h-5 w-5" />
-            System Health
-          </h1>
-          <p className="text-sm text-muted-foreground mt-0.5">
-            Monitor the health of core platform services
+          <h2 className="text-lg font-semibold">Agent Health Overview</h2>
+          <p className="text-sm text-muted-foreground">
+            Monitor uptime and run health checks for all agents.
           </p>
         </div>
         <div className="flex items-center gap-3">
-          <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer select-none">
-            <input
-              type="checkbox"
+          <div className="flex items-center gap-2">
+            <Switch
+              id="auto-refresh"
               checked={autoRefresh}
-              onChange={(e) => setAutoRefresh(e.target.checked)}
-              className="rounded border-input"
+              onCheckedChange={setAutoRefresh}
             />
-            Auto-refresh (60s)
-          </label>
-          <button
-            onClick={handleRunCheck}
-            disabled={healthCheckMutation.isPending}
-            className={cn(
-              'inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium',
-              'bg-primary text-primary-foreground hover:bg-primary/90',
-              'disabled:opacity-50 disabled:pointer-events-none transition-colors'
-            )}
-          >
-            {healthCheckMutation.isPending ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <RefreshCw className="h-4 w-4" />
-            )}
-            Run Health Check
-          </button>
+            <Label htmlFor="auto-refresh" className="text-sm cursor-pointer">
+              Auto-refresh (30s)
+            </Label>
+          </div>
+          <Button variant="outline" size="sm" onClick={() => refetch()}>
+            <RefreshCw className="h-4 w-4 mr-1.5" />
+            Refresh
+          </Button>
+          <AddHealthCheckDialog />
         </div>
       </div>
 
-      {/* Overall status banner */}
-      <OverallStatusBanner status={overallStatus} />
-
-      {/* Service cards */}
-      {statusLoading ? (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {Array.from({ length: 3 }).map((_, i) => (
-            <div key={i} className="rounded-xl border border-border bg-card p-5 animate-pulse">
-              <div className="h-9 w-24 bg-muted rounded mb-3" />
-              <div className="h-4 w-32 bg-muted rounded mb-2" />
-              <div className="h-3 w-20 bg-muted rounded" />
+      {/* Overview grid */}
+      {isLoading ? (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {[1, 2, 3].map((i) => (
+            <Skeleton key={i} className="h-52" />
+          ))}
+        </div>
+      ) : !overview?.length ? (
+        <Card>
+          <CardContent className="py-16 text-center">
+            <Activity className="h-10 w-10 text-muted-foreground mx-auto mb-3" />
+            <p className="font-medium">No health data yet</p>
+            <p className="text-sm text-muted-foreground mt-1">
+              Add a health check and run it to see agent uptime data.
+            </p>
+            <div className="mt-4">
+              <AddHealthCheckDialog />
             </div>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {overview.map((summary) => (
+            <AgentUptimeCard key={summary.agent_id} summary={summary} />
           ))}
         </div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {serviceNames.map((svcName) => (
-            <ServiceCard
-              key={svcName}
-              service={serviceMap[svcName]}
-              uptime={uptimeMap[svcName]}
-            />
-          ))}
-        </div>
-      )}
-
-      {/* Charts row */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {historyLoading ? (
-          <div className="rounded-xl border border-border bg-card p-5 animate-pulse">
-            <div className="h-4 w-40 bg-muted rounded mb-3" />
-            <div className="h-32 bg-muted rounded" />
-          </div>
-        ) : (
-          <ResponseTimeChart history={history} />
-        )}
-
-        {uptimeLoading ? (
-          <div className="rounded-xl border border-border bg-card p-5 animate-pulse">
-            <div className="h-4 w-32 bg-muted rounded mb-3" />
-            <div className="h-32 bg-muted rounded" />
-          </div>
-        ) : (
-          <UptimeBars uptimes={uptimes} />
-        )}
-      </div>
-
-      {/* History log */}
-      {historyLoading ? (
-        <div className="rounded-xl border border-border bg-card p-5 animate-pulse">
-          <div className="h-4 w-36 bg-muted rounded mb-3" />
-          <div className="space-y-2">
-            {Array.from({ length: 5 }).map((_, i) => (
-              <div key={i} className="h-6 bg-muted rounded" />
-            ))}
-          </div>
-        </div>
-      ) : (
-        <HistoryLog
-          history={history}
-          serviceFilter={serviceFilter}
-          onServiceFilterChange={setServiceFilter}
-        />
       )}
     </div>
   );

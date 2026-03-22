@@ -16,6 +16,8 @@ import {
   __testGetTask,
   __testParseTraceparent,
   __testResolveTraceId,
+  __testRouteOpenClawMessage,
+  __testExtractTextFromEnvelope,
 } from './a2a-openclaw-adapter';
 import {
   validateOpenClawEvent,
@@ -548,4 +550,158 @@ describe('full event type coverage', () => {
       expect('skipped' in result).toBe(true);
     });
   }
+});
+
+// ---------------------------------------------------------------------------
+// Tests: Social channel routing (Task 36)
+// ---------------------------------------------------------------------------
+
+describe('routeOpenClawMessage', () => {
+  // PM routing
+  it('routes "Create a new project" to recoder_pm', () => {
+    expect(__testRouteOpenClawMessage('Create a new project for Q3')).toBe('recoder_pm');
+  });
+
+  it('routes "add a task to the sprint" to recoder_pm', () => {
+    expect(__testRouteOpenClawMessage('Please add a task to the sprint')).toBe('recoder_pm');
+  });
+
+  it('routes "update the feature roadmap" to recoder_pm', () => {
+    expect(__testRouteOpenClawMessage('Can you update the feature roadmap?')).toBe('recoder_pm');
+  });
+
+  it('routes "move this ticket to backlog" to recoder_pm', () => {
+    expect(__testRouteOpenClawMessage('Move this ticket to backlog')).toBe('recoder_pm');
+  });
+
+  it('routes messages with "milestone" to recoder_pm', () => {
+    expect(__testRouteOpenClawMessage('We need to hit the milestone by Friday')).toBe('recoder_pm');
+  });
+
+  it('routes messages with "epic" to recoder_pm', () => {
+    expect(__testRouteOpenClawMessage('This belongs in the onboarding epic')).toBe('recoder_pm');
+  });
+
+  it('routes messages with "release" to recoder_pm', () => {
+    expect(__testRouteOpenClawMessage('Schedule the release for Monday')).toBe('recoder_pm');
+  });
+
+  // Agency routing
+  it('routes "send invoice to the client" to recoder_agency', () => {
+    expect(__testRouteOpenClawMessage('Send the invoice to the client')).toBe('recoder_agency');
+  });
+
+  it('routes "prepare a quote for the website" to recoder_agency', () => {
+    expect(__testRouteOpenClawMessage('Prepare a quote for the website redesign')).toBe('recoder_agency');
+  });
+
+  it('routes "deliverable is ready for review" to recoder_agency', () => {
+    expect(__testRouteOpenClawMessage('The deliverable is ready for review')).toBe('recoder_agency');
+  });
+
+  it('routes "draft a proposal" to recoder_agency', () => {
+    expect(__testRouteOpenClawMessage('Draft a proposal for the new engagement')).toBe('recoder_agency');
+  });
+
+  it('routes messages with "brief" to recoder_agency', () => {
+    expect(__testRouteOpenClawMessage('Review the creative brief')).toBe('recoder_agency');
+  });
+
+  it('routes messages with "contract" to recoder_agency', () => {
+    expect(__testRouteOpenClawMessage('Send the contract for signing')).toBe('recoder_agency');
+  });
+
+  it('routes messages with "billing" to recoder_agency', () => {
+    expect(__testRouteOpenClawMessage('Check the billing status')).toBe('recoder_agency');
+  });
+
+  // Backend (fallback) routing
+  it('routes generic messages to recoder_backend', () => {
+    expect(__testRouteOpenClawMessage('Hello world')).toBe('recoder_backend');
+  });
+
+  it('routes empty messages to recoder_backend', () => {
+    expect(__testRouteOpenClawMessage('')).toBe('recoder_backend');
+  });
+
+  it('routes "what is the weather today" to recoder_backend', () => {
+    expect(__testRouteOpenClawMessage('What is the weather today?')).toBe('recoder_backend');
+  });
+
+  // PM takes priority over Agency when both match
+  it('routes "create a project task for the client" to recoder_pm (PM priority)', () => {
+    // Contains both PM ("project", "task") and Agency ("client") keywords
+    expect(__testRouteOpenClawMessage('Create a project task for the client')).toBe('recoder_pm');
+  });
+
+  // Case insensitivity
+  it('is case-insensitive', () => {
+    expect(__testRouteOpenClawMessage('CREATE A NEW PROJECT')).toBe('recoder_pm');
+    expect(__testRouteOpenClawMessage('SEND THE INVOICE')).toBe('recoder_agency');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Tests: Text extraction from TaskEnvelope (Task 36)
+// ---------------------------------------------------------------------------
+
+describe('extractTextFromEnvelope', () => {
+  it('extracts text from a text payload', () => {
+    const validation = validateOpenClawEvent(
+      makeVoiceTranscriptEvent({ text: 'Create a new project' }),
+    );
+    expect(validation.ok).toBe(true);
+    if (!validation.ok) return;
+
+    const result = mapOpenClawEvent(validation.event, { workspace_id: 'ws_test' });
+    expect(result.ok).toBe(true);
+    if (!result.ok || 'skipped' in result) return;
+
+    const text = __testExtractTextFromEnvelope(result.envelope);
+    expect(text).toContain('Create a new project');
+  });
+
+  it('extracts text from a command payload', () => {
+    const validation = validateOpenClawEvent(makeExecStartedEvent({ command: 'npm run build' }));
+    expect(validation.ok).toBe(true);
+    if (!validation.ok) return;
+
+    const result = mapOpenClawEvent(validation.event, { workspace_id: 'ws_test' });
+    expect(result.ok).toBe(true);
+    if (!result.ok || 'skipped' in result) return;
+
+    const text = __testExtractTextFromEnvelope(result.envelope);
+    expect(text).toContain('npm run build');
+  });
+
+  it('extracts text from a JSON payload with text field', () => {
+    const validation = validateOpenClawEvent(
+      makeAgentLifecycleEvent({ data: { text: 'processing task' } }),
+    );
+    expect(validation.ok).toBe(true);
+    if (!validation.ok) return;
+
+    const result = mapOpenClawEvent(validation.event, { workspace_id: 'ws_test' });
+    expect(result.ok).toBe(true);
+    if (!result.ok || 'skipped' in result) return;
+
+    const text = __testExtractTextFromEnvelope(result.envelope);
+    expect(text).toContain('processing task');
+  });
+
+  it('returns empty string for payloads with no extractable text', () => {
+    const validation = validateOpenClawEvent(
+      makeAgentLifecycleEvent({ data: { count: 42 } }),
+    );
+    expect(validation.ok).toBe(true);
+    if (!validation.ok) return;
+
+    const result = mapOpenClawEvent(validation.event, { workspace_id: 'ws_test' });
+    expect(result.ok).toBe(true);
+    if (!result.ok || 'skipped' in result) return;
+
+    const text = __testExtractTextFromEnvelope(result.envelope);
+    // The JSON payload mapper includes phase, so "start" should be there
+    expect(text).toContain('start');
+  });
 });

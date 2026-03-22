@@ -392,8 +392,8 @@ class Configuration:
     STRIPE_PRODUCT_ID_STAGING: Optional[str] = 'prod_SCgIj3G7yPOAWY'
     
     # Sandbox configuration
-    SANDBOX_IMAGE_NAME = "recoder/recoder:0.1.3.30"
-    SANDBOX_SNAPSHOT_NAME = "recoder/recoder:0.1.3.30"
+    SANDBOX_IMAGE_NAME = os.getenv("SANDBOX_SNAPSHOT_NAME", "daytonaio/sandbox:0.5.0-slim")
+    SANDBOX_SNAPSHOT_NAME = os.getenv("SANDBOX_SNAPSHOT_NAME", "daytonaio/sandbox:0.5.0-slim")
     SANDBOX_ENTRYPOINT = "/usr/bin/supervisord -n -c /etc/supervisor/conf.d/supervisord.conf"
     
     # Debug configuration

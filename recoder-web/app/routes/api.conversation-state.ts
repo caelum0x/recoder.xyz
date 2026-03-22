@@ -4,7 +4,6 @@
  */
 
 import { type ActionFunctionArgs, type LoaderFunctionArgs, json } from '@remix-run/cloudflare';
-import { neon } from '@neondatabase/serverless';
 import { createScopedLogger } from '~/utils/logger';
 
 const logger = createScopedLogger('ConversationState');
@@ -13,7 +12,7 @@ const logger = createScopedLogger('ConversationState');
 // Types
 // ============================================================================
 
-export interface ConversationMessage {
+interface ConversationMessage {
   id: string;
   role: 'user' | 'assistant';
   content: string;
@@ -26,7 +25,7 @@ export interface ConversationMessage {
   };
 }
 
-export interface ConversationEdit {
+interface ConversationEdit {
   timestamp: number;
   userRequest: string;
   editType: string;
@@ -36,7 +35,7 @@ export interface ConversationEdit {
   errorMessage?: string;
 }
 
-export interface ProjectEvolution {
+interface ProjectEvolution {
   initialState?: string;
   majorChanges: Array<{
     timestamp: number;
@@ -45,14 +44,14 @@ export interface ProjectEvolution {
   }>;
 }
 
-export interface UserPreferences {
+interface UserPreferences {
   editStyle?: 'targeted' | 'comprehensive';
   commonRequests?: string[];
   packagePreferences?: string[];
   [key: string]: unknown;
 }
 
-export interface ConversationContext {
+interface ConversationContext {
   messages: ConversationMessage[];
   edits: ConversationEdit[];
   currentTopic?: string;
@@ -60,7 +59,7 @@ export interface ConversationContext {
   userPreferences: UserPreferences;
 }
 
-export interface ConversationState {
+interface ConversationState {
   conversationId: string;
   startedAt: number;
   lastUpdated: number;
@@ -72,10 +71,10 @@ export interface ConversationState {
 // ============================================================================
 
 class ConversationStateDB {
-  private sql: ReturnType<typeof neon>;
+  private sql: any;
 
-  constructor(databaseUrl: string) {
-    this.sql = neon(databaseUrl);
+  constructor(sql: any) {
+    this.sql = sql;
   }
 
   /**
@@ -415,7 +414,7 @@ class ConversationStateDB {
 // Helper Functions
 // ============================================================================
 
-function getDatabase(env: any): ConversationStateDB | null {
+async function getDatabase(env: any): Promise<ConversationStateDB | null> {
   const databaseUrl = env?.DATABASE_URL || process.env.DATABASE_URL;
 
   if (!databaseUrl) {
@@ -423,7 +422,9 @@ function getDatabase(env: any): ConversationStateDB | null {
     return null;
   }
 
-  return new ConversationStateDB(databaseUrl);
+  const { createSql } = await import('~/lib/.server/db/pg-pool');
+  const sql = createSql(databaseUrl);
+  return new ConversationStateDB(sql);
 }
 
 // ============================================================================
@@ -446,7 +447,7 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
 
   try {
     const env = (context as any)?.cloudflare?.env || process.env;
-    const db = getDatabase(env);
+    const db = await getDatabase(env);
 
     if (!db) {
       return json({
@@ -545,7 +546,7 @@ export async function action({ request, context }: ActionFunctionArgs) {
 
   try {
     const env = (context as any)?.cloudflare?.env || process.env;
-    const db = getDatabase(env);
+    const db = await getDatabase(env);
 
     if (!db) {
       return json({
@@ -772,7 +773,7 @@ export async function action({ request, context }: ActionFunctionArgs) {
 async function handleDelete(request: Request, context: any) {
   try {
     const env = (context as any)?.cloudflare?.env || process.env;
-    const db = getDatabase(env);
+    const db = await getDatabase(env);
 
     if (!db) {
       return json({

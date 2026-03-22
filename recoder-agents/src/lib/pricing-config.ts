@@ -31,7 +31,7 @@ export interface PricingTier {
 
 export const pricingTiers: PricingTier[] = [
   {
-    name: 'Basic',
+    name: 'Free',
     price: '$0',
     yearlyPrice: '$0',
     originalYearlyPrice: '$0',
@@ -44,7 +44,7 @@ export const pricingTiers: PricingTier[] = [
     features: [
       '300 weekly credits - Refreshes every 7 days',
       '1 concurrent run',
-      'Basic Mode - Core Recoder experience with basic autonomy',
+      'Recoder - Core Recoder experience',
     ],
     disabledFeatures: [
       'No custom AI Workers',
@@ -76,7 +76,7 @@ export const pricingTiers: PricingTier[] = [
       '5 scheduled triggers - Run at 9am daily, every Monday, first of month...',
       '25 app triggers - Auto-respond to new emails, Slack messages, form submissions...',
       '100+ Integrations - Google Drive, Slack, Notion, Gmail, Calendar, GitHub & more',
-      'Recoder Advanced mode - Strongest autonomy & decision-making capabilities',
+      'Recoder - Strongest autonomy & decision-making capabilities',
     ],
     tierKey: config.SUBSCRIPTION_TIERS.TIER_2_20.tierKey,
     upgradePlans: [],
@@ -102,7 +102,7 @@ export const pricingTiers: PricingTier[] = [
       '10 scheduled triggers - Run at 9am daily, every Monday, first of month...',
       '50 app triggers - Auto-respond to new emails, Slack messages, form submissions...',
       '100+ Integrations - Google Drive, Slack, Notion, Gmail, Calendar, GitHub & more',
-      'Recoder Advanced mode - Strongest autonomy & decision-making capabilities',
+      'Recoder - Strongest autonomy & decision-making capabilities',
     ],
     tierKey: config.SUBSCRIPTION_TIERS.TIER_6_50.tierKey,
     upgradePlans: [],
@@ -150,7 +150,7 @@ export const pricingTiers: PricingTier[] = [
       '50 scheduled triggers - Run at 9am daily, every Monday, first of month...',
       '200 app triggers - Auto-respond to new emails, Slack messages, form submissions...',
       '100+ Integrations - Google Drive, Slack, Notion, Gmail, Calendar, GitHub & more',
-      'Recoder Advanced mode - Strongest autonomy & decision-making capabilities',
+      'Recoder - Strongest autonomy & decision-making capabilities',
     ],
     tierKey: config.SUBSCRIPTION_TIERS.TIER_25_200.tierKey,
     upgradePlans: [],

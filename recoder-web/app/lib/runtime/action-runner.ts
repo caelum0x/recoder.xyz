@@ -1280,16 +1280,9 @@ export class ActionRunner {
           globalNpmInstallRunning = true;
 
           try {
-            logger.info('📦 Installing dependencies with bun...');
-            try {
-              await this.#dockerExec('bun install --force');
-              logger.info('✅ Dependencies installed successfully with bun');
-            } catch (bunError: any) {
-              // Fallback to npm with legacy peer deps if bun fails
-              logger.warn('⚠️ bun install failed, trying npm fallback...');
-              await this.#dockerExec('npm install --legacy-peer-deps --prefer-offline --no-audit --no-fund');
-              logger.info('✅ Dependencies installed successfully with npm');
-            }
+            logger.info('📦 Installing dependencies with npm...');
+            await this.#dockerExec('npm install --legacy-peer-deps --prefer-offline --no-audit --no-fund');
+            logger.info('✅ Dependencies installed successfully with npm');
 
             // Only mark as complete if we reach this point without exceptions
             globalNpmInstallComplete = true;
@@ -1380,16 +1373,11 @@ export class ActionRunner {
           await this.#dockerExec('rm -rf node_modules package-lock.json');
         }
         
-        // Extract and run install with bun (faster, no peer dep issues)
+        // Extract and run install with npm
         const installMatch = action.content.match(/\b(npm|yarn|pnpm)\s+(install|i\b)(\s+[^&]*)?/);
         if (installMatch) {
-          logger.info('📦 Installing with bun...');
-          let installOutput = await this.#dockerExec('bun install --force');
-
-          if (installOutput.includes('error:') || installOutput.includes('failed')) {
-            logger.warn('⚠️ bun failed, trying npm fallback...');
-            installOutput = await this.#dockerExec('npm install --legacy-peer-deps --prefer-offline --no-audit --no-fund');
-          }
+          logger.info('📦 Installing with npm...');
+          await this.#dockerExec('npm install --legacy-peer-deps --prefer-offline --no-audit --no-fund');
         }
 
         // Start dev server via backend API (handles framework detection, port binding, health checks)
@@ -2331,14 +2319,12 @@ export class ActionRunner {
       if (framework === 'expo') {
         logger.info('📱 Expo project detected — installing deps and starting Metro via Expo API');
 
-        // Install dependencies (Expo uses npm/bun)
+        // Install dependencies
         try {
-          await this.#dockerExec('bun install --force');
-          logger.info('✅ Expo dependencies installed with bun');
-        } catch {
-          logger.warn('⚠️ bun install failed for Expo, trying npm...');
           await this.#dockerExec('npm install --legacy-peer-deps --prefer-offline --no-audit --no-fund');
           logger.info('✅ Expo dependencies installed with npm');
+        } catch (installErr: any) {
+          logger.error('❌ Expo npm install failed:', installErr.message);
         }
 
         globalNpmInstallComplete = true;
@@ -2383,18 +2369,9 @@ export class ActionRunner {
       if (hasValidNodeModules && globalNpmInstallComplete) {
         logger.info('✅ Dependencies already installed, skipping reinstall');
       } else {
-        // 🚀 Use bun for fast installs - --force handles peer dependency conflicts
-        logger.info('📦 Installing dependencies with bun...');
-        try {
-          await this.#dockerExec('bun install --force');
-          logger.info('✅ Dependencies installed successfully with bun');
-        } catch (bunError: any) {
-          // Fallback to npm with legacy peer deps if bun fails
-          logger.warn('⚠️ bun install failed, trying npm fallback...');
-          await this.#dockerExec('rm -rf node_modules bun.lockb');
-          await this.#dockerExec('npm install --legacy-peer-deps --prefer-offline --no-audit --no-fund');
-          logger.info('✅ Dependencies installed successfully with npm');
-        }
+        logger.info('📦 Installing dependencies with npm...');
+        await this.#dockerExec('npm install --legacy-peer-deps --prefer-offline --no-audit --no-fund');
+        logger.info('✅ Dependencies installed successfully with npm');
 
         // Only mark as complete if we reach this point without exceptions
         globalNpmInstallComplete = true; // ✅ Mark install as complete
@@ -2465,8 +2442,8 @@ export class ActionRunner {
 
       logger.info('💡 You can manually fix this:');
       logger.info('  1. Check package.json is valid');
-      logger.info('  2. Run: bun install');
-      logger.info('  3. Run: bun run dev');
+      logger.info('  2. Run: npm install');
+      logger.info('  3. Run: npm run dev');
     }
   }
 
@@ -2551,11 +2528,10 @@ export class ActionRunner {
 
           // Re-install with the new packages
           try {
-            await this.#dockerExec('bun install --force');
-            logger.info('✅ Re-installed dependencies with auto-detected packages');
-          } catch {
             await this.#dockerExec('npm install --legacy-peer-deps --prefer-offline --no-audit --no-fund');
-            logger.info('✅ Re-installed dependencies (npm fallback) with auto-detected packages');
+            logger.info('✅ Re-installed dependencies with auto-detected packages');
+          } catch (installErr: any) {
+            logger.warn('⚠️ npm install failed for auto-detected packages:', installErr.message);
           }
         }
       } else {
@@ -2892,7 +2868,8 @@ export class ActionRunner {
 
         // Log the actual preview URL instead of container's localhost
         if (DOCKER_URL && this.#projectId) {
-          const previewUrl = `${DOCKER_URL}/preview/${this.#projectId}`;
+          const origin = typeof window !== 'undefined' ? window.location.origin : DOCKER_URL;
+          const previewUrl = `${origin}/preview/${this.#projectId}`;
           logger.info(`🌐 Dev server URL: ${previewUrl}`);
         }
       } else if (logs.length > 10) {

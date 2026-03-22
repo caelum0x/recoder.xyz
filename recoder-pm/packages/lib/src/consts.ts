@@ -1,7 +1,7 @@
 export const FEEDBACK_PAGE_SIZE = 20;
 export const CRON_PAGE_SIZE = 20;
 
-export const MAX_FREE_MEMBERS = 1;
+export const MAX_FREE_MEMBERS = 10;
 export const MAX_FREE_FEEDBACK = 250;
 export const MAX_FREE_FEATURES = 150;
 export const MAX_FREE_CHANGELOGS = 5;

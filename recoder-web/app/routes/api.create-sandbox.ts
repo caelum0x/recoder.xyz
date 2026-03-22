@@ -250,6 +250,7 @@ interface ContainerResponse {
   fromPool?: boolean;
   port: number;
   ptyPort: number;
+  daytona?: boolean;
   ports: {
     preview: number;
     vite: number;
@@ -382,11 +383,20 @@ export async function action({ request, context }: ActionFunctionArgs) {
     }
 
     // Build public URLs
-    // In production, preview is accessed via docker.recoder.xyz/preview/:projectId
-    // Vite runs on port 5173 inside the container, mapped to container.ports.vite
-    const previewUrl = `${publicDockerUrl}/preview/${projectId}`;
-    const viteUrl = `${publicDockerUrl}/preview/${projectId}`; // Same URL, proxied based on port
-    const ptyUrl = containerResponse.urls.pty.replace('ws://localhost', 'wss://docker.recoder.xyz');
+    // For Daytona sandboxes, use the Daytona preview URL directly.
+    // For Docker, use the same-origin proxy URL.
+    let previewUrl: string;
+    let viteUrl: string;
+    if (containerResponse.daytona && containerResponse.urls.preview) {
+      // Daytona: direct URL from daytona-proxy e.g. https://5173-{sandboxId}.sandbox.recoder.xyz
+      previewUrl = containerResponse.urls.preview;
+      viteUrl = previewUrl;
+      logger.info(`Daytona sandbox ready at: ${previewUrl}`);
+    } else {
+      previewUrl = `${publicDockerUrl}/preview/${projectId}`;
+      viteUrl = `${publicDockerUrl}/preview/${projectId}`;
+    }
+    const ptyUrl = (containerResponse.urls?.pty || '').replace('ws://localhost', 'wss://docker.recoder.xyz');
 
     logger.info(`Sandbox ready at: ${previewUrl}`);
 

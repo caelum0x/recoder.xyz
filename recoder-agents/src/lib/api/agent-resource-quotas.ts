@@ -55,7 +55,7 @@ export interface QuotaViolation {
 export const getAgentQuotas = async (agentId: string): Promise<AgentQuota[]> => {
   const response = await backendApi.get<AgentQuota[]>(
     `/agents/${agentId}/quotas`,
-    { showErrors: false, cache: 'no-store' }
+    { showErrors: true, cache: 'no-store' }
   );
 
   if (response.error) {
@@ -105,7 +105,7 @@ export const checkAgentQuota = async (
   const response = await backendApi.post<CheckQuotaResult>(
     `/agents/${agentId}/quotas/check`,
     data,
-    { showErrors: false }
+    { showErrors: true }
   );
 
   if (response.error) {
@@ -122,7 +122,7 @@ export const recordAgentUsage = async (
   const response = await backendApi.post<RecordUsageResult>(
     `/agents/${agentId}/quotas/record-usage`,
     data,
-    { showErrors: false }
+    { showErrors: true }
   );
 
   if (response.error) {
@@ -160,7 +160,7 @@ export const getQuotaViolations = async (
   const url = `/agents/quotas/violations${query ? `?${query}` : ''}`;
 
   const response = await backendApi.get<QuotaViolation[]>(url, {
-    showErrors: false,
+    showErrors: true,
     cache: 'no-store',
   });
 

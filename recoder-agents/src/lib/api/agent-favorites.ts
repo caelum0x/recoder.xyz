@@ -12,7 +12,7 @@ export interface AgentFavorite {
 export const getAgentFavorites = async (): Promise<AgentFavorite[]> => {
   const response = await backendApi.get<AgentFavorite[]>(
     '/agents/favorites',
-    { showErrors: false }
+    { showErrors: true }
   );
   if (response.error) throw new Error(response.error.message);
   return response.data!;

@@ -97,7 +97,7 @@ export async function getPreferences(
 
     const response = await backendApi.get<UserPreference[]>(
       `/preferences${qs ? `?${qs}` : ''}`,
-      { showErrors: false },
+      { showErrors: true },
     );
     if (response.error) throw new Error(`Error: ${response.error.message}`);
     return response.data ?? [];
@@ -115,7 +115,7 @@ export async function setPreference(
     const response = await backendApi.put<UserPreference>(
       '/preferences',
       payload,
-      { showErrors: false },
+      { showErrors: true },
     );
     if (response.error) throw new Error(`Error: ${response.error.message}`);
     return response.data!;
@@ -133,7 +133,7 @@ export async function batchSetPreferences(
     const response = await backendApi.put<BatchSetResponse>(
       '/preferences/batch',
       payload,
-      { showErrors: false },
+      { showErrors: true },
     );
     if (response.error) throw new Error(`Error: ${response.error.message}`);
     return response.data!;
@@ -150,7 +150,7 @@ export async function deletePreference(
   try {
     const response = await backendApi.delete(
       `/preferences/${encodeURIComponent(preferenceKey)}`,
-      { showErrors: false },
+      { showErrors: true },
     );
     if (response.error) throw new Error(`Error: ${response.error.message}`);
   } catch (error) {
@@ -167,7 +167,7 @@ export async function syncPush(
     const response = await backendApi.post<SyncPushResponse>(
       '/preferences/sync',
       payload,
-      { showErrors: false },
+      { showErrors: true },
     );
     if (response.error) throw new Error(`Error: ${response.error.message}`);
     return response.data!;
@@ -188,7 +188,7 @@ export async function syncPull(
 
     const response = await backendApi.get<UserPreference[]>(
       `/preferences/sync/pull${qs ? `?${qs}` : ''}`,
-      { showErrors: false },
+      { showErrors: true },
     );
     if (response.error) throw new Error(`Error: ${response.error.message}`);
     return response.data ?? [];
@@ -209,7 +209,7 @@ export async function getSyncLog(
 
     const response = await backendApi.get<SyncLogEntry[]>(
       `/preferences/sync/log${qs ? `?${qs}` : ''}`,
-      { showErrors: false },
+      { showErrors: true },
     );
     if (response.error) throw new Error(`Error: ${response.error.message}`);
     return response.data ?? [];

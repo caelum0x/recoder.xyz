@@ -37,8 +37,10 @@ function SignInForm() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const rawReturn = searchParams.get('redirect') || searchParams.get('return') || '/dashboard';
-  // Prevent open redirect: only allow relative paths (no protocol-relative //evil.com)
-  const returnUrl = rawReturn.startsWith('/') && !rawReturn.startsWith('//') ? rawReturn : '/dashboard';
+  // Allow relative paths and *.recoder.xyz subdomains, block open redirects
+  const isRelative = rawReturn.startsWith('/') && !rawReturn.startsWith('//');
+  const isRecoderSubdomain = /^https:\/\/[a-z-]+\.recoder\.xyz(\/|$)/.test(rawReturn);
+  const returnUrl = isRelative || isRecoderSubdomain ? rawReturn : '/dashboard';
 
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();

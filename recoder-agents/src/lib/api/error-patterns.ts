@@ -87,7 +87,7 @@ export const getErrorPatterns = async (filters?: ErrorPatternFilters): Promise<E
   const url = `/error-patterns${query ? `?${query}` : ''}`;
 
   const response = await backendApi.get<ErrorPattern[]>(url, {
-    showErrors: false,
+    showErrors: true,
     cache: 'no-store',
   });
 
@@ -101,7 +101,7 @@ export const getErrorPatterns = async (filters?: ErrorPatternFilters): Promise<E
 export const getErrorPattern = async (patternId: string): Promise<ErrorPattern> => {
   const response = await backendApi.get<ErrorPattern>(
     `/error-patterns/${patternId}`,
-    { showErrors: false, cache: 'no-store' }
+    { showErrors: true, cache: 'no-store' }
   );
 
   if (response.error) {
@@ -131,7 +131,7 @@ export const updateErrorPattern = async (
 export const getErrorPatternStats = async (): Promise<ErrorPatternStats> => {
   const response = await backendApi.get<ErrorPatternStats>(
     '/error-patterns/stats',
-    { showErrors: false, cache: 'no-store' }
+    { showErrors: true, cache: 'no-store' }
   );
 
   if (response.error) {

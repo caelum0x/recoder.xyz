@@ -110,7 +110,7 @@ export interface MeasurementFilters {
 export const getSlaDefinitions = async (): Promise<SlaDefinition[]> => {
   const response = await backendApi.get<SlaDefinition[]>(
     '/sla/definitions',
-    { showErrors: false, cache: 'no-store' }
+    { showErrors: true, cache: 'no-store' }
   );
 
   if (response.error) {
@@ -192,7 +192,7 @@ export const getSlaMeasurements = async (
   const url = `/sla/${slaId}/measurements${query ? `?${query}` : ''}`;
 
   const response = await backendApi.get<SlaMeasurement[]>(url, {
-    showErrors: false,
+    showErrors: true,
     cache: 'no-store',
   });
 
@@ -206,7 +206,7 @@ export const getSlaMeasurements = async (
 export const getSlaDashboard = async (): Promise<SlaDashboard> => {
   const response = await backendApi.get<SlaDashboard>(
     '/sla/dashboard',
-    { showErrors: false, cache: 'no-store' }
+    { showErrors: true, cache: 'no-store' }
   );
 
   if (response.error) {

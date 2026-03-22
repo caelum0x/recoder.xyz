@@ -1,8 +1,15 @@
-"""API routes for hierarchical thread labels — organize threads with nested labels."""
+"""
+Thread Labels API endpoints.
 
-from fastapi import APIRouter, Depends, HTTPException
+Provides CRUD for label definitions and assignment of labels to threads,
+plus bulk assignment and reverse lookup.
+"""
+
+from typing import Optional, List, Dict, Any
+
+from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
-from typing import Optional, List
+
 from core.utils.auth_utils import verify_and_get_user_id_from_jwt
 from core.services.db import execute, execute_one, execute_mutate, serialize_row, serialize_rows
 from core.utils.logger import logger
@@ -10,285 +17,337 @@ from core.utils.logger import logger
 router = APIRouter(tags=["thread-labels"])
 
 
-# ---------------------------------------------------------------------------
-# Pydantic models
-# ---------------------------------------------------------------------------
+# ============================================================================
+# Pydantic Models
+# ============================================================================
 
 class CreateLabelRequest(BaseModel):
-    name: str
+    label_name: str
     color: Optional[str] = "#6366f1"
-    parent_id: Optional[str] = None
+    description: Optional[str] = None
+    icon: Optional[str] = "tag"
 
 
 class UpdateLabelRequest(BaseModel):
-    name: Optional[str] = None
+    label_name: Optional[str] = None
     color: Optional[str] = None
-    parent_id: Optional[str] = None
-    sort_order: Optional[int] = None
+    description: Optional[str] = None
+    icon: Optional[str] = None
 
 
 class AssignLabelRequest(BaseModel):
     label_id: str
 
 
-# ---------------------------------------------------------------------------
-# Helper: build tree from flat rows
-# ---------------------------------------------------------------------------
-
-def _build_label_tree(rows: List[dict]) -> List[dict]:
-    """Convert a flat list of label rows into a nested tree structure."""
-    by_id = {}
-    for r in rows:
-        r["children"] = []
-        by_id[str(r["id"])] = r
-
-    roots = []
-    for r in rows:
-        pid = str(r["parent_id"]) if r.get("parent_id") else None
-        if pid and pid in by_id:
-            by_id[pid]["children"].append(r)
-        else:
-            roots.append(r)
-
-    return roots
+class BulkAssignRequest(BaseModel):
+    label_id: str
+    thread_ids: List[str]
 
 
-# ---------------------------------------------------------------------------
-# Label CRUD
-# ---------------------------------------------------------------------------
+# ============================================================================
+# Endpoints — Label Definitions
+# ============================================================================
 
-@router.post("/thread-labels", summary="Create a label")
+@router.post(
+    "/labels",
+    summary="Create thread label",
+    operation_id="create_thread_label",
+)
 async def create_label(
     body: CreateLabelRequest,
     user_id: str = Depends(verify_and_get_user_id_from_jwt),
 ):
-    if not body.name or not body.name.strip():
-        raise HTTPException(status_code=400, detail="Label name is required")
-
-    # Validate parent_id belongs to user if provided
-    if body.parent_id:
-        parent = await execute_one(
-            "SELECT id FROM thread_labels WHERE id = :id AND user_id = :user_id",
-            {"id": body.parent_id, "user_id": user_id},
-        )
-        if not parent:
-            raise HTTPException(status_code=404, detail="Parent label not found")
-
+    """Create a new thread label definition."""
     try:
         row = await execute_one(
             """
-            INSERT INTO thread_labels (user_id, name, color, parent_id)
-            VALUES (:user_id, :name, :color, :parent_id)
+            INSERT INTO thread_label_definitions
+              (user_id, label_name, color, description, icon)
+            VALUES
+              (:user_id, :label_name, :color, :description, :icon)
             RETURNING *
             """,
             {
                 "user_id": user_id,
-                "name": body.name.strip(),
+                "label_name": body.label_name,
                 "color": body.color or "#6366f1",
-                "parent_id": body.parent_id,
+                "description": body.description,
+                "icon": body.icon or "tag",
             },
-            commit=True,
         )
-        return serialize_row(dict(row))
+        return serialize_row(row)
     except Exception as e:
-        if "unique" in str(e).lower() or "duplicate" in str(e).lower():
-            raise HTTPException(status_code=409, detail="A label with this name already exists")
-        raise
+        if "unique" in str(e).lower():
+            raise HTTPException(status_code=409, detail="A label with that name already exists.")
+        logger.error(f"create_label error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to create label.")
 
 
-@router.get("/thread-labels", summary="List labels as tree")
+@router.get(
+    "/labels",
+    summary="List thread labels",
+    operation_id="list_thread_labels",
+)
 async def list_labels(
     user_id: str = Depends(verify_and_get_user_id_from_jwt),
 ):
-    rows = await execute(
-        """
-        SELECT l.*, COALESCE(c.thread_count, 0) AS thread_count
-        FROM thread_labels l
-        LEFT JOIN (
-            SELECT label_id, COUNT(*) AS thread_count
-            FROM thread_label_assignments
-            WHERE user_id = :user_id
-            GROUP BY label_id
-        ) c ON c.label_id = l.id
-        WHERE l.user_id = :user_id
-        ORDER BY l.sort_order, l.name
-        """,
-        {"user_id": user_id},
-    )
-    flat = serialize_rows([dict(r) for r in rows])
-    return _build_label_tree(flat)
+    """List all label definitions with usage count."""
+    try:
+        rows = await execute(
+            """
+            SELECT ld.*,
+                   COUNT(la.id) AS thread_count
+            FROM thread_label_definitions ld
+            LEFT JOIN thread_label_assignments la ON la.label_id = ld.id
+            WHERE ld.user_id = :user_id
+            GROUP BY ld.id
+            ORDER BY ld.created_at DESC
+            """,
+            {"user_id": user_id},
+        )
+        return serialize_rows(rows)
+    except Exception as e:
+        logger.error(f"list_labels error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to list labels.")
 
 
-@router.patch("/thread-labels/{label_id}", summary="Update a label")
+@router.patch(
+    "/labels/{label_id}",
+    summary="Update thread label",
+    operation_id="update_thread_label",
+)
 async def update_label(
     label_id: str,
     body: UpdateLabelRequest,
     user_id: str = Depends(verify_and_get_user_id_from_jwt),
 ):
-    existing = await execute_one(
-        "SELECT id FROM thread_labels WHERE id = :id AND user_id = :user_id",
-        {"id": label_id, "user_id": user_id},
-    )
-    if not existing:
-        raise HTTPException(status_code=404, detail="Label not found")
-
-    updates = {}
-    params: dict = {"id": label_id, "user_id": user_id}
-
-    if body.name is not None:
-        updates["name"] = body.name.strip()
-        params["name"] = body.name.strip()
-    if body.color is not None:
-        updates["color"] = body.color
-        params["color"] = body.color
-    if body.parent_id is not None:
-        # Prevent self-reference
-        if body.parent_id == label_id:
-            raise HTTPException(status_code=400, detail="Label cannot be its own parent")
-        # Validate parent belongs to user (empty string means unset parent)
-        if body.parent_id:
-            parent = await execute_one(
-                "SELECT id FROM thread_labels WHERE id = :pid AND user_id = :user_id",
-                {"pid": body.parent_id, "user_id": user_id},
-            )
-            if not parent:
-                raise HTTPException(status_code=404, detail="Parent label not found")
-        updates["parent_id"] = body.parent_id if body.parent_id else None
-        params["parent_id"] = body.parent_id if body.parent_id else None
-    if body.sort_order is not None:
-        updates["sort_order"] = body.sort_order
-        params["sort_order"] = body.sort_order
-
-    if not updates:
-        raise HTTPException(status_code=400, detail="No fields to update")
-
-    set_clause = ", ".join(f"{k} = :{k}" for k in updates)
-
+    """Update a label definition."""
     try:
-        row = await execute_one(
-            f"UPDATE thread_labels SET {set_clause} WHERE id = :id AND user_id = :user_id RETURNING *",
-            params,
-            commit=True,
+        existing = await execute_one(
+            "SELECT * FROM thread_label_definitions WHERE id = :label_id AND user_id = :user_id",
+            {"label_id": label_id, "user_id": user_id},
         )
-        return serialize_row(dict(row))
-    except Exception as e:
-        if "unique" in str(e).lower() or "duplicate" in str(e).lower():
-            raise HTTPException(status_code=409, detail="A label with this name already exists")
+        if not existing:
+            raise HTTPException(status_code=404, detail="Label not found.")
+
+        updates = body.model_dump(exclude_none=True)
+        if not updates:
+            return serialize_row(existing)
+
+        set_clauses: List[str] = []
+        params: Dict[str, Any] = {"label_id": label_id, "user_id": user_id}
+        for key, val in updates.items():
+            set_clauses.append(f"{key} = :{key}")
+            params[key] = val
+
+        sql = (
+            f"UPDATE thread_label_definitions SET {', '.join(set_clauses)} "
+            f"WHERE id = :label_id AND user_id = :user_id RETURNING *"
+        )
+        row = await execute_one(sql, params)
+        return serialize_row(row)
+    except HTTPException:
         raise
+    except Exception as e:
+        logger.error(f"update_label error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to update label.")
 
 
-@router.delete("/thread-labels/{label_id}", summary="Delete a label (children become root)")
+@router.delete(
+    "/labels/{label_id}",
+    summary="Delete thread label",
+    operation_id="delete_thread_label",
+)
 async def delete_label(
     label_id: str,
     user_id: str = Depends(verify_and_get_user_id_from_jwt),
 ):
-    existing = await execute_one(
-        "SELECT id FROM thread_labels WHERE id = :id AND user_id = :user_id",
-        {"id": label_id, "user_id": user_id},
-    )
-    if not existing:
-        raise HTTPException(status_code=404, detail="Label not found")
-
-    # Children are handled by ON DELETE SET NULL on parent_id FK
-    await execute_mutate(
-        "DELETE FROM thread_labels WHERE id = :id AND user_id = :user_id",
-        {"id": label_id, "user_id": user_id},
-    )
-    return {"status": "ok"}
+    """Delete a label definition (cascades to assignments)."""
+    try:
+        await execute_mutate(
+            "DELETE FROM thread_label_definitions WHERE id = :label_id AND user_id = :user_id",
+            {"label_id": label_id, "user_id": user_id},
+        )
+        return {"deleted": True}
+    except Exception as e:
+        logger.error(f"delete_label error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to delete label.")
 
 
-# ---------------------------------------------------------------------------
-# Label assignment endpoints
-# ---------------------------------------------------------------------------
+# ============================================================================
+# Endpoints — Assignments
+# ============================================================================
 
-@router.post("/threads/{thread_id}/labels", summary="Assign label to thread")
+@router.post(
+    "/threads/{thread_id}/labels",
+    summary="Assign label to thread",
+    operation_id="assign_label_to_thread",
+)
 async def assign_label(
     thread_id: str,
     body: AssignLabelRequest,
     user_id: str = Depends(verify_and_get_user_id_from_jwt),
 ):
-    # Verify the label belongs to the user
-    label = await execute_one(
-        "SELECT id FROM thread_labels WHERE id = :label_id AND user_id = :user_id",
-        {"label_id": body.label_id, "user_id": user_id},
-    )
-    if not label:
-        raise HTTPException(status_code=404, detail="Label not found")
-
+    """Assign a label to a thread (idempotent)."""
     try:
+        # Verify label belongs to user
+        label = await execute_one(
+            "SELECT id FROM thread_label_definitions WHERE id = :label_id AND user_id = :user_id",
+            {"label_id": body.label_id, "user_id": user_id},
+        )
+        if not label:
+            raise HTTPException(status_code=404, detail="Label not found.")
+
         row = await execute_one(
             """
-            INSERT INTO thread_label_assignments (thread_id, label_id, user_id)
-            VALUES (:thread_id, :label_id, :user_id)
-            ON CONFLICT (thread_id, label_id) DO NOTHING
+            INSERT INTO thread_label_assignments (user_id, thread_id, label_id)
+            VALUES (:user_id, :thread_id, :label_id)
+            ON CONFLICT DO NOTHING
             RETURNING *
             """,
-            {
-                "thread_id": thread_id,
-                "label_id": body.label_id,
-                "user_id": user_id,
-            },
-            commit=True,
+            {"user_id": user_id, "thread_id": thread_id, "label_id": body.label_id},
         )
-        return {"status": "ok", "assignment": serialize_row(dict(row)) if row else None}
-    except Exception:
-        return {"status": "ok", "assignment": None}
+        if row:
+            return serialize_row(row)
+        # Already assigned — return existing
+        existing = await execute_one(
+            """
+            SELECT * FROM thread_label_assignments
+            WHERE user_id = :user_id AND thread_id = :thread_id AND label_id = :label_id
+            """,
+            {"user_id": user_id, "thread_id": thread_id, "label_id": body.label_id},
+        )
+        return serialize_row(existing)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"assign_label error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to assign label.")
 
 
-@router.delete("/threads/{thread_id}/labels/{label_id}", summary="Remove label from thread")
+@router.delete(
+    "/threads/{thread_id}/labels/{label_id}",
+    summary="Remove label from thread",
+    operation_id="remove_label_from_thread",
+)
 async def remove_label(
     thread_id: str,
     label_id: str,
     user_id: str = Depends(verify_and_get_user_id_from_jwt),
 ):
-    await execute_mutate(
-        """
-        DELETE FROM thread_label_assignments
-        WHERE thread_id = :thread_id AND label_id = :label_id AND user_id = :user_id
-        """,
-        {"thread_id": thread_id, "label_id": label_id, "user_id": user_id},
-    )
-    return {"status": "ok"}
+    """Remove a label assignment from a thread."""
+    try:
+        await execute_mutate(
+            """
+            DELETE FROM thread_label_assignments
+            WHERE user_id = :user_id AND thread_id = :thread_id AND label_id = :label_id
+            """,
+            {"user_id": user_id, "thread_id": thread_id, "label_id": label_id},
+        )
+        return {"deleted": True}
+    except Exception as e:
+        logger.error(f"remove_label error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to remove label.")
 
 
-@router.get("/threads/{thread_id}/labels", summary="List labels on a thread")
-async def list_thread_labels(
+@router.get(
+    "/threads/{thread_id}/labels",
+    summary="Get labels for thread",
+    operation_id="get_thread_label_assignments",
+)
+async def get_thread_labels(
     thread_id: str,
     user_id: str = Depends(verify_and_get_user_id_from_jwt),
 ):
-    rows = await execute(
-        """
-        SELECT l.*
-        FROM thread_labels l
-        JOIN thread_label_assignments a ON a.label_id = l.id
-        WHERE a.thread_id = :thread_id AND a.user_id = :user_id
-        ORDER BY l.name
-        """,
-        {"thread_id": thread_id, "user_id": user_id},
-    )
-    return serialize_rows([dict(r) for r in rows])
+    """Get all labels assigned to a thread, with definition details."""
+    try:
+        rows = await execute(
+            """
+            SELECT la.*,
+                   ld.label_name, ld.color, ld.description, ld.icon
+            FROM thread_label_assignments la
+            JOIN thread_label_definitions ld ON ld.id = la.label_id
+            WHERE la.thread_id = :thread_id AND la.user_id = :user_id
+            ORDER BY la.assigned_at DESC
+            """,
+            {"thread_id": thread_id, "user_id": user_id},
+        )
+        return serialize_rows(rows)
+    except Exception as e:
+        logger.error(f"get_thread_labels error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to get thread labels.")
 
 
-@router.get("/thread-labels/{label_id}/threads", summary="List threads with a specific label")
-async def list_label_threads(
+@router.get(
+    "/labels/{label_id}/threads",
+    summary="Get threads for label",
+    operation_id="get_label_threads",
+)
+async def get_label_threads(
     label_id: str,
     user_id: str = Depends(verify_and_get_user_id_from_jwt),
 ):
-    # Verify the label belongs to the user
-    label = await execute_one(
-        "SELECT id FROM thread_labels WHERE id = :label_id AND user_id = :user_id",
-        {"label_id": label_id, "user_id": user_id},
-    )
-    if not label:
-        raise HTTPException(status_code=404, detail="Label not found")
+    """Get all thread_ids assigned to a label."""
+    try:
+        owner = await execute_one(
+            "SELECT id FROM thread_label_definitions WHERE id = :label_id AND user_id = :user_id",
+            {"label_id": label_id, "user_id": user_id},
+        )
+        if not owner:
+            raise HTTPException(status_code=404, detail="Label not found.")
 
-    rows = await execute(
-        """
-        SELECT a.thread_id, a.assigned_at
-        FROM thread_label_assignments a
-        WHERE a.label_id = :label_id AND a.user_id = :user_id
-        ORDER BY a.assigned_at DESC
-        """,
-        {"label_id": label_id, "user_id": user_id},
-    )
-    return serialize_rows([dict(r) for r in rows])
+        rows = await execute(
+            """
+            SELECT thread_id, assigned_at
+            FROM thread_label_assignments
+            WHERE label_id = :label_id AND user_id = :user_id
+            ORDER BY assigned_at DESC
+            """,
+            {"label_id": label_id, "user_id": user_id},
+        )
+        return serialize_rows(rows)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"get_label_threads error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to get label threads.")
+
+
+@router.post(
+    "/labels/bulk-assign",
+    summary="Bulk assign label to threads",
+    operation_id="bulk_assign_label",
+)
+async def bulk_assign_label(
+    body: BulkAssignRequest,
+    user_id: str = Depends(verify_and_get_user_id_from_jwt),
+):
+    """Assign a label to multiple threads, ignoring duplicates."""
+    try:
+        label = await execute_one(
+            "SELECT id FROM thread_label_definitions WHERE id = :label_id AND user_id = :user_id",
+            {"label_id": body.label_id, "user_id": user_id},
+        )
+        if not label:
+            raise HTTPException(status_code=404, detail="Label not found.")
+
+        assigned_count = 0
+        for thread_id in body.thread_ids:
+            row = await execute_one(
+                """
+                INSERT INTO thread_label_assignments (user_id, thread_id, label_id)
+                VALUES (:user_id, :thread_id, :label_id)
+                ON CONFLICT DO NOTHING
+                RETURNING id
+                """,
+                {"user_id": user_id, "thread_id": thread_id, "label_id": body.label_id},
+            )
+            if row:
+                assigned_count += 1
+
+        return {"assigned_count": assigned_count}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"bulk_assign_label error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to bulk assign label.")

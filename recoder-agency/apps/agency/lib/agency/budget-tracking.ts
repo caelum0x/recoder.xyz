@@ -17,16 +17,33 @@ export async function getProjectBudgetSummary(
 	teamDbId: number,
 	projectDbId: number,
 ): Promise<ProjectBudgetSummary | null> {
-	const project = await db.query.projects.findFirst({
-		where: and(eq(projects.dbId, projectDbId), eq(projects.teamDbId, teamDbId)),
-	});
+	let project: Awaited<ReturnType<typeof db.query.projects.findFirst>>;
+	try {
+		project = await db.query.projects.findFirst({
+			where: and(
+				eq(projects.dbId, projectDbId),
+				eq(projects.teamDbId, teamDbId),
+			),
+		});
+	} catch {
+		return null;
+	}
 
 	if (!project) return null;
 
-	const entries = await db
-		.select()
-		.from(costLedgerEntries)
-		.where(eq(costLedgerEntries.projectDbId, projectDbId));
+	let entries: Array<{ amountCents: number; category: string }>;
+	try {
+		entries = await db
+			.select({
+				amountCents: costLedgerEntries.amountCents,
+				category: costLedgerEntries.category,
+			})
+			.from(costLedgerEntries)
+			.where(eq(costLedgerEntries.projectDbId, projectDbId));
+	} catch {
+		// cost_ledger_entries table may not exist yet
+		entries = [];
+	}
 
 	const totalSpentCents = entries.reduce((sum, e) => sum + e.amountCents, 0);
 
@@ -76,27 +93,53 @@ export interface TeamBudgetOverview {
 export async function getTeamBudgetOverview(
 	teamDbId: number,
 ): Promise<TeamBudgetOverview> {
-	const teamProjects = await db
-		.select({
-			dbId: projects.dbId,
-			id: projects.id,
-			name: projects.name,
-			budgetCents: projects.budgetCents,
-			status: projects.status,
-			clientName: clients.name,
-		})
-		.from(projects)
-		.leftJoin(clients, eq(projects.clientDbId, clients.dbId))
-		.where(eq(projects.teamDbId, teamDbId));
+	const empty: TeamBudgetOverview = {
+		totalBudgetCents: 0,
+		totalSpentCents: 0,
+		projectCount: 0,
+		overBudgetCount: 0,
+		projects: [],
+	};
 
-	const spentByProject = await db
-		.select({
-			projectDbId: costLedgerEntries.projectDbId,
-			total: sql<number>`coalesce(sum(${costLedgerEntries.amountCents}), 0)`,
-		})
-		.from(costLedgerEntries)
-		.where(eq(costLedgerEntries.teamDbId, teamDbId))
-		.groupBy(costLedgerEntries.projectDbId);
+	let teamProjects: Array<{
+		dbId: number;
+		id: string;
+		name: string;
+		budgetCents: number | null;
+		status: string;
+		clientName: string | null;
+	}>;
+	try {
+		teamProjects = await db
+			.select({
+				dbId: projects.dbId,
+				id: projects.id,
+				name: projects.name,
+				budgetCents: projects.budgetCents,
+				status: projects.status,
+				clientName: clients.name,
+			})
+			.from(projects)
+			.leftJoin(clients, eq(projects.clientDbId, clients.dbId))
+			.where(eq(projects.teamDbId, teamDbId));
+	} catch {
+		return empty;
+	}
+
+	let spentByProject: Array<{ projectDbId: number; total: number }>;
+	try {
+		spentByProject = await db
+			.select({
+				projectDbId: costLedgerEntries.projectDbId,
+				total: sql<number>`coalesce(sum(${costLedgerEntries.amountCents}), 0)`,
+			})
+			.from(costLedgerEntries)
+			.where(eq(costLedgerEntries.teamDbId, teamDbId))
+			.groupBy(costLedgerEntries.projectDbId);
+	} catch {
+		// cost_ledger_entries table may not exist yet
+		spentByProject = [];
+	}
 
 	const spentMap = new Map(
 		spentByProject.map((s) => [s.projectDbId, Number(s.total)]),

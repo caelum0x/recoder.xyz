@@ -2,7 +2,6 @@
 
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { Check, Search, AlertTriangle, Crown, Cpu, Plus, Edit, Trash, KeyRound, Lock } from 'lucide-react';
-import { RecoderLogo } from '@/components/sidebar/recoder-logo';
 import { ModelProviderIcon } from '@/lib/model-provider-icons';
 import { Button } from '@/components/ui/button';
 import {
@@ -27,28 +26,8 @@ import Link from 'next/link';
 
 // Helper to render model labels with special styling for Recoder modes
 const ModelLabel = ({ label, className }: { label: string; className?: string }) => {
-    if (label === 'Recoder Advanced Mode') {
-        return (
-            <span className={cn("flex items-center gap-2", className)}>
-                <span className="font-medium">Recoder</span>
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-primary/10 dark:bg-primary/15 rounded-full">
-                    <RecoderLogo size={12} variant="symbol" />
-                    <span className="text-[11px] font-semibold tracking-wide uppercase text-primary">
-                        Advanced
-                    </span>
-                </span>
-            </span>
-        );
-    }
-    if (label === 'Recoder Basic') {
-        return (
-            <span className={cn("flex items-center gap-2", className)}>
-                <span className="font-medium">Recoder</span>
-                <span className="text-xs font-medium text-muted-foreground px-1.5 py-0.5 bg-muted/50 rounded-md">
-                    Basic
-                </span>
-            </span>
-        );
+    if (label === 'Recoder' || label === 'Recoder Advanced Mode' || label === 'Recoder Advanced mode' || label === 'Recoder Basic') {
+        return <span className={cn("font-medium", className)}>Recoder</span>;
     }
     if (label === 'Recoder Test') {
         return (
@@ -223,7 +202,7 @@ export function AgentModelSelector({
       const isPowerModel = modelId === 'recoder/power';
       openPricingModal({
         isAlert: true,
-        alertTitle: isPowerModel ? 'Upgrade to access Recoder Advanced mode' : 'Upgrade to access this model',
+        alertTitle: isPowerModel ? 'Upgrade to access Recoder' : 'Upgrade to access this model',
       });
     }
   };
@@ -398,7 +377,7 @@ export function AgentModelSelector({
           </TooltipTrigger>
           {!accessible && !isLocalMode() ? (
             <TooltipContent side="left" className="text-xs max-w-xs">
-              <p>{isPowerModel ? 'Upgrade to access Recoder Advanced mode' : 'Upgrade to access this model'}</p>
+              <p>{isPowerModel ? 'Upgrade to access Recoder' : 'Upgrade to access this model'}</p>
             </TooltipContent>
           ) : isLowQuality ? (
             <TooltipContent side="left" className="text-xs max-w-xs">

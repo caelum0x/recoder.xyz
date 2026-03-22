@@ -16,6 +16,7 @@ import { Separator } from '@/components/ui/separator';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { toast } from '@/lib/toast';
 import { cn } from '@/lib/utils';
+import { backendApi } from '@/lib/api-client';
 
 const STORAGE_KEY = 'recoder-appearance-settings';
 
@@ -59,6 +60,43 @@ function loadSettings(): AppearanceSettings {
   return defaultSettings;
 }
 
+async function loadSettingsFromApi(): Promise<AppearanceSettings> {
+  try {
+    const res = await backendApi.get<Array<{ preference_key: string; preference_value: any }>>(
+      '/preferences?category=appearance',
+      { showErrors: false },
+    );
+    if (res.success && Array.isArray(res.data) && res.data.length > 0) {
+      const mapped: Partial<AppearanceSettings> = {};
+      for (const pref of res.data) {
+        switch (pref.preference_key) {
+          case 'theme': mapped.theme = pref.preference_value as ThemeOption; break;
+          case 'fontSize': mapped.fontSize = pref.preference_value as FontSize; break;
+          case 'compactMode': mapped.compactMode = Boolean(pref.preference_value); break;
+          case 'reducedAnimations': mapped.reducedAnimations = Boolean(pref.preference_value); break;
+        }
+      }
+      const settings = { ...defaultSettings, ...mapped };
+      // Cache to localStorage for instant reads next time
+      try { localStorage.setItem(STORAGE_KEY, JSON.stringify(settings)); } catch {}
+      return settings;
+    }
+  } catch {
+    // API unavailable — fall back to localStorage
+  }
+  return loadSettings();
+}
+
+function persistToApi(settings: AppearanceSettings): void {
+  const entries = [
+    { preference_key: 'theme', preference_value: settings.theme, category: 'appearance' },
+    { preference_key: 'fontSize', preference_value: settings.fontSize, category: 'appearance' },
+    { preference_key: 'compactMode', preference_value: settings.compactMode, category: 'appearance' },
+    { preference_key: 'reducedAnimations', preference_value: settings.reducedAnimations, category: 'appearance' },
+  ];
+  backendApi.put('/preferences/batch', { preferences: entries }, { showErrors: false }).catch(() => {});
+}
+
 function applyTheme(theme: ThemeOption) {
   const root = document.documentElement;
   root.classList.remove('light', 'dark');
@@ -74,7 +112,6 @@ function applyTheme(theme: ThemeOption) {
 function applyFontSize(fontSize: FontSize) {
   const root = document.documentElement;
   root.classList.remove('text-sm', 'text-base', 'text-lg');
-  const sizeMap: Record<FontSize, string> = { small: 'text-sm', medium: 'text-base', large: 'text-lg' };
   root.style.fontSize = fontSize === 'small' ? '14px' : fontSize === 'large' ? '18px' : '16px';
 }
 
@@ -92,11 +129,19 @@ export default function AppearanceSettingsPage() {
   const [settings, setSettings] = useState<AppearanceSettings>(defaultSettings);
 
   useEffect(() => {
-    const loaded = loadSettings();
-    setSettings(loaded);
-    applyTheme(loaded.theme);
-    applyFontSize(loaded.fontSize);
-    applyReducedAnimations(loaded.reducedAnimations);
+    // Show cached settings immediately
+    const cached = loadSettings();
+    setSettings(cached);
+    applyTheme(cached.theme);
+    applyFontSize(cached.fontSize);
+    applyReducedAnimations(cached.reducedAnimations);
+    // Then hydrate from API (updates if different)
+    loadSettingsFromApi().then((loaded) => {
+      setSettings(loaded);
+      applyTheme(loaded.theme);
+      applyFontSize(loaded.fontSize);
+      applyReducedAnimations(loaded.reducedAnimations);
+    });
   }, []);
 
   const persist = useCallback((next: AppearanceSettings) => {
@@ -105,6 +150,7 @@ export default function AppearanceSettingsPage() {
     } catch {
       // Ignore storage errors
     }
+    persistToApi(next);
   }, []);
 
   const handleThemeChange = (theme: ThemeOption) => {

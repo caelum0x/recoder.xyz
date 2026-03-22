@@ -105,21 +105,21 @@ export const getAggregatedLogs = async (
   if (filters?.offset != null) params.set('offset', String(filters.offset));
   const qs = params.toString();
   const response = await backendApi.get<AggregatedLog[]>(`/logs${qs ? `?${qs}` : ''}`, {
-    showErrors: false,
+    showErrors: true,
   });
   if (response.error) throw new Error(response.error.message);
   return response.data!;
 };
 
 export const getLogStats = async (): Promise<LogStats> => {
-  const response = await backendApi.get<LogStats>('/logs/stats', { showErrors: false });
+  const response = await backendApi.get<LogStats>('/logs/stats', { showErrors: true });
   if (response.error) throw new Error(response.error.message);
   return response.data!;
 };
 
 export const getTraceLogs = async (traceId: string): Promise<AggregatedLog[]> => {
   const response = await backendApi.get<AggregatedLog[]>(`/logs/trace/${traceId}`, {
-    showErrors: false,
+    showErrors: true,
   });
   if (response.error) throw new Error(response.error.message);
   return response.data!;
@@ -141,7 +141,7 @@ export const createSavedFilter = async (
 
 export const getSavedFilters = async (): Promise<LogSavedFilter[]> => {
   const response = await backendApi.get<LogSavedFilter[]>('/logs/saved-filters', {
-    showErrors: false,
+    showErrors: true,
   });
   if (response.error) throw new Error(response.error.message);
   return response.data!;

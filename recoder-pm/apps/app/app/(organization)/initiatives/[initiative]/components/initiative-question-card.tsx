@@ -1,6 +1,7 @@
 "use client";
 
 import { useChat } from "@ai-sdk/react";
+import { DefaultChatTransport } from "ai";
 import type { Initiative, Organization } from "@repo/backend/prisma/client";
 import { Input } from "@repo/design-system/components/precomposed/input";
 import { Prose } from "@repo/design-system/components/prose";
@@ -8,9 +9,8 @@ import { StackCard } from "@repo/design-system/components/stack-card";
 import { Button } from "@repo/design-system/components/ui/button";
 import { handleError } from "@repo/design-system/lib/handle-error";
 import { cn } from "@repo/design-system/lib/utils";
-import { DefaultChatTransport } from "ai";
 import { SparklesIcon, XIcon } from "lucide-react";
-import { type KeyboardEventHandler, useState } from "react";
+import { type KeyboardEventHandler, useMemo, useState } from "react";
 import { MemoizedReactMarkdown } from "@/components/markdown";
 
 type InitiativeQuestionCardProps = {
@@ -23,22 +23,29 @@ export const InitiativeQuestionCard = ({
   organizationId,
 }: InitiativeQuestionCardProps) => {
   const [isOpen, setIsOpen] = useState(false);
-  const [input, setInput] = useState("");
+  const [localInput, setLocalInput] = useState("");
+
+  const transport = useMemo(
+    () =>
+      new DefaultChatTransport({
+        api: "/api/initiatives/chat",
+        body: { initiativeId, organizationId },
+      }),
+    [initiativeId, organizationId]
+  );
+
   const { messages, sendMessage } = useChat({
-    transport: new DefaultChatTransport({
-      api: "/api/initiatives/chat",
-      body: {
-        initiativeId,
-        organizationId,
-      },
-    }),
+    transport,
     onError: handleError,
   });
 
   const handleKeyDown: KeyboardEventHandler<HTMLInputElement> = (event) => {
     if (event.key === "Enter" && !event.shiftKey) {
       event.preventDefault();
-      sendMessage({ text: input });
+      const text = localInput.trim();
+      if (!text) return;
+      setLocalInput("");
+      sendMessage({ text });
       setIsOpen(true);
     }
   };
@@ -53,10 +60,10 @@ export const InitiativeQuestionCard = ({
       >
         <Input
           className="h-auto rounded-none border-none p-3 text-primary shadow-none placeholder:text-primary/50"
-          onChangeText={setInput}
+          onChangeText={setLocalInput}
           onKeyDown={handleKeyDown}
           placeholder="What would you like to know?"
-          value={input}
+          value={localInput}
         />
       </StackCard>
       <div className="relative">

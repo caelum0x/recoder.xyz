@@ -80,7 +80,7 @@ export const getMergeHistory = async (
 ): Promise<ThreadMerge[]> => {
   const response = await backendApi.get<ThreadMerge[]>(
     `/threads/merges?limit=${limit}`,
-    { showErrors: false, cache: 'no-store' },
+    { showErrors: true, cache: 'no-store' },
   );
   if (response.error) {
     throw new Error(`Failed to fetch merge history: ${response.error.message}`);
@@ -93,7 +93,7 @@ export const getMergeDetail = async (
 ): Promise<ThreadMerge> => {
   const response = await backendApi.get<ThreadMerge>(
     `/threads/merges/${mergeId}`,
-    { showErrors: false, cache: 'no-store' },
+    { showErrors: true, cache: 'no-store' },
   );
   if (response.error) {
     throw new Error(`Failed to fetch merge detail: ${response.error.message}`);

@@ -1,8 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { backendApi } from '@/lib/api-client';
 
-const API_URL = process.env.NEXT_PUBLIC_BACKEND_URL;
-
 export interface TriggerWithAgent {
   trigger_id: string;
   agent_id: string;
@@ -23,12 +21,17 @@ export interface TriggerWithAgent {
 }
 
 const fetchAllTriggers = async (): Promise<TriggerWithAgent[]> => {
-  const response = await backendApi.get<TriggerWithAgent[]>(`/triggers/all`);
-  if (!response.success) {
-    const error = response.error?.message || 'Failed to fetch triggers';
-    throw new Error(error || 'Failed to fetch triggers');
+  try {
+    const response = await backendApi.get<TriggerWithAgent[]>(`/triggers/all`);
+    if (!response.success) {
+      console.warn('Failed to fetch triggers:', response.error?.message);
+      return [];
+    }
+    return response.data ?? [];
+  } catch (error) {
+    console.warn('Failed to fetch triggers:', error);
+    return [];
   }
-  return response.data;
 };
 
 export const useAllTriggers = () => {

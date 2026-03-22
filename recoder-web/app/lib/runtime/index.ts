@@ -22,7 +22,13 @@ export const runtimeContext: RuntimeContext = {
   mode: (import.meta.env.VITE_RUNTIME_MODE as RuntimeMode) || 'webcontainer',
   ready: false,
   projectId: null,
-  dockerUrl: import.meta.env.VITE_DOCKER_BACKEND_URL || null,
+  dockerUrl: (() => {
+    let url = import.meta.env.VITE_DOCKER_BACKEND_URL || null;
+    if (typeof window !== 'undefined' && window.location.hostname !== 'localhost' && url?.includes('localhost')) {
+      url = 'https://docker.recoder.xyz';
+    }
+    return url;
+  })(),
 };
 
 // WebContainer instance (for webcontainer mode)
@@ -75,9 +81,13 @@ export async function getWebContainer(): Promise<WebContainer> {
  */
 export async function writeFile(path: string, content: string): Promise<void> {
   if (runtimeContext.mode === 'docker' && runtimeContext.dockerUrl) {
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    const token = getSessionToken();
+    if (token) headers['Authorization'] = `Bearer ${token}`;
     const res = await fetch(`${runtimeContext.dockerUrl}/api/file/${runtimeContext.projectId}`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers,
+      credentials: 'include',
       body: JSON.stringify({ path: `/workspace${path}`, content }),
     });
     if (!res.ok) {
@@ -99,7 +109,13 @@ export async function writeFile(path: string, content: string): Promise<void> {
  */
 export async function readFile(path: string): Promise<string> {
   if (runtimeContext.mode === 'docker' && runtimeContext.dockerUrl) {
-    const res = await fetch(`${runtimeContext.dockerUrl}/api/file/${runtimeContext.projectId}?path=/workspace${path}`);
+    const readHeaders: Record<string, string> = {};
+    const readToken = getSessionToken();
+    if (readToken) readHeaders['Authorization'] = `Bearer ${readToken}`;
+    const res = await fetch(`${runtimeContext.dockerUrl}/api/file/${runtimeContext.projectId}?path=/workspace${path}`, {
+      credentials: 'include',
+      headers: readHeaders,
+    });
     const data = await res.json() as { content?: string; error?: string };
     if (!res.ok) throw new Error(data.error || 'Read failed');
     return data.content || '';
@@ -114,7 +130,13 @@ export async function readFile(path: string): Promise<string> {
  */
 export async function readdir(path: string): Promise<string[]> {
   if (runtimeContext.mode === 'docker' && runtimeContext.dockerUrl) {
-    const res = await fetch(`${runtimeContext.dockerUrl}/api/files/${runtimeContext.projectId}?path=/workspace${path}`);
+    const dirHeaders: Record<string, string> = {};
+    const dirToken = getSessionToken();
+    if (dirToken) dirHeaders['Authorization'] = `Bearer ${dirToken}`;
+    const res = await fetch(`${runtimeContext.dockerUrl}/api/files/${runtimeContext.projectId}?path=/workspace${path}`, {
+      credentials: 'include',
+      headers: dirHeaders,
+    });
     const data = await res.json() as { files?: string[]; error?: string };
     if (!res.ok) throw new Error(data.error || 'List failed');
     return (data.files || []).map((f: string) => f.replace('/workspace', ''));
@@ -158,9 +180,13 @@ export async function rm(path: string, options?: { recursive?: boolean }): Promi
  */
 export async function exec(command: string, cwd: string = '/'): Promise<string> {
   if (runtimeContext.mode === 'docker' && runtimeContext.dockerUrl) {
+    const execHeaders: Record<string, string> = { 'Content-Type': 'application/json' };
+    const execToken = getSessionToken();
+    if (execToken) execHeaders['Authorization'] = `Bearer ${execToken}`;
     const res = await fetch(`${runtimeContext.dockerUrl}/api/exec/${runtimeContext.projectId}`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: execHeaders,
+      credentials: 'include',
       body: JSON.stringify({ command, cwd: `/workspace${cwd}` }),
     });
     const data = (await res.json()) as { output?: string; error?: string };
@@ -256,7 +282,9 @@ export function connectTerminal(onData: (data: string) => void): {
  */
 export function getPreviewUrl(port: number = 3000): string {
   if (runtimeContext.mode === 'docker' && runtimeContext.dockerUrl) {
-    return `${runtimeContext.dockerUrl}/preview/${runtimeContext.projectId}`;
+    // Use same-origin proxy URL to avoid cross-origin iframe issues
+    const origin = typeof window !== 'undefined' ? window.location.origin : runtimeContext.dockerUrl;
+    return `${origin}/preview/${runtimeContext.projectId}`;
   } else {
     // WebContainer uses its own preview mechanism
     return '';
@@ -271,8 +299,13 @@ export async function destroyRuntime(): Promise<void> {
   syncWs?.close();
 
   if (runtimeContext.mode === 'docker' && runtimeContext.dockerUrl && runtimeContext.projectId) {
+    const delHeaders: Record<string, string> = {};
+    const delToken = getSessionToken();
+    if (delToken) delHeaders['Authorization'] = `Bearer ${delToken}`;
     await fetch(`${runtimeContext.dockerUrl}/api/container/${runtimeContext.projectId}`, {
       method: 'DELETE',
+      headers: delHeaders,
+      credentials: 'include',
     });
   }
 

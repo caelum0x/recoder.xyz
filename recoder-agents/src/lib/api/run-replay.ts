@@ -60,7 +60,7 @@ export const getRunReplay = async (
 ): Promise<RunReplayResponse> => {
   const response = await backendApi.get<RunReplayResponse>(
     `/agents/${agentId}/runs/${runId}/replay`,
-    { showErrors: false, cache: 'no-store' }
+    { showErrors: true, cache: 'no-store' }
   );
 
   if (response.error) {
@@ -76,7 +76,7 @@ export const getRunReplaySummary = async (
 ): Promise<ReplaySummary> => {
   const response = await backendApi.get<ReplaySummary>(
     `/agents/${agentId}/runs/${runId}/replay/summary`,
-    { showErrors: false, cache: 'no-store' }
+    { showErrors: true, cache: 'no-store' }
   );
 
   if (response.error) {

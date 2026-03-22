@@ -93,7 +93,7 @@ export const DEFAULT_EDITOR_SETTINGS: EditorSettings = {
 
 export const DEFAULT_AI_SETTINGS: AISettings = {
   // Model Selection
-  defaultModel: 'x-ai/grok-code-fast-1',
+  defaultModel: 'openai/gpt-4o-mini',
   preferredTier: 'balanced',
 
   // Generation Parameters

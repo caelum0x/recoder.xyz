@@ -5,9 +5,9 @@ import { NuqsAdapter } from "nuqs/adapters/next/app";
 import { ThemeProvider } from "@/components/theme-provider";
 import { roobert, roobertMono } from "./fonts/roobert";
 
-const title = "Recoder Agency";
+const title = "Recoder Agency — Cursor for Agencies";
 const description =
-	"AI-powered agency platform. Automate service delivery with intelligent workflows.";
+	"AI-first agency platform. Intelligent workflows, automated deliverables, smart client management. The way agencies should deliver.";
 const canonicalAgencyUrl = "https://agency.recoder.xyz";
 const configuredSiteUrl = process.env.NEXT_PUBLIC_SITE_URL;
 const url =

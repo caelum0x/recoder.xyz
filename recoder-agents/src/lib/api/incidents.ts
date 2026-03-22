@@ -73,7 +73,7 @@ export const getIncidents = async (filters?: IncidentFilters): Promise<Incident[
   const url = `/incidents${query ? `?${query}` : ''}`;
 
   const response = await backendApi.get<Incident[]>(url, {
-    showErrors: false,
+    showErrors: true,
     cache: 'no-store',
   });
 
@@ -87,7 +87,7 @@ export const getIncidents = async (filters?: IncidentFilters): Promise<Incident[
 export const getIncident = async (incidentId: string): Promise<Incident> => {
   const response = await backendApi.get<Incident>(
     `/incidents/${incidentId}`,
-    { showErrors: false, cache: 'no-store' }
+    { showErrors: true, cache: 'no-store' }
   );
 
   if (response.error) {
@@ -131,7 +131,7 @@ export const updateIncident = async (
 export const getIncidentStats = async (): Promise<IncidentStats> => {
   const response = await backendApi.get<IncidentStats>(
     '/incidents/stats',
-    { showErrors: false, cache: 'no-store' }
+    { showErrors: true, cache: 'no-store' }
   );
 
   if (response.error) {

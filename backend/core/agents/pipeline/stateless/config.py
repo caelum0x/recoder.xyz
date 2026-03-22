@@ -17,7 +17,7 @@ class StatelessConfig:
     HEARTBEAT_TTL_SECONDS: ClassVar[int] = 45
     CLAIM_TTL_SECONDS: ClassVar[int] = 3600
     ORPHAN_THRESHOLD_SECONDS: ClassVar[int] = 90
-    STUCK_RUN_THRESHOLD_SECONDS: ClassVar[int] = 600
+    STUCK_RUN_THRESHOLD_SECONDS: ClassVar[int] = 300
 
     MAX_THREAD_LOCKS: ClassVar[int] = 100
     MAX_FLUSH_TASKS: ClassVar[int] = 10

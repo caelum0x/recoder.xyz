@@ -35,7 +35,7 @@ export const getApiUsageHeatmap = async (
     url += `&endpoint_group=${encodeURIComponent(endpointGroup)}`;
   }
   const response = await backendApi.get<HeatmapCell[]>(url, {
-    showErrors: false,
+    showErrors: true,
     cache: 'no-store',
   });
   if (response.error) throw new Error(response.error.message);
@@ -45,7 +45,7 @@ export const getApiUsageHeatmap = async (
 export const getApiEndpoints = async (): Promise<EndpointGroup[]> => {
   const response = await backendApi.get<EndpointGroup[]>(
     '/api-usage/endpoints',
-    { showErrors: false }
+    { showErrors: true }
   );
   if (response.error) throw new Error(response.error.message);
   return response.data!;
@@ -61,7 +61,7 @@ export const getApiPeakHours = async (
 ): Promise<PeakHour[]> => {
   const response = await backendApi.get<PeakHour[]>(
     `/api-usage/peak-hours?days=${days}`,
-    { showErrors: false, cache: 'no-store' }
+    { showErrors: true, cache: 'no-store' }
   );
   if (response.error) throw new Error(response.error.message);
   return response.data!;

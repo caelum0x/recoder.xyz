@@ -96,7 +96,7 @@ export interface TestRunDetailResponse extends TestRun {
 export const getTestCases = async (agentId: string): Promise<TestCaseListResponse> => {
   const response = await backendApi.get<TestCaseListResponse>(
     `/agents/${agentId}/test-cases`,
-    { showErrors: false, cache: 'no-store' }
+    { showErrors: true, cache: 'no-store' }
   );
   if (response.error) {
     throw new Error(`Failed to fetch test cases: ${response.error.message}`);
@@ -172,7 +172,7 @@ export const getTestRuns = async (
 
   const response = await backendApi.get<TestRunListResponse>(
     `/agents/${agentId}/test-runs${query}`,
-    { showErrors: false, cache: 'no-store' }
+    { showErrors: true, cache: 'no-store' }
   );
   if (response.error) {
     throw new Error(`Failed to fetch test runs: ${response.error.message}`);
@@ -186,7 +186,7 @@ export const getTestRunDetail = async (
 ): Promise<TestRunDetailResponse> => {
   const response = await backendApi.get<TestRunDetailResponse>(
     `/agents/${agentId}/test-runs/${runId}`,
-    { showErrors: false, cache: 'no-store' }
+    { showErrors: true, cache: 'no-store' }
   );
   if (response.error) {
     throw new Error(`Failed to fetch test run detail: ${response.error.message}`);

@@ -60,7 +60,10 @@ interface CacheResult {
 // Configuration
 // ============================================================================
 
-const DOCKER_BACKEND_URL = import.meta.env.VITE_DOCKER_BACKEND_URL || 'http://localhost:3100';
+let DOCKER_BACKEND_URL = import.meta.env.VITE_DOCKER_BACKEND_URL || 'https://docker.recoder.xyz';
+if (typeof window !== 'undefined' && window.location.hostname !== 'localhost' && DOCKER_BACKEND_URL.includes('localhost')) {
+  DOCKER_BACKEND_URL = 'https://docker.recoder.xyz';
+}
 const LOCAL_HASH_CACHE_KEY = 'recoder:context-hashes';
 
 // ============================================================================
@@ -426,7 +429,9 @@ class ContextCacheService {
    */
   async getStats(): Promise<CacheStats | null> {
     try {
-      const response = await fetch(`${DOCKER_BACKEND_URL}/api/context/cache/stats`);
+      const response = await fetch(`${DOCKER_BACKEND_URL}/api/context/cache/stats`, {
+        credentials: 'include',
+      });
 
       if (!response.ok) {
         return null;

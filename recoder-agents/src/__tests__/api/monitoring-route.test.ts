@@ -22,7 +22,7 @@ describe('POST /monitoring', () => {
   it('returns 500 when Sentry DSN is not configured', async () => {
     delete process.env.NEXT_PUBLIC_SENTRY_DSN;
 
-    const { POST } = await import('@/app/monitoring/route');
+    const { POST } = await import('@/app/api/monitoring/route');
 
     const request = new Request('http://localhost/monitoring', {
       method: 'POST',
@@ -40,7 +40,7 @@ describe('POST /monitoring', () => {
     process.env.NEXT_PUBLIC_SENTRY_DSN =
       'https://abc123@o123456.ingest.sentry.io/654321';
 
-    const { POST } = await import('@/app/monitoring/route');
+    const { POST } = await import('@/app/api/monitoring/route');
 
     const envelope = JSON.stringify({
       dsn: 'https://abc123@evil.sentry.io/654321',
@@ -62,7 +62,7 @@ describe('POST /monitoring', () => {
     process.env.NEXT_PUBLIC_SENTRY_DSN =
       'https://abc123@o123456.ingest.sentry.io/654321';
 
-    const { POST } = await import('@/app/monitoring/route');
+    const { POST } = await import('@/app/api/monitoring/route');
 
     const envelope = JSON.stringify({
       dsn: 'https://abc123@o123456.ingest.sentry.io/999999',
@@ -88,7 +88,7 @@ describe('POST /monitoring', () => {
       new Response('', { status: 200 })
     );
 
-    const { POST } = await import('@/app/monitoring/route');
+    const { POST } = await import('@/app/api/monitoring/route');
 
     const envelope = JSON.stringify({
       dsn: 'https://abc123@o123456.ingest.sentry.io/654321',

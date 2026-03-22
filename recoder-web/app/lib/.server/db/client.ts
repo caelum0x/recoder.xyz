@@ -3,7 +3,7 @@
  * Handles connections and queries for subscription management
  */
 
-import { neon } from '@neondatabase/serverless';
+import { createSql } from './pg-pool';
 import { createScopedLogger } from '~/utils/logger';
 const logger = createScopedLogger('DBClient');
 
@@ -23,7 +23,7 @@ export function getDatabase(env: Env) {
     throw new Error('DATABASE_URL not configured');
   }
 
-  const sql = neon(databaseUrl);
+  const sql = createSql(databaseUrl);
 
   cachedDb = {
     // Execute raw SQL query

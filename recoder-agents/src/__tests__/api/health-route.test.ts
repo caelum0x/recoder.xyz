@@ -1,12 +1,28 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 describe('GET /api/health', () => {
+  const originalFetch = globalThis.fetch;
+
   beforeEach(() => {
     vi.useFakeTimers();
+    // Mock fetch so that checkBackend and checkAuth both succeed
+    globalThis.fetch = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ status: 'ok' }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
+    );
+    // Set env vars so the health checks actually run (otherwise they short-circuit to false)
+    process.env.NEXT_PUBLIC_BACKEND_URL = 'http://localhost:3001';
+    process.env.BETTER_AUTH_URL = 'http://localhost:3000';
   });
 
   afterEach(() => {
+    globalThis.fetch = originalFetch;
     vi.useRealTimers();
+    vi.resetModules();
+    delete process.env.NEXT_PUBLIC_BACKEND_URL;
+    delete process.env.BETTER_AUTH_URL;
   });
 
   it('returns 200 with status "ok"', async () => {
@@ -54,7 +70,24 @@ describe('GET /api/health', () => {
     expect(body).toHaveProperty('status');
     expect(body).toHaveProperty('service');
     expect(body).toHaveProperty('timestamp');
-    // Should contain exactly these three fields
-    expect(Object.keys(body)).toHaveLength(3);
+    expect(body).toHaveProperty('uptime');
+    expect(body).toHaveProperty('version');
+    expect(body).toHaveProperty('node');
+    expect(body).toHaveProperty('checks');
+    expect(Object.keys(body)).toHaveLength(7);
+  });
+
+  it('returns 503 when backend and auth are unreachable', async () => {
+    // Override fetch to simulate failure
+    globalThis.fetch = vi.fn().mockRejectedValue(new Error('Connection refused'));
+
+    const { GET } = await import('@/app/api/health/route');
+
+    const response = await GET();
+
+    expect(response.status).toBe(503);
+
+    const body = await response.json();
+    expect(body.status).toBe('down');
   });
 });

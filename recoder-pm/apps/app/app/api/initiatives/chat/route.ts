@@ -170,7 +170,7 @@ export const POST = async (req: Request) => {
   ].join("\n");
 
   log.info("🤖 Successfully created prompt. Starting stream...");
-  const result = streamText({
+  const result = await streamText({
     model: await getOrganizationTextModel(organizationId),
     system: await withOrganizationSystemPrompt(organizationId, prompt),
     messages: convertToModelMessages(messages),

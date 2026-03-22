@@ -44,24 +44,6 @@ export class PlatformApiKeyService {
         return { success: false, message: 'User not found' };
       }
 
-      const isPremium = ['weekly', 'monthly', 'pro', 'enterprise'].includes(
-        user.subscriptionPlan
-      );
-
-      if (!isPremium) {
-        return {
-          success: false,
-          message: 'API keys are only available for premium users. Please upgrade your plan.',
-        };
-      }
-
-      if (user.subscriptionStatus !== 'active') {
-        return {
-          success: false,
-          message: 'Your subscription is not active. Please check your billing.',
-        };
-      }
-
       // Generate unique API key
       const apiKey = `sk-recoder-${nanoid(48)}`;
       const keyId = `key_${nanoid(24)}`;
@@ -191,27 +173,42 @@ export class PlatformApiKeyService {
    * List all API keys for a user
    */
   static async listUserApiKeys(userId: string) {
-    const keys = await prisma.api_keys.findMany({
-      where: {
-        userId,
-        isActive: true,
-      },
-      select: {
-        id: true,
-        keyPrefix: true,
-        name: true,
-        permissions: true,
-        createdAt: true,
-        lastUsedAt: true,
-        expiresAt: true,
-        usageCount: true,
-      },
-      orderBy: {
-        createdAt: 'desc',
-      },
-    });
+    try {
+      const keys = await prisma.api_keys.findMany({
+        where: {
+          userId,
+          isActive: true,
+        },
+        select: {
+          id: true,
+          keyPrefix: true,
+          name: true,
+          permissions: true,
+          createdAt: true,
+          lastUsedAt: true,
+          expiresAt: true,
+          usageCount: true,
+        },
+        orderBy: {
+          createdAt: 'desc',
+        },
+      });
 
-    return keys;
+      // Ensure each key has safe defaults for all fields
+      return keys.map(key => ({
+        ...key,
+        keyId: key.id,
+        name: key.name || 'Unnamed Key',
+        keyPrefix: key.keyPrefix || 'sk-recoder-***',
+        scopes: Array.isArray(key.permissions) ? key.permissions : [],
+        usageCount: key.usageCount ?? 0,
+        lastUsedAt: key.lastUsedAt ?? null,
+        expiresAt: key.expiresAt ?? null,
+      }));
+    } catch (error) {
+      console.error('Failed to list API keys from database:', error);
+      return [];
+    }
   }
 
   /**
@@ -375,10 +372,10 @@ export class PlatformApiKeyService {
 
     // Set limits based on plan
     const limits: Record<string, number> = {
-      free: 0,
-      weekly: 3,
-      monthly: 5,
-      pro: 10,
+      free: 3,
+      weekly: 5,
+      monthly: 10,
+      pro: 25,
       enterprise: 999,
     };
 

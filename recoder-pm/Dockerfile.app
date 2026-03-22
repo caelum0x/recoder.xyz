@@ -7,7 +7,7 @@ COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY apps ./apps
 COPY packages ./packages
 
-RUN pnpm install --frozen-lockfile
+RUN pnpm install --no-frozen-lockfile
 RUN pnpm --filter @repo/backend exec -- prisma generate
 
 ENV DOCKER=1
@@ -23,11 +23,14 @@ FROM node:20-alpine AS runner
 WORKDIR /app
 
 ENV NODE_ENV=production
-ENV PORT=3000
+ENV PORT=3004
 ENV HOSTNAME=0.0.0.0
 
 COPY --from=base /repo/apps/app/.next/standalone ./
 COPY --from=base /repo/apps/app/.next/static ./apps/app/.next/static
 COPY --from=base /repo/apps/app/public ./apps/app/public
+
+HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
+  CMD wget -qO- http://localhost:3004/api/health || exit 1
 
 CMD ["node", "apps/app/server.js"]

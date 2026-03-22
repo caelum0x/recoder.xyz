@@ -96,18 +96,6 @@ export const RECODER_SERVICES: RecoderService[] = [
     internal: false,
   },
   {
-    id: 'studio',
-    label: 'Recoder Agency',
-    description: 'AI agent workflows',
-    productionUrl: 'https://agency.recoder.xyz',
-    devUrl: 'http://localhost:3005',
-    port: 3005,
-    healthPath: '/',
-    healthResponseType: 'html',
-    showInSwitcher: false,
-    internal: false,
-  },
-  {
     id: 'agency',
     label: 'Recoder Agency',
     description: 'AI agent workflows',

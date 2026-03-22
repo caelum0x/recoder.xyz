@@ -13,10 +13,8 @@ import {
 	WorkspaceId,
 } from "@recoder/protocol";
 import type { EmbeddingMetrics } from "@recoder/rag";
-import {
-	supabaseStorageDriver as experimental_supabaseStorageDriver,
-	supabaseVaultDriver,
-} from "@recoder/supabase-driver";
+import { fsStorageDriver } from "@recoder/storage";
+import { noopVaultDriver } from "@recoder/vault";
 import { tasks as jobs } from "@trigger.dev/sdk";
 import { eq, sql } from "drizzle-orm";
 import { apps, db, tasks } from "@/db";
@@ -43,18 +41,14 @@ import {
 } from "../lib/vector-stores/github";
 import type { generateContentJob } from "../trigger/generate-content-job";
 
-export const storage = experimental_supabaseStorageDriver({
-	endpoint: process.env.SUPABASE_STORAGE_URL ?? "",
-	region: process.env.SUPABASE_STORAGE_REGION ?? "",
-	accessKeyId: process.env.SUPABASE_STORAGE_ACCESS_KEY_ID ?? "",
-	secretAccessKey: process.env.SUPABASE_STORAGE_SECRET_ACCESS_KEY ?? "",
-	bucket: "app",
-});
+// Storage: Local filesystem storage on the server.
+// Workspace JSON and blob data stored under GISELLE_STORAGE_ROOT.
+const storageRoot = process.env.GISELLE_STORAGE_ROOT ?? "/root/recoder.xyz/data/giselle-storage";
+export const storage = fsStorageDriver({ root: storageRoot });
 
-const vault = supabaseVaultDriver({
-	url: process.env.SUPABASE_URL ?? "",
-	serviceKey: process.env.SUPABASE_SERVICE_KEY ?? "",
-});
+// Vault: Using noop vault (no external encryption service needed).
+// OAuth tokens are encrypted at the application layer via TOKEN_ENCRYPTION_KEY.
+const vault = noopVaultDriver;
 
 let sampleAppWorkspaceIds: WorkspaceId[] | undefined;
 if (process.env.SAMPLE_APP_WORKSPACE_IDS) {
@@ -79,12 +73,24 @@ const githubAppClientId = process.env.GITHUB_APP_CLIENT_ID;
 const githubAppClientSecret = process.env.GITHUB_APP_CLIENT_SECRET;
 const githubAppWebhookSecret = process.env.GITHUB_APP_WEBHOOK_SECRET;
 
+// Validate GitHub credentials are real values (not placeholders) and the
+// private key looks like a PEM key. Without this, @octokit/auth-app crashes
+// at module load time when trying to parse "placeholder" as PEM.
+function isValidGitHubKey(key: string | undefined): boolean {
+	if (!key || key === "placeholder") return false;
+	return key.includes("-----BEGIN") || key.includes("\\n");
+}
+
 const hasGitHubCredentials =
 	githubAppId !== undefined &&
-	githubAppPrivateKey !== undefined &&
+	githubAppId !== "placeholder" &&
+	isValidGitHubKey(githubAppPrivateKey) &&
 	githubAppClientId !== undefined &&
+	githubAppClientId !== "placeholder" &&
 	githubAppClientSecret !== undefined &&
-	githubAppWebhookSecret !== undefined;
+	githubAppClientSecret !== "placeholder" &&
+	githubAppWebhookSecret !== undefined &&
+	githubAppWebhookSecret !== "placeholder";
 
 if (!hasGitHubCredentials) {
 	console.warn(

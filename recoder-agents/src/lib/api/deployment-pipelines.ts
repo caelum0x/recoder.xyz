@@ -76,7 +76,7 @@ export const getPipelines = async (agentId?: string): Promise<DeploymentPipeline
   const qs = agentId ? `?agent_id=${encodeURIComponent(agentId)}` : '';
   const response = await backendApi.get<DeploymentPipeline[]>(
     `/deployment/pipelines${qs}`,
-    { showErrors: false }
+    { showErrors: true }
   );
   if (response.error) throw new Error(response.error.message);
   return response.data!;
@@ -85,7 +85,7 @@ export const getPipelines = async (agentId?: string): Promise<DeploymentPipeline
 export const getPipeline = async (pipelineId: string): Promise<DeploymentPipeline> => {
   const response = await backendApi.get<DeploymentPipeline>(
     `/deployment/pipelines/${pipelineId}`,
-    { showErrors: false }
+    { showErrors: true }
   );
   if (response.error) throw new Error(response.error.message);
   return response.data!;
@@ -126,7 +126,7 @@ export const getPipelineRuns = async (
 ): Promise<PipelineRun[]> => {
   const response = await backendApi.get<PipelineRun[]>(
     `/deployment/pipelines/${pipelineId}/runs?limit=${limit}`,
-    { showErrors: false }
+    { showErrors: true }
   );
   if (response.error) throw new Error(response.error.message);
   return response.data!;
@@ -135,7 +135,7 @@ export const getPipelineRuns = async (
 export const getPipelineRunDetail = async (runId: string): Promise<PipelineRun> => {
   const response = await backendApi.get<PipelineRun>(
     `/deployment/runs/${runId}`,
-    { showErrors: false }
+    { showErrors: true }
   );
   if (response.error) throw new Error(response.error.message);
   return response.data!;
@@ -165,7 +165,7 @@ export const cancelPipelineRun = async (runId: string): Promise<PipelineRun> => 
 export const getPipelineGates = async (pipelineId: string): Promise<PipelineGate[]> => {
   const response = await backendApi.get<PipelineGate[]>(
     `/deployment/pipelines/${pipelineId}/gates`,
-    { showErrors: false }
+    { showErrors: true }
   );
   if (response.error) throw new Error(response.error.message);
   return response.data!;

@@ -201,7 +201,6 @@ export default defineConfig((config) => {
         'ajv-formats',
         '@modelcontextprotocol/sdk',
         'vite-plugin-node-polyfills',
-        'glob',
         'jsdom',
         'defuddle',
         'defuddle/node',

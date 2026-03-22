@@ -440,7 +440,7 @@ async function executeDockerAction(args: ActionExecutorArgs): Promise<Generation
 
   try {
     let result: unknown;
-    const baseUrl = process.env.DOCKER_BACKEND_URL || 'http://localhost:3100';
+    const baseUrl = process.env.DOCKER_BACKEND_URL || 'https://docker.recoder.xyz';
 
     switch (action) {
       case 'docker.exec':

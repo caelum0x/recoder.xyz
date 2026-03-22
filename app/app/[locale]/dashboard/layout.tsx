@@ -13,7 +13,7 @@ import { MobileNav } from '@/app/components/MobileNav';
 
 const sidebarLinks = [
   { href: '/dashboard', label: 'Overview', icon: LayoutDashboard, exact: true },
-  { href: '/dashboard/api-keys', label: 'API Keys', icon: Key },
+  { href: '/dashboard/api-keys', label: 'Developer Keys', icon: Key },
   { href: '/dashboard/projects', label: 'Projects', icon: FolderOpen },
   { href: '/dashboard/usage', label: 'Usage', icon: BarChart3 },
   { href: '/dashboard/analytics', label: 'Analytics', icon: Cpu },
@@ -21,7 +21,7 @@ const sidebarLinks = [
 
 const settingsLinks = [
   { href: '/settings', label: 'Settings', icon: Settings, exact: true },
-  { href: '/settings/ai-providers', label: 'AI Providers', icon: Sparkles },
+  { href: '/settings/ai-providers', label: 'AI Provider Keys', icon: Sparkles },
   { href: '/settings/account', label: 'Account', icon: User },
 ];
 

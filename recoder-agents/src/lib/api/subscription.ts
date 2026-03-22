@@ -14,8 +14,8 @@ export interface SubscriptionStatus {
 // API
 // ---------------------------------------------------------------------------
 
-const SUBSCRIPTION_URL =
-  `${process.env.NEXT_PUBLIC_URL || 'https://recoder.xyz'}/api/user/subscription`;
+// Use the local nginx stub (same-origin) which returns subscription data
+const SUBSCRIPTION_URL = '/api/user/subscription';
 
 /**
  * Fetch the current user's subscription status from the central

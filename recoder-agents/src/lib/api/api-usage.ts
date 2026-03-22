@@ -38,7 +38,7 @@ export const getKeyUsage = async (keyId: string, days?: number): Promise<DailyUs
   const query = days ? `?days=${days}` : '';
   const response = await backendApi.get<DailyUsageStats[]>(
     `/api-keys/${keyId}/usage${query}`,
-    { showErrors: false },
+    { showErrors: true },
   );
   if (response.error) throw new Error(response.error.message);
   return response.data!;
@@ -47,7 +47,7 @@ export const getKeyUsage = async (keyId: string, days?: number): Promise<DailyUs
 export const getKeyRecentUsage = async (keyId: string): Promise<RecentRequest[]> => {
   const response = await backendApi.get<RecentRequest[]>(
     `/api-keys/${keyId}/usage/recent`,
-    { showErrors: false },
+    { showErrors: true },
   );
   if (response.error) throw new Error(response.error.message);
   return response.data!;
@@ -56,7 +56,7 @@ export const getKeyRecentUsage = async (keyId: string): Promise<RecentRequest[]>
 export const getUsageSummary = async (): Promise<UsageSummary> => {
   const response = await backendApi.get<UsageSummary>(
     '/api-keys/usage/summary',
-    { showErrors: false },
+    { showErrors: true },
   );
   if (response.error) throw new Error(response.error.message);
   return response.data!;

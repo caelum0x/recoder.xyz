@@ -1,6 +1,5 @@
-const CACHE_NAME = 'recoder-agents-v1';
+const CACHE_NAME = 'recoder-agents-v3';
 const STATIC_ASSETS = ['/', '/manifest.json'];
-const MAX_CACHE_AGE_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
@@ -15,37 +14,65 @@ self.addEventListener('fetch', (event) => {
   // Skip non-GET requests
   if (event.request.method !== 'GET') return;
 
-  // Skip API requests and external URLs
-  if (url.pathname.startsWith('/api/') || url.origin !== self.location.origin) return;
+  // Skip API requests
+  if (url.pathname.startsWith('/api/')) return;
+
+  // Skip external/cross-origin URLs entirely — let the browser handle them
+  // This prevents CSP and network error issues with third-party resources
+  // (e.g., js.stripe.com, logos.composio.dev, analytics, etc.)
+  if (url.origin !== self.location.origin) return;
+
+  // Skip Next.js HMR and webpack dev requests
+  if (url.pathname.startsWith('/_next/webpack-hmr')) return;
 
   // Cache-first for static assets
-  if (url.pathname.match(/\.(js|css|woff2|png|svg|ico|jpg|jpeg|webp)$/)) {
+  if (url.pathname.match(/\.(js|css|woff2|png|svg|ico|jpg|jpeg|webp|avif)$/)) {
     event.respondWith(
       caches.match(event.request).then((cached) => {
         if (cached) return cached;
-        return fetch(event.request).then((response) => {
-          if (response.ok) {
-            const clone = response.clone();
-            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
-          }
-          return response;
-        });
-      }).catch(() => caches.match(event.request))
+        return fetch(event.request)
+          .then((response) => {
+            if (response && response.ok) {
+              const clone = response.clone();
+              caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
+            }
+            return response;
+          })
+          .catch(() => {
+            // Return cached version if available, otherwise a proper error response
+            return caches.match(event.request).then((cached) => {
+              return cached || new Response('Service Unavailable', {
+                status: 503,
+                statusText: 'Service Unavailable',
+                headers: new Headers({ 'Content-Type': 'text/plain' }),
+              });
+            });
+          });
+      })
     );
     return;
   }
 
-  // Network-first for pages
+  // Network-first for page navigations
   event.respondWith(
     fetch(event.request)
       .then((response) => {
-        if (response.ok) {
+        if (response && response.ok) {
           const clone = response.clone();
           caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
         }
         return response;
       })
-      .catch(() => caches.match(event.request))
+      .catch(() => {
+        // Return cached version if available, otherwise a proper error response
+        return caches.match(event.request).then((cached) => {
+          return cached || new Response('Service Unavailable', {
+            status: 503,
+            statusText: 'Service Unavailable',
+            headers: new Headers({ 'Content-Type': 'text/plain' }),
+          });
+        });
+      })
   );
 });
 

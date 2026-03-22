@@ -27,7 +27,7 @@ export const removeFavorite = async (itemType: string, itemId: string) => {
 
 export const getFavorites = async (type?: string): Promise<Favorite[]> => {
   const url = type ? `/favorites?type=${type}` : '/favorites';
-  const response = await backendApi.get<Favorite[]>(url, { showErrors: false });
+  const response = await backendApi.get<Favorite[]>(url, { showErrors: true });
   if (response.error) throw new Error(response.error.message);
   return response.data!;
 };
@@ -35,7 +35,7 @@ export const getFavorites = async (type?: string): Promise<Favorite[]> => {
 export const checkFavorite = async (itemType: string, itemId: string): Promise<boolean> => {
   const response = await backendApi.get<{ is_favorited: boolean }>(
     `/favorites/check/${itemType}/${itemId}`,
-    { showErrors: false }
+    { showErrors: true }
   );
   if (response.error) return false;
   return response.data?.is_favorited ?? false;

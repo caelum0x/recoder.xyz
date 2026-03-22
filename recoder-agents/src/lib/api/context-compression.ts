@@ -14,7 +14,7 @@ export async function compressThreadContext(
   const response = await backendApi.post<CompressResult>(
     `/threads/${threadId}/compress`,
     { messages, preserve_last_n: preserveLastN },
-    { showErrors: false },
+    { showErrors: true },
   );
 
   if (!response.success || !response.data) {

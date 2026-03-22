@@ -79,17 +79,22 @@ export function validateEnv(): ServerEnv {
 			prodMissing.push("TOKEN_ENCRYPTION_KEY");
 		if (!process.env.AUTH_DATABASE_URL) prodMissing.push("AUTH_DATABASE_URL");
 		if (!process.env.BETTER_AUTH_URL) prodMissing.push("BETTER_AUTH_URL");
-		if (!process.env.POLAR_ACCESS_TOKEN)
-			prodMissing.push("POLAR_ACCESS_TOKEN");
-		if (!process.env.POLAR_PRO_PRODUCT_ID)
-			prodMissing.push("POLAR_PRO_PRODUCT_ID");
-		if (!process.env.POLAR_WEBHOOK_SECRET)
-			prodMissing.push("POLAR_WEBHOOK_SECRET");
-		if (!process.env.POLAR_ORGANIZATION_ID)
-			prodMissing.push("POLAR_ORGANIZATION_ID");
 		if (prodMissing.length > 0) {
 			throw new Error(
 				`[env-validation] Required in production: ${prodMissing.join(", ")}.`,
+			);
+		}
+
+		// Polar payment vars are optional — warn if missing but don't block startup
+		const polarMissing = [
+			"POLAR_ACCESS_TOKEN",
+			"POLAR_PRO_PRODUCT_ID",
+			"POLAR_WEBHOOK_SECRET",
+			"POLAR_ORGANIZATION_ID",
+		].filter((key) => !process.env[key]);
+		if (polarMissing.length > 0) {
+			console.warn(
+				`[env-validation] Polar payment variables not set: ${polarMissing.join(", ")}. Billing features will be disabled.`,
 			);
 		}
 	} else {

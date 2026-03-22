@@ -35,7 +35,7 @@ export const getBookmarks = async (
   const params = threadId ? `?thread_id=${encodeURIComponent(threadId)}` : '';
   const response = await backendApi.get<MessageBookmark[]>(
     `/bookmarks${params}`,
-    { showErrors: false }
+    { showErrors: true }
   );
   if (response.error) throw new Error(response.error.message);
   return response.data!;

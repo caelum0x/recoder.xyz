@@ -80,7 +80,7 @@ export const unpinThread = async (
 
 export const listPinnedThreads = async (): Promise<PinnedThread[]> => {
   const response = await backendApi.get<PinnedThread[]>('/pinned-threads', {
-    showErrors: false,
+    showErrors: true,
   });
   if (response.error) throw new Error(response.error.message);
   return response.data!;
@@ -118,7 +118,7 @@ export const createCollection = async (data: CreateCollectionData): Promise<PinC
 
 export const listCollections = async (): Promise<PinCollection[]> => {
   const response = await backendApi.get<PinCollection[]>('/pin-collections', {
-    showErrors: false,
+    showErrors: true,
   });
   if (response.error) throw new Error(response.error.message);
   return response.data!;

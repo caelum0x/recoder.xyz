@@ -3,14 +3,14 @@
  * Verifies the database connection and schema
  */
 
-import { neon } from '@neondatabase/serverless';
+import { createSql } from '../app/lib/.server/db/pg-pool';
 
 const DATABASE_URL = 'postgresql://<DB_USER>:<DB_PASSWORD>@<DB_HOST>/<DB_NAME>?sslmode=require&channel_binding=require';
 
 async function verifyDatabase() {
   console.log('🔍 Verifying Recoder Web Database...\n');
 
-  const sql = neon(DATABASE_URL);
+  const sql = createSql(DATABASE_URL);
 
   try {
     // Test connection

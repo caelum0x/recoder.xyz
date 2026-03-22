@@ -15,14 +15,25 @@ export function usePlatformApi<T>(
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const authFailedRef = useRef(false);
 
   const fetchData = useCallback(async () => {
+    if (authFailedRef.current) return;
     try {
       setLoading(true);
       const res = await fetch(`${PLATFORM_BASE}${path}`, {
         credentials: "include",
       });
       if (!res.ok) {
+        if (res.status === 401) {
+          authFailedRef.current = true;
+          if (intervalRef.current) {
+            clearInterval(intervalRef.current);
+            intervalRef.current = null;
+          }
+          setError("unauthorized");
+          return;
+        }
         if (res.status === 403) {
           const body = await res.json().catch(() => null);
           if (body?.error === "plan_limit_exceeded") {
@@ -45,6 +56,7 @@ export function usePlatformApi<T>(
 
   useEffect(() => {
     if (options?.enabled === false) return;
+    authFailedRef.current = false;
     fetchData();
     if (options?.refreshInterval) {
       intervalRef.current = setInterval(fetchData, options.refreshInterval);

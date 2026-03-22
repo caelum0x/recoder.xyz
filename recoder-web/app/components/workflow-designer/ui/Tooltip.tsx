@@ -110,7 +110,7 @@ export function Tooltip({
           className={classNames(
             'absolute z-50 px-2 py-1 text-xs rounded shadow-md whitespace-nowrap',
             'animate-fade-in',
-            variant === 'light' && 'bg-gray-200 dark:bg-recoder-elements-background-depth-3 text-gray-900 dark:text-recoder-elements-textPrimary',
+            variant === 'light' && 'bg-recoder-elements-background-depth-3 text-recoder-elements-textPrimary',
             variant === 'dark' && 'bg-recoder-elements-background-depth-2 text-recoder-elements-textPrimary',
             className
           )}

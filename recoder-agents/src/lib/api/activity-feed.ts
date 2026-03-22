@@ -85,7 +85,7 @@ export const recordActivityEvent = async (
   const response = await backendApi.post<ActivityEvent>(
     '/activity/events',
     body,
-    { showErrors: false }
+    { showErrors: true }
   );
   if (response.error) throw new Error(response.error.message);
   return response.data!;
@@ -103,7 +103,7 @@ export const getActivityFeed = async (
   const query = params.toString() ? `?${params}` : '';
   const response = await backendApi.get<ActivityFeedResponse>(
     `/activity/feed${query}`,
-    { showErrors: false }
+    { showErrors: true }
   );
   if (response.error) throw new Error(response.error.message);
   return response.data!;
@@ -115,7 +115,7 @@ export const markActivityRead = async (
   const response = await backendApi.post<{ id: string; is_read: boolean }>(
     `/activity/events/${eventId}/read`,
     undefined,
-    { showErrors: false }
+    { showErrors: true }
   );
   if (response.error) throw new Error(response.error.message);
   return response.data!;
@@ -125,7 +125,7 @@ export const markAllActivitiesRead = async (): Promise<{ success: boolean }> => 
   const response = await backendApi.post<{ success: boolean }>(
     '/activity/events/mark-all-read',
     undefined,
-    { showErrors: false }
+    { showErrors: true }
   );
   if (response.error) throw new Error(response.error.message);
   return response.data!;
@@ -134,7 +134,7 @@ export const markAllActivitiesRead = async (): Promise<{ success: boolean }> => 
 export const getActivityPreferences = async (): Promise<ActivityPreferences> => {
   const response = await backendApi.get<ActivityPreferences>(
     '/activity/feed/preferences',
-    { showErrors: false }
+    { showErrors: true }
   );
   if (response.error) throw new Error(response.error.message);
   return response.data!;
@@ -146,7 +146,7 @@ export const updateActivityPreferences = async (
   const response = await backendApi.put<ActivityPreferences>(
     '/activity/feed/preferences',
     body,
-    { showErrors: false }
+    { showErrors: true }
   );
   if (response.error) throw new Error(response.error.message);
   return response.data!;
@@ -155,7 +155,7 @@ export const updateActivityPreferences = async (
 export const getActivityStats = async (): Promise<ActivityStats> => {
   const response = await backendApi.get<ActivityStats>(
     '/activity/feed/stats',
-    { showErrors: false }
+    { showErrors: true }
   );
   if (response.error) throw new Error(response.error.message);
   return response.data!;

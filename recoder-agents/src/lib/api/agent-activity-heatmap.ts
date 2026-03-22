@@ -45,7 +45,7 @@ export const getAgentActivityHeatmap = async (
   const qs = params.toString();
   const response = await backendApi.get<HeatmapResponse>(
     `/agents/activity/heatmap${qs ? `?${qs}` : ''}`,
-    { showErrors: false }
+    { showErrors: true }
   );
   if (response.error) throw new Error(response.error.message);
   return response.data!;
@@ -54,7 +54,7 @@ export const getAgentActivityHeatmap = async (
 export const getActivityStreaks = async (): Promise<StreaksResponse> => {
   const response = await backendApi.get<StreaksResponse>(
     '/agents/activity/streaks',
-    { showErrors: false }
+    { showErrors: true }
   );
   if (response.error) throw new Error(response.error.message);
   return response.data!;
@@ -63,7 +63,7 @@ export const getActivityStreaks = async (): Promise<StreaksResponse> => {
 export const getWeeklyActivitySummary = async (): Promise<WeeklySummaryResponse> => {
   const response = await backendApi.get<WeeklySummaryResponse>(
     '/agents/activity/weekly-summary',
-    { showErrors: false }
+    { showErrors: true }
   );
   if (response.error) throw new Error(response.error.message);
   return response.data!;

@@ -26,13 +26,13 @@ export const createThreadTemplate = async (data: {
 
 export const getThreadTemplates = async (category?: string): Promise<ThreadTemplate[]> => {
   const query = category ? `?category=${category}` : '';
-  const response = await backendApi.get<ThreadTemplate[]>(`/thread-templates${query}`, { showErrors: false });
+  const response = await backendApi.get<ThreadTemplate[]>(`/thread-templates${query}`, { showErrors: true });
   if (response.error) throw new Error(response.error.message);
   return response.data!;
 };
 
 export const getThreadTemplate = async (id: string): Promise<ThreadTemplate> => {
-  const response = await backendApi.get<ThreadTemplate>(`/thread-templates/${id}`, { showErrors: false });
+  const response = await backendApi.get<ThreadTemplate>(`/thread-templates/${id}`, { showErrors: true });
   if (response.error) throw new Error(response.error.message);
   return response.data!;
 };

@@ -8,6 +8,7 @@ import {
   Save,
   Info,
 } from 'lucide-react';
+import { backendApi } from '@/lib/api-client';
 
 // ---------------------------------------------------------------------------
 // Feature flag definitions
@@ -82,6 +83,47 @@ function saveFlags(flags: Record<string, boolean>) {
   } catch {}
 }
 
+async function loadFlagsFromApi(): Promise<Record<string, boolean>> {
+  try {
+    const res = await backendApi.get<Array<{ preference_key: string; preference_value: any }>>(
+      '/preferences?category=general',
+      { showErrors: false },
+    );
+    if (res.success && Array.isArray(res.data)) {
+      const PREFIX = 'feature_flag_';
+      const apiFlags: Record<string, boolean> = {};
+      let found = false;
+      for (const row of res.data) {
+        if (row.preference_key.startsWith(PREFIX)) {
+          const key = row.preference_key.slice(PREFIX.length);
+          apiFlags[key] = Boolean(row.preference_value);
+          found = true;
+        }
+      }
+      if (found) {
+        // Merge with defaults so new flags not yet on server still appear
+        const defaults: Record<string, boolean> = {};
+        FEATURE_FLAGS.forEach((f) => (defaults[f.key] = f.defaultValue));
+        const merged = { ...defaults, ...apiFlags };
+        try { localStorage.setItem(STORAGE_KEY, JSON.stringify(merged)); } catch {}
+        return merged;
+      }
+    }
+  } catch {
+    // API unavailable — fall back to localStorage
+  }
+  return loadFlags();
+}
+
+function saveFlagsToApi(flags: Record<string, boolean>): void {
+  const entries = Object.entries(flags).map(([key, value]) => ({
+    preference_key: `feature_flag_${key}`,
+    preference_value: value,
+    category: 'general',
+  }));
+  backendApi.put('/preferences/batch', { preferences: entries }, { showErrors: false }).catch(() => {});
+}
+
 // ---------------------------------------------------------------------------
 // Toggle switch
 // ---------------------------------------------------------------------------
@@ -122,7 +164,10 @@ export default function AdminFeaturesPage() {
   const [saved, setSaved] = useState(false);
 
   useEffect(() => {
+    // Show cached flags immediately
     setFlags(loadFlags());
+    // Then hydrate from API
+    loadFlagsFromApi().then((loaded) => setFlags(loaded));
   }, []);
 
   const handleToggle = useCallback((key: string, value: boolean) => {
@@ -140,6 +185,7 @@ export default function AdminFeaturesPage() {
 
   const handleSave = useCallback(() => {
     saveFlags(flags);
+    saveFlagsToApi(flags);
     setSaved(true);
     setTimeout(() => setSaved(false), 2500);
   }, [flags]);
@@ -149,6 +195,7 @@ export default function AdminFeaturesPage() {
     FEATURE_FLAGS.forEach((f) => (defaults[f.key] = f.defaultValue));
     setFlags(defaults);
     saveFlags(defaults);
+    saveFlagsToApi(defaults);
     setSaved(true);
     setTimeout(() => setSaved(false), 2500);
   }, []);

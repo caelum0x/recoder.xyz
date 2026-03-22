@@ -49,6 +49,7 @@ import {
   usePopularSnippets,
   type PromptSnippet,
 } from '@/hooks/prompts/use-shared-prompts';
+import type { PromptCategory } from '@/lib/api/shared-prompts';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -58,20 +59,20 @@ const CATEGORIES = [
   { id: 'all', label: 'All' },
   { id: 'general', label: 'General' },
   { id: 'system', label: 'System' },
-  { id: 'tool', label: 'Tool' },
-  { id: 'format', label: 'Format' },
-  { id: 'persona', label: 'Persona' },
-  { id: 'safety', label: 'Safety' },
+  { id: 'coding', label: 'Coding' },
+  { id: 'writing', label: 'Writing' },
+  { id: 'analysis', label: 'Analysis' },
+  { id: 'creative', label: 'Creative' },
   { id: 'custom', label: 'Custom' },
 ] as const;
 
 const CATEGORY_COLORS: Record<string, string> = {
   general: 'bg-blue-500/15 text-blue-600 border-blue-500/30',
   system: 'bg-purple-500/15 text-purple-600 border-purple-500/30',
-  tool: 'bg-orange-500/15 text-orange-600 border-orange-500/30',
-  format: 'bg-emerald-500/15 text-emerald-600 border-emerald-500/30',
-  persona: 'bg-pink-500/15 text-pink-600 border-pink-500/30',
-  safety: 'bg-red-500/15 text-red-600 border-red-500/30',
+  coding: 'bg-orange-500/15 text-orange-600 border-orange-500/30',
+  writing: 'bg-emerald-500/15 text-emerald-600 border-emerald-500/30',
+  analysis: 'bg-pink-500/15 text-pink-600 border-pink-500/30',
+  creative: 'bg-red-500/15 text-red-600 border-red-500/30',
   custom: 'bg-gray-500/15 text-gray-600 border-gray-500/30',
 };
 
@@ -93,7 +94,7 @@ function SnippetDialog({
 
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
-  const [category, setCategory] = useState('general');
+  const [category, setCategory] = useState<PromptCategory>('general');
   const [isPublic, setIsPublic] = useState(false);
   const [tagsInput, setTagsInput] = useState('');
   const [tags, setTags] = useState<string[]>([]);
@@ -181,7 +182,7 @@ function SnippetDialog({
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label>Category</Label>
-              <Select value={category} onValueChange={setCategory}>
+              <Select value={category} onValueChange={(v) => setCategory(v as PromptCategory)}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
@@ -314,7 +315,7 @@ function SnippetCard({
           <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground">
             <span className="flex items-center gap-1">
               <TrendingUp className="h-3 w-3" />
-              {snippet.usage_count} uses
+              {snippet.use_count} uses
             </span>
             {snippet.tags.map((tag) => (
               <Badge key={tag} variant="outline" className="text-xs py-0">
@@ -369,7 +370,7 @@ export default function PromptLibraryPage() {
   const { data: popularData } = usePopularSnippets(5);
   const deleteMutation = useDeleteSnippet();
 
-  const snippets = snippetsData?.snippets || [];
+  const snippets = snippetsData?.prompts || [];
   const popularSnippets = popularData?.snippets || [];
 
   const handleDelete = async (snippet: PromptSnippet) => {
@@ -459,7 +460,7 @@ export default function PromptLibraryPage() {
                     </p>
                     <div className="flex items-center gap-2 mt-1.5 text-[10px] text-muted-foreground">
                       <TrendingUp className="h-3 w-3" />
-                      {snippet.usage_count} uses
+                      {snippet.use_count} uses
                     </div>
                   </SpotlightCard>
                 ))}

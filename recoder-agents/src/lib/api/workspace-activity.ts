@@ -59,7 +59,7 @@ export const getWorkspaceActivity = async (
   const url = `/workspaces/activity${qs ? `?${qs}` : ''}`;
 
   const response = await backendApi.get<ActivityEvent[]>(url, {
-    showErrors: false,
+    showErrors: true,
   });
   if (response.error) throw new Error(response.error.message);
   return response.data!;
@@ -68,7 +68,7 @@ export const getWorkspaceActivity = async (
 export const getActivitySummary = async (): Promise<ActivitySummary> => {
   const response = await backendApi.get<ActivitySummary>(
     '/workspaces/activity/summary',
-    { showErrors: false, cache: 'no-store' }
+    { showErrors: true, cache: 'no-store' }
   );
   if (response.error) throw new Error(response.error.message);
   return response.data!;
@@ -79,7 +79,7 @@ export const getActivityTimeline = async (
 ): Promise<TimelinePoint[]> => {
   const response = await backendApi.get<TimelinePoint[]>(
     `/workspaces/activity/timeline?hours=${hours}`,
-    { showErrors: false, cache: 'no-store' }
+    { showErrors: true, cache: 'no-store' }
   );
   if (response.error) throw new Error(response.error.message);
   return response.data!;

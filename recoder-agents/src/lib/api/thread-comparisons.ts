@@ -68,7 +68,7 @@ export const createComparison = async (
 export const getComparisons = async (limit = 50): Promise<ThreadComparison[]> => {
   const response = await backendApi.get<ThreadComparison[]>(
     `/thread-comparisons?limit=${limit}`,
-    { showErrors: false }
+    { showErrors: true }
   );
   if (response.error) throw new Error(response.error.message);
   return response.data!;
@@ -79,7 +79,7 @@ export const getComparisonDetail = async (
 ): Promise<ThreadComparisonDetail> => {
   const response = await backendApi.get<ThreadComparisonDetail>(
     `/thread-comparisons/${comparisonId}`,
-    { showErrors: false }
+    { showErrors: true }
   );
   if (response.error) throw new Error(response.error.message);
   return response.data!;
@@ -109,7 +109,7 @@ export const getComparisonEvaluations = async (
 ): Promise<ComparisonEvaluation[]> => {
   const response = await backendApi.get<ComparisonEvaluation[]>(
     `/thread-comparisons/${comparisonId}/evaluations`,
-    { showErrors: false }
+    { showErrors: true }
   );
   if (response.error) throw new Error(response.error.message);
   return response.data!;
@@ -118,7 +118,7 @@ export const getComparisonEvaluations = async (
 export const getComparisonStats = async (): Promise<ComparisonStats> => {
   const response = await backendApi.get<ComparisonStats>(
     '/thread-comparisons/stats',
-    { showErrors: false }
+    { showErrors: true }
   );
   if (response.error) throw new Error(response.error.message);
   return response.data!;

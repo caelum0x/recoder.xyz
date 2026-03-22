@@ -5,7 +5,13 @@
  *
  * Receives OpenClaw gateway events via POST /api/a2a/openclaw/events,
  * validates them, maps to canonical TaskEnvelope, stores in-memory,
- * and returns the created task ID + trace_id.
+ * routes to the appropriate internal agent (PM, Agency, or Backend)
+ * via the A2A bridge, and returns the created task ID + trace_id.
+ *
+ * Social channel routing (Task 36):
+ * - Messages mentioning project/task/sprint/feature -> recoder_pm
+ * - Messages mentioning client/deliverable/quote/invoice -> recoder_agency
+ * - Everything else -> recoder_backend (general AI)
  *
  * Trace propagation:
  * 1. If the event carries trace.trace_id, use it.
@@ -26,10 +32,14 @@ import {
   mapOpenClawEvent,
   buildA2AError,
   A2AErrorCodeEnum,
+  RECODER_A2A_PROTOCOL_VERSION,
+  RECODER_A2A_ENVELOPE_VERSION,
   type TaskEnvelope,
   type OpenClawMapperOptions,
   type ValidationResult,
   type OpenClawMapperResult,
+  type RecoderA2AEnvelope,
+  type RecoderPayload,
 } from '@recoder/shared/a2a';
 
 // ---------------------------------------------------------------------------
@@ -44,6 +54,167 @@ const log = createLogger('a2a-openclaw-adapter');
 
 const DEFAULT_WORKSPACE_ID =
   process.env.RECODER_OPENCLAW_WORKSPACE_ID || 'ws_openclaw_default';
+
+// ---------------------------------------------------------------------------
+// Social channel routing (Task 36: OpenClaw as social channel hub)
+// ---------------------------------------------------------------------------
+
+/**
+ * Valid internal agent IDs that OpenClaw messages can be routed to.
+ */
+type RoutableAgent = 'recoder_pm' | 'recoder_agency' | 'recoder_backend';
+
+/**
+ * Keyword sets for routing decisions.
+ * Order matters: PM and Agency keywords are checked first;
+ * if neither match, the message falls through to recoder_backend.
+ */
+const PM_KEYWORDS = [
+  'project', 'task', 'sprint', 'feature', 'milestone',
+  'backlog', 'epic', 'story', 'kanban', 'roadmap',
+  'ticket', 'priority', 'release', 'changelog',
+];
+const AGENCY_KEYWORDS = [
+  'client', 'deliverable', 'quote', 'invoice', 'proposal',
+  'brief', 'agency', 'contract', 'billing', 'sow', 'scope',
+  'revision', 'approval',
+];
+
+/**
+ * Route an OpenClaw message to the appropriate internal agent based on
+ * keyword analysis of the message text.
+ *
+ * Priority: PM keywords > Agency keywords > Backend (fallback).
+ * If the message contains keywords from both PM and Agency, PM wins
+ * (task management is typically the higher-urgency routing target).
+ */
+function routeOpenClawMessage(message: string): RoutableAgent {
+  const lower = message.toLowerCase();
+
+  const hasPm = PM_KEYWORDS.some((kw) => lower.includes(kw));
+  const hasAgency = AGENCY_KEYWORDS.some((kw) => lower.includes(kw));
+
+  if (hasPm) return 'recoder_pm';
+  if (hasAgency) return 'recoder_agency';
+  return 'recoder_backend';
+}
+
+/**
+ * Extract text content from a TaskEnvelope payload for routing analysis.
+ * Handles single and array payloads, and multiple payload kinds.
+ */
+function extractTextFromEnvelope(envelope: TaskEnvelope): string {
+  const payloads: RecoderPayload[] = Array.isArray(envelope.payload)
+    ? envelope.payload
+    : [envelope.payload];
+
+  const parts: string[] = [];
+  for (const p of payloads) {
+    if (p.kind === 'text') {
+      parts.push(p.text);
+    } else if (p.kind === 'command') {
+      parts.push(p.command);
+    } else if (p.kind === 'json' && p.data) {
+      // Attempt to extract text-like fields from JSON payloads
+      const d = p.data as Record<string, unknown>;
+      if (typeof d.text === 'string') parts.push(d.text);
+      if (typeof d.message === 'string') parts.push(d.message);
+      if (typeof d.phase === 'string') parts.push(d.phase);
+    }
+  }
+
+  return parts.join(' ');
+}
+
+/**
+ * Dispatch a TaskEnvelope to the target agent via the internal A2A bridge.
+ * This posts to the local /api/a2a/envelope endpoint which handles
+ * signing, registry lookup, and forwarding.
+ *
+ * Fire-and-forget: dispatch failures are logged but do not block the
+ * response to OpenClaw. The task is already stored and can be retried.
+ */
+async function dispatchToAgent(
+  envelope: TaskEnvelope,
+  targetAgent: RoutableAgent,
+  traceId: string,
+): Promise<{ dispatched: boolean; agent: RoutableAgent; error?: string }> {
+  const backendPort = process.env.PORT || '3001';
+  const baseUrl = `http://127.0.0.1:${backendPort}`;
+
+  // Build a RecoderA2AEnvelope from the TaskEnvelope for the bridge
+  const a2aEnvelope: RecoderA2AEnvelope = {
+    envelopeVersion: RECODER_A2A_ENVELOPE_VERSION,
+    protocolVersion: RECODER_A2A_PROTOCOL_VERSION,
+    messageId: envelope.id,
+    threadId: envelope.thread_id,
+    createdAt: envelope.created_at,
+    from: {
+      id: 'openclaw-gateway',
+      name: 'OpenClaw Gateway',
+      platform: 'custom',
+    },
+    to: {
+      id: targetAgent,
+      name: targetAgent,
+      platform: targetAgent as any,
+    },
+    intent: 'execute',
+    payload: Array.isArray(envelope.payload)
+      ? envelope.payload
+      : [envelope.payload],
+    metadata: {
+      source: 'openclaw',
+      routed_by: 'keyword_router',
+      original_task_id: envelope.id,
+      workspace_id: envelope.workspace_id,
+    },
+    trace: {
+      traceId,
+    },
+  };
+
+  try {
+    const response = await fetch(`${baseUrl}/api/a2a/envelope`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-recoder-a2a-agent-id': 'openclaw-gateway',
+      },
+      body: JSON.stringify(a2aEnvelope),
+    });
+
+    if (!response.ok) {
+      const body = await response.text();
+      log.warn(
+        {
+          trace_id: traceId,
+          target_agent: targetAgent,
+          status: response.status,
+          body,
+        },
+        `A2A dispatch to ${targetAgent} returned non-OK status`,
+      );
+      return {
+        dispatched: false,
+        agent: targetAgent,
+        error: `HTTP ${response.status}`,
+      };
+    }
+
+    log.info(
+      { trace_id: traceId, target_agent: targetAgent, task_id: envelope.id },
+      `Dispatched OpenClaw task to ${targetAgent}`,
+    );
+    return { dispatched: true, agent: targetAgent };
+  } catch (err) {
+    log.warn(
+      { trace_id: traceId, target_agent: targetAgent, err },
+      `Failed to dispatch to ${targetAgent} (non-fatal)`,
+    );
+    return { dispatched: false, agent: targetAgent, error: 'fetch_failed' };
+  }
+}
 
 // ---------------------------------------------------------------------------
 // In-memory task store
@@ -394,6 +565,46 @@ router.post('/events', async (req: Request, res: Response) => {
     return;
   }
 
+  // -------------------------------------------------------------------
+  // Step 4.5: Route to internal agent via A2A bridge (Task 36)
+  // -------------------------------------------------------------------
+  const messageText = extractTextFromEnvelope(envelope);
+  const targetAgent = routeOpenClawMessage(messageText);
+
+  // Fire-and-forget: dispatch to the target agent through A2A bridge.
+  // We do not await this — the response is returned immediately with
+  // the routing decision, and the dispatch happens asynchronously.
+  const dispatchPromise = dispatchToAgent(envelope, targetAgent, trace_id)
+    .catch((err) => {
+      log.warn(
+        { err, task_id: envelope.id, target_agent: targetAgent },
+        'A2A bridge dispatch failed (non-fatal)',
+      );
+      return { dispatched: false, agent: targetAgent, error: 'dispatch_exception' } as const;
+    });
+
+  // Also forward via the Platform Hub for webhook-based delivery
+  // (secondary path for PM/Agency apps that expose webhook endpoints)
+  import('./openclaw-platform-hub.js')
+    .then(({ processOpenClawEvent }) => {
+      processOpenClawEvent({
+        type: event.event || 'chat.message',
+        channel: (event as any).channel || 'unknown',
+        from: {
+          id: (event as any).from?.id || (event as any).sender?.id || 'unknown',
+          name: (event as any).from?.name || (event as any).sender?.name,
+          phone: (event as any).from?.phone,
+        },
+        content: (event as any).text || (event as any).content || '',
+        timestamp: envelope.created_at || new Date().toISOString(),
+        threadId: envelope.thread_id,
+        metadata: (event as any).metadata,
+      }).catch((err: unknown) => {
+        log.warn({ err, task_id: envelope.id }, 'Platform hub forwarding failed');
+      });
+    })
+    .catch(() => { /* hub not available — ignore */ });
+
   const durationMs = Date.now() - startTime;
 
   log.info(
@@ -404,14 +615,27 @@ router.post('/events', async (req: Request, res: Response) => {
       state: envelope.state,
       workspace_id: envelope.workspace_id,
       thread_id: envelope.thread_id,
+      routed_to: targetAgent,
       duration_ms: durationMs,
     },
-    `OpenClaw event mapped to task ${envelope.id}`
+    `OpenClaw event mapped to task ${envelope.id}, routed to ${targetAgent}`,
   );
 
   // -------------------------------------------------------------------
-  // Step 5: Return success response
+  // Step 5: Return success response with routing info
   // -------------------------------------------------------------------
+
+  // Wait briefly for dispatch result to include in response (50ms max)
+  let dispatchResult: { dispatched: boolean; agent: RoutableAgent; error?: string } | undefined;
+  try {
+    dispatchResult = await Promise.race([
+      dispatchPromise,
+      new Promise<undefined>((resolve) => setTimeout(() => resolve(undefined), 50)),
+    ]);
+  } catch {
+    // Ignore — dispatch is best-effort
+  }
+
   res.status(201).json({
     ok: true,
     task_id: envelope.id,
@@ -420,6 +644,10 @@ router.post('/events', async (req: Request, res: Response) => {
     state: envelope.state,
     event_type: event.event,
     created_at: envelope.created_at,
+    routed_to: targetAgent,
+    dispatch: dispatchResult
+      ? { dispatched: dispatchResult.dispatched, error: dispatchResult.error }
+      : { dispatched: 'pending' },
   });
 });
 
@@ -485,4 +713,6 @@ export {
   parseTraceparent as __testParseTraceparent,
   resolveTraceId as __testResolveTraceId,
   generateTraceId as __testGenerateTraceId,
+  routeOpenClawMessage as __testRouteOpenClawMessage,
+  extractTextFromEnvelope as __testExtractTextFromEnvelope,
 };

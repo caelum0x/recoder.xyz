@@ -92,7 +92,7 @@ def _row_to_analytics(row: Dict[str, Any]) -> ThreadAnalytics:
     return ThreadAnalytics(
         id=str(row["id"]) if row.get("id") else None,
         thread_id=str(row["thread_id"]),
-        account_id=row["account_id"],
+        account_id=str(row["account_id"]),
         total_messages=row.get("total_messages", 0),
         user_messages=row.get("user_messages", 0),
         assistant_messages=row.get("assistant_messages", 0),
@@ -146,10 +146,10 @@ async def get_thread_analytics(
                 "SELECT account_id FROM threads WHERE thread_id = :thread_id",
                 {"thread_id": thread_id},
             )
-            account_id = thread_row["account_id"] if thread_row else auth.user_id
+            account_id = str(thread_row["account_id"]) if thread_row else str(auth.user_id)
 
             return ThreadAnalytics(
-                thread_id=thread_id,
+                thread_id=str(thread_id),
                 account_id=account_id,
             )
 

@@ -77,7 +77,7 @@ export async function getRateLimitEvents(
 
   const response = await backendApi.get<RateLimitEvent[]>(
     `/rate-limits/events${qs ? `?${qs}` : ''}`,
-    { showErrors: false, cache: 'no-store' }
+    { showErrors: true, cache: 'no-store' }
   );
 
   if (response.error) {
@@ -92,7 +92,7 @@ export async function getRateLimitSummary(
 ): Promise<RateLimitSummary> {
   const response = await backendApi.get<RateLimitSummary>(
     `/rate-limits/summary?hours=${hours}`,
-    { showErrors: false, cache: 'no-store' }
+    { showErrors: true, cache: 'no-store' }
   );
 
   if (response.error) {
@@ -107,7 +107,7 @@ export async function getRateLimitTimeline(
 ): Promise<TimelineBucket[]> {
   const response = await backendApi.get<TimelineBucket[]>(
     `/rate-limits/timeline?hours=${hours}`,
-    { showErrors: false, cache: 'no-store' }
+    { showErrors: true, cache: 'no-store' }
   );
 
   if (response.error) {
@@ -120,7 +120,7 @@ export async function getRateLimitTimeline(
 export async function getRateLimitConfigs(): Promise<RateLimitConfig[]> {
   const response = await backendApi.get<RateLimitConfig[]>(
     '/rate-limits/configs',
-    { showErrors: false, cache: 'no-store' }
+    { showErrors: true, cache: 'no-store' }
   );
 
   if (response.error) {

@@ -311,7 +311,7 @@ export default function ListingDetailPage() {
         )}
 
         {activeTab === 'reviews' && (
-          <ReviewSection listingId={listingId} />
+          <ReviewSection agentId={listingId} />
         )}
       </div>
     </div>

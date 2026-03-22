@@ -31,7 +31,9 @@ export type Provider =
   | 'meta'
   | 'groq'
   | 'mistral'
-  | 'xai';
+  | 'xai'
+  | 'openrouter'
+  | 'qwen';
 
 // Extended model information
 export interface ModelMetadata {
@@ -46,6 +48,8 @@ export interface ModelMetadata {
   supportsVision?: boolean;
   supportsTools?: boolean;
   new?: boolean; // Mark new models
+  isFree?: boolean; // Whether this model is free to use
+  speedTier?: string; // Speed tier from registry API
 }
 
 // Provider information
@@ -106,10 +110,36 @@ export const PROVIDERS: Record<Provider, ProviderInfo> = {
     icon: 'i-ph:x-bold',
     color: '#FFFFFF',
   },
+  openrouter: {
+    id: 'openrouter',
+    name: 'OpenRouter',
+    icon: 'i-ph:shuffle-bold',
+    color: '#6366F1',
+  },
+  qwen: {
+    id: 'qwen',
+    name: 'Qwen',
+    icon: 'i-ph:code-bold',
+    color: '#615EFF',
+  },
 };
 
-// Available models with full metadata (all functional with OpenRouter)
-export const AVAILABLE_MODELS: ModelMetadata[] = [
+// Fallback models used when the registry API is unreachable
+export const FALLBACK_MODELS: ModelMetadata[] = [
+  // Free auto-router (always first)
+  {
+    id: 'openrouter/free',
+    name: 'Auto (Free)',
+    provider: 'openrouter',
+    contextWindow: 200000,
+    speed: 'balanced',
+    costTier: 1,
+    description: 'Automatically picks the best available free model',
+    recommended: true,
+    isFree: true,
+    speedTier: 'balanced',
+  },
+
   // Anthropic Models
   {
     id: 'anthropic/claude-sonnet-4',
@@ -372,6 +402,150 @@ export const AVAILABLE_MODELS: ModelMetadata[] = [
   },
 ];
 
+// Mutable model list — starts as fallback, replaced after registry fetch
+export let AVAILABLE_MODELS: ModelMetadata[] = [...FALLBACK_MODELS];
+
+// ── Registry API fetch ────────────────────────────────────────────────
+
+const REGISTRY_CACHE_KEY = 'recoder-models-cache-v1';
+const REGISTRY_CACHE_TTL = 60 * 60 * 1000; // 1 hour
+const REGISTRY_API_URL = 'https://api.recoder.xyz/v1/models';
+
+interface RegistryCacheEntry {
+  models: ModelMetadata[];
+  timestamp: number;
+}
+
+/**
+ * Map a speed_tier string from the API to our SpeedTier type.
+ */
+function mapSpeedTier(tier?: string): SpeedTier {
+  if (tier === 'fast') return 'fast';
+  if (tier === 'powerful') return 'powerful';
+  return 'balanced';
+}
+
+/**
+ * Derive a CostTier from pricing info.
+ */
+function deriveCostTier(pricing?: { prompt?: number; completion?: number }): CostTier {
+  if (!pricing) return 2;
+  const total = (pricing.prompt || 0) + (pricing.completion || 0);
+  if (total === 0) return 1;
+  if (total <= 2) return 1;
+  if (total <= 12) return 2;
+  return 3;
+}
+
+/**
+ * Map a provider string from the API to our Provider type.
+ */
+function mapProvider(provider?: string): Provider {
+  if (!provider) return 'openrouter';
+  const known: Record<string, Provider> = {
+    anthropic: 'anthropic',
+    openai: 'openai',
+    google: 'google',
+    deepseek: 'deepseek',
+    meta: 'meta',
+    'meta-llama': 'meta',
+    groq: 'groq',
+    mistral: 'mistral',
+    mistralai: 'mistral',
+    xai: 'xai',
+    'x-ai': 'xai',
+    openrouter: 'openrouter',
+    qwen: 'qwen',
+  };
+  return known[provider.toLowerCase()] || 'openrouter';
+}
+
+/**
+ * Map a single API model entry to our ModelMetadata shape.
+ */
+function mapRegistryModel(entry: Record<string, any>): ModelMetadata {
+  const isFree = entry.tier === 'free' || (entry.pricing?.prompt === 0 && entry.pricing?.completion === 0);
+  const speedTier = mapSpeedTier(entry.speed_tier);
+
+  return {
+    id: entry.id,
+    name: entry.name || entry.id,
+    provider: mapProvider(entry.provider),
+    contextWindow: entry.context_length || 128000,
+    speed: speedTier,
+    costTier: deriveCostTier(entry.pricing),
+    description: entry.description || '',
+    recommended: entry.recommended || false,
+    supportsVision: entry.supports_vision ?? undefined,
+    supportsTools: entry.supports_tools ?? undefined,
+    isFree,
+    speedTier: entry.speed_tier || 'balanced',
+  };
+}
+
+/**
+ * Fetch models from the unified model registry API.
+ *
+ * - Checks localStorage cache first (1 hour TTL)
+ * - Falls back to FALLBACK_MODELS on failure
+ * - Updates the mutable AVAILABLE_MODELS list
+ */
+export async function fetchModelsFromRegistry(): Promise<ModelMetadata[]> {
+  // 1. Try localStorage cache
+  if (typeof window !== 'undefined') {
+    try {
+      const raw = localStorage.getItem(REGISTRY_CACHE_KEY);
+      if (raw) {
+        const cached: RegistryCacheEntry = JSON.parse(raw);
+        if (Date.now() - cached.timestamp < REGISTRY_CACHE_TTL && cached.models.length > 0) {
+          logger.debug('[ModelSelection] Using cached registry models');
+          AVAILABLE_MODELS = cached.models;
+          return cached.models;
+        }
+      }
+    } catch (e) {
+      logger.warn('[ModelSelection] Failed to read registry cache:', e);
+    }
+  }
+
+  // 2. Fetch from API
+  try {
+    const resp = await fetch(REGISTRY_API_URL);
+    if (!resp.ok) throw new Error(`Registry API returned ${resp.status}`);
+
+    const data = (await resp.json()) as { models?: Record<string, any>[] };
+    const apiModels: Record<string, any>[] = data.models || [];
+
+    if (apiModels.length === 0) {
+      logger.warn('[ModelSelection] Registry returned empty model list, using fallback');
+      return FALLBACK_MODELS;
+    }
+
+    const mapped = apiModels.map(mapRegistryModel);
+    AVAILABLE_MODELS = mapped;
+
+    // 3. Cache to localStorage
+    if (typeof window !== 'undefined') {
+      try {
+        const cacheEntry: RegistryCacheEntry = {
+          models: mapped,
+          timestamp: Date.now(),
+        };
+        localStorage.setItem(REGISTRY_CACHE_KEY, JSON.stringify(cacheEntry));
+      } catch (e) {
+        logger.warn('[ModelSelection] Failed to write registry cache:', e);
+      }
+    }
+
+    logger.debug(`[ModelSelection] Loaded ${mapped.length} models from registry`);
+    return mapped;
+  } catch (e) {
+    logger.error('[ModelSelection] Failed to fetch from registry, using fallback:', e);
+    AVAILABLE_MODELS = [...FALLBACK_MODELS];
+    return FALLBACK_MODELS;
+  }
+}
+
 // Group models by provider
 export function getModelsByProvider(): Map<Provider, ModelMetadata[]> {
   const grouped = new Map<Provider, ModelMetadata[]>();
@@ -413,7 +587,7 @@ interface ModelSelectionState {
 
 // Default state
 const DEFAULT_STATE: ModelSelectionState = {
-  selectedModelId: 'x-ai/grok-code-fast-1', // Default to Grok Code Fast
+  selectedModelId: 'openrouter/free', // Default to free auto-router
   recentModelIds: [],
 };
 

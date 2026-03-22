@@ -156,7 +156,8 @@ export async function loadAllSessions(limit: number = 50): Promise<ChatSessionMe
   chatSessions.setError(null);
 
   try {
-    const user = getCurrentUser();
+    // Use async version to wait for session fetch before checking user
+    const user = await getCurrentUserAsync();
     const anonymousId = !user ? getOrCreateAnonymousId() : undefined;
 
     const params = new URLSearchParams();
@@ -204,7 +205,7 @@ export async function loadProjectSessions(projectId: string): Promise<ChatSessio
  */
 export async function createNewSession(projectId?: string): Promise<string | null> {
   try {
-    const user = getCurrentUser();
+    const user = await getCurrentUserAsync();
     const anonymousId = !user ? getOrCreateAnonymousId() : undefined;
 
     // Generate new session ID
@@ -253,7 +254,7 @@ export async function renameSessionPersistent(sessionId: string, newTitle: strin
     if (!session) return false;
 
     // Persist to database - re-save with new title
-    const user = getCurrentUser();
+    const user = await getCurrentUserAsync();
     const anonymousId = !user ? getOrCreateAnonymousId() : undefined;
 
     const response = await fetch('/api/chat-history', {
@@ -579,7 +580,7 @@ async function loadChatFromDatabase(mixedId: string): Promise<ChatHistoryItem | 
   }
 
   try {
-    const user = getCurrentUser();
+    const user = await getCurrentUserAsync();
     const anonymousId = !user ? getOrCreateAnonymousId() : undefined;
 
     const params = new URLSearchParams();

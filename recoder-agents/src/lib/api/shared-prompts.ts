@@ -90,7 +90,7 @@ export const getSharedPrompts = async (
   const qs = params.toString() ? `?${params.toString()}` : '';
   const response = await backendApi.get<SharedPromptListResponse>(
     `/prompts/shared${qs}`,
-    { showErrors: false, cache: 'no-store' },
+    { showErrors: true, cache: 'no-store' },
   );
   if (response.error) {
     throw new Error(`Failed to fetch shared prompts: ${response.error.message}`);
@@ -101,7 +101,7 @@ export const getSharedPrompts = async (
 export const getSharedPrompt = async (promptId: string): Promise<SharedPrompt> => {
   const response = await backendApi.get<SharedPrompt>(
     `/prompts/shared/${promptId}`,
-    { showErrors: false, cache: 'no-store' },
+    { showErrors: true, cache: 'no-store' },
   );
   if (response.error) {
     throw new Error(`Failed to fetch prompt: ${response.error.message}`);
@@ -157,7 +157,7 @@ export const useSharedPromptContent = async (
   const response = await backendApi.post<SharedPrompt>(
     `/prompts/shared/${promptId}/use`,
     {},
-    { showErrors: false },
+    { showErrors: true },
   );
   if (response.error) {
     throw new Error(`Failed to use prompt: ${response.error.message}`);
@@ -170,7 +170,7 @@ export const getPromptVersions = async (
 ): Promise<PromptVersionsResponse> => {
   const response = await backendApi.get<PromptVersionsResponse>(
     `/prompts/shared/${promptId}/versions`,
-    { showErrors: false, cache: 'no-store' },
+    { showErrors: true, cache: 'no-store' },
   );
   if (response.error) {
     throw new Error(`Failed to fetch prompt versions: ${response.error.message}`);

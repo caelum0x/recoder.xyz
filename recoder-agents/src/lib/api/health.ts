@@ -10,7 +10,7 @@ export interface HealthCheckResponse {
 export const checkApiHealth = async (): Promise<HealthCheckResponse> => {
   const response = await backendApi.get<unknown>(
     '/health',
-    { showErrors: false, cache: 'no-store' }
+    { showErrors: true, cache: 'no-store' }
   );
 
   if (response.error) {

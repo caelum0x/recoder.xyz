@@ -3,6 +3,9 @@ import { FastifyRequest, FastifyReply } from 'fastify';
 import { ModelRouter, TaskType, RoutingRequest, PlanType } from '../core/model-router';
 import { routerBackendClient } from '../services/backend-client';
 import { log } from '../utils/log';
+import { executionPipeline } from '../integrations/execution-pipeline';
+import { daytonaSandbox } from '../integrations/daytona-sandbox';
+import { a2aBridge } from '../integrations/a2a-bridge';
 
 const smartRouter = new ModelRouter();
 
@@ -220,6 +223,8 @@ export const getRouterStatus = async (
       return providerInstance && providerInstance.apiKey;
     });
 
+    const pipelineStatus = executionPipeline.getStatus();
+
     reply.status(200);
     return {
       success: true,
@@ -227,16 +232,169 @@ export const getRouterStatus = async (
       availableProviders,
       totalProviders: providers.length,
       availableModels: smartRouter.getAvailableModels().length,
-      version: '1.0.0',
+      execution: {
+        sandbox: pipelineStatus.sandbox,
+        a2a: pipelineStatus.a2a,
+      },
+      version: '2.3.1',
       timestamp: new Date().toISOString()
     };
   } catch (error: any) {
     log('Error getting router status:', error.message);
-    
+
     reply.status(500);
     return {
       success: false,
       error: error.message || 'Internal server error'
     };
+  }
+};
+
+// ── Sandbox Execution Endpoint ──
+
+export interface SandboxRunBody {
+  command: string;
+  image?: string;
+  timeoutMs?: number;
+}
+
+export const sandboxRunEndpoint = async (
+  request: FastifyRequest<{ Body: SandboxRunBody }>,
+  reply: FastifyReply
+) => {
+  try {
+    const { command, image, timeoutMs } = request.body;
+
+    if (!command || command.trim().length === 0) {
+      reply.status(400);
+      return { success: false, error: 'command is required' };
+    }
+
+    if (!daytonaSandbox.isConfigured()) {
+      reply.status(503);
+      return { success: false, error: 'Daytona sandbox not configured. Set DAYTONA_API_KEY.' };
+    }
+
+    log(`Sandbox run: ${command.slice(0, 80)}...`);
+    const result = await daytonaSandbox.run(command, { image, timeoutMs });
+
+    reply.status(200);
+    return {
+      success: true,
+      exitCode: result.exitCode,
+      output: result.output,
+      error: result.error,
+      sandboxId: result.sandboxId,
+      executionTimeMs: result.executionTimeMs,
+    };
+  } catch (error: any) {
+    log('Sandbox run error:', error.message);
+    reply.status(500);
+    return { success: false, error: error.message || 'Sandbox execution failed' };
+  }
+};
+
+// ── A2A Agent Endpoints ──
+
+export const a2aListAgentsEndpoint = async (
+  _request: FastifyRequest,
+  reply: FastifyReply
+) => {
+  try {
+    const agents = await a2aBridge.listAgents();
+    reply.status(200);
+    return { success: true, agents };
+  } catch (error: any) {
+    log('A2A list agents error:', error.message);
+    reply.status(500);
+    return { success: false, error: error.message };
+  }
+};
+
+export const a2aListTasksEndpoint = async (
+  _request: FastifyRequest,
+  reply: FastifyReply
+) => {
+  try {
+    const tasks = await a2aBridge.listTasks();
+    reply.status(200);
+    return { success: true, tasks };
+  } catch (error: any) {
+    log('A2A list tasks error:', error.message);
+    reply.status(500);
+    return { success: false, error: error.message };
+  }
+};
+
+export interface A2ASendTaskBody {
+  target_agent: string;
+  task: string;
+  capability?: 'execute' | 'plan' | 'edit';
+}
+
+export const a2aSendTaskEndpoint = async (
+  request: FastifyRequest<{ Body: A2ASendTaskBody }>,
+  reply: FastifyReply
+) => {
+  try {
+    const { target_agent, task, capability } = request.body;
+
+    if (!target_agent || !task) {
+      reply.status(400);
+      return { success: false, error: 'target_agent and task are required' };
+    }
+
+    if (!a2aBridge.isConfigured()) {
+      reply.status(503);
+      return { success: false, error: 'A2A bridge not configured. Set RECODER_API_TOKEN.' };
+    }
+
+    log(`A2A send task to ${target_agent}: ${task.slice(0, 80)}...`);
+    const result = await a2aBridge.sendTask({
+      targetAgent: target_agent,
+      task,
+      capability,
+    });
+
+    reply.status(200);
+    return { success: true, task: result };
+  } catch (error: any) {
+    log('A2A send task error:', error.message);
+    reply.status(500);
+    return { success: false, error: error.message };
+  }
+};
+
+export interface A2ACreateThreadBody {
+  prompt: string;
+  agent_id?: string;
+}
+
+export const a2aCreateThreadEndpoint = async (
+  request: FastifyRequest<{ Body: A2ACreateThreadBody }>,
+  reply: FastifyReply
+) => {
+  try {
+    const { prompt, agent_id } = request.body;
+
+    if (!prompt) {
+      reply.status(400);
+      return { success: false, error: 'prompt is required' };
+    }
+
+    if (!a2aBridge.isConfigured()) {
+      reply.status(503);
+      return { success: false, error: 'A2A bridge not configured. Set RECODER_API_TOKEN.' };
+    }
+
+    log(`A2A create thread: ${prompt.slice(0, 80)}...`);
+    const thread = await a2aBridge.createThread({ prompt, agentId: agent_id });
+
+    reply.status(200);
+    return { success: true, thread };
+  } catch (error: any) {
+    log('A2A create thread error:', error.message);
+    reply.status(500);
+    return { success: false, error: error.message };
   }
 };

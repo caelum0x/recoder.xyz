@@ -3,6 +3,7 @@ import { fileURLToPath, pathToFileURL } from 'url';
 import { dirname, join } from 'path';
 import { createRequestHandler } from '@remix-run/express';
 import express from 'express';
+import { createProxyMiddleware } from 'http-proxy-middleware';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirnameLocal = dirname(__filename);
@@ -31,12 +32,70 @@ const BUILD_DIR = join(__dirnameLocal, 'build');
 const app = express();
 const publicBaseUrl = process.env.RECODER_WEB_URL || process.env.MAIN_SITE_URL || 'https://web.recoder.xyz';
 
-// Add cross-origin isolation headers for WebContainer support
-app.use((req, res, next) => {
-  res.setHeader('Cross-Origin-Opener-Policy', 'same-origin');
-  res.setHeader('Cross-Origin-Embedder-Policy', 'credentialless');
-  next();
-});
+// Docker backend URL for preview proxy (internal, not via nginx for /preview/ routes)
+const DOCKER_BACKEND_URL = process.env.DOCKER_URL
+  || process.env.VITE_DOCKER_BACKEND_URL
+  || 'https://docker.recoder.xyz';
+
+// Add cross-origin isolation headers for WebContainer support.
+// In Docker mode (production), COEP/COOP are not needed and actively break
+// the preview iframe — the parent page's COEP restricts sub-resources
+// loaded by user apps in the preview (fonts, CDN scripts, images).
+// Only enable COEP/COOP when WebContainer is the runtime (no Docker URL configured).
+const hasExplicitDockerUrl = !!(process.env.DOCKER_URL || process.env.VITE_DOCKER_BACKEND_URL || process.env.DOCKER_BACKEND_URL);
+if (!hasExplicitDockerUrl) {
+  console.log('🔒 COEP/COOP enabled (WebContainer mode)');
+  app.use((req, res, next) => {
+    if (req.path.startsWith('/preview/')) {
+      return next();
+    }
+    res.setHeader('Cross-Origin-Opener-Policy', 'same-origin');
+    res.setHeader('Cross-Origin-Embedder-Policy', 'credentialless');
+    next();
+  });
+} else {
+  console.log('🐳 COEP/COOP skipped (Docker mode — preview iframe compatibility)');
+}
+
+// ============================================================
+// Same-origin preview proxy
+// Proxies /preview/:projectId/* to docker-backend /preview/:projectId/*
+// This makes the preview iframe same-origin with web.recoder.xyz,
+// eliminating all CSP frame-src, X-Frame-Options, and COEP issues.
+// ============================================================
+app.use('/preview', createProxyMiddleware({
+  target: DOCKER_BACKEND_URL,
+  changeOrigin: true,
+  ws: true,
+  // Don't rewrite path — keep /preview/:projectId as-is
+  onProxyRes: (proxyRes) => {
+    // Remove restrictive headers that the docker-backend or nginx might add
+    delete proxyRes.headers['x-frame-options'];
+    delete proxyRes.headers['cross-origin-embedder-policy'];
+    delete proxyRes.headers['cross-origin-opener-policy'];
+    delete proxyRes.headers['content-security-policy'];
+
+    // Set permissive headers for same-origin iframe content
+    proxyRes.headers['cross-origin-resource-policy'] = 'same-origin';
+  },
+  onError: (err, req, res) => {
+    console.error('[Preview Proxy] Error:', err.message);
+    if (!res.headersSent) {
+      res.writeHead(502, { 'Content-Type': 'text/html' });
+      res.end(`
+        <html><body style="font-family:system-ui;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;background:#f7fafc">
+          <div style="text-align:center;max-width:400px">
+            <h2>Preview Unavailable</h2>
+            <p style="color:#64748b">The preview service is not responding. It may be starting up.</p>
+            <script>setTimeout(() => location.reload(), 3000)</script>
+          </div>
+        </body></html>
+      `);
+    }
+  },
+}));
+
+console.log(`📺 Preview proxy: /preview/* -> ${DOCKER_BACKEND_URL}/preview/*`);
 
 // Serve static files with smart caching
 // Files with content hashes (e.g., /assets/index-abc123.js) get long cache
@@ -102,7 +161,7 @@ app.use(async (req, res, next) => {
       GROQ_API_KEY: process.env.GROQ_API_KEY,
       OPENROUTER_API_KEY: process.env.OPENROUTER_API_KEY,
     };
-    
+
     return createRequestHandler({
       build,
       getLoadContext() {

@@ -37,7 +37,7 @@ export const getThreadSummary = async (
 ): Promise<ThreadSummary | null> => {
   const response = await backendApi.get<ThreadSummary | null>(
     `/threads/${threadId}/summary`,
-    { showErrors: false }
+    { showErrors: true }
   );
   if (response.error) throw new Error(response.error.message);
   return response.data ?? null;
@@ -48,7 +48,7 @@ export const getRecentSummaries = async (
 ): Promise<ThreadSummary[]> => {
   const response = await backendApi.get<ThreadSummary[]>(
     `/summaries/recent?limit=${limit}`,
-    { showErrors: false }
+    { showErrors: true }
   );
   if (response.error) throw new Error(response.error.message);
   return response.data!;
@@ -62,7 +62,7 @@ export const deleteSummary = async (summaryId: string): Promise<void> => {
 export const getSummaryStats = async (): Promise<SummaryStats> => {
   const response = await backendApi.get<SummaryStats>(
     `/summaries/stats`,
-    { showErrors: false }
+    { showErrors: true }
   );
   if (response.error) throw new Error(response.error.message);
   return response.data!;

@@ -1,21 +1,17 @@
 /**
- * API Key Management Route
- * Handles adding, updating, and deleting user API keys
+ * API Key Management Route (Onboarding)
+ * Handles saving OpenRouter API key for the user during onboarding
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { requireAuth } from "@/lib/auth-helpers";
-import { auth } from '@/lib/auth-config';
-import { headers } from 'next/headers';
-
-const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || process.env.BACKEND_URL || 'http://localhost:3001';
+import { requireAuth, ensureAppUserFromAuthUser } from '@/lib/auth-helpers';
+import { prisma } from '@/lib/prisma';
 
 export async function POST(request: NextRequest) {
   try {
-    // Get session
     const authResult = await requireAuth(request);
     if (authResult.error) return authResult.response;
-    const { user, session } = authResult;
+    const { user } = authResult;
 
     if (!user) {
       return NextResponse.json(
@@ -24,7 +20,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Get request body
     const body = await request.json();
     const { apiKey } = body;
 
@@ -35,23 +30,19 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Forward to backend
-    const response = await fetch(`${BACKEND_URL}/api/user/api-key`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${(session as any)?.accessToken || ''}`,
+    // Ensure app user exists
+    const appUser = await ensureAppUserFromAuthUser(user);
+
+    // Save the OpenRouter API key to the user record
+    await prisma.users.update({
+      where: { id: appUser?.id || user.id },
+      data: {
+        openRouterApiKey: apiKey,
+        hasOwnApiKey: true,
       },
-      body: JSON.stringify({ apiKey }),
     });
 
-    const data = await response.json();
-
-    if (!response.ok) {
-      return NextResponse.json(data, { status: response.status });
-    }
-
-    return NextResponse.json(data);
+    return NextResponse.json({ success: true });
   } catch (error) {
     console.error('Error adding API key:', error);
     return NextResponse.json(
@@ -63,10 +54,9 @@ export async function POST(request: NextRequest) {
 
 export async function DELETE(request: NextRequest) {
   try {
-    // Get session
     const authResult = await requireAuth(request);
     if (authResult.error) return authResult.response;
-    const { user, session } = authResult;
+    const { user } = authResult;
 
     if (!user) {
       return NextResponse.json(
@@ -75,21 +65,17 @@ export async function DELETE(request: NextRequest) {
       );
     }
 
-    // Forward to backend
-    const response = await fetch(`${BACKEND_URL}/api/user/api-key`, {
-      method: 'DELETE',
-      headers: {
-        'Authorization': `Bearer ${(session as any)?.accessToken || ''}`,
+    const appUser = await ensureAppUserFromAuthUser(user);
+
+    await prisma.users.update({
+      where: { id: appUser?.id || user.id },
+      data: {
+        openRouterApiKey: null,
+        hasOwnApiKey: false,
       },
     });
 
-    const data = await response.json();
-
-    if (!response.ok) {
-      return NextResponse.json(data, { status: response.status });
-    }
-
-    return NextResponse.json(data);
+    return NextResponse.json({ success: true });
   } catch (error) {
     console.error('Error deleting API key:', error);
     return NextResponse.json(

@@ -201,7 +201,7 @@ function TemplateEditorDialog({
       }
       onClose();
     } catch (err) {
-      handleApiError(err, isEditing ? 'updating template' : 'creating template');
+      handleApiError(err, { operation: isEditing ? 'update template' : 'create template' });
     }
   };
 
@@ -412,7 +412,7 @@ function RenderPanel({ template }: RenderPanelProps) {
         // history will refresh via query invalidation
       }
     } catch (err) {
-      handleApiError(err, 'rendering template');
+      handleApiError(err, { operation: 'render template' });
     }
   };
 
@@ -678,7 +678,7 @@ export default function WebhookTemplatesPage() {
       if (selectedId === template.id) setSelectedId(null);
       toast.success('Template deleted');
     } catch (err) {
-      handleApiError(err, 'deleting template');
+      handleApiError(err, { operation: 'delete template' });
     }
   };
 
@@ -692,7 +692,7 @@ export default function WebhookTemplatesPage() {
         template.is_active ? 'Template deactivated' : 'Template activated'
       );
     } catch (err) {
-      handleApiError(err, 'updating template');
+      handleApiError(err, { operation: 'update template' });
     }
   };
 

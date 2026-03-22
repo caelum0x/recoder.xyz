@@ -1,6 +1,6 @@
 import { json, type LoaderFunctionArgs, type ActionFunctionArgs } from '@remix-run/cloudflare';
 import { verifySession } from '~/lib/auth/session.server';
-import { neon } from '@neondatabase/serverless';
+import { createSql } from '~/lib/.server/db/pg-pool';
 import { createScopedLogger } from '~/utils/logger';
 
 const logger = createScopedLogger('ChatGitHub');
@@ -8,7 +8,7 @@ const logger = createScopedLogger('ChatGitHub');
 function getDb(context: any) {
   const dbUrl = context?.cloudflare?.env?.DATABASE_URL || process.env.DATABASE_URL;
   if (!dbUrl) throw new Error('DATABASE_URL not configured');
-  return neon(dbUrl);
+  return createSql(dbUrl);
 }
 
 export async function loader({ params, request, context }: LoaderFunctionArgs) {

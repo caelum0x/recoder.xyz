@@ -138,6 +138,13 @@ export default function ClaudeCodeSettingsPage() {
         <div className="max-w-3xl mx-auto">
           {/* Page Header */}
           <div className="mb-8">
+            <Link
+              href="/settings"
+              className="inline-flex items-center gap-2 text-sm text-gray-400 hover:text-white transition-colors mb-4"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              Back to Settings
+            </Link>
             <div className="flex items-center space-x-3 mb-4">
               <div className="w-12 h-12 bg-gradient-to-br from-amber-500 to-orange-600 rounded-xl flex items-center justify-center">
                 <Terminal className="w-6 h-6 text-white" />

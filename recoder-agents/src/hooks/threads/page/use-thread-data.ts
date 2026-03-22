@@ -245,9 +245,9 @@ export function useThreadData(
         if (!isMounted) return;
 
         if (messagesQuery.data && !messagesLoadedRef.current) {
-          const unifiedMessages = (messagesQuery.data || [])
+          const unifiedMessages: UnifiedMessage[] = (messagesQuery.data || [])
             .map((msg: ApiMessageType) => ({
-              message_id: msg.message_id || null,
+              message_id: msg.message_id || '',
               thread_id: msg.thread_id || threadId,
               type: (msg.type || 'system') as UnifiedMessage['type'],
               is_llm_message: Boolean(msg.is_llm_message),
@@ -255,8 +255,7 @@ export function useThreadData(
               metadata: msg.metadata || '{}',
               created_at: msg.created_at || new Date().toISOString(),
               updated_at: msg.updated_at || new Date().toISOString(),
-              agent_id: (msg as Record<string, unknown>).agent_id as string | undefined,
-              agents: (msg as Record<string, unknown>).agents as string[] | undefined,
+              agent_id: (msg as any).agent_id as string | undefined,
             }));
 
           const serverIds = new Set(
@@ -424,9 +423,9 @@ export function useThreadData(
   // This ensures reasoning_content and other metadata updates from server are reflected
   useEffect(() => {
     if (messagesQuery.data && messagesQuery.status === 'success' && !isLoading) {
-      const unifiedMessages = (messagesQuery.data || [])
+      const unifiedMessages: UnifiedMessage[] = (messagesQuery.data || [])
         .map((msg: ApiMessageType) => ({
-          message_id: msg.message_id || null,
+          message_id: msg.message_id || '',
           thread_id: msg.thread_id || threadId,
           type: (msg.type || 'system') as UnifiedMessage['type'],
           is_llm_message: Boolean(msg.is_llm_message),
@@ -435,7 +434,6 @@ export function useThreadData(
           created_at: msg.created_at || new Date().toISOString(),
           updated_at: msg.updated_at || new Date().toISOString(),
           agent_id: (msg as any).agent_id,
-          agents: (msg as any).agents,
         }));
 
       setMessages((prev) => {

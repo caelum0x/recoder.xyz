@@ -98,6 +98,7 @@ from core.monitoring.error_patterns_api import router as error_patterns_router
 from core.agents.agent_sandbox_api import router as agent_sandbox_router
 from core.billing.usage_forecasting_api import router as usage_forecasting_router
 from core.agents.agent_template_gallery_api import router as agent_template_gallery_router
+from core.ai_models.models_api import models_router
 
 
 if sys.platform == "win32":
@@ -206,7 +207,12 @@ async def lifespan(app: FastAPI):
         from core.agents.pipeline.stateless import lifecycle
         await lifecycle.initialize()
         logger.info("[STARTUP] Stateless pipeline initialized")
-        
+
+        # Start background free-model sync for unified registry
+        from core.ai_models.registry import start_free_model_sync
+        asyncio.create_task(start_free_model_sync())
+        logger.info("[STARTUP] Free model sync background task started")
+
         yield
 
         _is_shutting_down = True
@@ -516,9 +522,9 @@ from core.agents.agent_scheduled_tasks_api import router as agent_scheduled_task
 api_router.include_router(agent_scheduled_tasks_router)
 
 api_router.include_router(shared_prompts_router)
-api_router.include_router(threads_router)
-api_router.include_router(thread_templates_router)
 api_router.include_router(thread_pins_router)
+api_router.include_router(thread_templates_router)
+api_router.include_router(threads_router)
 api_router.include_router(thread_search_router)
 api_router.include_router(thread_analytics_router)
 api_router.include_router(thread_tags_router)
@@ -666,6 +672,9 @@ api_router.include_router(search_router)
 
 from core.search.global_search_api import router as global_search_router
 api_router.include_router(global_search_router)
+
+from core.search.web_search_api import router as web_search_router
+api_router.include_router(web_search_router)
 
 from core.marketplace.marketplace_api import router as marketplace_router
 api_router.include_router(marketplace_router)
@@ -965,6 +974,130 @@ api_router.include_router(log_aggregation_router)
 from core.agents.agent_skill_trees_api import router as agent_skill_trees_router
 api_router.include_router(agent_skill_trees_router)
 
+# Agent Config Snapshots (Sprint 69 Phase 1)
+from core.agents.agent_config_snapshots_api import router as agent_config_snapshots_router
+api_router.include_router(agent_config_snapshots_router)
+
+# Thread Export Templates (Sprint 69 Phase 2)
+from core.threads.thread_export_templates_api import router as thread_export_templates_router
+api_router.include_router(thread_export_templates_router)
+
+# Task Queue (Sprint 69 Phase 5)
+from core.agents.task_queue_api import router as task_queue_router
+api_router.include_router(task_queue_router)
+
+# Cost Tracking (Sprint 69 Phase 3)
+from core.billing.cost_tracking_api import router as cost_tracking_router
+api_router.include_router(cost_tracking_router)
+
+# Agent Health Checks (Sprint 69 Phase 4)
+from core.agents.agent_health_checks_api import router as agent_health_checks_router
+api_router.include_router(agent_health_checks_router)
+
+# Agent Personas (Sprint 70 Phase 1)
+from core.agents.agent_personas_api import router as agent_personas_router
+api_router.include_router(agent_personas_router)
+
+# Thread Summarization (Sprint 70 Phase 2)
+from core.threads.thread_summarization_api import router as thread_summarization_router
+api_router.include_router(thread_summarization_router)
+
+# Plugin Registry (Sprint 70 Phase 5)
+from core.agents.plugin_registry_api import router as plugin_registry_router
+api_router.include_router(plugin_registry_router)
+
+# Quota Alerts (Sprint 70 Phase 3)
+from core.monitoring.quota_alerts_api import router as quota_alerts_router
+api_router.include_router(quota_alerts_router)
+
+# Agent Benchmark Suites (Sprint 70 Phase 4)
+from core.agents.agent_benchmark_suites_api import router as agent_benchmark_suites_router
+api_router.include_router(agent_benchmark_suites_router)
+
+# Notification Templates (Sprint 71 Phase 5)
+from core.monitoring.notification_templates_api import router as notification_templates_router
+api_router.include_router(notification_templates_router)
+
+# Execution Traces (Sprint 71 Phase 3)
+from core.agents.execution_traces_api import router as execution_traces_router
+api_router.include_router(execution_traces_router)
+
+# A/B Testing (Sprint 71 Phase 4)
+from core.agents.ab_testing_api import router as ab_testing_router
+api_router.include_router(ab_testing_router)
+
+# Agent Secrets Vault (Sprint 71 Phase 1)
+from core.agents.agent_secrets_api import router as agent_secrets_router
+api_router.include_router(agent_secrets_router)
+
+# Thread Labels — already registered above (line ~531)
+
+# Agent Feedback (Sprint 72 Phase 1)
+from core.agents.agent_feedback_api import router as agent_feedback_router
+api_router.include_router(agent_feedback_router)
+
+# Thread Search Index (Sprint 72 Phase 2)
+from core.threads.thread_search_index_api import router as thread_search_index_router
+api_router.include_router(thread_search_index_router)
+
+# Alert Escalation (Sprint 72 Phase 3)
+from core.monitoring.alert_escalation_api import router as alert_escalation_router
+api_router.include_router(alert_escalation_router)
+
+# Agent Audit Log (Sprint 72 Phase 4)
+from core.agents.agent_audit_log_api import router as agent_audit_log_router
+api_router.include_router(agent_audit_log_router)
+
+# Data Pipelines (Sprint 72 Phase 5)
+from core.agents.data_pipeline_api import router as data_pipeline_router
+api_router.include_router(data_pipeline_router)
+
+# Agent Memory Profiles (Sprint 73 Phase 1)
+from core.agents.agent_memory_profiles_api import router as agent_memory_profiles_router
+api_router.include_router(agent_memory_profiles_router)
+
+# Thread Replay (Sprint 73 Phase 2)
+from core.threads.thread_replay_api import router as thread_replay_router
+api_router.include_router(thread_replay_router)
+
+# Capacity Planning (Sprint 73 Phase 3)
+from core.monitoring.capacity_planning_api import router as capacity_planning_router
+api_router.include_router(capacity_planning_router)
+
+# Marketplace Reviews (Sprint 73 Phase 4)
+from core.agents.marketplace_reviews_api import router as marketplace_reviews_router
+api_router.include_router(marketplace_reviews_router)
+
+# Integration Health (Sprint 73 Phase 5)
+from core.monitoring.integration_health_api import router as integration_health_router
+api_router.include_router(integration_health_router)
+
+# Response Templates (Sprint 74 Phase 1)
+from core.agents.response_templates_api import router as response_templates_router
+api_router.include_router(response_templates_router)
+
+# Thread Analytics V2 (Sprint 74 Phase 2)
+from core.threads.thread_analytics_v2_api import router as thread_analytics_v2_router
+api_router.include_router(thread_analytics_v2_router)
+
+# Error Recovery Playbooks (Sprint 74 Phase 3)
+from core.agents.error_recovery_api import router as error_recovery_router
+api_router.include_router(error_recovery_router)
+
+# Agent Comparison V2 (Sprint 74 Phase 4)
+from core.agents.agent_comparison_v2_api import router as agent_comparison_v2_router
+api_router.include_router(agent_comparison_v2_router)
+
+# Workspace Management (Sprint 74 Phase 5)
+from core.agents.workspace_management_api import router as workspace_management_router
+api_router.include_router(workspace_management_router)
+
+# Client Error Monitoring (self-hosted Sentry alternative)
+from core.monitoring.client_errors_api import router as client_errors_router
+api_router.include_router(client_errors_router)
+from core.monitoring.error_reporter_script import router as error_reporter_script_router
+api_router.include_router(error_reporter_script_router)
+
 # Auth OTP endpoint for expired magic links
 api_router.include_router(auth_api.router)
 api_router.include_router(mfa_api.router)
@@ -1128,6 +1261,9 @@ async def health_check_docker():
         logger.error(f"Failed health docker check: {e}")
         raise HTTPException(status_code=500, detail="Health check failed")
 
+
+# Unified Model Registry
+api_router.include_router(models_router)
 
 app.include_router(api_router, prefix="/v1")
 

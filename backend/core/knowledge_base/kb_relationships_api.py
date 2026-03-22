@@ -151,7 +151,7 @@ async def get_kb_graph(
     # Get all KB entries for this user as nodes
     node_rows = await execute(
         """
-        SELECT id, filename AS title, file_type AS content_type, file_type, created_at::text
+        SELECT entry_id AS id, filename AS title, content_type, content_type AS file_type, created_at::text
         FROM knowledge_base_entries
         WHERE account_id = :user_id AND is_active = true
         ORDER BY filename ASC
@@ -203,7 +203,7 @@ async def suggest_kb_relationships(
     """Suggest relationships based on filename/title similarity (simple word overlap)."""
     # Get the source entry
     source = await execute_one(
-        "SELECT id, filename FROM knowledge_base_entries WHERE id = :entry_id AND account_id = :user_id AND is_active = true",
+        "SELECT entry_id AS id, filename FROM knowledge_base_entries WHERE entry_id = :entry_id AND account_id = :user_id AND is_active = true",
         {"entry_id": entry_id, "user_id": user_id},
     )
     if not source:
@@ -214,16 +214,16 @@ async def suggest_kb_relationships(
     # Get all other entries (excluding already-related ones)
     candidates = await execute(
         """
-        SELECT e.id, e.filename
+        SELECT e.entry_id AS id, e.filename
         FROM knowledge_base_entries e
         WHERE e.account_id = :user_id
           AND e.is_active = true
-          AND e.id != :entry_id
-          AND e.id NOT IN (
+          AND e.entry_id != :entry_id
+          AND e.entry_id NOT IN (
             SELECT target_entry_id FROM kb_entry_relationships
             WHERE source_entry_id = :entry_id AND user_id = :user_id
           )
-          AND e.id NOT IN (
+          AND e.entry_id NOT IN (
             SELECT source_entry_id FROM kb_entry_relationships
             WHERE target_entry_id = :entry_id AND user_id = :user_id
           )

@@ -7,12 +7,16 @@ export function Editor({
 	isReadOnly = false,
 	userRole = "viewer",
 	onFlowNameChange,
+	onDuplicate,
+	onDelete,
 	teamName,
 	teamAvatarUrl,
 }: {
 	isReadOnly?: boolean;
 	userRole?: "viewer" | "guest" | "editor" | "owner";
 	onFlowNameChange?: (name: string) => Promise<void>;
+	onDuplicate?: () => void;
+	onDelete?: () => void;
 	teamName?: string;
 	teamAvatarUrl?: string | null;
 }) {
@@ -21,6 +25,8 @@ export function Editor({
 			isReadOnly={isReadOnly}
 			userRole={userRole}
 			onNameChange={onFlowNameChange}
+			onDuplicate={onDuplicate}
+			onDelete={onDelete}
 			teamName={teamName}
 			teamAvatarUrl={teamAvatarUrl}
 		/>

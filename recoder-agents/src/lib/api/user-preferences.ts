@@ -25,7 +25,7 @@ export type UserPreferencesUpdate = Partial<Omit<UserPreferences, 'user_id' | 'u
 export const getPreferences = async (): Promise<UserPreferences> => {
   const response = await backendApi.get<UserPreferences>(
     '/preferences',
-    { showErrors: false }
+    { showErrors: true }
   );
   if (response.error) throw new Error(response.error.message);
   return response.data!;
@@ -37,7 +37,7 @@ export const updatePreferences = async (
   const response = await backendApi.put<UserPreferences>(
     '/preferences',
     updates,
-    { showErrors: false }
+    { showErrors: true }
   );
   if (response.error) throw new Error(response.error.message);
   return response.data!;
@@ -47,7 +47,7 @@ export const resetPreferences = async (): Promise<UserPreferences> => {
   const response = await backendApi.post<UserPreferences>(
     '/preferences/reset',
     {},
-    { showErrors: false }
+    { showErrors: true }
   );
   if (response.error) throw new Error(response.error.message);
   return response.data!;

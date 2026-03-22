@@ -157,49 +157,58 @@ async def list_archived_threads(
     user_id: str = Depends(verify_and_get_user_id_from_jwt),
 ):
     """List all archived threads for the authenticated user with thread details."""
-    rows = await execute(
-        """
-        SELECT
-            a.thread_id,
-            a.archived_at,
-            t.name AS thread_name,
-            t.agent_id,
-            t.updated_at AS thread_updated_at,
-            p.project_id,
-            p.name AS project_name,
-            p.icon_name AS project_icon_name
-        FROM thread_archive_status a
-        LEFT JOIN threads t ON t.thread_id = a.thread_id
-        LEFT JOIN projects p ON p.project_id = t.project_id
-        WHERE a.user_id = :user_id
-        ORDER BY a.archived_at DESC
-        LIMIT :limit OFFSET :offset
-        """,
-        {"user_id": user_id, "limit": limit, "offset": offset},
-    )
+    try:
+        rows = await execute(
+            """
+            SELECT
+                a.thread_id,
+                a.archived_at,
+                t.name AS thread_name,
+                t.agent_id,
+                t.updated_at AS thread_updated_at,
+                p.project_id,
+                p.name AS project_name,
+                p.icon_name AS project_icon_name
+            FROM thread_archive_status a
+            LEFT JOIN threads t ON t.thread_id = a.thread_id
+            LEFT JOIN projects p ON p.project_id = t.project_id
+            WHERE a.user_id = :user_id
+            ORDER BY a.archived_at DESC
+            LIMIT :limit OFFSET :offset
+            """,
+            {"user_id": user_id, "limit": limit, "offset": offset},
+        )
 
-    count_row = await execute_one(
-        "SELECT COUNT(*) AS total FROM thread_archive_status WHERE user_id = :user_id",
-        {"user_id": user_id},
-    )
-    total = count_row["total"] if count_row else 0
+        count_row = await execute_one(
+            "SELECT COUNT(*) AS total FROM thread_archive_status WHERE user_id = :user_id",
+            {"user_id": user_id},
+        )
+        total = count_row["total"] if count_row else 0
 
-    threads = []
-    for row in rows:
-        threads.append({
-            "thread_id": row["thread_id"],
-            "archived_at": row["archived_at"].isoformat() if row.get("archived_at") else None,
-            "thread_name": row.get("thread_name"),
-            "agent_id": row.get("agent_id"),
-            "thread_updated_at": row["thread_updated_at"].isoformat() if row.get("thread_updated_at") else None,
-            "project_id": row.get("project_id"),
-            "project_name": row.get("project_name"),
-            "project_icon_name": row.get("project_icon_name"),
-        })
+        threads = []
+        for row in rows:
+            threads.append({
+                "thread_id": row["thread_id"],
+                "archived_at": row["archived_at"].isoformat() if row.get("archived_at") else None,
+                "thread_name": row.get("thread_name"),
+                "agent_id": row.get("agent_id"),
+                "thread_updated_at": row["thread_updated_at"].isoformat() if row.get("thread_updated_at") else None,
+                "project_id": row.get("project_id"),
+                "project_name": row.get("project_name"),
+                "project_icon_name": row.get("project_icon_name"),
+            })
 
-    return {
-        "threads": threads,
-        "total": total,
-        "limit": limit,
-        "offset": offset,
-    }
+        return {
+            "threads": threads,
+            "total": total,
+            "limit": limit,
+            "offset": offset,
+        }
+    except Exception as e:
+        logger.warning(f"Failed to list archived threads (returning empty as fallback): {e}")
+        return {
+            "threads": [],
+            "total": 0,
+            "limit": limit,
+            "offset": offset,
+        }

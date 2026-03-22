@@ -1,7 +1,14 @@
 import { handleApiError, handleNetworkError, ErrorContext, ApiError } from './error-handler';
 import { parseTierRestrictionError, RequestTooLargeError } from './api/errors';
+import { getSessionAccessToken } from '@/lib/auth/session-token';
 
-const API_URL = process.env.NEXT_PUBLIC_BACKEND_URL || '';
+const _envUrl = process.env.NEXT_PUBLIC_BACKEND_URL || '';
+// Guard: never use a localhost backend URL in production (can leak in via .env.local at build time)
+const API_URL = (_envUrl && !_envUrl.includes('localhost'))
+  ? _envUrl
+  : (typeof window !== 'undefined' && window.location.hostname !== 'localhost'
+    ? 'https://api.recoder.xyz/v1'
+    : _envUrl);
 
 export interface ApiClientOptions {
   showErrors?: boolean;
@@ -49,8 +56,19 @@ async function makeRequest<T = any>(
     // Merge with any headers from fetchOptions
     Object.assign(headers, fetchOptions.headers as Record<string, string>);
 
-    // Auth is handled via cross-subdomain session cookies (better-auth).
-    // The recoder.session_token cookie is sent automatically with credentials: "include".
+    // Attach Bearer token for cross-subdomain auth.
+    // Cross-domain cookies (credentials: "include") are increasingly blocked by browsers,
+    // so we always send the session token as a Bearer header as the primary auth method.
+    if (!headers['Authorization']) {
+      try {
+        const token = await getSessionAccessToken();
+        if (token) {
+          headers['Authorization'] = `Bearer ${token}`;
+        }
+      } catch {
+        // Session token unavailable — fall back to cookie-based auth
+      }
+    }
 
     const response = await fetch(url, {
       ...fetchOptions,

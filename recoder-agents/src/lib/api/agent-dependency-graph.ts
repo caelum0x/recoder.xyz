@@ -96,7 +96,7 @@ export async function getAgentDependenciesV2(
 ): Promise<DependencyRecord[]> {
   const response = await backendApi.get<DependencyRecord[]>(
     `/agents/${agentId}/dependencies`,
-    { showErrors: false, cache: 'no-store' }
+    { showErrors: true, cache: 'no-store' }
   );
 
   if (response.error) {
@@ -125,7 +125,7 @@ export async function removeAgentDependency(
 export async function getFullDependencyGraph(): Promise<DependencyGraph> {
   const response = await backendApi.get<DependencyGraph>(
     '/agents/dependency-graph',
-    { showErrors: false, cache: 'no-store' }
+    { showErrors: true, cache: 'no-store' }
   );
 
   if (response.error) {
@@ -140,7 +140,7 @@ export async function getAgentImpact(
 ): Promise<ImpactAnalysis> {
   const response = await backendApi.get<ImpactAnalysis>(
     `/agents/${agentId}/impact`,
-    { showErrors: false, cache: 'no-store' }
+    { showErrors: true, cache: 'no-store' }
   );
 
   if (response.error) {
@@ -153,7 +153,7 @@ export async function getAgentImpact(
 export async function getDependencyStats(): Promise<DependencyStats> {
   const response = await backendApi.get<DependencyStats>(
     '/agents/dependency-stats',
-    { showErrors: false, cache: 'no-store' }
+    { showErrors: true, cache: 'no-store' }
   );
 
   if (response.error) {

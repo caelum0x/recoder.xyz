@@ -44,10 +44,18 @@ export class DockerProvider implements ExecutionProvider {
     }
   }
 
+  private getAuthHeaders(): Record<string, string> {
+    const headers: Record<string, string> = {};
+    const token = getSessionToken();
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    return headers;
+  }
+
   async writeFile(path: string, content: string): Promise<void> {
     const res = await fetch(`${this.baseUrl}/api/file/${this.projectId}`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...this.getAuthHeaders() },
+      credentials: 'include',
       body: JSON.stringify({ path: `/workspace${path}`, content }),
     });
     if (!res.ok) {
@@ -57,14 +65,20 @@ export class DockerProvider implements ExecutionProvider {
   }
 
   async readFile(path: string): Promise<string> {
-    const res = await fetch(`${this.baseUrl}/api/file/${this.projectId}?path=/workspace${path}`);
+    const res = await fetch(`${this.baseUrl}/api/file/${this.projectId}?path=/workspace${path}`, {
+      credentials: 'include',
+      headers: this.getAuthHeaders(),
+    });
     const data = await res.json() as { content?: string; error?: string };
     if (!res.ok) throw new Error(data.error || 'Read failed');
     return data.content || '';
   }
 
   async listFiles(path: string = '/'): Promise<string[]> {
-    const res = await fetch(`${this.baseUrl}/api/files/${this.projectId}?path=/workspace${path}`);
+    const res = await fetch(`${this.baseUrl}/api/files/${this.projectId}?path=/workspace${path}`, {
+      credentials: 'include',
+      headers: this.getAuthHeaders(),
+    });
     const data = await res.json() as { files?: string[]; error?: string };
     if (!res.ok) throw new Error(data.error || 'List failed');
     return (data.files || []).map((f: string) => f.replace('/workspace', ''));
@@ -73,7 +87,8 @@ export class DockerProvider implements ExecutionProvider {
   async exec(command: string, cwd: string = '/'): Promise<string> {
     const res = await fetch(`${this.baseUrl}/api/exec/${this.projectId}`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...this.getAuthHeaders() },
+      credentials: 'include',
       body: JSON.stringify({ command, cwd: `/workspace${cwd}` }),
     });
     const data = await res.json() as { output?: string; error?: string };
@@ -117,7 +132,11 @@ export class DockerProvider implements ExecutionProvider {
 
   async destroy(): Promise<void> {
     this.terminalWs?.close();
-    await fetch(`${this.baseUrl}/api/container/${this.projectId}`, { method: 'DELETE' });
+    await fetch(`${this.baseUrl}/api/container/${this.projectId}`, {
+      method: 'DELETE',
+      headers: this.getAuthHeaders(),
+      credentials: 'include',
+    });
   }
 }
 
@@ -183,7 +202,10 @@ export function createExecutionProvider(
   options: { dockerUrl?: string; getWebContainer?: () => Promise<any>; userId?: string }
 ): ExecutionProvider {
   if (mode === 'docker') {
-    const url = options.dockerUrl || import.meta.env.VITE_DOCKER_BACKEND_URL || 'http://localhost:3100';
+    let url = options.dockerUrl || import.meta.env.VITE_DOCKER_BACKEND_URL || 'https://docker.recoder.xyz';
+    if (typeof window !== 'undefined' && window.location.hostname !== 'localhost' && url.includes('localhost')) {
+      url = 'https://docker.recoder.xyz';
+    }
     return new DockerProvider(url, projectId, options.userId);
   }
   

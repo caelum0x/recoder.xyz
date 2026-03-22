@@ -83,7 +83,7 @@ export const getPostmortems = async (filters?: PostmortemFilters): Promise<Postm
   const url = `/postmortems${query ? `?${query}` : ''}`;
 
   const response = await backendApi.get<Postmortem[]>(url, {
-    showErrors: false,
+    showErrors: true,
     cache: 'no-store',
   });
 
@@ -97,7 +97,7 @@ export const getPostmortems = async (filters?: PostmortemFilters): Promise<Postm
 export const getPostmortem = async (id: string): Promise<Postmortem> => {
   const response = await backendApi.get<Postmortem>(
     `/postmortems/${id}`,
-    { showErrors: false, cache: 'no-store' }
+    { showErrors: true, cache: 'no-store' }
   );
 
   if (response.error) {
@@ -168,7 +168,7 @@ export const publishPostmortem = async (id: string): Promise<Postmortem> => {
 export const getPostmortemStats = async (): Promise<PostmortemStats> => {
   const response = await backendApi.get<PostmortemStats>(
     '/postmortems/stats',
-    { showErrors: false, cache: 'no-store' }
+    { showErrors: true, cache: 'no-store' }
   );
 
   if (response.error) {

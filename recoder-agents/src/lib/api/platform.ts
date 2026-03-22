@@ -40,8 +40,8 @@ export async function getActivityFeed(params?: {
     if (params?.date_range) searchParams.set('date_range', params.date_range);
     const qs = searchParams.toString();
     const response = await backendApi.get<ActivityFeedResponse>(
-      `/platform/activity-feed${qs ? `?${qs}` : ''}`,
-      { showErrors: false },
+      `/activity/feed${qs ? `?${qs}` : ''}`,
+      { showErrors: true },
     );
     if (response.error) throw new Error(`Error: ${response.error.message}`);
     return response.data!;
@@ -54,7 +54,7 @@ export async function getActivityFeed(params?: {
 export async function getPlatformStats(): Promise<PlatformStats> {
   try {
     const response = await backendApi.get<PlatformStats>('/platform/stats', {
-      showErrors: false,
+      showErrors: true,
     });
     if (response.error) throw new Error(`Error: ${response.error.message}`);
     return response.data!;
