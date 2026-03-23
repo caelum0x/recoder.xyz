@@ -394,6 +394,9 @@ class Configuration:
     # Sandbox configuration
     SANDBOX_IMAGE_NAME = os.getenv("SANDBOX_SNAPSHOT_NAME", "daytonaio/sandbox:0.5.0-slim")
     SANDBOX_SNAPSHOT_NAME = os.getenv("SANDBOX_SNAPSHOT_NAME", "daytonaio/sandbox:0.5.0-slim")
+    # Full image for computer-use sandboxes (has Xvfb, VNC, browser pre-installed)
+    # Falls back to installing deps at runtime if the slim image is used
+    SANDBOX_COMPUTER_USE_SNAPSHOT = os.getenv("SANDBOX_COMPUTER_USE_SNAPSHOT", "daytonaio/sandbox:0.5.0")
     SANDBOX_ENTRYPOINT = "/usr/bin/supervisord -n -c /etc/supervisor/conf.d/supervisord.conf"
     
     # Debug configuration
