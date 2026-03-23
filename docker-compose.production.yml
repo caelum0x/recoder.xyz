@@ -240,7 +240,7 @@ services:
       # Public URL for preview proxy (same-origin via web.recoder.xyz/preview/)
       - PUBLIC_URL=https://web.recoder.xyz
       # SearXNG self-hosted search (same Docker network, port 8080 internally)
-      - SEARXNG_URL=http://host.docker.internal:8888
+      - SEARXNG_URL=http://searxng:8080
     ports:
       - "3100:3100"
     depends_on:
@@ -301,7 +301,7 @@ services:
       - RECODER_A2A_WORKER_TOKEN=${RECODER_A2A_WORKER_TOKEN}
       - RECODER_A2A_EGRESS_ALLOWLIST=http://recoder-docker-backend:3100
       # SearXNG self-hosted search (same Docker network, port 8080 internally)
-      - SEARXNG_URL=http://host.docker.internal:8888
+      - SEARXNG_URL=http://searxng:8080
     ports:
       - "5173:5173"
     extra_hosts:
@@ -401,7 +401,7 @@ services:
       - DATABASE_URL=${DATABASE_URL}
       - REDIS_URL=redis://:${REDIS_PASSWORD}@recoder-redis:6379/0
       # SearXNG self-hosted search (same Docker network, port 8080 internally)
-      - SEARXNG_URL=http://host.docker.internal:8888
+      - SEARXNG_URL=http://searxng:8080
     depends_on:
       redis:
         condition: service_healthy
@@ -455,7 +455,7 @@ services:
       - OPENAI_API_KEY=
       - ANTHROPIC_API_KEY=
       # SearXNG self-hosted search (same Docker network, port 8080 internally)
-      - SEARXNG_URL=http://host.docker.internal:8888
+      - SEARXNG_URL=http://searxng:8080
     depends_on:
       redis:
         condition: service_healthy
