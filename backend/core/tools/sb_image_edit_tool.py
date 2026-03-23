@@ -506,9 +506,9 @@ Generate, edit, upscale, or remove background from images. Video generation supp
         import httpx
 
         config = get_config()
-        api_key = config.OPENROUTER_API_KEY
+        api_key = config.OPENROUTER_API_KEY or os.getenv("OPENROUTER_API_KEY")
         if not api_key:
-            logger.warning("No OPENROUTER_API_KEY configured for image generation")
+            logger.warning("No OPENROUTER_API_KEY configured for image generation (checked config + env)")
             return None
 
         try:
@@ -600,7 +600,8 @@ Generate, edit, upscale, or remove background from images. Video generation supp
                     sandbox_path = f"{self.workspace_path}/{smart_filename}"
                     await self.write_file(sandbox_path, result_bytes)
                     return smart_filename
-                return self.fail_response("Image generation not available (no REPLICATE_API_TOKEN or OPENROUTER_API_KEY configured)")
+                logger.error("Image generation failed: OPENROUTER_API_KEY returned None from config AND env. Check backend/.env on server.")
+                return self.fail_response("Image generation not available — OPENROUTER_API_KEY not found in server config. Please set it in backend/.env and restart the backend.")
 
             # Ensure Replicate token is set
             self._get_replicate_token()
