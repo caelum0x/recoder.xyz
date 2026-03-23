@@ -8,7 +8,7 @@ type TeamMemberQuota = {
 };
 
 const TEAM_MEMBER_QUOTAS: Record<TeamPlan, TeamMemberQuota> = {
-	free: { isAvailable: false, maxMembers: 1 },
+	free: { isAvailable: true, maxMembers: 10 },
 	pro: { isAvailable: false, maxMembers: 1 },
 	team: { isAvailable: true, maxMembers: 10 },
 	// NOTE: Enterprise uses temporary values until we support per-contract limits.

@@ -1,6 +1,6 @@
 # Recoder Platform — Current State & Plan
 
-Last updated: 2026-03-23 21:00 (T3+T6 — DB schema crisis: 298 tables, hundreds of text→uuid mismatches)
+Last updated: 2026-03-24 00:30 (T7 — pipelines end-to-end, sidebar chats fix, thread loading fix, pricing popup fix, SSE improvements)
 
 ## CRITICAL SYSTEMIC ISSUE
 
@@ -76,16 +76,16 @@ Last updated: 2026-03-23 21:00 (T3+T6 — DB schema crisis: 298 tables, hundreds
 | **Download** | REAL | File download + document export (DOCX, PPTX, PDF). PDF export via WeasyPrint verified working (returns %PDF-1.7). CORS OK. Browser CORS error was from cached QUIC. |
 
 ### Agents — BROKEN FEATURES (user-reported)
-- **Past chats not showing**: Sidebar "Chats" section is EMPTY. API returns 80 threads but sidebar doesn't render them. Dashboard crash was preventing whole page from loading. DB fixes deployed (documents.thread_id, workflows table, agent_triggers columns) — needs hard refresh.
-- **Workers page**: Opens but shows nothing — no agents/workers listed
-- **Spaces page**: Opens but shows nothing
+- **Past chats not showing**: FIXED — Threads without `project_id` were silently skipped in `sidebar-thread-list.tsx`. Now uses `thread_id` as fallback project ID and routes to `/thread/{id}` for orphaned threads.
+- **Workers page**: Shows empty state ("No workers yet") — expected when user has no agents. Backend API works, frontend renders correctly. Create a worker to populate.
+- **Spaces page**: Shows empty state — expected when user has no workspaces. Backend API works, fully implemented CRUD. Create a workspace to populate.
 - **Triggers page**: Opens but shows nothing — `trigger_id` column was missing (FIXED in DB)
 - **Custom slide creation**: Can load templates but CANNOT customize them. Agent says "Read File" and reviews template but the `full_file_rewrite` tool fails silently. Only template slides show, not custom content.
-- **Thread stuck loading**: Old threads show skeleton loading forever. Thread API returns data but frontend SSE stream drops prevent rendering. New threads work better.
-- **Pricing popup on dashboard**: "Pick the plan that works for you" modal appears. Should not show since BYOK mode = no billing. Needs frontend removal.
+- **Thread stuck loading**: FIXED — `use-thread-data.ts` never set `initialLoadCompleted` on error paths. When messages query 404'd (retries exhausted), skeleton showed forever. Now marks initial load complete on error and renders empty thread instead of permanent skeleton.
+- **Pricing popup on dashboard**: FIXED — `pricing-modal-store.ts` `openPricingModal()` now returns early in BYOK mode. Billing API already hardcodes `tier_key='byok'`.
 - **Kortix banner**: "Recoder for Desktop is here" with old Kortix logo — REMOVED (deployed)
 - **Agent start timeout**: "500 Request timeout" when starting agent — backend overloaded or sandbox creation slow
-- **ERR_HTTP2_PROTOCOL_ERROR**: SSE streams still drop even after QUIC disable. Backend workers restart and kill connections.
+- **ERR_HTTP2_PROTOCOL_ERROR**: SSE streams drop on HTTP/2. Mitigated: nginx `proxy_ignore_client_abort on`, frontend uses fetch-based SSE fallback after 3 EventSource failures, notification provider upgraded to `connectTokenizedSSE`.
 - **Header overlap**: Fixed with overflow-hidden (deployed)
 
 ### Agents Sidebar Items Status
@@ -93,9 +93,9 @@ Last updated: 2026-03-23 21:00 (T3+T6 — DB schema crisis: 298 tables, hundreds
 |------|--------|---------|
 | New Chat | WORKS | Creates new thread |
 | Files | WORKS | Sandbox file browser |
-| **Chats** | **BROKEN** | API returns threads but sidebar is empty |
-| **Workers** | **BROKEN** | Opens empty page |
-| **Spaces** | **BROKEN** | Opens empty page |
+| Chats | FIXED | Threads without project_id now render with fallback routing |
+| Workers | WORKS | Shows empty state until user creates agents — expected behavior |
+| Spaces | WORKS | Shows empty state until user creates workspaces — expected behavior |
 | **Triggers** | **BROKEN** | DB column fixed, needs test |
 | Active Runs | WORKS | Shows running agents |
 | Shared | WORKS | Shared threads |
@@ -108,11 +108,11 @@ Last updated: 2026-03-23 21:00 (T3+T6 — DB schema crisis: 298 tables, hundreds
 | Monitoring | PARTIAL | UI exists, limited data |
 | Incidents | PARTIAL | UI exists |
 | Schedules | WORKS | Scheduled triggers |
-| Pipelines | MOCK | UI only, no backend |
+| Pipelines | REAL | End-to-end sequential agent execution, CRUD, SSE live progress, cancel support |
 | Leaderboard | WORKS | Agent leaderboard |
 | A/B Tests | MOCK | UI only, no backend |
 | Reports | MOCK | UI only, no backend |
-| Billing | REAL | Shows pricing plans — should be hidden in BYOK mode |
+| Billing | FIXED | Pricing modal suppressed in BYOK mode via pricing-modal-store guard |
 | Developers | WORKS | API docs |
 
 ### PM (pm.recoder.xyz)

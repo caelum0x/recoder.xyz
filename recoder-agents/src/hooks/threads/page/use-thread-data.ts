@@ -376,11 +376,19 @@ export function useThreadData(
         }
         const isThreadNotFound = threadQuery.isError &&
           (String(threadQuery.error).includes('Thread not found') || String(threadQuery.error).includes('404'));
-        const requiredDataLoaded = Boolean((threadQuery.data || isThreadNotFound) && messagesQuery.data !== undefined);
+        // Messages query errored out (all retries exhausted) — treat empty messages as loaded
+        const messagesErroredOut = messagesQuery.isError && messagesQuery.data === undefined;
+        const messagesAvailable = messagesQuery.data !== undefined || messagesErroredOut;
+        const requiredDataLoaded = Boolean((threadQuery.data || isThreadNotFound) && messagesAvailable);
 
         if (requiredDataLoaded) {
           initialLoadCompleted.current = true;
           setIsLoading(false);
+          // If messages errored, set empty array so the thread still renders
+          if (messagesErroredOut && !messagesLoadedRef.current) {
+            setMessages([]);
+            messagesLoadedRef.current = true;
+          }
         }
 
       } catch (err) {
@@ -388,12 +396,14 @@ export function useThreadData(
         if (isMounted) {
           const errorMessage =
             err instanceof Error ? err.message : 'Failed to load thread';
-          const is404Error = errorMessage.toLowerCase().includes('404') || 
+          const is404Error = errorMessage.toLowerCase().includes('404') ||
                             errorMessage.toLowerCase().includes('not found');
           if (!is404Error) {
             setError(errorMessage);
             toast.error(errorMessage);
           }
+          // Always mark initial load as completed on error so the skeleton goes away
+          initialLoadCompleted.current = true;
           setIsLoading(false);
         }
       }
@@ -413,6 +423,7 @@ export function useThreadData(
     threadQuery.error,
     projectQuery.data,
     messagesQuery.data,
+    messagesQuery.isError,
     agentRunsQuery.data,
     isShared,
     // Note: 'messages' was removed from deps to prevent infinite loops

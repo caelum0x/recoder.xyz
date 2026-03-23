@@ -1,97 +1,48 @@
-import { getGitHubIdentityState } from "@/services/accounts";
 import { fetchCurrentTeam } from "@/services/teams";
-import { getGitHubVectorStoreQuota } from "@/services/teams/plan-features/github-vector-store";
+import { getDocumentVectorStoreQuota } from "@/services/teams/plan-features/document-vector-store";
 import {
-	deleteRepositoryIndex,
-	registerRepositoryIndex,
-	triggerManualIngest,
-	updateRepositoryIndex,
+	createDocumentVectorStore,
+	deleteDocumentVectorStore,
+	updateDocumentVectorStore,
 } from "./actions";
 import {
-	getGitHubRepositoryIndexes,
-	getInstallationsWithRepos,
-	getOfficialGitHubRepositoryIndexes,
+	getDocumentVectorStores,
+	getOfficialDocumentVectorStores,
 } from "./data";
-import { OfficialRepositorySection } from "./official-repository-section";
-import { RepositoryList } from "./repository-list";
-import { RepositoryRegistrationDialog } from "./repository-registration-dialog";
-import {
-	GitHubAppInstallRequiredCard,
-	GitHubAuthErrorCard,
-	GitHubAuthRequiredCard,
-} from "./status-cards";
+import { DocumentVectorStoreCreateDialog } from "./document-store-create-dialog";
+import { DocumentVectorStoreList } from "./document-vector-store-list";
 
-export default async function TeamVectorStorePage() {
-	const [githubIdentityState, officialRepositoryIndexes] = await Promise.all([
-		getGitHubIdentityState(),
-		getOfficialGitHubRepositoryIndexes(),
-	]);
-
-	if (
-		githubIdentityState.status === "unauthorized" ||
-		githubIdentityState.status === "invalid-credential"
-	) {
-		return (
-			<div className="flex flex-col gap-[24px]">
-				<GitHubAuthRequiredCard />
-				<OfficialRepositorySection repositories={officialRepositoryIndexes} />
-			</div>
-		);
-	}
-
-	if (githubIdentityState.status === "error") {
-		return (
-			<div className="flex flex-col gap-[24px]">
-				<GitHubAuthErrorCard errorMessage={githubIdentityState.errorMessage} />
-				<OfficialRepositorySection repositories={officialRepositoryIndexes} />
-			</div>
-		);
-	}
-
-	const userClient = githubIdentityState.gitHubUserClient;
-	const installationData = await userClient.getInstallations();
-	if (installationData.total_count === 0) {
-		return (
-			<div className="flex flex-col gap-[24px]">
-				<GitHubAppInstallRequiredCard />
-				<OfficialRepositorySection repositories={officialRepositoryIndexes} />
-			</div>
-		);
-	}
-
-	const [installationsWithRepos, repositoryIndexes, team] = await Promise.all([
-		getInstallationsWithRepos(),
-		getGitHubRepositoryIndexes(),
+export default async function VectorStoresPage() {
+	const [vectorStores, officialStores, team] = await Promise.all([
+		getDocumentVectorStores(),
+		getOfficialDocumentVectorStores(),
 		fetchCurrentTeam(),
 	]);
-
-	const quota = getGitHubVectorStoreQuota(team.plan);
+	const quota = getDocumentVectorStoreQuota(team.plan);
+	const usageCount = vectorStores.length;
 	const hasAccess = quota.isAvailable;
-	const hasReachedLimit =
-		hasAccess && repositoryIndexes.length >= quota.maxStores;
-	const registerDisabled = !hasAccess || hasReachedLimit;
-	const registerDisabledReason = !hasAccess
-		? "GitHub Vector Stores are available with the Pro or Team plans."
+	const hasReachedLimit = hasAccess && usageCount >= quota.maxStores;
+	const createDisabled = !hasAccess || hasReachedLimit;
+	const createDisabledReason = !hasAccess
+		? "Upgrade your plan to use Document Vector Stores."
 		: hasReachedLimit
-			? "You've reached the maximum number of GitHub Vector Stores included in your plan."
+			? "You've reached the maximum number of Document Vector Stores."
 			: undefined;
 
 	return (
 		<div className="flex flex-col gap-[24px]">
 			<div className="flex justify-end">
-				<RepositoryRegistrationDialog
-					installationsWithRepos={installationsWithRepos}
-					registerRepositoryIndexAction={registerRepositoryIndex}
-					disabled={registerDisabled}
-					disabledReason={registerDisabledReason}
+				<DocumentVectorStoreCreateDialog
+					createAction={createDocumentVectorStore}
+					disabled={createDisabled}
+					disabledReason={createDisabledReason}
 				/>
 			</div>
-			<RepositoryList
-				repositories={repositoryIndexes}
-				officialRepositories={officialRepositoryIndexes}
-				deleteRepositoryIndexAction={deleteRepositoryIndex}
-				triggerManualIngestAction={triggerManualIngest}
-				updateRepositoryIndexAction={updateRepositoryIndex}
+			<DocumentVectorStoreList
+				stores={vectorStores}
+				officialStores={officialStores}
+				deleteAction={deleteDocumentVectorStore}
+				updateAction={updateDocumentVectorStore}
 				hasAccess={hasAccess}
 				maxStores={quota.maxStores}
 				teamPlan={team.plan}

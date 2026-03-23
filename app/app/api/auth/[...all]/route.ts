@@ -68,6 +68,41 @@ const authServiceUnavailable = (origin: string, message: string) => {
 
 export async function GET(request: NextRequest) {
   const origin = request.headers.get('origin') || '';
+  const pathname = request.nextUrl.pathname;
+
+  // Better Auth social sign-in only supports POST and returns JSON {url, redirect}.
+  // Cross-subdomain redirects (e.g. from agency.recoder.xyz) arrive as GET.
+  // Convert GET→POST, parse the JSON response, and do a real HTTP redirect.
+  if (pathname.includes('/sign-in/social')) {
+    const provider = request.nextUrl.searchParams.get('provider');
+    const callbackURL = request.nextUrl.searchParams.get('callbackURL');
+    if (provider && callbackURL) {
+      const postRequest = new NextRequest(request.url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ provider, callbackURL }),
+      });
+      try {
+        const response = await originalPOST(postRequest);
+        // Better Auth returns JSON with {url, redirect: true} — extract and do real redirect
+        const body = await response.json().catch(() => null);
+        if (body?.url) {
+          // Forward the Set-Cookie headers (state cookie) to the redirect response
+          const redirectResponse = NextResponse.redirect(body.url);
+          const setCookie = response.headers.get('set-cookie');
+          if (setCookie) {
+            redirectResponse.headers.set('set-cookie', setCookie);
+          }
+          return redirectResponse;
+        }
+        return addCorsHeaders(response, origin);
+      } catch (error) {
+        logger.error('Auth social GET→POST failed', { error: error instanceof Error ? error.message : String(error) });
+        return authServiceUnavailable(origin, 'Social sign-in is temporarily unavailable');
+      }
+    }
+  }
+
   try {
     const response = await originalGET(request);
     if (response.status >= 500) {
