@@ -964,6 +964,14 @@ async def get_project_sandbox_status(
             health_data
         )
 
+        # Generate VNC/sandbox URLs dynamically if not in config
+        vnc_preview = config.get('vnc_preview')
+        sandbox_url = config.get('sandbox_url')
+        if not vnc_preview and sandbox_id and daytona_state.lower() == 'started':
+            vnc_preview = f"https://6080-{sandbox_id}.sandbox.recoder.xyz"
+        if not sandbox_url and sandbox_id:
+            sandbox_url = f"https://8080-{sandbox_id}.sandbox.recoder.xyz"
+
         return SandboxStatusResponse(
             status=unified_status,
             sandbox_id=sandbox_id,
@@ -971,8 +979,8 @@ async def get_project_sandbox_status(
             daytona_state=daytona_state,
             services_health=services_health,
             last_checked=datetime.now(timezone.utc).isoformat(),
-            vnc_preview=config.get('vnc_preview'),
-            sandbox_url=config.get('sandbox_url'),
+            vnc_preview=vnc_preview,
+            sandbox_url=sandbox_url,
             cpu=getattr(sandbox, 'cpu', None),
             memory=getattr(sandbox, 'memory', None),
             disk=getattr(sandbox, 'disk', None),
