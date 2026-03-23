@@ -186,11 +186,15 @@ async def create_sandbox(password: str, project_id: str = None) -> AsyncSandbox:
     # Ensure /workspace exists (tools write here, but it doesn't exist in Daytona images)
     await _ensure_workspace(sandbox)
 
-    # Install essential tools and Python packages
+    # Install essential system tools (git, curl, wget, imagemagick, ffmpeg)
     try:
         result = await sandbox.process.exec(
-            "which git || (sudo apt-get update -qq && sudo apt-get install -y -qq git curl wget > /dev/null 2>&1 && echo 'tools installed')",
-            timeout=60,
+            "which git && which ffmpeg && which convert && echo ALL_PRESENT || ("
+            "sudo rm -f /etc/apt/sources.list.d/yarn.list 2>/dev/null; "
+            "sudo apt-get update -qq 2>/dev/null && "
+            "sudo apt-get install -y -qq git curl wget imagemagick ffmpeg > /dev/null 2>&1 && "
+            "echo 'tools installed')",
+            timeout=180,
         )
         logger.info(f"Sandbox tools setup: {result.result.strip()[:80]}")
     except Exception as e:
