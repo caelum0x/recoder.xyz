@@ -207,13 +207,13 @@ async def start_computer_use_safe(sandbox: AsyncSandbox):
     Tries SDK method first, then falls back to manual Xvfb + x11vnc + websockify.
     Non-blocking — fails silently if VNC tools aren't available.
     """
-    # Try SDK method first
+    # Try SDK method first (requires full image with xvfb/xfce4/x11vnc/novnc)
     try:
         await sandbox.computer_use.start()
         logger.info(f"Computer use started via SDK in sandbox {sandbox.id}")
         return
-    except Exception:
-        pass
+    except Exception as e:
+        logger.info(f"SDK computer_use.start() not available in sandbox {sandbox.id}: {e}")
 
     # Fallback: manual VNC startup (full image has Xvfb + x11vnc)
     try:

@@ -3,9 +3,12 @@ import type { OAuthProvider } from "@/services/accounts";
 
 const DEFAULT_ORIGIN = "http://localhost:3000";
 
-/** Returns the site origin from NEXT_PUBLIC_SITE_URL or falls back to localhost */
+/** Returns the site origin for auth callback redirects.
+ *  Uses NEXT_PUBLIC_APP_URL (agency.recoder.xyz) so post-auth redirect
+ *  goes back to the agency app, not the auth server (recoder.xyz).
+ */
 export function getSiteOrigin(): string {
-	const envOrigin = process.env.NEXT_PUBLIC_SITE_URL;
+	const envOrigin = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXT_PUBLIC_SITE_URL;
 
 	if (!envOrigin) {
 		return DEFAULT_ORIGIN;
