@@ -488,21 +488,25 @@ api_router = APIRouter()
 # Include all API routers without individual prefixes
 # Core routers
 api_router.include_router(versioning_router)
+# Routers with static /agents/WORD paths must come BEFORE agent_crud
+# (which has /agents/{agent_id}) to avoid FastAPI matching "leaderboard",
+# "active-runs", "quotas", "activity" as an agent_id.
 api_router.include_router(agent_runs_router)
+api_router.include_router(agent_comparison_router)
+api_router.include_router(agent_quota_router)
+api_router.include_router(agent_activity_router)
+# agent_crud has /agents/{agent_id} — must come after all static /agents/* routes
 api_router.include_router(agent_crud_router)
 api_router.include_router(agent_tools_router)
 api_router.include_router(agent_json_router)
 api_router.include_router(agent_setup_router)
 api_router.include_router(agent_analytics_router)
 api_router.include_router(agent_metrics_router)
-api_router.include_router(agent_comparison_router)
 api_router.include_router(execution_logs_router)
 api_router.include_router(agent_secrets_router)
-api_router.include_router(agent_quota_router)
 api_router.include_router(agent_import_export_router)
 api_router.include_router(agent_schedule_router)
 api_router.include_router(agent_ab_test_router)
-api_router.include_router(agent_activity_router)
 api_router.include_router(agent_versioning_router)
 api_router.include_router(agent_benchmark_router)
 api_router.include_router(agent_comments_router)

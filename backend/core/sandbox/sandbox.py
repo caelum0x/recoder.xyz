@@ -31,34 +31,79 @@ else:
 
 daytona = AsyncDaytona(daytona_config)
 
+async def _ensure_workspace(sandbox: AsyncSandbox):
+    """Ensure /workspace is a symlink to /home/daytona.
+
+    Daytona sandbox images have no /workspace directory. The sandbox user home
+    is /home/daytona and the SDK resolves relative paths there. However, all
+    tools use absolute /workspace/... paths. A symlink bridges the two so that
+    /workspace/presentations/... maps to /home/daytona/presentations/... and
+    the file server on :8080 (serving /home/daytona/) can serve them.
+    """
+    try:
+        check = await sandbox.process.exec(
+            "readlink /workspace 2>/dev/null || (test -d /workspace && echo REAL_DIR) || echo MISSING",
+            timeout=5,
+        )
+        result = (check.result or "").strip()
+
+        if result == "/home/daytona":
+            return  # Already correct symlink
+
+        if result == "REAL_DIR":
+            # Real directory exists — replace with symlink (move contents first)
+            await sandbox.process.exec(
+                "sudo cp -a /workspace/. /home/daytona/ 2>/dev/null; "
+                "sudo rm -rf /workspace && sudo ln -sfn /home/daytona /workspace",
+                timeout=15,
+            )
+            logger.info("Replaced /workspace directory with symlink -> /home/daytona")
+        elif result == "MISSING":
+            await sandbox.process.exec("sudo ln -sfn /home/daytona /workspace", timeout=10)
+            logger.info("Created /workspace -> /home/daytona symlink")
+        else:
+            # Some other symlink target — fix it
+            await sandbox.process.exec(
+                "sudo rm -f /workspace && sudo ln -sfn /home/daytona /workspace",
+                timeout=10,
+            )
+            logger.info(f"Fixed /workspace symlink (was -> {result})")
+    except Exception as e:
+        logger.warning(f"Could not ensure /workspace: {e}")
+
+
 async def get_or_start_sandbox(sandbox_id: str) -> AsyncSandbox:
     """Retrieve a sandbox by ID, check its state, and start it if needed."""
-    
+
     logger.info(f"Getting or starting sandbox with ID: {sandbox_id}")
 
     try:
         sandbox = await daytona.get(sandbox_id)
-        
+
         # Check if sandbox needs to be started
         if sandbox.state in [SandboxState.ARCHIVED, SandboxState.STOPPED, SandboxState.ARCHIVING]:
             logger.info(f"Sandbox is in {sandbox.state} state. Starting...")
             try:
                 await daytona.start(sandbox)
-                
+
                 # Wait for sandbox to reach STARTED state
                 for _ in range(30):
                     await asyncio.sleep(1)
                     sandbox = await daytona.get(sandbox_id)
                     if sandbox.state == SandboxState.STARTED:
                         break
-                
-                # Start file server and computer use when restarting
+
+                # Ensure /workspace symlink, start file server and computer use
+                await _ensure_workspace(sandbox)
                 await start_file_server(sandbox)
                 await start_computer_use_safe(sandbox)
             except Exception as e:
                 logger.error(f"Error starting sandbox: {e}")
                 raise e
-        
+        else:
+            # Sandbox already running — still ensure /workspace exists
+            await _ensure_workspace(sandbox)
+
         logger.info(f"Sandbox {sandbox_id} is ready")
         return sandbox
 
@@ -137,6 +182,9 @@ async def create_sandbox(password: str, project_id: str = None) -> AsyncSandbox:
     # Create the sandbox
     sandbox = await daytona.create(params)
     logger.info(f"Sandbox created with ID: {sandbox.id}")
+
+    # Ensure /workspace exists (tools write here, but it doesn't exist in Daytona images)
+    await _ensure_workspace(sandbox)
 
     # Install essential tools if using slim image
     try:

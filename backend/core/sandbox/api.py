@@ -128,16 +128,36 @@ async def _get_project_sandbox_resource(project_id: str) -> Optional[dict]:
 
     Replicates ResourceService.get_project_sandbox_resource using SQLAlchemy
     so that callers in this module do not need a separate DB client.
+    Falls back to projects.sandbox JSON column if sandbox_resource_id is not set.
     """
-    project = await Table("projects").get("project_id", project_id, cols="sandbox_resource_id")
+    project = await Table("projects").get("project_id", project_id, cols="sandbox_resource_id, sandbox")
     if not project:
         return None
 
     sandbox_resource_id = project.get("sandbox_resource_id")
-    if not sandbox_resource_id:
-        return None
+    if sandbox_resource_id:
+        return await Table("resources").get("id", sandbox_resource_id)
 
-    return await Table("resources").get("id", sandbox_resource_id)
+    # Fallback: read from projects.sandbox JSON column
+    sandbox_data = project.get("sandbox")
+    if sandbox_data:
+        import json
+        if isinstance(sandbox_data, str):
+            try:
+                sandbox_data = json.loads(sandbox_data)
+            except (json.JSONDecodeError, TypeError):
+                return None
+        sandbox_id = sandbox_data.get('id') or sandbox_data.get('sandbox_id')
+        if sandbox_id:
+            # Return a dict shaped like a resource record
+            return {
+                'id': None,
+                'external_id': sandbox_id,
+                'config': {k: v for k, v in sandbox_data.items() if k not in ('id', 'sandbox_id')},
+                'status': 'active',
+            }
+
+    return None
 
 
 class FileInfo(BaseModel):
