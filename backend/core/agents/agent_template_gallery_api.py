@@ -108,7 +108,7 @@ CATEGORY_LABELS = {
 @router.post("", response_model=AgentTemplate, summary="Create agent template")
 async def create_template(body: CreateTemplateRequest, request: Request):
     """Create a new agent template."""
-    user_id = verify_and_get_user_id_from_jwt(request)
+    user_id = await verify_and_get_user_id_from_jwt(request)
 
     if body.category not in VALID_CATEGORIES:
         raise HTTPException(status_code=400, detail=f"Invalid category. Must be one of: {', '.join(VALID_CATEGORIES)}")
@@ -170,7 +170,7 @@ async def list_templates(
     offset: int = Query(0, ge=0),
 ):
     """List agent templates with filtering, search, and sorting."""
-    user_id = verify_and_get_user_id_from_jwt(request)
+    user_id = await verify_and_get_user_id_from_jwt(request)
 
     try:
         where_clauses = ["(is_public = true OR user_id = :user_id)"]
@@ -238,7 +238,7 @@ async def list_templates(
 @router.get("/categories", response_model=List[CategoryCount], summary="List categories with counts")
 async def list_categories(request: Request):
     """List all template categories with their template counts."""
-    user_id = verify_and_get_user_id_from_jwt(request)
+    user_id = await verify_and_get_user_id_from_jwt(request)
 
     try:
         sql = """
@@ -279,7 +279,7 @@ async def list_categories(request: Request):
 @router.get("/{template_id}", response_model=AgentTemplate, summary="Get template detail")
 async def get_template(template_id: str, request: Request):
     """Get a single template by ID."""
-    user_id = verify_and_get_user_id_from_jwt(request)
+    user_id = await verify_and_get_user_id_from_jwt(request)
 
     try:
         sql = """
@@ -325,7 +325,7 @@ async def use_template(template_id: str, request: Request):
     Create a new agent from a template.
     Increments the template's use_count and logs the usage.
     """
-    user_id = verify_and_get_user_id_from_jwt(request)
+    user_id = await verify_and_get_user_id_from_jwt(request)
 
     try:
         # Fetch the template
@@ -396,7 +396,7 @@ async def use_template(template_id: str, request: Request):
 @router.patch("/{template_id}", response_model=AgentTemplate, summary="Update template")
 async def update_template(template_id: str, body: UpdateTemplateRequest, request: Request):
     """Update an agent template. Only the owner can update."""
-    user_id = verify_and_get_user_id_from_jwt(request)
+    user_id = await verify_and_get_user_id_from_jwt(request)
 
     try:
         # Verify ownership
@@ -480,7 +480,7 @@ async def update_template(template_id: str, body: UpdateTemplateRequest, request
 @router.delete("/{template_id}", summary="Delete template")
 async def delete_template(template_id: str, request: Request):
     """Delete an agent template. Only the owner can delete."""
-    user_id = verify_and_get_user_id_from_jwt(request)
+    user_id = await verify_and_get_user_id_from_jwt(request)
 
     try:
         sql = """
@@ -509,7 +509,7 @@ async def create_template_from_agent(
     request: Request,
 ):
     """Create a template from an existing agent's configuration."""
-    user_id = verify_and_get_user_id_from_jwt(request)
+    user_id = await verify_and_get_user_id_from_jwt(request)
 
     if body.category not in VALID_CATEGORIES:
         raise HTTPException(status_code=400, detail=f"Invalid category. Must be one of: {', '.join(VALID_CATEGORIES)}")
