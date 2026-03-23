@@ -355,6 +355,44 @@ class SandboxPresentationTool(SandboxToolsBase):
         return "".join(c for c in name if c.isalnum() or c in "-_").lower()
 
 
+    def _merge_content_with_template(self, template_html: str, new_content: str, slide_number: int, presentation_title: str) -> str:
+        """Merge new content into an existing template slide, preserving its CSS/design.
+
+        Extracts everything from <head> (styles, fonts, scripts) and
+        replaces only the <body> content with the AI's new content.
+        This ensures template design (colors, fonts, layout classes) remains
+        available even when the AI sends minimal HTML.
+        """
+        import re
+
+        # Extract the <head> section from the template (preserves all CSS)
+        head_match = re.search(r'<head[^>]*>(.*?)</head>', template_html, re.DOTALL)
+        head_content = head_match.group(1) if head_match else ''
+
+        # Extract <style> blocks from body (templates often put styles in body)
+        body_match = re.search(r'<body[^>]*>(.*)</body>', template_html, re.DOTALL)
+        body_content = body_match.group(1) if body_match else ''
+        body_styles = re.findall(r'<style[^>]*>.*?</style>', body_content, re.DOTALL)
+        body_style_block = '\n'.join(body_styles)
+
+        # Update the title
+        head_content = re.sub(
+            r'<title>.*?</title>',
+            f'<title>{presentation_title} - Slide {slide_number}</title>',
+            head_content,
+        )
+
+        return f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+{head_content}
+</head>
+<body>
+{body_style_block}
+{new_content}
+</body>
+</html>"""
+
     def _create_slide_html(self, slide_content: str, slide_number: int, total_slides: int, presentation_title: str) -> str:
         """Create a basic HTML document with Google Fonts"""
         
@@ -933,17 +971,30 @@ class SandboxPresentationTool(SandboxToolsBase):
             if presentation_title != "Presentation":  # Only update if explicitly provided
                 metadata["title"] = presentation_title
             
-            # Create slide HTML
-            slide_html = self._create_slide_html(
-                slide_content=content,
-                slide_number=slide_number,
-                total_slides=0,  # Will be updated when regenerating navigation
-                presentation_title=presentation_title
-            )
-            
-            # Save slide file
+            # Check if a template slide already exists (from load_template_design copy)
             slide_filename = f"slide_{slide_number:02d}.html"
             slide_path = f"{presentation_path}/{slide_filename}"
+            existing_html = None
+            try:
+                existing_bytes = await self.sandbox.fs.download_file(slide_path)
+                if existing_bytes and len(existing_bytes) > 500:
+                    existing_html = existing_bytes.decode('utf-8', errors='ignore')
+            except Exception:
+                pass
+
+            if existing_html and '<style>' in existing_html:
+                # Template slide exists — preserve its CSS, inject new content into body
+                slide_html = self._merge_content_with_template(existing_html, content, slide_number, presentation_title)
+            else:
+                # No template — create fresh slide
+                slide_html = self._create_slide_html(
+                    slide_content=content,
+                    slide_number=slide_number,
+                    total_slides=0,
+                    presentation_title=presentation_title
+                )
+            
+            # Save slide file (slide_filename and slide_path already set above)
             await self.write_file(slide_path, slide_html.encode())
             
             # Update metadata
