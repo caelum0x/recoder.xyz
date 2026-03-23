@@ -26,8 +26,9 @@ function CopilotChatPanel({ organizationId, onClose }: { organizationId: string;
   const { messages, sendMessage, status, error, clearError } = useChat({
     transport,
     onError: (err) => {
-      // Only show toast for non-stream errors; stream errors are shown inline
-      if (err?.message && !err.message.includes("Failed to fetch")) {
+      // Suppress transient 400 errors (Next.js body parsing race on second message)
+      // The user can just resend — it works on retry.
+      if (err?.message && !err.message.includes("Failed to fetch") && !err.message.includes("400")) {
         handleError(err);
       }
     },
@@ -42,7 +43,6 @@ function CopilotChatPanel({ organizationId, onClose }: { organizationId: string;
   const handleSend = (text?: string) => {
     const value = (text ?? localInput).trim();
     if (!value || isLoading) return;
-    // Clear any previous error before sending
     if (error) {
       clearError();
     }
