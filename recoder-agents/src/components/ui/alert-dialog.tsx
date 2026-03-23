@@ -46,6 +46,7 @@ function AlertDialogOverlay({
 
 function AlertDialogContent({
   className,
+  children,
   ...props
 }: React.ComponentProps<typeof AlertDialogPrimitive.Content>) {
   return (
@@ -58,7 +59,12 @@ function AlertDialogContent({
           className,
         )}
         {...props}
-      />
+      >
+        {!props['aria-describedby'] && (
+          <AlertDialogPrimitive.Description className="sr-only">Alert dialog</AlertDialogPrimitive.Description>
+        )}
+        {children}
+      </AlertDialogPrimitive.Content>
     </AlertDialogPortal>
   );
 }

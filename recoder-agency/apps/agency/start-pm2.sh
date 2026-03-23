@@ -19,4 +19,21 @@ if [ -f "$ENV_FILE" ]; then
   done < "$ENV_FILE"
 fi
 
+# Next.js standalone doesn't serve static files — copy them into the standalone dir
+if [ -d ".next/static" ] && [ ! -d ".next/standalone/apps/agency/.next/static" ]; then
+  mkdir -p .next/standalone/apps/agency/.next/
+  cp -r .next/static .next/standalone/apps/agency/.next/static
+fi
+if [ -d "public" ] && [ ! -d ".next/standalone/apps/agency/public" ]; then
+  cp -r public .next/standalone/apps/agency/public
+fi
+
+# Prisma engine: symlink auth-client into standalone so Prisma can find the engine
+PRISMA_SRC=".next/standalone/node_modules/.pnpm/@recoder+auth@file+..+packages+auth_typescript@5.7.3/node_modules/@recoder/auth/prisma/auth-client"
+PRISMA_DST=".next/standalone/apps/agency/prisma/auth-client"
+if [ -d "$PRISMA_SRC" ] && [ ! -e "$PRISMA_DST" ]; then
+  mkdir -p "$(dirname "$PRISMA_DST")"
+  ln -sf "$PRISMA_SRC" "$PRISMA_DST"
+fi
+
 exec node .next/standalone/apps/agency/server.js
