@@ -1,3 +1,5 @@
+import { getSessionAccessToken } from '@/lib/auth/session-token';
+
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'https://api.recoder.xyz/v1';
 
 /**
@@ -17,6 +19,61 @@ export function buildSandboxFileUrl(
   }
 
   return `${BACKEND_URL}/sandboxes/${sandboxId}/files/content?path=${encodeURIComponent(processedPath)}`;
+}
+
+/**
+ * Build auth headers for sandbox file requests.
+ * Returns headers object with Bearer token if available.
+ */
+export async function getSandboxAuthHeaders(): Promise<Record<string, string>> {
+  const headers: Record<string, string> = {};
+  try {
+    const token = await getSessionAccessToken();
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+  } catch {
+    // Fall back to cookie-based auth
+  }
+  return headers;
+}
+
+/**
+ * Fetch sandbox file content with authentication.
+ * Uses Bearer token auth since cross-origin cookies are blocked.
+ */
+export async function fetchSandboxFile(
+  url: string,
+  options: RequestInit = {},
+): Promise<Response> {
+  const authHeaders = await getSandboxAuthHeaders();
+  return fetch(url, {
+    ...options,
+    headers: {
+      ...authHeaders,
+      ...(options.headers as Record<string, string>),
+    },
+    credentials: 'include',
+  });
+}
+
+/**
+ * Fetch an HTML file from the sandbox and return a blob URL suitable for iframe src.
+ * This bypasses the iframe auth problem: browsers can't send Bearer tokens via iframe src,
+ * so we fetch the content via JS with auth headers and create a blob URL.
+ */
+export async function fetchSandboxHtmlAsBlobUrl(
+  url: string,
+): Promise<string | null> {
+  try {
+    const response = await fetchSandboxFile(url);
+    if (!response.ok) return null;
+    const html = await response.text();
+    const blob = new Blob([html], { type: 'text/html' });
+    return URL.createObjectURL(blob);
+  } catch {
+    return null;
+  }
 }
 
 /**

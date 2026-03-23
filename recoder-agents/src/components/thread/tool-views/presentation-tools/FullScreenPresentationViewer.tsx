@@ -20,7 +20,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { buildSandboxFileUrl } from '@/lib/utils/url';
+import { buildSandboxFileUrl, fetchSandboxFile, fetchSandboxHtmlAsBlobUrl } from '@/lib/utils/url';
 import { downloadPresentation, DownloadFormat, handleGoogleSlidesUpload } from '../utils/presentation-utils';
 import { useDownloadRestriction } from '@/hooks/billing';
 
@@ -120,11 +120,11 @@ export function FullScreenPresentationViewer({
       );
       
       const urlWithCacheBust = `${metadataUrl}?t=${Date.now()}`;
-      
-      
-      const response = await fetch(urlWithCacheBust, {
+
+
+      const response = await fetchSandboxFile(urlWithCacheBust, {
         cache: 'no-cache',
-        headers: { 'Cache-Control': 'no-cache' }
+        headers: { 'Cache-Control': 'no-cache' },
       });
       
       if (response.ok) {
@@ -334,18 +334,48 @@ export function FullScreenPresentationViewer({
     const SlideIframeComponent = React.memo(({ slide }: { slide: SlideMetadata & { number: number } }) => {
       const [containerRef, setContainerRef] = useState<HTMLDivElement | null>(null);
       const [scale, setScale] = useState(1);
+      const [blobUrl, setBlobUrl] = useState<string | null>(null);
+      const prevBlobRef = useRef<string | null>(null);
+
+      // Fetch slide HTML with auth and create blob URL
+      useEffect(() => {
+        // In editor mode, we use the sandbox URL directly (different origin, not our API)
+        if (showEditor || !sandboxId) return;
+
+        let cancelled = false;
+        const slideUrl = buildSandboxFileUrl(sandboxId, slide.file_path);
+        const slideUrlWithCacheBust = `${slideUrl}?t=${refreshTimestamp}`;
+
+        (async () => {
+          const url = await fetchSandboxHtmlAsBlobUrl(slideUrlWithCacheBust);
+          if (!cancelled) {
+            if (prevBlobRef.current) URL.revokeObjectURL(prevBlobRef.current);
+            prevBlobRef.current = url;
+            setBlobUrl(url);
+          }
+        })();
+
+        return () => { cancelled = true; };
+      }, [sandboxId, slide.file_path, refreshTimestamp, showEditor]);
+
+      // Cleanup blob on unmount
+      useEffect(() => {
+        return () => {
+          if (prevBlobRef.current) URL.revokeObjectURL(prevBlobRef.current);
+        };
+      }, []);
 
       useEffect(() => {
         if (containerRef) {
           const updateScale = () => {
             const containerWidth = containerRef.offsetWidth;
             const containerHeight = containerRef.offsetHeight;
-            
+
             // Calculate scale to fit 1920x1080 into container while maintaining aspect ratio
             const scaleX = containerWidth / 1920;
             const scaleY = containerHeight / 1080;
             const newScale = Math.min(scaleX, scaleY);
-            
+
             // Only update if scale actually changed to prevent unnecessary re-renders
             if (Math.abs(newScale - scale) > 0.001) {
               setScale(newScale);
@@ -379,13 +409,14 @@ export function FullScreenPresentationViewer({
         );
       }
 
-      const slideUrl = buildSandboxFileUrl(sandboxId, slide.file_path);
-      // Add cache-busting to iframe src to ensure fresh content
-      const slideUrlWithCacheBust = `${slideUrl}?t=${refreshTimestamp}`;
+      // In editor mode, use the sandbox URL directly; otherwise use auth blob URL
+      const iframeSrc = showEditor
+        ? `${sandboxUrl}/api/html/${slide.file_path}/editor`
+        : blobUrl || buildSandboxFileUrl(sandboxId, slide.file_path);
 
       return (
         <div className="w-full h-full flex items-center justify-center bg-transparent">
-          <div 
+          <div
             ref={setContainerRef}
             className="relative bg-transparent rounded-lg overflow-hidden"
             style={{
@@ -398,8 +429,8 @@ export function FullScreenPresentationViewer({
             }}
           >
             <iframe
-              key={`slide-${slide.number}-${refreshTimestamp}-${showEditor}`} // Key with stable timestamp ensures iframe refreshes when metadata changes
-              src={showEditor ? `${sandboxUrl}/api/html/${slide.file_path}/editor` : slideUrlWithCacheBust}
+              key={`slide-${slide.number}-${refreshTimestamp}-${showEditor}`}
+              src={iframeSrc}
               title={`Slide ${slide.number}: ${slide.title}`}
               className="border-0 rounded-xl"
               sandbox="allow-same-origin allow-scripts allow-modals"
@@ -423,10 +454,10 @@ export function FullScreenPresentationViewer({
       );
     }, (prevProps, nextProps) => {
       // Custom comparison function - only re-render if slide number or file_path changes
-      return prevProps.slide.number === nextProps.slide.number && 
+      return prevProps.slide.number === nextProps.slide.number &&
              prevProps.slide.file_path === nextProps.slide.file_path;
     });
-    
+
     SlideIframeComponent.displayName = 'SlideIframeComponent';
     return SlideIframeComponent;
   }, [sandboxId, sandboxUrl, refreshTimestamp, showEditor]);

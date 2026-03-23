@@ -95,3 +95,27 @@ export const getPipelineRuns = async (
   if (response.error) throw new Error(response.error.message);
   return response.data!;
 };
+
+export const cancelPipelineRun = async (
+  pipelineId: string,
+  runId: string,
+): Promise<{ status: string }> => {
+  const response = await backendApi.post<{ status: string }>(
+    `/pipelines/${pipelineId}/cancel/${runId}`,
+    {},
+  );
+  if (response.error) throw new Error(response.error.message);
+  return response.data!;
+};
+
+export const getPipelineRun = async (
+  pipelineId: string,
+  runId: string,
+): Promise<PipelineRun> => {
+  const response = await backendApi.get<PipelineRun>(
+    `/pipelines/${pipelineId}/runs/${runId}`,
+    { showErrors: true },
+  );
+  if (response.error) throw new Error(response.error.message);
+  return response.data!;
+};
