@@ -1,6 +1,6 @@
 # Recoder Platform — Current State & Plan
 
-Last updated: 2026-03-23 16:00 (T6 session — /workspace symlink + resource linkage fixes deployed)
+Last updated: 2026-03-23 16:30 (T6 — slides partially working, /workspace symlink + resource linkage deployed)
 
 ---
 
@@ -135,7 +135,7 @@ Confirmed via server logs: `[DaytonaFileService] write_file verify failed for /w
 
 **Verified via server test**: After symlink fix, files written to `/workspace/presentations/...` appear in `/home/daytona/presentations/...` and are readable via the sandbox file API.
 
-**What needs browser test**: Create a NEW presentation on agents.recoder.xyz. The sandbox should get the symlink, files should be written, and slides should render.
+**Browser test result (T6)**: Slides partially working! Architect template confirmed rendering at page 9/12. Template listing tool returns unparseable JSON ("No templates available" / "Failed to parse templates data"). Template PDF preview blocked by CSP (`object-src`). But actual slide HTML content IS being written and rendered — the core `/workspace` symlink fix works.
 
 ### 2. Feedback 500
 Table may be in wrong database. Need to check which DB the endpoint queries.
@@ -168,30 +168,19 @@ Sandbox access checks may still fail for some combinations.
 | **Sandbox images** | `0.5.0-slim` (default), `0.5.0` (full, with VNC) |
 | **SearXNG** | 127.0.0.1:8888 → container searxng:8080 |
 | **SSH** | `ssh -i ~/.ssh/id_ed25519_hetzner root@77.42.23.19` |
-Access to resource at 'https://api.recoder.xyz/v1/presence/thread/55f7fcf4-8530-4e24-8511-a20bd91002ba/stream?token=yWyDDaZHJhfND8c4fzLzhnJWmz1LesAP' from origin 'https://agents.recoder.xyz' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.Understand this error
-api.recoder.xyz/v1/presence/thread/55f7fcf4-8530-4e24-8511-a20bd91002ba/stream?token=yWyDDaZHJhfND8c4fzLzhnJWmz1LesAP:1  Failed to load resource: net::ERR_FAILEDUnderstand this error
-55f7fcf4-8530-4e24-8511-a20bd91002ba:1 Access to fetch at 'https://api.recoder.xyz/v1/projects/facd652b-b5c8-415c-82b1-975531016acf' from origin 'https://agents.recoder.xyz' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.Understand this error
-api.recoder.xyz/v1/projects/facd652b-b5c8-415c-82b1-975531016acf:1  Failed to load resource: net::ERR_FAILEDUnderstand this error
-55f7fcf4-8530-4e24-8511-a20bd91002ba:1 Access to fetch at 'https://api.recoder.xyz/v1/presence/update' from origin 'https://agents.recoder.xyz' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.Understand this error
-api.recoder.xyz/v1/presence/update:1  Failed to load resource: net::ERR_FAILEDUnderstand this error
-55f7fcf4-8530-4e24-8511-a20bd91002ba:1 Access to fetch at 'https://api.recoder.xyz/v1/agents/active-runs' from origin 'https://agents.recoder.xyz' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.Understand this error
-api.recoder.xyz/v1/agents/active-runs:1  Failed to load resource: net::ERR_FAILEDUnderstand this error
-55f7fcf4-8530-4e24-8511-a20bd91002ba:1 Access to fetch at 'https://api.recoder.xyz/v1/agent-runs/active' from origin 'https://agents.recoder.xyz' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.Understand this error
-api.recoder.xyz/v1/agent-runs/active:1  Failed to load resource: net::ERR_FAILEDUnderstand this error
-55f7fcf4-8530-4e24-8511-a20bd91002ba:1 Access to fetch at 'https://api.recoder.xyz/v1/projects/facd652b-b5c8-415c-82b1-975531016acf' from origin 'https://agents.recoder.xyz' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.Understand this error
-api.recoder.xyz/v1/projects/facd652b-b5c8-415c-82b1-975531016acf:1  Failed to load resource: net::ERR_FAILEDUnderstand this error
-55f7fcf4-8530-4e24-8511-a20bd91002ba:1 Access to fetch at 'https://api.recoder.xyz/v1/agents/active-runs' from origin 'https://agents.recoder.xyz' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.Understand this error
-api.recoder.xyz/v1/agents/active-runs:1  Failed to load resource: net::ERR_FAILEDUnderstand this error
-55f7fcf4-8530-4e24-8511-a20bd91002ba:1 Access to resource at 'https://api.recoder.xyz/v1/presence/thread/55f7fcf4-8530-4e24-8511-a20bd91002ba/stream?token=yWyDDaZHJhfND8c4fzLzhnJWmz1LesAP' from origin 'https://agents.recoder.xyz' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.Understand this error
-api.recoder.xyz/v1/presence/thread/55f7fcf4-8530-4e24-8511-a20bd91002ba/stream?token=yWyDDaZHJhfND8c4fzLzhnJWmz1LesAP:1  Failed to load resource: net::ERR_FAILEDUnderstand this error
-55f7fcf4-8530-4e24-8511-a20bd91002ba:1 Access to resource at 'https://api.recoder.xyz/v1/presence/thread/55f7fcf4-8530-4e24-8511-a20bd91002ba/stream?token=yWyDDaZHJhfND8c4fzLzhnJWmz1LesAP' from origin 'https://agents.recoder.xyz' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.Understand this error
-71550-a0d26949554ab28b.js:1 [connectTokenizedSSE] EventSource failed 3 times, switching to fetch SSE fallback
-n.onerror @ 71550-a0d26949554ab28b.js:1Understand this warning
-api.recoder.xyz/v1/presence/thread/55f7fcf4-8530-4e24-8511-a20bd91002ba/stream?token=yWyDDaZHJhfND8c4fzLzhnJWmz1LesAP:1  Failed to load resource: net::ERR_FAILEDUnderstand this error
-55f7fcf4-8530-4e24-8511-a20bd91002ba:1  Failed to load resource: the server responded with a status of 503 (Service Unavailable)Understand this error
-55f7fcf4-8530-4e24-8511-a20bd91002ba:1 Access to fetch at 'https://api.recoder.xyz/v1/project/facd652b-b5c8-415c-82b1-975531016acf/sandbox/status' from origin 'https://agents.recoder.xyz' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.Understand this error
-api.recoder.xyz/v1/project/facd652b-b5c8-415c-82b1-975531016acf/sandbox/status:1  Failed to load resource: net::ERR_FAILEDUnderstand this error
-Node cannot be found in the current page.Understand this warning
-api.recoder.xyz/v1/realtime/projects/facd652b-b5c8-415c-82b1-975531016acf/stream?token=yWyDDaZHJhfND8c4fzLzhnJWmz1LesAP:1  Failed to load resource: net::ERR_QUIC_PROTOCOL_ERRORUnderstand this error
-api.recoder.xyz/v1/agent-run/80693832-cd60-42d2-b606-2830220072d4/stream?token=yWyDDaZHJhfND8c4fzLzhnJWmz1LesAP:1  Failed to load resource: net::ERR_QUIC_PROTOCOL_ERRORUnderstand this error
-api.recoder.xyz/v1/notifications/stream?token=yWyDDaZHJhfND8c4fzLzhnJWmz1LesAP:1  Failed to load resource: net::ERR_QUIC_PROTOCOL_ERRORUnderstand this error
+
+---
+
+## REMAINING ISSUES (prioritized)
+
+### P0 — Blocking user testing
+1. **503 intermittent on thread pages**: Next.js agents frontend has stale/corrupt `.next` build. Needs full rebuild on server.
+2. **CORS errors on SSE streams**: `ERR_QUIC_PROTOCOL_ERROR` on `/presence/*/stream`, `/realtime/*/stream`, `/notifications/stream`. Cloudflare HTTP/3 (QUIC) breaks long-lived SSE. May need to disable QUIC or use WebSocket fallback.
+3. **Dashboard crash**: `TypeError: Cannot read properties of undefined (reading 'length')` — `/v1/agents/leaderboard` route conflicts with `/v1/agents/{agent_id}` (FastAPI matches "leaderboard" as agent_id).
+
+### P1 — Feature broken
+4. **Template listing**: `list_presentation_templates` tool returns unparseable JSON → "No templates available" in UI.
+5. **Template PDF preview CSP**: `object-src` blocked by Content Security Policy for `api.recoder.xyz/v1/presentation-templates/*/pdf`.
+6. **Files tab empty**: Depends on sandbox file writes working (fixed by /workspace symlink) + frontend receiving sandbox ID (fixed by resource linkage).
+7. **Feedback API 500**: Table in wrong database.
+8. **Computer use**: Needs full sandbox image (not slim). `computer_use.start()` is the proper SDK method per Daytona docs.
