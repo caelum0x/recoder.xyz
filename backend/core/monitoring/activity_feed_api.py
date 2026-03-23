@@ -173,7 +173,8 @@ async def list_activity_feed(
     total = int(count_row["count"]) if count_row else 0
 
     return {
-        "events": serialize_rows(rows),
+        "items": serialize_rows(rows),
+        "events": serialize_rows(rows),  # backward compat
         "total": total,
         "limit": limit,
         "offset": offset,
