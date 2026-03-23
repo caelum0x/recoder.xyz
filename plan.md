@@ -40,9 +40,45 @@ Last updated: 2026-03-23 20:20 (T6 — 22 fixes, comprehensive issue list, dashb
 | **Search** | REAL | Search input in config menu works |
 | **Download** | REAL | File download + document export (DOCX, PPTX, PDF). PDF export via WeasyPrint verified working (returns %PDF-1.7). CORS OK. Browser CORS error was from cached QUIC. |
 
-### Agents UI Issues
-- **Header overlap**: "Recoder" logo and "Share" button collide when slide preview panel opens — CSS layout doesn't account for panel width
-- **CORS on page load**: SSE streams (presence, notifications, realtime) fail with CORS on initial page load, then recover after fetch fallback kicks in. Root cause: first HTTP/2 connection attempt sometimes fails before CORS headers are received. Non-blocking — features work after fallback.
+### Agents — BROKEN FEATURES (user-reported)
+- **Past chats not showing**: Sidebar "Chats" section is EMPTY. API returns 80 threads but sidebar doesn't render them. Dashboard crash was preventing whole page from loading. DB fixes deployed (documents.thread_id, workflows table, agent_triggers columns) — needs hard refresh.
+- **Workers page**: Opens but shows nothing — no agents/workers listed
+- **Spaces page**: Opens but shows nothing
+- **Triggers page**: Opens but shows nothing — `trigger_id` column was missing (FIXED in DB)
+- **Custom slide creation**: Can load templates but CANNOT customize them. Agent says "Read File" and reviews template but the `full_file_rewrite` tool fails silently. Only template slides show, not custom content.
+- **Thread stuck loading**: Old threads show skeleton loading forever. Thread API returns data but frontend SSE stream drops prevent rendering. New threads work better.
+- **Pricing popup on dashboard**: "Pick the plan that works for you" modal appears. Should not show since BYOK mode = no billing. Needs frontend removal.
+- **Kortix banner**: "Recoder for Desktop is here" with old Kortix logo — REMOVED (deployed)
+- **Agent start timeout**: "500 Request timeout" when starting agent — backend overloaded or sandbox creation slow
+- **ERR_HTTP2_PROTOCOL_ERROR**: SSE streams still drop even after QUIC disable. Backend workers restart and kill connections.
+- **Header overlap**: Fixed with overflow-hidden (deployed)
+
+### Agents Sidebar Items Status
+| Item | Status | Details |
+|------|--------|---------|
+| New Chat | WORKS | Creates new thread |
+| Files | WORKS | Sandbox file browser |
+| **Chats** | **BROKEN** | API returns threads but sidebar is empty |
+| **Workers** | **BROKEN** | Opens empty page |
+| **Spaces** | **BROKEN** | Opens empty page |
+| **Triggers** | **BROKEN** | DB column fixed, needs test |
+| Active Runs | WORKS | Shows running agents |
+| Shared | WORKS | Shared threads |
+| Favorites | WORKS | Favorited threads |
+| Marketplace | WORKS | Agent marketplace |
+| Templates | WORKS | Agent templates |
+| Prompts | WORKS | Prompt library |
+| Activity | WORKS | Activity feed (crash fixed) |
+| Runs | WORKS | Active/past agent runs |
+| Monitoring | PARTIAL | UI exists, limited data |
+| Incidents | PARTIAL | UI exists |
+| Schedules | WORKS | Scheduled triggers |
+| Pipelines | MOCK | UI only, no backend |
+| Leaderboard | WORKS | Agent leaderboard |
+| A/B Tests | MOCK | UI only, no backend |
+| Reports | MOCK | UI only, no backend |
+| Billing | REAL | Shows pricing plans — should be hidden in BYOK mode |
+| Developers | WORKS | API docs |
 
 ### PM (pm.recoder.xyz)
 - **Copilot**: PATCHED — direct OpenRouter fetch, bypasses broken AI SDK
