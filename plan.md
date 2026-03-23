@@ -1,6 +1,6 @@
 # Recoder Platform — Current State & Plan
 
-Last updated: 2026-03-23 19:15 (T6 — 17 fixes deployed, QUIC disabled, VNC + sandbox URLs live)
+Last updated: 2026-03-23 20:05 (T3+T6 — slides confirmed rendering in browser, VNC working, sandbox URLs live)
 
 ---
 
@@ -10,7 +10,7 @@ Last updated: 2026-03-23 19:15 (T6 — 17 fixes deployed, QUIC disabled, VNC + s
 - **Plain text chat**: WORKS
 - **Web search**: WORKS (SearXNG, no API key needed)
 - **Image search**: WORKS (SearXNG `categories=images`, replaced Serper API)
-- **Slides**: WORKS — `/workspace` symlink, resource linkage, template name sanitization, CSP object-src all fixed
+- **Slides**: WORKS — user confirmed: slide HTML renders in browser at `8080-{id}.sandbox.recoder.xyz`. Template design basic (plain text, no styling from template design system). `/workspace` symlink, resource linkage, CSP object-src all fixed.
 - **Data/Excel**: WORKS — openpyxl installed in sandbox, verified: creates XLSX with formulas + styling (5KB)
 - **Docs**: WORKS — python-docx installed in sandbox, verified: creates DOCX with headings + tables (37KB)
 - **Presentation export**: WORKS — python-pptx installed in sandbox, verified: creates PPTX (28KB)
@@ -53,7 +53,7 @@ Last updated: 2026-03-23 19:15 (T6 — 17 fixes deployed, QUIC disabled, VNC + s
 - **Settings/Workflows**: not functional (Giselle-based, separate system)
 
 ### Recoder Web (web.recoder.xyz)
-- **All features**: BROKEN — separate codebase (docker-backend TypeScript), not addressed this session
+- **All features**: BROKEN — separate codebase (docker-backend TypeScript). T3 deployed: bun→npm, Docker stream parsing hardened, dev-server STRICT_AUTH bypass. But live preview still not tested end-to-end in browser. Needs: auth cookie propagation, preview URL routing, auto-install timing fixes.
 
 ### Infrastructure
 - **Sandbox preview URLs**: WORKS — Let's Encrypt wildcard cert, DNS only, nginx → daytona-proxy → sandbox
@@ -143,7 +143,7 @@ Confirmed via server logs: `[DaytonaFileService] write_file verify failed for /w
 
 **Verified via server test**: After symlink fix, files written to `/workspace/presentations/...` appear in `/home/daytona/presentations/...` and are readable via the sandbox file API.
 
-**Browser test result (T6)**: Slides partially working! Architect template confirmed rendering at page 9/12. Template listing tool returns unparseable JSON ("No templates available" / "Failed to parse templates data"). Template PDF preview blocked by CSP (`object-src`). But actual slide HTML content IS being written and rendered — the core `/workspace` symlink fix works.
+**Browser test result (T3+T6)**: Slides confirmed working! User opened `https://8080-bef47f04-f524-4941-837c-08f1c3fe1593.sandbox.recoder.xyz/presentations/portfolio_presentation/slide_01.html` — shows "Portfolio Overview — A showcase of my work and achievements". Architect template also confirmed rendering (page 9/12). Template design styling is basic (needs improvement). Core pipeline: AI → sandbox write → file server → browser render ALL working.
 
 ### 2. Feedback 500
 Table may be in wrong database. Need to check which DB the endpoint queries.
