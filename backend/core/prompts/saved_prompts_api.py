@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, Query, HTTPException
 from pydantic import BaseModel
 from typing import Optional
 from core.utils.auth_utils import verify_and_get_user_id_from_jwt
-from core.services.db import execute, execute_one
+from core.services.db import execute, execute_one, execute_mutate, serialize_row
 from core.utils.logger import logger
 
 router = APIRouter(prefix="/prompts", tags=["saved-prompts"])
@@ -28,7 +28,7 @@ async def create_prompt(
     body: CreatePromptRequest,
     user_id: str = Depends(verify_and_get_user_id_from_jwt),
 ):
-    row = await execute_one(
+    rows = await execute_mutate(
         """
         INSERT INTO saved_prompts (user_id, title, content, category, tags)
         VALUES (:user_id, :title, :content, :category, :tags)
@@ -42,7 +42,9 @@ async def create_prompt(
             "tags": body.tags,
         },
     )
-    return dict(row)
+    if not rows:
+        raise HTTPException(status_code=500, detail="Failed to create prompt")
+    return serialize_row(rows[0])
 
 
 @router.get("", summary="List saved prompts")
@@ -65,7 +67,7 @@ async def list_prompts(
     query += " ORDER BY is_pinned DESC, updated_at DESC"
 
     rows = await execute(query, params)
-    return [dict(r) for r in rows]
+    return [serialize_row(dict(r)) for r in rows]
 
 
 @router.get("/{prompt_id}", summary="Get a saved prompt")
@@ -79,7 +81,7 @@ async def get_prompt(
     )
     if not row:
         raise HTTPException(status_code=404, detail="Prompt not found")
-    return dict(row)
+    return serialize_row(dict(row))
 
 
 @router.patch("/{prompt_id}", summary="Update a saved prompt")
@@ -113,13 +115,14 @@ async def update_prompt(
     updates.append("updated_at = now()")
     set_clause = ", ".join(updates)
 
-    row = await execute_one(
+    rows = await execute_mutate(
         f"UPDATE saved_prompts SET {set_clause} WHERE id = :id AND user_id = :user_id RETURNING *",
         params,
     )
-    if not row:
+    if not rows:
         raise HTTPException(status_code=404, detail="Prompt not found")
-    return dict(row)
+    from core.services.db import serialize_row
+    return serialize_row(rows[0])
 
 
 @router.delete("/{prompt_id}", summary="Delete a saved prompt")
@@ -127,7 +130,7 @@ async def delete_prompt(
     prompt_id: str,
     user_id: str = Depends(verify_and_get_user_id_from_jwt),
 ):
-    await execute(
+    await execute_mutate(
         "DELETE FROM saved_prompts WHERE id = :id AND user_id = :user_id",
         {"id": prompt_id, "user_id": user_id},
     )
@@ -139,7 +142,7 @@ async def use_prompt(
     prompt_id: str,
     user_id: str = Depends(verify_and_get_user_id_from_jwt),
 ):
-    await execute(
+    await execute_mutate(
         "UPDATE saved_prompts SET usage_count = usage_count + 1, updated_at = now() WHERE id = :id AND user_id = :user_id",
         {"id": prompt_id, "user_id": user_id},
     )
