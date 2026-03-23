@@ -327,6 +327,10 @@ class SandboxPresentationTool(SandboxToolsBase):
         # Path to built-in templates (on the backend filesystem, not in sandbox)
         self.templates_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "templates", "presentations")
 
+    def fail_response(self, msg: str) -> ToolResult:
+        """Override to return JSON so frontend ListPresentationTemplatesToolView can parse it."""
+        return ToolResult(success=False, output=json.dumps({"error": msg, "message": msg, "templates": []}))
+
 
     async def _ensure_presentations_dir(self):
         """Ensure the presentations directory exists"""
@@ -629,8 +633,10 @@ class SandboxPresentationTool(SandboxToolsBase):
         If presentation_name is provided, copies the entire template to workspace for editing.
         """
         try:
+            # Normalize: template folders on disk are lowercase with underscores
+            template_name = self._sanitize_filename(template_name)
             template_path = os.path.join(self.templates_dir, template_name)
-            
+
             if not os.path.exists(template_path):
                 return self.fail_response(f"Template '{template_name}' not found")
             

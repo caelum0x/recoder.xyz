@@ -10,6 +10,7 @@ import uuid
 
 class TaskStatus(str, Enum):
     PENDING = "pending"
+    IN_PROGRESS = "in_progress"
     COMPLETED = "completed"
     CANCELLED = "cancelled"
 
@@ -427,8 +428,8 @@ class TaskListTool(SandboxToolsBase):
                     },
                     "status": {
                         "type": "string",
-                        "enum": ["pending", "completed", "cancelled"],
-                        "description": "New status. Use 'completed' when task is done."
+                        "enum": ["pending", "in_progress", "completed", "cancelled"],
+                        "description": "New status. Use 'in_progress' when working on a task, 'completed' when done."
                     },
                     "section_id": {
                         "type": "string",
