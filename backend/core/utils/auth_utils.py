@@ -178,69 +178,46 @@ _provisioned_users: set = set()  # In-memory set of already-provisioned user IDs
 async def _ensure_basejump_account(user_id: str):
     """Auto-create a basejump personal account for a user if one doesn't exist.
 
-    This runs on every authenticated request but is fast:
-    - In-memory cache skips the DB check for known users
-    - Single INSERT ... ON CONFLICT DO NOTHING for new users
+    Uses the BACKEND database (recoder_backend), not the auth database,
+    because basejump tables live alongside projects/threads/agents.
+
+    Fast: in-memory cache skips DB for known users.
     """
     if user_id in _provisioned_users:
         return
 
     try:
-        engine = await _get_auth_engine()
-        if engine is None:
+        from core.services.db import execute_one, execute_mutate
+
+        # Check if account already exists (fast path)
+        existing = await execute_one(
+            "SELECT id FROM basejump.accounts WHERE id = :uid",
+            {"uid": user_id}
+        )
+        if existing:
+            _provisioned_users.add(user_id)
             return
 
-        async with engine.begin() as conn:
-            # Ensure basejump schema exists
-            await conn.exec_driver_sql("CREATE SCHEMA IF NOT EXISTS basejump")
+        # Create personal account (user_id = account_id)
+        await execute_mutate(
+            """INSERT INTO basejump.accounts (id, primary_owner_user_id, name, personal_account)
+               VALUES (:uid, :uid, '', true)
+               ON CONFLICT (id) DO NOTHING""",
+            {"uid": user_id}
+        )
 
-            # Create accounts table if missing
-            await conn.exec_driver_sql("""
-                CREATE TABLE IF NOT EXISTS basejump.accounts (
-                    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-                    primary_owner_user_id UUID NOT NULL,
-                    name TEXT,
-                    slug TEXT,
-                    personal_account BOOLEAN DEFAULT true,
-                    created_at TIMESTAMPTZ DEFAULT NOW(),
-                    updated_at TIMESTAMPTZ DEFAULT NOW()
-                )
-            """)
-
-            # Create account_user table if missing
-            await conn.exec_driver_sql("""
-                CREATE TABLE IF NOT EXISTS basejump.account_user (
-                    user_id UUID NOT NULL,
-                    account_id UUID NOT NULL,
-                    account_role TEXT DEFAULT 'owner',
-                    created_at TIMESTAMPTZ DEFAULT NOW(),
-                    PRIMARY KEY (user_id, account_id)
-                )
-            """)
-
-            # Insert personal account (user_id = account_id for simplicity)
-            await conn.exec_driver_sql(
-                """
-                INSERT INTO basejump.accounts (id, primary_owner_user_id, name, personal_account)
-                VALUES ($1::uuid, $1::uuid, '', true)
-                ON CONFLICT (id) DO NOTHING
-                """,
-                (user_id,),
-            )
-
-            # Insert account membership
-            await conn.exec_driver_sql(
-                """
-                INSERT INTO basejump.account_user (user_id, account_id, account_role)
-                VALUES ($1::uuid, $1::uuid, 'owner')
-                ON CONFLICT (user_id, account_id) DO NOTHING
-                """,
-                (user_id,),
-            )
+        # Create membership
+        await execute_mutate(
+            """INSERT INTO basejump.account_user (user_id, account_id, account_role)
+               VALUES (:uid, :uid, 'owner')
+               ON CONFLICT (user_id, account_id) DO NOTHING""",
+            {"uid": user_id}
+        )
 
         _provisioned_users.add(user_id)
+        logger.info(f"Auto-provisioned basejump account for user {user_id}")
     except Exception as e:
-        # Non-fatal: log and continue — the user can still authenticate
+        # Non-fatal — user can still authenticate, just may hit 403 on first request
         logger.warning(f"Auto-provision basejump account failed for {user_id}: {e}")
 
 
