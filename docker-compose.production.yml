@@ -208,6 +208,8 @@ services:
       - STRICT_AUTH=false
       - ALLOW_LOCALHOST_ORIGIN=true
       - AUTH_DATABASE_URL=postgresql://recoder:recoder_prod_2026@host.docker.internal:5432/recoder_main
+      - INTERNAL_SERVICE_KEY=recoder_internal_service_key_2026
+      - APP_API_URL=https://recoder.xyz
       # --- A2A inter-service communication ---
       - RECODER_A2A_SHARED_SECRET=${RECODER_A2A_SHARED_SECRET}
       - RECODER_A2A_REDIS_URL=redis://:${REDIS_PASSWORD}@recoder-redis:6379/0

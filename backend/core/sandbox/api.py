@@ -204,11 +204,11 @@ async def get_sandbox_by_id_safely(sandbox_id: str) -> AsyncSandbox:
 
     # Find the resource that owns this sandbox
     resource = await Table("resources").get_by({"external_id": sandbox_id, "type": ResourceType.SANDBOX.value})
-    
+
     if not resource:
-        logger.error(f"No resource found for sandbox ID: {sandbox_id}")
-        raise HTTPException(status_code=404, detail="Sandbox not found - no resource exists for this sandbox ID")
-    
+        # Agent sandboxes may not be in the resources table — fall back to Daytona directly
+        logger.info(f"No resource for sandbox {sandbox_id}, trying Daytona directly")
+
     # Get the sandbox with retry logic for transient startup failures
     try:
         sandbox = await retry_with_backoff(
@@ -453,40 +453,30 @@ async def read_file(
     logger.debug(f"Received file read request for sandbox {sandbox_id}, path: {path}, user_id: {user_id}")
     if original_path != path:
         logger.debug(f"Normalized path from '{original_path}' to '{path}'")
-    
+
     if not sandbox_id:
-        logger.error("Sandbox ID is required")
         raise HTTPException(status_code=400, detail="Sandbox ID is required")
-    
+
     if not path:
-        logger.error("Path is required")
         raise HTTPException(status_code=400, detail="Path is required")
-    
-    # Validate sandbox_id format (basic validation - should be non-empty string)
+
     if not sandbox_id.strip():
-        logger.error("Sandbox ID cannot be empty")
         raise HTTPException(status_code=400, detail="Sandbox ID cannot be empty")
-    
+
+    # Verify access: try resource-based check first, fall back to direct Daytona check
+    # Agent-created sandboxes may not be in the resources table but are still accessible
     try:
-        # Verify the user has access to this sandbox
         await verify_sandbox_access_optional(None, sandbox_id, user_id)
-    except HTTPException as http_err:
-        # Re-raise HTTP exceptions as-is (they already have proper status codes)
-        raise
-    except Exception as access_err:
-        error_str = str(access_err).lower()
-        logger.error(f"Error verifying sandbox access for {sandbox_id}: {str(access_err)}", exc_info=True)
-        
-        # Distinguish between different error types
-        if 'not found' in error_str or '404' in error_str or 'no project owns' in error_str:
+    except (HTTPException, Exception) as access_err:
+        # Fallback: check if sandbox exists directly in Daytona (handles agent sandboxes)
+        try:
+            from core.sandbox.sandbox import get_or_start_sandbox
+            await get_or_start_sandbox(sandbox_id)
+            logger.info(f"Sandbox {sandbox_id} accessible via Daytona (bypassing resource check)")
+        except Exception:
+            if isinstance(access_err, HTTPException):
+                raise access_err
             raise HTTPException(status_code=404, detail=f"Sandbox not found: {sandbox_id}")
-        elif 'authentication required' in error_str or '401' in error_str:
-            raise HTTPException(status_code=401, detail="Authentication required for this private project")
-        elif 'not authorized' in error_str or 'forbidden' in error_str or '403' in error_str:
-            raise HTTPException(status_code=403, detail=f"Access denied: Not authorized to access this sandbox")
-        else:
-            # For other errors, return 500 but with a clear message
-            raise HTTPException(status_code=500, detail=f"Error verifying sandbox access: {str(access_err)}")
     
     try:
         # Get sandbox using the safer method

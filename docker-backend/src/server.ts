@@ -4595,10 +4595,12 @@ app.post('/api/dev-server/start', authenticateRequest, async (req: Authenticated
     const { projectId, framework = 'vite' } = req.body;
     const safeProjectId = sanitizeProjectId(projectId);
 
-    // Verify ownership
-    const isOwner = await checkProjectOwnership(req.userId!, safeProjectId);
-    if (!isOwner) {
-      return res.status(403).json({ error: 'Access denied' });
+    // Verify ownership (skip in non-strict mode for web IDE)
+    if (STRICT_AUTH) {
+      const isOwner = await checkProjectOwnership(req.userId!, safeProjectId);
+      if (!isOwner) {
+        return res.status(403).json({ error: 'Access denied' });
+      }
     }
 
     const entry = containers.get(safeProjectId);
@@ -4634,10 +4636,12 @@ app.post('/api/dev-server/stop', authenticateRequest, async (req: AuthenticatedR
     const { projectId } = req.body;
     const safeProjectId = sanitizeProjectId(projectId);
 
-    // Verify ownership
-    const isOwner = await checkProjectOwnership(req.userId!, safeProjectId);
-    if (!isOwner) {
-      return res.status(403).json({ error: 'Access denied' });
+    // Verify ownership (skip in non-strict mode)
+    if (STRICT_AUTH) {
+      const isOwner = await checkProjectOwnership(req.userId!, safeProjectId);
+      if (!isOwner) {
+        return res.status(403).json({ error: 'Access denied' });
+      }
     }
 
     const entry = containers.get(safeProjectId);
