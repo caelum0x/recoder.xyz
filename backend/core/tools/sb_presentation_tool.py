@@ -374,13 +374,17 @@ class SandboxPresentationTool(SandboxToolsBase):
     <style>
         * {{
             font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            box-sizing: border-box;
         }}
         body {{
             height: 1080px;
             width: 1920px;
             margin: 0;
             padding: 0;
+            background-color: #ffffff;
+            color: #1a1a1a;
             font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            overflow: hidden;
         }}
     </style>
 </head>
