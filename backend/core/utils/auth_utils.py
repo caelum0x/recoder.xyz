@@ -149,6 +149,7 @@ _SESSION_CACHE_TTL = 60  # 60 seconds
 async def verify_session_token_cached(token: str) -> Optional[str]:
     """
     Verify a better-auth session token with in-memory caching.
+    Also auto-provisions a basejump account on first auth.
     Returns user_id if valid, None otherwise.
     """
     now = time.time()
@@ -161,8 +162,86 @@ async def verify_session_token_cached(token: str) -> Optional[str]:
     user_id = await _verify_session_token(token)
     if user_id:
         _session_cache[token] = (user_id, now + _SESSION_CACHE_TTL)
+        # Auto-create basejump account if needed (non-blocking, cached)
+        await _ensure_basejump_account(user_id)
 
     return user_id
+
+
+# ============================================================================
+# Auto-provisioning: ensure every authenticated user has a basejump account
+# ============================================================================
+
+_provisioned_users: set = set()  # In-memory set of already-provisioned user IDs
+
+
+async def _ensure_basejump_account(user_id: str):
+    """Auto-create a basejump personal account for a user if one doesn't exist.
+
+    This runs on every authenticated request but is fast:
+    - In-memory cache skips the DB check for known users
+    - Single INSERT ... ON CONFLICT DO NOTHING for new users
+    """
+    if user_id in _provisioned_users:
+        return
+
+    try:
+        engine = await _get_auth_engine()
+        if engine is None:
+            return
+
+        async with engine.begin() as conn:
+            # Ensure basejump schema exists
+            await conn.exec_driver_sql("CREATE SCHEMA IF NOT EXISTS basejump")
+
+            # Create accounts table if missing
+            await conn.exec_driver_sql("""
+                CREATE TABLE IF NOT EXISTS basejump.accounts (
+                    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                    primary_owner_user_id UUID NOT NULL,
+                    name TEXT,
+                    slug TEXT,
+                    personal_account BOOLEAN DEFAULT true,
+                    created_at TIMESTAMPTZ DEFAULT NOW(),
+                    updated_at TIMESTAMPTZ DEFAULT NOW()
+                )
+            """)
+
+            # Create account_user table if missing
+            await conn.exec_driver_sql("""
+                CREATE TABLE IF NOT EXISTS basejump.account_user (
+                    user_id UUID NOT NULL,
+                    account_id UUID NOT NULL,
+                    account_role TEXT DEFAULT 'owner',
+                    created_at TIMESTAMPTZ DEFAULT NOW(),
+                    PRIMARY KEY (user_id, account_id)
+                )
+            """)
+
+            # Insert personal account (user_id = account_id for simplicity)
+            await conn.exec_driver_sql(
+                """
+                INSERT INTO basejump.accounts (id, primary_owner_user_id, name, personal_account)
+                VALUES ($1::uuid, $1::uuid, '', true)
+                ON CONFLICT (id) DO NOTHING
+                """,
+                (user_id,),
+            )
+
+            # Insert account membership
+            await conn.exec_driver_sql(
+                """
+                INSERT INTO basejump.account_user (user_id, account_id, account_role)
+                VALUES ($1::uuid, $1::uuid, 'owner')
+                ON CONFLICT (user_id, account_id) DO NOTHING
+                """,
+                (user_id,),
+            )
+
+        _provisioned_users.add(user_id)
+    except Exception as e:
+        # Non-fatal: log and continue — the user can still authenticate
+        logger.warning(f"Auto-provision basejump account failed for {user_id}: {e}")
 
 
 async def verify_admin_api_key(x_admin_api_key: Optional[str] = Header(None)):
