@@ -141,6 +141,17 @@ async def search_threads_endpoint(
         raise HTTPException(status_code=500, detail=f"Failed to search threads: {str(e)}")
 
 
+@router.get("/threads/archived", summary="List Archived Threads", operation_id="list_archived_threads")
+async def get_archived_threads(
+    request: Request,
+    user_id: str = Depends(verify_and_get_user_id_from_jwt),
+    limit: Optional[int] = Query(50, ge=1, le=1000),
+    offset: Optional[int] = Query(0, ge=0),
+):
+    """Return empty list — archived threads not yet implemented."""
+    return {"threads": [], "pagination": {"page": 1, "limit": limit, "total": 0, "pages": 0}}
+
+
 @router.get("/threads", summary="List User Threads", operation_id="list_user_threads")
 async def get_user_threads(
     request: Request,
@@ -219,10 +230,29 @@ async def get_project(
         
         sandbox_info = {}
         if project.get('sandbox_external_id'):
+            # Primary path: sandbox linked via resources table
             sandbox_info = {
                 'id': project.get('sandbox_external_id'),
                 **(project.get('sandbox_config') or {})
             }
+        elif project.get('sandbox'):
+            # Fallback: sandbox data stored in projects.sandbox JSON column
+            # (resolver writes here but sandbox_resource_id may not be set)
+            import json
+            sandbox_data = project['sandbox']
+            if isinstance(sandbox_data, str):
+                try:
+                    sandbox_data = json.loads(sandbox_data)
+                except (json.JSONDecodeError, TypeError):
+                    sandbox_data = {}
+            if isinstance(sandbox_data, dict) and (sandbox_data.get('id') or sandbox_data.get('sandbox_id')):
+                sandbox_info = {
+                    'id': sandbox_data.get('id') or sandbox_data.get('sandbox_id'),
+                    'pass': sandbox_data.get('pass', ''),
+                    'sandbox_url': sandbox_data.get('sandbox_url', ''),
+                    'vnc_preview': sandbox_data.get('vnc_preview', ''),
+                    'token': sandbox_data.get('token', ''),
+                }
         
         project_data = {
             "project_id": project['project_id'],

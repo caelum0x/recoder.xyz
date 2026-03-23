@@ -84,12 +84,12 @@ class SandboxResolver:
             except Exception as e:
                 logger.warning(f"[RESOLVER] Cached sandbox {sandbox_id} failed: {e}")
         
-        if db_client:
-            sandbox_info = await self._resolve_from_db(project_id, account_id, db_client)
-            if sandbox_info:
-                elapsed = (time.time() - start_time) * 1000
-                logger.debug(f"[RESOLVER] DB hit for {project_id}: {sandbox_info.sandbox_id} in {elapsed:.0f}ms")
-                return sandbox_info
+        # Always check DB for existing sandbox (ResourceService uses execute_* internally)
+        sandbox_info = await self._resolve_from_db(project_id, account_id, db_client)
+        if sandbox_info:
+            elapsed = (time.time() - start_time) * 1000
+            logger.debug(f"[RESOLVER] DB hit for {project_id}: {sandbox_info.sandbox_id} in {elapsed:.0f}ms")
+            return sandbox_info
         
         sandbox_info = await self._claim_or_create(project_id, account_id, db_client)
         if sandbox_info:
@@ -157,6 +157,20 @@ class SandboxResolver:
                 if claimed:
                     sandbox_id, config = claimed
                     sandbox = await get_or_start_sandbox(sandbox_id)
+                    # Create resource entry and link to project
+                    try:
+                        from core.resources import ResourceService, ResourceType, ResourceStatus
+                        resource_service = ResourceService(None)
+                        resource = await resource_service.create_resource(
+                            account_id=account_id,
+                            resource_type=ResourceType.SANDBOX,
+                            external_id=sandbox_id,
+                            config=config,
+                            status=ResourceStatus.ACTIVE
+                        )
+                        await resource_service.link_resource_to_project(project_id, resource['id'])
+                    except Exception as link_err:
+                        logger.warning(f"[RESOLVER] Pool claim resource linkage failed: {link_err}")
                     await self._update_cache(project_id, sandbox_id, config)
                     logger.info(f"[RESOLVER] Claimed from pool: {sandbox_id} for {project_id}")
                     return SandboxInfo(
@@ -199,7 +213,9 @@ class SandboxResolver:
                 'token': token
             }
             
-            if db_client:
+            # Always create resource entry and link to project.
+            # ResourceService uses execute_mutate internally (no db_client needed).
+            try:
                 resource_service = ResourceService(db_client)
                 resource = await resource_service.create_resource(
                     account_id=account_id,
@@ -209,7 +225,9 @@ class SandboxResolver:
                     status=ResourceStatus.ACTIVE
                 )
                 await resource_service.link_resource_to_project(project_id, resource['id'])
-            
+            except Exception as link_err:
+                logger.warning(f"[RESOLVER] Resource linkage failed (sandbox still usable): {link_err}")
+
             await self._update_cache(project_id, sandbox_id, config)
             
             logger.info(f"[RESOLVER] Created new sandbox: {sandbox_id} for {project_id}")

@@ -92,7 +92,7 @@ async def upload_files_to_sandbox(
         sandbox_info = await resolve_sandbox(
             project_id=project_id,
             account_id=account_id,
-            db_client=client,
+            db_client=None,
             require_started=True
         )
         
