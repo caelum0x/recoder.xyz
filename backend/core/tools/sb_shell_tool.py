@@ -82,6 +82,45 @@ tmux kill-session -t myserver
 
 ### Port 8080
 Port 8080 is AUTO-EXPOSED and publicly accessible. Files served from /workspace are automatically available via preview URLs.
+
+### Pre-installed Tools & Libraries
+The sandbox has these tools available for shell commands:
+
+**System tools:**
+- `git`, `curl`, `wget` — version control and downloads
+- `convert`, `identify` (ImageMagick 7) — image creation, conversion, resizing, compositing, watermarks
+- `ffmpeg`, `ffprobe` — video/audio processing, format conversion, screen recording, thumbnails
+- `chromium` — headless browser for screenshots and web scraping
+
+**Python packages (use via `python3 script.py`):**
+- `openpyxl` — create/edit Excel spreadsheets (.xlsx) with formulas, charts, styling
+- `python-pptx` — create PowerPoint presentations (.pptx) programmatically
+- `python-docx` — create Word documents (.docx) with headings, tables, images
+- `pandas`, `numpy`, `matplotlib`, `seaborn` — data analysis and charting
+- `pillow` (PIL) — image processing, resize, crop, filters, text overlay
+- `requests`, `beautifulsoup4` — web scraping
+- `flask`, `django` — web servers
+
+**Example: Create a chart image with matplotlib:**
+```bash
+python3 -c "
+import matplotlib.pyplot as plt
+plt.bar(['Q1','Q2','Q3','Q4'], [100,150,130,180])
+plt.title('Revenue')
+plt.savefig('/workspace/chart.png', dpi=150)
+print('Chart saved')
+"
+```
+
+**Example: Convert image format with ImageMagick:**
+```bash
+convert /workspace/photo.jpg -resize 800x600 -quality 85 /workspace/photo_small.jpg
+```
+
+**Example: Create video from images with FFmpeg:**
+```bash
+ffmpeg -framerate 1 -pattern_type glob -i '/workspace/slides/*.png' -c:v libx264 -pix_fmt yuv420p /workspace/slideshow.mp4
+```
 """
 )
 class SandboxShellTool(SandboxToolsBase):
