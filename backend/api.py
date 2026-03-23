@@ -488,36 +488,35 @@ api_router = APIRouter()
 # Include all API routers without individual prefixes
 # Core routers
 api_router.include_router(versioning_router)
-# Routers with static /agents/WORD paths must come BEFORE agent_crud
-# (which has /agents/{agent_id}) to avoid FastAPI matching "leaderboard",
-# "active-runs", "quotas", "activity" as an agent_id.
-api_router.include_router(agent_runs_router)
-api_router.include_router(agent_comparison_router)
-api_router.include_router(agent_quota_router)
-api_router.include_router(agent_activity_router)
-# agent_crud has /agents/{agent_id} — must come after all static /agents/* routes
-api_router.include_router(agent_crud_router)
-api_router.include_router(agent_tools_router)
-api_router.include_router(agent_json_router)
-api_router.include_router(agent_setup_router)
+# ALL agent routers with static /agents/WORD paths MUST come BEFORE agent_crud
+# because agent_crud has /agents/{agent_id} which matches any word as an agent_id.
+# FastAPI routes are matched in registration order — first match wins.
+api_router.include_router(agent_runs_router)          # /agents/active-runs
+api_router.include_router(agent_comparison_router)    # /agents/leaderboard, /agents/compare, /agents/comparisons
+api_router.include_router(agent_quota_router)         # /agents/quotas/*
+api_router.include_router(agent_activity_router)      # /agents/activity/*
+api_router.include_router(agent_json_router)          # /agents/json/*
+api_router.include_router(agent_setup_router)         # /agents/setup-from-chat
+api_router.include_router(agent_import_export_router) # /agents/import
+api_router.include_router(agent_clone_router)         # /agents/clone-diff
+api_router.include_router(agent_benchmark_router)     # /benchmarks/*
+api_router.include_router(agent_ab_test_router)       # ab-tests
+api_router.include_router(agent_tools_router)         # /agents/{id}/tools (has {id} but also static)
 api_router.include_router(agent_analytics_router)
 api_router.include_router(agent_metrics_router)
-api_router.include_router(execution_logs_router)
-api_router.include_router(agent_secrets_router)
-api_router.include_router(agent_import_export_router)
 api_router.include_router(agent_schedule_router)
-api_router.include_router(agent_ab_test_router)
-api_router.include_router(agent_versioning_router)
-api_router.include_router(agent_benchmark_router)
+api_router.include_router(agent_secrets_router)
 api_router.include_router(agent_comments_router)
 api_router.include_router(agent_env_vars_router)
-api_router.include_router(agent_clone_router)
 api_router.include_router(agent_clone_wizard_router)
 api_router.include_router(agent_testing_router)
 api_router.include_router(agent_replay_router)
 api_router.include_router(agent_health_router)
 api_router.include_router(agent_changelog_router)
 api_router.include_router(agent_versioned_configs_router)
+# agent_crud MUST be LAST — it has /agents/{agent_id} catch-all
+api_router.include_router(agent_crud_router)
+api_router.include_router(execution_logs_router)
 
 from core.agents.agent_deployment_api import router as agent_deployment_router
 api_router.include_router(agent_deployment_router)

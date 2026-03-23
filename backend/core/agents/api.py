@@ -15,7 +15,7 @@ import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Optional, List, Dict, Any, Tuple
 
-from fastapi import APIRouter, HTTPException, Depends, Request, File, UploadFile, Form
+from fastapi import APIRouter, HTTPException, Depends, Request, File, UploadFile, Form, Query
 from fastapi.responses import StreamingResponse
 
 from core.utils.auth_utils import (
@@ -928,6 +928,41 @@ async def get_active_agent_runs(user_id: str = Depends(verify_and_get_user_id_fr
     except Exception as e:
         logger.error(f"Error fetching active runs: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to fetch active runs: {str(e)}")
+
+
+@router.get("/agents/runs", summary="List All Agent Runs", operation_id="list_all_agent_runs")
+async def list_all_agent_runs(
+    user_id: str = Depends(verify_and_get_user_id_from_jwt),
+    status: Optional[str] = Query(None),
+    limit: int = Query(20, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+):
+    """List agent runs with optional status filter."""
+    from core.services.db import execute, execute_one, serialize_rows
+
+    where = ["account_id = :user_id"]
+    params: dict = {"user_id": user_id, "limit": limit, "offset": offset}
+
+    if status:
+        where.append("status = :status")
+        params["status"] = status
+
+    where_sql = " AND ".join(where)
+    rows = await execute(
+        f"SELECT * FROM agent_runs WHERE {where_sql} ORDER BY started_at DESC NULLS LAST LIMIT :limit OFFSET :offset",
+        params,
+    )
+    count_row = await execute_one(
+        f"SELECT COUNT(*) as count FROM agent_runs WHERE {where_sql}",
+        {k: v for k, v in params.items() if k not in ("limit", "offset")},
+    )
+    total = int(count_row["count"]) if count_row else 0
+
+    return {
+        "runs": serialize_rows(rows),
+        "total": total,
+        "has_more": (offset + limit) < total,
+    }
 
 
 @router.get("/agents/active-runs", summary="List Active Agent Runs (enriched)", operation_id="list_active_agent_runs_enriched")
