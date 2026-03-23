@@ -1,6 +1,41 @@
 # Recoder Platform — Current State & Plan
 
-Last updated: 2026-03-23 20:20 (T6 — 22 fixes, comprehensive issue list, dashboard crash fixed)
+Last updated: 2026-03-23 21:00 (T3+T6 — DB schema crisis: 298 tables, hundreds of text→uuid mismatches)
+
+## CRITICAL SYSTEMIC ISSUE
+
+**298 database tables. Hundreds of `_id` columns are `text` instead of `uuid`.** Every JOIN between these tables and the core `agents`/`threads` tables (which use `uuid`) fails with `operator does not exist: uuid = text`. This causes 500 errors on almost every API endpoint.
+
+### What this breaks:
+- `/v1/agents/runs` → 500 (agent_id text vs uuid)
+- `/v1/schedules` → 500 (agent_schedules.agent_id text vs uuid) — FIXED
+- `/v1/triggers/all` → 500 (agent_triggers.trigger_id missing) — FIXED
+- `/v1/trigger-templates/seed` → 500 (route ordering + seed function error)
+- `/v1/pipelines/{id}` → 404 (no pipelines endpoint)
+- `/v1/monitor/runs/active` → 500 (agent_runs.user_id missing) — FIXED
+- `/v1/presence/update` → 502 (backend crash during request)
+- `/v1/system/status` → CORS blocked
+- Past threads → 503 (thread loading fails, SSE drops)
+
+### What was fixed (DB, server-side only):
+- `documents.thread_id` text→uuid
+- `agent_triggers` added trigger_id, name, description columns
+- `agent_runs` added user_id, account_id columns
+- `agent_schedules.agent_id` text→uuid
+- `conversation_analytics_queue.account_id` text→uuid
+- `thread_analytics.account_id` text→uuid
+- `feedback.account_id/thread_id/message_id` text→uuid
+- `workflows` table created
+- `categories` column added to projects
+
+### What still needs fixing:
+- **Hundreds more text→uuid mismatches** across 298 tables
+- **Route ordering**: `/agents/runs` caught by `/{agent_id}` (FastAPI)
+- **Route ordering**: `/trigger-templates/seed` caught by `/{template_id}`
+- **Pipelines endpoint**: 404 — no backend route exists
+- **Past threads won't load**: 503 on thread pages — SSE stream drops kill the page
+- **CORS intermittent**: `presence/update` returns 502 Bad Gateway sometimes
+- **ERR_HTTP2_PROTOCOL_ERROR**: SSE streams still drop despite QUIC disable
 
 ---
 
