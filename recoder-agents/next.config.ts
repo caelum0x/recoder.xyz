@@ -83,6 +83,7 @@ const buildCsp = () => {
       'https://*.ingest.sentry.io',
     ].join(' '),
     "frame-src 'self' blob: https://*.recoder.xyz https://*.sandbox.recoder.xyz https://js.stripe.com https://hooks.stripe.com https://checkout.stripe.com",
+    "object-src 'self' https://api.recoder.xyz https://*.recoder.xyz",
     "frame-ancestors 'none'",
     "worker-src 'self'",
   ];
