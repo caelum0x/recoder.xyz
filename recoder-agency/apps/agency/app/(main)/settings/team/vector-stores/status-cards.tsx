@@ -7,15 +7,16 @@ export function GitHubAuthRequiredCard() {
 		<Card className="rounded-[8px] bg-transparent p-6 border-0">
 			<div className="flex flex-col items-center justify-center py-8">
 				<h4 className="text-text font-medium text-[18px] leading-[21.6px] font-sans mb-2">
-					Please authenticate your GitHub account.
+					GitHub Vector Stores
 				</h4>
 				<p className="text-link-muted text-[14px] leading-[20.4px] font-sans text-center mb-4">
-					To use Vector Stores, you need to authenticate your GitHub account.
-					Please authenticate from your account settings page.
+					Vector Stores index GitHub repositories for use as knowledge sources in
+					your workflows. To get started, install the GitHub App on your
+					repositories from the Integrations page.
 				</p>
 				<Button asChild variant="primary">
-					<a href="/settings/account/authentication">
-						Open Authentication Settings
+					<a href="/settings/team/integrations">
+						Open Integrations
 					</a>
 				</Button>
 			</div>

@@ -7,7 +7,7 @@ type DocumentVectorStoreQuota = {
 
 const DOCUMENT_VECTOR_STORE_QUOTAS: Record<TeamPlan, DocumentVectorStoreQuota> =
 	{
-		free: { isAvailable: false, maxStores: 0 },
+		free: { isAvailable: true, maxStores: 20 },
 		pro: { isAvailable: true, maxStores: 5 },
 		team: { isAvailable: true, maxStores: 20 },
 		// NOTE: Enterprise uses temporary values until we support per-contract limits.

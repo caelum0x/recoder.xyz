@@ -6,7 +6,7 @@ type GitHubVectorStoreQuota = {
 };
 
 const GITHUB_VECTOR_STORE_QUOTAS: Record<TeamPlan, GitHubVectorStoreQuota> = {
-	free: { isAvailable: false, maxStores: 0 },
+	free: { isAvailable: true, maxStores: 10 },
 	pro: { isAvailable: true, maxStores: 3 },
 	team: { isAvailable: true, maxStores: 10 },
 	// NOTE: Enterprise uses temporary values until we support per-contract limits.
