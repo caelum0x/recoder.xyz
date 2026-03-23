@@ -190,7 +190,7 @@ Sandbox access checks may still fail for some combinations.
 3. **DialogContent warning**: Needs frontend rebuild (`next build`) to fix missing `aria-describedby`.
 4. **CloudWatch metrics**: "Unable to locate credentials" — no AWS creds. Non-critical log spam.
 
-### RESOLVED THIS SESSION (T6) — 17 fixes
+### RESOLVED THIS SESSION (T6) — 20 fixes
 - ✅ `/workspace` symlink → files write to sandbox correctly
 - ✅ sandbox_resource_id linkage → frontend gets sandbox ID
 - ✅ Image search → SearXNG (replaced paid Serper API)
@@ -210,6 +210,14 @@ Sandbox access checks may still fail for some combinations.
 - ✅ Shell tool guide: documented all available tools + examples
 - ✅ HTTP/3 (QUIC) disabled in Cloudflare (was causing CORS on SSE)
 - ✅ Broken yarn apt repo removed from sandbox
+- ✅ PresentationViewer: loadMetadata triggers on sandbox.id (not just sandbox_url)
+- ✅ Template CSS preservation: create_slide merges content with existing template CSS
+- ✅ Slide HTML default styling: background-color + color in base template
+
+### NEW ISSUES FOUND
+- **Thread search embeddings fail**: `_create_embedding` uses OpenRouter API key (`sk-or-v1...`) against OpenAI embeddings endpoint → 401. Thread search/embedding silently fails on every page load. Needs: either use OpenRouter-compatible embedding endpoint or set a separate `OPENAI_API_KEY` for embeddings.
+- **Recoder Web auth**: Cookie not sent to web.recoder.xyz subdomain. `session.server.ts` reads cookies but finds none. Needs browser DevTools → Application → Cookies debugging to verify `__Secure-recoder.session_token` is set with `domain=.recoder.xyz`.
+- **Recoder Web architecture**: Separate from Python backend. Uses docker-backend (Express on port 3100) for container orchestration + live preview. Preview proxy at `/preview/{projectId}` discovers dev server ports (5173/3000/8080) inside containers. Blocked at auth step — can't create projects without session.
 
 ---
 
