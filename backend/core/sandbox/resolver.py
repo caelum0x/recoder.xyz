@@ -243,14 +243,23 @@ class SandboxResolver:
         try:
             sandbox_data = {
                 'sandbox_id': sandbox_id,
+                'id': sandbox_id,
                 'pass': config.get('pass'),
                 'vnc_preview': config.get('vnc_preview'),
                 'sandbox_url': config.get('sandbox_url'),
                 'token': config.get('token')
             }
             await set_cached_project_metadata(project_id, sandbox_data)
+
+            # Also persist to DB so the frontend can read it via the projects API
+            from core.services.db import execute_mutate
+            import json
+            await execute_mutate(
+                "UPDATE projects SET sandbox = :sandbox WHERE project_id = :pid",
+                {"sandbox": json.dumps(sandbox_data), "pid": project_id}
+            )
         except Exception as e:
-            logger.warning(f"[RESOLVER] Cache update failed: {e}")
+            logger.warning(f"[RESOLVER] Cache/DB update failed: {e}")
 
 
 def get_resolver() -> SandboxResolver:
