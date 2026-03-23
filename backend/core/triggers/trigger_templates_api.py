@@ -309,7 +309,7 @@ async def seed_trigger_templates(
         await execute_mutate(
             """
             INSERT INTO trigger_templates (name, description, category, trigger_type, config_template, icon, is_builtin, user_id)
-            VALUES (:name, :description, :category, :trigger_type, :config_template::jsonb, :icon, true, NULL)
+            VALUES (:name, :description, :category, :trigger_type, CAST(:config_template AS jsonb), :icon, true, NULL)
             """,
             {
                 "name": tpl["name"],
