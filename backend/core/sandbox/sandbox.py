@@ -52,8 +52,9 @@ async def get_or_start_sandbox(sandbox_id: str) -> AsyncSandbox:
                     if sandbox.state == SandboxState.STARTED:
                         break
                 
-                # Start supervisord in a session when restarting
+                # Start file server and computer use when restarting
                 await start_file_server(sandbox)
+                await start_computer_use_safe(sandbox)
             except Exception as e:
                 logger.error(f"Error starting sandbox: {e}")
                 raise e
@@ -144,11 +145,66 @@ async def create_sandbox(password: str, project_id: str = None) -> AsyncSandbox:
     except Exception as e:
         logger.warning(f"Could not install tools in sandbox: {e}")
 
-    # Start supervisord in a session for new sandbox
+    # Start file server and computer use services
     await start_file_server(sandbox)
+    await start_computer_use_safe(sandbox)
 
     logger.info(f"Sandbox environment successfully initialized")
     return sandbox
+
+
+async def start_computer_use_safe(sandbox: AsyncSandbox):
+    """Start VNC for computer use in the sandbox.
+
+    Tries SDK method first, then falls back to manual Xvfb + x11vnc + websockify.
+    Non-blocking — fails silently if VNC tools aren't available.
+    """
+    # Try SDK method first
+    try:
+        await sandbox.computer_use.start()
+        logger.info(f"Computer use started via SDK in sandbox {sandbox.id}")
+        return
+    except Exception:
+        pass
+
+    # Fallback: manual VNC startup (full image has Xvfb + x11vnc)
+    try:
+        # Check if Xvfb is available
+        check = await sandbox.process.exec("which Xvfb", timeout=5)
+        if not check.result or 'Xvfb' not in (check.result or ''):
+            logger.info(f"No VNC tools in sandbox {sandbox.id} (slim image)")
+            return
+
+        # Start Xvfb display
+        await sandbox.process.exec(
+            "Xvfb :99 -screen 0 1024x768x24 -ac +extension GLX +render -noreset &",
+            timeout=5
+        )
+        await asyncio.sleep(1)
+
+        # Start x11vnc
+        await sandbox.process.exec(
+            "DISPLAY=:99 x11vnc -display :99 -forever -shared -rfbport 5900 -nopw -bg -o /tmp/x11vnc.log",
+            timeout=10
+        )
+        await asyncio.sleep(1)
+
+        # Start websockify (noVNC proxy) on port 6080
+        await sandbox.process.exec(
+            "which websockify || pip3 install -q websockify 2>/dev/null",
+            timeout=30
+        )
+        await sandbox.process.exec(
+            "nohup websockify 6080 localhost:5900 --web /usr/share/novnc > /tmp/websockify.log 2>&1 &",
+            timeout=5
+        )
+
+        # Export DISPLAY for child processes
+        await sandbox.process.exec("echo 'export DISPLAY=:99' >> ~/.bashrc", timeout=5)
+
+        logger.info(f"VNC started manually in sandbox {sandbox.id} (Xvfb+x11vnc+websockify)")
+    except Exception as e:
+        logger.warning(f"Could not start VNC in sandbox {sandbox.id}: {e}")
 
 async def delete_sandbox(sandbox_id: str) -> bool:
     """Delete a sandbox by its ID."""
