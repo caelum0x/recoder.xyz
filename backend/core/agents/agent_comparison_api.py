@@ -524,7 +524,7 @@ async def agent_leaderboard(
                     ELSE 0 END AS avg_cost_per_run,
                 COALESCE(SUM(ad.total_tokens_in) + SUM(ad.total_tokens_out), 0) AS total_tokens
             FROM agents a
-            LEFT JOIN agent_analytics_daily ad ON ad.agent_id = a.agent_id::text
+            LEFT JOIN agent_analytics_daily ad ON ad.agent_id::text = a.agent_id::text
             WHERE a.account_id::text = :user_id
             GROUP BY a.agent_id, a.name
             HAVING COALESCE(SUM(ad.total_runs), 0) > 0
@@ -542,7 +542,7 @@ async def agent_leaderboard(
                 ad.model_breakdown,
                 ad.tool_breakdown
             FROM agent_analytics_daily ad
-            JOIN agents a ON a.agent_id::text = ad.agent_id
+            JOIN agents a ON a.agent_id::text = ad.agent_id::text
             WHERE a.account_id::text = :user_id
             """,
             {"user_id": user_id},
