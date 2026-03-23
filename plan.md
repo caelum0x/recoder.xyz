@@ -38,7 +38,7 @@ Last updated: 2026-03-23 20:05 (T3+T6 — slides confirmed rendering in browser,
 | **Insights** | MOCK | Dropdown with no real data behind it |
 | **Analytics** | PARTIAL | Has `useThreadAnalytics` hook + backend `thread_analytics_api`, may return data if analytics computed |
 | **Search** | REAL | Search input in config menu works |
-| **Download** | REAL | File download + document export (DOCX, PPTX, PDF) |
+| **Download** | REAL | File download + document export (DOCX, PPTX, PDF). PDF export via WeasyPrint verified working (returns %PDF-1.7). CORS OK. Browser CORS error was from cached QUIC. |
 
 ### Agents UI Issues
 - **Header overlap**: "Recoder" logo and "Share" button collide when slide preview panel opens — CSS layout doesn't account for panel width
@@ -53,7 +53,10 @@ Last updated: 2026-03-23 20:05 (T3+T6 — slides confirmed rendering in browser,
 - **Settings/Workflows**: not functional (Giselle-based, separate system)
 
 ### Recoder Web (web.recoder.xyz)
-- **All features**: BROKEN — separate codebase (docker-backend TypeScript). T3 deployed: bun→npm, Docker stream parsing hardened, dev-server STRICT_AUTH bypass. But live preview still not tested end-to-end in browser. Needs: auth cookie propagation, preview URL routing, auto-install timing fixes.
+- **Auth**: BROKEN — `session.server.ts` reads Cookie header and forwards to `recoder.xyz/api/auth/session`. Log shows "No cookies found in request." Cookie config IS correct (domain=`.recoder.xyz`, sameSite=none, secure=true, prefix=`__Secure-recoder`). Possible causes: Cloudflare SSL mode stripping Secure cookies, browser not sending cookie to subdomain, or __Secure- prefix issue. Needs browser DevTools → Application → Cookies debugging.
+- **Docker-backend**: Uses Daytona via `DaytonaClient` class. `daytonaWriteFile`, `daytonaExec` all implemented. `STRICT_AUTH=false`, `DAYTONA_API_KEY` set. File/dev-server endpoints return "Container not found" because no sandbox created for the project yet (auth blocks project creation).
+- **Preview URL**: Frontend already supports Daytona previews (`if (data?.daytona && data.previewUrl)`). Would use `3000-{sandboxId}.sandbox.recoder.xyz` pattern which is working.
+- **Pipeline**: Auth → Create project → Create Daytona sandbox → AI writes files → npm install → dev server → preview. Blocked at step 1 (auth).
 
 ### Infrastructure
 - **Sandbox preview URLs**: WORKS — Let's Encrypt wildcard cert, DNS only, nginx → daytona-proxy → sandbox
