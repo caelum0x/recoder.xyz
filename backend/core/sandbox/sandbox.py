@@ -186,12 +186,28 @@ async def create_sandbox(password: str, project_id: str = None) -> AsyncSandbox:
     # Ensure /workspace exists (tools write here, but it doesn't exist in Daytona images)
     await _ensure_workspace(sandbox)
 
-    # Install essential tools if using slim image
+    # Install essential tools and Python packages
     try:
-        result = await sandbox.process.exec("which git || (sudo apt-get update -qq && sudo apt-get install -y -qq git curl wget > /dev/null 2>&1 && echo 'tools installed')", timeout=60)
+        result = await sandbox.process.exec(
+            "which git || (sudo apt-get update -qq && sudo apt-get install -y -qq git curl wget > /dev/null 2>&1 && echo 'tools installed')",
+            timeout=60,
+        )
         logger.info(f"Sandbox tools setup: {result.result.strip()[:80]}")
     except Exception as e:
         logger.warning(f"Could not install tools in sandbox: {e}")
+
+    # Install Python packages required by tools (openpyxl for spreadsheets,
+    # python-pptx for presentation export, python-docx for documents)
+    try:
+        check = await sandbox.process.exec("python3 -c 'import openpyxl' 2>&1 && echo OK || echo MISSING", timeout=5)
+        if "MISSING" in (check.result or ""):
+            await sandbox.process.exec(
+                "pip3 install -q openpyxl python-pptx python-docx 2>/dev/null",
+                timeout=60,
+            )
+            logger.info("Installed openpyxl, python-pptx, python-docx in sandbox")
+    except Exception as e:
+        logger.warning(f"Could not install Python packages in sandbox: {e}")
 
     # Start file server and computer use services
     await start_file_server(sandbox)
