@@ -53,7 +53,7 @@ async def get_or_start_sandbox(sandbox_id: str) -> AsyncSandbox:
                         break
                 
                 # Start supervisord in a session when restarting
-                await start_supervisord_session(sandbox)
+                await start_file_server(sandbox)
             except Exception as e:
                 logger.error(f"Error starting sandbox: {e}")
                 raise e
@@ -65,19 +65,36 @@ async def get_or_start_sandbox(sandbox_id: str) -> AsyncSandbox:
         logger.error(f"Error retrieving or starting sandbox: {str(e)}")
         raise e
 
-async def start_supervisord_session(sandbox: AsyncSandbox):
-    """Start supervisord in a session."""
-    session_id = "supervisord-session"
+async def start_file_server(sandbox: AsyncSandbox):
+    """Start a simple HTTP file server on port 8080 in the sandbox.
+
+    Uses python3 http.server since the slim Daytona image doesn't have supervisord.
+    The server serves files from /home/daytona/ making them accessible via
+    https://8080-{sandboxId}.sandbox.recoder.xyz/
+    """
+    session_id = "file-server"
     try:
-        await sandbox.process.create_session(session_id)
+        # Try to create session (may already exist)
+        try:
+            await sandbox.process.create_session(session_id)
+        except Exception:
+            pass  # Session may already exist from a previous start
+
+        # Check if port 8080 is already in use
+        check = await sandbox.process.exec("ss -tlnp | grep ':8080' || true", timeout=5)
+        if check.result and ':8080' in (check.result or ''):
+            logger.info("File server already running on port 8080")
+            return
+
+        # Start python3 HTTP server in the background
         await sandbox.process.execute_session_command(session_id, SessionExecuteRequest(
-            command="exec /usr/bin/supervisord -n -c /etc/supervisor/conf.d/supervisord.conf",
+            command="cd /home/daytona && nohup python3 -m http.server 8080 --bind 0.0.0.0 > /tmp/fileserver.log 2>&1 &",
             var_async=True
         ))
-        logger.info("Supervisord started successfully")
+        logger.info("File server started on port 8080")
     except Exception as e:
-        # Don't fail if supervisord already running
-        logger.warning(f"Could not start supervisord: {str(e)}")
+        # Don't fail sandbox creation if file server fails
+        logger.warning(f"Could not start file server: {str(e)}")
 
 async def create_sandbox(password: str, project_id: str = None) -> AsyncSandbox:
     """Create a new sandbox with all required services configured and running."""
@@ -128,7 +145,7 @@ async def create_sandbox(password: str, project_id: str = None) -> AsyncSandbox:
         logger.warning(f"Could not install tools in sandbox: {e}")
 
     # Start supervisord in a session for new sandbox
-    await start_supervisord_session(sandbox)
+    await start_file_server(sandbox)
 
     logger.info(f"Sandbox environment successfully initialized")
     return sandbox
