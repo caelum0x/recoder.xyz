@@ -31,7 +31,7 @@ import { RecoderLoader } from '@/components/ui/recoder-loader';
 import { ToolViewProps } from '../types';
 import { formatTimestamp, getToolTitle } from '../utils';
 import { downloadPresentation, handleGoogleSlidesUpload } from '../utils/presentation-utils';
-import { buildSandboxFileUrl } from '@/lib/utils/url';
+import { buildSandboxFileUrl, fetchSandboxFile } from '@/lib/utils/url';
 import { CodeBlockCode } from '@/components/ui/code-block';
 import { FullScreenPresentationViewer } from './FullScreenPresentationViewer';
 import { DownloadFormat } from '../utils/presentation-utils';
@@ -312,11 +312,11 @@ export function PresentationViewer({
       // Add cache-busting parameter to ensure fresh data
       const urlWithCacheBust = `${metadataUrl}?t=${Date.now()}`;
       
-      const response = await fetch(urlWithCacheBust, {
+      const response = await fetchSandboxFile(urlWithCacheBust, {
         cache: 'no-cache',
         headers: {
           'Cache-Control': 'no-cache'
-        }
+        },
       });
       
       if (response.ok) {
@@ -439,24 +439,15 @@ export function PresentationViewer({
       }
     }
     
-    // THEN: Start loading fresh data if we have the required data
-    if (extractedPresentationName && project?.sandbox?.sandbox_url) {
-      
+    // THEN: Start loading fresh data if we have sandbox ID (loadMetadata uses sandbox.id, not sandbox_url)
+    if (extractedPresentationName && (project?.sandbox?.id || project?.sandbox?.sandbox_url)) {
+
       loadMetadata();
-    } else if (extractedPresentationName && project?.sandbox?.id && !project?.sandbox?.sandbox_url) {
-      // Sandbox exists but URL not available yet
-      // Only show loading if we don't have cached data for this presentation
-      const hasCachedData = sanitizedName && metadataCacheRef.current.has(sanitizedName);
-      if (!hasCachedData && !metadata) {
-        setIsLoadingMetadata(true);
-      } else {
-        setIsLoadingMetadata(false);
-      }
     } else {
       setIsLoadingMetadata(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [extractedPresentationName, project?.sandbox?.sandbox_url, toolResult?.output]);
+  }, [extractedPresentationName, project?.sandbox?.id, project?.sandbox?.sandbox_url, toolResult?.output]);
 
   // Cleanup retry timeout and sandbox check interval on unmount
   useEffect(() => {
@@ -487,9 +478,9 @@ export function PresentationViewer({
         );
         
         try {
-          const response = await fetch(`${metadataUrl}?t=${Date.now()}`, {
+          const response = await fetchSandboxFile(`${metadataUrl}?t=${Date.now()}`, {
             cache: 'no-cache',
-            headers: { 'Cache-Control': 'no-cache' }
+            headers: { 'Cache-Control': 'no-cache' },
           });
           
           if (response.ok) {
