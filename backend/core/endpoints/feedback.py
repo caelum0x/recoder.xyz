@@ -6,7 +6,7 @@ from pydantic import BaseModel
 
 from core.utils.auth_utils import verify_and_get_user_id_from_jwt
 from core.utils.logger import logger
-from core.services.db import Table, execute_one, execute_read
+from core.services.db import Table, execute_one, execute_read, serialize_row
 
 router = APIRouter(tags=["feedback"])
 
@@ -96,7 +96,7 @@ async def submit_feedback(
             if not updated:
                 raise HTTPException(status_code=500, detail="Failed to update feedback")
             logger.debug(f"Updated feedback {updated['feedback_id']}")
-            return updated
+            return serialize_row(updated)
         else:
             # Insert new feedback
             feedback_payload["feedback_id"] = str(uuid.uuid4())
@@ -105,7 +105,7 @@ async def submit_feedback(
             if not inserted:
                 raise HTTPException(status_code=500, detail="Failed to create feedback")
             logger.debug(f"Created feedback {inserted['feedback_id']}")
-            return inserted
+            return serialize_row(inserted)
 
     except HTTPException:
         raise
@@ -138,7 +138,7 @@ async def get_feedback(
 
         feedback_result = await feedback_table.list(filters=filters, limit=1000)
 
-        return feedback_result or []
+        return [serialize_row(r) for r in (feedback_result or [])]
 
     except HTTPException:
         raise
@@ -164,7 +164,7 @@ async def get_feedback_by_id(
         if not feedback_row:
             return None
 
-        return feedback_row
+        return serialize_row(feedback_row)
 
     except Exception as e:
         logger.error(f"Error getting feedback {feedback_id}: {str(e)}")
