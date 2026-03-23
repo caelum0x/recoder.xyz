@@ -176,12 +176,19 @@ class ThreadSearchService:
         return self._is_configured
 
     def _get_openai_client(self):
-        """Lazily initialize AsyncOpenAI client."""
+        """Lazily initialize AsyncOpenAI client.
+
+        If the API key is an OpenRouter key (sk-or-v1-...), use OpenRouter's
+        base URL so embeddings go through OpenRouter instead of OpenAI directly.
+        """
         if self._openai_client is None and self._is_configured:
             try:
                 from openai import AsyncOpenAI
-                self._openai_client = AsyncOpenAI(api_key=self._openai_api_key)
-                logger.debug("[ThreadSearch] AsyncOpenAI client initialized")
+                kwargs = {"api_key": self._openai_api_key}
+                if self._openai_api_key and self._openai_api_key.startswith("sk-or-"):
+                    kwargs["base_url"] = "https://openrouter.ai/api/v1"
+                self._openai_client = AsyncOpenAI(**kwargs)
+                logger.debug(f"[ThreadSearch] AsyncOpenAI client initialized (openrouter={self._openai_api_key.startswith('sk-or-') if self._openai_api_key else False})")
             except Exception as e:
                 logger.error(f"[ThreadSearch] Failed to initialize OpenAI client: {e}")
                 self._openai_client = None
