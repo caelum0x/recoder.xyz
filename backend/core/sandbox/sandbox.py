@@ -199,13 +199,16 @@ async def create_sandbox(password: str, project_id: str = None) -> AsyncSandbox:
     # Install Python packages required by tools (openpyxl for spreadsheets,
     # python-pptx for presentation export, python-docx for documents)
     try:
-        check = await sandbox.process.exec("python3 -c 'import openpyxl' 2>&1 && echo OK || echo MISSING", timeout=5)
+        check = await sandbox.process.exec(
+            "python3 -c 'import openpyxl, pptx, docx' 2>&1 && echo ALL_OK || echo MISSING",
+            timeout=10,
+        )
         if "MISSING" in (check.result or ""):
-            await sandbox.process.exec(
-                "pip3 install -q openpyxl python-pptx python-docx 2>/dev/null",
-                timeout=60,
+            result = await sandbox.process.exec(
+                "pip3 install openpyxl python-pptx python-docx 2>&1 | tail -1",
+                timeout=90,
             )
-            logger.info("Installed openpyxl, python-pptx, python-docx in sandbox")
+            logger.info(f"Installed Python packages in sandbox: {(result.result or '').strip()[-80:]}")
     except Exception as e:
         logger.warning(f"Could not install Python packages in sandbox: {e}")
 
