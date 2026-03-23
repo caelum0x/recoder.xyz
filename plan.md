@@ -33,7 +33,7 @@ Last updated: 2026-03-23 19:15 (T6 — 17 fixes deployed, QUIC disabled, VNC + s
 ### Agents Toolbar Buttons Status
 | Button | Status | Details |
 |--------|--------|---------|
-| **Share** | MOCK | Only has shared view playback, no real sharing URL generation |
+| **Share** | PARTIAL | Generates share URL but was using `localhost:3000` — FIXED to `https://agents.recoder.xyz`. Share page exists at `/share/[threadId]`. |
 | **Save as Template** | REAL | Dialog with save handler, calls `createTemplate` mutation |
 | **Insights** | MOCK | Dropdown with no real data behind it |
 | **Analytics** | PARTIAL | Has `useThreadAnalytics` hook + backend `thread_analytics_api`, may return data if analytics computed |
