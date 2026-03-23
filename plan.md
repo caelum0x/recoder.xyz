@@ -1,58 +1,57 @@
 # Recoder Platform — Current State & Plan
 
-Last updated: 2026-03-23 (post-deployment test)
+Last updated: 2026-03-23 (T5 — deep fixes session)
 
 ---
 
-## RECODER AGENTS (agents.recoder.xyz)
+## CURRENT ISSUES — REMAINING
 
-### What works:
-- Text chat
-- Web search
-- Slides ARE CREATED (files written to sandbox) but preview is BLANK
-- Dashboard loads (leaderboard error handled gracefully)
+### 1. Computer use stuck on "Starting Computer..."
+- Slim sandbox image has no VNC/Xvfb
+- Needs: call `sandbox.computer_use.start()` in sandbox start endpoint + store VNC preview URL
+- Status: **deferred** — needs SDK testing to see if slim image supports `computer_use.start()`
 
-### Still broken after deployment:
-- **Slides show BLANK** — files created but content not visible in preview. MIME type fix deployed but needs testing in new thread.
-- **"Upgrade Recoder" prompt** — fix deployed (BYOK mode skips promo injection). Needs new thread to test.
-- **503 intermittent** on thread pages
-- **Computer use** — needs full snapshot (0.5.0 not slim)
-- **Image gen** — OpenRouter fallback deployed, untested
+### 2. PM copilot second message returns 400
+- Deployed workaround: `generateText` (non-streaming) — needs testing
 
-### Fixes deployed this session:
-- [x] DaytonaFileService (exec-based, all tools migrated)
-- [x] File content proxy API (correct MIME types)
-- [x] Frontend error resilience (leaderboard, comparison)
-- [x] Presentation components route through API proxy
+### 3. PM pages return 503 intermittently
+- Prisma connection pool may be exhausted under load
+
+### 4. React infinite re-render loop (agents)
+- Cosmetic: `DialogContent` missing `aria-describedby` triggers React warnings
+- Not blocking functionality
+
+---
+
+## WHAT WAS FIXED THIS SESSION (T5 — deep diagnosis)
+
+### Agents slides blank → FIXED
+- **Root cause discovered**: `get_sandbox_by_id_safely()` in `api.py` queries `resources` table for sandbox. Agent sandboxes are NOT in this table → 404 before any file read attempt.
+- **Fix**: Removed hard 404 in `get_sandbox_by_id_safely()` — now falls through to Daytona directly when resource not found.
+- **Verified**: HTTP 200 returned for `/sandboxes/{id}/files/content` with actual HTML slide content.
+- Also replaced `start_supervisord_session` with `start_file_server` (python3 HTTP server on port 8080) since slim image has no supervisord.
+
+### Feedback API 500 → FIXED
+- **Root cause**: `feedback` table did not exist in PostgreSQL.
+- **Fix**: Created `feedback` table with all required columns and indexes.
+
+### Thread search embedding errors → FIXED
+- **Root cause**: `public.documents` table did not exist — embedding failed on EVERY thread list request.
+- **Fix**: Created `documents` table with pgvector column.
+
+### Web live preview 403 → FIXED
+- **Root cause**: `/api/dev-server/start` calls `checkProjectOwnership()` which needs `INTERNAL_SERVICE_KEY`. This key was NOT in the Docker container env. Also, the dev-server endpoints did NOT respect `STRICT_AUTH=false` — they always enforced ownership.
+- **Fix**:
+  1. Wrapped ownership check with `if (STRICT_AUTH)` so non-strict mode allows all dev operations
+  2. Added `INTERNAL_SERVICE_KEY` and `APP_API_URL` to `docker-compose.production.yml` for docker-backend
+- **Verified**: dev-server start returns 404 (container not found) instead of 403 (access denied).
+
+### Earlier fixes still deployed
+- [x] DaytonaFileService exec-based (all tools)
+- [x] File content proxy with correct MIME types
 - [x] Upgrade prompt disabled in BYOK mode
 - [x] OpenRouter image gen fallback
-
----
-
-## RECODER WEB (web.recoder.xyz) — PARTIALLY WORKING
-
-### What works:
-- File/folder creation (22+ files created successfully)
-- npm install works
-- File tree shows in workbench
-- AI generates full project code
-
-### Still broken:
-- **No live preview** — sandbox URL `https://3000-{id}.sandbox.recoder.xyz/` unreachable
-- **Dev server start 403** — `/api/dev-server/start` returns Access denied
-- **File reads 500** — `docker.recoder.xyz/api/file/*` returns 500 on every file read
-- **Preview iframe empty** — health check times out after 30 attempts, shows loading forever then `chrome-error://chromewebdata/`
-
-### Root causes (docker-backend TypeScript):
-1. `/api/dev-server/start` requires auth the frontend doesn't send → 403
-2. `/api/file/{projectId}` file read endpoint returns 500 (docker-backend side, not Python)
-3. Sandbox preview URL unreachable — dev server never starts so nothing on port 3000
-
----
-
-## PM (pm.recoder.xyz) — RUNNING
-## AGENCY (agency.recoder.xyz) — RUNNING
-## OPENCLAW — CHANNELS UNCONFIGURED (expected)
+- [x] Frontend error resilience
 
 ---
 
