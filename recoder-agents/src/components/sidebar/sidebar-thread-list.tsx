@@ -456,22 +456,23 @@ export function SidebarThreadList({ mode }: SidebarThreadListProps) {
       const projectId = thread.project_id;
       const project = thread.project;
 
-      if (!projectId) {
-        
-        continue;
-      }
+      // Use thread_id as fallback project_id when project_id is missing
+      // This prevents threads from being silently dropped from the sidebar
+      const effectiveProjectId = projectId || thread.thread_id;
 
-      const displayName = project?.name || 'Unnamed Project';
+      const displayName = project?.name || thread.name || 'Untitled Chat';
       const iconName = project?.icon_name;
       const updatedAt = thread.updated_at || project?.updated_at || new Date().toISOString();
       const formattedDate = formatDateForList(updatedAt);
 
       processed.push({
         threadId: thread.thread_id,
-        projectId: projectId,
+        projectId: effectiveProjectId,
         projectName: displayName,
         threadName: thread.name && thread.name.trim() ? thread.name : formattedDate,
-        url: `/projects/${projectId}/thread/${thread.thread_id}`,
+        url: projectId
+          ? `/projects/${projectId}/thread/${thread.thread_id}`
+          : `/thread/${thread.thread_id}`,
         updatedAt: updatedAt,
         iconName: iconName,
       });

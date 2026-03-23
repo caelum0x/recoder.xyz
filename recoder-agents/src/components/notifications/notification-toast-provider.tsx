@@ -5,7 +5,7 @@ import { useAuth } from '@/components/AuthProvider';
 import { toast } from 'sonner';
 import { CheckCircle, XCircle, MessageCircle, AlertTriangle } from 'lucide-react';
 import { resolveBackendApiUrl } from '@/lib/runtime-urls';
-import { getSessionAccessToken } from '@/lib/auth/session-token';
+import { connectTokenizedSSE, type TokenizedSSEConnection } from '@/lib/realtime/sse';
 
 interface NotificationEvent {
   id: string;
@@ -29,10 +29,25 @@ const TOAST_TYPE_MAP: Record<string, 'success' | 'error' | 'info' | 'warning'> =
   'system.alert': 'warning',
 };
 
+function handleNotificationEvent(event: MessageEvent) {
+  try {
+    const data: NotificationEvent = JSON.parse(event.data);
+    const toastType = TOAST_TYPE_MAP[data.type] || 'info';
+    const icon = ICON_MAP[data.type];
+
+    toast[toastType](data.title, {
+      description: data.message,
+      icon,
+      duration: 5000,
+    });
+  } catch {
+    // Ignore parse errors (heartbeats, etc.)
+  }
+}
+
 export function NotificationToastProvider() {
   const { session } = useAuth();
-  const eventSourceRef = useRef<EventSource | null>(null);
-  const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const connectionRef = useRef<TokenizedSSEConnection | null>(null);
 
   useEffect(() => {
     if (!session?.user) return;
@@ -45,54 +60,24 @@ export function NotificationToastProvider() {
       // ignore parse errors
     }
 
-    let cancelled = false;
+    const backendUrl = resolveBackendApiUrl();
+    const url = `${backendUrl}/notifications/stream`;
 
-    async function connect() {
-      if (cancelled) return;
-
-      // Get a session token to pass as query param (EventSource cannot set headers)
-      const token = await getSessionAccessToken();
-      if (!token || cancelled) return;
-
-      const backendUrl = resolveBackendApiUrl();
-      const url = `${backendUrl}/notifications/stream?token=${encodeURIComponent(token)}`;
-
-      const eventSource = new EventSource(url);
-      eventSourceRef.current = eventSource;
-
-      eventSource.onmessage = (event) => {
-        try {
-          const data: NotificationEvent = JSON.parse(event.data);
-          const toastType = TOAST_TYPE_MAP[data.type] || 'info';
-          const icon = ICON_MAP[data.type];
-
-          toast[toastType](data.title, {
-            description: data.message,
-            icon,
-            duration: 5000,
-          });
-        } catch {
-          // Ignore parse errors (heartbeats, etc.)
-        }
-      };
-
-      eventSource.onerror = () => {
-        eventSource.close();
-        if (!cancelled) {
-          // Reconnect after 5 seconds
-          reconnectTimeoutRef.current = setTimeout(connect, 5000);
-        }
-      };
-    }
-
-    connect();
+    // Use connectTokenizedSSE which has:
+    // - Auto-reconnect with configurable delay
+    // - Fetch-based SSE fallback after 3 EventSource failures (handles HTTP/2 issues)
+    // - Automatic token injection via query param
+    connectionRef.current = connectTokenizedSSE({
+      url,
+      reconnectDelayMs: 5000,
+      events: {
+        message: handleNotificationEvent,
+      },
+    });
 
     return () => {
-      cancelled = true;
-      eventSourceRef.current?.close();
-      if (reconnectTimeoutRef.current) {
-        clearTimeout(reconnectTimeoutRef.current);
-      }
+      connectionRef.current?.close();
+      connectionRef.current = null;
     };
   }, [session?.user]);
 
