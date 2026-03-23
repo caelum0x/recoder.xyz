@@ -238,7 +238,7 @@ export default function DashboardLayoutContent({
         </Suspense>
       }
     >
-      <div className="relative h-full">
+      <div className="relative h-full overflow-auto">
         {technicalIssue?.enabled && technicalIssue.message && (
           <Suspense fallback={null}>
             <TechnicalIssueBanner 
