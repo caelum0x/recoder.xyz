@@ -99,7 +99,7 @@ export function SiteHeader({
         </div>
 
         {/* Right side - Actions */}
-        <div className="flex items-center gap-1 flex-shrink-0">
+        <div className="flex items-center gap-1 flex-shrink-0 overflow-hidden">
           <TooltipProvider delayDuration={300}>
             {threadId && variant !== 'shared' && (
               <ThreadMessageSearch threadId={threadId} />
