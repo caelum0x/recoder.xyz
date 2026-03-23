@@ -1,6 +1,6 @@
 # Recoder Platform — Current State & Plan
 
-Last updated: 2026-03-23 16:30 (T6 — slides partially working, /workspace symlink + resource linkage deployed)
+Last updated: 2026-03-23 17:00 (T6 — search infra mapped, image search → SearXNG, message migration + documents table fixed)
 
 ---
 
@@ -179,8 +179,39 @@ Sandbox access checks may still fail for some combinations.
 3. **Dashboard crash**: `TypeError: Cannot read properties of undefined (reading 'length')` — `/v1/agents/leaderboard` route conflicts with `/v1/agents/{agent_id}` (FastAPI matches "leaderboard" as agent_id).
 
 ### P1 — Feature broken
-4. **Template listing**: `list_presentation_templates` tool returns unparseable JSON → "No templates available" in UI.
-5. **Template PDF preview CSP**: `object-src` blocked by Content Security Policy for `api.recoder.xyz/v1/presentation-templates/*/pdf`.
-6. **Files tab empty**: Depends on sandbox file writes working (fixed by /workspace symlink) + frontend receiving sandbox ID (fixed by resource linkage).
-7. **Feedback API 500**: Table in wrong database.
-8. **Computer use**: Needs full sandbox image (not slim). `computer_use.start()` is the proper SDK method per Daytona docs.
+4. **Image search "No Images Found"**: `image_search_tool.py` was hardcoded to Serper API (paid, no key set). Fix: rewrite to use SearXNG `categories=images` — tested: returns 332 results for "maldives hotel". Code change ready, needs deploy.
+5. **Template listing**: `list_presentation_templates` tool returns unparseable JSON → "No templates available" in UI. Root cause: `fail_response()` returns plain string, frontend `JSON.parse()` fails.
+6. **Template PDF preview CSP**: `object-src` blocked by Content Security Policy for `api.recoder.xyz/v1/presentation-templates/*/pdf`.
+7. **Message migration crash**: `message_migration.py:530` passes Python dict to psycopg which can't serialize it. `Table("messages")` missing `.json_columns("metadata", "content")`. Fixed, deployed.
+8. **public.documents table missing**: Thread embedding fails on every page load. Fixed: table created with pgvector.
+9. **Files tab empty**: Depends on sandbox file writes working (fixed by /workspace symlink) + frontend receiving sandbox ID (fixed by resource linkage).
+10. **Feedback API 500**: Table in wrong database.
+11. **Computer use**: Needs full sandbox image (not slim). `computer_use.start()` is the proper SDK method per Daytona docs.
+
+---
+
+## SEARCH INFRASTRUCTURE
+
+All search should run through self-hosted SearXNG (no paid API keys needed). Current state:
+
+| Tool | File | Current Provider | Status | Action |
+|------|------|-----------------|--------|--------|
+| **Web Search** | `web_search_tool.py` | SearXNG → DuckDuckGo fallback | WORKS | None |
+| **Image Search** | `image_search_tool.py` | ~~Serper API (PAID)~~ → SearXNG | FIXED (code ready) | Deploy |
+| **News Search** | `web_search_tool.py` | SearXNG → DuckDuckGo fallback | WORKS | None |
+| **Company Search** | `company_search_tool.py` | Exa.ai (PAID, EXA_API_KEY) | No key set | Rewrite to SearXNG |
+| **People Search** | `people_search_tool.py` | Exa.ai (PAID, EXA_API_KEY) | No key set | Rewrite to SearXNG |
+| **Paper Search** | `paper_search_tool.py` | Semantic Scholar (FREE) | WORKS | Rewrite to SearXNG |
+
+### SearXNG capabilities (self-hosted, no rate limits, no API keys)
+- **Web**: `categories=general` — already used
+- **Images**: `categories=images` — now used for image search
+- **News**: `categories=news` — already used
+- **Science/Papers**: `categories=science` — can replace Semantic Scholar with custom SearXNG engines (Google Scholar, arXiv, PubMed, Crossref)
+- **People/Company**: SearXNG can search LinkedIn, Crunchbase, etc. via custom engines — needs SearXNG `settings.yml` config to enable specific engines + backend tool rewrite to parse structured data from results
+
+### SearXNG server details
+- **URL**: `http://127.0.0.1:8888` (host) / `http://searxng:8080` (Docker network)
+- **Config**: Docker container, settings in `/etc/searxng/settings.yml`
+- **Engines to enable**: Google Scholar, arXiv, Crossref, LinkedIn, Crunchbase, Wikipedia (for people/company enrichment)
+- **No API keys needed** for any SearXNG search

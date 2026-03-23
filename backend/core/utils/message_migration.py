@@ -515,7 +515,7 @@ async def migrate_thread_messages(thread_id: str, save: bool = False) -> Dict[st
                 break
             offset += batch_size
 
-        messages_table = Table("messages")
+        messages_table = Table("messages").json_columns("metadata", "content")
 
         # Separate assistant and tool messages
         assistant_messages = [m for m in all_messages if m.get('type') == 'assistant']

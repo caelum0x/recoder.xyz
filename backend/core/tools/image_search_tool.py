@@ -46,18 +46,14 @@ from typing import Union, List
 """
 )
 class SandboxImageSearchTool(SandboxToolsBase):
-    """Tool for performing image searches using SERPER API."""
+    """Tool for performing image searches using SearXNG (self-hosted) with Serper API fallback."""
 
     def __init__(self, project_id: str, thread_manager: ThreadManager):
         super().__init__(project_id, thread_manager)
-        # Load environment variables
         load_dotenv()
-        # Use API keys from config
+        import os
+        self.searxng_url = os.environ.get("SEARXNG_URL", "http://127.0.0.1:8888")
         self.serper_api_key = config.SERPER_API_KEY
-        
-        if not self.serper_api_key:
-            from core.utils.logger import logger
-            logger.warning("SERPER_API_KEY not configured - Image Search Tool will not be available")
 
     @openapi_schema({
         "type": "function",
@@ -104,20 +100,14 @@ class SandboxImageSearchTool(SandboxToolsBase):
         
         Supports both single and batch searches:
         """
-        # Initialize variables for error handling
         is_batch = False
         queries = []
-        
+
         try:
-            # Check if Serper API key is configured
-            if not self.serper_api_key:
-                return self.fail_response("Image Search is not available. SERPER_API_KEY is not configured.")
-            
             # Validate inputs
             if isinstance(query, str):
                 if not query or not query.strip():
                     return self.fail_response("A valid search query is required.")
-                is_batch = False
                 queries = [query]
             elif isinstance(query, list):
                 if not query or not all(isinstance(q, str) and q.strip() for q in query):
@@ -126,12 +116,7 @@ class SandboxImageSearchTool(SandboxToolsBase):
                 queries = query
             else:
                 return self.fail_response("Query must be either a string or list of strings.")
-            
-            # Check if SERPER API key is available
-            if not self.serper_api_key:
-                return self.fail_response("SERPER_API_KEY not configured. Image search is not available.")
-            
-            # Normalize num_results
+
             if num_results is None:
                 num_results = 12
             elif isinstance(num_results, str):
@@ -139,108 +124,100 @@ class SandboxImageSearchTool(SandboxToolsBase):
                     num_results = int(num_results)
                 except ValueError:
                     num_results = 12
-            
-            # Clamp num_results to valid range
             num_results = max(1, min(num_results, 100))
 
-            if is_batch:
-                logging.info(f"Executing batch image search for {len(queries)} queries with {num_results} results each")
-                # Batch API request
-                payload = [{"q": q, "num": num_results} for q in queries]
-            else:
-                logging.info(f"Executing image search for query: '{queries[0]}' with {num_results} results")
-                # Single API request  
-                payload = {"q": queries[0], "num": num_results}
-            
-            # SERPER API request
             start_time = time.time()
-            async with get_http_client() as client:
-                headers = {
-                    "X-API-KEY": self.serper_api_key,
-                    "Content-Type": "application/json"
-                }
-                
-                response = await client.post(
-                    "https://google.serper.dev/images",
-                    json=payload,
-                    headers=headers,
-                    timeout=30.0
-                )
-                
-                response.raise_for_status()
-                data = response.json()
-            elapsed_time = round(time.time() - start_time, 2)
-            
+
             if is_batch:
-                if not isinstance(data, list):
-                    return self.fail_response("Unexpected batch response format from SERPER API.")
-                
+                logging.info(f"Executing batch image search for {len(queries)} queries via SearXNG")
                 batch_results = []
-                for i, (q, result_data) in enumerate(zip(queries, data)):
-                    images = result_data.get("images", []) if isinstance(result_data, dict) else []
-                    
-                    image_urls = []
-                    for img in images:
-                        img_url = img.get("imageUrl")
-                        if img_url:
-                            image_urls.append(img_url)
-                    
+                for q in queries:
+                    image_urls = await self._searxng_image_search(q, num_results)
                     batch_results.append({
                         "query": q,
                         "total_found": len(image_urls),
-                        "images": image_urls
+                        "images": image_urls,
                     })
-                    
                     logging.info(f"Found {len(image_urls)} image URLs for query: '{q}'")
-                
+
+                elapsed_time = round(time.time() - start_time, 2)
                 result = {
                     "batch_results": batch_results,
                     "total_queries": len(queries),
-                    "response_time": elapsed_time
+                    "response_time": elapsed_time,
                 }
             else:
-                images = data.get("images", [])
-                
-                if not images:
+                logging.info(f"Executing image search for query: '{queries[0]}' via SearXNG")
+                image_urls = await self._searxng_image_search(queries[0], num_results)
+                elapsed_time = round(time.time() - start_time, 2)
+
+                if not image_urls:
                     logging.warning(f"No images found for query: '{queries[0]}'")
                     return self.fail_response(f"No images found for query: '{queries[0]}'")
-                
-                image_urls = []
-                for img in images:
-                    img_url = img.get("imageUrl")
-                    if img_url:
-                        image_urls.append(img_url)
-                
+
                 logging.info(f"Found {len(image_urls)} image URLs for query: '{queries[0]}'")
-                
                 result = {
                     "query": queries[0],
                     "total_found": len(image_urls),
                     "images": image_urls,
-                    "response_time": elapsed_time
+                    "response_time": elapsed_time,
                 }
-            
+
             return ToolResult(
                 success=True,
-                output=json.dumps(result, ensure_ascii=False)
+                output=json.dumps(result, ensure_ascii=False),
             )
-        
-        except httpx.HTTPStatusError as e:
-            error_message = f"SERPER API error: {e.response.status_code}"
-            if e.response.status_code == 429:
-                error_message = "SERPER API rate limit exceeded. Please try again later."
-            elif e.response.status_code == 401:
-                error_message = "Invalid SERPER API key."
-            
-            query_desc = f"batch queries {queries}" if is_batch else f"query '{queries[0]}'"
-            logging.error(f"SERPER API error for {query_desc}: {error_message}")
-            return self.fail_response(error_message)
-        
+
         except Exception as e:
             error_message = str(e)
             query_desc = f"batch queries {queries}" if is_batch else f"query '{queries[0]}'"
             logging.error(f"Error performing image search for {query_desc}: {error_message}")
-            simplified_message = f"Error performing image search: {error_message[:200]}"
-            if len(error_message) > 200:
-                simplified_message += "..."
-            return self.fail_response(simplified_message)
+            return self.fail_response(f"Error performing image search: {error_message[:200]}")
+
+    async def _searxng_image_search(self, query: str, num_results: int = 12) -> List[str]:
+        """Search for images using self-hosted SearXNG instance."""
+        try:
+            async with httpx.AsyncClient(timeout=15.0) as client:
+                response = await client.get(
+                    f"{self.searxng_url}/search",
+                    params={
+                        "q": query,
+                        "format": "json",
+                        "categories": "images",
+                        "pageno": 1,
+                    },
+                )
+                response.raise_for_status()
+                data = response.json()
+
+            raw_results = data.get("results", [])
+            image_urls = []
+            for r in raw_results[:num_results]:
+                url = r.get("img_src") or r.get("url") or r.get("thumbnail_src")
+                if url and url.startswith("http"):
+                    image_urls.append(url)
+
+            return image_urls
+        except Exception as e:
+            logging.warning(f"[ImageSearch] SearXNG error for '{query}': {e}")
+            # Fall back to Serper if configured
+            if self.serper_api_key:
+                return await self._serper_image_search(query, num_results)
+            return []
+
+    async def _serper_image_search(self, query: str, num_results: int = 12) -> List[str]:
+        """Fallback: search for images using Serper API."""
+        try:
+            async with get_http_client() as client:
+                response = await client.post(
+                    "https://google.serper.dev/images",
+                    json={"q": query, "num": num_results},
+                    headers={"X-API-KEY": self.serper_api_key, "Content-Type": "application/json"},
+                    timeout=30.0,
+                )
+                response.raise_for_status()
+                data = response.json()
+            return [img["imageUrl"] for img in data.get("images", []) if img.get("imageUrl")]
+        except Exception as e:
+            logging.error(f"[ImageSearch] Serper fallback error for '{query}': {e}")
+            return []
