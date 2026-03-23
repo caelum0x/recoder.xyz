@@ -10,7 +10,6 @@ import {
   Save,
   Play,
   Loader2,
-  GripVertical,
   ChevronDown,
   ChevronRight,
   Clock,
@@ -40,6 +39,7 @@ import {
   useUpdatePipeline,
   useExecutePipeline,
   usePipelineRuns,
+  usePipelineRunStream,
 } from '@/hooks/agents/use-pipelines';
 import { useAgents } from '@/hooks/agents/use-agents';
 import { PipelineExecutionView } from '@/components/pipelines/pipeline-execution-view';
@@ -226,6 +226,10 @@ export default function PipelineDetailPage() {
   const [hasChanges, setHasChanges] = useState(false);
   const [runsOpen, setRunsOpen] = useState(false);
   const [selectedRun, setSelectedRun] = useState<PipelineRun | null>(null);
+  const [activeRunId, setActiveRunId] = useState<string | null>(null);
+
+  // Real-time streaming for the active pipeline run
+  const liveRun = usePipelineRunStream(pipelineId, activeRunId);
 
   // Populate form from loaded pipeline
   useEffect(() => {
@@ -285,8 +289,45 @@ export default function PipelineDetailPage() {
 
   const handleRun = async () => {
     const result = await executeMutation.mutateAsync(pipelineId);
+    setActiveRunId(result.run_id);
     setRunsOpen(true);
+    // Create a synthetic run for immediate UI feedback
+    setSelectedRun({
+      id: result.run_id,
+      pipeline_id: pipelineId,
+      status: 'running',
+      current_step: 0,
+      total_steps: result.total_steps,
+      step_results: [],
+      started_at: new Date().toISOString(),
+      completed_at: null,
+      error: null,
+    });
   };
+
+  const handleCancel = async () => {
+    if (!activeRunId) return;
+    try {
+      const { cancelPipelineRun } = await import('@/lib/api/pipelines');
+      await cancelPipelineRun(pipelineId, activeRunId);
+      setActiveRunId(null);
+    } catch {}
+  };
+
+  // Merge live SSE data into selected run
+  const displayRun: PipelineRun | null = selectedRun
+    ? {
+        ...selectedRun,
+        ...(liveRun && activeRunId === selectedRun.id ? liveRun as Partial<PipelineRun> : {}),
+      }
+    : null;
+
+  // Clear active run tracking when pipeline completes
+  useEffect(() => {
+    if (liveRun && ['completed', 'failed', 'cancelled'].includes(liveRun.status || '')) {
+      setActiveRunId(null);
+    }
+  }, [liveRun]);
 
   if (isLoading) {
     return (
@@ -420,7 +461,7 @@ export default function PipelineDetailPage() {
       </div>
 
       {/* Execution view for selected run */}
-      {selectedRun && (
+      {displayRun && (
         <div className="mb-6 rounded-lg border bg-card p-4">
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-sm font-medium">Execution Details</h3>
@@ -428,12 +469,16 @@ export default function PipelineDetailPage() {
               variant="ghost"
               size="sm"
               className="h-6 text-xs"
-              onClick={() => setSelectedRun(null)}
+              onClick={() => { setSelectedRun(null); setActiveRunId(null); }}
             >
               Close
             </Button>
           </div>
-          <PipelineExecutionView run={selectedRun} steps={steps} />
+          <PipelineExecutionView
+            run={displayRun}
+            steps={steps}
+            onCancel={displayRun.status === 'running' ? handleCancel : undefined}
+          />
         </div>
       )}
 

@@ -1,8 +1,8 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Maximize2, Presentation } from 'lucide-react';
-import { buildSandboxFileUrl } from '@/lib/utils/url';
+import { buildSandboxFileUrl, fetchSandboxHtmlAsBlobUrl } from '@/lib/utils/url';
 import { Project } from '@/lib/api/threads';
 
 interface SlideMetadata {
@@ -32,12 +32,51 @@ export function PresentationSlideCard({
 }: PresentationSlideCardProps) {
   const [containerRef, setContainerRef] = useState<HTMLDivElement | null>(null);
   const [scale, setScale] = useState(1);
+  const [blobUrl, setBlobUrl] = useState<string | null>(null);
+  const prevBlobUrlRef = useRef<string | null>(null);
 
-  const slidePreviewUrl = useMemo(() => {
+  const slideApiUrl = useMemo(() => {
     if (!project?.sandbox?.id) return null;
     const url = buildSandboxFileUrl(project?.sandbox?.id, slide.file_path);
     return refreshTimestamp ? `${url}?t=${refreshTimestamp}` : url;
   }, [project?.sandbox?.id, slide.file_path, refreshTimestamp]);
+
+  // Fetch slide HTML with auth and create blob URL for iframe
+  useEffect(() => {
+    if (!slideApiUrl) {
+      setBlobUrl(null);
+      return;
+    }
+    let cancelled = false;
+
+    (async () => {
+      const url = await fetchSandboxHtmlAsBlobUrl(slideApiUrl);
+      if (!cancelled) {
+        // Revoke previous blob URL to avoid memory leak
+        if (prevBlobUrlRef.current) {
+          URL.revokeObjectURL(prevBlobUrlRef.current);
+        }
+        prevBlobUrlRef.current = url;
+        setBlobUrl(url);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [slideApiUrl]);
+
+  // Cleanup blob URL on unmount
+  useEffect(() => {
+    return () => {
+      if (prevBlobUrlRef.current) {
+        URL.revokeObjectURL(prevBlobUrlRef.current);
+      }
+    };
+  }, []);
+
+  // Use blob URL for the iframe (auth-safe), fall back to direct URL for public sandboxes
+  const slidePreviewUrl = blobUrl || slideApiUrl;
 
   useEffect(() => {
     if (!containerRef) return;

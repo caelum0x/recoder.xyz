@@ -72,6 +72,8 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
   const lastSentThreadRef = useRef<string | null>(null);
   const hasInitializedRef = useRef<boolean>(false);
   const lastUpdateTimeRef = useRef<number>(0);
+  const disabledByBackendRef = useRef<boolean>(false);
+  const consecutiveFailuresRef = useRef<number>(0);
   const MIN_UPDATE_INTERVAL = 2000; // Minimum 2 seconds between updates
 
   const stopHeartbeat = useCallback(() => {
@@ -83,7 +85,7 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
 
   const sendPresenceUpdate = useCallback(
     async (threadId: string | null, force: boolean = false) => {
-      if (DISABLE_PRESENCE || !user || !sessionId) {
+      if (DISABLE_PRESENCE || disabledByBackendRef.current || !user || !sessionId) {
         return;
       }
 
@@ -113,16 +115,23 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
 
       const requestPromise = (async () => {
         try {
-          
-          await backendApi.post('/presence/update', {
+          const result = await backendApi.post('/presence/update', {
             session_id: sessionId,
             active_thread_id: threadId,
             platform: 'web',
             client_timestamp: timestamp,
           }, { showErrors: false });
-        } catch (err) {
-          console.error('[Presence] Update failed:', err);
-          throw err;
+          // If backend says presence is disabled, stop all future calls
+          if (result.data?.disabled) {
+            disabledByBackendRef.current = true;
+          }
+        } catch {
+          // Silently ignore presence errors — presence is non-critical
+          consecutiveFailuresRef.current++;
+          // Back off after 3 consecutive failures
+          if (consecutiveFailuresRef.current >= 3) {
+            disabledByBackendRef.current = true;
+          }
         } finally {
           setTimeout(() => {
             if (pendingRequestRef.current === requestPromise) {
