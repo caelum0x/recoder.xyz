@@ -520,7 +520,7 @@ Generate, edit, upscale, or remove background from images. Video generation supp
                         "Content-Type": "application/json",
                     },
                     json={
-                        "model": "google/gemini-2.5-flash-image-preview",
+                        "model": "google/gemini-2.5-flash-image",
                         "messages": [{"role": "user", "content": prompt}],
                         "modalities": ["image", "text"],
                     },
