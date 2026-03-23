@@ -30,6 +30,20 @@ Last updated: 2026-03-23 19:15 (T6 — 17 fixes deployed, QUIC disabled, VNC + s
 - **DialogContent warning**: COSMETIC — infinite re-render in console, needs frontend rebuild
 - **503 errors**: RARE — browser cache of old Server Action hashes, hard refresh fixes
 
+### Agents Toolbar Buttons Status
+| Button | Status | Details |
+|--------|--------|---------|
+| **Share** | MOCK | Only has shared view playback, no real sharing URL generation |
+| **Save as Template** | REAL | Dialog with save handler, calls `createTemplate` mutation |
+| **Insights** | MOCK | Dropdown with no real data behind it |
+| **Analytics** | PARTIAL | Has `useThreadAnalytics` hook + backend `thread_analytics_api`, may return data if analytics computed |
+| **Search** | REAL | Search input in config menu works |
+| **Download** | REAL | File download + document export (DOCX, PPTX, PDF) |
+
+### Agents UI Issues
+- **Header overlap**: "Recoder" logo and "Share" button collide when slide preview panel opens — CSS layout doesn't account for panel width
+- **CORS on page load**: SSE streams (presence, notifications, realtime) fail with CORS on initial page load, then recover after fetch fallback kicks in. Root cause: first HTTP/2 connection attempt sometimes fails before CORS headers are received. Non-blocking — features work after fallback.
+
 ### PM (pm.recoder.xyz)
 - **Copilot**: PATCHED — direct OpenRouter fetch, bypasses broken AI SDK
 - **React #418**: cosmetic hydration error
