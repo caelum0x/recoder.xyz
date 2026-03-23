@@ -275,10 +275,7 @@ export default function DashboardLayoutContent({
         <Suspense fallback={null}>
           <PresentationViewerWrapper />
         </Suspense>
-        {/* Recoder App announcement banners */}
-        <Suspense fallback={null}>
-          <RecoderAppBanners disableMobileAdvertising={featureFlags.disableMobileAdvertising} />
-        </Suspense>
+        {/* Recoder App announcement banners — disabled (no desktop app yet, had old Kortix logo) */}
         {/* Tutorials banner for new users */}
         <Suspense fallback={null}>
           <TutorialsBanner />
