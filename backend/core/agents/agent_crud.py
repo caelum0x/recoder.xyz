@@ -1,3 +1,4 @@
+from core.services.db import execute
 import asyncio
 from typing import Optional
 from fastapi import APIRouter, HTTPException, Depends, File, UploadFile, Query, Request
@@ -556,6 +557,31 @@ async def get_agents(
     except Exception as e:
         logger.error("Error fetching agents for user", user_id=user_id, error=str(e), exc_info=True)
         raise HTTPException(status_code=500, detail=f"Failed to fetch agents: {str(e)}")
+
+
+@router.get("/agents/runs", summary="List Agent Runs", operation_id="list_all_runs_v2")
+async def list_all_agent_runs_v2(
+    limit: int = 20,
+    offset: int = 0,
+    user_id: str = Depends(verify_and_get_user_id_from_jwt),
+):
+    """List all agent runs for the authenticated user."""
+    try:
+        rows = await execute(
+            """SELECT ar.id, ar.agent_id, ar.thread_id, ar.status, ar.started_at, ar.completed_at, ar.cost,
+                      a.name as agent_name
+               FROM agent_runs ar
+               LEFT JOIN agents a ON a.agent_id = ar.agent_id
+               WHERE a.account_id = :user_id
+               ORDER BY ar.started_at DESC NULLS LAST
+               LIMIT :limit OFFSET :offset""",
+            {"user_id": user_id, "limit": limit, "offset": offset},
+        )
+        return {"runs": [dict(r) for r in (rows or [])], "total": len(rows or [])}
+    except Exception as e:
+        logger.warning(f"Error listing runs: {e}")
+        return {"runs": [], "total": 0}
+
 
 @router.get("/agents/{agent_id}", response_model=AgentResponse, summary="Get Agent", operation_id="get_agent")
 async def get_agent(agent_id: str, user_id: str = Depends(verify_and_get_user_id_from_jwt)):
