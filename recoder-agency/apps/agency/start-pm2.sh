@@ -28,12 +28,16 @@ if [ -d "public" ] && [ ! -d ".next/standalone/apps/agency/public" ]; then
   cp -r public .next/standalone/apps/agency/public
 fi
 
-# Prisma engine: symlink auth-client into standalone so Prisma can find the engine
+# Prisma engine: symlink auth-client into standalone so Prisma can find the engine.
+# The symlink target must be relative to the symlink's own directory, not the script CWD.
 PRISMA_SRC=".next/standalone/node_modules/.pnpm/@recoder+auth@file+..+packages+auth_typescript@5.7.3/node_modules/@recoder/auth/prisma/auth-client"
 PRISMA_DST=".next/standalone/apps/agency/prisma/auth-client"
-if [ -d "$PRISMA_SRC" ] && [ ! -e "$PRISMA_DST" ]; then
+PRISMA_REL="../../../node_modules/.pnpm/@recoder+auth@file+..+packages+auth_typescript@5.7.3/node_modules/@recoder/auth/prisma/auth-client"
+if [ -d "$PRISMA_SRC" ]; then
   mkdir -p "$(dirname "$PRISMA_DST")"
-  ln -sf "$PRISMA_SRC" "$PRISMA_DST"
+  # Remove any existing (possibly broken) symlink, then create with correct relative path
+  rm -f "$PRISMA_DST"
+  ln -s "$PRISMA_REL" "$PRISMA_DST"
 fi
 
 exec node .next/standalone/apps/agency/server.js

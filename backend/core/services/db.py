@@ -685,7 +685,7 @@ class Table:
         session_ctx = get_read_session() if should_use_replica else get_session()
         
         async with session_ctx as s:
-            r = await s.execute(text(f'SELECT {cols} FROM "{self.name}" WHERE "{id_col}" = :id'), {"id": id_val})
+            r = await s.execute(text(f'SELECT {cols} FROM "{self.name}" WHERE "{id_col}"::text = :id'), {"id": str(id_val)})
             row = r.fetchone()
             return dict(row._mapping) if row else None
     
@@ -700,11 +700,11 @@ class Table:
         """
         self._check_keys(filters, "filter column")
         cols = _validate_columns(cols)
-        where = " AND ".join(f'"{k}" = :f_{k}' for k in filters)
-        params = {f"f_{k}": v for k, v in filters.items()}
+        where = " AND ".join(f'"{k}"::text = :f_{k}' for k in filters)
+        params = {f"f_{k}": str(v) for k, v in filters.items()}
         should_use_replica = use_replica if use_replica is not None else self.use_read_replica
         session_ctx = get_read_session() if should_use_replica else get_session()
-        
+
         async with session_ctx as s:
             r = await s.execute(text(f'SELECT {cols} FROM "{self.name}" WHERE {where} LIMIT 1'), params)
             row = r.fetchone()
@@ -728,8 +728,8 @@ class Table:
         where = ""
         if filters:
             self._check_keys(filters, "filter column")
-            where = "WHERE " + " AND ".join(f'"{k}" = :f_{k}' for k in filters)
-            params.update({f"f_{k}": v for k, v in filters.items()})
+            where = "WHERE " + " AND ".join(f'"{k}"::text = :f_{k}' for k in filters)
+            params.update({f"f_{k}": str(v) for k, v in filters.items()})
         order = f"ORDER BY {_validate_order_by(order_by)}" if order_by else ""
         should_use_replica = use_replica if use_replica is not None else self.use_read_replica
         session_ctx = get_read_session() if should_use_replica else get_session()
@@ -750,11 +750,11 @@ class Table:
         where = ""
         if filters:
             self._check_keys(filters, "filter column")
-            where = "WHERE " + " AND ".join(f'"{k}" = :f_{k}' for k in filters)
-            params.update({f"f_{k}": v for k, v in filters.items()})
+            where = "WHERE " + " AND ".join(f'"{k}"::text = :f_{k}' for k in filters)
+            params.update({f"f_{k}": str(v) for k, v in filters.items()})
         should_use_replica = use_replica if use_replica is not None else self.use_read_replica
         session_ctx = get_read_session() if should_use_replica else get_session()
-        
+
         async with session_ctx as s:
             r = await s.execute(text(f'SELECT COUNT(*) FROM "{self.name}" {where}'), params)
             return r.scalar() or 0
@@ -778,7 +778,7 @@ class Table:
         data = self._prep_json(data)
         set_clause = ", ".join(f'"{k}" = CAST(:{k} AS jsonb)' if k in self._json_cols else f'"{k}" = :{k}' for k in data)
         async with get_session() as s:
-            r = await s.execute(text(f'UPDATE "{self.name}" SET {set_clause} WHERE "{id_col}" = :id RETURNING *'), {**data, "id": id_val})
+            r = await s.execute(text(f'UPDATE "{self.name}" SET {set_clause} WHERE "{id_col}"::text = :id RETURNING *'), {**data, "id": str(id_val)})
             await s.commit()
             row = r.fetchone()
             return dict(row._mapping) if row else None
@@ -801,14 +801,14 @@ class Table:
     async def delete(self, id_col: str, id_val) -> bool:
         id_col = _validate_identifier(id_col, "id column")
         async with get_session() as s:
-            r = await s.execute(text(f'DELETE FROM "{self.name}" WHERE "{id_col}" = :id RETURNING "{id_col}"'), {"id": id_val})
+            r = await s.execute(text(f'DELETE FROM "{self.name}" WHERE "{id_col}"::text = :id RETURNING "{id_col}"'), {"id": str(id_val)})
             await s.commit()
             return r.fetchone() is not None
     
     async def delete_by(self, filters: dict) -> int:
         self._check_keys(filters, "filter column")
-        where = " AND ".join(f'"{k}" = :f_{k}' for k in filters)
-        params = {f"f_{k}": v for k, v in filters.items()}
+        where = " AND ".join(f'"{k}"::text = :f_{k}' for k in filters)
+        params = {f"f_{k}": str(v) for k, v in filters.items()}
         async with get_session() as s:
             r = await s.execute(text(f'DELETE FROM "{self.name}" WHERE {where}'), params)
             await s.commit()

@@ -572,14 +572,14 @@ export function NavUserWithTeams({
         open={showSettingsModal}
         onOpenChange={setShowSettingsModal}
         defaultTab={settingsTab}
-        returnUrl={typeof window !== 'undefined' ? window?.location?.href || '/' : '/'}
+        returnUrl="/dashboard"
       />
 
       {/* Plan Selection Modal */}
       <PlanSelectionModal
         open={showPlanModal}
         onOpenChange={setShowPlanModal}
-        returnUrl={typeof window !== 'undefined' ? window?.location?.href || '/' : '/'}
+        returnUrl="/dashboard"
       />
       
       {/* Feedback Dialog */}

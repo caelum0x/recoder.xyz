@@ -31,7 +31,7 @@ export function PlanSelectionModal({
     creditsExhausted = false,
     upgradeReason: controlledUpgradeReason,
 }: PlanSelectionModalProps) {
-    const defaultReturnUrl = typeof window !== 'undefined' ? `${window.location.origin}/dashboard?subscription=success` : '/';
+    const defaultReturnUrl = '/dashboard?subscription=success';
 
     const { isOpen: storeIsOpen, customTitle: storeCustomTitle, returnUrl: storeReturnUrl, closePricingModal, isAlert: storeIsAlert, alertTitle: storeAlertTitle, alertSubtitle: storeAlertSubtitle } = usePricingModalStore();
 

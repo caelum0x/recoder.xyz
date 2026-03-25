@@ -225,7 +225,7 @@ export default function RootLayout({
         />
       </head>
 
-      <body className="antialiased font-sans bg-background">
+      <body className="antialiased font-sans bg-background" suppressHydrationWarning>
         <OfflineIndicator />
         <ServiceWorkerRegistration />
         <a href="#main-content" className="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-1/2 focus:-translate-x-1/2 focus:z-[10000] focus:px-4 focus:py-2 focus:bg-orange-500 focus:text-white focus:rounded-lg">Skip to main content</a>

@@ -52,17 +52,20 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
   const [activeThreadId, setActiveThreadState] = useState<string | null>(null);
   const [connectionState, setConnectionState] = useState<'idle' | 'connecting' | 'connected' | 'error'>('idle');
   const [presences, setPresences] = useState<Record<string, PresenceEventPayload>>({});
-  const [sessionId, setSessionId] = useState<string | null>(() => {
-    if (typeof window === 'undefined') return null;
-    
+  // Initialize sessionId as null on both server and client to prevent hydration mismatch.
+  // The real sessionId is resolved in a useEffect below (client-only).
+  const [sessionId, setSessionId] = useState<string | null>(null);
+
+  // Resolve sessionId on client only (after hydration) to avoid server/client mismatch
+  useEffect(() => {
     let storedId = sessionStorage.getItem('presence_session_id');
     if (!storedId) {
       storedId = generateSessionId();
       sessionStorage.setItem('presence_session_id', storedId);
-    } else {
     }
-    return storedId;
-  });
+    setSessionId(storedId);
+  }, []);
+
   const heartbeatRef = useRef<NodeJS.Timeout | null>(null);
   const presenceStreamRef = useRef<TokenizedSSEConnection | null>(null);
   const latestThreadRef = useRef<string | null>(null);

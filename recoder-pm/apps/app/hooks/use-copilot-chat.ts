@@ -94,7 +94,17 @@ export function useCopilotChat({ api, body, onError }: UseCopilotChatOptions) {
           const errText = await response
             .text()
             .catch(() => `HTTP ${response.status}`);
-          throw new Error(errText || `HTTP ${response.status}`);
+          // Try to extract a structured error message from JSON responses
+          let errorMessage = errText || `HTTP ${response.status}`;
+          try {
+            const parsed = JSON.parse(errText);
+            if (typeof parsed.error === "string") {
+              errorMessage = parsed.error;
+            }
+          } catch {
+            // Not JSON — use the raw text as-is
+          }
+          throw new Error(errorMessage);
         }
 
         if (!response.body) {

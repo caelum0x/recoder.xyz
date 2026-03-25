@@ -134,7 +134,7 @@ export default function SubscriptionRequiredPage() {
           </div>
         }>
           <PricingSection
-            returnUrl={`${typeof window !== 'undefined' ? window.location.origin : ''}/dashboard?subscription=activated`}
+            returnUrl="/dashboard?subscription=activated"
             showTitleAndTabs={false}
             onSubscriptionUpdate={handleSubscriptionUpdate}
           />

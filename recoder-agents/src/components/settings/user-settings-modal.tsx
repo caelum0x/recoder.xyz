@@ -122,7 +122,7 @@ export function UserSettingsModal({
     open,
     onOpenChange,
     defaultTab = 'general',
-    returnUrl = typeof window !== 'undefined' ? window?.location?.href || '/' : '/',
+    returnUrl = '/dashboard',
 }: UserSettingsModalProps) {
     const router = useRouter();
     const isMobile = useIsMobile();

@@ -69,9 +69,7 @@ export const DateRangePicker: FC<DateRangePickerProps> = ({
 
   const [selectedPreset, setSelectedPreset] = useState<string | undefined>(undefined)
 
-  const [isSmallScreen, setIsSmallScreen] = useState(
-    typeof window !== 'undefined' ? window.innerWidth < 960 : false
-  )
+  const [isSmallScreen, setIsSmallScreen] = useState(false)
 
   useEffect(() => {
     const handleResize = (): void => {

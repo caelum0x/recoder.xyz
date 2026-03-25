@@ -1,4 +1,5 @@
 import { withOrganizationSystemPrompt } from "@repo/backend/ai-prompts";
+import { contentToText } from "@repo/editor/lib/tiptap";
 import { log } from "@repo/observability/log";
 import { database } from "@/lib/database";
 
@@ -9,6 +10,41 @@ const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
 const OPENROUTER_MODEL =
   process.env.OPENROUTER_TEXT_MODEL || "openai/gpt-4o-mini";
 const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
+
+/**
+ * Safely extract a text preview from a Feedback content field.
+ * Content is stored as TipTap JSON, not a plain string.
+ */
+function feedbackContentPreview(
+  content: unknown,
+  maxLen = 100
+): string {
+  if (!content) {
+    return "";
+  }
+  try {
+    // TipTap JSON document
+    if (typeof content === "object") {
+      const text = contentToText(content as object);
+      return text.length > maxLen ? `${text.slice(0, maxLen)}...` : text;
+    }
+    // Fallback: plain string (shouldn't happen, but be safe)
+    if (typeof content === "string") {
+      return content.length > maxLen
+        ? `${content.slice(0, maxLen)}...`
+        : content;
+    }
+  } catch {
+    // If contentToText fails, try JSON.stringify
+    try {
+      const raw = JSON.stringify(content).slice(0, maxLen);
+      return raw;
+    } catch {
+      return "";
+    }
+  }
+  return "";
+}
 
 /**
  * Extract text content from a message object.
@@ -47,7 +83,11 @@ export const POST = async (req: Request) => {
     return new Response("Messages required", { status: 400 });
   }
   if (!OPENROUTER_API_KEY) {
-    return new Response("AI provider not configured", { status: 500 });
+    log.error("OPENROUTER_API_KEY is not set");
+    return Response.json(
+      { error: "AI service not configured" },
+      { status: 503 }
+    );
   }
 
   // Convert messages to plain { role, content } for OpenRouter
@@ -67,22 +107,32 @@ export const POST = async (req: Request) => {
 
   try {
     // Gather product context from user's workspace
+    // Each query gets its own .catch so one table failure doesn't crash the whole route
     const [org, features, feedbackItems, insights, releases, initiatives] = await Promise.all([
       database.organization.findUnique({
         where: { id: organizationId },
         select: { name: true, slug: true },
+      }).catch((err: unknown) => {
+        log.error("Failed to fetch organization", { error: String(err) });
+        return null;
       }),
       database.feature.findMany({
         where: { organizationId },
         select: { id: true, title: true, status: { select: { name: true } }, startAt: true, endAt: true },
         take: 30,
         orderBy: { createdAt: "desc" },
+      }).catch((err: unknown) => {
+        log.error("Failed to fetch features", { error: String(err) });
+        return [];
       }),
       database.feedback.findMany({
         where: { organizationId },
         select: { title: true, content: true, aiSentiment: true, createdAt: true },
         take: 20,
         orderBy: { createdAt: "desc" },
+      }).catch((err: unknown) => {
+        log.error("Failed to fetch feedback", { error: String(err) });
+        return [];
       }),
       database.aiInsight.findMany({
         where: { organizationId },
@@ -94,19 +144,28 @@ export const POST = async (req: Request) => {
         },
         take: 10,
         orderBy: { createdAt: "desc" },
+      }).catch((err: unknown) => {
+        log.error("Failed to fetch AI insights", { error: String(err) });
+        return [];
       }),
       database.release.findMany({
         where: { organizationId },
         select: { title: true, state: true, endAt: true },
         take: 10,
         orderBy: { endAt: "desc" },
+      }).catch((err: unknown) => {
+        log.error("Failed to fetch releases", { error: String(err) });
+        return [];
       }),
       database.initiative.findMany({
         where: { organizationId },
         select: { title: true, state: true },
         take: 10,
         orderBy: { createdAt: "desc" },
-      }).catch(() => []),
+      }).catch((err: unknown) => {
+        log.error("Failed to fetch initiatives", { error: String(err) });
+        return [];
+      }),
     ]);
 
     const orgName = org?.name || "your organization";
@@ -119,7 +178,7 @@ export const POST = async (req: Request) => {
       "",
       `### Feedback (${feedbackItems.length})`,
       feedbackItems
-        .map((f) => `- ${f.title}: ${f.content?.slice(0, 100) || ""} (sentiment: ${f.aiSentiment || "?"})`)
+        .map((f) => `- ${f.title}: ${feedbackContentPreview(f.content)} (sentiment: ${f.aiSentiment || "?"})`)
         .join("\n") || "No feedback yet",
       "",
       `### AI Insights (${insights.length})`,
@@ -184,13 +243,17 @@ Be concise and actionable. Use markdown formatting. Never reference "Recoder" as
         status: apiResponse.status,
         body: errText.slice(0, 200),
       });
-      return new Response(`AI service error: ${apiResponse.status}`, {
-        status: 502,
-      });
+      return Response.json(
+        { error: `AI service error (${apiResponse.status})` },
+        { status: 502 }
+      );
     }
 
     if (!apiResponse.body) {
-      return new Response("No response stream", { status: 502 });
+      return Response.json(
+        { error: "No response stream from AI service" },
+        { status: 502 }
+      );
     }
 
     // Transform OpenRouter SSE -> UI Message Stream Protocol (AI SDK v5)
@@ -308,7 +371,14 @@ Be concise and actionable. Use markdown formatting. Never reference "Recoder" as
     });
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
-    log.error("Insights chat error", { error: msg, organizationId });
-    return new Response(msg || "Internal server error", { status: 500 });
+    log.error("Insights chat error", {
+      error: msg,
+      stack: error instanceof Error ? error.stack : undefined,
+      organizationId,
+    });
+    return Response.json(
+      { error: msg || "Internal server error" },
+      { status: 500 }
+    );
   }
 };

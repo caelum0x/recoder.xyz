@@ -111,11 +111,11 @@ async def mark_sandbox_deleted(resource_id: str) -> bool:
     sql = """
     UPDATE resources
     SET status = 'deleted', updated_at = :now
-    WHERE id = :resource_id
+    WHERE id::text = :resource_id
     RETURNING id
     """
     rows = await execute_mutate(sql, {
-        "resource_id": resource_id,
+        "resource_id": str(resource_id),
         "now": now
     })
     return len(rows) > 0
@@ -157,8 +157,8 @@ async def update_sandbox_last_ping(resource_id: str) -> bool:
     sql = """
     UPDATE resources
     SET updated_at = :now
-    WHERE id = :resource_id
+    WHERE id::text = :resource_id
     RETURNING id
     """
-    rows = await execute_mutate(sql, {"resource_id": resource_id, "now": now})
+    rows = await execute_mutate(sql, {"resource_id": str(resource_id), "now": now})
     return len(rows) > 0
