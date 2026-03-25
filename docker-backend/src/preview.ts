@@ -125,7 +125,8 @@ async function recoverContainerFromDocker(
         }
         
         // The "port" in our schema is the base port (mapped to 3000)
-        const basePort = port3000Host || port5173Host - 1 || port8080Host - 2;
+        // Parentheses needed: without them, `port5173Host - 1` evaluates to -1 when port5173Host is 0 (truthy!)
+        const basePort = port3000Host || (port5173Host ? port5173Host - 1 : 0) || (port8080Host ? port8080Host - 2 : 0);
         
         if (basePort > 0) {
           const recovered = {
@@ -352,6 +353,7 @@ export function setupPreviewProxy(app: Express, containers: Map<string, { id: st
 
     // Daytona preview: if container has a Daytona preview URL, redirect to it
     // This MUST be checked BEFORE trying local ports (Daytona sandboxes are remote)
+    // The health check may have updated daytonaPreviewUrl to the correct port (e.g. 5173 for Vite)
     const daytonaUrl = (entry as any).daytonaPreviewUrl;
     if (daytonaUrl) {
       console.log(`[Preview] Daytona preview redirect for ${projectId}: ${daytonaUrl}`);
@@ -612,26 +614,58 @@ export function setupPreviewProxy(app: Express, containers: Map<string, { id: st
       return res.status(404).json({ error: 'Container not found' });
     }
 
-    // For Daytona sandboxes, check if the preview URL is accessible via HTTP HEAD
+    // For Daytona sandboxes, check multiple common dev server ports
     const daytonaUrl = (entry as any)?.daytonaPreviewUrl;
     if (daytonaUrl) {
+      // Extract sandboxId from preview URL pattern: https://{port}-{sandboxId}.sandbox.recoder.xyz
+      const urlMatch = daytonaUrl.match(/^https?:\/\/\d+-([^.]+)\./);
+      const sandboxId = urlMatch?.[1] || entry.id;
+
+      // Check multiple ports: Vite (5173), Next.js (3000), Expo (8081), Other (8080)
+      const portsToCheck = [
+        { port: 5173, type: 'Vite (5173)' },
+        { port: 3000, type: 'Next.js (3000)' },
+        { port: 8081, type: 'Expo (8081)' },
+        { port: 8080, type: 'Other (8080)' },
+      ];
+
+      const prevRejectUnauthorized = process.env.NODE_TLS_REJECT_UNAUTHORIZED;
+      process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
+
       try {
-        const ctrl = new AbortController();
-        const to = setTimeout(() => ctrl.abort(), 3000);
-        // preview URLs use a self-signed wildcard cert — bypass TLS verification for internal health checks
-        const prevRejectUnauthorized = process.env.NODE_TLS_REJECT_UNAUTHORIZED;
-        process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
-        const resp = await fetch(daytonaUrl, { method: 'HEAD', signal: ctrl.signal }).catch(() => null);
+        const portResults = await Promise.all(
+          portsToCheck.map(async ({ port, type }) => {
+            const portUrl = `https://${port}-${sandboxId}.sandbox.recoder.xyz`;
+            try {
+              const ctrl = new AbortController();
+              const to = setTimeout(() => ctrl.abort(), 3000);
+              const resp = await fetch(portUrl, { method: 'HEAD', signal: ctrl.signal }).catch(() => null);
+              clearTimeout(to);
+              const responding = resp !== null && resp.status < 500;
+              return { port, responding, type, url: portUrl };
+            } catch {
+              return { port, responding: false, type, url: portUrl };
+            }
+          })
+        );
+
         process.env.NODE_TLS_REJECT_UNAUTHORIZED = prevRejectUnauthorized ?? '1';
-        clearTimeout(to);
-        const responding = resp !== null && resp.status < 500;
+
+        // Find the first responding port and update stored preview URL if different
+        const respondingResult = portResults.find(r => r.responding);
+        const effectivePreviewUrl = respondingResult?.url || daytonaUrl;
+        if (respondingResult && effectivePreviewUrl !== daytonaUrl) {
+          (entry as any).daytonaPreviewUrl = effectivePreviewUrl;
+        }
+
         return res.json({
           projectId: req.params.projectId,
           daytona: true,
-          previewUrl: daytonaUrl,
-          ports: [{ port: entry.port || 3000, responding, type: 'Daytona preview' }],
+          previewUrl: effectivePreviewUrl,
+          ports: portResults.map(({ port, responding, type }) => ({ port, responding, type })),
         });
       } catch (_e) {
+        process.env.NODE_TLS_REJECT_UNAUTHORIZED = prevRejectUnauthorized ?? '1';
         return res.json({
           projectId: req.params.projectId,
           daytona: true,

@@ -2469,6 +2469,17 @@ app.post('/api/container', containerLimiter, optionalAuthenticateRequest, flexib
           autoArchiveInterval: 120,
           public: true,
         });
+
+        // Wait for sandbox to reach running state before returning — prevents exec failures
+        if (sandbox.state !== 'started' && sandbox.state !== 'running') {
+          logger.info({ sandboxId: sandbox.id, state: sandbox.state }, 'Waiting for Daytona sandbox to be ready...');
+          try {
+            await dc.getOrStartSandbox(sandbox.id, 30000);
+          } catch (waitErr: any) {
+            logger.warn({ sandboxId: sandbox.id, err: waitErr.message }, 'Sandbox readiness wait failed, proceeding anyway');
+          }
+        }
+
         const previewUrl = dc.getPreviewUrl(sandbox.id, 3000);
         containers.set(projectId, {
           id: sandbox.id,
