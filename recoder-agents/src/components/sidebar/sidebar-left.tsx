@@ -23,7 +23,7 @@ import {
 import { NewAgentDialog } from '@/components/agents/new-agent-dialog';
 import { ThreadSearchModal } from '@/components/sidebar/thread-search-modal';
 import { GlobalSearchDialog } from '@/components/search/global-search-dialog';
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useRef } from 'react';
 import { useTheme } from 'next-themes';
 import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import {
@@ -129,6 +129,7 @@ export function SidebarLeft({
   const { theme, setTheme } = useTheme();
   const router = useRouter();
   const [activeView, setActiveView] = useState<'chats' | 'workers' | 'workspaces' | 'starred'>('chats');
+  const sidebarScrollRef = useRef<HTMLDivElement>(null);
   const [showEnterpriseCard, setShowEnterpriseCard] = useState(true);
   const [user, setUser] = useState<{
     name: string;
@@ -180,6 +181,8 @@ export function SidebarLeft({
   // Handle view switching (Files is independent - just a link, not part of this)
   const handleViewChange = (view: 'chats' | 'workers' | 'workspaces' | 'starred') => {
     setActiveView(view);
+    // Scroll the sidebar content to top so the new view is visible
+    sidebarScrollRef.current?.scrollTo({ top: 0 });
   };
 
   // Logout handler
@@ -432,7 +435,7 @@ export function SidebarLeft({
               : "opacity-100 pointer-events-auto delay-100"
           )}
         >
-          <div className="px-6 pt-4 space-y-4">
+          <div className="px-6 pt-4 space-y-4 flex-shrink-0">
             {/* New Chat button */}
             <div className="w-full">
               <Button
@@ -518,10 +521,10 @@ export function SidebarLeft({
           </div>
 
           {/* Scrollable area containing content panels, active runs, and nav links */}
-          <div className="flex-1 min-h-0 overflow-y-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:'none'] [scrollbar-width:'none']">
+          <div ref={sidebarScrollRef} className="flex-1 min-h-0 overflow-y-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:'none'] [scrollbar-width:'none']">
             {/* Content area — each section wrapped in SSEErrorBoundary so
                 CORS/QUIC/network failures don't blank the entire sidebar */}
-            <div className="px-6 min-h-[200px]">
+            <div className="px-6">
               {activeView === 'chats' && (
                 <SSEErrorBoundary name="sidebar-chats" retryAfterMs={10000}
                   fallback={<SidebarSectionError label="Chats" />}>
