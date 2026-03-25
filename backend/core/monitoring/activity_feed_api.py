@@ -3,7 +3,7 @@ Activity Feed API endpoints.
 
 Provides recording, listing, marking read, preferences, and stats for
 user activity feed events.
-Access control enforced at application layer (WHERE user_id = :user_id).
+Access control enforced at application layer (WHERE user_id::text = :user_id).
 """
 
 from datetime import datetime, timezone, timedelta
@@ -116,7 +116,7 @@ async def list_activity_feed(
     """
     # Fetch muted event types from preferences
     prefs_row = await execute_one(
-        "SELECT muted_event_types, show_read FROM activity_feed_preferences WHERE user_id = :user_id",
+        "SELECT muted_event_types, show_read FROM activity_feed_preferences WHERE user_id::text = :user_id",
         {"user_id": user_id},
     )
     muted_types: List[str] = []
@@ -125,7 +125,7 @@ async def list_activity_feed(
         muted_types = prefs_row.get("muted_event_types") or []
         show_read = prefs_row.get("show_read", True)
 
-    where_clauses = ["user_id = :user_id"]
+    where_clauses = ["user_id::text = :user_id"]
     params: Dict[str, Any] = {
         "user_id": user_id,
         "limit": limit,
@@ -196,7 +196,7 @@ async def mark_activity_read(
         """
         UPDATE activity_feed_events
         SET is_read = true
-        WHERE id = :event_id AND user_id = :user_id
+        WHERE id = :event_id AND user_id::text = :user_id
         RETURNING id, is_read
         """,
         {"event_id": event_id, "user_id": user_id},
@@ -222,7 +222,7 @@ async def mark_all_activity_read(
         """
         UPDATE activity_feed_events
         SET is_read = true
-        WHERE user_id = :user_id AND is_read = false
+        WHERE user_id::text = :user_id AND is_read = false
         """,
         {"user_id": user_id},
     )
@@ -240,7 +240,7 @@ async def get_activity_preferences(
 ):
     """Get the user's activity feed preferences."""
     row = await execute_one(
-        "SELECT * FROM activity_feed_preferences WHERE user_id = :user_id",
+        "SELECT * FROM activity_feed_preferences WHERE user_id::text = :user_id",
         {"user_id": user_id},
     )
 
@@ -318,7 +318,7 @@ async def activity_feed_stats(
     unread_row = await execute_one(
         """
         SELECT COUNT(*) FROM activity_feed_events
-        WHERE user_id = :user_id AND is_read = false
+        WHERE user_id::text = :user_id AND is_read = false
         """,
         {"user_id": user_id},
     )
@@ -329,7 +329,7 @@ async def activity_feed_stats(
         """
         SELECT event_type, COUNT(*) AS count
         FROM activity_feed_events
-        WHERE user_id = :user_id AND created_at >= :today_start
+        WHERE user_id::text = :user_id AND created_at >= :today_start
         GROUP BY event_type
         ORDER BY count DESC
         """,
@@ -344,7 +344,7 @@ async def activity_feed_stats(
         """
         SELECT EXTRACT(HOUR FROM created_at)::INTEGER AS hour, COUNT(*) AS count
         FROM activity_feed_events
-        WHERE user_id = :user_id AND created_at >= :since
+        WHERE user_id::text = :user_id AND created_at >= :since
         GROUP BY hour
         ORDER BY count DESC
         LIMIT 1

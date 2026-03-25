@@ -225,7 +225,7 @@ class SandboxKbTool(SandboxToolsBase):
                         rows = await execute_read(
                             """SELECT entry_id, filename, summary, file_size
                             FROM knowledge_base_entries
-                            WHERE account_id = :account_id AND is_active = true
+                            WHERE account_id::text = :account_id AND is_active = true
                               AND (filename ILIKE :pattern OR summary ILIKE :pattern OR content ILIKE :pattern)
                             ORDER BY created_at DESC LIMIT 10""",
                             {"account_id": account_id, "pattern": f"%{q}%"}
@@ -317,7 +317,7 @@ class SandboxKbTool(SandboxToolsBase):
             elif operation == "clear_embeddings":
                 # Clear embeddings in DB
                 await execute_mutate(
-                    "UPDATE knowledge_base_entries SET embedding = NULL WHERE account_id = :account_id",
+                    "UPDATE knowledge_base_entries SET embedding = NULL WHERE account_id::text = :account_id",
                     {"account_id": account_id}
                 )
                 return self.success_response({"message": "Cleared all embeddings for account. They will be regenerated on next file upload."})
@@ -363,8 +363,8 @@ class SandboxKbTool(SandboxToolsBase):
                           CASE WHEN e.embedding IS NOT NULL THEN true ELSE false END AS has_embedding,
                           CASE WHEN e.search_vector IS NOT NULL THEN true ELSE false END AS has_fulltext
                    FROM knowledge_base_entries e
-                   JOIN knowledge_base_folders f ON f.folder_id = e.folder_id
-                   WHERE e.account_id = :account_id AND e.is_active = true
+                   JOIN knowledge_base_folders f ON f.folder_id::text = e.folder_id::text
+                   WHERE e.account_id::text = :account_id AND e.is_active = true
                    ORDER BY f.name, e.filename""",
                 {"account_id": account_id}
             )
@@ -533,9 +533,9 @@ class SandboxKbTool(SandboxToolsBase):
                     e.mime_type,
                     f.name AS folder_name
                 FROM agent_knowledge_entry_assignments a
-                JOIN knowledge_base_entries e ON e.entry_id = a.entry_id
-                JOIN knowledge_base_folders f ON f.folder_id = e.folder_id
-                WHERE a.agent_id = :agent_id AND a.enabled = true
+                JOIN knowledge_base_entries e ON e.entry_id::text = a.entry_id::text
+                JOIN knowledge_base_folders f ON f.folder_id::text = e.folder_id::text
+                WHERE a.agent_id::text = :agent_id AND a.enabled = true
             """, {"agent_id": agent_id})
 
             if not result:
@@ -1161,7 +1161,7 @@ This directory contains your agent's knowledge base files, synced from the cloud
                 await execute_mutate(
                     """UPDATE agent_knowledge_entry_assignments
                        SET enabled = :enabled
-                       WHERE agent_id = :agent_id AND entry_id = :entry_id""",
+                       WHERE agent_id::text = :agent_id AND entry_id::text = :entry_id""",
                     {"enabled": enabled, "agent_id": agent_id, "entry_id": item_id}
                 )
             else:
@@ -1244,7 +1244,7 @@ This directory contains your agent's knowledge base files, synced from the cloud
                         await execute_mutate(
                             """UPDATE agent_knowledge_entry_assignments
                                SET enabled = true
-                               WHERE agent_id = :agent_id AND entry_id = :entry_id""",
+                               WHERE agent_id::text = :agent_id AND entry_id::text = :entry_id""",
                             {"agent_id": agent_id, "entry_id": entry_id}
                         )
                     else:
@@ -1311,8 +1311,8 @@ This directory contains your agent's knowledge base files, synced from the cloud
                 SELECT e.entry_id, e.filename, e.file_size, e.created_at, e.summary, e.folder_id,
                        f.name AS folder_name
                 FROM knowledge_base_entries e
-                JOIN knowledge_base_folders f ON f.folder_id = e.folder_id
-                WHERE e.account_id = :account_id AND e.is_active = true
+                JOIN knowledge_base_folders f ON f.folder_id::text = e.folder_id::text
+                WHERE e.account_id::text = :account_id AND e.is_active = true
                 ORDER BY e.created_at
             """, {"account_id": account_id})
 

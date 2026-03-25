@@ -93,7 +93,7 @@ async def scan_error_patterns(
             """
             SELECT agent_id, error, status, started_at
             FROM agent_runs
-            WHERE user_id = :user_id
+            WHERE user_id::text = :user_id
               AND status = 'failed'
               AND error IS NOT NULL
               AND started_at > now() - interval '7 days'
@@ -149,7 +149,7 @@ async def scan_error_patterns(
                 """
                 SELECT id, occurrence_count, affected_agents, sample_errors
                 FROM detected_error_patterns
-                WHERE user_id = :user_id AND error_signature = :signature
+                WHERE user_id::text = :user_id AND error_signature = :signature
                 """,
                 {"user_id": user_id, "signature": signature},
             )
@@ -248,7 +248,7 @@ async def list_error_patterns(
 ):
     """List error patterns with optional filters."""
     try:
-        conditions = ["user_id = :user_id"]
+        conditions = ["user_id::text = :user_id"]
         params: dict = {"user_id": user_id, "limit": limit, "offset": offset}
 
         if status:
@@ -294,7 +294,7 @@ async def get_error_pattern_stats(
             """
             SELECT COUNT(*) AS cnt
             FROM detected_error_patterns
-            WHERE user_id = :user_id AND status = 'active'
+            WHERE user_id::text = :user_id AND status = 'active'
             """,
             {"user_id": user_id},
         )
@@ -305,7 +305,7 @@ async def get_error_pattern_stats(
             """
             SELECT severity, COUNT(*) AS cnt
             FROM detected_error_patterns
-            WHERE user_id = :user_id AND status IN ('active', 'investigating')
+            WHERE user_id::text = :user_id AND status IN ('active', 'investigating')
             GROUP BY severity
             """,
             {"user_id": user_id},
@@ -319,7 +319,7 @@ async def get_error_pattern_stats(
             """
             SELECT id, pattern_name, occurrence_count, severity, last_seen_at
             FROM detected_error_patterns
-            WHERE user_id = :user_id AND status IN ('active', 'investigating')
+            WHERE user_id::text = :user_id AND status IN ('active', 'investigating')
             ORDER BY occurrence_count DESC
             LIMIT 5
             """,
@@ -339,7 +339,7 @@ async def get_error_pattern_stats(
             """
             SELECT id, pattern_name, occurrence_count, severity, last_seen_at
             FROM detected_error_patterns
-            WHERE user_id = :user_id
+            WHERE user_id::text = :user_id
               AND status IN ('active', 'investigating')
               AND last_seen_at > now() - interval '24 hours'
             ORDER BY occurrence_count DESC
@@ -382,7 +382,7 @@ async def get_error_pattern(
         row = await execute_one(
             """
             SELECT * FROM detected_error_patterns
-            WHERE id = :pattern_id AND user_id = :user_id
+            WHERE id = :pattern_id AND user_id::text = :user_id
             """,
             {"pattern_id": pattern_id, "user_id": user_id},
         )
@@ -452,7 +452,7 @@ async def update_error_pattern(
             f"""
             UPDATE detected_error_patterns
             SET {set_clause}
-            WHERE id = :pattern_id AND user_id = :user_id
+            WHERE id = :pattern_id AND user_id::text = :user_id
             RETURNING *
             """,
             params,

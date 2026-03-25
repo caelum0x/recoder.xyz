@@ -96,9 +96,9 @@ async def list_workflow_templates(
     params: dict = {"user_id": user_id, "limit": limit}
 
     if public_only:
-        conditions.append("(is_public = true OR user_id = :user_id)")
+        conditions.append("(is_public = true OR user_id::text = :user_id)")
     else:
-        conditions.append("(user_id = :user_id OR is_public = true)")
+        conditions.append("(user_id::text = :user_id OR is_public = true)")
 
     if category:
         conditions.append("category = :category")
@@ -130,7 +130,7 @@ async def get_workflow_template(
     row = await execute_one(
         """
         SELECT * FROM workflow_templates
-        WHERE id = :id AND (user_id = :user_id OR is_public = true)
+        WHERE id = :id AND (user_id::text = :user_id OR is_public = true)
         """,
         {"id": template_id, "user_id": user_id},
     )
@@ -146,7 +146,7 @@ async def update_workflow_template(
     user_id: str = Depends(verify_and_get_user_id_from_jwt),
 ):
     existing = await execute_one(
-        "SELECT id FROM workflow_templates WHERE id = :id AND user_id = :user_id",
+        "SELECT id FROM workflow_templates WHERE id = :id AND user_id::text = :user_id",
         {"id": template_id, "user_id": user_id},
     )
     if not existing:
@@ -191,7 +191,7 @@ async def update_workflow_template(
     set_clause = ", ".join(set_parts)
 
     row = await execute_one(
-        f"UPDATE workflow_templates SET {set_clause} WHERE id = :id AND user_id = :user_id RETURNING *",
+        f"UPDATE workflow_templates SET {set_clause} WHERE id = :id AND user_id::text = :user_id RETURNING *",
         params,
         commit=True,
     )
@@ -204,14 +204,14 @@ async def delete_workflow_template(
     user_id: str = Depends(verify_and_get_user_id_from_jwt),
 ):
     existing = await execute_one(
-        "SELECT id FROM workflow_templates WHERE id = :id AND user_id = :user_id",
+        "SELECT id FROM workflow_templates WHERE id = :id AND user_id::text = :user_id",
         {"id": template_id, "user_id": user_id},
     )
     if not existing:
         raise HTTPException(status_code=404, detail="Workflow template not found or access denied")
 
     await execute_mutate(
-        "DELETE FROM workflow_templates WHERE id = :id AND user_id = :user_id",
+        "DELETE FROM workflow_templates WHERE id = :id AND user_id::text = :user_id",
         {"id": template_id, "user_id": user_id},
     )
     return {"status": "ok"}
@@ -231,7 +231,7 @@ async def run_workflow_template(
     template = await execute_one(
         """
         SELECT * FROM workflow_templates
-        WHERE id = :id AND (user_id = :user_id OR is_public = true)
+        WHERE id = :id AND (user_id::text = :user_id OR is_public = true)
         """,
         {"id": template_id, "user_id": user_id},
     )
@@ -272,7 +272,7 @@ async def list_workflow_template_runs(
     template = await execute_one(
         """
         SELECT id FROM workflow_templates
-        WHERE id = :id AND (user_id = :user_id OR is_public = true)
+        WHERE id = :id AND (user_id::text = :user_id OR is_public = true)
         """,
         {"id": template_id, "user_id": user_id},
     )
@@ -282,7 +282,7 @@ async def list_workflow_template_runs(
     rows = await execute(
         """
         SELECT * FROM workflow_template_runs
-        WHERE template_id = :template_id AND user_id = :user_id
+        WHERE template_id::text = :template_id AND user_id::text = :user_id
         ORDER BY created_at DESC
         LIMIT :limit
         """,

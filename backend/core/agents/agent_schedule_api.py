@@ -265,7 +265,7 @@ async def list_agent_schedules(
     rows = await execute(
         """
         SELECT * FROM agent_schedules
-        WHERE agent_id = :agent_id AND user_id = :user_id
+        WHERE agent_id::text = :agent_id AND user_id::text = :user_id
         ORDER BY created_at DESC
         """,
         {"agent_id": agent_id, "user_id": user_id},
@@ -286,8 +286,8 @@ async def list_all_schedules(
         """
         SELECT s.*, a.name AS agent_name
         FROM agent_schedules s
-        LEFT JOIN agents a ON a.agent_id = s.agent_id
-        WHERE s.user_id = :user_id
+        LEFT JOIN agents a ON a.agent_id::text = s.agent_id::text
+        WHERE s.user_id::text = :user_id
         ORDER BY s.created_at DESC
         """,
         {"user_id": user_id},
@@ -295,7 +295,7 @@ async def list_all_schedules(
     results = []
     for r in rows:
         d = dict(r)
-        d["cron_human"] = cron_to_human(d["cron_expression"])
+        d["cron_human"] = cron_to_human(d.get("cron_expression", ""))
         results.append(d)
     return results
 
@@ -308,7 +308,7 @@ async def update_schedule(
 ):
     # Verify ownership
     existing = await execute_one(
-        "SELECT * FROM agent_schedules WHERE id = :id AND user_id = :user_id",
+        "SELECT * FROM agent_schedules WHERE id = :id AND user_id::text = :user_id",
         {"id": schedule_id, "user_id": user_id},
     )
     if not existing:
@@ -350,7 +350,7 @@ async def update_schedule(
     set_clauses += ", updated_at = now()"
 
     row = await execute_one(
-        f"UPDATE agent_schedules SET {set_clauses} WHERE id = :id AND user_id = :user_id RETURNING *",
+        f"UPDATE agent_schedules SET {set_clauses} WHERE id = :id AND user_id::text = :user_id RETURNING *",
         params,
     )
     result = dict(row)
@@ -364,14 +364,14 @@ async def delete_schedule(
     user_id: str = Depends(verify_and_get_user_id_from_jwt),
 ):
     existing = await execute_one(
-        "SELECT id FROM agent_schedules WHERE id = :id AND user_id = :user_id",
+        "SELECT id FROM agent_schedules WHERE id = :id AND user_id::text = :user_id",
         {"id": schedule_id, "user_id": user_id},
     )
     if not existing:
         raise HTTPException(status_code=404, detail="Schedule not found")
 
     await execute(
-        "DELETE FROM agent_schedules WHERE id = :id AND user_id = :user_id",
+        "DELETE FROM agent_schedules WHERE id = :id AND user_id::text = :user_id",
         {"id": schedule_id, "user_id": user_id},
     )
     return {"status": "ok"}
@@ -383,7 +383,7 @@ async def trigger_schedule(
     user_id: str = Depends(verify_and_get_user_id_from_jwt),
 ):
     schedule = await execute_one(
-        "SELECT * FROM agent_schedules WHERE id = :id AND user_id = :user_id",
+        "SELECT * FROM agent_schedules WHERE id = :id AND user_id::text = :user_id",
         {"id": schedule_id, "user_id": user_id},
     )
     if not schedule:
@@ -426,13 +426,13 @@ async def list_executions(
 ):
     # Verify ownership
     schedule = await execute_one(
-        "SELECT id FROM agent_schedules WHERE id = :id AND user_id = :user_id",
+        "SELECT id FROM agent_schedules WHERE id = :id AND user_id::text = :user_id",
         {"id": schedule_id, "user_id": user_id},
     )
     if not schedule:
         raise HTTPException(status_code=404, detail="Schedule not found")
 
-    where = "schedule_id = :schedule_id AND user_id = :user_id"
+    where = "schedule_id::text = :schedule_id AND user_id::text = :user_id"
     params: dict = {"schedule_id": schedule_id, "user_id": user_id, "limit": limit, "offset": offset}
 
     if status:

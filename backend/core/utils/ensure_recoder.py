@@ -21,7 +21,7 @@ async def ensure_recoder_installed(account_id: str) -> None:
             """
             SELECT agent_id
             FROM agents
-            WHERE account_id = :account_id
+            WHERE account_id::text = :account_id
               AND metadata->>'is_recoder_default' = 'true'
             LIMIT 1
             """,

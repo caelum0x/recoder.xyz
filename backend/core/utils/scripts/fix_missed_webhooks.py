@@ -128,7 +128,7 @@ async def fix_new_signups(target_date: str, dry_run: bool = False):
                           billing_cycle_anchor = :billing_cycle_anchor,
                           next_credit_grant = :next_credit_grant,
                           last_grant_date = :last_grant_date
-                        WHERE account_id = :account_id
+                        WHERE account_id::text = :account_id
                         """,
                         {
                             "account_id": account_id,
@@ -281,7 +281,7 @@ async def fix_renewals(target_date: str, dry_run: bool = False):
                         SET
                           last_grant_date = :last_grant_date,
                           next_credit_grant = :next_credit_grant
-                        WHERE account_id = :account_id
+                        WHERE account_id::text = :account_id
                         """,
                         {
                             "account_id": account_id,
@@ -400,7 +400,7 @@ async def fix_upgrades(target_date: str, dry_run: bool = False):
                           plan_type = :plan_type,
                           billing_cycle_anchor = :billing_cycle_anchor,
                           next_credit_grant = :next_credit_grant
-                        WHERE account_id = :account_id
+                        WHERE account_id::text = :account_id
                         """,
                         {
                             "account_id": account_id,

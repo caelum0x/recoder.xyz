@@ -160,7 +160,7 @@ async def list_anomaly_configs(
             SELECT id, user_id, metric_type, agent_id, detection_method,
                    sensitivity, window_hours, is_active, created_at
             FROM anomaly_detection_configs
-            WHERE user_id = :user_id
+            WHERE user_id::text = :user_id
             ORDER BY created_at DESC
             """,
             {"user_id": user_id},
@@ -195,7 +195,7 @@ async def update_anomaly_config(
             set_parts.append("metric_type = :metric_type")
             params["metric_type"] = body.metric_type
         if body.agent_id is not None:
-            set_parts.append("agent_id = :agent_id")
+            set_parts.append("agent_id::text = :agent_id")
             params["agent_id"] = body.agent_id
         if body.detection_method is not None:
             set_parts.append("detection_method = :detection_method")
@@ -218,7 +218,7 @@ async def update_anomaly_config(
             f"""
             UPDATE anomaly_detection_configs
             SET {set_clause}
-            WHERE id = :config_id AND user_id = :user_id
+            WHERE id = :config_id AND user_id::text = :user_id
             RETURNING id, user_id, metric_type, agent_id, detection_method,
                       sensitivity, window_hours, is_active, created_at
             """,
@@ -248,7 +248,7 @@ async def delete_anomaly_config(
         rows = await execute_mutate(
             """
             DELETE FROM anomaly_detection_configs
-            WHERE id = :config_id AND user_id = :user_id
+            WHERE id = :config_id AND user_id::text = :user_id
             RETURNING id
             """,
             {"config_id": config_id, "user_id": user_id},
@@ -286,7 +286,7 @@ async def run_anomaly_config_scan(
             """
             SELECT id, metric_type, agent_id, detection_method, sensitivity, window_hours
             FROM anomaly_detection_configs
-            WHERE user_id = :user_id AND is_active = true
+            WHERE user_id::text = :user_id AND is_active = true
             """,
             {"user_id": user_id},
         )
@@ -365,7 +365,7 @@ async def list_detected_anomalies(
 ):
     """List detected anomalies with optional filters."""
     try:
-        conditions = ["user_id = :user_id"]
+        conditions = ["user_id::text = :user_id"]
         params: dict = {"user_id": user_id, "limit": limit}
 
         if status:
@@ -375,7 +375,7 @@ async def list_detected_anomalies(
             conditions.append("severity = :severity")
             params["severity"] = severity
         if agent_id:
-            conditions.append("agent_id = :agent_id")
+            conditions.append("agent_id::text = :agent_id")
             params["agent_id"] = agent_id
 
         where_clause = " AND ".join(conditions)
@@ -418,7 +418,7 @@ async def update_detected_anomaly_status(
             """
             UPDATE detected_anomalies
             SET status = :status
-            WHERE id = :anomaly_id AND user_id = :user_id
+            WHERE id = :anomaly_id AND user_id::text = :user_id
             RETURNING id, user_id, config_id, agent_id, metric_type, observed_value,
                       expected_value, deviation_score, severity, status, description, detected_at
             """,
@@ -452,7 +452,7 @@ async def get_anomaly_detection_stats(
             """
             SELECT severity, COUNT(*) AS cnt
             FROM detected_anomalies
-            WHERE user_id = :user_id AND status = 'open'
+            WHERE user_id::text = :user_id AND status = 'open'
             GROUP BY severity
             """,
             {"user_id": user_id},
@@ -469,7 +469,7 @@ async def get_anomaly_detection_stats(
             """
             SELECT metric_type, COUNT(*) AS cnt
             FROM detected_anomalies
-            WHERE user_id = :user_id AND status = 'open'
+            WHERE user_id::text = :user_id AND status = 'open'
             GROUP BY metric_type
             ORDER BY cnt DESC
             """,
@@ -482,7 +482,7 @@ async def get_anomaly_detection_stats(
             """
             SELECT COUNT(*) AS cnt
             FROM detected_anomalies
-            WHERE user_id = :user_id AND status = 'resolved'
+            WHERE user_id::text = :user_id AND status = 'resolved'
             """,
             {"user_id": user_id},
         )

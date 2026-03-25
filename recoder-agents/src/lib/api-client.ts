@@ -22,6 +22,39 @@ export interface ApiResponse<T = any> {
   success: boolean;
 }
 
+/**
+ * Error class that preserves HTTP status code when API responses are thrown.
+ * React Query's retry function checks `error.status` to decide whether to retry,
+ * so we need to propagate the status from the API response.
+ */
+export class ApiRequestError extends Error {
+  status?: number;
+  code?: string;
+  details?: any;
+
+  constructor(message: string, status?: number, code?: string, details?: any) {
+    super(message);
+    this.name = 'ApiRequestError';
+    this.status = status;
+    this.code = code;
+    this.details = details;
+  }
+}
+
+/**
+ * Helper to throw an error from an ApiResponse, preserving HTTP status for React Query.
+ * Use this instead of `if (response.error) throw new Error(response.error.message)`
+ * so that retry logic can distinguish 4xx from 5xx errors.
+ */
+export function throwIfError<T>(response: ApiResponse<T>): asserts response is ApiResponse<T> & { data: T; success: true } {
+  if (response.error) {
+    const status = (response.error as any)?.status;
+    const code = (response.error as any)?.code;
+    const details = (response.error as any)?.details;
+    throw new ApiRequestError(response.error.message, status, code, details);
+  }
+}
+
 async function makeRequest<T = any>(
   url: string,
   options: RequestInit & ApiClientOptions = {}

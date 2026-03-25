@@ -114,7 +114,7 @@ async def list_thread_message_bookmarks(
         rows = await execute(
             """
             SELECT * FROM thread_message_bookmarks
-            WHERE user_id = :user_id AND thread_id = :thread_id
+            WHERE user_id::text = :user_id AND thread_id::text = :thread_id
             ORDER BY message_index ASC
             """,
             {"user_id": user_id, "thread_id": thread_id},
@@ -142,7 +142,7 @@ async def update_message_bookmark(
     """Update a message bookmark's label, note, or color."""
     try:
         existing = await execute_one(
-            "SELECT id FROM thread_message_bookmarks WHERE id = :id AND user_id = :user_id",
+            "SELECT id FROM thread_message_bookmarks WHERE id = :id AND user_id::text = :user_id",
             {"id": bookmark_id, "user_id": user_id},
         )
         if not existing:
@@ -166,7 +166,7 @@ async def update_message_bookmark(
 
         set_clauses = ", ".join(f"{k} = :{k}" for k in updates)
         row = await execute_one(
-            f"UPDATE thread_message_bookmarks SET {set_clauses} WHERE id = :id AND user_id = :user_id RETURNING *",
+            f"UPDATE thread_message_bookmarks SET {set_clauses} WHERE id = :id AND user_id::text = :user_id RETURNING *",
             params,
         )
         return serialize_row(row)
@@ -189,14 +189,14 @@ async def delete_message_bookmark(
     """Delete a specific message bookmark."""
     try:
         existing = await execute_one(
-            "SELECT id FROM thread_message_bookmarks WHERE id = :id AND user_id = :user_id",
+            "SELECT id FROM thread_message_bookmarks WHERE id = :id AND user_id::text = :user_id",
             {"id": bookmark_id, "user_id": user_id},
         )
         if not existing:
             raise HTTPException(status_code=404, detail="Bookmark not found")
 
         await execute_mutate(
-            "DELETE FROM thread_message_bookmarks WHERE id = :id AND user_id = :user_id",
+            "DELETE FROM thread_message_bookmarks WHERE id = :id AND user_id::text = :user_id",
             {"id": bookmark_id, "user_id": user_id},
         )
         return {"status": "ok"}
@@ -222,14 +222,14 @@ async def list_all_message_bookmarks(
         rows = await execute(
             """
             SELECT * FROM thread_message_bookmarks
-            WHERE user_id = :user_id
+            WHERE user_id::text = :user_id
             ORDER BY created_at DESC
             LIMIT :limit OFFSET :offset
             """,
             {"user_id": user_id, "limit": limit, "offset": offset},
         )
         count_row = await execute_one(
-            "SELECT COUNT(*) AS total FROM thread_message_bookmarks WHERE user_id = :user_id",
+            "SELECT COUNT(*) AS total FROM thread_message_bookmarks WHERE user_id::text = :user_id",
             {"user_id": user_id},
         )
         return {
@@ -294,7 +294,7 @@ async def list_bookmark_collections(
         rows = await execute(
             """
             SELECT * FROM bookmark_collections
-            WHERE user_id = :user_id
+            WHERE user_id::text = :user_id
             ORDER BY created_at DESC
             """,
             {"user_id": user_id},
@@ -318,7 +318,7 @@ async def update_bookmark_collection(
     """Update a bookmark collection's name, description, or bookmark list."""
     try:
         existing = await execute_one(
-            "SELECT id FROM bookmark_collections WHERE id = :id AND user_id = :user_id",
+            "SELECT id FROM bookmark_collections WHERE id = :id AND user_id::text = :user_id",
             {"id": collection_id, "user_id": user_id},
         )
         if not existing:
@@ -342,7 +342,7 @@ async def update_bookmark_collection(
 
         set_clauses = ", ".join(f"{k} = :{k}" for k in updates)
         row = await execute_one(
-            f"UPDATE bookmark_collections SET {set_clauses} WHERE id = :id AND user_id = :user_id RETURNING *",
+            f"UPDATE bookmark_collections SET {set_clauses} WHERE id = :id AND user_id::text = :user_id RETURNING *",
             params,
         )
         return serialize_row(row)
@@ -365,14 +365,14 @@ async def delete_bookmark_collection(
     """Delete a bookmark collection."""
     try:
         existing = await execute_one(
-            "SELECT id FROM bookmark_collections WHERE id = :id AND user_id = :user_id",
+            "SELECT id FROM bookmark_collections WHERE id = :id AND user_id::text = :user_id",
             {"id": collection_id, "user_id": user_id},
         )
         if not existing:
             raise HTTPException(status_code=404, detail="Collection not found")
 
         await execute_mutate(
-            "DELETE FROM bookmark_collections WHERE id = :id AND user_id = :user_id",
+            "DELETE FROM bookmark_collections WHERE id = :id AND user_id::text = :user_id",
             {"id": collection_id, "user_id": user_id},
         )
         return {"status": "ok"}

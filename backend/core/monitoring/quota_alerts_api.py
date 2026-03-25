@@ -2,7 +2,7 @@
 Quota Alert Rules & Events API endpoints.
 
 Provides CRUD for alert rules, threshold evaluation, event history, and stats.
-Access control enforced at application layer (WHERE user_id = :user_id).
+Access control enforced at application layer (WHERE user_id::text = :user_id).
 """
 
 import uuid
@@ -144,7 +144,7 @@ async def list_alert_rules(
 ):
     """List all alert rules for the authenticated user."""
     rows = await execute(
-        "SELECT * FROM quota_alert_rules WHERE user_id = :user_id ORDER BY created_at DESC",
+        "SELECT * FROM quota_alert_rules WHERE user_id::text = :user_id ORDER BY created_at DESC",
         {"user_id": user_id},
     )
     return serialize_rows(rows)
@@ -162,7 +162,7 @@ async def update_alert_rule(
 ):
     """Update fields on an existing alert rule."""
     existing = await execute_one(
-        "SELECT id FROM quota_alert_rules WHERE id = :id AND user_id = :user_id",
+        "SELECT id FROM quota_alert_rules WHERE id = :id AND user_id::text = :user_id",
         {"id": rule_id, "user_id": user_id},
     )
     if not existing:
@@ -176,7 +176,7 @@ async def update_alert_rule(
     set_clauses = ", ".join(f"{k} = :{k}" for k in updates)
     params = {**updates, "id": rule_id, "user_id": user_id}
     await execute_mutate(
-        f"UPDATE quota_alert_rules SET {set_clauses} WHERE id = :id AND user_id = :user_id",
+        f"UPDATE quota_alert_rules SET {set_clauses} WHERE id = :id AND user_id::text = :user_id",
         params,
     )
     row = await execute_one("SELECT * FROM quota_alert_rules WHERE id = :id", {"id": rule_id})
@@ -194,14 +194,14 @@ async def delete_alert_rule(
 ):
     """Delete an alert rule (cascades to events)."""
     existing = await execute_one(
-        "SELECT id FROM quota_alert_rules WHERE id = :id AND user_id = :user_id",
+        "SELECT id FROM quota_alert_rules WHERE id = :id AND user_id::text = :user_id",
         {"id": rule_id, "user_id": user_id},
     )
     if not existing:
         raise HTTPException(status_code=404, detail="Alert rule not found")
 
     await execute_mutate(
-        "DELETE FROM quota_alert_rules WHERE id = :id AND user_id = :user_id",
+        "DELETE FROM quota_alert_rules WHERE id = :id AND user_id::text = :user_id",
         {"id": rule_id, "user_id": user_id},
     )
     return {"deleted": True, "rule_id": rule_id}
@@ -227,10 +227,10 @@ async def check_quota(
     rows = await execute(
         """
         SELECT * FROM quota_alert_rules
-        WHERE user_id = :user_id
+        WHERE user_id::text = :user_id
           AND metric_type = :metric_type
           AND is_active = true
-          AND (agent_id IS NULL OR agent_id = :agent_id)
+          AND (agent_id IS NULL OR agent_id::text = :agent_id)
         """,
         {"user_id": user_id, "metric_type": body.metric_type, "agent_id": body.agent_id},
     )
@@ -309,7 +309,7 @@ async def mark_all_events_read(
 ):
     """Mark all unread quota alert events for the user as read."""
     await execute_mutate(
-        "UPDATE quota_alert_events SET is_read = true WHERE user_id = :user_id AND is_read = false",
+        "UPDATE quota_alert_events SET is_read = true WHERE user_id::text = :user_id AND is_read = false",
         {"user_id": user_id},
     )
     return {"marked_read": True}
@@ -326,14 +326,14 @@ async def mark_event_read(
 ):
     """Mark a single quota alert event as read."""
     existing = await execute_one(
-        "SELECT id FROM quota_alert_events WHERE id = :id AND user_id = :user_id",
+        "SELECT id FROM quota_alert_events WHERE id = :id AND user_id::text = :user_id",
         {"id": event_id, "user_id": user_id},
     )
     if not existing:
         raise HTTPException(status_code=404, detail="Event not found")
 
     await execute_mutate(
-        "UPDATE quota_alert_events SET is_read = true WHERE id = :id AND user_id = :user_id",
+        "UPDATE quota_alert_events SET is_read = true WHERE id = :id AND user_id::text = :user_id",
         {"id": event_id, "user_id": user_id},
     )
     return {"marked_read": True, "event_id": event_id}
@@ -351,13 +351,13 @@ async def list_alert_events(
     user_id: str = Depends(verify_and_get_user_id_from_jwt),
 ):
     """List quota alert events with optional filters."""
-    conditions = ["user_id = :user_id"]
+    conditions = ["user_id::text = :user_id"]
     params: dict = {"user_id": user_id, "limit": limit}
 
     if unread_only:
         conditions.append("is_read = false")
     if rule_id:
-        conditions.append("rule_id = :rule_id")
+        conditions.append("rule_id::text = :rule_id")
         params["rule_id"] = rule_id
 
     where_clause = " AND ".join(conditions)
@@ -382,13 +382,13 @@ async def get_quota_alert_stats(
 ):
     """Return aggregate stats: active rules, unread events, top rule, events by metric."""
     active_rules_row = await execute_one(
-        "SELECT COUNT(*) AS cnt FROM quota_alert_rules WHERE user_id = :user_id AND is_active = true",
+        "SELECT COUNT(*) AS cnt FROM quota_alert_rules WHERE user_id::text = :user_id AND is_active = true",
         {"user_id": user_id},
     )
     active_rules_count = int(active_rules_row["cnt"]) if active_rules_row else 0
 
     unread_events_row = await execute_one(
-        "SELECT COUNT(*) AS cnt FROM quota_alert_events WHERE user_id = :user_id AND is_read = false",
+        "SELECT COUNT(*) AS cnt FROM quota_alert_events WHERE user_id::text = :user_id AND is_read = false",
         {"user_id": user_id},
     )
     unread_events_count = int(unread_events_row["cnt"]) if unread_events_row else 0
@@ -396,7 +396,7 @@ async def get_quota_alert_stats(
     top_rule_row = await execute_one(
         """
         SELECT rule_name FROM quota_alert_rules
-        WHERE user_id = :user_id
+        WHERE user_id::text = :user_id
         ORDER BY trigger_count DESC
         LIMIT 1
         """,
@@ -408,8 +408,8 @@ async def get_quota_alert_stats(
         """
         SELECT r.metric_type, COUNT(e.id) AS event_count
         FROM quota_alert_events e
-        JOIN quota_alert_rules r ON r.id = e.rule_id
-        WHERE e.user_id = :user_id
+        JOIN quota_alert_rules r ON r.id::text = e.rule_id::text
+        WHERE e.user_id::text = :user_id
         GROUP BY r.metric_type
         ORDER BY event_count DESC
         """,

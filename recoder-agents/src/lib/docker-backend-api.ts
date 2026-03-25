@@ -194,7 +194,19 @@ export function connectDockerSSE(
       return;
     }
 
-    eventSource = new EventSource(fullUrl);
+    try {
+      eventSource = new EventSource(fullUrl);
+    } catch (err) {
+      // EventSource constructor can throw on invalid URLs or when blocked
+      // by CORS/CSP. Treat as a failure and try reconnecting.
+      console.warn('[connectDockerSSE] EventSource constructor threw for %s:', path, err);
+      consecutiveFailures++;
+      if (consecutiveFailures >= SSE_FETCH_FALLBACK_AFTER) {
+        useFetchFallback = true;
+      }
+      scheduleReconnect();
+      return;
+    }
 
     for (const [name, handler] of Object.entries(events)) {
       eventSource.addEventListener(name, handler as EventListener);
@@ -229,6 +241,12 @@ export function connectDockerSSE(
   const connectViaFetch = async (url: string) => {
     if (closed) return;
 
+    // Abort any previous fetch connection before starting a new one.
+    if (fetchAbortController) {
+      try { fetchAbortController.abort(); } catch { /* ignore */ }
+      fetchAbortController = null;
+    }
+
     try {
       fetchAbortController = new AbortController();
       const response = await fetch(url, {
@@ -247,6 +265,11 @@ export function connectDockerSSE(
       const decoder = new TextDecoder();
       let buffer = '';
 
+      // Persist event name and data across read() calls so that SSE events
+      // split across TCP chunks are reassembled correctly.
+      let currentEventName = 'message';
+      let currentData = '';
+
       const readLoop = async () => {
         try {
           while (!closed) {
@@ -259,9 +282,6 @@ export function connectDockerSSE(
             buffer += decoder.decode(value, { stream: true });
             const lines = buffer.split('\n');
             buffer = lines.pop() || '';
-
-            let currentEventName = 'message';
-            let currentData = '';
 
             for (const line of lines) {
               if (line.startsWith('event: ') || line.startsWith('event:')) {
@@ -295,11 +315,22 @@ export function connectDockerSSE(
     if (closed || reconnectTimer) return;
     reconnectTimer = setTimeout(() => {
       reconnectTimer = null;
-      void connect();
+      connect().catch((err) => {
+        if (!closed) {
+          console.warn('[connectDockerSSE] Reconnect error for %s:', path, err);
+        }
+      });
     }, 1500);
   };
 
-  void connect();
+  // Kick off connection; catch any unexpected rejection so it never
+  // surfaces as an unhandled promise rejection that could crash React.
+  connect().catch((err) => {
+    if (!closed) {
+      console.warn('[connectDockerSSE] Unhandled connection error for %s:', path, err);
+      scheduleReconnect();
+    }
+  });
 
   return {
     close: () => {

@@ -36,8 +36,23 @@ function checkBodyLimit(request: NextRequest): NextResponse | null {
 	return null;
 }
 
+// Known locale prefixes from recoder.xyz (next-intl). If any leaks into
+// agency URLs (e.g. OAuth callback), strip it and redirect cleanly.
+const LOCALE_PREFIXES = ["/en", "/tr", "/es", "/zh", "/de"];
+
 export async function proxy(request: NextRequest) {
 	const { pathname } = request.nextUrl;
+
+	// Strip locale prefix if present (e.g. /tr/auth/callback → /auth/callback)
+	for (const prefix of LOCALE_PREFIXES) {
+		if (pathname === prefix || pathname.startsWith(`${prefix}/`)) {
+			const cleanPath = pathname.slice(prefix.length) || "/";
+			const url = request.nextUrl.clone();
+			url.pathname = cleanPath;
+			return NextResponse.redirect(url, 308);
+		}
+	}
+
 	const nextActionId = request.headers.get("next-action");
 
 	// Reduce noisy Next.js errors from malformed action probes.

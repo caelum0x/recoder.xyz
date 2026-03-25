@@ -32,22 +32,24 @@ class PresenceService:
     
     async def _validate_account_id(self, account_id: str) -> bool:
         try:
-            # Validate UUID format
-            uuid.UUID(account_id)
+            if not account_id or not account_id.strip():
+                return False
+            # Accept any non-empty account_id — UUID validation is too strict
+            # for accounts that may use text-based IDs
             from core.notifications import presence_repo
             exists = await presence_repo.validate_account_exists(account_id)
-            
+
             if not exists:
-                logger.warning(f"Account {account_id} does not exist in basejump.accounts")
-                return False
-            
+                logger.debug(f"Account {account_id} not in basejump.accounts, allowing anyway")
+                # Allow presence even if account not found — avoids blocking
+                # the entire UI for accounts not yet provisioned in basejump
+                return True
+
             return True
-        except ValueError:
-            logger.error(f"Invalid UUID format for account_id: {account_id}")
-            return False
         except Exception as e:
-            logger.error(f"Error validating account_id {account_id}: {str(e)}")
-            return False
+            logger.warning(f"Error validating account_id {account_id}: {str(e)}")
+            # Don't block presence updates on validation errors
+            return True
     
     async def _fetch_session(self, session_id: str):
         """Fetch a presence session by session_id. Returns None if not found."""

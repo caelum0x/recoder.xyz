@@ -55,12 +55,12 @@ async def get_preferences(
                 detail=f"category must be one of {VALID_CATEGORIES}",
             )
         rows = await execute(
-            "SELECT * FROM user_preferences WHERE user_id = :user_id AND category = :category ORDER BY preference_key ASC",
+            "SELECT * FROM user_preferences WHERE user_id::text = :user_id AND category = :category ORDER BY preference_key ASC",
             {"user_id": user_id, "category": category},
         )
     else:
         rows = await execute(
-            "SELECT * FROM user_preferences WHERE user_id = :user_id ORDER BY category ASC, preference_key ASC",
+            "SELECT * FROM user_preferences WHERE user_id::text = :user_id ORDER BY category ASC, preference_key ASC",
             {"user_id": user_id},
         )
     return [dict(row) for row in rows]
@@ -163,14 +163,14 @@ async def delete_preference(
     user_id: str = Depends(verify_and_get_user_id_from_jwt),
 ):
     existing = await execute_one(
-        "SELECT id FROM user_preferences WHERE user_id = :user_id AND preference_key = :preference_key",
+        "SELECT id FROM user_preferences WHERE user_id::text = :user_id AND preference_key = :preference_key",
         {"user_id": user_id, "preference_key": preference_key},
     )
     if not existing:
         raise HTTPException(status_code=404, detail="Preference not found")
 
     await execute_mutate(
-        "DELETE FROM user_preferences WHERE user_id = :user_id AND preference_key = :preference_key",
+        "DELETE FROM user_preferences WHERE user_id::text = :user_id AND preference_key = :preference_key",
         {"user_id": user_id, "preference_key": preference_key},
     )
     return {"status": "ok"}
@@ -246,12 +246,12 @@ async def sync_pull(
 ):
     if since:
         rows = await execute(
-            "SELECT * FROM user_preferences WHERE user_id = :user_id AND updated_at > :since ORDER BY updated_at ASC",
+            "SELECT * FROM user_preferences WHERE user_id::text = :user_id AND updated_at > :since ORDER BY updated_at ASC",
             {"user_id": user_id, "since": since},
         )
     else:
         rows = await execute(
-            "SELECT * FROM user_preferences WHERE user_id = :user_id ORDER BY category ASC, preference_key ASC",
+            "SELECT * FROM user_preferences WHERE user_id::text = :user_id ORDER BY category ASC, preference_key ASC",
             {"user_id": user_id},
         )
     return [dict(row) for row in rows]
@@ -267,7 +267,7 @@ async def get_sync_log(
     user_id: str = Depends(verify_and_get_user_id_from_jwt),
 ):
     rows = await execute(
-        "SELECT * FROM preference_sync_log WHERE user_id = :user_id ORDER BY synced_at DESC LIMIT :limit",
+        "SELECT * FROM preference_sync_log WHERE user_id::text = :user_id ORDER BY synced_at DESC LIMIT :limit",
         {"user_id": user_id, "limit": limit},
     )
     return [dict(row) for row in rows]

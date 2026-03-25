@@ -50,13 +50,13 @@ async def create_filter(
     # If this filter should be the default, unset existing defaults first
     if body.is_default:
         await execute_mutate(
-            "UPDATE saved_filters SET is_default = false WHERE user_id = :user_id AND view_type = :view_type AND is_default = true",
+            "UPDATE saved_filters SET is_default = false WHERE user_id::text = :user_id AND view_type = :view_type AND is_default = true",
             {"user_id": user_id, "view_type": body.view_type},
         )
 
     # Get next sort_order
     max_row = await execute_one(
-        "SELECT COALESCE(MAX(sort_order), -1) + 1 AS next_order FROM saved_filters WHERE user_id = :user_id AND view_type = :view_type",
+        "SELECT COALESCE(MAX(sort_order), -1) + 1 AS next_order FROM saved_filters WHERE user_id::text = :user_id AND view_type = :view_type",
         {"user_id": user_id, "view_type": body.view_type},
     )
     next_order = max_row["next_order"] if max_row else 0
@@ -92,12 +92,12 @@ async def list_filters(
                 detail=f"view_type must be one of {VALID_VIEW_TYPES}",
             )
         rows = await execute(
-            "SELECT * FROM saved_filters WHERE user_id = :user_id AND view_type = :view_type ORDER BY sort_order ASC, created_at ASC",
+            "SELECT * FROM saved_filters WHERE user_id::text = :user_id AND view_type = :view_type ORDER BY sort_order ASC, created_at ASC",
             {"user_id": user_id, "view_type": view_type},
         )
     else:
         rows = await execute(
-            "SELECT * FROM saved_filters WHERE user_id = :user_id ORDER BY view_type ASC, sort_order ASC, created_at ASC",
+            "SELECT * FROM saved_filters WHERE user_id::text = :user_id ORDER BY view_type ASC, sort_order ASC, created_at ASC",
             {"user_id": user_id},
         )
     return [dict(row) for row in rows]
@@ -111,7 +111,7 @@ async def update_filter(
 ):
     # Verify ownership
     existing = await execute_one(
-        "SELECT * FROM saved_filters WHERE id = :id AND user_id = :user_id",
+        "SELECT * FROM saved_filters WHERE id = :id AND user_id::text = :user_id",
         {"id": filter_id, "user_id": user_id},
     )
     if not existing:
@@ -124,7 +124,7 @@ async def update_filter(
     # If setting as default, unset existing defaults for same view_type first
     if updates.get("is_default"):
         await execute_mutate(
-            "UPDATE saved_filters SET is_default = false WHERE user_id = :user_id AND view_type = :view_type AND is_default = true AND id != :id",
+            "UPDATE saved_filters SET is_default = false WHERE user_id::text = :user_id AND view_type = :view_type AND is_default = true AND id != :id",
             {"user_id": user_id, "view_type": existing["view_type"], "id": filter_id},
         )
 
@@ -138,7 +138,7 @@ async def update_filter(
         params[key] = value
 
     row = await execute_one(
-        f"UPDATE saved_filters SET {', '.join(set_clauses)} WHERE id = :id AND user_id = :user_id RETURNING *",
+        f"UPDATE saved_filters SET {', '.join(set_clauses)} WHERE id = :id AND user_id::text = :user_id RETURNING *",
         params,
         commit=True,
     )
@@ -151,14 +151,14 @@ async def delete_filter(
     user_id: str = Depends(verify_and_get_user_id_from_jwt),
 ):
     existing = await execute_one(
-        "SELECT id FROM saved_filters WHERE id = :id AND user_id = :user_id",
+        "SELECT id FROM saved_filters WHERE id = :id AND user_id::text = :user_id",
         {"id": filter_id, "user_id": user_id},
     )
     if not existing:
         raise HTTPException(status_code=404, detail="Filter not found")
 
     await execute_mutate(
-        "DELETE FROM saved_filters WHERE id = :id AND user_id = :user_id",
+        "DELETE FROM saved_filters WHERE id = :id AND user_id::text = :user_id",
         {"id": filter_id, "user_id": user_id},
     )
     return {"status": "ok"}
@@ -171,7 +171,7 @@ async def set_default_filter(
 ):
     # Verify ownership and get view_type
     existing = await execute_one(
-        "SELECT * FROM saved_filters WHERE id = :id AND user_id = :user_id",
+        "SELECT * FROM saved_filters WHERE id = :id AND user_id::text = :user_id",
         {"id": filter_id, "user_id": user_id},
     )
     if not existing:
@@ -179,13 +179,13 @@ async def set_default_filter(
 
     # Unset any existing default for this view_type
     await execute_mutate(
-        "UPDATE saved_filters SET is_default = false WHERE user_id = :user_id AND view_type = :view_type AND is_default = true",
+        "UPDATE saved_filters SET is_default = false WHERE user_id::text = :user_id AND view_type = :view_type AND is_default = true",
         {"user_id": user_id, "view_type": existing["view_type"]},
     )
 
     # Set this filter as default
     row = await execute_one(
-        "UPDATE saved_filters SET is_default = true WHERE id = :id AND user_id = :user_id RETURNING *",
+        "UPDATE saved_filters SET is_default = true WHERE id = :id AND user_id::text = :user_id RETURNING *",
         {"id": filter_id, "user_id": user_id},
         commit=True,
     )

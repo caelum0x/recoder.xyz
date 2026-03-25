@@ -114,7 +114,7 @@ async def list_rooms(
 ):
     """List collaboration rooms for the authenticated user."""
     try:
-        where_clauses = ["user_id = :user_id"]
+        where_clauses = ["user_id::text = :user_id"]
         params: Dict[str, Any] = {"user_id": user_id, "limit": limit}
 
         if status:
@@ -156,7 +156,7 @@ async def get_room(
         row = await execute_one(
             """
             SELECT * FROM collaboration_rooms
-            WHERE id = :room_id AND user_id = :user_id
+            WHERE id = :room_id AND user_id::text = :user_id
             """,
             {"room_id": room_id, "user_id": user_id},
         )
@@ -182,7 +182,7 @@ async def update_room(
 ):
     """Update a collaboration room."""
     existing = await execute_one(
-        "SELECT id FROM collaboration_rooms WHERE id = :room_id AND user_id = :user_id",
+        "SELECT id FROM collaboration_rooms WHERE id = :room_id AND user_id::text = :user_id",
         {"room_id": room_id, "user_id": user_id},
     )
     if not existing:
@@ -222,7 +222,7 @@ async def update_room(
             f"""
             UPDATE collaboration_rooms
             SET {', '.join(updates)}
-            WHERE id = :room_id AND user_id = :user_id
+            WHERE id = :room_id AND user_id::text = :user_id
             RETURNING *
             """,
             params,
@@ -248,7 +248,7 @@ async def delete_room(
 ):
     """Delete a collaboration room and cascade-delete its messages and tasks."""
     existing = await execute_one(
-        "SELECT id FROM collaboration_rooms WHERE id = :room_id AND user_id = :user_id",
+        "SELECT id FROM collaboration_rooms WHERE id = :room_id AND user_id::text = :user_id",
         {"room_id": room_id, "user_id": user_id},
     )
     if not existing:
@@ -256,7 +256,7 @@ async def delete_room(
 
     try:
         await execute_mutate(
-            "DELETE FROM collaboration_rooms WHERE id = :room_id AND user_id = :user_id",
+            "DELETE FROM collaboration_rooms WHERE id = :room_id AND user_id::text = :user_id",
             {"room_id": room_id, "user_id": user_id},
         )
         return {"deleted": True, "room_id": room_id}
@@ -290,7 +290,7 @@ async def post_message(
 
     # Verify room ownership
     room = await execute_one(
-        "SELECT id FROM collaboration_rooms WHERE id = :room_id AND user_id = :user_id",
+        "SELECT id FROM collaboration_rooms WHERE id = :room_id AND user_id::text = :user_id",
         {"room_id": room_id, "user_id": user_id},
     )
     if not room:
@@ -343,7 +343,7 @@ async def list_messages(
 ):
     """List messages in a collaboration room, ordered oldest-first."""
     room = await execute_one(
-        "SELECT id FROM collaboration_rooms WHERE id = :room_id AND user_id = :user_id",
+        "SELECT id FROM collaboration_rooms WHERE id = :room_id AND user_id::text = :user_id",
         {"room_id": room_id, "user_id": user_id},
     )
     if not room:
@@ -353,7 +353,7 @@ async def list_messages(
         rows = await execute(
             """
             SELECT * FROM collaboration_messages
-            WHERE room_id = :room_id AND user_id = :user_id
+            WHERE room_id::text = :room_id AND user_id::text = :user_id
             ORDER BY created_at ASC
             LIMIT :limit OFFSET :offset
             """,
@@ -385,7 +385,7 @@ async def create_task(
         raise HTTPException(status_code=400, detail=f"Invalid priority. Must be one of: {', '.join(valid_priorities)}")
 
     room = await execute_one(
-        "SELECT id FROM collaboration_rooms WHERE id = :room_id AND user_id = :user_id",
+        "SELECT id FROM collaboration_rooms WHERE id = :room_id AND user_id::text = :user_id",
         {"room_id": room_id, "user_id": user_id},
     )
     if not room:
@@ -443,7 +443,7 @@ async def update_task(
     existing = await execute_one(
         """
         SELECT id FROM collaboration_tasks
-        WHERE id = :task_id AND room_id = :room_id AND user_id = :user_id
+        WHERE id = :task_id AND room_id::text = :room_id AND user_id::text = :user_id
         """,
         {"task_id": task_id, "room_id": room_id, "user_id": user_id},
     )
@@ -460,7 +460,7 @@ async def update_task(
         updates.append("task_description = :task_description")
         params["task_description"] = body.task_description
     if body.assigned_agent_id is not None:
-        updates.append("assigned_agent_id = :assigned_agent_id")
+        updates.append("assigned_agent_id::text = :assigned_agent_id")
         params["assigned_agent_id"] = body.assigned_agent_id
     if body.status is not None:
         updates.append("status = :status")
@@ -486,7 +486,7 @@ async def update_task(
             f"""
             UPDATE collaboration_tasks
             SET {', '.join(updates)}
-            WHERE id = :task_id AND room_id = :room_id AND user_id = :user_id
+            WHERE id = :task_id AND room_id::text = :room_id AND user_id::text = :user_id
             RETURNING *
             """,
             params,
@@ -514,14 +514,14 @@ async def list_tasks(
 ):
     """List tasks in a collaboration room."""
     room = await execute_one(
-        "SELECT id FROM collaboration_rooms WHERE id = :room_id AND user_id = :user_id",
+        "SELECT id FROM collaboration_rooms WHERE id = :room_id AND user_id::text = :user_id",
         {"room_id": room_id, "user_id": user_id},
     )
     if not room:
         raise HTTPException(status_code=404, detail="Collaboration room not found")
 
     try:
-        where_clauses = ["room_id = :room_id", "user_id = :user_id"]
+        where_clauses = ["room_id::text = :room_id", "user_id::text = :user_id"]
         params: Dict[str, Any] = {"room_id": room_id, "user_id": user_id, "limit": limit}
 
         if status:

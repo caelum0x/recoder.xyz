@@ -93,7 +93,7 @@ class RecoderDefaultAgentService:
                 """
                 SELECT agent_id
                 FROM agents
-                WHERE account_id = :account_id
+                WHERE account_id::text = :account_id
                   AND metadata->>'is_recoder_default' = 'true'
                 LIMIT 1
                 """,
@@ -247,7 +247,7 @@ class RecoderDefaultAgentService:
                     """
                     SELECT trigger_id
                     FROM agent_triggers
-                    WHERE agent_id = :agent_id
+                    WHERE agent_id::text = :agent_id
                     """,
                     {"agent_id": agent_id},
                 )
@@ -265,7 +265,7 @@ class RecoderDefaultAgentService:
             deleted_rows = await execute_mutate(
                 """
                 DELETE FROM agents
-                WHERE agent_id = :agent_id
+                WHERE agent_id::text = :agent_id
                 RETURNING agent_id
                 """,
                 {"agent_id": agent_id},

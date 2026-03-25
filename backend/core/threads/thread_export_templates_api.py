@@ -194,7 +194,7 @@ async def create_export_template(
         # If this is set as default, clear other defaults first
         if body.is_default:
             await execute_mutate(
-                "UPDATE thread_export_templates SET is_default = false WHERE user_id = :user_id",
+                "UPDATE thread_export_templates SET is_default = false WHERE user_id::text = :user_id",
                 {"user_id": user_id},
             )
 
@@ -242,7 +242,7 @@ async def get_export_template_stats(
     """Get export stats: total exports, by format, top templates."""
     try:
         totals = await execute_one(
-            "SELECT COUNT(*) AS total_exports FROM thread_exports WHERE user_id = :user_id",
+            "SELECT COUNT(*) AS total_exports FROM thread_exports WHERE user_id::text = :user_id",
             {"user_id": user_id},
         )
 
@@ -250,7 +250,7 @@ async def get_export_template_stats(
             """
             SELECT format, COUNT(*) AS count
             FROM thread_exports
-            WHERE user_id = :user_id
+            WHERE user_id::text = :user_id
             GROUP BY format
             ORDER BY count DESC
             """,
@@ -261,7 +261,7 @@ async def get_export_template_stats(
             """
             SELECT id, template_name, format, use_count
             FROM thread_export_templates
-            WHERE user_id = :user_id AND use_count > 0
+            WHERE user_id::text = :user_id AND use_count > 0
             ORDER BY use_count DESC
             LIMIT 5
             """,
@@ -291,7 +291,7 @@ async def list_export_templates(
         rows = await execute(
             """
             SELECT * FROM thread_export_templates
-            WHERE user_id = :user_id
+            WHERE user_id::text = :user_id
             ORDER BY is_default DESC, created_at DESC
             """,
             {"user_id": user_id},
@@ -314,7 +314,7 @@ async def get_export_template(
     """Get a specific export template."""
     try:
         row = await execute_one(
-            "SELECT * FROM thread_export_templates WHERE id = :template_id AND user_id = :user_id",
+            "SELECT * FROM thread_export_templates WHERE id = :template_id AND user_id::text = :user_id",
             {"template_id": template_id, "user_id": user_id},
         )
         if not row:
@@ -340,7 +340,7 @@ async def update_export_template(
     """Update an export template."""
     try:
         existing = await execute_one(
-            "SELECT id FROM thread_export_templates WHERE id = :template_id AND user_id = :user_id",
+            "SELECT id FROM thread_export_templates WHERE id = :template_id AND user_id::text = :user_id",
             {"template_id": template_id, "user_id": user_id},
         )
         if not existing:
@@ -352,7 +352,7 @@ async def update_export_template(
         # If setting as default, clear others
         if body.is_default:
             await execute_mutate(
-                "UPDATE thread_export_templates SET is_default = false WHERE user_id = :user_id AND id != :template_id",
+                "UPDATE thread_export_templates SET is_default = false WHERE user_id::text = :user_id AND id != :template_id",
                 {"user_id": user_id, "template_id": template_id},
             )
 
@@ -377,7 +377,7 @@ async def update_export_template(
 
         if not updates:
             row = await execute_one(
-                "SELECT * FROM thread_export_templates WHERE id = :template_id AND user_id = :user_id",
+                "SELECT * FROM thread_export_templates WHERE id = :template_id AND user_id::text = :user_id",
                 {"template_id": template_id, "user_id": user_id},
             )
             return serialize_row(row)
@@ -388,7 +388,7 @@ async def update_export_template(
             f"""
             UPDATE thread_export_templates
             SET {set_clause}
-            WHERE id = :template_id AND user_id = :user_id
+            WHERE id = :template_id AND user_id::text = :user_id
             RETURNING *
             """,
             params,
@@ -415,14 +415,14 @@ async def delete_export_template(
     """Delete an export template."""
     try:
         existing = await execute_one(
-            "SELECT id FROM thread_export_templates WHERE id = :template_id AND user_id = :user_id",
+            "SELECT id FROM thread_export_templates WHERE id = :template_id AND user_id::text = :user_id",
             {"template_id": template_id, "user_id": user_id},
         )
         if not existing:
             raise HTTPException(status_code=404, detail="Export template not found")
 
         await execute_mutate(
-            "DELETE FROM thread_export_templates WHERE id = :template_id AND user_id = :user_id",
+            "DELETE FROM thread_export_templates WHERE id = :template_id AND user_id::text = :user_id",
             {"template_id": template_id, "user_id": user_id},
         )
         return {"deleted": True}
@@ -450,7 +450,7 @@ async def export_thread(
 
         if body.template_id:
             template_row = await execute_one(
-                "SELECT * FROM thread_export_templates WHERE id = :template_id AND user_id = :user_id",
+                "SELECT * FROM thread_export_templates WHERE id = :template_id AND user_id::text = :user_id",
                 {"template_id": body.template_id, "user_id": user_id},
             )
             if not template_row:
@@ -492,7 +492,7 @@ async def export_thread(
         # Increment template use_count if template was used
         if body.template_id:
             await execute_mutate(
-                "UPDATE thread_export_templates SET use_count = use_count + 1 WHERE id = :template_id AND user_id = :user_id",
+                "UPDATE thread_export_templates SET use_count = use_count + 1 WHERE id = :template_id AND user_id::text = :user_id",
                 {"template_id": body.template_id, "user_id": user_id},
             )
 
@@ -525,8 +525,8 @@ async def list_thread_exports(
             """
             SELECT te.*, t.template_name
             FROM thread_exports te
-            LEFT JOIN thread_export_templates t ON te.template_id = t.id
-            WHERE te.thread_id = :thread_id AND te.user_id = :user_id
+            LEFT JOIN thread_export_templates t ON te.template_id::text = t.id::text
+            WHERE te.thread_id::text = :thread_id AND te.user_id::text = :user_id
             ORDER BY te.exported_at DESC
             LIMIT :limit
             """,

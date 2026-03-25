@@ -25,7 +25,7 @@ async def get_key_usage(
         """
         SELECT date, request_count, error_count, total_tokens, avg_response_time_ms
         FROM api_key_daily_stats
-        WHERE key_id = :key_id AND user_id = :user_id
+        WHERE key_id::text = :key_id AND user_id::text = :user_id
           AND date >= CURRENT_DATE - :days * INTERVAL '1 day'
         ORDER BY date ASC
         """,
@@ -43,7 +43,7 @@ async def get_key_recent_usage(
         """
         SELECT endpoint, method, status_code, response_time_ms, tokens_used, timestamp
         FROM api_key_usage
-        WHERE key_id = :key_id AND user_id = :user_id
+        WHERE key_id::text = :key_id AND user_id::text = :user_id
         ORDER BY timestamp DESC
         LIMIT 50
         """,
@@ -68,7 +68,7 @@ async def get_usage_summary(
             COALESCE(SUM(total_tokens), 0) as total_tokens,
             COUNT(DISTINCT key_id) as active_keys
         FROM api_key_daily_stats
-        WHERE user_id = :user_id
+        WHERE user_id::text = :user_id
           AND date >= CURRENT_DATE - 30 * INTERVAL '1 day'
         """,
         {"user_id": user_id},

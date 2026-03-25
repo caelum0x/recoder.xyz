@@ -116,14 +116,14 @@ async def get_quota_usage_daily(
         now = datetime.now(timezone.utc)
         start_date = (now - timedelta(days=days)).date()
 
-        where = "user_id = :user_id AND date >= :start_date"
+        where = "user_id::text = :user_id AND date >= :start_date"
         params: Dict[str, Any] = {
             "user_id": user_id,
             "start_date": start_date.isoformat(),
         }
 
         if agent_id:
-            where += " AND agent_id = :agent_id"
+            where += " AND agent_id::text = :agent_id"
             params["agent_id"] = agent_id
 
         rows = await execute(
@@ -185,7 +185,7 @@ async def get_quota_usage_summary(
                 COALESCE(SUM(token_count), 0) AS total_tokens,
                 COALESCE(SUM(cost), 0) AS total_cost
             FROM quota_usage_daily
-            WHERE user_id = :user_id
+            WHERE user_id::text = :user_id
               AND date >= :period_start
               AND date <= :period_end
             """,
@@ -213,7 +213,7 @@ async def get_quota_usage_summary(
                     COALESCE(SUM(max_tokens_per_month), 0) AS total_token_limit,
                     COALESCE(SUM(max_cost_per_month), 0) AS total_cost_limit
                 FROM agent_quotas
-                WHERE user_id = :user_id AND active = true
+                WHERE user_id::text = :user_id AND active = true
                 """,
                 {"user_id": user_id},
             )
@@ -282,7 +282,7 @@ async def get_quota_forecast(
                 COALESCE(SUM(token_count), 0) AS total_tokens,
                 COALESCE(SUM(cost), 0) AS total_cost
             FROM quota_usage_daily
-            WHERE user_id = :user_id
+            WHERE user_id::text = :user_id
               AND date >= :period_start
               AND date <= :period_end
             """,
@@ -319,7 +319,7 @@ async def get_quota_forecast(
                     COALESCE(SUM(max_tokens_per_month), 0) AS total_token_limit,
                     COALESCE(SUM(max_cost_per_month), 0) AS total_cost_limit
                 FROM agent_quotas
-                WHERE user_id = :user_id AND active = true
+                WHERE user_id::text = :user_id AND active = true
                 """,
                 {"user_id": user_id},
             )
@@ -400,7 +400,7 @@ async def get_top_consumers(
                 COALESCE(SUM(q.token_count), 0) AS total_tokens,
                 COALESCE(SUM(q.cost), 0) AS total_cost
             FROM quota_usage_daily q
-            WHERE q.user_id = :user_id
+            WHERE q.user_id::text = :user_id
               AND q.date >= :period_start
               AND q.agent_id IS NOT NULL
             GROUP BY q.agent_id

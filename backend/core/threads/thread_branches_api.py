@@ -86,8 +86,8 @@ async def list_branches(
     rows = await execute(
         """
         SELECT * FROM thread_branches
-        WHERE source_thread_id = :thread_id
-          AND user_id = :user_id
+        WHERE source_thread_id::text = :thread_id
+          AND user_id::text = :user_id
           AND status != 'deleted'
         ORDER BY created_at DESC
         """,
@@ -109,7 +109,7 @@ async def get_branch(
     row = await execute_one(
         """
         SELECT * FROM thread_branches
-        WHERE id = :branch_id AND user_id = :user_id
+        WHERE id = :branch_id AND user_id::text = :user_id
         """,
         {"branch_id": branch_id, "user_id": user_id},
     )
@@ -150,7 +150,7 @@ async def update_branch(
         f"""
         UPDATE thread_branches
         SET {set_sql}
-        WHERE id = :branch_id AND user_id = :user_id
+        WHERE id = :branch_id AND user_id::text = :user_id
         RETURNING *
         """,
         params,
@@ -177,7 +177,7 @@ async def delete_branch(
         """
         UPDATE thread_branches
         SET status = 'deleted'
-        WHERE id = :branch_id AND user_id = :user_id
+        WHERE id = :branch_id AND user_id::text = :user_id
         RETURNING id
         """,
         {"branch_id": branch_id, "user_id": user_id},
@@ -216,8 +216,8 @@ async def get_branch_tree(
         rows = await execute(
             """
             SELECT * FROM thread_branches
-            WHERE source_thread_id = :thread_id
-              AND user_id = :user_id
+            WHERE source_thread_id::text = :thread_id
+              AND user_id::text = :user_id
               AND status != 'deleted'
             ORDER BY branch_point_index ASC, created_at ASC
             """,

@@ -256,7 +256,7 @@ class ApifyTool(SandboxToolsBase):
                 """
                 SELECT account_id
                 FROM threads
-                WHERE thread_id = :thread_id
+                WHERE thread_id::text = :thread_id
                 LIMIT 1
                 """,
                 {"thread_id": thread_id},
@@ -445,7 +445,7 @@ class ApifyTool(SandboxToolsBase):
                 """
                 SELECT id
                 FROM credit_ledger
-                WHERE account_id = :account_id
+                WHERE account_id::text = :account_id
                   AND type = 'usage'
                   AND description LIKE :description_pattern
                 LIMIT 1

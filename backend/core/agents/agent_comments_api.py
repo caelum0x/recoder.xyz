@@ -51,7 +51,7 @@ async def create_agent_comment(
         parent = await execute_one(
             """
             SELECT id FROM agent_comments
-            WHERE id = :parent_id AND agent_id = :agent_id AND user_id = :user_id
+            WHERE id = :parent_id AND agent_id::text = :agent_id AND user_id::text = :user_id
             """,
             {"parent_id": body.parent_id, "agent_id": agent_id, "user_id": user_id},
         )
@@ -90,7 +90,7 @@ async def list_agent_comments(
     offset: int = Query(0, ge=0),
 ):
     """List comments for an agent, optionally filtered by section and resolved status."""
-    where = "user_id = :user_id AND agent_id = :agent_id"
+    where = "user_id::text = :user_id AND agent_id::text = :agent_id"
     params: dict = {
         "user_id": user_id,
         "agent_id": agent_id,
@@ -146,7 +146,7 @@ async def update_agent_comment(
     existing = await execute_one(
         """
         SELECT id FROM agent_comments
-        WHERE id = :comment_id AND agent_id = :agent_id AND user_id = :user_id
+        WHERE id = :comment_id AND agent_id::text = :agent_id AND user_id::text = :user_id
         """,
         {"comment_id": comment_id, "agent_id": agent_id, "user_id": user_id},
     )
@@ -178,7 +178,7 @@ async def update_agent_comment(
         f"""
         UPDATE agent_comments
         SET {', '.join(set_clauses)}
-        WHERE id = :comment_id AND agent_id = :agent_id AND user_id = :user_id
+        WHERE id = :comment_id AND agent_id::text = :agent_id AND user_id::text = :user_id
         RETURNING *
         """,
         params,
@@ -201,7 +201,7 @@ async def delete_agent_comment(
     existing = await execute_one(
         """
         SELECT id FROM agent_comments
-        WHERE id = :comment_id AND agent_id = :agent_id AND user_id = :user_id
+        WHERE id = :comment_id AND agent_id::text = :agent_id AND user_id::text = :user_id
         """,
         {"comment_id": comment_id, "agent_id": agent_id, "user_id": user_id},
     )
@@ -211,7 +211,7 @@ async def delete_agent_comment(
     await execute_mutate(
         """
         DELETE FROM agent_comments
-        WHERE id = :comment_id AND agent_id = :agent_id AND user_id = :user_id
+        WHERE id = :comment_id AND agent_id::text = :agent_id AND user_id::text = :user_id
         """,
         {"comment_id": comment_id, "agent_id": agent_id, "user_id": user_id},
     )
@@ -236,7 +236,7 @@ async def count_agent_comments(
             COUNT(*) AS total,
             COUNT(*) FILTER (WHERE is_resolved = false) AS unresolved
         FROM agent_comments
-        WHERE user_id = :user_id AND agent_id = :agent_id
+        WHERE user_id::text = :user_id AND agent_id::text = :agent_id
         GROUP BY section
         """,
         {"user_id": user_id, "agent_id": agent_id},

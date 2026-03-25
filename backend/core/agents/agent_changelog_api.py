@@ -104,7 +104,7 @@ async def list_agent_changelog(
     Optionally filter by change_type.
     """
     try:
-        where_clauses = ["agent_id = :agent_id"]
+        where_clauses = ["agent_id::text = :agent_id"]
         params: Dict[str, Any] = {"agent_id": agent_id}
 
         if change_type:
@@ -243,7 +243,7 @@ async def get_changelog_summary(
         sql = """
         SELECT change_type, COUNT(*) AS cnt
         FROM agent_changelog
-        WHERE agent_id = :agent_id AND created_at >= :since
+        WHERE agent_id::text = :agent_id AND created_at >= :since
         GROUP BY change_type
         ORDER BY cnt DESC
         """
@@ -288,7 +288,7 @@ async def get_changelog_diff(
         SELECT id, agent_id, user_id, change_type, description,
                old_value, new_value, metadata, created_at
         FROM agent_changelog
-        WHERE id = :change_id AND agent_id = :agent_id
+        WHERE id = :change_id AND agent_id::text = :agent_id
         """
 
         row = await execute_one(sql, {"change_id": change_id, "agent_id": agent_id})

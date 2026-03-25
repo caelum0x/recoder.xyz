@@ -83,7 +83,7 @@ class AgentService:
         filters: AgentFilters
     ) -> PaginatedResponse[Dict[str, Any]]:
         try:
-            where_clauses = ["creator_id = :creator_id"]
+            where_clauses = ["creator_id::text = :creator_id"]
             params: Dict[str, Any] = {"creator_id": user_id}
 
             # Apply search filter
@@ -155,7 +155,7 @@ class AgentService:
 
     def _build_agents_where(self, user_id: str, filters: AgentFilters) -> Tuple[str, Dict[str, Any]]:
         """Build WHERE clause and params for agents queries."""
-        where_clauses = ["account_id = :account_id"]
+        where_clauses = ["account_id::text = :account_id"]
         params: Dict[str, Any] = {"account_id": user_id}
 
         if filters.search:

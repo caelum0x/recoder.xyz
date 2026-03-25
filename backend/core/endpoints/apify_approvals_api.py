@@ -37,7 +37,7 @@ async def approve_apify_request(
             raise HTTPException(status_code=400, detail="thread_id is required")
 
         thread_result = await execute_one(
-            "SELECT project_id, account_id FROM threads WHERE thread_id = :thread_id",
+            "SELECT project_id, account_id FROM threads WHERE thread_id::text = :thread_id",
             {"thread_id": thread_id}
         )
 
@@ -275,7 +275,7 @@ async def get_apify_approval_status(
             raise HTTPException(status_code=400, detail="thread_id is required")
 
         thread_result = await execute_one(
-            "SELECT project_id, account_id FROM threads WHERE thread_id = :thread_id",
+            "SELECT project_id, account_id FROM threads WHERE thread_id::text = :thread_id",
             {"thread_id": thread_id}
         )
 

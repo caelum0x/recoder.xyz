@@ -108,8 +108,8 @@ async def list_layouts(
         """
         SELECT l.*, COUNT(w.id) AS widget_count
         FROM dashboard_layouts l
-        LEFT JOIN dashboard_layout_widgets w ON w.layout_id = l.id
-        WHERE l.user_id = :user_id AND l.is_template = false
+        LEFT JOIN dashboard_layout_widgets w ON w.layout_id::text = l.id::text
+        WHERE l.user_id::text = :user_id AND l.is_template = false
         GROUP BY l.id
         ORDER BY l.created_at DESC
         """,
@@ -126,7 +126,7 @@ async def list_templates(
         """
         SELECT l.*, COUNT(w.id) AS widget_count
         FROM dashboard_layouts l
-        LEFT JOIN dashboard_layout_widgets w ON w.layout_id = l.id
+        LEFT JOIN dashboard_layout_widgets w ON w.layout_id::text = l.id::text
         WHERE l.is_template = true
         GROUP BY l.id
         ORDER BY l.name ASC
@@ -141,14 +141,14 @@ async def get_layout(
     user_id: str = Depends(verify_and_get_user_id_from_jwt),
 ):
     layout = await execute_one(
-        "SELECT * FROM dashboard_layouts WHERE id = :id AND (user_id = :user_id OR is_template = true)",
+        "SELECT * FROM dashboard_layouts WHERE id = :id AND (user_id::text = :user_id OR is_template = true)",
         {"id": layout_id, "user_id": user_id},
     )
     if not layout:
         raise HTTPException(status_code=404, detail="Layout not found")
 
     widgets = await execute(
-        "SELECT * FROM dashboard_layout_widgets WHERE layout_id = :layout_id ORDER BY position_y ASC, position_x ASC",
+        "SELECT * FROM dashboard_layout_widgets WHERE layout_id::text = :layout_id ORDER BY position_y ASC, position_x ASC",
         {"layout_id": layout_id},
     )
 
@@ -165,7 +165,7 @@ async def update_layout(
 ):
     # Verify ownership
     existing = await execute_one(
-        "SELECT * FROM dashboard_layouts WHERE id = :id AND user_id = :user_id",
+        "SELECT * FROM dashboard_layouts WHERE id = :id AND user_id::text = :user_id",
         {"id": layout_id, "user_id": user_id},
     )
     if not existing:
@@ -178,7 +178,7 @@ async def update_layout(
     # If setting as active, deactivate all other layouts for this user
     if updates.get("is_active"):
         await execute_mutate(
-            "UPDATE dashboard_layouts SET is_active = false WHERE user_id = :user_id AND is_active = true AND id != :id",
+            "UPDATE dashboard_layouts SET is_active = false WHERE user_id::text = :user_id AND is_active = true AND id != :id",
             {"user_id": user_id, "id": layout_id},
         )
 
@@ -189,7 +189,7 @@ async def update_layout(
         params[key] = value
 
     row = await execute_one(
-        f"UPDATE dashboard_layouts SET {', '.join(set_clauses)} WHERE id = :id AND user_id = :user_id RETURNING *",
+        f"UPDATE dashboard_layouts SET {', '.join(set_clauses)} WHERE id = :id AND user_id::text = :user_id RETURNING *",
         params,
         commit=True,
     )
@@ -202,7 +202,7 @@ async def delete_layout(
     user_id: str = Depends(verify_and_get_user_id_from_jwt),
 ):
     existing = await execute_one(
-        "SELECT id FROM dashboard_layouts WHERE id = :id AND user_id = :user_id",
+        "SELECT id FROM dashboard_layouts WHERE id = :id AND user_id::text = :user_id",
         {"id": layout_id, "user_id": user_id},
     )
     if not existing:
@@ -210,7 +210,7 @@ async def delete_layout(
 
     # Widgets are cascade-deleted by the FK constraint
     await execute_mutate(
-        "DELETE FROM dashboard_layouts WHERE id = :id AND user_id = :user_id",
+        "DELETE FROM dashboard_layouts WHERE id = :id AND user_id::text = :user_id",
         {"id": layout_id, "user_id": user_id},
     )
     return {"status": "ok"}
@@ -224,7 +224,7 @@ async def set_layout_widgets(
 ):
     # Verify ownership
     existing = await execute_one(
-        "SELECT id FROM dashboard_layouts WHERE id = :id AND user_id = :user_id",
+        "SELECT id FROM dashboard_layouts WHERE id = :id AND user_id::text = :user_id",
         {"id": layout_id, "user_id": user_id},
     )
     if not existing:
@@ -240,7 +240,7 @@ async def set_layout_widgets(
 
     # Delete old widgets
     await execute_mutate(
-        "DELETE FROM dashboard_layout_widgets WHERE layout_id = :layout_id",
+        "DELETE FROM dashboard_layout_widgets WHERE layout_id::text = :layout_id",
         {"layout_id": layout_id},
     )
 

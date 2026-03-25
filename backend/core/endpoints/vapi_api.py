@@ -51,7 +51,7 @@ async def list_calls(limit: int = 10, thread_id: str = None):
     try:
         if thread_id:
             calls = await execute_read(
-                "SELECT * FROM vapi_calls WHERE thread_id = :thread_id ORDER BY created_at DESC LIMIT :limit",
+                "SELECT * FROM vapi_calls WHERE thread_id::text = :thread_id ORDER BY created_at DESC LIMIT :limit",
                 {"thread_id": thread_id, "limit": limit}
             )
         else:

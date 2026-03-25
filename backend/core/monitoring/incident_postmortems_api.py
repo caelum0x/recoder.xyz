@@ -162,7 +162,7 @@ async def get_postmortem_stats(
     try:
         # Total count
         total_row = await execute_one(
-            "SELECT COUNT(*) AS total FROM incident_postmortems WHERE user_id = :user_id",
+            "SELECT COUNT(*) AS total FROM incident_postmortems WHERE user_id::text = :user_id",
             {"user_id": user_id},
         )
         total = int(total_row["total"]) if total_row else 0
@@ -172,7 +172,7 @@ async def get_postmortem_stats(
             """
             SELECT severity, COUNT(*) AS cnt
             FROM incident_postmortems
-            WHERE user_id = :user_id
+            WHERE user_id::text = :user_id
             GROUP BY severity
             """,
             {"user_id": user_id},
@@ -186,7 +186,7 @@ async def get_postmortem_stats(
             """
             SELECT status, COUNT(*) AS cnt
             FROM incident_postmortems
-            WHERE user_id = :user_id
+            WHERE user_id::text = :user_id
             GROUP BY status
             """,
             {"user_id": user_id},
@@ -202,7 +202,7 @@ async def get_postmortem_stats(
                 EXTRACT(EPOCH FROM (resolved_at - started_at)) / 3600
             ) AS avg_hours
             FROM incident_postmortems
-            WHERE user_id = :user_id
+            WHERE user_id::text = :user_id
               AND resolved_at IS NOT NULL
               AND started_at IS NOT NULL
             """,
@@ -238,7 +238,7 @@ async def list_postmortems(
 ):
     """List postmortems with optional filters."""
     try:
-        conditions = ["user_id = :user_id"]
+        conditions = ["user_id::text = :user_id"]
         params: dict = {"user_id": user_id, "limit": limit, "offset": offset}
 
         if status:
@@ -284,7 +284,7 @@ async def get_postmortem(
             """
             SELECT *
             FROM incident_postmortems
-            WHERE id = :postmortem_id AND user_id = :user_id
+            WHERE id = :postmortem_id AND user_id::text = :user_id
             """,
             {"postmortem_id": postmortem_id, "user_id": user_id},
         )
@@ -337,7 +337,7 @@ async def update_postmortem(
             params["title"] = body.title
 
         if body.incident_id is not None:
-            set_parts.append("incident_id = :incident_id")
+            set_parts.append("incident_id::text = :incident_id")
             params["incident_id"] = body.incident_id
 
         if body.severity is not None:
@@ -394,7 +394,7 @@ async def update_postmortem(
             f"""
             UPDATE incident_postmortems
             SET {set_clause}
-            WHERE id = :postmortem_id AND user_id = :user_id
+            WHERE id = :postmortem_id AND user_id::text = :user_id
             RETURNING *
             """,
             params,
@@ -426,7 +426,7 @@ async def delete_postmortem(
         rows = await execute_mutate(
             """
             DELETE FROM incident_postmortems
-            WHERE id = :postmortem_id AND user_id = :user_id
+            WHERE id = :postmortem_id AND user_id::text = :user_id
             RETURNING id
             """,
             {"postmortem_id": postmortem_id, "user_id": user_id},
@@ -459,7 +459,7 @@ async def publish_postmortem(
             """
             UPDATE incident_postmortems
             SET status = 'published', updated_at = now()
-            WHERE id = :postmortem_id AND user_id = :user_id
+            WHERE id = :postmortem_id AND user_id::text = :user_id
             RETURNING *
             """,
             {"postmortem_id": postmortem_id, "user_id": user_id},

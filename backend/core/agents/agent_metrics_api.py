@@ -123,9 +123,9 @@ async def get_metrics_overview(
             ) FILTER (WHERE ar.completed_at IS NOT NULL), 0) AS avg_latency_ms,
             COALESCE(SUM(ar.cost), 0) AS total_cost
         FROM agent_runs ar
-        JOIN threads t ON ar.thread_id = t.thread_id
-        WHERE ar.agent_id = :agent_id
-          AND t.account_id = :account_id
+        JOIN threads t ON ar.thread_id::text = t.thread_id::text
+        WHERE ar.agent_id::text = :agent_id
+          AND t.account_id::text = :account_id
           AND ar.started_at >= :start_date
         """
         agg_params: Dict[str, Any] = {
@@ -153,9 +153,9 @@ async def get_metrics_overview(
             COUNT(*) FILTER (WHERE ar.status = 'completed') AS successes,
             COUNT(*) FILTER (WHERE ar.status IN ('error', 'failed')) AS failures
         FROM agent_runs ar
-        JOIN threads t ON ar.thread_id = t.thread_id
-        WHERE ar.agent_id = :agent_id
-          AND t.account_id = :account_id
+        JOIN threads t ON ar.thread_id::text = t.thread_id::text
+        WHERE ar.agent_id::text = :agent_id
+          AND t.account_id::text = :account_id
           AND ar.started_at >= :start_date
         GROUP BY DATE(ar.started_at AT TIME ZONE 'UTC')
         ORDER BY run_date ASC
@@ -213,7 +213,7 @@ async def get_tool_metrics(
         analytics_sql = """
         SELECT tool_breakdown
         FROM agent_analytics_daily
-        WHERE agent_id = :agent_id
+        WHERE agent_id::text = :agent_id
           AND date >= :start_date
         """
         analytics_rows = await execute(analytics_sql, {
@@ -269,10 +269,10 @@ async def get_tool_metrics(
                 COUNT(*) FILTER (WHERE tc.status IN ('error', 'failed')) AS failure_count,
                 COALESCE(AVG(tc.duration_ms), 0) AS avg_duration_ms
             FROM tool_calls tc
-            JOIN agent_runs ar ON tc.agent_run_id = ar.id
-            JOIN threads t ON ar.thread_id = t.thread_id
-            WHERE ar.agent_id = :agent_id
-              AND t.account_id = :account_id
+            JOIN agent_runs ar ON tc.agent_run_id::text = ar.id::text
+            JOIN threads t ON ar.thread_id::text = t.thread_id::text
+            WHERE ar.agent_id::text = :agent_id
+              AND t.account_id::text = :account_id
               AND tc.created_at >= :start_date
             GROUP BY tc.tool_name
             ORDER BY call_count DESC
@@ -343,9 +343,9 @@ async def get_cost_breakdown(
             COALESCE(SUM(ar.cost), 0) AS total_cost,
             COUNT(*) AS run_count
         FROM agent_runs ar
-        JOIN threads t ON ar.thread_id = t.thread_id
-        WHERE ar.agent_id = :agent_id
-          AND t.account_id = :account_id
+        JOIN threads t ON ar.thread_id::text = t.thread_id::text
+        WHERE ar.agent_id::text = :agent_id
+          AND t.account_id::text = :account_id
           AND ar.started_at >= :start_date
         GROUP BY COALESCE(ar.model, 'unknown')
         ORDER BY total_cost DESC
@@ -374,9 +374,9 @@ async def get_cost_breakdown(
             DATE(ar.started_at AT TIME ZONE 'UTC') AS run_date,
             COALESCE(SUM(ar.cost), 0) AS cost
         FROM agent_runs ar
-        JOIN threads t ON ar.thread_id = t.thread_id
-        WHERE ar.agent_id = :agent_id
-          AND t.account_id = :account_id
+        JOIN threads t ON ar.thread_id::text = t.thread_id::text
+        WHERE ar.agent_id::text = :agent_id
+          AND t.account_id::text = :account_id
           AND ar.started_at >= :start_date
         GROUP BY DATE(ar.started_at AT TIME ZONE 'UTC')
         ORDER BY run_date ASC
@@ -404,13 +404,13 @@ async def get_cost_breakdown(
         # ---- Token usage ----
         token_sql = """
         SELECT
-            COALESCE(SUM(ar.tokens_in), 0) AS total_input,
-            COALESCE(SUM(ar.tokens_out), 0) AS total_output,
+            COALESCE(SUM(ar.input_tokens), 0) AS total_input,
+            COALESCE(SUM(ar.output_tokens), 0) AS total_output,
             COUNT(*) AS run_count
         FROM agent_runs ar
-        JOIN threads t ON ar.thread_id = t.thread_id
-        WHERE ar.agent_id = :agent_id
-          AND t.account_id = :account_id
+        JOIN threads t ON ar.thread_id::text = t.thread_id::text
+        WHERE ar.agent_id::text = :agent_id
+          AND t.account_id::text = :account_id
           AND ar.started_at >= :start_date
         """
         token_rows = await execute(token_sql, base_params)

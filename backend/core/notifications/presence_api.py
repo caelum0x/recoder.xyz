@@ -137,14 +137,11 @@ async def stream_thread_viewers(
         async def disabled_stream():
             payload = json.dumps({"thread_id": thread_id, "viewers": [], "disabled": True})
             yield f"event: presence.update\ndata: {payload}\n\n"
+        from core.utils.sse_headers import get_sse_headers
         return StreamingResponse(
             disabled_stream(),
             media_type="text/event-stream",
-            headers={
-                "Cache-Control": "no-cache",
-                "Connection": "keep-alive",
-                "X-Accel-Buffering": "no",
-            },
+            headers=get_sse_headers(request),
         )
 
     try:
@@ -152,6 +149,10 @@ async def stream_thread_viewers(
         await verify_and_authorize_thread_access(None, thread_id, account_id)
 
         async def event_generator():
+            # Emit initial SSE comment immediately so Cloudflare sees first byte
+            # and does not kill the connection with ERR_HTTP2_PROTOCOL_ERROR.
+            yield ": connected\n\n"
+
             last_fingerprint: Optional[str] = None
             last_keepalive = time.monotonic()
 
@@ -177,14 +178,11 @@ async def stream_thread_viewers(
 
                 await asyncio.sleep(1.0)
 
+        from core.utils.sse_headers import get_sse_headers as _get_sse
         return StreamingResponse(
             event_generator(),
             media_type="text/event-stream",
-            headers={
-                "Cache-Control": "no-cache",
-                "Connection": "keep-alive",
-                "X-Accel-Buffering": "no",
-            },
+            headers=_get_sse(request),
         )
     except HTTPException:
         raise

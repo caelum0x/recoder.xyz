@@ -53,6 +53,8 @@ export const useThreads = (options?: {
     // Keep showing current page data while loading next page
     placeholderData: keepPreviousData,
     enabled: options?.enabled !== false,
+    retry: 2,
+    retryDelay: (attemptIndex) => Math.min(1000 * (attemptIndex + 1), 5000),
   });
 };
 

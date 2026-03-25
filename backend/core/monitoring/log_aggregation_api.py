@@ -159,11 +159,11 @@ async def query_logs(
 ):
     """Query logs with filters."""
     try:
-        where_clauses = ["user_id = :user_id"]
+        where_clauses = ["user_id::text = :user_id"]
         params: Dict[str, Any] = {"user_id": user_id, "limit": limit, "offset": offset}
 
         if agent_id:
-            where_clauses.append("agent_id = :agent_id")
+            where_clauses.append("agent_id::text = :agent_id")
             params["agent_id"] = agent_id
 
         if log_level:
@@ -179,7 +179,7 @@ async def query_logs(
             params["search"] = f"%{search}%"
 
         if trace_id:
-            where_clauses.append("trace_id = :trace_id")
+            where_clauses.append("trace_id::text = :trace_id")
             params["trace_id"] = trace_id
 
         if tags:
@@ -228,7 +228,7 @@ async def get_log_stats(
             """
             SELECT log_level, COUNT(*) AS count
             FROM aggregated_logs
-            WHERE user_id = :user_id
+            WHERE user_id::text = :user_id
             GROUP BY log_level
             ORDER BY count DESC
             """,
@@ -240,7 +240,7 @@ async def get_log_stats(
             """
             SELECT agent_id, COUNT(*) AS count
             FROM aggregated_logs
-            WHERE user_id = :user_id AND agent_id IS NOT NULL
+            WHERE user_id::text = :user_id AND agent_id IS NOT NULL
             GROUP BY agent_id
             ORDER BY count DESC
             LIMIT 10
@@ -253,7 +253,7 @@ async def get_log_stats(
             """
             SELECT source, COUNT(*) AS count
             FROM aggregated_logs
-            WHERE user_id = :user_id
+            WHERE user_id::text = :user_id
             GROUP BY source
             ORDER BY count DESC
             LIMIT 10
@@ -266,7 +266,7 @@ async def get_log_stats(
             """
             SELECT unnest(tags) AS tag, COUNT(*) AS count
             FROM aggregated_logs
-            WHERE user_id = :user_id
+            WHERE user_id::text = :user_id
             GROUP BY tag
             ORDER BY count DESC
             LIMIT 20
@@ -281,7 +281,7 @@ async def get_log_stats(
                 date_trunc('hour', created_at) AS hour,
                 COUNT(*) AS count
             FROM aggregated_logs
-            WHERE user_id = :user_id
+            WHERE user_id::text = :user_id
               AND created_at >= now() - interval '24 hours'
             GROUP BY hour
             ORDER BY hour ASC
@@ -290,7 +290,7 @@ async def get_log_stats(
         )
 
         total_row = await execute_one(
-            "SELECT COUNT(*) AS total FROM aggregated_logs WHERE user_id = :user_id",
+            "SELECT COUNT(*) AS total FROM aggregated_logs WHERE user_id::text = :user_id",
             {"user_id": user_id},
         )
 
@@ -321,7 +321,7 @@ async def get_trace_logs(
         rows = await execute(
             """
             SELECT * FROM aggregated_logs
-            WHERE user_id = :user_id AND trace_id = :trace_id
+            WHERE user_id::text = :user_id AND trace_id::text = :trace_id
             ORDER BY created_at ASC
             """,
             {"user_id": user_id, "trace_id": trace_id},
@@ -346,7 +346,7 @@ async def delete_old_logs(
         result = await execute_mutate(
             """
             DELETE FROM aggregated_logs
-            WHERE user_id = :user_id
+            WHERE user_id::text = :user_id
               AND created_at < now() - (:days || ' days')::interval
             """,
             {"user_id": user_id, "days": days},
@@ -399,7 +399,7 @@ async def list_saved_filters(
         rows = await execute(
             """
             SELECT * FROM log_saved_filters
-            WHERE user_id = :user_id
+            WHERE user_id::text = :user_id
             ORDER BY created_at DESC
             """,
             {"user_id": user_id},
@@ -422,13 +422,13 @@ async def delete_saved_filter(
     """Delete a saved filter configuration by ID."""
     try:
         row = await execute_one(
-            "SELECT id FROM log_saved_filters WHERE id = :filter_id AND user_id = :user_id",
+            "SELECT id FROM log_saved_filters WHERE id = :filter_id AND user_id::text = :user_id",
             {"filter_id": filter_id, "user_id": user_id},
         )
         if not row:
             raise HTTPException(status_code=404, detail="Saved filter not found")
         await execute_mutate(
-            "DELETE FROM log_saved_filters WHERE id = :filter_id AND user_id = :user_id",
+            "DELETE FROM log_saved_filters WHERE id = :filter_id AND user_id::text = :user_id",
             {"filter_id": filter_id, "user_id": user_id},
         )
         return {"deleted": True}

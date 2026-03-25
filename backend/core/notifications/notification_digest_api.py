@@ -155,7 +155,7 @@ async def _collect_notifications(user_id: str, period_start: datetime, period_en
     rows = await execute(
         """SELECT trigger_event, conditions_met, actions_taken, created_at
            FROM notification_rule_log
-           WHERE user_id = :user_id
+           WHERE user_id::text = :user_id
              AND created_at >= :period_start
              AND created_at <= :period_end
            ORDER BY created_at DESC""",
@@ -206,7 +206,7 @@ async def get_digest_config(
     """Get the notification digest configuration for the authenticated user."""
     try:
         row = await execute_one(
-            "SELECT * FROM notification_digest_config WHERE user_id = :user_id",
+            "SELECT * FROM notification_digest_config WHERE user_id::text = :user_id",
             {"user_id": user_id},
         )
 
@@ -304,7 +304,7 @@ async def generate_digest(
     """Generate a digest for the current period based on user config."""
     try:
         config_row = await execute_one(
-            "SELECT * FROM notification_digest_config WHERE user_id = :user_id",
+            "SELECT * FROM notification_digest_config WHERE user_id::text = :user_id",
             {"user_id": user_id},
         )
 
@@ -361,14 +361,14 @@ async def list_digest_history(
     """List past notification digests for the authenticated user."""
     try:
         count_row = await execute_one(
-            "SELECT COUNT(*) AS cnt FROM notification_digests WHERE user_id = :user_id",
+            "SELECT COUNT(*) AS cnt FROM notification_digests WHERE user_id::text = :user_id",
             {"user_id": user_id},
         )
         total = count_row["cnt"] if count_row else 0
 
         rows = await execute(
             """SELECT * FROM notification_digests
-               WHERE user_id = :user_id
+               WHERE user_id::text = :user_id
                ORDER BY created_at DESC
                LIMIT :limit OFFSET :offset""",
             {"user_id": user_id, "limit": limit, "offset": offset},
@@ -390,7 +390,7 @@ async def get_digest_detail(
     """Get details of a specific notification digest."""
     try:
         row = await execute_one(
-            "SELECT * FROM notification_digests WHERE id = :id AND user_id = :user_id",
+            "SELECT * FROM notification_digests WHERE id = :id AND user_id::text = :user_id",
             {"id": digest_id, "user_id": user_id},
         )
 
@@ -413,7 +413,7 @@ async def preview_digest(
     """Preview the next digest without saving it. Shows what the digest would contain."""
     try:
         config_row = await execute_one(
-            "SELECT * FROM notification_digest_config WHERE user_id = :user_id",
+            "SELECT * FROM notification_digest_config WHERE user_id::text = :user_id",
             {"user_id": user_id},
         )
 

@@ -24,7 +24,7 @@ async def get_commitment_status(account_id: str) -> Optional[Dict[str, Any]]:
     sql = """
     SELECT commitment_type, commitment_start_date, commitment_end_date, commitment_price_id
     FROM credit_accounts
-    WHERE account_id = :account_id
+    WHERE account_id::text = :account_id
     """
     return await execute_one(sql, {"account_id": account_id})
 
@@ -37,7 +37,7 @@ async def clear_commitment(account_id: str) -> None:
         commitment_end_date = NULL,
         commitment_price_id = NULL,
         can_cancel_after = NULL
-    WHERE account_id = :account_id
+    WHERE account_id::text = :account_id
     """
     await execute_mutate(sql, {"account_id": account_id})
 
@@ -54,5 +54,5 @@ async def update_commitment(account_id: str, commitment_data: Dict[str, Any]) ->
         params[key] = value
     
     set_sql = ", ".join(set_parts)
-    sql = f"UPDATE credit_accounts SET {set_sql} WHERE account_id = :account_id"
+    sql = f"UPDATE credit_accounts SET {set_sql} WHERE account_id::text = :account_id"
     await execute_mutate(sql, params)

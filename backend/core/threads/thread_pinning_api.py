@@ -80,7 +80,7 @@ async def pin_thread(
     """Pin a thread with optional label, note, and color."""
     try:
         max_row = await execute_one(
-            "SELECT COALESCE(MAX(display_order), -1) AS max_ord FROM pinned_threads WHERE user_id = :user_id",
+            "SELECT COALESCE(MAX(display_order), -1) AS max_ord FROM pinned_threads WHERE user_id::text = :user_id",
             {"user_id": user_id},
         )
         next_order = (max_row["max_ord"] + 1) if max_row else 0
@@ -121,7 +121,7 @@ async def unpin_thread(
 ):
     """Remove a thread pin."""
     existing = await execute_one(
-        "SELECT id FROM pinned_threads WHERE user_id = :user_id AND thread_id = :thread_id",
+        "SELECT id FROM pinned_threads WHERE user_id::text = :user_id AND thread_id::text = :thread_id",
         {"user_id": user_id, "thread_id": thread_id},
     )
     if not existing:
@@ -129,7 +129,7 @@ async def unpin_thread(
 
     try:
         await execute_mutate(
-            "DELETE FROM pinned_threads WHERE user_id = :user_id AND thread_id = :thread_id",
+            "DELETE FROM pinned_threads WHERE user_id::text = :user_id AND thread_id::text = :thread_id",
             {"user_id": user_id, "thread_id": thread_id},
         )
         return {"deleted": True, "thread_id": thread_id}
@@ -155,7 +155,7 @@ async def list_pinned_threads(
         rows = await execute(
             """
             SELECT * FROM pinned_threads
-            WHERE user_id = :user_id
+            WHERE user_id::text = :user_id
             ORDER BY display_order ASC, created_at DESC
             """,
             {"user_id": user_id},
@@ -182,7 +182,7 @@ async def reorder_pins(
                 """
                 UPDATE pinned_threads
                 SET display_order = :display_order
-                WHERE id = :pin_id AND user_id = :user_id
+                WHERE id = :pin_id AND user_id::text = :user_id
                 """,
                 {"display_order": idx, "pin_id": pin_id, "user_id": user_id},
             )
@@ -204,7 +204,7 @@ async def update_pin(
 ):
     """Update a thread pin's label, note, or color."""
     existing = await execute_one(
-        "SELECT id FROM pinned_threads WHERE id = :pin_id AND user_id = :user_id",
+        "SELECT id FROM pinned_threads WHERE id = :pin_id AND user_id::text = :user_id",
         {"pin_id": pin_id, "user_id": user_id},
     )
     if not existing:
@@ -231,7 +231,7 @@ async def update_pin(
             f"""
             UPDATE pinned_threads
             SET {', '.join(updates)}
-            WHERE id = :pin_id AND user_id = :user_id
+            WHERE id = :pin_id AND user_id::text = :user_id
             RETURNING *
             """,
             params,
@@ -297,7 +297,7 @@ async def list_collections(
         rows = await execute(
             """
             SELECT * FROM thread_pin_collections
-            WHERE user_id = :user_id
+            WHERE user_id::text = :user_id
             ORDER BY created_at DESC
             """,
             {"user_id": user_id},
@@ -320,7 +320,7 @@ async def update_collection(
 ):
     """Update a pin collection's name, description, thread list, or shared flag."""
     existing = await execute_one(
-        "SELECT id FROM thread_pin_collections WHERE id = :collection_id AND user_id = :user_id",
+        "SELECT id FROM thread_pin_collections WHERE id = :collection_id AND user_id::text = :user_id",
         {"collection_id": collection_id, "user_id": user_id},
     )
     if not existing:
@@ -350,7 +350,7 @@ async def update_collection(
             f"""
             UPDATE thread_pin_collections
             SET {', '.join(updates)}
-            WHERE id = :collection_id AND user_id = :user_id
+            WHERE id = :collection_id AND user_id::text = :user_id
             RETURNING *
             """,
             params,
@@ -376,7 +376,7 @@ async def delete_collection(
 ):
     """Delete a pin collection (does not unpin threads)."""
     existing = await execute_one(
-        "SELECT id FROM thread_pin_collections WHERE id = :collection_id AND user_id = :user_id",
+        "SELECT id FROM thread_pin_collections WHERE id = :collection_id AND user_id::text = :user_id",
         {"collection_id": collection_id, "user_id": user_id},
     )
     if not existing:
@@ -384,7 +384,7 @@ async def delete_collection(
 
     try:
         await execute_mutate(
-            "DELETE FROM thread_pin_collections WHERE id = :collection_id AND user_id = :user_id",
+            "DELETE FROM thread_pin_collections WHERE id = :collection_id AND user_id::text = :user_id",
             {"collection_id": collection_id, "user_id": user_id},
         )
         return {"deleted": True, "collection_id": collection_id}

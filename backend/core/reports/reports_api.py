@@ -108,12 +108,12 @@ async def get_usage_summary(
             """
             SELECT
                 COUNT(*)::int AS total_runs,
-                COALESCE(SUM(ar.total_cost), 0) AS total_cost,
-                COALESCE(SUM(COALESCE(ar.tokens_in, 0) + COALESCE(ar.tokens_out, 0)), 0)::int AS total_tokens,
+                COALESCE(SUM(ar.cost), 0) AS total_cost,
+                COALESCE(SUM(COALESCE(ar.input_tokens, 0) + COALESCE(ar.output_tokens, 0)), 0)::int AS total_tokens,
                 COUNT(DISTINCT ar.agent_id)::int AS unique_agents
             FROM agent_runs ar
-            JOIN threads t ON ar.thread_id = t.thread_id
-            WHERE t.account_id = :user_id
+            JOIN threads t ON ar.thread_id::text = t.thread_id::text
+            WHERE t.account_id::text = :user_id
               AND ar.started_at >= :start_date
               AND ar.started_at <= :end_date
             """,
@@ -135,9 +135,9 @@ async def get_usage_summary(
             """
             SELECT a.name AS agent_name, COUNT(*)::int AS runs
             FROM agent_runs ar
-            JOIN threads t ON ar.thread_id = t.thread_id
-            LEFT JOIN agents a ON ar.agent_id = a.agent_id
-            WHERE t.account_id = :user_id
+            JOIN threads t ON ar.thread_id::text = t.thread_id::text
+            LEFT JOIN agents a ON ar.agent_id::text = a.agent_id::text
+            WHERE t.account_id::text = :user_id
               AND ar.started_at >= :start_date
               AND ar.started_at <= :end_date
             GROUP BY a.name
@@ -160,10 +160,10 @@ async def get_usage_summary(
         # Top model
         top_model_rows = await execute(
             """
-            SELECT ar.model, COALESCE(SUM(ar.total_cost), 0) AS cost
+            SELECT ar.model, COALESCE(SUM(ar.cost), 0) AS cost
             FROM agent_runs ar
-            JOIN threads t ON ar.thread_id = t.thread_id
-            WHERE t.account_id = :user_id
+            JOIN threads t ON ar.thread_id::text = t.thread_id::text
+            WHERE t.account_id::text = :user_id
               AND ar.started_at >= :start_date
               AND ar.started_at <= :end_date
               AND ar.model IS NOT NULL
@@ -213,9 +213,9 @@ async def get_usage_by_agent(
             """
             SELECT
                 COALESCE(a.name, 'Unknown') AS agent_name,
-                ar.agent_id,
+                ar.agent_id::text AS agent_id,
                 COUNT(*)::int AS total_runs,
-                COALESCE(SUM(ar.total_cost), 0) AS total_cost,
+                COALESCE(SUM(ar.cost), 0) AS total_cost,
                 COALESCE(AVG(
                     EXTRACT(EPOCH FROM (ar.completed_at - ar.started_at)) * 1000
                 ) FILTER (WHERE ar.completed_at IS NOT NULL), 0)::int AS avg_latency_ms,
@@ -226,9 +226,9 @@ async def get_usage_by_agent(
                     ELSE 0
                 END AS success_rate
             FROM agent_runs ar
-            JOIN threads t ON ar.thread_id = t.thread_id
-            LEFT JOIN agents a ON ar.agent_id = a.agent_id
-            WHERE t.account_id = :user_id
+            JOIN threads t ON ar.thread_id::text = t.thread_id::text
+            LEFT JOIN agents a ON ar.agent_id::text = a.agent_id::text
+            WHERE t.account_id::text = :user_id
               AND ar.started_at >= :start_date
               AND ar.started_at <= :end_date
             GROUP BY a.name, ar.agent_id
@@ -242,8 +242,8 @@ async def get_usage_by_agent(
         )
         return [
             AgentUsage(
-                agent_name=r.get("agent_name", ""),
-                agent_id=r.get("agent_id", ""),
+                agent_name=str(r.get("agent_name", "")),
+                agent_id=str(r.get("agent_id", "")),
                 total_runs=r.get("total_runs", 0) or 0,
                 total_cost=float(r.get("total_cost", 0) or 0),
                 avg_latency_ms=float(r.get("avg_latency_ms", 0) or 0),
@@ -270,13 +270,13 @@ async def get_usage_by_model(
             """
             SELECT
                 COALESCE(ar.model, 'unknown') AS model,
-                COALESCE(SUM(ar.tokens_in), 0)::int AS total_tokens_in,
-                COALESCE(SUM(ar.tokens_out), 0)::int AS total_tokens_out,
-                COALESCE(SUM(ar.total_cost), 0) AS total_cost,
+                COALESCE(SUM(ar.input_tokens), 0)::int AS total_tokens_in,
+                COALESCE(SUM(ar.output_tokens), 0)::int AS total_tokens_out,
+                COALESCE(SUM(ar.cost), 0) AS total_cost,
                 COUNT(*)::int AS run_count
             FROM agent_runs ar
-            JOIN threads t ON ar.thread_id = t.thread_id
-            WHERE t.account_id = :user_id
+            JOIN threads t ON ar.thread_id::text = t.thread_id::text
+            WHERE t.account_id::text = :user_id
               AND ar.started_at >= :start_date
               AND ar.started_at <= :end_date
             GROUP BY ar.model
@@ -321,11 +321,11 @@ async def get_usage_by_day(
             SELECT
                 DATE_TRUNC('{date_trunc}', ar.started_at AT TIME ZONE 'UTC')::date AS bucket,
                 COUNT(*)::int AS runs,
-                COALESCE(SUM(ar.total_cost), 0) AS cost,
-                COALESCE(SUM(COALESCE(ar.tokens_in, 0) + COALESCE(ar.tokens_out, 0)), 0)::int AS tokens
+                COALESCE(SUM(ar.cost), 0) AS cost,
+                COALESCE(SUM(COALESCE(ar.input_tokens, 0) + COALESCE(ar.output_tokens, 0)), 0)::int AS tokens
             FROM agent_runs ar
-            JOIN threads t ON ar.thread_id = t.thread_id
-            WHERE t.account_id = :user_id
+            JOIN threads t ON ar.thread_id::text = t.thread_id::text
+            WHERE t.account_id::text = :user_id
               AND ar.started_at >= :start_date
               AND ar.started_at <= :end_date
             GROUP BY bucket

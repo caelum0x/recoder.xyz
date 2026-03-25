@@ -506,7 +506,7 @@ Images remain in the sandbox and can be loaded again anytime. SVG files are auto
                 """
                 SELECT COUNT(*)::int AS image_count
                 FROM messages
-                WHERE thread_id = :thread_id
+                WHERE thread_id::text = :thread_id
                   AND type = 'image_context'
                 """,
                 {"thread_id": self.thread_id},
@@ -522,7 +522,7 @@ Images remain in the sandbox and can be loaded again anytime. SVG files are auto
             deleted_rows = await execute_mutate(
                 """
                 DELETE FROM messages
-                WHERE thread_id = :thread_id
+                WHERE thread_id::text = :thread_id
                   AND type = 'image_context'
                 RETURNING message_id
                 """,

@@ -108,7 +108,7 @@ async def list_workflows(
         rows = await execute(
             """
             SELECT * FROM approval_workflows
-            WHERE user_id = :user_id
+            WHERE user_id::text = :user_id
             ORDER BY created_at DESC
             """,
             {"user_id": user_id},
@@ -132,7 +132,7 @@ async def update_workflow(
     """Update an existing approval workflow."""
     try:
         existing = await execute_one(
-            "SELECT id FROM approval_workflows WHERE id = :id AND user_id = :user_id",
+            "SELECT id FROM approval_workflows WHERE id = :id AND user_id::text = :user_id",
             {"id": workflow_id, "user_id": user_id},
         )
         if not existing:
@@ -156,7 +156,7 @@ async def update_workflow(
 
         if not updates:
             row = await execute_one(
-                "SELECT * FROM approval_workflows WHERE id = :id AND user_id = :user_id",
+                "SELECT * FROM approval_workflows WHERE id = :id AND user_id::text = :user_id",
                 {"id": workflow_id, "user_id": user_id},
             )
             return serialize_row(row)
@@ -168,7 +168,7 @@ async def update_workflow(
             f"""
             UPDATE approval_workflows
             SET {set_clause}
-            WHERE id = :id AND user_id = :user_id
+            WHERE id = :id AND user_id::text = :user_id
             RETURNING *
             """,
             params,
@@ -193,7 +193,7 @@ async def delete_workflow(
     """Delete an approval workflow."""
     try:
         result = await execute_mutate(
-            "DELETE FROM approval_workflows WHERE id = :id AND user_id = :user_id",
+            "DELETE FROM approval_workflows WHERE id = :id AND user_id::text = :user_id",
             {"id": workflow_id, "user_id": user_id},
         )
         if not result:
@@ -225,7 +225,7 @@ async def create_request(
         timeout_hours = 24
         if body.workflow_id:
             wf = await execute_one(
-                "SELECT approval_timeout_hours FROM approval_workflows WHERE id = :id AND user_id = :user_id",
+                "SELECT approval_timeout_hours FROM approval_workflows WHERE id = :id AND user_id::text = :user_id",
                 {"id": body.workflow_id, "user_id": user_id},
             )
             if wf:
@@ -270,7 +270,7 @@ async def list_requests(
 ):
     """List approval requests for the authenticated user."""
     try:
-        where_clauses = ["user_id = :user_id"]
+        where_clauses = ["user_id::text = :user_id"]
         params: Dict[str, Any] = {"user_id": user_id, "limit": limit}
 
         if status:
@@ -278,7 +278,7 @@ async def list_requests(
             params["status"] = status
 
         if agent_id:
-            where_clauses.append("agent_id = :agent_id")
+            where_clauses.append("agent_id::text = :agent_id")
             params["agent_id"] = agent_id
 
         where_sql = " AND ".join(where_clauses)
@@ -310,7 +310,7 @@ async def get_request(
     """Get a single approval request by ID."""
     try:
         row = await execute_one(
-            "SELECT * FROM approval_requests WHERE id = :id AND user_id = :user_id",
+            "SELECT * FROM approval_requests WHERE id = :id AND user_id::text = :user_id",
             {"id": request_id, "user_id": user_id},
         )
         if not row:
@@ -336,7 +336,7 @@ async def approve_request(
     """Approve a pending approval request."""
     try:
         existing = await execute_one(
-            "SELECT status FROM approval_requests WHERE id = :id AND user_id = :user_id",
+            "SELECT status FROM approval_requests WHERE id = :id AND user_id::text = :user_id",
             {"id": request_id, "user_id": user_id},
         )
         if not existing:
@@ -351,7 +351,7 @@ async def approve_request(
                 decision_note = :decision_note,
                 decided_by = :decided_by,
                 decided_at = now()
-            WHERE id = :id AND user_id = :user_id
+            WHERE id = :id AND user_id::text = :user_id
             RETURNING *
             """,
             {
@@ -382,7 +382,7 @@ async def reject_request(
     """Reject a pending approval request."""
     try:
         existing = await execute_one(
-            "SELECT status FROM approval_requests WHERE id = :id AND user_id = :user_id",
+            "SELECT status FROM approval_requests WHERE id = :id AND user_id::text = :user_id",
             {"id": request_id, "user_id": user_id},
         )
         if not existing:
@@ -397,7 +397,7 @@ async def reject_request(
                 decision_note = :decision_note,
                 decided_by = :decided_by,
                 decided_at = now()
-            WHERE id = :id AND user_id = :user_id
+            WHERE id = :id AND user_id::text = :user_id
             RETURNING *
             """,
             {
@@ -427,7 +427,7 @@ async def cancel_request(
     """Cancel a pending approval request."""
     try:
         existing = await execute_one(
-            "SELECT status FROM approval_requests WHERE id = :id AND user_id = :user_id",
+            "SELECT status FROM approval_requests WHERE id = :id AND user_id::text = :user_id",
             {"id": request_id, "user_id": user_id},
         )
         if not existing:
@@ -440,7 +440,7 @@ async def cancel_request(
             UPDATE approval_requests
             SET status = 'cancelled',
                 decided_at = now()
-            WHERE id = :id AND user_id = :user_id
+            WHERE id = :id AND user_id::text = :user_id
             RETURNING *
             """,
             {"id": request_id, "user_id": user_id},
@@ -480,7 +480,7 @@ async def get_stats(
                     0
                 ) AS avg_decision_time_hours
             FROM approval_requests
-            WHERE user_id = :user_id
+            WHERE user_id::text = :user_id
             """,
             {"user_id": user_id},
         )
@@ -497,7 +497,7 @@ async def get_stats(
             """
             SELECT action_type, COUNT(*) AS cnt
             FROM approval_requests
-            WHERE user_id = :user_id
+            WHERE user_id::text = :user_id
             GROUP BY action_type
             ORDER BY cnt DESC
             """,

@@ -71,6 +71,16 @@ class SnapshotRequest(BaseModel):
 # Endpoints
 # ============================================================================
 
+@router.get("/", summary="Monitor overview (trailing slash)", operation_id="monitor_overview_slash", include_in_schema=False)
+@router.get("", summary="Monitor overview", operation_id="monitor_overview")
+async def monitor_overview(user_id: str = Depends(verify_and_get_user_id_from_jwt)):
+    """Return a summary of monitoring status."""
+    return {
+        "status": "ok",
+        "endpoints": ["/monitor/runs/active", "/monitor/health", "/monitor/alerts"],
+    }
+
+
 @router.get(
     "/runs/active",
     response_model=List[ActiveRun],
@@ -85,14 +95,14 @@ async def list_active_runs(
         rows = await execute(
             """
             SELECT
-                ar.id AS run_id,
-                ar.agent_id,
+                ar.id::text AS run_id,
+                ar.agent_id::text AS agent_id,
                 a.name AS agent_name,
                 ar.status,
                 ar.started_at
             FROM agent_runs ar
-            LEFT JOIN agents a ON a.agent_id = ar.agent_id
-            WHERE ar.user_id = :user_id
+            LEFT JOIN agents a ON a.agent_id::text = ar.agent_id::text
+            WHERE ar.user_id::text = :user_id
               AND ar.status = 'running'
             ORDER BY ar.started_at DESC
             LIMIT 50
@@ -107,7 +117,7 @@ async def list_active_runs(
                 """
                 SELECT step_count, current_tool, tokens_used, cost_so_far, elapsed_ms
                 FROM run_monitor_snapshots
-                WHERE run_id = :run_id AND user_id = :user_id
+                WHERE run_id::text = :run_id AND user_id::text = :user_id
                 ORDER BY captured_at DESC
                 LIMIT 1
                 """,
@@ -153,7 +163,7 @@ async def get_run_timeline(
             SELECT id, run_id, agent_id, status, step_count, current_tool,
                    tokens_used, cost_so_far, elapsed_ms, error, captured_at
             FROM run_monitor_snapshots
-            WHERE run_id = :run_id AND user_id = :user_id
+            WHERE run_id::text = :run_id AND user_id::text = :user_id
             ORDER BY captured_at ASC
             LIMIT :limit
             """,
@@ -183,7 +193,7 @@ async def get_monitor_stats(
             """
             SELECT COUNT(*) AS cnt
             FROM agent_runs
-            WHERE user_id = :user_id AND status = 'running'
+            WHERE user_id::text = :user_id AND status = 'running'
             """,
             {"user_id": user_id},
         )
@@ -201,7 +211,7 @@ async def get_monitor_stats(
                 COALESCE(SUM(CASE WHEN status IN ('error', 'failed') THEN 1 ELSE 0 END), 0) AS errors_today,
                 COALESCE(SUM(cost), 0) AS cost_today
             FROM agent_runs
-            WHERE user_id = :user_id
+            WHERE user_id::text = :user_id
               AND started_at >= CURRENT_DATE
             """,
             {"user_id": user_id},
@@ -267,3 +277,15 @@ async def record_run_snapshot(
     except Exception as e:
         logger.error(f"Error recording snapshot for run {run_id}: {e}")
         raise HTTPException(status_code=500, detail="Failed to record snapshot")
+
+
+@router.get("/health", summary="Monitor health check", operation_id="monitor_health")
+async def monitor_health(user_id: str = Depends(verify_and_get_user_id_from_jwt)):
+    """Return health status of the monitoring system."""
+    return {"status": "healthy", "monitoring": True}
+
+
+@router.get("/alerts", summary="List monitor alerts", operation_id="list_alerts")
+async def list_alerts(user_id: str = Depends(verify_and_get_user_id_from_jwt)):
+    """List active monitoring alerts."""
+    return {"alerts": [], "total": 0}

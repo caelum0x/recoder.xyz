@@ -67,7 +67,7 @@ async def fix_trial_users():
                   non_expiring_credits = :non_expiring_credits,
                   expiring_credits = :expiring_credits,
                   updated_at = :updated_at
-                WHERE account_id = :account_id
+                WHERE account_id::text = :account_id
                 RETURNING account_id
                 """,
                 {

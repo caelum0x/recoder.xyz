@@ -10,7 +10,7 @@ async def get_user_admin_role(user_id: str) -> Dict[str, Any]:
     sql = """
     SELECT role 
     FROM user_roles 
-    WHERE user_id = :user_id 
+    WHERE user_id::text = :user_id 
       AND role IN ('admin', 'super_admin')
     LIMIT 1
     """

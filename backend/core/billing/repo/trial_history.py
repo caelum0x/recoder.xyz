@@ -8,7 +8,7 @@ async def get_trial_history(account_id: str) -> Optional[Dict[str, Any]]:
     SELECT id, started_at, ended_at, converted_to_paid, status,
            stripe_checkout_session_id, error_message
     FROM trial_history
-    WHERE account_id = :account_id
+    WHERE account_id::text = :account_id
     """
     return await execute_one(sql, {"account_id": account_id})
 
@@ -37,7 +37,7 @@ async def update_trial_history(account_id: str, update_data: Dict[str, Any], sta
         params[key] = value
     
     set_sql = ", ".join(set_parts)
-    sql = f"UPDATE trial_history SET {set_sql} WHERE account_id = :account_id"
+    sql = f"UPDATE trial_history SET {set_sql} WHERE account_id::text = :account_id"
     
     if status_filter:
         sql += " AND status = :status_filter"
@@ -66,7 +66,7 @@ async def upsert_trial_history(account_id: str, data: Dict[str, Any]) -> None:
 
 
 async def delete_trial_history_by_status(account_id: str, status: str) -> None:
-    sql = "DELETE FROM trial_history WHERE account_id = :account_id AND status = :status"
+    sql = "DELETE FROM trial_history WHERE account_id::text = :account_id AND status = :status"
     await execute_mutate(sql, {"account_id": account_id, "status": status})
 
 
@@ -75,7 +75,7 @@ async def mark_trial_converted(account_id: str) -> None:
     sql = """
     UPDATE trial_history
     SET ended_at = :ended_at, converted_to_paid = TRUE
-    WHERE account_id = :account_id AND ended_at IS NULL
+    WHERE account_id::text = :account_id AND ended_at IS NULL
     """
     await execute_mutate(sql, {
         "account_id": account_id,
@@ -87,7 +87,7 @@ async def get_credit_account_for_free_tier(account_id: str) -> Optional[Dict[str
     sql = """
     SELECT stripe_subscription_id, revenuecat_subscription_id, provider, tier
     FROM credit_accounts
-    WHERE account_id = :account_id
+    WHERE account_id::text = :account_id
     """
     return await execute_one(sql, {"account_id": account_id})
 
@@ -97,7 +97,7 @@ async def get_credit_account_for_trial(account_id: str) -> Optional[Dict[str, An
     SELECT tier, trial_status, trial_ends_at, stripe_subscription_id,
            balance, expiring_credits, non_expiring_credits
     FROM credit_accounts
-    WHERE account_id = :account_id
+    WHERE account_id::text = :account_id
     """
     return await execute_one(sql, {"account_id": account_id})
 
@@ -111,7 +111,7 @@ async def update_credit_account_for_trial_cancel(account_id: str) -> None:
         expiring_credits = 0.00,
         non_expiring_credits = 0.00,
         stripe_subscription_id = NULL
-    WHERE account_id = :account_id
+    WHERE account_id::text = :account_id
     """
     await execute_mutate(sql, {"account_id": account_id})
 
@@ -140,7 +140,7 @@ async def get_recent_credit_ledger_entries(account_id: str, since: str) -> list:
     sql = """
     SELECT amount, description, created_at, stripe_event_id
     FROM credit_ledger
-    WHERE account_id = :account_id AND created_at >= :since
+    WHERE account_id::text = :account_id AND created_at >= :since
     """
     return await execute(sql, {"account_id": account_id, "since": since})
 
@@ -170,7 +170,7 @@ async def get_credit_account_for_refill(account_id: str) -> Optional[Dict[str, A
     sql = """
     SELECT next_credit_grant, billing_cycle_anchor, plan_type
     FROM credit_accounts
-    WHERE account_id = :account_id
+    WHERE account_id::text = :account_id
     """
     return await execute_one(sql, {"account_id": account_id})
 

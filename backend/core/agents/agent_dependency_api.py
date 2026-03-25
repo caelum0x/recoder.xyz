@@ -107,7 +107,7 @@ async def create_dependency(
     # Verify both agents belong to this user
     for aid in [body.source_agent_id, body.target_agent_id]:
         agent = await execute_one(
-            "SELECT agent_id FROM agents WHERE agent_id = :agent_id AND account_id = :user_id",
+            "SELECT agent_id FROM agents WHERE agent_id::text = :agent_id AND account_id::text = :user_id",
             {"agent_id": aid, "user_id": user_id},
         )
         if not agent:
@@ -151,8 +151,8 @@ async def list_dependencies(
             rows = await execute(
                 """
                 SELECT * FROM agent_dependencies
-                WHERE user_id = :user_id
-                  AND (source_agent_id = :agent_id OR target_agent_id = :agent_id)
+                WHERE user_id::text = :user_id
+                  AND (source_agent_id::text = :agent_id OR target_agent_id::text = :agent_id)
                 ORDER BY created_at DESC
                 """,
                 {"user_id": user_id, "agent_id": agent_id},
@@ -161,7 +161,7 @@ async def list_dependencies(
             rows = await execute(
                 """
                 SELECT * FROM agent_dependencies
-                WHERE user_id = :user_id
+                WHERE user_id::text = :user_id
                 ORDER BY created_at DESC
                 """,
                 {"user_id": user_id},
@@ -185,7 +185,7 @@ async def delete_dependency(
     """Delete a dependency by ID."""
     try:
         row = await execute_one(
-            "DELETE FROM agent_dependencies WHERE id = :dep_id AND user_id = :user_id RETURNING id",
+            "DELETE FROM agent_dependencies WHERE id = :dep_id AND user_id::text = :user_id RETURNING id",
             {"dep_id": dep_id, "user_id": user_id},
         )
         if not row:
@@ -214,13 +214,13 @@ async def get_dependency_graph(
     try:
         # Get all agents for this user
         agents = await execute(
-            "SELECT agent_id, name FROM agents WHERE account_id = :user_id",
+            "SELECT agent_id, name FROM agents WHERE account_id::text = :user_id",
             {"user_id": user_id},
         )
 
         # Get all dependencies
         deps = await execute(
-            "SELECT * FROM agent_dependencies WHERE user_id = :user_id",
+            "SELECT * FROM agent_dependencies WHERE user_id::text = :user_id",
             {"user_id": user_id},
         )
 
@@ -231,7 +231,7 @@ async def get_dependency_graph(
                 """
                 SELECT DISTINCT ON (agent_id) agent_id, overall_score
                 FROM agent_health_scores
-                WHERE user_id = :user_id
+                WHERE user_id::text = :user_id
                 ORDER BY agent_id, calculated_at DESC
                 """,
                 {"user_id": user_id},
@@ -297,7 +297,7 @@ async def auto_detect_dependencies(
             """
             SELECT source_agent_id, cloned_agent_id
             FROM agent_clone_history
-            WHERE user_id = :user_id
+            WHERE user_id::text = :user_id
             """,
             {"user_id": user_id},
         )
@@ -325,8 +325,8 @@ async def auto_detect_dependencies(
             """
             SELECT a.agent_id, v.configured_mcps
             FROM agents a
-            JOIN agent_versions v ON a.current_version_id = v.version_id
-            WHERE a.account_id = :user_id
+            JOIN agent_versions v ON a.current_version_id::text = v.version_id::text
+            WHERE a.account_id::text = :user_id
               AND v.configured_mcps IS NOT NULL
               AND v.configured_mcps != '[]'::jsonb
               AND v.configured_mcps != 'null'::jsonb
@@ -383,8 +383,8 @@ async def auto_detect_dependencies(
             """
             SELECT a.agent_id, v.agentpress_tools
             FROM agents a
-            JOIN agent_versions v ON a.current_version_id = v.version_id
-            WHERE a.account_id = :user_id
+            JOIN agent_versions v ON a.current_version_id::text = v.version_id::text
+            WHERE a.account_id::text = :user_id
               AND v.agentpress_tools IS NOT NULL
               AND v.agentpress_tools != '{}'::jsonb
               AND v.agentpress_tools != 'null'::jsonb

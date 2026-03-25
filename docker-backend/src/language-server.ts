@@ -6,8 +6,17 @@
 
 import Docker from 'dockerode';
 import { EventEmitter } from 'events';
+import { daytonaExec } from './daytona-file-ops.js';
 
 const docker = new Docker();
+
+/** Workspace path inside Daytona sandboxes */
+const DAYTONA_WORKSPACE = '/home/daytona';
+
+/** Check whether a containerId refers to a Daytona sandbox */
+function isDaytonaSandbox(containerId: string): boolean {
+  return !!((global as any).__daytonaSandboxIds as Set<string> | undefined)?.has(containerId);
+}
 
 export interface Diagnostic {
   file: string;
@@ -95,10 +104,8 @@ export class LanguageServerManager extends EventEmitter {
    */
   async autoStart(containerId: string, projectId: string): Promise<void> {
     try {
-      const container = docker.getContainer(containerId);
-      
       // Detect languages in project
-      const files = await this.execCommand(container, 'find /workspace -type f -name "*.*" | head -100');
+      const files = await this.execCommand(containerId, 'find /workspace -type f -name "*.*" | head -100');
       const extensions = new Set(
         files.split('\n')
           .map(f => f.match(/\.[^.]+$/)?.[0])
@@ -137,18 +144,16 @@ export class LanguageServerManager extends EventEmitter {
     if (!server) return;
 
     try {
-      const container = docker.getContainer(containerId);
-      
       // Check if already installed
-      const checkCmd = language === 'typescript' 
+      const checkCmd = language === 'typescript'
         ? 'which npx && npm list -g typescript-language-server'
         : `which ${server.command.split(' ')[0]}`;
-      
-      const installed = await this.execCommand(container, `${checkCmd} 2>/dev/null || echo "not-found"`);
-      
+
+      const installed = await this.execCommand(containerId, `${checkCmd} 2>/dev/null || echo "not-found"`);
+
       if (installed.includes('not-found')) {
         console.log(`[LSP] Installing ${server.name}...`);
-        await this.execCommand(container, server.install);
+        await this.execCommand(containerId, server.install);
       }
 
       console.log(`[LSP] Started ${server.name} for ${projectId}`);
@@ -182,29 +187,27 @@ export class LanguageServerManager extends EventEmitter {
    * Get diagnostics for specific language
    */
   private async getDiagnosticsForLanguage(containerId: string, language: string): Promise<Diagnostic[]> {
-    const container = docker.getContainer(containerId);
-
     switch (language) {
       case 'typescript':
-        return this.getTypeScriptDiagnostics(container);
+        return this.getTypeScriptDiagnostics(containerId);
       case 'python':
-        return this.getPythonDiagnostics(container);
+        return this.getPythonDiagnostics(containerId);
       case 'rust':
-        return this.getRustDiagnostics(container);
+        return this.getRustDiagnostics(containerId);
       case 'go':
-        return this.getGoDiagnostics(container);
+        return this.getGoDiagnostics(containerId);
       default:
         return [];
     }
   }
 
-  private async getTypeScriptDiagnostics(container: Docker.Container): Promise<Diagnostic[]> {
-    const output = await this.execCommand(container, 'cd /workspace && npx tsc --noEmit --pretty false 2>&1 || true');
+  private async getTypeScriptDiagnostics(containerId: string): Promise<Diagnostic[]> {
+    const output = await this.execCommand(containerId, 'cd /workspace && npx tsc --noEmit --pretty false 2>&1 || true');
     return this.parseTscOutput(output);
   }
 
-  private async getPythonDiagnostics(container: Docker.Container): Promise<Diagnostic[]> {
-    const output = await this.execCommand(container, 'cd /workspace && npx pyright --outputjson 2>&1 || true');
+  private async getPythonDiagnostics(containerId: string): Promise<Diagnostic[]> {
+    const output = await this.execCommand(containerId, 'cd /workspace && npx pyright --outputjson 2>&1 || true');
     try {
       const result = JSON.parse(output);
       return (result.generalDiagnostics || []).map((d: any) => ({
@@ -222,8 +225,8 @@ export class LanguageServerManager extends EventEmitter {
     }
   }
 
-  private async getRustDiagnostics(container: Docker.Container): Promise<Diagnostic[]> {
-    const output = await this.execCommand(container, 'cd /workspace && cargo check --message-format=json 2>&1 || true');
+  private async getRustDiagnostics(containerId: string): Promise<Diagnostic[]> {
+    const output = await this.execCommand(containerId, 'cd /workspace && cargo check --message-format=json 2>&1 || true');
     const diagnostics: Diagnostic[] = [];
     
     for (const line of output.split('\n')) {
@@ -249,8 +252,8 @@ export class LanguageServerManager extends EventEmitter {
     return diagnostics;
   }
 
-  private async getGoDiagnostics(container: Docker.Container): Promise<Diagnostic[]> {
-    const output = await this.execCommand(container, 'cd /workspace && go build ./... 2>&1 || true');
+  private async getGoDiagnostics(containerId: string): Promise<Diagnostic[]> {
+    const output = await this.execCommand(containerId, 'cd /workspace && go build ./... 2>&1 || true');
     const diagnostics: Diagnostic[] = [];
     
     // Parse Go compiler output: file.go:10:5: error message
@@ -324,11 +327,9 @@ export class LanguageServerManager extends EventEmitter {
    * Get code fixes for a diagnostic
    */
   async getCodeFixes(containerId: string, diagnostic: Diagnostic): Promise<CodeFix[]> {
-    const container = docker.getContainer(containerId);
-    
     switch (diagnostic.source) {
       case 'typescript':
-        return this.getTypeScriptFixes(container, diagnostic);
+        return this.getTypeScriptFixes(containerId, diagnostic);
       default:
         return [];
     }
@@ -337,11 +338,11 @@ export class LanguageServerManager extends EventEmitter {
   /**
    * Get TypeScript quick fixes
    */
-  private async getTypeScriptFixes(container: Docker.Container, diagnostic: Diagnostic): Promise<CodeFix[]> {
+  private async getTypeScriptFixes(containerId: string, diagnostic: Diagnostic): Promise<CodeFix[]> {
     try {
       // Use tsc to get suggested fixes
       const cmd = `cd /workspace && npx tsc --noEmit --pretty false ${diagnostic.file} 2>&1 || true`;
-      const output = await this.execCommand(container, cmd);
+      const output = await this.execCommand(containerId, cmd);
       
       const fixes: CodeFix[] = [];
       
@@ -388,22 +389,20 @@ export class LanguageServerManager extends EventEmitter {
    */
   async applyCodeFix(containerId: string, fix: CodeFix): Promise<boolean> {
     try {
-      const container = docker.getContainer(containerId);
-      
       for (const edit of fix.edits) {
         // Read file
-        const content = await this.execCommand(container, `cat ${edit.file}`);
+        const content = await this.execCommand(containerId, `cat ${edit.file}`);
         const lines = content.split('\n');
-        
+
         // Apply edit
         const { start, end } = edit.range;
         const before = lines.slice(0, start.line - 1);
         const after = lines.slice(end.line);
         const newContent = [...before, edit.newText, ...after].join('\n');
-        
+
         // Write back
         const escapedContent = newContent.replace(/'/g, "'\\''");
-        await this.execCommand(container, `echo '${escapedContent}' > ${edit.file}`);
+        await this.execCommand(containerId, `echo '${escapedContent}' > ${edit.file}`);
       }
       
       return true;
@@ -413,15 +412,29 @@ export class LanguageServerManager extends EventEmitter {
     }
   }
 
-  private async execCommand(container: Docker.Container, command: string): Promise<string> {
-    const exec = await container.exec({
+  private async execCommand(containerOrId: Docker.Container | string, command: string): Promise<string> {
+    // If we received a raw containerId string, route through Daytona or Docker
+    if (typeof containerOrId === 'string') {
+      if (isDaytonaSandbox(containerOrId)) {
+        // Rewrite /workspace paths to Daytona home dir
+        const daytonaCmd = command
+          .replace(/\/workspace\//g, `${DAYTONA_WORKSPACE}/`)
+          .replace(/\/workspace(?=["'\s]|$)/g, DAYTONA_WORKSPACE);
+        const result = await daytonaExec(containerOrId, daytonaCmd, { timeoutSecs: 30 });
+        return (result.output || '').trim();
+      }
+      // Regular Docker container — get the container object and fall through
+      containerOrId = docker.getContainer(containerOrId);
+    }
+
+    const exec = await containerOrId.exec({
       Cmd: ['/bin/bash', '-c', command],
       AttachStdout: true,
       AttachStderr: true,
     });
 
     const stream = await exec.start({});
-    
+
     return new Promise((resolve, reject) => {
       let output = '';
       stream.on('data', (chunk: Buffer) => {
@@ -437,7 +450,6 @@ export class LanguageServerManager extends EventEmitter {
    */
   async getHover(containerId: string, file: string, line: number, character: number): Promise<{ contents: string } | null> {
     try {
-      const container = docker.getContainer(containerId);
       const ext = file.match(/\.([^.]+)$/)?.[1];
 
       if (ext === 'ts' || ext === 'tsx' || ext === 'js' || ext === 'jsx') {
@@ -454,7 +466,7 @@ export class LanguageServerManager extends EventEmitter {
             console.log(token.getText(sf));
           }
         `;
-        const output = await this.execCommand(container, `cd /workspace && node -e "${script.replace(/"/g, '\\"').replace(/\n/g, ' ')}" 2>/dev/null || true`);
+        const output = await this.execCommand(containerId, `cd /workspace && node -e "${script.replace(/"/g, '\\"').replace(/\n/g, ' ')}" 2>/dev/null || true`);
         if (output) {
           return { contents: output };
         }
@@ -470,7 +482,6 @@ export class LanguageServerManager extends EventEmitter {
    */
   async getDefinition(containerId: string, file: string, line: number, character: number): Promise<{ uri: string; range: { start: { line: number; character: number } } } | null> {
     try {
-      const container = docker.getContainer(containerId);
       const ext = file.match(/\.([^.]+)$/)?.[1];
 
       if (ext === 'ts' || ext === 'tsx' || ext === 'js' || ext === 'jsx') {
@@ -504,7 +515,7 @@ export class LanguageServerManager extends EventEmitter {
             }
           }
         `;
-        const output = await this.execCommand(container, `cd /workspace && node -e "${script.replace(/"/g, '\\"').replace(/\n/g, ' ')}" 2>/dev/null || true`);
+        const output = await this.execCommand(containerId, `cd /workspace && node -e "${script.replace(/"/g, '\\"').replace(/\n/g, ' ')}" 2>/dev/null || true`);
         if (output) {
           return JSON.parse(output);
         }

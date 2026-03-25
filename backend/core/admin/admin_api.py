@@ -120,9 +120,9 @@ async def get_user_details(
                    bs.created AS subscription_created,
                    bs.current_period_end AS subscription_period_end
             FROM basejump.accounts a
-            LEFT JOIN basejump.billing_customers bc ON bc.account_id = a.id
-            LEFT JOIN basejump.billing_subscriptions bs ON bs.account_id = a.id
-            WHERE a.id = :user_id
+            LEFT JOIN basejump.billing_customers bc ON bc.account_id::text = a.id::text
+            LEFT JOIN basejump.billing_subscriptions bs ON bs.account_id::text = a.id::text
+            WHERE a.id::text = :user_id
             """,
             {"user_id": user_id}
         )
@@ -166,7 +166,7 @@ async def get_user_details(
             SELECT balance, tier, lifetime_granted, lifetime_purchased,
                    lifetime_used, last_grant_date
             FROM credit_accounts
-            WHERE account_id = :account_id
+            WHERE account_id::text = :account_id
             """,
             {"account_id": user_id}
         )
@@ -188,8 +188,8 @@ async def get_user_details(
             """
             SELECT ar.id, ar.created_at, ar.status, ar.thread_id
             FROM agent_runs ar
-            INNER JOIN threads t ON t.thread_id = ar.thread_id
-            WHERE t.account_id = :account_id
+            INNER JOIN threads t ON t.thread_id::text = ar.thread_id::text
+            WHERE t.account_id::text = :account_id
             ORDER BY ar.created_at DESC
             LIMIT 10
             """,
@@ -238,7 +238,7 @@ async def get_user_stats_overview(
             """
             SELECT COUNT(DISTINCT t.account_id) AS cnt
             FROM agent_runs ar
-            INNER JOIN threads t ON t.thread_id = ar.thread_id
+            INNER JOIN threads t ON t.thread_id::text = ar.thread_id::text
             WHERE ar.created_at >= :since
             """,
             {"since": thirty_days_ago}
@@ -285,8 +285,8 @@ async def get_user_activity(
             f"""
             SELECT COUNT(*) AS cnt
             FROM agent_runs ar
-            INNER JOIN threads t ON t.thread_id = ar.thread_id
-            WHERE t.account_id = :account_id {status_clause}
+            INNER JOIN threads t ON t.thread_id::text = ar.thread_id::text
+            WHERE t.account_id::text = :account_id {status_clause}
             """,
             params
         )
@@ -300,8 +300,8 @@ async def get_user_activity(
             f"""
             SELECT ar.*, t.account_id, t.thread_id AS t_thread_id
             FROM agent_runs ar
-            INNER JOIN threads t ON t.thread_id = ar.thread_id
-            WHERE t.account_id = :account_id {status_clause}
+            INNER JOIN threads t ON t.thread_id::text = ar.thread_id::text
+            WHERE t.account_id::text = :account_id {status_clause}
             ORDER BY ar.created_at DESC
             LIMIT :lim OFFSET :off
             """,
@@ -378,7 +378,7 @@ async def get_user_threads_by_email(
 
         # Get total count
         count_row = await execute_one_read(
-            "SELECT COUNT(*) AS cnt FROM threads WHERE account_id = :account_id",
+            "SELECT COUNT(*) AS cnt FROM threads WHERE account_id::text = :account_id",
             {"account_id": account_id}
         )
         total_count = count_row["cnt"] if count_row else 0
@@ -389,7 +389,7 @@ async def get_user_threads_by_email(
             """
             SELECT thread_id, project_id, is_public, created_at, updated_at
             FROM threads
-            WHERE account_id = :account_id
+            WHERE account_id::text = :account_id
             ORDER BY updated_at DESC
             LIMIT :lim OFFSET :off
             """,

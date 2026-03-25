@@ -2,7 +2,7 @@
 Audit Log API endpoints.
 
 Provides listing, recording, summary, export, and timeline views of audit events.
-Access control enforced at application layer (WHERE user_id = :user_id).
+Access control enforced at application layer (WHERE user_id::text = :user_id).
 """
 
 from datetime import datetime, timezone, timedelta
@@ -63,7 +63,7 @@ async def list_audit_logs(
     offset: int = Query(0, ge=0),
 ):
     """List audit logs for the authenticated user with optional filters."""
-    where_clauses = ["user_id = :user_id"]
+    where_clauses = ["user_id::text = :user_id"]
     params: Dict[str, Any] = {
         "user_id": user_id,
         "limit": limit,
@@ -79,7 +79,7 @@ async def list_audit_logs(
         params["action"] = f"%{action}%"
 
     if resource_id:
-        where_clauses.append("resource_id = :resource_id")
+        where_clauses.append("resource_id::text = :resource_id")
         params["resource_id"] = resource_id
 
     if date_from:
@@ -183,7 +183,7 @@ async def audit_log_summary(
         """
         SELECT resource_type, COUNT(*) AS count
         FROM audit_log
-        WHERE user_id = :user_id AND created_at >= :since
+        WHERE user_id::text = :user_id AND created_at >= :since
         GROUP BY resource_type
         ORDER BY count DESC
         """,
@@ -195,7 +195,7 @@ async def audit_log_summary(
         """
         SELECT EXTRACT(HOUR FROM created_at)::INTEGER AS hour, COUNT(*) AS count
         FROM audit_log
-        WHERE user_id = :user_id AND created_at >= :since
+        WHERE user_id::text = :user_id AND created_at >= :since
         GROUP BY hour
         ORDER BY count DESC
         LIMIT 5
@@ -208,7 +208,7 @@ async def audit_log_summary(
         """
         SELECT action, COUNT(*) AS count
         FROM audit_log
-        WHERE user_id = :user_id AND created_at >= :since
+        WHERE user_id::text = :user_id AND created_at >= :since
         GROUP BY action
         ORDER BY count DESC
         LIMIT 5
@@ -220,7 +220,7 @@ async def audit_log_summary(
     total_row = await execute_one(
         """
         SELECT COUNT(*) FROM audit_log
-        WHERE user_id = :user_id AND created_at >= :since
+        WHERE user_id::text = :user_id AND created_at >= :since
         """,
         {"user_id": user_id, "since": since},
     )
@@ -249,7 +249,7 @@ async def export_audit_logs(
     date_to: Optional[str] = Query(None),
 ):
     """Export audit logs as a JSON array with the same filters as list endpoint."""
-    where_clauses = ["user_id = :user_id"]
+    where_clauses = ["user_id::text = :user_id"]
     params: Dict[str, Any] = {"user_id": user_id}
 
     if resource_type:
@@ -261,7 +261,7 @@ async def export_audit_logs(
         params["action"] = f"%{action}%"
 
     if resource_id:
-        where_clauses.append("resource_id = :resource_id")
+        where_clauses.append("resource_id::text = :resource_id")
         params["resource_id"] = resource_id
 
     if date_from:
@@ -303,7 +303,7 @@ async def audit_log_timeline(
         """
         SELECT DATE(created_at) AS date, COUNT(*) AS count
         FROM audit_log
-        WHERE user_id = :user_id AND created_at >= :since
+        WHERE user_id::text = :user_id AND created_at >= :since
         GROUP BY DATE(created_at)
         ORDER BY date ASC
         """,

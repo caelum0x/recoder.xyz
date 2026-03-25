@@ -82,7 +82,7 @@ async def list_pipelines(user_id: str = Depends(verify_and_get_user_id_from_jwt)
                (SELECT COUNT(*) FROM pipeline_runs WHERE pipeline_id = p.id) as run_count,
                (SELECT status FROM pipeline_runs WHERE pipeline_id = p.id ORDER BY started_at DESC LIMIT 1) as last_run_status
         FROM agent_pipelines p
-        WHERE p.user_id = :user_id
+        WHERE p.user_id::text = :user_id
         ORDER BY p.updated_at DESC
         """,
         {"user_id": user_id},
@@ -96,7 +96,7 @@ async def get_pipeline(
     user_id: str = Depends(verify_and_get_user_id_from_jwt),
 ):
     row = await execute_one(
-        "SELECT * FROM agent_pipelines WHERE id = :id AND user_id = :user_id",
+        "SELECT * FROM agent_pipelines WHERE id::text = :id AND user_id::text = :user_id",
         {"id": pipeline_id, "user_id": user_id},
     )
     if not row:
@@ -133,7 +133,7 @@ async def update_pipeline(
 
     updates.append("updated_at = now()")
     row = await execute_one(
-        f"UPDATE agent_pipelines SET {', '.join(updates)} WHERE id = :id AND user_id = :user_id RETURNING *",
+        f"UPDATE agent_pipelines SET {', '.join(updates)} WHERE id::text = :id AND user_id::text = :user_id RETURNING *",
         params,
     )
     if not row:
@@ -147,7 +147,7 @@ async def delete_pipeline(
     user_id: str = Depends(verify_and_get_user_id_from_jwt),
 ):
     await execute(
-        "DELETE FROM agent_pipelines WHERE id = :id AND user_id = :user_id",
+        "DELETE FROM agent_pipelines WHERE id::text = :id AND user_id::text = :user_id",
         {"id": pipeline_id, "user_id": user_id},
     )
     return {"status": "ok"}
@@ -163,7 +163,7 @@ async def execute_pipeline(
     user_id: str = Depends(verify_and_get_user_id_from_jwt),
 ):
     pipeline = await execute_one(
-        "SELECT * FROM agent_pipelines WHERE id = :id AND user_id = :user_id",
+        "SELECT * FROM agent_pipelines WHERE id::text = :id AND user_id::text = :user_id",
         {"id": pipeline_id, "user_id": user_id},
     )
     if not pipeline:
@@ -209,7 +209,7 @@ async def cancel_pipeline_run(
         """
         UPDATE pipeline_runs
         SET status = 'cancelled', completed_at = now(), error = 'Cancelled by user'
-        WHERE id = :run_id AND pipeline_id = :pipeline_id AND user_id = :user_id AND status = 'running'
+        WHERE id::text = :run_id AND pipeline_id::text = :pipeline_id AND user_id::text = :user_id AND status = 'running'
         RETURNING id
         """,
         {"run_id": run_id, "pipeline_id": pipeline_id, "user_id": user_id},
@@ -227,7 +227,7 @@ async def list_pipeline_runs(
     rows = await execute(
         """
         SELECT * FROM pipeline_runs
-        WHERE pipeline_id = :pipeline_id AND user_id = :user_id
+        WHERE pipeline_id::text = :pipeline_id AND user_id::text = :user_id
         ORDER BY started_at DESC
         LIMIT 20
         """,
@@ -245,7 +245,7 @@ async def get_pipeline_run(
     row = await execute_one(
         """
         SELECT * FROM pipeline_runs
-        WHERE id = :run_id AND pipeline_id = :pipeline_id AND user_id = :user_id
+        WHERE id::text = :run_id AND pipeline_id::text = :pipeline_id AND user_id::text = :user_id
         """,
         {"run_id": run_id, "pipeline_id": pipeline_id, "user_id": user_id},
     )
@@ -275,7 +275,7 @@ async def stream_pipeline_run(
 
     # Verify access
     row = await execute_one(
-        "SELECT id FROM pipeline_runs WHERE id = :run_id AND pipeline_id = :pipeline_id AND user_id = :user_id",
+        "SELECT id FROM pipeline_runs WHERE id::text = :run_id AND pipeline_id::text = :pipeline_id AND user_id::text = :user_id",
         {"run_id": run_id, "pipeline_id": pipeline_id, "user_id": user_id},
     )
     if not row:
@@ -283,6 +283,10 @@ async def stream_pipeline_run(
 
     async def event_generator():
         from core.services import redis
+
+        # Emit initial SSE comment immediately so Cloudflare sees first byte
+        # and does not kill the connection with ERR_HTTP2_PROTOCOL_ERROR.
+        yield ": connected\n\n"
 
         stream_key = f"pipeline_run:{run_id}:stream"
         last_id = "0-0"
@@ -334,12 +338,9 @@ async def stream_pipeline_run(
                 last_keepalive = now
                 yield ": keepalive\n\n"
 
+    from core.utils.sse_headers import get_sse_headers
     return StreamingResponse(
         event_generator(),
         media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache",
-            "Connection": "keep-alive",
-            "X-Accel-Buffering": "no",
-        },
+        headers=get_sse_headers(request),
     )

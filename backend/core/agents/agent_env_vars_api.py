@@ -69,7 +69,7 @@ async def list_env_vars(
         """
         SELECT id, agent_id, key, value, is_secret, description, created_at, updated_at
         FROM agent_env_variables
-        WHERE agent_id = :agent_id AND user_id = :user_id
+        WHERE agent_id::text = :agent_id AND user_id::text = :user_id
         ORDER BY key
         """,
         {"agent_id": agent_id, "user_id": user_id},
@@ -94,7 +94,7 @@ async def upsert_env_var(
 
     # Check if it already exists to determine audit action
     existing = await execute_one(
-        "SELECT id FROM agent_env_variables WHERE agent_id = :agent_id AND key = :key AND user_id = :user_id",
+        "SELECT id FROM agent_env_variables WHERE agent_id::text = :agent_id AND key = :key AND user_id::text = :user_id",
         {"agent_id": agent_id, "key": key, "user_id": user_id},
     )
     audit_action = "updated" if existing else "created"
@@ -135,7 +135,7 @@ async def reveal_env_var(
         """
         SELECT id, agent_id, key, value, is_secret, description, created_at, updated_at
         FROM agent_env_variables
-        WHERE agent_id = :agent_id AND key = :key AND user_id = :user_id
+        WHERE agent_id::text = :agent_id AND key = :key AND user_id::text = :user_id
         """,
         {"agent_id": agent_id, "key": key, "user_id": user_id},
     )
@@ -153,14 +153,14 @@ async def delete_env_var(
     user_id: str = Depends(verify_and_get_user_id_from_jwt),
 ):
     existing = await execute_one(
-        "SELECT id FROM agent_env_variables WHERE agent_id = :agent_id AND key = :key AND user_id = :user_id",
+        "SELECT id FROM agent_env_variables WHERE agent_id::text = :agent_id AND key = :key AND user_id::text = :user_id",
         {"agent_id": agent_id, "key": key, "user_id": user_id},
     )
     if not existing:
         raise HTTPException(status_code=404, detail="Environment variable not found")
 
     await execute_mutate(
-        "DELETE FROM agent_env_variables WHERE agent_id = :agent_id AND key = :key AND user_id = :user_id",
+        "DELETE FROM agent_env_variables WHERE agent_id::text = :agent_id AND key = :key AND user_id::text = :user_id",
         {"agent_id": agent_id, "key": key, "user_id": user_id},
     )
 
@@ -185,7 +185,7 @@ async def bulk_set_env_vars(
         try:
             # Check if it already exists to determine audit action
             existing = await execute_one(
-                "SELECT id FROM agent_env_variables WHERE agent_id = :agent_id AND key = :key AND user_id = :user_id",
+                "SELECT id FROM agent_env_variables WHERE agent_id::text = :agent_id AND key = :key AND user_id::text = :user_id",
                 {"agent_id": agent_id, "key": key, "user_id": user_id},
             )
             audit_action = "updated" if existing else "created"
@@ -230,7 +230,7 @@ async def get_env_var_audit(
         """
         SELECT id, agent_id, key, action, created_at
         FROM env_variable_audit
-        WHERE agent_id = :agent_id AND user_id = :user_id
+        WHERE agent_id::text = :agent_id AND user_id::text = :user_id
         ORDER BY created_at DESC
         LIMIT :limit
         """,
@@ -248,7 +248,7 @@ async def export_env_vars(
         """
         SELECT key, value, is_secret, description
         FROM agent_env_variables
-        WHERE agent_id = :agent_id AND user_id = :user_id
+        WHERE agent_id::text = :agent_id AND user_id::text = :user_id
         ORDER BY key
         """,
         {"agent_id": agent_id, "user_id": user_id},

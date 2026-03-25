@@ -31,7 +31,7 @@ async def bulk_delete_threads(
         try:
             # Verify ownership before deleting
             thread = await execute_one(
-                "SELECT thread_id FROM threads WHERE thread_id = :thread_id AND account_id = :user_id",
+                "SELECT thread_id FROM threads WHERE thread_id::text = :thread_id AND account_id::text = :user_id",
                 {"thread_id": thread_id, "user_id": user_id},
             )
             if not thread:
@@ -40,19 +40,19 @@ async def bulk_delete_threads(
 
             # Remove from archive status if archived
             await execute(
-                "DELETE FROM thread_archive_status WHERE thread_id = :thread_id AND user_id = :user_id",
+                "DELETE FROM thread_archive_status WHERE thread_id::text = :thread_id AND user_id::text = :user_id",
                 {"thread_id": thread_id, "user_id": user_id},
             )
 
             # Delete messages first (foreign key)
             await execute(
-                "DELETE FROM messages WHERE thread_id = :thread_id",
+                "DELETE FROM messages WHERE thread_id::text = :thread_id",
                 {"thread_id": thread_id},
             )
 
             # Delete the thread
             await execute(
-                "DELETE FROM threads WHERE thread_id = :thread_id AND account_id = :user_id",
+                "DELETE FROM threads WHERE thread_id::text = :thread_id AND account_id::text = :user_id",
                 {"thread_id": thread_id, "user_id": user_id},
             )
 
@@ -88,7 +88,7 @@ async def bulk_archive_threads(
         try:
             # Verify ownership
             thread = await execute_one(
-                "SELECT thread_id FROM threads WHERE thread_id = :thread_id AND account_id = :user_id",
+                "SELECT thread_id FROM threads WHERE thread_id::text = :thread_id AND account_id::text = :user_id",
                 {"thread_id": thread_id, "user_id": user_id},
             )
             if not thread:
@@ -134,7 +134,7 @@ async def bulk_unarchive_threads(
     for thread_id in body.thread_ids:
         try:
             result = await execute(
-                "DELETE FROM thread_archive_status WHERE thread_id = :thread_id AND user_id = :user_id",
+                "DELETE FROM thread_archive_status WHERE thread_id::text = :thread_id AND user_id::text = :user_id",
                 {"thread_id": thread_id, "user_id": user_id},
             )
             unarchived.append(thread_id)
@@ -170,9 +170,9 @@ async def list_archived_threads(
                 p.name AS project_name,
                 p.icon_name AS project_icon_name
             FROM thread_archive_status a
-            LEFT JOIN threads t ON t.thread_id = a.thread_id
-            LEFT JOIN projects p ON p.project_id = t.project_id
-            WHERE a.user_id = :user_id
+            LEFT JOIN threads t ON t.thread_id::text = a.thread_id::text
+            LEFT JOIN projects p ON p.project_id::text = t.project_id::text
+            WHERE a.user_id::text = :user_id
             ORDER BY a.archived_at DESC
             LIMIT :limit OFFSET :offset
             """,
@@ -180,7 +180,7 @@ async def list_archived_threads(
         )
 
         count_row = await execute_one(
-            "SELECT COUNT(*) AS total FROM thread_archive_status WHERE user_id = :user_id",
+            "SELECT COUNT(*) AS total FROM thread_archive_status WHERE user_id::text = :user_id",
             {"user_id": user_id},
         )
         total = count_row["total"] if count_row else 0

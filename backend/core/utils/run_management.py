@@ -66,7 +66,7 @@ async def check_for_active_project_agent_run(client, project_id: str) -> Optiona
     from core.services.db import execute_read, execute_one
 
     threads = await execute_read(
-        "SELECT thread_id FROM threads WHERE project_id = :project_id",
+        "SELECT thread_id FROM threads WHERE project_id::text = :project_id",
         {"project_id": project_id}
     )
     project_thread_ids = [t['thread_id'] for t in threads]

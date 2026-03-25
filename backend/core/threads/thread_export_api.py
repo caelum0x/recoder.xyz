@@ -60,8 +60,8 @@ async def _fetch_thread_messages(
     thread = await execute_one(
         "SELECT t.thread_id, p.name as project_name, p.project_id "
         "FROM threads t "
-        "LEFT JOIN projects p ON p.project_id = t.project_id "
-        "WHERE t.thread_id = :thread_id AND t.account_id = :user_id",
+        "LEFT JOIN projects p ON p.project_id::text = t.project_id::text "
+        "WHERE t.thread_id::text = :thread_id AND t.account_id::text = :user_id",
         {"thread_id": thread_id, "user_id": user_id},
     )
     if not thread:
@@ -69,8 +69,8 @@ async def _fetch_thread_messages(
         thread = await execute_one(
             "SELECT t.thread_id, p.name as project_name, p.project_id "
             "FROM threads t "
-            "LEFT JOIN projects p ON p.project_id = t.project_id "
-            "WHERE t.thread_id = :thread_id AND t.is_public = true",
+            "LEFT JOIN projects p ON p.project_id::text = t.project_id::text "
+            "WHERE t.thread_id::text = :thread_id AND t.is_public = true",
             {"thread_id": thread_id},
         )
         if not thread:
@@ -84,7 +84,7 @@ async def _fetch_thread_messages(
     messages = await execute(
         "SELECT message_id, type, content, created_at "
         "FROM messages "
-        f"WHERE thread_id = :thread_id{type_filter} "
+        f"WHERE thread_id::text = :thread_id{type_filter} "
         "ORDER BY created_at ASC",
         {"thread_id": thread_id},
     )

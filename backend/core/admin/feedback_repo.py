@@ -93,7 +93,7 @@ async def list_feedback_paginated(
         fwc.*,
         COALESCE(bc.email, 'N/A') as user_email
     FROM feedback_with_count fwc
-    LEFT JOIN basejump.billing_customers bc ON fwc.account_id = bc.account_id
+    LEFT JOIN basejump.billing_customers bc ON fwc.account_id::text = bc.account_id::text
     """
     
     rows = await execute(sql, params)
@@ -155,7 +155,7 @@ async def get_all_feedback(
         f.*,
         COALESCE(bc.email, 'N/A') as user_email
     FROM feedback f
-    LEFT JOIN basejump.billing_customers bc ON f.account_id = bc.account_id
+    LEFT JOIN basejump.billing_customers bc ON f.account_id::text = bc.account_id::text
     WHERE {where_sql}
     ORDER BY f.created_at DESC
     """
@@ -376,7 +376,7 @@ async def get_critical_feedback(limit: int = 20) -> List[Dict[str, Any]]:
         f.thread_id,
         COALESCE(bc.email, 'N/A') as user_email
     FROM feedback f
-    LEFT JOIN basejump.billing_customers bc ON f.account_id = bc.account_id
+    LEFT JOIN basejump.billing_customers bc ON f.account_id::text = bc.account_id::text
     WHERE f.rating <= 2.5 
       AND f.feedback_text IS NOT NULL 
       AND f.feedback_text != ''

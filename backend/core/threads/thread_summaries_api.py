@@ -119,7 +119,7 @@ async def summarize_thread(
         """
         SELECT role, content, type, created_at
         FROM messages
-        WHERE thread_id = :thread_id
+        WHERE thread_id::text = :thread_id
         ORDER BY created_at ASC
         """,
         {"thread_id": thread_id},
@@ -174,7 +174,7 @@ async def get_thread_summary(
         """
         SELECT *
         FROM thread_summaries
-        WHERE thread_id = :thread_id AND user_id = :user_id
+        WHERE thread_id::text = :thread_id AND user_id::text = :user_id
         ORDER BY created_at DESC
         LIMIT 1
         """,
@@ -196,8 +196,8 @@ async def get_recent_summaries(
         """
         SELECT ts.*, t.name as thread_name
         FROM thread_summaries ts
-        LEFT JOIN threads t ON t.thread_id = ts.thread_id
-        WHERE ts.user_id = :user_id
+        LEFT JOIN threads t ON t.thread_id::text = ts.thread_id::text
+        WHERE ts.user_id::text = :user_id
         ORDER BY ts.created_at DESC
         LIMIT :limit
         """,
@@ -213,14 +213,14 @@ async def delete_summary(
     user_id: str = Depends(verify_and_get_user_id_from_jwt),
 ):
     existing = await execute_one(
-        "SELECT id FROM thread_summaries WHERE id = :summary_id AND user_id = :user_id",
+        "SELECT id FROM thread_summaries WHERE id = :summary_id AND user_id::text = :user_id",
         {"summary_id": summary_id, "user_id": user_id},
     )
     if not existing:
         raise HTTPException(status_code=404, detail="Summary not found")
 
     await execute_mutate(
-        "DELETE FROM thread_summaries WHERE id = :summary_id AND user_id = :user_id",
+        "DELETE FROM thread_summaries WHERE id = :summary_id AND user_id::text = :user_id",
         {"summary_id": summary_id, "user_id": user_id},
     )
 
@@ -238,7 +238,7 @@ async def get_summary_stats(
             COALESCE(AVG(array_length(key_points, 1)), 0) as avg_key_points,
             COALESCE(AVG(array_length(action_items, 1)), 0) as avg_action_items
         FROM thread_summaries
-        WHERE user_id = :user_id
+        WHERE user_id::text = :user_id
         """,
         {"user_id": user_id},
     )

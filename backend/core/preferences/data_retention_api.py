@@ -53,7 +53,7 @@ async def list_policies(
     rows = await execute(
         """
         SELECT * FROM data_retention_policies
-        WHERE user_id = :user_id
+        WHERE user_id::text = :user_id
         ORDER BY resource_type ASC
         """,
         {"user_id": user_id},
@@ -105,14 +105,14 @@ async def delete_policy(
     user_id: str = Depends(verify_and_get_user_id_from_jwt),
 ):
     existing = await execute_one(
-        "SELECT id FROM data_retention_policies WHERE id = :id AND user_id = :user_id",
+        "SELECT id FROM data_retention_policies WHERE id = :id AND user_id::text = :user_id",
         {"id": policy_id, "user_id": user_id},
     )
     if not existing:
         raise HTTPException(status_code=404, detail="Policy not found")
 
     await execute_mutate(
-        "DELETE FROM data_retention_policies WHERE id = :id AND user_id = :user_id",
+        "DELETE FROM data_retention_policies WHERE id = :id AND user_id::text = :user_id",
         {"id": policy_id, "user_id": user_id},
     )
     return {"status": "ok"}
@@ -126,7 +126,7 @@ async def _count_stale_items(user_id: str, resource_type: str, retention_days: i
     table, date_col = mapping
     try:
         row = await execute_one(
-            f"SELECT COUNT(*) AS cnt FROM {table} WHERE user_id = :user_id AND {date_col} < now() - make_interval(days => :days)",
+            f"SELECT COUNT(*) AS cnt FROM {table} WHERE user_id::text = :user_id AND {date_col} < now() - make_interval(days => :days)",
             {"user_id": user_id, "days": retention_days},
         )
         return int(row["cnt"]) if row else 0
@@ -140,7 +140,7 @@ async def run_cleanup(
     user_id: str = Depends(verify_and_get_user_id_from_jwt),
 ):
     policies = await execute(
-        "SELECT * FROM data_retention_policies WHERE user_id = :user_id AND is_active = true",
+        "SELECT * FROM data_retention_policies WHERE user_id::text = :user_id AND is_active = true",
         {"user_id": user_id},
     )
     results = []
@@ -194,7 +194,7 @@ async def list_cleanup_log(
         rows = await execute(
             """
             SELECT * FROM retention_cleanup_log
-            WHERE user_id = :user_id AND resource_type = :resource_type
+            WHERE user_id::text = :user_id AND resource_type = :resource_type
             ORDER BY cleaned_at DESC
             LIMIT :limit
             """,
@@ -204,7 +204,7 @@ async def list_cleanup_log(
         rows = await execute(
             """
             SELECT * FROM retention_cleanup_log
-            WHERE user_id = :user_id
+            WHERE user_id::text = :user_id
             ORDER BY cleaned_at DESC
             LIMIT :limit
             """,
@@ -218,7 +218,7 @@ async def preview_cleanup(
     user_id: str = Depends(verify_and_get_user_id_from_jwt),
 ):
     policies = await execute(
-        "SELECT * FROM data_retention_policies WHERE user_id = :user_id AND is_active = true",
+        "SELECT * FROM data_retention_policies WHERE user_id::text = :user_id AND is_active = true",
         {"user_id": user_id},
     )
     previews = []

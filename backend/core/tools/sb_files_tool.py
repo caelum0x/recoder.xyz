@@ -191,18 +191,28 @@ Usage:
             # Create parent directories if needed
             parent_dir = '/'.join(full_path.split('/')[:-1])
             if parent_dir:
-                await self.sandbox.fs.create_folder(parent_dir, "755")
+                # Use process.exec instead of sandbox.fs.create_folder —
+                # the Daytona toolbox HTTP proxy (port 4000) is unreliable on
+                # freshly-created/started sandboxes, causing first-attempt failures.
+                await self.sandbox.process.exec(f"mkdir -p '{parent_dir}'", timeout=10)
 
             # convert to json string if file_contents is a dict
             if isinstance(file_contents, dict):
                 file_contents = json.dumps(file_contents, indent=4)
 
             # Write the file content
-            await self.write_file(full_path, file_contents.encode())
-            await self.sandbox.fs.set_file_permissions(full_path, permissions)
+            write_ok = await self.write_file(full_path, file_contents.encode())
+            if not write_ok:
+                return self.fail_response(f"Failed to create file '{file_path}': write to sandbox failed after retries.")
+            # Use process.exec for permissions instead of sandbox.fs.set_file_permissions
+            # to avoid Daytona toolbox HTTP proxy reliability issues
+            try:
+                await self.sandbox.process.exec(f"chmod {permissions} '{full_path}'", timeout=10)
+            except Exception as perm_err:
+                logger.debug(f"Could not set permissions on '{file_path}': {perm_err}")
 
             message = f"File '{file_path}' created successfully."
-            
+
             if file_path.lower().endswith('.html'):
                 try:
                     website_link = await self.sandbox.get_preview_link(8080)
@@ -279,7 +289,9 @@ Usage:
                 return self.fail_response(f"Multiple occurrences found in lines {lines}. Use replace_all=true or provide more context to make it unique")
 
             new_content = content.replace(old_str, new_str)
-            await self.write_file(full_path, new_content.encode())
+            write_ok = await self.write_file(full_path, new_content.encode())
+            if not write_ok:
+                return self.fail_response(f"Failed to write replacement to '{file_path}': write to sandbox failed after retries.")
 
             return ToolResult(success=True, output=json.dumps({
                 "message": f"Replacement successful.",
@@ -327,8 +339,15 @@ Usage:
             if not await self._file_exists(full_path):
                 return self.fail_response(f"File '{file_path}' does not exist. Use create_file to create a new file.")
 
-            await self.write_file(full_path, file_contents.encode())
-            await self.sandbox.fs.set_file_permissions(full_path, permissions)
+            write_ok = await self.write_file(full_path, file_contents.encode())
+            if not write_ok:
+                return self.fail_response(f"Failed to rewrite file '{file_path}': write to sandbox failed after retries. The file was not modified.")
+            # Use process.exec for permissions instead of sandbox.fs.set_file_permissions
+            # to avoid Daytona toolbox HTTP proxy reliability issues
+            try:
+                await self.sandbox.process.exec(f"chmod {permissions} '{full_path}'", timeout=10)
+            except Exception as perm_err:
+                logger.debug(f"Could not set permissions on '{file_path}': {perm_err}")
 
             message = f"File '{file_path}' completely rewritten successfully."
             
@@ -578,7 +597,9 @@ Usage:
                     "updated_content": original_content
                 }))
 
-            await self.write_file(full_path, new_content.encode())
+            write_ok = await self.write_file(full_path, new_content.encode())
+            if not write_ok:
+                return self.fail_response(f"Failed to write edits to '{target_file}': write to sandbox failed after retries.")
 
             return ToolResult(success=True, output=json.dumps({
                 "message": f"File '{target_file}' edited successfully.",

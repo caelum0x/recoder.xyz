@@ -75,7 +75,7 @@ async def get_history(
         rows = await execute(
             """
             SELECT * FROM command_palette_history
-            WHERE user_id = :user_id AND command_type = :command_type
+            WHERE user_id::text = :user_id AND command_type = :command_type
             ORDER BY executed_at DESC
             LIMIT :limit
             """,
@@ -85,7 +85,7 @@ async def get_history(
         rows = await execute(
             """
             SELECT * FROM command_palette_history
-            WHERE user_id = :user_id
+            WHERE user_id::text = :user_id
             ORDER BY executed_at DESC
             LIMIT :limit
             """,
@@ -104,7 +104,7 @@ async def get_frequent(
         """
         SELECT command, command_type, COUNT(*) as use_count, MAX(executed_at) as last_used
         FROM command_palette_history
-        WHERE user_id = :user_id
+        WHERE user_id::text = :user_id
         GROUP BY command, command_type
         ORDER BY use_count DESC, last_used DESC
         LIMIT :limit
@@ -126,7 +126,7 @@ async def pin_command(
 
     # Get the next sort_order
     max_order = await execute_one(
-        "SELECT COALESCE(MAX(sort_order), -1) + 1 as next_order FROM command_palette_pins WHERE user_id = :user_id",
+        "SELECT COALESCE(MAX(sort_order), -1) + 1 as next_order FROM command_palette_pins WHERE user_id::text = :user_id",
         {"user_id": user_id},
     )
     next_order = max_order["next_order"] if max_order else 0
@@ -159,7 +159,7 @@ async def list_pins(
     rows = await execute(
         """
         SELECT * FROM command_palette_pins
-        WHERE user_id = :user_id
+        WHERE user_id::text = :user_id
         ORDER BY sort_order ASC
         """,
         {"user_id": user_id},
@@ -173,14 +173,14 @@ async def unpin_command(
     user_id: str = Depends(verify_and_get_user_id_from_jwt),
 ):
     existing = await execute_one(
-        "SELECT id FROM command_palette_pins WHERE id = :pin_id AND user_id = :user_id",
+        "SELECT id FROM command_palette_pins WHERE id = :pin_id AND user_id::text = :user_id",
         {"pin_id": pin_id, "user_id": user_id},
     )
     if not existing:
         raise HTTPException(status_code=404, detail="Pinned command not found")
 
     await execute_mutate(
-        "DELETE FROM command_palette_pins WHERE id = :pin_id AND user_id = :user_id",
+        "DELETE FROM command_palette_pins WHERE id = :pin_id AND user_id::text = :user_id",
         {"pin_id": pin_id, "user_id": user_id},
     )
     return {"status": "ok"}

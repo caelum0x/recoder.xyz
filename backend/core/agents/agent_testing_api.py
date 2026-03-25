@@ -93,7 +93,7 @@ async def list_test_cases(
     rows = await execute(
         """
         SELECT * FROM agent_test_cases
-        WHERE user_id = :user_id AND agent_id = :agent_id
+        WHERE user_id::text = :user_id AND agent_id::text = :agent_id
         ORDER BY created_at DESC
         """,
         {"user_id": user_id, "agent_id": agent_id},
@@ -132,7 +132,7 @@ async def update_test_case(
         f"""
         UPDATE agent_test_cases
         SET {set_sql}
-        WHERE id = :case_id AND user_id = :user_id AND agent_id = :agent_id
+        WHERE id = :case_id AND user_id::text = :user_id AND agent_id::text = :agent_id
         RETURNING *
         """,
         params,
@@ -158,7 +158,7 @@ async def delete_test_case(
     await execute_mutate(
         """
         DELETE FROM agent_test_cases
-        WHERE id = :case_id AND user_id = :user_id AND agent_id = :agent_id
+        WHERE id = :case_id AND user_id::text = :user_id AND agent_id::text = :agent_id
         """,
         {"case_id": case_id, "user_id": user_id, "agent_id": agent_id},
     )
@@ -187,7 +187,7 @@ async def start_test_run(
     cases = await execute(
         """
         SELECT * FROM agent_test_cases
-        WHERE user_id = :user_id AND agent_id = :agent_id AND is_active = true
+        WHERE user_id::text = :user_id AND agent_id::text = :agent_id AND is_active = true
         ORDER BY created_at ASC
         """,
         {"user_id": user_id, "agent_id": agent_id},
@@ -263,7 +263,7 @@ async def list_test_runs(
     rows = await execute(
         """
         SELECT * FROM agent_test_runs
-        WHERE user_id = :user_id AND agent_id = :agent_id
+        WHERE user_id::text = :user_id AND agent_id::text = :agent_id
         ORDER BY started_at DESC
         LIMIT :limit OFFSET :offset
         """,
@@ -278,7 +278,7 @@ async def list_test_runs(
     count_row = await execute_one(
         """
         SELECT COUNT(*) FROM agent_test_runs
-        WHERE user_id = :user_id AND agent_id = :agent_id
+        WHERE user_id::text = :user_id AND agent_id::text = :agent_id
         """,
         {"user_id": user_id, "agent_id": agent_id},
     )
@@ -306,7 +306,7 @@ async def get_test_run_detail(
     run = await execute_one(
         """
         SELECT * FROM agent_test_runs
-        WHERE id = :run_id AND user_id = :user_id AND agent_id = :agent_id
+        WHERE id = :run_id AND user_id::text = :user_id AND agent_id::text = :agent_id
         """,
         {"run_id": run_id, "user_id": user_id, "agent_id": agent_id},
     )
@@ -318,8 +318,8 @@ async def get_test_run_detail(
         """
         SELECT r.*, tc.name AS test_case_name, tc.input_message, tc.expected_behavior
         FROM agent_test_results r
-        JOIN agent_test_cases tc ON tc.id = r.test_case_id
-        WHERE r.test_run_id = :run_id
+        JOIN agent_test_cases tc ON tc.id::text = r.test_case_id::text
+        WHERE r.test_run_id::text = :run_id
         ORDER BY r.created_at ASC
         """,
         {"run_id": run_id},

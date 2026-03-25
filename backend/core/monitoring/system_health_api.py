@@ -297,7 +297,7 @@ async def get_health_status(
             """
             SELECT id, service_name, status, response_time_ms, details, checked_at
             FROM system_health_checks
-            WHERE user_id = :user_id
+            WHERE user_id::text = :user_id
             ORDER BY checked_at DESC
             """,
             {"user_id": user_id},
@@ -348,7 +348,7 @@ async def get_health_history(
     try:
         params: Dict[str, Any] = {"user_id": user_id, "hours": hours}
 
-        where_clause = "WHERE user_id = :user_id AND checked_at >= now() - make_interval(hours => :hours)"
+        where_clause = "WHERE user_id::text = :user_id AND checked_at >= now() - make_interval(hours => :hours)"
         if service_name:
             where_clause += " AND service_name = :service_name"
             params["service_name"] = service_name
@@ -401,7 +401,7 @@ async def get_service_uptime(
                 COUNT(*) AS total_checks,
                 COUNT(*) FILTER (WHERE status IN ('healthy', 'degraded')) AS healthy_checks
             FROM system_health_history
-            WHERE user_id = :user_id
+            WHERE user_id::text = :user_id
               AND checked_at >= now() - interval '30 days'
             GROUP BY service_name
             ORDER BY service_name

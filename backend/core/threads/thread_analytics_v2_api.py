@@ -74,7 +74,7 @@ async def get_analytics_summary(
                 COALESCE(AVG(avg_response_time_ms), 0) AS avg_response_time,
                 COALESCE(AVG(user_satisfaction_score), 0) AS avg_satisfaction
             FROM thread_analytics_v2
-            WHERE user_id = :user_id
+            WHERE user_id::text = :user_id
             """,
             {"user_id": user_id},
         )
@@ -92,7 +92,7 @@ async def get_analytics_summary(
                 COUNT(*) AS thread_count,
                 COALESCE(AVG(total_messages), 0) AS avg_messages
             FROM thread_analytics_v2
-            WHERE user_id = :user_id AND agent_id IS NOT NULL
+            WHERE user_id::text = :user_id AND agent_id IS NOT NULL
             GROUP BY agent_id
             ORDER BY thread_count DESC
             LIMIT 10
@@ -139,7 +139,7 @@ async def get_analytics_trends(
                 COUNT(*) AS thread_count,
                 COALESCE(AVG(user_satisfaction_score), 0) AS avg_satisfaction
             FROM thread_analytics_v2
-            WHERE user_id = :user_id
+            WHERE user_id::text = :user_id
               AND created_at >= now() - INTERVAL '30 days'
             GROUP BY DATE(created_at)
             ORDER BY DATE(created_at) ASC
@@ -174,7 +174,7 @@ async def get_top_threads(
         rows = await execute(
             """
             SELECT * FROM thread_analytics_v2
-            WHERE user_id = :user_id
+            WHERE user_id::text = :user_id
             ORDER BY total_messages DESC
             LIMIT :limit
             """,
@@ -264,7 +264,7 @@ async def get_thread_analytics_detail(
 ):
     """Get analytics record for a specific thread."""
     row = await execute_one(
-        "SELECT * FROM thread_analytics_v2 WHERE thread_id = :thread_id AND user_id = :user_id",
+        "SELECT * FROM thread_analytics_v2 WHERE thread_id::text = :thread_id AND user_id::text = :user_id",
         {"thread_id": thread_id, "user_id": user_id},
     )
     if not row:
@@ -325,7 +325,7 @@ async def list_thread_events(
         rows = await execute(
             """
             SELECT * FROM thread_events
-            WHERE thread_id = :thread_id AND user_id = :user_id
+            WHERE thread_id::text = :thread_id AND user_id::text = :user_id
             ORDER BY occurred_at ASC
             """,
             {"thread_id": thread_id, "user_id": user_id},

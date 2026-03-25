@@ -131,7 +131,7 @@ async def list_metric_definitions(
         rows = await execute(
             """
             SELECT * FROM custom_metric_definitions
-            WHERE user_id = :user_id
+            WHERE user_id::text = :user_id
             ORDER BY created_at DESC
             """,
             {"user_id": user_id},
@@ -154,7 +154,7 @@ async def update_metric_definition(
 ):
     """Update a custom metric definition."""
     existing = await execute_one(
-        "SELECT id FROM custom_metric_definitions WHERE id = :id AND user_id = :user_id",
+        "SELECT id FROM custom_metric_definitions WHERE id = :id AND user_id::text = :user_id",
         {"id": metric_id, "user_id": user_id},
     )
     if not existing:
@@ -174,7 +174,7 @@ async def update_metric_definition(
             f"""
             UPDATE custom_metric_definitions
             SET {set_clauses}
-            WHERE id = :id AND user_id = :user_id
+            WHERE id = :id AND user_id::text = :user_id
             RETURNING *
             """,
             params,
@@ -196,7 +196,7 @@ async def delete_metric_definition(
 ):
     """Delete a custom metric definition and all its values (CASCADE)."""
     existing = await execute_one(
-        "SELECT id FROM custom_metric_definitions WHERE id = :id AND user_id = :user_id",
+        "SELECT id FROM custom_metric_definitions WHERE id = :id AND user_id::text = :user_id",
         {"id": metric_id, "user_id": user_id},
     )
     if not existing:
@@ -204,7 +204,7 @@ async def delete_metric_definition(
 
     try:
         await execute_mutate(
-            "DELETE FROM custom_metric_definitions WHERE id = :id AND user_id = :user_id",
+            "DELETE FROM custom_metric_definitions WHERE id = :id AND user_id::text = :user_id",
             {"id": metric_id, "user_id": user_id},
         )
         return {"success": True, "deleted_id": metric_id}
@@ -225,7 +225,7 @@ async def record_metric_value(
 ):
     """Record a new value for a custom metric."""
     definition = await execute_one(
-        "SELECT id FROM custom_metric_definitions WHERE id = :id AND user_id = :user_id AND is_active = true",
+        "SELECT id FROM custom_metric_definitions WHERE id = :id AND user_id::text = :user_id AND is_active = true",
         {"id": metric_id, "user_id": user_id},
     )
     if not definition:
@@ -268,7 +268,7 @@ async def list_metric_values(
 ):
     """List recorded values for a metric within the given time window."""
     definition = await execute_one(
-        "SELECT id FROM custom_metric_definitions WHERE id = :id AND user_id = :user_id",
+        "SELECT id FROM custom_metric_definitions WHERE id = :id AND user_id::text = :user_id",
         {"id": metric_id, "user_id": user_id},
     )
     if not definition:
@@ -278,8 +278,8 @@ async def list_metric_values(
         rows = await execute(
             """
             SELECT * FROM custom_metric_values
-            WHERE metric_id = :metric_id
-              AND user_id = :user_id
+            WHERE metric_id::text = :metric_id
+              AND user_id::text = :user_id
               AND recorded_at >= now() - :hours * INTERVAL '1 hour'
             ORDER BY recorded_at DESC
             LIMIT :limit
@@ -304,7 +304,7 @@ async def get_metric_aggregate(
 ):
     """Return aggregate statistics (latest, min, max, avg, sum, trend) for a metric."""
     definition = await execute_one(
-        "SELECT * FROM custom_metric_definitions WHERE id = :id AND user_id = :user_id",
+        "SELECT * FROM custom_metric_definitions WHERE id = :id AND user_id::text = :user_id",
         {"id": metric_id, "user_id": user_id},
     )
     if not definition:
@@ -320,11 +320,11 @@ async def get_metric_aggregate(
                 AVG(value) AS avg_value,
                 SUM(value) AS sum_value,
                 (SELECT value FROM custom_metric_values
-                 WHERE metric_id = :metric_id AND user_id = :user_id
+                 WHERE metric_id::text = :metric_id AND user_id::text = :user_id
                  ORDER BY recorded_at DESC LIMIT 1) AS latest_value
             FROM custom_metric_values
-            WHERE metric_id = :metric_id
-              AND user_id = :user_id
+            WHERE metric_id::text = :metric_id
+              AND user_id::text = :user_id
               AND recorded_at >= now() - :hours * INTERVAL '1 hour'
             """,
             {"metric_id": metric_id, "user_id": user_id, "hours": hours},
@@ -338,7 +338,7 @@ async def get_metric_aggregate(
             first_half = await execute_one(
                 """
                 SELECT AVG(value) AS avg_val FROM custom_metric_values
-                WHERE metric_id = :metric_id AND user_id = :user_id
+                WHERE metric_id::text = :metric_id AND user_id::text = :user_id
                   AND recorded_at >= now() - :hours * INTERVAL '1 hour'
                   AND recorded_at < now() - :half * INTERVAL '1 hour'
                 """,
@@ -347,7 +347,7 @@ async def get_metric_aggregate(
             second_half = await execute_one(
                 """
                 SELECT AVG(value) AS avg_val FROM custom_metric_values
-                WHERE metric_id = :metric_id AND user_id = :user_id
+                WHERE metric_id::text = :metric_id AND user_id::text = :user_id
                   AND recorded_at >= now() - :half * INTERVAL '1 hour'
                 """,
                 {"metric_id": metric_id, "user_id": user_id, "half": half},
@@ -403,26 +403,26 @@ async def get_metrics_dashboard(
                 (
                     SELECT v.value
                     FROM custom_metric_values v
-                    WHERE v.metric_id = d.id AND v.user_id = d.user_id
+                    WHERE v.metric_id::text = d.id::text AND v.user_id::text = d.user_id::text
                     ORDER BY v.recorded_at DESC
                     LIMIT 1
                 ) AS latest_value,
                 (
                     SELECT v.recorded_at
                     FROM custom_metric_values v
-                    WHERE v.metric_id = d.id AND v.user_id = d.user_id
+                    WHERE v.metric_id::text = d.id::text AND v.user_id::text = d.user_id::text
                     ORDER BY v.recorded_at DESC
                     LIMIT 1
                 ) AS latest_recorded_at,
                 (
                     SELECT COUNT(*)
                     FROM custom_metric_values v
-                    WHERE v.metric_id = d.id
-                      AND v.user_id = d.user_id
+                    WHERE v.metric_id::text = d.id::text
+                      AND v.user_id::text = d.user_id::text
                       AND v.recorded_at >= now() - INTERVAL '24 hours'
                 ) AS values_last_24h
             FROM custom_metric_definitions d
-            WHERE d.user_id = :user_id
+            WHERE d.user_id::text = :user_id
             ORDER BY d.created_at DESC
             """,
             {"user_id": user_id},

@@ -17,12 +17,46 @@ export interface StreamConnectionOptions {
 type EventHandler = (...args: unknown[]) => void;
 
 /**
- * Maximum number of consecutive EventSource failures before switching to
- * fetch-based SSE streaming. Cloudflare HTTP/3 (QUIC) can break the native
- * EventSource API with ERR_QUIC_PROTOCOL_ERROR, but regular fetch with
- * ReadableStream works fine over the same connection.
+ * Use fetch-based SSE from the start. Cloudflare HTTP/2 idle timeout (~100s)
+ * kills native EventSource streams with ERR_HTTP2_PROTOCOL_ERROR. The fetch()
+ * + ReadableStream approach is more reliable through HTTP/2 proxies.
  */
-const FETCH_FALLBACK_THRESHOLD = 2;
+const FETCH_FALLBACK_THRESHOLD = 0;
+
+/**
+ * Timeout for fetch connections — if we don't get a response in this time,
+ * abort and retry.
+ */
+const FETCH_CONNECT_TIMEOUT_MS = 30000;
+
+/**
+ * Extended max reconnect attempts — SSE failures should never crash the page.
+ * We retry aggressively in the background.
+ */
+const EXTENDED_MAX_RECONNECT_ATTEMPTS = 15;
+
+/**
+ * Check if an error is a known transient network/protocol error that should
+ * be silently retried without noisy logging.
+ */
+function isTransientError(err: unknown): boolean {
+  if (!(err instanceof Error)) return false;
+  const msg = err.message?.toLowerCase() || '';
+  return (
+    msg.includes('err_http2_protocol_error') ||
+    msg.includes('err_quic_protocol_error') ||
+    msg.includes('err_network_changed') ||
+    msg.includes('err_internet_disconnected') ||
+    msg.includes('err_connection_refused') ||
+    msg.includes('err_connection_reset') ||
+    msg.includes('net::err_') ||
+    msg.includes('failed to fetch') ||
+    msg.includes('network error') ||
+    msg.includes('load failed') ||
+    err.name === 'AbortError' ||
+    (err.name === 'TypeError' && msg.includes('fetch'))
+  );
+}
 
 export class StreamConnection {
   private eventSource: EventSource | null = null;
@@ -36,8 +70,8 @@ export class StreamConnection {
   private options: StreamConnectionOptions;
   private eventHandlers: Map<string, EventHandler> = new Map();
 
-  // Fetch-based SSE fallback state
-  private useFetchFallback = false;
+  // Fetch-based SSE — used by default to avoid Cloudflare HTTP/2 ERR_HTTP2_PROTOCOL_ERROR
+  private useFetchFallback = true;
   private fetchAbortController: AbortController | null = null;
   private fetchReconnectAttempts = 0;
   private consecutiveEventSourceFailures = 0;
@@ -60,15 +94,47 @@ export class StreamConnection {
     }
 
     try {
-      const token = await this.options.getAuthToken();
+      let token: string | null;
+      try {
+        token = await this.options.getAuthToken();
+      } catch (err) {
+        // Auth token resolution failure — don't crash, just retry
+        if (!isTransientError(err)) {
+          console.warn('[StreamConnection] Auth token resolution failed:', err);
+        }
+        this.scheduleReconnect();
+        return;
+      }
+
       const streamBaseUrl = `${this.options.apiUrl}/agent-run/${this.options.runId}/stream`;
       const url = buildTokenizedSSEUrl(streamBaseUrl, token, {
         last_id: this.lastEventId && this.lastEventId !== '0' ? this.lastEventId : undefined,
       });
 
-      this.eventSource = new EventSource(url);
+      try {
+        this.eventSource = new EventSource(url, { withCredentials: true });
+      } catch (esError) {
+        // EventSource constructor can throw on CORS/CSP blocks or invalid URLs.
+        // Count as a connection failure and potentially switch to fetch fallback.
+        if (!isTransientError(esError)) {
+          console.warn('[StreamConnection] EventSource constructor threw:', esError);
+        }
+        this.consecutiveEventSourceFailures++;
+        if (this.consecutiveEventSourceFailures >= FETCH_FALLBACK_THRESHOLD && !this.useFetchFallback) {
+          this.useFetchFallback = true;
+          this.reconnectAttempts = 0;
+          await this.connectViaFetch();
+          return;
+        }
+        this.scheduleReconnect();
+        return;
+      }
       this.setupEventHandlers();
     } catch (error) {
+      // Catch-all: NEVER let connection errors propagate to React
+      if (!isTransientError(error)) {
+        console.warn('[StreamConnection] Unexpected connect error:', error);
+      }
       this.handleError(error instanceof Error ? error : new Error(String(error)));
     }
   }
@@ -81,8 +147,26 @@ export class StreamConnection {
   private async connectViaFetch(): Promise<void> {
     if (this.isDestroyed) return;
 
+    // Abort any previous fetch connection before starting a new one.
+    // Without this, a heartbeat-triggered reconnect would leave the old
+    // ReadableStream reader running, causing duplicate callbacks.
+    if (this.fetchAbortController) {
+      try { this.fetchAbortController.abort(); } catch { /* ignore */ }
+      this.fetchAbortController = null;
+    }
+
     try {
-      const token = await this.options.getAuthToken();
+      let token: string | null;
+      try {
+        token = await this.options.getAuthToken();
+      } catch (err) {
+        if (!isTransientError(err)) {
+          console.warn('[StreamConnection] Fetch auth token resolution failed:', err);
+        }
+        this.handleFetchConnectionError();
+        return;
+      }
+
       const streamBaseUrl = `${this.options.apiUrl}/agent-run/${this.options.runId}/stream`;
       const url = buildTokenizedSSEUrl(streamBaseUrl, token, {
         last_id: this.lastEventId && this.lastEventId !== '0' ? this.lastEventId : undefined,
@@ -90,18 +174,55 @@ export class StreamConnection {
 
       this.fetchAbortController = new AbortController();
 
-      const response = await fetch(url, {
-        headers: { 'Accept': 'text/event-stream' },
-        signal: this.fetchAbortController.signal,
-        credentials: 'include',
-      });
+      // Add a connection timeout so we don't hang forever on stalled connections
+      const timeoutId = setTimeout(() => {
+        try { this.fetchAbortController?.abort(); } catch { /* ignore */ }
+      }, FETCH_CONNECT_TIMEOUT_MS);
+
+      let response: Response;
+      try {
+        response = await fetch(url, {
+          headers: { 'Accept': 'text/event-stream' },
+          signal: this.fetchAbortController.signal,
+          credentials: 'include',
+        });
+      } catch (fetchErr) {
+        clearTimeout(timeoutId);
+        if (this.isDestroyed) return;
+        if (fetchErr instanceof Error && fetchErr.name === 'AbortError') {
+          // Timeout or intentional abort — just retry
+          this.handleFetchConnectionError();
+          return;
+        }
+        throw fetchErr;
+      } finally {
+        clearTimeout(timeoutId);
+      }
 
       if (!response.ok) {
-        throw new Error(`Fetch SSE failed: ${response.status} ${response.statusText}`);
+        // Stop retrying on 4xx client errors (404, 401, 403, etc.)
+        // These errors mean the endpoint/resource doesn't exist and won't self-resolve.
+        if (response.status >= 400 && response.status < 500) {
+          if (this.fetchReconnectAttempts === 0) {
+            console.warn(
+              `[StreamConnection] SSE endpoint returned ${response.status}, stopping reconnect.`
+            );
+          }
+          this.handleError(new Error(`SSE endpoint returned HTTP ${response.status}`));
+          return;
+        }
+        // For 5xx or other errors, retry gracefully with backoff
+        if (!this.isDestroyed) {
+          this.handleFetchConnectionError();
+        }
+        return;
       }
 
       if (!response.body) {
-        throw new Error('Fetch SSE: response body is null (streaming not supported)');
+        if (!this.isDestroyed) {
+          this.handleFetchConnectionError();
+        }
+        return;
       }
 
       // Connection is open
@@ -109,7 +230,11 @@ export class StreamConnection {
       this.lastMessageTime = Date.now();
       this.setState('connected');
       this.startHeartbeatMonitor();
-      this.options.onOpen?.();
+      try {
+        this.options.onOpen?.();
+      } catch {
+        // Don't let callback errors crash us
+      }
 
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
@@ -123,7 +248,11 @@ export class StreamConnection {
             if (done) {
               // Stream ended normally
               if (!this.isDestroyed) {
-                this.options.onClose?.();
+                try {
+                  this.options.onClose?.();
+                } catch {
+                  // Don't let callback errors crash us
+                }
               }
               return;
             }
@@ -142,11 +271,15 @@ export class StreamConnection {
                 currentData += (currentData ? '\n' : '') + line.slice(6);
               } else if (line.trim() === '' && currentData) {
                 // Empty line = end of SSE event
-                this.handleFetchMessage(currentData);
+                try {
+                  this.handleFetchMessage(currentData);
+                } catch (handlerErr) {
+                  // Never let message handler errors crash the read loop
+                  console.warn('[StreamConnection] Fetch message handler error suppressed:', handlerErr);
+                }
                 currentData = '';
               }
-              // Ignore lines starting with ":" (SSE comments/keepalives),
-              // "event:", "id:", "retry:" etc.
+              // Capture event IDs
               if (line.startsWith('id: ') || line.startsWith('id:')) {
                 const id = line.slice(line.indexOf(':') + 1).trim();
                 if (id) this.lastEventId = id;
@@ -167,6 +300,9 @@ export class StreamConnection {
           const error = err instanceof Error ? err : new Error(String(err));
           // AbortError means we intentionally closed
           if (error.name === 'AbortError') return;
+          if (!isTransientError(error)) {
+            console.warn('[StreamConnection] Fetch read loop error:', error.message);
+          }
           this.handleFetchConnectionError();
         }
       };
@@ -174,6 +310,9 @@ export class StreamConnection {
       readLoop();
     } catch (error) {
       if (this.isDestroyed) return;
+      if (!isTransientError(error)) {
+        console.warn('[StreamConnection] Fetch connection error:', error);
+      }
       this.handleFetchConnectionError();
     }
   }
@@ -194,13 +333,20 @@ export class StreamConnection {
       // Not JSON or no _event_id — fine
     }
 
-    this.options.onMessage(data);
+    try {
+      this.options.onMessage(data);
+    } catch (err) {
+      // Never let message callback errors propagate
+      console.warn('[StreamConnection] onMessage callback error suppressed:', err);
+    }
   }
 
   private handleFetchConnectionError(): void {
     this.fetchReconnectAttempts++;
 
-    if (this.fetchReconnectAttempts < STREAM_CONFIG.RECONNECT_MAX_ATTEMPTS && !this.isDestroyed) {
+    const maxAttempts = Math.max(STREAM_CONFIG.RECONNECT_MAX_ATTEMPTS, EXTENDED_MAX_RECONNECT_ATTEMPTS);
+
+    if (this.fetchReconnectAttempts < maxAttempts && !this.isDestroyed) {
       this.setState('reconnecting');
       const delay = calculateExponentialBackoff(
         this.fetchReconnectAttempts - 1,
@@ -210,10 +356,16 @@ export class StreamConnection {
       );
       this.reconnectTimeoutId = setTimeout(() => {
         if (!this.isDestroyed) {
-          this.connectViaFetch();
+          this.connectViaFetch().catch((err) => {
+            // Catch-all: never let reconnect errors propagate
+            if (!this.isDestroyed && !isTransientError(err)) {
+              console.warn('[StreamConnection] Fetch reconnect error:', err);
+            }
+          });
         }
       }, delay);
     } else {
+      // Even after max attempts, report error gracefully — don't throw
       this.handleError(new Error('Fetch SSE fallback: max reconnect attempts exceeded'));
     }
   }
@@ -229,7 +381,11 @@ export class StreamConnection {
       this.lastMessageTime = Date.now();
       this.setState('connected');
       this.startHeartbeatMonitor();
-      this.options.onOpen?.();
+      try {
+        this.options.onOpen?.();
+      } catch {
+        // Don't let callback errors crash us
+      }
     };
 
     const onMessage = (event: MessageEvent) => {
@@ -249,7 +405,12 @@ export class StreamConnection {
       } catch {
       }
 
-      this.options.onMessage(event.data);
+      try {
+        this.options.onMessage(event.data);
+      } catch (err) {
+        // Never let message callback errors propagate to EventSource
+        console.warn('[StreamConnection] onMessage callback error suppressed:', err);
+      }
     };
 
     const onError = () => {
@@ -269,15 +430,13 @@ export class StreamConnection {
   private handleConnectionError(): void {
     this.consecutiveEventSourceFailures++;
 
-    if (this.shouldReconnect()) {
-      this.scheduleReconnect();
-    } else if (
+    // Check fetch fallback FIRST — if EventSource keeps failing, switch to
+    // fetch-based SSE immediately rather than burning through reconnect attempts
+    // with the same broken transport (e.g. HTTP/2 or QUIC protocol errors).
+    if (
       this.consecutiveEventSourceFailures >= FETCH_FALLBACK_THRESHOLD &&
       !this.useFetchFallback
     ) {
-      // EventSource keeps failing — switch to fetch-based SSE streaming.
-      // This handles Cloudflare HTTP/3 QUIC errors that break EventSource
-      // but not regular fetch requests.
       console.warn(
         '[StreamConnection] EventSource failed %d times, switching to fetch-based SSE fallback',
         this.consecutiveEventSourceFailures
@@ -285,22 +444,36 @@ export class StreamConnection {
       this.useFetchFallback = true;
       this.reconnectAttempts = 0;
       this.cleanup();
-      this.connect();
+      this.connect().catch((err) => {
+        // Never let reconnect errors propagate to React
+        if (!this.isDestroyed && !isTransientError(err)) {
+          console.warn('[StreamConnection] Fallback switch connect error:', err);
+        }
+      });
+    } else if (this.shouldReconnect()) {
+      this.scheduleReconnect();
     } else {
+      // Even when we hit max retries, use handleError which sets state
+      // but doesn't throw — the page stays functional
       this.handleError(new Error('EventSource connection error'));
     }
   }
 
   private handleError(error: Error): void {
     this.setState('error');
-    this.options.onError?.(error);
+    try {
+      this.options.onError?.(error);
+    } catch {
+      // Never let error callback errors propagate
+    }
     this.cleanup();
   }
 
   private shouldReconnect(): boolean {
+    const maxAttempts = Math.max(STREAM_CONFIG.RECONNECT_MAX_ATTEMPTS, EXTENDED_MAX_RECONNECT_ATTEMPTS);
     return (
       !this.isDestroyed &&
-      this.reconnectAttempts < STREAM_CONFIG.RECONNECT_MAX_ATTEMPTS &&
+      this.reconnectAttempts < maxAttempts &&
       this.state !== 'closed'
     );
   }
@@ -320,7 +493,18 @@ export class StreamConnection {
 
     this.reconnectTimeoutId = setTimeout(() => {
       if (!this.isDestroyed) {
-        this.connect();
+        this.connect().catch((err) => {
+          // Catch-all: NEVER let reconnect errors surface as unhandled rejections
+          if (!this.isDestroyed) {
+            if (!isTransientError(err)) {
+              console.warn('[StreamConnection] Reconnect error:', err);
+            }
+            // Try again if we haven't exceeded attempts
+            if (this.shouldReconnect()) {
+              this.scheduleReconnect();
+            }
+          }
+        });
       }
     }, delay);
   }
@@ -356,7 +540,11 @@ export class StreamConnection {
   private setState(newState: ConnectionState): void {
     if (this.state !== newState) {
       this.state = newState;
-      this.options.onStateChange?.(newState);
+      try {
+        this.options.onStateChange?.(newState);
+      } catch {
+        // Never let state change callbacks crash us
+      }
     }
   }
 
@@ -370,7 +558,11 @@ export class StreamConnection {
 
     if (this.eventSource) {
       this.eventHandlers.forEach((handler, event) => {
-        this.eventSource?.removeEventListener(event, handler as EventListener);
+        try {
+          this.eventSource?.removeEventListener(event, handler as EventListener);
+        } catch {
+          // Ignore cleanup errors
+        }
       });
       this.eventHandlers.clear();
 
@@ -394,7 +586,11 @@ export class StreamConnection {
   close(): void {
     this.setState('closed');
     this.cleanup();
-    this.options.onClose?.();
+    try {
+      this.options.onClose?.();
+    } catch {
+      // Don't let callback errors propagate
+    }
   }
 
   destroy(): void {

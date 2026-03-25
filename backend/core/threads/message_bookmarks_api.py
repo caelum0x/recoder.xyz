@@ -69,7 +69,7 @@ async def list_bookmarks(
         rows = await execute(
             """
             SELECT * FROM message_bookmarks
-            WHERE user_id = :user_id AND thread_id = :thread_id
+            WHERE user_id::text = :user_id AND thread_id::text = :thread_id
             ORDER BY message_index ASC
             """,
             {"user_id": user_id, "thread_id": thread_id},
@@ -78,7 +78,7 @@ async def list_bookmarks(
         rows = await execute(
             """
             SELECT * FROM message_bookmarks
-            WHERE user_id = :user_id
+            WHERE user_id::text = :user_id
             ORDER BY created_at DESC
             """,
             {"user_id": user_id},
@@ -92,14 +92,14 @@ async def delete_bookmark(
     user_id: str = Depends(verify_and_get_user_id_from_jwt),
 ):
     existing = await execute_one(
-        "SELECT id FROM message_bookmarks WHERE id = :id AND user_id = :user_id",
+        "SELECT id FROM message_bookmarks WHERE id = :id AND user_id::text = :user_id",
         {"id": bookmark_id, "user_id": user_id},
     )
     if not existing:
         raise HTTPException(status_code=404, detail="Bookmark not found")
 
     await execute(
-        "DELETE FROM message_bookmarks WHERE id = :id AND user_id = :user_id",
+        "DELETE FROM message_bookmarks WHERE id = :id AND user_id::text = :user_id",
         {"id": bookmark_id, "user_id": user_id},
     )
     return {"status": "ok"}
@@ -112,7 +112,7 @@ async def update_bookmark_note(
     user_id: str = Depends(verify_and_get_user_id_from_jwt),
 ):
     existing = await execute_one(
-        "SELECT id FROM message_bookmarks WHERE id = :id AND user_id = :user_id",
+        "SELECT id FROM message_bookmarks WHERE id = :id AND user_id::text = :user_id",
         {"id": bookmark_id, "user_id": user_id},
     )
     if not existing:
@@ -122,7 +122,7 @@ async def update_bookmark_note(
         """
         UPDATE message_bookmarks
         SET note = :note
-        WHERE id = :id AND user_id = :user_id
+        WHERE id = :id AND user_id::text = :user_id
         RETURNING *
         """,
         {"id": bookmark_id, "user_id": user_id, "note": body.note},

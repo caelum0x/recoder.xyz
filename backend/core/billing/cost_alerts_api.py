@@ -191,7 +191,7 @@ async def list_cost_alerts(
 ):
     """List all cost alert rules for the authenticated account."""
     try:
-        where = "account_id = :account_id"
+        where = "account_id::text = :account_id"
         params: Dict[str, Any] = {"account_id": user_id}
 
         if active_only:
@@ -224,7 +224,7 @@ async def update_cost_alert(
     """Update an existing cost alert rule."""
     try:
         existing = await execute_one(
-            "SELECT id FROM cost_alert_rules WHERE id = :id AND account_id = :account_id",
+            "SELECT id FROM cost_alert_rules WHERE id = :id AND account_id::text = :account_id",
             {"id": rule_id, "account_id": user_id},
         )
         if not existing:
@@ -240,7 +240,7 @@ async def update_cost_alert(
             set_parts.append("threshold_amount = :threshold_amount")
             params["threshold_amount"] = body.threshold_amount
         if body.agent_id is not None:
-            set_parts.append("agent_id = :agent_id")
+            set_parts.append("agent_id::text = :agent_id")
             params["agent_id"] = body.agent_id if body.agent_id else None
         if body.model_filter is not None:
             set_parts.append("model_filter = :model_filter")
@@ -256,7 +256,7 @@ async def update_cost_alert(
 
         row = await execute_one(
             f"""UPDATE cost_alert_rules SET {set_sql}
-                WHERE id = :id AND account_id = :account_id
+                WHERE id = :id AND account_id::text = :account_id
                 RETURNING *""",
             params,
             commit=True,
@@ -282,14 +282,14 @@ async def delete_cost_alert(
     """Delete a cost alert rule and its history."""
     try:
         existing = await execute_one(
-            "SELECT id FROM cost_alert_rules WHERE id = :id AND account_id = :account_id",
+            "SELECT id FROM cost_alert_rules WHERE id = :id AND account_id::text = :account_id",
             {"id": rule_id, "account_id": user_id},
         )
         if not existing:
             raise HTTPException(status_code=404, detail="Cost alert rule not found")
 
         await execute_mutate(
-            "DELETE FROM cost_alert_rules WHERE id = :id AND account_id = :account_id",
+            "DELETE FROM cost_alert_rules WHERE id = :id AND account_id::text = :account_id",
             {"id": rule_id, "account_id": user_id},
         )
 
@@ -319,11 +319,11 @@ async def get_alert_history(
 ):
     """Get the history of triggered cost alerts."""
     try:
-        where_parts = ["account_id = :account_id"]
+        where_parts = ["account_id::text = :account_id"]
         params: Dict[str, Any] = {"account_id": user_id, "limit": limit, "offset": offset}
 
         if rule_id:
-            where_parts.append("rule_id = :rule_id")
+            where_parts.append("rule_id::text = :rule_id")
             params["rule_id"] = rule_id
 
         where_sql = " AND ".join(where_parts)
@@ -366,7 +366,7 @@ async def check_alerts_now(
     try:
         rules = await execute(
             """SELECT * FROM cost_alert_rules
-               WHERE account_id = :account_id AND active = true
+               WHERE account_id::text = :account_id AND active = true
                ORDER BY created_at""",
             {"account_id": user_id},
         )
@@ -391,7 +391,7 @@ async def check_alerts_now(
                     cost_row = await execute_one(
                         """SELECT COALESCE(SUM(ABS(amount)), 0) as total
                            FROM credit_transactions
-                           WHERE user_id = :user_id
+                           WHERE user_id::text = :user_id
                              AND type = 'debit'
                              AND created_at >= date_trunc('month', now())""",
                         {"user_id": user_id},
@@ -402,7 +402,7 @@ async def check_alerts_now(
                     cost_row = await execute_one(
                         """SELECT COALESCE(SUM(ABS(amount)), 0) as total
                            FROM credit_transactions
-                           WHERE user_id = :user_id
+                           WHERE user_id::text = :user_id
                              AND type = 'debit'
                              AND created_at >= date_trunc('day', now())""",
                         {"user_id": user_id},
@@ -413,10 +413,10 @@ async def check_alerts_now(
                     cost_row = await execute_one(
                         """SELECT COALESCE(SUM(ABS(amount)), 0) as total
                            FROM credit_transactions
-                           WHERE user_id = :user_id
+                           WHERE user_id::text = :user_id
                              AND type = 'debit'
                              AND reference_type = 'agent_run'
-                             AND reference_id = :agent_id
+                             AND reference_id::text = :agent_id
                              AND created_at >= date_trunc('month', now())""",
                         {"user_id": user_id, "agent_id": agent_id},
                     )
@@ -426,7 +426,7 @@ async def check_alerts_now(
                     cost_row = await execute_one(
                         """SELECT COALESCE(SUM(ABS(amount)), 0) as total
                            FROM credit_transactions
-                           WHERE user_id = :user_id
+                           WHERE user_id::text = :user_id
                              AND type = 'debit'
                              AND description ILIKE :model_pattern
                              AND created_at >= date_trunc('month', now())""",

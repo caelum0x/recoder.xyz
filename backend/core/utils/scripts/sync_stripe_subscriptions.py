@@ -156,7 +156,7 @@ class FastSyncService:
                       billing_cycle_anchor = :billing_cycle_anchor,
                       next_credit_grant = :next_credit_grant,
                       updated_at = :updated_at
-                    WHERE account_id = :account_id
+                    WHERE account_id::text = :account_id
                     """,
                     {
                         "account_id": account_id,

@@ -107,7 +107,7 @@ class VerifySubscriptionSyncService:
                 """
                 SELECT tier, balance, stripe_subscription_id
                 FROM credit_accounts
-                WHERE account_id = :account_id
+                WHERE account_id::text = :account_id
                 LIMIT 1
                 """,
                 {"account_id": account_id},

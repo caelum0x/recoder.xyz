@@ -123,9 +123,9 @@ async def get_run_replay(
         rows = await execute(
             """
             SELECT * FROM run_replay_snapshots
-            WHERE user_id = :user_id
-              AND agent_id = :agent_id
-              AND run_id = :run_id
+            WHERE user_id::text = :user_id
+              AND agent_id::text = :agent_id
+              AND run_id::text = :run_id
             ORDER BY step_index ASC
             """,
             {
@@ -176,9 +176,9 @@ async def get_run_replay_summary(
                 MIN(timestamp) AS first_step_at,
                 MAX(timestamp) AS last_step_at
             FROM run_replay_snapshots
-            WHERE user_id = :user_id
-              AND agent_id = :agent_id
-              AND run_id = :run_id
+            WHERE user_id::text = :user_id
+              AND agent_id::text = :agent_id
+              AND run_id::text = :run_id
             """,
             {
                 "user_id": user_id,
@@ -208,9 +208,9 @@ async def get_run_replay_summary(
             """
             SELECT step_type, COUNT(*) AS cnt
             FROM run_replay_snapshots
-            WHERE user_id = :user_id
-              AND agent_id = :agent_id
-              AND run_id = :run_id
+            WHERE user_id::text = :user_id
+              AND agent_id::text = :agent_id
+              AND run_id::text = :run_id
             GROUP BY step_type
             ORDER BY cnt DESC
             """,
@@ -268,7 +268,7 @@ async def capture_replay_step(
         thread_id = body.thread_id
         if not thread_id:
             run_row = await execute_one(
-                "SELECT thread_id FROM agent_runs WHERE id = :run_id AND user_id = :user_id",
+                "SELECT thread_id FROM agent_runs WHERE id = :run_id AND user_id::text = :user_id",
                 {"run_id": run_id, "user_id": user_id},
             )
             thread_id = run_row["thread_id"] if run_row else run_id

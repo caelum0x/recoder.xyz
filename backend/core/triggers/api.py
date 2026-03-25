@@ -192,15 +192,52 @@ async def get_agent_triggers(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.get("/all", response_model=List[Dict[str, Any]])
-async def get_all_user_triggers(
+@router.get("", response_model=List[Dict[str, Any]])
+async def list_user_triggers(
     user_id: str = Depends(verify_and_get_user_id_from_jwt)
 ):
+    """List all triggers for the authenticated user (root endpoint)."""
     try:
         from core.triggers.repo import get_all_user_triggers as repo_get_triggers
         return await repo_get_triggers(user_id)
     except Exception as e:
-        logger.warning(f"Error getting all user triggers (returning empty as fallback): {e}")
+        logger.error(f"Error getting all user triggers for user {user_id}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to load triggers: {str(e)}")
+
+
+@router.get("/all", response_model=List[Dict[str, Any]])
+async def get_all_user_triggers(
+    user_id: str = Depends(verify_and_get_user_id_from_jwt)
+):
+    """List all triggers for the authenticated user (alias)."""
+    try:
+        from core.triggers.repo import get_all_user_triggers as repo_get_triggers
+        return await repo_get_triggers(user_id)
+    except Exception as e:
+        logger.error(f"Error getting all user triggers for user {user_id}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to load triggers: {str(e)}")
+
+
+@router.get("/scheduled", response_model=List[Dict[str, Any]])
+async def get_scheduled_triggers(
+    user_id: str = Depends(verify_and_get_user_id_from_jwt)
+):
+    """List scheduled triggers for the authenticated user."""
+    try:
+        from core.services.db import execute
+        rows = await execute(
+            """SELECT at.trigger_id, at.agent_id, at.name, at.description, at.trigger_type,
+                      at.is_active, at.config, at.created_at::text, at.updated_at::text,
+                      a.name as agent_name
+               FROM agent_triggers at
+               LEFT JOIN agents a ON a.agent_id::text = at.agent_id::text
+               WHERE a.account_id::text = :user_id AND at.trigger_type = 'schedule'
+               ORDER BY at.created_at DESC""",
+            {"user_id": user_id},
+        )
+        return [dict(r) for r in (rows or [])]
+    except Exception as e:
+        logger.error(f"Error getting scheduled triggers: {e}", exc_info=True)
         return []
 
 
@@ -344,7 +381,10 @@ async def get_trigger(
     user_id: str = Depends(verify_and_get_user_id_from_jwt)
 ):
     """Get a trigger by ID"""
-    
+    import re
+    if not re.match(r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$', trigger_id):
+        raise HTTPException(status_code=404, detail="Trigger not found")
+
     try:
         trigger_service = get_trigger_service()
         trigger = await trigger_service.get_trigger(trigger_id)
@@ -368,6 +408,8 @@ async def get_trigger(
             config=trigger.config
         )
         
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error getting trigger: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
@@ -380,7 +422,10 @@ async def update_trigger(
     user_id: str = Depends(verify_and_get_user_id_from_jwt)
 ):
     """Update a trigger"""
-    
+    import re
+    if not re.match(r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$', trigger_id):
+        raise HTTPException(status_code=404, detail="Trigger not found")
+
     try:
         trigger_service = get_trigger_service()
         
@@ -417,6 +462,8 @@ async def update_trigger(
         
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error updating trigger: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
@@ -448,7 +495,9 @@ async def delete_trigger(
         await sync_triggers_to_version_config(agent_id)
         
         return {"message": "Trigger deleted successfully"}
-        
+
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error deleting trigger: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
@@ -634,6 +683,8 @@ async def trigger_webhook(
             }
         })
         
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error processing webhook trigger: {e}")
         return JSONResponse(

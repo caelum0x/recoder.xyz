@@ -100,11 +100,11 @@ async def list_pipelines(
 ):
     """List deployment pipelines for the authenticated user."""
     try:
-        where_clauses = ["user_id = :user_id"]
+        where_clauses = ["user_id::text = :user_id"]
         params: Dict[str, Any] = {"user_id": user_id, "limit": limit}
 
         if agent_id:
-            where_clauses.append("agent_id = :agent_id")
+            where_clauses.append("agent_id::text = :agent_id")
             params["agent_id"] = agent_id
 
         where_sql = " AND ".join(where_clauses)
@@ -138,7 +138,7 @@ async def get_pipeline(
         row = await execute_one(
             """
             SELECT * FROM deployment_pipelines
-            WHERE id = :pipeline_id AND user_id = :user_id
+            WHERE id = :pipeline_id AND user_id::text = :user_id
             """,
             {"pipeline_id": pipeline_id, "user_id": user_id},
         )
@@ -165,7 +165,7 @@ async def update_pipeline(
     """Partially update a deployment pipeline."""
     try:
         existing = await execute_one(
-            "SELECT id FROM deployment_pipelines WHERE id = :pipeline_id AND user_id = :user_id",
+            "SELECT id FROM deployment_pipelines WHERE id = :pipeline_id AND user_id::text = :user_id",
             {"pipeline_id": pipeline_id, "user_id": user_id},
         )
         if not existing:
@@ -192,7 +192,7 @@ async def update_pipeline(
             f"""
             UPDATE deployment_pipelines
             SET {set_sql}
-            WHERE id = :pipeline_id AND user_id = :user_id
+            WHERE id = :pipeline_id AND user_id::text = :user_id
             RETURNING *
             """,
             params,
@@ -217,14 +217,14 @@ async def delete_pipeline(
     """Delete a deployment pipeline and all associated runs and gates."""
     try:
         existing = await execute_one(
-            "SELECT id FROM deployment_pipelines WHERE id = :pipeline_id AND user_id = :user_id",
+            "SELECT id FROM deployment_pipelines WHERE id = :pipeline_id AND user_id::text = :user_id",
             {"pipeline_id": pipeline_id, "user_id": user_id},
         )
         if not existing:
             raise HTTPException(status_code=404, detail="Pipeline not found")
 
         await execute_mutate(
-            "DELETE FROM deployment_pipelines WHERE id = :pipeline_id AND user_id = :user_id",
+            "DELETE FROM deployment_pipelines WHERE id = :pipeline_id AND user_id::text = :user_id",
             {"pipeline_id": pipeline_id, "user_id": user_id},
         )
         return {"deleted": True, "pipeline_id": pipeline_id}
@@ -251,7 +251,7 @@ async def start_pipeline_run(
     """Start a new run for the specified pipeline."""
     try:
         pipeline = await execute_one(
-            "SELECT * FROM deployment_pipelines WHERE id = :pipeline_id AND user_id = :user_id",
+            "SELECT * FROM deployment_pipelines WHERE id = :pipeline_id AND user_id::text = :user_id",
             {"pipeline_id": pipeline_id, "user_id": user_id},
         )
         if not pipeline:
@@ -293,7 +293,7 @@ async def list_pipeline_runs(
     """List runs for a specific pipeline."""
     try:
         pipeline = await execute_one(
-            "SELECT id FROM deployment_pipelines WHERE id = :pipeline_id AND user_id = :user_id",
+            "SELECT id FROM deployment_pipelines WHERE id = :pipeline_id AND user_id::text = :user_id",
             {"pipeline_id": pipeline_id, "user_id": user_id},
         )
         if not pipeline:
@@ -302,7 +302,7 @@ async def list_pipeline_runs(
         rows = await execute(
             """
             SELECT * FROM pipeline_runs
-            WHERE pipeline_id = :pipeline_id AND user_id = :user_id
+            WHERE pipeline_id::text = :pipeline_id AND user_id::text = :user_id
             ORDER BY started_at DESC
             LIMIT :limit
             """,
@@ -330,7 +330,7 @@ async def get_pipeline_run(
         row = await execute_one(
             """
             SELECT * FROM pipeline_runs
-            WHERE id = :run_id AND user_id = :user_id
+            WHERE id = :run_id AND user_id::text = :user_id
             """,
             {"run_id": run_id, "user_id": user_id},
         )
@@ -357,7 +357,7 @@ async def advance_pipeline_run(
     """Increment current_stage_index and append stage result. Marks completed when all stages done."""
     try:
         run = await execute_one(
-            "SELECT * FROM pipeline_runs WHERE id = :run_id AND user_id = :user_id",
+            "SELECT * FROM pipeline_runs WHERE id = :run_id AND user_id::text = :user_id",
             {"run_id": run_id, "user_id": user_id},
         )
         if not run:
@@ -399,7 +399,7 @@ async def advance_pipeline_run(
                     stage_results = :stage_results,
                     status = :status,
                     completed_at = now()
-                WHERE id = :run_id AND user_id = :user_id
+                WHERE id = :run_id AND user_id::text = :user_id
                 RETURNING *
                 """,
                 params,
@@ -411,7 +411,7 @@ async def advance_pipeline_run(
                 SET current_stage_index = :new_stage_index,
                     stage_results = :stage_results,
                     status = :status
-                WHERE id = :run_id AND user_id = :user_id
+                WHERE id = :run_id AND user_id::text = :user_id
                 RETURNING *
                 """,
                 params,
@@ -436,7 +436,7 @@ async def cancel_pipeline_run(
     """Mark a pipeline run as cancelled."""
     try:
         run = await execute_one(
-            "SELECT id, status FROM pipeline_runs WHERE id = :run_id AND user_id = :user_id",
+            "SELECT id, status FROM pipeline_runs WHERE id = :run_id AND user_id::text = :user_id",
             {"run_id": run_id, "user_id": user_id},
         )
         if not run:
@@ -448,7 +448,7 @@ async def cancel_pipeline_run(
             """
             UPDATE pipeline_runs
             SET status = 'cancelled', completed_at = now()
-            WHERE id = :run_id AND user_id = :user_id
+            WHERE id = :run_id AND user_id::text = :user_id
             RETURNING *
             """,
             {"run_id": run_id, "user_id": user_id},
@@ -477,7 +477,7 @@ async def list_pipeline_gates(
     """List all gates associated with a pipeline."""
     try:
         pipeline = await execute_one(
-            "SELECT id FROM deployment_pipelines WHERE id = :pipeline_id AND user_id = :user_id",
+            "SELECT id FROM deployment_pipelines WHERE id = :pipeline_id AND user_id::text = :user_id",
             {"pipeline_id": pipeline_id, "user_id": user_id},
         )
         if not pipeline:
@@ -486,7 +486,7 @@ async def list_pipeline_gates(
         rows = await execute(
             """
             SELECT * FROM pipeline_gates
-            WHERE pipeline_id = :pipeline_id AND user_id = :user_id
+            WHERE pipeline_id::text = :pipeline_id AND user_id::text = :user_id
             ORDER BY stage_index ASC
             """,
             {"pipeline_id": pipeline_id, "user_id": user_id},
@@ -511,7 +511,7 @@ async def pass_gate(
     """Mark a pipeline gate as passed."""
     try:
         gate = await execute_one(
-            "SELECT id, status FROM pipeline_gates WHERE id = :gate_id AND user_id = :user_id",
+            "SELECT id, status FROM pipeline_gates WHERE id = :gate_id AND user_id::text = :user_id",
             {"gate_id": gate_id, "user_id": user_id},
         )
         if not gate:
@@ -523,7 +523,7 @@ async def pass_gate(
             """
             UPDATE pipeline_gates
             SET status = 'passed', evaluated_at = now()
-            WHERE id = :gate_id AND user_id = :user_id
+            WHERE id = :gate_id AND user_id::text = :user_id
             RETURNING *
             """,
             {"gate_id": gate_id, "user_id": user_id},
@@ -548,7 +548,7 @@ async def fail_gate(
     """Mark a pipeline gate as failed."""
     try:
         gate = await execute_one(
-            "SELECT id, status FROM pipeline_gates WHERE id = :gate_id AND user_id = :user_id",
+            "SELECT id, status FROM pipeline_gates WHERE id = :gate_id AND user_id::text = :user_id",
             {"gate_id": gate_id, "user_id": user_id},
         )
         if not gate:
@@ -560,7 +560,7 @@ async def fail_gate(
             """
             UPDATE pipeline_gates
             SET status = 'failed', evaluated_at = now()
-            WHERE id = :gate_id AND user_id = :user_id
+            WHERE id = :gate_id AND user_id::text = :user_id
             RETURNING *
             """,
             {"gate_id": gate_id, "user_id": user_id},

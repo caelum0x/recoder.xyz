@@ -79,7 +79,7 @@ async def find_project_by_sandbox_id(sandbox_id: str) -> Optional[Dict]:
             """
             SELECT p.project_id, p.account_id
             FROM projects p
-            JOIN resources r ON p.sandbox_resource_id = r.id
+            JOIN resources r ON p.sandbox_resource_id::text = r.id::text
             WHERE r.external_id = :sandbox_id
               AND r.type = 'sandbox'
             LIMIT 1

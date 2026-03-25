@@ -30,7 +30,7 @@ async def list_shortcuts(
     user_id: str = Depends(verify_and_get_user_id_from_jwt),
 ):
     rows = await execute(
-        "SELECT * FROM user_keyboard_shortcuts WHERE user_id = :user_id ORDER BY action ASC",
+        "SELECT * FROM user_keyboard_shortcuts WHERE user_id::text = :user_id ORDER BY action ASC",
         {"user_id": user_id},
     )
     return [dict(row) for row in rows]
@@ -80,14 +80,14 @@ async def reset_shortcut(
     user_id: str = Depends(verify_and_get_user_id_from_jwt),
 ):
     existing = await execute_one(
-        "SELECT id FROM user_keyboard_shortcuts WHERE user_id = :user_id AND action = :action",
+        "SELECT id FROM user_keyboard_shortcuts WHERE user_id::text = :user_id AND action = :action",
         {"user_id": user_id, "action": action},
     )
     if not existing:
         raise HTTPException(status_code=404, detail="Shortcut not found")
 
     await execute_mutate(
-        "DELETE FROM user_keyboard_shortcuts WHERE user_id = :user_id AND action = :action",
+        "DELETE FROM user_keyboard_shortcuts WHERE user_id::text = :user_id AND action = :action",
         {"user_id": user_id, "action": action},
     )
     return {"status": "ok"}
@@ -98,7 +98,7 @@ async def reset_all_shortcuts(
     user_id: str = Depends(verify_and_get_user_id_from_jwt),
 ):
     await execute_mutate(
-        "DELETE FROM user_keyboard_shortcuts WHERE user_id = :user_id",
+        "DELETE FROM user_keyboard_shortcuts WHERE user_id::text = :user_id",
         {"user_id": user_id},
     )
     return {"status": "ok"}

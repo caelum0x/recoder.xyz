@@ -307,7 +307,35 @@ export async function ensureDaytonaSandboxRunning(
   try {
     const sandbox = await dc.getOrStartSandbox(sandboxId, 30000);
     const isRunning = sandbox.state === 'started' || sandbox.state === 'running';
-    return { running: isRunning, restarted: sandbox.state !== 'started' };
+    const wasRestarted = sandbox.state !== 'started';
+
+    // After restarting a stopped sandbox, all processes (including dev server) are gone.
+    // Auto-restart the dev server if package.json exists and has a dev script.
+    if (isRunning && wasRestarted) {
+      logger.info({ sandboxId }, 'Daytona: sandbox was restarted, checking if dev server needs restart');
+      try {
+        const checkResult = await dc.execCommand(sandboxId,
+          'test -f /home/daytona/package.json && grep -q \'"dev"\' /home/daytona/package.json && echo HAS_DEV || echo NO_DEV',
+          { timeoutSecs: 5 },
+        );
+        if (checkResult.output?.includes('HAS_DEV')) {
+          // Check if dev server is already running
+          const portCheck = await dc.execCommand(sandboxId,
+            'curl -sf -o /dev/null -w "%{http_code}" http://localhost:3000 2>/dev/null || echo "000"',
+            { timeoutSecs: 5 },
+          );
+          const code = parseInt(portCheck.output?.trim() || '0', 10);
+          if (code === 0 || code >= 500) {
+            logger.info({ sandboxId }, 'Daytona: dev server not running after restart, auto-starting');
+            await daytonaExecBackground(sandboxId, 'npm run dev -- --host 0.0.0.0 --port 3000', '/home/daytona');
+          }
+        }
+      } catch (devErr: any) {
+        logger.warn({ sandboxId, err: devErr.message }, 'Daytona: dev server auto-restart failed (non-fatal)');
+      }
+    }
+
+    return { running: isRunning, restarted: wasRestarted };
   } catch (err: any) {
     logger.error({ sandboxId, err: err.message }, 'Daytona: failed to ensure sandbox running');
     return { running: false, restarted: false, error: err.message };

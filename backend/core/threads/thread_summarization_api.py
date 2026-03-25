@@ -153,7 +153,7 @@ async def get_thread_summary(
         row = await execute_one(
             """
             SELECT * FROM thread_summaries
-            WHERE thread_id = :thread_id AND user_id = :user_id
+            WHERE thread_id::text = :thread_id AND user_id::text = :user_id
             ORDER BY created_at DESC
             LIMIT 1
             """,
@@ -183,7 +183,7 @@ async def list_thread_summaries(
         rows = await execute(
             """
             SELECT * FROM thread_summaries
-            WHERE thread_id = :thread_id AND user_id = :user_id
+            WHERE thread_id::text = :thread_id AND user_id::text = :user_id
             ORDER BY created_at DESC
             """,
             {"thread_id": thread_id, "user_id": user_id},
@@ -209,7 +209,7 @@ async def delete_thread_summary(
         await execute_mutate(
             """
             DELETE FROM thread_summaries
-            WHERE id = :summary_id AND thread_id = :thread_id AND user_id = :user_id
+            WHERE id = :summary_id AND thread_id::text = :thread_id AND user_id::text = :user_id
             """,
             {"summary_id": summary_id, "thread_id": thread_id, "user_id": user_id},
         )
@@ -234,7 +234,7 @@ async def get_summarization_config(
     """Get the user's summarization config, or return defaults."""
     try:
         row = await execute_one(
-            "SELECT * FROM summarization_configs WHERE user_id = :user_id",
+            "SELECT * FROM summarization_configs WHERE user_id::text = :user_id",
             {"user_id": user_id},
         )
         if not row:
@@ -315,7 +315,7 @@ async def get_summarization_stats(
               COUNT(DISTINCT thread_id)           AS threads_summarized,
               COALESCE(AVG(message_count), 0)     AS avg_message_count
             FROM thread_summaries
-            WHERE user_id = :user_id
+            WHERE user_id::text = :user_id
             """,
             {"user_id": user_id},
         )

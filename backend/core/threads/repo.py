@@ -39,9 +39,9 @@ async def list_user_threads(
         -- Total count without extra query
         COUNT(*) OVER() AS total_count
     FROM threads t
-    LEFT JOIN projects p ON t.project_id = p.project_id
-    LEFT JOIN resources r ON p.sandbox_resource_id = r.id
-    WHERE t.account_id = :account_id
+    LEFT JOIN projects p ON t.project_id::text = p.project_id::text
+    LEFT JOIN resources r ON p.sandbox_resource_id::text = r.id::text
+    WHERE t.account_id::text = :account_id
     ORDER BY t.created_at DESC
     LIMIT :limit OFFSET :offset
     """
@@ -98,7 +98,7 @@ async def get_thread_count(account_id: str) -> int:
     sql = """
     SELECT COUNT(*) as count 
     FROM threads 
-    WHERE account_id = :account_id
+    WHERE account_id::text = :account_id
     """
     result = await execute_one(sql, {"account_id": account_id})
     return result["count"] if result else 0
@@ -116,20 +116,20 @@ async def get_thread_by_id(thread_id: str) -> Optional[Dict[str, Any]]:
         p.updated_at AS project_updated_at,
         p.sandbox_resource_id
     FROM threads t
-    LEFT JOIN projects p ON t.project_id = p.project_id
-    WHERE t.thread_id = :thread_id
+    LEFT JOIN projects p ON t.project_id::text = p.project_id::text
+    WHERE t.thread_id::text = :thread_id
     """
     return await execute_one(sql, {"thread_id": thread_id})
 
 
 async def get_thread_account_id(thread_id: str) -> Optional[str]:
-    sql = "SELECT account_id FROM threads WHERE thread_id = :thread_id"
+    sql = "SELECT account_id FROM threads WHERE thread_id::text = :thread_id"
     result = await execute_one(sql, {"thread_id": thread_id})
     return result["account_id"] if result else None
 
 
 async def get_thread_project_id(thread_id: str) -> Optional[str]:
-    sql = "SELECT project_id FROM threads WHERE thread_id = :thread_id"
+    sql = "SELECT project_id FROM threads WHERE thread_id::text = :thread_id"
     result = await execute_one(sql, {"thread_id": thread_id})
     return result["project_id"] if result else None
 
@@ -138,17 +138,17 @@ async def delete_thread_data(thread_id: str) -> bool:
     from core.services.db import execute_mutate
     
     await execute_mutate(
-        "DELETE FROM agent_runs WHERE thread_id = :thread_id",
+        "DELETE FROM agent_runs WHERE thread_id::text = :thread_id",
         {"thread_id": thread_id}
     )
     
     await execute_mutate(
-        "DELETE FROM messages WHERE thread_id = :thread_id",
+        "DELETE FROM messages WHERE thread_id::text = :thread_id",
         {"thread_id": thread_id}
     )
     
     result = await execute_mutate(
-        "DELETE FROM threads WHERE thread_id = :thread_id RETURNING thread_id",
+        "DELETE FROM threads WHERE thread_id::text = :thread_id RETURNING thread_id",
         {"thread_id": thread_id}
     )
     
@@ -156,7 +156,7 @@ async def delete_thread_data(thread_id: str) -> bool:
 
 
 async def count_project_threads(project_id: str) -> int:
-    sql = "SELECT COUNT(*) as count FROM threads WHERE project_id = :project_id"
+    sql = "SELECT COUNT(*) as count FROM threads WHERE project_id::text = :project_id"
     result = await execute_one(sql, {"project_id": project_id})
     return result["count"] if result else 0
 
@@ -165,7 +165,7 @@ async def delete_project(project_id: str) -> bool:
     from core.services.db import execute_mutate
     
     result = await execute_mutate(
-        "DELETE FROM projects WHERE project_id = :project_id RETURNING project_id",
+        "DELETE FROM projects WHERE project_id::text = :project_id RETURNING project_id",
         {"project_id": project_id}
     )
     return len(result) > 0
@@ -201,12 +201,12 @@ async def get_project_access(project_id: str, user_id: str) -> Optional[Dict[str
     sql = """
     SELECT p.project_id, p.account_id, p.name
     FROM projects p
-    WHERE p.project_id = :project_id
+    WHERE p.project_id::text = :project_id
       AND (
-        p.account_id = :user_id
+        p.account_id::text = :user_id
         OR EXISTS (
           SELECT 1 FROM basejump.account_user au 
-          WHERE au.account_id = p.account_id AND au.user_id = :user_id
+          WHERE au.account_id::text = p.account_id::text AND au.user_id::text = :user_id
         )
       )
     """
@@ -230,7 +230,7 @@ async def get_thread_messages(
             message_id, thread_id, type, is_llm_message, 
             content, metadata, created_at, updated_at, agent_id
         FROM messages
-        WHERE thread_id = :thread_id AND type = ANY(:allowed_types)
+        WHERE thread_id::text = :thread_id AND type = ANY(:allowed_types)
         ORDER BY created_at {order_direction}
         """
     else:
@@ -238,7 +238,7 @@ async def get_thread_messages(
         SELECT message_id, thread_id, type, is_llm_message, content, 
                metadata, created_at, updated_at, agent_id, agent_version_id
         FROM messages
-        WHERE thread_id = :thread_id
+        WHERE thread_id::text = :thread_id
         ORDER BY created_at {order_direction}
         """
     
@@ -251,7 +251,7 @@ async def get_thread_messages(
 
 
 async def get_thread_name(thread_id: str) -> Optional[str]:
-    sql = "SELECT name FROM threads WHERE thread_id = :thread_id"
+    sql = "SELECT name FROM threads WHERE thread_id::text = :thread_id"
     result = await execute_one(sql, {"thread_id": thread_id})
     return result["name"] if result else None
 
@@ -294,8 +294,8 @@ async def delete_message(thread_id: str, message_id: str, is_llm_message: bool =
     
     sql = """
     DELETE FROM messages 
-    WHERE message_id = :message_id 
-      AND thread_id = :thread_id 
+    WHERE message_id::text = :message_id 
+      AND thread_id::text = :thread_id 
       AND is_llm_message = :is_llm_message
     """
     
@@ -320,7 +320,7 @@ async def get_thread_with_project(thread_id: str) -> Optional[Dict[str, Any]]:
         t.created_at,
         t.updated_at
     FROM threads t
-    WHERE t.thread_id = :thread_id
+    WHERE t.thread_id::text = :thread_id
     """
     result = await execute_one(sql, {"thread_id": thread_id})
     return serialize_row(dict(result)) if result else None
@@ -355,7 +355,7 @@ async def update_thread(
     sql = f"""
     UPDATE threads
     SET {set_sql}
-    WHERE thread_id = :thread_id
+    WHERE thread_id::text = :thread_id
     RETURNING *
     """
     
@@ -370,7 +370,7 @@ async def update_project_name(project_id: str, name: str) -> bool:
     sql = """
     UPDATE projects
     SET name = :name, updated_at = :updated_at
-    WHERE project_id = :project_id
+    WHERE project_id::text = :project_id
     """
     result = await execute_mutate(sql, {
         "project_id": project_id,
@@ -387,7 +387,7 @@ async def update_project_visibility(project_id: str, is_public: bool) -> bool:
     sql = """
     UPDATE projects
     SET is_public = :is_public, updated_at = :updated_at
-    WHERE project_id = :project_id
+    WHERE project_id::text = :project_id
     """
     result = await execute_mutate(sql, {
         "project_id": project_id,
@@ -402,7 +402,7 @@ async def get_project_by_id(project_id: str) -> Optional[Dict[str, Any]]:
     SELECT project_id, name, description, account_id, is_public, 
            icon_name, sandbox_resource_id, created_at, updated_at
     FROM projects 
-    WHERE project_id = :project_id
+    WHERE project_id::text = :project_id
     """
     result = await execute_one(sql, {"project_id": project_id})
     return serialize_row(dict(result)) if result else None
@@ -617,7 +617,7 @@ async def update_thread_status(
     
     set_sql = ", ".join(updates)
     sql = f"""
-    UPDATE threads SET {set_sql} WHERE thread_id = :thread_id
+    UPDATE threads SET {set_sql} WHERE thread_id::text = :thread_id
     """
     
     await execute_mutate(sql, params)
@@ -631,7 +631,7 @@ async def update_thread_name(thread_id: str, name: str) -> bool:
     sql = """
     UPDATE threads
     SET name = :name, updated_at = :updated_at
-    WHERE thread_id = :thread_id
+    WHERE thread_id::text = :thread_id
     """
     await execute_mutate(sql, {
         "thread_id": thread_id,
@@ -676,7 +676,7 @@ async def get_project_for_sandbox(project_id: str) -> Optional[Dict[str, Any]]:
     sql = """
     SELECT project_id, account_id, sandbox_resource_id
     FROM projects 
-    WHERE project_id = :project_id
+    WHERE project_id::text = :project_id
     """
     result = await execute_one(sql, {"project_id": project_id})
     return dict(result) if result else None
@@ -689,7 +689,7 @@ async def update_project_sandbox_resource(project_id: str, sandbox_resource_id: 
     sql = """
     UPDATE projects
     SET sandbox_resource_id = :sandbox_resource_id, updated_at = :updated_at
-    WHERE project_id = :project_id
+    WHERE project_id::text = :project_id
     """
     await execute_mutate(sql, {
         "project_id": project_id,
@@ -700,7 +700,7 @@ async def update_project_sandbox_resource(project_id: str, sandbox_resource_id: 
 
 
 async def get_thread_messages_ids(thread_id: str) -> List[str]:
-    sql = "SELECT message_id FROM messages WHERE thread_id = :thread_id"
+    sql = "SELECT message_id FROM messages WHERE thread_id::text = :thread_id"
     rows = await execute(sql, {"thread_id": thread_id})
     return [row["message_id"] for row in rows] if rows else []
 
@@ -713,7 +713,7 @@ async def set_thread_has_images(thread_id: str) -> bool:
     UPDATE threads
     SET metadata = COALESCE(metadata, '{}'::jsonb) || '{"has_images": true}'::jsonb,
         updated_at = :updated_at
-    WHERE thread_id = :thread_id
+    WHERE thread_id::text = :thread_id
     """
     await execute_mutate(sql, {
         "thread_id": thread_id,
@@ -730,8 +730,8 @@ async def get_project_with_sandbox(project_id: str) -> Optional[Dict[str, Any]]:
         r.external_id as resource_external_id,
         r.config as resource_config
     FROM projects p
-    LEFT JOIN resources r ON p.sandbox_resource_id = r.id
-    WHERE p.project_id = :project_id
+    LEFT JOIN resources r ON p.sandbox_resource_id::text = r.id::text
+    WHERE p.project_id::text = :project_id
     """
     result = await execute_one(sql, {"project_id": project_id})
     return dict(result) if result else None
@@ -745,8 +745,8 @@ async def get_project_and_thread_info(thread_id: str) -> Optional[Dict[str, Any]
         t.project_id,
         p.name as project_name
     FROM threads t
-    LEFT JOIN projects p ON t.project_id = p.project_id
-    WHERE t.thread_id = :thread_id
+    LEFT JOIN projects p ON t.project_id::text = p.project_id::text
+    WHERE t.thread_id::text = :thread_id
     """
     result = await execute_one(sql, {"thread_id": thread_id})
     return dict(result) if result else None
@@ -761,7 +761,7 @@ async def get_llm_messages(
         sql = """
         SELECT message_id, type, content
         FROM messages
-        WHERE thread_id = :thread_id 
+        WHERE thread_id::text = :thread_id 
           AND is_llm_message = true
           AND type != 'image_context'
         ORDER BY created_at ASC
@@ -772,7 +772,7 @@ async def get_llm_messages(
         sql = """
         SELECT message_id, type, content, metadata
         FROM messages
-        WHERE thread_id = :thread_id 
+        WHERE thread_id::text = :thread_id 
           AND is_llm_message = true
           AND (metadata->>'omitted' IS NULL OR metadata->>'omitted' != 'true')
           AND type != 'image_context'
@@ -792,7 +792,7 @@ async def get_llm_messages_paginated(
     sql = """
     SELECT message_id, type, content, metadata
     FROM messages
-    WHERE thread_id = :thread_id 
+    WHERE thread_id::text = :thread_id 
       AND is_llm_message = true
       AND (metadata->>'omitted' IS NULL OR metadata->>'omitted' != 'true')
       AND type != 'image_context'
@@ -812,7 +812,7 @@ async def get_image_context_messages(thread_id: str) -> List[Dict[str, Any]]:
     sql = """
     SELECT message_id, content, metadata, created_at
     FROM messages
-    WHERE thread_id = :thread_id 
+    WHERE thread_id::text = :thread_id 
       AND type = 'image_context'
       AND (metadata->>'omitted' IS NULL OR metadata->>'omitted' != 'true')
     ORDER BY created_at ASC
@@ -823,7 +823,7 @@ async def get_image_context_messages(thread_id: str) -> List[Dict[str, Any]]:
 
 async def get_thread_metadata(thread_id: str) -> Optional[Dict[str, Any]]:
     from core.services.db import execute_one_read
-    sql = "SELECT metadata FROM threads WHERE thread_id = :thread_id"
+    sql = "SELECT metadata FROM threads WHERE thread_id::text = :thread_id"
     result = await execute_one_read(sql, {"thread_id": thread_id})
     return result["metadata"] if result else None
 
@@ -835,7 +835,7 @@ async def update_thread_metadata(thread_id: str, metadata: Dict[str, Any]) -> bo
     sql = """
     UPDATE threads
     SET metadata = :metadata, updated_at = :updated_at
-    WHERE thread_id = :thread_id
+    WHERE thread_id::text = :thread_id
     """
     await execute_mutate(sql, {
         "thread_id": thread_id,
@@ -849,7 +849,7 @@ async def get_last_llm_response_end(thread_id: str) -> Optional[Dict[str, Any]]:
     sql = """
     SELECT content
     FROM messages
-    WHERE thread_id = :thread_id AND type = 'llm_response_end'
+    WHERE thread_id::text = :thread_id AND type = 'llm_response_end'
     ORDER BY created_at DESC
     LIMIT 1
     """
@@ -861,7 +861,7 @@ async def get_latest_user_message(thread_id: str) -> Optional[Dict[str, Any]]:
     sql = """
     SELECT content
     FROM messages
-    WHERE thread_id = :thread_id AND type = 'user'
+    WHERE thread_id::text = :thread_id AND type = 'user'
     ORDER BY created_at DESC
     LIMIT 1
     """
@@ -886,14 +886,14 @@ async def set_cache_needs_rebuild(thread_id: str, needs_rebuild: bool = True) ->
         UPDATE threads
         SET metadata = COALESCE(metadata, '{}'::jsonb) || '{"cache_needs_rebuild": true}'::jsonb,
             updated_at = :updated_at
-        WHERE thread_id = :thread_id
+        WHERE thread_id::text = :thread_id
         """
     else:
         sql = """
         UPDATE threads
         SET metadata = COALESCE(metadata, '{}'::jsonb) - 'cache_needs_rebuild',
             updated_at = :updated_at
-        WHERE thread_id = :thread_id
+        WHERE thread_id::text = :thread_id
         """
     
     await execute_mutate(sql, {
@@ -922,7 +922,7 @@ async def update_message_content(
         sql = """
         UPDATE messages
         SET content = :content, metadata = :metadata, updated_at = :updated_at
-        WHERE message_id = :message_id
+        WHERE message_id::text = :message_id
         RETURNING *
         """
         result = await execute_mutate(sql, {
@@ -935,7 +935,7 @@ async def update_message_content(
         sql = """
         UPDATE messages
         SET content = :content, updated_at = :updated_at
-        WHERE message_id = :message_id
+        WHERE message_id::text = :message_id
         RETURNING *
         """
         result = await execute_mutate(sql, {
@@ -961,7 +961,7 @@ async def get_message_by_id(message_id: str) -> Optional[Dict[str, Any]]:
     SELECT message_id, thread_id, type, is_llm_message, content, 
            metadata, created_at, updated_at, agent_id, agent_version_id
     FROM messages 
-    WHERE message_id = :message_id
+    WHERE message_id::text = :message_id
     """
     result = await execute_one(sql, {"message_id": message_id})
     return dict(result) if result else None
@@ -971,7 +971,7 @@ async def get_tool_results_by_thread(thread_id: str) -> List[Dict[str, Any]]:
     sql = """
     SELECT message_id, metadata
     FROM messages
-    WHERE thread_id = :thread_id AND type = 'tool'
+    WHERE thread_id::text = :thread_id AND type = 'tool'
     """
     rows = await execute(sql, {"thread_id": thread_id})
     return [dict(row) for row in rows] if rows else []
@@ -984,7 +984,7 @@ async def update_message_metadata(message_id: str, metadata: Dict[str, Any]) -> 
     sql = """
     UPDATE messages
     SET metadata = :metadata, updated_at = :updated_at
-    WHERE message_id = :message_id
+    WHERE message_id::text = :message_id
     """
     await execute_mutate(sql, {
         "message_id": message_id,
@@ -998,10 +998,10 @@ async def delete_message_by_id(message_id: str, thread_id: Optional[str] = None)
     from core.services.db import execute_mutate
     
     if thread_id:
-        sql = "DELETE FROM messages WHERE message_id = :message_id AND thread_id = :thread_id"
+        sql = "DELETE FROM messages WHERE message_id::text = :message_id AND thread_id::text = :thread_id"
         result = await execute_mutate(sql, {"message_id": message_id, "thread_id": thread_id})
     else:
-        sql = "DELETE FROM messages WHERE message_id = :message_id"
+        sql = "DELETE FROM messages WHERE message_id::text = :message_id"
         result = await execute_mutate(sql, {"message_id": message_id})
     
     return len(result) > 0 if result else False
@@ -1028,7 +1028,7 @@ async def update_messages_is_llm_message(message_ids: List[str], is_llm_message:
 
 
 async def get_message_metadata_by_id(message_id: str) -> Optional[Dict[str, Any]]:
-    sql = "SELECT metadata FROM messages WHERE message_id = :message_id"
+    sql = "SELECT metadata FROM messages WHERE message_id::text = :message_id"
     result = await execute_one(sql, {"message_id": message_id})
     return result["metadata"] if result else None
 
@@ -1052,7 +1052,7 @@ async def save_compressed_message(
     sql = """
     UPDATE messages
     SET metadata = :metadata, updated_at = :updated_at
-    WHERE message_id = :message_id
+    WHERE message_id::text = :message_id
     """
     await execute_mutate(sql, {
         "message_id": message_id,
@@ -1123,7 +1123,7 @@ async def save_compressed_messages_batch(
                 ),
             updated_at = NOW()
         FROM (VALUES {', '.join(values_parts)}) AS data(id, compressed_content, is_omission)
-        WHERE m.message_id = data.id::uuid  -- Cast string to uuid for comparison
+        WHERE m.message_id::text = data.id::text::uuid  -- Cast string to uuid for comparison
         """
         
         try:
@@ -1172,7 +1172,7 @@ async def mark_tool_results_as_omitted(thread_id: str, tool_call_ids: List[str])
     SET 
         metadata = COALESCE(metadata, '{{}}'::jsonb) || '{{"omitted": true}}'::jsonb,
         updated_at = NOW()
-    WHERE thread_id = :thread_id
+    WHERE thread_id::text = :thread_id
       AND is_llm_message = true
       AND content->>'tool_call_id' IN ({placeholders})
       AND (metadata->>'omitted' IS NULL OR metadata->>'omitted' != 'true')
@@ -1213,7 +1213,7 @@ async def remove_tool_calls_from_assistants(thread_id: str, tool_call_ids: List[
     sql = """
     SELECT message_id, content, metadata
     FROM messages
-    WHERE thread_id = :thread_id
+    WHERE thread_id::text = :thread_id
     AND type = 'assistant'
     AND is_llm_message = true
     AND (metadata->>'omitted' IS NULL OR metadata->>'omitted' != 'true')
@@ -1259,7 +1259,7 @@ async def remove_tool_calls_from_assistants(thread_id: str, tool_call_ids: List[
                 """
                 UPDATE messages
                 SET metadata = :metadata, updated_at = NOW()
-                WHERE message_id = :message_id
+                WHERE message_id::text = :message_id
                 """,
                 {'message_id': msg['message_id'], 'metadata': metadata}
             )
@@ -1269,7 +1269,7 @@ async def remove_tool_calls_from_assistants(thread_id: str, tool_call_ids: List[
                 """
                 UPDATE messages
                 SET content = :content, updated_at = NOW()
-                WHERE message_id = :message_id
+                WHERE message_id::text = :message_id
                 """,
                 {'message_id': msg['message_id'], 'content': new_content}
             )
@@ -1283,7 +1283,7 @@ async def get_kb_entry_count(agent_id: str) -> int:
     sql = """
     SELECT COUNT(*) as count
     FROM agent_knowledge_entry_assignments
-    WHERE agent_id = :agent_id
+    WHERE agent_id::text = :agent_id
     """
     result = await execute_one(sql, {"agent_id": agent_id})
     return result["count"] if result else 0
@@ -1293,7 +1293,7 @@ async def get_first_user_message_content(thread_id: str) -> Optional[Dict[str, A
     sql = """
     SELECT content
     FROM messages
-    WHERE thread_id = :thread_id AND type = 'user'
+    WHERE thread_id::text = :thread_id AND type = 'user'
     ORDER BY created_at ASC
     LIMIT 1
     """
@@ -1313,7 +1313,7 @@ async def get_user_memory_enabled(account_id: str) -> bool:
 
 
 async def get_thread_memory_enabled(thread_id: str) -> bool:
-    sql = "SELECT memory_enabled FROM threads WHERE thread_id = :thread_id"
+    sql = "SELECT memory_enabled FROM threads WHERE thread_id::text = :thread_id"
     result = await execute_one(sql, {"thread_id": thread_id})
     if result and result["memory_enabled"] is not None:
         return result["memory_enabled"]
@@ -1422,7 +1422,7 @@ async def insert_message(
 async def get_latest_message_type(thread_id: str) -> Optional[str]:
     sql = """
     SELECT type FROM messages 
-    WHERE thread_id = :thread_id AND type IN ('assistant', 'tool', 'user')
+    WHERE thread_id::text = :thread_id AND type IN ('assistant', 'tool', 'user')
     ORDER BY created_at DESC
     LIMIT 1
     """
@@ -1437,8 +1437,8 @@ async def get_project_with_details(project_id: str) -> Optional[Dict[str, Any]]:
         r.external_id as sandbox_external_id,
         r.config as sandbox_config
     FROM projects p
-    LEFT JOIN resources r ON p.sandbox_resource_id = r.id
-    WHERE p.project_id = :project_id
+    LEFT JOIN resources r ON p.sandbox_resource_id::text = r.id::text
+    WHERE p.project_id::text = :project_id
     """
     result = await execute_one(sql, {"project_id": project_id})
     return serialize_row(dict(result)) if result else None
@@ -1447,7 +1447,7 @@ async def get_project_with_details(project_id: str) -> Optional[Dict[str, Any]]:
 async def check_user_admin_role(user_id: str) -> bool:
     sql = """
     SELECT role FROM user_roles 
-    WHERE user_id = :user_id AND role IN ('admin', 'super_admin')
+    WHERE user_id::text = :user_id AND role IN ('admin', 'super_admin')
     LIMIT 1
     """
     result = await execute_one(sql, {"user_id": user_id})
@@ -1457,7 +1457,7 @@ async def check_user_admin_role(user_id: str) -> bool:
 async def check_account_user_access(user_id: str, account_id: str) -> bool:
     sql = """
     SELECT account_role FROM basejump.account_user 
-    WHERE user_id = :user_id AND account_id = :account_id
+    WHERE user_id::text = :user_id AND account_id::text = :account_id
     LIMIT 1
     """
     result = await execute_one(sql, {"user_id": user_id, "account_id": account_id})
@@ -1469,7 +1469,7 @@ async def get_project_threads_paginated(
     limit: int = 100,
     offset: int = 0
 ) -> Tuple[List[Dict[str, Any]], int]:
-    count_sql = "SELECT COUNT(*) as count FROM threads WHERE project_id = :project_id"
+    count_sql = "SELECT COUNT(*) as count FROM threads WHERE project_id::text = :project_id"
     count_result = await execute_one(count_sql, {"project_id": project_id})
     total_count = count_result["count"] if count_result else 0
     
@@ -1487,8 +1487,8 @@ async def get_project_threads_paginated(
         t.updated_at,
         COUNT(m.message_id) as message_count
     FROM threads t
-    LEFT JOIN messages m ON t.thread_id = m.thread_id
-    WHERE t.project_id = :project_id
+    LEFT JOIN messages m ON t.thread_id::text = m.thread_id::text
+    WHERE t.project_id::text = :project_id
     GROUP BY t.thread_id, t.project_id, t.name, t.metadata, t.is_public, t.created_at, t.updated_at
     ORDER BY t.created_at DESC
     LIMIT :limit OFFSET :offset
@@ -1531,11 +1531,11 @@ async def get_thread_with_details(thread_id: str) -> Optional[Dict[str, Any]]:
         p.sandbox_resource_id,
         r.external_id as sandbox_external_id,
         r.config as sandbox_config,
-        (SELECT COUNT(*) FROM messages m WHERE m.thread_id = t.thread_id) as message_count
+        (SELECT COUNT(*) FROM messages m WHERE m.thread_id::text = t.thread_id::text) as message_count
     FROM threads t
-    LEFT JOIN projects p ON t.project_id = p.project_id
-    LEFT JOIN resources r ON p.sandbox_resource_id = r.id
-    WHERE t.thread_id = :thread_id
+    LEFT JOIN projects p ON t.project_id::text = p.project_id::text
+    LEFT JOIN resources r ON p.sandbox_resource_id::text = r.id::text
+    WHERE t.thread_id::text = :thread_id
     """
     result = await execute_one(sql, {"thread_id": thread_id})
     return serialize_row(dict(result)) if result else None
@@ -1547,7 +1547,7 @@ async def get_thread_agent_runs(thread_id: str) -> List[Dict[str, Any]]:
         id, status, started_at, completed_at, error, 
         agent_id, agent_version_id, created_at
     FROM agent_runs 
-    WHERE thread_id = :thread_id 
+    WHERE thread_id::text = :thread_id 
     ORDER BY created_at DESC
     """
     rows = await execute(sql, {"thread_id": thread_id})
@@ -1607,7 +1607,7 @@ async def create_new_thread_with_project(
 
 
 async def get_project_thread_ids(project_id: str) -> List[str]:
-    sql = "SELECT thread_id FROM threads WHERE project_id = :project_id"
+    sql = "SELECT thread_id FROM threads WHERE project_id::text = :project_id"
     rows = await execute(sql, {"project_id": project_id})
     return [row["thread_id"] for row in rows] if rows else []
 
@@ -1616,22 +1616,22 @@ async def delete_project_and_threads(project_id: str) -> bool:
     from core.services.db import execute_mutate
     
     await execute_mutate(
-        "DELETE FROM agent_runs WHERE thread_id IN (SELECT thread_id FROM threads WHERE project_id = :project_id)",
+        "DELETE FROM agent_runs WHERE thread_id IN (SELECT thread_id FROM threads WHERE project_id::text = :project_id)",
         {"project_id": project_id}
     )
     
     await execute_mutate(
-        "DELETE FROM messages WHERE thread_id IN (SELECT thread_id FROM threads WHERE project_id = :project_id)",
+        "DELETE FROM messages WHERE thread_id IN (SELECT thread_id FROM threads WHERE project_id::text = :project_id)",
         {"project_id": project_id}
     )
     
     await execute_mutate(
-        "DELETE FROM threads WHERE project_id = :project_id",
+        "DELETE FROM threads WHERE project_id::text = :project_id",
         {"project_id": project_id}
     )
     
     result = await execute_mutate(
-        "DELETE FROM projects WHERE project_id = :project_id RETURNING project_id",
+        "DELETE FROM projects WHERE project_id::text = :project_id RETURNING project_id",
         {"project_id": project_id}
     )
     

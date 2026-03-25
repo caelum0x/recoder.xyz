@@ -133,8 +133,8 @@ async def get_thread_analytics(
         sql = """
         SELECT ta.*, t.account_id
         FROM thread_analytics ta
-        JOIN threads t ON t.thread_id = ta.thread_id
-        WHERE ta.thread_id = :thread_id
+        JOIN threads t ON t.thread_id::text = ta.thread_id::text
+        WHERE ta.thread_id::text = :thread_id
         """
 
         row = await execute_one(sql, {"thread_id": thread_id})
@@ -143,7 +143,7 @@ async def get_thread_analytics(
             # Return empty analytics if not computed yet
             # Fetch account_id from the thread itself
             thread_row = await execute_one(
-                "SELECT account_id FROM threads WHERE thread_id = :thread_id",
+                "SELECT account_id FROM threads WHERE thread_id::text = :thread_id",
                 {"thread_id": thread_id},
             )
             account_id = str(thread_row["account_id"]) if thread_row else str(auth.user_id)
@@ -178,7 +178,7 @@ async def calculate_thread_analytics(
     try:
         # Get thread info
         thread_row = await execute_one(
-            "SELECT account_id FROM threads WHERE thread_id = :thread_id",
+            "SELECT account_id FROM threads WHERE thread_id::text = :thread_id",
             {"thread_id": thread_id},
         )
         if not thread_row:
@@ -197,7 +197,7 @@ async def calculate_thread_analytics(
             MAX(created_at) AS last_message_at,
             EXTRACT(EPOCH FROM (MAX(created_at) - MIN(created_at)))::INTEGER AS duration_seconds
         FROM messages
-        WHERE thread_id = :thread_id
+        WHERE thread_id::text = :thread_id
         """
 
         stats = await execute_one(stats_sql, {"thread_id": thread_id})
@@ -209,7 +209,7 @@ async def calculate_thread_analytics(
         tool_sql = """
         SELECT COUNT(*) AS tool_call_count
         FROM messages
-        WHERE thread_id = :thread_id AND role = 'tool'
+        WHERE thread_id::text = :thread_id AND role = 'tool'
         """
         tool_row = await execute_one(tool_sql, {"thread_id": thread_id})
         tool_call_count = tool_row["tool_call_count"] if tool_row else 0
@@ -293,7 +293,7 @@ async def get_threads_analytics_overview(
             COALESCE(SUM(total_tokens_out), 0) AS total_tokens_out,
             COALESCE(SUM(total_cost), 0) AS total_cost
         FROM thread_analytics
-        WHERE account_id = :account_id
+        WHERE account_id::text = :account_id
         """
 
         row = await execute_one(sql, {"account_id": user_id})
@@ -309,7 +309,7 @@ async def get_threads_analytics_overview(
         breakdown_sql = """
         SELECT tool_breakdown, model_breakdown
         FROM thread_analytics
-        WHERE account_id = :account_id
+        WHERE account_id::text = :account_id
         AND (tool_breakdown != '{}' OR model_breakdown != '{}')
         """
 
@@ -380,8 +380,8 @@ async def get_top_threads(
             ta.total_cost,
             ta.last_message_at
         FROM thread_analytics ta
-        JOIN threads t ON t.thread_id = ta.thread_id
-        WHERE ta.account_id = :account_id
+        JOIN threads t ON t.thread_id::text = ta.thread_id::text
+        WHERE ta.account_id::text = :account_id
         ORDER BY ta.{metric} DESC
         LIMIT :limit
         """
