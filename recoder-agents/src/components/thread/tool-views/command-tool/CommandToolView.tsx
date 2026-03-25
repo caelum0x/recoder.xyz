@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
   Terminal,
   CheckCircle,
@@ -6,6 +6,8 @@ import {
   CircleDashed,
   Clock,
   TerminalIcon,
+  Download,
+  FileText,
 } from 'lucide-react';
 import { ToolViewProps } from '../types';
 import { formatTimestamp, getToolTitle } from '../utils';
@@ -77,6 +79,23 @@ export function CommandToolView({
     }
   }, [streamingOutput, isOutputStreaming]);
   
+  // Detect created files in the command or output (for download links)
+  const createdFiles = useMemo(() => {
+    const files: string[] = [];
+    const text = `${command || ''} ${output || ''}`;
+    // Match common file output patterns
+    const patterns = [
+      /\/workspace\/[\w/._-]+\.(?:docx|doc|xlsx|xls|pptx|ppt|pdf|csv|zip|tar\.gz|png|jpg|jpeg|svg)/gi,
+      /\/home\/daytona\/[\w/._-]+\.(?:docx|doc|xlsx|xls|pptx|ppt|pdf|csv|zip|tar\.gz|png|jpg|jpeg|svg)/gi,
+    ];
+    for (const pat of patterns) {
+      const matches = text.match(pat);
+      if (matches) files.push(...matches);
+    }
+    // Deduplicate
+    return [...new Set(files)];
+  }, [command, output]);
+
   const actualAssistantTimestamp = assistantTimestamp;
   const name = toolCall.function_name.replace(/_/g, '-');
 
@@ -318,6 +337,33 @@ export function CommandToolView({
                     </div>
                   </div>
                 ) : null}
+
+                {/* Show created files with download info */}
+                {createdFiles.length > 0 && (
+                  <div className="bg-card border border-border rounded-lg overflow-hidden">
+                    <div className="flex-shrink-0 px-4 py-2.5 border-b border-border">
+                      <Badge variant="outline" className="text-xs px-2.5 py-0.5 h-5 font-normal">
+                        <FileText className="h-2.5 w-2.5 mr-1 opacity-70" />
+                        Created Files
+                      </Badge>
+                    </div>
+                    <div className="p-4 space-y-2">
+                      {createdFiles.map((filePath, idx) => {
+                        const fileName = filePath.split('/').pop() || filePath;
+                        return (
+                          <div key={idx} className="flex items-center gap-3 p-2 rounded-md bg-zinc-50 dark:bg-zinc-800/50">
+                            <Download className="h-4 w-4 text-blue-500 flex-shrink-0" />
+                            <div className="min-w-0 flex-1">
+                              <p className="text-sm font-medium text-foreground truncate">{fileName}</p>
+                              <p className="text-xs text-muted-foreground truncate">{filePath}</p>
+                            </div>
+                            <span className="text-xs text-muted-foreground flex-shrink-0">In sandbox Files tab</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           </div>
