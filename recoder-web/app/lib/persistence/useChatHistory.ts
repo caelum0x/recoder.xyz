@@ -721,8 +721,25 @@ async function runNpmInstallWithCoordination(projectId: string): Promise<boolean
 
   globalNpmInstallPromise = (async () => {
     try {
+      // Helper: retry exec with delay — sandbox may still be starting after creation
+      const execWithRetry = async <T = unknown>(body: Record<string, unknown>, retries = 2, delayMs = 2000): Promise<T> => {
+        for (let attempt = 0; attempt <= retries; attempt++) {
+          try {
+            return await dockerPost<T>(`/api/exec/${projectId}`, body);
+          } catch (err) {
+            if (attempt < retries) {
+              logger.info(`⏳ [runInstallWithCoordination] Exec failed (attempt ${attempt + 1}/${retries + 1}), retrying in ${delayMs}ms...`);
+              await new Promise(resolve => setTimeout(resolve, delayMs));
+            } else {
+              throw err;
+            }
+          }
+        }
+        throw new Error('Unreachable');
+      };
+
       // 🚀 OPTIMIZATION: Check if node_modules is valid before cleaning
-      const checkResult = await dockerPost<{ output?: string }>(`/api/exec/${projectId}`, { command: 'test -d /workspace/node_modules/.bin && echo "valid" || echo "invalid"' });
+      const checkResult = await execWithRetry<{ output?: string }>({ command: 'test -d /workspace/node_modules/.bin && echo "valid" || echo "invalid"' });
       const isValid = checkResult.output?.includes('valid');
 
       if (!isValid) {
@@ -735,7 +752,7 @@ async function runNpmInstallWithCoordination(projectId: string): Promise<boolean
       let result: { output?: string; error?: string };
 
       try {
-        result = await dockerPost<{ output?: string; error?: string }>(`/api/exec/${projectId}`, { command: 'bun install --force' });
+        result = await execWithRetry<{ output?: string; error?: string }>({ command: 'bun install --force' });
       } catch (error) {
         logger.warn('⚠️ [runInstallWithCoordination] bun install request failed, trying npm fallback...');
         try {
