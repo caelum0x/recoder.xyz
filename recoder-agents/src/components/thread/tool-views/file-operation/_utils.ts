@@ -403,6 +403,7 @@ export const isFileType = {
   csv: (fileExtension: string): boolean => fileExtension === 'csv',
   xlsx: (fileExtension: string): boolean => fileExtension === 'xlsx' || fileExtension === 'xls',
   pptx: (fileExtension: string): boolean => fileExtension === 'pptx' || fileExtension === 'ppt',
+  docx: (fileExtension: string): boolean => fileExtension === 'docx' || fileExtension === 'doc',
 };
 
 export const hasLanguageHighlighting = (language: string): boolean => {

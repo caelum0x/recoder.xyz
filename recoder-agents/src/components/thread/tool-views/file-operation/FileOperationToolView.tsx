@@ -688,6 +688,7 @@ export function FileOperationToolView({
   const isHtml = isFileType.html(fileExtension);
   const isCsv = fileExtension === 'csv' || fileExtension === 'tsv';
   const isXlsx = fileExtension === 'xlsx' || fileExtension === 'xls';
+  const isDocx = isFileType.docx(fileExtension);
 
   // Check if this is a presentation slide file
   const isPresentationSlide = processedFilePath ? isPresentationSlideFile(processedFilePath) : false;
@@ -932,6 +933,34 @@ export function FileOperationToolView({
             project={project}
             className="w-full h-full"
           />
+        </div>
+      );
+    }
+
+    // For DOCX files — binary format, don't render in CodeEditor
+    if (isDocx) {
+      const sandboxUrl = project?.sandbox?.sandbox_url;
+      const downloadUrl = sandboxUrl && processedFilePath
+        ? `${sandboxUrl}/workspace/${processedFilePath.replace(/^\/?(workspace\/)?/, '')}`
+        : undefined;
+      return (
+        <div className="flex flex-col items-center justify-center py-12 px-6 bg-white dark:bg-zinc-900 rounded-lg">
+          <div className="w-16 h-16 rounded-full bg-blue-50 dark:bg-blue-900/30 flex items-center justify-center mb-4">
+            <FileIcon className="w-8 h-8 text-blue-600 dark:text-blue-400" />
+          </div>
+          <h3 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100 mb-1">{fileName}</h3>
+          <p className="text-sm text-zinc-500 dark:text-zinc-400 mb-4">Word document created successfully</p>
+          {downloadUrl && (
+            <a
+              href={downloadUrl}
+              download={fileName}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors"
+            >
+              Download {fileName}
+            </a>
+          )}
         </div>
       );
     }
