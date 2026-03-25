@@ -23,9 +23,9 @@ export const useMessagesQuery = (threadId: string, options?) => {
       }
       return 1000;
     },
-    refetchOnMount: false,
+    refetchOnMount: 'always',
     refetchOnWindowFocus: false,
-    refetchOnReconnect: false,
+    refetchOnReconnect: true,
     ...options,
   });
 };

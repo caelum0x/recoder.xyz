@@ -9,6 +9,14 @@ import {
   parseThreadsResponse,
 } from './contracts';
 
+// Production-safe backend URL with localhost guard
+const _envUrl = process.env.NEXT_PUBLIC_BACKEND_URL || '';
+const API_URL = (_envUrl && !_envUrl.includes('localhost'))
+  ? _envUrl
+  : (typeof window !== 'undefined' && window.location.hostname !== 'localhost'
+    ? 'https://api.recoder.xyz/v1'
+    : _envUrl);
+
 export type ThreadStatus = 'pending' | 'initializing' | 'ready' | 'error';
 
 // Thread search types
@@ -214,8 +222,6 @@ export const getProjectThreads = async (projectId: string, page: number = 1, lim
 // Create a thread in an existing project
 export const createThreadInProject = async (projectId: string): Promise<{ thread_id: string; project_id: string }> => {
   const token = await requireSessionAccessToken();
-
-  const API_URL = process.env.NEXT_PUBLIC_BACKEND_URL;
 
   const response = await fetch(`${API_URL}/projects/${projectId}/threads`, {
     method: 'POST',
@@ -459,8 +465,6 @@ export const getThread = async (threadId: string): Promise<Thread> => {
 export const createThread = async (projectId?: string): Promise<Thread> => {
   const token = await requireSessionAccessToken();
 
-  const API_URL = process.env.NEXT_PUBLIC_BACKEND_URL;
-
   // Use backend API endpoint - it handles project creation as well
   // If projectId is provided, use the new endpoint to create thread in existing project
   if (projectId) {
@@ -514,8 +518,6 @@ export const addUserMessage = async (
       throw new NoAccessTokenAvailableError();
     }
 
-    const API_URL = process.env.NEXT_PUBLIC_BACKEND_URL;
-
     // Use backend API endpoint with auth handling
     const response = await fetch(`${API_URL}/threads/${threadId}/messages/add`, {
       method: 'POST',
@@ -556,8 +558,6 @@ const shouldUseOptimizedMessages = (): boolean => {
 export const getMessages = async (threadId: string): Promise<Message[]> => {
   try {
     const token = await getSessionAccessToken();
-
-    const API_URL = process.env.NEXT_PUBLIC_BACKEND_URL;
 
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
