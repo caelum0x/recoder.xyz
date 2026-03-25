@@ -136,34 +136,38 @@ def get_action_prompt(action: str, user_prompt: Optional[str] = None) -> str:
 
 
 async def process_with_replicate_gpt(image_bytes: bytes, mime_type: str, prompt: str) -> str:
-    """Process image using GPT Image via Replicate (openai/gpt-image-1.5) with quality: low"""
+    """Process image using GPT Image 1.5. Uses Replicate if configured, otherwise falls back to OpenRouter Gemini."""
+    config = get_config()
+
+    if not config.REPLICATE_API_TOKEN:
+        # Fall back to OpenRouter Gemini for image editing
+        logger.info(f"REPLICATE_API_TOKEN not set, using OpenRouter Gemini for image editing (image size: {len(image_bytes)} bytes)")
+        return await process_with_gemini(image_bytes, mime_type, prompt, "gemini-flash")
+
     _get_replicate_token()
-    
-    # Convert bytes to data URL
+
     image_b64 = base64.b64encode(image_bytes).decode('utf-8')
     image_data_url = f"data:{mime_type};base64,{image_b64}"
-    
+
     logger.info(f"Calling Replicate openai/gpt-image-1.5 for editing with quality: low (image size: {len(image_bytes)} bytes)")
-    
+
     try:
-        # Wrap replicate.run() in thread pool to avoid blocking event loop
         output = await asyncio.to_thread(
             replicate.run,
             "openai/gpt-image-1.5",
             input={
                 "prompt": prompt,
-                "input_images": [image_data_url],  # For editing, use input_images array
+                "input_images": [image_data_url],
                 "aspect_ratio": "1:1",
                 "number_of_images": 1,
-                "quality": "low",  # Use low quality for cost efficiency ($0.02/image)
+                "quality": "low",
             }
         )
-        
-        # Output is a list of FileOutput objects - get the first one
+
         output_list = list(output) if hasattr(output, '__iter__') and not hasattr(output, 'read') else [output]
         if len(output_list) == 0:
             raise Exception("No output from GPT image model")
-        
+
         return _replicate_output_to_base64(output_list[0], "png")
     except Exception as e:
         logger.error(f"Replicate GPT error: {e}")
@@ -257,13 +261,17 @@ async def process_with_gemini(
 
 
 def _get_replicate_token() -> str:
-    """Get Replicate API token from config"""
+    """Get Replicate API token from config. Raises if not set."""
     config = get_config()
     token = config.REPLICATE_API_TOKEN
     if not token:
         raise Exception("Replicate API token not configured. Add REPLICATE_API_TOKEN to your .env")
     os.environ["REPLICATE_API_TOKEN"] = token
     return token
+
+
+# Alias for clarity in call sites that absolutely require Replicate
+_get_replicate_token_or_raise = _get_replicate_token
 
 
 def _replicate_output_to_base64(output, output_format: str = "png") -> str:
@@ -285,9 +293,62 @@ def _replicate_output_to_base64(output, output_format: str = "png") -> str:
         return f"data:{mime};base64,{result_b64}"
 
 
+async def _generate_image_openrouter(prompt: str) -> Optional[str]:
+    """Generate an image from text prompt via OpenRouter Gemini. Returns base64 data URL or None."""
+    api_key = OPENROUTER_API_KEY or os.getenv("OPENROUTER_API_KEY", "")
+    if not api_key:
+        logger.warning("No OPENROUTER_API_KEY configured for canvas image generation")
+        return None
+
+    try:
+        async with get_http_client() as client:
+            response = await client.post(
+                f"{OPENROUTER_BASE_URL}/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {api_key}",
+                    "Content-Type": "application/json",
+                    "HTTP-Referer": "https://recoder.xyz",
+                    "X-Title": "Recoder Canvas AI",
+                },
+                json={
+                    "model": "google/gemini-2.5-flash-preview-05-20",
+                    "messages": [{"role": "user", "content": prompt}],
+                    "modalities": ["image", "text"],
+                },
+                timeout=120.0,
+            )
+
+            if response.status_code != 200:
+                logger.warning(f"OpenRouter canvas image gen failed: {response.status_code} — {response.text[:300]}")
+                return None
+
+            result = response.json()
+            message = result.get("choices", [{}])[0].get("message", {})
+            content = message.get("content")
+
+            if isinstance(content, list):
+                for part in content:
+                    if isinstance(part, dict) and part.get("type") == "image_url":
+                        url = part.get("image_url", {}).get("url")
+                        if url:
+                            return url
+
+            images = message.get("images", [])
+            if images and isinstance(images[0], dict):
+                url = images[0].get("image_url", {}).get("url")
+                if url:
+                    return url
+
+            logger.warning("OpenRouter canvas image gen: no image in response")
+            return None
+    except Exception as e:
+        logger.warning(f"OpenRouter canvas image gen error: {e}")
+        return None
+
+
 async def process_with_replicate_remove_bg(image_bytes: bytes, mime_type: str) -> str:
-    """Remove background using Replicate's 851-labs/background-remover"""
-    _get_replicate_token()
+    """Remove background using Replicate's 851-labs/background-remover. Requires REPLICATE_API_TOKEN."""
+    _get_replicate_token_or_raise()
     
     # Convert bytes to data URL
     image_b64 = base64.b64encode(image_bytes).decode('utf-8')
@@ -309,8 +370,8 @@ async def process_with_replicate_remove_bg(image_bytes: bytes, mime_type: str) -
 
 
 async def process_with_replicate_upscale(image_bytes: bytes, mime_type: str) -> str:
-    """Upscale image using Replicate's recraft-ai/recraft-crisp-upscale"""
-    _get_replicate_token()
+    """Upscale image using Replicate's recraft-ai/recraft-crisp-upscale. Requires REPLICATE_API_TOKEN."""
+    _get_replicate_token_or_raise()
     
     # Convert bytes to data URL
     image_b64 = base64.b64encode(image_bytes).decode('utf-8')
@@ -514,47 +575,51 @@ Instructions: {request.prompt}
 Create a single cohesive image that combines these images according to the instructions.
 The result should be a high-quality merged image."""
 
-        _get_replicate_token()
-        
-        logger.info(f"Calling Replicate openai/gpt-image-1.5 for merge with {len(input_images)} images")
-        
-        try:
-            # Wrap replicate.run() in thread pool to avoid blocking event loop
-            output = await asyncio.to_thread(
-                replicate.run,
-                "openai/gpt-image-1.5",
-                input={
-                    "prompt": merge_prompt,
-                    "input_images": input_images,
-                    "aspect_ratio": "1:1",
-                    "number_of_images": 1,
-                    "quality": "low",  # Cost-efficient ($0.02/image)
-                }
-            )
-            
-            # Output is a list of FileOutput objects - get the first one
-            output_list = list(output) if hasattr(output, '__iter__') and not hasattr(output, 'read') else [output]
-            if len(output_list) == 0:
-                raise Exception("No output from GPT image model")
-            
-            merged_image = _replicate_output_to_base64(output_list[0], "png")
-            
-            # BILLING: Deduct credits for successful merge
-            await media_billing.deduct_media_credits(
-                account_id=user_id,
-                provider="replicate",
-                model="openai/gpt-image-1.5",
-                media_type="image",
-                count=1,
-                description="Canvas image merge",
-                variant="low",
-            )
-            
-            return ImageMergeResponse(success=True, image=merged_image)
-            
-        except Exception as e:
-            logger.error(f"GPT Image merge failed: {e}")
-            raise Exception(f"Merge failed: {str(e)}")
+        config = get_config()
+        use_replicate = bool(config.REPLICATE_API_TOKEN)
+
+        if use_replicate:
+            _get_replicate_token()
+            logger.info(f"Calling Replicate openai/gpt-image-1.5 for merge with {len(input_images)} images")
+            try:
+                output = await asyncio.to_thread(
+                    replicate.run,
+                    "openai/gpt-image-1.5",
+                    input={
+                        "prompt": merge_prompt,
+                        "input_images": input_images,
+                        "aspect_ratio": "1:1",
+                        "number_of_images": 1,
+                        "quality": "low",
+                    }
+                )
+                output_list = list(output) if hasattr(output, '__iter__') and not hasattr(output, 'read') else [output]
+                if len(output_list) == 0:
+                    raise Exception("No output from GPT image model")
+                merged_image = _replicate_output_to_base64(output_list[0], "png")
+            except Exception as e:
+                logger.error(f"GPT Image merge failed: {e}")
+                raise Exception(f"Merge failed: {str(e)}")
+        else:
+            # Use OpenRouter Gemini for merging (send first image + prompt)
+            logger.info(f"Using OpenRouter Gemini for merge with {len(input_images)} images")
+            first_mime, first_bytes, _ = extract_image_data(input_images[0])
+            merged_image = await process_with_gemini(first_bytes, first_mime, merge_prompt, "gemini-flash")
+
+        # BILLING: Deduct credits for successful merge
+        billing_provider = "replicate" if use_replicate else "openrouter"
+        billing_model = "openai/gpt-image-1.5" if use_replicate else MODELS["gemini-flash"]
+        await media_billing.deduct_media_credits(
+            account_id=user_id,
+            provider=billing_provider,
+            model=billing_model,
+            media_type="image",
+            count=1,
+            description="Canvas image merge",
+            variant="low" if use_replicate else None,
+        )
+
+        return ImageMergeResponse(success=True, image=merged_image)
         
     except Exception as e:
         error_msg = str(e)
@@ -596,59 +661,72 @@ async def generate_images(
                 error="Prompt is required"
             )
         
-        _get_replicate_token()
-        
         num_to_generate = min(request.num_images, 4)
-        logger.info(f"Generating {num_to_generate} images with flux-schnell")
-        
-        try:
-            # Wrap replicate.run() in thread pool to avoid blocking event loop
-            output = await asyncio.to_thread(
-                replicate.run,
-                "black-forest-labs/flux-schnell",
-                input={
-                    "prompt": request.prompt,
-                    "aspect_ratio": request.aspect_ratio,
-                    "num_outputs": num_to_generate,
-                    "output_format": "webp",
-                    "output_quality": 90,
-                    "go_fast": True,
-                }
-            )
-            
-            # Output can be a list or iterator of FileOutput objects
-            generated_images: list[str] = []
-            
-            # Convert to list if it's an iterator
-            output_list = list(output) if hasattr(output, '__iter__') else [output]
-            logger.info(f"Replicate returned {len(output_list)} outputs")
-            
-            for img_output in output_list:
+        config = get_config()
+        use_replicate = bool(config.REPLICATE_API_TOKEN)
+
+        generated_images: list[str] = []
+
+        if use_replicate:
+            _get_replicate_token()
+            logger.info(f"Generating {num_to_generate} images with flux-schnell via Replicate")
+            try:
+                output = await asyncio.to_thread(
+                    replicate.run,
+                    "black-forest-labs/flux-schnell",
+                    input={
+                        "prompt": request.prompt,
+                        "aspect_ratio": request.aspect_ratio,
+                        "num_outputs": num_to_generate,
+                        "output_format": "webp",
+                        "output_quality": 90,
+                        "go_fast": True,
+                    }
+                )
+                output_list = list(output) if hasattr(output, '__iter__') else [output]
+                logger.info(f"Replicate returned {len(output_list)} outputs")
+                for img_output in output_list:
+                    try:
+                        image_b64 = _replicate_output_to_base64(img_output, "webp")
+                        generated_images.append(image_b64)
+                    except Exception as e:
+                        logger.error(f"Failed to process output: {e}")
+                        continue
+            except Exception as e:
+                logger.error(f"Flux generation failed: {e}")
+                return ImageGenerateResponse(success=False, error=str(e)[:150])
+        else:
+            # Use OpenRouter Gemini for image generation
+            logger.info(f"Generating {num_to_generate} images via OpenRouter Gemini")
+            for i in range(num_to_generate):
                 try:
-                    image_b64 = _replicate_output_to_base64(img_output, "webp")
-                    generated_images.append(image_b64)
+                    # process_with_gemini expects image bytes for edit, but for
+                    # generation we send a dummy 1x1 transparent PNG so the model
+                    # can produce images via the modalities API.  However, Gemini
+                    # supports text-only image generation, so we use a direct
+                    # OpenRouter call instead.
+                    result_b64 = await _generate_image_openrouter(request.prompt)
+                    if result_b64:
+                        generated_images.append(result_b64)
                 except Exception as e:
-                    logger.error(f"Failed to process output: {e}")
+                    logger.error(f"OpenRouter image gen {i} failed: {e}")
                     continue
-                
-        except Exception as e:
-            logger.error(f"Flux generation failed: {e}")
-            return ImageGenerateResponse(success=False, error=str(e)[:150])
-        
+
         if len(generated_images) == 0:
             return ImageGenerateResponse(
                 success=False,
                 error="Failed to generate any images"
             )
-        
+
         # BILLING: Deduct credits for successful generation
+        billing_model = "black-forest-labs/flux-schnell" if use_replicate else MODELS["gemini-flash"]
         await media_billing.deduct_replicate_image(
             account_id=user_id,
-            model="black-forest-labs/flux-schnell",
+            model=billing_model,
             count=len(generated_images),
             description=f"Canvas image generation ({len(generated_images)} images)",
         )
-        
+
         return ImageGenerateResponse(
             success=True,
             images=generated_images

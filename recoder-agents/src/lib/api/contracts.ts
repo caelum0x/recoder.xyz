@@ -242,10 +242,19 @@ export function parseConfirmInlineCheckoutResponse(payload: unknown) {
 }
 
 const apiMessageSchema = z.object({
-  role: z.string(),
-  content: z.string(),
+  message_id: z.string().optional(),
+  thread_id: z.string().optional(),
   type: z.string(),
-  agent_id: z.string().optional(),
+  is_llm_message: z.boolean().optional(),
+  content: z.unknown().optional(),
+  metadata: z.unknown().optional(),
+  created_at: z.string().optional(),
+  updated_at: z.string().optional(),
+  agent_id: z.string().nullable().optional(),
+  agent_run_id: z.string().nullable().optional(),
+  agent_version_id: z.string().nullable().optional(),
+  // Legacy fields (may appear in older responses or agent runs)
+  role: z.string().optional(),
   agents: z.object({ name: z.string() }).optional(),
 });
 

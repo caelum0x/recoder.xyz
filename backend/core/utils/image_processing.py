@@ -18,11 +18,13 @@ from core.utils.config import get_config
 
 
 def get_replicate_token() -> str:
-    """Get and set Replicate API token from config."""
+    """Get and set Replicate API token from config.
+    Raises if REPLICATE_API_TOKEN is not set. Upscale and remove_bg
+    operations require Replicate; image generation uses OpenRouter instead."""
     config = get_config()
     token = config.REPLICATE_API_TOKEN
     if not token:
-        raise Exception("Replicate API token not configured. Add REPLICATE_API_TOKEN to your .env")
+        raise Exception("Replicate API token not configured. Upscale/remove-bg require REPLICATE_API_TOKEN in .env")
     os.environ["REPLICATE_API_TOKEN"] = token
     return token
 

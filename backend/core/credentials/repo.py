@@ -6,9 +6,9 @@ from core.utils.logger import logger
 async def get_credential_profile_by_id(profile_id: str) -> Optional[Dict[str, Any]]:
     sql = """
     SELECT profile_id, account_id, mcp_qualified_name, profile_name, display_name,
-           encrypted_config, is_active, is_default, created_at, updated_at
-    FROM user_mcp_credential_profiles 
-    WHERE profile_id = :profile_id
+           encrypted_config, config_hash, is_active, is_default, created_at, updated_at
+    FROM user_mcp_credential_profiles
+    WHERE profile_id::text = :profile_id
     """
     result = await execute_one(sql, {"profile_id": profile_id})
     return serialize_row(dict(result)) if result else None
@@ -17,9 +17,9 @@ async def get_credential_profile_by_id(profile_id: str) -> Optional[Dict[str, An
 async def get_user_credential_profiles(account_id: str) -> List[Dict[str, Any]]:
     sql = """
     SELECT profile_id, account_id, mcp_qualified_name, profile_name, display_name,
-           encrypted_config, is_active, is_default, created_at, updated_at
+           encrypted_config, config_hash, is_active, is_default, created_at, updated_at
     FROM user_mcp_credential_profiles
-    WHERE account_id = :account_id
+    WHERE account_id::text = :account_id
     ORDER BY created_at DESC
     """
     rows = await execute(sql, {"account_id": account_id})
@@ -29,9 +29,9 @@ async def get_user_credential_profiles(account_id: str) -> List[Dict[str, Any]]:
 async def get_profiles_for_mcp(account_id: str, mcp_qualified_name: str) -> List[Dict[str, Any]]:
     sql = """
     SELECT profile_id, account_id, mcp_qualified_name, profile_name, display_name,
-           encrypted_config, is_active, is_default, created_at, updated_at
+           encrypted_config, config_hash, is_active, is_default, created_at, updated_at
     FROM user_mcp_credential_profiles
-    WHERE account_id = :account_id AND mcp_qualified_name = :mcp_qualified_name
+    WHERE account_id::text = :account_id AND mcp_qualified_name = :mcp_qualified_name
     ORDER BY is_default DESC, created_at DESC
     """
     rows = await execute(sql, {
@@ -47,23 +47,24 @@ async def create_credential_profile(
     mcp_qualified_name: str,
     profile_name: str,
     display_name: str,
-    encrypted_config: str
+    encrypted_config: str,
+    config_hash: str = ""
 ) -> bool:
     from datetime import datetime, timezone
-    
+
     sql = """
     INSERT INTO user_mcp_credential_profiles (
-        profile_id, account_id, mcp_qualified_name, profile_name, 
-        display_name, encrypted_config, is_active, is_default, created_at, updated_at
+        profile_id, account_id, mcp_qualified_name, profile_name,
+        display_name, encrypted_config, config_hash, is_active, is_default, created_at, updated_at
     )
     VALUES (
         :profile_id, :account_id, :mcp_qualified_name, :profile_name,
-        :display_name, :encrypted_config, :is_active, :is_default, :created_at, :updated_at
+        :display_name, :encrypted_config, :config_hash, :is_active, :is_default, :created_at, :updated_at
     )
     """
-    
+
     now = datetime.now(timezone.utc)
-    
+
     try:
         await execute_mutate(sql, {
             "profile_id": profile_id,
@@ -72,6 +73,7 @@ async def create_credential_profile(
             "profile_name": profile_name,
             "display_name": display_name,
             "encrypted_config": encrypted_config,
+            "config_hash": config_hash,
             "is_active": True,
             "is_default": False,
             "created_at": now,
@@ -119,7 +121,7 @@ async def update_credential_profile(
     sql = f"""
     UPDATE user_mcp_credential_profiles
     SET {set_clause}
-    WHERE profile_id = :profile_id AND account_id = :account_id
+    WHERE profile_id::text = :profile_id AND account_id::text = :account_id
     """
     
     try:
@@ -133,7 +135,7 @@ async def update_credential_profile(
 async def delete_credential_profile(profile_id: str, account_id: str) -> bool:
     sql = """
     DELETE FROM user_mcp_credential_profiles
-    WHERE profile_id = :profile_id AND account_id = :account_id
+    WHERE profile_id::text = :profile_id AND account_id::text = :account_id
     RETURNING profile_id
     """
     result = await execute_mutate(sql, {"profile_id": profile_id, "account_id": account_id})
@@ -146,13 +148,13 @@ async def set_default_profile(account_id: str, profile_id: str, mcp_qualified_na
     clear_sql = """
     UPDATE user_mcp_credential_profiles
     SET is_default = false, updated_at = :updated_at
-    WHERE account_id = :account_id AND mcp_qualified_name = :mcp_qualified_name
+    WHERE account_id::text = :account_id AND mcp_qualified_name = :mcp_qualified_name
     """
-    
+
     set_sql = """
     UPDATE user_mcp_credential_profiles
     SET is_default = true, updated_at = :updated_at
-    WHERE profile_id = :profile_id AND account_id = :account_id
+    WHERE profile_id::text = :profile_id AND account_id::text = :account_id
     """
     
     now = datetime.now(timezone.utc)
@@ -179,8 +181,8 @@ async def set_default_profile(account_id: str, profile_id: str, mcp_qualified_na
 async def get_default_profile_for_mcp(account_id: str, mcp_qualified_name: str) -> Optional[Dict[str, Any]]:
     sql = """
     SELECT * FROM user_mcp_credential_profiles
-    WHERE account_id = :account_id 
-      AND mcp_qualified_name = :mcp_qualified_name 
+    WHERE account_id::text = :account_id
+      AND mcp_qualified_name = :mcp_qualified_name
       AND is_default = true
     LIMIT 1
     """

@@ -33,11 +33,12 @@ export type ThreadParams = {
 };
 
 // Extend the base Message type with the expected database fields
-export interface ApiMessageType extends Omit<BaseApiMessageType, 'type'> {
+export interface ApiMessageType extends Omit<BaseApiMessageType, 'type' | 'content'> {
   message_id?: string;
   thread_id?: string;
   is_llm_message?: boolean;
-  metadata?: string;
+  content?: unknown;
+  metadata?: unknown;
   created_at?: string;
   updated_at?: string;
   // Allow 'type' to be potentially wider than the base type

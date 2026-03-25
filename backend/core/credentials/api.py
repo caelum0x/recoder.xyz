@@ -402,19 +402,32 @@ async def get_composio_profiles(
 ):
     try:
         profile_service = get_profile_service(db)
-        from core.composio_integration.composio_profile_service import ComposioProfileService
-        composio_service = ComposioProfileService()
-        
+
+        try:
+            from core.composio_integration.composio_profile_service import ComposioProfileService
+            composio_service = ComposioProfileService()
+        except Exception as import_err:
+            logger.warning(f"Composio integration unavailable (import failed): {import_err}")
+            return ComposioCredentialsResponse(success=True, toolkits=[], total_profiles=0)
+
         all_profiles = await profile_service.get_all_user_profiles(user_id)
-        
+
         composio_profiles = [
-            profile for profile in all_profiles 
+            profile for profile in all_profiles
             if profile.mcp_qualified_name.startswith('composio.')
         ]
-        
-        from core.composio_integration.toolkit_service import ToolkitService
-        toolkit_service = ToolkitService()
-        
+
+        # If no composio profiles, return early without loading toolkit service
+        if not composio_profiles:
+            return ComposioCredentialsResponse(success=True, toolkits=[], total_profiles=0)
+
+        try:
+            from core.composio_integration.toolkit_service import ToolkitService
+            toolkit_service = ToolkitService()
+        except Exception as import_err:
+            logger.warning(f"Composio ToolkitService unavailable: {import_err}")
+            toolkit_service = None
+
         toolkit_groups = {}
         for profile in composio_profiles:
             mcp_parts = profile.mcp_qualified_name.split('.')
@@ -425,27 +438,29 @@ async def get_composio_profiles(
                 config = profile.config
                 toolkit_slug = config.get('toolkit_slug', 'unknown')
                 toolkit_name = config.get('toolkit_name', toolkit_slug.title())
-            
+
             if toolkit_slug not in toolkit_groups:
-                try:
-                    icon_url = await toolkit_service.get_toolkit_icon(toolkit_slug)
-                except Exception:
-                    icon_url = None
-                
+                icon_url = None
+                if toolkit_service is not None:
+                    try:
+                        icon_url = await toolkit_service.get_toolkit_icon(toolkit_slug)
+                    except Exception:
+                        icon_url = None
+
                 toolkit_groups[toolkit_slug] = {
                     'toolkit_slug': toolkit_slug,
                     'toolkit_name': toolkit_name,
                     'icon_url': icon_url,
                     'profiles': []
                 }
-            
+
             has_mcp_url = False
             try:
                 mcp_url = await composio_service.get_mcp_url_for_runtime(profile.profile_id)
                 has_mcp_url = bool(mcp_url)
             except Exception:
                 has_mcp_url = False
-            
+
             profile_summary = ComposioProfileSummary(
                 profile_id=profile.profile_id,
                 profile_name=profile.profile_name,
@@ -457,22 +472,22 @@ async def get_composio_profiles(
                 created_at=profile.created_at.isoformat() if profile.created_at else "",
                 has_mcp_url=has_mcp_url
             )
-            
+
             toolkit_groups[toolkit_slug]['profiles'].append(profile_summary)
-        
+
         toolkits = []
         for group_data in toolkit_groups.values():
             group_data['profiles'].sort(key=lambda p: p.created_at, reverse=True)
             toolkits.append(ComposioToolkitGroup(**group_data))
-        
+
         toolkits.sort(key=lambda t: t.toolkit_name)
-        
+
         return ComposioCredentialsResponse(
             success=True,
             toolkits=toolkits,
             total_profiles=len(composio_profiles)
         )
-        
+
     except Exception as e:
         logger.error(f"Error getting Composio profiles: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")

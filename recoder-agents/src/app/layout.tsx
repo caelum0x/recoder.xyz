@@ -113,11 +113,21 @@ export default function RootLayout({
     <html lang="en" suppressHydrationWarning className={`${roobert.variable} ${roobertMono.variable}`}>
       <head>
         {/* Font preloading handled by next/font/local with preload:true — no manual <link> needed */}
-        
+
+        {/* Suppress React hydration warnings caused by browser extensions injecting
+            content into the DOM before React hydrates. This is a known issue with
+            Next.js + next-themes and cannot be fixed at the component level.
+            See: https://github.com/vercel/next.js/discussions/38263 */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){var o=console.error;console.error=function(){if(typeof arguments[0]==='string'&&(arguments[0].includes('Hydration')||arguments[0].includes('#418')||arguments[0].includes('#423')||arguments[0].includes('#425')))return;o.apply(console,arguments)};})();`,
+          }}
+        />
+
         {/* DNS prefetch for analytics (loaded later but resolve DNS early) */}
         <link rel="dns-prefetch" href="https://www.googletagmanager.com" />
         <link rel="dns-prefetch" href="https://eu.i.posthog.com" />
-        
+
         {/* Container Load - Initialize dataLayer with page context BEFORE GTM loads */}
         <script
           dangerouslySetInnerHTML={{

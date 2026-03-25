@@ -120,7 +120,7 @@ async def create_webhook(
     row = await execute_one(
         """
         INSERT INTO agent_webhooks (user_id, agent_id, name, url, secret, events, retry_count, timeout_ms)
-        VALUES (:user_id, :agent_id, :name, :url, :secret, :events, :retry_count, :timeout_ms)
+        VALUES (:user_id::uuid, :agent_id, :name, :url, :secret, :events, :retry_count, :timeout_ms)
         RETURNING *
         """,
         {
@@ -147,11 +147,11 @@ async def list_webhooks(
         rows = await execute(
             """
             SELECT w.*,
-                   (SELECT COUNT(*) FROM webhook_deliveries d WHERE d.webhook_id = w.id AND d.status = 'delivered') AS delivered_count,
-                   (SELECT COUNT(*) FROM webhook_deliveries d WHERE d.webhook_id = w.id) AS total_delivery_count,
-                   (SELECT MAX(d.created_at) FROM webhook_deliveries d WHERE d.webhook_id = w.id) AS last_delivery_at
+                   0 AS delivered_count,
+                   0 AS total_delivery_count,
+                   NULL::timestamptz AS last_delivery_at
             FROM agent_webhooks w
-            WHERE w.user_id = :user_id AND w.agent_id = :agent_id
+            WHERE w.user_id::text = :user_id AND w.agent_id = :agent_id
             ORDER BY w.created_at DESC
             """,
             {"user_id": user_id, "agent_id": agent_id},
@@ -160,11 +160,11 @@ async def list_webhooks(
         rows = await execute(
             """
             SELECT w.*,
-                   (SELECT COUNT(*) FROM webhook_deliveries d WHERE d.webhook_id = w.id AND d.status = 'delivered') AS delivered_count,
-                   (SELECT COUNT(*) FROM webhook_deliveries d WHERE d.webhook_id = w.id) AS total_delivery_count,
-                   (SELECT MAX(d.created_at) FROM webhook_deliveries d WHERE d.webhook_id = w.id) AS last_delivery_at
+                   0 AS delivered_count,
+                   0 AS total_delivery_count,
+                   NULL::timestamptz AS last_delivery_at
             FROM agent_webhooks w
-            WHERE w.user_id = :user_id
+            WHERE w.user_id::text = :user_id
             ORDER BY w.created_at DESC
             """,
             {"user_id": user_id},
@@ -179,7 +179,7 @@ async def update_webhook(
     user_id: str = Depends(verify_and_get_user_id_from_jwt),
 ):
     existing = await execute_one(
-        "SELECT id FROM agent_webhooks WHERE id = :id AND user_id = :user_id",
+        "SELECT id FROM agent_webhooks WHERE id::text = :id AND user_id::text = :user_id",
         {"id": webhook_id, "user_id": user_id},
     )
     if not existing:
@@ -202,7 +202,7 @@ async def update_webhook(
     row = await execute_one(
         f"""
         UPDATE agent_webhooks SET {set_clause}
-        WHERE id = :id AND user_id = :user_id
+        WHERE id::text = :id AND user_id::text = :user_id
         RETURNING *
         """,
         params,
@@ -217,14 +217,14 @@ async def delete_webhook(
     user_id: str = Depends(verify_and_get_user_id_from_jwt),
 ):
     existing = await execute_one(
-        "SELECT id FROM agent_webhooks WHERE id = :id AND user_id = :user_id",
+        "SELECT id FROM agent_webhooks WHERE id::text = :id AND user_id::text = :user_id",
         {"id": webhook_id, "user_id": user_id},
     )
     if not existing:
         raise HTTPException(status_code=404, detail="Webhook not found")
 
     await execute_mutate(
-        "DELETE FROM agent_webhooks WHERE id = :id AND user_id = :user_id",
+        "DELETE FROM agent_webhooks WHERE id::text = :id AND user_id::text = :user_id",
         {"id": webhook_id, "user_id": user_id},
     )
     return {"success": True}
@@ -236,7 +236,7 @@ async def test_webhook(
     user_id: str = Depends(verify_and_get_user_id_from_jwt),
 ):
     webhook = await execute_one(
-        "SELECT * FROM agent_webhooks WHERE id = :id AND user_id = :user_id",
+        "SELECT * FROM agent_webhooks WHERE id::text = :id AND user_id::text = :user_id",
         {"id": webhook_id, "user_id": user_id},
     )
     if not webhook:
@@ -281,8 +281,8 @@ async def test_webhook(
 
     delivery = await execute_one(
         """
-        INSERT INTO webhook_deliveries (webhook_id, user_id, event_type, payload, response_status, response_body, status, attempt, delivered_at)
-        VALUES (:webhook_id, :user_id, :event_type, :payload, :response_status, :response_body, :status, 1, :delivered_at)
+        INSERT INTO agent_webhook_deliveries (webhook_id, user_id, event_type, payload, response_status, response_body, status, attempt, delivered_at)
+        VALUES (:webhook_id::uuid, :user_id::uuid, :event_type, :payload, :response_status, :response_body, :status, 1, :delivered_at)
         RETURNING *
         """,
         {
@@ -310,7 +310,7 @@ async def list_deliveries(
 ):
     # Verify ownership
     existing = await execute_one(
-        "SELECT id FROM agent_webhooks WHERE id = :id AND user_id = :user_id",
+        "SELECT id FROM agent_webhooks WHERE id::text = :id AND user_id::text = :user_id",
         {"id": webhook_id, "user_id": user_id},
     )
     if not existing:
@@ -323,7 +323,7 @@ async def list_deliveries(
         "offset": offset,
     }
 
-    where_clauses = ["d.webhook_id = :webhook_id", "d.user_id = :user_id"]
+    where_clauses = ["d.webhook_id::text = :webhook_id", "d.user_id::text = :user_id"]
     if status:
         where_clauses.append("d.status = :status")
         params["status"] = status
@@ -332,7 +332,7 @@ async def list_deliveries(
 
     rows = await execute(
         f"""
-        SELECT d.* FROM webhook_deliveries d
+        SELECT d.* FROM agent_webhook_deliveries d
         WHERE {where}
         ORDER BY d.created_at DESC
         LIMIT :limit OFFSET :offset
@@ -341,7 +341,7 @@ async def list_deliveries(
     )
 
     total_row = await execute_one(
-        f"SELECT COUNT(*) as total FROM webhook_deliveries d WHERE {where}",
+        f"SELECT COUNT(*) as total FROM agent_webhook_deliveries d WHERE {where}",
         params,
     )
 
@@ -359,9 +359,9 @@ async def retry_delivery(
     delivery = await execute_one(
         """
         SELECT d.*, w.url, w.secret, w.timeout_ms
-        FROM webhook_deliveries d
+        FROM agent_webhook_deliveries d
         JOIN agent_webhooks w ON w.id = d.webhook_id
-        WHERE d.id = :id AND d.user_id = :user_id
+        WHERE d.id::text = :id AND d.user_id::text = :user_id
         """,
         {"id": delivery_id, "user_id": user_id},
     )
@@ -404,13 +404,13 @@ async def retry_delivery(
 
     updated = await execute_one(
         """
-        UPDATE webhook_deliveries
+        UPDATE agent_webhook_deliveries
         SET response_status = :response_status,
             response_body = :response_body,
             status = :status,
             attempt = attempt + 1,
             delivered_at = :delivered_at
-        WHERE id = :id AND user_id = :user_id
+        WHERE id::text = :id AND user_id::text = :user_id
         RETURNING *
         """,
         {

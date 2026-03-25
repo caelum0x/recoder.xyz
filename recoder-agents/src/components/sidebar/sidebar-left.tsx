@@ -517,45 +517,47 @@ export function SidebarLeft({
             </div>
           </div>
 
-          {/* Content area — each section wrapped in SSEErrorBoundary so
-              CORS/QUIC/network failures don't blank the entire sidebar */}
-          <div className="px-6 flex-1 overflow-hidden">
-            {activeView === 'chats' && (
-              <SSEErrorBoundary name="sidebar-chats" retryAfterMs={10000}
-                fallback={<SidebarSectionError label="Chats" />}>
-                <div data-tour="sidebar-agents"><NavAgents /></div>
-              </SSEErrorBoundary>
-            )}
-            {activeView === 'workers' && (
-              <SSEErrorBoundary name="sidebar-workers" retryAfterMs={10000}
-                fallback={<SidebarSectionError label="Workers" />}>
-                <NavWorkers />
-              </SSEErrorBoundary>
-            )}
-            {activeView === 'workspaces' && (
-              <SSEErrorBoundary name="sidebar-workspaces" retryAfterMs={10000}
-                fallback={<SidebarSectionError label="Spaces" />}>
-                <NavWorkspaces />
-              </SSEErrorBoundary>
-            )}
-            {activeView === 'starred' && (
-              <SSEErrorBoundary name="sidebar-triggers" retryAfterMs={10000}
-                fallback={<SidebarSectionError label="Triggers" />}>
-                <NavGlobalConfig />
-                <NavTriggerRuns />
-              </SSEErrorBoundary>
-            )}
-          </div>
+          {/* Scrollable area containing content panels, active runs, and nav links */}
+          <div className="flex-1 min-h-0 overflow-y-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:'none'] [scrollbar-width:'none']">
+            {/* Content area — each section wrapped in SSEErrorBoundary so
+                CORS/QUIC/network failures don't blank the entire sidebar */}
+            <div className="px-6 min-h-[200px]">
+              {activeView === 'chats' && (
+                <SSEErrorBoundary name="sidebar-chats" retryAfterMs={10000}
+                  fallback={<SidebarSectionError label="Chats" />}>
+                  <div data-tour="sidebar-agents"><NavAgents /></div>
+                </SSEErrorBoundary>
+              )}
+              {activeView === 'workers' && (
+                <SSEErrorBoundary name="sidebar-workers" retryAfterMs={10000}
+                  fallback={<SidebarSectionError label="Workers" />}>
+                  <NavWorkers />
+                </SSEErrorBoundary>
+              )}
+              {activeView === 'workspaces' && (
+                <SSEErrorBoundary name="sidebar-workspaces" retryAfterMs={10000}
+                  fallback={<SidebarSectionError label="Spaces" />}>
+                  <NavWorkspaces />
+                </SSEErrorBoundary>
+              )}
+              {activeView === 'starred' && (
+                <SSEErrorBoundary name="sidebar-triggers" retryAfterMs={10000}
+                  fallback={<SidebarSectionError label="Triggers" />}>
+                  <NavGlobalConfig />
+                  <NavTriggerRuns />
+                </SSEErrorBoundary>
+              )}
+            </div>
 
-          {/* Active runs monitor */}
-          <div className="px-6">
-            <SSEErrorBoundary name="sidebar-active-runs" retryAfterMs={10000}>
-              <ActiveRunsSection />
-            </SSEErrorBoundary>
-          </div>
+            {/* Active runs monitor */}
+            <div className="px-6">
+              <SSEErrorBoundary name="sidebar-active-runs" retryAfterMs={10000}>
+                <ActiveRunsSection />
+              </SSEErrorBoundary>
+            </div>
 
-          {/* Shared + Developers links */}
-          <div className="px-6 pb-2 space-y-0.5">
+            {/* Shared + Developers links */}
+            <div className="px-6 pb-2 space-y-0.5">
             <Link
               href="/shared"
               className={cn(
@@ -749,6 +751,7 @@ export function SidebarLeft({
               Developers
             </Link>
           </div>
+          </div>{/* end scrollable area */}
         </div>
       </SidebarContent>
 
