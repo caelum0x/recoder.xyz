@@ -79,8 +79,9 @@ class ProfileService:
             await credentials_repo.set_default_profile(account_id, profile_id, mcp_qualified_name)
         
         success = await credentials_repo.create_credential_profile(
-            profile_id, account_id, mcp_qualified_name, 
-            profile_name, display_name, encoded_config
+            profile_id, account_id, mcp_qualified_name,
+            profile_name, display_name, encoded_config,
+            config_hash=config_hash
         )
         
         if not success:
