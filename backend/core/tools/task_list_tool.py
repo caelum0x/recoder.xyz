@@ -128,7 +128,7 @@ class TaskListTool(SandboxToolsBase):
 
             row = await execute_one(
                 """SELECT * FROM messages
-                   WHERE thread_id = :thread_id AND type = :msg_type
+                   WHERE thread_id::text = :thread_id AND type = :msg_type
                    ORDER BY created_at DESC LIMIT 1""",
                 {"thread_id": self.thread_id, "msg_type": self.task_list_message_type}
             )
@@ -177,7 +177,7 @@ class TaskListTool(SandboxToolsBase):
 
             existing = await execute_one(
                 """SELECT message_id FROM messages
-                   WHERE thread_id = :thread_id AND type = :msg_type
+                   WHERE thread_id::text = :thread_id AND type = :msg_type
                    ORDER BY created_at DESC LIMIT 1""",
                 {"thread_id": self.thread_id, "msg_type": self.task_list_message_type}
             )
@@ -300,7 +300,11 @@ class TaskListTool(SandboxToolsBase):
     })
     async def create_tasks(self, sections: Optional[List[Dict[str, Any]]] = None,
                           section_title: Optional[str] = None, section_id: Optional[str] = None,
-                          task_contents: Optional[List[str]] = None) -> ToolResult:
+                          task_contents: Optional[List[str]] = None,
+                          tasks: Optional[List[Any]] = None, **kwargs) -> ToolResult:
+        # Accept "tasks" as alias for "sections" (model sometimes uses wrong param name)
+        if tasks is not None and sections is None:
+            sections = tasks
         """Create tasks - supports batch multi-section and single section creation"""
         try:
             # Parse JSON strings if needed

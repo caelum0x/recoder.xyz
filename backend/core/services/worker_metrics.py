@@ -16,23 +16,45 @@ from core.utils.config import config, EnvMode
 
 # CloudWatch client (lazy initialized)
 _cloudwatch_client = None
+# Flag to avoid repeated "no credentials" warnings
+_cloudwatch_unavailable = False
 
 
 def _get_cloudwatch_client():
-    """Get or create CloudWatch client (production only)."""
-    global _cloudwatch_client
-    
+    """Get or create CloudWatch client (production only).
+
+    Returns None silently after the first failure to avoid spamming logs
+    every publish interval when AWS credentials are not configured.
+    """
+    global _cloudwatch_client, _cloudwatch_unavailable
+
     if config.ENV_MODE != EnvMode.PRODUCTION:
         return None
-        
+
+    # If we already know CloudWatch is unavailable, skip silently
+    if _cloudwatch_unavailable:
+        return None
+
     if _cloudwatch_client is None:
         try:
             import boto3
+            # Check if AWS credentials are configured before creating client
+            aws_key = os.getenv("AWS_ACCESS_KEY_ID")
+            aws_secret = os.getenv("AWS_SECRET_ACCESS_KEY")
+            if not aws_key or not aws_secret:
+                logger.info("AWS credentials not configured — CloudWatch metrics disabled (this message appears once)")
+                _cloudwatch_unavailable = True
+                return None
             _cloudwatch_client = boto3.client('cloudwatch', region_name='us-west-2')
-        except Exception as e:
-            logger.warning(f"Failed to initialize CloudWatch client: {e}")
+        except ImportError:
+            logger.info("boto3 not installed — CloudWatch metrics disabled (this message appears once)")
+            _cloudwatch_unavailable = True
             return None
-    
+        except Exception as e:
+            logger.warning(f"Failed to initialize CloudWatch client: {e} — disabling CloudWatch metrics")
+            _cloudwatch_unavailable = True
+            return None
+
     return _cloudwatch_client
 
 
@@ -144,19 +166,25 @@ async def publish_to_cloudwatch(metrics: dict) -> bool:
 async def start_cloudwatch_publisher(interval_seconds: int = 60):
     """
     Background task to publish API instance metrics to CloudWatch periodically.
-    
+
     Args:
         interval_seconds: How often to publish (default 60s)
     """
+    # Check once at startup — if CloudWatch is not available, exit immediately
+    # instead of spinning in an infinite loop that logs errors every interval.
+    if _get_cloudwatch_client() is None:
+        logger.info("CloudWatch publisher not started — client unavailable")
+        return
+
     logger.info(f"Starting CloudWatch API instance metrics publisher (interval: {interval_seconds}s)")
-    
+
     while True:
         try:
             await asyncio.sleep(interval_seconds)
-            
+
             metrics = await get_worker_metrics()
             await publish_to_cloudwatch(metrics)
-            
+
         except asyncio.CancelledError:
             logger.info("CloudWatch API instance metrics publisher stopped")
             raise

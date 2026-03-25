@@ -108,7 +108,7 @@ async def _compute_live_from_agent_runs(
     Query agent_runs table directly to compute daily aggregates.
     Falls back to this when agent_analytics_daily has no data.
     """
-    where_clauses = ["ar.agent_id = :agent_id", "t.account_id = :account_id"]
+    where_clauses = ["ar.agent_id::text = :agent_id", "t.account_id::text = :account_id"]
     params: Dict[str, Any] = {"agent_id": agent_id, "account_id": account_id}
 
     if start_date:
@@ -131,7 +131,7 @@ async def _compute_live_from_agent_runs(
             EXTRACT(EPOCH FROM (ar.completed_at - ar.started_at)) * 1000
         ) FILTER (WHERE ar.completed_at IS NOT NULL), 0)::INTEGER AS avg_response_ms
     FROM agent_runs ar
-    JOIN threads t ON ar.thread_id = t.thread_id
+    JOIN threads t ON ar.thread_id::text = t.thread_id::text
     WHERE {where_sql}
     GROUP BY DATE(ar.started_at AT TIME ZONE 'UTC')
     ORDER BY run_date DESC
@@ -171,7 +171,7 @@ async def _get_or_compute_daily_records(
     Fetch from agent_analytics_daily. If empty, compute from agent_runs
     and cache the results.
     """
-    where_clauses = ["agent_id = :agent_id"]
+    where_clauses = ["agent_id::text = :agent_id"]
     params: Dict[str, Any] = {"agent_id": agent_id}
 
     if start_date:

@@ -19,10 +19,10 @@ async def get_user_accounts(user_id: str) -> List[Dict[str, Any]]:
             ELSE COALESCE(am.account_role, 'member')
         END as account_role
     FROM basejump.accounts a
-    LEFT JOIN basejump.account_user am ON a.id = am.account_id AND am.user_id = :user_id
-    WHERE 
-        (a.primary_owner_user_id = :user_id)
-        OR (am.user_id = :user_id)
+    LEFT JOIN basejump.account_user am ON a.id::text = am.account_id::text AND am.user_id::text = :user_id
+    WHERE
+        (a.primary_owner_user_id::text = :user_id)
+        OR (am.user_id::text = :user_id)
     ORDER BY a.personal_account DESC, a.name ASC
     """
     

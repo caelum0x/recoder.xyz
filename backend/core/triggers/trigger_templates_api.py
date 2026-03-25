@@ -134,7 +134,7 @@ async def list_trigger_templates(
     user_id: str = Depends(verify_and_get_user_id_from_jwt),
 ):
     """List all trigger templates (built-in + user-created)."""
-    conditions = ["(is_builtin = true OR user_id = :user_id)"]
+    conditions = ["(is_builtin = true OR user_id::text = :user_id)"]
     params: dict = {"user_id": user_id}
 
     if category:
@@ -157,6 +157,40 @@ async def list_trigger_templates(
     return [dict(r) for r in rows]
 
 
+@router.post("/seed", summary="Seed Built-in Templates", operation_id="seed_trigger_templates")
+async def seed_trigger_templates(
+    user_id: str = Depends(verify_and_get_user_id_from_jwt),
+):
+    """Seed the built-in trigger templates (idempotent)."""
+
+    seeded = 0
+    for tpl in BUILTIN_TEMPLATES:
+        existing = await execute_one(
+            "SELECT id FROM trigger_templates WHERE name = :name AND is_builtin = true",
+            {"name": tpl["name"]},
+        )
+        if existing:
+            continue
+
+        await execute_mutate(
+            """
+            INSERT INTO trigger_templates (name, description, category, trigger_type, config_template, icon, is_builtin, user_id)
+            VALUES (:name, :description, :category, :trigger_type, CAST(:config_template AS jsonb), :icon, true, NULL)
+            """,
+            {
+                "name": tpl["name"],
+                "description": tpl["description"],
+                "category": tpl["category"],
+                "trigger_type": tpl["trigger_type"],
+                "config_template": json.dumps(tpl["config_template"]),
+                "icon": tpl["icon"],
+            },
+        )
+        seeded += 1
+
+    return {"status": "ok", "seeded": seeded, "total_builtin": len(BUILTIN_TEMPLATES)}
+
+
 @router.get("/{template_id}", summary="Get Trigger Template", operation_id="get_trigger_template")
 async def get_trigger_template(
     template_id: str,
@@ -168,7 +202,7 @@ async def get_trigger_template(
         SELECT id, name, description, category, trigger_type, config_template,
                icon, is_builtin, user_id, usage_count, created_at::text
         FROM trigger_templates
-        WHERE id = :template_id AND (is_builtin = true OR user_id = :user_id)
+        WHERE id = :template_id AND (is_builtin = true OR user_id::text = :user_id)
         """,
         {"template_id": template_id, "user_id": user_id},
     )
@@ -216,7 +250,7 @@ async def apply_trigger_template(
         """
         SELECT id, name, description, category, trigger_type, config_template, icon
         FROM trigger_templates
-        WHERE id = :template_id AND (is_builtin = true OR user_id = :user_id)
+        WHERE id = :template_id AND (is_builtin = true OR user_id::text = :user_id)
         """,
         {"template_id": template_id, "user_id": user_id},
     )
@@ -288,38 +322,3 @@ async def apply_trigger_template(
             "template_name": template["name"],
             "created": dict(row) if row else None,
         }
-
-
-@router.post("/seed", summary="Seed Built-in Templates", operation_id="seed_trigger_templates")
-async def seed_trigger_templates(
-    user_id: str = Depends(verify_and_get_user_id_from_jwt),
-):
-    """Seed the built-in trigger templates (idempotent)."""
-
-    seeded = 0
-    for tpl in BUILTIN_TEMPLATES:
-        # Check if already exists by name + is_builtin
-        existing = await execute_one(
-            "SELECT id FROM trigger_templates WHERE name = :name AND is_builtin = true",
-            {"name": tpl["name"]},
-        )
-        if existing:
-            continue
-
-        await execute_mutate(
-            """
-            INSERT INTO trigger_templates (name, description, category, trigger_type, config_template, icon, is_builtin, user_id)
-            VALUES (:name, :description, :category, :trigger_type, CAST(:config_template AS jsonb), :icon, true, NULL)
-            """,
-            {
-                "name": tpl["name"],
-                "description": tpl["description"],
-                "category": tpl["category"],
-                "trigger_type": tpl["trigger_type"],
-                "config_template": json.dumps(tpl["config_template"]),
-                "icon": tpl["icon"],
-            },
-        )
-        seeded += 1
-
-    return {"status": "ok", "seeded": seeded, "total_builtin": len(BUILTIN_TEMPLATES)}

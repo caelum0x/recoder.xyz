@@ -77,7 +77,7 @@ export function PresentationViewer({
 
   const [isLoadingMetadata, setIsLoadingMetadata] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [retryAttempt, setRetryAttempt] = useState(0);
+  const [, setRetryAttempt] = useState(0);
   const [hasScrolledToCurrentSlide, setHasScrolledToCurrentSlide] = useState(false);
   const retryTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const hasLoadedRef = useRef(false);
@@ -363,11 +363,16 @@ export function PresentationViewer({
         ? Math.min(1000 * Math.pow(2, retryCount), 10000)
         : 5000;
       
-      // Keep retrying indefinitely - don't set error state
-      retryTimeoutRef.current = setTimeout(() => {
-        loadMetadata(retryCount + 1, maxRetries, forceRefresh);
-      }, delay);
-      
+      // Retry up to 30 times (~2 minutes with exponential backoff), then show error
+      if (retryCount < 30) {
+        retryTimeoutRef.current = setTimeout(() => {
+          loadMetadata(retryCount + 1, maxRetries, forceRefresh);
+        }, delay);
+      } else {
+        setError('Could not load presentation metadata after multiple attempts. The sandbox may be unavailable.');
+        setIsLoadingMetadata(false);
+      }
+
       return;
     }
   }, [extractedPresentationName, project?.sandbox?.id, ensureSandboxActive]);
@@ -448,6 +453,32 @@ export function PresentationViewer({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [extractedPresentationName, project?.sandbox?.id, project?.sandbox?.sandbox_url, toolResult?.output]);
+
+  // Timeout: if we're stuck waiting for tool result (stream broken), give up after 60s
+  const [waitingTimedOut, setWaitingTimedOut] = useState(false);
+  const waitingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    // Start timeout when we have no toolResult and we're not streaming
+    if (!toolResult && !isStreaming && !waitingTimedOut) {
+      waitingTimeoutRef.current = setTimeout(() => {
+        setWaitingTimedOut(true);
+      }, 60_000); // 60 seconds
+    } else if (toolResult || isStreaming) {
+      // Got data or streaming started — cancel timeout
+      if (waitingTimeoutRef.current) {
+        clearTimeout(waitingTimeoutRef.current);
+        waitingTimeoutRef.current = null;
+      }
+      setWaitingTimedOut(false);
+    }
+
+    return () => {
+      if (waitingTimeoutRef.current) {
+        clearTimeout(waitingTimeoutRef.current);
+      }
+    };
+  }, [toolResult, isStreaming, waitingTimedOut]);
 
   // Cleanup retry timeout and sandbox check interval on unmount
   useEffect(() => {
@@ -833,6 +864,55 @@ export function PresentationViewer({
                 className="text-xs bg-zinc-100 dark:bg-zinc-800 p-3 rounded-md border"
               />
             </div>
+          </div>
+        ) : error && !isLoadingMetadata && !isStreaming ? (
+          // Metadata loading error — show after retries exhausted
+          <div className="flex flex-col items-center justify-center h-full py-12 px-6 bg-gradient-to-b from-white to-zinc-50 dark:from-zinc-950 dark:to-zinc-900">
+            <div className="w-20 h-20 rounded-full flex items-center justify-center mb-6 bg-gradient-to-b from-zinc-100 to-zinc-50 shadow-inner dark:from-zinc-800/40 dark:to-zinc-900/60">
+              <AlertTriangle className="h-10 w-10 text-zinc-500 dark:text-zinc-400" />
+            </div>
+            <h3 className="text-xl font-semibold mb-2 text-zinc-900 dark:text-zinc-100">
+              Could not load presentation
+            </h3>
+            <p className="text-sm text-zinc-500 dark:text-zinc-400 text-center max-w-md mb-4">
+              {error}
+            </p>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setError(null);
+                setRetryAttempt(0);
+                hasLoadedRef.current = false;
+                loadMetadata(0);
+              }}
+            >
+              Retry
+            </Button>
+          </div>
+        ) : waitingTimedOut && !toolResult && !isStreaming ? (
+          // Timed out waiting for stream data — show error with explanation
+          <div className="flex flex-col items-center justify-center h-full py-12 px-6 bg-gradient-to-b from-white to-zinc-50 dark:from-zinc-950 dark:to-zinc-900">
+            <div className="w-20 h-20 rounded-full flex items-center justify-center mb-6 bg-gradient-to-b from-zinc-100 to-zinc-50 shadow-inner dark:from-zinc-800/40 dark:to-zinc-900/60">
+              <AlertTriangle className="h-10 w-10 text-zinc-500 dark:text-zinc-400" />
+            </div>
+            <h3 className="text-xl font-semibold mb-2 text-zinc-900 dark:text-zinc-100">
+              Loading timed out
+            </h3>
+            <p className="text-sm text-zinc-500 dark:text-zinc-400 text-center max-w-md mb-4">
+              The stream connection was interrupted before the presentation data arrived.
+              The agent may still be running — check the Runs page for status.
+            </p>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setWaitingTimedOut(false);
+                // Reset timeout to allow another 60s wait
+              }}
+            >
+              Wait longer
+            </Button>
           </div>
         ) : isLoadingMetadata || (extractedPresentationName && !metadata && !toolExecutionError) || (!toolResult && !isStreaming) ? (
           // Loading state - show skeleton slides while:

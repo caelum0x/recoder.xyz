@@ -102,7 +102,7 @@ async def list_active_sandboxes(
                 status,
                 captured_at
             FROM sandbox_resource_snapshots
-            WHERE user_id = :user_id
+            WHERE user_id::text = :user_id
               AND captured_at >= now() - INTERVAL '1 hour'
             ORDER BY sandbox_id, captured_at DESC
             """,
@@ -136,8 +136,8 @@ async def get_resource_history(
                    network_in_kb, network_out_kb, process_count,
                    status, captured_at
             FROM sandbox_resource_snapshots
-            WHERE sandbox_id = :sandbox_id
-              AND user_id = :user_id
+            WHERE sandbox_id::text = :sandbox_id
+              AND user_id::text = :user_id
               AND captured_at >= now() - make_interval(hours => :hours)
             ORDER BY captured_at ASC
             LIMIT 1000
@@ -237,7 +237,7 @@ async def get_resource_summary(
                     network_out_kb,
                     status
                 FROM sandbox_resource_snapshots
-                WHERE user_id = :user_id
+                WHERE user_id::text = :user_id
                   AND captured_at >= now() - INTERVAL '1 hour'
                 ORDER BY sandbox_id, captured_at DESC
             )

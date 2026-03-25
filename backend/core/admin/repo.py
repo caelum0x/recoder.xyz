@@ -44,7 +44,7 @@ async def get_user_transactions_paginated(
     offset = (page - 1) * page_size
     
     # Build dynamic WHERE clause
-    where_clauses = ["account_id = :account_id"]
+    where_clauses = ["account_id::text = :account_id"]
     params: Dict[str, Any] = {
         "account_id": account_id,
         "limit": page_size,
@@ -100,7 +100,7 @@ async def get_recent_transactions(
     sql = """
     SELECT *
     FROM credit_ledger
-    WHERE account_id = :account_id
+    WHERE account_id::text = :account_id
     ORDER BY created_at DESC
     LIMIT :limit
     """
@@ -113,7 +113,7 @@ async def get_billing_subscription(account_id: str) -> Optional[Dict[str, Any]]:
     sql = """
     SELECT *
     FROM basejump.billing_subscriptions
-    WHERE account_id = :account_id
+    WHERE account_id::text = :account_id
     ORDER BY created DESC
     LIMIT 1
     """

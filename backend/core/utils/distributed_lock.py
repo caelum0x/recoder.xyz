@@ -112,7 +112,7 @@ class RenewalLock:
             """
             SELECT id, processed_by, credits_granted
             FROM renewal_processing
-            WHERE account_id = :account_id AND period_start = :period_start
+            WHERE account_id::text = :account_id AND period_start = :period_start
             LIMIT 1
             """,
             {"account_id": account_id, "period_start": period_start},
@@ -172,7 +172,7 @@ class WebhookLock:
             """
             SELECT id, status, processed_at, processing_started_at, retry_count
             FROM webhook_events
-            WHERE event_id = :event_id
+            WHERE event_id::text = :event_id
             LIMIT 1
             """,
             {"event_id": event_id},
@@ -292,7 +292,7 @@ class WebhookLock:
                         """
                         SELECT id, status, processing_started_at, retry_count
                         FROM webhook_events
-                        WHERE event_id = :event_id
+                        WHERE event_id::text = :event_id
                         LIMIT 1
                         """,
                         {"event_id": event_id},
@@ -334,7 +334,7 @@ class WebhookLock:
                                 """
                                 SELECT id, status, processing_started_at, retry_count
                                 FROM webhook_events
-                                WHERE event_id = :event_id
+                                WHERE event_id::text = :event_id
                                 LIMIT 1
                                 """,
                                 {"event_id": event_id},
@@ -380,7 +380,7 @@ class WebhookLock:
             UPDATE webhook_events
             SET status = 'completed',
                 processed_at = :processed_at
-            WHERE event_id = :event_id
+            WHERE event_id::text = :event_id
             """,
             {"processed_at": datetime.now(timezone.utc).isoformat(), "event_id": event_id},
         )
@@ -404,7 +404,7 @@ class WebhookLock:
                 SET status = 'failed',
                     error_message = :error_message,
                     processed_at = :processed_at
-                WHERE event_id = :event_id
+                WHERE event_id::text = :event_id
                 """,
                 {
                     "error_message": safe_error_message,

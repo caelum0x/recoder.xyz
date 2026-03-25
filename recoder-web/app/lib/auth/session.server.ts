@@ -39,18 +39,25 @@ interface SessionApiResponse {
 }
 
 /**
- * Get the main site URL based on environment
+ * Internal URL for server-to-server session verification.
+ *
+ * Inside Docker the container cannot reach `https://recoder.xyz` (DNS/TLS
+ * roundtrip through Cloudflare). Use MAIN_SITE_INTERNAL_URL
+ * (e.g. http://host.docker.internal:3000) for the server-side fetch.
  */
-function getMainSiteUrl(): string {
-  const mainSiteUrl = process.env.MAIN_SITE_URL;
-  logger.info('[Auth] MAIN_SITE_URL env:', mainSiteUrl, 'NODE_ENV:', process.env.NODE_ENV);
-  if (mainSiteUrl) {
-    return mainSiteUrl;
-  }
-  // Default to production or development
-  return process.env.NODE_ENV === 'production'
-    ? 'https://recoder.xyz'
-    : 'http://localhost:3000'; // Main app port
+function getInternalMainSiteUrl(): string {
+  return process.env.MAIN_SITE_INTERNAL_URL
+    || process.env.MAIN_SITE_URL
+    || (process.env.NODE_ENV === 'production' ? 'https://recoder.xyz' : 'http://localhost:3000');
+}
+
+/**
+ * Public URL for browser-facing redirects (login, signup).
+ * Always uses the external URL that browsers can reach.
+ */
+function getPublicMainSiteUrl(): string {
+  return process.env.MAIN_SITE_URL
+    || (process.env.NODE_ENV === 'production' ? 'https://recoder.xyz' : 'http://localhost:3000');
 }
 
 /**
@@ -59,7 +66,7 @@ function getMainSiteUrl(): string {
  */
 export async function verifySession(request: Request): Promise<Session | null> {
   try {
-    const mainSiteUrl = getMainSiteUrl();
+    const mainSiteUrl = getInternalMainSiteUrl();
     const cookieHeader = request.headers.get('Cookie');
 
     if (!cookieHeader) {
@@ -154,7 +161,7 @@ export async function hasSubscription(
  * @param currentUrl - Full current URL to redirect back to after login
  */
 export function getLoginUrl(currentUrl?: string): string {
-  const mainSiteUrl = getMainSiteUrl();
+  const mainSiteUrl = getPublicMainSiteUrl();
 
   // If currentUrl is provided and it's a full URL (starts with http), use it directly
   // Otherwise, construct the Web IDE URL from the pathname
@@ -176,7 +183,7 @@ export function getLoginUrl(currentUrl?: string): string {
  * @param currentUrl - Full current URL to redirect back to after signup
  */
 export function getSignupUrl(currentUrl?: string): string {
-  const mainSiteUrl = getMainSiteUrl();
+  const mainSiteUrl = getPublicMainSiteUrl();
 
   // If currentUrl is provided and it's a full URL (starts with http), use it directly
   // Otherwise, construct the Web IDE URL from the pathname

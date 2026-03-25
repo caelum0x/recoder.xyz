@@ -2,7 +2,7 @@
 Agent Performance Benchmarks API endpoints.
 
 Provides benchmark CRUD, simulated runs, results history, and summary statistics.
-Access control enforced at application layer (WHERE user_id = :user_id).
+Access control enforced at application layer (WHERE user_id::text = :user_id).
 """
 
 import random
@@ -90,8 +90,8 @@ async def list_benchmarks(
             lr.duration_ms AS latest_duration_ms,
             lr.run_at AS latest_run_at,
             lr.metrics AS latest_metrics,
-            (SELECT COUNT(*) FROM benchmark_results br WHERE br.benchmark_id = b.id) AS run_count,
-            (SELECT MAX(br2.score) FROM benchmark_results br2 WHERE br2.benchmark_id = b.id AND br2.status = 'completed') AS best_score
+            (SELECT COUNT(*) FROM benchmark_results br WHERE br.benchmark_id::text = b.id::text) AS run_count,
+            (SELECT MAX(br2.score) FROM benchmark_results br2 WHERE br2.benchmark_id::text = b.id::text AND br2.status = 'completed') AS best_score
         FROM agent_benchmarks_v2 b
         LEFT JOIN LATERAL (
             SELECT score, status, duration_ms, run_at, metrics
@@ -100,7 +100,7 @@ async def list_benchmarks(
             ORDER BY run_at DESC
             LIMIT 1
         ) lr ON TRUE
-        WHERE b.user_id = :user_id AND b.agent_id = :agent_id
+        WHERE b.user_id::text = :user_id AND b.agent_id::text = :agent_id
         ORDER BY b.created_at DESC
         """,
         {"user_id": user_id, "agent_id": agent_id},
@@ -123,7 +123,7 @@ async def delete_benchmark(
     existing = await execute_one(
         """
         SELECT id FROM agent_benchmarks_v2
-        WHERE id = :benchmark_id AND user_id = :user_id AND agent_id = :agent_id
+        WHERE id = :benchmark_id AND user_id::text = :user_id AND agent_id::text = :agent_id
         """,
         {"benchmark_id": benchmark_id, "user_id": user_id, "agent_id": agent_id},
     )
@@ -160,7 +160,7 @@ async def run_benchmark(
     benchmark = await execute_one(
         """
         SELECT * FROM agent_benchmarks_v2
-        WHERE id = :benchmark_id AND user_id = :user_id AND agent_id = :agent_id
+        WHERE id = :benchmark_id AND user_id::text = :user_id AND agent_id::text = :agent_id
         """,
         {"benchmark_id": benchmark_id, "user_id": user_id, "agent_id": agent_id},
     )
@@ -228,7 +228,7 @@ async def list_benchmark_results(
     rows = await execute(
         """
         SELECT * FROM benchmark_results
-        WHERE benchmark_id = :benchmark_id AND user_id = :user_id AND agent_id = :agent_id
+        WHERE benchmark_id::text = :benchmark_id AND user_id::text = :user_id AND agent_id::text = :agent_id
         ORDER BY run_at DESC
         LIMIT :limit
         """,
@@ -259,7 +259,7 @@ async def benchmark_summary(
     benchmarks = await execute(
         """
         SELECT * FROM agent_benchmarks_v2
-        WHERE user_id = :user_id AND agent_id = :agent_id
+        WHERE user_id::text = :user_id AND agent_id::text = :agent_id
         ORDER BY created_at DESC
         """,
         {"user_id": user_id, "agent_id": agent_id},
@@ -277,7 +277,7 @@ async def benchmark_summary(
                 MAX(score) AS best_score,
                 AVG(score) AS avg_score
             FROM benchmark_results
-            WHERE benchmark_id = :benchmark_id AND status = 'completed'
+            WHERE benchmark_id::text = :benchmark_id AND status = 'completed'
             """,
             {"benchmark_id": bench_id},
         )
@@ -286,7 +286,7 @@ async def benchmark_summary(
         first_result = await execute_one(
             """
             SELECT score FROM benchmark_results
-            WHERE benchmark_id = :benchmark_id AND status = 'completed'
+            WHERE benchmark_id::text = :benchmark_id AND status = 'completed'
             ORDER BY run_at ASC
             LIMIT 1
             """,
@@ -295,7 +295,7 @@ async def benchmark_summary(
         last_result = await execute_one(
             """
             SELECT score FROM benchmark_results
-            WHERE benchmark_id = :benchmark_id AND status = 'completed'
+            WHERE benchmark_id::text = :benchmark_id AND status = 'completed'
             ORDER BY run_at DESC
             LIMIT 1
             """,

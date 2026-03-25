@@ -74,7 +74,7 @@ async def list_routing_rules(
     rows = await execute(
         """
         SELECT * FROM model_routing_rules
-        WHERE agent_id = :agent_id AND user_id = :user_id
+        WHERE agent_id::text = :agent_id AND user_id::text = :user_id
         ORDER BY priority DESC, created_at ASC
         """,
         {"agent_id": agent_id, "user_id": user_id},
@@ -112,7 +112,7 @@ async def update_routing_rule(
         f"""
         UPDATE model_routing_rules
         SET {set_sql}
-        WHERE id = :rule_id AND agent_id = :agent_id AND user_id = :user_id
+        WHERE id = :rule_id AND agent_id::text = :agent_id AND user_id::text = :user_id
         RETURNING *
         """,
         params,
@@ -132,7 +132,7 @@ async def delete_routing_rule(
     rows = await execute_mutate(
         """
         DELETE FROM model_routing_rules
-        WHERE id = :rule_id AND agent_id = :agent_id AND user_id = :user_id
+        WHERE id = :rule_id AND agent_id::text = :agent_id AND user_id::text = :user_id
         RETURNING id
         """,
         {"rule_id": rule_id, "agent_id": agent_id, "user_id": user_id},
@@ -198,7 +198,7 @@ async def evaluate_routing(
     rows = await execute(
         """
         SELECT * FROM model_routing_rules
-        WHERE agent_id = :agent_id AND user_id = :user_id AND is_active = true
+        WHERE agent_id::text = :agent_id AND user_id::text = :user_id AND is_active = true
         ORDER BY priority DESC, created_at ASC
         """,
         {"agent_id": agent_id, "user_id": user_id},
@@ -232,7 +232,7 @@ async def get_routing_stats(
         """
         SELECT id, name, condition_type, target_model, hit_count, is_active
         FROM model_routing_rules
-        WHERE agent_id = :agent_id AND user_id = :user_id
+        WHERE agent_id::text = :agent_id AND user_id::text = :user_id
         ORDER BY hit_count DESC
         """,
         {"agent_id": agent_id, "user_id": user_id},

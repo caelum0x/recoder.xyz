@@ -22,7 +22,7 @@ class CreditService:
             logger.info(f"[DAILY REFRESH] Starting for {user_id}")
 
             account = await execute_one(
-                "SELECT tier, last_daily_refresh FROM credit_accounts WHERE account_id = :uid",
+                "SELECT tier, last_daily_refresh FROM credit_accounts WHERE account_id::text = :uid",
                 {"uid": user_id}
             )
 
@@ -320,7 +320,7 @@ class CreditService:
         offset: int = 0
     ) -> List[Dict[str, Any]]:
         return await execute_read(
-            "SELECT * FROM credit_ledger WHERE account_id = :uid ORDER BY created_at DESC LIMIT :lim OFFSET :off",
+            "SELECT * FROM credit_ledger WHERE account_id::text = :uid ORDER BY created_at DESC LIMIT :lim OFFSET :off",
             {"uid": user_id, "lim": limit, "off": offset}
         )
 
@@ -339,7 +339,7 @@ class CreditService:
             }
 
         ledger_rows = await execute_read(
-            "SELECT type, amount, description FROM credit_ledger WHERE account_id = :uid",
+            "SELECT type, amount, description FROM credit_ledger WHERE account_id::text = :uid",
             {"uid": user_id}
         )
 

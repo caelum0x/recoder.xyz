@@ -3,7 +3,7 @@ Scheduled Reports API endpoints.
 
 Provides CRUD for scheduled report configurations, manual report generation
 with mock/aggregated data, and report history browsing.
-Access control enforced at application layer (WHERE user_id = :user_id).
+Access control enforced at application layer (WHERE user_id::text = :user_id).
 """
 
 import json
@@ -127,7 +127,7 @@ async def _generate_report_data(report_type: str, user_id: str, agent_ids: List[
     if report_type == "agent_summary":
         # Try to fetch real agent run summaries
         try:
-            where_clause = "t.account_id = :user_id"
+            where_clause = "t.account_id::text = :user_id"
             params: Dict[str, Any] = {"user_id": user_id}
             if agent_ids:
                 where_clause += " AND ar.agent_id = ANY(:agent_ids)"
@@ -136,15 +136,15 @@ async def _generate_report_data(report_type: str, user_id: str, agent_ids: List[
             rows = await execute(
                 f"""
                 SELECT
-                    ar.agent_id,
+                    ar.agent_id::text AS agent_id,
                     COALESCE(a.name, 'Unknown') AS agent_name,
                     COUNT(*)::int AS total_runs,
                     COUNT(*) FILTER (WHERE ar.status = 'completed')::int AS completed,
                     COUNT(*) FILTER (WHERE ar.status = 'error')::int AS errors,
-                    COALESCE(SUM(ar.total_cost), 0) AS total_cost
+                    COALESCE(SUM(ar.cost), 0) AS total_cost
                 FROM agent_runs ar
-                JOIN threads t ON ar.thread_id = t.thread_id
-                LEFT JOIN agents a ON ar.agent_id = a.agent_id
+                JOIN threads t ON ar.thread_id::text = t.thread_id::text
+                LEFT JOIN agents a ON ar.agent_id::text = a.agent_id::text
                 WHERE {where_clause}
                   AND ar.started_at >= NOW() - INTERVAL '30 days'
                 GROUP BY ar.agent_id, a.name
@@ -188,12 +188,12 @@ async def _generate_report_data(report_type: str, user_id: str, agent_ids: List[
                 SELECT
                     COALESCE(ar.model, 'unknown') AS model,
                     COUNT(*)::int AS run_count,
-                    COALESCE(SUM(ar.total_cost), 0) AS total_cost,
-                    COALESCE(SUM(ar.tokens_in), 0)::int AS tokens_in,
-                    COALESCE(SUM(ar.tokens_out), 0)::int AS tokens_out
+                    COALESCE(SUM(ar.cost), 0) AS total_cost,
+                    COALESCE(SUM(ar.input_tokens), 0)::int AS tokens_in,
+                    COALESCE(SUM(ar.output_tokens), 0)::int AS tokens_out
                 FROM agent_runs ar
-                JOIN threads t ON ar.thread_id = t.thread_id
-                WHERE t.account_id = :user_id
+                JOIN threads t ON ar.thread_id::text = t.thread_id::text
+                WHERE t.account_id::text = :user_id
                   AND ar.started_at >= NOW() - INTERVAL '30 days'
                 GROUP BY ar.model
                 ORDER BY total_cost DESC
@@ -239,8 +239,8 @@ async def _generate_report_data(report_type: str, user_id: str, agent_ids: List[
                         EXTRACT(EPOCH FROM (ar.completed_at - ar.started_at)) * 1000
                     ) FILTER (WHERE ar.completed_at IS NOT NULL), 0)::int AS avg_duration_ms
                 FROM agent_runs ar
-                JOIN threads t ON ar.thread_id = t.thread_id
-                WHERE t.account_id = :user_id
+                JOIN threads t ON ar.thread_id::text = t.thread_id::text
+                WHERE t.account_id::text = :user_id
                   AND ar.started_at >= NOW() - INTERVAL '30 days'
                 GROUP BY run_date
                 ORDER BY run_date DESC
@@ -287,11 +287,11 @@ async def _generate_report_data(report_type: str, user_id: str, agent_ids: List[
                 SELECT
                     COUNT(*)::int AS total_runs,
                     COUNT(DISTINCT ar.agent_id)::int AS unique_agents,
-                    COALESCE(SUM(ar.total_cost), 0) AS total_cost,
-                    COALESCE(SUM(COALESCE(ar.tokens_in, 0) + COALESCE(ar.tokens_out, 0)), 0)::int AS total_tokens
+                    COALESCE(SUM(ar.cost), 0) AS total_cost,
+                    COALESCE(SUM(COALESCE(ar.input_tokens, 0) + COALESCE(ar.output_tokens, 0)), 0)::int AS total_tokens
                 FROM agent_runs ar
-                JOIN threads t ON ar.thread_id = t.thread_id
-                WHERE t.account_id = :user_id
+                JOIN threads t ON ar.thread_id::text = t.thread_id::text
+                WHERE t.account_id::text = :user_id
                   AND ar.started_at >= NOW() - INTERVAL '30 days'
                 """,
                 {"user_id": user_id},
@@ -362,7 +362,7 @@ async def create_scheduled_report(
         )
 
         row = await execute_one(
-            "SELECT * FROM scheduled_reports WHERE id = :id AND user_id = :user_id",
+            "SELECT * FROM scheduled_reports WHERE id = :id AND user_id::text = :user_id",
             {"id": report_id, "user_id": user_id},
         )
         if not row:
@@ -384,7 +384,7 @@ async def list_scheduled_reports(
     """List all scheduled reports for the authenticated user."""
     try:
         rows = await execute(
-            "SELECT * FROM scheduled_reports WHERE user_id = :user_id ORDER BY created_at DESC",
+            "SELECT * FROM scheduled_reports WHERE user_id::text = :user_id ORDER BY created_at DESC",
             {"user_id": user_id},
         )
         return [_row_to_report(r) for r in (rows or [])]
@@ -402,7 +402,7 @@ async def update_scheduled_report(
     """Update a scheduled report configuration."""
     # Verify ownership
     existing = await execute_one(
-        "SELECT id FROM scheduled_reports WHERE id = :id AND user_id = :user_id",
+        "SELECT id FROM scheduled_reports WHERE id = :id AND user_id::text = :user_id",
         {"id": report_id, "user_id": user_id},
     )
     if not existing:
@@ -441,12 +441,12 @@ async def update_scheduled_report(
 
         set_clause = ", ".join(updates)
         await execute_mutate(
-            f"UPDATE scheduled_reports SET {set_clause} WHERE id = :id AND user_id = :user_id",
+            f"UPDATE scheduled_reports SET {set_clause} WHERE id = :id AND user_id::text = :user_id",
             params,
         )
 
         row = await execute_one(
-            "SELECT * FROM scheduled_reports WHERE id = :id AND user_id = :user_id",
+            "SELECT * FROM scheduled_reports WHERE id = :id AND user_id::text = :user_id",
             {"id": report_id, "user_id": user_id},
         )
         return _row_to_report(row)
@@ -465,7 +465,7 @@ async def delete_scheduled_report(
 ):
     """Delete a scheduled report and its history."""
     existing = await execute_one(
-        "SELECT id FROM scheduled_reports WHERE id = :id AND user_id = :user_id",
+        "SELECT id FROM scheduled_reports WHERE id = :id AND user_id::text = :user_id",
         {"id": report_id, "user_id": user_id},
     )
     if not existing:
@@ -473,7 +473,7 @@ async def delete_scheduled_report(
 
     try:
         await execute_mutate(
-            "DELETE FROM scheduled_reports WHERE id = :id AND user_id = :user_id",
+            "DELETE FROM scheduled_reports WHERE id = :id AND user_id::text = :user_id",
             {"id": report_id, "user_id": user_id},
         )
         return {"status": "deleted"}
@@ -489,7 +489,7 @@ async def generate_report(
 ):
     """Manually trigger report generation. Creates a report_history entry."""
     report = await execute_one(
-        "SELECT * FROM scheduled_reports WHERE id = :id AND user_id = :user_id",
+        "SELECT * FROM scheduled_reports WHERE id = :id AND user_id::text = :user_id",
         {"id": report_id, "user_id": user_id},
     )
     if not report:
@@ -538,7 +538,7 @@ async def generate_report(
         )
 
         history_row = await execute_one(
-            "SELECT * FROM report_history WHERE id = :id AND user_id = :user_id",
+            "SELECT * FROM report_history WHERE id = :id AND user_id::text = :user_id",
             {"id": history_id, "user_id": user_id},
         )
         return _row_to_history(history_row)
@@ -560,7 +560,7 @@ async def list_report_history(
     """List past report generations for a specific scheduled report."""
     # Verify ownership
     existing = await execute_one(
-        "SELECT id FROM scheduled_reports WHERE id = :id AND user_id = :user_id",
+        "SELECT id FROM scheduled_reports WHERE id = :id AND user_id::text = :user_id",
         {"id": report_id, "user_id": user_id},
     )
     if not existing:
@@ -570,7 +570,7 @@ async def list_report_history(
         rows = await execute(
             """
             SELECT * FROM report_history
-            WHERE report_id = :report_id AND user_id = :user_id
+            WHERE report_id::text = :report_id AND user_id::text = :user_id
             ORDER BY created_at DESC
             LIMIT :limit OFFSET :offset
             """,
@@ -590,7 +590,7 @@ async def get_report_data(
     """Get the data for a specific report generation."""
     try:
         row = await execute_one(
-            "SELECT * FROM report_history WHERE id = :id AND user_id = :user_id",
+            "SELECT * FROM report_history WHERE id = :id AND user_id::text = :user_id",
             {"id": history_id, "user_id": user_id},
         )
         if not row:

@@ -280,8 +280,8 @@ async def _cleanup_stale_runs(account_id: str):
             WHERE id IN (
                 SELECT ar.id
                 FROM agent_runs ar
-                INNER JOIN threads t ON ar.thread_id = t.thread_id
-                WHERE t.account_id = :account_id
+                INNER JOIN threads t ON ar.thread_id::text = t.thread_id::text
+                WHERE t.account_id::text = :account_id
                   AND ar.status = 'running'
                   AND ar.started_at < :stale_cutoff
             )
@@ -452,10 +452,11 @@ async def start_agent_run(
     has_files = files_data and len(files_data) > 0
     
     if has_files:
-        # WITH FILES: Create sandbox (blocking) and upload files immediately
-        # Ensure project exists first (needed for sandbox linking)
+        # WITH FILES: Create sandbox and upload files
+        # Use a 45s timeout to stay well under gunicorn's 75s limit
+        # If sandbox creation exceeds timeout, fall back to background upload
+        placeholder_name = f"{prompt[:30]}..." if len(prompt) > 30 else prompt if prompt else "Untitled"
         if is_new_thread:
-            placeholder_name = f"{prompt[:30]}..." if len(prompt) > 30 else prompt if prompt else "Untitled"
             try:
                 await threads_repo.create_project(project_id, account_id, placeholder_name)
             except Exception as e:
@@ -464,23 +465,40 @@ async def start_agent_run(
             try:
                 existing_project = await threads_repo.get_project(project_id)
                 if not existing_project:
-                    placeholder_name = f"{prompt[:30]}..." if len(prompt) > 30 else prompt if prompt else "Untitled"
                     await threads_repo.create_project(project_id, account_id, placeholder_name)
             except Exception as e:
                 logger.debug(f"Project check/creation skipped: {e}")
-        
-        # Resolve sandbox (creates if needed, starts it) - BLOCKING
-        sandbox_info = await resolve_sandbox(project_id, account_id, None, require_started=True)
-        sandbox_id = sandbox_info.sandbox_id if sandbox_info else None
-        
-        if sandbox_id:
-            logger.info(f"✅ [AGENT_START] Resolved sandbox {sandbox_id} for file uploads (project {project_id})")
-            # Upload files immediately
-            from core.files.upload_handler import upload_files_to_sandbox
-            await upload_files_to_sandbox(project_id, thread_id, files_data, account_id)
-            logger.info(f"✅ [AGENT_START] Uploaded {len(files_data)} files to sandbox {sandbox_id}")
-        else:
-            logger.warning(f"⚠️ [AGENT_START] Failed to resolve sandbox for file uploads (project {project_id})")
+
+        try:
+            # Resolve sandbox with 45s timeout to avoid gunicorn timeout
+            sandbox_info = await asyncio.wait_for(
+                resolve_sandbox(project_id, account_id, None, require_started=True),
+                timeout=45.0,
+            )
+            sandbox_id = sandbox_info.sandbox_id if sandbox_info else None
+
+            if sandbox_id:
+                logger.info(f"✅ [AGENT_START] Resolved sandbox {sandbox_id} for file uploads (project {project_id})")
+                from core.files.upload_handler import upload_files_to_sandbox
+                await upload_files_to_sandbox(project_id, thread_id, files_data, account_id)
+                logger.info(f"✅ [AGENT_START] Uploaded {len(files_data)} files to sandbox {sandbox_id}")
+            else:
+                logger.warning(f"⚠️ [AGENT_START] Failed to resolve sandbox for file uploads (project {project_id})")
+        except asyncio.TimeoutError:
+            # Sandbox creation too slow — fall back to background upload
+            logger.warning(f"⏱️ [AGENT_START] Sandbox creation timed out (45s) for project {project_id}, moving to background")
+
+            async def _background_file_upload(proj_id, acc_id, thr_id, fdata):
+                try:
+                    sinfo = await resolve_sandbox(proj_id, acc_id, None, require_started=True)
+                    if sinfo and sinfo.sandbox_id:
+                        from core.files.upload_handler import upload_files_to_sandbox
+                        await upload_files_to_sandbox(proj_id, thr_id, fdata, acc_id)
+                        logger.info(f"✅ [BACKGROUND] Uploaded {len(fdata)} files to sandbox {sinfo.sandbox_id}")
+                except Exception as e:
+                    logger.error(f"❌ [BACKGROUND] File upload failed for project {proj_id}: {e}")
+
+            asyncio.create_task(_background_file_upload(project_id, account_id, thread_id, files_data))
     
     elif is_new_thread:
         # NO FILES but NEW THREAD: Start sandbox creation in background (non-blocking)
@@ -940,7 +958,7 @@ async def list_all_agent_runs(
     """List agent runs with optional status filter."""
     from core.services.db import execute, execute_one, serialize_rows
 
-    where = ["account_id = :user_id"]
+    where = ["account_id::text = :user_id"]
     params: dict = {"user_id": user_id, "limit": limit, "offset": offset}
 
     if status:
@@ -1115,6 +1133,10 @@ async def stream_agent_run(
         return last_safe
 
     async def stream_generator(agent_run_data, client_last_id: Optional[str] = None):
+        # Emit initial SSE comment immediately so Cloudflare sees first byte
+        # and does not kill the connection with ERR_HTTP2_PROTOCOL_ERROR.
+        yield ": connected\n\n"
+
         terminate = False
         last_id = client_last_id if client_last_id and client_last_id != "0" else "0"
         skip_catchup = client_last_id and client_last_id != "0"
@@ -1229,14 +1251,9 @@ async def stream_agent_run(
             logger.error(f"Stream error for {agent_run_id}: {e}", exc_info=True)
             yield f"data: {json.dumps({'type': 'status', 'status': 'error', 'message': str(e)})}\n\n"
 
+    from core.utils.sse_headers import get_sse_headers
     return StreamingResponse(
-        stream_generator(agent_run_data, last_id), 
-        media_type="text/event-stream", 
-        headers={
-            "Cache-Control": "no-cache, no-transform", 
-            "Connection": "keep-alive",
-            "X-Accel-Buffering": "no", 
-            "Content-Type": "text/event-stream",
-            "Access-Control-Allow-Origin": "*"
-        }
+        stream_generator(agent_run_data, last_id),
+        media_type="text/event-stream",
+        headers=get_sse_headers(request),
     )

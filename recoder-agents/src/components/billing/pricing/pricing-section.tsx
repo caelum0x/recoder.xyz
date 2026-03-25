@@ -1148,6 +1148,11 @@ export function PricingSection({
 
   const isYearly = billingPeriod === 'yearly' || billingPeriod === 'yearly_commitment';
 
+  // BYOK mode: no billing, don't render pricing UI at all
+  // Hardcoded true while billing is disabled. When billing is re-enabled, remove `|| true`.
+  const isByok = process.env.NEXT_PUBLIC_BYOK_MODE === 'true' || true;
+  if (isByok) return null;
+
   return (
     <section
       id="pricing"

@@ -95,8 +95,8 @@ async def list_comparisons(
                 tc.*,
                 COUNT(ce.id) AS evaluation_count
             FROM thread_comparisons tc
-            LEFT JOIN comparison_evaluations ce ON ce.comparison_id = tc.id
-            WHERE tc.user_id = :user_id
+            LEFT JOIN comparison_evaluations ce ON ce.comparison_id::text = tc.id::text
+            WHERE tc.user_id::text = :user_id
             GROUP BY tc.id
             ORDER BY tc.created_at DESC
             LIMIT :limit
@@ -125,8 +125,8 @@ async def get_stats(
                 COUNT(DISTINCT tc.id) AS total_comparisons,
                 COALESCE(AVG(ce.quality_score), 0) AS avg_quality_score
             FROM thread_comparisons tc
-            LEFT JOIN comparison_evaluations ce ON ce.comparison_id = tc.id
-            WHERE tc.user_id = :user_id
+            LEFT JOIN comparison_evaluations ce ON ce.comparison_id::text = tc.id::text
+            WHERE tc.user_id::text = :user_id
             """,
             {"user_id": user_id},
         )
@@ -136,7 +136,7 @@ async def get_stats(
             """
             SELECT unnest(thread_ids) AS thread_id, COUNT(*) AS appearances
             FROM thread_comparisons
-            WHERE user_id = :user_id
+            WHERE user_id::text = :user_id
             GROUP BY thread_id
             ORDER BY appearances DESC
             LIMIT 1
@@ -166,14 +166,14 @@ async def get_comparison(
     """Get a single thread comparison with its evaluations."""
     try:
         row = await execute_one(
-            "SELECT * FROM thread_comparisons WHERE id = :id AND user_id = :user_id",
+            "SELECT * FROM thread_comparisons WHERE id = :id AND user_id::text = :user_id",
             {"id": comparison_id, "user_id": user_id},
         )
         if not row:
             raise HTTPException(status_code=404, detail="Comparison not found")
 
         eval_rows = await execute(
-            "SELECT * FROM comparison_evaluations WHERE comparison_id = :id ORDER BY created_at ASC",
+            "SELECT * FROM comparison_evaluations WHERE comparison_id::text = :id ORDER BY created_at ASC",
             {"id": comparison_id},
         )
 
@@ -199,7 +199,7 @@ async def delete_comparison(
     """Delete a thread comparison and all associated evaluations."""
     try:
         result = await execute_mutate(
-            "DELETE FROM thread_comparisons WHERE id = :id AND user_id = :user_id",
+            "DELETE FROM thread_comparisons WHERE id = :id AND user_id::text = :user_id",
             {"id": comparison_id, "user_id": user_id},
         )
         if not result:
@@ -226,7 +226,7 @@ async def submit_evaluation(
     try:
         # Verify comparison ownership
         comp = await execute_one(
-            "SELECT id, thread_ids FROM thread_comparisons WHERE id = :id AND user_id = :user_id",
+            "SELECT id, thread_ids FROM thread_comparisons WHERE id = :id AND user_id::text = :user_id",
             {"id": comparison_id, "user_id": user_id},
         )
         if not comp:
@@ -286,14 +286,14 @@ async def get_evaluations(
     """Get all evaluations for a thread comparison."""
     try:
         comp = await execute_one(
-            "SELECT id FROM thread_comparisons WHERE id = :id AND user_id = :user_id",
+            "SELECT id FROM thread_comparisons WHERE id = :id AND user_id::text = :user_id",
             {"id": comparison_id, "user_id": user_id},
         )
         if not comp:
             raise HTTPException(status_code=404, detail="Comparison not found")
 
         rows = await execute(
-            "SELECT * FROM comparison_evaluations WHERE comparison_id = :id ORDER BY created_at ASC",
+            "SELECT * FROM comparison_evaluations WHERE comparison_id::text = :id ORDER BY created_at ASC",
             {"id": comparison_id},
         )
         return serialize_rows(rows) if rows else []

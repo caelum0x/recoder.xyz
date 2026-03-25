@@ -73,7 +73,7 @@ async def stream_project_updates(
                 """
                 SELECT project_id, updated_at, sandbox_resource_id
                 FROM projects
-                WHERE project_id = :project_id
+                WHERE project_id::text = :project_id
                 """,
                 {"project_id": project_id},
             )
@@ -111,14 +111,11 @@ async def stream_project_updates(
 
             await asyncio.sleep(1.5)
 
+    from core.utils.sse_headers import get_sse_headers
     return StreamingResponse(
         event_generator(),
         media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache",
-            "Connection": "keep-alive",
-            "X-Accel-Buffering": "no",
-        },
+        headers=get_sse_headers(request),
     )
 
 
@@ -138,7 +135,7 @@ async def stream_vapi_updates(
         await verify_and_authorize_thread_access(None, thread_id, user_id)
     elif call_id:
         call_row = await execute_one(
-            "SELECT thread_id FROM vapi_calls WHERE call_id = :call_id LIMIT 1",
+            "SELECT thread_id FROM vapi_calls WHERE call_id::text = :call_id LIMIT 1",
             {"call_id": call_id},
         )
         if not call_row:
@@ -166,7 +163,7 @@ async def stream_vapi_updates(
                     """
                     SELECT call_id, thread_id, status, updated_at
                     FROM vapi_calls
-                    WHERE call_id = :call_id
+                    WHERE call_id::text = :call_id
                     LIMIT 1
                     """,
                     {"call_id": call_id},
@@ -186,14 +183,14 @@ async def stream_vapi_updates(
                     """
                     SELECT call_id, thread_id, status, updated_at
                     FROM vapi_calls
-                    WHERE thread_id = :thread_id
+                    WHERE thread_id::text = :thread_id
                     ORDER BY updated_at DESC NULLS LAST
                     LIMIT 1
                     """,
                     {"thread_id": thread_id},
                 )
                 count_row = await execute_one(
-                    "SELECT COUNT(*) AS count FROM vapi_calls WHERE thread_id = :thread_id",
+                    "SELECT COUNT(*) AS count FROM vapi_calls WHERE thread_id::text = :thread_id",
                     {"thread_id": thread_id},
                 )
                 count = int(count_row.get("count") or 0) if count_row else 0
@@ -227,12 +224,9 @@ async def stream_vapi_updates(
 
             await asyncio.sleep(1.0)
 
+    from core.utils.sse_headers import get_sse_headers as _sse_h
     return StreamingResponse(
         event_generator(),
         media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache",
-            "Connection": "keep-alive",
-            "X-Accel-Buffering": "no",
-        },
+        headers=_sse_h(request),
     )

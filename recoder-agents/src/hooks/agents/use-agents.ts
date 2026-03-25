@@ -110,6 +110,8 @@ export const useAgents = (
     gcTime: 10 * 60 * 1000,
     enabled: true, // Default to enabled, can be overridden
     placeholderData, // Use cached data from other queries as placeholder
+    retry: 2,
+    retryDelay: (attemptIndex) => Math.min(1000 * (attemptIndex + 1), 5000),
     ...customOptions,
   });
 };

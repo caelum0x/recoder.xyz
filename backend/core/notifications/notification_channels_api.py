@@ -80,7 +80,7 @@ async def list_channels(
     rows = await execute(
         """
         SELECT * FROM notification_channels
-        WHERE user_id = :user_id
+        WHERE user_id::text = :user_id
         ORDER BY created_at DESC
         """,
         {"user_id": user_id},
@@ -95,7 +95,7 @@ async def update_channel(
     user_id: str = Depends(verify_and_get_user_id_from_jwt),
 ):
     existing = await execute_one(
-        "SELECT * FROM notification_channels WHERE id = :id AND user_id = :user_id",
+        "SELECT * FROM notification_channels WHERE id = :id AND user_id::text = :user_id",
         {"id": channel_id, "user_id": user_id},
     )
     if not existing:
@@ -127,7 +127,7 @@ async def update_channel(
     set_clauses += ", updated_at = now()"
 
     row = await execute_one(
-        f"UPDATE notification_channels SET {set_clauses} WHERE id = :id AND user_id = :user_id RETURNING *",
+        f"UPDATE notification_channels SET {set_clauses} WHERE id = :id AND user_id::text = :user_id RETURNING *",
         params,
     )
     return dict(row)
@@ -139,14 +139,14 @@ async def delete_channel(
     user_id: str = Depends(verify_and_get_user_id_from_jwt),
 ):
     existing = await execute_one(
-        "SELECT id FROM notification_channels WHERE id = :id AND user_id = :user_id",
+        "SELECT id FROM notification_channels WHERE id = :id AND user_id::text = :user_id",
         {"id": channel_id, "user_id": user_id},
     )
     if not existing:
         raise HTTPException(status_code=404, detail="Channel not found")
 
     await execute(
-        "DELETE FROM notification_channels WHERE id = :id AND user_id = :user_id",
+        "DELETE FROM notification_channels WHERE id = :id AND user_id::text = :user_id",
         {"id": channel_id, "user_id": user_id},
     )
     return {"status": "ok"}
@@ -158,7 +158,7 @@ async def test_channel(
     user_id: str = Depends(verify_and_get_user_id_from_jwt),
 ):
     channel = await execute_one(
-        "SELECT * FROM notification_channels WHERE id = :id AND user_id = :user_id",
+        "SELECT * FROM notification_channels WHERE id = :id AND user_id::text = :user_id",
         {"id": channel_id, "user_id": user_id},
     )
     if not channel:

@@ -67,7 +67,7 @@ class ExpandMessageTool(Tool):
     async def expand_message(self, message_id: str) -> ToolResult:
         try:
             message_data = await execute_one_read(
-                "SELECT * FROM messages WHERE message_id = :message_id AND thread_id = :thread_id",
+                "SELECT * FROM messages WHERE message_id::text = :message_id AND thread_id::text = :thread_id",
                 {"message_id": message_id, "thread_id": self.thread_id}
             )
 
@@ -401,7 +401,7 @@ class ExpandMessageTool(Tool):
             _threads = Table("threads").json_columns("metadata")
 
             row = await execute_one_read(
-                "SELECT metadata FROM threads WHERE thread_id = :thread_id",
+                "SELECT metadata FROM threads WHERE thread_id::text = :thread_id",
                 {"thread_id": self.thread_id}
             )
 

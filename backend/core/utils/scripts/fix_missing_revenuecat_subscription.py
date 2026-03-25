@@ -231,7 +231,7 @@ async def fix_missing_revenuecat_subscription(user_email: str, dry_run: bool = F
     logger.info("="*80)
     
     credit_account = await execute_one(
-        "SELECT * FROM credit_accounts WHERE account_id = :account_id LIMIT 1",
+        "SELECT * FROM credit_accounts WHERE account_id::text = :account_id LIMIT 1",
         {"account_id": account_id},
     )
 
@@ -316,7 +316,7 @@ async def fix_missing_revenuecat_subscription(user_email: str, dry_run: bool = F
     logger.info("="*80)
     
     current_balance = await execute_one(
-        "SELECT balance FROM credit_accounts WHERE account_id = :account_id LIMIT 1",
+        "SELECT balance FROM credit_accounts WHERE account_id::text = :account_id LIMIT 1",
         {"account_id": account_id},
     )
     balance = Decimal(str(current_balance['balance'])) if current_balance else Decimal('0')
@@ -350,7 +350,7 @@ async def fix_missing_revenuecat_subscription(user_email: str, dry_run: bool = F
     logger.info("="*80)
     
     final_account = await execute_one(
-        "SELECT * FROM credit_accounts WHERE account_id = :account_id LIMIT 1",
+        "SELECT * FROM credit_accounts WHERE account_id::text = :account_id LIMIT 1",
         {"account_id": account_id},
     )
 
@@ -499,7 +499,7 @@ async def fix_by_account_id(account_id: str, dry_run: bool = False):
     logger.info("✅ Updated credit_accounts table")
     
     current_balance = await execute_one(
-        "SELECT balance FROM credit_accounts WHERE account_id = :account_id LIMIT 1",
+        "SELECT balance FROM credit_accounts WHERE account_id::text = :account_id LIMIT 1",
         {"account_id": account_id},
     )
     balance = Decimal(str(current_balance['balance'])) if current_balance else Decimal('0')

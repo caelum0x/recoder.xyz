@@ -487,48 +487,117 @@ export function useAgentStream(
     }
   }, []);
   
+  // Polling fallback: when SSE stream fails but agent is still running,
+  // poll the status API every 5s so the UI eventually gets the completion event.
+  const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const pollCountRef = useRef(0);
+  const MAX_POLL_COUNT = 120; // ~10 minutes at 5s intervals
+
+  const stopPolling = useCallback(() => {
+    if (pollIntervalRef.current) {
+      clearInterval(pollIntervalRef.current);
+      pollIntervalRef.current = null;
+    }
+    pollCountRef.current = 0;
+  }, []);
+
+  const startPollingFallback = useCallback((runId: string) => {
+    // Don't start a duplicate poller
+    if (pollIntervalRef.current) return;
+
+    pollCountRef.current = 0;
+    pollIntervalRef.current = setInterval(async () => {
+      if (!isMountedRef.current || currentRunIdRef.current !== runId) {
+        stopPolling();
+        return;
+      }
+
+      pollCountRef.current++;
+      if (pollCountRef.current > MAX_POLL_COUNT) {
+        stopPolling();
+        setError('Agent run timed out. Check the Runs page for status.');
+        finalizeStream('error', runId);
+        return;
+      }
+
+      try {
+        const agentStatus = await checkAgentStatus(runId);
+
+        if (agentStatus.status !== 'running') {
+          stopPolling();
+          const finalStatus = mapBackendStatus(agentStatus.status);
+          finalizeStream(finalStatus, runId);
+        }
+        // Agent still running — keep polling
+      } catch (err) {
+        const errMsg = err instanceof Error ? err.message : String(err);
+        const isExpected =
+          errMsg.includes('not found') ||
+          errMsg.includes('404') ||
+          errMsg.includes('does not exist') ||
+          errMsg.includes('is not running');
+
+        if (isExpected) {
+          stopPolling();
+          finalizeStream('completed', runId);
+        }
+        // Transient errors — keep polling
+      }
+    }, 5000);
+  }, [checkAgentStatus, finalizeStream, stopPolling]);
+
+  // Clean up poller on unmount
+  useEffect(() => {
+    return () => {
+      stopPolling();
+    };
+  }, [stopPolling]);
+
   const handleConnectionError = useCallback(async (error: Error) => {
     const runId = currentRunIdRef.current;
     if (!runId) {
       finalizeStream('error');
       return;
     }
-    
+
     try {
       const agentStatus = await checkAgentStatus(runId);
-      
+
       if (agentStatus.status !== 'running') {
         const finalStatus = mapBackendStatus(agentStatus.status);
         finalizeStream(finalStatus);
       } else {
-        setError('Stream connection error');
-        optionsRef.current.showToast?.('Stream disconnected. Worker might still be running.', 'warning');
-        finalizeStream('error', runId);
+        // Agent is still running but stream is broken.
+        // Instead of giving up, start a polling fallback so the UI
+        // eventually learns when the agent finishes.
+        optionsRef.current.showToast?.('Stream disconnected. Polling for status updates...', 'warning');
+        setStatus('running');
+        startPollingFallback(runId);
       }
     } catch (err) {
       const errMsg = err instanceof Error ? err.message : String(err);
-      const isExpected = 
+      const isExpected =
         errMsg.includes('not found') ||
         errMsg.includes('404') ||
         errMsg.includes('does not exist') ||
         errMsg.includes('is not running');
-      
+
       if (isExpected) {
         finalizeStream('completed', runId);
       } else {
         finalizeStream('error', runId);
       }
     }
-  }, [checkAgentStatus, finalizeStream]);
+  }, [checkAgentStatus, finalizeStream, startPollingFallback]);
   
   const handleConnectionClose = useCallback(async () => {
     const runId = currentRunIdRef.current;
     const currentStatus = statusRef.current;
-    
+
     if (TERMINAL_STATUSES.includes(currentStatus as typeof TERMINAL_STATUSES[number])) {
       return;
     }
-    
+
     if (!runId) {
       if (currentStatus === 'streaming' || currentStatus === 'connecting') {
         finalizeStream('error');
@@ -537,28 +606,29 @@ export function useAgentStream(
       }
       return;
     }
-    
+
     setTimeout(async () => {
       if (!isMountedRef.current) return;
       if (currentRunIdRef.current !== runId) return;
-      
+
       try {
         const agentStatus = await checkAgentStatus(runId);
-        
+
         if (agentStatus.status === 'running') {
-          setError('Stream closed unexpectedly while agent was running.');
-          optionsRef.current.showToast?.('Stream disconnected. Worker might still be running.', 'warning');
-          finalizeStream('error', runId);
+          // Stream closed but agent still running — start polling fallback
+          optionsRef.current.showToast?.('Stream disconnected. Polling for status updates...', 'warning');
+          setStatus('running');
+          startPollingFallback(runId);
         } else {
           const finalStatus = mapBackendStatus(agentStatus.status);
           finalizeStream(finalStatus, runId);
         }
       } catch (err) {
         const errMsg = err instanceof Error ? err.message : String(err);
-        const isExpected = 
+        const isExpected =
           errMsg.includes('not found') ||
           errMsg.includes('404');
-        
+
         if (isExpected) {
           finalizeStream('completed', runId);
         } else {
@@ -566,7 +636,7 @@ export function useAgentStream(
         }
       }
     }, STREAM_CONFIG.STATUS_CHECK_DELAY_MS);
-  }, [checkAgentStatus, finalizeStream]);
+  }, [checkAgentStatus, finalizeStream, startPollingFallback]);
   
   handleConnectionErrorRef.current = handleConnectionError;
   handleConnectionCloseRef.current = handleConnectionClose;
@@ -674,11 +744,13 @@ export function useAgentStream(
   ]);
   
   const stopStreaming = useCallback(async () => {
+    stopPolling();
+
     if (connectionRef.current) {
       connectionRef.current.destroy();
       connectionRef.current = null;
     }
-    
+
     const runId = currentRunIdRef.current;
     if (runId) {
       try {

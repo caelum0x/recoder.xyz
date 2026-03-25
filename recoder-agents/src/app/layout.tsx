@@ -4,6 +4,7 @@ import type { Metadata, Viewport } from 'next';
 import './globals.css';
 import { AuthProvider } from '@/components/AuthProvider';
 import { PresenceProvider } from '@/components/presence-provider';
+import { SSEErrorBoundary } from '@/components/sse-error-boundary';
 import { ReactQueryProvider } from './react-query-provider';
 import { Toaster } from '@/components/ui/sonner';
 import '@/lib/polyfills';
@@ -111,14 +112,7 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning className={`${roobert.variable} ${roobertMono.variable}`}>
       <head>
-        {/* Preload critical fonts for faster FCP - local fonts need crossOrigin for CORS */}
-        <link
-          rel="preload"
-          href="/fonts/roobert/RoobertUprightsVF.woff2"
-          as="font"
-          type="font/woff2"
-          crossOrigin="anonymous"
-        />
+        {/* Font preloading handled by next/font/local with preload:true — no manual <link> needed */}
         
         {/* DNS prefetch for analytics (loaded later but resolve DNS early) */}
         <link rel="dns-prefetch" href="https://www.googletagmanager.com" />
@@ -243,12 +237,41 @@ export default function RootLayout({
         >
           <AuthProvider>
             <I18nProvider>
+              <SSEErrorBoundary name="presence" retryAfterMs={15000}
+                fallback={
+                  /* If PresenceProvider crashes, render children without presence.
+                     usePresenceContext() returns safe defaults so nothing else breaks. */
+                  <ReactQueryProvider>
+                    <KeyboardShortcutProvider>
+                      <main id="main-content">{children}</main>
+                      <Toaster />
+                      <SSEErrorBoundary name="notifications">
+                        <NotificationToastProvider />
+                      </SSEErrorBoundary>
+                      <Suspense fallback={null}>
+                        <KeyboardShortcutWiring />
+                      </Suspense>
+                      <Suspense fallback={null}>
+                        <PlanSelectionModal />
+                      </Suspense>
+                      <Suspense fallback={null}>
+                        <PostHogIdentify />
+                      </Suspense>
+                      <Suspense fallback={null}>
+                        <CommandPalette />
+                      </Suspense>
+                    </KeyboardShortcutProvider>
+                  </ReactQueryProvider>
+                }
+              >
               <PresenceProvider>
               <ReactQueryProvider>
                 <KeyboardShortcutProvider>
                   <main id="main-content">{children}</main>
                   <Toaster />
-                  <NotificationToastProvider />
+                  <SSEErrorBoundary name="notifications">
+                    <NotificationToastProvider />
+                  </SSEErrorBoundary>
                   <Suspense fallback={null}>
                     <KeyboardShortcutWiring />
                   </Suspense>
@@ -264,6 +287,7 @@ export default function RootLayout({
                 </KeyboardShortcutProvider>
               </ReactQueryProvider>
               </PresenceProvider>
+              </SSEErrorBoundary>
             </I18nProvider>
           </AuthProvider>
           {/* Analytics - lazy loaded to not block FCP */}

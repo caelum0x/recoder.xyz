@@ -91,7 +91,7 @@ class StripeSubscriptionSyncV2:
                 """
                 SELECT tier, balance
                 FROM credit_accounts
-                WHERE account_id = :account_id
+                WHERE account_id::text = :account_id
                 LIMIT 1
                 """,
                 {"account_id": account_id},
@@ -160,7 +160,7 @@ class StripeSubscriptionSyncV2:
                   billing_cycle_anchor = :billing_cycle_anchor,
                   updated_at = :updated_at,
                   next_credit_grant = :next_credit_grant
-                WHERE account_id = :account_id
+                WHERE account_id::text = :account_id
                 """,
                 update_params,
             )

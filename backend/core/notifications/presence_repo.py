@@ -86,7 +86,7 @@ async def delete_stale_sessions(
     if account_id:
         sql = """
         DELETE FROM user_presence_sessions 
-        WHERE last_seen < :threshold AND account_id = :account_id
+        WHERE last_seen < :threshold AND account_id::text = :account_id
         RETURNING session_id
         """
         result = await execute_mutate(sql, {
@@ -113,7 +113,7 @@ async def get_sessions_by_account_and_thread(
     SELECT session_id, account_id, active_thread_id, last_seen, 
            platform, device_info, client_timestamp, created_at, updated_at
     FROM user_presence_sessions 
-    WHERE account_id = :account_id AND active_thread_id = :thread_id
+    WHERE account_id::text = :account_id AND active_thread_id::text = :thread_id
     """
     rows = await execute(sql, {"account_id": account_id, "thread_id": thread_id})
     return [dict(row) for row in rows] if rows else []

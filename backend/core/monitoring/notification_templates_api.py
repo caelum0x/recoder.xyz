@@ -3,7 +3,7 @@ Notification Templates & Sends API endpoints.
 
 Provides CRUD for notification templates, template rendering with variable
 substitution, and send history.
-Access control enforced at application layer (WHERE user_id = :user_id).
+Access control enforced at application layer (WHERE user_id::text = :user_id).
 """
 
 import re
@@ -133,7 +133,7 @@ async def get_notification_template_stats(
 ):
     """Return aggregate stats: total templates, by channel, by event type, top by use_count."""
     total_row = await execute_one(
-        "SELECT COUNT(*) AS cnt FROM notification_templates WHERE user_id = :user_id",
+        "SELECT COUNT(*) AS cnt FROM notification_templates WHERE user_id::text = :user_id",
         {"user_id": user_id},
     )
     total = int(total_row["cnt"]) if total_row else 0
@@ -142,7 +142,7 @@ async def get_notification_template_stats(
         """
         SELECT channel, COUNT(*) AS cnt
         FROM notification_templates
-        WHERE user_id = :user_id
+        WHERE user_id::text = :user_id
         GROUP BY channel
         """,
         {"user_id": user_id},
@@ -153,7 +153,7 @@ async def get_notification_template_stats(
         """
         SELECT event_type, COUNT(*) AS cnt
         FROM notification_templates
-        WHERE user_id = :user_id
+        WHERE user_id::text = :user_id
         GROUP BY event_type
         ORDER BY cnt DESC
         """,
@@ -165,7 +165,7 @@ async def get_notification_template_stats(
         """
         SELECT id, template_name, event_type, channel, use_count
         FROM notification_templates
-        WHERE user_id = :user_id
+        WHERE user_id::text = :user_id
         ORDER BY use_count DESC
         LIMIT 3
         """,
@@ -174,7 +174,7 @@ async def get_notification_template_stats(
     top_templates = serialize_rows(top_rows) if top_rows else []
 
     sends_row = await execute_one(
-        "SELECT COUNT(*) AS cnt FROM notification_sends WHERE user_id = :user_id",
+        "SELECT COUNT(*) AS cnt FROM notification_sends WHERE user_id::text = :user_id",
         {"user_id": user_id},
     )
     total_sends = int(sends_row["cnt"]) if sends_row else 0
@@ -199,7 +199,7 @@ async def list_notification_sends(
     user_id: str = Depends(verify_and_get_user_id_from_jwt),
 ):
     """List recent notification sends for the authenticated user."""
-    conditions = ["user_id = :user_id"]
+    conditions = ["user_id::text = :user_id"]
     params: dict[str, Any] = {"user_id": user_id, "limit": limit}
 
     if event_type:
@@ -225,7 +225,7 @@ async def list_notification_templates(
     user_id: str = Depends(verify_and_get_user_id_from_jwt),
 ):
     """List notification templates for the authenticated user."""
-    conditions = ["user_id = :user_id"]
+    conditions = ["user_id::text = :user_id"]
     params: dict[str, Any] = {"user_id": user_id}
 
     if event_type:
@@ -254,7 +254,7 @@ async def get_notification_template(
 ):
     """Get a single notification template by ID."""
     row = await execute_one(
-        "SELECT * FROM notification_templates WHERE id = :id AND user_id = :user_id",
+        "SELECT * FROM notification_templates WHERE id = :id AND user_id::text = :user_id",
         {"id": template_id, "user_id": user_id},
     )
     if not row:
@@ -274,7 +274,7 @@ async def update_notification_template(
 ):
     """Update fields on an existing notification template."""
     existing = await execute_one(
-        "SELECT id FROM notification_templates WHERE id = :id AND user_id = :user_id",
+        "SELECT id FROM notification_templates WHERE id = :id AND user_id::text = :user_id",
         {"id": template_id, "user_id": user_id},
     )
     if not existing:
@@ -304,7 +304,7 @@ async def update_notification_template(
     params = {**updates, "id": template_id, "user_id": user_id}
     try:
         await execute_mutate(
-            f"UPDATE notification_templates SET {set_clause_str} WHERE id = :id AND user_id = :user_id",
+            f"UPDATE notification_templates SET {set_clause_str} WHERE id = :id AND user_id::text = :user_id",
             params,
         )
     except Exception as exc:
@@ -328,14 +328,14 @@ async def delete_notification_template(
 ):
     """Delete a notification template."""
     existing = await execute_one(
-        "SELECT id FROM notification_templates WHERE id = :id AND user_id = :user_id",
+        "SELECT id FROM notification_templates WHERE id = :id AND user_id::text = :user_id",
         {"id": template_id, "user_id": user_id},
     )
     if not existing:
         raise HTTPException(status_code=404, detail="Template not found")
 
     await execute_mutate(
-        "DELETE FROM notification_templates WHERE id = :id AND user_id = :user_id",
+        "DELETE FROM notification_templates WHERE id = :id AND user_id::text = :user_id",
         {"id": template_id, "user_id": user_id},
     )
     return {"deleted": True, "template_id": template_id}
@@ -356,7 +356,7 @@ async def render_notification_template(
     increment use_count. Returns rendered_subject, rendered_body, send_id.
     """
     row = await execute_one(
-        "SELECT * FROM notification_templates WHERE id = :id AND user_id = :user_id",
+        "SELECT * FROM notification_templates WHERE id = :id AND user_id::text = :user_id",
         {"id": template_id, "user_id": user_id},
     )
     if not row:

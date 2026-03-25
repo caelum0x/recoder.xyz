@@ -77,7 +77,7 @@ async def remove_reaction(
     result = await execute_mutate(
         """
         DELETE FROM thread_message_reactions
-        WHERE user_id = :user_id AND thread_id = :thread_id
+        WHERE user_id::text = :user_id AND thread_id::text = :thread_id
           AND message_index = :message_index AND emoji = :emoji
         """,
         {
@@ -105,7 +105,7 @@ async def list_message_reactions(
                COUNT(*) as count,
                array_agg(user_id::text) as user_ids
         FROM thread_message_reactions
-        WHERE thread_id = :thread_id AND message_index = :message_index
+        WHERE thread_id::text = :thread_id AND message_index = :message_index
         GROUP BY emoji
         ORDER BY count DESC
         """,
@@ -139,7 +139,7 @@ async def list_thread_reactions(
                COUNT(*) as count,
                array_agg(user_id::text) as user_ids
         FROM thread_message_reactions
-        WHERE thread_id = :thread_id
+        WHERE thread_id::text = :thread_id
         GROUP BY message_index, emoji
         ORDER BY message_index ASC, count DESC
         """,
@@ -175,7 +175,7 @@ async def frequent_emojis(
         """
         SELECT emoji, COUNT(*) as use_count
         FROM thread_message_reactions
-        WHERE user_id = :user_id
+        WHERE user_id::text = :user_id
         GROUP BY emoji
         ORDER BY use_count DESC
         LIMIT :limit

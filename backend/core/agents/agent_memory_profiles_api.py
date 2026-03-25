@@ -2,7 +2,7 @@
 Agent Memory Profiles API endpoints (Sprint 73 Phase 1).
 
 Provides CRUD for memory profiles and slots, with access logging.
-Access control enforced at application layer (WHERE user_id = :user_id).
+Access control enforced at application layer (WHERE user_id::text = :user_id).
 """
 
 from datetime import datetime, timezone
@@ -92,8 +92,8 @@ async def list_memory_profiles(
             """
             SELECT p.*, COUNT(s.id) AS slot_count
             FROM agent_memory_profiles p
-            LEFT JOIN memory_slots s ON s.profile_id = p.id
-            WHERE p.agent_id = :agent_id AND p.user_id = :user_id
+            LEFT JOIN memory_slots s ON s.profile_id::text = p.id::text
+            WHERE p.agent_id::text = :agent_id AND p.user_id::text = :user_id
             GROUP BY p.id
             ORDER BY p.created_at DESC
             """,
@@ -118,14 +118,14 @@ async def get_memory_profile(
     """Get a memory profile along with all its slots."""
     try:
         profile = await execute_one(
-            "SELECT * FROM agent_memory_profiles WHERE id = :id AND agent_id = :agent_id AND user_id = :user_id",
+            "SELECT * FROM agent_memory_profiles WHERE id = :id AND agent_id::text = :agent_id AND user_id::text = :user_id",
             {"id": profile_id, "agent_id": agent_id, "user_id": user_id},
         )
         if not profile:
             raise HTTPException(status_code=404, detail="Memory profile not found.")
 
         slots = await execute(
-            "SELECT * FROM memory_slots WHERE profile_id = :profile_id AND user_id = :user_id ORDER BY slot_key ASC",
+            "SELECT * FROM memory_slots WHERE profile_id::text = :profile_id AND user_id::text = :user_id ORDER BY slot_key ASC",
             {"profile_id": profile_id, "user_id": user_id},
         )
 
@@ -153,7 +153,7 @@ async def update_memory_profile(
     """Update a memory profile's name or active status."""
     try:
         profile = await execute_one(
-            "SELECT * FROM agent_memory_profiles WHERE id = :id AND agent_id = :agent_id AND user_id = :user_id",
+            "SELECT * FROM agent_memory_profiles WHERE id = :id AND agent_id::text = :agent_id AND user_id::text = :user_id",
             {"id": profile_id, "agent_id": agent_id, "user_id": user_id},
         )
         if not profile:
@@ -166,7 +166,7 @@ async def update_memory_profile(
             """
             UPDATE agent_memory_profiles
             SET profile_name = :profile_name, is_active = :is_active, updated_at = now()
-            WHERE id = :id AND user_id = :user_id
+            WHERE id = :id AND user_id::text = :user_id
             RETURNING *
             """,
             {
@@ -197,14 +197,14 @@ async def delete_memory_profile(
     """Delete a memory profile and all its slots."""
     try:
         profile = await execute_one(
-            "SELECT id FROM agent_memory_profiles WHERE id = :id AND agent_id = :agent_id AND user_id = :user_id",
+            "SELECT id FROM agent_memory_profiles WHERE id = :id AND agent_id::text = :agent_id AND user_id::text = :user_id",
             {"id": profile_id, "agent_id": agent_id, "user_id": user_id},
         )
         if not profile:
             raise HTTPException(status_code=404, detail="Memory profile not found.")
 
         await execute_mutate(
-            "DELETE FROM agent_memory_profiles WHERE id = :id AND user_id = :user_id",
+            "DELETE FROM agent_memory_profiles WHERE id = :id AND user_id::text = :user_id",
             {"id": profile_id, "user_id": user_id},
         )
         return {"deleted": True}
@@ -233,7 +233,7 @@ async def set_memory_slot(
     try:
         # Verify profile ownership
         profile = await execute_one(
-            "SELECT id FROM agent_memory_profiles WHERE id = :id AND user_id = :user_id",
+            "SELECT id FROM agent_memory_profiles WHERE id = :id AND user_id::text = :user_id",
             {"id": profile_id, "user_id": user_id},
         )
         if not profile:
@@ -241,7 +241,7 @@ async def set_memory_slot(
 
         # Get existing slot for audit log
         existing = await execute_one(
-            "SELECT id, slot_value FROM memory_slots WHERE profile_id = :profile_id AND slot_key = :slot_key",
+            "SELECT id, slot_value FROM memory_slots WHERE profile_id::text = :profile_id AND slot_key = :slot_key",
             {"profile_id": profile_id, "slot_key": body.slot_key},
         )
         old_value = existing["slot_value"] if existing else None
@@ -312,14 +312,14 @@ async def list_memory_slots(
     try:
         # Verify profile ownership
         profile = await execute_one(
-            "SELECT id FROM agent_memory_profiles WHERE id = :id AND user_id = :user_id",
+            "SELECT id FROM agent_memory_profiles WHERE id = :id AND user_id::text = :user_id",
             {"id": profile_id, "user_id": user_id},
         )
         if not profile:
             raise HTTPException(status_code=404, detail="Memory profile not found.")
 
         rows = await execute(
-            "SELECT * FROM memory_slots WHERE profile_id = :profile_id AND user_id = :user_id ORDER BY slot_key ASC",
+            "SELECT * FROM memory_slots WHERE profile_id::text = :profile_id AND user_id::text = :user_id ORDER BY slot_key ASC",
             {"profile_id": profile_id, "user_id": user_id},
         )
         return serialize_rows(rows)
@@ -344,14 +344,14 @@ async def get_memory_slot(
     try:
         # Verify profile ownership
         profile = await execute_one(
-            "SELECT id FROM agent_memory_profiles WHERE id = :id AND user_id = :user_id",
+            "SELECT id FROM agent_memory_profiles WHERE id = :id AND user_id::text = :user_id",
             {"id": profile_id, "user_id": user_id},
         )
         if not profile:
             raise HTTPException(status_code=404, detail="Memory profile not found.")
 
         row = await execute_one(
-            "SELECT * FROM memory_slots WHERE profile_id = :profile_id AND slot_key = :slot_key AND user_id = :user_id",
+            "SELECT * FROM memory_slots WHERE profile_id::text = :profile_id AND slot_key = :slot_key AND user_id::text = :user_id",
             {"profile_id": profile_id, "slot_key": slot_key, "user_id": user_id},
         )
         if not row:
@@ -402,14 +402,14 @@ async def delete_memory_slot(
     try:
         # Verify profile ownership
         profile = await execute_one(
-            "SELECT id FROM agent_memory_profiles WHERE id = :id AND user_id = :user_id",
+            "SELECT id FROM agent_memory_profiles WHERE id = :id AND user_id::text = :user_id",
             {"id": profile_id, "user_id": user_id},
         )
         if not profile:
             raise HTTPException(status_code=404, detail="Memory profile not found.")
 
         row = await execute_one(
-            "SELECT * FROM memory_slots WHERE profile_id = :profile_id AND slot_key = :slot_key AND user_id = :user_id",
+            "SELECT * FROM memory_slots WHERE profile_id::text = :profile_id AND slot_key = :slot_key AND user_id::text = :user_id",
             {"profile_id": profile_id, "slot_key": slot_key, "user_id": user_id},
         )
         if not row:
@@ -430,7 +430,7 @@ async def delete_memory_slot(
             logger.warning(f"Failed to log slot delete: {log_err}")
 
         await execute_mutate(
-            "DELETE FROM memory_slots WHERE id = :id AND user_id = :user_id",
+            "DELETE FROM memory_slots WHERE id = :id AND user_id::text = :user_id",
             {"id": slot["id"], "user_id": user_id},
         )
         return {"deleted": True}
@@ -459,7 +459,7 @@ async def get_memory_access_log(
     try:
         # Verify profile ownership
         profile = await execute_one(
-            "SELECT id FROM agent_memory_profiles WHERE id = :id AND user_id = :user_id",
+            "SELECT id FROM agent_memory_profiles WHERE id = :id AND user_id::text = :user_id",
             {"id": profile_id, "user_id": user_id},
         )
         if not profile:
@@ -469,8 +469,8 @@ async def get_memory_access_log(
             """
             SELECT mal.*, ms.slot_key
             FROM memory_access_log mal
-            JOIN memory_slots ms ON ms.id = mal.slot_id
-            WHERE ms.profile_id = :profile_id AND mal.user_id = :user_id
+            JOIN memory_slots ms ON ms.id::text = mal.slot_id::text
+            WHERE ms.profile_id::text = :profile_id AND mal.user_id::text = :user_id
             ORDER BY mal.accessed_at DESC
             LIMIT :limit
             """,

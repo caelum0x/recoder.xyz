@@ -49,7 +49,7 @@ async def global_search(
         if "agents" in type_list:
             agents = await execute(
                 """SELECT agent_id, name, description FROM agents
-                   WHERE account_id = :uid AND (lower(name) LIKE :q OR lower(COALESCE(description, '')) LIKE :q)
+                   WHERE account_id::text = :uid AND (lower(name) LIKE :q OR lower(COALESCE(description, '')) LIKE :q)
                    LIMIT 10""",
                 {"uid": user_id, "q": search_term},
             )
@@ -68,8 +68,8 @@ async def global_search(
             threads = await execute(
                 """SELECT t.thread_id, t.project_id, p.name AS project_name
                    FROM threads t
-                   JOIN projects p ON t.project_id = p.project_id
-                   WHERE t.account_id = :uid AND lower(COALESCE(p.name, '')) LIKE :q
+                   JOIN projects p ON t.project_id::text = p.project_id::text
+                   WHERE t.account_id::text = :uid AND lower(COALESCE(p.name, '')) LIKE :q
                    LIMIT 10""",
                 {"uid": user_id, "q": search_term},
             )
@@ -88,7 +88,7 @@ async def global_search(
         if "workflows" in type_list:
             workflows = await execute(
                 """SELECT id, name, description FROM workflows
-                   WHERE account_id = :uid AND (lower(name) LIKE :q OR lower(COALESCE(description, '')) LIKE :q)
+                   WHERE account_id::text = :uid AND (lower(name) LIKE :q OR lower(COALESCE(description, '')) LIKE :q)
                    LIMIT 10""",
                 {"uid": user_id, "q": search_term},
             )
@@ -106,7 +106,7 @@ async def global_search(
             # knowledge_base_entries uses entry_id, filename, and account_id
             kb = await execute(
                 """SELECT entry_id, filename FROM knowledge_base_entries
-                   WHERE account_id = :uid AND lower(COALESCE(filename, '')) LIKE :q
+                   WHERE account_id::text = :uid AND lower(COALESCE(filename, '')) LIKE :q
                    LIMIT 10""",
                 {"uid": user_id, "q": search_term},
             )

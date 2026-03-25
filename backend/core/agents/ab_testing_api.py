@@ -120,7 +120,7 @@ async def list_experiments(
     params: Dict[str, Any] = {"user_id": user_id}
     filters = ""
     if agent_id:
-        filters += " AND agent_id = :agent_id"
+        filters += " AND agent_id::text = :agent_id"
         params["agent_id"] = agent_id
     if status:
         filters += " AND status = :status"
@@ -129,7 +129,7 @@ async def list_experiments(
     rows = await execute(
         f"""
         SELECT * FROM ab_experiments
-        WHERE user_id = :user_id{filters}
+        WHERE user_id::text = :user_id{filters}
         ORDER BY created_at DESC
         """,
         params,
@@ -148,7 +148,7 @@ async def get_experiment(
 ):
     """Get a single experiment by ID."""
     row = await execute_one(
-        "SELECT * FROM ab_experiments WHERE id = :id AND user_id = :user_id",
+        "SELECT * FROM ab_experiments WHERE id = :id AND user_id::text = :user_id",
         {"id": experiment_id, "user_id": user_id},
     )
     if not row:
@@ -168,7 +168,7 @@ async def update_experiment(
 ):
     """Update experiment config, status, or winner."""
     existing = await execute_one(
-        "SELECT id FROM ab_experiments WHERE id = :id AND user_id = :user_id",
+        "SELECT id FROM ab_experiments WHERE id = :id AND user_id::text = :user_id",
         {"id": experiment_id, "user_id": user_id},
     )
     if not existing:
@@ -202,7 +202,7 @@ async def update_experiment(
     row = await execute_one(
         f"""
         UPDATE ab_experiments SET {set_clause}
-        WHERE id = :id AND user_id = :user_id
+        WHERE id = :id AND user_id::text = :user_id
         RETURNING *
         """,
         data,
@@ -221,14 +221,14 @@ async def delete_experiment(
 ):
     """Delete an experiment and all its results."""
     existing = await execute_one(
-        "SELECT id FROM ab_experiments WHERE id = :id AND user_id = :user_id",
+        "SELECT id FROM ab_experiments WHERE id = :id AND user_id::text = :user_id",
         {"id": experiment_id, "user_id": user_id},
     )
     if not existing:
         raise HTTPException(status_code=404, detail="Experiment not found")
 
     await execute_mutate(
-        "DELETE FROM ab_experiments WHERE id = :id AND user_id = :user_id",
+        "DELETE FROM ab_experiments WHERE id = :id AND user_id::text = :user_id",
         {"id": experiment_id, "user_id": user_id},
     )
     return {"deleted": True, "id": experiment_id}
@@ -245,7 +245,7 @@ async def start_experiment(
 ):
     """Set experiment status to running and record started_at."""
     existing = await execute_one(
-        "SELECT id FROM ab_experiments WHERE id = :id AND user_id = :user_id",
+        "SELECT id FROM ab_experiments WHERE id = :id AND user_id::text = :user_id",
         {"id": experiment_id, "user_id": user_id},
     )
     if not existing:
@@ -255,7 +255,7 @@ async def start_experiment(
         """
         UPDATE ab_experiments
         SET status = 'running', started_at = now()
-        WHERE id = :id AND user_id = :user_id
+        WHERE id = :id AND user_id::text = :user_id
         RETURNING *
         """,
         {"id": experiment_id, "user_id": user_id},
@@ -275,7 +275,7 @@ async def stop_experiment(
 ):
     """Set experiment status to completed and record ended_at."""
     existing = await execute_one(
-        "SELECT id FROM ab_experiments WHERE id = :id AND user_id = :user_id",
+        "SELECT id FROM ab_experiments WHERE id = :id AND user_id::text = :user_id",
         {"id": experiment_id, "user_id": user_id},
     )
     if not existing:
@@ -291,7 +291,7 @@ async def stop_experiment(
         f"""
         UPDATE ab_experiments
         SET status = 'completed', ended_at = now(){winner_clause}
-        WHERE id = :id AND user_id = :user_id
+        WHERE id = :id AND user_id::text = :user_id
         RETURNING *
         """,
         params,
@@ -311,7 +311,7 @@ async def record_result(
 ):
     """Record a metric result for a variant."""
     existing = await execute_one(
-        "SELECT id FROM ab_experiments WHERE id = :id AND user_id = :user_id",
+        "SELECT id FROM ab_experiments WHERE id = :id AND user_id::text = :user_id",
         {"id": experiment_id, "user_id": user_id},
     )
     if not existing:
@@ -354,7 +354,7 @@ async def list_results(
 ):
     """Return aggregated results per variant+metric."""
     existing = await execute_one(
-        "SELECT id FROM ab_experiments WHERE id = :id AND user_id = :user_id",
+        "SELECT id FROM ab_experiments WHERE id = :id AND user_id::text = :user_id",
         {"id": experiment_id, "user_id": user_id},
     )
     if not existing:
@@ -368,7 +368,7 @@ async def list_results(
           AVG(metric_value) AS avg_value,
           SUM(sample_size)  AS total_samples
         FROM ab_experiment_results
-        WHERE experiment_id = :experiment_id AND user_id = :user_id
+        WHERE experiment_id::text = :experiment_id AND user_id::text = :user_id
         GROUP BY variant, metric_name
         ORDER BY variant, metric_name
         """,
@@ -391,7 +391,7 @@ async def get_experiment_summary(
     suggested_winner: 'b' if pct_diff>5, 'a' if pct_diff<-5, else 'tie'.
     """
     existing = await execute_one(
-        "SELECT id FROM ab_experiments WHERE id = :id AND user_id = :user_id",
+        "SELECT id FROM ab_experiments WHERE id = :id AND user_id::text = :user_id",
         {"id": experiment_id, "user_id": user_id},
     )
     if not existing:
@@ -404,7 +404,7 @@ async def get_experiment_summary(
           variant,
           AVG(metric_value) AS avg_value
         FROM ab_experiment_results
-        WHERE experiment_id = :experiment_id AND user_id = :user_id
+        WHERE experiment_id::text = :experiment_id AND user_id::text = :user_id
         GROUP BY metric_name, variant
         ORDER BY metric_name, variant
         """,

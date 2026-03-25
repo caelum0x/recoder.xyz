@@ -74,10 +74,10 @@ async def list_tags(
         LEFT JOIN (
             SELECT tag_id, COUNT(*) AS thread_count
             FROM thread_tag_assignments
-            WHERE user_id = :user_id
+            WHERE user_id::text = :user_id
             GROUP BY tag_id
-        ) c ON c.tag_id = t.id
-        WHERE t.user_id = :user_id
+        ) c ON c.tag_id::text = t.id::text
+        WHERE t.user_id::text = :user_id
         ORDER BY t.name
         """,
         {"user_id": user_id},
@@ -92,7 +92,7 @@ async def update_tag(
     user_id: str = Depends(verify_and_get_user_id_from_jwt),
 ):
     existing = await execute_one(
-        "SELECT id FROM thread_tags WHERE id = :id AND user_id = :user_id",
+        "SELECT id FROM thread_tags WHERE id = :id AND user_id::text = :user_id",
         {"id": tag_id, "user_id": user_id},
     )
     if not existing:
@@ -115,7 +115,7 @@ async def update_tag(
 
     try:
         row = await execute_one(
-            f"UPDATE thread_tags SET {set_clauses} WHERE id = :id AND user_id = :user_id RETURNING *",
+            f"UPDATE thread_tags SET {set_clauses} WHERE id = :id AND user_id::text = :user_id RETURNING *",
             params,
         )
         return dict(row)
@@ -131,14 +131,14 @@ async def delete_tag(
     user_id: str = Depends(verify_and_get_user_id_from_jwt),
 ):
     existing = await execute_one(
-        "SELECT id FROM thread_tags WHERE id = :id AND user_id = :user_id",
+        "SELECT id FROM thread_tags WHERE id = :id AND user_id::text = :user_id",
         {"id": tag_id, "user_id": user_id},
     )
     if not existing:
         raise HTTPException(status_code=404, detail="Tag not found")
 
     await execute(
-        "DELETE FROM thread_tags WHERE id = :id AND user_id = :user_id",
+        "DELETE FROM thread_tags WHERE id = :id AND user_id::text = :user_id",
         {"id": tag_id, "user_id": user_id},
     )
     return {"status": "ok"}
@@ -156,7 +156,7 @@ async def assign_tag(
 ):
     # Verify the tag belongs to the user
     tag = await execute_one(
-        "SELECT id FROM thread_tags WHERE id = :tag_id AND user_id = :user_id",
+        "SELECT id FROM thread_tags WHERE id = :tag_id AND user_id::text = :user_id",
         {"tag_id": body.tag_id, "user_id": user_id},
     )
     if not tag:
@@ -190,7 +190,7 @@ async def remove_tag(
     await execute(
         """
         DELETE FROM thread_tag_assignments
-        WHERE thread_id = :thread_id AND tag_id = :tag_id AND user_id = :user_id
+        WHERE thread_id::text = :thread_id AND tag_id::text = :tag_id AND user_id::text = :user_id
         """,
         {"thread_id": thread_id, "tag_id": tag_id, "user_id": user_id},
     )
@@ -206,8 +206,8 @@ async def list_thread_tags(
         """
         SELECT t.*
         FROM thread_tags t
-        JOIN thread_tag_assignments a ON a.tag_id = t.id
-        WHERE a.thread_id = :thread_id AND a.user_id = :user_id
+        JOIN thread_tag_assignments a ON a.tag_id::text = t.id::text
+        WHERE a.thread_id::text = :thread_id AND a.user_id::text = :user_id
         ORDER BY t.name
         """,
         {"thread_id": thread_id, "user_id": user_id},
@@ -224,7 +224,7 @@ async def list_tagged_threads(
         """
         SELECT a.thread_id, a.assigned_at
         FROM thread_tag_assignments a
-        WHERE a.tag_id = :tag_id AND a.user_id = :user_id
+        WHERE a.tag_id::text = :tag_id AND a.user_id::text = :user_id
         ORDER BY a.assigned_at DESC
         """,
         {"tag_id": tag_id, "user_id": user_id},
@@ -239,7 +239,7 @@ async def bulk_tag(
 ):
     # Verify the tag belongs to the user
     tag = await execute_one(
-        "SELECT id FROM thread_tags WHERE id = :tag_id AND user_id = :user_id",
+        "SELECT id FROM thread_tags WHERE id = :tag_id AND user_id::text = :user_id",
         {"tag_id": body.tag_id, "user_id": user_id},
     )
     if not tag:

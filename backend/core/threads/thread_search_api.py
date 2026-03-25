@@ -13,7 +13,7 @@ async def search_thread_messages(
 ):
     # Verify thread ownership
     thread = await execute_one(
-        "SELECT thread_id FROM threads WHERE thread_id = :thread_id AND account_id = :user_id",
+        "SELECT thread_id FROM threads WHERE thread_id::text = :thread_id AND account_id::text = :user_id",
         {"thread_id": thread_id, "user_id": user_id},
     )
     if not thread:
@@ -23,7 +23,7 @@ async def search_thread_messages(
         """
         SELECT id, role, content, created_at
         FROM messages
-        WHERE thread_id = :thread_id
+        WHERE thread_id::text = :thread_id
           AND content::text ILIKE :search
         ORDER BY created_at ASC
         """,

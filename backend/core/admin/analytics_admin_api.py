@@ -550,7 +550,7 @@ async def _browse_threads_by_email(
         )
     
     # Build WHERE conditions and params for threads by this account
-    conditions = ["account_id = :account_id"]
+    conditions = ["account_id::text = :account_id"]
     query_params: dict = {"account_id": target_account_id}
 
     if date_from:
@@ -4013,8 +4013,8 @@ async def get_rfm_engagement_summary(
                 COUNT(*) FILTER (WHERE ar.started_at > NOW() - MAKE_INTERVAL(days => :days)) as recent_runs,
                 COALESCE(ca.tier, 'none') as tier
             FROM agent_runs ar
-            JOIN threads t ON ar.thread_id = t.thread_id
-            LEFT JOIN credit_accounts ca ON ca.account_id = t.account_id
+            JOIN threads t ON ar.thread_id::text = t.thread_id::text
+            LEFT JOIN credit_accounts ca ON ca.account_id::text = t.account_id::text
             GROUP BY t.account_id, ca.tier
         ),
         percentiles AS (
@@ -4101,8 +4101,8 @@ async def get_rfm_engagement_summary(
                 COUNT(*) FILTER (WHERE ar.started_at > NOW() - MAKE_INTERVAL(days => :days)) as recent_runs,
                 COALESCE(ca.tier, 'none') as tier
             FROM agent_runs ar
-            JOIN threads t ON ar.thread_id = t.thread_id
-            LEFT JOIN credit_accounts ca ON ca.account_id = t.account_id
+            JOIN threads t ON ar.thread_id::text = t.thread_id::text
+            LEFT JOIN credit_accounts ca ON ca.account_id::text = t.account_id::text
             GROUP BY t.account_id, ca.tier
         ),
         percentiles AS (
@@ -4260,8 +4260,8 @@ async def get_accounts_by_segment(
                 COUNT(*) FILTER (WHERE ar.started_at > NOW() - MAKE_INTERVAL(days => :days)) as recent_runs,
                 COALESCE(ca.tier, 'none') as tier
             FROM agent_runs ar
-            JOIN threads t ON ar.thread_id = t.thread_id
-            LEFT JOIN credit_accounts ca ON ca.account_id = t.account_id
+            JOIN threads t ON ar.thread_id::text = t.thread_id::text
+            LEFT JOIN credit_accounts ca ON ca.account_id::text = t.account_id::text
             GROUP BY t.account_id, ca.tier
         ),
         percentiles AS (
@@ -4650,7 +4650,7 @@ async def _build_conversation_items(records: List[Dict[str, Any]]) -> List[Conve
                     completed_at = run_row.get('completed_at')
 
             # Build query for user messages
-            msg_conditions = ["thread_id = :thread_id", "type = 'user'"]
+            msg_conditions = ["thread_id::text = :thread_id", "type = 'user'"]
             msg_params: dict = {"thread_id": thread_id}
             if started_at:
                 msg_conditions.append("created_at >= :started_at")

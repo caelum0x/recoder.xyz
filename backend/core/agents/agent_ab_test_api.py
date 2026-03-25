@@ -122,7 +122,7 @@ async def list_ab_tests(
     user_id: str = Depends(verify_and_get_user_id_from_jwt),
     status: Optional[str] = Query(None),
 ):
-    where = "user_id = :user_id"
+    where = "user_id::text = :user_id"
     params: dict = {"user_id": user_id}
 
     if status:
@@ -146,14 +146,14 @@ async def get_ab_test(
     user_id: str = Depends(verify_and_get_user_id_from_jwt),
 ):
     test = await execute_one(
-        "SELECT * FROM agent_ab_tests WHERE id = :id AND user_id = :user_id",
+        "SELECT * FROM agent_ab_tests WHERE id = :id AND user_id::text = :user_id",
         {"id": test_id, "user_id": user_id},
     )
     if not test:
         raise HTTPException(status_code=404, detail="A/B test not found")
 
     trials = await execute(
-        "SELECT * FROM ab_test_trials WHERE test_id = :test_id ORDER BY created_at DESC",
+        "SELECT * FROM ab_test_trials WHERE test_id::text = :test_id ORDER BY created_at DESC",
         {"test_id": test_id},
     )
 
@@ -169,7 +169,7 @@ async def update_ab_test(
     user_id: str = Depends(verify_and_get_user_id_from_jwt),
 ):
     existing = await execute_one(
-        "SELECT * FROM agent_ab_tests WHERE id = :id AND user_id = :user_id",
+        "SELECT * FROM agent_ab_tests WHERE id = :id AND user_id::text = :user_id",
         {"id": test_id, "user_id": user_id},
     )
     if not existing:
@@ -206,7 +206,7 @@ async def update_ab_test(
 
     set_clauses = ", ".join(f"{k} = :{k}" for k in updates)
     row = await execute_one(
-        f"UPDATE agent_ab_tests SET {set_clauses} WHERE id = :id AND user_id = :user_id RETURNING *",
+        f"UPDATE agent_ab_tests SET {set_clauses} WHERE id = :id AND user_id::text = :user_id RETURNING *",
         params,
     )
     return dict(row)
@@ -218,14 +218,14 @@ async def delete_ab_test(
     user_id: str = Depends(verify_and_get_user_id_from_jwt),
 ):
     existing = await execute_one(
-        "SELECT id FROM agent_ab_tests WHERE id = :id AND user_id = :user_id",
+        "SELECT id FROM agent_ab_tests WHERE id = :id AND user_id::text = :user_id",
         {"id": test_id, "user_id": user_id},
     )
     if not existing:
         raise HTTPException(status_code=404, detail="A/B test not found")
 
     await execute(
-        "DELETE FROM agent_ab_tests WHERE id = :id AND user_id = :user_id",
+        "DELETE FROM agent_ab_tests WHERE id = :id AND user_id::text = :user_id",
         {"id": test_id, "user_id": user_id},
     )
     return {"status": "ok"}
@@ -238,7 +238,7 @@ async def record_trial(
     user_id: str = Depends(verify_and_get_user_id_from_jwt),
 ):
     test = await execute_one(
-        "SELECT * FROM agent_ab_tests WHERE id = :id AND user_id = :user_id",
+        "SELECT * FROM agent_ab_tests WHERE id = :id AND user_id::text = :user_id",
         {"id": test_id, "user_id": user_id},
     )
     if not test:
@@ -311,14 +311,14 @@ async def get_ab_test_results(
     user_id: str = Depends(verify_and_get_user_id_from_jwt),
 ):
     test = await execute_one(
-        "SELECT * FROM agent_ab_tests WHERE id = :id AND user_id = :user_id",
+        "SELECT * FROM agent_ab_tests WHERE id = :id AND user_id::text = :user_id",
         {"id": test_id, "user_id": user_id},
     )
     if not test:
         raise HTTPException(status_code=404, detail="A/B test not found")
 
     trials = await execute(
-        "SELECT * FROM ab_test_trials WHERE test_id = :test_id",
+        "SELECT * FROM ab_test_trials WHERE test_id::text = :test_id",
         {"test_id": test_id},
     )
     trials_list = [dict(t) for t in trials]

@@ -62,16 +62,16 @@ async def _fetch_thread_messages(
     thread = await execute_one(
         "SELECT t.thread_id, p.name as project_name, p.project_id "
         "FROM threads t "
-        "LEFT JOIN projects p ON p.project_id = t.project_id "
-        "WHERE t.thread_id = :thread_id AND t.account_id = :user_id",
+        "LEFT JOIN projects p ON p.project_id::text = t.project_id::text "
+        "WHERE t.thread_id::text = :thread_id AND t.account_id::text = :user_id",
         {"thread_id": thread_id, "user_id": user_id},
     )
     if not thread:
         thread = await execute_one(
             "SELECT t.thread_id, p.name as project_name, p.project_id "
             "FROM threads t "
-            "LEFT JOIN projects p ON p.project_id = t.project_id "
-            "WHERE t.thread_id = :thread_id AND t.is_public = true",
+            "LEFT JOIN projects p ON p.project_id::text = t.project_id::text "
+            "WHERE t.thread_id::text = :thread_id AND t.is_public = true",
             {"thread_id": thread_id},
         )
         if not thread:
@@ -84,7 +84,7 @@ async def _fetch_thread_messages(
     messages = await execute(
         "SELECT message_id, type, content, created_at "
         "FROM messages "
-        f"WHERE thread_id = :thread_id{type_filter} "
+        f"WHERE thread_id::text = :thread_id{type_filter} "
         "ORDER BY created_at ASC",
         {"thread_id": thread_id},
     )
@@ -336,7 +336,7 @@ async def create_thread_export(
                 file_url = :file_url,
                 file_size_bytes = :file_size_bytes,
                 completed_at = now()
-            WHERE id = :export_id AND user_id = :user_id
+            WHERE id = :export_id AND user_id::text = :user_id
             """
             await execute_mutate(update_sql, {
                 "export_id": export_id,
@@ -396,7 +396,7 @@ async def list_thread_exports(
         SELECT id, thread_id, export_format, status, file_size_bytes,
                options, error, created_at, completed_at
         FROM thread_exports
-        WHERE thread_id = :thread_id AND user_id = :user_id
+        WHERE thread_id::text = :thread_id AND user_id::text = :user_id
         ORDER BY created_at DESC
         """
         rows = await execute(sql, {"thread_id": thread_id, "user_id": user_id})
@@ -440,7 +440,7 @@ async def get_recent_exports(
         SELECT id, thread_id, export_format, status, file_size_bytes,
                options, error, created_at, completed_at
         FROM thread_exports
-        WHERE user_id = :user_id
+        WHERE user_id::text = :user_id
         ORDER BY created_at DESC
         LIMIT :limit
         """
@@ -485,7 +485,7 @@ async def get_export_detail(
         SELECT id, thread_id, export_format, status, file_url, file_size_bytes,
                options, error, created_at, completed_at
         FROM thread_exports
-        WHERE id = :export_id AND user_id = :user_id
+        WHERE id = :export_id AND user_id::text = :user_id
         """
         row = await execute_one(sql, {"export_id": export_id, "user_id": user_id})
 
@@ -528,7 +528,7 @@ async def delete_export(
     """Delete a specific export record."""
     try:
         result = await execute_mutate(
-            "DELETE FROM thread_exports WHERE id = :export_id AND user_id = :user_id",
+            "DELETE FROM thread_exports WHERE id = :export_id AND user_id::text = :user_id",
             {"export_id": export_id, "user_id": user_id},
         )
 

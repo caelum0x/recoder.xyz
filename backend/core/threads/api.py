@@ -60,7 +60,7 @@ async def search_threads_endpoint(
                     p.name AS project_name,
                     p.icon_name AS project_icon_name
                 FROM threads t
-                LEFT JOIN projects p ON t.project_id = p.project_id
+                LEFT JOIN projects p ON t.project_id::text = p.project_id::text
                 WHERE t.thread_id = ANY(CAST(:thread_ids AS uuid[]))
                 """
                 rows = await execute(enrichment_sql, {"thread_ids": result_thread_ids})
@@ -97,9 +97,9 @@ async def search_threads_endpoint(
             p.icon_name AS project_icon_name,
             m.content::text AS text_preview
         FROM threads t
-        LEFT JOIN projects p ON t.project_id = p.project_id
-        LEFT JOIN messages m ON m.thread_id = t.thread_id
-        WHERE t.account_id = :user_id
+        LEFT JOIN projects p ON t.project_id::text = p.project_id::text
+        LEFT JOIN messages m ON m.thread_id::text = t.thread_id::text
+        WHERE t.account_id::text = :user_id
           AND (
             m.content::text ILIKE :query_pattern
             OR p.name ILIKE :query_pattern
@@ -426,7 +426,7 @@ async def delete_project(
                 raise HTTPException(status_code=403, detail="Not authorized to delete this project")
         
         threads_rows = await execute_read(
-            "SELECT thread_id FROM threads WHERE project_id = :project_id",
+            "SELECT thread_id FROM threads WHERE project_id::text = :project_id",
             {"project_id": project_id}
         )
         thread_ids = [t['thread_id'] for t in (threads_rows or [])]
@@ -449,7 +449,7 @@ async def delete_project(
             logger.debug(f"Deleting agent runs for {len(thread_ids)} threads")
             for thread_id in thread_ids:
                 await execute_mutate(
-                    "DELETE FROM agent_runs WHERE thread_id = :thread_id",
+                    "DELETE FROM agent_runs WHERE thread_id::text = :thread_id",
                     {"thread_id": thread_id}
                 )
 
@@ -457,20 +457,20 @@ async def delete_project(
             logger.debug(f"Deleting messages for {len(thread_ids)} threads")
             for thread_id in thread_ids:
                 await execute_mutate(
-                    "DELETE FROM messages WHERE thread_id = :thread_id",
+                    "DELETE FROM messages WHERE thread_id::text = :thread_id",
                     {"thread_id": thread_id}
                 )
 
         if thread_ids:
             logger.debug(f"Deleting {len(thread_ids)} threads")
             await execute_mutate(
-                "DELETE FROM threads WHERE project_id = :project_id",
+                "DELETE FROM threads WHERE project_id::text = :project_id",
                 {"project_id": project_id}
             )
 
         logger.debug(f"Deleting project {project_id}")
         project_delete_rows = await execute_mutate(
-            "DELETE FROM projects WHERE project_id = :project_id RETURNING *",
+            "DELETE FROM projects WHERE project_id::text = :project_id RETURNING *",
             {"project_id": project_id}
         )
 

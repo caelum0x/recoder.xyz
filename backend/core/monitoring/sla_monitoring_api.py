@@ -165,10 +165,10 @@ async def list_sla_definitions(
                     COUNT(*) AS total_measurements,
                     COUNT(*) FILTER (WHERE is_breach = true) AS breach_count
                 FROM sla_measurements
-                WHERE user_id = :user_id
+                WHERE user_id::text = :user_id
                 GROUP BY sla_id
-            ) m ON m.sla_id = sd.id
-            WHERE sd.user_id = :user_id
+            ) m ON m.sla_id::text = sd.id::text
+            WHERE sd.user_id::text = :user_id
             ORDER BY sd.created_at DESC
             """,
             {"user_id": user_id},
@@ -195,7 +195,7 @@ async def update_sla_definition(
     try:
         # Verify ownership
         existing = await execute_one(
-            "SELECT id FROM sla_definitions WHERE id = :sla_id AND user_id = :user_id",
+            "SELECT id FROM sla_definitions WHERE id = :sla_id AND user_id::text = :user_id",
             {"sla_id": sla_id, "user_id": user_id},
         )
         if not existing:
@@ -228,7 +228,7 @@ async def update_sla_definition(
             f"""
             UPDATE sla_definitions
             SET {set_clause}
-            WHERE id = :sla_id AND user_id = :user_id
+            WHERE id = :sla_id AND user_id::text = :user_id
             RETURNING *
             """,
             updates,
@@ -257,7 +257,7 @@ async def delete_sla_definition(
     """Delete an SLA definition and its measurements."""
     try:
         rows = await execute_mutate(
-            "DELETE FROM sla_definitions WHERE id = :sla_id AND user_id = :user_id RETURNING id",
+            "DELETE FROM sla_definitions WHERE id = :sla_id AND user_id::text = :user_id RETURNING id",
             {"sla_id": sla_id, "user_id": user_id},
         )
 
@@ -287,7 +287,7 @@ async def measure_sla(
     """
     try:
         slas = await execute(
-            "SELECT * FROM sla_definitions WHERE user_id = :user_id AND is_active = true",
+            "SELECT * FROM sla_definitions WHERE user_id::text = :user_id AND is_active = true",
             {"user_id": user_id},
         )
 
@@ -399,7 +399,7 @@ async def list_sla_measurements(
     try:
         # Verify ownership
         existing = await execute_one(
-            "SELECT id FROM sla_definitions WHERE id = :sla_id AND user_id = :user_id",
+            "SELECT id FROM sla_definitions WHERE id = :sla_id AND user_id::text = :user_id",
             {"sla_id": sla_id, "user_id": user_id},
         )
         if not existing:
@@ -411,7 +411,7 @@ async def list_sla_measurements(
             f"""
             SELECT sm.*
             FROM sla_measurements sm
-            WHERE sm.sla_id = :sla_id AND sm.user_id = :user_id
+            WHERE sm.sla_id::text = :sla_id AND sm.user_id::text = :user_id
             {breach_filter}
             ORDER BY sm.measured_at DESC
             LIMIT :limit
@@ -448,7 +448,7 @@ async def sla_dashboard(
                 COUNT(*) AS total_measurements,
                 COUNT(*) FILTER (WHERE is_breach = true) AS total_breaches
             FROM sla_measurements
-            WHERE user_id = :user_id
+            WHERE user_id::text = :user_id
             """,
             {"user_id": user_id},
         )
@@ -466,7 +466,7 @@ async def sla_dashboard(
                 COUNT(*) AS total_slas,
                 COUNT(*) FILTER (WHERE is_active = true) AS active_slas
             FROM sla_definitions
-            WHERE user_id = :user_id
+            WHERE user_id::text = :user_id
             """,
             {"user_id": user_id},
         )
@@ -494,10 +494,10 @@ async def sla_dashboard(
             LEFT JOIN (
                 SELECT sla_id, COUNT(*) AS total, COUNT(*) FILTER (WHERE is_breach = true) AS breaches
                 FROM sla_measurements
-                WHERE user_id = :user_id
+                WHERE user_id::text = :user_id
                 GROUP BY sla_id
-            ) m ON m.sla_id = sd.id
-            WHERE sd.user_id = :user_id AND sd.is_active = true
+            ) m ON m.sla_id::text = sd.id::text
+            WHERE sd.user_id::text = :user_id AND sd.is_active = true
             ORDER BY compliance_rate ASC NULLS LAST
             """,
             {"user_id": user_id},
@@ -516,8 +516,8 @@ async def sla_dashboard(
                 sd.target_unit,
                 sm.measured_at
             FROM sla_measurements sm
-            JOIN sla_definitions sd ON sd.id = sm.sla_id
-            WHERE sm.user_id = :user_id AND sm.is_breach = true
+            JOIN sla_definitions sd ON sd.id::text = sm.sla_id::text
+            WHERE sm.user_id::text = :user_id AND sm.is_breach = true
             ORDER BY sm.measured_at DESC
             LIMIT 10
             """,

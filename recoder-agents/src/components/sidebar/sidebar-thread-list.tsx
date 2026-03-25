@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo, useCallback, startTransition, useRef, useEffect } from 'react';
+import { useState, useMemo, startTransition, useRef, useEffect } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
 import {
@@ -856,6 +856,7 @@ export function SidebarThreadList({ mode }: SidebarThreadListProps) {
   };
 
   const isLoading = isThreadsLoading && combinedThreads.length === 0;
+  const hasError = !!threadsError && combinedThreads.length === 0;
 
   // Determine active state based on mode
   const isItemActive = (thread: ThreadWithProject) => {
@@ -966,7 +967,26 @@ export function SidebarThreadList({ mode }: SidebarThreadListProps) {
       >
         {(state !== 'collapsed' || isMobile) && (
           <>
-            {isLoading ? (
+            {hasError ? (
+              <div className="flex flex-col items-center justify-center py-8 text-center">
+                <div className="w-12 h-12 bg-muted/50 rounded-2xl flex items-center justify-center mb-3">
+                  <Frown className="h-6 w-6 text-muted-foreground" />
+                </div>
+                <p className="text-sm text-muted-foreground mb-2">
+                  Failed to load chats
+                </p>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="text-xs text-primary"
+                  onClick={() => {
+                    queryClient.invalidateQueries({ queryKey: threadKeys.lists() });
+                  }}
+                >
+                  Retry
+                </Button>
+              </div>
+            ) : isLoading ? (
               <div className="space-y-1">
                 {Array.from({ length: 3 }).map((_, index) => (
                   <div key={`skeleton-${index}`} className="flex items-center gap-3 px-2 py-2">

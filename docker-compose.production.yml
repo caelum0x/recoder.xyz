@@ -286,6 +286,7 @@ services:
       - DOCKER_BACKEND_URL=http://recoder-docker-backend:3100
       - DOCKER_URL=http://recoder-docker-backend:3100
       - MAIN_SITE_URL=https://recoder.xyz
+      - MAIN_SITE_INTERNAL_URL=http://host.docker.internal:3000
       - VITE_MAIN_SITE_URL=https://recoder.xyz
       - DATABASE_URL=postgresql://recoder:recoder_prod_2026@host.docker.internal:5432/recoder_main
       - INTERNAL_SERVICE_KEY=recoder_internal_service_key_2026
@@ -479,6 +480,10 @@ services:
     stop_grace_period: 30s
 
   # OpenClaw A2A Gateway — openclaw.recoder.xyz
+  # The docker-entrypoint.sh writes openclaw.json before starting, which:
+  #   - Disables device pairing for the Control UI (browser auto-connects)
+  #   - Allows the production origin for WebSocket connections
+  #   - Trusts the nginx reverse proxy for correct client IP detection
   openclaw-gateway:
     build: ./openclaw
     container_name: openclaw-gateway
@@ -490,6 +495,10 @@ services:
       - TERM=xterm-256color
       - OPENCLAW_GATEWAY_TOKEN=${OPENCLAW_GATEWAY_TOKEN}
       - NODE_OPTIONS=--max_old_space_size=1536
+      # Control UI: allow openclaw.recoder.xyz origin for WebSocket
+      - OPENCLAW_CONTROL_UI_ALLOWED_ORIGINS=https://openclaw.recoder.xyz
+      # Trust common Docker bridge gateway IPs (exact match, no CIDR)
+      - OPENCLAW_TRUSTED_PROXIES=172.17.0.1,172.18.0.1,172.19.0.1,172.20.0.1,172.21.0.1,172.22.0.1
     volumes:
       - openclaw_config:/home/node/.openclaw
       - openclaw_workspace:/home/node/.openclaw/workspace

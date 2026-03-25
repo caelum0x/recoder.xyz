@@ -83,15 +83,15 @@ async def list_ratings(
     offset: int = Query(0, ge=0),
     user_id: str = Depends(verify_and_get_user_id_from_jwt),
 ):
-    conditions = ["user_id = :user_id"]
+    conditions = ["user_id::text = :user_id"]
     params: dict = {"user_id": user_id, "limit": limit, "offset": offset}
 
     if thread_id:
-        conditions.append("thread_id = :thread_id")
+        conditions.append("thread_id::text = :thread_id")
         params["thread_id"] = thread_id
 
     if agent_id:
-        conditions.append("agent_id = :agent_id")
+        conditions.append("agent_id::text = :agent_id")
         params["agent_id"] = agent_id
 
     if min_rating is not None:
@@ -133,11 +133,11 @@ async def get_ratings_summary(
     agent_id: Optional[str] = Query(None),
     user_id: str = Depends(verify_and_get_user_id_from_jwt),
 ):
-    conditions = ["user_id = :user_id"]
+    conditions = ["user_id::text = :user_id"]
     params: dict = {"user_id": user_id}
 
     if agent_id:
-        conditions.append("agent_id = :agent_id")
+        conditions.append("agent_id::text = :agent_id")
         params["agent_id"] = agent_id
 
     where_clause = " AND ".join(conditions)
@@ -210,14 +210,14 @@ async def delete_rating(
     user_id: str = Depends(verify_and_get_user_id_from_jwt),
 ):
     existing = await execute_one(
-        "SELECT id FROM response_ratings WHERE id = :id AND user_id = :user_id",
+        "SELECT id FROM response_ratings WHERE id = :id AND user_id::text = :user_id",
         {"id": rating_id, "user_id": user_id},
     )
     if not existing:
         raise HTTPException(status_code=404, detail="Rating not found")
 
     await execute(
-        "DELETE FROM response_ratings WHERE id = :id AND user_id = :user_id",
+        "DELETE FROM response_ratings WHERE id = :id AND user_id::text = :user_id",
         {"id": rating_id, "user_id": user_id},
     )
     return {"status": "ok"}

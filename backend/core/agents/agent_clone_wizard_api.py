@@ -108,7 +108,7 @@ async def _get_full_agent_config(agent_id: str, user_id: str) -> Optional[Dict[s
                   agentpress_tools, configured_mcps, custom_mcps, is_default,
                   avatar_url, metadata, icon_name, icon_color, icon_background
            FROM agents
-           WHERE agent_id = :agent_id AND account_id = :user_id""",
+           WHERE agent_id::text = :agent_id AND account_id::text = :user_id""",
         {"agent_id": agent_id, "user_id": user_id},
     )
     if not agent_row:
@@ -118,7 +118,7 @@ async def _get_full_agent_config(agent_id: str, user_id: str) -> Optional[Dict[s
     version_row = await execute_one(
         """SELECT system_prompt, model, configured_mcps, custom_mcps, agentpress_tools
            FROM agent_versions
-           WHERE agent_id = :agent_id AND is_active = true
+           WHERE agent_id::text = :agent_id AND is_active = true
            ORDER BY created_at DESC LIMIT 1""",
         {"agent_id": agent_id},
     )
@@ -141,7 +141,7 @@ async def _get_full_agent_config(agent_id: str, user_id: str) -> Optional[Dict[s
     try:
         workflow_rows = await execute(
             """SELECT workflow_id, name FROM agent_workflows
-               WHERE agent_id = :agent_id ORDER BY created_at""",
+               WHERE agent_id::text = :agent_id ORDER BY created_at""",
             {"agent_id": agent_id},
         )
         workflows = workflow_rows or []
@@ -152,7 +152,7 @@ async def _get_full_agent_config(agent_id: str, user_id: str) -> Optional[Dict[s
     tags = []
     try:
         tag_rows = await execute(
-            """SELECT tag FROM agent_tags WHERE agent_id = :agent_id""",
+            """SELECT tag FROM agent_tags WHERE agent_id::text = :agent_id""",
             {"agent_id": agent_id},
         )
         tags = [r["tag"] for r in (tag_rows or [])]
@@ -480,9 +480,9 @@ async def list_clone_history(
                       sa.name AS source_agent_name,
                       ta.name AS target_agent_name
                FROM agent_clone_history ch
-               LEFT JOIN agents sa ON sa.agent_id = ch.source_agent_id
-               LEFT JOIN agents ta ON ta.agent_id = COALESCE(ch.target_agent_id, ch.cloned_agent_id)
-               WHERE ch.user_id = :user_id
+               LEFT JOIN agents sa ON sa.agent_id::text = ch.source_agent_id::text
+               LEFT JOIN agents ta ON ta.agent_id::text = COALESCE(ch.target_agent_id, ch.cloned_agent_id)::text
+               WHERE ch.user_id::text = :user_id
                ORDER BY ch.created_at DESC
                LIMIT :limit""",
             {"user_id": user_id, "limit": limit},
@@ -546,7 +546,7 @@ async def clone_suggestions(
         # Count existing clones to make name unique
         clone_count_row = await execute_one(
             """SELECT COUNT(*) AS cnt FROM agent_clone_history
-               WHERE source_agent_id = :agent_id AND user_id = :user_id""",
+               WHERE source_agent_id::text = :agent_id AND user_id::text = :user_id""",
             {"agent_id": agent_id, "user_id": user_id},
         )
         clone_count = (clone_count_row or {}).get("cnt", 0)

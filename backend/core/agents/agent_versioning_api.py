@@ -92,7 +92,7 @@ async def _get_agent_config(agent_id: str, user_id: str) -> Dict[str, Any]:
                   agentpress_tools, configured_mcps, custom_mcps, is_default,
                   avatar_url, metadata, icon_name, icon_color, icon_background
            FROM agents
-           WHERE agent_id = :agent_id AND account_id = :user_id""",
+           WHERE agent_id::text = :agent_id AND account_id::text = :user_id""",
         {"agent_id": agent_id, "user_id": user_id},
     )
     if not agent_row:
@@ -170,7 +170,7 @@ async def create_config_version(
 
         # Determine next version number
         max_row = await execute_one(
-            "SELECT COALESCE(MAX(version_number), 0) AS max_num FROM agent_config_versions WHERE agent_id = :agent_id",
+            "SELECT COALESCE(MAX(version_number), 0) AS max_num FROM agent_config_versions WHERE agent_id::text = :agent_id",
             {"agent_id": agent_id},
         )
         next_version = (max_row["max_num"] if max_row else 0) + 1
@@ -221,14 +221,14 @@ async def list_config_versions(
     try:
         # Verify ownership
         agent_check = await execute_one(
-            "SELECT agent_id FROM agents WHERE agent_id = :agent_id AND account_id = :user_id",
+            "SELECT agent_id FROM agents WHERE agent_id::text = :agent_id AND account_id::text = :user_id",
             {"agent_id": agent_id, "user_id": user_id},
         )
         if not agent_check:
             raise HTTPException(status_code=404, detail="Agent not found")
 
         count_row = await execute_one(
-            "SELECT COUNT(*) AS cnt FROM agent_config_versions WHERE agent_id = :agent_id AND user_id = :user_id",
+            "SELECT COUNT(*) AS cnt FROM agent_config_versions WHERE agent_id::text = :agent_id AND user_id::text = :user_id",
             {"agent_id": agent_id, "user_id": user_id},
         )
         total = count_row["cnt"] if count_row else 0
@@ -236,7 +236,7 @@ async def list_config_versions(
         rows = await execute(
             """SELECT id, user_id, agent_id, version_number, name, description, config_snapshot, created_at
                FROM agent_config_versions
-               WHERE agent_id = :agent_id AND user_id = :user_id
+               WHERE agent_id::text = :agent_id AND user_id::text = :user_id
                ORDER BY version_number DESC
                LIMIT :limit OFFSET :offset""",
             {"agent_id": agent_id, "user_id": user_id, "limit": limit, "offset": offset},
@@ -270,7 +270,7 @@ async def get_config_version(
         row = await execute_one(
             """SELECT id, user_id, agent_id, version_number, name, description, config_snapshot, created_at
                FROM agent_config_versions
-               WHERE agent_id = :agent_id AND version_number = :version_number AND user_id = :user_id""",
+               WHERE agent_id::text = :agent_id AND version_number = :version_number AND user_id::text = :user_id""",
             {"agent_id": agent_id, "version_number": version_number, "user_id": user_id},
         )
 
@@ -306,7 +306,7 @@ async def restore_config_version(
         # Fetch the target snapshot
         row = await execute_one(
             """SELECT config_snapshot FROM agent_config_versions
-               WHERE agent_id = :agent_id AND version_number = :version_number AND user_id = :user_id""",
+               WHERE agent_id::text = :agent_id AND version_number = :version_number AND user_id::text = :user_id""",
             {"agent_id": agent_id, "version_number": version_number, "user_id": user_id},
         )
         if not row:
@@ -328,7 +328,7 @@ async def restore_config_version(
                    icon_name = :icon_name,
                    icon_color = :icon_color,
                    icon_background = :icon_background
-               WHERE agent_id = :agent_id AND account_id = :user_id""",
+               WHERE agent_id::text = :agent_id AND account_id::text = :user_id""",
             {
                 "agent_id": agent_id,
                 "user_id": user_id,
@@ -346,7 +346,7 @@ async def restore_config_version(
 
         # Create a new snapshot recording the restore
         max_row = await execute_one(
-            "SELECT COALESCE(MAX(version_number), 0) AS max_num FROM agent_config_versions WHERE agent_id = :agent_id",
+            "SELECT COALESCE(MAX(version_number), 0) AS max_num FROM agent_config_versions WHERE agent_id::text = :agent_id",
             {"agent_id": agent_id},
         )
         next_version = (max_row["max_num"] if max_row else 0) + 1
@@ -394,7 +394,7 @@ async def diff_config_versions(
     try:
         from_row = await execute_one(
             """SELECT config_snapshot FROM agent_config_versions
-               WHERE agent_id = :agent_id AND version_number = :version_number AND user_id = :user_id""",
+               WHERE agent_id::text = :agent_id AND version_number = :version_number AND user_id::text = :user_id""",
             {"agent_id": agent_id, "version_number": from_version, "user_id": user_id},
         )
         if not from_row:
@@ -402,7 +402,7 @@ async def diff_config_versions(
 
         to_row = await execute_one(
             """SELECT config_snapshot FROM agent_config_versions
-               WHERE agent_id = :agent_id AND version_number = :version_number AND user_id = :user_id""",
+               WHERE agent_id::text = :agent_id AND version_number = :version_number AND user_id::text = :user_id""",
             {"agent_id": agent_id, "version_number": to_version, "user_id": user_id},
         )
         if not to_row:
@@ -445,7 +445,7 @@ async def delete_config_version(
     try:
         row = await execute_one(
             """DELETE FROM agent_config_versions
-               WHERE agent_id = :agent_id AND version_number = :version_number AND user_id = :user_id
+               WHERE agent_id::text = :agent_id AND version_number = :version_number AND user_id::text = :user_id
                RETURNING id""",
             {"agent_id": agent_id, "version_number": version_number, "user_id": user_id},
             commit=True,

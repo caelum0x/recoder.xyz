@@ -2,7 +2,7 @@
 Agent Audit Log API endpoints.
 
 Provides event logging, batch ingestion, querying, stats, and retention management
-for agent audit events. Access control enforced at application layer (WHERE user_id = :user_id).
+for agent audit events. Access control enforced at application layer (WHERE user_id::text = :user_id).
 """
 
 from datetime import datetime, timezone
@@ -146,13 +146,13 @@ async def get_audit_event_stats(
 ):
     """Return aggregate stats for audit events."""
     total_row = await execute_one(
-        "SELECT COUNT(*) AS total FROM agent_audit_events WHERE user_id = :user_id",
+        "SELECT COUNT(*) AS total FROM agent_audit_events WHERE user_id::text = :user_id",
         {"user_id": user_id},
     )
     total_events = int(total_row["total"]) if total_row else 0
 
     type_rows = await execute(
-        "SELECT event_type, COUNT(*) AS cnt FROM agent_audit_events WHERE user_id = :user_id GROUP BY event_type ORDER BY cnt DESC",
+        "SELECT event_type, COUNT(*) AS cnt FROM agent_audit_events WHERE user_id::text = :user_id GROUP BY event_type ORDER BY cnt DESC",
         {"user_id": user_id},
     )
     by_event_type = {row["event_type"]: int(row["cnt"]) for row in (type_rows or [])}
@@ -161,7 +161,7 @@ async def get_audit_event_stats(
         """
         SELECT agent_id, COUNT(*) AS cnt
         FROM agent_audit_events
-        WHERE user_id = :user_id AND agent_id IS NOT NULL
+        WHERE user_id::text = :user_id AND agent_id IS NOT NULL
         GROUP BY agent_id ORDER BY cnt DESC LIMIT 20
         """,
         {"user_id": user_id},
@@ -169,7 +169,7 @@ async def get_audit_event_stats(
     by_agent = {row["agent_id"]: int(row["cnt"]) for row in (agent_rows or [])}
 
     action_rows = await execute(
-        "SELECT action, COUNT(*) AS cnt FROM agent_audit_events WHERE user_id = :user_id GROUP BY action ORDER BY cnt DESC",
+        "SELECT action, COUNT(*) AS cnt FROM agent_audit_events WHERE user_id::text = :user_id GROUP BY action ORDER BY cnt DESC",
         {"user_id": user_id},
     )
     by_action = {row["action"]: int(row["cnt"]) for row in (action_rows or [])}
@@ -178,7 +178,7 @@ async def get_audit_event_stats(
         """
         SELECT DATE(created_at) AS day, COUNT(*) AS cnt
         FROM agent_audit_events
-        WHERE user_id = :user_id AND created_at >= now() - INTERVAL '7 days'
+        WHERE user_id::text = :user_id AND created_at >= now() - INTERVAL '7 days'
         GROUP BY day ORDER BY day ASC
         """,
         {"user_id": user_id},
@@ -206,7 +206,7 @@ async def get_audit_retention_policy(
 ):
     """Get the retention policy for the authenticated user, or defaults."""
     row = await execute_one(
-        "SELECT * FROM audit_retention_policies WHERE user_id = :user_id",
+        "SELECT * FROM audit_retention_policies WHERE user_id::text = :user_id",
         {"user_id": user_id},
     )
     if not row:
@@ -252,13 +252,13 @@ async def cleanup_audit_events(
 ):
     """Delete audit events older than the user's retention policy."""
     policy = await execute_one(
-        "SELECT retention_days FROM audit_retention_policies WHERE user_id = :user_id",
+        "SELECT retention_days FROM audit_retention_policies WHERE user_id::text = :user_id",
         {"user_id": user_id},
     )
     days = int(policy["retention_days"]) if policy else 90
 
     result = await execute_mutate(
-        f"DELETE FROM agent_audit_events WHERE user_id = :user_id AND created_at < now() - INTERVAL '{days} days'",
+        f"DELETE FROM agent_audit_events WHERE user_id::text = :user_id AND created_at < now() - INTERVAL '{days} days'",
         {"user_id": user_id},
     )
     deleted_count = len(result) if isinstance(result, list) else 0
@@ -282,11 +282,11 @@ async def query_audit_events(
     offset: int = Query(0, ge=0),
 ):
     """Query audit events with filters, pagination."""
-    conditions = ["user_id = :user_id"]
+    conditions = ["user_id::text = :user_id"]
     params: Dict[str, Any] = {"user_id": user_id, "limit": limit, "offset": offset}
 
     if agent_id:
-        conditions.append("agent_id = :agent_id")
+        conditions.append("agent_id::text = :agent_id")
         params["agent_id"] = agent_id
     if event_type:
         conditions.append("event_type = :event_type")
@@ -323,7 +323,7 @@ async def get_audit_event(
 ):
     """Get a single audit event by ID."""
     row = await execute_one(
-        "SELECT * FROM agent_audit_events WHERE id = :id AND user_id = :user_id",
+        "SELECT * FROM agent_audit_events WHERE id = :id AND user_id::text = :user_id",
         {"id": event_id, "user_id": user_id},
     )
     if not row:

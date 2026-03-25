@@ -73,14 +73,14 @@ async def delete_node(
     user_id: str = Depends(verify_and_get_user_id_from_jwt),
 ):
     existing = await execute_one(
-        "SELECT id FROM knowledge_graph_nodes WHERE id = :id AND user_id = :user_id",
+        "SELECT id FROM knowledge_graph_nodes WHERE id = :id AND user_id::text = :user_id",
         {"id": node_id, "user_id": user_id},
     )
     if not existing:
         raise HTTPException(status_code=404, detail="Node not found")
 
     await execute_mutate(
-        "DELETE FROM knowledge_graph_nodes WHERE id = :id AND user_id = :user_id",
+        "DELETE FROM knowledge_graph_nodes WHERE id = :id AND user_id::text = :user_id",
         {"id": node_id, "user_id": user_id},
     )
     return {"status": "ok"}
@@ -101,14 +101,14 @@ async def add_edge(
 
     # Verify both nodes belong to the user
     source = await execute_one(
-        "SELECT id FROM knowledge_graph_nodes WHERE id = :id AND user_id = :user_id",
+        "SELECT id FROM knowledge_graph_nodes WHERE id = :id AND user_id::text = :user_id",
         {"id": body.source_node_id, "user_id": user_id},
     )
     if not source:
         raise HTTPException(status_code=404, detail="Source node not found")
 
     target = await execute_one(
-        "SELECT id FROM knowledge_graph_nodes WHERE id = :id AND user_id = :user_id",
+        "SELECT id FROM knowledge_graph_nodes WHERE id = :id AND user_id::text = :user_id",
         {"id": body.target_node_id, "user_id": user_id},
     )
     if not target:
@@ -144,14 +144,14 @@ async def delete_edge(
     user_id: str = Depends(verify_and_get_user_id_from_jwt),
 ):
     existing = await execute_one(
-        "SELECT id FROM knowledge_graph_edges WHERE id = :id AND user_id = :user_id",
+        "SELECT id FROM knowledge_graph_edges WHERE id = :id AND user_id::text = :user_id",
         {"id": edge_id, "user_id": user_id},
     )
     if not existing:
         raise HTTPException(status_code=404, detail="Edge not found")
 
     await execute_mutate(
-        "DELETE FROM knowledge_graph_edges WHERE id = :id AND user_id = :user_id",
+        "DELETE FROM knowledge_graph_edges WHERE id = :id AND user_id::text = :user_id",
         {"id": edge_id, "user_id": user_id},
     )
     return {"status": "ok"}
@@ -172,12 +172,12 @@ async def get_graph(
             raise HTTPException(status_code=400, detail=f"Invalid node_type filter")
 
         nodes = await execute(
-            "SELECT * FROM knowledge_graph_nodes WHERE user_id = :user_id AND node_type = :node_type ORDER BY created_at DESC",
+            "SELECT * FROM knowledge_graph_nodes WHERE user_id::text = :user_id AND node_type = :node_type ORDER BY created_at DESC",
             {"user_id": user_id, "node_type": node_type},
         )
     else:
         nodes = await execute(
-            "SELECT * FROM knowledge_graph_nodes WHERE user_id = :user_id ORDER BY created_at DESC",
+            "SELECT * FROM knowledge_graph_nodes WHERE user_id::text = :user_id ORDER BY created_at DESC",
             {"user_id": user_id},
         )
 
@@ -188,9 +188,9 @@ async def get_graph(
         edges = await execute(
             """
             SELECT * FROM knowledge_graph_edges
-            WHERE user_id = :user_id
-              AND source_node_id IN (SELECT id FROM knowledge_graph_nodes WHERE user_id = :user_id)
-              AND target_node_id IN (SELECT id FROM knowledge_graph_nodes WHERE user_id = :user_id)
+            WHERE user_id::text = :user_id
+              AND source_node_id IN (SELECT id FROM knowledge_graph_nodes WHERE user_id::text = :user_id)
+              AND target_node_id IN (SELECT id FROM knowledge_graph_nodes WHERE user_id::text = :user_id)
             ORDER BY created_at DESC
             """,
             {"user_id": user_id},
@@ -210,7 +210,7 @@ async def get_node_connections(
     user_id: str = Depends(verify_and_get_user_id_from_jwt),
 ):
     node = await execute_one(
-        "SELECT * FROM knowledge_graph_nodes WHERE id = :id AND user_id = :user_id",
+        "SELECT * FROM knowledge_graph_nodes WHERE id = :id AND user_id::text = :user_id",
         {"id": node_id, "user_id": user_id},
     )
     if not node:
@@ -219,8 +219,8 @@ async def get_node_connections(
     edges = await execute(
         """
         SELECT * FROM knowledge_graph_edges
-        WHERE user_id = :user_id
-          AND (source_node_id = :node_id OR target_node_id = :node_id)
+        WHERE user_id::text = :user_id
+          AND (source_node_id::text = :node_id OR target_node_id::text = :node_id)
         ORDER BY created_at DESC
         """,
         {"user_id": user_id, "node_id": node_id},
@@ -237,7 +237,7 @@ async def get_node_connections(
     if connected_ids:
         for cid in connected_ids:
             cn = await execute_one(
-                "SELECT * FROM knowledge_graph_nodes WHERE id = :id AND user_id = :user_id",
+                "SELECT * FROM knowledge_graph_nodes WHERE id = :id AND user_id::text = :user_id",
                 {"id": cid, "user_id": user_id},
             )
             if cn:
@@ -258,7 +258,7 @@ async def get_stats(
         """
         SELECT node_type, COUNT(*) as count
         FROM knowledge_graph_nodes
-        WHERE user_id = :user_id
+        WHERE user_id::text = :user_id
         GROUP BY node_type
         ORDER BY count DESC
         """,
@@ -269,7 +269,7 @@ async def get_stats(
         """
         SELECT edge_type, COUNT(*) as count
         FROM knowledge_graph_edges
-        WHERE user_id = :user_id
+        WHERE user_id::text = :user_id
         GROUP BY edge_type
         ORDER BY count DESC
         """,
@@ -300,7 +300,7 @@ async def auto_discover(
     try:
         # Discover agents
         agents = await execute(
-            "SELECT agent_id, name FROM agents WHERE account_id = :user_id",
+            "SELECT agent_id, name FROM agents WHERE account_id::text = :user_id",
             {"user_id": user_id},
         )
         for agent in agents:
@@ -328,7 +328,7 @@ async def auto_discover(
                 'Thread ' || LEFT(thread_id::text, 8)
             ) as label
             FROM threads
-            WHERE account_id = :user_id
+            WHERE account_id::text = :user_id
             ORDER BY created_at DESC
             LIMIT 100
             """,
@@ -356,7 +356,7 @@ async def auto_discover(
             """
             SELECT DISTINCT ar.agent_id, ar.thread_id
             FROM agent_runs ar
-            JOIN agents a ON a.agent_id = ar.agent_id AND a.account_id = :user_id
+            JOIN agents a ON a.agent_id::text = ar.agent_id::text AND a.account_id::text = :user_id
             WHERE ar.thread_id IS NOT NULL
             LIMIT 200
             """,
@@ -365,11 +365,11 @@ async def auto_discover(
         edges_created = 0
         for link in agent_thread_links:
             source = await execute_one(
-                "SELECT id FROM knowledge_graph_nodes WHERE user_id = :user_id AND node_type = 'agent' AND node_id = :node_id",
+                "SELECT id FROM knowledge_graph_nodes WHERE user_id::text = :user_id AND node_type = 'agent' AND node_id::text = :node_id",
                 {"user_id": user_id, "node_id": str(link["agent_id"])},
             )
             target = await execute_one(
-                "SELECT id FROM knowledge_graph_nodes WHERE user_id = :user_id AND node_type = 'thread' AND node_id = :node_id",
+                "SELECT id FROM knowledge_graph_nodes WHERE user_id::text = :user_id AND node_type = 'thread' AND node_id::text = :node_id",
                 {"user_id": user_id, "node_id": str(link["thread_id"])},
             )
             if source and target:

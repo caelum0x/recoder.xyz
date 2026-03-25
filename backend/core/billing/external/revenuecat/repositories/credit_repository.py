@@ -73,8 +73,8 @@ class CreditRepository:
         sql = """
         SELECT id, revenuecat_transaction_id, amount_dollars, created_at, status
         FROM credit_purchases
-        WHERE account_id = :account_id
-          AND revenuecat_transaction_id = :transaction_id
+        WHERE account_id::text = :account_id
+          AND revenuecat_transaction_id::text = :transaction_id
         """
         return await execute_one(sql, {
             "account_id": app_user_id,
@@ -116,7 +116,7 @@ class CreditRepository:
         sql = """
         UPDATE credit_purchases
         SET status = 'completed', completed_at = :completed_at
-        WHERE revenuecat_transaction_id = :transaction_id
+        WHERE revenuecat_transaction_id::text = :transaction_id
         """
         await execute_mutate(sql, {
             "transaction_id": transaction_id,
@@ -131,7 +131,7 @@ class CreditRepository:
             sql = """
             UPDATE credit_purchases
             SET status = 'failed', error_message = :error_message
-            WHERE revenuecat_transaction_id = :transaction_id
+            WHERE revenuecat_transaction_id::text = :transaction_id
             """
             await execute_mutate(sql, {
                 "transaction_id": transaction_id,

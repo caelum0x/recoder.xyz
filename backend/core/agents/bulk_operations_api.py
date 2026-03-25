@@ -69,7 +69,7 @@ async def _validate_targets(
         rows = await execute(
             f"""
             SELECT id::text FROM agents
-            WHERE id::text IN ({placeholders}) AND user_id = :user_id
+            WHERE id::text IN ({placeholders}) AND user_id::text = :user_id
             """,
             params,
         )
@@ -83,7 +83,7 @@ async def _validate_targets(
         rows = await execute(
             f"""
             SELECT thread_id::text AS id FROM threads
-            WHERE thread_id::text IN ({placeholders}) AND user_id = :user_id
+            WHERE thread_id::text IN ({placeholders}) AND user_id::text = :user_id
             """,
             params,
         )
@@ -108,7 +108,7 @@ async def _process_operation(
         try:
             if operation_type == "agent_delete":
                 await execute_mutate(
-                    "DELETE FROM agents WHERE id = :id AND user_id = :user_id",
+                    "DELETE FROM agents WHERE id = :id AND user_id::text = :user_id",
                     {"id": tid, "user_id": user_id},
                 )
             elif operation_type == "agent_update":
@@ -123,17 +123,17 @@ async def _process_operation(
                     if set_parts:
                         set_clause = ", ".join(set_parts)
                         await execute_mutate(
-                            f"UPDATE agents SET {set_clause} WHERE id = :id AND user_id = :user_id",
+                            f"UPDATE agents SET {set_clause} WHERE id = :id AND user_id::text = :user_id",
                             update_params,
                         )
             elif operation_type == "thread_delete":
                 await execute_mutate(
-                    "DELETE FROM threads WHERE thread_id = :id AND user_id = :user_id",
+                    "DELETE FROM threads WHERE thread_id::text = :id AND user_id::text = :user_id",
                     {"id": tid, "user_id": user_id},
                 )
             elif operation_type == "thread_archive":
                 await execute_mutate(
-                    "UPDATE threads SET is_archived = true WHERE thread_id = :id AND user_id = :user_id",
+                    "UPDATE threads SET is_archived = true WHERE thread_id::text = :id AND user_id::text = :user_id",
                     {"id": tid, "user_id": user_id},
                 )
             elif operation_type == "tag_assign":
@@ -153,7 +153,7 @@ async def _process_operation(
                     await execute_mutate(
                         """
                         DELETE FROM agent_tag_assignments
-                        WHERE agent_id = :agent_id AND tag_id = :tag_id AND user_id = :user_id
+                        WHERE agent_id::text = :agent_id AND tag_id::text = :tag_id AND user_id::text = :user_id
                         """,
                         {"agent_id": tid, "tag_id": tag_id, "user_id": user_id},
                     )
@@ -171,7 +171,7 @@ async def _process_operation(
             """
             UPDATE bulk_operations
             SET processed_count = :processed, error_count = :errors, errors = :error_list::jsonb
-            WHERE id = :id AND user_id = :user_id
+            WHERE id = :id AND user_id::text = :user_id
             """,
             {
                 "id": op_id,
@@ -195,7 +195,7 @@ async def _process_operation(
         UPDATE bulk_operations
         SET status = :status, completed_at = :completed_at,
             processed_count = :processed, error_count = :errors, errors = :error_list::jsonb
-        WHERE id = :id AND user_id = :user_id
+        WHERE id = :id AND user_id::text = :user_id
         """,
         {
             "id": op_id,
@@ -271,7 +271,7 @@ async def execute_bulk_operation(
 
     # Return final state
     result = await execute_one(
-        "SELECT * FROM bulk_operations WHERE id = :id AND user_id = :user_id",
+        "SELECT * FROM bulk_operations WHERE id = :id AND user_id::text = :user_id",
         {"id": op_id, "user_id": user_id},
     )
 
@@ -290,7 +290,7 @@ async def list_bulk_operations(
     user_id: str = Depends(verify_and_get_user_id_from_jwt),
 ):
     """List bulk operations for the current user."""
-    conditions = ["user_id = :user_id"]
+    conditions = ["user_id::text = :user_id"]
     params: dict = {"user_id": user_id, "limit": limit}
 
     if status:
@@ -323,7 +323,7 @@ async def get_bulk_operation(
 ):
     """Get details of a specific bulk operation."""
     row = await execute_one(
-        "SELECT * FROM bulk_operations WHERE id = :id AND user_id = :user_id",
+        "SELECT * FROM bulk_operations WHERE id = :id AND user_id::text = :user_id",
         {"id": op_id, "user_id": user_id},
     )
 
@@ -382,7 +382,7 @@ async def get_bulk_stats(
             ), 0) AS success_rate_pct,
             COALESCE(ROUND(AVG(target_count)::numeric, 1), 0) AS avg_targets_per_op
         FROM bulk_operations
-        WHERE user_id = :user_id
+        WHERE user_id::text = :user_id
         """,
         {"user_id": user_id},
     )
@@ -392,7 +392,7 @@ async def get_bulk_stats(
         """
         SELECT operation_type, COUNT(*)::int AS count
         FROM bulk_operations
-        WHERE user_id = :user_id
+        WHERE user_id::text = :user_id
         GROUP BY operation_type
         ORDER BY count DESC
         LIMIT 1

@@ -1,19 +1,19 @@
+"""People research tool using self-hosted SearXNG.
+
+Searches for people via SearXNG (no API key, no rate limits) and extracts
+structured professional information from the results.
+"""
+
 from typing import Optional
 import asyncio
+import os
+import re
 import structlog
 import json
 from decimal import Decimal
+from urllib.parse import urlparse
 
-# exa-py removed due to openai 2.x incompatibility - tool disabled
-try:
-    from exa_py import Exa
-    from exa_py.websets.types import CreateWebsetParameters, CreateEnrichmentParameters
-    EXA_AVAILABLE = True
-except ImportError:
-    EXA_AVAILABLE = False
-    Exa = None
-    CreateWebsetParameters = None
-    CreateEnrichmentParameters = None
+import httpx
 
 from core.agentpress.tool import Tool, ToolResult, openapi_schema, tool_metadata
 from core.utils.config import config, EnvMode
@@ -23,128 +23,80 @@ from core.billing.credits.manager import CreditManager
 from core.billing.shared.config import TOKEN_PRICE_MULTIPLIER
 from core.services.db import execute_one
 
+SEARXNG_URL = os.environ.get("SEARXNG_URL", "http://127.0.0.1:8888")
+
+
 @tool_metadata(
     display_name="People Research",
-    description="Find and research people with professional background information",
-    icon="Users",
-    color="bg-sky-100 dark:bg-sky-800/50",
+    description="Find and research people with professional information",
+    icon="User",
+    color="bg-blue-100 dark:bg-blue-800/50",
     weight=250,
     visible=True,
     usage_guide="""
 ### SPECIALIZED PEOPLE SEARCH
 
-**⚠️ COST: $0.54 per search (returns 10 results)**
+**Uses self-hosted SearXNG — no external API key required.**
 
-**🔴 MANDATORY: ALWAYS ASK FOR CONFIRMATION BEFORE USING THIS TOOL**
-
-**WORKFLOW - NO EXCEPTIONS:**
-1. **CLARIFY:** Ask 3-5 specific questions about what they're looking for
-   - Job title/role details
-   - Industry/company type
-   - Location preferences
-   - Experience level
-   - Skills/technologies needed
-2. **REFINE:** Build detailed search query based on answers
-3. **CONFIRM:** Show refined query + cost, ask for explicit "yes"
-4. **WAIT:** Wait for confirmation
-5. **EXECUTE:** Only then use people_search
+**WORKFLOW:**
+1. **CLARIFY:** Ask specific questions
+   - Name / role / title
+   - Company or industry
+   - Location
+   - Expertise area
+2. **REFINE:** Build detailed search query
+3. **EXECUTE:** Run people_search
 
 **SEARCH QUERY BEST PRACTICES:**
-- Use descriptive, natural language queries
-- Include job titles, companies, locations, skills, experience
+- Include name, role, company, or industry
 - Examples:
-  - "Senior Python developers with ML experience at Google"
-  - "CTOs at AI startups in San Francisco with Series A funding"
-  - "Sales directors with 10+ years in SaaS companies"
-
-**ENRICHMENT:**
-- Default: LinkedIn profile URL
-- Can specify custom data to find about each person
+  - "CTO of AI companies in San Francisco"
+  - "Data scientists at Google"
+  - "John Smith software engineer LinkedIn"
 
 **NEVER:**
-- Call without clarifying questions first
-- Proceed without explicit user confirmation
-- Use vague queries - always refine with user input
+- Use vague queries — specificity is critical
 """
 )
 class PeopleSearchTool(Tool):
     def __init__(self, thread_manager: ThreadManager):
         super().__init__()
         self.thread_manager = thread_manager
-        self.api_key = config.EXA_API_KEY
         self.credit_manager = CreditManager()
-        self.exa_client = None
-        
-        if self.api_key:
-            self.exa_client = Exa(self.api_key)
-            logger.info("People Search Tool initialized.")
-        else:
-            logger.warning("EXA_API_KEY not configured - People Search Tool will not be available")
-    
+        logger.info("People Search Tool initialized (SearXNG).")
+
     async def _get_current_thread_and_user(self) -> tuple[Optional[str], Optional[str]]:
         try:
             context_vars = structlog.contextvars.get_contextvars()
             thread_id = context_vars.get('thread_id')
-            
             if not thread_id:
-                logger.warning("No thread_id in execution context")
                 return None, None
-
             thread = await execute_one(
-                """
-                SELECT account_id
-                FROM threads
-                WHERE thread_id = :thread_id
-                LIMIT 1
-                """,
+                "SELECT account_id FROM threads WHERE thread_id::text = :thread_id LIMIT 1",
                 {"thread_id": thread_id},
             )
             if thread:
                 return thread_id, thread.get('account_id')
-                
         except Exception as e:
             logger.error(f"Failed to get thread context: {e}")
         return None, None
-    
-    async def _deduct_credits(self, user_id: str, num_results: int, thread_id: Optional[str] = None) -> bool:
-        base_cost = Decimal('0.45')
-        total_cost = base_cost * TOKEN_PRICE_MULTIPLIER
-        
-        try:
-            result = await self.credit_manager.use_credits(
-                account_id=user_id,
-                amount=total_cost,
-                description=f"People search: {num_results} results",
-                thread_id=thread_id
-            )
-            
-            if result.get('success'):
-                logger.info(f"Deducted ${total_cost:.2f} for people search ({num_results} results)")
-                return True
-            else:
-                logger.warning(f"Failed to deduct credits: {result.get('error')}")
-                return False
-                
-        except Exception as e:
-            logger.error(f"Error deducting credits: {e}")
-            return False
 
     @openapi_schema({
         "type": "function",
         "function": {
             "name": "people_search",
-            "description": "Search for people using natural language queries and enrich with LinkedIn profiles. IMPORTANT: This search costs 54 credits per search (10 results).",
+            "description": "Search for people using natural language queries. Returns names, URLs, and descriptions from web search results.",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "query": {
                         "type": "string",
-                        "description": "Natural language search query describing the people you want to find. Examples: 'CTOs at AI startups in San Francisco', 'Senior Python developers with machine learning experience at Google', 'Marketing managers at Fortune 500 companies in New York'"
+                        "description": "Natural language search query describing the people you want to find. Examples: 'CTO of AI startups in San Francisco', 'Data scientists at FAANG companies'"
                     },
-                    "enrichment_description": {
-                        "type": "string",
-                        "description": "What specific information to find about each person. Default: 'LinkedIn profile URL'",
-                        "default": "LinkedIn profile URL"
+                    "num_results": {
+                        "type": "integer",
+                        "description": "Number of results to return (1-20, default 10)",
+                        "default": 10
                     }
                 },
                 "required": ["query"]
@@ -154,197 +106,236 @@ class PeopleSearchTool(Tool):
     async def people_search(
         self,
         query: str,
-        enrichment_description: str = "LinkedIn profile URL"
+        num_results: int = 10,
     ) -> ToolResult:
-        if not self.exa_client:
-            return self.fail_response(
-                "People Search is not available. EXA_API_KEY is not configured. "
-                "Please contact your administrator to enable this feature."
-            )
-        
         if not query:
             return self.fail_response("Search query is required.")
-        
-        thread_id, user_id = await self._get_current_thread_and_user()
-        
-        if config.ENV_MODE != EnvMode.LOCAL and (not thread_id or not user_id):
-            return self.fail_response(
-                "No active session context for billing. This tool requires an active agent session."
-            )
-        
-        try:
-            logger.info(f"Creating Exa webset for: '{query}' with 10 results")
-            
-            enrichment_config = CreateEnrichmentParameters(
-                description=enrichment_description,
-                format="text"
-            )
-            
-            webset_params = CreateWebsetParameters(
-                search={
-                    "query": query,
-                    "count": 10
-                },
-                enrichments=[enrichment_config]
-            )
-            
-            try:
-                webset = await asyncio.to_thread(
-                    self.exa_client.websets.create,
-                    params=webset_params
-                )
-                
-                logger.info(f"Webset created with ID: {webset.id}")
-            except Exception as create_error:
-                logger.error(f"Failed to create webset - Error type: {type(create_error).__name__}")
-                try:
-                    error_str = str(create_error)
-                    logger.error(f"Failed to create webset - Error message: {error_str}")
-                except Exception:
-                    logger.exception("Failed to convert Exa webset creation error to string")
-                    error_str = "Unknown error"
-                    logger.error(f"Failed to create webset - Could not convert error to string")
-                
-                if "401" in error_str:
-                    return self.fail_response(
-                        "Authentication failed with Exa API. Please check your API key configuration."
-                    )
-                elif "400" in error_str:
-                    return self.fail_response(
-                        "Invalid request to Exa API. Please check your query format."
-                    )
-                else:
-                    return self.fail_response(
-                        "Failed to create webset. Please try again."
-                    )
-            
-            logger.info(f"Waiting for webset {webset.id} to complete processing...")
-            try:
-                webset = await asyncio.to_thread(
-                    self.exa_client.websets.wait_until_idle,
-                    webset.id
-                )
-                logger.info(f"Webset {webset.id} processing complete")
-            except Exception as wait_error:
-                logger.error(f"Error waiting for webset: {type(wait_error).__name__}: {repr(wait_error)}")
-                return self.fail_response("Failed while waiting for search results. Please try again.")
 
-            logger.info(f"Retrieving items from webset {webset.id}...")
-            try:
-                items = await asyncio.to_thread(
-                    self.exa_client.websets.items.list,
-                    webset_id=webset.id
+        num_results = max(1, min(num_results, 20))
+
+        try:
+            # Run multiple search strategies in parallel for richer results
+            search_queries = [
+                f"{query} site:linkedin.com",
+                f"{query} professional profile OR biography OR resume",
+            ]
+
+            tasks = [
+                self._searxng_search(sq, num_results)
+                for sq in search_queries
+            ]
+            all_results = await asyncio.gather(*tasks, return_exceptions=True)
+
+            # Merge and deduplicate results by URL
+            seen_urls: set[str] = set()
+            merged: list[dict] = []
+            for batch in all_results:
+                if isinstance(batch, Exception):
+                    logger.warning(f"People search sub-query failed: {batch}")
+                    continue
+                for r in batch:
+                    url = r.get("url", "")
+                    if url and url not in seen_urls:
+                        seen_urls.add(url)
+                        merged.append(r)
+
+            if not merged:
+                return self.fail_response(
+                    f"No results found for: {query}. Try a broader query."
                 )
-                logger.info(f"Retrieved items from webset")
-            except Exception as items_error:
-                logger.error(f"Error retrieving items: {type(items_error).__name__}: {repr(items_error)}")
-                return self.fail_response("Failed to retrieve search results. Please try again.")
-            
-            results = items.data if items else []
-            logger.info(f"Got {len(results)} results from webset")
-            
-            formatted_results = []
-            for idx, item in enumerate(results[:10], 1):
-                if hasattr(item, 'model_dump'):
-                    item_dict = item.model_dump()
-                elif isinstance(item, dict):
-                    item_dict = item
-                else:
-                    item_dict = vars(item) if hasattr(item, '__dict__') else {}
-                
-                properties = item_dict.get('properties', {})
-                person_info = properties.get('person', {})
-                
-                evaluations_text = ""
-                evaluations = item_dict.get('evaluations', [])
-                if evaluations:
-                    eval_items = []
-                    for eval_item in evaluations:
-                        if isinstance(eval_item, dict):
-                            criterion = eval_item.get('criterion', '')
-                            satisfied = eval_item.get('satisfied', '')
-                            if criterion:
-                                eval_items.append(f"{criterion}: {satisfied}")
-                    evaluations_text = " | ".join(eval_items)
-                
-                enrichment_text = ""
-                if 'enrichments' in item_dict and item_dict['enrichments']:
-                    enrichments = item_dict['enrichments']
-                    if isinstance(enrichments, list) and len(enrichments) > 0:
-                        enrichment = enrichments[0]
-                        if isinstance(enrichment, dict):
-                            enrich_result = enrichment.get('result')
-                            if enrich_result is not None:
-                                if isinstance(enrich_result, list) and enrich_result:
-                                    enrichment_text = str(enrich_result[0]) if enrich_result[0] else ""
-                                elif isinstance(enrich_result, str):
-                                    enrichment_text = enrich_result
-                                else:
-                                    enrichment_text = str(enrich_result) if enrich_result else ""
-                
-                picture_url = person_info.get('picture_url', '')
-                if picture_url is None:
-                    picture_url = ''
-                
-                result_entry = {
-                    "rank": idx,
-                    "id": item_dict.get('id', ''),
-                    "webset_id": item_dict.get('webset_id', ''),
-                    "source": str(item_dict.get('source', '')),
-                    "source_id": item_dict.get('source_id', ''),
-                    "url": properties.get('url', ''),
-                    "type": properties.get('type', ''),
-                    "description": properties.get('description', ''),
-                    "person_name": person_info.get('name', ''),
-                    "person_location": person_info.get('location', ''),
-                    "person_position": person_info.get('position', ''),
-                    "person_picture_url": str(picture_url) if picture_url else '',
-                    "evaluations": evaluations_text,
-                    "enrichment_data": enrichment_text,
-                    "created_at": str(item_dict.get('created_at', '')),
-                    "updated_at": str(item_dict.get('updated_at', ''))
-                }
-                
-                formatted_results.append(result_entry)
-            
-            base_cost = Decimal('0.45')
-            total_cost = base_cost * TOKEN_PRICE_MULTIPLIER
-            
-            if config.ENV_MODE == EnvMode.LOCAL:
-                logger.info("Running in LOCAL mode - skipping billing for people search")
-                cost_deducted_str = f"{int(total_cost * 100)} credits (LOCAL - not charged)"
-            else:
-                credits_deducted = await self._deduct_credits(user_id, len(formatted_results), thread_id)
-                if not credits_deducted:
-                    return self.fail_response(
-                        "Insufficient credits for people search. "
-                        f"This search costs {int(total_cost * 100)} credits ({len(formatted_results)} results). "
-                        "Please add credits to continue."
-                    )
-                cost_deducted_str = f"{int(total_cost * 100)} credits"
-            
+
+            # Parse and enrich each result with structured people info
+            formatted = []
+            for idx, r in enumerate(merged[:num_results], 1):
+                title = r.get("title", "")
+                url = r.get("url", "")
+                content = r.get("content", "")
+
+                person_info = self._extract_person_info(title, url, content)
+                person_info["rank"] = idx
+                person_info["engine"] = r.get("engine", "")
+                formatted.append(person_info)
+
             output = {
                 "query": query,
-                "total_results": len(formatted_results),
-                "cost_deducted": cost_deducted_str,
-                "results": formatted_results,
-                "enrichment_type": enrichment_description
+                "total_results": len(formatted),
+                "results": formatted,
             }
-            
-            logger.info(f"Successfully completed people search with {len(formatted_results)} results")
-            
-            try:
-                json_output = json.dumps(output, indent=2, default=str)
-                return self.success_response(json_output)
-            except Exception as json_error:
-                logger.error(f"Failed to serialize output: {json_error}")
-                summary = f"Found {len(formatted_results)} results for query: {query}"
-                if formatted_results:
-                    summary += f"\n\nTop result:\nName: {formatted_results[0].get('person_name', 'Unknown')}\nPosition: {formatted_results[0].get('person_position', 'Unknown')}\nLocation: {formatted_results[0].get('person_location', 'Unknown')}"
-                return self.success_response(summary)
-                
+
+            return self.success_response(json.dumps(output, indent=2, default=str))
+
         except asyncio.TimeoutError:
             return self.fail_response("Search timed out. Please try again with a simpler query.")
         except Exception as e:
-            logger.error(f"People search failed: {repr(e)}", exc_info=True)
+            logger.error(f"People search failed: {e}", exc_info=True)
             return self.fail_response("An error occurred during the search. Please try again.")
+
+    def _extract_person_info(self, title: str, url: str, content: str) -> dict:
+        """Extract structured person information from a search result."""
+        person_name = title
+        domain = ""
+        source = ""
+        title_role = ""
+        company = ""
+        location = ""
+        description = content
+
+        # Extract domain from URL
+        try:
+            parsed = urlparse(url)
+            domain = parsed.netloc
+            if "linkedin.com" in domain:
+                source = "linkedin"
+            elif "twitter.com" in domain or "x.com" in domain:
+                source = "twitter"
+            elif "github.com" in domain:
+                source = "github"
+            elif "crunchbase.com" in domain:
+                source = "crunchbase"
+            elif "about.me" in domain:
+                source = "about.me"
+            else:
+                source = "web"
+        except Exception:
+            pass
+
+        # Clean person name from title patterns
+        # LinkedIn: "John Smith - Software Engineer - Acme Inc. | LinkedIn"
+        # General: "John Smith | Company"
+        separators = [" | ", " - ", " — ", " – ", " :: "]
+        name_parts = [person_name]
+        for sep in separators:
+            if sep in person_name:
+                name_parts = [p.strip() for p in person_name.split(sep)]
+                break
+
+        if len(name_parts) >= 1:
+            person_name = name_parts[0]
+            # Remove trailing "LinkedIn", "Twitter", etc.
+            for platform in ["LinkedIn", "Twitter", "GitHub", "X"]:
+                person_name = person_name.replace(platform, "").strip()
+
+        # Try to extract title/role from title parts or content
+        if source == "linkedin" and len(name_parts) >= 2:
+            # LinkedIn format: "Name - Title - Company | LinkedIn"
+            if len(name_parts) >= 3:
+                title_role = name_parts[1]
+                company = name_parts[2].replace("LinkedIn", "").strip()
+            elif len(name_parts) == 2:
+                # Could be "Name - Title | LinkedIn" or "Name | LinkedIn"
+                second = name_parts[1].replace("LinkedIn", "").strip()
+                if second:
+                    title_role = second
+
+        # Try to extract title/role from content
+        if not title_role:
+            role_patterns = [
+                r'(?:^|\.\s+)([A-Z][a-zA-Z\s]+?)\s+at\s+([A-Z][a-zA-Z\s&.]+)',
+                r'(?:is|was)\s+(?:the\s+)?([A-Z][a-zA-Z\s]+?)\s+(?:at|of)\s+([A-Z][a-zA-Z\s&.]+)',
+                r'(CEO|CTO|CFO|COO|VP|Director|Manager|Engineer|Developer|Founder|Co-Founder|President|Partner)\b',
+            ]
+            for pattern in role_patterns:
+                match = re.search(pattern, content)
+                if match:
+                    if match.lastindex and match.lastindex >= 2:
+                        title_role = match.group(1).strip()
+                        if not company:
+                            company = match.group(2).strip()
+                    else:
+                        title_role = match.group(1).strip() if match.group(1) else match.group(0).strip()
+                    break
+
+        # Try to extract company from content if not yet found
+        if not company:
+            company_patterns = [
+                r'at\s+([A-Z][a-zA-Z\s&.]+?)(?:\.|,|\s+[-–—])',
+                r'(?:works?\s+(?:at|for)|employed\s+(?:at|by))\s+([A-Z][a-zA-Z\s&.]+?)(?:\.|,)',
+            ]
+            for pattern in company_patterns:
+                match = re.search(pattern, content)
+                if match:
+                    company = match.group(1).strip()
+                    break
+
+        # Try to extract location from content
+        location_patterns = [
+            r'(?:based|located|lives?)\s+in\s+([A-Z][a-zA-Z\s,]+?)(?:\.|,|\s+[-–—])',
+            r'([A-Z][a-zA-Z]+,\s*[A-Z]{2})\b',  # City, ST format
+            r'([A-Z][a-zA-Z]+\s+(?:Area|Metropolitan|Region))',
+        ]
+        for pattern in location_patterns:
+            match = re.search(pattern, content)
+            if match:
+                location = match.group(1).strip()
+                break
+
+        return {
+            "person_name": person_name,
+            "url": url,
+            "domain": domain,
+            "description": description,
+            "source": source,
+            "title": title_role if title_role else None,
+            "company": company if company else None,
+            "location": location if location else None,
+        }
+
+    async def _searxng_search(self, query: str, num_results: int) -> list[dict]:
+        """Execute a search via SearXNG with categories=general."""
+        try:
+            async with httpx.AsyncClient(timeout=15.0) as client:
+                response = await client.get(
+                    f"{SEARXNG_URL}/search",
+                    params={
+                        "q": query,
+                        "format": "json",
+                        "categories": "general",
+                        "pageno": 1,
+                    },
+                )
+                response.raise_for_status()
+                data = response.json()
+
+            raw = data.get("results", [])
+            if not raw:
+                logger.info(f"SearXNG returned 0 results for: '{query}', trying DDG fallback")
+                return await self._ddg_fallback(query, num_results)
+
+            results = []
+            for r in raw[:num_results]:
+                results.append({
+                    "title": r.get("title", ""),
+                    "url": r.get("url", ""),
+                    "content": r.get("content", ""),
+                    "engine": r.get("engine", ""),
+                })
+
+            logger.info(f"SearXNG returned {len(results)} people results for: '{query}'")
+            return results
+
+        except Exception as e:
+            logger.warning(f"SearXNG people search failed: {e}, trying DuckDuckGo fallback")
+            return await self._ddg_fallback(query, num_results)
+
+    async def _ddg_fallback(self, query: str, num_results: int) -> list[dict]:
+        """Fallback to DuckDuckGo if SearXNG is unavailable."""
+        try:
+            from duckduckgo_search import DDGS
+
+            def _search():
+                with DDGS() as ddgs:
+                    return list(ddgs.text(query, max_results=num_results))
+
+            raw = await asyncio.to_thread(_search)
+            return [
+                {
+                    "title": r.get("title", ""),
+                    "url": r.get("href", ""),
+                    "content": r.get("body", ""),
+                    "engine": "duckduckgo",
+                }
+                for r in raw
+            ]
+        except Exception as e:
+            logger.warning(f"DuckDuckGo fallback also failed: {e}")
+            return []

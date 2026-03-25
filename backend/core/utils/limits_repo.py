@@ -10,8 +10,8 @@ async def count_running_agent_runs(account_id: str) -> Dict[str, Any]:
         COUNT(*) as running_count,
         ARRAY_AGG(ar.thread_id) as running_thread_ids
     FROM agent_runs ar
-    INNER JOIN threads t ON ar.thread_id = t.thread_id
-    WHERE t.account_id = :account_id 
+    INNER JOIN threads t ON ar.thread_id::text = t.thread_id::text
+    WHERE t.account_id::text = :account_id
       AND ar.status = 'running'
     """
     
@@ -36,8 +36,8 @@ async def count_agent_runs_24h(account_id: str) -> int:
     sql = """
     SELECT COUNT(*) as count
     FROM agent_runs ar
-    INNER JOIN threads t ON ar.thread_id = t.thread_id
-    WHERE t.account_id = :account_id 
+    INNER JOIN threads t ON ar.thread_id::text = t.thread_id::text
+    WHERE t.account_id::text = :account_id
       AND ar.started_at >= :since
     """
     
@@ -53,7 +53,7 @@ async def count_user_agents(account_id: str) -> int:
     sql = """
     SELECT COUNT(*) as count 
     FROM agents 
-    WHERE account_id = :account_id 
+    WHERE account_id::text = :account_id
       AND (metadata->>'is_recoder_default')::boolean IS NOT TRUE
     """
     result = await execute_one(sql, {"account_id": account_id})
@@ -61,13 +61,13 @@ async def count_user_agents(account_id: str) -> int:
 
 
 async def count_user_threads(account_id: str) -> int:
-    sql = "SELECT COUNT(*) as count FROM threads WHERE account_id = :account_id"
+    sql = "SELECT COUNT(*) as count FROM threads WHERE account_id::text = :account_id"
     result = await execute_one(sql, {"account_id": account_id})
     return result["count"] if result else 0
 
 
 async def count_user_projects(account_id: str) -> int:
-    sql = "SELECT COUNT(*) as count FROM projects WHERE account_id = :account_id"
+    sql = "SELECT COUNT(*) as count FROM projects WHERE account_id::text = :account_id"
     result = await execute_one(sql, {"account_id": account_id})
     return result["count"] if result else 0
 
@@ -81,21 +81,21 @@ async def get_all_limits_counts(account_id: str) -> Dict[str, Any]:
     """
     sql = """
     SELECT 
-        (SELECT COUNT(*) FROM agents 
-         WHERE account_id = :account_id 
+        (SELECT COUNT(*) FROM agents
+         WHERE account_id::text = :account_id
            AND (metadata->>'is_recoder_default')::boolean IS NOT TRUE) as agent_count,
-        (SELECT COUNT(*) FROM threads WHERE account_id = :account_id) as thread_count,
-        (SELECT COUNT(*) FROM projects WHERE account_id = :account_id) as project_count,
-        (SELECT COUNT(*) FROM agent_runs ar 
-         INNER JOIN threads t ON ar.thread_id = t.thread_id
-         WHERE t.account_id = :account_id AND ar.status = 'running') as running_runs_count,
+        (SELECT COUNT(*) FROM threads WHERE account_id::text = :account_id) as thread_count,
+        (SELECT COUNT(*) FROM projects WHERE account_id::text = :account_id) as project_count,
+        (SELECT COUNT(*) FROM agent_runs ar
+         INNER JOIN threads t ON ar.thread_id::text = t.thread_id::text
+         WHERE t.account_id::text = :account_id AND ar.status = 'running') as running_runs_count,
         (SELECT COALESCE(
             SUM(JSONB_ARRAY_LENGTH(
                 COALESCE(av.config->'tools'->'custom_mcp', '[]'::jsonb)
             )), 0)
          FROM agents a
-         LEFT JOIN agent_versions av ON a.current_version_id = av.version_id
-         WHERE a.account_id = :account_id) as custom_mcp_count
+         LEFT JOIN agent_versions av ON a.current_version_id::text = av.version_id::text
+         WHERE a.account_id::text = :account_id) as custom_mcp_count
     """
     result = await execute_one(sql, {"account_id": account_id})
     
@@ -120,7 +120,7 @@ async def get_all_limits_counts(account_id: str) -> Dict[str, Any]:
 async def check_agent_exists(agent_id: str, account_id: str) -> bool:
     sql = """
     SELECT agent_id FROM agents 
-    WHERE agent_id = :agent_id AND account_id = :account_id
+    WHERE agent_id::text = :agent_id AND account_id::text = :account_id
     LIMIT 1
     """
     result = await execute_one(sql, {"agent_id": agent_id, "account_id": account_id})
@@ -132,8 +132,8 @@ async def count_agent_triggers(agent_id: str) -> Dict[str, int]:
     SELECT 
         trigger_type,
         COUNT(*) as count
-    FROM agent_triggers 
-    WHERE agent_id = :agent_id
+    FROM agent_triggers
+    WHERE agent_id::text = :agent_id
     GROUP BY trigger_type
     """
     
@@ -160,8 +160,8 @@ async def count_all_triggers_for_account(account_id: str) -> Dict[str, int]:
         at.trigger_type,
         COUNT(*) as count
     FROM agent_triggers at
-    INNER JOIN agents a ON at.agent_id = a.agent_id
-    WHERE a.account_id = :account_id
+    INNER JOIN agents a ON at.agent_id::text = a.agent_id::text
+    WHERE a.account_id::text = :account_id
     GROUP BY at.trigger_type
     """
     
@@ -183,7 +183,7 @@ async def count_all_triggers_for_account(account_id: str) -> Dict[str, int]:
 
 
 async def get_agent_ids_for_account(account_id: str) -> List[str]:
-    sql = "SELECT agent_id FROM agents WHERE account_id = :account_id"
+    sql = "SELECT agent_id FROM agents WHERE account_id::text = :account_id"
     rows = await execute(sql, {"account_id": account_id})
     return [row["agent_id"] for row in rows] if rows else []
 
@@ -198,9 +198,9 @@ async def count_custom_mcps_for_account(account_id: str) -> int:
             0
         ) as total_custom_mcps
     FROM agents a
-    LEFT JOIN agent_versions av ON a.current_version_id = av.version_id
-    WHERE a.account_id = :account_id
+    LEFT JOIN agent_versions av ON a.current_version_id::text = av.version_id::text
+    WHERE a.account_id::text = :account_id
     """
-    
+
     result = await execute_one(sql, {"account_id": account_id})
     return result["total_custom_mcps"] if result else 0

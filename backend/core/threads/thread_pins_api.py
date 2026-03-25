@@ -27,7 +27,7 @@ async def unpin_thread(
     user_id: str = Depends(verify_and_get_user_id_from_jwt),
 ):
     await execute(
-        "DELETE FROM user_pinned_threads WHERE user_id = :user_id AND thread_id = :thread_id",
+        "DELETE FROM user_pinned_threads WHERE user_id::text = :user_id AND thread_id::text = :thread_id",
         {"user_id": user_id, "thread_id": thread_id},
     )
     return {"status": "unpinned"}
@@ -41,8 +41,8 @@ async def list_pinned_threads(
         """
         SELECT p.thread_id, p.pinned_at, t.name, t.updated_at
         FROM user_pinned_threads p
-        LEFT JOIN threads t ON t.thread_id = p.thread_id::uuid
-        WHERE p.user_id = :user_id
+        LEFT JOIN threads t ON t.thread_id::text = p.thread_id::text
+        WHERE p.user_id::text = :user_id
         ORDER BY p.pinned_at DESC
         """,
         {"user_id": user_id},

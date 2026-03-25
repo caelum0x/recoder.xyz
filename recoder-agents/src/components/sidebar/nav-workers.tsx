@@ -31,7 +31,7 @@ export function NavWorkers() {
     tierKey === 'none'
   ) && !isLocalMode();
 
-  const { data: agentsResponse, isLoading } = useAgents({ limit: 50 });
+  const { data: agentsResponse, isLoading, error: agentsError, refetch } = useAgents({ limit: 50 });
   const agents = useMemo(() => {
     return Array.isArray(agentsResponse?.agents) ? agentsResponse.agents : [];
   }, [agentsResponse]);
@@ -81,7 +81,22 @@ export function NavWorkers() {
       </div>
 
       <div className="flex-1 overflow-y-auto space-y-1 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:'none'] [scrollbar-width:'none']">
-        {isLoading ? (
+        {agentsError && !isLoading && agents.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-8 text-center">
+            <div className="w-12 h-12 bg-muted/50 rounded-2xl flex items-center justify-center mb-3">
+              <Frown className="h-6 w-6 text-muted-foreground" />
+            </div>
+            <p className="text-sm text-muted-foreground mb-2">
+              Failed to load workers
+            </p>
+            <button
+              className="text-xs text-primary hover:underline cursor-pointer"
+              onClick={() => refetch()}
+            >
+              Retry
+            </button>
+          </div>
+        ) : isLoading ? (
           <div className="flex items-center justify-center py-8">
             <RecoderLoader size="small" />
           </div>

@@ -126,17 +126,12 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
 
     const userData = await verifyResponse.json();
 
-    const headers = new Headers();
-    const secureCookie = `__Secure-recoder.session_token=${encodeURIComponent(token)}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=86400`;
-    const legacyCookie = `recoder.session_token=${encodeURIComponent(token)}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=86400`;
-    headers.append('Set-Cookie', secureCookie);
-    headers.append('Set-Cookie', legacyCookie);
-
-    // Set session cookies for compatibility across legacy and secure naming.
-    return json(
-      { success: true, user: userData },
-      { headers }
-    );
+    // DO NOT set session cookies here. The cross-subdomain cookie set by
+    // recoder.xyz (Domain=.recoder.xyz, SameSite=None) already reaches
+    // web.recoder.xyz. Setting a web.recoder.xyz-scoped cookie without
+    // the signature suffix would OVERRIDE the correct cookie and break
+    // session verification.
+    return json({ success: true, user: userData });
   } catch (error) {
     logger.error('Token verification error', error);
     return json({ error: 'Verification failed' }, { status: 500 });

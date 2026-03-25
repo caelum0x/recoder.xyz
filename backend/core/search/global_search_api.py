@@ -70,7 +70,7 @@ async def indexed_search(
     search_term = f"%{q}%"
     params: dict = {"user_id": user_id, "q": search_term, "lim": limit}
 
-    where_clauses = ["user_id = :user_id", "title ILIKE :q"]
+    where_clauses = ["user_id::text = :user_id", "title ILIKE :q"]
     if resource_type:
         where_clauses.append("resource_type = :resource_type")
         params["resource_type"] = resource_type
@@ -121,7 +121,7 @@ async def reindex(
     # --- Agents ---
     try:
         agents = await execute(
-            "SELECT agent_id, name, description FROM agents WHERE account_id = :uid",
+            "SELECT agent_id, name, description FROM agents WHERE account_id::text = :uid",
             {"uid": user_id},
         )
         count = 0
@@ -152,8 +152,8 @@ async def reindex(
             """
             SELECT t.thread_id, p.name AS project_name
             FROM threads t
-            LEFT JOIN projects p ON t.project_id = p.project_id
-            WHERE t.account_id = :uid
+            LEFT JOIN projects p ON t.project_id::text = p.project_id::text
+            WHERE t.account_id::text = :uid
             """,
             {"uid": user_id},
         )
@@ -182,7 +182,7 @@ async def reindex(
     # --- Saved Prompts ---
     try:
         prompts = await execute(
-            "SELECT id, title, content FROM saved_prompts WHERE user_id = :uid",
+            "SELECT id, title, content FROM saved_prompts WHERE user_id::text = :uid",
             {"uid": user_id},
         )
         count = 0
@@ -210,7 +210,7 @@ async def reindex(
     # --- Shared Prompt Snippets ---
     try:
         snippets = await execute(
-            "SELECT id, title, content FROM shared_prompt_snippets WHERE user_id = :uid",
+            "SELECT id, title, content FROM shared_prompt_snippets WHERE user_id::text = :uid",
             {"uid": user_id},
         )
         count = 0
@@ -238,7 +238,7 @@ async def reindex(
     # --- Knowledge Base Entries ---
     try:
         kb_entries = await execute(
-            "SELECT entry_id, filename FROM knowledge_base_entries WHERE account_id = :uid",
+            "SELECT entry_id, filename FROM knowledge_base_entries WHERE account_id::text = :uid",
             {"uid": user_id},
         )
         count = 0
@@ -282,7 +282,7 @@ async def suggestions(
         """
         SELECT title, resource_type, resource_id
         FROM search_index
-        WHERE user_id = :user_id AND title ILIKE :prefix
+        WHERE user_id::text = :user_id AND title ILIKE :prefix
         ORDER BY updated_at DESC NULLS LAST
         LIMIT :lim
         """,

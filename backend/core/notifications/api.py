@@ -30,7 +30,7 @@ async def list_notifications(
 ):
     """List notifications for the current user."""
     try:
-        where_clause = "WHERE user_id = :user_id"
+        where_clause = "WHERE user_id::text = :user_id"
         if unread_only:
             where_clause += " AND read = false"
 
@@ -82,7 +82,7 @@ async def mark_notification_read(
     """Mark a notification as read."""
     try:
         await execute(
-            "UPDATE notifications SET read = true WHERE id = :id AND user_id = :user_id",
+            "UPDATE notifications SET read = true WHERE id = :id AND user_id::text = :user_id",
             {"id": notification_id, "user_id": user_id},
         )
         return {"success": True}
@@ -98,7 +98,7 @@ async def mark_all_read(
     """Mark all notifications as read."""
     try:
         await execute(
-            "UPDATE notifications SET read = true WHERE user_id = :user_id AND read = false",
+            "UPDATE notifications SET read = true WHERE user_id::text = :user_id AND read = false",
             {"user_id": user_id},
         )
         return {"success": True}

@@ -112,7 +112,7 @@ async def get_pipeline_stats(
           COUNT(*)                             AS total,
           COUNT(*) FILTER (WHERE is_active)    AS active
         FROM data_pipelines
-        WHERE user_id = :user_id
+        WHERE user_id::text = :user_id
         """,
         {"user_id": user_id},
     )
@@ -124,7 +124,7 @@ async def get_pipeline_stats(
           COUNT(*) FILTER (WHERE status = 'completed')    AS completed_executions,
           COALESCE(SUM(records_processed), 0)             AS total_records_processed
         FROM pipeline_executions
-        WHERE user_id = :user_id
+        WHERE user_id::text = :user_id
         """,
         {"user_id": user_id},
     )
@@ -154,7 +154,7 @@ async def list_pipelines(
     rows = await execute(
         """
         SELECT * FROM data_pipelines
-        WHERE user_id = :user_id
+        WHERE user_id::text = :user_id
         ORDER BY created_at DESC
         """,
         {"user_id": user_id},
@@ -173,7 +173,7 @@ async def get_pipeline(
 ):
     """Get a single pipeline by ID."""
     row = await execute_one(
-        "SELECT * FROM data_pipelines WHERE id = :id AND user_id = :user_id",
+        "SELECT * FROM data_pipelines WHERE id = :id AND user_id::text = :user_id",
         {"id": pipeline_id, "user_id": user_id},
     )
     if not row:
@@ -193,7 +193,7 @@ async def update_pipeline(
 ):
     """Update pipeline configuration."""
     existing = await execute_one(
-        "SELECT id FROM data_pipelines WHERE id = :id AND user_id = :user_id",
+        "SELECT id FROM data_pipelines WHERE id = :id AND user_id::text = :user_id",
         {"id": pipeline_id, "user_id": user_id},
     )
     if not existing:
@@ -227,7 +227,7 @@ async def update_pipeline(
     row = await execute_one(
         f"""
         UPDATE data_pipelines SET {set_clause}
-        WHERE id = :id AND user_id = :user_id
+        WHERE id = :id AND user_id::text = :user_id
         RETURNING *
         """,
         data,
@@ -246,14 +246,14 @@ async def delete_pipeline(
 ):
     """Delete a pipeline and all its executions."""
     existing = await execute_one(
-        "SELECT id FROM data_pipelines WHERE id = :id AND user_id = :user_id",
+        "SELECT id FROM data_pipelines WHERE id = :id AND user_id::text = :user_id",
         {"id": pipeline_id, "user_id": user_id},
     )
     if not existing:
         raise HTTPException(status_code=404, detail="Pipeline not found")
 
     await execute_mutate(
-        "DELETE FROM data_pipelines WHERE id = :id AND user_id = :user_id",
+        "DELETE FROM data_pipelines WHERE id = :id AND user_id::text = :user_id",
         {"id": pipeline_id, "user_id": user_id},
     )
     return {"deleted": True, "id": pipeline_id}
@@ -270,7 +270,7 @@ async def run_pipeline(
 ):
     """Simulate a pipeline execution and record the result."""
     existing = await execute_one(
-        "SELECT id FROM data_pipelines WHERE id = :id AND user_id = :user_id",
+        "SELECT id FROM data_pipelines WHERE id = :id AND user_id::text = :user_id",
         {"id": pipeline_id, "user_id": user_id},
     )
     if not existing:
@@ -309,7 +309,7 @@ async def run_pipeline(
                 last_run_status = 'completed',
                 run_count = run_count + 1,
                 updated_at = now()
-            WHERE id = :id AND user_id = :user_id
+            WHERE id = :id AND user_id::text = :user_id
             """,
             {"id": pipeline_id, "user_id": user_id},
         )
@@ -332,7 +332,7 @@ async def list_pipeline_executions(
 ):
     """List execution history for a pipeline."""
     existing = await execute_one(
-        "SELECT id FROM data_pipelines WHERE id = :id AND user_id = :user_id",
+        "SELECT id FROM data_pipelines WHERE id = :id AND user_id::text = :user_id",
         {"id": pipeline_id, "user_id": user_id},
     )
     if not existing:
@@ -341,7 +341,7 @@ async def list_pipeline_executions(
     rows = await execute(
         """
         SELECT * FROM pipeline_executions
-        WHERE pipeline_id = :pipeline_id AND user_id = :user_id
+        WHERE pipeline_id::text = :pipeline_id AND user_id::text = :user_id
         ORDER BY started_at DESC
         LIMIT :limit
         """,
@@ -361,7 +361,7 @@ async def get_execution(
 ):
     """Get a single execution by ID."""
     row = await execute_one(
-        "SELECT * FROM pipeline_executions WHERE id = :id AND user_id = :user_id",
+        "SELECT * FROM pipeline_executions WHERE id = :id AND user_id::text = :user_id",
         {"id": execution_id, "user_id": user_id},
     )
     if not row:
@@ -380,7 +380,7 @@ async def cancel_execution(
 ):
     """Cancel a running execution."""
     existing = await execute_one(
-        "SELECT id FROM pipeline_executions WHERE id = :id AND user_id = :user_id",
+        "SELECT id FROM pipeline_executions WHERE id = :id AND user_id::text = :user_id",
         {"id": execution_id, "user_id": user_id},
     )
     if not existing:
@@ -390,7 +390,7 @@ async def cancel_execution(
         """
         UPDATE pipeline_executions
         SET status = 'cancelled', completed_at = now()
-        WHERE id = :id AND user_id = :user_id
+        WHERE id = :id AND user_id::text = :user_id
         RETURNING *
         """,
         {"id": execution_id, "user_id": user_id},

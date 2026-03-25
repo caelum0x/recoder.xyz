@@ -28,6 +28,14 @@ export function usePipeline(id: string) {
     queryFn: () => getPipeline(id),
     enabled: !!id,
     staleTime: 30_000,
+    // Never retry 404s — the pipeline simply doesn't exist.
+    // The global retry function already handles this via ApiRequestError.status,
+    // but we add an explicit retry: false here for safety since this is a
+    // common source of 404 loops.
+    retry: (failureCount, error: any) => {
+      if (error?.status === 404) return false;
+      return failureCount < 2;
+    },
   });
 }
 
@@ -78,6 +86,11 @@ export function usePipelineRuns(pipelineId: string) {
     queryFn: () => getPipelineRuns(pipelineId),
     enabled: !!pipelineId,
     staleTime: 15_000,
+    // Never retry on 404 (pipeline doesn't exist)
+    retry: (failureCount, error: any) => {
+      if (error?.status === 404) return false;
+      return failureCount < 2;
+    },
     // Auto-refetch every 5s when there's a running pipeline
     refetchInterval: (query) => {
       const data = query.state.data as PipelineRun[] | undefined;

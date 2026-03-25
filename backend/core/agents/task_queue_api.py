@@ -142,7 +142,7 @@ async def get_task_queue_stats(
                     0
                 ) AS avg_run_seconds
             FROM queued_tasks
-            WHERE user_id = :user_id
+            WHERE user_id::text = :user_id
             """,
             {"user_id": user_id},
         )
@@ -208,14 +208,14 @@ async def list_queued_tasks(
 ):
     """List tasks for the authenticated user with optional filters."""
     try:
-        where_clauses = ["user_id = :user_id"]
+        where_clauses = ["user_id::text = :user_id"]
         params: Dict[str, Any] = {"user_id": user_id, "limit": limit, "offset": offset}
 
         if status:
             where_clauses.append("status = :status")
             params["status"] = status
         if agent_id:
-            where_clauses.append("agent_id = :agent_id")
+            where_clauses.append("agent_id::text = :agent_id")
             params["agent_id"] = agent_id
         if task_type:
             where_clauses.append("task_type = :task_type")
@@ -253,7 +253,7 @@ async def delete_completed_tasks(
             """
             WITH deleted AS (
                 DELETE FROM queued_tasks
-                WHERE user_id = :user_id
+                WHERE user_id::text = :user_id
                   AND status = 'completed'
                   AND created_at < now() - INTERVAL '1 day' * :days
                 RETURNING id
@@ -280,7 +280,7 @@ async def get_queued_task(
     """Get full detail for a single task."""
     try:
         row = await execute_one(
-            "SELECT * FROM queued_tasks WHERE id = :task_id AND user_id = :user_id",
+            "SELECT * FROM queued_tasks WHERE id = :task_id AND user_id::text = :user_id",
             {"task_id": task_id, "user_id": user_id},
         )
         if not row:
@@ -305,7 +305,7 @@ async def cancel_queued_task(
     """Cancel a task that is in pending or retrying state."""
     try:
         task = await execute_one(
-            "SELECT id, status FROM queued_tasks WHERE id = :task_id AND user_id = :user_id",
+            "SELECT id, status FROM queued_tasks WHERE id = :task_id AND user_id::text = :user_id",
             {"task_id": task_id, "user_id": user_id},
         )
         if not task:
@@ -319,7 +319,7 @@ async def cancel_queued_task(
             """
             UPDATE queued_tasks
             SET status = 'cancelled'
-            WHERE id = :task_id AND user_id = :user_id
+            WHERE id = :task_id AND user_id::text = :user_id
             RETURNING *
             """,
             {"task_id": task_id, "user_id": user_id},
@@ -344,7 +344,7 @@ async def retry_queued_task(
     """Reset retry_count to 0 and status to pending for a failed task."""
     try:
         task = await execute_one(
-            "SELECT id, status FROM queued_tasks WHERE id = :task_id AND user_id = :user_id",
+            "SELECT id, status FROM queued_tasks WHERE id = :task_id AND user_id::text = :user_id",
             {"task_id": task_id, "user_id": user_id},
         )
         if not task:
@@ -358,7 +358,7 @@ async def retry_queued_task(
             """
             UPDATE queued_tasks
             SET status = 'pending', retry_count = 0, error_message = NULL
-            WHERE id = :task_id AND user_id = :user_id
+            WHERE id = :task_id AND user_id::text = :user_id
             RETURNING *
             """,
             {"task_id": task_id, "user_id": user_id},
@@ -384,7 +384,7 @@ async def complete_queued_task(
     """Mark a task as completed with an optional result payload."""
     try:
         task = await execute_one(
-            "SELECT id FROM queued_tasks WHERE id = :task_id AND user_id = :user_id",
+            "SELECT id FROM queued_tasks WHERE id = :task_id AND user_id::text = :user_id",
             {"task_id": task_id, "user_id": user_id},
         )
         if not task:
@@ -393,7 +393,7 @@ async def complete_queued_task(
             """
             UPDATE queued_tasks
             SET status = 'completed', result = :result, completed_at = now()
-            WHERE id = :task_id AND user_id = :user_id
+            WHERE id = :task_id AND user_id::text = :user_id
             RETURNING *
             """,
             {"task_id": task_id, "user_id": user_id, "result": body.result},
@@ -419,7 +419,7 @@ async def fail_queued_task(
     """Increment retry_count. If retry_count < max_retries sets status=retrying, else status=failed."""
     try:
         task = await execute_one(
-            "SELECT * FROM queued_tasks WHERE id = :task_id AND user_id = :user_id",
+            "SELECT * FROM queued_tasks WHERE id = :task_id AND user_id::text = :user_id",
             {"task_id": task_id, "user_id": user_id},
         )
         if not task:
@@ -435,7 +435,7 @@ async def fail_queued_task(
             SET status = :status,
                 retry_count = :retry_count,
                 error_message = :error_message
-            WHERE id = :task_id AND user_id = :user_id
+            WHERE id = :task_id AND user_id::text = :user_id
             RETURNING *
             """,
             {

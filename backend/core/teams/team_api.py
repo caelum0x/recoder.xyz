@@ -34,7 +34,7 @@ async def list_teams(user_id: str = Depends(verify_and_get_user_id_from_jwt)):
         SELECT t.*, tm.role as my_role,
                (SELECT COUNT(*) FROM team_members WHERE team_id = t.id) as member_count
         FROM teams t
-        JOIN team_members tm ON tm.team_id = t.id AND tm.user_id = :user_id
+        JOIN team_members tm ON tm.team_id::text = t.id::text AND tm.user_id::text = :user_id
         ORDER BY t.created_at DESC
         """,
         {"user_id": user_id},
@@ -73,7 +73,7 @@ async def get_team(
 ):
     # Verify membership
     member = await execute_one(
-        "SELECT * FROM team_members WHERE team_id = :team_id AND user_id = :user_id",
+        "SELECT * FROM team_members WHERE team_id::text = :team_id AND user_id::text = :user_id",
         {"team_id": team_id, "user_id": user_id},
     )
     if not member:
@@ -81,7 +81,7 @@ async def get_team(
 
     team = await execute_one("SELECT * FROM teams WHERE id = :id", {"id": team_id})
     members = await execute(
-        "SELECT * FROM team_members WHERE team_id = :team_id ORDER BY invited_at",
+        "SELECT * FROM team_members WHERE team_id::text = :team_id ORDER BY invited_at",
         {"team_id": team_id},
     )
     result = dict(team)
@@ -97,7 +97,7 @@ async def update_team(
     user_id: str = Depends(verify_and_get_user_id_from_jwt),
 ):
     team = await execute_one(
-        "SELECT * FROM teams WHERE id = :id AND owner_id = :owner_id",
+        "SELECT * FROM teams WHERE id = :id AND owner_id::text = :owner_id",
         {"id": team_id, "owner_id": user_id},
     )
     if not team:
@@ -126,7 +126,7 @@ async def delete_team(
     user_id: str = Depends(verify_and_get_user_id_from_jwt),
 ):
     team = await execute_one(
-        "SELECT * FROM teams WHERE id = :id AND owner_id = :owner_id",
+        "SELECT * FROM teams WHERE id = :id AND owner_id::text = :owner_id",
         {"id": team_id, "owner_id": user_id},
     )
     if not team:
@@ -143,7 +143,7 @@ async def invite_member(
 ):
     # Verify admin/owner
     member = await execute_one(
-        "SELECT * FROM team_members WHERE team_id = :team_id AND user_id = :user_id AND role IN ('owner', 'admin')",
+        "SELECT * FROM team_members WHERE team_id::text = :team_id AND user_id::text = :user_id AND role IN ('owner', 'admin')",
         {"team_id": team_id, "user_id": user_id},
     )
     if not member:
@@ -167,7 +167,7 @@ async def invite_member(
 
             # Check if already a member
             already_member = await execute_one(
-                "SELECT id FROM team_members WHERE team_id = :team_id AND user_id = :user_id",
+                "SELECT id FROM team_members WHERE team_id::text = :team_id AND user_id::text = :user_id",
                 {"team_id": team_id, "user_id": target_user_id},
             )
             if already_member:
@@ -183,7 +183,7 @@ async def invite_member(
         else:
             # User doesn't exist yet — check for duplicate invite by email
             existing_invite = await execute_one(
-                "SELECT id FROM team_members WHERE team_id = :team_id AND LOWER(email) = LOWER(:email)",
+                "SELECT id FROM team_members WHERE team_id::text = :team_id AND LOWER(email) = LOWER(:email)",
                 {"team_id": team_id, "email": body.email},
             )
             if existing_invite:
@@ -214,7 +214,7 @@ async def remove_member(
 ):
     # Verify admin/owner
     member = await execute_one(
-        "SELECT * FROM team_members WHERE team_id = :team_id AND user_id = :user_id AND role IN ('owner', 'admin')",
+        "SELECT * FROM team_members WHERE team_id::text = :team_id AND user_id::text = :user_id AND role IN ('owner', 'admin')",
         {"team_id": team_id, "user_id": user_id},
     )
     if not member:
@@ -222,14 +222,14 @@ async def remove_member(
 
     # Can't remove the owner
     target = await execute_one(
-        "SELECT * FROM team_members WHERE team_id = :team_id AND user_id = :member_user_id",
+        "SELECT * FROM team_members WHERE team_id::text = :team_id AND user_id::text = :member_user_id",
         {"team_id": team_id, "member_user_id": member_user_id},
     )
     if target and target["role"] == "owner":
         raise HTTPException(status_code=400, detail="Cannot remove the team owner")
 
     await execute(
-        "DELETE FROM team_members WHERE team_id = :team_id AND user_id = :member_user_id",
+        "DELETE FROM team_members WHERE team_id::text = :team_id AND user_id::text = :member_user_id",
         {"team_id": team_id, "member_user_id": member_user_id},
     )
     return {"status": "ok"}
@@ -244,7 +244,7 @@ async def update_member_role(
 ):
     # Verify admin/owner
     member = await execute_one(
-        "SELECT * FROM team_members WHERE team_id = :team_id AND user_id = :user_id AND role IN ('owner', 'admin')",
+        "SELECT * FROM team_members WHERE team_id::text = :team_id AND user_id::text = :user_id AND role IN ('owner', 'admin')",
         {"team_id": team_id, "user_id": user_id},
     )
     if not member:
@@ -255,7 +255,7 @@ async def update_member_role(
         raise HTTPException(status_code=400, detail=f"Role must be one of {valid_roles}")
 
     await execute(
-        "UPDATE team_members SET role = :role WHERE team_id = :team_id AND user_id = :member_user_id",
+        "UPDATE team_members SET role = :role WHERE team_id::text = :team_id AND user_id::text = :member_user_id",
         {"team_id": team_id, "member_user_id": member_user_id, "role": body.role},
     )
     return {"status": "ok"}

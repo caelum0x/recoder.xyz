@@ -132,7 +132,7 @@ async def create_config_snapshot(
     try:
         # Get max version number for this agent
         max_row = await execute_one(
-            "SELECT COALESCE(MAX(version_number), 0) AS max_ver FROM agent_config_snapshots WHERE agent_id = :agent_id",
+            "SELECT COALESCE(MAX(version_number), 0) AS max_ver FROM agent_config_snapshots WHERE agent_id::text = :agent_id",
             {"agent_id": agent_id},
         )
         next_version = (max_row["max_ver"] if max_row else 0) + 1
@@ -180,7 +180,7 @@ async def list_config_snapshots(
         rows = await execute(
             """
             SELECT * FROM agent_config_snapshots
-            WHERE agent_id = :agent_id AND user_id = :user_id
+            WHERE agent_id::text = :agent_id AND user_id::text = :user_id
             ORDER BY version_number DESC
             LIMIT :limit
             """,
@@ -210,7 +210,7 @@ async def get_config_snapshot_detail(
         row = await execute_one(
             """
             SELECT * FROM agent_config_snapshots
-            WHERE id = :snapshot_id AND agent_id = :agent_id AND user_id = :user_id
+            WHERE id = :snapshot_id AND agent_id::text = :agent_id AND user_id::text = :user_id
             """,
             {"snapshot_id": snapshot_id, "agent_id": agent_id, "user_id": user_id},
         )
@@ -243,7 +243,7 @@ async def activate_config_snapshot(
         row = await execute_one(
             """
             SELECT id FROM agent_config_snapshots
-            WHERE id = :snapshot_id AND agent_id = :agent_id AND user_id = :user_id
+            WHERE id = :snapshot_id AND agent_id::text = :agent_id AND user_id::text = :user_id
             """,
             {"snapshot_id": snapshot_id, "agent_id": agent_id, "user_id": user_id},
         )
@@ -253,7 +253,7 @@ async def activate_config_snapshot(
 
         # Deactivate all snapshots for this agent
         await execute_mutate(
-            "UPDATE agent_config_snapshots SET is_active = false WHERE agent_id = :agent_id AND user_id = :user_id",
+            "UPDATE agent_config_snapshots SET is_active = false WHERE agent_id::text = :agent_id AND user_id::text = :user_id",
             {"agent_id": agent_id, "user_id": user_id},
         )
 
@@ -288,7 +288,7 @@ async def diff_config_snapshots(
         cached = await execute_one(
             """
             SELECT diff FROM config_diff_cache
-            WHERE snapshot_a_id = :a_id AND snapshot_b_id = :b_id
+            WHERE snapshot_a_id::text = :a_id AND snapshot_b_id::text = :b_id
             """,
             {"a_id": body.snapshot_a_id, "b_id": body.snapshot_b_id},
         )
@@ -304,14 +304,14 @@ async def diff_config_snapshots(
         snap_a = await execute_one(
             """
             SELECT * FROM agent_config_snapshots
-            WHERE id = :snapshot_id AND agent_id = :agent_id AND user_id = :user_id
+            WHERE id = :snapshot_id AND agent_id::text = :agent_id AND user_id::text = :user_id
             """,
             {"snapshot_id": body.snapshot_a_id, "agent_id": agent_id, "user_id": user_id},
         )
         snap_b = await execute_one(
             """
             SELECT * FROM agent_config_snapshots
-            WHERE id = :snapshot_id AND agent_id = :agent_id AND user_id = :user_id
+            WHERE id = :snapshot_id AND agent_id::text = :agent_id AND user_id::text = :user_id
             """,
             {"snapshot_id": body.snapshot_b_id, "agent_id": agent_id, "user_id": user_id},
         )
@@ -369,7 +369,7 @@ async def rollback_config_snapshot(
         source = await execute_one(
             """
             SELECT * FROM agent_config_snapshots
-            WHERE id = :snapshot_id AND agent_id = :agent_id AND user_id = :user_id
+            WHERE id = :snapshot_id AND agent_id::text = :agent_id AND user_id::text = :user_id
             """,
             {"snapshot_id": snapshot_id, "agent_id": agent_id, "user_id": user_id},
         )
@@ -379,14 +379,14 @@ async def rollback_config_snapshot(
 
         # Get next version number
         max_row = await execute_one(
-            "SELECT COALESCE(MAX(version_number), 0) AS max_ver FROM agent_config_snapshots WHERE agent_id = :agent_id",
+            "SELECT COALESCE(MAX(version_number), 0) AS max_ver FROM agent_config_snapshots WHERE agent_id::text = :agent_id",
             {"agent_id": agent_id},
         )
         next_version = (max_row["max_ver"] if max_row else 0) + 1
 
         # Deactivate all snapshots for this agent
         await execute_mutate(
-            "UPDATE agent_config_snapshots SET is_active = false WHERE agent_id = :agent_id AND user_id = :user_id",
+            "UPDATE agent_config_snapshots SET is_active = false WHERE agent_id::text = :agent_id AND user_id::text = :user_id",
             {"agent_id": agent_id, "user_id": user_id},
         )
 

@@ -112,8 +112,8 @@ async def list_personas(
             SELECT p.*,
                    COUNT(a.id) AS assignment_count
             FROM agent_personas p
-            LEFT JOIN agent_persona_assignments a ON a.persona_id = p.id
-            WHERE p.user_id = :user_id
+            LEFT JOIN agent_persona_assignments a ON a.persona_id::text = p.id::text
+            WHERE p.user_id::text = :user_id
             GROUP BY p.id
             ORDER BY p.created_at DESC
             """,
@@ -141,8 +141,8 @@ async def get_persona(
             SELECT p.*,
                    COUNT(a.id) AS assignment_count
             FROM agent_personas p
-            LEFT JOIN agent_persona_assignments a ON a.persona_id = p.id
-            WHERE p.id = :persona_id AND p.user_id = :user_id
+            LEFT JOIN agent_persona_assignments a ON a.persona_id::text = p.id::text
+            WHERE p.id::text = :persona_id AND p.user_id::text = :user_id
             GROUP BY p.id
             """,
             {"persona_id": persona_id, "user_id": user_id},
@@ -171,7 +171,7 @@ async def update_persona(
     try:
         import json
         existing = await execute_one(
-            "SELECT * FROM agent_personas WHERE id = :persona_id AND user_id = :user_id",
+            "SELECT * FROM agent_personas WHERE id = :persona_id AND user_id::text = :user_id",
             {"persona_id": persona_id, "user_id": user_id},
         )
         if not existing:
@@ -192,7 +192,7 @@ async def update_persona(
                 params[key] = val
 
         set_clauses.append("updated_at = now()")
-        sql = f"UPDATE agent_personas SET {', '.join(set_clauses)} WHERE id = :persona_id AND user_id = :user_id RETURNING *"
+        sql = f"UPDATE agent_personas SET {', '.join(set_clauses)} WHERE id = :persona_id AND user_id::text = :user_id RETURNING *"
         row = await execute_one(sql, params)
         return serialize_row(row)
     except HTTPException:
@@ -214,7 +214,7 @@ async def delete_persona(
     """Delete a persona (cascades to assignments)."""
     try:
         result = await execute_mutate(
-            "DELETE FROM agent_personas WHERE id = :persona_id AND user_id = :user_id",
+            "DELETE FROM agent_personas WHERE id = :persona_id AND user_id::text = :user_id",
             {"persona_id": persona_id, "user_id": user_id},
         )
         return {"deleted": True}
@@ -241,7 +241,7 @@ async def assign_persona(
     try:
         # Verify persona belongs to user
         persona = await execute_one(
-            "SELECT id FROM agent_personas WHERE id = :persona_id AND user_id = :user_id",
+            "SELECT id FROM agent_personas WHERE id = :persona_id AND user_id::text = :user_id",
             {"persona_id": body.persona_id, "user_id": user_id},
         )
         if not persona:
@@ -292,8 +292,8 @@ async def get_agent_persona(
                    p.communication_style, p.language_preferences, p.custom_instructions,
                    p.avatar_emoji, p.is_active
             FROM agent_persona_assignments a
-            JOIN agent_personas p ON p.id = a.persona_id
-            WHERE a.agent_id = :agent_id AND a.user_id = :user_id
+            JOIN agent_personas p ON p.id::text = a.persona_id::text
+            WHERE a.agent_id::text = :agent_id AND a.user_id::text = :user_id
             """,
             {"agent_id": agent_id, "user_id": user_id},
         )
@@ -319,7 +319,7 @@ async def remove_persona_assignment(
     """Remove the persona assignment from an agent."""
     try:
         await execute_mutate(
-            "DELETE FROM agent_persona_assignments WHERE agent_id = :agent_id AND user_id = :user_id",
+            "DELETE FROM agent_persona_assignments WHERE agent_id::text = :agent_id AND user_id::text = :user_id",
             {"agent_id": agent_id, "user_id": user_id},
         )
         return {"deleted": True}

@@ -51,7 +51,7 @@ async def get_heatmap(
                 """
                 SELECT date, run_count, message_count, error_count, total_cost
                 FROM agent_activity_daily
-                WHERE user_id = :user_id AND agent_id = :agent_id AND date >= :start_date
+                WHERE user_id::text = :user_id AND agent_id::text = :agent_id AND date >= :start_date
                 ORDER BY date ASC
                 """,
                 {"user_id": user_id, "agent_id": agent_id, "start_date": start_date},
@@ -65,7 +65,7 @@ async def get_heatmap(
                        SUM(error_count)::INTEGER AS error_count,
                        SUM(total_cost)::NUMERIC AS total_cost
                 FROM agent_activity_daily
-                WHERE user_id = :user_id AND date >= :start_date
+                WHERE user_id::text = :user_id AND date >= :start_date
                 GROUP BY date
                 ORDER BY date ASC
                 """,
@@ -100,7 +100,7 @@ async def get_streaks(
             """
             SELECT DISTINCT date
             FROM agent_activity_daily
-            WHERE user_id = :user_id AND run_count > 0
+            WHERE user_id::text = :user_id AND run_count > 0
             ORDER BY date DESC
             """,
             {"user_id": user_id},
@@ -212,7 +212,7 @@ async def get_weekly_summary(
                 SUM(error_count)::INTEGER AS error_count,
                 SUM(total_cost)::NUMERIC AS total_cost
             FROM agent_activity_daily
-            WHERE user_id = :user_id AND date >= :start_date
+            WHERE user_id::text = :user_id AND date >= :start_date
             GROUP BY week_start
             ORDER BY week_start DESC
             """,

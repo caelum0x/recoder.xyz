@@ -258,7 +258,7 @@ async def get_account_id_from_thread(thread_id: str, db=None) -> str:
             """
             SELECT account_id
             FROM threads
-            WHERE thread_id = :thread_id
+            WHERE thread_id::text = :thread_id
             LIMIT 1
             """,
             {"thread_id": thread_id},
@@ -502,7 +502,7 @@ async def verify_and_get_agent_authorization(agent_id: str, user_id: str) -> dic
         from core.services.db import execute_one
 
         agent_result = await execute_one(
-            "SELECT * FROM agents WHERE agent_id = :agent_id AND account_id = :user_id LIMIT 1",
+            "SELECT * FROM agents WHERE agent_id::text = :agent_id AND account_id::text = :user_id LIMIT 1",
             {"agent_id": agent_id, "user_id": user_id},
         )
 
@@ -542,10 +542,10 @@ async def verify_and_authorize_thread_access(client, thread_id: str, user_id: Op
                 COALESCE(ur.role::text, '') as user_role,
                 CASE WHEN au.user_id IS NOT NULL THEN true ELSE false END as is_team_member
             FROM threads t
-            LEFT JOIN projects p ON t.project_id = p.project_id
-            LEFT JOIN user_roles ur ON ur.user_id = :user_id
-            LEFT JOIN basejump.account_user au ON au.account_id = t.account_id AND au.user_id = :user_id
-            WHERE t.thread_id = :thread_id
+            LEFT JOIN projects p ON t.project_id::text = p.project_id::text
+            LEFT JOIN user_roles ur ON ur.user_id::text = :user_id
+            LEFT JOIN basejump.account_user au ON au.account_id::text = t.account_id::text AND au.user_id::text = :user_id
+            WHERE t.thread_id::text = :thread_id
             """
             result = await execute_one(sql, {"thread_id": thread_id, "user_id": user_id})
         else:
@@ -556,8 +556,8 @@ async def verify_and_authorize_thread_access(client, thread_id: str, user_id: Op
                 t.account_id,
                 p.is_public as project_is_public
             FROM threads t
-            LEFT JOIN projects p ON t.project_id = p.project_id
-            WHERE t.thread_id = :thread_id
+            LEFT JOIN projects p ON t.project_id::text = p.project_id::text
+            WHERE t.thread_id::text = :thread_id
             """
             result = await execute_one(sql, {"thread_id": thread_id})
         
@@ -803,10 +803,10 @@ async def verify_sandbox_access(client, sandbox_id: str, user_id: str):
         CASE WHEN au_resource.user_id IS NOT NULL THEN true ELSE false END as is_resource_team_member,
         CASE WHEN au_project.user_id IS NOT NULL THEN true ELSE false END as is_project_team_member
     FROM resources r
-    LEFT JOIN projects p ON p.sandbox_resource_id = r.id
-    LEFT JOIN user_roles ur ON ur.user_id = :user_id
-    LEFT JOIN basejump.account_user au_resource ON au_resource.account_id = r.account_id AND au_resource.user_id = :user_id
-    LEFT JOIN basejump.account_user au_project ON au_project.account_id = p.account_id AND au_project.user_id = :user_id
+    LEFT JOIN projects p ON p.sandbox_resource_id::text = r.id::text
+    LEFT JOIN user_roles ur ON ur.user_id::text = :user_id
+    LEFT JOIN basejump.account_user au_resource ON au_resource.account_id::text = r.account_id::text AND au_resource.user_id::text = :user_id
+    LEFT JOIN basejump.account_user au_project ON au_project.account_id::text = p.account_id::text AND au_project.user_id::text = :user_id
     WHERE r.external_id = :sandbox_id AND r.type = 'sandbox'
     """
     
@@ -924,10 +924,10 @@ async def verify_sandbox_access_optional(client, sandbox_id: str, user_id: Optio
             CASE WHEN au_resource.user_id IS NOT NULL THEN true ELSE false END as is_resource_team_member,
             CASE WHEN au_project.user_id IS NOT NULL THEN true ELSE false END as is_project_team_member
         FROM resources r
-        LEFT JOIN projects p ON p.sandbox_resource_id = r.id
-        LEFT JOIN user_roles ur ON ur.user_id = :user_id
-        LEFT JOIN basejump.account_user au_resource ON au_resource.account_id = r.account_id AND au_resource.user_id = :user_id
-        LEFT JOIN basejump.account_user au_project ON au_project.account_id = p.account_id AND au_project.user_id = :user_id
+        LEFT JOIN projects p ON p.sandbox_resource_id::text = r.id::text
+        LEFT JOIN user_roles ur ON ur.user_id::text = :user_id
+        LEFT JOIN basejump.account_user au_resource ON au_resource.account_id::text = r.account_id::text AND au_resource.user_id::text = :user_id
+        LEFT JOIN basejump.account_user au_project ON au_project.account_id::text = p.account_id::text AND au_project.user_id::text = :user_id
         WHERE r.external_id = :sandbox_id AND r.type = 'sandbox'
         """
         result = await execute_one(sql, {"sandbox_id": sandbox_id, "user_id": user_id})
@@ -947,7 +947,7 @@ async def verify_sandbox_access_optional(client, sandbox_id: str, user_id: Optio
             p.created_at as project_created_at,
             p.updated_at as project_updated_at
         FROM resources r
-        LEFT JOIN projects p ON p.sandbox_resource_id = r.id
+        LEFT JOIN projects p ON p.sandbox_resource_id::text = r.id::text
         WHERE r.external_id = :sandbox_id AND r.type = 'sandbox'
         """
         result = await execute_one(sql, {"sandbox_id": sandbox_id})

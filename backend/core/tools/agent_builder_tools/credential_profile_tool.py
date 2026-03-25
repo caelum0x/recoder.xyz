@@ -217,14 +217,14 @@ After connecting, you'll be able to use {result.toolkit.name} tools in your agen
                 return self.fail_response("Profile is not connected yet. Please connect the profile first.")
 
             agent_row = await execute_one(
-                "SELECT current_version_id FROM agents WHERE agent_id = :agent_id",
+                "SELECT current_version_id FROM agents WHERE agent_id::text = :agent_id",
                 {"agent_id": self.agent_id}
             )
             if not agent_row or not agent_row.get('current_version_id'):
                 return self.fail_response("Worker configuration not found")
 
             version_row = await execute_one(
-                "SELECT config FROM agent_versions WHERE version_id = :version_id",
+                "SELECT config FROM agent_versions WHERE version_id::text = :version_id",
                 {"version_id": agent_row['current_version_id']}
             )
 
@@ -347,12 +347,12 @@ After connecting, you'll be able to use {result.toolkit.name} tools in your agen
 
             # Remove from agent configuration if it exists
             agent_row = await execute_one(
-                "SELECT current_version_id FROM agents WHERE agent_id = :agent_id",
+                "SELECT current_version_id FROM agents WHERE agent_id::text = :agent_id",
                 {"agent_id": self.agent_id}
             )
             if agent_row and agent_row.get('current_version_id'):
                 version_row = await execute_one(
-                    "SELECT config FROM agent_versions WHERE version_id = :version_id",
+                    "SELECT config FROM agent_versions WHERE version_id::text = :version_id",
                     {"version_id": agent_row['current_version_id']}
                 )
 

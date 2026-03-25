@@ -28,7 +28,7 @@ class AgentBuilderBaseTool(Tool):
             raise ValueError("No thread_id available from execution context")
 
         result = await execute_one(
-            "SELECT account_id FROM threads WHERE thread_id = :thread_id LIMIT 1",
+            "SELECT account_id FROM threads WHERE thread_id::text = :thread_id LIMIT 1",
             {"thread_id": thread_id}
         )
 

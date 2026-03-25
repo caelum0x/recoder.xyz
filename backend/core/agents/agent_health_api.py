@@ -27,7 +27,7 @@ async def get_agent_health(
     row = await execute_one(
         """
         SELECT * FROM agent_health_scores
-        WHERE user_id = :user_id AND agent_id = :agent_id
+        WHERE user_id::text = :user_id AND agent_id::text = :agent_id
         ORDER BY calculated_at DESC
         LIMIT 1
         """,
@@ -82,8 +82,8 @@ async def calculate_agent_health(
                 2
             ) AS success_rate
         FROM agent_runs
-        WHERE user_id = :user_id
-          AND agent_id = :agent_id
+        WHERE user_id::text = :user_id
+          AND agent_id::text = :agent_id
           AND started_at >= :period_start
         """,
         {
@@ -107,8 +107,8 @@ async def calculate_agent_health(
                 ORDER BY EXTRACT(EPOCH FROM (ended_at - started_at))
             )::NUMERIC AS median_duration_s
         FROM agent_runs
-        WHERE user_id = :user_id
-          AND agent_id = :agent_id
+        WHERE user_id::text = :user_id
+          AND agent_id::text = :agent_id
           AND started_at >= :period_start
           AND ended_at IS NOT NULL
           AND status = 'completed'
@@ -141,8 +141,8 @@ async def calculate_agent_health(
             SUM(cost)::NUMERIC(10,6) AS total_cost,
             COUNT(*) FILTER (WHERE status = 'completed') AS completed_runs
         FROM agent_runs
-        WHERE user_id = :user_id
-          AND agent_id = :agent_id
+        WHERE user_id::text = :user_id
+          AND agent_id::text = :agent_id
           AND started_at >= :period_start
           AND cost IS NOT NULL
         """,
@@ -178,8 +178,8 @@ async def calculate_agent_health(
             AVG(rating)::NUMERIC(3,2) AS avg_rating,
             COUNT(*) AS rating_count
         FROM response_ratings
-        WHERE user_id = :user_id
-          AND agent_id = :agent_id
+        WHERE user_id::text = :user_id
+          AND agent_id::text = :agent_id
           AND created_at >= :period_start
         """,
         {
@@ -285,7 +285,7 @@ async def get_agent_health_history(
             cost_efficiency_score, user_satisfaction_score,
             factors, calculated_at
         FROM agent_health_scores
-        WHERE user_id = :user_id AND agent_id = :agent_id
+        WHERE user_id::text = :user_id AND agent_id::text = :agent_id
         ORDER BY calculated_at DESC
         LIMIT :limit
         """,
@@ -318,7 +318,7 @@ async def get_agents_health_overview(
             performance_score, cost_efficiency_score,
             user_satisfaction_score, factors, calculated_at
         FROM agent_health_scores
-        WHERE user_id = :user_id
+        WHERE user_id::text = :user_id
         ORDER BY agent_id, calculated_at DESC
         """,
         {"user_id": user_id},

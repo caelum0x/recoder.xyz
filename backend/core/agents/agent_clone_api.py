@@ -85,7 +85,7 @@ async def _get_agent_config(agent_id: str, user_id: str) -> Optional[Dict[str, A
                   agentpress_tools, configured_mcps, custom_mcps, is_default,
                   avatar_url, metadata, icon_name, icon_color, icon_background
            FROM agents
-           WHERE agent_id = :agent_id AND account_id = :user_id""",
+           WHERE agent_id::text = :agent_id AND account_id::text = :user_id""",
         {"agent_id": agent_id, "user_id": user_id},
     )
     if not agent_row:
@@ -95,7 +95,7 @@ async def _get_agent_config(agent_id: str, user_id: str) -> Optional[Dict[str, A
     version_row = await execute_one(
         """SELECT system_prompt, model, configured_mcps, custom_mcps, agentpress_tools
            FROM agent_versions
-           WHERE agent_id = :agent_id AND is_active = true
+           WHERE agent_id::text = :agent_id AND is_active = true
            ORDER BY created_at DESC LIMIT 1""",
         {"agent_id": agent_id},
     )
@@ -326,8 +326,8 @@ async def list_agent_clones(
             """SELECT ch.id, ch.source_agent_id, ch.cloned_agent_id, ch.modifications, ch.created_at,
                       a.name as cloned_agent_name
                FROM agent_clone_history ch
-               LEFT JOIN agents a ON a.agent_id = ch.cloned_agent_id
-               WHERE ch.source_agent_id = :agent_id AND ch.user_id = :user_id
+               LEFT JOIN agents a ON a.agent_id::text = ch.cloned_agent_id::text
+               WHERE ch.source_agent_id::text = :agent_id AND ch.user_id::text = :user_id
                ORDER BY ch.created_at DESC
                LIMIT :limit OFFSET :offset""",
             {"agent_id": agent_id, "user_id": user_id, "limit": limit, "offset": offset},

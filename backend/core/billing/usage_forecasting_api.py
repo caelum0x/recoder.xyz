@@ -184,7 +184,7 @@ async def generate_forecast(body: GenerateForecastRequest, request: Request):
         sql = """
         SELECT value, period_start, period_end, metadata
         FROM usage_snapshots
-        WHERE user_id = :user_id
+        WHERE user_id::text = :user_id
           AND metric_type = :metric_type
           AND recorded_at >= :cutoff
         ORDER BY period_start ASC
@@ -287,7 +287,7 @@ async def list_forecasts(
     user_id = verify_and_get_user_id_from_jwt(request)
 
     try:
-        where_clauses = ["user_id = :user_id"]
+        where_clauses = ["user_id::text = :user_id"]
         params: Dict[str, Any] = {"user_id": user_id, "limit": limit, "offset": offset}
 
         if metric_type:
@@ -353,7 +353,7 @@ async def get_forecast_detail(
                historical_data, forecast_data, trend,
                confidence_score, alert_threshold, projected_value, generated_at
         FROM usage_forecasts
-        WHERE user_id = :user_id
+        WHERE user_id::text = :user_id
           AND metric_type = :metric_type
           AND forecast_period = :forecast_period
         ORDER BY generated_at DESC
@@ -436,7 +436,7 @@ async def list_snapshots(
     user_id = verify_and_get_user_id_from_jwt(request)
 
     try:
-        where_clauses = ["user_id = :user_id"]
+        where_clauses = ["user_id::text = :user_id"]
         params: Dict[str, Any] = {"user_id": user_id, "limit": limit, "offset": offset}
 
         if metric_type:
@@ -493,7 +493,7 @@ async def get_usage_trends(request: Request):
             forecast_sql = """
             SELECT trend, projected_value, alert_threshold, confidence_score
             FROM usage_forecasts
-            WHERE user_id = :user_id AND metric_type = :metric_type
+            WHERE user_id::text = :user_id AND metric_type = :metric_type
             ORDER BY generated_at DESC
             LIMIT 1
             """
@@ -506,7 +506,7 @@ async def get_usage_trends(request: Request):
             snapshot_sql = """
             SELECT value
             FROM usage_snapshots
-            WHERE user_id = :user_id AND metric_type = :metric_type
+            WHERE user_id::text = :user_id AND metric_type = :metric_type
             ORDER BY recorded_at DESC
             LIMIT 1
             """

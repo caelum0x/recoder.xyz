@@ -117,8 +117,8 @@ async def analyze_thread_sentiment(
         """
         SELECT m.content, m.role, t.agent_id
         FROM messages m
-        JOIN threads t ON t.thread_id = m.thread_id
-        WHERE m.thread_id = :thread_id AND t.account_id = :user_id
+        JOIN threads t ON t.thread_id::text = m.thread_id::text
+        WHERE m.thread_id::text = :thread_id AND t.account_id::text = :user_id
         ORDER BY m.created_at ASC
         """,
         {"thread_id": thread_id, "user_id": user_id},
@@ -189,7 +189,7 @@ async def get_thread_sentiment(
         """
         SELECT id, thread_id, message_index, sentiment, confidence, keywords, scored_at
         FROM thread_sentiment_scores
-        WHERE thread_id = :thread_id AND user_id = :user_id
+        WHERE thread_id::text = :thread_id AND user_id::text = :user_id
         ORDER BY message_index ASC
         """,
         {"thread_id": thread_id, "user_id": user_id},
@@ -224,7 +224,7 @@ async def get_sentiment_trend(
         """
         SELECT message_index, sentiment
         FROM thread_sentiment_scores
-        WHERE thread_id = :thread_id AND user_id = :user_id
+        WHERE thread_id::text = :thread_id AND user_id::text = :user_id
         ORDER BY message_index ASC
         """,
         {"thread_id": thread_id, "user_id": user_id},
@@ -255,7 +255,7 @@ async def get_sentiment_overview(
         """
         SELECT sentiment, COUNT(*) AS cnt
         FROM thread_sentiment_scores
-        WHERE user_id = :user_id
+        WHERE user_id::text = :user_id
         GROUP BY sentiment
         """,
         {"user_id": user_id},
@@ -275,7 +275,7 @@ async def get_sentiment_overview(
                END) AS avg_sentiment,
                COUNT(*) AS message_count
         FROM thread_sentiment_scores
-        WHERE user_id = :user_id
+        WHERE user_id::text = :user_id
         GROUP BY thread_id
         ORDER BY avg_sentiment DESC
         LIMIT 5
@@ -304,7 +304,7 @@ async def get_sentiment_overview(
                END) AS avg_sentiment,
                COUNT(*) AS message_count
         FROM thread_sentiment_scores
-        WHERE user_id = :user_id
+        WHERE user_id::text = :user_id
         GROUP BY thread_id
         ORDER BY avg_sentiment ASC
         LIMIT 5
@@ -333,7 +333,7 @@ async def get_sentiment_overview(
                END) AS avg_sentiment,
                COUNT(*) AS message_count
         FROM thread_sentiment_scores
-        WHERE user_id = :user_id AND agent_id IS NOT NULL
+        WHERE user_id::text = :user_id AND agent_id IS NOT NULL
         GROUP BY agent_id
         ORDER BY avg_sentiment DESC
         """,

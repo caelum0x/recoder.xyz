@@ -64,7 +64,7 @@ class TriggerTool(AgentBuilderBaseTool):
     async def _sync_triggers_to_version_config(self) -> None:
         try:
             agent_row = await execute_one(
-                "SELECT current_version_id FROM agents WHERE agent_id = :agent_id",
+                "SELECT current_version_id FROM agents WHERE agent_id::text = :agent_id",
                 {"agent_id": self.agent_id}
             )
             if not agent_row or not agent_row.get('current_version_id'):
@@ -89,7 +89,7 @@ class TriggerTool(AgentBuilderBaseTool):
                     triggers.append(trigger_copy)
 
             version_row = await execute_one(
-                "SELECT config FROM agent_versions WHERE version_id = :version_id",
+                "SELECT config FROM agent_versions WHERE version_id::text = :version_id",
                 {"version_id": current_version_id}
             )
             if not version_row:

@@ -81,7 +81,7 @@ async def get_run_logs(
 ):
     """Get log entries for a specific agent run."""
     try:
-        where_clauses = ["run_id = :run_id", "user_id = :user_id"]
+        where_clauses = ["run_id::text = :run_id", "user_id::text = :user_id"]
         params: Dict[str, Any] = {"run_id": run_id, "user_id": user_id}
 
         if log_level and log_level != "all":
@@ -217,7 +217,7 @@ async def get_run_log_summary(
         count_sql = """
         SELECT log_level, COUNT(*) as cnt
         FROM agent_run_logs
-        WHERE run_id = :run_id AND user_id = :user_id
+        WHERE run_id::text = :run_id AND user_id::text = :user_id
         GROUP BY log_level
         """
         count_rows = await execute(count_sql, {"run_id": run_id, "user_id": user_id})
@@ -232,7 +232,7 @@ async def get_run_log_summary(
         duration_sql = """
         SELECT COALESCE(SUM(duration_ms), 0) as total_duration_ms
         FROM agent_run_logs
-        WHERE run_id = :run_id AND user_id = :user_id
+        WHERE run_id::text = :run_id AND user_id::text = :user_id
         """
         dur_row = await execute_one(duration_sql, {"run_id": run_id, "user_id": user_id})
         total_duration_ms = dur_row["total_duration_ms"] if dur_row else 0
@@ -241,7 +241,7 @@ async def get_run_log_summary(
         errors_sql = """
         SELECT message, COUNT(*) as cnt
         FROM agent_run_logs
-        WHERE run_id = :run_id AND user_id = :user_id AND log_level = 'error'
+        WHERE run_id::text = :run_id AND user_id::text = :user_id AND log_level = 'error'
         GROUP BY message
         ORDER BY cnt DESC
         LIMIT 5
@@ -284,7 +284,7 @@ async def search_logs(
     """Search logs across all runs for the authenticated user."""
     try:
         cutoff = datetime.now(timezone.utc) - timedelta(days=days)
-        where_clauses = ["user_id = :user_id", "created_at >= :cutoff"]
+        where_clauses = ["user_id::text = :user_id", "created_at >= :cutoff"]
         params: Dict[str, Any] = {"user_id": user_id, "cutoff": cutoff}
 
         if search:
@@ -292,7 +292,7 @@ async def search_logs(
             params["search"] = f"%{search}%"
 
         if agent_id:
-            where_clauses.append("agent_id = :agent_id")
+            where_clauses.append("agent_id::text = :agent_id")
             params["agent_id"] = agent_id
 
         if log_level and log_level != "all":
@@ -356,14 +356,14 @@ async def get_error_frequency(
     try:
         cutoff = datetime.now(timezone.utc) - timedelta(days=days)
         where_clauses = [
-            "user_id = :user_id",
+            "user_id::text = :user_id",
             "created_at >= :cutoff",
             "log_level IN ('error', 'fatal')",
         ]
         params: Dict[str, Any] = {"user_id": user_id, "cutoff": cutoff}
 
         if agent_id:
-            where_clauses.append("agent_id = :agent_id")
+            where_clauses.append("agent_id::text = :agent_id")
             params["agent_id"] = agent_id
 
         where_sql = " AND ".join(where_clauses)

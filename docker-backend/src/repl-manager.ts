@@ -1,10 +1,12 @@
 /**
- * REPL Manager - Manages interactive REPL sessions within Docker containers
+ * REPL Manager - Manages interactive REPL sessions within Docker containers and Daytona sandboxes
  * Supports Node.js, Python, Ruby, and Go (via gore)
  */
 
 import Docker from 'dockerode';
 import { Duplex } from 'stream';
+import { PassThrough } from 'stream';
+import { daytonaExec } from './daytona-file-ops.js';
 
 export type ReplLanguage = 'nodejs' | 'python' | 'ruby' | 'go';
 
@@ -70,6 +72,8 @@ export interface ReplSession {
   isWaitingForPrompt: boolean;
   pendingResolve: ((output: string) => void) | null;
   pendingReject: ((error: Error) => void) | null;
+  /** When true, this session runs inside a Daytona sandbox (not Docker) */
+  isDaytona?: boolean;
 }
 
 class ReplManager {
@@ -105,10 +109,23 @@ class ReplManager {
   }
 
   /**
-   * Check if a REPL language is available in the container
+   * Check if a REPL language is available in the container or Daytona sandbox
    */
-  async checkLanguageAvailable(containerId: string, language: ReplLanguage): Promise<boolean> {
+  async checkLanguageAvailable(containerId: string, language: ReplLanguage, isDaytona: boolean = false): Promise<boolean> {
     const config = REPL_CONFIGS[language];
+
+    // Daytona sandbox: use daytonaExec instead of Docker exec
+    if (isDaytona) {
+      try {
+        const result = await daytonaExec(containerId, config.checkCommand, { timeoutSecs: 10 });
+        return result.exitCode === 0 && result.output.trim().length > 0;
+      } catch (error) {
+        console.error(`[REPL] Error checking ${language} availability in Daytona sandbox:`, error);
+        return false;
+      }
+    }
+
+    // Docker container
     const container = this.docker.getContainer(containerId);
 
     try {
@@ -146,7 +163,8 @@ class ReplManager {
   async startSession(
     projectId: string,
     containerId: string,
-    language: ReplLanguage
+    language: ReplLanguage,
+    isDaytona: boolean = false
   ): Promise<{ sessionId: string; welcomeMessage: string }> {
     const sessionKey = this.getSessionKey(projectId, language);
 
@@ -161,17 +179,24 @@ class ReplManager {
     }
 
     const config = REPL_CONFIGS[language];
-    const container = this.docker.getContainer(containerId);
 
     // For Go, check if gore is available, fallback to just running .go files
     if (language === 'go') {
-      const goreAvailable = await this.checkLanguageAvailable(containerId, 'go');
+      const goreAvailable = await this.checkLanguageAvailable(containerId, 'go', isDaytona);
       if (!goreAvailable) {
         throw new Error(
           'Go REPL (gore) is not available. Install it with: go install github.com/x-motemen/gore/cmd/gore@latest'
         );
       }
     }
+
+    // Daytona sandbox: use daytonaExec-based polling instead of Docker interactive streams
+    if (isDaytona) {
+      return this.startDaytonaSession(projectId, containerId, language, config);
+    }
+
+    // Docker container: use interactive Docker exec stream
+    const container = this.docker.getContainer(containerId);
 
     // Create exec instance for interactive REPL
     const exec = await container.exec({
@@ -215,6 +240,57 @@ class ReplManager {
 
     // Wait for initial prompt
     const welcomeMessage = await this.waitForOutput(session, 5000);
+
+    return { sessionId, welcomeMessage };
+  }
+
+  /**
+   * Start a REPL session in a Daytona sandbox.
+   * Daytona does not support interactive streams, so we simulate a REPL by
+   * executing each command via daytonaExec. The session object uses a
+   * PassThrough stream as a no-op placeholder.
+   */
+  private async startDaytonaSession(
+    projectId: string,
+    containerId: string,
+    language: ReplLanguage,
+    config: ReplLanguageConfig
+  ): Promise<{ sessionId: string; welcomeMessage: string }> {
+    const sessionKey = this.getSessionKey(projectId, language);
+    const sessionId = `repl-${projectId}-${language}-${Date.now()}`;
+
+    // Use a PassThrough as a placeholder stream (Daytona sessions don't use persistent streams)
+    const placeholderStream = new PassThrough() as unknown as Duplex;
+
+    const session: ReplSession = {
+      id: sessionId,
+      projectId,
+      language,
+      containerId,
+      stream: placeholderStream,
+      execId: `daytona-${sessionId}`,
+      startedAt: Date.now(),
+      lastActive: Date.now(),
+      outputBuffer: '',
+      isWaitingForPrompt: false,
+      pendingResolve: null,
+      pendingReject: null,
+      isDaytona: true,
+    };
+
+    this.sessions.set(sessionKey, session);
+    console.log(`[REPL] Started Daytona ${language} session for project ${projectId}`);
+
+    // Get a welcome message by running the version command
+    let welcomeMessage = `${config.name} REPL (Daytona sandbox)`;
+    try {
+      const result = await daytonaExec(containerId, config.checkCommand, { timeoutSecs: 10 });
+      if (result.exitCode === 0 && result.output.trim()) {
+        welcomeMessage = `${config.name} REPL (Daytona sandbox) - ${result.output.trim()}`;
+      }
+    } catch {
+      // Ignore — use default welcome message
+    }
 
     return { sessionId, welcomeMessage };
   }
@@ -295,6 +371,12 @@ class ReplManager {
     }
 
     session.lastActive = Date.now();
+
+    // Daytona sandbox: execute via daytonaExec (no persistent stream)
+    if (session.isDaytona) {
+      return this.executeDaytonaCode(session, language, code);
+    }
+
     session.outputBuffer = '';
 
     // Write code to REPL
@@ -305,6 +387,55 @@ class ReplManager {
 
     // Clean up the output (remove the echoed command and prompts)
     return this.cleanOutput(output, code, language);
+  }
+
+  /**
+   * Execute code in a Daytona REPL session by running the code through a one-shot command.
+   * For multi-line or expression evaluation, we wrap the code appropriately per language.
+   */
+  private async executeDaytonaCode(session: ReplSession, language: ReplLanguage, code: string): Promise<string> {
+    let command: string;
+
+    // Daytona workspace path
+    const workDir = '/home/daytona';
+    const escaped = this.shellEscape(code);
+
+    switch (language) {
+      case 'nodejs':
+        // Use node -e for one-shot evaluation
+        command = `cd "${workDir}" && node -e ${escaped} 2>&1`;
+        break;
+      case 'python':
+        // Use python3 -c for one-shot evaluation
+        command = `cd "${workDir}" && python3 -c ${escaped} 2>&1`;
+        break;
+      case 'ruby':
+        // Use ruby -e for one-shot evaluation
+        command = `cd "${workDir}" && ruby -e ${escaped} 2>&1`;
+        break;
+      case 'go':
+        // gore doesn't support -e; pipe code via stdin
+        command = `cd "${workDir}" && echo ${escaped} | gore 2>&1`;
+        break;
+      default:
+        // Exhaustive — all known languages handled above; fallback for future additions
+        command = `cd "${workDir}" && ${REPL_CONFIGS[language as ReplLanguage].command} -e ${escaped} 2>&1`;
+    }
+
+    try {
+      const result = await daytonaExec(session.containerId, command, { timeoutSecs: 30 });
+      return result.output.trim();
+    } catch (error: any) {
+      throw new Error(`Daytona REPL exec failed: ${error.message}`);
+    }
+  }
+
+  /**
+   * Shell-escape a string for safe embedding in a shell command.
+   */
+  private shellEscape(s: string): string {
+    // Wrap in single quotes and escape any internal single quotes
+    return "'" + s.replace(/'/g, "'\\''") + "'";
   }
 
   private cleanOutput(output: string, input: string, language: ReplLanguage): string {
@@ -340,6 +471,19 @@ class ReplManager {
 
     const config = REPL_CONFIGS[language];
 
+    // Daytona sandbox: no persistent stream to tear down, just clean up the session map
+    if (session.isDaytona) {
+      try {
+        session.stream.end();
+      } catch {
+        // PassThrough cleanup is best-effort
+      }
+      this.sessions.delete(sessionKey);
+      console.log(`[REPL] Stopped Daytona ${language} session for project ${projectId}`);
+      return;
+    }
+
+    // Docker container: send exit command and close stream
     try {
       // Send exit command gracefully
       session.stream.write(config.exitCommand + '\n');
@@ -389,15 +533,15 @@ class ReplManager {
   }
 
   /**
-   * Get available languages for a container
+   * Get available languages for a container or Daytona sandbox
    */
-  async getAvailableLanguages(containerId: string): Promise<ReplLanguage[]> {
+  async getAvailableLanguages(containerId: string, isDaytona: boolean = false): Promise<ReplLanguage[]> {
     const available: ReplLanguage[] = [];
 
     // Check each language in parallel
     const checks = await Promise.all(
       (Object.keys(REPL_CONFIGS) as ReplLanguage[]).map(async (lang) => {
-        const isAvailable = await this.checkLanguageAvailable(containerId, lang);
+        const isAvailable = await this.checkLanguageAvailable(containerId, lang, isDaytona);
         return { lang, isAvailable };
       })
     );

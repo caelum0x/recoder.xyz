@@ -1,14 +1,13 @@
 "use client";
 
-import { useChat } from "@ai-sdk/react";
-import { DefaultChatTransport } from "ai";
-import { handleError } from "@repo/design-system/lib/handle-error";
 import { StackCard } from "@repo/design-system/components/stack-card";
-import { Input } from "@repo/design-system/components/ui/input";
 import { Button } from "@repo/design-system/components/ui/button";
-import { SparklesIcon, SendIcon, XIcon } from "lucide-react";
-import { useMemo, useState, useRef, useEffect } from "react";
+import { Input } from "@repo/design-system/components/ui/input";
+import { handleError } from "@repo/design-system/lib/handle-error";
+import { SendIcon, SparklesIcon, XIcon } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import { MemoizedReactMarkdown } from "@/components/markdown";
+import { useCopilotChat } from "@/hooks/use-copilot-chat";
 
 type InsightsCopilotProps = {
   readonly organizationId: string;
@@ -24,19 +23,11 @@ export const InsightsCopilot = ({ organizationId }: InsightsCopilotProps) => {
     setMounted(true);
   }, []);
 
-  const transport = useMemo(
-    () =>
-      new DefaultChatTransport({
-        api: "/api/insights/chat",
-        body: { organizationId },
-      }),
-    [organizationId]
-  );
-
-  const { messages, sendMessage, status, error, clearError } = useChat({
-    transport,
+  const { messages, sendMessage, status, error, clearError } = useCopilotChat({
+    api: "/api/insights/chat",
+    body: { organizationId },
     onError: (err) => {
-      if (err?.message && !err.message.includes("Failed to fetch")) {
+      if (!err.message?.includes("Failed to fetch")) {
         handleError(err);
       }
     },
@@ -50,12 +41,14 @@ export const InsightsCopilot = ({ organizationId }: InsightsCopilotProps) => {
 
   const handleSend = () => {
     const text = localInput.trim();
-    if (!text || isLoading) return;
+    if (!text || isLoading) {
+      return;
+    }
     if (error) {
       clearError();
     }
     setLocalInput("");
-    sendMessage({ text });
+    sendMessage(text);
   };
 
   // Prevent hydration mismatch by not rendering until client-side mount
@@ -66,7 +59,7 @@ export const InsightsCopilot = ({ organizationId }: InsightsCopilotProps) => {
   if (!isOpen) {
     return (
       <button
-        className="flex items-center gap-2 rounded-lg border border-dashed border-muted-foreground/25 px-4 py-3 text-muted-foreground text-sm transition-colors hover:border-primary/50 hover:text-foreground"
+        className="flex items-center gap-2 rounded-lg border border-muted-foreground/25 border-dashed px-4 py-3 text-muted-foreground text-sm transition-colors hover:border-primary/50 hover:text-foreground"
         onClick={() => setIsOpen(true)}
         type="button"
       >
@@ -94,18 +87,12 @@ export const InsightsCopilot = ({ organizationId }: InsightsCopilotProps) => {
       <div className="mb-3 max-h-80 space-y-3 overflow-y-auto rounded-lg bg-muted/30 p-3">
         {messages.length === 0 && (
           <p className="text-center text-muted-foreground text-xs">
-            Ask about trends, feature priorities, feedback patterns, or anything about your product.
+            Ask about trends, feature priorities, feedback patterns, or anything
+            about your product.
           </p>
         )}
         {messages.map((message) => {
           const isUser = message.role === "user";
-          const content = message.parts
-            ?.filter(
-              (part): part is { type: "text"; text: string } => part.type === "text"
-            )
-            .map((p) => p.text)
-            .join("") ?? "";
-
           return (
             <div
               className={`flex ${isUser ? "justify-end" : "justify-start"}`}
@@ -119,33 +106,35 @@ export const InsightsCopilot = ({ organizationId }: InsightsCopilotProps) => {
                 }`}
               >
                 {isUser ? (
-                  content || "\u200B"
+                  message.content || "\u200B"
                 ) : (
-                  <MemoizedReactMarkdown>{content || "\u200B"}</MemoizedReactMarkdown>
+                  <MemoizedReactMarkdown>
+                    {message.content || "\u200B"}
+                  </MemoizedReactMarkdown>
                 )}
               </div>
             </div>
           );
         })}
-        {isLoading && (
+        {isLoading ? (
           <div className="flex justify-start">
             <div className="rounded-lg bg-secondary px-3 py-2 text-muted-foreground text-sm">
               Thinking...
             </div>
           </div>
-        )}
-        {error && (
-          <div className="rounded-lg bg-destructive/10 px-3 py-2 text-xs text-destructive">
+        ) : null}
+        {error !== null && error !== undefined ? (
+          <div className="rounded-lg bg-destructive/10 px-3 py-2 text-destructive text-xs">
             <p>{error.message || "An error occurred"}</p>
             <button
-              type="button"
+              className="mt-1 text-destructive/70 underline hover:text-destructive"
               onClick={() => clearError()}
-              className="mt-1 underline text-destructive/70 hover:text-destructive"
+              type="button"
             >
               Dismiss
             </button>
           </div>
-        )}
+        ) : null}
         <div ref={messagesEndRef} />
       </div>
 

@@ -122,7 +122,12 @@ module.exports = {
         HOSTNAME: '0.0.0.0',
         ALLOW_LOCALHOST_DB: 'true',
         GISELLE_STORAGE_ROOT: '/root/recoder.xyz/data/giselle-storage',
-        SEARXNG_URL: 'http://127.0.0.1:8888'
+        SEARXNG_URL: 'http://127.0.0.1:8888',
+        // Auth callback URLs — must point to agency.recoder.xyz, not recoder.xyz,
+        // to prevent the main app's intl middleware from injecting locale prefixes
+        // (e.g. /tr/) into the OAuth callback path and causing 404s.
+        NEXT_PUBLIC_APP_URL: 'https://agency.recoder.xyz',
+        BETTER_AUTH_URL: 'https://recoder.xyz'
       }
     }
   ]

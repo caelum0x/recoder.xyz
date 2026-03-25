@@ -34,7 +34,7 @@ async def request_account_deletion(
 ):
     try:
         personal_account = await execute_one(
-            "SELECT id FROM basejump.accounts WHERE primary_owner_user_id = :user_id AND personal_account = true",
+            "SELECT id FROM basejump.accounts WHERE primary_owner_user_id::text = :user_id AND personal_account = true",
             {"user_id": user_id}
         )
 
@@ -93,7 +93,7 @@ async def cancel_account_deletion(
 ):
     try:
         personal_account = await execute_one(
-            "SELECT id FROM basejump.accounts WHERE primary_owner_user_id = :user_id AND personal_account = true",
+            "SELECT id FROM basejump.accounts WHERE primary_owner_user_id::text = :user_id AND personal_account = true",
             {"user_id": user_id}
         )
 
@@ -140,7 +140,7 @@ async def get_account_deletion_status(
 ):
     try:
         personal_account = await execute_one(
-            "SELECT id FROM basejump.accounts WHERE primary_owner_user_id = :user_id AND personal_account = true",
+            "SELECT id FROM basejump.accounts WHERE primary_owner_user_id::text = :user_id AND personal_account = true",
             {"user_id": user_id}
         )
 
@@ -204,7 +204,7 @@ async def check_and_schedule_subscriptions(account_id: str, cancel_at: datetime)
     try:
         credit_accounts = await execute_read(
             "SELECT stripe_subscription_id, revenuecat_subscription_id, tier, provider "
-            "FROM credit_accounts WHERE account_id = :account_id",
+            "FROM credit_accounts WHERE account_id::text = :account_id",
             {"account_id": account_id}
         )
 
@@ -256,7 +256,7 @@ async def schedule_stripe_subscription_cancellation(account_id: str, stripe_sub_
 async def unschedule_subscription_cancellation(account_id: str) -> None:
     try:
         credit_accounts = await execute_read(
-            "SELECT stripe_subscription_id FROM credit_accounts WHERE account_id = :account_id",
+            "SELECT stripe_subscription_id FROM credit_accounts WHERE account_id::text = :account_id",
             {"account_id": account_id}
         )
 
@@ -295,7 +295,7 @@ async def cancel_account_subscriptions_immediately(account_id: str) -> dict:
     try:
         credit_accounts = await execute_read(
             "SELECT stripe_subscription_id, revenuecat_subscription_id, tier, provider "
-            "FROM credit_accounts WHERE account_id = :account_id",
+            "FROM credit_accounts WHERE account_id::text = :account_id",
             {"account_id": account_id}
         )
 
@@ -389,7 +389,7 @@ async def delete_account_immediately(
 ):
     try:
         personal_account = await execute_one(
-            "SELECT id FROM basejump.accounts WHERE primary_owner_user_id = :user_id AND personal_account = true",
+            "SELECT id FROM basejump.accounts WHERE primary_owner_user_id::text = :user_id AND personal_account = true",
             {"user_id": user_id}
         )
 

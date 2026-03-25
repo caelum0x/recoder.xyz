@@ -2,7 +2,7 @@
 Workspace management API endpoints.
 
 Provides CRUD for workspaces, member management, agent/thread assignment,
-and activity tracking. Access control via WHERE user_id = :user_id.
+and activity tracking. Access control via WHERE user_id::text = :user_id.
 """
 
 from typing import Optional
@@ -125,11 +125,11 @@ async def list_workspaces(
         rows = await execute(
             """
             SELECT w.*,
-              (SELECT COUNT(*) FROM workspace_members wm WHERE wm.workspace_id = w.id) as member_count,
+              (SELECT COUNT(*) FROM workspace_members wm WHERE wm.workspace_id::text = w.id::text) as member_count,
               COALESCE(array_length(w.agent_ids, 1), 0) as agent_count,
               COALESCE(array_length(w.thread_ids, 1), 0) as thread_count
             FROM workspaces w
-            WHERE w.user_id = :user_id
+            WHERE w.user_id::text = :user_id
             ORDER BY w.created_at DESC
             """,
             {"user_id": user_id},
@@ -155,11 +155,11 @@ async def get_workspace(
         row = await execute_one(
             """
             SELECT w.*,
-              (SELECT COUNT(*) FROM workspace_members wm WHERE wm.workspace_id = w.id) as member_count,
+              (SELECT COUNT(*) FROM workspace_members wm WHERE wm.workspace_id::text = w.id::text) as member_count,
               COALESCE(array_length(w.agent_ids, 1), 0) as agent_count,
               COALESCE(array_length(w.thread_ids, 1), 0) as thread_count
             FROM workspaces w
-            WHERE w.id = :workspace_id AND w.user_id = :user_id
+            WHERE w.id::text = :workspace_id AND w.user_id::text = :user_id
             """,
             {"workspace_id": workspace_id, "user_id": user_id},
         )
@@ -205,7 +205,7 @@ async def update_workspace(
             f"""
             UPDATE workspaces
             SET {set_clauses}, updated_at = now()
-            WHERE id = :workspace_id AND user_id = :user_id
+            WHERE id = :workspace_id AND user_id::text = :user_id
             RETURNING id, user_id, workspace_name, description, color, icon,
                       agent_ids, thread_ids, is_default, created_at, updated_at
             """,
@@ -237,7 +237,7 @@ async def delete_workspace(
         row = await execute_one(
             """
             DELETE FROM workspaces
-            WHERE id = :workspace_id AND user_id = :user_id
+            WHERE id = :workspace_id AND user_id::text = :user_id
             RETURNING id
             """,
             {"workspace_id": workspace_id, "user_id": user_id},
@@ -265,7 +265,7 @@ async def add_agent_to_workspace(
             """
             UPDATE workspaces
             SET agent_ids = array_append(agent_ids, :agent_id), updated_at = now()
-            WHERE id = :workspace_id AND user_id = :user_id
+            WHERE id = :workspace_id AND user_id::text = :user_id
             RETURNING id
             """,
             {"workspace_id": workspace_id, "user_id": user_id, "agent_id": body.agent_id},
@@ -293,7 +293,7 @@ async def remove_agent_from_workspace(
             """
             UPDATE workspaces
             SET agent_ids = array_remove(agent_ids, :agent_id), updated_at = now()
-            WHERE id = :workspace_id AND user_id = :user_id
+            WHERE id = :workspace_id AND user_id::text = :user_id
             RETURNING id
             """,
             {"workspace_id": workspace_id, "user_id": user_id, "agent_id": agent_id},
@@ -321,7 +321,7 @@ async def add_thread_to_workspace(
             """
             UPDATE workspaces
             SET thread_ids = array_append(thread_ids, :thread_id), updated_at = now()
-            WHERE id = :workspace_id AND user_id = :user_id
+            WHERE id = :workspace_id AND user_id::text = :user_id
             RETURNING id
             """,
             {"workspace_id": workspace_id, "user_id": user_id, "thread_id": body.thread_id},
@@ -349,7 +349,7 @@ async def remove_thread_from_workspace(
             """
             UPDATE workspaces
             SET thread_ids = array_remove(thread_ids, :thread_id), updated_at = now()
-            WHERE id = :workspace_id AND user_id = :user_id
+            WHERE id = :workspace_id AND user_id::text = :user_id
             RETURNING id
             """,
             {"workspace_id": workspace_id, "user_id": user_id, "thread_id": thread_id},
@@ -375,7 +375,7 @@ async def record_workspace_activity(
     try:
         # Verify ownership
         exists = await execute_one(
-            "SELECT id FROM workspaces WHERE id = :workspace_id AND user_id = :user_id",
+            "SELECT id FROM workspaces WHERE id = :workspace_id AND user_id::text = :user_id",
             {"workspace_id": workspace_id, "user_id": user_id},
         )
         if not exists:
@@ -429,7 +429,7 @@ async def list_workspace_activity(
     try:
         # Verify ownership
         exists = await execute_one(
-            "SELECT id FROM workspaces WHERE id = :workspace_id AND user_id = :user_id",
+            "SELECT id FROM workspaces WHERE id = :workspace_id AND user_id::text = :user_id",
             {"workspace_id": workspace_id, "user_id": user_id},
         )
         if not exists:
@@ -439,7 +439,7 @@ async def list_workspace_activity(
             """
             SELECT id, workspace_id, user_id, activity_type, entity_type, entity_id, description, occurred_at
             FROM workspace_activity
-            WHERE workspace_id = :workspace_id
+            WHERE workspace_id::text = :workspace_id
             ORDER BY occurred_at DESC
             LIMIT :limit
             """,

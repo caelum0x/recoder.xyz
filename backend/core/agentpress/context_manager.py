@@ -36,15 +36,31 @@ def _get_anthropic_client_singleton():
     return _anthropic_client
 
 
+_bedrock_unavailable = False
+
+
 def _get_bedrock_client_singleton():
-    """Module-level lazy initialization of Bedrock client (singleton)."""
-    global _bedrock_client
+    """Module-level lazy initialization of Bedrock client (singleton).
+
+    Checks for AWS credentials before attempting to create the client so
+    botocore does not emit repeated credential-lookup warnings.
+    """
+    global _bedrock_client, _bedrock_unavailable
+    if _bedrock_unavailable:
+        return None
     if _bedrock_client is None:
         try:
+            aws_key = os.environ.get("AWS_ACCESS_KEY_ID")
+            aws_secret = os.environ.get("AWS_SECRET_ACCESS_KEY")
+            if not aws_key or not aws_secret:
+                logger.debug("AWS credentials not set — Bedrock client disabled")
+                _bedrock_unavailable = True
+                return None
             import boto3
             _bedrock_client = boto3.client('bedrock-runtime', region_name='us-west-2')
         except Exception as e:
             logger.debug(f"Could not initialize Bedrock client: {e}")
+            _bedrock_unavailable = True
     return _bedrock_client
 
 

@@ -113,7 +113,7 @@ async def search_threads_filtered(
 ):
     """Search threads with advanced filters. Records search in history."""
     try:
-        where_clauses = ["user_id = :user_id"]
+        where_clauses = ["user_id::text = :user_id"]
         params: Dict[str, Any] = {"user_id": user_id}
 
         # Text search on content_preview
@@ -123,7 +123,7 @@ async def search_threads_filtered(
 
         # Agent filter
         if body.agent_id:
-            where_clauses.append("agent_id = :agent_id")
+            where_clauses.append("agent_id::text = :agent_id")
             params["agent_id"] = body.agent_id
 
         # Boolean filters
@@ -293,7 +293,7 @@ async def get_search_history(
         rows = await execute(
             """
             SELECT * FROM search_history
-            WHERE user_id = :user_id
+            WHERE user_id::text = :user_id
             ORDER BY searched_at DESC
             LIMIT :limit
             """,
@@ -323,7 +323,7 @@ async def get_search_suggestions(
             """
             SELECT DISTINCT query, MAX(searched_at) as last_used
             FROM search_history
-            WHERE user_id = :user_id AND query != ''
+            WHERE user_id::text = :user_id AND query != ''
             GROUP BY query
             ORDER BY last_used DESC
             LIMIT 5
@@ -336,7 +336,7 @@ async def get_search_suggestions(
             """
             SELECT UNNEST(tags) as tag, COUNT(*) as count
             FROM thread_search_index
-            WHERE user_id = :user_id AND tags != '{}'
+            WHERE user_id::text = :user_id AND tags != '{}'
             GROUP BY tag
             ORDER BY count DESC
             LIMIT 10
@@ -349,7 +349,7 @@ async def get_search_suggestions(
             """
             SELECT DISTINCT agent_id, COUNT(*) as thread_count
             FROM thread_search_index
-            WHERE user_id = :user_id AND agent_id IS NOT NULL
+            WHERE user_id::text = :user_id AND agent_id IS NOT NULL
             GROUP BY agent_id
             ORDER BY thread_count DESC
             LIMIT 10
@@ -388,7 +388,7 @@ async def clear_search_history(
     """Clear all search history for the user."""
     try:
         await execute_mutate(
-            "DELETE FROM search_history WHERE user_id = :user_id",
+            "DELETE FROM search_history WHERE user_id::text = :user_id",
             {"user_id": user_id},
         )
 

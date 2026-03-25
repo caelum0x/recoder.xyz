@@ -13,7 +13,7 @@ import { SpotlightCard } from '@/components/ui/spotlight-card';
 import { formatDateForList } from '@/lib/utils/date-formatting';
 
 // Component for date group headers
-const DateGroupHeader: React.FC<{ dateGroup: string; count: number }> = ({ dateGroup, count }) => {
+const DateGroupHeader: React.FC<{ dateGroup: string; count: number }> = ({ dateGroup }) => {
     return (
         <div className="py-2 mt-4 first:mt-2">
             <div className="text-xs font-medium text-muted-foreground pl-2.5">
@@ -156,7 +156,19 @@ export function NavTriggerRuns() {
             <div className="overflow-y-auto max-h-[calc(100vh-480px)] [&::-webkit-scrollbar]:hidden [-ms-overflow-style:'none'] [scrollbar-width:'none'] pb-10">
                 {(state !== 'collapsed' || isMobile) && (
                     <>
-                        {isLoading ? (
+                        {hasError && !isLoading ? (
+                            <div className="text-center py-4 space-y-2">
+                                <p className="text-xs text-muted-foreground">
+                                    Failed to load trigger runs
+                                </p>
+                                <button
+                                    className="text-xs text-primary hover:underline cursor-pointer"
+                                    onClick={() => queryClient.invalidateQueries({ queryKey: ['threads'] })}
+                                >
+                                    Retry
+                                </button>
+                            </div>
+                        ) : isLoading ? (
                             // Show skeleton loaders while loading
                             <div className="space-y-1">
                                 {Array.from({ length: 3 }).map((_, index) => (

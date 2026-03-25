@@ -35,7 +35,7 @@ async def list_agent_benchmarks(
     offset: int = Query(0, ge=0),
 ):
     """List all performance benchmarks for a given agent."""
-    where = "user_id = :user_id AND agent_id = :agent_id"
+    where = "user_id::text = :user_id AND agent_id::text = :agent_id"
     params: dict = {
         "user_id": user_id,
         "agent_id": agent_id,
@@ -106,8 +106,8 @@ async def generate_agent_benchmark(
                 2
             ) AS success_rate
         FROM agent_runs
-        WHERE user_id = :user_id
-          AND agent_id = :agent_id
+        WHERE user_id::text = :user_id
+          AND agent_id::text = :agent_id
           AND started_at >= :period_start
           AND ended_at IS NOT NULL
         """,
@@ -130,8 +130,8 @@ async def generate_agent_benchmark(
         """
         SELECT model, COUNT(*) AS cnt
         FROM agent_runs
-        WHERE user_id = :user_id
-          AND agent_id = :agent_id
+        WHERE user_id::text = :user_id
+          AND agent_id::text = :agent_id
           AND started_at >= :period_start
         GROUP BY model
         ORDER BY cnt DESC
@@ -211,7 +211,7 @@ async def compare_agent_benchmarks(
             SUM(total_runs)::INTEGER AS total_runs,
             COUNT(*) AS benchmark_count
         FROM agent_benchmarks
-        WHERE user_id = :user_id AND agent_id = :agent_id AND model IS NOT NULL
+        WHERE user_id::text = :user_id AND agent_id::text = :agent_id AND model IS NOT NULL
         GROUP BY model
         ORDER BY success_rate DESC
         """,
@@ -260,7 +260,7 @@ async def benchmark_leaderboard(
                  ELSE NULL
             END AS cost_efficiency
         FROM agent_benchmarks b
-        WHERE b.user_id = :user_id
+        WHERE b.user_id::text = :user_id
         ORDER BY b.agent_id, b.created_at DESC
         """,
         {"user_id": user_id},

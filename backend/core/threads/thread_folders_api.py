@@ -55,7 +55,7 @@ async def create_folder(
     # Validate parent_id belongs to user if provided
     if body.parent_id:
         parent = await execute_one(
-            "SELECT id FROM thread_folders WHERE id = :id AND user_id = :user_id",
+            "SELECT id FROM thread_folders WHERE id = :id AND user_id::text = :user_id",
             {"id": body.parent_id, "user_id": user_id},
         )
         if not parent:
@@ -99,10 +99,10 @@ async def list_folders(
         LEFT JOIN (
             SELECT folder_id, COUNT(*) AS thread_count
             FROM thread_folder_assignments
-            WHERE user_id = :user_id
+            WHERE user_id::text = :user_id
             GROUP BY folder_id
-        ) c ON c.folder_id = f.id
-        WHERE f.user_id = :user_id
+        ) c ON c.folder_id::text = f.id::text
+        WHERE f.user_id::text = :user_id
         ORDER BY f.display_order ASC, f.name ASC
         """,
         {"user_id": user_id},
@@ -125,7 +125,7 @@ async def update_folder(
     user_id: str = Depends(verify_and_get_user_id_from_jwt),
 ):
     existing = await execute_one(
-        "SELECT id FROM thread_folders WHERE id = :id AND user_id = :user_id",
+        "SELECT id FROM thread_folders WHERE id = :id AND user_id::text = :user_id",
         {"id": folder_id, "user_id": user_id},
     )
     if not existing:
@@ -149,7 +149,7 @@ async def update_folder(
             raise HTTPException(status_code=400, detail="A folder cannot be its own parent")
         if body.parent_id:
             parent = await execute_one(
-                "SELECT id FROM thread_folders WHERE id = :parent_id AND user_id = :user_id",
+                "SELECT id FROM thread_folders WHERE id = :parent_id AND user_id::text = :user_id",
                 {"parent_id": body.parent_id, "user_id": user_id},
             )
             if not parent:
@@ -167,7 +167,7 @@ async def update_folder(
 
     try:
         row = await execute_one(
-            f"UPDATE thread_folders SET {set_clauses} WHERE id = :id AND user_id = :user_id RETURNING *",
+            f"UPDATE thread_folders SET {set_clauses} WHERE id = :id AND user_id::text = :user_id RETURNING *",
             params,
         )
         result = dict(row)
@@ -188,14 +188,14 @@ async def delete_folder(
     user_id: str = Depends(verify_and_get_user_id_from_jwt),
 ):
     existing = await execute_one(
-        "SELECT id FROM thread_folders WHERE id = :id AND user_id = :user_id",
+        "SELECT id FROM thread_folders WHERE id = :id AND user_id::text = :user_id",
         {"id": folder_id, "user_id": user_id},
     )
     if not existing:
         raise HTTPException(status_code=404, detail="Folder not found")
 
     await execute(
-        "DELETE FROM thread_folders WHERE id = :id AND user_id = :user_id",
+        "DELETE FROM thread_folders WHERE id = :id AND user_id::text = :user_id",
         {"id": folder_id, "user_id": user_id},
     )
     return {"status": "ok"}
@@ -213,7 +213,7 @@ async def assign_thread_to_folder(
 ):
     # Verify the folder belongs to the user
     folder = await execute_one(
-        "SELECT id FROM thread_folders WHERE id = :folder_id AND user_id = :user_id",
+        "SELECT id FROM thread_folders WHERE id = :folder_id AND user_id::text = :user_id",
         {"folder_id": body.folder_id, "user_id": user_id},
     )
     if not folder:
@@ -247,7 +247,7 @@ async def remove_thread_from_folder(
     await execute(
         """
         DELETE FROM thread_folder_assignments
-        WHERE thread_id = :thread_id AND folder_id = :folder_id AND user_id = :user_id
+        WHERE thread_id::text = :thread_id AND folder_id::text = :folder_id AND user_id::text = :user_id
         """,
         {"thread_id": thread_id, "folder_id": folder_id, "user_id": user_id},
     )
@@ -261,7 +261,7 @@ async def list_folder_threads(
 ):
     # Verify folder belongs to user
     folder = await execute_one(
-        "SELECT id FROM thread_folders WHERE id = :id AND user_id = :user_id",
+        "SELECT id FROM thread_folders WHERE id = :id AND user_id::text = :user_id",
         {"id": folder_id, "user_id": user_id},
     )
     if not folder:
@@ -271,7 +271,7 @@ async def list_folder_threads(
         """
         SELECT a.thread_id, a.assigned_at
         FROM thread_folder_assignments a
-        WHERE a.folder_id = :folder_id AND a.user_id = :user_id
+        WHERE a.folder_id::text = :folder_id AND a.user_id::text = :user_id
         ORDER BY a.assigned_at DESC
         """,
         {"folder_id": folder_id, "user_id": user_id},

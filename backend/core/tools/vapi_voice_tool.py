@@ -347,7 +347,7 @@ class VapiVoiceTool(Tool):
             if not user_id and thread_id:
                 try:
                     thread = await execute_one(
-                        "SELECT account_id FROM threads WHERE thread_id = :thread_id",
+                        "SELECT account_id FROM threads WHERE thread_id::text = :thread_id",
                         {"thread_id": thread_id}
                     )
                     if thread:

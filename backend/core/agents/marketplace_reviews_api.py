@@ -130,7 +130,7 @@ async def list_marketplace_listings(
 ):
     """List marketplace listings (published ones, plus the user's own drafts)."""
     try:
-        where_parts = ["(is_published = true OR user_id = :user_id)"]
+        where_parts = ["(is_published = true OR user_id::text = :user_id)"]
         params: Dict[str, Any] = {"user_id": user_id, "limit": limit}
 
         if category:
@@ -172,7 +172,7 @@ async def get_marketplace_listing(
     row = await execute_one(
         """
         SELECT * FROM marketplace_agent_listings
-        WHERE id = :id AND (is_published = true OR user_id = :user_id)
+        WHERE id = :id AND (is_published = true OR user_id::text = :user_id)
         """,
         {"id": listing_id, "user_id": user_id},
     )
@@ -242,7 +242,7 @@ async def update_marketplace_listing(
 
     try:
         row = await execute_one(
-            f"UPDATE marketplace_agent_listings SET {set_clause} WHERE id = :id AND user_id = :user_id RETURNING *",
+            f"UPDATE marketplace_agent_listings SET {set_clause} WHERE id = :id AND user_id::text = :user_id RETURNING *",
             params,
         )
         return serialize_row(row)
@@ -271,7 +271,7 @@ async def delete_marketplace_listing(
         raise HTTPException(status_code=403, detail="Not the listing owner")
 
     await execute_mutate(
-        "DELETE FROM marketplace_agent_listings WHERE id = :id AND user_id = :user_id",
+        "DELETE FROM marketplace_agent_listings WHERE id = :id AND user_id::text = :user_id",
         {"id": listing_id, "user_id": user_id},
     )
     return {"deleted": True, "id": listing_id}
@@ -288,7 +288,7 @@ async def install_marketplace_listing(
 ):
     """Increment the install count for a listing."""
     existing = await execute_one(
-        "SELECT id FROM marketplace_agent_listings WHERE id = :id AND (is_published = true OR user_id = :user_id)",
+        "SELECT id FROM marketplace_agent_listings WHERE id = :id AND (is_published = true OR user_id::text = :user_id)",
         {"id": listing_id, "user_id": user_id},
     )
     if not existing:
@@ -322,7 +322,7 @@ async def submit_marketplace_review(
 ):
     """Submit or update a review for a marketplace listing."""
     listing = await execute_one(
-        "SELECT id FROM marketplace_agent_listings WHERE id = :id AND (is_published = true OR user_id = :user_id)",
+        "SELECT id FROM marketplace_agent_listings WHERE id = :id AND (is_published = true OR user_id::text = :user_id)",
         {"id": listing_id, "user_id": user_id},
     )
     if not listing:
@@ -355,8 +355,8 @@ async def submit_marketplace_review(
         await execute_mutate(
             """
             UPDATE marketplace_agent_listings
-            SET rating_avg   = (SELECT AVG(rating) FROM marketplace_reviews WHERE listing_id = :listing_id),
-                rating_count = (SELECT COUNT(*) FROM marketplace_reviews WHERE listing_id = :listing_id),
+            SET rating_avg   = (SELECT AVG(rating) FROM marketplace_reviews WHERE listing_id::text = :listing_id),
+                rating_count = (SELECT COUNT(*) FROM marketplace_reviews WHERE listing_id::text = :listing_id),
                 updated_at   = now()
             WHERE id = :listing_id
             """,
@@ -380,7 +380,7 @@ async def list_marketplace_reviews(
 ):
     """List reviews for a marketplace listing, sorted by created_at DESC."""
     listing = await execute_one(
-        "SELECT id FROM marketplace_agent_listings WHERE id = :id AND (is_published = true OR user_id = :user_id)",
+        "SELECT id FROM marketplace_agent_listings WHERE id = :id AND (is_published = true OR user_id::text = :user_id)",
         {"id": listing_id, "user_id": user_id},
     )
     if not listing:
@@ -388,7 +388,7 @@ async def list_marketplace_reviews(
 
     try:
         rows = await execute(
-            "SELECT * FROM marketplace_reviews WHERE listing_id = :listing_id ORDER BY created_at DESC",
+            "SELECT * FROM marketplace_reviews WHERE listing_id::text = :listing_id ORDER BY created_at DESC",
             {"listing_id": listing_id},
         )
         return serialize_rows(rows) if rows else []

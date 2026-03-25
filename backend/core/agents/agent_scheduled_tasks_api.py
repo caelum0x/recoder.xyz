@@ -115,7 +115,7 @@ async def list_scheduled_tasks(
     rows = await execute(
         """
         SELECT * FROM agent_scheduled_tasks
-        WHERE agent_id = :agent_id AND user_id = :user_id
+        WHERE agent_id::text = :agent_id AND user_id::text = :user_id
         ORDER BY created_at DESC
         """,
         {"agent_id": agent_id, "user_id": user_id},
@@ -133,7 +133,7 @@ async def update_scheduled_task(
     existing = await execute_one(
         """
         SELECT * FROM agent_scheduled_tasks
-        WHERE id = :id AND agent_id = :agent_id AND user_id = :user_id
+        WHERE id = :id AND agent_id::text = :agent_id AND user_id::text = :user_id
         """,
         {"id": task_id, "agent_id": agent_id, "user_id": user_id},
     )
@@ -183,7 +183,7 @@ async def update_scheduled_task(
         f"""
         UPDATE agent_scheduled_tasks
         SET {set_clauses}
-        WHERE id = :id AND agent_id = :agent_id AND user_id = :user_id
+        WHERE id = :id AND agent_id::text = :agent_id AND user_id::text = :user_id
         RETURNING *
         """,
         params,
@@ -202,7 +202,7 @@ async def delete_scheduled_task(
     existing = await execute_one(
         """
         SELECT id FROM agent_scheduled_tasks
-        WHERE id = :id AND agent_id = :agent_id AND user_id = :user_id
+        WHERE id = :id AND agent_id::text = :agent_id AND user_id::text = :user_id
         """,
         {"id": task_id, "agent_id": agent_id, "user_id": user_id},
     )
@@ -212,7 +212,7 @@ async def delete_scheduled_task(
     await execute_mutate(
         """
         DELETE FROM agent_scheduled_tasks
-        WHERE id = :id AND user_id = :user_id
+        WHERE id = :id AND user_id::text = :user_id
         """,
         {"id": task_id, "user_id": user_id},
     )
@@ -228,7 +228,7 @@ async def trigger_scheduled_task(
     task = await execute_one(
         """
         SELECT * FROM agent_scheduled_tasks
-        WHERE id = :id AND agent_id = :agent_id AND user_id = :user_id
+        WHERE id = :id AND agent_id::text = :agent_id AND user_id::text = :user_id
         """,
         {"id": task_id, "agent_id": agent_id, "user_id": user_id},
     )
@@ -274,14 +274,14 @@ async def list_task_runs(
     task = await execute_one(
         """
         SELECT id FROM agent_scheduled_tasks
-        WHERE id = :id AND agent_id = :agent_id AND user_id = :user_id
+        WHERE id = :id AND agent_id::text = :agent_id AND user_id::text = :user_id
         """,
         {"id": task_id, "agent_id": agent_id, "user_id": user_id},
     )
     if not task:
         raise HTTPException(status_code=404, detail="Scheduled task not found")
 
-    where = "task_id = :task_id AND user_id = :user_id"
+    where = "task_id::text = :task_id AND user_id::text = :user_id"
     params: dict = {
         "task_id": task_id,
         "user_id": user_id,
@@ -326,8 +326,8 @@ async def get_upcoming_runs(
         """
         SELECT t.*, a.name AS agent_name
         FROM agent_scheduled_tasks t
-        LEFT JOIN agents a ON a.agent_id = t.agent_id
-        WHERE t.user_id = :user_id AND t.is_active = true AND t.next_run_at IS NOT NULL
+        LEFT JOIN agents a ON a.agent_id::text = t.agent_id::text
+        WHERE t.user_id::text = :user_id AND t.is_active = true AND t.next_run_at IS NOT NULL
         ORDER BY t.next_run_at ASC
         LIMIT 20
         """,

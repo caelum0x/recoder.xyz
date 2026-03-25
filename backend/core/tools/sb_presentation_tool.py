@@ -336,7 +336,10 @@ class SandboxPresentationTool(SandboxToolsBase):
         """Ensure the presentations directory exists"""
         full_path = f"{self.workspace_path}/{self.presentations_dir}"
         try:
-            await self.sandbox.fs.create_folder(full_path, "755")
+            # Use process.exec instead of sandbox.fs.create_folder —
+            # the Daytona toolbox HTTP proxy (port 4000) is unreliable on
+            # freshly-created sandboxes, causing first-attempt failures.
+            await self.sandbox.process.exec(f"mkdir -p '{full_path}'", timeout=10)
         except Exception as e:
             logger.debug(f"[sb_presentation_tool] _ensure_presentations_dir: folder may already exist at {full_path}: {e}")
 
@@ -345,7 +348,10 @@ class SandboxPresentationTool(SandboxToolsBase):
         safe_name = self._sanitize_filename(presentation_name)
         presentation_path = f"{self.workspace_path}/{self.presentations_dir}/{safe_name}"
         try:
-            await self.sandbox.fs.create_folder(presentation_path, "755")
+            # Use process.exec instead of sandbox.fs.create_folder —
+            # the Daytona toolbox HTTP proxy (port 4000) is unreliable on
+            # freshly-created sandboxes, causing first-attempt failures.
+            await self.sandbox.process.exec(f"mkdir -p '{presentation_path}'", timeout=10)
         except Exception as e:
             logger.debug(f"[sb_presentation_tool] _ensure_presentation_dir: folder may already exist at {presentation_path}: {e}")
         return safe_name, presentation_path
@@ -503,7 +509,10 @@ class SandboxPresentationTool(SandboxToolsBase):
                 target_dir = os.path.join(presentation_path, rel_path)
                 target_dir_path = target_dir.replace('\\', '/')  # Normalize path separators
                 try:
-                    await self.sandbox.fs.create_folder(target_dir_path, "755")
+                    # Use process.exec instead of sandbox.fs.create_folder —
+                    # the Daytona toolbox HTTP proxy (port 4000) is unreliable on
+                    # freshly-created sandboxes, causing first-attempt failures.
+                    await self.sandbox.process.exec(f"mkdir -p '{target_dir_path}'", timeout=10)
                 except Exception as e:
                     logger.debug(f"[sb_presentation_tool] Directory may already exist at {target_dir_path}: {e}")
             else:
@@ -518,10 +527,17 @@ class SandboxPresentationTool(SandboxToolsBase):
                 try:
                     with open(source_file, 'rb') as f:
                         file_content = f.read()
-                    await self.write_file(target_file, file_content)
-                    copied_files.append(rel_file_path)
+                    ok = await self.write_file(target_file, file_content)
+                    if not ok:
+                        # Retry once after a short delay — Daytona toolbox
+                        # proxy can be flaky on freshly-created sandboxes
+                        await asyncio.sleep(1)
+                        ok = await self.write_file(target_file, file_content)
+                    if ok:
+                        copied_files.append(rel_file_path)
+                    else:
+                        logger.warning(f"Failed to copy {rel_file_path} after retry")
                 except Exception as e:
-                    # Log error but continue with other files
                     logger.warning(f"Error copying {rel_file_path}: {str(e)}")
         
         # Update metadata.json with correct paths for the new presentation

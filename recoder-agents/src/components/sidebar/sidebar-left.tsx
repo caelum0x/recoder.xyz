@@ -8,6 +8,7 @@ import { NavAgents } from '@/components/sidebar/nav-agents';
 import { NavWorkers } from '@/components/sidebar/nav-workers';
 import { NavGlobalConfig } from '@/components/sidebar/nav-global-config';
 import { NavTriggerRuns } from '@/components/sidebar/nav-trigger-runs';
+import { SSEErrorBoundary } from '@/components/sse-error-boundary';
 import { NavWorkspaces } from '@/components/sidebar/nav-workspaces';
 import { NavUserWithTeams } from '@/components/sidebar/nav-user-with-teams';
 import { RecoderLogo } from '@/components/sidebar/recoder-logo';
@@ -46,6 +47,24 @@ import { useAuth } from '@/components/AuthProvider';
 import { SubscriptionStatusBadge } from '@/components/billing/subscription-status-badge';
 import { ActiveRunsSection } from '@/components/sidebar/active-runs';
 
+/** Minimal fallback shown when a sidebar section crashes (SSE/network error) */
+function SidebarSectionError({ label, onRetry }: { label: string; onRetry?: () => void }) {
+  return (
+    <div className="py-6 text-center space-y-2">
+      <p className="text-xs text-muted-foreground">
+        {label} temporarily unavailable
+      </p>
+      {onRetry && (
+        <button
+          onClick={onRetry}
+          className="text-xs text-primary hover:underline cursor-pointer"
+        >
+          Retry
+        </button>
+      )}
+    </div>
+  );
+}
 
 function UserProfileSection({ user }: { user: any }) {
   const { data: accountState } = useAccountState({ enabled: true });
@@ -498,22 +517,41 @@ export function SidebarLeft({
             </div>
           </div>
 
-          {/* Content area */}
+          {/* Content area — each section wrapped in SSEErrorBoundary so
+              CORS/QUIC/network failures don't blank the entire sidebar */}
           <div className="px-6 flex-1 overflow-hidden">
-            {activeView === 'chats' && <div data-tour="sidebar-agents"><NavAgents /></div>}
-            {activeView === 'workers' && <NavWorkers />}
-            {activeView === 'workspaces' && <NavWorkspaces />}
+            {activeView === 'chats' && (
+              <SSEErrorBoundary name="sidebar-chats" retryAfterMs={10000}
+                fallback={<SidebarSectionError label="Chats" />}>
+                <div data-tour="sidebar-agents"><NavAgents /></div>
+              </SSEErrorBoundary>
+            )}
+            {activeView === 'workers' && (
+              <SSEErrorBoundary name="sidebar-workers" retryAfterMs={10000}
+                fallback={<SidebarSectionError label="Workers" />}>
+                <NavWorkers />
+              </SSEErrorBoundary>
+            )}
+            {activeView === 'workspaces' && (
+              <SSEErrorBoundary name="sidebar-workspaces" retryAfterMs={10000}
+                fallback={<SidebarSectionError label="Spaces" />}>
+                <NavWorkspaces />
+              </SSEErrorBoundary>
+            )}
             {activeView === 'starred' && (
-              <>
+              <SSEErrorBoundary name="sidebar-triggers" retryAfterMs={10000}
+                fallback={<SidebarSectionError label="Triggers" />}>
                 <NavGlobalConfig />
                 <NavTriggerRuns />
-              </>
+              </SSEErrorBoundary>
             )}
           </div>
 
           {/* Active runs monitor */}
           <div className="px-6">
-            <ActiveRunsSection />
+            <SSEErrorBoundary name="sidebar-active-runs" retryAfterMs={10000}>
+              <ActiveRunsSection />
+            </SSEErrorBoundary>
           </div>
 
           {/* Shared + Developers links */}

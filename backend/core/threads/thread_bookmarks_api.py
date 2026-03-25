@@ -59,7 +59,7 @@ async def create_collection(
     try:
         # Get next sort_order
         max_row = await execute_one(
-            "SELECT COALESCE(MAX(sort_order), -1) + 1 as next_order FROM thread_bookmark_collections WHERE user_id = :user_id",
+            "SELECT COALESCE(MAX(sort_order), -1) + 1 as next_order FROM thread_bookmark_collections WHERE user_id::text = :user_id",
             {"user_id": user_id},
         )
         next_order = max_row["next_order"] if max_row else 0
@@ -98,10 +98,10 @@ async def list_collections(
                LEFT JOIN (
                    SELECT collection_id, COUNT(*) AS bookmark_count
                    FROM thread_bookmarks
-                   WHERE user_id = :user_id
+                   WHERE user_id::text = :user_id
                    GROUP BY collection_id
-               ) bc ON bc.collection_id = c.id
-               WHERE c.user_id = :user_id
+               ) bc ON bc.collection_id::text = c.id::text
+               WHERE c.user_id::text = :user_id
                ORDER BY c.sort_order, c.name""",
             {"user_id": user_id},
         )
@@ -121,7 +121,7 @@ async def update_collection(
     """Update a bookmark collection's properties."""
     try:
         existing = await execute_one(
-            "SELECT id FROM thread_bookmark_collections WHERE id = :id AND user_id = :user_id",
+            "SELECT id FROM thread_bookmark_collections WHERE id = :id AND user_id::text = :user_id",
             {"id": collection_id, "user_id": user_id},
         )
         if not existing:
@@ -151,7 +151,7 @@ async def update_collection(
 
         set_clauses = ", ".join(f"{k} = :{k}" for k in updates)
         row = await execute_one(
-            f"UPDATE thread_bookmark_collections SET {set_clauses} WHERE id = :id AND user_id = :user_id RETURNING *",
+            f"UPDATE thread_bookmark_collections SET {set_clauses} WHERE id = :id AND user_id::text = :user_id RETURNING *",
             params,
         )
         return dict(row)
@@ -171,14 +171,14 @@ async def delete_collection(
     """Delete a collection. Bookmarks in it become uncollected (collection_id set to NULL via FK cascade)."""
     try:
         existing = await execute_one(
-            "SELECT id FROM thread_bookmark_collections WHERE id = :id AND user_id = :user_id",
+            "SELECT id FROM thread_bookmark_collections WHERE id = :id AND user_id::text = :user_id",
             {"id": collection_id, "user_id": user_id},
         )
         if not existing:
             raise HTTPException(status_code=404, detail="Collection not found")
 
         await execute(
-            "DELETE FROM thread_bookmark_collections WHERE id = :id AND user_id = :user_id",
+            "DELETE FROM thread_bookmark_collections WHERE id = :id AND user_id::text = :user_id",
             {"id": collection_id, "user_id": user_id},
         )
         return {"status": "ok"}
@@ -204,7 +204,7 @@ async def create_thread_bookmark(
         # Validate collection_id if provided
         if body.collection_id:
             coll = await execute_one(
-                "SELECT id FROM thread_bookmark_collections WHERE id = :id AND user_id = :user_id",
+                "SELECT id FROM thread_bookmark_collections WHERE id = :id AND user_id::text = :user_id",
                 {"id": body.collection_id, "user_id": user_id},
             )
             if not coll:
@@ -244,14 +244,14 @@ async def list_thread_bookmarks(
 ):
     """List bookmarked threads, optionally filtered by collection."""
     try:
-        where_clauses = ["b.user_id = :user_id"]
+        where_clauses = ["b.user_id::text = :user_id"]
         params: Dict[str, Any] = {"user_id": user_id}
 
         if collection_id and collection_id != "all":
             if collection_id == "uncollected":
                 where_clauses.append("b.collection_id IS NULL")
             else:
-                where_clauses.append("b.collection_id = :collection_id")
+                where_clauses.append("b.collection_id::text = :collection_id")
                 params["collection_id"] = collection_id
 
         where_sql = " AND ".join(where_clauses)
@@ -261,7 +261,7 @@ async def list_thread_bookmarks(
         rows = await execute(
             f"""SELECT b.*, c.name as collection_name, c.color as collection_color
                 FROM thread_bookmarks b
-                LEFT JOIN thread_bookmark_collections c ON c.id = b.collection_id
+                LEFT JOIN thread_bookmark_collections c ON c.id::text = b.collection_id::text
                 WHERE {where_sql}
                 ORDER BY b.created_at DESC
                 LIMIT :limit OFFSET :offset""",
@@ -294,14 +294,14 @@ async def delete_thread_bookmark(
     """Remove a thread bookmark."""
     try:
         existing = await execute_one(
-            "SELECT id FROM thread_bookmarks WHERE id = :id AND user_id = :user_id",
+            "SELECT id FROM thread_bookmarks WHERE id = :id AND user_id::text = :user_id",
             {"id": bookmark_id, "user_id": user_id},
         )
         if not existing:
             raise HTTPException(status_code=404, detail="Bookmark not found")
 
         await execute(
-            "DELETE FROM thread_bookmarks WHERE id = :id AND user_id = :user_id",
+            "DELETE FROM thread_bookmarks WHERE id = :id AND user_id::text = :user_id",
             {"id": bookmark_id, "user_id": user_id},
         )
         return {"status": "ok"}
@@ -322,7 +322,7 @@ async def update_thread_bookmark(
     """Update a bookmark's note or move it to a different collection."""
     try:
         existing = await execute_one(
-            "SELECT id FROM thread_bookmarks WHERE id = :id AND user_id = :user_id",
+            "SELECT id FROM thread_bookmarks WHERE id = :id AND user_id::text = :user_id",
             {"id": bookmark_id, "user_id": user_id},
         )
         if not existing:
@@ -343,7 +343,7 @@ async def update_thread_bookmark(
             else:
                 # Validate collection
                 coll = await execute_one(
-                    "SELECT id FROM thread_bookmark_collections WHERE id = :coll_id AND user_id = :user_id",
+                    "SELECT id FROM thread_bookmark_collections WHERE id = :coll_id AND user_id::text = :user_id",
                     {"coll_id": body.collection_id, "user_id": user_id},
                 )
                 if not coll:
@@ -356,7 +356,7 @@ async def update_thread_bookmark(
 
         set_clauses = ", ".join(f"{k} = :{k}" for k in updates)
         row = await execute_one(
-            f"UPDATE thread_bookmarks SET {set_clauses} WHERE id = :id AND user_id = :user_id RETURNING *",
+            f"UPDATE thread_bookmarks SET {set_clauses} WHERE id = :id AND user_id::text = :user_id RETURNING *",
             params,
         )
         return dict(row)

@@ -163,7 +163,7 @@ async def fix_missed_renewals(target_date: str, dry_run: bool = False):
                           next_credit_grant = :next_credit_grant,
                           billing_cycle_anchor = :billing_cycle_anchor,
                           plan_type = :plan_type
-                        WHERE account_id = :account_id
+                        WHERE account_id::text = :account_id
                         """,
                         {
                             "account_id": account_id,

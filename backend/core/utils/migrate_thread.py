@@ -29,7 +29,7 @@ async def migrate_thread_in_db(thread_id: str, dry_run: bool = False):
     # Fetch messages
     print("\n1. Fetching messages from database...")
     messages = await execute_read(
-        "SELECT * FROM messages WHERE thread_id = :thread_id ORDER BY created_at",
+        "SELECT * FROM messages WHERE thread_id::text = :thread_id ORDER BY created_at",
         {"thread_id": thread_id}
     )
 

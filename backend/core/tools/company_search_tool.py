@@ -1,19 +1,19 @@
+"""Company research tool using self-hosted SearXNG.
+
+Searches for companies via SearXNG (no API key, no rate limits) and extracts
+structured company information from the results.
+"""
+
 from typing import Optional
 import asyncio
+import os
+import re
 import structlog
 import json
 from decimal import Decimal
+from urllib.parse import urlparse
 
-# exa-py removed due to openai 2.x incompatibility - tool disabled
-try:
-    from exa_py import Exa
-    from exa_py.websets.types import CreateWebsetParameters, CreateEnrichmentParameters
-    EXA_AVAILABLE = True
-except ImportError:
-    EXA_AVAILABLE = False
-    Exa = None
-    CreateWebsetParameters = None
-    CreateEnrichmentParameters = None
+import httpx
 
 from core.agentpress.tool import Tool, ToolResult, openapi_schema, tool_metadata
 from core.utils.config import config, EnvMode
@@ -22,6 +22,9 @@ from core.agentpress.thread_manager import ThreadManager
 from core.billing.credits.manager import CreditManager
 from core.billing.shared.config import TOKEN_PRICE_MULTIPLIER
 from core.services.db import execute_one
+
+SEARXNG_URL = os.environ.get("SEARXNG_URL", "http://127.0.0.1:8888")
+
 
 @tool_metadata(
     display_name="Company Research",
@@ -33,21 +36,16 @@ from core.services.db import execute_one
     usage_guide="""
 ### SPECIALIZED COMPANY SEARCH
 
-**⚠️ COST: $0.54 per search (returns 10 results)**
+**Uses self-hosted SearXNG — no external API key required.**
 
-**🔴 MANDATORY: ALWAYS ASK FOR CONFIRMATION BEFORE USING THIS TOOL**
-
-**WORKFLOW - NO EXCEPTIONS:**
+**WORKFLOW:**
 1. **CLARIFY:** Ask 3-5 specific questions
    - Industry/sector specifics
    - Location preferences
    - Company stage/size
    - Technology focus
-   - Other criteria
 2. **REFINE:** Build detailed search query
-3. **CONFIRM:** Show query + cost, ask for "yes"
-4. **WAIT:** Wait for confirmation
-5. **EXECUTE:** Only then use company_search
+3. **EXECUTE:** Run company_search
 
 **SEARCH QUERY BEST PRACTICES:**
 - Use natural language to describe company criteria
@@ -57,93 +55,49 @@ from core.services.db import execute_one
   - "E-commerce companies in Austin with 50-200 employees"
   - "Healthcare technology companies in Boston"
 
-**ENRICHMENT:**
-- Results include company information, websites, and details
-
 **NEVER:**
-- Call without clarifying questions first
-- Proceed without explicit confirmation
-- Use vague queries - specificity is critical
+- Use vague queries — specificity is critical
 """
 )
 class CompanySearchTool(Tool):
     def __init__(self, thread_manager: ThreadManager):
         super().__init__()
         self.thread_manager = thread_manager
-        self.api_key = config.EXA_API_KEY
         self.credit_manager = CreditManager()
-        self.exa_client = None
-        
-        if self.api_key:
-            self.exa_client = Exa(self.api_key)
-            logger.info("Company Search Tool initialized.")
-        else:
-            logger.warning("EXA_API_KEY not configured - Company Search Tool will not be available")
-    
+        logger.info("Company Search Tool initialized (SearXNG).")
+
     async def _get_current_thread_and_user(self) -> tuple[Optional[str], Optional[str]]:
         try:
             context_vars = structlog.contextvars.get_contextvars()
             thread_id = context_vars.get('thread_id')
-            
             if not thread_id:
-                logger.warning("No thread_id in execution context")
                 return None, None
-
             thread = await execute_one(
-                """
-                SELECT account_id
-                FROM threads
-                WHERE thread_id = :thread_id
-                LIMIT 1
-                """,
+                "SELECT account_id FROM threads WHERE thread_id::text = :thread_id LIMIT 1",
                 {"thread_id": thread_id},
             )
             if thread:
                 return thread_id, thread.get('account_id')
-                
         except Exception as e:
             logger.error(f"Failed to get thread context: {e}")
         return None, None
-    
-    async def _deduct_credits(self, user_id: str, num_results: int, thread_id: Optional[str] = None) -> bool:
-        base_cost = Decimal('0.45')
-        total_cost = base_cost * TOKEN_PRICE_MULTIPLIER
-        
-        try:
-            result = await self.credit_manager.use_credits(
-                account_id=user_id,
-                amount=total_cost,
-                description=f"Company search: {num_results} results",
-                thread_id=thread_id
-            )
-            
-            if result.get('success'):
-                logger.info(f"Deducted ${total_cost:.2f} for company search ({num_results} results)")
-                return True
-            else:
-                logger.warning(f"Failed to deduct credits: {result.get('error')}")
-                return False
-                
-        except Exception as e:
-            logger.error(f"Error deducting credits: {e}")
-            return False
 
     @openapi_schema({
         "type": "function",
         "function": {
             "name": "company_search",
-            "description": "Search for companies using natural language queries and enrich with company profiles. IMPORTANT: This search costs 54 credits per search (10 results).",
+            "description": "Search for companies using natural language queries. Returns company names, URLs, and descriptions from web search results.",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "query": {
                         "type": "string",
-                        "description": "Natural language search query describing the companies you want to find. Examples: 'AI startups in San Francisco with recent funding', 'Fortune 500 companies in healthcare sector', 'B2B SaaS companies with over 100 employees in New York'"
+                        "description": "Natural language search query describing the companies you want to find. Examples: 'AI startups in San Francisco with recent funding', 'Fortune 500 companies in healthcare sector'"
                     },
-                    "enrichment_description": {
-                        "type": "string",
-                        "description": "What specific information to find about each company. Default: 'Company website, funding information, and key details'",
-                        "default": "Company website, funding information, and key details"
+                    "num_results": {
+                        "type": "integer",
+                        "description": "Number of results to return (1-20, default 10)",
+                        "default": 10
                     }
                 },
                 "required": ["query"]
@@ -153,197 +107,203 @@ class CompanySearchTool(Tool):
     async def company_search(
         self,
         query: str,
-        enrichment_description: str = "Company website, funding information, and key details"
+        num_results: int = 10,
     ) -> ToolResult:
-        if not self.exa_client:
-            return self.fail_response(
-                "Company Search is not available. EXA_API_KEY is not configured. "
-                "Please contact your administrator to enable this feature."
-            )
-        
         if not query:
             return self.fail_response("Search query is required.")
-        
-        thread_id, user_id = await self._get_current_thread_and_user()
-        
-        if config.ENV_MODE != EnvMode.LOCAL and (not thread_id or not user_id):
-            return self.fail_response(
-                "No active session context for billing. This tool requires an active agent session."
-            )
-        
-        try:
-            logger.info(f"Creating Exa webset for: '{query}' with 10 results")
-            
-            enrichment_config = CreateEnrichmentParameters(
-                description=enrichment_description,
-                format="text"
-            )
-            
-            webset_params = CreateWebsetParameters(
-                search={
-                    "query": query,
-                    "count": 10
-                },
-                enrichments=[enrichment_config]
-            )
-            
-            try:
-                webset = await asyncio.to_thread(
-                    self.exa_client.websets.create,
-                    params=webset_params
-                )
-                
-                logger.info(f"Webset created with ID: {webset.id}")
-            except Exception as create_error:
-                logger.error(f"Failed to create webset - Error type: {type(create_error).__name__}")
-                try:
-                    error_str = str(create_error)
-                    logger.error(f"Failed to create webset - Error message: {error_str}")
-                except Exception:
-                    logger.exception("Failed to convert Exa webset creation error to string")
-                    error_str = "Unknown error"
-                    logger.error(f"Failed to create webset - Could not convert error to string")
-                
-                if "401" in error_str:
-                    return self.fail_response(
-                        "Authentication failed with Exa API. Please check your API key configuration."
-                    )
-                elif "400" in error_str:
-                    return self.fail_response(
-                        "Invalid request to Exa API. Please check your query format."
-                    )
-                else:
-                    return self.fail_response(
-                        "Failed to create webset. Please try again."
-                    )
-            
-            logger.info(f"Waiting for webset {webset.id} to complete processing...")
-            try:
-                webset = await asyncio.to_thread(
-                    self.exa_client.websets.wait_until_idle,
-                    webset.id
-                )
-                logger.info(f"Webset {webset.id} processing complete")
-            except Exception as wait_error:
-                logger.error(f"Error waiting for webset: {type(wait_error).__name__}: {repr(wait_error)}")
-                return self.fail_response("Failed while waiting for search results. Please try again.")
 
-            logger.info(f"Retrieving items from webset {webset.id}...")
-            try:
-                items = await asyncio.to_thread(
-                    self.exa_client.websets.items.list,
-                    webset_id=webset.id
+        num_results = max(1, min(num_results, 20))
+
+        try:
+            # Run multiple search strategies in parallel for richer results
+            search_queries = [
+                f"{query} company",
+                f"{query} company overview site:linkedin.com OR site:crunchbase.com OR site:bloomberg.com",
+            ]
+
+            tasks = [
+                self._searxng_search(sq, num_results)
+                for sq in search_queries
+            ]
+            all_results = await asyncio.gather(*tasks, return_exceptions=True)
+
+            # Merge and deduplicate results by URL
+            seen_urls: set[str] = set()
+            merged: list[dict] = []
+            for batch in all_results:
+                if isinstance(batch, Exception):
+                    logger.warning(f"Company search sub-query failed: {batch}")
+                    continue
+                for r in batch:
+                    url = r.get("url", "")
+                    if url and url not in seen_urls:
+                        seen_urls.add(url)
+                        merged.append(r)
+
+            if not merged:
+                return self.fail_response(
+                    f"No results found for: {query}. Try a broader query."
                 )
-                logger.info(f"Retrieved items from webset")
-            except Exception as items_error:
-                logger.error(f"Error retrieving items: {type(items_error).__name__}: {repr(items_error)}")
-                return self.fail_response("Failed to retrieve search results. Please try again.")
-            
-            results = items.data if items else []
-            logger.info(f"Got {len(results)} results from webset")
-            
-            formatted_results = []
-            for idx, item in enumerate(results[:10], 1):
-                if hasattr(item, 'model_dump'):
-                    item_dict = item.model_dump()
-                elif isinstance(item, dict):
-                    item_dict = item
-                else:
-                    item_dict = vars(item) if hasattr(item, '__dict__') else {}
-                
-                properties = item_dict.get('properties', {})
-                company_info = properties.get('company', {})
-                
-                evaluations_text = ""
-                evaluations = item_dict.get('evaluations', [])
-                if evaluations:
-                    eval_items = []
-                    for eval_item in evaluations:
-                        if isinstance(eval_item, dict):
-                            criterion = eval_item.get('criterion', '')
-                            satisfied = eval_item.get('satisfied', '')
-                            if criterion:
-                                eval_items.append(f"{criterion}: {satisfied}")
-                    evaluations_text = " | ".join(eval_items)
-                
-                enrichment_text = ""
-                if 'enrichments' in item_dict and item_dict['enrichments']:
-                    enrichments = item_dict['enrichments']
-                    if isinstance(enrichments, list) and len(enrichments) > 0:
-                        enrichment = enrichments[0]
-                        if isinstance(enrichment, dict):
-                            enrich_result = enrichment.get('result')
-                            if enrich_result is not None:
-                                if isinstance(enrich_result, list) and enrich_result:
-                                    enrichment_text = str(enrich_result[0]) if enrich_result[0] else ""
-                                elif isinstance(enrich_result, str):
-                                    enrichment_text = enrich_result
-                                else:
-                                    enrichment_text = str(enrich_result) if enrich_result else ""
-                
-                logo_url = company_info.get('logo_url', '')
-                if logo_url is None:
-                    logo_url = ''
-                
-                result_entry = {
-                    "rank": idx,
-                    "id": item_dict.get('id', ''),
-                    "webset_id": item_dict.get('webset_id', ''),
-                    "source": str(item_dict.get('source', '')),
-                    "source_id": item_dict.get('source_id', ''),
-                    "url": properties.get('url', ''),
-                    "type": properties.get('type', ''),
-                    "description": properties.get('description', ''),
-                    "company_name": company_info.get('name', ''),
-                    "company_location": company_info.get('location', ''),
-                    "company_industry": company_info.get('industry', ''),
-                    "company_logo_url": str(logo_url) if logo_url else '',
-                    "evaluations": evaluations_text,
-                    "enrichment_data": enrichment_text,
-                    "created_at": str(item_dict.get('created_at', '')),
-                    "updated_at": str(item_dict.get('updated_at', ''))
-                }
-                
-                formatted_results.append(result_entry)
-            
-            base_cost = Decimal('0.45')
-            total_cost = base_cost * TOKEN_PRICE_MULTIPLIER
-            
-            if config.ENV_MODE == EnvMode.LOCAL:
-                logger.info("Running in LOCAL mode - skipping billing for company search")
-                cost_deducted_str = f"{int(total_cost * 100)} credits (LOCAL - not charged)"
-            else:
-                credits_deducted = await self._deduct_credits(user_id, len(formatted_results), thread_id)
-                if not credits_deducted:
-                    return self.fail_response(
-                        "Insufficient credits for company search. "
-                        f"This search costs {int(total_cost * 100)} credits ({len(formatted_results)} results). "
-                        "Please add credits to continue."
-                    )
-                cost_deducted_str = f"{int(total_cost * 100)} credits"
-            
+
+            # Parse and enrich each result with structured company info
+            formatted = []
+            for idx, r in enumerate(merged[:num_results], 1):
+                title = r.get("title", "")
+                url = r.get("url", "")
+                content = r.get("content", "")
+
+                company_info = self._extract_company_info(title, url, content)
+                company_info["rank"] = idx
+                company_info["engine"] = r.get("engine", "")
+                formatted.append(company_info)
+
             output = {
                 "query": query,
-                "total_results": len(formatted_results),
-                "cost_deducted": cost_deducted_str,
-                "results": formatted_results,
-                "enrichment_type": enrichment_description
+                "total_results": len(formatted),
+                "results": formatted,
             }
-            
-            logger.info(f"Successfully completed company search with {len(formatted_results)} results")
-            
-            try:
-                json_output = json.dumps(output, indent=2, default=str)
-                return self.success_response(json_output)
-            except Exception as json_error:
-                logger.error(f"Failed to serialize output: {json_error}")
-                summary = f"Found {len(formatted_results)} results for query: {query}"
-                if formatted_results:
-                    summary += f"\n\nTop result:\nName: {formatted_results[0].get('company_name', 'Unknown')}\nIndustry: {formatted_results[0].get('company_industry', 'Unknown')}\nLocation: {formatted_results[0].get('company_location', 'Unknown')}"
-                return self.success_response(summary)
-                
+
+            return self.success_response(json.dumps(output, indent=2, default=str))
+
         except asyncio.TimeoutError:
             return self.fail_response("Search timed out. Please try again with a simpler query.")
         except Exception as e:
-            logger.error(f"Company search failed: {repr(e)}", exc_info=True)
+            logger.error(f"Company search failed: {e}", exc_info=True)
             return self.fail_response("An error occurred during the search. Please try again.")
+
+    def _extract_company_info(self, title: str, url: str, content: str) -> dict:
+        """Extract structured company information from a search result."""
+        company_name = title
+        domain = ""
+        source = ""
+        industry = ""
+        location = ""
+        description = content
+
+        # Extract domain from URL
+        try:
+            parsed = urlparse(url)
+            domain = parsed.netloc
+            # Identify source type
+            if "linkedin.com" in domain:
+                source = "linkedin"
+            elif "crunchbase.com" in domain:
+                source = "crunchbase"
+            elif "bloomberg.com" in domain:
+                source = "bloomberg"
+            elif "glassdoor.com" in domain:
+                source = "glassdoor"
+            elif "pitchbook.com" in domain:
+                source = "pitchbook"
+            else:
+                source = "web"
+        except Exception:
+            pass
+
+        # Clean company name from title patterns
+        # e.g. "Acme Inc. | LinkedIn" -> "Acme Inc."
+        # e.g. "Acme Inc. - Company Profile - Crunchbase" -> "Acme Inc."
+        separators = [" | ", " - ", " — ", " – ", " :: "]
+        for sep in separators:
+            if sep in company_name:
+                parts = company_name.split(sep)
+                # Take the first part as the company name (usually the most relevant)
+                company_name = parts[0].strip()
+                break
+
+        # Try to extract location from content
+        location_patterns = [
+            r'(?:headquartered|based|located)\s+in\s+([A-Z][a-zA-Z\s,]+?)(?:\.|,|\s+is|\s+and|\s+with)',
+            r'([A-Z][a-zA-Z]+,\s*[A-Z]{2})\b',  # City, ST format
+            r'([A-Z][a-zA-Z]+,\s*[A-Z][a-zA-Z]+)\b',  # City, Country format
+        ]
+        for pattern in location_patterns:
+            match = re.search(pattern, content)
+            if match:
+                location = match.group(1).strip()
+                break
+
+        # Try to extract industry from content
+        industry_keywords = [
+            "technology", "software", "healthcare", "fintech", "finance",
+            "artificial intelligence", "AI", "machine learning", "biotech",
+            "e-commerce", "ecommerce", "SaaS", "cybersecurity", "edtech",
+            "cleantech", "real estate", "manufacturing", "logistics",
+            "automotive", "telecommunications", "media", "entertainment",
+            "food", "agriculture", "energy", "retail", "consulting",
+        ]
+        content_lower = content.lower()
+        for kw in industry_keywords:
+            if kw.lower() in content_lower:
+                industry = kw
+                break
+
+        return {
+            "company_name": company_name,
+            "url": url,
+            "domain": domain,
+            "description": description,
+            "source": source,
+            "industry": industry if industry else None,
+            "location": location if location else None,
+        }
+
+    async def _searxng_search(self, query: str, num_results: int) -> list[dict]:
+        """Execute a search via SearXNG with categories=general."""
+        try:
+            async with httpx.AsyncClient(timeout=15.0) as client:
+                response = await client.get(
+                    f"{SEARXNG_URL}/search",
+                    params={
+                        "q": query,
+                        "format": "json",
+                        "categories": "general",
+                        "pageno": 1,
+                    },
+                )
+                response.raise_for_status()
+                data = response.json()
+
+            raw = data.get("results", [])
+            if not raw:
+                logger.info(f"SearXNG returned 0 results for: '{query}', trying DDG fallback")
+                return await self._ddg_fallback(query, num_results)
+
+            results = []
+            for r in raw[:num_results]:
+                results.append({
+                    "title": r.get("title", ""),
+                    "url": r.get("url", ""),
+                    "content": r.get("content", ""),
+                    "engine": r.get("engine", ""),
+                })
+
+            logger.info(f"SearXNG returned {len(results)} company results for: '{query}'")
+            return results
+
+        except Exception as e:
+            logger.warning(f"SearXNG company search failed: {e}, trying DuckDuckGo fallback")
+            return await self._ddg_fallback(query, num_results)
+
+    async def _ddg_fallback(self, query: str, num_results: int) -> list[dict]:
+        """Fallback to DuckDuckGo if SearXNG is unavailable."""
+        try:
+            from duckduckgo_search import DDGS
+
+            def _search():
+                with DDGS() as ddgs:
+                    return list(ddgs.text(query, max_results=num_results))
+
+            raw = await asyncio.to_thread(_search)
+            return [
+                {
+                    "title": r.get("title", ""),
+                    "url": r.get("href", ""),
+                    "content": r.get("body", ""),
+                    "engine": "duckduckgo",
+                }
+                for r in raw
+            ]
+        except Exception as e:
+            logger.warning(f"DuckDuckGo fallback also failed: {e}")
+            return []

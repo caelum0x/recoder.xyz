@@ -8,6 +8,7 @@ export const roobertMono = localFont({
   ],
   variable: "--font-roobert-mono",
   display: "swap",
+  preload: true,
   declarations: [
     {
       prop: "font-feature-settings",

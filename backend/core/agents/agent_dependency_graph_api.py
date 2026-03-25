@@ -171,7 +171,7 @@ async def add_dependency(
     # Verify both agents belong to the user
     for aid in [agent_id, body.depends_on_agent_id]:
         agent = await execute_one(
-            "SELECT agent_id FROM agents WHERE agent_id = :aid AND account_id = :user_id",
+            "SELECT agent_id FROM agents WHERE agent_id::text = :aid AND account_id::text = :user_id",
             {"aid": aid, "user_id": user_id},
         )
         if not agent:
@@ -227,7 +227,7 @@ async def list_agent_dependencies(
     rows = await execute(
         """
         SELECT * FROM agent_dependencies
-        WHERE user_id = :user_id AND source_agent_id = :agent_id
+        WHERE user_id::text = :user_id AND source_agent_id::text = :agent_id
         ORDER BY created_at DESC
         """,
         {"user_id": user_id, "agent_id": agent_id},
@@ -262,7 +262,7 @@ async def remove_dependency(
         row = await execute_one(
             """
             DELETE FROM agent_dependencies
-            WHERE id = :dep_id AND user_id = :user_id AND source_agent_id = :agent_id
+            WHERE id = :dep_id AND user_id::text = :user_id AND source_agent_id::text = :agent_id
             RETURNING id
             """,
             {"dep_id": dep_id, "user_id": user_id, "agent_id": agent_id},
@@ -294,14 +294,14 @@ async def get_full_dependency_graph(
     try:
         # Get all agents
         agents = await execute(
-            "SELECT agent_id, name FROM agents WHERE account_id = :user_id",
+            "SELECT agent_id, name FROM agents WHERE account_id::text = :user_id",
             {"user_id": user_id},
         )
         agent_name_map = {a["agent_id"]: a["name"] or a["agent_id"][:8] for a in agents}
 
         # Get all dependencies
         deps = await execute(
-            "SELECT * FROM agent_dependencies WHERE user_id = :user_id",
+            "SELECT * FROM agent_dependencies WHERE user_id::text = :user_id",
             {"user_id": user_id},
         )
 
@@ -355,14 +355,14 @@ async def get_agent_impact(
     try:
         # Get all agents for name lookup
         agents = await execute(
-            "SELECT agent_id, name FROM agents WHERE account_id = :user_id",
+            "SELECT agent_id, name FROM agents WHERE account_id::text = :user_id",
             {"user_id": user_id},
         )
         agent_name_map = {a["agent_id"]: a["name"] or a["agent_id"][:8] for a in agents}
 
         # Get all dependencies for this user
         deps = await execute(
-            "SELECT source_agent_id, target_agent_id, dependency_type FROM agent_dependencies WHERE user_id = :user_id",
+            "SELECT source_agent_id, target_agent_id, dependency_type FROM agent_dependencies WHERE user_id::text = :user_id",
             {"user_id": user_id},
         )
 
@@ -428,7 +428,7 @@ async def get_dependency_stats(
     try:
         # Get all agents
         agents = await execute(
-            "SELECT agent_id, name FROM agents WHERE account_id = :user_id",
+            "SELECT agent_id, name FROM agents WHERE account_id::text = :user_id",
             {"user_id": user_id},
         )
         agent_name_map = {a["agent_id"]: a["name"] or a["agent_id"][:8] for a in agents}
@@ -436,7 +436,7 @@ async def get_dependency_stats(
 
         # Get all dependencies
         deps = await execute(
-            "SELECT source_agent_id, target_agent_id, dependency_type FROM agent_dependencies WHERE user_id = :user_id",
+            "SELECT source_agent_id, target_agent_id, dependency_type FROM agent_dependencies WHERE user_id::text = :user_id",
             {"user_id": user_id},
         )
 

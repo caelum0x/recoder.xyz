@@ -47,7 +47,7 @@ async def list_templates(
     user_id: str = Depends(verify_and_get_user_id_from_jwt),
 ):
     params: dict = {"user_id": user_id}
-    query = "SELECT * FROM thread_templates WHERE user_id = :user_id"
+    query = "SELECT * FROM thread_templates WHERE user_id::text = :user_id"
     if category:
         query += " AND category = :category"
         params["category"] = category
@@ -62,7 +62,7 @@ async def get_template(
     user_id: str = Depends(verify_and_get_user_id_from_jwt),
 ):
     row = await execute_one(
-        "SELECT * FROM thread_templates WHERE id = :id AND user_id = :user_id",
+        "SELECT * FROM thread_templates WHERE id = :id AND user_id::text = :user_id",
         {"id": template_id, "user_id": user_id},
     )
     if not row:
@@ -76,7 +76,7 @@ async def delete_template(
     user_id: str = Depends(verify_and_get_user_id_from_jwt),
 ):
     await execute(
-        "DELETE FROM thread_templates WHERE id = :id AND user_id = :user_id",
+        "DELETE FROM thread_templates WHERE id = :id AND user_id::text = :user_id",
         {"id": template_id, "user_id": user_id},
     )
     return {"status": "ok"}
@@ -88,7 +88,7 @@ async def create_thread_from_template(
     user_id: str = Depends(verify_and_get_user_id_from_jwt),
 ):
     template = await execute_one(
-        "SELECT * FROM thread_templates WHERE id = :id AND user_id = :user_id",
+        "SELECT * FROM thread_templates WHERE id = :id AND user_id::text = :user_id",
         {"id": template_id, "user_id": user_id},
     )
     if not template:

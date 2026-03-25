@@ -139,15 +139,18 @@ def _setup_cloudwatch_logging() -> None:
         aws_access_key_id = os.getenv("AWS_ACCESS_KEY_ID")
         aws_secret_access_key = os.getenv("AWS_SECRET_ACCESS_KEY")
 
-        if aws_access_key_id and aws_secret_access_key:
-            logs_client = boto3.client(
-                "logs",
-                region_name=aws_region,
-                aws_access_key_id=aws_access_key_id,
-                aws_secret_access_key=aws_secret_access_key,
+        if not aws_access_key_id or not aws_secret_access_key:
+            logging.getLogger().debug(
+                "CloudWatch logging skipped: AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY not set."
             )
-        else:
-            logs_client = boto3.client("logs", region_name=aws_region)
+            return
+
+        logs_client = boto3.client(
+            "logs",
+            region_name=aws_region,
+            aws_access_key_id=aws_access_key_id,
+            aws_secret_access_key=aws_secret_access_key,
+        )
 
         # Best-effort: ensure log group exists
         try:

@@ -107,7 +107,7 @@ async def list_agent_quotas(
                     ELSE 0
                 END AS usage_pct
             FROM agent_resource_quotas
-            WHERE user_id = :user_id AND agent_id = :agent_id
+            WHERE user_id::text = :user_id AND agent_id::text = :agent_id
             ORDER BY resource_type
             """,
             {"user_id": user_id, "agent_id": agent_id},
@@ -135,7 +135,7 @@ async def delete_agent_quota(
         rows = await execute_mutate(
             """
             DELETE FROM agent_resource_quotas
-            WHERE id = :quota_id AND user_id = :user_id AND agent_id = :agent_id
+            WHERE id = :quota_id AND user_id::text = :user_id AND agent_id::text = :agent_id
             RETURNING id
             """,
             {"quota_id": quota_id, "user_id": user_id, "agent_id": agent_id},
@@ -168,7 +168,7 @@ async def check_agent_quota(
         quota = await execute_one(
             """
             SELECT * FROM agent_resource_quotas
-            WHERE user_id = :user_id AND agent_id = :agent_id AND resource_type = :resource_type AND is_active = true
+            WHERE user_id::text = :user_id AND agent_id::text = :agent_id AND resource_type = :resource_type AND is_active = true
             """,
             {"user_id": user_id, "agent_id": agent_id, "resource_type": body.resource_type},
         )
@@ -216,7 +216,7 @@ async def record_agent_usage(
         quota = await execute_one(
             """
             SELECT * FROM agent_resource_quotas
-            WHERE user_id = :user_id AND agent_id = :agent_id AND resource_type = :resource_type AND is_active = true
+            WHERE user_id::text = :user_id AND agent_id::text = :agent_id AND resource_type = :resource_type AND is_active = true
             """,
             {"user_id": user_id, "agent_id": agent_id, "resource_type": body.resource_type},
         )
@@ -233,7 +233,7 @@ async def record_agent_usage(
             """
             UPDATE agent_resource_quotas
             SET current_usage = current_usage + :amount
-            WHERE id = :quota_id AND user_id = :user_id
+            WHERE id = :quota_id AND user_id::text = :user_id
             """,
             {"amount": body.amount, "quota_id": str(quota["id"]), "user_id": user_id},
         )
@@ -281,7 +281,7 @@ async def reset_agent_quotas(
             """
             UPDATE agent_resource_quotas
             SET current_usage = 0, last_reset_at = now()
-            WHERE user_id = :user_id AND agent_id = :agent_id
+            WHERE user_id::text = :user_id AND agent_id::text = :agent_id
             RETURNING id, resource_type
             """,
             {"user_id": user_id, "agent_id": agent_id},
@@ -311,7 +311,7 @@ async def list_quota_violations(
 ):
     """List quota violations across all agents or for a specific agent."""
     try:
-        agent_filter = "AND vl.agent_id = :agent_id" if agent_id else ""
+        agent_filter = "AND vl.agent_id::text = :agent_id" if agent_id else ""
         params: dict = {"user_id": user_id, "limit": limit}
         if agent_id:
             params["agent_id"] = agent_id
@@ -323,8 +323,8 @@ async def list_quota_violations(
                 q.resource_type,
                 q.agent_id
             FROM quota_violation_log vl
-            JOIN agent_resource_quotas q ON q.id = vl.quota_id
-            WHERE vl.user_id = :user_id
+            JOIN agent_resource_quotas q ON q.id::text = vl.quota_id::text
+            WHERE vl.user_id::text = :user_id
             {agent_filter}
             ORDER BY vl.violated_at DESC
             LIMIT :limit

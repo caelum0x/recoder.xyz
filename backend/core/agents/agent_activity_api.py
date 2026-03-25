@@ -63,6 +63,45 @@ def fire_and_forget_activity(
 # Endpoints
 # ---------------------------------------------------------------------------
 
+@router.get("/agents/activity", summary="Get all agent activity")
+async def get_all_agent_activity(
+    user_id: str = Depends(verify_and_get_user_id_from_jwt),
+    limit: int = Query(20, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    activity_type: Optional[str] = Query(None),
+):
+    """Paginated activity feed across all agents for the authenticated user."""
+    where = "user_id::text = :user_id"
+    params: dict = {"user_id": user_id, "limit": limit, "offset": offset}
+
+    if activity_type:
+        where += " AND activity_type = :activity_type"
+        params["activity_type"] = activity_type
+
+    rows = await execute(
+        f"""
+        SELECT * FROM agent_activity
+        WHERE {where}
+        ORDER BY created_at DESC
+        LIMIT :limit OFFSET :offset
+        """,
+        params,
+    )
+
+    count_row = await execute_one(
+        f"SELECT COUNT(*) FROM agent_activity WHERE {where}",
+        {k: v for k, v in params.items() if k not in ("limit", "offset")},
+    )
+    total = int(count_row["count"]) if count_row else 0
+
+    return {
+        "activities": [dict(r) for r in rows],
+        "total": total,
+        "limit": limit,
+        "offset": offset,
+    }
+
+
 @router.get("/agents/{agent_id}/activity", summary="Get agent activity feed")
 async def get_agent_activity(
     agent_id: str,
@@ -72,7 +111,7 @@ async def get_agent_activity(
     activity_type: Optional[str] = Query(None),
 ):
     """Paginated activity feed for a specific agent."""
-    where = "user_id = :user_id AND agent_id = :agent_id"
+    where = "user_id::text = :user_id AND agent_id::text = :agent_id"
     params: dict = {
         "user_id": user_id,
         "agent_id": agent_id,
@@ -118,8 +157,8 @@ async def get_recent_activity(
         """
         SELECT aa.*, a.name AS agent_name
         FROM agent_activity aa
-        LEFT JOIN agents a ON a.agent_id::text = aa.agent_id
-        WHERE aa.user_id = :user_id
+        LEFT JOIN agents a ON a.agent_id::text = aa.agent_id::text
+        WHERE aa.user_id::text = :user_id
         ORDER BY aa.created_at DESC
         LIMIT :limit
         """,
@@ -140,8 +179,8 @@ async def get_agent_activity_summary(
         """
         SELECT activity_type, COUNT(*) AS count
         FROM agent_activity
-        WHERE user_id = :user_id
-          AND agent_id = :agent_id
+        WHERE user_id::text = :user_id
+          AND agent_id::text = :agent_id
           AND created_at >= :cutoff
         GROUP BY activity_type
         ORDER BY count DESC

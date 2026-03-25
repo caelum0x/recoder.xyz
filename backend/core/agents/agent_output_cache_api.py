@@ -110,7 +110,7 @@ async def get_cache_stats(
                 COALESCE(SUM(hit_count), 0) AS total_hits,
                 COUNT(*) FILTER (WHERE expires_at < :now) AS expired_count
             FROM agent_output_cache
-            WHERE agent_id = :agent_id AND user_id = :user_id
+            WHERE agent_id::text = :agent_id AND user_id::text = :user_id
             """,
             {"agent_id": agent_id, "user_id": user_id, "now": now},
         )
@@ -143,7 +143,7 @@ async def get_cache_policy(
         row = await execute_one(
             """
             SELECT * FROM cache_policies
-            WHERE agent_id = :agent_id AND user_id = :user_id
+            WHERE agent_id::text = :agent_id AND user_id::text = :user_id
             """,
             {"agent_id": agent_id, "user_id": user_id},
         )
@@ -227,7 +227,7 @@ async def lookup_cache(
         row = await execute_one(
             """
             SELECT * FROM agent_output_cache
-            WHERE agent_id = :agent_id AND cache_key = :cache_key AND user_id = :user_id
+            WHERE agent_id::text = :agent_id AND cache_key = :cache_key AND user_id::text = :user_id
             """,
             {"agent_id": agent_id, "cache_key": cache_key, "user_id": user_id},
         )
@@ -245,7 +245,7 @@ async def lookup_cache(
             """
             UPDATE agent_output_cache
             SET hit_count = hit_count + 1
-            WHERE agent_id = :agent_id AND cache_key = :cache_key AND user_id = :user_id
+            WHERE agent_id::text = :agent_id AND cache_key = :cache_key AND user_id::text = :user_id
             """,
             {"agent_id": agent_id, "cache_key": cache_key, "user_id": user_id},
         )
@@ -273,7 +273,7 @@ async def invalidate_cache_entry(
         existing = await execute_one(
             """
             SELECT id FROM agent_output_cache
-            WHERE agent_id = :agent_id AND cache_key = :cache_key AND user_id = :user_id
+            WHERE agent_id::text = :agent_id AND cache_key = :cache_key AND user_id::text = :user_id
             """,
             {"agent_id": agent_id, "cache_key": cache_key, "user_id": user_id},
         )
@@ -283,7 +283,7 @@ async def invalidate_cache_entry(
         await execute_mutate(
             """
             DELETE FROM agent_output_cache
-            WHERE agent_id = :agent_id AND cache_key = :cache_key AND user_id = :user_id
+            WHERE agent_id::text = :agent_id AND cache_key = :cache_key AND user_id::text = :user_id
             """,
             {"agent_id": agent_id, "cache_key": cache_key, "user_id": user_id},
         )
@@ -309,7 +309,7 @@ async def clear_agent_cache(
         rows = await execute(
             """
             DELETE FROM agent_output_cache
-            WHERE agent_id = :agent_id AND user_id = :user_id
+            WHERE agent_id::text = :agent_id AND user_id::text = :user_id
             RETURNING id
             """,
             {"agent_id": agent_id, "user_id": user_id},
@@ -336,7 +336,7 @@ async def cleanup_expired_cache(
         rows = await execute(
             """
             DELETE FROM agent_output_cache
-            WHERE user_id = :user_id AND expires_at < :now
+            WHERE user_id::text = :user_id AND expires_at < :now
             RETURNING id
             """,
             {"user_id": user_id, "now": now},

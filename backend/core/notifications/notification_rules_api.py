@@ -344,7 +344,7 @@ async def list_notification_rules(
     try:
         rows = await execute(
             """SELECT * FROM notification_rules
-               WHERE user_id = :user_id
+               WHERE user_id::text = :user_id
                ORDER BY created_at DESC""",
             {"user_id": user_id},
         )
@@ -365,11 +365,11 @@ async def list_notification_rule_log(
 ):
     """List notification rule execution log entries."""
     try:
-        where_parts = ["l.user_id = :user_id"]
+        where_parts = ["l.user_id::text = :user_id"]
         params: Dict[str, Any] = {"user_id": user_id, "limit": limit, "offset": offset}
 
         if rule_id:
-            where_parts.append("l.rule_id = :rule_id")
+            where_parts.append("l.rule_id::text = :rule_id")
             params["rule_id"] = rule_id
 
         where_sql = " AND ".join(where_parts)
@@ -404,7 +404,7 @@ async def get_notification_rule(
     """Get a notification rule with recent log entries."""
     try:
         row = await execute_one(
-            "SELECT * FROM notification_rules WHERE id = :id AND user_id = :user_id",
+            "SELECT * FROM notification_rules WHERE id = :id AND user_id::text = :user_id",
             {"id": rule_id, "user_id": user_id},
         )
         if not row:
@@ -415,7 +415,7 @@ async def get_notification_rule(
         # Get recent logs
         log_rows = await execute(
             """SELECT * FROM notification_rule_log
-               WHERE rule_id = :rule_id AND user_id = :user_id
+               WHERE rule_id::text = :rule_id AND user_id::text = :user_id
                ORDER BY created_at DESC
                LIMIT 20""",
             {"rule_id": rule_id, "user_id": user_id},
@@ -447,7 +447,7 @@ async def update_notification_rule(
     """Update a notification rule."""
     try:
         existing = await execute_one(
-            "SELECT id FROM notification_rules WHERE id = :id AND user_id = :user_id",
+            "SELECT id FROM notification_rules WHERE id = :id AND user_id::text = :user_id",
             {"id": rule_id, "user_id": user_id},
         )
         if not existing:
@@ -499,7 +499,7 @@ async def update_notification_rule(
 
         row = await execute_one(
             f"""UPDATE notification_rules SET {set_sql}
-                WHERE id = :id AND user_id = :user_id
+                WHERE id = :id AND user_id::text = :user_id
                 RETURNING *""",
             params,
             commit=True,
@@ -525,14 +525,14 @@ async def delete_notification_rule(
     """Delete a notification rule and its log entries."""
     try:
         existing = await execute_one(
-            "SELECT id FROM notification_rules WHERE id = :id AND user_id = :user_id",
+            "SELECT id FROM notification_rules WHERE id = :id AND user_id::text = :user_id",
             {"id": rule_id, "user_id": user_id},
         )
         if not existing:
             raise HTTPException(status_code=404, detail="Notification rule not found")
 
         await execute_mutate(
-            "DELETE FROM notification_rules WHERE id = :id AND user_id = :user_id",
+            "DELETE FROM notification_rules WHERE id = :id AND user_id::text = :user_id",
             {"id": rule_id, "user_id": user_id},
         )
 
@@ -553,7 +553,7 @@ async def test_notification_rule(
     """Test a notification rule with mock data. Returns what would happen."""
     try:
         row = await execute_one(
-            "SELECT * FROM notification_rules WHERE id = :id AND user_id = :user_id",
+            "SELECT * FROM notification_rules WHERE id = :id AND user_id::text = :user_id",
             {"id": rule_id, "user_id": user_id},
         )
         if not row:

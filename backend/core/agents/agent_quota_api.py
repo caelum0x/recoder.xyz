@@ -1,8 +1,11 @@
+import logging
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 from typing import Optional
 from core.utils.auth_utils import verify_and_get_user_id_from_jwt
 from core.services.db import execute, execute_one
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["agent-quotas"])
 
@@ -28,7 +31,7 @@ async def _get_current_usage(agent_id: str, user_id: str) -> dict:
             COALESCE(SUM(total_tokens_in + total_tokens_out), 0) AS tokens_today,
             COALESCE(SUM(total_cost), 0) AS cost_today
         FROM agent_analytics_daily
-        WHERE agent_id = :agent_id
+        WHERE agent_id::text = :agent_id
           AND date = CURRENT_DATE
         """,
         {"agent_id": agent_id},
@@ -42,7 +45,7 @@ async def _get_current_usage(agent_id: str, user_id: str) -> dict:
             COALESCE(SUM(total_tokens_in + total_tokens_out), 0) AS tokens_month,
             COALESCE(SUM(total_cost), 0) AS cost_month
         FROM agent_analytics_daily
-        WHERE agent_id = :agent_id
+        WHERE agent_id::text = :agent_id
           AND date >= date_trunc('month', CURRENT_DATE)
         """,
         {"agent_id": agent_id},
@@ -71,7 +74,7 @@ async def get_agent_quota(
     user_id: str = Depends(verify_and_get_user_id_from_jwt),
 ):
     quota_row = await execute_one(
-        "SELECT * FROM agent_quotas WHERE agent_id = :agent_id AND user_id = :user_id",
+        "SELECT * FROM agent_quotas WHERE agent_id::text = :agent_id AND user_id::text = :user_id",
         {"agent_id": agent_id, "user_id": user_id},
     )
 
@@ -147,7 +150,7 @@ async def delete_agent_quota(
     user_id: str = Depends(verify_and_get_user_id_from_jwt),
 ):
     await execute(
-        "DELETE FROM agent_quotas WHERE agent_id = :agent_id AND user_id = :user_id",
+        "DELETE FROM agent_quotas WHERE agent_id::text = :agent_id AND user_id::text = :user_id",
         {"agent_id": agent_id, "user_id": user_id},
     )
     return {"status": "ok"}
@@ -157,6 +160,14 @@ async def delete_agent_quota(
 async def get_quotas_overview(
     user_id: str = Depends(verify_and_get_user_id_from_jwt),
 ):
+    try:
+        return await _get_quotas_overview_impl(user_id)
+    except Exception as e:
+        logger.warning(f"Quotas overview error: {e}")
+        return []
+
+
+async def _get_quotas_overview_impl(user_id: str):
     # Get all agents with their quotas (left join so we include agents without quotas)
     rows = await execute(
         """
@@ -178,14 +189,14 @@ async def get_quotas_overview(
             COALESCE(m.tokens_month, 0) AS tokens_month,
             COALESCE(m.cost_month, 0) AS cost_month
         FROM agents a
-        LEFT JOIN agent_quotas q ON q.agent_id = a.agent_id AND q.user_id = :user_id
+        LEFT JOIN agent_quotas q ON q.agent_id::text = a.agent_id::text AND CAST(q.user_id AS text) = CAST(:user_id AS text)
         LEFT JOIN LATERAL (
             SELECT
                 SUM(total_runs) AS runs_today,
                 SUM(total_tokens_in + total_tokens_out) AS tokens_today,
                 SUM(total_cost) AS cost_today
             FROM agent_analytics_daily
-            WHERE agent_id = a.agent_id AND date = CURRENT_DATE
+            WHERE agent_id::text = a.agent_id::text AND date = CURRENT_DATE
         ) d ON true
         LEFT JOIN LATERAL (
             SELECT
@@ -193,9 +204,9 @@ async def get_quotas_overview(
                 SUM(total_tokens_in + total_tokens_out) AS tokens_month,
                 SUM(total_cost) AS cost_month
             FROM agent_analytics_daily
-            WHERE agent_id = a.agent_id AND date >= date_trunc('month', CURRENT_DATE)
+            WHERE agent_id::text = a.agent_id::text AND date >= date_trunc('month', CURRENT_DATE)
         ) m ON true
-        WHERE a.account_id = :user_id
+        WHERE CAST(a.account_id AS text) = CAST(:user_id AS text)
         ORDER BY a.name
         """,
         {"user_id": user_id},
@@ -242,14 +253,14 @@ async def get_quota_alerts(
             COALESCE(m.tokens_month, 0) AS tokens_month,
             COALESCE(m.cost_month, 0) AS cost_month
         FROM agent_quotas q
-        JOIN agents a ON a.agent_id = q.agent_id
+        JOIN agents a ON a.agent_id::text = q.agent_id::text
         LEFT JOIN LATERAL (
             SELECT
                 SUM(total_runs) AS runs_today,
                 SUM(total_tokens_in + total_tokens_out) AS tokens_today,
                 SUM(total_cost) AS cost_today
             FROM agent_analytics_daily
-            WHERE agent_id = q.agent_id AND date = CURRENT_DATE
+            WHERE agent_id::text = q.agent_id::text AND date = CURRENT_DATE
         ) d ON true
         LEFT JOIN LATERAL (
             SELECT
@@ -257,9 +268,9 @@ async def get_quota_alerts(
                 SUM(total_tokens_in + total_tokens_out) AS tokens_month,
                 SUM(total_cost) AS cost_month
             FROM agent_analytics_daily
-            WHERE agent_id = q.agent_id AND date >= date_trunc('month', CURRENT_DATE)
+            WHERE agent_id::text = q.agent_id::text AND date >= date_trunc('month', CURRENT_DATE)
         ) m ON true
-        WHERE q.user_id = :user_id
+        WHERE q.user_id::text = :user_id
         ORDER BY a.name
         """,
         {"user_id": user_id},
