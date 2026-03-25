@@ -240,6 +240,10 @@ export class StreamConnection {
       const decoder = new TextDecoder();
       let buffer = '';
 
+      // Persist currentData across read() calls so that SSE events
+      // split across TCP chunks are reassembled correctly.
+      let currentData = '';
+
       const readLoop = async () => {
         try {
           while (!this.isDestroyed) {
@@ -265,7 +269,6 @@ export class StreamConnection {
             // Keep the last incomplete line in the buffer
             buffer = lines.pop() || '';
 
-            let currentData = '';
             for (const line of lines) {
               if (line.startsWith('data: ')) {
                 currentData += (currentData ? '\n' : '') + line.slice(6);
@@ -284,15 +287,6 @@ export class StreamConnection {
                 const id = line.slice(line.indexOf(':') + 1).trim();
                 if (id) this.lastEventId = id;
               }
-            }
-
-            // If there is accumulated data without a trailing blank line,
-            // it might be a single-line SSE message (some servers don't
-            // send trailing newlines). We keep it in a pending state.
-            if (currentData) {
-              // Put it back at the start of the buffer so it gets completed
-              // with the next chunk
-              buffer = currentData + '\n' + buffer;
             }
           }
         } catch (err) {
