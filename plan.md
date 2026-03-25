@@ -1,6 +1,6 @@
 # Recoder Platform — Current State & Plan
 
-Last updated: 2026-03-25 18:10 (T14 — Deep SSE/HTTP2 fix, 2000+ ::text casts across 219 files, frontend error resilience, full deploy)
+Last updated: 2026-03-25 22:00 (T15 — Restored chat preview fix: Daytona multi-port health check, sandbox readiness wait, exec retry, port recovery bug)
 
 ## CRITICAL SYSTEMIC ISSUE
 
@@ -176,7 +176,8 @@ All critical blockers resolved. **Needs browser verification in incognito.**
   3. Dev server ✅ — `preview.ts` auto-detects framework, runs `npm install` + `npm run dev`, polls ports
   4. Preview URL ✅ — `https://web.recoder.xyz/preview/{projectId}` proxied via nginx → docker-backend → dev server (or redirects to `{port}-{sandboxId}.sandbox.recoder.xyz` for Daytona)
   5. **T12**: Fixed login redirect (was using internal URL). Now redirects to `https://recoder.xyz/auth/signin`.
-  6. **Needs browser test** — Auth + sandbox + preview should now work end-to-end
+  6. **T15**: Fixed restored chat preview never loading — Daytona health check now probes 5173/3000/8081/8080, sandbox waits for running state, exec retries on startup failures, port recovery precedence bug fixed.
+  7. **Needs browser test** — Auth + sandbox + preview should now work end-to-end
 - **Publish Pipeline**: FULLY WIRED (T9 investigation confirmed):
   1. `POST /api/publish/{projectId}` → docker-backend builds project → copies to `/data/published/{slug}/`
   2. docker-backend serves at `GET /published/{slug}/*` with path traversal protection + SPA fallback (server.ts lines 15068-15107)
@@ -376,11 +377,12 @@ Sandbox access checks may still fail for some combinations.
 - ~~Live preview pipeline~~ — UNBLOCKED T9.
 - ~~Publish serving~~ — FIXED T9.
 
-### STILL OPEN — Needs user browser testing (after T14 deploy)
+### STILL OPEN — Needs user browser testing (after T14+T15 deploy)
 1. ~~**QUIC/HTTP2 SSE errors** (P0)~~: **FIXED T14** — fetch-based SSE default, immediate `: connected` from backend, consistent nginx SSE blocks. Test in incognito.
 2. ~~**Chats/Workers/Spaces/Triggers** (P1)~~: All backend endpoints return 200. ::text casts comprehensive. React Query won't retry 404s. **Test in incognito.**
 3. ~~**Slides stuck loading** (P1)~~: SSE streams should now work → agent completion events reach frontend → output renders.
-4. **web.recoder.xyz full flow** (P3): Auth ✅, preview pipeline wired, publish serving working. User actively using it.
+4. ~~**web.recoder.xyz restored chat preview never loads** (P1)~~: **FIXED T15** — Three root causes: (1) Daytona preview URL hardcoded to port 3000 but Vite runs on 5173, (2) sandbox not ready for exec immediately after creation, (3) port recovery operator precedence bug. Fix: multi-port health check, sandbox readiness wait, exec retry with backoff.
+5. **web.recoder.xyz full flow** (P3): Auth ✅, preview pipeline wired, publish serving working. User actively using it.
 
 ### RESOLVED T12b (2026-03-24 ~06:00)
 - ~~CloudWatch metrics~~ — FIXED: credential check added, no more log spam.
@@ -530,3 +532,28 @@ All search should run through self-hosted SearXNG (no paid API keys needed). Cur
 - ✅ **Monitor health/alerts endpoints**: `GET /monitor/health` and `GET /monitor/alerts` returned 404 (monitor overview claimed they existed but they didn't). Added stub endpoints returning `{"status": "healthy"}` and `{"alerts": [], "total": 0}`.
 
 **27/27 backend endpoints verified 200. 721/721 Python files compile clean. Zero errors in all service logs.**
+
+### RESOLVED T14 — Deep fix (deployed 2026-03-25 18:10)
+
+#### Backend: Comprehensive ::text cast sweep (219 files)
+- ✅ **~2,014 WHERE/AND clauses** fixed with `::text` casts across ALL backend modules
+- ✅ **~44 JOIN conditions** fixed with `::text` on both sides
+- ✅ **Pipeline API**: All 8 queries in `agent_pipeline_api.py` fixed (was causing `/v1/pipelines/{id}` → 404)
+- ✅ 9 false positives caught (SET assignments incorrectly cast) — reverted
+- ✅ Stripe/external IDs correctly excluded from casting
+
+#### SSE/HTTP2 fix (3-layer)
+- ✅ **Frontend fetch-based SSE by default**: `sse.ts` `FETCH_FALLBACK_AFTER=0`, `stream-connection.ts` `useFetchFallback=true`. Bypasses EventSource HTTP/2 issues entirely.
+- ✅ **Backend immediate first byte**: 4 SSE endpoints (`agent-run`, `pipeline`, `notifications`, `presence`) now emit `": connected\n\n"` immediately on connection. Prevents Cloudflare first-byte timeout.
+- ✅ **Backend keepalive standardized**: `notification_stream_api.py` reduced from 30s→15s. All 6 SSE endpoints now at 15s.
+- ✅ **nginx SSE blocks consistent**: All 10 SSE location blocks across 5 server blocks now have full config (`proxy_buffering off`, `chunked_transfer_encoding off`, `proxy_ignore_client_abort on`, `X-Accel-Buffering: no`, 24h timeouts, `Accept: text/event-stream`).
+- ✅ **Gzip exclusion**: `text/event-stream` removed from `gzip_types` (gzip buffers defeat SSE streaming).
+
+#### Frontend error resilience
+- ✅ **`ApiRequestError` class**: Preserves HTTP status on thrown errors for React Query.
+- ✅ **React Query**: Never retries 4xx errors (only 5xx + network). Exponential backoff with jitter.
+- ✅ **Pipeline 404 handling**: Page shows "not found" state instead of infinite retry loop.
+- ✅ **SSE reconnect**: Stops on 4xx, max 15 attempts on transient errors, exponential backoff.
+- ✅ **SSE error boundary**: Logs every 5th retry only (kills console spam).
+
+**273 files changed. All Python files compile clean. Deployed: backend + nginx + frontend.**
