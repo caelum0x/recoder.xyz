@@ -43,10 +43,19 @@ export type Thread = {
 };
 
 export type Message = {
-  role: string;
-  content: string;
+  message_id?: string;
+  thread_id?: string;
   type: string;
+  is_llm_message?: boolean;
+  content?: unknown;
+  metadata?: unknown;
+  created_at?: string;
+  updated_at?: string;
   agent_id?: string;
+  agent_run_id?: string;
+  agent_version_id?: string;
+  // Legacy fields
+  role?: string;
   agents?: {
     name: string;
   };

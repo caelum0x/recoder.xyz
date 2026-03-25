@@ -6,9 +6,11 @@ from core.services.http_client import get_http_client
 from core.utils.logger import logger
 from io import BytesIO
 import uuid
-from litellm import aimage_generation, aimage_edit
 import base64
+import os
 from core.utils.file_name_generator import generate_smart_filename
+from core.utils.config import get_config
+from core.services.http_client import get_http_client
 
 @tool_metadata(
     display_name="Design & Graphics",
@@ -163,35 +165,23 @@ class SandboxDesignerTool(SandboxToolsBase):
             size_string = self._get_size_string(actual_width, actual_height)
 
             if mode == "create":
-                response = await aimage_generation(
-                    model="gpt-image-1.5",
-                    prompt=enhanced_prompt,
-                    n=1,
-                    size=size_string,
-                    quality=quality,
-                )
+                result_b64 = await self._generate_via_openrouter(enhanced_prompt)
             elif mode == "edit":
                 if not image_path:
                     return self.fail_response("'image_path' is required for edit mode.")
 
                 image_bytes = await self._get_image_bytes(image_path)
-                if isinstance(image_bytes, ToolResult):  
+                if isinstance(image_bytes, ToolResult):
                     return image_bytes
 
-                image_io = BytesIO(image_bytes)
-                image_io.name = "design.png"
-
-                response = await aimage_edit(
-                    image=[image_io],  
-                    prompt=enhanced_prompt,
-                    model="gpt-image-1.5",
-                    n=1,
-                    size=size_string,
-                )
+                result_b64 = await self._generate_via_openrouter(enhanced_prompt, image_bytes=image_bytes)
             else:
                 return self.fail_response("Invalid mode. Use 'create' or 'edit'.")
 
-            design_path = await self._process_design_response(response, actual_width, actual_height, prompt, platform_preset)
+            if result_b64 is None:
+                return self.fail_response("Image generation failed. Ensure OPENROUTER_API_KEY is configured.")
+
+            design_path = await self._process_design_b64(result_b64, actual_width, actual_height, prompt, platform_preset)
             if isinstance(design_path, ToolResult):  
                 return design_path
 
@@ -362,6 +352,97 @@ class SandboxDesignerTool(SandboxToolsBase):
                 f"Could not read design file from sandbox: {image_path} - {str(e)}"
             )
 
+    async def _generate_via_openrouter(self, prompt: str, image_bytes: Optional[bytes] = None) -> Optional[str]:
+        """Generate or edit an image via OpenRouter (Gemini image model).
+        Returns a base64 data URL on success, or None on failure."""
+        import httpx
+
+        config = get_config()
+        api_key = config.OPENROUTER_API_KEY or os.getenv("OPENROUTER_API_KEY")
+        if not api_key:
+            logger.warning("No OPENROUTER_API_KEY configured for designer image generation")
+            return None
+
+        try:
+            if image_bytes:
+                image_b64 = base64.b64encode(image_bytes).decode('utf-8')
+                user_content = [
+                    {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{image_b64}"}},
+                    {"type": "text", "text": prompt},
+                ]
+            else:
+                user_content = prompt
+
+            async with httpx.AsyncClient(timeout=120) as client:
+                response = await client.post(
+                    "https://openrouter.ai/api/v1/chat/completions",
+                    headers={
+                        "Authorization": f"Bearer {api_key}",
+                        "Content-Type": "application/json",
+                        "HTTP-Referer": "https://recoder.xyz",
+                        "X-Title": "Recoder Designer",
+                    },
+                    json={
+                        "model": "google/gemini-2.5-flash-preview-05-20",
+                        "messages": [{"role": "user", "content": user_content}],
+                        "modalities": ["image", "text"],
+                    },
+                )
+
+                if response.status_code != 200:
+                    body = response.text[:500]
+                    logger.warning(f"OpenRouter designer image gen failed: {response.status_code} — {body}")
+                    return None
+
+                data = response.json()
+                message = data.get("choices", [{}])[0].get("message", {})
+                content = message.get("content")
+
+                if isinstance(content, list):
+                    for part in content:
+                        if isinstance(part, dict) and part.get("type") == "image_url":
+                            url = part.get("image_url", {}).get("url")
+                            if url:
+                                return url
+
+                images = message.get("images", [])
+                if images:
+                    url = images[0].get("image_url", {}).get("url") if isinstance(images[0], dict) else None
+                    if url:
+                        return url
+
+                logger.warning("OpenRouter designer: no image found in response")
+                return None
+        except Exception as e:
+            logger.warning(f"OpenRouter designer image gen error: {e}")
+            return None
+
+    async def _process_design_b64(self, b64_data_url: str, width: int, height: int, prompt: str = "", platform: str = "") -> str | ToolResult:
+        """Process a base64 data URL image and save to sandbox."""
+        try:
+            if b64_data_url.startswith("data:"):
+                b64_str = b64_data_url.split(",", 1)[1]
+            else:
+                b64_str = b64_data_url
+            image_data = base64.b64decode(b64_str)
+
+            if prompt:
+                smart_filename = await generate_smart_filename(
+                    prompt=prompt,
+                    file_type="image",
+                    extension="png"
+                )
+            else:
+                platform_title = platform.replace('_', ' ').title() if platform else 'Custom'
+                smart_filename = f"{platform_title} Design.png"
+
+            full_path = f"{self.designs_dir}/{smart_filename}"
+            await self.write_file(full_path, image_data)
+            return full_path
+
+        except Exception as e:
+            return self.fail_response(f"Failed to save design: {str(e)}")
+
     async def _process_design_response(self, response, width: int, height: int, prompt: str = "", platform: str = "") -> str | ToolResult:
         try:
             original_b64_str = response.data[0].b64_json
@@ -378,11 +459,11 @@ class SandboxDesignerTool(SandboxToolsBase):
                 # Fallback with platform info
                 platform_title = platform.replace('_', ' ').title() if platform else 'Custom'
                 smart_filename = f"{platform_title} Design.png"
-            
+
             full_path = f"{self.designs_dir}/{smart_filename}"
 
             await self.write_file(full_path, image_data)
-            
+
             return full_path
 
         except Exception as e:

@@ -13,7 +13,7 @@ CREATE TABLE IF NOT EXISTS agent_webhooks (
   updated_at TIMESTAMPTZ DEFAULT now()
 );
 
-CREATE TABLE IF NOT EXISTS webhook_deliveries (
+CREATE TABLE IF NOT EXISTS agent_webhook_deliveries (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   webhook_id UUID NOT NULL REFERENCES agent_webhooks(id) ON DELETE CASCADE,
   user_id UUID NOT NULL,
@@ -29,8 +29,8 @@ CREATE TABLE IF NOT EXISTS webhook_deliveries (
 
 CREATE INDEX idx_webhooks_user ON agent_webhooks(user_id);
 CREATE INDEX idx_webhooks_agent ON agent_webhooks(agent_id);
-CREATE INDEX idx_deliveries_webhook ON webhook_deliveries(webhook_id, created_at DESC);
-CREATE INDEX idx_deliveries_user ON webhook_deliveries(user_id, created_at DESC);
-CREATE INDEX idx_deliveries_status ON webhook_deliveries(status) WHERE status IN ('pending', 'retrying');
+CREATE INDEX idx_deliveries_webhook ON agent_webhook_deliveries(webhook_id, created_at DESC);
+CREATE INDEX idx_deliveries_user ON agent_webhook_deliveries(user_id, created_at DESC);
+CREATE INDEX idx_deliveries_status ON agent_webhook_deliveries(status) WHERE status IN ('pending', 'retrying');
 
 -- Access control enforced at application layer (WHERE user_id = :user_id)

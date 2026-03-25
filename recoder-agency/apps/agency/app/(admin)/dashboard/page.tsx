@@ -47,12 +47,47 @@ function formatCurrency(cents: number, currency = "USD") {
 	}).format(cents / 100);
 }
 
+/**
+ * Fallback UI shown when the dashboard cannot load data.
+ * This prevents the whole page from crashing and gives the user actionable info.
+ */
+function DashboardSetupFallback({ reason }: { reason: "auth" | "db" }) {
+	return (
+		<div className="flex flex-col items-center justify-center min-h-[60vh] gap-6 px-4 text-center">
+			<div className="rounded-full bg-amber-500/10 p-4">
+				<AlertTriangleIcon className="h-8 w-8 text-amber-500" />
+			</div>
+			<h1 className="text-2xl font-bold">Dashboard Unavailable</h1>
+			<p className="text-muted-foreground max-w-md">
+				{reason === "auth"
+					? "Could not verify your session. Please sign in again."
+					: "Could not load dashboard data. The agency database tables may not be fully provisioned yet."}
+			</p>
+			<div className="flex gap-3">
+				<Link
+					href={reason === "auth" ? "/login" : "/"}
+					className="px-6 py-2 bg-primary text-primary-foreground rounded-md hover:opacity-90 transition-opacity"
+				>
+					{reason === "auth" ? "Sign In" : "Return Home"}
+				</Link>
+			</div>
+		</div>
+	);
+}
+
 export default async function AdminDashboardPage({
 	searchParams,
 }: {
 	searchParams: Promise<{ fallbackWindow?: string }>;
 }) {
-	const team = await fetchCurrentTeam();
+	let team: Awaited<ReturnType<typeof fetchCurrentTeam>>;
+	try {
+		team = await fetchCurrentTeam();
+	} catch (err) {
+		console.error("[agency/dashboard] fetchCurrentTeam failed:", err);
+		return <DashboardSetupFallback reason="auth" />;
+	}
+
 	const params = await searchParams;
 	const fallbackWindowParam = params.fallbackWindow;
 	const fallbackWindow =
@@ -62,26 +97,46 @@ export default async function AdminDashboardPage({
 	const fallbackWindowDays =
 		fallbackWindow === "7d" ? 7 : fallbackWindow === "30d" ? 30 : null;
 
-	const [
-		clientCount,
-		projectCounts,
-		pendingReviews,
-		weeklyMetrics,
-		freshness,
-		failedInvoices,
-		budgetOverview,
-		costGuardrailEvents,
-		unitEconomicsRows,
-		marginOverview,
-		modelCostBreakdown,
-		modelFallbackBreakdown,
-		fallbackTrendSummary,
-		effectiveRoutingRows,
-		auditGuardReadiness,
-		restoreDrillReadiness,
-		recentAuditEvents,
-		auditSourceBreakdown,
-	] = await Promise.all([
+	let clientCount: { count: number }[];
+	let projectCounts: { status: string; count: number }[];
+	let pendingReviews: { count: number }[];
+	let weeklyMetrics: Awaited<ReturnType<typeof fetchLatestWeeklyDeliveryMetrics>>;
+	let freshness: Awaited<ReturnType<typeof fetchWeeklyDeliveryMetricsFreshness>>;
+	let failedInvoices: any[];
+	let budgetOverview: Awaited<ReturnType<typeof getTeamBudgetOverview>>;
+	let costGuardrailEvents: any[];
+	let unitEconomicsRows: Awaited<ReturnType<typeof fetchProjectUnitEconomicsRows>>;
+	let marginOverview: Awaited<ReturnType<typeof getTeamMarginOverview>>;
+	let modelCostBreakdown: Awaited<ReturnType<typeof getTeamModelCostBreakdown>>;
+	let modelFallbackBreakdown: Awaited<ReturnType<typeof getTeamModelFallbackBreakdown>>;
+	let fallbackTrendSummary: Awaited<ReturnType<typeof getTeamFallbackTrendSummary>> | null;
+	let effectiveRoutingRows: Awaited<ReturnType<typeof getEffectiveModelRoutingByProject>>;
+	let auditGuardReadiness: Awaited<ReturnType<typeof fetchAuditGuardReadiness>>;
+	let restoreDrillReadiness: Awaited<ReturnType<typeof fetchRestoreDrillReadiness>>;
+	let recentAuditEvents: any[];
+	let auditSourceBreakdown: any[];
+
+	try {
+		[
+			clientCount,
+			projectCounts,
+			pendingReviews,
+			weeklyMetrics,
+			freshness,
+			failedInvoices,
+			budgetOverview,
+			costGuardrailEvents,
+			unitEconomicsRows,
+			marginOverview,
+			modelCostBreakdown,
+			modelFallbackBreakdown,
+			fallbackTrendSummary,
+			effectiveRoutingRows,
+			auditGuardReadiness,
+			restoreDrillReadiness,
+			recentAuditEvents,
+			auditSourceBreakdown,
+		] = await Promise.all([
 		db
 			.select({ count: count() })
 			.from(clients)
@@ -201,7 +256,11 @@ export default async function AdminDashboardPage({
 			)
 			.orderBy(desc(sql`count(*)`))
 			.limit(6),
-	]);
+		]);
+	} catch (err) {
+		console.error("[agency/dashboard] Dashboard data query failed:", err);
+		return <DashboardSetupFallback reason="db" />;
+	}
 
 	const totalClients = clientCount[0]?.count ?? 0;
 	const projectsByStatus = Object.fromEntries(

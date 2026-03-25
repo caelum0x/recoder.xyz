@@ -1,13 +1,14 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { cookies } from "next/headers";
-import invariant from "tiny-invariant";
 
 const SEPARATOR = ".";
 const SIGNATURE_LENGTH = 64; // SHA-256 hex string length (256 bits = 32 bytes = 64 hex chars)
 
 function sign(value: string): string {
 	const SECRET = process.env.COOKIE_SECRET;
-	invariant(SECRET, "COOKIE_SECRET is not set");
+	if (!SECRET) {
+		throw new Error("COOKIE_SECRET is not set — cannot sign cookies.");
+	}
 
 	const signature = createHmac("sha256", SECRET).update(value).digest("hex");
 	return `${value}${SEPARATOR}${signature}`;
@@ -15,7 +16,10 @@ function sign(value: string): string {
 
 function verify(signed: string): string | null {
 	const SECRET = process.env.COOKIE_SECRET;
-	invariant(SECRET, "COOKIE_SECRET is not set");
+	if (!SECRET) {
+		console.warn("[signed-cookie] COOKIE_SECRET is not set — cannot verify cookies.");
+		return null;
+	}
 
 	const separatorIndex = signed.lastIndexOf(SEPARATOR);
 	if (separatorIndex <= 0) return null;
