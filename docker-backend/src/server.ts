@@ -14972,8 +14972,24 @@ app.post('/api/publish/:projectId', authenticateRequest, verifyProjectOwnership,
     }
     fs.mkdirSync(tmpDir, { recursive: true });
 
-    // Use docker cp to extract build output
-    execFileSync('docker', ['cp', `${entry.id}:/workspace/${outputDir}/.`, `${tmpDir}/`], { timeout: 30000 });
+    // Copy build output from container/sandbox to host
+    if (isDaytonaSandbox(entry)) {
+      // Daytona: use tar + base64 via exec to stream files out of sandbox
+      const daytonaOutputDir = `/home/daytona/${outputDir}`;
+      const tarResult = await daytonaExec(entry.id, `cd "${daytonaOutputDir}" && tar cf - . | base64 -w0`, { timeoutSecs: 120 });
+      if (!tarResult.output || tarResult.exitCode !== 0) {
+        throw new Error(`Failed to archive build output from sandbox: ${tarResult.output?.slice(0, 200)}`);
+      }
+      const tarBuf = Buffer.from(tarResult.output.trim(), 'base64');
+      const tarPath = `${tmpDir}/_archive.tar`;
+      const fsSync = await import('fs');
+      fsSync.writeFileSync(tarPath, tarBuf);
+      execFileSync('tar', ['xf', tarPath, '-C', tmpDir], { timeout: 30000 });
+      fsSync.unlinkSync(tarPath);
+    } else {
+      // Docker: use docker cp
+      execFileSync('docker', ['cp', `${entry.id}:/workspace/${outputDir}/.`, `${tmpDir}/`], { timeout: 30000 });
+    }
 
     // Atomic swap
     if (fs.existsSync(publishedDir)) {
