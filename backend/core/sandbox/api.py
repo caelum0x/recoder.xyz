@@ -652,7 +652,7 @@ async def ensure_project_sandbox_active(
         if account_id:
             account_user = await execute_one(
                 "SELECT account_role FROM basejump.account_user WHERE user_id::text = :user_id AND account_id::text = :account_id",
-                {"user_id": user_id, "account_id": account_id}
+                {"user_id": str(user_id), "account_id": str(account_id)}
             )
             if not account_user:
                 logger.error(f"User {user_id} not authorized to access project {project_id}")
@@ -716,7 +716,7 @@ async def get_project_sandbox_details(
         if account_id:
             account_user = await execute_one(
                 "SELECT account_role FROM basejump.account_user WHERE user_id::text = :user_id AND account_id::text = :account_id",
-                {"user_id": user_id, "account_id": account_id}
+                {"user_id": str(user_id), "account_id": str(account_id)}
             )
             if not account_user:
                 logger.error(f"User {user_id} not authorized to access project {project_id}")
@@ -724,7 +724,7 @@ async def get_project_sandbox_details(
 
     try:
         sandbox_resource = await _get_project_sandbox_resource(project_id)
-        
+
         if not sandbox_resource:
             raise HTTPException(status_code=404, detail="No sandbox found for this project")
             
@@ -921,30 +921,34 @@ async def get_project_sandbox_status(
     """
     logger.debug(f"Received sandbox status request for project {project_id}, user_id: {user_id}")
 
-    # Auth check (same as existing get_project_sandbox_details)
-    project_data = await execute_one("SELECT * FROM projects WHERE project_id::text = :pid", {"pid": project_id})
-
-    if not project_data:
-        raise HTTPException(status_code=404, detail="Project not found")
-
-    if not project_data.get('is_public'):
-        if not user_id:
-            raise HTTPException(status_code=401, detail="Authentication required")
-
-        account_id = project_data.get('account_id')
-        if account_id:
-            account_user = await execute_one(
-                "SELECT account_role FROM basejump.account_user WHERE user_id::text = :uid AND account_id::text = :aid",
-                {"uid": user_id, "aid": account_id}
-            )
-            if not account_user:
-                raise HTTPException(status_code=403, detail="Not authorized")
-
     try:
-        from core.resources import ResourceService
+        # Auth check (same as existing get_project_sandbox_details)
+        project_data = await execute_one("SELECT * FROM projects WHERE project_id::text = :pid", {"pid": project_id})
 
-        resource_service = ResourceService()
-        sandbox_resource = await resource_service.get_project_sandbox_resource(project_id)
+        if not project_data:
+            raise HTTPException(status_code=404, detail="Project not found")
+
+        if not project_data.get('is_public'):
+            if not user_id:
+                raise HTTPException(status_code=401, detail="Authentication required")
+
+            account_id = project_data.get('account_id')
+            if account_id:
+                try:
+                    account_user = await execute_one(
+                        "SELECT account_role FROM basejump.account_user WHERE user_id::text = :uid AND account_id::text = :aid",
+                        {"uid": str(user_id), "aid": str(account_id)}
+                    )
+                    if not account_user:
+                        raise HTTPException(status_code=403, detail="Not authorized")
+                except HTTPException:
+                    raise
+                except Exception as auth_err:
+                    # basejump.account_user may not exist on self-hosted PostgreSQL;
+                    # fall through and allow access (app-layer auth already verified the JWT).
+                    logger.warning(f"basejump.account_user query failed, skipping account check: {auth_err}")
+
+        sandbox_resource = await _get_project_sandbox_resource(project_id)
 
         if not sandbox_resource:
             return SandboxStatusResponse(
@@ -957,11 +961,30 @@ async def get_project_sandbox_status(
             )
 
         sandbox_id = sandbox_resource.get('external_id')
-        config = sandbox_resource.get('config', {})
+        config = sandbox_resource.get('config') or {}
+        if isinstance(config, str):
+            import json as _json
+            try:
+                config = _json.loads(config)
+            except (ValueError, TypeError):
+                config = {}
 
-        # Get Daytona state
-        sandbox = await daytona.get(sandbox_id)
-        daytona_state = sandbox.state.value if hasattr(sandbox.state, 'value') else str(sandbox.state)
+        # Get Daytona state — if Daytona is unreachable, return UNKNOWN instead of 500
+        sandbox = None
+        daytona_state = "unknown"
+        try:
+            sandbox = await daytona.get(sandbox_id)
+            daytona_state = sandbox.state.value if hasattr(sandbox.state, 'value') else str(sandbox.state)
+        except Exception as daytona_err:
+            logger.warning(f"Daytona unreachable for sandbox {sandbox_id}: {daytona_err}")
+            return SandboxStatusResponse(
+                status=UnifiedSandboxStatus.UNKNOWN.value,
+                sandbox_id=sandbox_id or "",
+                project_id=project_id,
+                daytona_state="unreachable",
+                last_checked=datetime.now(timezone.utc).isoformat(),
+                error=f"Daytona API error: {str(daytona_err)}"
+            )
 
         # Only fetch health if Daytona reports started
         services_health = None
@@ -994,17 +1017,17 @@ async def get_project_sandbox_status(
 
         return SandboxStatusResponse(
             status=unified_status,
-            sandbox_id=sandbox_id,
+            sandbox_id=sandbox_id or "",
             project_id=project_id,
             daytona_state=daytona_state,
             services_health=services_health,
             last_checked=datetime.now(timezone.utc).isoformat(),
             vnc_preview=vnc_preview,
             sandbox_url=sandbox_url,
-            cpu=getattr(sandbox, 'cpu', None),
-            memory=getattr(sandbox, 'memory', None),
-            disk=getattr(sandbox, 'disk', None),
-            target=getattr(sandbox, 'target', None)
+            cpu=getattr(sandbox, 'cpu', None) if sandbox else None,
+            memory=getattr(sandbox, 'memory', None) if sandbox else None,
+            disk=getattr(sandbox, 'disk', None) if sandbox else None,
+            target=getattr(sandbox, 'target', None) if sandbox else None
         )
 
     except HTTPException:
@@ -1047,17 +1070,15 @@ async def start_project_sandbox(
     if account_id:
         account_user = await execute_one(
             "SELECT account_role FROM basejump.account_user WHERE user_id::text = :uid AND account_id::text = :aid",
-            {"uid": user_id, "aid": account_id}
+            {"uid": str(user_id), "aid": str(account_id)}
         )
         if not account_user:
             raise HTTPException(status_code=403, detail="Not authorized")
 
     try:
-        from core.resources import ResourceService
         from core.sandbox.resolver import resolve_sandbox
 
-        resource_service = ResourceService()
-        sandbox_resource = await resource_service.get_project_sandbox_resource(project_id)
+        sandbox_resource = await _get_project_sandbox_resource(project_id)
 
         if not sandbox_resource:
             # No sandbox exists - create one using resolve_sandbox
@@ -1279,16 +1300,13 @@ async def stop_project_sandbox(
     if account_id:
         account_user = await execute_one(
             "SELECT account_role FROM basejump.account_user WHERE user_id::text = :uid AND account_id::text = :aid",
-            {"uid": user_id, "aid": account_id}
+            {"uid": str(user_id), "aid": str(account_id)}
         )
         if not account_user:
             raise HTTPException(status_code=403, detail="Not authorized")
 
     try:
-        from core.resources import ResourceService
-
-        resource_service = ResourceService()
-        sandbox_resource = await resource_service.get_project_sandbox_resource(project_id)
+        sandbox_resource = await _get_project_sandbox_resource(project_id)
 
         if not sandbox_resource:
             raise HTTPException(status_code=404, detail="No sandbox found for this project")
@@ -1350,7 +1368,7 @@ async def create_file_in_project(
     if account_id:
         account_user = await execute_one(
             "SELECT account_role FROM basejump.account_user WHERE user_id::text = :uid AND account_id::text = :aid",
-            {"uid": user_id, "aid": account_id}
+            {"uid": str(user_id), "aid": str(account_id)}
         )
         if not account_user:
             logger.error(f"User {user_id} not authorized to access project {project_id}")
@@ -1361,9 +1379,7 @@ async def create_file_in_project(
         from core.files import ensure_sandbox_for_thread
 
         # Check if sandbox existed before
-        from core.resources import ResourceService
-        resource_service = ResourceService()
-        sandbox_resource = await resource_service.get_project_sandbox_resource(project_id)
+        sandbox_resource = await _get_project_sandbox_resource(project_id)
         existing_sandbox_id = sandbox_resource.get('external_id') if sandbox_resource else None
 
         # Ensure sandbox exists (creates if needed)

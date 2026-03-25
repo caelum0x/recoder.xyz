@@ -57,7 +57,7 @@ export default function PricingPage() {
         >
           <Suspense fallback={<PricingSkeleton />}>
             <PricingSection
-              returnUrl={typeof window !== 'undefined' ? window.location.href : '/pricing'}
+              returnUrl="/pricing"
               showTitleAndTabs={true}
               customTitle="Choose your plan"
             />

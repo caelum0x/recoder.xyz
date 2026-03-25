@@ -25,7 +25,9 @@
 			"@recoder/shared/*": ["../../../shared/src/*"],
 			"@recoder/icons/*": [
 				"../../internal-packages/workflow-designer-ui/src/icons/*"
-			]
+			],
+			"@recoder/storage": ["../../packages/storage/src/index.ts"],
+			"@recoder/vault": ["../../packages/vault/src/index.ts"]
 		},
 		"target": "ES2017"
 	},

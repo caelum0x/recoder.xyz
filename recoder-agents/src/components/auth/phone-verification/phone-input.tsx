@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -98,7 +98,11 @@ export function PhoneInput({ onSubmit, isLoading = false, error = null }: PhoneI
   const t = useTranslations('auth.phoneVerification');
   const [phoneNumber, setPhoneNumber] = useState("");
   const [localError, setLocalError] = useState<string | null>(null);
-  const [defaultCountry] = useState<string>(() => getUserCountryCode());
+  const [defaultCountry, setDefaultCountry] = useState<string>('US');
+
+  useEffect(() => {
+    setDefaultCountry(getUserCountryCode());
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

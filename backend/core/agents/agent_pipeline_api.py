@@ -76,18 +76,24 @@ async def create_pipeline(
 
 @router.get("", summary="List pipelines")
 async def list_pipelines(user_id: str = Depends(verify_and_get_user_id_from_jwt)):
-    rows = await execute(
-        """
-        SELECT p.*,
-               (SELECT COUNT(*) FROM pipeline_runs WHERE pipeline_id = p.id) as run_count,
-               (SELECT status FROM pipeline_runs WHERE pipeline_id = p.id ORDER BY started_at DESC LIMIT 1) as last_run_status
-        FROM agent_pipelines p
-        WHERE p.user_id::text = :user_id
-        ORDER BY p.updated_at DESC
-        """,
-        {"user_id": user_id},
-    )
-    return [dict(r) for r in rows]
+    try:
+        rows = await execute(
+            """
+            SELECT p.*,
+                   (SELECT COUNT(*) FROM pipeline_runs WHERE pipeline_id = p.id) as run_count,
+                   (SELECT status FROM pipeline_runs WHERE pipeline_id = p.id ORDER BY started_at DESC LIMIT 1) as last_run_status
+            FROM agent_pipelines p
+            WHERE p.user_id::text = :user_id
+            ORDER BY p.updated_at DESC
+            """,
+            {"user_id": user_id},
+        )
+        return [dict(r) for r in rows]
+    except Exception as e:
+        # RLS with auth.uid() blocks access on self-hosted PostgreSQL;
+        # run migration 20260326000000_fix_pipeline_rls.sql to fix.
+        logger.error(f"Pipeline list query failed (likely RLS issue): {e}")
+        raise HTTPException(status_code=500, detail="Pipeline query failed — check server logs for RLS migration status")
 
 
 @router.get("/{pipeline_id}", summary="Get pipeline detail")
@@ -95,10 +101,14 @@ async def get_pipeline(
     pipeline_id: str,
     user_id: str = Depends(verify_and_get_user_id_from_jwt),
 ):
-    row = await execute_one(
-        "SELECT * FROM agent_pipelines WHERE id::text = :id AND user_id::text = :user_id",
-        {"id": pipeline_id, "user_id": user_id},
-    )
+    try:
+        row = await execute_one(
+            "SELECT * FROM agent_pipelines WHERE id::text = :id AND user_id::text = :user_id",
+            {"id": pipeline_id, "user_id": user_id},
+        )
+    except Exception as e:
+        logger.error(f"Pipeline get query failed (likely RLS issue): {e}")
+        raise HTTPException(status_code=500, detail="Pipeline query failed — check server logs for RLS migration status")
     if not row:
         raise HTTPException(status_code=404, detail="Pipeline not found")
     return dict(row)
