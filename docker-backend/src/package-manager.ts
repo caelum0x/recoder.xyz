@@ -4,6 +4,7 @@
  */
 
 import Docker from 'dockerode';
+import { daytonaExec } from './daytona-file-ops.js';
 
 const docker = new Docker();
 
@@ -87,7 +88,21 @@ export interface PackageSearchResult {
 // Execute command in container
 // ============================================
 
-async function execInContainer(containerId: string, cmd: string): Promise<string> {
+/** Workspace path inside Daytona sandboxes */
+const DAYTONA_WORKSPACE = '/home/daytona';
+
+async function execInContainer(containerId: string, cmd: string, isDaytona: boolean = false): Promise<string> {
+  // Daytona sandboxes use SDK exec, not Docker exec
+  // Check the global set populated by server.ts
+  if (isDaytona || (global as any).__daytonaSandboxIds?.has(containerId)) {
+    // Rewrite /workspace paths to Daytona home dir
+    const daytonaCmd = cmd
+      .replace(/\/workspace\//g, `${DAYTONA_WORKSPACE}/`)
+      .replace(/\/workspace(?=["'\s]|$)/g, DAYTONA_WORKSPACE);
+    const result = await daytonaExec(containerId, daytonaCmd, { timeoutSecs: 30 });
+    return (result.output || '').trim();
+  }
+
   const container = docker.getContainer(containerId);
   const exec = await container.exec({
     Cmd: ['/bin/bash', '-c', cmd],

@@ -1567,6 +1567,48 @@ app.use((req: express.Request, res: express.Response, next: express.NextFunction
 // Daytona sandboxes are stored with daytona: true so all file/exec routes can route correctly
 const containers = new Map<string, ContainerEntry>();
 
+/**
+ * Get container entry, auto-recovering from Daytona if the in-memory mapping
+ * was lost (e.g., docker-backend restart). Queries Daytona for sandboxes
+ * with matching projectId label and re-registers them.
+ */
+async function getOrRecoverContainer(projectId: string): Promise<ContainerEntry | undefined> {
+  const existing = containers.get(projectId);
+  if (existing) return existing;
+
+  // Try to recover from Daytona
+  if (!isDaytonaConfigured() || process.env.USE_DAYTONA_CONTAINERS !== 'true') return undefined;
+
+  try {
+    const dc = getDaytonaClient();
+    const sandboxes = await dc.listSandboxes();
+    const match = sandboxes.find((s: any) => s.labels?.projectId === projectId);
+    if (!match) return undefined;
+
+    const isRunning = match.state === 'started' || match.state === 'running';
+    if (!isRunning) {
+      // Try to start it
+      try { await dc.getOrStartSandbox(match.id, 30000); } catch {}
+    }
+
+    const previewUrl = dc.getPreviewUrl(match.id, 3000);
+    const entry: ContainerEntry = {
+      id: match.id,
+      port: 3000,
+      ptyPort: 0,
+      lastActive: Date.now(),
+      daytona: true,
+      daytonaPreviewUrl: previewUrl,
+    };
+    containers.set(projectId, entry);
+    logger.info({ projectId, sandboxId: match.id }, 'Auto-recovered container mapping from Daytona');
+    return entry;
+  } catch (err: any) {
+    logger.warn({ projectId, err: err.message }, 'Failed to recover container from Daytona');
+    return undefined;
+  }
+}
+
 // Track containers being created to prevent race conditions
 type ContainerCreationResult = { containerId: string; port: number; ptyPort: number; fromPool?: boolean };
 const creatingContainers = new Map<string, ContainerCreationEntry<ContainerCreationResult>>();
@@ -2629,13 +2671,13 @@ app.post('/api/container', containerLimiter, optionalAuthenticateRequest, flexib
               if (claudeCodeToken) {
                 envLines.push(`export CLAUDE_CODE_OAUTH_TOKEN=${claudeCodeToken}`);
               }
-              if (aiProviderKeys.openai) {
+              if (aiProviderKeys?.openai) {
                 envLines.push(`export OPENAI_API_KEY=${aiProviderKeys.openai}`);
               }
-              if (aiProviderKeys.gemini) {
+              if (aiProviderKeys?.gemini) {
                 envLines.push(`export GEMINI_API_KEY=${aiProviderKeys.gemini}`);
               }
-              if (aiProviderKeys.anthropic) {
+              if (aiProviderKeys?.anthropic) {
                 envLines.push(`export ANTHROPIC_API_KEY=${aiProviderKeys.anthropic}`);
               }
 
@@ -2943,7 +2985,7 @@ app.delete('/api/container/:projectId', optionalAuthenticateRequest, flexiblePro
       ip: req.ip,
     });
 
-    const entry = containers.get(projectId);
+    const entry = await getOrRecoverContainer(projectId);
     if (!entry) return res.status(404).json({ error: 'Container not found' });
 
     // Untrack from metering before removal
@@ -2981,7 +3023,7 @@ app.post('/api/mount/:projectId', authenticateRequest, verifyProjectOwnership, a
   const projectId = sanitizeProjectId(req.params.projectId);
   try {
     const { files } = req.body;
-    const entry = containers.get(projectId);
+    const entry = await getOrRecoverContainer(projectId);
     if (!entry) return res.status(404).json({ error: 'Container not found' });
     if (!files?.length) return res.status(400).json({ error: 'files array required' });
 
@@ -3036,7 +3078,7 @@ app.post('/api/file/:projectId', authenticateRequest, verifyProjectOwnership, as
       ip: req.ip,
     });
 
-    const entry = containers.get(projectId);
+    const entry = await getOrRecoverContainer(projectId);
     if (!entry) {
       metricsCollector.recordFileOperation({
         operation: 'write',
@@ -3126,7 +3168,7 @@ app.post('/api/files/:projectId/batch', authenticateRequest, verifyProjectOwners
   const batchOpStartTime = Date.now();
   try {
     const { files } = req.body; // Array of { path, content }
-    const entry = containers.get(projectId);
+    const entry = await getOrRecoverContainer(projectId);
     if (!entry) {
       metricsCollector.recordFileOperation({
         operation: 'batch_write',
@@ -3296,7 +3338,7 @@ app.get('/api/file/:projectId', authenticateRequest, verifyProjectOwnership, asy
       }
     }
 
-    const entry = containers.get(projectId);
+    const entry = await getOrRecoverContainer(projectId);
     if (!entry) {
       metricsCollector.recordFileOperation({
         operation: 'read',
@@ -3399,7 +3441,7 @@ app.delete('/api/file/:projectId', authenticateRequest, verifyProjectOwnership, 
       ip: req.ip,
     });
 
-    const entry = containers.get(projectId);
+    const entry = await getOrRecoverContainer(projectId);
     if (!entry) return res.status(404).json({ error: 'Container not found' });
 
     entry.lastActive = Date.now();
@@ -3451,7 +3493,7 @@ app.put('/api/file/:projectId/rename', authenticateRequest, verifyProjectOwnersh
       ip: req.ip,
     });
 
-    const entry = containers.get(projectId);
+    const entry = await getOrRecoverContainer(projectId);
     if (!entry) return res.status(404).json({ error: 'Container not found' });
 
     entry.lastActive = Date.now();
@@ -3502,7 +3544,7 @@ app.post('/api/folder/:projectId', authenticateRequest, verifyProjectOwnership, 
       return res.status(400).json({ error: 'Invalid folder path' });
     }
 
-    const entry = containers.get(projectId);
+    const entry = await getOrRecoverContainer(projectId);
     if (!entry) return res.status(404).json({ error: 'Container not found' });
 
     entry.lastActive = Date.now();
@@ -3542,7 +3584,7 @@ app.get('/api/files/read', authenticateRequest, verifyProjectOwnership, async (r
   try {
     const projectId = sanitizeProjectId(rawProjectId);
     // Find the container entry by projectId
-    const entry = containers.get(projectId);
+    const entry = await getOrRecoverContainer(projectId);
     if (!entry) return res.status(404).json({ error: 'Container not found' });
 
     entry.lastActive = Date.now();
@@ -3609,7 +3651,7 @@ app.get('/api/files/read', authenticateRequest, verifyProjectOwnership, async (r
 // Workspace state - used to skip re-restoring files on refresh
 app.get('/api/workspace-state/:projectId', authenticateRequest, verifyProjectOwnership, async (req: AuthenticatedRequest, res) => {
   const projectId = sanitizeProjectId(req.params.projectId);
-  const entry = containers.get(projectId);
+  const entry = await getOrRecoverContainer(projectId);
 
   if (!entry) {
     return res.status(404).json({ hasFiles: false, fileCount: 0, hasPackageJson: false, devServerRunning: false });
@@ -3686,7 +3728,7 @@ app.get('/api/workspace-state/:projectId', authenticateRequest, verifyProjectOwn
 // Type check a project workspace using tsc
 app.post('/api/typecheck/:projectId', authenticateRequest, verifyProjectOwnership, async (req: AuthenticatedRequest, res) => {
   const projectId = sanitizeProjectId(req.params.projectId);
-  const entry = containers.get(projectId);
+  const entry = await getOrRecoverContainer(projectId);
   if (!entry) return res.status(404).json({ error: 'Container not found' });
 
   try {
@@ -3778,7 +3820,7 @@ app.get('/api/files/:projectId', authenticateRequest, verifyProjectOwnership, as
     const rawPath = (req.query.path as string) || '/workspace';
     const safePath = rawPath === '/workspace' ? '/workspace' : `/workspace/${sanitizePath(rawPath)}`;
 
-    const entry = containers.get(projectId);
+    const entry = await getOrRecoverContainer(projectId);
     if (!entry) return res.status(404).json({ error: 'Container not found' });
 
     entry.lastActive = Date.now();
@@ -4008,7 +4050,7 @@ app.get('/api/export/:projectId', authenticateRequest, verifyProjectOwnership, a
   const exportStartTime = Date.now();
 
   try {
-    const entry = containers.get(projectId);
+    const entry = await getOrRecoverContainer(projectId);
     if (!entry) {
       return res.status(404).json({ error: 'Container not found' });
     }
@@ -4243,7 +4285,7 @@ app.post('/api/exec/:projectId', authenticateRequest, verifyProjectOwnership, as
     // Remove duplicate /workspace if present
     cwd = cwd.replace(/\/workspace\/workspace/, '/workspace');
 
-    const entry = containers.get(projectId);
+    const entry = await getOrRecoverContainer(projectId);
     if (!entry) return res.status(404).json({ error: 'Container not found' });
 
     // Ensure container is running before exec
@@ -4434,7 +4476,7 @@ app.post('/api/exec/:projectId', authenticateRequest, verifyProjectOwnership, as
 app.get('/api/logs/:projectId', authenticateRequest, verifyProjectOwnership, async (req: AuthenticatedRequest, res) => {
   try {
     const projectId = sanitizeProjectId(req.params.projectId);
-    const entry = containers.get(projectId);
+    const entry = await getOrRecoverContainer(projectId);
     if (!entry) return res.status(404).json({ error: 'Container not found' });
 
     entry.lastActive = Date.now();
@@ -4459,7 +4501,7 @@ app.get('/api/logs/:projectId', authenticateRequest, verifyProjectOwnership, asy
 app.get('/api/logs/:projectId/parsed', authenticateRequest, verifyProjectOwnership, async (req: AuthenticatedRequest, res) => {
   try {
     const projectId = sanitizeProjectId(req.params.projectId);
-    const entry = containers.get(projectId);
+    const entry = await getOrRecoverContainer(projectId);
     if (!entry) return res.status(404).json({ error: 'Container not found' });
 
     entry.lastActive = Date.now();
@@ -4493,7 +4535,7 @@ app.get('/api/logs/:projectId/parsed', authenticateRequest, verifyProjectOwnersh
 app.get('/api/errors/:projectId', authenticateRequest, verifyProjectOwnership, async (req: AuthenticatedRequest, res) => {
   try {
     const projectId = sanitizeProjectId(req.params.projectId);
-    const entry = containers.get(projectId);
+    const entry = await getOrRecoverContainer(projectId);
     if (!entry) return res.status(404).json({ error: 'Container not found' });
 
     entry.lastActive = Date.now();
@@ -4557,7 +4599,7 @@ app.get('/api/errors/:projectId', authenticateRequest, verifyProjectOwnership, a
 app.post('/api/auto-restore/:projectId', authenticateRequest, verifyProjectOwnership, async (req: AuthenticatedRequest, res) => {
   try {
     const projectId = sanitizeProjectId(req.params.projectId);
-    const entry = containers.get(projectId);
+    const entry = await getOrRecoverContainer(projectId);
     if (!entry) return res.status(404).json({ error: 'Container not found' });
 
     entry.lastActive = Date.now();
@@ -4700,7 +4742,7 @@ app.post('/api/dev-server/restart', authenticateRequest, async (req: Authenticat
 app.get('/api/dev-server/status/:projectId', authenticateRequest, verifyProjectOwnership, async (req: AuthenticatedRequest, res) => {
   try {
     const projectId = sanitizeProjectId(req.params.projectId);
-    const entry = containers.get(projectId);
+    const entry = await getOrRecoverContainer(projectId);
     if (!entry) return res.status(404).json({ error: 'Container not found' });
 
     const status = devServerManager.getStatus(projectId);
@@ -4723,7 +4765,7 @@ app.get('/api/dev-server/status/:projectId', authenticateRequest, verifyProjectO
 app.get('/api/dev-server/detect-framework/:projectId', authenticateRequest, verifyProjectOwnership, async (req: AuthenticatedRequest, res) => {
   try {
     const projectId = sanitizeProjectId(req.params.projectId);
-    const entry = containers.get(projectId);
+    const entry = await getOrRecoverContainer(projectId);
     if (!entry) return res.status(404).json({ error: 'Container not found' });
 
     const framework = await detectFrameworkFromContainer(entry.id);
@@ -4832,7 +4874,7 @@ app.post('/api/snapshot/:projectId', authenticateRequest, verifyProjectOwnership
     const projectId = sanitizeProjectId(req.params.projectId);
     const { message = 'Manual snapshot', author = 'user' } = req.body;
 
-    const entry = containers.get(projectId);
+    const entry = await getOrRecoverContainer(projectId);
     if (!entry) return res.status(404).json({ error: 'Container not found' });
 
     auditLog({
@@ -4874,7 +4916,7 @@ app.get('/api/snapshots/:projectId', authenticateRequest, verifyProjectOwnership
     const projectId = sanitizeProjectId(req.params.projectId);
     const limit = Math.min(parseInt(req.query.limit as string) || 50, 200);
 
-    const entry = containers.get(projectId);
+    const entry = await getOrRecoverContainer(projectId);
     if (!entry) return res.status(404).json({ error: 'Container not found' });
 
     entry.lastActive = Date.now();
@@ -4891,7 +4933,7 @@ app.get('/api/snapshot/:projectId/current', authenticateRequest, verifyProjectOw
   try {
     const projectId = sanitizeProjectId(req.params.projectId);
 
-    const entry = containers.get(projectId);
+    const entry = await getOrRecoverContainer(projectId);
     if (!entry) return res.status(404).json({ error: 'Container not found' });
 
     const snapshot = await snapshotManager.getCurrentSnapshot(entry.id);
@@ -4915,7 +4957,7 @@ app.post('/api/snapshot/:projectId/restore', authenticateRequest, verifyProjectO
     // Sanitize snapshot ID
     const safeSnapshotId = snapshotId.replace(/[^a-zA-Z0-9_-]/g, '');
 
-    const entry = containers.get(projectId);
+    const entry = await getOrRecoverContainer(projectId);
     if (!entry) return res.status(404).json({ error: 'Container not found' });
 
     auditLog({
@@ -4975,7 +5017,7 @@ app.get('/api/snapshot/:projectId/diff', authenticateRequest, verifyProjectOwner
     const safeFrom = (from as string).replace(/[^a-zA-Z0-9_-]/g, '');
     const safeTo = (to as string).replace(/[^a-zA-Z0-9_-]/g, '');
 
-    const entry = containers.get(projectId);
+    const entry = await getOrRecoverContainer(projectId);
     if (!entry) return res.status(404).json({ error: 'Container not found' });
 
     const diff = await snapshotManager.getDiff(entry.id, safeFrom, safeTo);
@@ -5000,7 +5042,7 @@ app.get('/api/snapshot/:projectId/file-diff', authenticateRequest, verifyProject
     const safeFrom = (from as string).replace(/[^a-zA-Z0-9_-]/g, '');
     const safeTo = (to as string).replace(/[^a-zA-Z0-9_-]/g, '');
 
-    const entry = containers.get(projectId);
+    const entry = await getOrRecoverContainer(projectId);
     if (!entry) return res.status(404).json({ error: 'Container not found' });
 
     const diff = await snapshotManager.getFileDiff(
@@ -5029,7 +5071,7 @@ app.get('/api/snapshot/:projectId/file', authenticateRequest, verifyProjectOwner
     const safePath = sanitizePath(path as string);
     const safeSnapshotId = (snapshotId as string).replace(/[^a-zA-Z0-9_-]/g, '');
 
-    const entry = containers.get(projectId);
+    const entry = await getOrRecoverContainer(projectId);
     if (!entry) return res.status(404).json({ error: 'Container not found' });
 
     const content = await snapshotManager.getFileAtSnapshot(
@@ -5053,7 +5095,7 @@ app.get('/api/snapshot/:projectId/status', authenticateRequest, verifyProjectOwn
   try {
     const projectId = sanitizeProjectId(req.params.projectId);
 
-    const entry = containers.get(projectId);
+    const entry = await getOrRecoverContainer(projectId);
     if (!entry) return res.status(404).json({ error: 'Container not found' });
 
     const hasChanges = await snapshotManager.hasUnsavedChanges(entry.id);
@@ -5071,7 +5113,7 @@ app.post('/api/snapshot/:projectId/auto-save', authenticateRequest, verifyProjec
     const projectId = sanitizeProjectId(req.params.projectId);
     const { enabled, intervalMs = 5 * 60 * 1000 } = req.body;
 
-    const entry = containers.get(projectId);
+    const entry = await getOrRecoverContainer(projectId);
     if (!entry) return res.status(404).json({ error: 'Container not found' });
 
     auditLog({
@@ -5098,7 +5140,7 @@ app.post('/api/snapshot/:projectId/auto-save', authenticateRequest, verifyProjec
 app.post('/api/snapshot/:projectId/compress', authenticateRequest, verifyProjectOwnership, async (req: AuthenticatedRequest, res) => {
   try {
     const projectId = sanitizeProjectId(req.params.projectId);
-    const entry = containers.get(projectId);
+    const entry = await getOrRecoverContainer(projectId);
     if (!entry) return res.status(404).json({ error: 'Container not found' });
 
     const result = await snapshotManager.compress(entry.id);
@@ -5113,7 +5155,7 @@ app.post('/api/snapshot/:projectId/prune', authenticateRequest, verifyProjectOwn
   try {
     const projectId = sanitizeProjectId(req.params.projectId);
     const { keepCount = 50 } = req.body;
-    const entry = containers.get(projectId);
+    const entry = await getOrRecoverContainer(projectId);
     if (!entry) return res.status(404).json({ error: 'Container not found' });
 
     auditLog({
@@ -5135,7 +5177,7 @@ app.post('/api/snapshot/:projectId/prune', authenticateRequest, verifyProjectOwn
 app.get('/api/snapshot/:projectId/stats', authenticateRequest, verifyProjectOwnership, async (req: AuthenticatedRequest, res) => {
   try {
     const projectId = sanitizeProjectId(req.params.projectId);
-    const entry = containers.get(projectId);
+    const entry = await getOrRecoverContainer(projectId);
     if (!entry) return res.status(404).json({ error: 'Container not found' });
 
     const stats = await snapshotManager.getStats(entry.id);
@@ -5149,7 +5191,7 @@ app.get('/api/snapshot/:projectId/stats', authenticateRequest, verifyProjectOwne
 app.post('/api/keep-alive/:projectId', authenticateRequest, verifyProjectOwnership, async (req: AuthenticatedRequest, res) => {
   try {
     const projectId = sanitizeProjectId(req.params.projectId);
-    const entry = containers.get(projectId);
+    const entry = await getOrRecoverContainer(projectId);
     if (!entry) return res.status(404).json({ error: 'Container not found' });
 
     entry.lastActive = Date.now();
@@ -5250,7 +5292,7 @@ lifecycleManager.setCleanupHandler(async (projectId, containerId) => {
       await container.stop().catch(() => {});
       await container.remove().catch(() => {});
     }
-    const entry = containers.get(projectId);
+    const entry = await getOrRecoverContainer(projectId);
     if (entry) {
       releasePorts(entry.port, entry.ptyPort);
       if (entry.userId) {
@@ -5943,7 +5985,7 @@ app.post('/api/replace/:projectId', authenticateRequest, verifyProjectOwnership,
       return res.status(400).json({ error: 'searchQuery is required' });
     }
 
-    const entry = containers.get(projectId);
+    const entry = await getOrRecoverContainer(projectId);
 
     if (!entry) {
       return res.status(404).json({ error: 'Container not found' });
@@ -5971,7 +6013,7 @@ app.get('/api/project-type/:projectId', authenticateRequest, verifyProjectOwners
   try {
     const projectId = sanitizeProjectId(req.params.projectId);
 
-    const entry = containers.get(projectId);
+    const entry = await getOrRecoverContainer(projectId);
     if (!entry) {
       return res.status(404).json({ error: 'Container not found' });
     }
@@ -6096,7 +6138,7 @@ app.get('/api/packages/:projectId', authenticateRequest, verifyProjectOwnership,
       return res.status(400).json({ error: 'Valid package manager required (npm, bun, pip, cargo, go, composer, gem)' });
     }
 
-    const entry = containers.get(projectId);
+    const entry = await getOrRecoverContainer(projectId);
     if (!entry) {
       return res.status(404).json({ error: 'Container not found' });
     }
@@ -6158,7 +6200,7 @@ app.post('/api/packages/:projectId/install', authenticateRequest, verifyProjectO
       return res.status(400).json({ error: 'Invalid package name' });
     }
 
-    const entry = containers.get(projectId);
+    const entry = await getOrRecoverContainer(projectId);
     if (!entry) {
       return res.status(404).json({ error: 'Container not found' });
     }
@@ -6205,7 +6247,7 @@ app.post('/api/packages/:projectId/uninstall', authenticateRequest, verifyProjec
       return res.status(400).json({ error: 'Invalid package name' });
     }
 
-    const entry = containers.get(projectId);
+    const entry = await getOrRecoverContainer(projectId);
     if (!entry) {
       return res.status(404).json({ error: 'Container not found' });
     }
@@ -6252,7 +6294,7 @@ app.post('/api/packages/:projectId/update', authenticateRequest, verifyProjectOw
       return res.status(400).json({ error: 'Invalid package name' });
     }
 
-    const entry = containers.get(projectId);
+    const entry = await getOrRecoverContainer(projectId);
     if (!entry) {
       return res.status(404).json({ error: 'Container not found' });
     }
@@ -6294,7 +6336,7 @@ app.get('/api/secrets/:projectId', authenticateRequest, verifyProjectOwnership, 
       return res.status(400).json({ error: 'Invalid environment' });
     }
 
-    const entry = containers.get(projectId);
+    const entry = await getOrRecoverContainer(projectId);
     if (!entry) {
       return res.status(404).json({ error: 'Container not found' });
     }
@@ -6339,7 +6381,7 @@ app.post('/api/secrets/:projectId', authenticateRequest, verifyProjectOwnership,
       return res.status(400).json({ error: 'Invalid key name' });
     }
 
-    const entry = containers.get(projectId);
+    const entry = await getOrRecoverContainer(projectId);
     if (!entry) {
       return res.status(404).json({ error: 'Container not found' });
     }
@@ -6382,7 +6424,7 @@ app.delete('/api/secrets/:projectId/:key', authenticateRequest, verifyProjectOwn
       return res.status(400).json({ error: 'Invalid environment' });
     }
 
-    const entry = containers.get(projectId);
+    const entry = await getOrRecoverContainer(projectId);
     if (!entry) {
       return res.status(404).json({ error: 'Container not found' });
     }
@@ -6419,7 +6461,7 @@ app.get('/api/git/:projectId/status', authenticateRequest, verifyProjectOwnershi
   try {
     const projectId = sanitizeProjectId(req.params.projectId);
 
-    const entry = containers.get(projectId);
+    const entry = await getOrRecoverContainer(projectId);
     if (!entry) {
       return res.status(404).json({ error: 'Container not found' });
     }
@@ -6439,7 +6481,7 @@ app.get('/api/git/:projectId/branches', authenticateRequest, verifyProjectOwners
   try {
     const projectId = sanitizeProjectId(req.params.projectId);
 
-    const entry = containers.get(projectId);
+    const entry = await getOrRecoverContainer(projectId);
     if (!entry) {
       return res.status(404).json({ error: 'Container not found' });
     }
@@ -6465,7 +6507,7 @@ app.post('/api/git/:projectId/branch', authenticateRequest, verifyProjectOwnersh
       return res.status(400).json({ error: branchValidation.error });
     }
 
-    const entry = containers.get(projectId);
+    const entry = await getOrRecoverContainer(projectId);
     if (!entry) {
       return res.status(404).json({ error: 'Container not found' });
     }
@@ -6503,7 +6545,7 @@ app.post('/api/git/:projectId/checkout', authenticateRequest, verifyProjectOwner
       return res.status(400).json({ error: branchValidation.error });
     }
 
-    const entry = containers.get(projectId);
+    const entry = await getOrRecoverContainer(projectId);
     if (!entry) {
       return res.status(404).json({ error: 'Container not found' });
     }
@@ -6542,7 +6584,7 @@ app.delete('/api/git/:projectId/branch/:name', authenticateRequest, verifyProjec
       return res.status(400).json({ error: branchValidation.error });
     }
 
-    const entry = containers.get(projectId);
+    const entry = await getOrRecoverContainer(projectId);
     if (!entry) {
       return res.status(404).json({ error: 'Container not found' });
     }
@@ -6576,7 +6618,7 @@ app.get('/api/git/:projectId/log', authenticateRequest, verifyProjectOwnership, 
     const limit = Math.min(parseInt(req.query.limit as string) || 50, 200);
     const branch = req.query.branch as string | undefined;
 
-    const entry = containers.get(projectId);
+    const entry = await getOrRecoverContainer(projectId);
     if (!entry) {
       return res.status(404).json({ error: 'Container not found' });
     }
@@ -6598,7 +6640,7 @@ app.get('/api/git/:projectId/diff/:file(*)', authenticateRequest, verifyProjectO
     const filePath = decodeURIComponent(req.params.file);
     const staged = req.query.staged === 'true';
 
-    const entry = containers.get(projectId);
+    const entry = await getOrRecoverContainer(projectId);
     if (!entry) {
       return res.status(404).json({ error: 'Container not found' });
     }
@@ -6619,7 +6661,7 @@ app.post('/api/git/:projectId/stage', authenticateRequest, verifyProjectOwnershi
     const projectId = sanitizeProjectId(req.params.projectId);
     const { files } = req.body;
 
-    const entry = containers.get(projectId);
+    const entry = await getOrRecoverContainer(projectId);
     if (!entry) {
       return res.status(404).json({ error: 'Container not found' });
     }
@@ -6644,7 +6686,7 @@ app.post('/api/git/:projectId/unstage', authenticateRequest, verifyProjectOwners
     const projectId = sanitizeProjectId(req.params.projectId);
     const { files } = req.body;
 
-    const entry = containers.get(projectId);
+    const entry = await getOrRecoverContainer(projectId);
     if (!entry) {
       return res.status(404).json({ error: 'Container not found' });
     }
@@ -6674,7 +6716,7 @@ app.post('/api/git/:projectId/commit', authenticateRequest, verifyProjectOwnersh
       return res.status(400).json({ error: msgValidation.error });
     }
 
-    const entry = containers.get(projectId);
+    const entry = await getOrRecoverContainer(projectId);
     if (!entry) {
       return res.status(404).json({ error: 'Container not found' });
     }
@@ -6707,7 +6749,7 @@ app.post('/api/git/:projectId/discard', authenticateRequest, verifyProjectOwners
     const projectId = sanitizeProjectId(req.params.projectId);
     const { files } = req.body;
 
-    const entry = containers.get(projectId);
+    const entry = await getOrRecoverContainer(projectId);
     if (!entry) {
       return res.status(404).json({ error: 'Container not found' });
     }
@@ -6739,7 +6781,7 @@ app.post('/api/git/:projectId/init', authenticateRequest, verifyProjectOwnership
   try {
     const projectId = sanitizeProjectId(req.params.projectId);
 
-    const entry = containers.get(projectId);
+    const entry = await getOrRecoverContainer(projectId);
     if (!entry) {
       return res.status(404).json({ error: 'Container not found' });
     }
@@ -6771,7 +6813,7 @@ app.post('/api/git/:projectId/auto-commit', authenticateRequest, verifyProjectOw
     const projectId = sanitizeProjectId(req.params.projectId);
     const { message } = req.body;
 
-    const entry = containers.get(projectId);
+    const entry = await getOrRecoverContainer(projectId);
     if (!entry) {
       return res.status(404).json({ error: 'Container not found' });
     }
@@ -6803,7 +6845,7 @@ app.post('/api/git/:projectId/revert', authenticateRequest, verifyProjectOwnersh
       return res.status(400).json({ error: hashValidation.error });
     }
 
-    const entry = containers.get(projectId);
+    const entry = await getOrRecoverContainer(projectId);
     if (!entry) {
       return res.status(404).json({ error: 'Container not found' });
     }
@@ -6837,7 +6879,7 @@ app.post('/api/git/:projectId/revert', authenticateRequest, verifyProjectOwnersh
 app.get('/api/git/:projectId/remotes', authenticateRequest, verifyProjectOwnership, async (req: AuthenticatedRequest, res) => {
   try {
     const projectId = sanitizeProjectId(req.params.projectId);
-    const entry = containers.get(projectId);
+    const entry = await getOrRecoverContainer(projectId);
     if (!entry) {
       return res.status(404).json({ error: 'Container not found' });
     }
@@ -6860,7 +6902,7 @@ app.post('/api/git/:projectId/remote', authenticateRequest, verifyProjectOwnersh
       return res.status(400).json({ error: 'name and url are required' });
     }
 
-    const entry = containers.get(projectId);
+    const entry = await getOrRecoverContainer(projectId);
     if (!entry) {
       return res.status(404).json({ error: 'Container not found' });
     }
@@ -6892,7 +6934,7 @@ app.delete('/api/git/:projectId/remote/:name', authenticateRequest, verifyProjec
     const projectId = sanitizeProjectId(req.params.projectId);
     const name = decodeURIComponent(req.params.name);
 
-    const entry = containers.get(projectId);
+    const entry = await getOrRecoverContainer(projectId);
     if (!entry) {
       return res.status(404).json({ error: 'Container not found' });
     }
@@ -6924,7 +6966,7 @@ app.post('/api/git/:projectId/push', authenticateRequest, verifyProjectOwnership
     const projectId = sanitizeProjectId(req.params.projectId);
     const { remote, branch, force, setUpstream, token } = req.body;
 
-    const entry = containers.get(projectId);
+    const entry = await getOrRecoverContainer(projectId);
     if (!entry) {
       return res.status(404).json({ error: 'Container not found' });
     }
@@ -6961,7 +7003,7 @@ app.post('/api/git/:projectId/pull', authenticateRequest, verifyProjectOwnership
     const projectId = sanitizeProjectId(req.params.projectId);
     const { remote, branch, rebase, token } = req.body;
 
-    const entry = containers.get(projectId);
+    const entry = await getOrRecoverContainer(projectId);
     if (!entry) {
       return res.status(404).json({ error: 'Container not found' });
     }
@@ -7000,7 +7042,7 @@ app.post('/api/git/:projectId/fetch', authenticateRequest, verifyProjectOwnershi
     const projectId = sanitizeProjectId(req.params.projectId);
     const { remote, token } = req.body;
 
-    const entry = containers.get(projectId);
+    const entry = await getOrRecoverContainer(projectId);
     if (!entry) {
       return res.status(404).json({ error: 'Container not found' });
     }
@@ -7029,7 +7071,7 @@ app.post('/api/git/:projectId/clone', authenticateRequest, verifyProjectOwnershi
       return res.status(400).json({ error: 'url is required' });
     }
 
-    const entry = containers.get(projectId);
+    const entry = await getOrRecoverContainer(projectId);
     if (!entry) {
       return res.status(404).json({ error: 'Container not found' });
     }
@@ -7063,7 +7105,7 @@ app.get('/api/git/:projectId/state', authenticateRequest, verifyProjectOwnership
   try {
     const projectId = sanitizeProjectId(req.params.projectId);
 
-    const entry = containers.get(projectId);
+    const entry = await getOrRecoverContainer(projectId);
     if (!entry) {
       return res.status(404).json({ error: 'Container not found' });
     }
@@ -7083,7 +7125,7 @@ app.get('/api/git/:projectId/conflicts', authenticateRequest, verifyProjectOwner
   try {
     const projectId = sanitizeProjectId(req.params.projectId);
 
-    const entry = containers.get(projectId);
+    const entry = await getOrRecoverContainer(projectId);
     if (!entry) {
       return res.status(404).json({ error: 'Container not found' });
     }
@@ -7109,7 +7151,7 @@ app.post('/api/git/:projectId/merge', authenticateRequest, verifyProjectOwnershi
       return res.status(400).json({ error: branchValidation.error });
     }
 
-    const entry = containers.get(projectId);
+    const entry = await getOrRecoverContainer(projectId);
     if (!entry) {
       return res.status(404).json({ error: 'Container not found' });
     }
@@ -7150,7 +7192,7 @@ app.post('/api/git/:projectId/rebase', authenticateRequest, verifyProjectOwnersh
       return res.status(400).json({ error: branchValidation.error });
     }
 
-    const entry = containers.get(projectId);
+    const entry = await getOrRecoverContainer(projectId);
     if (!entry) {
       return res.status(404).json({ error: 'Container not found' });
     }
@@ -7185,7 +7227,7 @@ app.post('/api/git/:projectId/rebase-abort', authenticateRequest, verifyProjectO
   try {
     const projectId = sanitizeProjectId(req.params.projectId);
 
-    const entry = containers.get(projectId);
+    const entry = await getOrRecoverContainer(projectId);
     if (!entry) {
       return res.status(404).json({ error: 'Container not found' });
     }
@@ -7216,7 +7258,7 @@ app.post('/api/git/:projectId/rebase-continue', authenticateRequest, verifyProje
   try {
     const projectId = sanitizeProjectId(req.params.projectId);
 
-    const entry = containers.get(projectId);
+    const entry = await getOrRecoverContainer(projectId);
     if (!entry) {
       return res.status(404).json({ error: 'Container not found' });
     }
@@ -7261,7 +7303,7 @@ app.post('/api/git/:projectId/branch-rename', authenticateRequest, verifyProject
       return res.status(400).json({ error: newValidation.error });
     }
 
-    const entry = containers.get(projectId);
+    const entry = await getOrRecoverContainer(projectId);
     if (!entry) {
       return res.status(404).json({ error: 'Container not found' });
     }
@@ -7303,7 +7345,7 @@ app.post('/api/git/:projectId/force-push', authenticateRequest, verifyProjectOwn
       return res.status(400).json({ error: branchValidation.error });
     }
 
-    const entry = containers.get(projectId);
+    const entry = await getOrRecoverContainer(projectId);
     if (!entry) {
       return res.status(404).json({ error: 'Container not found' });
     }
@@ -7357,7 +7399,7 @@ app.post('/api/visual-edit/:projectId/apply', authenticateRequest, verifyProject
       }
     }
 
-    const entry = containers.get(projectId);
+    const entry = await getOrRecoverContainer(projectId);
     if (!entry) {
       return res.status(404).json({ error: 'Container not found' });
     }
@@ -7465,7 +7507,7 @@ app.post('/api/visual-edit/:projectId/apply', authenticateRequest, verifyProject
 app.post('/api/lsp/:projectId/start', authenticateRequest, verifyProjectOwnership, async (req: AuthenticatedRequest, res) => {
   try {
     const projectId = sanitizeProjectId(req.params.projectId);
-    const entry = containers.get(projectId);
+    const entry = await getOrRecoverContainer(projectId);
 
     if (!entry) {
       return res.status(404).json({ error: 'Container not found. Start a project first.' });
@@ -7554,7 +7596,7 @@ app.post('/api/lsp/:projectId/request', authenticateRequest, verifyProjectOwners
       return res.status(400).json({ error: 'filePath and method are required' });
     }
 
-    const entry = containers.get(projectId);
+    const entry = await getOrRecoverContainer(projectId);
     if (!entry) {
       return res.status(404).json({ error: 'Container not found' });
     }
@@ -7615,7 +7657,7 @@ app.post('/api/lsp/:projectId/sync', authenticateRequest, verifyProjectOwnership
       return res.status(400).json({ error: 'filePath and content are required' });
     }
 
-    const entry = containers.get(projectId);
+    const entry = await getOrRecoverContainer(projectId);
     if (!entry) {
       return res.status(404).json({ error: 'Container not found' });
     }
@@ -7701,7 +7743,7 @@ app.ws('/sync/:projectId', async (ws: WebSocket, req: express.Request) => {
   const syncRateLimiter = getWsRateLimiter('sync');
   syncRateLimiter.track(ws as any);
 
-  const entry = containers.get(projectId);
+  const entry = await getOrRecoverContainer(projectId);
   if (!entry) {
     wsKeepalive.closeWithHint(ws as any, 'container_not_found', 'Container not found for this project', 1008);
     return;
@@ -7821,7 +7863,7 @@ app.post('/api/repl/:projectId/start', authenticateRequest, verifyProjectOwnersh
     });
   }
 
-  const entry = containers.get(projectId);
+  const entry = await getOrRecoverContainer(projectId);
   if (!entry) {
     return res.status(404).json({ error: 'Container not found. Create a project first.' });
   }
@@ -7832,7 +7874,8 @@ app.post('/api/repl/:projectId/start', authenticateRequest, verifyProjectOwnersh
     const { sessionId, welcomeMessage } = await replManager.startSession(
       projectId,
       entry.id,
-      language
+      language,
+      isDaytonaSandbox(entry)
     );
 
     auditLog({
@@ -7872,7 +7915,7 @@ app.post('/api/repl/:projectId/execute', authenticateRequest, verifyProjectOwner
     return res.status(400).json({ error: 'Code is required' });
   }
 
-  const entry = containers.get(projectId);
+  const entry = await getOrRecoverContainer(projectId);
   if (!entry) {
     return res.status(404).json({ error: 'Container not found' });
   }
@@ -7928,7 +7971,7 @@ app.get('/api/repl/:projectId/status', authenticateRequest, verifyProjectOwnersh
   const projectId = sanitizeProjectId(req.params.projectId);
   const language = req.query.language as ReplLanguage | undefined;
 
-  const entry = containers.get(projectId);
+  const entry = await getOrRecoverContainer(projectId);
   if (!entry) {
     return res.status(404).json({ error: 'Container not found' });
   }
@@ -7970,13 +8013,13 @@ app.get('/api/repl/:projectId/status', authenticateRequest, verifyProjectOwnersh
 app.get('/api/repl/:projectId/languages', authenticateRequest, verifyProjectOwnership, async (req: AuthenticatedRequest, res) => {
   const projectId = sanitizeProjectId(req.params.projectId);
 
-  const entry = containers.get(projectId);
+  const entry = await getOrRecoverContainer(projectId);
   if (!entry) {
     return res.status(404).json({ error: 'Container not found' });
   }
 
   try {
-    const available = await replManager.getAvailableLanguages(entry.id);
+    const available = await replManager.getAvailableLanguages(entry.id, isDaytonaSandbox(entry));
 
     res.json({
       success: true,
@@ -8244,7 +8287,7 @@ async function startupSequence() {
       await container.restart({ t: 5 }); // 5 second graceful timeout
 
       // Update last active time
-      const entry = containers.get(projectId);
+      const entry = await getOrRecoverContainer(projectId);
       if (entry) {
         entry.lastActive = Date.now();
       }
@@ -9035,7 +9078,7 @@ app.post('/api/tunnel/start', authenticateRequest, async (req: AuthenticatedRequ
     return res.status(400).json({ error: 'projectId is required' });
   }
 
-  const entry = containers.get(projectId);
+  const entry = await getOrRecoverContainer(projectId);
   if (!entry) {
     return res.status(404).json({ error: 'Container not found. Start a project first.' });
   }
@@ -9218,7 +9261,7 @@ app.get('/api/expo-url/:projectId', authenticateRequest, verifyProjectOwnership,
   const projectId = sanitizeProjectId(req.params.projectId);
 
   try {
-    const entry = containers.get(projectId);
+    const entry = await getOrRecoverContainer(projectId);
     if (!entry) {
       return res.status(404).json({ isExpo: false, error: 'Container not found' });
     }
@@ -9365,7 +9408,7 @@ app.post('/api/expo-start/:projectId', authenticateRequest, verifyProjectOwnersh
   }
 
   try {
-    const entry = containers.get(projectId);
+    const entry = await getOrRecoverContainer(projectId);
     if (!entry) {
       return res.status(404).json({ error: 'Container not found' });
     }
@@ -9501,7 +9544,7 @@ app.post('/api/eas-build/:projectId', authenticateRequest, verifyProjectOwnershi
   const validProfiles = ['development', 'preview', 'production'];
   const safeProfile = validProfiles.includes(profile) ? profile : 'preview';
 
-  const entry = containers.get(projectId);
+  const entry = await getOrRecoverContainer(projectId);
   if (!entry) {
     return sendError(res, createError(ErrorCode.CONTAINER_NOT_FOUND, 'Container not found for this project'));
   }
@@ -9611,7 +9654,7 @@ app.get('/api/eas-build/:projectId/:buildId', authenticateRequest, verifyProject
 
   // Poll EAS for updated status
   if (expoToken) {
-    const entry = containers.get(projectId);
+    const entry = await getOrRecoverContainer(projectId);
     if (entry) {
       try {
         const safeToken = sanitizeShellToken(expoToken);
@@ -9716,7 +9759,7 @@ app.post('/api/eas-update/:projectId', authenticateRequest, verifyProjectOwnersh
     return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'Missing expoToken.'));
   }
 
-  const entry = containers.get(projectId);
+  const entry = await getOrRecoverContainer(projectId);
   if (!entry) {
     return sendError(res, createError(ErrorCode.CONTAINER_NOT_FOUND, 'Container not found for this project'));
   }
@@ -9814,7 +9857,7 @@ app.get('/api/eas-updates/:projectId', authenticateRequest, verifyProjectOwnersh
   const expoToken = req.query.expoToken as string;
   const branch = (req.query.branch as string) || 'preview';
 
-  const entry = containers.get(projectId);
+  const entry = await getOrRecoverContainer(projectId);
 
   let remoteUpdates: any[] = [];
 
@@ -9871,7 +9914,7 @@ app.post('/api/eas-update/:projectId/rollback', authenticateRequest, verifyProje
     return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'Missing expoToken.'));
   }
 
-  const entry = containers.get(projectId);
+  const entry = await getOrRecoverContainer(projectId);
   if (!entry) {
     return sendError(res, createError(ErrorCode.CONTAINER_NOT_FOUND, 'Container not found for this project'));
   }
@@ -9927,7 +9970,7 @@ app.post('/api/eas-share/:projectId', authenticateRequest, verifyProjectOwnershi
     return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'Missing expoToken.'));
   }
 
-  const entry = containers.get(projectId);
+  const entry = await getOrRecoverContainer(projectId);
   if (!entry) {
     return sendError(res, createError(ErrorCode.CONTAINER_NOT_FOUND, 'Container not found for this project'));
   }
@@ -10023,7 +10066,7 @@ app.post('/api/eas-submit/:projectId', authenticateRequest, verifyProjectOwnersh
     return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'Invalid platform. Must be "android" or "ios".'));
   }
 
-  const entry = containers.get(projectId);
+  const entry = await getOrRecoverContainer(projectId);
   if (!entry) {
     return sendError(res, createError(ErrorCode.CONTAINER_NOT_FOUND, 'Container not found for this project'));
   }
@@ -10075,7 +10118,7 @@ startupInfo('routes.eas-submit', 'registered');
 app.get('/api/app-config/:projectId', authenticateRequest, verifyProjectOwnership, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
   const { projectId } = req.params;
 
-  const entry = containers.get(projectId);
+  const entry = await getOrRecoverContainer(projectId);
   if (!entry) {
     return sendError(res, createError(ErrorCode.CONTAINER_NOT_FOUND, 'Container not found for this project'));
   }
@@ -10094,7 +10137,7 @@ app.put('/api/app-config/:projectId', authenticateRequest, verifyProjectOwnershi
   const { projectId } = req.params;
   const updates = req.body; // { name?, slug?, version?, icon?, splash?, ios?, android?, scheme? }
 
-  const entry = containers.get(projectId);
+  const entry = await getOrRecoverContainer(projectId);
   if (!entry) {
     return sendError(res, createError(ErrorCode.CONTAINER_NOT_FOUND, 'Container not found for this project'));
   }
@@ -10137,7 +10180,7 @@ app.put('/api/eas-config/:projectId', authenticateRequest, verifyProjectOwnershi
   const { projectId } = req.params;
   const updates = req.body; // { submit?: { production?: { ios?, android? } } }
 
-  const entry = containers.get(projectId);
+  const entry = await getOrRecoverContainer(projectId);
   if (!entry) {
     return sendError(res, createError(ErrorCode.CONTAINER_NOT_FOUND, 'Container not found for this project'));
   }
@@ -10188,7 +10231,7 @@ app.post('/api/backend-db/:projectId/init', authenticateRequest, verifyProjectOw
   const { projectId } = req.params;
   const { schema } = req.body; // optional initial SQL schema
 
-  const entry = containers.get(projectId);
+  const entry = await getOrRecoverContainer(projectId);
   if (!entry) {
     return sendError(res, createError(ErrorCode.CONTAINER_NOT_FOUND, 'Container not found for this project'));
   }
@@ -10222,7 +10265,7 @@ app.post('/api/backend-db/:projectId/query', authenticateRequest, verifyProjectO
     return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'Missing query.'));
   }
 
-  const entry = containers.get(projectId);
+  const entry = await getOrRecoverContainer(projectId);
   if (!entry) {
     return sendError(res, createError(ErrorCode.CONTAINER_NOT_FOUND, 'Container not found for this project'));
   }
@@ -10255,7 +10298,7 @@ app.post('/api/backend-db/:projectId/migrate', authenticateRequest, verifyProjec
     return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'Missing migrations array.'));
   }
 
-  const entry = containers.get(projectId);
+  const entry = await getOrRecoverContainer(projectId);
   if (!entry) {
     return sendError(res, createError(ErrorCode.CONTAINER_NOT_FOUND, 'Container not found for this project'));
   }
@@ -10309,7 +10352,7 @@ app.post('/api/backend-scaffold/:projectId', authenticateRequest, verifyProjectO
     return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'Invalid type. Must be "auth", "stripe", or "crud".'));
   }
 
-  const entry = containers.get(projectId);
+  const entry = await getOrRecoverContainer(projectId);
   if (!entry) {
     return sendError(res, createError(ErrorCode.CONTAINER_NOT_FOUND, 'Container not found for this project'));
   }
@@ -10593,7 +10636,7 @@ app.post('/api/figma-import/:projectId', authenticateRequest, verifyProjectOwner
     return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'Invalid Figma URL. Expected format: https://www.figma.com/file/XXXXX/...'));
   }
 
-  const entry = containers.get(projectId);
+  const entry = await getOrRecoverContainer(projectId);
   if (!entry) {
     return sendError(res, createError(ErrorCode.CONTAINER_NOT_FOUND, 'Container not found for this project'));
   }
@@ -10807,7 +10850,7 @@ app.post('/api/canvas-generate/:projectId', authenticateRequest, verifyProjectOw
     return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'Missing elements array.'));
   }
 
-  const entry = containers.get(projectId);
+  const entry = await getOrRecoverContainer(projectId);
   if (!entry) {
     return sendError(res, createError(ErrorCode.CONTAINER_NOT_FOUND, 'Container not found for this project'));
   }
@@ -10858,7 +10901,7 @@ app.post('/api/clone-url/:projectId', authenticateRequest, verifyProjectOwnershi
     return res.status(400).json({ error: 'URL is required' });
   }
 
-  const entry = containers.get(projectId);
+  const entry = await getOrRecoverContainer(projectId);
   if (!entry) {
     return res.status(404).json({ error: 'Container not found. Start a project first.' });
   }
@@ -11056,7 +11099,7 @@ app.post('/api/code-index/:projectId/index', authenticateRequest, verifyProjectO
     return res.status(400).json({ error: 'openaiApiKey is required' });
   }
 
-  const entry = containers.get(projectId);
+  const entry = await getOrRecoverContainer(projectId);
   if (!entry) {
     return res.status(404).json({ error: 'Container not found. Start a project first.' });
   }
@@ -11451,7 +11494,7 @@ app.post('/api/database/:projectId/connect', databaseLimiter, authenticateReques
 
   try {
     // Get workspace path for SQLite path validation
-    const entry = containers.get(projectId);
+    const entry = await getOrRecoverContainer(projectId);
     const basePath = entry ? '/workspace' : '/tmp';
 
     const result = await connectionManager.connect(projectId, params, basePath);
@@ -11792,7 +11835,7 @@ app.post('/api/debug/:projectId/start', authenticateRequest, verifyProjectOwners
       return res.status(400).json({ error: `Invalid language. Must be one of: ${validLanguages.join(', ')}` });
     }
 
-    const entry = containers.get(projectId);
+    const entry = await getOrRecoverContainer(projectId);
     if (!entry) {
       return res.status(404).json({ error: 'Container not found. Start a project first.' });
     }
@@ -12360,7 +12403,7 @@ app.ws('/api/debug/:projectId/events', async (ws: WebSocket, req: express.Reques
   if (!authSession) return;
 
   const projectId = sanitizeProjectId(req.params.projectId);
-  const entry = containers.get(projectId);
+  const entry = await getOrRecoverContainer(projectId);
 
   if (!entry) {
     ws.close(1008, 'Container not found');
@@ -12453,7 +12496,7 @@ async function waitForContainer(projectId: string, timeoutMs: number = 5000): Pr
   const checkInterval = 500; // Check every 500ms
 
   while (Date.now() - startTime < timeoutMs) {
-    const entry = containers.get(projectId);
+    const entry = await getOrRecoverContainer(projectId);
     if (entry) {
       return entry;
     }
@@ -12683,7 +12726,7 @@ app.ws('/build-errors/:projectId', async (ws: WebSocket, req: express.Request) =
   buildErrorsRateLimiter.track(ws as any);
 
   // Check if container exists
-  const entry = containers.get(projectId);
+  const entry = await getOrRecoverContainer(projectId);
   if (!entry) {
     logger.info({ projectId }, 'BuildErrors: container not found');
     wsKeepalive.closeWithHint(ws as any, 'container_not_found', 'Container not found for this project', 1008);
@@ -12876,7 +12919,7 @@ const mobileApiDependencies: MobileApiDependencies = {
   // Fetch project files
   fetchProjectFiles: async (userId, projectId, path) => {
     logger.info({ projectId, path: path || '/' }, 'Mobile: fetching files');
-    const entry = containers.get(projectId);
+    const entry = await getOrRecoverContainer(projectId);
     if (!entry) {
       return [];
     }
@@ -12911,7 +12954,7 @@ const mobileApiDependencies: MobileApiDependencies = {
     return checkProjectOwnership(userId, projectId);
   },
 
-  // Get container for project
+  // Get container for project (sync — uses in-memory Map only, recovery happens in route handlers)
   getContainer: (projectId) => {
     const entry = containers.get(projectId);
     if (!entry) {
@@ -14899,7 +14942,7 @@ app.post('/api/publish/:projectId', authenticateRequest, verifyProjectOwnership,
   const { projectId } = req.params;
   const userId = req.userId || 'anonymous';
 
-  const entry = containers.get(projectId);
+  const entry = await getOrRecoverContainer(projectId);
   if (!entry) {
     return sendError(res, createError(ErrorCode.CONTAINER_NOT_FOUND, 'Container not found for this project'));
   }
@@ -14989,7 +15032,7 @@ app.post('/api/publish/:projectId', authenticateRequest, verifyProjectOwnership,
       outputDir,
     });
 
-    const url = `https://web.recoder.xyz/${slug}`;
+    const url = `https://web.recoder.xyz/published/${slug}`;
     logger.info({ projectId, url }, 'Publish: project published');
 
     sendSuccess(res, { url, slug, publishedAt });
@@ -15033,7 +15076,7 @@ app.get('/api/publish-status/:projectId', authenticateRequest, verifyProjectOwne
   const customDomains = getDomainsForProject(projectId);
   sendSuccess(res, {
     published: true,
-    url: `https://web.recoder.xyz/${slug}`,
+    url: `https://web.recoder.xyz/published/${slug}`,
     slug,
     publishedAt: meta?.publishedAt || null,
     framework: meta?.framework || null,
@@ -15060,10 +15103,51 @@ app.post('/api/publish/:projectId/slug', authenticateRequest, verifyProjectOwner
     return sendError(res, createError(ErrorCode.VALIDATION_ERROR, result.error || 'Failed to change slug'));
   }
 
-  const url = `https://web.recoder.xyz/${result.slug}`;
+  const url = `https://web.recoder.xyz/published/${result.slug}`;
   logger.info({ projectId, slug: result.slug }, 'Publish: project slug changed');
   sendSuccess(res, { url, slug: result.slug, changed: true });
 }));
+
+// ── Serve published sites at /published/{slug}/* ──
+// Static files from data/published/{slug}/ served with proper content types
+import * as fsSync from 'node:fs';
+
+app.get('/published/:slug', (req, res) => {
+  const { slug } = req.params;
+  const publishedDir = getPublishedPath(slug);
+  const indexPath = path.join(publishedDir, 'index.html');
+  if (fsSync.existsSync(indexPath)) {
+    return res.sendFile(path.resolve(indexPath));
+  }
+  res.status(404).send('Site not found');
+});
+
+app.get('/published/:slug/*', (req, res) => {
+  const { slug } = req.params;
+  const publishedDir = path.resolve(getPublishedPath(slug));
+  if (!fsSync.existsSync(publishedDir)) {
+    return res.status(404).send('Site not found');
+  }
+  const relativePath = (req.params as any)[0] || 'index.html';
+  let filePath = path.resolve(path.join(publishedDir, relativePath));
+  // Prevent path traversal
+  if (!filePath.startsWith(publishedDir)) {
+    return res.status(403).send('Forbidden');
+  }
+  // Default to index.html for directory requests
+  if (fsSync.existsSync(filePath) && fsSync.statSync(filePath).isDirectory()) {
+    filePath = path.join(filePath, 'index.html');
+  }
+  if (!fsSync.existsSync(filePath)) {
+    // SPA fallback: serve index.html at slug root
+    const indexFallback = path.join(publishedDir, 'index.html');
+    if (fsSync.existsSync(indexFallback)) {
+      return res.sendFile(indexFallback);
+    }
+    return res.status(404).send('File not found');
+  }
+  res.sendFile(filePath);
+});
 
 startupInfo('routes.publish', 'registered');
 
@@ -16273,7 +16357,7 @@ async function githubApi(
 app.get('/api/git/:projectId/github-repo', authenticateRequest, verifyProjectOwnership, async (req: AuthenticatedRequest, res: express.Response) => {
   try {
     const projectId = sanitizeProjectId(req.params.projectId);
-    const entry = containers.get(projectId);
+    const entry = await getOrRecoverContainer(projectId);
     if (!entry) return sendError(res, createError(ErrorCode.NOT_FOUND, 'Container not found'));
 
     const remotes = await gitOperations.getRemotes(entry.id);
@@ -16296,7 +16380,7 @@ app.get('/api/git/:projectId/collaborators', authenticateRequest, verifyProjectO
     const token = req.query.token as string;
     if (!token) return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'GitHub token required'));
 
-    const entry = containers.get(projectId);
+    const entry = await getOrRecoverContainer(projectId);
     if (!entry) return sendError(res, createError(ErrorCode.NOT_FOUND, 'Container not found'));
 
     const remotes = await gitOperations.getRemotes(entry.id);
@@ -16333,7 +16417,7 @@ app.post('/api/git/:projectId/collaborators', authenticateRequest, verifyProject
     if (!token) return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'GitHub token required'));
     if (!username) return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'Username required'));
 
-    const entry = containers.get(projectId);
+    const entry = await getOrRecoverContainer(projectId);
     if (!entry) return sendError(res, createError(ErrorCode.NOT_FOUND, 'Container not found'));
 
     const remotes = await gitOperations.getRemotes(entry.id);
@@ -16374,7 +16458,7 @@ app.delete('/api/git/:projectId/collaborators/:username', authenticateRequest, v
     const token = req.query.token as string;
     if (!token) return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'GitHub token required'));
 
-    const entry = containers.get(projectId);
+    const entry = await getOrRecoverContainer(projectId);
     if (!entry) return sendError(res, createError(ErrorCode.NOT_FOUND, 'Container not found'));
 
     const remotes = await gitOperations.getRemotes(entry.id);
@@ -16407,7 +16491,7 @@ app.get('/api/git/:projectId/invitations', authenticateRequest, verifyProjectOwn
     const token = req.query.token as string;
     if (!token) return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'GitHub token required'));
 
-    const entry = containers.get(projectId);
+    const entry = await getOrRecoverContainer(projectId);
     if (!entry) return sendError(res, createError(ErrorCode.NOT_FOUND, 'Container not found'));
 
     const remotes = await gitOperations.getRemotes(entry.id);
@@ -16444,7 +16528,7 @@ app.delete('/api/git/:projectId/invitations/:invitationId', authenticateRequest,
     const token = req.query.token as string;
     if (!token) return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'GitHub token required'));
 
-    const entry = containers.get(projectId);
+    const entry = await getOrRecoverContainer(projectId);
     if (!entry) return sendError(res, createError(ErrorCode.NOT_FOUND, 'Container not found'));
 
     const remotes = await gitOperations.getRemotes(entry.id);
@@ -16717,7 +16801,7 @@ app.get('/api/web-search', asyncHandler(async (req: express.Request, res: expres
       searxng_url: SEARXNG_BASE_URL,
     });
   } catch (err) {
-    logger.error(`Web search proxy error (SEARXNG_URL=${SEARXNG_BASE_URL}):`, err);
+    logger.error({ err }, `Web search proxy error (SEARXNG_URL=${SEARXNG_BASE_URL})`);
     return sendError(res, createError(ErrorCode.SERVICE_UNAVAILABLE, 'Search backend is unreachable'));
   }
 }));

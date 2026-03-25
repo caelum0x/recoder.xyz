@@ -98,8 +98,8 @@ async def list_labels(
             SELECT ld.*,
                    COUNT(la.id) AS thread_count
             FROM thread_label_definitions ld
-            LEFT JOIN thread_label_assignments la ON la.label_id = ld.id
-            WHERE ld.user_id = :user_id
+            LEFT JOIN thread_label_assignments la ON la.label_id::text = ld.id::text
+            WHERE ld.user_id::text = :user_id
             GROUP BY ld.id
             ORDER BY ld.created_at DESC
             """,
@@ -124,7 +124,7 @@ async def update_label(
     """Update a label definition."""
     try:
         existing = await execute_one(
-            "SELECT * FROM thread_label_definitions WHERE id = :label_id AND user_id = :user_id",
+            "SELECT * FROM thread_label_definitions WHERE id = :label_id AND user_id::text = :user_id",
             {"label_id": label_id, "user_id": user_id},
         )
         if not existing:
@@ -142,7 +142,7 @@ async def update_label(
 
         sql = (
             f"UPDATE thread_label_definitions SET {', '.join(set_clauses)} "
-            f"WHERE id = :label_id AND user_id = :user_id RETURNING *"
+            f"WHERE id = :label_id AND user_id::text = :user_id RETURNING *"
         )
         row = await execute_one(sql, params)
         return serialize_row(row)
@@ -165,7 +165,7 @@ async def delete_label(
     """Delete a label definition (cascades to assignments)."""
     try:
         await execute_mutate(
-            "DELETE FROM thread_label_definitions WHERE id = :label_id AND user_id = :user_id",
+            "DELETE FROM thread_label_definitions WHERE id = :label_id AND user_id::text = :user_id",
             {"label_id": label_id, "user_id": user_id},
         )
         return {"deleted": True}
@@ -192,7 +192,7 @@ async def assign_label(
     try:
         # Verify label belongs to user
         label = await execute_one(
-            "SELECT id FROM thread_label_definitions WHERE id = :label_id AND user_id = :user_id",
+            "SELECT id FROM thread_label_definitions WHERE id = :label_id AND user_id::text = :user_id",
             {"label_id": body.label_id, "user_id": user_id},
         )
         if not label:
@@ -213,7 +213,7 @@ async def assign_label(
         existing = await execute_one(
             """
             SELECT * FROM thread_label_assignments
-            WHERE user_id = :user_id AND thread_id = :thread_id AND label_id = :label_id
+            WHERE user_id::text = :user_id AND thread_id::text = :thread_id AND label_id::text = :label_id
             """,
             {"user_id": user_id, "thread_id": thread_id, "label_id": body.label_id},
         )
@@ -240,7 +240,7 @@ async def remove_label(
         await execute_mutate(
             """
             DELETE FROM thread_label_assignments
-            WHERE user_id = :user_id AND thread_id = :thread_id AND label_id = :label_id
+            WHERE user_id::text = :user_id AND thread_id::text = :thread_id AND label_id::text = :label_id
             """,
             {"user_id": user_id, "thread_id": thread_id, "label_id": label_id},
         )
@@ -266,8 +266,8 @@ async def get_thread_labels(
             SELECT la.*,
                    ld.label_name, ld.color, ld.description, ld.icon
             FROM thread_label_assignments la
-            JOIN thread_label_definitions ld ON ld.id = la.label_id
-            WHERE la.thread_id = :thread_id AND la.user_id = :user_id
+            JOIN thread_label_definitions ld ON ld.id::text = la.label_id::text
+            WHERE la.thread_id::text = :thread_id AND la.user_id::text = :user_id
             ORDER BY la.assigned_at DESC
             """,
             {"thread_id": thread_id, "user_id": user_id},
@@ -290,7 +290,7 @@ async def get_label_threads(
     """Get all thread_ids assigned to a label."""
     try:
         owner = await execute_one(
-            "SELECT id FROM thread_label_definitions WHERE id = :label_id AND user_id = :user_id",
+            "SELECT id FROM thread_label_definitions WHERE id = :label_id AND user_id::text = :user_id",
             {"label_id": label_id, "user_id": user_id},
         )
         if not owner:
@@ -300,7 +300,7 @@ async def get_label_threads(
             """
             SELECT thread_id, assigned_at
             FROM thread_label_assignments
-            WHERE label_id = :label_id AND user_id = :user_id
+            WHERE label_id::text = :label_id AND user_id::text = :user_id
             ORDER BY assigned_at DESC
             """,
             {"label_id": label_id, "user_id": user_id},
@@ -325,7 +325,7 @@ async def bulk_assign_label(
     """Assign a label to multiple threads, ignoring duplicates."""
     try:
         label = await execute_one(
-            "SELECT id FROM thread_label_definitions WHERE id = :label_id AND user_id = :user_id",
+            "SELECT id FROM thread_label_definitions WHERE id = :label_id AND user_id::text = :user_id",
             {"label_id": body.label_id, "user_id": user_id},
         )
         if not label:

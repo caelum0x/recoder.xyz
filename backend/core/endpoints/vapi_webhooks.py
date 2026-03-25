@@ -436,7 +436,7 @@ class VapiWebhookHandler:
     async def _get_thread_id_for_call(self, call_id: str) -> Optional[str]:
         try:
             row = await execute_one(
-                "SELECT thread_id FROM vapi_calls WHERE call_id = :call_id",
+                "SELECT thread_id FROM vapi_calls WHERE call_id::text = :call_id",
                 {"call_id": call_id}
             )
             return row.get("thread_id") if row else None
@@ -447,7 +447,7 @@ class VapiWebhookHandler:
     async def _get_user_id_from_thread(self, thread_id: str) -> Optional[str]:
         try:
             row = await execute_one(
-                "SELECT account_id FROM threads WHERE thread_id = :thread_id",
+                "SELECT account_id FROM threads WHERE thread_id::text = :thread_id",
                 {"thread_id": thread_id}
             )
             return row.get("account_id") if row else None
@@ -462,7 +462,7 @@ class VapiWebhookHandler:
                 return
 
             existing_messages = await execute_read(
-                "SELECT metadata FROM messages WHERE thread_id = :thread_id",
+                "SELECT metadata FROM messages WHERE thread_id::text = :thread_id",
                 {"thread_id": thread_id}
             )
 

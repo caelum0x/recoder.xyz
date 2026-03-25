@@ -54,9 +54,29 @@ function isPlaceholder(val: string | undefined): boolean {
 	return !val || val === "placeholder" || val.length < 8;
 }
 
+function resolvePrivateKey(): string | null {
+	// Try direct PEM key first
+	const raw = process.env.GITHUB_APP_PRIVATE_KEY;
+	if (raw && raw.includes("-----BEGIN")) {
+		// Handle escaped newlines from env files
+		return raw.replace(/\\n/g, "\n");
+	}
+
+	// Fall back to base64-encoded key
+	const b64 = process.env.GITHUB_APP_PRIVATE_KEY_BASE64;
+	if (b64 && b64.length > 100) {
+		try {
+			return Buffer.from(b64, "base64").toString("utf-8");
+		} catch {
+			return null;
+		}
+	}
+
+	return null;
+}
+
 function appAuth() {
 	const appId = process.env.GITHUB_APP_ID;
-	const privateKey = process.env.GITHUB_APP_PRIVATE_KEY;
 	const clientId = process.env.GITHUB_APP_CLIENT_ID;
 	const clientSecret = process.env.GITHUB_APP_CLIENT_SECRET;
 
@@ -64,8 +84,8 @@ function appAuth() {
 		return null;
 	}
 
-	// Private key must look like a PEM key, not a placeholder string
-	if (!privateKey || (!privateKey.includes("-----BEGIN") && !privateKey.includes("\\n"))) {
+	const privateKey = resolvePrivateKey();
+	if (!privateKey) {
 		return null;
 	}
 

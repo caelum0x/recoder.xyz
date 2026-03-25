@@ -59,7 +59,7 @@ async def submit_feedback(
             if feedback_data.message_id:
                 # Verify message exists and belongs to thread
                 message_row = await execute_one(
-                    "SELECT message_id FROM messages WHERE message_id = :message_id AND thread_id = :thread_id",
+                    "SELECT message_id FROM messages WHERE message_id::text = :message_id AND thread_id::text = :thread_id",
                     {"message_id": feedback_data.message_id, "thread_id": feedback_data.thread_id}
                 )
                 if not message_row:

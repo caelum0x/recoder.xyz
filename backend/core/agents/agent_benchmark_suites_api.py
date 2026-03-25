@@ -2,7 +2,7 @@
 Agent Benchmark Suites API endpoints (Sprint 70 Phase 4).
 
 Provides CRUD for benchmark suites, simulated runs, run history, and leaderboards.
-Access control enforced at application layer (WHERE user_id = :user_id).
+Access control enforced at application layer (WHERE user_id::text = :user_id).
 """
 
 import uuid
@@ -102,7 +102,7 @@ async def list_benchmark_suites(
 ):
     """List all benchmark suites for the authenticated user."""
     rows = await execute(
-        "SELECT * FROM benchmark_suites WHERE user_id = :user_id ORDER BY created_at DESC",
+        "SELECT * FROM benchmark_suites WHERE user_id::text = :user_id ORDER BY created_at DESC",
         {"user_id": user_id},
     )
     return serialize_rows(rows)
@@ -119,7 +119,7 @@ async def get_benchmark_suite(
 ):
     """Get a single benchmark suite with full test_cases."""
     row = await execute_one(
-        "SELECT * FROM benchmark_suites WHERE id = :id AND user_id = :user_id",
+        "SELECT * FROM benchmark_suites WHERE id = :id AND user_id::text = :user_id",
         {"id": suite_id, "user_id": user_id},
     )
     if not row:
@@ -139,7 +139,7 @@ async def update_benchmark_suite(
 ):
     """Update fields on an existing benchmark suite."""
     existing = await execute_one(
-        "SELECT id FROM benchmark_suites WHERE id = :id AND user_id = :user_id",
+        "SELECT id FROM benchmark_suites WHERE id = :id AND user_id::text = :user_id",
         {"id": suite_id, "user_id": user_id},
     )
     if not existing:
@@ -158,7 +158,7 @@ async def update_benchmark_suite(
     set_clauses = ", ".join(f"{k} = :{k}" for k in updates)
     params = {**updates, "id": suite_id, "user_id": user_id}
     await execute_mutate(
-        f"UPDATE benchmark_suites SET {set_clauses} WHERE id = :id AND user_id = :user_id",
+        f"UPDATE benchmark_suites SET {set_clauses} WHERE id = :id AND user_id::text = :user_id",
         params,
     )
     row = await execute_one("SELECT * FROM benchmark_suites WHERE id = :id", {"id": suite_id})
@@ -176,14 +176,14 @@ async def delete_benchmark_suite(
 ):
     """Delete a benchmark suite (cascades to runs)."""
     existing = await execute_one(
-        "SELECT id FROM benchmark_suites WHERE id = :id AND user_id = :user_id",
+        "SELECT id FROM benchmark_suites WHERE id = :id AND user_id::text = :user_id",
         {"id": suite_id, "user_id": user_id},
     )
     if not existing:
         raise HTTPException(status_code=404, detail="Benchmark suite not found")
 
     await execute_mutate(
-        "DELETE FROM benchmark_suites WHERE id = :id AND user_id = :user_id",
+        "DELETE FROM benchmark_suites WHERE id = :id AND user_id::text = :user_id",
         {"id": suite_id, "user_id": user_id},
     )
     return {"deleted": True, "suite_id": suite_id}
@@ -207,7 +207,7 @@ async def run_benchmark_suite(
     import json
 
     suite_row = await execute_one(
-        "SELECT * FROM benchmark_suites WHERE id = :id AND user_id = :user_id",
+        "SELECT * FROM benchmark_suites WHERE id = :id AND user_id::text = :user_id",
         {"id": suite_id, "user_id": user_id},
     )
     if not suite_row:
@@ -284,14 +284,14 @@ async def list_benchmark_runs(
     user_id: str = Depends(verify_and_get_user_id_from_jwt),
 ):
     """List benchmark runs with optional filters."""
-    conditions = ["r.user_id = :user_id"]
+    conditions = ["r.user_id::text = :user_id"]
     params: dict = {"user_id": user_id, "limit": limit}
 
     if agent_id:
-        conditions.append("r.agent_id = :agent_id")
+        conditions.append("r.agent_id::text = :agent_id")
         params["agent_id"] = agent_id
     if suite_id:
-        conditions.append("r.suite_id = :suite_id")
+        conditions.append("r.suite_id::text = :suite_id")
         params["suite_id"] = suite_id
 
     where_clause = " AND ".join(conditions)
@@ -299,7 +299,7 @@ async def list_benchmark_runs(
         f"""
         SELECT r.*, s.suite_name
         FROM benchmark_runs r
-        JOIN benchmark_suites s ON s.id = r.suite_id
+        JOIN benchmark_suites s ON s.id::text = r.suite_id::text
         WHERE {where_clause}
         ORDER BY r.started_at DESC
         LIMIT :limit
@@ -323,8 +323,8 @@ async def get_benchmark_run(
         """
         SELECT r.*, s.suite_name
         FROM benchmark_runs r
-        JOIN benchmark_suites s ON s.id = r.suite_id
-        WHERE r.id = :run_id AND r.user_id = :user_id
+        JOIN benchmark_suites s ON s.id::text = r.suite_id::text
+        WHERE r.id::text = :run_id AND r.user_id::text = :user_id
         """,
         {"run_id": run_id, "user_id": user_id},
     )
@@ -344,7 +344,7 @@ async def get_benchmark_leaderboard(
 ):
     """Return runs for a suite sorted by overall_score DESC."""
     suite_row = await execute_one(
-        "SELECT id FROM benchmark_suites WHERE id = :id AND user_id = :user_id",
+        "SELECT id FROM benchmark_suites WHERE id = :id AND user_id::text = :user_id",
         {"id": suite_id, "user_id": user_id},
     )
     if not suite_row:
@@ -355,7 +355,7 @@ async def get_benchmark_leaderboard(
         SELECT r.id, r.agent_id, r.overall_score, r.passed_tests, r.total_tests,
                r.duration_ms, r.status, r.started_at, r.completed_at
         FROM benchmark_runs r
-        WHERE r.suite_id = :suite_id AND r.user_id = :user_id AND r.status = 'completed'
+        WHERE r.suite_id::text = :suite_id AND r.user_id::text = :user_id AND r.status = 'completed'
         ORDER BY r.overall_score DESC
         LIMIT 50
         """,

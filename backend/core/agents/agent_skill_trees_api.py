@@ -74,7 +74,7 @@ async def create_skill_node(
             parent = await execute_one(
                 """
                 SELECT id FROM skill_tree_nodes
-                WHERE id = :parent_id AND agent_id = :agent_id AND user_id = :user_id
+                WHERE id = :parent_id AND agent_id::text = :agent_id AND user_id::text = :user_id
                 """,
                 {"parent_id": body.parent_skill_id, "agent_id": agent_id, "user_id": user_id},
             )
@@ -128,7 +128,7 @@ async def list_skill_nodes(
         rows = await execute(
             """
             SELECT * FROM skill_tree_nodes
-            WHERE agent_id = :agent_id AND user_id = :user_id
+            WHERE agent_id::text = :agent_id AND user_id::text = :user_id
             ORDER BY created_at ASC
             """,
             {"agent_id": agent_id, "user_id": user_id},
@@ -154,7 +154,7 @@ async def unlock_skill(
         skill = await execute_one(
             """
             SELECT * FROM skill_tree_nodes
-            WHERE id = :skill_id AND agent_id = :agent_id AND user_id = :user_id
+            WHERE id = :skill_id AND agent_id::text = :agent_id AND user_id::text = :user_id
             """,
             {"skill_id": skill_id, "agent_id": agent_id, "user_id": user_id},
         )
@@ -167,7 +167,7 @@ async def unlock_skill(
         progress = await execute_one(
             """
             SELECT * FROM agent_skill_progress
-            WHERE user_id = :user_id AND agent_id = :agent_id
+            WHERE user_id::text = :user_id AND agent_id::text = :agent_id
             """,
             {"user_id": user_id, "agent_id": agent_id},
         )
@@ -224,7 +224,7 @@ async def unlock_skill(
                     current_level = :current_level,
                     skills_unlocked = :skills_unlocked,
                     updated_at = now()
-                WHERE user_id = :user_id AND agent_id = :agent_id
+                WHERE user_id::text = :user_id AND agent_id::text = :agent_id
                 """,
                 {
                     "total_xp": new_xp,
@@ -240,7 +240,7 @@ async def unlock_skill(
             """
             UPDATE skill_tree_nodes
             SET is_unlocked = true, unlocked_at = now()
-            WHERE id = :skill_id AND user_id = :user_id
+            WHERE id = :skill_id AND user_id::text = :user_id
             RETURNING *
             """,
             {"skill_id": skill_id, "user_id": user_id},
@@ -274,7 +274,7 @@ async def delete_skill_node(
         row = await execute_one(
             """
             SELECT id FROM skill_tree_nodes
-            WHERE id = :skill_id AND agent_id = :agent_id AND user_id = :user_id
+            WHERE id = :skill_id AND agent_id::text = :agent_id AND user_id::text = :user_id
             """,
             {"skill_id": skill_id, "agent_id": agent_id, "user_id": user_id},
         )
@@ -282,7 +282,7 @@ async def delete_skill_node(
             raise HTTPException(status_code=404, detail="Skill not found")
 
         await execute_mutate(
-            "DELETE FROM skill_tree_nodes WHERE id = :skill_id AND user_id = :user_id",
+            "DELETE FROM skill_tree_nodes WHERE id = :skill_id AND user_id::text = :user_id",
             {"skill_id": skill_id, "user_id": user_id},
         )
         return {"deleted": True}
@@ -324,7 +324,7 @@ async def award_xp(
         progress = await execute_one(
             """
             SELECT * FROM agent_skill_progress
-            WHERE user_id = :user_id AND agent_id = :agent_id
+            WHERE user_id::text = :user_id AND agent_id::text = :agent_id
             """,
             {"user_id": user_id, "agent_id": agent_id},
         )
@@ -354,7 +354,7 @@ async def award_xp(
                 SET total_xp = :total_xp,
                     current_level = :current_level,
                     updated_at = now()
-                WHERE user_id = :user_id AND agent_id = :agent_id
+                WHERE user_id::text = :user_id AND agent_id::text = :agent_id
                 RETURNING *
                 """,
                 {
@@ -388,7 +388,7 @@ async def list_xp_events(
         rows = await execute(
             """
             SELECT * FROM skill_xp_events
-            WHERE agent_id = :agent_id AND user_id = :user_id
+            WHERE agent_id::text = :agent_id AND user_id::text = :user_id
             ORDER BY created_at DESC
             LIMIT :limit
             """,
@@ -414,7 +414,7 @@ async def get_skill_progress(
         row = await execute_one(
             """
             SELECT * FROM agent_skill_progress
-            WHERE user_id = :user_id AND agent_id = :agent_id
+            WHERE user_id::text = :user_id AND agent_id::text = :agent_id
             """,
             {"user_id": user_id, "agent_id": agent_id},
         )

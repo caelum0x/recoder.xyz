@@ -60,9 +60,9 @@ function AlertDialogContent({
         )}
         {...props}
       >
-        {!props['aria-describedby'] && (
-          <AlertDialogPrimitive.Description className="sr-only">Alert dialog</AlertDialogPrimitive.Description>
-        )}
+        {/* Hidden title and description to suppress Radix aria warnings */}
+        <AlertDialogPrimitive.Title className="sr-only">Alert</AlertDialogPrimitive.Title>
+        <AlertDialogPrimitive.Description className="sr-only">Alert dialog</AlertDialogPrimitive.Description>
         {children}
       </AlertDialogPrimitive.Content>
     </AlertDialogPortal>

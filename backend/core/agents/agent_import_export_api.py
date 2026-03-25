@@ -69,7 +69,7 @@ async def _build_export_config(
                   agentpress_tools, configured_mcps, custom_mcps, is_default,
                   avatar_url, metadata, icon_name, icon_color, icon_background
            FROM agents
-           WHERE agent_id = :agent_id AND account_id = :user_id""",
+           WHERE agent_id::text = :agent_id AND account_id::text = :user_id""",
         {"agent_id": agent_id, "user_id": user_id},
     )
 
@@ -104,7 +104,7 @@ async def _build_export_config(
             kb_rows = await execute(
                 """SELECT id, title, content_type, file_name, description
                    FROM knowledge_base_items
-                   WHERE agent_id = :agent_id AND user_id = :user_id
+                   WHERE agent_id::text = :agent_id AND user_id::text = :user_id
                    ORDER BY created_at""",
                 {"agent_id": agent_id, "user_id": user_id},
             )
@@ -123,7 +123,7 @@ async def _build_export_config(
     secret_keys = []
     try:
         secret_rows = await execute(
-            "SELECT key FROM agent_secrets WHERE agent_id = :agent_id AND user_id = :user_id ORDER BY key",
+            "SELECT key FROM agent_secrets WHERE agent_id::text = :agent_id AND user_id::text = :user_id ORDER BY key",
             {"agent_id": agent_id, "user_id": user_id},
         )
         secret_keys = [r["key"] for r in (secret_rows or [])]
@@ -137,7 +137,7 @@ async def _build_export_config(
             sched_rows = await execute(
                 """SELECT name, cron_expression, timezone, input_message, is_active, max_runs
                    FROM agent_schedules
-                   WHERE agent_id = :agent_id AND user_id = :user_id
+                   WHERE agent_id::text = :agent_id AND user_id::text = :user_id
                    ORDER BY created_at""",
                 {"agent_id": agent_id, "user_id": user_id},
             )
@@ -164,7 +164,7 @@ async def _build_export_config(
                           max_runs_per_month, max_tokens_per_month, max_cost_per_month,
                           alert_threshold_pct, is_enforced
                    FROM agent_quotas
-                   WHERE agent_id = :agent_id AND user_id = :user_id""",
+                   WHERE agent_id::text = :agent_id AND user_id::text = :user_id""",
                 {"agent_id": agent_id, "user_id": user_id},
             )
             if quota_row:

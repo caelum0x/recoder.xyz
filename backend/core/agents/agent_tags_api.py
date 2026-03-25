@@ -76,10 +76,10 @@ async def list_tags(
         LEFT JOIN (
             SELECT tag_id, COUNT(*) AS agent_count
             FROM agent_tag_assignments
-            WHERE user_id = :user_id
+            WHERE user_id::text = :user_id
             GROUP BY tag_id
-        ) c ON c.tag_id = t.id
-        WHERE t.user_id = :user_id
+        ) c ON c.tag_id::text = t.id::text
+        WHERE t.user_id::text = :user_id
         ORDER BY t.name
         """,
         {"user_id": user_id},
@@ -95,7 +95,7 @@ async def update_tag(
 ):
     """Update an agent tag's name, color, or description."""
     existing = await execute_one(
-        "SELECT id FROM agent_tags WHERE id = :id AND user_id = :user_id",
+        "SELECT id FROM agent_tags WHERE id = :id AND user_id::text = :user_id",
         {"id": tag_id, "user_id": user_id},
     )
     if not existing:
@@ -123,7 +123,7 @@ async def update_tag(
             f"""
             UPDATE agent_tags
             SET {set_clause}
-            WHERE id = :id AND user_id = :user_id
+            WHERE id = :id AND user_id::text = :user_id
             RETURNING *
             """,
             params,
@@ -145,7 +145,7 @@ async def delete_tag(
     rows = await execute_mutate(
         """
         DELETE FROM agent_tags
-        WHERE id = :id AND user_id = :user_id
+        WHERE id = :id AND user_id::text = :user_id
         RETURNING id
         """,
         {"id": tag_id, "user_id": user_id},
@@ -168,7 +168,7 @@ async def assign_tag(
     """Assign an existing tag to an agent."""
     # Verify the tag belongs to the user
     tag = await execute_one(
-        "SELECT id FROM agent_tags WHERE id = :tag_id AND user_id = :user_id",
+        "SELECT id FROM agent_tags WHERE id = :tag_id AND user_id::text = :user_id",
         {"tag_id": body.tag_id, "user_id": user_id},
     )
     if not tag:
@@ -195,7 +195,7 @@ async def remove_tag(
     rows = await execute_mutate(
         """
         DELETE FROM agent_tag_assignments
-        WHERE agent_id = :agent_id AND tag_id = :tag_id AND user_id = :user_id
+        WHERE agent_id::text = :agent_id AND tag_id::text = :tag_id AND user_id::text = :user_id
         RETURNING id
         """,
         {"agent_id": agent_id, "tag_id": tag_id, "user_id": user_id},
@@ -215,8 +215,8 @@ async def get_agent_tags(
         """
         SELECT t.*
         FROM agent_tags t
-        INNER JOIN agent_tag_assignments a ON a.tag_id = t.id
-        WHERE a.agent_id = :agent_id AND a.user_id = :user_id
+        INNER JOIN agent_tag_assignments a ON a.tag_id::text = t.id::text
+        WHERE a.agent_id::text = :agent_id AND a.user_id::text = :user_id
         ORDER BY t.name
         """,
         {"agent_id": agent_id, "user_id": user_id},
@@ -232,7 +232,7 @@ async def get_tag_agents(
     """List all agent IDs that have a specific tag assigned."""
     # Verify the tag belongs to the user
     tag = await execute_one(
-        "SELECT id FROM agent_tags WHERE id = :tag_id AND user_id = :user_id",
+        "SELECT id FROM agent_tags WHERE id = :tag_id AND user_id::text = :user_id",
         {"tag_id": tag_id, "user_id": user_id},
     )
     if not tag:
@@ -242,7 +242,7 @@ async def get_tag_agents(
         """
         SELECT agent_id, assigned_at
         FROM agent_tag_assignments
-        WHERE tag_id = :tag_id AND user_id = :user_id
+        WHERE tag_id::text = :tag_id AND user_id::text = :user_id
         ORDER BY assigned_at DESC
         """,
         {"tag_id": tag_id, "user_id": user_id},

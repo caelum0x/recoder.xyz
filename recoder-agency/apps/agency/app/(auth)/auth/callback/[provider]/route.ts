@@ -2,6 +2,28 @@ import { type NextRequest, NextResponse } from "next/server";
 import { getSiteOrigin, isValidReturnUrl } from "@/app/(auth)/lib";
 import type { OAuthProvider } from "@/services/accounts";
 
+/**
+ * Locale prefixes from the main recoder.xyz app (next-intl).
+ * The agency app has no locale routing, so these must be stripped
+ * from any redirect path to avoid 404s.
+ */
+const LOCALE_PREFIXES = ["/en/", "/tr/", "/es/", "/zh/", "/de/"];
+
+function stripLocalePrefix(path: string): string {
+	for (const prefix of LOCALE_PREFIXES) {
+		if (path.startsWith(prefix)) {
+			return `/${path.slice(prefix.length)}`;
+		}
+	}
+	// Also handle bare locale paths like "/tr" -> "/"
+	for (const prefix of LOCALE_PREFIXES) {
+		if (path === prefix.slice(0, -1)) {
+			return "/";
+		}
+	}
+	return path;
+}
+
 function isValidOAuthProvider(provider: string): provider is OAuthProvider {
 	return provider === "github" || provider === "google";
 }
@@ -19,9 +41,12 @@ export async function GET(
 	}
 	const _provider: OAuthProvider = providerParam;
 
-	// Get and validate the redirect URL to prevent open redirects
+	// Get and validate the redirect URL to prevent open redirects.
+	// Strip any locale prefix (e.g. /tr/) that may have leaked from
+	// the main recoder.xyz app's intl middleware.
 	const nextParam = searchParams.get("next");
-	const next = isValidReturnUrl(nextParam) ? nextParam : "/";
+	const rawNext = isValidReturnUrl(nextParam) ? nextParam : "/";
+	const next = stripLocalePrefix(rawNext);
 
 	// Check for authentication errors
 	const errorMessage = checkError(searchParams);

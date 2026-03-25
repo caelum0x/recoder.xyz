@@ -170,8 +170,8 @@ async def list_cost_projects(
                    COALESCE(SUM(a.cost), 0) AS total_spend,
                    COUNT(a.id) AS run_count
                FROM cost_allocation_projects p
-               LEFT JOIN run_cost_allocations a ON a.project_id = p.id
-               WHERE p.user_id = :user_id
+               LEFT JOIN run_cost_allocations a ON a.project_id::text = p.id::text
+               WHERE p.user_id::text = :user_id
                GROUP BY p.id
                ORDER BY p.created_at DESC""",
             {"user_id": user_id},
@@ -206,7 +206,7 @@ async def update_cost_project(
     """Update an existing cost project."""
     try:
         existing = await execute_one(
-            "SELECT id FROM cost_allocation_projects WHERE id = :id AND user_id = :user_id",
+            "SELECT id FROM cost_allocation_projects WHERE id = :id AND user_id::text = :user_id",
             {"id": project_id, "user_id": user_id},
         )
         if not existing:
@@ -238,7 +238,7 @@ async def update_cost_project(
 
         row = await execute_one(
             f"""UPDATE cost_allocation_projects SET {set_sql}
-                WHERE id = :id AND user_id = :user_id
+                WHERE id = :id AND user_id::text = :user_id
                 RETURNING *""",
             params,
             commit=True,
@@ -250,7 +250,7 @@ async def update_cost_project(
         # Get spend totals
         spend_row = await execute_one(
             """SELECT COALESCE(SUM(cost), 0) AS total_spend, COUNT(*) AS run_count
-               FROM run_cost_allocations WHERE project_id = :project_id""",
+               FROM run_cost_allocations WHERE project_id::text = :project_id""",
             {"project_id": project_id},
         )
 
@@ -281,14 +281,14 @@ async def delete_cost_project(
     """Delete a cost project. Allocations will have project_id set to NULL."""
     try:
         existing = await execute_one(
-            "SELECT id FROM cost_allocation_projects WHERE id = :id AND user_id = :user_id",
+            "SELECT id FROM cost_allocation_projects WHERE id = :id AND user_id::text = :user_id",
             {"id": project_id, "user_id": user_id},
         )
         if not existing:
             raise HTTPException(status_code=404, detail="Cost project not found")
 
         await execute_mutate(
-            "DELETE FROM cost_allocation_projects WHERE id = :id AND user_id = :user_id",
+            "DELETE FROM cost_allocation_projects WHERE id = :id AND user_id::text = :user_id",
             {"id": project_id, "user_id": user_id},
         )
 
@@ -314,7 +314,7 @@ async def allocate_run_cost(
     try:
         # Verify project belongs to user
         project = await execute_one(
-            "SELECT id FROM cost_allocation_projects WHERE id = :project_id AND user_id = :user_id",
+            "SELECT id FROM cost_allocation_projects WHERE id = :project_id AND user_id::text = :user_id",
             {"project_id": body.project_id, "user_id": user_id},
         )
         if not project:
@@ -375,7 +375,7 @@ async def list_cost_allocations(
     """List run cost allocations with filters."""
     try:
         where_parts = [
-            "a.user_id = :user_id",
+            "a.user_id::text = :user_id",
             "a.allocated_at >= now() - make_interval(days => :days)",
         ]
         params: Dict[str, Any] = {
@@ -386,10 +386,10 @@ async def list_cost_allocations(
         }
 
         if project_id:
-            where_parts.append("a.project_id = :project_id")
+            where_parts.append("a.project_id::text = :project_id")
             params["project_id"] = project_id
         if agent_id:
-            where_parts.append("a.agent_id = :agent_id")
+            where_parts.append("a.agent_id::text = :agent_id")
             params["agent_id"] = agent_id
 
         where_sql = " AND ".join(where_parts)
@@ -406,7 +406,7 @@ async def list_cost_allocations(
                     p.name AS project_name,
                     p.color AS project_color
                 FROM run_cost_allocations a
-                LEFT JOIN cost_allocation_projects p ON p.id = a.project_id
+                LEFT JOIN cost_allocation_projects p ON p.id::text = a.project_id::text
                 WHERE {where_sql}
                 ORDER BY a.allocated_at DESC
                 LIMIT :limit OFFSET :offset""",
@@ -461,9 +461,9 @@ async def get_cost_report(
                    COUNT(a.id) AS run_count
                FROM cost_allocation_projects p
                LEFT JOIN run_cost_allocations a
-                   ON a.project_id = p.id
+                   ON a.project_id::text = p.id::text
                    AND a.allocated_at >= now() - make_interval(days => :days)
-               WHERE p.user_id = :user_id
+               WHERE p.user_id::text = :user_id
                GROUP BY p.id
                ORDER BY total_spend DESC""",
             params,
@@ -485,8 +485,8 @@ async def get_cost_report(
                        SUM(cost) AS agent_cost,
                        COUNT(*) AS agent_runs
                    FROM run_cost_allocations
-                   WHERE project_id = :project_id
-                     AND user_id = :user_id
+                   WHERE project_id::text = :project_id
+                     AND user_id::text = :user_id
                      AND allocated_at >= now() - make_interval(days => :days)
                      AND agent_id IS NOT NULL
                    GROUP BY agent_id
@@ -519,7 +519,7 @@ async def get_cost_report(
         unallocated_row = await execute_one(
             """SELECT COALESCE(SUM(cost), 0) AS unallocated
                FROM run_cost_allocations
-               WHERE user_id = :user_id
+               WHERE user_id::text = :user_id
                  AND project_id IS NULL
                  AND allocated_at >= now() - make_interval(days => :days)""",
             params,
@@ -533,7 +533,7 @@ async def get_cost_report(
                    SUM(cost) AS agent_cost,
                    COUNT(*) AS agent_runs
                FROM run_cost_allocations
-               WHERE user_id = :user_id
+               WHERE user_id::text = :user_id
                  AND allocated_at >= now() - make_interval(days => :days)
                  AND agent_id IS NOT NULL
                GROUP BY agent_id

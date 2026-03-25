@@ -45,13 +45,17 @@ async def notification_stream(
 
     async def event_generator():
         try:
+            # Emit initial SSE comment immediately so Cloudflare sees first byte
+            # and does not kill the connection with ERR_HTTP2_PROTOCOL_ERROR.
+            yield ": connected\n\n"
+
             # Send recent unread notifications on connect
             try:
                 recent = await execute(
                     """
                     SELECT id, type, title, message, data, created_at
                     FROM notifications
-                    WHERE user_id = :user_id AND read = false
+                    WHERE user_id::text = :user_id AND read = false
                       AND created_at > now() - interval '5 minutes'
                     ORDER BY created_at DESC
                     LIMIT 10
@@ -77,13 +81,15 @@ async def notification_stream(
                     break
 
                 try:
-                    data = await asyncio.wait_for(queue.get(), timeout=10.0)
+                    data = await asyncio.wait_for(queue.get(), timeout=5.0)
                     yield f"data: {json.dumps(data)}\n\n"
+                    last_heartbeat = time.time()
                 except asyncio.TimeoutError:
-                    # Send heartbeat every 30s
+                    # Send keepalive every 15s to prevent Cloudflare HTTP/2
+                    # idle timeout from killing the stream (ERR_HTTP2_PROTOCOL_ERROR)
                     now = time.time()
-                    if now - last_heartbeat >= 30:
-                        yield ": heartbeat\n\n"
+                    if now - last_heartbeat >= 15:
+                        yield ": keepalive\n\n"
                         last_heartbeat = now
         finally:
             # Cleanup connection
@@ -95,12 +101,9 @@ async def notification_stream(
                 if not _user_queues[user_id]:
                     del _user_queues[user_id]
 
+    from core.utils.sse_headers import get_sse_headers
     return StreamingResponse(
         event_generator(),
         media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache",
-            "Connection": "keep-alive",
-            "X-Accel-Buffering": "no",
-        },
+        headers=get_sse_headers(request),
     )

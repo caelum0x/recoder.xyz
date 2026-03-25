@@ -102,7 +102,7 @@ async def list_agent_comparisons(request: Request):
         rows = await execute(
             """
             SELECT * FROM agent_comparisons
-            WHERE user_id = :user_id
+            WHERE user_id::text = :user_id
             ORDER BY created_at DESC
             """,
             {"user_id": user_id},
@@ -120,7 +120,7 @@ async def get_agent_comparison(comparison_id: str, request: Request):
 
     try:
         row = await execute_one(
-            "SELECT * FROM agent_comparisons WHERE id = :id AND user_id = :user_id",
+            "SELECT * FROM agent_comparisons WHERE id = :id AND user_id::text = :user_id",
             {"id": comparison_id, "user_id": user_id},
         )
         if not row:
@@ -129,7 +129,7 @@ async def get_agent_comparison(comparison_id: str, request: Request):
         snapshot_rows = await execute(
             """
             SELECT * FROM comparison_metric_snapshots
-            WHERE comparison_id = :comparison_id
+            WHERE comparison_id::text = :comparison_id
             ORDER BY agent_id, metric_name, captured_at DESC
             """,
             {"comparison_id": comparison_id},
@@ -149,7 +149,7 @@ async def update_agent_comparison(comparison_id: str, request: Request):
 
     try:
         existing = await execute_one(
-            "SELECT * FROM agent_comparisons WHERE id = :id AND user_id = :user_id",
+            "SELECT * FROM agent_comparisons WHERE id = :id AND user_id::text = :user_id",
             {"id": comparison_id, "user_id": user_id},
         )
         if not existing:
@@ -175,7 +175,7 @@ async def update_agent_comparison(comparison_id: str, request: Request):
             return _serialize_comparison(existing)
 
         row = await execute_one(
-            f"UPDATE agent_comparisons SET {', '.join(updates)} WHERE id = :id AND user_id = :user_id RETURNING *",
+            f"UPDATE agent_comparisons SET {', '.join(updates)} WHERE id = :id AND user_id::text = :user_id RETURNING *",
             params,
         )
         return _serialize_comparison(row)
@@ -191,7 +191,7 @@ async def delete_agent_comparison(comparison_id: str, request: Request):
 
     try:
         row = await execute_one(
-            "DELETE FROM agent_comparisons WHERE id = :id AND user_id = :user_id RETURNING id",
+            "DELETE FROM agent_comparisons WHERE id = :id AND user_id::text = :user_id RETURNING id",
             {"id": comparison_id, "user_id": user_id},
         )
         if not row:
@@ -226,7 +226,7 @@ async def record_comparison_metric(comparison_id: str, request: Request):
 
     try:
         exists = await execute_one(
-            "SELECT id FROM agent_comparisons WHERE id = :id AND user_id = :user_id",
+            "SELECT id FROM agent_comparisons WHERE id = :id AND user_id::text = :user_id",
             {"id": comparison_id, "user_id": user_id},
         )
         if not exists:
@@ -261,7 +261,7 @@ async def get_comparison_summary(comparison_id: str, request: Request):
 
     try:
         exists = await execute_one(
-            "SELECT id FROM agent_comparisons WHERE id = :id AND user_id = :user_id",
+            "SELECT id FROM agent_comparisons WHERE id = :id AND user_id::text = :user_id",
             {"id": comparison_id, "user_id": user_id},
         )
         if not exists:
@@ -272,7 +272,7 @@ async def get_comparison_summary(comparison_id: str, request: Request):
             """
             SELECT metric_name, agent_id, AVG(metric_value) AS avg_value
             FROM comparison_metric_snapshots
-            WHERE comparison_id = :comparison_id
+            WHERE comparison_id::text = :comparison_id
             GROUP BY metric_name, agent_id
             """,
             {"comparison_id": comparison_id},

@@ -140,7 +140,7 @@ async def dispatch_to_channels(
         rows = await execute(
             """
             SELECT * FROM notification_channels
-            WHERE user_id = :user_id AND is_active = true
+            WHERE user_id::text = :user_id AND is_active = true
             """,
             {"user_id": user_id},
         )

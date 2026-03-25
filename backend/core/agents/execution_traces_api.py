@@ -79,7 +79,7 @@ async def get_trace_stats(
           COUNT(*) FILTER (WHERE status = 'cancelled') AS cancelled,
           ROUND(AVG(total_steps))                      AS avg_steps_per_trace
         FROM execution_traces
-        WHERE user_id = :user_id
+        WHERE user_id::text = :user_id
         """,
         {"user_id": user_id},
     )
@@ -89,7 +89,7 @@ async def get_trace_stats(
         """
         SELECT agent_id, COUNT(*) AS cnt
         FROM execution_traces
-        WHERE user_id = :user_id
+        WHERE user_id::text = :user_id
         GROUP BY agent_id
         ORDER BY cnt DESC
         """,
@@ -167,7 +167,7 @@ async def list_traces(
     params: Dict[str, Any] = {"user_id": user_id, "limit": limit}
     filters = ""
     if agent_id:
-        filters += " AND agent_id = :agent_id"
+        filters += " AND agent_id::text = :agent_id"
         params["agent_id"] = agent_id
     if status:
         filters += " AND status = :status"
@@ -176,7 +176,7 @@ async def list_traces(
     rows = await execute(
         f"""
         SELECT * FROM execution_traces
-        WHERE user_id = :user_id{filters}
+        WHERE user_id::text = :user_id{filters}
         ORDER BY started_at DESC
         LIMIT :limit
         """,
@@ -196,14 +196,14 @@ async def get_trace(
 ):
     """Get a single trace including all its steps ordered by step_index."""
     trace = await execute_one(
-        "SELECT * FROM execution_traces WHERE id = :id AND user_id = :user_id",
+        "SELECT * FROM execution_traces WHERE id = :id AND user_id::text = :user_id",
         {"id": trace_id, "user_id": user_id},
     )
     if not trace:
         raise HTTPException(status_code=404, detail="Trace not found")
 
     steps = await execute(
-        "SELECT * FROM trace_steps WHERE trace_id = :trace_id AND user_id = :user_id ORDER BY step_index ASC",
+        "SELECT * FROM trace_steps WHERE trace_id::text = :trace_id AND user_id::text = :user_id ORDER BY step_index ASC",
         {"trace_id": trace_id, "user_id": user_id},
     )
 
@@ -224,7 +224,7 @@ async def update_trace(
 ):
     """Update trace status, duration_ms, and/or completed_at."""
     existing = await execute_one(
-        "SELECT id FROM execution_traces WHERE id = :id AND user_id = :user_id",
+        "SELECT id FROM execution_traces WHERE id = :id AND user_id::text = :user_id",
         {"id": trace_id, "user_id": user_id},
     )
     if not existing:
@@ -243,7 +243,7 @@ async def update_trace(
     row = await execute_one(
         f"""
         UPDATE execution_traces SET {set_clauses}
-        WHERE id = :id AND user_id = :user_id
+        WHERE id = :id AND user_id::text = :user_id
         RETURNING *
         """,
         data,
@@ -262,14 +262,14 @@ async def delete_trace(
 ):
     """Delete an execution trace (cascade deletes steps)."""
     existing = await execute_one(
-        "SELECT id FROM execution_traces WHERE id = :id AND user_id = :user_id",
+        "SELECT id FROM execution_traces WHERE id = :id AND user_id::text = :user_id",
         {"id": trace_id, "user_id": user_id},
     )
     if not existing:
         raise HTTPException(status_code=404, detail="Trace not found")
 
     await execute_mutate(
-        "DELETE FROM execution_traces WHERE id = :id AND user_id = :user_id",
+        "DELETE FROM execution_traces WHERE id = :id AND user_id::text = :user_id",
         {"id": trace_id, "user_id": user_id},
     )
     return {"deleted": True, "id": trace_id}
@@ -291,7 +291,7 @@ async def add_trace_step(
 ):
     """Add a step to an existing trace and increment total_steps."""
     trace = await execute_one(
-        "SELECT id FROM execution_traces WHERE id = :id AND user_id = :user_id",
+        "SELECT id FROM execution_traces WHERE id = :id AND user_id::text = :user_id",
         {"id": trace_id, "user_id": user_id},
     )
     if not trace:
@@ -330,7 +330,7 @@ async def add_trace_step(
     # Increment total_steps
     try:
         await execute_mutate(
-            "UPDATE execution_traces SET total_steps = total_steps + 1 WHERE id = :id AND user_id = :user_id",
+            "UPDATE execution_traces SET total_steps = total_steps + 1 WHERE id = :id AND user_id::text = :user_id",
             {"id": trace_id, "user_id": user_id},
         )
     except Exception as exc:
@@ -350,14 +350,14 @@ async def list_trace_steps(
 ):
     """List all steps for a trace ordered by step_index ASC."""
     trace = await execute_one(
-        "SELECT id FROM execution_traces WHERE id = :id AND user_id = :user_id",
+        "SELECT id FROM execution_traces WHERE id = :id AND user_id::text = :user_id",
         {"id": trace_id, "user_id": user_id},
     )
     if not trace:
         raise HTTPException(status_code=404, detail="Trace not found")
 
     rows = await execute(
-        "SELECT * FROM trace_steps WHERE trace_id = :trace_id AND user_id = :user_id ORDER BY step_index ASC",
+        "SELECT * FROM trace_steps WHERE trace_id::text = :trace_id AND user_id::text = :user_id ORDER BY step_index ASC",
         {"trace_id": trace_id, "user_id": user_id},
     )
     return serialize_rows(rows)

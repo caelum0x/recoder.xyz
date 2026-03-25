@@ -3,7 +3,7 @@ Alert Escalation API endpoints.
 
 Provides CRUD for escalation policies and incident lifecycle management
 (open -> acknowledged -> escalated -> resolved/closed) with action timeline.
-Access control enforced at application layer (WHERE user_id = :user_id).
+Access control enforced at application layer (WHERE user_id::text = :user_id).
 """
 
 from datetime import datetime, timezone
@@ -109,7 +109,7 @@ async def list_escalation_policies(
 ):
     """List all escalation policies for the authenticated user."""
     rows = await execute(
-        "SELECT * FROM escalation_policies WHERE user_id = :user_id ORDER BY created_at DESC",
+        "SELECT * FROM escalation_policies WHERE user_id::text = :user_id ORDER BY created_at DESC",
         {"user_id": user_id},
     )
     return serialize_rows(rows)
@@ -129,7 +129,7 @@ async def update_escalation_policy(
     import json
 
     existing = await execute_one(
-        "SELECT id FROM escalation_policies WHERE id = :id AND user_id = :user_id",
+        "SELECT id FROM escalation_policies WHERE id = :id AND user_id::text = :user_id",
         {"id": policy_id, "user_id": user_id},
     )
     if not existing:
@@ -160,7 +160,7 @@ async def update_escalation_policy(
         params[key] = val
 
     row = await execute_one(
-        f"UPDATE escalation_policies SET {', '.join(set_clauses)} WHERE id = :id AND user_id = :user_id RETURNING *",
+        f"UPDATE escalation_policies SET {', '.join(set_clauses)} WHERE id = :id AND user_id::text = :user_id RETURNING *",
         params,
     )
     return serialize_row(row)
@@ -177,14 +177,14 @@ async def delete_escalation_policy(
 ):
     """Delete an escalation policy owned by the authenticated user."""
     existing = await execute_one(
-        "SELECT id FROM escalation_policies WHERE id = :id AND user_id = :user_id",
+        "SELECT id FROM escalation_policies WHERE id = :id AND user_id::text = :user_id",
         {"id": policy_id, "user_id": user_id},
     )
     if not existing:
         raise HTTPException(status_code=404, detail="Policy not found")
 
     await execute_mutate(
-        "DELETE FROM escalation_policies WHERE id = :id AND user_id = :user_id",
+        "DELETE FROM escalation_policies WHERE id = :id AND user_id::text = :user_id",
         {"id": policy_id, "user_id": user_id},
     )
     return {"deleted": True}
@@ -243,7 +243,7 @@ async def list_escalation_incidents(
     limit: int = Query(50, ge=1, le=200),
 ):
     """List escalation incidents for the authenticated user."""
-    conditions = ["user_id = :user_id"]
+    conditions = ["user_id::text = :user_id"]
     params: Dict[str, Any] = {"user_id": user_id, "limit": limit}
 
     if status:
@@ -272,14 +272,14 @@ async def get_escalation_incident(
 ):
     """Get a single escalation incident with its action timeline."""
     incident = await execute_one(
-        "SELECT * FROM escalation_incidents WHERE id = :id AND user_id = :user_id",
+        "SELECT * FROM escalation_incidents WHERE id = :id AND user_id::text = :user_id",
         {"id": incident_id, "user_id": user_id},
     )
     if not incident:
         raise HTTPException(status_code=404, detail="Incident not found")
 
     actions = await execute(
-        "SELECT * FROM escalation_actions WHERE incident_id = :incident_id ORDER BY performed_at ASC",
+        "SELECT * FROM escalation_actions WHERE incident_id::text = :incident_id ORDER BY performed_at ASC",
         {"incident_id": incident_id},
     )
 
@@ -299,7 +299,7 @@ async def acknowledge_escalation_incident(
 ):
     """Acknowledge an open incident."""
     incident = await execute_one(
-        "SELECT id, status FROM escalation_incidents WHERE id = :id AND user_id = :user_id",
+        "SELECT id, status FROM escalation_incidents WHERE id = :id AND user_id::text = :user_id",
         {"id": incident_id, "user_id": user_id},
     )
     if not incident:
@@ -310,7 +310,7 @@ async def acknowledge_escalation_incident(
         """
         UPDATE escalation_incidents
         SET status = 'acknowledged', acknowledged_at = :now
-        WHERE id = :id AND user_id = :user_id
+        WHERE id = :id AND user_id::text = :user_id
         RETURNING *
         """,
         {"id": incident_id, "user_id": user_id, "now": now},
@@ -339,7 +339,7 @@ async def escalate_incident(
 ):
     """Escalate an incident to the next step."""
     incident = await execute_one(
-        "SELECT id, current_step FROM escalation_incidents WHERE id = :id AND user_id = :user_id",
+        "SELECT id, current_step FROM escalation_incidents WHERE id = :id AND user_id::text = :user_id",
         {"id": incident_id, "user_id": user_id},
     )
     if not incident:
@@ -350,7 +350,7 @@ async def escalate_incident(
         """
         UPDATE escalation_incidents
         SET status = 'escalated', current_step = :next_step
-        WHERE id = :id AND user_id = :user_id
+        WHERE id = :id AND user_id::text = :user_id
         RETURNING *
         """,
         {"id": incident_id, "user_id": user_id, "next_step": next_step},
@@ -379,7 +379,7 @@ async def resolve_escalation_incident(
 ):
     """Resolve an incident."""
     incident = await execute_one(
-        "SELECT id FROM escalation_incidents WHERE id = :id AND user_id = :user_id",
+        "SELECT id FROM escalation_incidents WHERE id = :id AND user_id::text = :user_id",
         {"id": incident_id, "user_id": user_id},
     )
     if not incident:
@@ -390,7 +390,7 @@ async def resolve_escalation_incident(
         """
         UPDATE escalation_incidents
         SET status = 'resolved', resolved_at = :now
-        WHERE id = :id AND user_id = :user_id
+        WHERE id = :id AND user_id::text = :user_id
         RETURNING *
         """,
         {"id": incident_id, "user_id": user_id, "now": now},
@@ -421,7 +421,7 @@ async def get_escalation_stats(
 ):
     """Get aggregate escalation statistics for the authenticated user."""
     open_row = await execute_one(
-        "SELECT COUNT(*) AS cnt FROM escalation_incidents WHERE user_id = :user_id AND status NOT IN ('resolved', 'closed')",
+        "SELECT COUNT(*) AS cnt FROM escalation_incidents WHERE user_id::text = :user_id AND status NOT IN ('resolved', 'closed')",
         {"user_id": user_id},
     )
     open_count = int(open_row["cnt"]) if open_row else 0
@@ -430,7 +430,7 @@ async def get_escalation_stats(
         """
         SELECT severity, COUNT(*) AS cnt
         FROM escalation_incidents
-        WHERE user_id = :user_id AND status NOT IN ('resolved', 'closed')
+        WHERE user_id::text = :user_id AND status NOT IN ('resolved', 'closed')
         GROUP BY severity
         """,
         {"user_id": user_id},
@@ -441,18 +441,18 @@ async def get_escalation_stats(
         """
         SELECT AVG(EXTRACT(EPOCH FROM (resolved_at - created_at)) / 60.0) AS avg_mins
         FROM escalation_incidents
-        WHERE user_id = :user_id AND status = 'resolved' AND resolved_at IS NOT NULL
+        WHERE user_id::text = :user_id AND status = 'resolved' AND resolved_at IS NOT NULL
         """,
         {"user_id": user_id},
     )
     avg_resolution_minutes = round(float(avg_row["avg_mins"]), 2) if avg_row and avg_row["avg_mins"] else None
 
     total_row = await execute_one(
-        "SELECT COUNT(*) AS total FROM escalation_incidents WHERE user_id = :user_id",
+        "SELECT COUNT(*) AS total FROM escalation_incidents WHERE user_id::text = :user_id",
         {"user_id": user_id},
     )
     escalated_row = await execute_one(
-        "SELECT COUNT(*) AS cnt FROM escalation_incidents WHERE user_id = :user_id AND status = 'escalated'",
+        "SELECT COUNT(*) AS cnt FROM escalation_incidents WHERE user_id::text = :user_id AND status = 'escalated'",
         {"user_id": user_id},
     )
     total = int(total_row["total"]) if total_row else 0

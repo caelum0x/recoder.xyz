@@ -44,7 +44,7 @@ async def fix_missing_subscription(user_email: str):
     logger.info(f"   Account name: {result.get('name', 'N/A')}")
 
     billing_customer = await execute_one(
-        "SELECT id, account_id FROM basejump.billing_customers WHERE account_id = :account_id",
+        "SELECT id, account_id FROM basejump.billing_customers WHERE account_id::text = :account_id",
         {"account_id": account_id}
     )
 

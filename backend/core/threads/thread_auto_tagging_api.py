@@ -75,7 +75,7 @@ async def list_rules(
     rows = await execute(
         """
         SELECT * FROM thread_auto_tag_rules
-        WHERE user_id = :user_id
+        WHERE user_id::text = :user_id
         ORDER BY created_at DESC
         """,
         {"user_id": user_id},
@@ -90,7 +90,7 @@ async def update_rule(
     user_id: str = Depends(verify_and_get_user_id_from_jwt),
 ):
     existing = await execute_one(
-        "SELECT id FROM thread_auto_tag_rules WHERE id = :id AND user_id = :user_id",
+        "SELECT id FROM thread_auto_tag_rules WHERE id = :id AND user_id::text = :user_id",
         {"id": rule_id, "user_id": user_id},
     )
     if not existing:
@@ -136,7 +136,7 @@ async def update_rule(
 
     try:
         row = await execute_one(
-            f"UPDATE thread_auto_tag_rules SET {set_clause} WHERE id = :id AND user_id = :user_id RETURNING *",
+            f"UPDATE thread_auto_tag_rules SET {set_clause} WHERE id = :id AND user_id::text = :user_id RETURNING *",
             params,
             commit=True,
         )
@@ -152,14 +152,14 @@ async def delete_rule(
     user_id: str = Depends(verify_and_get_user_id_from_jwt),
 ):
     existing = await execute_one(
-        "SELECT id FROM thread_auto_tag_rules WHERE id = :id AND user_id = :user_id",
+        "SELECT id FROM thread_auto_tag_rules WHERE id = :id AND user_id::text = :user_id",
         {"id": rule_id, "user_id": user_id},
     )
     if not existing:
         raise HTTPException(status_code=404, detail="Rule not found")
 
     await execute_mutate(
-        "DELETE FROM thread_auto_tag_rules WHERE id = :id AND user_id = :user_id",
+        "DELETE FROM thread_auto_tag_rules WHERE id = :id AND user_id::text = :user_id",
         {"id": rule_id, "user_id": user_id},
     )
     return {"status": "ok"}
@@ -184,7 +184,7 @@ async def _evaluate_rule(rule: dict, thread_id: str, user_id: str) -> bool:
                 result = await execute_one(
                     """
                     SELECT 1 FROM messages
-                    WHERE thread_id = :thread_id
+                    WHERE thread_id::text = :thread_id
                       AND content ILIKE :pattern
                     LIMIT 1
                     """,
@@ -202,7 +202,7 @@ async def _evaluate_rule(rule: dict, thread_id: str, user_id: str) -> bool:
                 result = await execute_one(
                     """
                     SELECT 1 FROM agent_runs
-                    WHERE thread_id = :thread_id AND agent_id = :agent_id
+                    WHERE thread_id::text = :thread_id AND agent_id::text = :agent_id
                     LIMIT 1
                     """,
                     {"thread_id": thread_id, "agent_id": agent_id},
@@ -219,7 +219,7 @@ async def _evaluate_rule(rule: dict, thread_id: str, user_id: str) -> bool:
                 result = await execute_one(
                     """
                     SELECT 1 FROM messages
-                    WHERE thread_id = :thread_id
+                    WHERE thread_id::text = :thread_id
                       AND role = 'tool'
                       AND content ILIKE :pattern
                     LIMIT 1
@@ -234,7 +234,7 @@ async def _evaluate_rule(rule: dict, thread_id: str, user_id: str) -> bool:
             min_count = config.get("min", 0)
             max_count = config.get("max")
             count_result = await execute_one(
-                "SELECT COUNT(*) as cnt FROM messages WHERE thread_id = :thread_id",
+                "SELECT COUNT(*) as cnt FROM messages WHERE thread_id::text = :thread_id",
                 {"thread_id": thread_id},
             )
             count = count_result["cnt"] if count_result else 0
@@ -250,7 +250,7 @@ async def _evaluate_rule(rule: dict, thread_id: str, user_id: str) -> bool:
             result = await execute_one(
                 """
                 SELECT 1 FROM messages
-                WHERE thread_id = :thread_id
+                WHERE thread_id::text = :thread_id
                   AND content ~ :pattern
                 LIMIT 1
                 """,
@@ -266,7 +266,7 @@ async def _evaluate_rule(rule: dict, thread_id: str, user_id: str) -> bool:
             result = await execute_one(
                 """
                 SELECT 1 FROM threads
-                WHERE thread_id = :thread_id
+                WHERE thread_id::text = :thread_id
                   AND metadata->>'sentiment' = :sentiment
                 LIMIT 1
                 """,
@@ -285,7 +285,7 @@ async def apply_auto_tags(
     user_id: str = Depends(verify_and_get_user_id_from_jwt),
 ):
     rules = await execute(
-        "SELECT * FROM thread_auto_tag_rules WHERE user_id = :user_id AND is_active = true",
+        "SELECT * FROM thread_auto_tag_rules WHERE user_id::text = :user_id AND is_active = true",
         {"user_id": user_id},
     )
 
@@ -329,7 +329,7 @@ async def apply_all_auto_tags(
     threads = await execute(
         """
         SELECT thread_id FROM threads
-        WHERE account_id = :user_id
+        WHERE account_id::text = :user_id
         ORDER BY created_at DESC
         LIMIT 50
         """,
@@ -337,7 +337,7 @@ async def apply_all_auto_tags(
     )
 
     rules = await execute(
-        "SELECT * FROM thread_auto_tag_rules WHERE user_id = :user_id AND is_active = true",
+        "SELECT * FROM thread_auto_tag_rules WHERE user_id::text = :user_id AND is_active = true",
         {"user_id": user_id},
     )
 
@@ -395,8 +395,8 @@ async def get_thread_auto_tags(
         """
         SELECT t.*, r.rule_type, r.color
         FROM thread_auto_tags t
-        LEFT JOIN thread_auto_tag_rules r ON r.id = t.rule_id
-        WHERE t.user_id = :user_id AND t.thread_id = :thread_id
+        LEFT JOIN thread_auto_tag_rules r ON r.id::text = t.rule_id::text
+        WHERE t.user_id::text = :user_id AND t.thread_id::text = :thread_id
         ORDER BY t.applied_at DESC
         """,
         {"user_id": user_id, "thread_id": thread_id},
@@ -413,7 +413,7 @@ async def get_auto_tag_stats(
         """
         SELECT tag_name, COUNT(*) as count
         FROM thread_auto_tags
-        WHERE user_id = :user_id
+        WHERE user_id::text = :user_id
         GROUP BY tag_name
         ORDER BY count DESC
         LIMIT 20
@@ -426,7 +426,7 @@ async def get_auto_tag_stats(
         """
         SELECT tag_name, rule_type, match_count, color
         FROM thread_auto_tag_rules
-        WHERE user_id = :user_id
+        WHERE user_id::text = :user_id
         ORDER BY match_count DESC
         LIMIT 10
         """,
@@ -434,12 +434,12 @@ async def get_auto_tag_stats(
     )
 
     total_tags = await execute_one(
-        "SELECT COUNT(*) as cnt FROM thread_auto_tags WHERE user_id = :user_id",
+        "SELECT COUNT(*) as cnt FROM thread_auto_tags WHERE user_id::text = :user_id",
         {"user_id": user_id},
     )
 
     total_rules = await execute_one(
-        "SELECT COUNT(*) as cnt FROM thread_auto_tag_rules WHERE user_id = :user_id",
+        "SELECT COUNT(*) as cnt FROM thread_auto_tag_rules WHERE user_id::text = :user_id",
         {"user_id": user_id},
     )
 

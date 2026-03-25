@@ -2,7 +2,7 @@
 Thread Search Index API endpoints (Sprint 72 Phase 2).
 
 Provides full-text search over indexed threads, batch indexing, and search history.
-Access control enforced at application layer (WHERE user_id = :user_id).
+Access control enforced at application layer (WHERE user_id::text = :user_id).
 """
 
 import uuid
@@ -55,7 +55,7 @@ async def search_threads(
 ):
     """Search indexed threads using full-text search or return recent if no query."""
     try:
-        conditions = ["tsi.user_id = :user_id"]
+        conditions = ["tsi.user_id::text = :user_id"]
         params: Dict[str, Any] = {"user_id": user_id, "limit": limit}
 
         if q:
@@ -63,7 +63,7 @@ async def search_threads(
             params["q"] = q
 
         if agent_id:
-            conditions.append("tsi.agent_id = :agent_id")
+            conditions.append("tsi.agent_id::text = :agent_id")
             params["agent_id"] = agent_id
 
         if tags:
@@ -114,7 +114,7 @@ async def get_search_history(
     """Return recent search queries for the authenticated user."""
     try:
         rows = await execute(
-            "SELECT * FROM search_history WHERE user_id = :user_id ORDER BY searched_at DESC LIMIT :limit",
+            "SELECT * FROM search_history WHERE user_id::text = :user_id ORDER BY searched_at DESC LIMIT :limit",
             {"user_id": user_id, "limit": limit},
         )
         return serialize_rows(rows)
@@ -134,7 +134,7 @@ async def clear_search_history(
     """Clear all search history for the authenticated user."""
     try:
         await execute_mutate(
-            "DELETE FROM search_history WHERE user_id = :user_id",
+            "DELETE FROM search_history WHERE user_id::text = :user_id",
             {"user_id": user_id},
         )
         return {"cleared": True}
@@ -155,7 +155,7 @@ async def get_search_stats(
     try:
         # Total indexed
         total_row = await execute_one(
-            "SELECT COUNT(*) AS cnt FROM thread_search_index WHERE user_id = :user_id",
+            "SELECT COUNT(*) AS cnt FROM thread_search_index WHERE user_id::text = :user_id",
             {"user_id": user_id},
         )
         total_indexed = int(total_row["cnt"]) if total_row else 0
@@ -165,7 +165,7 @@ async def get_search_stats(
             """
             SELECT agent_id, COUNT(*) AS cnt
             FROM thread_search_index
-            WHERE user_id = :user_id AND agent_id IS NOT NULL
+            WHERE user_id::text = :user_id AND agent_id IS NOT NULL
             GROUP BY agent_id
             ORDER BY cnt DESC
             """,
@@ -179,7 +179,7 @@ async def get_search_stats(
             """
             SELECT COUNT(*) AS cnt
             FROM search_history
-            WHERE user_id = :user_id AND searched_at >= :cutoff
+            WHERE user_id::text = :user_id AND searched_at >= :cutoff
             """,
             {"user_id": user_id, "cutoff": cutoff.isoformat()},
         )
@@ -190,7 +190,7 @@ async def get_search_stats(
             """
             SELECT query, COUNT(*) AS cnt
             FROM search_history
-            WHERE user_id = :user_id
+            WHERE user_id::text = :user_id
             GROUP BY query
             ORDER BY cnt DESC
             LIMIT 5
@@ -355,7 +355,7 @@ async def remove_from_index(
     """Remove a thread from the search index."""
     try:
         await execute_mutate(
-            "DELETE FROM thread_search_index WHERE thread_id = :thread_id AND user_id = :user_id",
+            "DELETE FROM thread_search_index WHERE thread_id::text = :thread_id AND user_id::text = :user_id",
             {"thread_id": thread_id, "user_id": user_id},
         )
         return {"deleted": True}

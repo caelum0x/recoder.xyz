@@ -133,7 +133,7 @@ async def list_current_capacity_metrics(
             SELECT DISTINCT ON (metric_name)
               id, user_id, metric_name, current_value, max_capacity, unit, recorded_at
             FROM capacity_metrics
-            WHERE user_id = :user_id
+            WHERE user_id::text = :user_id
             ORDER BY metric_name, recorded_at DESC
             """,
             {"user_id": user_id},
@@ -159,7 +159,7 @@ async def get_capacity_metric_history(
         rows = await execute(
             """
             SELECT * FROM capacity_metrics
-            WHERE user_id = :user_id
+            WHERE user_id::text = :user_id
               AND metric_name = :metric_name
               AND recorded_at >= now() - :days * INTERVAL '1 day'
             ORDER BY recorded_at DESC
@@ -235,7 +235,7 @@ async def list_capacity_plans(
         rows = await execute(
             """
             SELECT * FROM capacity_plans
-            WHERE user_id = :user_id
+            WHERE user_id::text = :user_id
             ORDER BY created_at DESC
             """,
             {"user_id": user_id},
@@ -257,7 +257,7 @@ async def get_capacity_plan(
 ):
     """Get a single capacity plan."""
     row = await execute_one(
-        "SELECT * FROM capacity_plans WHERE id = :id AND user_id = :user_id",
+        "SELECT * FROM capacity_plans WHERE id = :id AND user_id::text = :user_id",
         {"id": plan_id, "user_id": user_id},
     )
     if not row:
@@ -277,7 +277,7 @@ async def update_capacity_plan(
 ):
     """Update a capacity plan."""
     existing = await execute_one(
-        "SELECT id FROM capacity_plans WHERE id = :id AND user_id = :user_id",
+        "SELECT id FROM capacity_plans WHERE id = :id AND user_id::text = :user_id",
         {"id": plan_id, "user_id": user_id},
     )
     if not existing:
@@ -319,7 +319,7 @@ async def update_capacity_plan(
 
     try:
         row = await execute_one(
-            f"UPDATE capacity_plans SET {set_clause} WHERE id = :id AND user_id = :user_id RETURNING *",
+            f"UPDATE capacity_plans SET {set_clause} WHERE id = :id AND user_id::text = :user_id RETURNING *",
             params,
         )
         return serialize_row(row)
@@ -339,14 +339,14 @@ async def delete_capacity_plan(
 ):
     """Delete a capacity plan."""
     existing = await execute_one(
-        "SELECT id FROM capacity_plans WHERE id = :id AND user_id = :user_id",
+        "SELECT id FROM capacity_plans WHERE id = :id AND user_id::text = :user_id",
         {"id": plan_id, "user_id": user_id},
     )
     if not existing:
         raise HTTPException(status_code=404, detail="Capacity plan not found")
 
     await execute_mutate(
-        "DELETE FROM capacity_plans WHERE id = :id AND user_id = :user_id",
+        "DELETE FROM capacity_plans WHERE id = :id AND user_id::text = :user_id",
         {"id": plan_id, "user_id": user_id},
     )
     return {"deleted": True, "id": plan_id}
@@ -404,7 +404,7 @@ async def list_capacity_alerts(
     """List all capacity alerts with current usage percentage."""
     try:
         alerts = await execute(
-            "SELECT * FROM capacity_alerts WHERE user_id = :user_id ORDER BY created_at DESC",
+            "SELECT * FROM capacity_alerts WHERE user_id::text = :user_id ORDER BY created_at DESC",
             {"user_id": user_id},
         )
         if not alerts:
@@ -418,7 +418,7 @@ async def list_capacity_alerts(
                 """
                 SELECT current_value, max_capacity
                 FROM capacity_metrics
-                WHERE user_id = :user_id AND metric_name = :metric_name
+                WHERE user_id::text = :user_id AND metric_name = :metric_name
                 ORDER BY recorded_at DESC
                 LIMIT 1
                 """,
@@ -451,7 +451,7 @@ async def check_capacity_alerts(
     """Check all active alerts and update last_triggered_at for those that fire."""
     try:
         alerts = await execute(
-            "SELECT * FROM capacity_alerts WHERE user_id = :user_id AND is_active = true",
+            "SELECT * FROM capacity_alerts WHERE user_id::text = :user_id AND is_active = true",
             {"user_id": user_id},
         )
         if not alerts:
@@ -464,7 +464,7 @@ async def check_capacity_alerts(
                 """
                 SELECT current_value, max_capacity
                 FROM capacity_metrics
-                WHERE user_id = :user_id AND metric_name = :metric_name
+                WHERE user_id::text = :user_id AND metric_name = :metric_name
                 ORDER BY recorded_at DESC
                 LIMIT 1
                 """,
@@ -482,7 +482,7 @@ async def check_capacity_alerts(
                     """
                     UPDATE capacity_alerts
                     SET last_triggered_at = now()
-                    WHERE id = :id AND user_id = :user_id
+                    WHERE id = :id AND user_id::text = :user_id
                     """,
                     {"id": str(alert_dict["id"]), "user_id": user_id},
                 )

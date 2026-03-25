@@ -505,7 +505,7 @@ async def migrate_thread_messages(thread_id: str, save: bool = False) -> Dict[st
 
         while True:
             batch = await execute_read(
-                "SELECT * FROM messages WHERE thread_id = :thread_id ORDER BY created_at LIMIT :lim OFFSET :off",
+                "SELECT * FROM messages WHERE thread_id::text = :thread_id ORDER BY created_at LIMIT :lim OFFSET :off",
                 {"thread_id": thread_id, "lim": batch_size, "off": offset}
             )
             if not batch:

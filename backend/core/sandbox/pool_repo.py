@@ -83,7 +83,7 @@ async def claim_pooled_sandbox(
     link_sql = """
     UPDATE projects
     SET sandbox_resource_id = :resource_id
-    WHERE project_id = :project_id
+    WHERE project_id::text = :project_id
     """
     await execute_mutate(link_sql, {
         "resource_id": resource_id,
@@ -134,8 +134,8 @@ async def get_project_sandbox(project_id: str) -> Optional[Dict[str, Any]]:
     sql = """
     SELECT r.id, r.account_id, r.external_id, r.status, r.config, r.created_at, r.updated_at
     FROM resources r
-    JOIN projects p ON p.sandbox_resource_id = r.id
-    WHERE p.project_id = :project_id AND r.status = 'active'
+    JOIN projects p ON p.sandbox_resource_id::text = r.id::text
+    WHERE p.project_id::text = :project_id AND r.status = 'active'
     """
     return await execute_one(sql, {"project_id": project_id})
 

@@ -273,7 +273,7 @@ class SandboxResolver:
             from core.services.db import execute_mutate
             import json
             await execute_mutate(
-                "UPDATE projects SET sandbox = :sandbox WHERE project_id = :pid",
+                "UPDATE projects SET sandbox = :sandbox WHERE project_id::text = :pid",
                 {"sandbox": json.dumps(sandbox_data), "pid": project_id}
             )
         except Exception as e:

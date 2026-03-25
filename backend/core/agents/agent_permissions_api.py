@@ -84,7 +84,7 @@ async def list_roles(
     user_id: str = Depends(verify_and_get_user_id_from_jwt),
 ):
     rows = await execute(
-        "SELECT * FROM agent_roles WHERE user_id = :user_id ORDER BY is_system DESC, name ASC",
+        "SELECT * FROM agent_roles WHERE user_id::text = :user_id ORDER BY is_system DESC, name ASC",
         {"user_id": user_id},
     )
     return [dict(r) for r in rows]
@@ -97,7 +97,7 @@ async def update_role(
     user_id: str = Depends(verify_and_get_user_id_from_jwt),
 ):
     existing = await execute_one(
-        "SELECT * FROM agent_roles WHERE id = :id AND user_id = :user_id",
+        "SELECT * FROM agent_roles WHERE id = :id AND user_id::text = :user_id",
         {"id": role_id, "user_id": user_id},
     )
     if not existing:
@@ -125,7 +125,7 @@ async def update_role(
     if not sets:
         return dict(existing)
 
-    sql = f"UPDATE agent_roles SET {', '.join(sets)} WHERE id = :id AND user_id = :user_id RETURNING *"
+    sql = f"UPDATE agent_roles SET {', '.join(sets)} WHERE id = :id AND user_id::text = :user_id RETURNING *"
     row = await execute_one(sql, params)
     return dict(row)
 
@@ -136,7 +136,7 @@ async def delete_role(
     user_id: str = Depends(verify_and_get_user_id_from_jwt),
 ):
     existing = await execute_one(
-        "SELECT * FROM agent_roles WHERE id = :id AND user_id = :user_id",
+        "SELECT * FROM agent_roles WHERE id = :id AND user_id::text = :user_id",
         {"id": role_id, "user_id": user_id},
     )
     if not existing:
@@ -145,7 +145,7 @@ async def delete_role(
         raise HTTPException(status_code=403, detail="System roles cannot be deleted")
 
     await execute(
-        "DELETE FROM agent_roles WHERE id = :id AND user_id = :user_id",
+        "DELETE FROM agent_roles WHERE id = :id AND user_id::text = :user_id",
         {"id": role_id, "user_id": user_id},
     )
     return {"status": "ok"}
@@ -161,7 +161,7 @@ async def assign_role(
 ):
     # Verify role belongs to user
     role = await execute_one(
-        "SELECT * FROM agent_roles WHERE id = :role_id AND user_id = :user_id",
+        "SELECT * FROM agent_roles WHERE id = :role_id AND user_id::text = :user_id",
         {"role_id": body.role_id, "user_id": user_id},
     )
     if not role:
@@ -197,8 +197,8 @@ async def list_agent_roles(
         SELECT a.*, r.name as role_name, r.description as role_description,
                r.permissions, r.is_system
         FROM agent_role_assignments a
-        JOIN agent_roles r ON r.id = a.role_id
-        WHERE a.agent_id = :agent_id AND a.user_id = :user_id
+        JOIN agent_roles r ON r.id::text = a.role_id::text
+        WHERE a.agent_id::text = :agent_id AND a.user_id::text = :user_id
         ORDER BY a.granted_at DESC
         """,
         {"agent_id": agent_id, "user_id": user_id},
@@ -213,7 +213,7 @@ async def remove_role_assignment(
     user_id: str = Depends(verify_and_get_user_id_from_jwt),
 ):
     await execute(
-        "DELETE FROM agent_role_assignments WHERE id = :id AND agent_id = :agent_id AND user_id = :user_id",
+        "DELETE FROM agent_role_assignments WHERE id = :id AND agent_id::text = :agent_id AND user_id::text = :user_id",
         {"id": assignment_id, "agent_id": agent_id, "user_id": user_id},
     )
     return {"status": "ok"}
@@ -231,7 +231,7 @@ async def get_permission_audit(
     rows = await execute(
         """
         SELECT * FROM agent_permission_audit
-        WHERE agent_id = :agent_id AND user_id = :user_id
+        WHERE agent_id::text = :agent_id AND user_id::text = :user_id
         ORDER BY created_at DESC
         LIMIT :limit OFFSET :offset
         """,

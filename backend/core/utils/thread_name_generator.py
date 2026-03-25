@@ -92,7 +92,7 @@ Respond with JSON: {"title": "Your Title"}"""
                 """
                 UPDATE threads
                 SET name = :name
-                WHERE thread_id = :thread_id
+                WHERE thread_id::text = :thread_id
                 RETURNING thread_id
                 """,
                 {"name": generated_name, "thread_id": thread_id},

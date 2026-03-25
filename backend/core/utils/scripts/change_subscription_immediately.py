@@ -70,7 +70,7 @@ async def get_user_info(user_email: str) -> Optional[dict]:
 
 async def get_stripe_customer_id(account_id: str) -> Optional[str]:
     result = await execute_one(
-        "SELECT id FROM basejump.billing_customers WHERE account_id = :account_id",
+        "SELECT id FROM basejump.billing_customers WHERE account_id::text = :account_id",
         {"account_id": account_id}
     )
     if not result:

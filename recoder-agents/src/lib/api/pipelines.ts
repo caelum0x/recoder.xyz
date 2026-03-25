@@ -1,4 +1,4 @@
-import { backendApi } from '@/lib/api-client';
+import { backendApi, throwIfError } from '@/lib/api-client';
 
 export interface PipelineStep {
   agent_id: string;
@@ -38,7 +38,7 @@ export const createPipeline = async (data: {
   steps: PipelineStep[];
 }): Promise<Pipeline> => {
   const response = await backendApi.post<Pipeline>('/pipelines', data);
-  if (response.error) throw new Error(response.error.message);
+  throwIfError(response);
   return response.data!;
 };
 
@@ -46,15 +46,15 @@ export const getPipelines = async (): Promise<Pipeline[]> => {
   const response = await backendApi.get<Pipeline[]>('/pipelines', {
     showErrors: true,
   });
-  if (response.error) throw new Error(response.error.message);
+  throwIfError(response);
   return response.data!;
 };
 
 export const getPipeline = async (id: string): Promise<Pipeline> => {
   const response = await backendApi.get<Pipeline>(`/pipelines/${id}`, {
-    showErrors: true,
+    showErrors: false,
   });
-  if (response.error) throw new Error(response.error.message);
+  throwIfError(response);
   return response.data!;
 };
 
@@ -63,13 +63,13 @@ export const updatePipeline = async (
   data: Partial<Pick<Pipeline, 'name' | 'description' | 'steps' | 'is_active'>>,
 ): Promise<Pipeline> => {
   const response = await backendApi.patch<Pipeline>(`/pipelines/${id}`, data);
-  if (response.error) throw new Error(response.error.message);
+  throwIfError(response);
   return response.data!;
 };
 
 export const deletePipeline = async (id: string) => {
   const response = await backendApi.delete(`/pipelines/${id}`);
-  if (response.error) throw new Error(response.error.message);
+  throwIfError(response);
   return response.data;
 };
 
@@ -81,7 +81,7 @@ export const executePipeline = async (
     status: string;
     total_steps: number;
   }>(`/pipelines/${id}/execute`, {});
-  if (response.error) throw new Error(response.error.message);
+  throwIfError(response);
   return response.data!;
 };
 
@@ -90,9 +90,9 @@ export const getPipelineRuns = async (
 ): Promise<PipelineRun[]> => {
   const response = await backendApi.get<PipelineRun[]>(
     `/pipelines/${id}/runs`,
-    { showErrors: true },
+    { showErrors: false },
   );
-  if (response.error) throw new Error(response.error.message);
+  throwIfError(response);
   return response.data!;
 };
 
@@ -104,7 +104,7 @@ export const cancelPipelineRun = async (
     `/pipelines/${pipelineId}/cancel/${runId}`,
     {},
   );
-  if (response.error) throw new Error(response.error.message);
+  throwIfError(response);
   return response.data!;
 };
 
@@ -114,8 +114,8 @@ export const getPipelineRun = async (
 ): Promise<PipelineRun> => {
   const response = await backendApi.get<PipelineRun>(
     `/pipelines/${pipelineId}/runs/${runId}`,
-    { showErrors: true },
+    { showErrors: false },
   );
-  if (response.error) throw new Error(response.error.message);
+  throwIfError(response);
   return response.data!;
 };

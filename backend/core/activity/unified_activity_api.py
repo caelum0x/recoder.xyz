@@ -134,8 +134,8 @@ async def get_activity_timeline(
                     f"""SELECT aa.id, aa.activity_type, aa.description, aa.agent_id,
                                aa.metadata, aa.created_at, a.name AS agent_name
                         FROM agent_activity aa
-                        LEFT JOIN agents a ON a.agent_id::text = aa.agent_id
-                        WHERE aa.user_id = :user_id{date_filter_aa}
+                        LEFT JOIN agents a ON a.agent_id::text = aa.agent_id::text
+                        WHERE aa.user_id::text = :user_id{date_filter_aa}
                         ORDER BY aa.created_at DESC
                         LIMIT :fetch_limit""",
                     {"user_id": user_id, "fetch_limit": limit + offset, **date_params},
@@ -162,7 +162,7 @@ async def get_activity_timeline(
                 al_rows = await execute(
                     f"""SELECT id, action, resource_type, resource_id, details, created_at
                         FROM audit_logs
-                        WHERE user_id = :user_id{date_filter_al}
+                        WHERE user_id::text = :user_id{date_filter_al}
                         ORDER BY created_at DESC
                         LIMIT :fetch_limit""",
                     {"user_id": user_id, "fetch_limit": limit + offset, **date_params},
@@ -189,8 +189,8 @@ async def get_activity_timeline(
                     f"""SELECT se.id, se.schedule_id, se.status, se.error_message,
                                se.executed_at, s.name AS schedule_name, s.agent_id
                         FROM schedule_executions se
-                        LEFT JOIN agent_schedules s ON s.id = se.schedule_id
-                        WHERE s.user_id = :user_id{date_filter_se}
+                        LEFT JOIN agent_schedules s ON s.id::text = se.schedule_id::text
+                        WHERE s.user_id::text = :user_id{date_filter_se}
                         ORDER BY se.executed_at DESC
                         LIMIT :fetch_limit""",
                     {"user_id": user_id, "fetch_limit": limit + offset, **date_params},
@@ -217,7 +217,7 @@ async def get_activity_timeline(
                 pa_rows = await execute(
                     f"""SELECT id, app, type, title, description, timestamp, metadata
                         FROM platform_activity
-                        WHERE user_id = :user_id{date_filter_pa}
+                        WHERE user_id::text = :user_id{date_filter_pa}
                         ORDER BY timestamp DESC
                         LIMIT :fetch_limit""",
                     {"user_id": user_id, "fetch_limit": limit + offset, **date_params},
@@ -274,7 +274,7 @@ async def get_activity_stats(
         events_today = 0
         try:
             row = await execute_one(
-                "SELECT COUNT(*) AS cnt FROM agent_activity WHERE user_id = :user_id AND created_at >= :since",
+                "SELECT COUNT(*) AS cnt FROM agent_activity WHERE user_id::text = :user_id AND created_at >= :since",
                 {"user_id": user_id, "since": today_start},
             )
             if row:
@@ -286,7 +286,7 @@ async def get_activity_stats(
         events_this_week = 0
         try:
             row = await execute_one(
-                "SELECT COUNT(*) AS cnt FROM agent_activity WHERE user_id = :user_id AND created_at >= :since",
+                "SELECT COUNT(*) AS cnt FROM agent_activity WHERE user_id::text = :user_id AND created_at >= :since",
                 {"user_id": user_id, "since": week_start},
             )
             if row:
@@ -300,8 +300,8 @@ async def get_activity_stats(
             row = await execute_one(
                 """SELECT a.name
                    FROM agent_activity aa
-                   LEFT JOIN agents a ON a.agent_id::text = aa.agent_id
-                   WHERE aa.user_id = :user_id AND aa.created_at >= :since
+                   LEFT JOIN agents a ON a.agent_id::text = aa.agent_id::text
+                   WHERE aa.user_id::text = :user_id AND aa.created_at >= :since
                    GROUP BY a.name
                    ORDER BY COUNT(*) DESC
                    LIMIT 1""",
@@ -318,7 +318,7 @@ async def get_activity_stats(
             row = await execute_one(
                 """SELECT EXTRACT(HOUR FROM created_at) AS hr
                    FROM agent_activity
-                   WHERE user_id = :user_id AND created_at >= :since
+                   WHERE user_id::text = :user_id AND created_at >= :since
                    GROUP BY EXTRACT(HOUR FROM created_at)
                    ORDER BY COUNT(*) DESC
                    LIMIT 1""",
@@ -335,7 +335,7 @@ async def get_activity_stats(
             rows = await execute(
                 """SELECT DATE(created_at) AS day, activity_type, COUNT(*) AS cnt
                    FROM agent_activity
-                   WHERE user_id = :user_id AND created_at >= :since
+                   WHERE user_id::text = :user_id AND created_at >= :since
                    GROUP BY DATE(created_at), activity_type
                    ORDER BY day""",
                 {"user_id": user_id, "since": thirty_days_ago},
@@ -387,7 +387,7 @@ async def get_activity_heatmap(
                    EXTRACT(HOUR FROM created_at) AS hr,
                    COUNT(*) AS cnt
                FROM agent_activity
-               WHERE user_id = :user_id AND created_at >= :since
+               WHERE user_id::text = :user_id AND created_at >= :since
                GROUP BY EXTRACT(DOW FROM created_at), EXTRACT(HOUR FROM created_at)
                ORDER BY dow, hr""",
             {"user_id": user_id, "since": since},

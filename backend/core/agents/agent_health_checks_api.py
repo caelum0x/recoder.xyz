@@ -59,7 +59,7 @@ async def get_health_overview(
     rows = await execute(
         """
         SELECT * FROM agent_uptime_summary
-        WHERE user_id = :user_id
+        WHERE user_id::text = :user_id
         ORDER BY last_checked_at DESC NULLS LAST
         """,
         {"user_id": user_id},
@@ -137,7 +137,7 @@ async def list_health_checks(
           ORDER BY checked_at DESC
           LIMIT 1
         ) hcr ON true
-        WHERE hcc.agent_id = :agent_id AND hcc.user_id = :user_id
+        WHERE hcc.agent_id::text = :agent_id AND hcc.user_id::text = :user_id
         ORDER BY hcc.created_at DESC
         """,
         {"agent_id": agent_id, "user_id": user_id},
@@ -158,7 +158,7 @@ async def update_health_check(
 ):
     """Update a health check configuration."""
     existing = await execute_one(
-        "SELECT * FROM health_check_configs WHERE id = :id AND agent_id = :agent_id AND user_id = :user_id",
+        "SELECT * FROM health_check_configs WHERE id = :id AND agent_id::text = :agent_id AND user_id::text = :user_id",
         {"id": config_id, "agent_id": agent_id, "user_id": user_id},
     )
     if not existing:
@@ -176,7 +176,7 @@ async def update_health_check(
     row = await execute_one(
         f"""
         UPDATE health_check_configs SET {set_clauses}
-        WHERE id = :id AND agent_id = :agent_id AND user_id = :user_id
+        WHERE id = :id AND agent_id::text = :agent_id AND user_id::text = :user_id
         RETURNING *
         """,
         data,
@@ -196,14 +196,14 @@ async def delete_health_check(
 ):
     """Delete a health check configuration."""
     existing = await execute_one(
-        "SELECT id FROM health_check_configs WHERE id = :id AND agent_id = :agent_id AND user_id = :user_id",
+        "SELECT id FROM health_check_configs WHERE id = :id AND agent_id::text = :agent_id AND user_id::text = :user_id",
         {"id": config_id, "agent_id": agent_id, "user_id": user_id},
     )
     if not existing:
         raise HTTPException(status_code=404, detail="Health check config not found")
 
     await execute_mutate(
-        "DELETE FROM health_check_configs WHERE id = :id AND user_id = :user_id",
+        "DELETE FROM health_check_configs WHERE id = :id AND user_id::text = :user_id",
         {"id": config_id, "user_id": user_id},
     )
     return {"deleted": True, "id": config_id}
@@ -221,7 +221,7 @@ async def run_health_check(
 ):
     """Simulate running a health check and record result. Updates uptime summary."""
     config = await execute_one(
-        "SELECT * FROM health_check_configs WHERE id = :id AND agent_id = :agent_id AND user_id = :user_id",
+        "SELECT * FROM health_check_configs WHERE id = :id AND agent_id::text = :agent_id AND user_id::text = :user_id",
         {"id": config_id, "agent_id": agent_id, "user_id": user_id},
     )
     if not config:
@@ -266,7 +266,7 @@ async def run_health_check(
     # Upsert uptime summary
     try:
         existing_summary = await execute_one(
-            "SELECT * FROM agent_uptime_summary WHERE user_id = :user_id AND agent_id = :agent_id",
+            "SELECT * FROM agent_uptime_summary WHERE user_id::text = :user_id AND agent_id::text = :agent_id",
             {"user_id": user_id, "agent_id": agent_id},
         )
         if existing_summary:
@@ -285,7 +285,7 @@ async def run_health_check(
                   last_status = :last_status,
                   last_checked_at = now(),
                   updated_at = now()
-                WHERE user_id = :user_id AND agent_id = :agent_id
+                WHERE user_id::text = :user_id AND agent_id::text = :agent_id
                 """,
                 {
                     "uptime_pct": uptime_pct,
@@ -341,7 +341,7 @@ async def get_health_results(
 ):
     """List results for a health check config."""
     config = await execute_one(
-        "SELECT id FROM health_check_configs WHERE id = :id AND agent_id = :agent_id AND user_id = :user_id",
+        "SELECT id FROM health_check_configs WHERE id = :id AND agent_id::text = :agent_id AND user_id::text = :user_id",
         {"id": config_id, "agent_id": agent_id, "user_id": user_id},
     )
     if not config:
@@ -356,7 +356,7 @@ async def get_health_results(
     rows = await execute(
         f"""
         SELECT * FROM health_check_results
-        WHERE config_id = :config_id AND user_id = :user_id{extra}
+        WHERE config_id::text = :config_id AND user_id::text = :user_id{extra}
         ORDER BY checked_at DESC
         LIMIT :limit
         """,
@@ -376,7 +376,7 @@ async def get_agent_uptime(
 ):
     """Return the uptime summary for a specific agent."""
     row = await execute_one(
-        "SELECT * FROM agent_uptime_summary WHERE user_id = :user_id AND agent_id = :agent_id",
+        "SELECT * FROM agent_uptime_summary WHERE user_id::text = :user_id AND agent_id::text = :agent_id",
         {"user_id": user_id, "agent_id": agent_id},
     )
     if not row:

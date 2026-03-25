@@ -15,9 +15,9 @@ async def get_active_agent_runs(user_id: str) -> List[Dict[str, Any]]:
         ar.metadata,
         a.name as agent_name
     FROM agent_runs ar
-    INNER JOIN threads t ON ar.thread_id = t.thread_id
-    LEFT JOIN agents a ON ar.agent_id = a.agent_id
-    WHERE t.account_id = :user_id
+    INNER JOIN threads t ON ar.thread_id::text = t.thread_id::text
+    LEFT JOIN agents a ON ar.agent_id::text = a.agent_id::text
+    WHERE t.account_id::text = :user_id
       AND ar.status = 'running'
     ORDER BY ar.started_at DESC
     """
@@ -62,7 +62,7 @@ async def get_thread_agent_runs(thread_id: str) -> List[Dict[str, Any]]:
         created_at,
         updated_at
     FROM agent_runs
-    WHERE thread_id = :thread_id
+    WHERE thread_id::text = :thread_id
     ORDER BY created_at DESC
     """
     
@@ -80,8 +80,8 @@ async def get_agent_run_by_id(agent_run_id: str) -> Optional[Dict[str, Any]]:
         ar.*,
         t.account_id as thread_account_id
     FROM agent_runs ar
-    JOIN threads t ON ar.thread_id = t.thread_id
-    WHERE ar.id = :agent_run_id
+    JOIN threads t ON ar.thread_id::text = t.thread_id::text
+    WHERE ar.id::text = :agent_run_id
     """
     result = await execute_one(sql, {"agent_run_id": agent_run_id})
     return serialize_row(dict(result)) if result else None
@@ -106,7 +106,7 @@ async def list_agents(
     # Only 'ASC' and 'DESC' are valid SQL ORDER BY directions.
     sort_direction = sort_order.upper() if sort_order.upper() in ("ASC", "DESC") else "DESC"
     
-    where_clauses = ["account_id = :account_id"]
+    where_clauses = ["account_id::text = :account_id"]
     params: Dict[str, Any] = {"account_id": account_id, "limit": limit, "offset": offset}
     
     if search:
@@ -168,14 +168,14 @@ async def get_agent_by_id(agent_id: str, account_id: Optional[str] = None) -> Op
         sql = f"""
         SELECT {columns}
         FROM agents 
-        WHERE agent_id = :agent_id AND account_id = :account_id
+        WHERE agent_id::text = :agent_id AND account_id::text = :account_id
         """
         params = {"agent_id": agent_id, "account_id": account_id}
     else:
         sql = f"""
         SELECT {columns}
         FROM agents 
-        WHERE agent_id = :agent_id
+        WHERE agent_id::text = :agent_id
         """
         params = {"agent_id": agent_id}
     
@@ -184,7 +184,7 @@ async def get_agent_by_id(agent_id: str, account_id: Optional[str] = None) -> Op
 
 
 async def get_agent_metadata(agent_id: str) -> Optional[Dict[str, Any]]:
-    sql = "SELECT metadata FROM agents WHERE agent_id = :agent_id"
+    sql = "SELECT metadata FROM agents WHERE agent_id::text = :agent_id"
     result = await execute_one(sql, {"agent_id": agent_id})
     if result:
         metadata = result.get("metadata")
@@ -195,14 +195,14 @@ async def get_agent_metadata(agent_id: str) -> Optional[Dict[str, Any]]:
 async def get_user_agent_ids(user_id: str) -> List[str]:
     sql = """
     SELECT agent_id FROM agents 
-    WHERE account_id = :user_id AND current_version_id IS NOT NULL
+    WHERE account_id::text = :user_id AND current_version_id IS NOT NULL
     """
     rows = await execute(sql, {"user_id": user_id})
     return [row["agent_id"] for row in rows] if rows else []
 
 
 async def get_agent_count(account_id: str) -> int:
-    sql = "SELECT COUNT(*) as count FROM agents WHERE account_id = :account_id"
+    sql = "SELECT COUNT(*) as count FROM agents WHERE account_id::text = :account_id"
     result = await execute_one(sql, {"account_id": account_id})
     return result["count"] if result else 0
 
@@ -278,7 +278,7 @@ async def update_agent(
     sql = f"""
     UPDATE agents
     SET {set_sql}
-    WHERE agent_id = :agent_id AND account_id = :account_id
+    WHERE agent_id::text = :agent_id AND account_id::text = :account_id
     RETURNING *
     """
     
@@ -290,7 +290,7 @@ async def clear_default_agent(account_id: str, exclude_agent_id: Optional[str] =
     sql = """
     UPDATE agents 
     SET is_default = false, updated_at = :updated_at
-    WHERE account_id = :account_id AND is_default = true
+    WHERE account_id::text = :account_id AND is_default = true
     """
     params = {"account_id": account_id, "updated_at": datetime.now(timezone.utc)}
     
@@ -305,7 +305,7 @@ async def clear_default_agent(account_id: str, exclude_agent_id: Optional[str] =
 async def delete_agent(agent_id: str, account_id: str) -> bool:
     sql = """
     DELETE FROM agents 
-    WHERE agent_id = :agent_id AND account_id = :account_id
+    WHERE agent_id::text = :agent_id AND account_id::text = :account_id
     RETURNING agent_id
     """
     result = await execute_one(sql, {"agent_id": agent_id, "account_id": account_id}, commit=True)
@@ -316,7 +316,7 @@ async def get_agent_triggers(agent_id: str) -> List[Dict[str, Any]]:
     sql = """
     SELECT trigger_id, trigger_type, provider_id, name, is_active
     FROM agent_triggers
-    WHERE agent_id = :agent_id
+    WHERE agent_id::text = :agent_id
     """
     rows = await execute(sql, {"agent_id": agent_id})
     return [dict(row) for row in rows] if rows else []
@@ -406,8 +406,8 @@ async def get_agent_run_with_thread(agent_run_id: str) -> Optional[Dict[str, Any
         ar.metadata,
         t.account_id as thread_account_id
     FROM agent_runs ar
-    JOIN threads t ON ar.thread_id = t.thread_id
-    WHERE ar.id = :agent_run_id
+    JOIN threads t ON ar.thread_id::text = t.thread_id::text
+    WHERE ar.id::text = :agent_run_id
     """
     result = await execute_one(sql, {"agent_run_id": agent_run_id})
     return serialize_row(dict(result)) if result else None
@@ -445,8 +445,8 @@ async def get_running_agent_runs_count(account_id: str) -> int:
     sql = """
     SELECT COUNT(*) as count
     FROM agent_runs ar
-    JOIN threads t ON ar.thread_id = t.thread_id
-    WHERE t.account_id = :account_id AND ar.status = 'running'
+    JOIN threads t ON ar.thread_id::text = t.thread_id::text
+    WHERE t.account_id::text = :account_id AND ar.status = 'running'
     """
     result = await execute_one(sql, {"account_id": account_id})
     return result["count"] if result else 0
@@ -456,8 +456,8 @@ async def get_running_thread_ids(account_id: str) -> List[str]:
     sql = """
     SELECT DISTINCT ar.thread_id
     FROM agent_runs ar
-    JOIN threads t ON ar.thread_id = t.thread_id
-    WHERE t.account_id = :account_id AND ar.status = 'running'
+    JOIN threads t ON ar.thread_id::text = t.thread_id::text
+    WHERE t.account_id::text = :account_id AND ar.status = 'running'
     """
     rows = await execute(sql, {"account_id": account_id})
     return [str(row["thread_id"]) for row in rows] if rows else []
@@ -500,7 +500,7 @@ async def get_active_thread_ids_with_runs() -> List[Dict[str, Any]]:
 async def get_default_agent_id(account_id: str) -> Optional[str]:
     sql = """
     SELECT agent_id FROM agents 
-    WHERE account_id = :account_id 
+    WHERE account_id::text = :account_id 
       AND metadata->>'is_recoder_default' = 'true'
     LIMIT 1
     """
@@ -509,7 +509,7 @@ async def get_default_agent_id(account_id: str) -> Optional[str]:
 
 
 async def get_any_agent_id(account_id: str) -> Optional[str]:
-    sql = "SELECT agent_id FROM agents WHERE account_id = :account_id LIMIT 1"
+    sql = "SELECT agent_id FROM agents WHERE account_id::text = :account_id LIMIT 1"
     result = await execute_one(sql, {"account_id": account_id})
     return str(result["agent_id"]) if result else None
 
@@ -518,7 +518,7 @@ async def get_shared_recoder_agent(admin_user_id: Optional[str] = None) -> Optio
     if admin_user_id:
         sql = """
         SELECT agent_id, account_id FROM agents 
-        WHERE account_id = :admin_user_id 
+        WHERE account_id::text = :admin_user_id 
           AND metadata->>'is_recoder_default' = 'true'
         LIMIT 1
         """

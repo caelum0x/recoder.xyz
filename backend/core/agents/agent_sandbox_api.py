@@ -143,7 +143,7 @@ async def send_sandbox_message(
         session = await execute_one(
             """
             SELECT * FROM agent_sandbox_sessions
-            WHERE id = :session_id AND user_id = :user_id AND agent_id = :agent_id
+            WHERE id = :session_id AND user_id::text = :user_id AND agent_id::text = :agent_id
             """,
             {"session_id": session_id, "user_id": user_id, "agent_id": agent_id},
         )
@@ -186,7 +186,7 @@ async def send_sandbox_message(
             UPDATE agent_sandbox_sessions
             SET messages = messages || :new_messages::jsonb,
                 updated_at = now()
-            WHERE id = :session_id AND user_id = :user_id
+            WHERE id = :session_id AND user_id::text = :user_id
             RETURNING *
             """,
             {
@@ -227,7 +227,7 @@ async def get_sandbox_session(
         row = await execute_one(
             """
             SELECT * FROM agent_sandbox_sessions
-            WHERE id = :session_id AND user_id = :user_id AND agent_id = :agent_id
+            WHERE id = :session_id AND user_id::text = :user_id AND agent_id::text = :agent_id
             """,
             {"session_id": session_id, "user_id": user_id, "agent_id": agent_id},
         )
@@ -260,7 +260,7 @@ async def end_sandbox_session(
             """
             UPDATE agent_sandbox_sessions
             SET status = 'completed', updated_at = now()
-            WHERE id = :session_id AND user_id = :user_id AND agent_id = :agent_id
+            WHERE id = :session_id AND user_id::text = :user_id AND agent_id::text = :agent_id
             RETURNING id
             """,
             {"session_id": session_id, "user_id": user_id, "agent_id": agent_id},
@@ -337,7 +337,7 @@ async def list_test_cases(
         rows = await execute(
             """
             SELECT * FROM sandbox_test_cases
-            WHERE user_id = :user_id AND agent_id = :agent_id
+            WHERE user_id::text = :user_id AND agent_id::text = :agent_id
             ORDER BY created_at DESC
             """,
             {"user_id": user_id, "agent_id": agent_id},
@@ -366,7 +366,7 @@ async def run_test_case(
         test_case = await execute_one(
             """
             SELECT * FROM sandbox_test_cases
-            WHERE id = :case_id AND user_id = :user_id AND agent_id = :agent_id
+            WHERE id = :case_id AND user_id::text = :user_id AND agent_id::text = :agent_id
             """,
             {"case_id": case_id, "user_id": user_id, "agent_id": agent_id},
         )
@@ -468,7 +468,7 @@ async def delete_test_case(
         await execute_mutate(
             """
             DELETE FROM sandbox_test_cases
-            WHERE id = :case_id AND user_id = :user_id AND agent_id = :agent_id
+            WHERE id = :case_id AND user_id::text = :user_id AND agent_id::text = :agent_id
             """,
             {"case_id": case_id, "user_id": user_id, "agent_id": agent_id},
         )

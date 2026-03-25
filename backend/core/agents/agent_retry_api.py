@@ -203,7 +203,7 @@ async def list_retry_policies(
         rows = await execute(
             """
             SELECT * FROM run_retry_policies
-            WHERE user_id = :user_id
+            WHERE user_id::text = :user_id
             ORDER BY created_at DESC
             """,
             {"user_id": user_id},
@@ -230,7 +230,7 @@ async def delete_retry_policy(
         result = await execute_mutate(
             """
             DELETE FROM run_retry_policies
-            WHERE id = :policy_id AND user_id = :user_id
+            WHERE id = :policy_id AND user_id::text = :user_id
             RETURNING id
             """,
             {"policy_id": policy_id, "user_id": user_id},
@@ -272,7 +272,7 @@ async def retry_run(
             """
             SELECT id, agent_id, status, thread_id
             FROM agent_runs
-            WHERE id = :run_id AND user_id = :user_id
+            WHERE id = :run_id AND user_id::text = :user_id
             """,
             {"run_id": run_id, "user_id": user_id},
         )
@@ -287,7 +287,7 @@ async def retry_run(
             """
             SELECT MAX(attempt_number) AS max_attempt
             FROM run_retry_attempts
-            WHERE original_run_id = :run_id AND user_id = :user_id
+            WHERE original_run_id::text = :run_id AND user_id::text = :user_id
             """,
             {"run_id": run_id, "user_id": user_id},
         )
@@ -298,11 +298,11 @@ async def retry_run(
         policy = await execute_one(
             """
             SELECT * FROM run_retry_policies
-            WHERE user_id = :user_id
-              AND (agent_id = :agent_id OR agent_id IS NULL)
+            WHERE user_id::text = :user_id
+              AND (agent_id::text = :agent_id OR agent_id IS NULL)
               AND is_active = true
             ORDER BY
-              CASE WHEN agent_id = :agent_id THEN 0 ELSE 1 END
+              CASE WHEN agent_id::text = :agent_id THEN 0 ELSE 1 END
             LIMIT 1
             """,
             {"user_id": user_id, "agent_id": agent_id},
@@ -362,7 +362,7 @@ async def list_retry_attempts(
         rows = await execute(
             """
             SELECT * FROM run_retry_attempts
-            WHERE original_run_id = :run_id AND user_id = :user_id
+            WHERE original_run_id::text = :run_id AND user_id::text = :user_id
             ORDER BY attempt_number ASC
             """,
             {"run_id": run_id, "user_id": user_id},
@@ -399,7 +399,7 @@ async def get_retry_stats(
                 COUNT(*) FILTER (WHERE status = 'succeeded') AS success_count,
                 COUNT(*) FILTER (WHERE status IN ('failed', 'exhausted')) AS failure_count
             FROM run_retry_attempts
-            WHERE user_id = :user_id
+            WHERE user_id::text = :user_id
             """,
             {"user_id": user_id},
         )
@@ -414,7 +414,7 @@ async def get_retry_stats(
             """
             SELECT agent_id, COUNT(*) AS cnt
             FROM run_retry_attempts
-            WHERE user_id = :user_id
+            WHERE user_id::text = :user_id
             GROUP BY agent_id
             ORDER BY cnt DESC
             LIMIT 1
@@ -432,7 +432,7 @@ async def get_retry_stats(
             FROM (
                 SELECT original_run_id, COUNT(*) AS attempt_count
                 FROM run_retry_attempts
-                WHERE user_id = :user_id
+                WHERE user_id::text = :user_id
                 GROUP BY original_run_id
             ) sub
             """,

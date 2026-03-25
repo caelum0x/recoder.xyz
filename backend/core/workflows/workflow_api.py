@@ -89,8 +89,8 @@ async def workflows_overview(
             COALESCE(SUM(we.total_cost), 0) as total_cost,
             AVG(EXTRACT(EPOCH FROM (we.completed_at - we.started_at))) FILTER (WHERE we.completed_at IS NOT NULL) as avg_duration
         FROM workflows w
-        LEFT JOIN workflow_executions we ON w.id = we.workflow_id
-        WHERE w.account_id = :account_id
+        LEFT JOIN workflow_executions we ON w.id::text = we.workflow_id::text
+        WHERE w.account_id::text = :account_id
         """
         rows = await execute(sql, {"account_id": user_id})
         row = rows[0] if rows else {}
@@ -102,8 +102,8 @@ async def workflows_overview(
         most_used_sql = """
         SELECT w.name, COUNT(we.id) as exec_count
         FROM workflows w
-        JOIN workflow_executions we ON w.id = we.workflow_id
-        WHERE w.account_id = :account_id
+        JOIN workflow_executions we ON w.id::text = we.workflow_id::text
+        WHERE w.account_id::text = :account_id
         GROUP BY w.id, w.name
         ORDER BY exec_count DESC
         LIMIT 1
@@ -305,7 +305,7 @@ async def workflow_analytics(
         # Verify the workflow belongs to the authenticated user
         ownership_sql = """
         SELECT id FROM workflows
-        WHERE id = :workflow_id AND account_id = :account_id
+        WHERE id = :workflow_id AND account_id::text = :account_id
         LIMIT 1
         """
         owner_check = await execute_one(ownership_sql, {"workflow_id": workflow_id, "account_id": user_id})
@@ -321,7 +321,7 @@ async def workflow_analytics(
             AVG(EXTRACT(EPOCH FROM (completed_at - started_at))) FILTER (WHERE completed_at IS NOT NULL) as avg_duration,
             COALESCE(SUM(total_cost), 0) as total_cost
         FROM workflow_executions
-        WHERE workflow_id = :workflow_id
+        WHERE workflow_id::text = :workflow_id
         """
         rows = await execute(stats_sql, {"workflow_id": workflow_id})
         row = rows[0] if rows else {}
@@ -340,9 +340,9 @@ async def workflow_analytics(
             AVG(EXTRACT(EPOCH FROM (wne.completed_at - wne.started_at))) as avg_seconds,
             COUNT(*) as exec_count
         FROM workflow_node_executions wne
-        JOIN workflow_nodes wn ON wne.node_id = wn.id
-        JOIN workflow_executions we ON wne.execution_id = we.id
-        WHERE we.workflow_id = :workflow_id AND wne.completed_at IS NOT NULL
+        JOIN workflow_nodes wn ON wne.node_id::text = wn.id::text
+        JOIN workflow_executions we ON wne.execution_id::text = we.id::text
+        WHERE we.workflow_id::text = :workflow_id AND wne.completed_at IS NOT NULL
         GROUP BY wne.node_id, wn.label, wn.node_type
         ORDER BY avg_seconds DESC
         LIMIT 5
@@ -363,9 +363,9 @@ async def workflow_analytics(
             COUNT(*) as total,
             COUNT(*) FILTER (WHERE wne.status = 'failed') as failures
         FROM workflow_node_executions wne
-        JOIN workflow_nodes wn ON wne.node_id = wn.id
-        JOIN workflow_executions we ON wne.execution_id = we.id
-        WHERE we.workflow_id = :workflow_id
+        JOIN workflow_nodes wn ON wne.node_id::text = wn.id::text
+        JOIN workflow_executions we ON wne.execution_id::text = we.id::text
+        WHERE we.workflow_id::text = :workflow_id
         GROUP BY wne.node_id, wn.label, wn.node_type
         HAVING COUNT(*) FILTER (WHERE wne.status = 'failed') > 0
         ORDER BY failures DESC

@@ -3,7 +3,7 @@
 import { backendApi } from '@/lib/api-client';
 import { useAuth } from '@/components/AuthProvider';
 import { getSessionAccessToken } from '@/lib/auth/session-token';
-import { connectTokenizedSSE, type TokenizedSSEConnection } from '@/lib/realtime/sse';
+import { connectTokenizedSSE, type TokenizedSSEConnection, type SSEConnectionState } from '@/lib/realtime/sse';
 import { ReactNode, createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 
 type PresenceStatus = 'online' | 'idle' | 'offline';
@@ -158,8 +158,13 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
   }, [sendPresenceUpdate, stopHeartbeat, user]);
 
   const stopPresenceStream = useCallback(() => {
-    if (presenceStreamRef.current) {
-      presenceStreamRef.current.close();
+    try {
+      if (presenceStreamRef.current) {
+        presenceStreamRef.current.close();
+        presenceStreamRef.current = null;
+      }
+    } catch {
+      // Ignore errors during stream cleanup
       presenceStreamRef.current = null;
     }
     setConnectionState('idle');
@@ -208,43 +213,69 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
 
   const startPresenceStream = useCallback(
     async (threadIdOverride?: string | null) => {
-      stopPresenceStream();
-      if (DISABLE_PRESENCE || !user) {
-        return;
-      }
+      try {
+        stopPresenceStream();
+        if (DISABLE_PRESENCE || !user) {
+          return;
+        }
 
-      const threadId = threadIdOverride ?? latestThreadRef.current;
-      if (!threadId) {
-        setPresences({});
-        setConnectionState('idle');
-        return;
-      }
+        const threadId = threadIdOverride ?? latestThreadRef.current;
+        if (!threadId) {
+          setPresences({});
+          setConnectionState('idle');
+          return;
+        }
 
-      const apiUrl = process.env.NEXT_PUBLIC_BACKEND_URL;
-      if (!apiUrl) {
-        setConnectionState('error');
-        return;
-      }
+        const apiUrl = process.env.NEXT_PUBLIC_BACKEND_URL;
+        if (!apiUrl) {
+          // Don't set error state — just stay idle. Presence is non-critical.
+          setConnectionState('idle');
+          return;
+        }
 
-      setConnectionState('connecting');
-      presenceStreamRef.current = connectTokenizedSSE({
-        url: `${apiUrl}/presence/thread/${threadId}/stream`,
-        events: {
-          'presence.update': (event) => {
+        setConnectionState('connecting');
+        presenceStreamRef.current = connectTokenizedSSE({
+          url: `${apiUrl}/presence/thread/${threadId}/stream`,
+          onStateChange: (sseState: SSEConnectionState) => {
+            // Map SSE connection states to presence connection states
+            // but never crash on state transitions
             try {
-              const parsed = JSON.parse(event.data as string) as {
-                thread_id?: string;
-                viewers?: Array<Record<string, unknown>>;
-              };
-              const payloadThreadId = parsed.thread_id || threadId;
-              const viewers = Array.isArray(parsed.viewers) ? parsed.viewers : [];
-              applyViewers(payloadThreadId, viewers);
-            } catch (error) {
-              console.error('[Presence] Failed to parse presence update:', error);
+              if (sseState === 'connected') {
+                setConnectionState('connected');
+              } else if (sseState === 'reconnecting' || sseState === 'connecting') {
+                setConnectionState('connecting');
+              } else if (sseState === 'error' || sseState === 'disconnected') {
+                // Don't propagate error state — presence is non-critical.
+                // The SSE layer will handle retries automatically.
+                setConnectionState('idle');
+              }
+            } catch {
+              // Never crash on state updates
             }
           },
-        },
-      });
+          events: {
+            'presence.update': (event) => {
+              try {
+                const parsed = JSON.parse(event.data as string) as {
+                  thread_id?: string;
+                  viewers?: Array<Record<string, unknown>>;
+                };
+                const payloadThreadId = parsed.thread_id || threadId;
+                const viewers = Array.isArray(parsed.viewers) ? parsed.viewers : [];
+                applyViewers(payloadThreadId, viewers);
+              } catch (error) {
+                // Silently suppress parse errors — presence is non-critical
+                console.warn('[Presence] Failed to parse presence update:', error);
+              }
+            },
+          },
+        });
+      } catch (error) {
+        // CRITICAL: Never let SSE connection errors crash the PresenceProvider.
+        // Presence is a non-critical feature — the app should work without it.
+        console.warn('[Presence] Failed to start presence stream, suppressing:', error);
+        setConnectionState('idle');
+      }
     },
     [applyViewers, stopPresenceStream, user]
   );
@@ -380,9 +411,13 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
 
     let cancelled = false;
     const refreshToken = async () => {
-      const token = await getSessionAccessToken();
-      if (!cancelled) {
-        sessionTokenRef.current = token;
+      try {
+        const token = await getSessionAccessToken();
+        if (!cancelled) {
+          sessionTokenRef.current = token;
+        }
+      } catch {
+        // Silently suppress token refresh errors — presence is non-critical
       }
     };
     void refreshToken();
@@ -420,10 +455,18 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
   );
 }
 
+/** Safe defaults when PresenceProvider is unavailable (e.g. caught by error boundary) */
+const FALLBACK_PRESENCE: PresenceContextValue = {
+  activeThreadId: null,
+  setActiveThreadId: () => {},
+  connectionState: 'idle',
+  presences: {},
+  sessionId: null,
+};
+
 export function usePresenceContext() {
   const context = useContext(PresenceContext);
-  if (!context) {
-    throw new Error('usePresenceContext must be used within PresenceProvider');
-  }
-  return context;
+  // Return safe defaults instead of throwing — this keeps the app functional
+  // when PresenceProvider is missing (e.g. caught by SSEErrorBoundary).
+  return context ?? FALLBACK_PRESENCE;
 }

@@ -94,7 +94,7 @@ async def create_rate_limit_tier(
         # If this is marked default, unset any existing default first
         if body.is_default:
             await execute_mutate(
-                "UPDATE rate_limit_tiers SET is_default = false WHERE user_id = :user_id",
+                "UPDATE rate_limit_tiers SET is_default = false WHERE user_id::text = :user_id",
                 {"user_id": user_id},
             )
 
@@ -149,7 +149,7 @@ async def list_rate_limit_tiers(
             SELECT id, user_id, tier_name, requests_per_minute, requests_per_hour,
                    requests_per_day, burst_allowance, is_default, created_at
             FROM rate_limit_tiers
-            WHERE user_id = :user_id
+            WHERE user_id::text = :user_id
             ORDER BY is_default DESC, tier_name ASC
             """,
             {"user_id": user_id},
@@ -196,7 +196,7 @@ async def update_rate_limit_tier(
             # Unset other defaults if setting this one as default
             if body.is_default:
                 await execute_mutate(
-                    "UPDATE rate_limit_tiers SET is_default = false WHERE user_id = :user_id AND id != :tier_id",
+                    "UPDATE rate_limit_tiers SET is_default = false WHERE user_id::text = :user_id AND id != :tier_id",
                     {"user_id": user_id, "tier_id": tier_id},
                 )
 
@@ -208,7 +208,7 @@ async def update_rate_limit_tier(
             f"""
             UPDATE rate_limit_tiers
             SET {set_clause}
-            WHERE id = :tier_id AND user_id = :user_id
+            WHERE id = :tier_id AND user_id::text = :user_id
             RETURNING id, user_id, tier_name, requests_per_minute, requests_per_hour,
                       requests_per_day, burst_allowance, is_default, created_at
             """,
@@ -238,7 +238,7 @@ async def delete_rate_limit_tier(
         rows = await execute_mutate(
             """
             DELETE FROM rate_limit_tiers
-            WHERE id = :tier_id AND user_id = :user_id
+            WHERE id = :tier_id AND user_id::text = :user_id
             RETURNING id
             """,
             {"tier_id": tier_id, "user_id": user_id},
@@ -276,7 +276,7 @@ async def assign_rate_tier_to_agent(
     try:
         # Verify tier belongs to user
         tier_row = await execute_one(
-            "SELECT id FROM rate_limit_tiers WHERE id = :tier_id AND user_id = :user_id",
+            "SELECT id FROM rate_limit_tiers WHERE id = :tier_id AND user_id::text = :user_id",
             {"tier_id": body.tier_id, "user_id": user_id},
         )
         if not tier_row:
@@ -334,8 +334,8 @@ async def get_agent_rate_tier(
                    ara.override_rph, ara.is_active, ara.assigned_at,
                    rlt.tier_name
             FROM agent_rate_assignments ara
-            JOIN rate_limit_tiers rlt ON rlt.id = ara.tier_id
-            WHERE ara.agent_id = :agent_id AND ara.user_id = :user_id AND ara.is_active = true
+            JOIN rate_limit_tiers rlt ON rlt.id::text = ara.tier_id::text
+            WHERE ara.agent_id::text = :agent_id AND ara.user_id::text = :user_id AND ara.is_active = true
             """,
             {"agent_id": agent_id, "user_id": user_id},
         )
@@ -363,7 +363,7 @@ async def remove_agent_rate_tier(
         rows = await execute_mutate(
             """
             DELETE FROM agent_rate_assignments
-            WHERE agent_id = :agent_id AND user_id = :user_id
+            WHERE agent_id::text = :agent_id AND user_id::text = :user_id
             RETURNING id
             """,
             {"agent_id": agent_id, "user_id": user_id},
@@ -399,8 +399,8 @@ async def get_rate_limit_usage(
                    COUNT(a.id) AS agent_count
             FROM rate_limit_tiers t
             LEFT JOIN agent_rate_assignments a
-                   ON a.tier_id = t.id AND a.is_active = true
-            WHERE t.user_id = :user_id
+                   ON a.tier_id::text = t.id::text AND a.is_active = true
+            WHERE t.user_id::text = :user_id
             GROUP BY t.id, t.tier_name, t.requests_per_minute, t.requests_per_hour,
                      t.requests_per_day, t.burst_allowance, t.is_default
             ORDER BY t.is_default DESC, t.tier_name ASC

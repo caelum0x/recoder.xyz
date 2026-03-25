@@ -39,7 +39,7 @@ async def get_agent_logs(
     query = (
         "SELECT id, agent_run_id, agent_id, level, category, message, metadata, timestamp "
         "FROM agent_execution_logs "
-        "WHERE agent_id = :agent_id AND user_id = :user_id"
+        "WHERE agent_id::text = :agent_id AND user_id::text = :user_id"
     )
     if level:
         query += " AND level = :level"
@@ -48,7 +48,7 @@ async def get_agent_logs(
         query += " AND category = :category"
         params["category"] = category
     if run_id:
-        query += " AND agent_run_id = :run_id"
+        query += " AND agent_run_id::text = :run_id"
         params["run_id"] = run_id
     query += " ORDER BY timestamp DESC LIMIT :limit OFFSET :offset"
     rows = await execute(query, params)
@@ -71,7 +71,7 @@ async def get_run_logs(
     query = (
         "SELECT id, agent_run_id, agent_id, level, category, message, metadata, timestamp "
         "FROM agent_execution_logs "
-        "WHERE agent_run_id = :run_id AND user_id = :user_id"
+        "WHERE agent_run_id::text = :run_id AND user_id::text = :user_id"
     )
     if level:
         query += " AND level = :level"
@@ -98,7 +98,7 @@ async def get_log_summary(
         """
         SELECT level, COUNT(*) as count
         FROM agent_execution_logs
-        WHERE agent_id = :agent_id AND user_id = :user_id
+        WHERE agent_id::text = :agent_id AND user_id::text = :user_id
         GROUP BY level
         """,
         {"agent_id": agent_id, "user_id": user_id},

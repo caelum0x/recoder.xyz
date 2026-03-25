@@ -27,10 +27,9 @@ export function AnnouncementDialog() {
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && closeAnnouncement()}>
-      <DialogContent 
+      <DialogContent
         className="sm:max-w-lg p-0 gap-0 overflow-hidden border-border/50"
         hideCloseButton
-        aria-describedby={undefined}
       >
         <VisuallyHidden>
           <DialogTitle>Announcement</DialogTitle>

@@ -85,7 +85,7 @@ async def get_response_template_stats(
     """Aggregate stats: total, by_category, by_format, top templates."""
     try:
         total_row = await execute_one(
-            "SELECT COUNT(*) AS total FROM response_templates WHERE user_id = :user_id AND is_active = true",
+            "SELECT COUNT(*) AS total FROM response_templates WHERE user_id::text = :user_id AND is_active = true",
             {"user_id": user_id},
         )
         total = int(total_row["total"]) if total_row else 0
@@ -94,7 +94,7 @@ async def get_response_template_stats(
             """
             SELECT category, COUNT(*) AS cnt
             FROM response_templates
-            WHERE user_id = :user_id AND is_active = true
+            WHERE user_id::text = :user_id AND is_active = true
             GROUP BY category
             """,
             {"user_id": user_id},
@@ -105,7 +105,7 @@ async def get_response_template_stats(
             """
             SELECT output_format, COUNT(*) AS cnt
             FROM response_templates
-            WHERE user_id = :user_id AND is_active = true
+            WHERE user_id::text = :user_id AND is_active = true
             GROUP BY output_format
             """,
             {"user_id": user_id},
@@ -115,7 +115,7 @@ async def get_response_template_stats(
         top_rows = await execute(
             """
             SELECT * FROM response_templates
-            WHERE user_id = :user_id AND is_active = true
+            WHERE user_id::text = :user_id AND is_active = true
             ORDER BY use_count DESC
             LIMIT 5
             """,
@@ -196,7 +196,7 @@ async def list_response_templates(
 ):
     """List the authenticated user's response templates."""
     try:
-        where_parts = ["user_id = :user_id", "is_active = true"]
+        where_parts = ["user_id::text = :user_id", "is_active = true"]
         params: Dict[str, Any] = {"user_id": user_id, "limit": limit}
 
         if category:
@@ -233,7 +233,7 @@ async def get_response_template(
 ):
     """Get a single response template by ID."""
     row = await execute_one(
-        "SELECT * FROM response_templates WHERE id = :id AND user_id = :user_id",
+        "SELECT * FROM response_templates WHERE id = :id AND user_id::text = :user_id",
         {"id": template_id, "user_id": user_id},
     )
     if not row:
@@ -253,7 +253,7 @@ async def update_response_template(
 ):
     """Update fields of an existing response template."""
     existing = await execute_one(
-        "SELECT id FROM response_templates WHERE id = :id AND user_id = :user_id",
+        "SELECT id FROM response_templates WHERE id = :id AND user_id::text = :user_id",
         {"id": template_id, "user_id": user_id},
     )
     if not existing:
@@ -291,7 +291,7 @@ async def update_response_template(
 
     try:
         row = await execute_one(
-            f"UPDATE response_templates SET {set_clause} WHERE id = :id AND user_id = :user_id RETURNING *",
+            f"UPDATE response_templates SET {set_clause} WHERE id = :id AND user_id::text = :user_id RETURNING *",
             params,
         )
         return serialize_row(row)
@@ -311,14 +311,14 @@ async def delete_response_template(
 ):
     """Delete a response template (owner only)."""
     existing = await execute_one(
-        "SELECT id FROM response_templates WHERE id = :id AND user_id = :user_id",
+        "SELECT id FROM response_templates WHERE id = :id AND user_id::text = :user_id",
         {"id": template_id, "user_id": user_id},
     )
     if not existing:
         raise HTTPException(status_code=404, detail="Template not found")
 
     await execute_mutate(
-        "DELETE FROM response_templates WHERE id = :id AND user_id = :user_id",
+        "DELETE FROM response_templates WHERE id = :id AND user_id::text = :user_id",
         {"id": template_id, "user_id": user_id},
     )
     return {"deleted": True, "id": template_id}
@@ -336,7 +336,7 @@ async def render_response_template(
 ):
     """Render a template by substituting {{key}} placeholders and recording the render."""
     template = await execute_one(
-        "SELECT * FROM response_templates WHERE id = :id AND user_id = :user_id AND is_active = true",
+        "SELECT * FROM response_templates WHERE id = :id AND user_id::text = :user_id AND is_active = true",
         {"id": template_id, "user_id": user_id},
     )
     if not template:
@@ -389,7 +389,7 @@ async def list_template_renders(
     """List render history for a specific template."""
     # Verify ownership
     existing = await execute_one(
-        "SELECT id FROM response_templates WHERE id = :id AND user_id = :user_id",
+        "SELECT id FROM response_templates WHERE id = :id AND user_id::text = :user_id",
         {"id": template_id, "user_id": user_id},
     )
     if not existing:
@@ -399,7 +399,7 @@ async def list_template_renders(
         rows = await execute(
             """
             SELECT * FROM template_renders
-            WHERE template_id = :template_id AND user_id = :user_id
+            WHERE template_id::text = :template_id AND user_id::text = :user_id
             ORDER BY rendered_at DESC
             LIMIT :limit
             """,

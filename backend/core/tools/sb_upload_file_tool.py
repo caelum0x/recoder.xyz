@@ -198,7 +198,7 @@ class SandboxUploadFileTool(SandboxToolsBase):
             
             if thread_id:
                 thread_row = await execute_one_read(
-                    "SELECT agent_id FROM threads WHERE thread_id = :thread_id",
+                    "SELECT agent_id FROM threads WHERE thread_id::text = :thread_id",
                     {"thread_id": thread_id}
                 )
                 if thread_row:
@@ -207,7 +207,7 @@ class SandboxUploadFileTool(SandboxToolsBase):
             user_id = None
             try:
                 account_row = await execute_one_read(
-                    "SELECT user_id FROM basejump.account_user WHERE account_id = :account_id LIMIT 1",
+                    "SELECT user_id FROM basejump.account_user WHERE account_id::text = :account_id LIMIT 1",
                     {"account_id": account_id}
                 )
                 if account_row:

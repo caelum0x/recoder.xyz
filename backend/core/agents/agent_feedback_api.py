@@ -2,7 +2,7 @@
 Agent Feedback API endpoints (Sprint 72 Phase 1).
 
 Provides submission, listing, stats, and management of agent feedback.
-Access control enforced at application layer (WHERE user_id = :user_id).
+Access control enforced at application layer (WHERE user_id::text = :user_id).
 """
 
 import uuid
@@ -113,7 +113,7 @@ async def get_feedback_stats(
               feedback_type,
               is_resolved
             FROM agent_feedback
-            WHERE agent_id = :agent_id AND user_id = :user_id
+            WHERE agent_id::text = :agent_id AND user_id::text = :user_id
             """,
             {"agent_id": agent_id, "user_id": user_id},
         )
@@ -163,7 +163,7 @@ async def list_feedback(
 ):
     """List feedback for a specific agent with optional filters."""
     try:
-        conditions = ["agent_id = :agent_id", "user_id = :user_id"]
+        conditions = ["agent_id::text = :agent_id", "user_id::text = :user_id"]
         params: Dict[str, Any] = {"agent_id": agent_id, "user_id": user_id, "limit": limit}
 
         if feedback_type:
@@ -204,11 +204,11 @@ async def list_all_feedback(
 ):
     """List all feedback across all agents for the authenticated user."""
     try:
-        conditions = ["user_id = :user_id"]
+        conditions = ["user_id::text = :user_id"]
         params: Dict[str, Any] = {"user_id": user_id, "limit": limit}
 
         if agent_id:
-            conditions.append("agent_id = :agent_id")
+            conditions.append("agent_id::text = :agent_id")
             params["agent_id"] = agent_id
         if feedback_type:
             conditions.append("feedback_type = :feedback_type")
@@ -238,7 +238,7 @@ async def update_feedback(
     """Update is_resolved and/or comment on a feedback entry."""
     try:
         existing = await execute_one(
-            "SELECT * FROM agent_feedback WHERE id = :feedback_id AND user_id = :user_id",
+            "SELECT * FROM agent_feedback WHERE id = :feedback_id AND user_id::text = :user_id",
             {"feedback_id": feedback_id, "user_id": user_id},
         )
         if not existing:
@@ -265,7 +265,7 @@ async def update_feedback(
 
         sql = (
             f"UPDATE agent_feedback SET {', '.join(set_clauses)} "
-            f"WHERE id = :feedback_id AND user_id = :user_id RETURNING *"
+            f"WHERE id = :feedback_id AND user_id::text = :user_id RETURNING *"
         )
         row = await execute_one(sql, params)
         return serialize_row(row)
@@ -288,7 +288,7 @@ async def delete_feedback(
     """Delete a feedback entry."""
     try:
         await execute_mutate(
-            "DELETE FROM agent_feedback WHERE id = :feedback_id AND user_id = :user_id",
+            "DELETE FROM agent_feedback WHERE id = :feedback_id AND user_id::text = :user_id",
             {"feedback_id": feedback_id, "user_id": user_id},
         )
         return {"deleted": True}
@@ -346,7 +346,7 @@ async def list_categories(
     """List all feedback categories for the authenticated user."""
     try:
         rows = await execute(
-            "SELECT * FROM feedback_categories WHERE user_id = :user_id ORDER BY created_at DESC",
+            "SELECT * FROM feedback_categories WHERE user_id::text = :user_id ORDER BY created_at DESC",
             {"user_id": user_id},
         )
         return serialize_rows(rows)
@@ -367,7 +367,7 @@ async def delete_category(
     """Delete a feedback category."""
     try:
         await execute_mutate(
-            "DELETE FROM feedback_categories WHERE id = :category_id AND user_id = :user_id",
+            "DELETE FROM feedback_categories WHERE id = :category_id AND user_id::text = :user_id",
             {"category_id": category_id, "user_id": user_id},
         )
         return {"deleted": True}

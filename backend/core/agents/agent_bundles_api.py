@@ -57,7 +57,7 @@ async def _build_bundle_config(
                   agentpress_tools, configured_mcps, custom_mcps, is_default,
                   avatar_url, metadata, icon_name, icon_color, icon_background
            FROM agents
-           WHERE agent_id = :agent_id AND account_id = :user_id""",
+           WHERE agent_id::text = :agent_id AND account_id::text = :user_id""",
         {"agent_id": agent_id, "user_id": user_id},
     )
     if not agent_row:
@@ -98,7 +98,7 @@ async def _build_bundle_config(
     if "env_vars" in included_sections:
         try:
             secret_rows = await execute(
-                "SELECT key FROM agent_secrets WHERE agent_id = :agent_id AND user_id = :user_id ORDER BY key",
+                "SELECT key FROM agent_secrets WHERE agent_id::text = :agent_id AND user_id::text = :user_id ORDER BY key",
                 {"agent_id": agent_id, "user_id": user_id},
             )
             config["env_var_keys"] = [r["key"] for r in (secret_rows or [])]
@@ -111,7 +111,7 @@ async def _build_bundle_config(
             sched_rows = await execute(
                 """SELECT name, cron_expression, timezone, input_message, is_active, max_runs
                    FROM agent_schedules
-                   WHERE agent_id = :agent_id AND user_id = :user_id
+                   WHERE agent_id::text = :agent_id AND user_id::text = :user_id
                    ORDER BY created_at""",
                 {"agent_id": agent_id, "user_id": user_id},
             )
@@ -135,7 +135,7 @@ async def _build_bundle_config(
             kb_rows = await execute(
                 """SELECT id, title, content_type, file_name, description
                    FROM knowledge_base_items
-                   WHERE agent_id = :agent_id AND user_id = :user_id
+                   WHERE agent_id::text = :agent_id AND user_id::text = :user_id
                    ORDER BY created_at""",
                 {"agent_id": agent_id, "user_id": user_id},
             )
@@ -360,11 +360,11 @@ async def list_bundles(
 ):
     """List the authenticated user's agent bundles."""
     try:
-        where_clauses = ["user_id = :user_id"]
+        where_clauses = ["user_id::text = :user_id"]
         params: Dict[str, Any] = {"user_id": user_id}
 
         if agent_id:
-            where_clauses.append("agent_id = :agent_id")
+            where_clauses.append("agent_id::text = :agent_id")
             params["agent_id"] = agent_id
 
         if bundle_type and bundle_type != "all":
@@ -462,7 +462,7 @@ async def get_bundle_detail(
     try:
         row = await execute_one(
             """SELECT * FROM agent_bundles
-               WHERE id = :bundle_id AND (user_id = :user_id OR is_public = true)""",
+               WHERE id = :bundle_id AND (user_id::text = :user_id OR is_public = true)""",
             {"bundle_id": bundle_id, "user_id": user_id},
         )
         if not row:
@@ -488,14 +488,14 @@ async def delete_bundle(
     """Delete a bundle owned by the user."""
     try:
         existing = await execute_one(
-            "SELECT id FROM agent_bundles WHERE id = :bundle_id AND user_id = :user_id",
+            "SELECT id FROM agent_bundles WHERE id = :bundle_id AND user_id::text = :user_id",
             {"bundle_id": bundle_id, "user_id": user_id},
         )
         if not existing:
             raise HTTPException(status_code=404, detail="Bundle not found")
 
         await execute(
-            "DELETE FROM agent_bundles WHERE id = :bundle_id AND user_id = :user_id",
+            "DELETE FROM agent_bundles WHERE id = :bundle_id AND user_id::text = :user_id",
             {"bundle_id": bundle_id, "user_id": user_id},
         )
         return {"status": "ok"}
@@ -517,7 +517,7 @@ async def download_bundle(
         row = await execute_one(
             """UPDATE agent_bundles
                SET download_count = download_count + 1
-               WHERE id = :bundle_id AND (user_id = :user_id OR is_public = true)
+               WHERE id = :bundle_id AND (user_id::text = :user_id OR is_public = true)
                RETURNING *""",
             {"bundle_id": bundle_id, "user_id": user_id},
         )

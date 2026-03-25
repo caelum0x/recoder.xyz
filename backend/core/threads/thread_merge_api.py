@@ -71,9 +71,9 @@ async def _count_thread_messages(thread_id: str, user_id: str) -> int:
         """
         SELECT COUNT(*) AS cnt
         FROM messages m
-        JOIN threads t ON m.thread_id = t.thread_id
-        WHERE m.thread_id = :thread_id
-          AND t.account_id = :user_id
+        JOIN threads t ON m.thread_id::text = t.thread_id::text
+        WHERE m.thread_id::text = :thread_id
+          AND t.account_id::text = :user_id
         """,
         {"thread_id": thread_id, "user_id": user_id},
     )
@@ -83,7 +83,7 @@ async def _count_thread_messages(thread_id: str, user_id: str) -> int:
 async def _verify_thread_ownership(thread_id: str, user_id: str) -> bool:
     """Verify the user owns the thread."""
     row = await execute_one(
-        "SELECT thread_id FROM threads WHERE thread_id = :thread_id AND account_id = :user_id",
+        "SELECT thread_id FROM threads WHERE thread_id::text = :thread_id AND account_id::text = :user_id",
         {"thread_id": thread_id, "user_id": user_id},
     )
     return row is not None
@@ -179,7 +179,7 @@ async def execute_merge(
                 WITH moved AS (
                     UPDATE messages
                     SET thread_id = :target_thread_id
-                    WHERE thread_id = :source_thread_id
+                    WHERE thread_id::text = :source_thread_id
                     RETURNING message_id
                 )
                 SELECT COUNT(*) AS cnt FROM moved
@@ -198,7 +198,7 @@ async def execute_merge(
                 WITH moved AS (
                     UPDATE messages
                     SET thread_id = :target_thread_id
-                    WHERE thread_id = :source_thread_id
+                    WHERE thread_id::text = :source_thread_id
                     RETURNING message_id
                 )
                 SELECT COUNT(*) AS cnt FROM moved
@@ -218,7 +218,7 @@ async def execute_merge(
                 WITH moved AS (
                     UPDATE messages
                     SET thread_id = :target_thread_id
-                    WHERE thread_id = :source_thread_id
+                    WHERE thread_id::text = :source_thread_id
                     RETURNING message_id
                 )
                 SELECT COUNT(*) AS cnt FROM moved
@@ -282,7 +282,7 @@ async def list_merges(
         rows = await execute(
             """
             SELECT * FROM thread_merges
-            WHERE user_id = :user_id
+            WHERE user_id::text = :user_id
             ORDER BY created_at DESC
             LIMIT :limit
             """,
@@ -308,7 +308,7 @@ async def get_merge(
         row = await execute_one(
             """
             SELECT * FROM thread_merges
-            WHERE merge_id = :merge_id AND user_id = :user_id
+            WHERE merge_id::text = :merge_id AND user_id::text = :user_id
             """,
             {"merge_id": merge_id, "user_id": user_id},
         )
@@ -339,7 +339,7 @@ async def revert_merge(
         merge = await execute_one(
             """
             SELECT * FROM thread_merges
-            WHERE merge_id = :merge_id AND user_id = :user_id
+            WHERE merge_id::text = :merge_id AND user_id::text = :user_id
             """,
             {"merge_id": merge_id, "user_id": user_id},
         )
@@ -361,7 +361,7 @@ async def revert_merge(
                 """
                 WITH to_revert AS (
                     SELECT message_id FROM messages
-                    WHERE thread_id = :target_thread_id
+                    WHERE thread_id::text = :target_thread_id
                     ORDER BY created_at DESC
                     LIMIT :count
                 )
@@ -380,7 +380,7 @@ async def revert_merge(
             """
             UPDATE thread_merges
             SET status = 'reverted'
-            WHERE merge_id = :merge_id AND user_id = :user_id
+            WHERE merge_id::text = :merge_id AND user_id::text = :user_id
             RETURNING *
             """,
             {"merge_id": merge_id, "user_id": user_id},

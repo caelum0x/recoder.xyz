@@ -65,7 +65,7 @@ export function NotificationToastProvider() {
 
     // Use connectTokenizedSSE which has:
     // - Auto-reconnect with configurable delay
-    // - Fetch-based SSE fallback after 3 EventSource failures (handles HTTP/2 issues)
+    // - Fetch-based SSE (bypasses EventSource entirely to avoid HTTP/2 issues)
     // - Automatic token injection via query param
     connectionRef.current = connectTokenizedSSE({
       url,

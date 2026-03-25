@@ -939,7 +939,7 @@ class AgentCreationTool(Tool):
                 )
             
             version_row = await execute_one(
-                "SELECT config FROM agent_versions WHERE version_id = :vid",
+                "SELECT config FROM agent_versions WHERE version_id::text = :vid",
                 {"vid": current_version_id}
             )
 
@@ -1437,7 +1437,7 @@ class AgentCreationTool(Tool):
                 return self.fail_response("Worker has no current version configured")
 
             version_row = await execute_one(
-                "SELECT config FROM agent_versions WHERE version_id = :vid",
+                "SELECT config FROM agent_versions WHERE version_id::text = :vid",
                 {"vid": current_version_id}
             )
             if not version_row:
@@ -1568,7 +1568,7 @@ class AgentCreationTool(Tool):
         """Sync triggers to the current version config."""
         try:
             agent_row = await execute_one(
-                "SELECT current_version_id FROM agents WHERE agent_id = :aid",
+                "SELECT current_version_id FROM agents WHERE agent_id::text = :aid",
                 {"aid": agent_id}
             )
             if not agent_row or not agent_row.get('current_version_id'):
@@ -1578,7 +1578,7 @@ class AgentCreationTool(Tool):
             current_version_id = agent_row['current_version_id']
 
             trigger_rows = await execute_read(
-                "SELECT * FROM agent_triggers WHERE agent_id = :aid",
+                "SELECT * FROM agent_triggers WHERE agent_id::text = :aid",
                 {"aid": agent_id}
             )
             triggers = []
@@ -1593,7 +1593,7 @@ class AgentCreationTool(Tool):
                 triggers.append(trigger_copy)
 
             version_row = await execute_one(
-                "SELECT config FROM agent_versions WHERE version_id = :vid",
+                "SELECT config FROM agent_versions WHERE version_id::text = :vid",
                 {"vid": current_version_id}
             )
             if not version_row:

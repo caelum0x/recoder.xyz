@@ -7,7 +7,7 @@ from core.utils.logger import logger
 async def get_credit_account(account_id: str) -> Optional[Dict[str, Any]]:
     sql = """
     SELECT * FROM credit_accounts 
-    WHERE account_id = :account_id
+    WHERE account_id::text = :account_id
     LIMIT 1
     """
     return await execute_one(sql, {"account_id": account_id})
@@ -17,7 +17,7 @@ async def get_credit_account_for_downgrade(account_id: str) -> Optional[Dict[str
     sql = """
     SELECT stripe_subscription_id, tier, commitment_type, commitment_end_date
     FROM credit_accounts
-    WHERE account_id = :account_id
+    WHERE account_id::text = :account_id
     """
     return await execute_one(sql, {"account_id": account_id})
 
@@ -27,13 +27,13 @@ async def get_credit_account_for_renewal(account_id: str) -> Optional[Dict[str, 
     SELECT tier, last_grant_date, next_credit_grant, billing_cycle_anchor,
            last_processed_invoice_id, trial_status, last_renewal_period_start
     FROM credit_accounts
-    WHERE account_id = :account_id
+    WHERE account_id::text = :account_id
     """
     return await execute_one(sql, {"account_id": account_id})
 
 
 async def get_credit_account_tier(account_id: str) -> Optional[Dict[str, Any]]:
-    sql = "SELECT tier FROM credit_accounts WHERE account_id = :account_id"
+    sql = "SELECT tier FROM credit_accounts WHERE account_id::text = :account_id"
     return await execute_one(sql, {"account_id": account_id})
 
 
@@ -44,7 +44,7 @@ async def get_credit_account_with_scheduling(account_id: str) -> Optional[Dict[s
            revenuecat_pending_change_product, revenuecat_pending_change_date, 
            revenuecat_pending_change_type
     FROM credit_accounts
-    WHERE account_id = :account_id
+    WHERE account_id::text = :account_id
     """
     return await execute_one(sql, {"account_id": account_id})
 
@@ -55,7 +55,7 @@ async def update_scheduled_tier_change(account_id: str, scheduled_tier: str, sch
     SET scheduled_tier_change = :scheduled_tier,
         scheduled_tier_change_date = :scheduled_date,
         scheduled_price_id = :price_id
-    WHERE account_id = :account_id
+    WHERE account_id::text = :account_id
     """
     await execute_mutate(sql, {
         "account_id": account_id,
@@ -71,7 +71,7 @@ async def clear_scheduled_tier_change(account_id: str) -> None:
     SET scheduled_tier_change = NULL,
         scheduled_tier_change_date = NULL,
         scheduled_price_id = NULL
-    WHERE account_id = :account_id
+    WHERE account_id::text = :account_id
     """
     await execute_mutate(sql, {"account_id": account_id})
 
@@ -82,13 +82,13 @@ async def clear_revenuecat_pending_change(account_id: str) -> None:
     SET revenuecat_pending_change_product = NULL,
         revenuecat_pending_change_date = NULL,
         revenuecat_pending_change_type = NULL
-    WHERE account_id = :account_id
+    WHERE account_id::text = :account_id
     """
     await execute_mutate(sql, {"account_id": account_id})
 
 
 async def get_credit_account_by_id(account_id: str) -> Optional[Dict[str, Any]]:
-    sql = "SELECT * FROM credit_accounts WHERE account_id = :account_id"
+    sql = "SELECT * FROM credit_accounts WHERE account_id::text = :account_id"
     return await execute_one(sql, {"account_id": account_id})
 
 
@@ -96,7 +96,7 @@ async def get_credit_account_subscription_info(account_id: str) -> Optional[Dict
     sql = """
     SELECT stripe_subscription_id, trial_status, tier
     FROM credit_accounts
-    WHERE account_id = :account_id
+    WHERE account_id::text = :account_id
     """
     return await execute_one(sql, {"account_id": account_id})
 
@@ -105,7 +105,7 @@ async def get_credit_account_subscription_details(account_id: str) -> Optional[D
     sql = """
     SELECT stripe_subscription_id, tier, commitment_type, commitment_end_date
     FROM credit_accounts
-    WHERE account_id = :account_id
+    WHERE account_id::text = :account_id
     """
     return await execute_one(sql, {"account_id": account_id})
 
@@ -115,14 +115,14 @@ async def get_credit_account_scheduled_changes(account_id: str) -> Optional[Dict
     SELECT stripe_subscription_id, tier, scheduled_tier_change, 
            scheduled_tier_change_date, scheduled_price_id
     FROM credit_accounts
-    WHERE account_id = :account_id
+    WHERE account_id::text = :account_id
     """
     return await execute_one(sql, {"account_id": account_id})
 
 
 async def get_credit_account_balance(account_id: str) -> Optional[Dict[str, Any]]:
     from core.services.db import serialize_row
-    sql = "SELECT balance FROM credit_accounts WHERE account_id = :account_id"
+    sql = "SELECT balance FROM credit_accounts WHERE account_id::text = :account_id"
     result = await execute_one(sql, {"account_id": account_id})
     return serialize_row(result) if result else None
 
@@ -132,7 +132,7 @@ async def get_credit_account_balances(account_id: str) -> Optional[Dict[str, Any
     sql = """
     SELECT balance, expiring_credits, non_expiring_credits
     FROM credit_accounts
-    WHERE account_id = :account_id
+    WHERE account_id::text = :account_id
     """
     result = await execute_one(sql, {"account_id": account_id})
     return serialize_row(result) if result else None
@@ -150,7 +150,7 @@ async def update_credit_account(account_id: str, update_data: Dict[str, Any]) ->
         params[key] = value
     
     set_sql = ", ".join(set_parts)
-    sql = f"UPDATE credit_accounts SET {set_sql} WHERE account_id = :account_id"
+    sql = f"UPDATE credit_accounts SET {set_sql} WHERE account_id::text = :account_id"
     
     await execute_mutate(sql, params)
     
@@ -178,7 +178,7 @@ async def update_credit_account_balances(
         non_expiring_credits = :non_expiring_credits,
         balance = :balance,
         updated_at = :updated_at
-    WHERE account_id = :account_id
+    WHERE account_id::text = :account_id
     """
     await execute_mutate(sql, {
         "account_id": account_id,

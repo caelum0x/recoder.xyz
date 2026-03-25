@@ -76,7 +76,7 @@ async def get_activity_feed(
     Optionally filter by source app.
     """
     try:
-        where_clauses = ["user_id = :user_id"]
+        where_clauses = ["user_id::text = :user_id"]
         params: Dict[str, Any] = {"user_id": user_id}
 
         if app_filter:
@@ -145,7 +145,7 @@ async def get_platform_stats(
     # agent_count: total agents owned by this user
     try:
         row = await execute_one(
-            "SELECT COUNT(*) AS cnt FROM agents WHERE account_id = :user_id",
+            "SELECT COUNT(*) AS cnt FROM agents WHERE account_id::text = :user_id",
             {"user_id": user_id},
         )
         if row:
@@ -156,7 +156,7 @@ async def get_platform_stats(
     # threads_7d: threads created in the last 7 days
     try:
         row = await execute_one(
-            "SELECT COUNT(*) AS cnt FROM threads WHERE account_id = :user_id AND created_at >= NOW() - INTERVAL '7 days'",
+            "SELECT COUNT(*) AS cnt FROM threads WHERE account_id::text = :user_id AND created_at >= NOW() - INTERVAL '7 days'",
             {"user_id": user_id},
         )
         if row:
@@ -167,7 +167,7 @@ async def get_platform_stats(
     # workflow_count: total workflows
     try:
         row = await execute_one(
-            "SELECT COUNT(*) AS cnt FROM workflows WHERE user_id = :user_id",
+            "SELECT COUNT(*) AS cnt FROM workflows WHERE user_id::text = :user_id",
             {"user_id": user_id},
         )
         if row:
@@ -178,7 +178,7 @@ async def get_platform_stats(
     # runs_today: agent runs started today
     try:
         row = await execute_one(
-            "SELECT COUNT(*) AS cnt FROM agent_runs ar JOIN threads t ON ar.thread_id = t.thread_id WHERE t.account_id = :user_id AND ar.started_at >= CURRENT_DATE",
+            "SELECT COUNT(*) AS cnt FROM agent_runs ar JOIN threads t ON ar.thread_id::text = t.thread_id::text WHERE t.account_id::text = :user_id AND ar.started_at >= CURRENT_DATE",
             {"user_id": user_id},
         )
         if row:

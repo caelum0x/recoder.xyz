@@ -149,8 +149,8 @@ async def list_cost_alert_rules(
             """
             SELECT r.*, a.name AS agent_name
             FROM agent_cost_alert_rules r
-            LEFT JOIN agents a ON a.agent_id = r.agent_id
-            WHERE r.user_id = :user_id
+            LEFT JOIN agents a ON a.agent_id::text = r.agent_id::text
+            WHERE r.user_id::text = :user_id
             ORDER BY r.created_at DESC
             """,
             {"user_id": user_id},
@@ -223,7 +223,7 @@ async def update_cost_alert_rule(
             f"""
             UPDATE agent_cost_alert_rules
             SET {set_clause}
-            WHERE id = :rule_id AND user_id = :user_id
+            WHERE id = :rule_id AND user_id::text = :user_id
             RETURNING *
             """,
             params,
@@ -255,7 +255,7 @@ async def delete_cost_alert_rule(
         rows = await execute_mutate(
             """
             DELETE FROM agent_cost_alert_rules
-            WHERE id = :rule_id AND user_id = :user_id
+            WHERE id = :rule_id AND user_id::text = :user_id
             RETURNING id
             """,
             {"rule_id": rule_id, "user_id": user_id},
@@ -296,7 +296,7 @@ async def check_cost_alerts(
             """
             SELECT *
             FROM agent_cost_alert_rules
-            WHERE user_id = :user_id AND is_active = true
+            WHERE user_id::text = :user_id AND is_active = true
             """,
             {"user_id": user_id},
         )
@@ -356,7 +356,7 @@ async def list_cost_alert_history(
 ):
     """List cost alert history with optional filters."""
     try:
-        conditions = ["h.user_id = :user_id"]
+        conditions = ["h.user_id::text = :user_id"]
         params: dict = {"user_id": user_id, "limit": limit}
 
         if status:
@@ -364,7 +364,7 @@ async def list_cost_alert_history(
             params["status"] = status
 
         if agent_id:
-            conditions.append("h.agent_id = :agent_id")
+            conditions.append("h.agent_id::text = :agent_id")
             params["agent_id"] = agent_id
 
         where_clause = " AND ".join(conditions)
@@ -374,8 +374,8 @@ async def list_cost_alert_history(
             SELECT h.*, r.name AS rule_name, r.threshold_period, r.alert_type,
                    a.name AS agent_name
             FROM agent_cost_alert_history h
-            LEFT JOIN agent_cost_alert_rules r ON r.id = h.rule_id
-            LEFT JOIN agents a ON a.agent_id = h.agent_id
+            LEFT JOIN agent_cost_alert_rules r ON r.id::text = h.rule_id::text
+            LEFT JOIN agents a ON a.agent_id::text = h.agent_id::text
             WHERE {where_clause}
             ORDER BY h.triggered_at DESC
             LIMIT :limit
@@ -413,7 +413,7 @@ async def update_cost_alert_status(
             """
             UPDATE agent_cost_alert_history
             SET status = :status
-            WHERE id = :alert_id AND user_id = :user_id
+            WHERE id = :alert_id AND user_id::text = :user_id
             RETURNING *
             """,
             {"alert_id": alert_id, "user_id": user_id, "status": body.status},

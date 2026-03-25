@@ -22,8 +22,8 @@ async def get_all_user_triggers(user_id: str) -> List[Dict[str, Any]]:
         a.icon_color,
         a.icon_background
     FROM agent_triggers t
-    INNER JOIN agents a ON t.agent_id = a.agent_id
-    WHERE a.account_id = :user_id
+    INNER JOIN agents a ON t.agent_id::text = a.agent_id::text
+    WHERE a.account_id::text = :user_id
     ORDER BY t.updated_at DESC
     """
     

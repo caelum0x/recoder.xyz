@@ -2,7 +2,7 @@
 Thread Replay API endpoints (Sprint 73 Phase 2).
 
 Provides checkpoint creation and replay management for threads.
-Access control enforced at application layer (WHERE user_id = :user_id).
+Access control enforced at application layer (WHERE user_id::text = :user_id).
 """
 
 import json
@@ -98,7 +98,7 @@ async def list_thread_checkpoints(
         rows = await execute(
             """
             SELECT * FROM thread_checkpoints
-            WHERE thread_id = :thread_id AND user_id = :user_id
+            WHERE thread_id::text = :thread_id AND user_id::text = :user_id
             ORDER BY created_at DESC
             """,
             {"thread_id": thread_id, "user_id": user_id},
@@ -122,14 +122,14 @@ async def delete_thread_checkpoint(
     """Delete a checkpoint."""
     try:
         row = await execute_one(
-            "SELECT id FROM thread_checkpoints WHERE id = :id AND thread_id = :thread_id AND user_id = :user_id",
+            "SELECT id FROM thread_checkpoints WHERE id = :id AND thread_id::text = :thread_id AND user_id::text = :user_id",
             {"id": checkpoint_id, "thread_id": thread_id, "user_id": user_id},
         )
         if not row:
             raise HTTPException(status_code=404, detail="Checkpoint not found.")
 
         await execute_mutate(
-            "DELETE FROM thread_checkpoints WHERE id = :id AND user_id = :user_id",
+            "DELETE FROM thread_checkpoints WHERE id = :id AND user_id::text = :user_id",
             {"id": checkpoint_id, "user_id": user_id},
         )
         return {"deleted": True}
@@ -158,7 +158,7 @@ async def create_thread_replay(
     try:
         # Verify checkpoint ownership
         checkpoint = await execute_one(
-            "SELECT id FROM thread_checkpoints WHERE id = :id AND user_id = :user_id",
+            "SELECT id FROM thread_checkpoints WHERE id = :id AND user_id::text = :user_id",
             {"id": body.checkpoint_id, "user_id": user_id},
         )
         if not checkpoint:
@@ -209,7 +209,7 @@ async def list_thread_replays(
         rows = await execute(
             """
             SELECT * FROM thread_replays
-            WHERE source_thread_id = :thread_id AND user_id = :user_id
+            WHERE source_thread_id::text = :thread_id AND user_id::text = :user_id
             ORDER BY created_at DESC
             """,
             {"thread_id": thread_id, "user_id": user_id},
@@ -240,8 +240,8 @@ async def get_replay_detail(
                    c.agent_config_snapshot,
                    c.thread_id AS checkpoint_thread_id
             FROM thread_replays r
-            LEFT JOIN thread_checkpoints c ON c.id = r.checkpoint_id
-            WHERE r.id = :id AND r.user_id = :user_id
+            LEFT JOIN thread_checkpoints c ON c.id::text = r.checkpoint_id::text
+            WHERE r.id::text = :id AND r.user_id::text = :user_id
             """,
             {"id": replay_id, "user_id": user_id},
         )
@@ -268,7 +268,7 @@ async def update_replay(
     """Update comparison notes or status for a replay."""
     try:
         row = await execute_one(
-            "SELECT * FROM thread_replays WHERE id = :id AND user_id = :user_id",
+            "SELECT * FROM thread_replays WHERE id = :id AND user_id::text = :user_id",
             {"id": replay_id, "user_id": user_id},
         )
         if not row:
@@ -282,7 +282,7 @@ async def update_replay(
             """
             UPDATE thread_replays
             SET comparison_notes = :comparison_notes, status = :status
-            WHERE id = :id AND user_id = :user_id
+            WHERE id = :id AND user_id::text = :user_id
             RETURNING *
             """,
             {
@@ -312,14 +312,14 @@ async def delete_replay(
     """Delete a replay."""
     try:
         row = await execute_one(
-            "SELECT id FROM thread_replays WHERE id = :id AND user_id = :user_id",
+            "SELECT id FROM thread_replays WHERE id = :id AND user_id::text = :user_id",
             {"id": replay_id, "user_id": user_id},
         )
         if not row:
             raise HTTPException(status_code=404, detail="Replay not found.")
 
         await execute_mutate(
-            "DELETE FROM thread_replays WHERE id = :id AND user_id = :user_id",
+            "DELETE FROM thread_replays WHERE id = :id AND user_id::text = :user_id",
             {"id": replay_id, "user_id": user_id},
         )
         return {"deleted": True}

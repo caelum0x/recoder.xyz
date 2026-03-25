@@ -2,7 +2,7 @@
 Integration Health API endpoints.
 
 Provides endpoint registration, health check simulation, uptime tracking, and history.
-Access control enforced at application layer (WHERE user_id = :user_id).
+Access control enforced at application layer (WHERE user_id::text = :user_id).
 """
 
 import uuid
@@ -96,7 +96,7 @@ async def register_endpoint(
         raise HTTPException(status_code=500, detail="Failed to register endpoint")
 
     row = await execute_one(
-        "SELECT * FROM integration_endpoints WHERE id = :id AND user_id = :user_id",
+        "SELECT * FROM integration_endpoints WHERE id = :id AND user_id::text = :user_id",
         {"id": endpoint_id, "user_id": user_id},
     )
     return serialize_row(row)
@@ -130,8 +130,8 @@ async def get_integration_overview(
             u.updated_at                        AS last_checked_at
         FROM integration_endpoints e
         LEFT JOIN integration_uptime u
-               ON u.endpoint_id = e.id AND u.user_id = e.user_id
-        WHERE e.user_id = :user_id
+               ON u.endpoint_id::text = e.id::text AND u.user_id::text = e.user_id::text
+        WHERE e.user_id::text = :user_id
         ORDER BY e.created_at DESC
         """,
         {"user_id": user_id},
@@ -153,8 +153,8 @@ async def get_integration_stats(
             COALESCE(AVG(COALESCE(u.uptime_pct, 100)), 100)                     AS overall_avg_uptime
         FROM integration_endpoints e
         LEFT JOIN integration_uptime u
-               ON u.endpoint_id = e.id AND u.user_id = e.user_id
-        WHERE e.user_id = :user_id
+               ON u.endpoint_id::text = e.id::text AND u.user_id::text = e.user_id::text
+        WHERE e.user_id::text = :user_id
         """,
         {"user_id": user_id},
     )
@@ -178,7 +178,7 @@ async def list_endpoints(
     user_id: str = Depends(verify_and_get_user_id_from_jwt),
 ) -> list[dict[str, Any]]:
     rows = await execute(
-        "SELECT * FROM integration_endpoints WHERE user_id = :user_id ORDER BY created_at DESC",
+        "SELECT * FROM integration_endpoints WHERE user_id::text = :user_id ORDER BY created_at DESC",
         {"user_id": user_id},
     )
     return serialize_rows(rows)
@@ -191,7 +191,7 @@ async def update_endpoint(
     user_id: str = Depends(verify_and_get_user_id_from_jwt),
 ) -> dict[str, Any]:
     existing = await execute_one(
-        "SELECT id FROM integration_endpoints WHERE id = :id AND user_id = :user_id",
+        "SELECT id FROM integration_endpoints WHERE id = :id AND user_id::text = :user_id",
         {"id": endpoint_id, "user_id": user_id},
     )
     if not existing:
@@ -205,11 +205,11 @@ async def update_endpoint(
     params = {"id": endpoint_id, "user_id": user_id, **updates}
 
     await execute_mutate(
-        f"UPDATE integration_endpoints SET {set_clauses} WHERE id = :id AND user_id = :user_id",
+        f"UPDATE integration_endpoints SET {set_clauses} WHERE id = :id AND user_id::text = :user_id",
         params,
     )
     row = await execute_one(
-        "SELECT * FROM integration_endpoints WHERE id = :id AND user_id = :user_id",
+        "SELECT * FROM integration_endpoints WHERE id = :id AND user_id::text = :user_id",
         {"id": endpoint_id, "user_id": user_id},
     )
     return serialize_row(row)
@@ -221,14 +221,14 @@ async def delete_endpoint(
     user_id: str = Depends(verify_and_get_user_id_from_jwt),
 ) -> dict[str, Any]:
     existing = await execute_one(
-        "SELECT id FROM integration_endpoints WHERE id = :id AND user_id = :user_id",
+        "SELECT id FROM integration_endpoints WHERE id = :id AND user_id::text = :user_id",
         {"id": endpoint_id, "user_id": user_id},
     )
     if not existing:
         raise _endpoint_not_found()
 
     await execute_mutate(
-        "DELETE FROM integration_endpoints WHERE id = :id AND user_id = :user_id",
+        "DELETE FROM integration_endpoints WHERE id = :id AND user_id::text = :user_id",
         {"id": endpoint_id, "user_id": user_id},
     )
     return {"deleted": True, "id": endpoint_id}
@@ -244,7 +244,7 @@ async def run_integration_check(
     user_id: str = Depends(verify_and_get_user_id_from_jwt),
 ) -> dict[str, Any]:
     endpoint = await execute_one(
-        "SELECT * FROM integration_endpoints WHERE id = :id AND user_id = :user_id",
+        "SELECT * FROM integration_endpoints WHERE id = :id AND user_id::text = :user_id",
         {"id": endpoint_id, "user_id": user_id},
     )
     if not endpoint:
@@ -289,7 +289,7 @@ async def run_integration_check(
 
     # Upsert integration_uptime
     existing_uptime = await execute_one(
-        "SELECT * FROM integration_uptime WHERE endpoint_id = :endpoint_id AND user_id = :user_id",
+        "SELECT * FROM integration_uptime WHERE endpoint_id::text = :endpoint_id AND user_id::text = :user_id",
         {"endpoint_id": endpoint_id, "user_id": user_id},
     )
 
@@ -313,7 +313,7 @@ async def run_integration_check(
                 avg_response_ms = :avg_response_ms,
                 last_status = :last_status,
                 updated_at = :updated_at
-            WHERE endpoint_id = :endpoint_id AND user_id = :user_id
+            WHERE endpoint_id::text = :endpoint_id AND user_id::text = :user_id
             """,
             {
                 "total_checks": new_total,
@@ -371,7 +371,7 @@ async def get_endpoint_history(
     user_id: str = Depends(verify_and_get_user_id_from_jwt),
 ) -> list[dict[str, Any]]:
     endpoint = await execute_one(
-        "SELECT id FROM integration_endpoints WHERE id = :id AND user_id = :user_id",
+        "SELECT id FROM integration_endpoints WHERE id = :id AND user_id::text = :user_id",
         {"id": endpoint_id, "user_id": user_id},
     )
     if not endpoint:
@@ -380,7 +380,7 @@ async def get_endpoint_history(
     rows = await execute(
         """
         SELECT * FROM integration_health_checks
-        WHERE endpoint_id = :endpoint_id AND user_id = :user_id
+        WHERE endpoint_id::text = :endpoint_id AND user_id::text = :user_id
         ORDER BY checked_at DESC
         LIMIT :limit
         """,

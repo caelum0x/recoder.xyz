@@ -492,7 +492,7 @@ async def reconcile_all_active() -> dict:
         sql = """
         SELECT DISTINCT t.account_id 
         FROM agent_runs ar
-        JOIN threads t ON ar.thread_id = t.thread_id
+        JOIN threads t ON ar.thread_id::text = t.thread_id::text
         WHERE ar.status = 'running'
         """
         rows = await execute(sql, {})

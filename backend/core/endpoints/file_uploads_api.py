@@ -28,7 +28,7 @@ async def regenerate_signed_link(
 ):
     try:
         account_rows = await execute_read(
-            "SELECT account_id FROM basejump.account_user WHERE user_id = :user_id",
+            "SELECT account_id FROM basejump.account_user WHERE user_id::text = :user_id",
             {"user_id": user_id}
         )
         if not account_rows:
@@ -105,7 +105,7 @@ async def get_file_upload(
             raise HTTPException(status_code=404, detail="File upload not found")
 
         account_rows = await execute_read(
-            "SELECT account_id FROM basejump.account_user WHERE user_id = :user_id",
+            "SELECT account_id FROM basejump.account_user WHERE user_id::text = :user_id",
             {"user_id": user_id}
         )
         if not account_rows:

@@ -6,13 +6,13 @@ async def get_billing_customer(account_id: str) -> Optional[Dict[str, Any]]:
     sql = """
     SELECT id, email 
     FROM basejump.billing_customers
-    WHERE account_id = :account_id
+    WHERE account_id::text = :account_id
     """
     return await execute_one(sql, {"account_id": account_id})
 
 
 async def delete_billing_customer(account_id: str) -> None:
-    sql = "DELETE FROM basejump.billing_customers WHERE account_id = :account_id"
+    sql = "DELETE FROM basejump.billing_customers WHERE account_id::text = :account_id"
     await execute_mutate(sql, {"account_id": account_id})
 
 
@@ -64,5 +64,5 @@ async def update_billing_customer(account_id: str, update_data: Dict[str, Any]) 
         params[key] = value
     
     set_sql = ", ".join(set_parts)
-    sql = f"UPDATE basejump.billing_customers SET {set_sql} WHERE account_id = :account_id"
+    sql = f"UPDATE basejump.billing_customers SET {set_sql} WHERE account_id::text = :account_id"
     await execute_mutate(sql, params)

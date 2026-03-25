@@ -106,7 +106,7 @@ async def generate_and_update_project_name(project_id: str, prompt: str):
                 SET
                     name = :name,
                     icon_name = COALESCE(:icon_name, icon_name)
-                WHERE project_id = :project_id
+                WHERE project_id::text = :project_id
                 RETURNING project_id
                 """,
                 {

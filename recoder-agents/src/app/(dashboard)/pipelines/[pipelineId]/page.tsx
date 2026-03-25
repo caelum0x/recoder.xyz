@@ -214,10 +214,12 @@ export default function PipelineDetailPage() {
   const router = useRouter();
   const pipelineId = params.pipelineId as string;
 
-  const { data: pipeline, isLoading } = usePipeline(pipelineId);
+  const { data: pipeline, isLoading, error: pipelineError } = usePipeline(pipelineId);
+  const pipelineNotFound = (pipelineError as any)?.status === 404;
   const updateMutation = useUpdatePipeline();
   const executeMutation = useExecutePipeline();
-  const { data: runs } = usePipelineRuns(pipelineId);
+  // Don't fetch runs if the pipeline itself doesn't exist
+  const { data: runs } = usePipelineRuns(pipelineNotFound ? '' : pipelineId);
   const { data: agentsData } = useAgents({ limit: 100, sort_by: 'name', sort_order: 'asc' });
 
   const [name, setName] = useState('');
@@ -333,6 +335,23 @@ export default function PipelineDetailPage() {
     return (
       <div className="flex items-center justify-center py-20">
         <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  if (pipelineNotFound || (!pipeline && pipelineError)) {
+    return (
+      <div className="mx-auto max-w-3xl px-4 py-8 text-center">
+        <AlertTriangle className="h-8 w-8 text-muted-foreground mx-auto mb-3" />
+        <p className="text-muted-foreground">
+          {pipelineNotFound
+            ? 'Pipeline not found. It may have been deleted.'
+            : 'Failed to load pipeline. Please try again later.'}
+        </p>
+        <Button variant="ghost" className="mt-4" onClick={() => router.push('/pipelines')}>
+          <ArrowLeft className="h-4 w-4 mr-2" />
+          Back to Pipelines
+        </Button>
       </div>
     );
   }

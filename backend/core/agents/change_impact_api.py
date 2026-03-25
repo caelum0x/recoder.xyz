@@ -134,7 +134,7 @@ async def run_impact_analysis(
 
     # Verify agent ownership
     agent = await execute_one(
-        "SELECT agent_id, name FROM agents WHERE agent_id = :agent_id AND account_id = :user_id",
+        "SELECT agent_id, name FROM agents WHERE agent_id::text = :agent_id AND account_id::text = :user_id",
         {"agent_id": agent_id, "user_id": user_id},
     )
     if not agent:
@@ -149,8 +149,8 @@ async def run_impact_analysis(
             """
             SELECT ad.source_agent_id, a.name
             FROM agent_dependencies ad
-            JOIN agents a ON a.agent_id = ad.source_agent_id
-            WHERE ad.target_agent_id = :agent_id AND ad.user_id = :user_id
+            JOIN agents a ON a.agent_id::text = ad.source_agent_id::text
+            WHERE ad.target_agent_id::text = :agent_id AND ad.user_id::text = :user_id
             """,
             {"agent_id": agent_id, "user_id": user_id},
         )
@@ -168,7 +168,7 @@ async def run_impact_analysis(
                 """
                 SELECT id, slot_name, environment
                 FROM agent_deployment_slots
-                WHERE agent_id = :agent_id AND user_id = :user_id
+                WHERE agent_id::text = :agent_id AND user_id::text = :user_id
                 """,
                 {"agent_id": agent_id, "user_id": user_id},
             )
@@ -190,7 +190,7 @@ async def run_impact_analysis(
                 """
                 SELECT id, rule_name
                 FROM model_routing_rules
-                WHERE agent_id = :agent_id AND user_id = :user_id
+                WHERE agent_id::text = :agent_id AND user_id::text = :user_id
                 """,
                 {"agent_id": agent_id, "user_id": user_id},
             )
@@ -210,7 +210,7 @@ async def run_impact_analysis(
                 """
                 SELECT id, trigger_type
                 FROM agent_triggers
-                WHERE agent_id = :agent_id AND user_id = :user_id AND is_active = true
+                WHERE agent_id::text = :agent_id AND user_id::text = :user_id AND is_active = true
                 """,
                 {"agent_id": agent_id, "user_id": user_id},
             )
@@ -287,7 +287,7 @@ async def list_agent_impact_analyses(
         rows = await execute(
             """
             SELECT * FROM change_impact_analyses
-            WHERE user_id = :user_id AND agent_id = :agent_id
+            WHERE user_id::text = :user_id AND agent_id::text = :agent_id
             ORDER BY created_at DESC
             """,
             {"user_id": user_id, "agent_id": agent_id},
@@ -311,7 +311,7 @@ async def get_impact_stats(
     try:
         # Total count
         total_row = await execute_one(
-            "SELECT COUNT(*) as cnt FROM change_impact_analyses WHERE user_id = :user_id",
+            "SELECT COUNT(*) as cnt FROM change_impact_analyses WHERE user_id::text = :user_id",
             {"user_id": user_id},
         )
         total = total_row["cnt"] if total_row else 0
@@ -321,7 +321,7 @@ async def get_impact_stats(
             """
             SELECT risk_level, COUNT(*) as cnt
             FROM change_impact_analyses
-            WHERE user_id = :user_id
+            WHERE user_id::text = :user_id
             GROUP BY risk_level
             """,
             {"user_id": user_id},
@@ -333,7 +333,7 @@ async def get_impact_stats(
             """
             SELECT change_type, COUNT(*) as cnt
             FROM change_impact_analyses
-            WHERE user_id = :user_id
+            WHERE user_id::text = :user_id
             GROUP BY change_type
             """,
             {"user_id": user_id},
@@ -347,7 +347,7 @@ async def get_impact_stats(
                 COUNT(*) FILTER (WHERE status IN ('approved', 'rejected')) as decided,
                 COUNT(*) FILTER (WHERE status = 'approved') as approved
             FROM change_impact_analyses
-            WHERE user_id = :user_id
+            WHERE user_id::text = :user_id
             """,
             {"user_id": user_id},
         )
@@ -381,7 +381,7 @@ async def get_impact_analysis_detail(
         row = await execute_one(
             """
             SELECT * FROM change_impact_analyses
-            WHERE id = :analysis_id AND user_id = :user_id
+            WHERE id = :analysis_id AND user_id::text = :user_id
             """,
             {"analysis_id": analysis_id, "user_id": user_id},
         )
@@ -415,7 +415,7 @@ async def update_impact_analysis_status(
             """
             UPDATE change_impact_analyses
             SET status = :status
-            WHERE id = :analysis_id AND user_id = :user_id
+            WHERE id = :analysis_id AND user_id::text = :user_id
             RETURNING *
             """,
             {"status": body.status, "analysis_id": analysis_id, "user_id": user_id},

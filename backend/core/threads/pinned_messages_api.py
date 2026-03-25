@@ -2,7 +2,7 @@
 Thread Pinned Messages API endpoints.
 
 Allows users to pin individual messages within threads with optional notes
-and color labels. Access control enforced at application layer (WHERE user_id = :user_id).
+and color labels. Access control enforced at application layer (WHERE user_id::text = :user_id).
 """
 
 import uuid
@@ -107,7 +107,7 @@ async def pin_message(
         row = await execute_one(
             """
             SELECT * FROM thread_pinned_messages
-            WHERE user_id = :user_id AND thread_id = :thread_id AND message_index = :message_index
+            WHERE user_id::text = :user_id AND thread_id::text = :thread_id AND message_index = :message_index
             """,
             {"user_id": user_id, "thread_id": thread_id, "message_index": body.message_index},
         )
@@ -133,7 +133,7 @@ async def list_pinned_messages(
         rows = await execute(
             """
             SELECT * FROM thread_pinned_messages
-            WHERE user_id = :user_id AND thread_id = :thread_id
+            WHERE user_id::text = :user_id AND thread_id::text = :thread_id
             ORDER BY pinned_at DESC
             """,
             {"user_id": user_id, "thread_id": thread_id},
@@ -152,7 +152,7 @@ async def unpin_message(
 ):
     """Remove a pin from a message."""
     existing = await execute_one(
-        "SELECT id FROM thread_pinned_messages WHERE id = :id AND user_id = :user_id AND thread_id = :thread_id",
+        "SELECT id FROM thread_pinned_messages WHERE id = :id AND user_id::text = :user_id AND thread_id::text = :thread_id",
         {"id": pin_id, "user_id": user_id, "thread_id": thread_id},
     )
     if not existing:
@@ -160,7 +160,7 @@ async def unpin_message(
 
     try:
         await execute_mutate(
-            "DELETE FROM thread_pinned_messages WHERE id = :id AND user_id = :user_id",
+            "DELETE FROM thread_pinned_messages WHERE id = :id AND user_id::text = :user_id",
             {"id": pin_id, "user_id": user_id},
         )
         return {"status": "unpinned"}
@@ -178,7 +178,7 @@ async def update_pin(
 ):
     """Update the note or color of an existing pin."""
     existing = await execute_one(
-        "SELECT id FROM thread_pinned_messages WHERE id = :id AND user_id = :user_id AND thread_id = :thread_id",
+        "SELECT id FROM thread_pinned_messages WHERE id = :id AND user_id::text = :user_id AND thread_id::text = :thread_id",
         {"id": pin_id, "user_id": user_id, "thread_id": thread_id},
     )
     if not existing:
@@ -204,12 +204,12 @@ async def update_pin(
 
         set_clause = ", ".join(updates)
         await execute_mutate(
-            f"UPDATE thread_pinned_messages SET {set_clause} WHERE id = :id AND user_id = :user_id",
+            f"UPDATE thread_pinned_messages SET {set_clause} WHERE id = :id AND user_id::text = :user_id",
             params,
         )
 
         row = await execute_one(
-            "SELECT * FROM thread_pinned_messages WHERE id = :id AND user_id = :user_id",
+            "SELECT * FROM thread_pinned_messages WHERE id = :id AND user_id::text = :user_id",
             {"id": pin_id, "user_id": user_id},
         )
         return _row_to_pin(row)
@@ -231,7 +231,7 @@ async def recent_pins(
         rows = await execute(
             """
             SELECT * FROM thread_pinned_messages
-            WHERE user_id = :user_id
+            WHERE user_id::text = :user_id
             ORDER BY pinned_at DESC
             LIMIT :limit
             """,

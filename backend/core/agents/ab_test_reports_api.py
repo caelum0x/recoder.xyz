@@ -173,11 +173,11 @@ async def list_reports(
 ):
     """List A/B test reports for the authenticated user."""
     try:
-        where_clauses = ["user_id = :user_id"]
+        where_clauses = ["user_id::text = :user_id"]
         params: Dict[str, Any] = {"user_id": user_id, "limit": limit}
 
         if agent_id:
-            where_clauses.append("agent_id = :agent_id")
+            where_clauses.append("agent_id::text = :agent_id")
             params["agent_id"] = agent_id
 
         if status:
@@ -221,7 +221,7 @@ async def get_summary(
                 COUNT(*) FILTER (WHERE winner = 'b') AS wins_b,
                 COALESCE(AVG(confidence_level) FILTER (WHERE status = 'completed'), 0) AS avg_confidence
             FROM ab_test_reports
-            WHERE user_id = :user_id
+            WHERE user_id::text = :user_id
             """,
             {"user_id": user_id},
         )
@@ -260,7 +260,7 @@ async def get_report(
         row = await execute_one(
             """
             SELECT * FROM ab_test_reports
-            WHERE test_id = :report_id AND user_id = :user_id
+            WHERE test_id::text = :report_id AND user_id::text = :user_id
             """,
             {"report_id": report_id, "user_id": user_id},
         )
@@ -293,7 +293,7 @@ async def record_sample(
         report = await execute_one(
             """
             SELECT * FROM ab_test_reports
-            WHERE test_id = :report_id AND user_id = :user_id
+            WHERE test_id::text = :report_id AND user_id::text = :user_id
             """,
             {"report_id": report_id, "user_id": user_id},
         )
@@ -324,7 +324,7 @@ async def record_sample(
             SET metrics = :metrics,
                 {sample_col} = {sample_col} + 1,
                 updated_at = now()
-            WHERE test_id = :report_id AND user_id = :user_id
+            WHERE test_id::text = :report_id AND user_id::text = :user_id
             RETURNING *
             """,
             {
@@ -355,7 +355,7 @@ async def complete_report(
         report = await execute_one(
             """
             SELECT * FROM ab_test_reports
-            WHERE test_id = :report_id AND user_id = :user_id
+            WHERE test_id::text = :report_id AND user_id::text = :user_id
             """,
             {"report_id": report_id, "user_id": user_id},
         )
@@ -377,7 +377,7 @@ async def complete_report(
                 winner = :winner,
                 confidence_level = :confidence,
                 updated_at = now()
-            WHERE test_id = :report_id AND user_id = :user_id
+            WHERE test_id::text = :report_id AND user_id::text = :user_id
             RETURNING *
             """,
             {

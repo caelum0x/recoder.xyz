@@ -8,7 +8,7 @@ import { useWorkspaceStore } from '@/stores/workspace-store';
 
 export function NavWorkspaces() {
   const router = useRouter();
-  const { data, isLoading } = useWorkspaces();
+  const { data, isLoading, error, refetch } = useWorkspaces();
   const setCurrentWorkspace = useWorkspaceStore((s) => s.setCurrentWorkspace);
   const currentWorkspaceId = useWorkspaceStore((s) => s.currentWorkspaceId);
 
@@ -28,7 +28,19 @@ export function NavWorkspaces() {
         </Button>
       </div>
 
-      {isLoading ? (
+      {error && !isLoading && !data ? (
+        <div className="text-center py-4 space-y-2">
+          <p className="text-xs text-muted-foreground">
+            Failed to load workspaces
+          </p>
+          <button
+            className="text-xs text-primary hover:underline cursor-pointer"
+            onClick={() => refetch()}
+          >
+            Retry
+          </button>
+        </div>
+      ) : isLoading ? (
         <div className="flex justify-center py-4">
           <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
         </div>

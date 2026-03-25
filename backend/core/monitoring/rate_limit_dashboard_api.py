@@ -94,7 +94,7 @@ async def list_rate_limit_events(
     cutoff = (datetime.now(timezone.utc) - timedelta(hours=hours)).isoformat()
     params = {"user_id": user_id, "cutoff": cutoff, "limit": limit}
 
-    conditions = ["user_id = :user_id", "occurred_at >= :cutoff"]
+    conditions = ["user_id::text = :user_id", "occurred_at >= :cutoff"]
     if endpoint:
         conditions.append("endpoint = :endpoint")
         params["endpoint"] = endpoint
@@ -151,7 +151,7 @@ async def get_rate_limit_summary(
             COUNT(*) FILTER (WHERE was_blocked = true) AS blocked_count,
             COUNT(*) FILTER (WHERE was_blocked = false) AS allowed_count
         FROM rate_limit_events
-        WHERE user_id = :user_id AND occurred_at >= :cutoff
+        WHERE user_id::text = :user_id AND occurred_at >= :cutoff
         """,
         params,
     )
@@ -168,7 +168,7 @@ async def get_rate_limit_summary(
                COUNT(*) AS total_hits,
                COUNT(*) FILTER (WHERE was_blocked = true) AS blocked_hits
         FROM rate_limit_events
-        WHERE user_id = :user_id AND occurred_at >= :cutoff
+        WHERE user_id::text = :user_id AND occurred_at >= :cutoff
         GROUP BY endpoint
         ORDER BY total_hits DESC
         LIMIT 5
@@ -214,7 +214,7 @@ async def get_rate_limit_timeline(
             COUNT(*) FILTER (WHERE was_blocked = true) AS blocked,
             COUNT(*) FILTER (WHERE was_blocked = false) AS allowed
         FROM rate_limit_events
-        WHERE user_id = :user_id AND occurred_at >= :cutoff
+        WHERE user_id::text = :user_id AND occurred_at >= :cutoff
         GROUP BY date_trunc('hour', occurred_at)
         ORDER BY hour ASC
         """,
@@ -246,7 +246,7 @@ async def list_rate_limit_configs(
         SELECT id, user_id, endpoint_pattern, limit_type,
                max_allowed, window_seconds, is_active, created_at
         FROM rate_limit_configs
-        WHERE user_id = :user_id
+        WHERE user_id::text = :user_id
         ORDER BY created_at DESC
         """,
         {"user_id": user_id},

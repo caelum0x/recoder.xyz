@@ -123,13 +123,13 @@ async def list_snapshots(
     """List resource snapshots within the given time window."""
     try:
         where_clauses = [
-            "user_id = :user_id",
+            "user_id::text = :user_id",
             "recorded_at >= now() - :minutes * INTERVAL '1 minute'",
         ]
         params: Dict[str, Any] = {"user_id": user_id, "minutes": minutes, "limit": limit}
 
         if agent_id:
-            where_clauses.append("agent_id = :agent_id")
+            where_clauses.append("agent_id::text = :agent_id")
             params["agent_id"] = agent_id
 
         where_sql = " AND ".join(where_clauses)
@@ -166,7 +166,7 @@ async def get_current_resources(
                 disk_mb, network_in_kb, network_out_kb,
                 active_connections, recorded_at
             FROM resource_snapshots
-            WHERE user_id = :user_id
+            WHERE user_id::text = :user_id
             ORDER BY COALESCE(agent_id, 'global'), recorded_at DESC
             """,
             {"user_id": user_id},
@@ -191,7 +191,7 @@ async def get_resource_history(
     """Return time-bucketed averages for CPU, memory, and other metrics."""
     try:
         where_clauses = [
-            "user_id = :user_id",
+            "user_id::text = :user_id",
             "recorded_at >= now() - :minutes * INTERVAL '1 minute'",
         ]
         params: Dict[str, Any] = {
@@ -201,7 +201,7 @@ async def get_resource_history(
         }
 
         if agent_id:
-            where_clauses.append("agent_id = :agent_id")
+            where_clauses.append("agent_id::text = :agent_id")
             params["agent_id"] = agent_id
 
         where_sql = " AND ".join(where_clauses)
@@ -288,7 +288,7 @@ async def list_alert_rules(
         rows = await execute(
             """
             SELECT * FROM resource_alert_rules
-            WHERE user_id = :user_id
+            WHERE user_id::text = :user_id
             ORDER BY created_at DESC
             """,
             {"user_id": user_id},
@@ -311,7 +311,7 @@ async def update_alert_rule(
 ):
     """Update a resource alert rule."""
     existing = await execute_one(
-        "SELECT id FROM resource_alert_rules WHERE id = :id AND user_id = :user_id",
+        "SELECT id FROM resource_alert_rules WHERE id = :id AND user_id::text = :user_id",
         {"id": rule_id, "user_id": user_id},
     )
     if not existing:
@@ -336,7 +336,7 @@ async def update_alert_rule(
             f"""
             UPDATE resource_alert_rules
             SET {set_clauses}
-            WHERE id = :id AND user_id = :user_id
+            WHERE id = :id AND user_id::text = :user_id
             RETURNING *
             """,
             params,
@@ -358,7 +358,7 @@ async def delete_alert_rule(
 ):
     """Delete a resource alert rule."""
     existing = await execute_one(
-        "SELECT id FROM resource_alert_rules WHERE id = :id AND user_id = :user_id",
+        "SELECT id FROM resource_alert_rules WHERE id = :id AND user_id::text = :user_id",
         {"id": rule_id, "user_id": user_id},
     )
     if not existing:
@@ -366,7 +366,7 @@ async def delete_alert_rule(
 
     try:
         await execute_mutate(
-            "DELETE FROM resource_alert_rules WHERE id = :id AND user_id = :user_id",
+            "DELETE FROM resource_alert_rules WHERE id = :id AND user_id::text = :user_id",
             {"id": rule_id, "user_id": user_id},
         )
         return {"success": True, "deleted_id": rule_id}
@@ -388,7 +388,7 @@ async def check_alerts(
         rules = await execute(
             """
             SELECT * FROM resource_alert_rules
-            WHERE user_id = :user_id AND is_active = true
+            WHERE user_id::text = :user_id AND is_active = true
             """,
             {"user_id": user_id},
         )
@@ -400,7 +400,7 @@ async def check_alerts(
             SELECT DISTINCT ON (COALESCE(agent_id, 'global'))
                 agent_id, cpu_percent, memory_percent, disk_mb, active_connections
             FROM resource_snapshots
-            WHERE user_id = :user_id
+            WHERE user_id::text = :user_id
               AND recorded_at >= now() - INTERVAL '10 minutes'
             ORDER BY COALESCE(agent_id, 'global'), recorded_at DESC
             """,
@@ -450,7 +450,7 @@ async def check_alerts(
                     """
                     UPDATE resource_alert_rules
                     SET last_triggered_at = now()
-                    WHERE id = :id AND user_id = :user_id
+                    WHERE id = :id AND user_id::text = :user_id
                     """,
                     {"id": str(rule["id"]), "user_id": user_id},
                 )

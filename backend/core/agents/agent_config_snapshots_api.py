@@ -100,7 +100,7 @@ async def get_snapshot_stats(
                 COUNT(*) AS total_snapshots,
                 COUNT(*) FILTER (WHERE is_pinned = true) AS pinned_count
             FROM agent_config_snapshots
-            WHERE agent_id = :agent_id AND user_id = :user_id
+            WHERE agent_id::text = :agent_id AND user_id::text = :user_id
             """,
             {"agent_id": agent_id, "user_id": user_id},
         )
@@ -109,7 +109,7 @@ async def get_snapshot_stats(
             """
             SELECT id, snapshot_name, restored_count
             FROM agent_config_snapshots
-            WHERE agent_id = :agent_id AND user_id = :user_id
+            WHERE agent_id::text = :agent_id AND user_id::text = :user_id
               AND restored_count > 0
             ORDER BY restored_count DESC
             LIMIT 1
@@ -142,7 +142,7 @@ async def list_snapshots(
     try:
         query = """
             SELECT * FROM agent_config_snapshots
-            WHERE agent_id = :agent_id AND user_id = :user_id
+            WHERE agent_id::text = :agent_id AND user_id::text = :user_id
         """
         params: Dict[str, Any] = {"agent_id": agent_id, "user_id": user_id, "limit": limit}
 
@@ -173,7 +173,7 @@ async def get_snapshot(
         snapshot = await execute_one(
             """
             SELECT * FROM agent_config_snapshots
-            WHERE id = :snapshot_id AND agent_id = :agent_id AND user_id = :user_id
+            WHERE id = :snapshot_id AND agent_id::text = :agent_id AND user_id::text = :user_id
             """,
             {"snapshot_id": snapshot_id, "agent_id": agent_id, "user_id": user_id},
         )
@@ -183,7 +183,7 @@ async def get_snapshot(
         restore_log = await execute(
             """
             SELECT * FROM snapshot_restore_log
-            WHERE snapshot_id = :snapshot_id AND user_id = :user_id
+            WHERE snapshot_id::text = :snapshot_id AND user_id::text = :user_id
             ORDER BY restored_at DESC
             LIMIT 20
             """,
@@ -216,7 +216,7 @@ async def update_snapshot(
         existing = await execute_one(
             """
             SELECT id FROM agent_config_snapshots
-            WHERE id = :snapshot_id AND agent_id = :agent_id AND user_id = :user_id
+            WHERE id = :snapshot_id AND agent_id::text = :agent_id AND user_id::text = :user_id
             """,
             {"snapshot_id": snapshot_id, "agent_id": agent_id, "user_id": user_id},
         )
@@ -241,7 +241,7 @@ async def update_snapshot(
 
         if not updates:
             snapshot = await execute_one(
-                "SELECT * FROM agent_config_snapshots WHERE id = :snapshot_id AND user_id = :user_id",
+                "SELECT * FROM agent_config_snapshots WHERE id = :snapshot_id AND user_id::text = :user_id",
                 {"snapshot_id": snapshot_id, "user_id": user_id},
             )
             return serialize_row(snapshot)
@@ -251,7 +251,7 @@ async def update_snapshot(
             f"""
             UPDATE agent_config_snapshots
             SET {set_clause}
-            WHERE id = :snapshot_id AND user_id = :user_id
+            WHERE id = :snapshot_id AND user_id::text = :user_id
             RETURNING *
             """,
             params,
@@ -279,7 +279,7 @@ async def delete_snapshot(
         existing = await execute_one(
             """
             SELECT id FROM agent_config_snapshots
-            WHERE id = :snapshot_id AND agent_id = :agent_id AND user_id = :user_id
+            WHERE id = :snapshot_id AND agent_id::text = :agent_id AND user_id::text = :user_id
             """,
             {"snapshot_id": snapshot_id, "agent_id": agent_id, "user_id": user_id},
         )
@@ -287,7 +287,7 @@ async def delete_snapshot(
             raise HTTPException(status_code=404, detail="Snapshot not found")
 
         await execute_mutate(
-            "DELETE FROM agent_config_snapshots WHERE id = :snapshot_id AND user_id = :user_id",
+            "DELETE FROM agent_config_snapshots WHERE id = :snapshot_id AND user_id::text = :user_id",
             {"snapshot_id": snapshot_id, "user_id": user_id},
         )
         return {"deleted": True}
@@ -314,7 +314,7 @@ async def restore_snapshot(
         existing = await execute_one(
             """
             SELECT id FROM agent_config_snapshots
-            WHERE id = :snapshot_id AND agent_id = :agent_id AND user_id = :user_id
+            WHERE id = :snapshot_id AND agent_id::text = :agent_id AND user_id::text = :user_id
             """,
             {"snapshot_id": snapshot_id, "agent_id": agent_id, "user_id": user_id},
         )
@@ -326,7 +326,7 @@ async def restore_snapshot(
             """
             UPDATE agent_config_snapshots
             SET restored_count = restored_count + 1
-            WHERE id = :snapshot_id AND user_id = :user_id
+            WHERE id = :snapshot_id AND user_id::text = :user_id
             RETURNING *
             """,
             {"snapshot_id": snapshot_id, "user_id": user_id},
@@ -374,7 +374,7 @@ async def list_restore_log(
         existing = await execute_one(
             """
             SELECT id FROM agent_config_snapshots
-            WHERE id = :snapshot_id AND agent_id = :agent_id AND user_id = :user_id
+            WHERE id = :snapshot_id AND agent_id::text = :agent_id AND user_id::text = :user_id
             """,
             {"snapshot_id": snapshot_id, "agent_id": agent_id, "user_id": user_id},
         )
@@ -384,7 +384,7 @@ async def list_restore_log(
         rows = await execute(
             """
             SELECT * FROM snapshot_restore_log
-            WHERE snapshot_id = :snapshot_id AND user_id = :user_id
+            WHERE snapshot_id::text = :snapshot_id AND user_id::text = :user_id
             ORDER BY restored_at DESC
             LIMIT :limit
             """,

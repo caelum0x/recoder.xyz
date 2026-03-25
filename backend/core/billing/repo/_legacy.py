@@ -28,7 +28,7 @@ async def list_transactions(
         metadata,
         COUNT(*) OVER() AS total_count
     FROM credit_ledger
-    WHERE account_id = :account_id
+    WHERE account_id::text = :account_id
     ORDER BY created_at DESC
     LIMIT :limit OFFSET :offset
     """
@@ -71,7 +71,7 @@ async def get_transactions_summary(
         SUM(amount) as total_amount,
         COUNT(*) as count
     FROM credit_ledger
-    WHERE account_id = :account_id
+    WHERE account_id::text = :account_id
       AND created_at >= :since_date
     GROUP BY type
     """
@@ -117,7 +117,7 @@ async def get_purchases(account_id: str) -> Tuple[float, List[Dict[str, Any]]]:
     sql = """
     SELECT amount, created_at, description
     FROM credit_ledger
-    WHERE account_id = :account_id AND type = 'purchase'
+    WHERE account_id::text = :account_id AND type = 'purchase'
     ORDER BY created_at DESC
     """
     
@@ -141,7 +141,7 @@ async def get_usage_history(
     sql = """
     SELECT id, amount, description, created_at, metadata
     FROM credit_ledger
-    WHERE account_id = :account_id 
+    WHERE account_id::text = :account_id 
       AND type = 'usage'
       AND created_at >= :since_date
     ORDER BY created_at DESC
@@ -185,7 +185,7 @@ async def get_credit_usage_records(
         metadata,
         COUNT(*) OVER() AS total_count
     FROM credit_ledger
-    WHERE account_id = :account_id AND type = 'usage'
+    WHERE account_id::text = :account_id AND type = 'usage'
     ORDER BY created_at DESC
     LIMIT :limit OFFSET :offset
     """
@@ -228,7 +228,7 @@ async def get_credit_usage_by_thread(
         MAX(created_at) as last_used,
         COUNT(*) OVER() AS total_count
     FROM credit_ledger
-    WHERE account_id = :account_id 
+    WHERE account_id::text = :account_id 
       AND type = 'usage'
       AND metadata->>'thread_id' IS NOT NULL
     GROUP BY metadata->>'thread_id'
@@ -290,7 +290,7 @@ async def get_credit_usage_by_thread_with_dates(
         amount,
         created_at
     FROM credit_ledger
-    WHERE account_id = :account_id 
+    WHERE account_id::text = :account_id 
       AND type = 'usage'
       AND (thread_id IS NOT NULL OR metadata->>'thread_id' IS NOT NULL)
       {date_filter}
@@ -354,7 +354,7 @@ async def get_thread_details(thread_ids: List[str]) -> Dict[str, Dict[str, Any]]
         t.created_at,
         p.name as project_name
     FROM threads t
-    LEFT JOIN projects p ON t.project_id = p.project_id
+    LEFT JOIN projects p ON t.project_id::text = p.project_id::text
     WHERE t.thread_id = ANY(:thread_ids)
     """
     
@@ -400,7 +400,7 @@ async def get_trial_credits_by_description(account_id: str, description: str) ->
     """Get trial credits from credit_ledger by account and description."""
     sql = """
     SELECT * FROM credit_ledger
-    WHERE account_id = :account_id AND description = :description
+    WHERE account_id::text = :account_id AND description = :description
     """
     rows = await execute(sql, {"account_id": account_id, "description": description})
     return rows if rows else None
@@ -431,7 +431,7 @@ async def update_trial_end(account_id: str, ended_at, converted: bool = True) ->
     sql = """
     UPDATE trial_history
     SET ended_at = :ended_at, converted_to_paid = :converted
-    WHERE account_id = :account_id AND ended_at IS NULL
+    WHERE account_id::text = :account_id AND ended_at IS NULL
     """
     await execute_mutate(sql, {
         "account_id": account_id,
@@ -685,7 +685,7 @@ async def add_credits_and_update_account(
         
         # Get current balance
         result = await session.execute(
-            text("SELECT balance, expiring_credits, non_expiring_credits FROM credit_accounts WHERE account_id = :account_id FOR UPDATE"),
+            text("SELECT balance, expiring_credits, non_expiring_credits FROM credit_accounts WHERE account_id::text = :account_id FOR UPDATE"),
             {"account_id": account_id}
         )
         row = result.fetchone()
@@ -713,7 +713,7 @@ async def add_credits_and_update_account(
                     expiring_credits = :expiring_credits,
                     non_expiring_credits = :non_expiring_credits,
                     updated_at = NOW()
-                WHERE account_id = :account_id
+                WHERE account_id::text = :account_id
             """),
             {
                 "account_id": account_id,
@@ -779,7 +779,7 @@ async def deduct_credits_and_update_account(
         
         # Get current balance
         result = await session.execute(
-            text("SELECT balance, expiring_credits, non_expiring_credits FROM credit_accounts WHERE account_id = :account_id FOR UPDATE"),
+            text("SELECT balance, expiring_credits, non_expiring_credits FROM credit_accounts WHERE account_id::text = :account_id FOR UPDATE"),
             {"account_id": account_id}
         )
         row = result.fetchone()
@@ -807,7 +807,7 @@ async def deduct_credits_and_update_account(
                     expiring_credits = :expiring_credits,
                     non_expiring_credits = :non_expiring_credits,
                     updated_at = NOW()
-                WHERE account_id = :account_id
+                WHERE account_id::text = :account_id
             """),
             {
                 "account_id": account_id,
@@ -866,7 +866,7 @@ async def expire_existing_credits(account_id: str) -> None:
     sql = """
     UPDATE credits
     SET expires_at = :current_time, is_expired = true
-    WHERE account_id = :account_id 
+    WHERE account_id::text = :account_id 
       AND is_expiring = true 
       AND is_expired IS NULL
     """

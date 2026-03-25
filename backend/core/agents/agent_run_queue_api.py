@@ -98,14 +98,14 @@ async def enqueue_agent_run(
     priority = body.priority
     if priority is None:
         settings = await execute_one(
-            "SELECT default_priority FROM run_queue_settings WHERE user_id = :user_id",
+            "SELECT default_priority FROM run_queue_settings WHERE user_id::text = :user_id",
             {"user_id": user_id},
         )
         priority = settings["default_priority"] if settings else 5
 
     # Calculate position: count of currently queued items + 1
     pos_row = await execute_one(
-        "SELECT COUNT(*) AS cnt FROM agent_run_queue WHERE user_id = :user_id AND status = 'queued'",
+        "SELECT COUNT(*) AS cnt FROM agent_run_queue WHERE user_id::text = :user_id AND status = 'queued'",
         {"user_id": user_id},
     )
     position = (pos_row["cnt"] if pos_row else 0) + 1
@@ -156,7 +156,7 @@ async def list_queue_entries(
     user_id: str = Depends(verify_and_get_user_id_from_jwt),
 ):
     """List queue entries for the authenticated user."""
-    conditions = ["user_id = :user_id"]
+    conditions = ["user_id::text = :user_id"]
     params: Dict[str, Any] = {"user_id": user_id, "limit": limit, "offset": offset}
 
     if status:
@@ -164,7 +164,7 @@ async def list_queue_entries(
         params["status"] = status
 
     if agent_id:
-        conditions.append("agent_id = :agent_id")
+        conditions.append("agent_id::text = :agent_id")
         params["agent_id"] = agent_id
 
     where_clause = " AND ".join(conditions)
@@ -213,7 +213,7 @@ async def cancel_queue_entry(
 ):
     """Cancel a queued entry. Only entries with status 'queued' can be cancelled."""
     entry = await execute_one(
-        "SELECT id, status FROM agent_run_queue WHERE id = :entry_id AND user_id = :user_id",
+        "SELECT id, status FROM agent_run_queue WHERE id = :entry_id AND user_id::text = :user_id",
         {"entry_id": entry_id, "user_id": user_id},
     )
 
@@ -224,7 +224,7 @@ async def cancel_queue_entry(
         raise HTTPException(status_code=400, detail=f"Cannot cancel entry with status '{entry['status']}'. Only 'queued' entries can be cancelled.")
 
     await execute_mutate(
-        "UPDATE agent_run_queue SET status = 'cancelled', completed_at = now() WHERE id = :entry_id AND user_id = :user_id",
+        "UPDATE agent_run_queue SET status = 'cancelled', completed_at = now() WHERE id = :entry_id AND user_id::text = :user_id",
         {"entry_id": entry_id, "user_id": user_id},
     )
 
@@ -243,7 +243,7 @@ async def update_queue_entry_priority(
 ):
     """Update the priority of a queued entry."""
     entry = await execute_one(
-        "SELECT id, status FROM agent_run_queue WHERE id = :entry_id AND user_id = :user_id",
+        "SELECT id, status FROM agent_run_queue WHERE id = :entry_id AND user_id::text = :user_id",
         {"entry_id": entry_id, "user_id": user_id},
     )
 
@@ -254,7 +254,7 @@ async def update_queue_entry_priority(
         raise HTTPException(status_code=400, detail="Can only update priority for queued entries")
 
     await execute_mutate(
-        "UPDATE agent_run_queue SET priority = :priority WHERE id = :entry_id AND user_id = :user_id",
+        "UPDATE agent_run_queue SET priority = :priority WHERE id = :entry_id AND user_id::text = :user_id",
         {"entry_id": entry_id, "user_id": user_id, "priority": body.priority},
     )
 
@@ -272,11 +272,11 @@ async def get_queue_stats(
 ):
     """Get queue statistics for the authenticated user."""
     queued_row = await execute_one(
-        "SELECT COUNT(*) AS cnt FROM agent_run_queue WHERE user_id = :user_id AND status = 'queued'",
+        "SELECT COUNT(*) AS cnt FROM agent_run_queue WHERE user_id::text = :user_id AND status = 'queued'",
         {"user_id": user_id},
     )
     running_row = await execute_one(
-        "SELECT COUNT(*) AS cnt FROM agent_run_queue WHERE user_id = :user_id AND status = 'running'",
+        "SELECT COUNT(*) AS cnt FROM agent_run_queue WHERE user_id::text = :user_id AND status = 'running'",
         {"user_id": user_id},
     )
 
@@ -285,7 +285,7 @@ async def get_queue_stats(
         """
         SELECT COALESCE(AVG(EXTRACT(EPOCH FROM (started_at - queued_at))), 0) AS avg_wait
         FROM agent_run_queue
-        WHERE user_id = :user_id AND started_at IS NOT NULL AND queued_at IS NOT NULL
+        WHERE user_id::text = :user_id AND started_at IS NOT NULL AND queued_at IS NOT NULL
         """,
         {"user_id": user_id},
     )
@@ -294,7 +294,7 @@ async def get_queue_stats(
     completed_row = await execute_one(
         """
         SELECT COUNT(*) AS cnt FROM agent_run_queue
-        WHERE user_id = :user_id AND status = 'completed'
+        WHERE user_id::text = :user_id AND status = 'completed'
           AND completed_at >= CURRENT_DATE
         """,
         {"user_id": user_id},
@@ -319,7 +319,7 @@ async def get_queue_settings(
 ):
     """Get queue settings for the authenticated user."""
     row = await execute_one(
-        "SELECT max_concurrent_runs, default_priority, auto_retry_failed, max_retries FROM run_queue_settings WHERE user_id = :user_id",
+        "SELECT max_concurrent_runs, default_priority, auto_retry_failed, max_retries FROM run_queue_settings WHERE user_id::text = :user_id",
         {"user_id": user_id},
     )
 
@@ -346,7 +346,7 @@ async def update_queue_settings(
 ):
     """Update queue settings for the authenticated user (upsert)."""
     existing = await execute_one(
-        "SELECT id FROM run_queue_settings WHERE user_id = :user_id",
+        "SELECT id FROM run_queue_settings WHERE user_id::text = :user_id",
         {"user_id": user_id},
     )
 
@@ -371,7 +371,7 @@ async def update_queue_settings(
         if updates:
             set_clause = ", ".join(updates)
             await execute_mutate(
-                f"UPDATE run_queue_settings SET {set_clause} WHERE user_id = :user_id",
+                f"UPDATE run_queue_settings SET {set_clause} WHERE user_id::text = :user_id",
                 params,
             )
     else:
@@ -404,13 +404,13 @@ async def process_next_queue_entry(
     """Dequeue the next entry by priority (lowest number = highest priority), mark it as running."""
     # Check how many are currently running vs max allowed
     settings = await execute_one(
-        "SELECT max_concurrent_runs FROM run_queue_settings WHERE user_id = :user_id",
+        "SELECT max_concurrent_runs FROM run_queue_settings WHERE user_id::text = :user_id",
         {"user_id": user_id},
     )
     max_concurrent = settings["max_concurrent_runs"] if settings else 3
 
     running_row = await execute_one(
-        "SELECT COUNT(*) AS cnt FROM agent_run_queue WHERE user_id = :user_id AND status = 'running'",
+        "SELECT COUNT(*) AS cnt FROM agent_run_queue WHERE user_id::text = :user_id AND status = 'running'",
         {"user_id": user_id},
     )
     running_count = running_row["cnt"] if running_row else 0
@@ -426,7 +426,7 @@ async def process_next_queue_entry(
         """
         SELECT id, agent_id, input_message, config, priority
         FROM agent_run_queue
-        WHERE user_id = :user_id AND status = 'queued'
+        WHERE user_id::text = :user_id AND status = 'queued'
         ORDER BY priority ASC, queued_at ASC
         LIMIT 1
         """,

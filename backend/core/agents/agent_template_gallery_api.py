@@ -173,7 +173,7 @@ async def list_templates(
     user_id = await verify_and_get_user_id_from_jwt(request)
 
     try:
-        where_clauses = ["(is_public = true OR user_id = :user_id)"]
+        where_clauses = ["(is_public = true OR user_id::text = :user_id)"]
         params: Dict[str, Any] = {"user_id": user_id, "limit": limit, "offset": offset}
 
         if category:
@@ -244,7 +244,7 @@ async def list_categories(request: Request):
         sql = """
         SELECT category, COUNT(*) as count
         FROM agent_templates
-        WHERE is_public = true OR user_id = :user_id
+        WHERE is_public = true OR user_id::text = :user_id
         GROUP BY category
         ORDER BY count DESC
         """
@@ -279,6 +279,10 @@ async def list_categories(request: Request):
 @router.get("/{template_id}", response_model=AgentTemplate, summary="Get template detail")
 async def get_template(template_id: str, request: Request):
     """Get a single template by ID."""
+    import re as _re
+    if not _re.match(r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$', template_id):
+        raise HTTPException(status_code=404, detail="Template not found")
+
     user_id = await verify_and_get_user_id_from_jwt(request)
 
     try:
@@ -288,7 +292,7 @@ async def get_template(template_id: str, request: Request):
                tags, preview_images, created_at, updated_at
         FROM agent_templates
         WHERE id = :template_id
-          AND (is_public = true OR user_id = :user_id)
+          AND (is_public = true OR user_id::text = :user_id)
         """
         row = await execute_one(sql, {"template_id": template_id, "user_id": user_id})
 
@@ -333,7 +337,7 @@ async def use_template(template_id: str, request: Request):
         SELECT id, template_name, agent_config, category, icon
         FROM agent_templates
         WHERE id = :template_id
-          AND (is_public = true OR user_id = :user_id)
+          AND (is_public = true OR user_id::text = :user_id)
         """
         template = await execute_one(template_sql, {"template_id": template_id, "user_id": user_id})
 
@@ -400,7 +404,7 @@ async def update_template(template_id: str, body: UpdateTemplateRequest, request
 
     try:
         # Verify ownership
-        check_sql = "SELECT id FROM agent_templates WHERE id = :template_id AND user_id = :user_id"
+        check_sql = "SELECT id FROM agent_templates WHERE id = :template_id AND user_id::text = :user_id"
         existing = await execute_one(check_sql, {"template_id": template_id, "user_id": user_id})
 
         if not existing:
@@ -446,7 +450,7 @@ async def update_template(template_id: str, body: UpdateTemplateRequest, request
         sql = f"""
         UPDATE agent_templates
         SET {set_sql}
-        WHERE id = :template_id AND user_id = :user_id
+        WHERE id = :template_id AND user_id::text = :user_id
         RETURNING id, user_id, template_name, description, category,
                   agent_config, icon, is_official, is_public, use_count,
                   tags, preview_images, created_at, updated_at
@@ -485,7 +489,7 @@ async def delete_template(template_id: str, request: Request):
     try:
         sql = """
         DELETE FROM agent_templates
-        WHERE id = :template_id AND user_id = :user_id
+        WHERE id = :template_id AND user_id::text = :user_id
         RETURNING id
         """
         result = await execute_one(sql, {"template_id": template_id, "user_id": user_id})
@@ -519,7 +523,7 @@ async def create_template_from_agent(
         agent_sql = """
         SELECT agent_id, name, system_prompt, agent_type, model, tools_config, config
         FROM agents
-        WHERE agent_id = :agent_id AND account_id = :user_id
+        WHERE agent_id::text = :agent_id AND account_id::text = :user_id
         """
         agent = await execute_one(agent_sql, {"agent_id": agent_id, "user_id": user_id})
 

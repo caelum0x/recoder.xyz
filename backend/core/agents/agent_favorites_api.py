@@ -65,7 +65,7 @@ async def add_favorite(
         max_order_sql = """
         SELECT COALESCE(MAX(display_order), -1) + 1 AS next_order
         FROM agent_favorites
-        WHERE user_id = :user_id
+        WHERE user_id::text = :user_id
         """
         rows = await execute(max_order_sql, {"user_id": user_id})
         next_order = rows[0]["next_order"] if rows else 0
@@ -121,7 +121,7 @@ async def list_favorites(
         sql = """
         SELECT id, user_id, agent_id, display_order, quick_prompt, created_at
         FROM agent_favorites
-        WHERE user_id = :user_id
+        WHERE user_id::text = :user_id
         ORDER BY display_order ASC
         """
 
@@ -158,7 +158,7 @@ async def remove_favorite(
     try:
         sql = """
         DELETE FROM agent_favorites
-        WHERE user_id = :user_id AND agent_id = :agent_id
+        WHERE user_id::text = :user_id AND agent_id::text = :agent_id
         RETURNING id
         """
 
@@ -196,7 +196,7 @@ async def reorder_favorites(
             sql = """
             UPDATE agent_favorites
             SET display_order = :display_order
-            WHERE user_id = :user_id AND agent_id = :agent_id
+            WHERE user_id::text = :user_id AND agent_id::text = :agent_id
             """
             await execute_mutate(sql, {
                 "user_id": user_id,
@@ -228,7 +228,7 @@ async def update_favorite_prompt(
         sql = """
         UPDATE agent_favorites
         SET quick_prompt = :quick_prompt
-        WHERE user_id = :user_id AND agent_id = :agent_id
+        WHERE user_id::text = :user_id AND agent_id::text = :agent_id
         RETURNING id, user_id, agent_id, display_order, quick_prompt, created_at
         """
 

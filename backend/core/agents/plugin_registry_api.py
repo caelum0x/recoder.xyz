@@ -125,7 +125,7 @@ async def list_plugins(
 ):
     """List own plugins and public plugins with optional filters."""
     params: Dict[str, Any] = {"user_id": user_id, "limit": limit}
-    conditions = ["(p.is_public = true OR p.user_id = :user_id)", "p.is_active = true"]
+    conditions = ["(p.is_public = true OR p.user_id::text = :user_id)", "p.is_active = true"]
 
     if plugin_type:
         conditions.append("p.plugin_type = :plugin_type")
@@ -134,7 +134,7 @@ async def list_plugins(
     if is_public is True:
         conditions[0] = "p.is_public = true"
     elif is_public is False:
-        conditions[0] = "p.user_id = :user_id"
+        conditions[0] = "p.user_id::text = :user_id"
 
     if search:
         conditions.append(
@@ -167,7 +167,7 @@ async def get_plugin(
 ):
     """Get a plugin by ID (own or public)."""
     row = await execute_one(
-        "SELECT * FROM plugins WHERE id = :id AND (is_public = true OR user_id = :user_id)",
+        "SELECT * FROM plugins WHERE id = :id AND (is_public = true OR user_id::text = :user_id)",
         {"id": plugin_id, "user_id": user_id},
     )
     if not row:
@@ -217,7 +217,7 @@ async def update_plugin(
     data["user_id"] = user_id
 
     row = await execute_one(
-        f"UPDATE plugins SET {set_sql} WHERE id = :id AND user_id = :user_id RETURNING *",
+        f"UPDATE plugins SET {set_sql} WHERE id = :id AND user_id::text = :user_id RETURNING *",
         data,
     )
     return serialize_row(row)
@@ -243,7 +243,7 @@ async def delete_plugin(
         raise HTTPException(status_code=403, detail="Not authorized to delete this plugin")
 
     await execute_mutate(
-        "DELETE FROM plugins WHERE id = :id AND user_id = :user_id",
+        "DELETE FROM plugins WHERE id = :id AND user_id::text = :user_id",
         {"id": plugin_id, "user_id": user_id},
     )
     return {"deleted": True, "id": plugin_id}
@@ -265,7 +265,7 @@ async def install_plugin(
 ):
     """Install (or re-install) a plugin for an agent. Increments install_count."""
     plugin = await execute_one(
-        "SELECT id FROM plugins WHERE id = :id AND (is_public = true OR user_id = :user_id)",
+        "SELECT id FROM plugins WHERE id = :id AND (is_public = true OR user_id::text = :user_id)",
         {"id": body.plugin_id, "user_id": user_id},
     )
     if not plugin:
@@ -334,8 +334,8 @@ async def list_agent_plugins(
           p.rating_count,
           p.install_count
         FROM agent_plugin_installs api
-        JOIN plugins p ON p.id = api.plugin_id
-        WHERE api.agent_id = :agent_id AND api.user_id = :user_id
+        JOIN plugins p ON p.id::text = api.plugin_id::text
+        WHERE api.agent_id::text = :agent_id AND api.user_id::text = :user_id
         ORDER BY api.installed_at DESC
         """,
         {"agent_id": agent_id, "user_id": user_id},
@@ -356,7 +356,7 @@ async def update_plugin_install(
 ):
     """Update config_values or is_enabled for an installed plugin."""
     existing = await execute_one(
-        "SELECT * FROM agent_plugin_installs WHERE id = :id AND agent_id = :agent_id AND user_id = :user_id",
+        "SELECT * FROM agent_plugin_installs WHERE id = :id AND agent_id::text = :agent_id AND user_id::text = :user_id",
         {"id": install_id, "agent_id": agent_id, "user_id": user_id},
     )
     if not existing:
@@ -382,7 +382,7 @@ async def update_plugin_install(
     row = await execute_one(
         f"""
         UPDATE agent_plugin_installs SET {set_sql}
-        WHERE id = :id AND agent_id = :agent_id AND user_id = :user_id
+        WHERE id = :id AND agent_id::text = :agent_id AND user_id::text = :user_id
         RETURNING *
         """,
         data,
@@ -402,14 +402,14 @@ async def uninstall_plugin(
 ):
     """Uninstall a plugin from an agent."""
     existing = await execute_one(
-        "SELECT id FROM agent_plugin_installs WHERE id = :id AND agent_id = :agent_id AND user_id = :user_id",
+        "SELECT id FROM agent_plugin_installs WHERE id = :id AND agent_id::text = :agent_id AND user_id::text = :user_id",
         {"id": install_id, "agent_id": agent_id, "user_id": user_id},
     )
     if not existing:
         raise HTTPException(status_code=404, detail="Plugin install not found")
 
     await execute_mutate(
-        "DELETE FROM agent_plugin_installs WHERE id = :id AND user_id = :user_id",
+        "DELETE FROM agent_plugin_installs WHERE id = :id AND user_id::text = :user_id",
         {"id": install_id, "user_id": user_id},
     )
     return {"deleted": True, "id": install_id}
@@ -431,7 +431,7 @@ async def rate_plugin(
 ):
     """Upsert a rating for a plugin and recalculate aggregate stats."""
     plugin = await execute_one(
-        "SELECT id FROM plugins WHERE id = :id AND (is_public = true OR user_id = :user_id)",
+        "SELECT id FROM plugins WHERE id = :id AND (is_public = true OR user_id::text = :user_id)",
         {"id": plugin_id, "user_id": user_id},
     )
     if not plugin:
@@ -468,12 +468,12 @@ async def rate_plugin(
               rating_avg = (
                 SELECT ROUND(AVG(rating)::numeric, 2)
                 FROM plugin_ratings
-                WHERE plugin_id = :plugin_id
+                WHERE plugin_id::text = :plugin_id
               ),
               rating_count = (
                 SELECT COUNT(*)
                 FROM plugin_ratings
-                WHERE plugin_id = :plugin_id
+                WHERE plugin_id::text = :plugin_id
               ),
               updated_at = now()
             WHERE id = :plugin_id

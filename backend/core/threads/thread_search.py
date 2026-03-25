@@ -344,7 +344,7 @@ class ThreadSearchService:
 
             # Delete existing chunks for this thread first
             await execute_mutate(
-                "DELETE FROM public.documents WHERE account_id = :account_id AND thread_id = :thread_id",
+                "DELETE FROM public.documents WHERE account_id::text = :account_id AND thread_id::text = :thread_id",
                 {"account_id": account_id, "thread_id": thread_id}
             )
 
@@ -436,7 +436,7 @@ class ThreadSearchService:
             FROM public.documents
             WHERE embedding IS NOT NULL
             AND thread_id IS NOT NULL
-            AND account_id = :account_id       -- filter by tenant
+            AND account_id::text = :account_id       -- filter by tenant
             ORDER BY embedding <=> CAST(:query_embedding AS vector)  -- closest first
             LIMIT :limit;
             """
@@ -497,7 +497,7 @@ class ThreadSearchService:
         try:
             from core.services.db import execute_mutate
 
-            sql = "DELETE FROM public.documents WHERE thread_id = :thread_id"
+            sql = "DELETE FROM public.documents WHERE thread_id::text = :thread_id"
             await execute_mutate(sql, {"thread_id": thread_id})
 
             logger.info(f"[ThreadSearch] Deleted embedding for thread {thread_id}")
@@ -585,10 +585,10 @@ async def get_threads_needing_embedding(account_id: str, thread_ids: List[str]) 
                 MAX(m.updated_at) as last_message_at
             FROM unnest(CAST(:thread_ids AS uuid[])) AS t(thread_id)
             LEFT JOIN public.documents d
-                ON d.account_id = :account_id
-                AND d.thread_id = t.thread_id
+                ON d.account_id::text = :account_id
+                AND d.thread_id::text = t.thread_id::text
             LEFT JOIN public.messages m
-                ON m.thread_id = t.thread_id
+                ON m.thread_id::text = t.thread_id::text
                 AND m.type IN ('user', 'assistant')
             GROUP BY t.thread_id
         )
@@ -635,8 +635,8 @@ async def embed_thread_with_messages(thread_id: str, account_id: str) -> bool:
             t.name as thread_name,
             p.name as project_name
         FROM threads t
-        LEFT JOIN projects p ON t.project_id = p.project_id
-        WHERE t.thread_id = :thread_id
+        LEFT JOIN projects p ON t.project_id::text = p.project_id::text
+        WHERE t.thread_id::text = :thread_id
         """
 
         thread_rows = await execute(thread_sql, {"thread_id": thread_id})
@@ -654,7 +654,7 @@ async def embed_thread_with_messages(thread_id: str, account_id: str) -> bool:
             type,
             content->>'content' as text_content
         FROM messages
-        WHERE thread_id = :thread_id
+        WHERE thread_id::text = :thread_id
           AND type IN ('user', 'assistant')
           AND content->>'content' IS NOT NULL
           AND content->>'content' != ''

@@ -80,9 +80,9 @@ async def _compute_budget_usage(budget: dict, user_id: str) -> dict:
         "user_id": user_id,
         "start_dt": start_dt.isoformat(),
     }
-    where = "WHERE user_id = :user_id AND recorded_at >= :start_dt"
+    where = "WHERE user_id::text = :user_id AND recorded_at >= :start_dt"
     if budget.get("agent_id"):
-        where += " AND agent_id = :agent_id"
+        where += " AND agent_id::text = :agent_id"
         filters["agent_id"] = budget["agent_id"]
 
     row = await execute_one(
@@ -202,11 +202,11 @@ async def list_costs(
     user_id: str = Depends(verify_and_get_user_id_from_jwt),
 ):
     """Query cost records with optional filters."""
-    where = ["user_id = :user_id"]
+    where = ["user_id::text = :user_id"]
     params: Dict[str, Any] = {"user_id": user_id, "limit": limit}
 
     if agent_id:
-        where.append("agent_id = :agent_id")
+        where.append("agent_id::text = :agent_id")
         params["agent_id"] = agent_id
     if model_name:
         where.append("model_name = :model_name")
@@ -251,7 +251,7 @@ async def get_cost_summary(
           COALESCE(SUM(cost_usd), 0)     AS total_cost_usd,
           COALESCE(SUM(total_tokens), 0) AS total_tokens
         FROM cost_records
-        WHERE user_id = :user_id AND recorded_at >= :since
+        WHERE user_id::text = :user_id AND recorded_at >= :since
         """,
         {"user_id": user_id, "since": since},
     )
@@ -260,7 +260,7 @@ async def get_cost_summary(
         """
         SELECT agent_id, COALESCE(SUM(cost_usd), 0) AS cost_usd
         FROM cost_records
-        WHERE user_id = :user_id AND recorded_at >= :since AND agent_id IS NOT NULL
+        WHERE user_id::text = :user_id AND recorded_at >= :since AND agent_id IS NOT NULL
         GROUP BY agent_id
         ORDER BY cost_usd DESC
         """,
@@ -271,7 +271,7 @@ async def get_cost_summary(
         """
         SELECT model_name, COALESCE(SUM(cost_usd), 0) AS cost_usd
         FROM cost_records
-        WHERE user_id = :user_id AND recorded_at >= :since
+        WHERE user_id::text = :user_id AND recorded_at >= :since
         GROUP BY model_name
         ORDER BY cost_usd DESC
         """,
@@ -282,7 +282,7 @@ async def get_cost_summary(
         """
         SELECT provider, COALESCE(SUM(cost_usd), 0) AS cost_usd
         FROM cost_records
-        WHERE user_id = :user_id AND recorded_at >= :since
+        WHERE user_id::text = :user_id AND recorded_at >= :since
         GROUP BY provider
         ORDER BY cost_usd DESC
         """,
@@ -317,7 +317,7 @@ async def get_cost_trends(
     params: Dict[str, Any] = {"user_id": user_id, "since": since}
     extra = ""
     if agent_id:
-        extra = " AND agent_id = :agent_id"
+        extra = " AND agent_id::text = :agent_id"
         params["agent_id"] = agent_id
 
     rows = await execute(
@@ -327,7 +327,7 @@ async def get_cost_trends(
           COALESCE(SUM(cost_usd), 0)     AS cost_usd,
           COALESCE(SUM(total_tokens), 0) AS tokens
         FROM cost_records
-        WHERE user_id = :user_id AND recorded_at >= :since{extra}
+        WHERE user_id::text = :user_id AND recorded_at >= :since{extra}
         GROUP BY DATE(recorded_at)
         ORDER BY date ASC
         """,
@@ -353,7 +353,7 @@ async def get_budget_alerts(
 ):
     """Return budgets where usage_pct >= alert_threshold_pct."""
     rows = await execute(
-        "SELECT * FROM cost_budgets WHERE user_id = :user_id AND is_active = true",
+        "SELECT * FROM cost_budgets WHERE user_id::text = :user_id AND is_active = true",
         {"user_id": user_id},
     )
     enriched = [await _compute_budget_usage(serialize_row(r), user_id) for r in (rows or [])]
@@ -408,7 +408,7 @@ async def list_budgets(
 ):
     """List all budgets with current usage."""
     rows = await execute(
-        "SELECT * FROM cost_budgets WHERE user_id = :user_id ORDER BY created_at DESC",
+        "SELECT * FROM cost_budgets WHERE user_id::text = :user_id ORDER BY created_at DESC",
         {"user_id": user_id},
     )
     budgets = [serialize_row(r) for r in (rows or [])]
@@ -427,7 +427,7 @@ async def update_budget(
 ):
     """Update a cost budget."""
     existing = await execute_one(
-        "SELECT * FROM cost_budgets WHERE id = :id AND user_id = :user_id",
+        "SELECT * FROM cost_budgets WHERE id = :id AND user_id::text = :user_id",
         {"id": budget_id, "user_id": user_id},
     )
     if not existing:
@@ -448,7 +448,7 @@ async def update_budget(
     row = await execute_one(
         f"""
         UPDATE cost_budgets SET {set_clauses}
-        WHERE id = :id AND user_id = :user_id
+        WHERE id = :id AND user_id::text = :user_id
         RETURNING *
         """,
         updates,
@@ -468,14 +468,14 @@ async def delete_budget(
 ):
     """Delete a cost budget."""
     existing = await execute_one(
-        "SELECT id FROM cost_budgets WHERE id = :id AND user_id = :user_id",
+        "SELECT id FROM cost_budgets WHERE id = :id AND user_id::text = :user_id",
         {"id": budget_id, "user_id": user_id},
     )
     if not existing:
         raise HTTPException(status_code=404, detail="Budget not found")
 
     await execute_mutate(
-        "DELETE FROM cost_budgets WHERE id = :id AND user_id = :user_id",
+        "DELETE FROM cost_budgets WHERE id = :id AND user_id::text = :user_id",
         {"id": budget_id, "user_id": user_id},
     )
     return {"deleted": True, "id": budget_id}

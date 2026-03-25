@@ -127,7 +127,7 @@ async def _compute_agent_metrics(
                 ELSE 0 END AS avg_tokens
         FROM agents a
         LEFT JOIN agent_analytics_daily ad
-            ON ad.agent_id = a.agent_id::text
+            ON ad.agent_id::text = a.agent_id::text
             AND ad.date >= CURRENT_DATE - :interval::interval
         WHERE a.agent_id::text IN ({placeholders})
           AND a.account_id::text = :user_id
@@ -253,7 +253,7 @@ async def list_comparisons(
             """
             SELECT id, user_id, name, agent_ids, metrics, created_at
             FROM agent_comparisons
-            WHERE user_id = :user_id
+            WHERE user_id::text = :user_id
             ORDER BY created_at DESC
             """,
             {"user_id": user_id},
@@ -287,7 +287,7 @@ async def get_comparison(
             """
             SELECT id, user_id, name, agent_ids, metrics, created_at
             FROM agent_comparisons
-            WHERE id = :comparison_id AND user_id = :user_id
+            WHERE id = :comparison_id AND user_id::text = :user_id
             """,
             {"comparison_id": comparison_id, "user_id": user_id},
         )
@@ -299,7 +299,7 @@ async def get_comparison(
             """
             SELECT id, comparison_id, agent_id, metric_name, metric_value, period, captured_at
             FROM agent_comparison_snapshots
-            WHERE comparison_id = :comparison_id
+            WHERE comparison_id::text = :comparison_id
             ORDER BY agent_id, metric_name
             """,
             {"comparison_id": comparison_id},
@@ -345,7 +345,7 @@ async def delete_comparison(
         row = await execute_one(
             """
             DELETE FROM agent_comparisons
-            WHERE id = :comparison_id AND user_id = :user_id
+            WHERE id = :comparison_id AND user_id::text = :user_id
             RETURNING id
             """,
             {"comparison_id": comparison_id, "user_id": user_id},
@@ -426,7 +426,7 @@ async def compare_agents(
                     ELSE 0 END AS avg_cost_per_run,
                 COALESCE(SUM(ad.total_tokens_in) + SUM(ad.total_tokens_out), 0) AS total_tokens
             FROM agents a
-            LEFT JOIN agent_analytics_daily ad ON ad.agent_id = a.agent_id::text
+            LEFT JOIN agent_analytics_daily ad ON ad.agent_id::text = a.agent_id::text
             WHERE a.agent_id::text IN ({placeholders})
               AND a.account_id::text = :user_id
             GROUP BY a.agent_id, a.name

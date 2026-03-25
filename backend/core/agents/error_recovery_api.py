@@ -135,7 +135,7 @@ async def list_playbooks(
             rows = await execute(
                 """
                 SELECT * FROM recovery_playbooks
-                WHERE user_id = :user_id AND error_type = :error_type
+                WHERE user_id::text = :user_id AND error_type = :error_type
                 ORDER BY created_at DESC
                 """,
                 {"user_id": user_id, "error_type": error_type},
@@ -144,7 +144,7 @@ async def list_playbooks(
             rows = await execute(
                 """
                 SELECT * FROM recovery_playbooks
-                WHERE user_id = :user_id
+                WHERE user_id::text = :user_id
                 ORDER BY created_at DESC
                 """,
                 {"user_id": user_id},
@@ -163,7 +163,7 @@ async def get_playbook_stats(request: Request):
 
     try:
         total_row = await execute_one(
-            "SELECT COUNT(*) AS total FROM recovery_playbooks WHERE user_id = :user_id",
+            "SELECT COUNT(*) AS total FROM recovery_playbooks WHERE user_id::text = :user_id",
             {"user_id": user_id},
         )
         total_playbooks = int(total_row["total"]) if total_row else 0
@@ -175,7 +175,7 @@ async def get_playbook_stats(request: Request):
                 COALESCE(SUM(trigger_count), 0) AS total_triggers,
                 COALESCE(SUM(success_count), 0) AS total_successes
             FROM recovery_playbooks
-            WHERE user_id = :user_id AND trigger_count > 0
+            WHERE user_id::text = :user_id AND trigger_count > 0
             """,
             {"user_id": user_id},
         )
@@ -191,7 +191,7 @@ async def get_playbook_stats(request: Request):
             """
             SELECT error_type, COUNT(*) AS cnt
             FROM recovery_playbooks
-            WHERE user_id = :user_id
+            WHERE user_id::text = :user_id
             GROUP BY error_type
             """,
             {"user_id": user_id},
@@ -215,7 +215,7 @@ async def get_playbook(playbook_id: str, request: Request):
 
     try:
         row = await execute_one(
-            "SELECT * FROM recovery_playbooks WHERE id = :id AND user_id = :user_id",
+            "SELECT * FROM recovery_playbooks WHERE id = :id AND user_id::text = :user_id",
             {"id": playbook_id, "user_id": user_id},
         )
         if not row:
@@ -234,7 +234,7 @@ async def update_playbook(playbook_id: str, request: Request):
 
     try:
         existing = await execute_one(
-            "SELECT * FROM recovery_playbooks WHERE id = :id AND user_id = :user_id",
+            "SELECT * FROM recovery_playbooks WHERE id = :id AND user_id::text = :user_id",
             {"id": playbook_id, "user_id": user_id},
         )
         if not existing:
@@ -275,7 +275,7 @@ async def update_playbook(playbook_id: str, request: Request):
             return _serialize_playbook(existing)
 
         row = await execute_one(
-            f"UPDATE recovery_playbooks SET {', '.join(updates)} WHERE id = :id AND user_id = :user_id RETURNING *",
+            f"UPDATE recovery_playbooks SET {', '.join(updates)} WHERE id = :id AND user_id::text = :user_id RETURNING *",
             params,
         )
         return _serialize_playbook(row)
@@ -291,7 +291,7 @@ async def delete_playbook(playbook_id: str, request: Request):
 
     try:
         row = await execute_one(
-            "DELETE FROM recovery_playbooks WHERE id = :id AND user_id = :user_id RETURNING id",
+            "DELETE FROM recovery_playbooks WHERE id = :id AND user_id::text = :user_id RETURNING id",
             {"id": playbook_id, "user_id": user_id},
         )
         if not row:
@@ -310,7 +310,7 @@ async def execute_playbook(playbook_id: str, request: Request):
 
     try:
         playbook = await execute_one(
-            "SELECT * FROM recovery_playbooks WHERE id = :id AND user_id = :user_id",
+            "SELECT * FROM recovery_playbooks WHERE id = :id AND user_id::text = :user_id",
             {"id": playbook_id, "user_id": user_id},
         )
         if not playbook:
@@ -391,7 +391,7 @@ async def list_playbook_executions(playbook_id: str, request: Request):
     try:
         # Verify ownership
         exists = await execute_one(
-            "SELECT id FROM recovery_playbooks WHERE id = :id AND user_id = :user_id",
+            "SELECT id FROM recovery_playbooks WHERE id = :id AND user_id::text = :user_id",
             {"id": playbook_id, "user_id": user_id},
         )
         if not exists:
@@ -400,7 +400,7 @@ async def list_playbook_executions(playbook_id: str, request: Request):
         rows = await execute(
             """
             SELECT * FROM recovery_executions
-            WHERE playbook_id = :playbook_id
+            WHERE playbook_id::text = :playbook_id
             ORDER BY started_at DESC
             LIMIT 100
             """,

@@ -46,7 +46,7 @@ async def list_anomalies(
 ):
     """List usage anomalies with optional filters."""
     try:
-        conditions = ["a.user_id = :user_id"]
+        conditions = ["a.user_id::text = :user_id"]
         params: dict = {"user_id": user_id, "limit": limit, "offset": offset}
 
         if status:
@@ -62,7 +62,7 @@ async def list_anomalies(
             params["severity"] = severity
 
         if agent_id:
-            conditions.append("a.agent_id = :agent_id")
+            conditions.append("a.agent_id::text = :agent_id")
             params["agent_id"] = agent_id
 
         where_clause = " AND ".join(conditions)
@@ -75,7 +75,7 @@ async def list_anomalies(
                 a.deviation_percent, a.status, a.detected_at, a.resolved_at,
                 ag.name AS agent_name
             FROM usage_anomalies a
-            LEFT JOIN agents ag ON ag.agent_id = a.agent_id
+            LEFT JOIN agents ag ON ag.agent_id::text = a.agent_id::text
             WHERE {where_clause}
             ORDER BY a.detected_at DESC
             LIMIT :limit OFFSET :offset
@@ -139,7 +139,7 @@ async def update_anomaly_status(
             f"""
             UPDATE usage_anomalies
             SET {set_clause}
-            WHERE id = :anomaly_id AND user_id = :user_id
+            WHERE id = :anomaly_id AND user_id::text = :user_id
             RETURNING id, user_id, anomaly_type, severity, agent_id,
                       description, current_value, baseline_value,
                       deviation_percent, status, detected_at, resolved_at
@@ -200,7 +200,7 @@ async def run_anomaly_scan(
                     COALESCE(SUM(error_count), 0) AS recent_errors,
                     COALESCE(SUM(token_count), 0) AS recent_tokens
                 FROM quota_usage_daily
-                WHERE user_id = :user_id
+                WHERE user_id::text = :user_id
                   AND date >= (CURRENT_DATE - INTERVAL '1 day')
                 GROUP BY agent_id
             ),
@@ -220,7 +220,7 @@ async def run_anomaly_scan(
                         SUM(error_count) AS daily_errors,
                         SUM(token_count) AS daily_tokens
                     FROM quota_usage_daily
-                    WHERE user_id = :user_id
+                    WHERE user_id::text = :user_id
                       AND date >= (CURRENT_DATE - INTERVAL '8 days')
                       AND date < (CURRENT_DATE - INTERVAL '1 day')
                     GROUP BY agent_id, date
@@ -368,7 +368,7 @@ async def get_anomaly_stats(
             """
             SELECT severity, COUNT(*) AS cnt
             FROM usage_anomalies
-            WHERE user_id = :user_id AND status = 'open'
+            WHERE user_id::text = :user_id AND status = 'open'
             GROUP BY severity
             """,
             {"user_id": user_id},
@@ -385,8 +385,8 @@ async def get_anomaly_stats(
             """
             SELECT a.agent_id, ag.name AS agent_name, COUNT(*) AS anomaly_count
             FROM usage_anomalies a
-            LEFT JOIN agents ag ON ag.agent_id = a.agent_id
-            WHERE a.user_id = :user_id AND a.status = 'open'
+            LEFT JOIN agents ag ON ag.agent_id::text = a.agent_id::text
+            WHERE a.user_id::text = :user_id AND a.status = 'open'
             GROUP BY a.agent_id, ag.name
             ORDER BY anomaly_count DESC
             LIMIT 1
@@ -408,7 +408,7 @@ async def get_anomaly_stats(
                 DATE(detected_at) AS day,
                 COUNT(*) AS count
             FROM usage_anomalies
-            WHERE user_id = :user_id
+            WHERE user_id::text = :user_id
               AND detected_at >= (CURRENT_DATE - INTERVAL '30 days')
             GROUP BY DATE(detected_at)
             ORDER BY day ASC

@@ -69,7 +69,7 @@ async def list_annotations(
     resolved: Optional[bool] = Query(None),
     user_id: str = Depends(verify_and_get_user_id_from_jwt),
 ):
-    conditions = ["thread_id = :thread_id", "user_id = :user_id"]
+    conditions = ["thread_id::text = :thread_id", "user_id::text = :user_id"]
     params: dict = {"thread_id": thread_id, "user_id": user_id}
 
     if annotation_type:
@@ -128,7 +128,7 @@ async def update_annotation(
         f"""
         UPDATE thread_annotations
         SET {set_sql}
-        WHERE id = :annotation_id AND thread_id = :thread_id AND user_id = :user_id
+        WHERE id = :annotation_id AND thread_id::text = :thread_id AND user_id::text = :user_id
         RETURNING *
         """,
         params,
@@ -148,7 +148,7 @@ async def delete_annotation(
     rows = await execute_mutate(
         """
         DELETE FROM thread_annotations
-        WHERE id = :annotation_id AND thread_id = :thread_id AND user_id = :user_id
+        WHERE id = :annotation_id AND thread_id::text = :thread_id AND user_id::text = :user_id
         RETURNING id
         """,
         {"annotation_id": annotation_id, "thread_id": thread_id, "user_id": user_id},
@@ -166,7 +166,7 @@ async def get_recent_annotations(
     rows = await execute(
         """
         SELECT * FROM thread_annotations
-        WHERE user_id = :user_id
+        WHERE user_id::text = :user_id
         ORDER BY created_at DESC
         LIMIT :limit
         """,
@@ -183,7 +183,7 @@ async def get_annotation_summary(
         """
         SELECT annotation_type, COUNT(*) as count
         FROM thread_annotations
-        WHERE user_id = :user_id
+        WHERE user_id::text = :user_id
         GROUP BY annotation_type
         ORDER BY count DESC
         """,
@@ -195,7 +195,7 @@ async def get_annotation_summary(
         """
         SELECT COUNT(*) as count
         FROM thread_annotations
-        WHERE user_id = :user_id AND is_resolved = false
+        WHERE user_id::text = :user_id AND is_resolved = false
         """,
         {"user_id": user_id},
     )
@@ -220,7 +220,7 @@ async def resolve_annotation(
     user_id: str = Depends(verify_and_get_user_id_from_jwt),
 ):
     existing = await execute_one(
-        "SELECT id, is_resolved FROM thread_annotations WHERE id = :id AND user_id = :user_id",
+        "SELECT id, is_resolved FROM thread_annotations WHERE id = :id AND user_id::text = :user_id",
         {"id": annotation_id, "user_id": user_id},
     )
     if not existing:
@@ -233,7 +233,7 @@ async def resolve_annotation(
         f"""
         UPDATE thread_annotations
         SET is_resolved = :is_resolved, resolved_at = {resolved_at_clause}, updated_at = now()
-        WHERE id = :id AND user_id = :user_id
+        WHERE id = :id AND user_id::text = :user_id
         RETURNING *
         """,
         {"id": annotation_id, "user_id": user_id, "is_resolved": new_resolved},
@@ -252,7 +252,7 @@ async def add_annotation_reply(
 ):
     # Verify annotation ownership
     annotation = await execute_one(
-        "SELECT id FROM thread_annotations WHERE id = :id AND user_id = :user_id",
+        "SELECT id FROM thread_annotations WHERE id = :id AND user_id::text = :user_id",
         {"id": annotation_id, "user_id": user_id},
     )
     if not annotation:
@@ -283,7 +283,7 @@ async def list_annotation_replies(
 ):
     # Verify annotation ownership
     annotation = await execute_one(
-        "SELECT id FROM thread_annotations WHERE id = :id AND user_id = :user_id",
+        "SELECT id FROM thread_annotations WHERE id = :id AND user_id::text = :user_id",
         {"id": annotation_id, "user_id": user_id},
     )
     if not annotation:
@@ -292,7 +292,7 @@ async def list_annotation_replies(
     rows = await execute(
         """
         SELECT * FROM annotation_replies
-        WHERE annotation_id = :annotation_id
+        WHERE annotation_id::text = :annotation_id
         ORDER BY created_at ASC
         """,
         {"annotation_id": annotation_id},
@@ -307,9 +307,9 @@ async def get_action_items(
     rows = await execute(
         """
         SELECT a.*,
-            (SELECT COUNT(*) FROM annotation_replies r WHERE r.annotation_id = a.id) AS reply_count
+            (SELECT COUNT(*) FROM annotation_replies r WHERE r.annotation_id::text = a.id::text) AS reply_count
         FROM thread_annotations a
-        WHERE a.user_id = :user_id
+        WHERE a.user_id::text = :user_id
           AND a.annotation_type IN ('action', 'action_item')
           AND a.is_resolved = false
         ORDER BY a.created_at DESC

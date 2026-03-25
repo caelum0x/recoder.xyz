@@ -147,11 +147,11 @@ async def list_incidents(
     """List incidents with optional filters."""
     try:
         # Build dynamic WHERE clauses
-        conditions = ["i.user_id = :user_id"]
+        conditions = ["i.user_id::text = :user_id"]
         params: dict = {"user_id": user_id, "limit": limit, "offset": offset}
 
         if agent_id:
-            conditions.append("i.agent_id = :agent_id")
+            conditions.append("i.agent_id::text = :agent_id")
             params["agent_id"] = agent_id
 
         if status:
@@ -172,7 +172,7 @@ async def list_incidents(
                 i.auto_created, i.created_at, i.resolved_at,
                 a.name AS agent_name
             FROM agent_incidents i
-            LEFT JOIN agents a ON a.agent_id = i.agent_id
+            LEFT JOIN agents a ON a.agent_id::text = i.agent_id::text
             WHERE {where_clause}
             ORDER BY i.created_at DESC
             LIMIT :limit OFFSET :offset
@@ -221,7 +221,7 @@ async def get_incident_stats(
             """
             SELECT severity, COUNT(*) AS cnt
             FROM agent_incidents
-            WHERE user_id = :user_id AND status NOT IN ('resolved', 'dismissed')
+            WHERE user_id::text = :user_id AND status NOT IN ('resolved', 'dismissed')
             GROUP BY severity
             """,
             {"user_id": user_id},
@@ -240,7 +240,7 @@ async def get_incident_stats(
                 EXTRACT(EPOCH FROM (resolved_at - created_at)) / 3600
             ) AS avg_hours
             FROM agent_incidents
-            WHERE user_id = :user_id
+            WHERE user_id::text = :user_id
               AND status = 'resolved'
               AND resolved_at IS NOT NULL
             """,
@@ -255,8 +255,8 @@ async def get_incident_stats(
             """
             SELECT i.agent_id, a.name AS agent_name, COUNT(*) AS incident_count
             FROM agent_incidents i
-            LEFT JOIN agents a ON a.agent_id = i.agent_id
-            WHERE i.user_id = :user_id AND i.status NOT IN ('resolved', 'dismissed')
+            LEFT JOIN agents a ON a.agent_id::text = i.agent_id::text
+            WHERE i.user_id::text = :user_id AND i.status NOT IN ('resolved', 'dismissed')
             GROUP BY i.agent_id, a.name
             ORDER BY incident_count DESC
             LIMIT 5
@@ -302,8 +302,8 @@ async def get_incident(
                 i.auto_created, i.created_at, i.resolved_at,
                 a.name AS agent_name
             FROM agent_incidents i
-            LEFT JOIN agents a ON a.agent_id = i.agent_id
-            WHERE i.id = :incident_id AND i.user_id = :user_id
+            LEFT JOIN agents a ON a.agent_id::text = i.agent_id::text
+            WHERE i.id::text = :incident_id AND i.user_id::text = :user_id
             """,
             {"incident_id": incident_id, "user_id": user_id},
         )
@@ -405,7 +405,7 @@ async def update_incident(
             f"""
             UPDATE agent_incidents
             SET {set_clause}
-            WHERE id = :incident_id AND user_id = :user_id
+            WHERE id = :incident_id AND user_id::text = :user_id
             RETURNING id, user_id, agent_id, run_id, severity, title, description,
                       status, root_cause, resolution, auto_created, created_at, resolved_at
             """,

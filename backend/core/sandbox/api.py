@@ -651,7 +651,7 @@ async def ensure_project_sandbox_active(
 
         if account_id:
             account_user = await execute_one(
-                "SELECT account_role FROM basejump.account_user WHERE user_id = :user_id AND account_id = :account_id",
+                "SELECT account_role FROM basejump.account_user WHERE user_id::text = :user_id AND account_id::text = :account_id",
                 {"user_id": user_id, "account_id": account_id}
             )
             if not account_user:
@@ -715,7 +715,7 @@ async def get_project_sandbox_details(
 
         if account_id:
             account_user = await execute_one(
-                "SELECT account_role FROM basejump.account_user WHERE user_id = :user_id AND account_id = :account_id",
+                "SELECT account_role FROM basejump.account_user WHERE user_id::text = :user_id AND account_id::text = :account_id",
                 {"user_id": user_id, "account_id": account_id}
             )
             if not account_user:
@@ -922,7 +922,7 @@ async def get_project_sandbox_status(
     logger.debug(f"Received sandbox status request for project {project_id}, user_id: {user_id}")
 
     # Auth check (same as existing get_project_sandbox_details)
-    project_data = await execute_one("SELECT * FROM projects WHERE project_id = :pid", {"pid": project_id})
+    project_data = await execute_one("SELECT * FROM projects WHERE project_id::text = :pid", {"pid": project_id})
 
     if not project_data:
         raise HTTPException(status_code=404, detail="Project not found")
@@ -934,7 +934,7 @@ async def get_project_sandbox_status(
         account_id = project_data.get('account_id')
         if account_id:
             account_user = await execute_one(
-                "SELECT account_role FROM basejump.account_user WHERE user_id = :uid AND account_id = :aid",
+                "SELECT account_role FROM basejump.account_user WHERE user_id::text = :uid AND account_id::text = :aid",
                 {"uid": user_id, "aid": account_id}
             )
             if not account_user:
@@ -1037,7 +1037,7 @@ async def start_project_sandbox(
     logger.debug(f"Received sandbox start request for project {project_id}, user_id: {user_id}")
 
     # Auth check
-    project_data = await execute_one("SELECT * FROM projects WHERE project_id = :pid", {"pid": project_id})
+    project_data = await execute_one("SELECT * FROM projects WHERE project_id::text = :pid", {"pid": project_id})
 
     if not project_data:
         raise HTTPException(status_code=404, detail="Project not found")
@@ -1046,7 +1046,7 @@ async def start_project_sandbox(
 
     if account_id:
         account_user = await execute_one(
-            "SELECT account_role FROM basejump.account_user WHERE user_id = :uid AND account_id = :aid",
+            "SELECT account_role FROM basejump.account_user WHERE user_id::text = :uid AND account_id::text = :aid",
             {"uid": user_id, "aid": account_id}
         )
         if not account_user:
@@ -1157,7 +1157,7 @@ async def get_sandbox_status_by_id(
             config = resource.get('config', {})
             # Try to find the project
             project_row = await execute_one(
-                "SELECT project_id FROM projects WHERE sandbox_resource_id = :rid",
+                "SELECT project_id FROM projects WHERE sandbox_resource_id::text = :rid",
                 {"rid": resource['id']}
             )
             if project_row:
@@ -1269,7 +1269,7 @@ async def stop_project_sandbox(
     logger.debug(f"Received sandbox stop request for project {project_id}, user_id: {user_id}")
 
     # Auth check
-    project_data = await execute_one("SELECT * FROM projects WHERE project_id = :pid", {"pid": project_id})
+    project_data = await execute_one("SELECT * FROM projects WHERE project_id::text = :pid", {"pid": project_id})
 
     if not project_data:
         raise HTTPException(status_code=404, detail="Project not found")
@@ -1278,7 +1278,7 @@ async def stop_project_sandbox(
 
     if account_id:
         account_user = await execute_one(
-            "SELECT account_role FROM basejump.account_user WHERE user_id = :uid AND account_id = :aid",
+            "SELECT account_role FROM basejump.account_user WHERE user_id::text = :uid AND account_id::text = :aid",
             {"uid": user_id, "aid": account_id}
         )
         if not account_user:
@@ -1338,7 +1338,7 @@ async def create_file_in_project(
     path = normalize_path(path)
 
     # Find the project and verify user has access
-    project_data = await execute_one("SELECT * FROM projects WHERE project_id = :pid", {"pid": project_id})
+    project_data = await execute_one("SELECT * FROM projects WHERE project_id::text = :pid", {"pid": project_id})
 
     if not project_data:
         logger.error(f"Project not found: {project_id}")
@@ -1349,7 +1349,7 @@ async def create_file_in_project(
     # Verify user has access to this project
     if account_id:
         account_user = await execute_one(
-            "SELECT account_role FROM basejump.account_user WHERE user_id = :uid AND account_id = :aid",
+            "SELECT account_role FROM basejump.account_user WHERE user_id::text = :uid AND account_id::text = :aid",
             {"uid": user_id, "aid": account_id}
         )
         if not account_user:
@@ -2620,7 +2620,7 @@ async def get_sandbox_pool_stats(
     try:
         # Check if user is admin
         rows = await execute_read(
-            "SELECT account_role FROM basejump.account_user WHERE user_id = :user_id",
+            "SELECT account_role FROM basejump.account_user WHERE user_id::text = :user_id",
             {"user_id": user_id}
         )
         is_admin = any(r.get('account_role') == 'owner' for r in rows)
@@ -2672,7 +2672,7 @@ async def trigger_pool_replenish(
     try:
         # Check if user is admin
         rows = await execute_read(
-            "SELECT account_role FROM basejump.account_user WHERE user_id = :user_id",
+            "SELECT account_role FROM basejump.account_user WHERE user_id::text = :user_id",
             {"user_id": user_id}
         )
         is_admin = any(r.get('account_role') == 'owner' for r in rows)

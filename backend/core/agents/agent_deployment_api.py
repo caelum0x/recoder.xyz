@@ -156,7 +156,7 @@ async def list_slots(
         rows = await execute(
             """
             SELECT * FROM agent_deployment_slots
-            WHERE agent_id = :agent_id AND user_id = :user_id
+            WHERE agent_id::text = :agent_id AND user_id::text = :user_id
             ORDER BY
                 CASE slot_name
                     WHEN 'production' THEN 1
@@ -190,7 +190,7 @@ async def promote_slot(
         staging = await execute_one(
             """
             SELECT * FROM agent_deployment_slots
-            WHERE agent_id = :agent_id AND user_id = :user_id AND slot_name = 'staging'
+            WHERE agent_id::text = :agent_id AND user_id::text = :user_id AND slot_name = 'staging'
             """,
             {"agent_id": agent_id, "user_id": user_id},
         )
@@ -202,7 +202,7 @@ async def promote_slot(
         production = await execute_one(
             """
             SELECT * FROM agent_deployment_slots
-            WHERE agent_id = :agent_id AND user_id = :user_id AND slot_name = 'production'
+            WHERE agent_id::text = :agent_id AND user_id::text = :user_id AND slot_name = 'production'
             """,
             {"agent_id": agent_id, "user_id": user_id},
         )
@@ -299,7 +299,7 @@ async def rollback_slot(
         rollback = await execute_one(
             """
             SELECT * FROM agent_deployment_slots
-            WHERE agent_id = :agent_id AND user_id = :user_id AND slot_name = 'rollback'
+            WHERE agent_id::text = :agent_id AND user_id::text = :user_id AND slot_name = 'rollback'
             """,
             {"agent_id": agent_id, "user_id": user_id},
         )
@@ -311,7 +311,7 @@ async def rollback_slot(
         production = await execute_one(
             """
             SELECT * FROM agent_deployment_slots
-            WHERE agent_id = :agent_id AND user_id = :user_id AND slot_name = 'production'
+            WHERE agent_id::text = :agent_id AND user_id::text = :user_id AND slot_name = 'production'
             """,
             {"agent_id": agent_id, "user_id": user_id},
         )
@@ -394,7 +394,7 @@ async def update_traffic(
             """
             UPDATE agent_deployment_slots
             SET traffic_percent = :traffic_percent
-            WHERE agent_id = :agent_id AND user_id = :user_id AND slot_name = :slot_name
+            WHERE agent_id::text = :agent_id AND user_id::text = :user_id AND slot_name = :slot_name
             RETURNING *
             """,
             {
@@ -432,7 +432,7 @@ async def get_deployment_history(
         rows = await execute(
             """
             SELECT * FROM deployment_history
-            WHERE agent_id = :agent_id AND user_id = :user_id
+            WHERE agent_id::text = :agent_id AND user_id::text = :user_id
             ORDER BY created_at DESC
             LIMIT :limit
             """,
