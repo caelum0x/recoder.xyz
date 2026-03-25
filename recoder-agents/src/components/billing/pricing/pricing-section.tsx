@@ -968,7 +968,7 @@ interface PricingSectionProps {
 }
 
 export function PricingSection({
-  returnUrl = typeof window !== 'undefined' ? window.location.href : '/',
+  returnUrl = '/dashboard',
   showTitleAndTabs = true,
   hideFree = false,
   insideDialog = false,

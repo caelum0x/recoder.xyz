@@ -103,7 +103,10 @@ export function AgentStartInput({
   );
   
   const canCreateThread = accountState?.limits?.threads?.can_create || false;
-  const isDismissed = typeof window !== 'undefined' && sessionStorage.getItem('threadLimitAlertDismissed') === 'true';
+  const [isDismissed, setIsDismissed] = React.useState(false);
+  React.useEffect(() => {
+    setIsDismissed(sessionStorage.getItem('threadLimitAlertDismissed') === 'true');
+  }, []);
   const threadLimitExceeded = !isAccountStateLoading && !canCreateThread && !isDismissed;
   
   const dailyCreditsInfo = accountState?.credits.daily_refresh;

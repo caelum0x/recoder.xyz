@@ -20,7 +20,7 @@ export const AgentCountLimitDialog: React.FC<AgentCountLimitDialogProps> = ({
   limit,
   tierName,
 }) => {
-  const returnUrl = typeof window !== 'undefined' ? window.location.href : '/';
+  const returnUrl = '/dashboard';
 
   const getNextTierRecommendation = () => {
     if (tierName === 'free' || tierName === 'none') {

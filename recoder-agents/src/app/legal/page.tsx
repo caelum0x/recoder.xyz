@@ -155,14 +155,14 @@ function LegalContent() {
                         Terms of Service
                       </h2>
                       <p className="text-sm text-muted-foreground mb-6">
-                        Last updated: {new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}
+                        Last updated: March 26, 2026
                       </p>
 
                       <h3 className="text-lg font-medium tracking-tight">
                         Terms of Service & Privacy Policy
                       </h3>
                       <p className="text-muted-foreground text-balance mb-4">
-                        Last updated and effective date: {new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}
+                        Last updated and effective date: March 26, 2026
                       </p>
 
                       <p className="text-muted-foreground text-balance mb-6">
@@ -1527,7 +1527,7 @@ function LegalContent() {
                         Privacy Policy
                       </h2>
                       <p className="text-sm text-muted-foreground mb-6">
-                        Last updated: {new Date().toLocaleDateString()}
+                        Last updated: March 26, 2026
                       </p>
 
                       <h3 className="text-lg font-medium tracking-tight">

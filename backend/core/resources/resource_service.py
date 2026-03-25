@@ -65,8 +65,8 @@ class ResourceService:
     async def get_resource_by_id(self, resource_id: str) -> Optional[Dict[str, Any]]:
         """Get a resource by its ID."""
         return await execute_one(
-            "SELECT * FROM resources WHERE id = :resource_id LIMIT 1",
-            {"resource_id": resource_id},
+            "SELECT * FROM resources WHERE id::text = :resource_id LIMIT 1",
+            {"resource_id": str(resource_id)},
         )
     
     async def get_resource_by_external_id(
@@ -104,7 +104,7 @@ class ResourceService:
             status: Optional filter by status
         """
         params: Dict[str, Any] = {"account_id": account_id}
-        sql = "SELECT * FROM resources WHERE account_id = :account_id"
+        sql = "SELECT * FROM resources WHERE account_id::text = :account_id"
         if resource_type:
             sql += " AND type = :resource_type"
             params["resource_type"] = resource_type.value
@@ -149,7 +149,7 @@ class ResourceService:
             f"""
             UPDATE resources
             SET {", ".join(updates)}
-            WHERE id = :resource_id
+            WHERE id::text = :resource_id
             RETURNING *
             """,
             params,
@@ -160,17 +160,17 @@ class ResourceService:
 
         logger.debug(f"Updated resource {resource_id}")
         return rows[0]
-    
+
     async def update_last_used(self, resource_id: str) -> None:
         """Update the last_used_at timestamp for a resource."""
         await execute_mutate(
             """
             UPDATE resources
             SET last_used_at = :last_used_at, updated_at = :updated_at
-            WHERE id = :resource_id
+            WHERE id::text = :resource_id
             """,
             {
-                "resource_id": resource_id,
+                "resource_id": str(resource_id),
                 "last_used_at": datetime.now(timezone.utc),
                 "updated_at": datetime.now(timezone.utc),
             },
@@ -213,7 +213,7 @@ class ResourceService:
             """
             SELECT sandbox_resource_id
             FROM projects
-            WHERE project_id = :project_id
+            WHERE project_id::text = :project_id
             LIMIT 1
             """,
             {"project_id": project_id},
@@ -248,7 +248,7 @@ class ResourceService:
             """
             UPDATE projects
             SET sandbox_resource_id = :resource_id, updated_at = :updated_at
-            WHERE project_id = :project_id
+            WHERE project_id::text = :project_id
             RETURNING project_id
             """,
             {
@@ -282,7 +282,7 @@ class ResourceService:
                 """
                 SELECT project_id, account_id, sandbox_resource_id
                 FROM projects
-                WHERE project_id = :project_id
+                WHERE project_id::text = :project_id
                 LIMIT 1
                 """,
                 {"project_id": project_id},
@@ -293,18 +293,18 @@ class ResourceService:
 
             sandbox_resource_id = project_data.get('sandbox_resource_id')
             account_id = project_data.get('account_id')
-            
+
             # If already migrated, nothing to do
             if sandbox_resource_id:
                 return None
-            
+
             # Try to get sandbox JSONB data (column only exists in production)
             try:
                 sandbox_row = await execute_one(
                     """
                     SELECT sandbox
                     FROM projects
-                    WHERE project_id = :project_id
+                    WHERE project_id::text = :project_id
                     LIMIT 1
                     """,
                     {"project_id": project_id},
@@ -440,7 +440,7 @@ class ResourceService:
                 status = :active_status,
                 updated_at = :updated_at,
                 pooled_at = NULL
-            WHERE id = :resource_id
+            WHERE id::text = :resource_id
               AND status = :pooled_status
             RETURNING *
             """,
@@ -448,7 +448,7 @@ class ResourceService:
                 "account_id": account_id,
                 "active_status": ResourceStatus.ACTIVE.value,
                 "updated_at": now,
-                "resource_id": resource_id,
+                "resource_id": str(resource_id),
                 "pooled_status": ResourceStatus.POOLED.value,
             },
         )

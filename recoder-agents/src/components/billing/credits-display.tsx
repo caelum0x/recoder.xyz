@@ -83,7 +83,7 @@ export function CreditsDisplay() {
       <PlanSelectionModal
         open={showPlanModal}
         onOpenChange={handleModalClose}
-        returnUrl={typeof window !== 'undefined' ? window.location.href : '/'}
+        returnUrl={'/dashboard'}
       />
     </>
   );
