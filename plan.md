@@ -3,6 +3,9 @@
 Last updated: 2026-03-26 01:00 (T16 — Fix sandbox/status 500, pipeline RLS 404, PM insights 500, agency crash, agents hydration)
 
 ## CRITICAL SYSTEMIC ISSUE
+❯ Processing Failed                                                                                                                          
+  Failed to process image: Replicate API token not configured. Add REPLICATE_API_TOKEN to your .env agents image ivideo slides excel
+  powerpoint and coding not work agents only chat and search works and search only works like 5 first links on internet    
 
 ~~**298 database tables. Hundreds of `_id` columns are `text` instead of `uuid`.**~~ **RESOLVED T14**: Comprehensive sweep added `::text` casts to ~2,014 WHERE/AND clauses and ~44 JOIN conditions across 219 Python files. All uuid/text comparison errors eliminated at the query level.
 
@@ -412,8 +415,9 @@ Sandbox access checks may still fail for some combinations.
 ---
 
 ### RESOLVED T16 (2026-03-26) — 5 fixes
-- **sandbox/status 500**: Added `str()` casts for UUID params, isolated Daytona API errors, guarded None sandbox_id. Also fixed `::text` casts in pool_repo.py, db.py Table helpers, resource_service.py.
-- **Pipeline RLS 404**: Dropped `auth.uid()` policies and disabled RLS on `agent_pipelines` + `pipeline_runs`. Migration: `20260326000000_fix_pipeline_rls.sql`.
+- **sandbox/status 500**: Added `str()` casts for UUID params in sandbox/api.py, isolated Daytona API errors, guarded None sandbox_id. Also fixed `::text` casts in pool_repo.py, db.py Table helpers, resource_service.py.
+- **Pipeline RLS 404**: Dropped `auth.uid()` policies and disabled RLS on `agent_pipelines` + `pipeline_runs`. Migration: `20260326000000_fix_pipeline_rls.sql`. Needs to be run on production DB.
 - **PM insights/chat 500**: Fixed TypeError — TipTap JSON `.slice()` crash. Added `feedbackContentPreview()` helper with `.catch()` on all DB queries.
 - **Agency crash**: Fixed `@recoder/storage` and `@recoder/vault` resolution — tsconfig wildcard was intercepting workspace package imports. Added explicit path overrides.
-- **Agents React #418**: Added `suppressHydrationWarning` on body tag, presence-provider error resilience.                      
+- **Agents React #418**: Added `suppressHydrationWarning` on body tag, presence-provider error resilience.
+- **OpenClaw gateway**: Error is `gateway token mismatch` (not pairing). Token in UI matches docker-compose env var but gateway rejects it. Needs server-side investigation of actual running config vs stored token.
