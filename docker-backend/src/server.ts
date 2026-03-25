@@ -5354,53 +5354,8 @@ app.ws('/terminal/:projectId', async (ws: WebSocket, req: express.Request) => {
   const terminalRateLimiter = getWsRateLimiter('terminal');
   terminalRateLimiter.track(ws as any);
 
-  let entry = containers.get(projectId);
-
-  // Try to recover container from Docker if not in memory (after backend restart)
-  if (!entry) {
-    logger.info({ projectId }, 'Terminal: container not in memory, attempting recovery');
-    try {
-      // Add timeout to listContainers (10 seconds) to prevent blocking
-      const allContainers = await withTimeout(
-        docker.listContainers({ all: false }),
-        10000,
-        'docker.listContainers'
-      );
-      for (const containerInfo of allContainers) {
-        const volumes = Object.keys(containerInfo.Mounts?.reduce((acc: any, m: any) => {
-          if (m.Name) acc[m.Name] = true;
-          return acc;
-        }, {}) || {});
-
-        if (volumes.some(v => v.includes(`recoder-${projectId}`))) {
-          const ports = containerInfo.Ports || [];
-          let basePort = 0;
-          let ptyPort = 0;
-
-          for (const p of ports) {
-            if (p.PrivatePort === 3000 && p.PublicPort) basePort = p.PublicPort;
-            if (p.PrivatePort === 5173 && p.PublicPort && !basePort) basePort = p.PublicPort - 1;
-            if (p.PrivatePort === 9999 && p.PublicPort) ptyPort = p.PublicPort;
-          }
-
-          if (basePort > 0) {
-            entry = {
-              id: containerInfo.Id,
-              lastActive: Date.now(),
-              port: basePort,
-              ptyPort: ptyPort || basePort + 3,
-              backgroundDev: false
-            };
-            containers.set(projectId, entry);
-            logger.info({ projectId, containerId: containerInfo.Id.slice(0, 12) }, 'Terminal: recovered container');
-            break;
-          }
-        }
-      }
-    } catch (err: any) {
-      logger.error({ err, projectId }, 'Terminal: recovery failed');
-    }
-  }
+  // Use centralized recovery that handles both Docker and Daytona sandboxes
+  let entry = await getOrRecoverContainer(projectId);
 
   if (!entry) {
     wsKeepalive.closeWithHint(ws as any, 'container_not_found', 'Container not found for this project', 1008);
