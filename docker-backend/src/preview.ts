@@ -7,6 +7,7 @@ import type { Express } from 'express';
 import http from 'http';
 import Docker from 'dockerode';
 import { devServerManager } from './dev-server.js';
+import { getDaytonaClient } from './daytona-client.js';
 
 const docker = new Docker();
 const autoStartAttempts = new Map<string, number>();
@@ -30,9 +31,16 @@ async function execInContainer(containerId: string, cmd: string): Promise<string
   });
 }
 
-async function detectFramework(containerId: string): Promise<string> {
+async function detectFramework(containerId: string, isDaytona?: boolean): Promise<string> {
   try {
-    const pkgRaw = await execInContainer(containerId, 'cat /workspace/package.json 2>/dev/null || echo ""');
+    let pkgRaw: string;
+    if (isDaytona) {
+      const dc = getDaytonaClient();
+      const result = await dc.execCommand(containerId, 'cat /home/daytona/package.json 2>/dev/null || echo ""', { timeoutSecs: 10 });
+      pkgRaw = result.output;
+    } else {
+      pkgRaw = await execInContainer(containerId, 'cat /workspace/package.json 2>/dev/null || echo ""');
+    }
     if (!pkgRaw) return 'vite';
     let pkg: Record<string, any>;
     try {
@@ -50,10 +58,33 @@ async function detectFramework(containerId: string): Promise<string> {
   return 'vite';
 }
 
-async function ensureDependencies(containerId: string, projectId: string): Promise<void> {
+async function ensureDependencies(containerId: string, projectId: string, isDaytona?: boolean): Promise<void> {
   const now = Date.now();
   const lastInstall = autoInstallAttempts.get(projectId) || 0;
   if (now - lastInstall < AUTO_INSTALL_COOLDOWN_MS) {
+    return;
+  }
+
+  if (isDaytona) {
+    const dc = getDaytonaClient();
+    const pkgResult = await dc.execCommand(containerId, 'cat /home/daytona/package.json 2>/dev/null || echo ""', { timeoutSecs: 10 });
+    if (!pkgResult.output) {
+      console.log(`⚠️ [Preview] package.json not found yet for ${projectId} (Daytona), skipping install`);
+      return;
+    }
+
+    const nmResult = await dc.execCommand(containerId, 'test -d /home/daytona/node_modules && echo "yes" || echo "no"', { timeoutSecs: 10 });
+    if (nmResult.output.includes('yes')) {
+      return;
+    }
+
+    autoInstallAttempts.set(projectId, now);
+    console.log(`📦 [Preview] Installing dependencies for ${projectId} (Daytona)...`);
+    await dc.execCommand(
+      containerId,
+      'cd /home/daytona && npm install --legacy-peer-deps --no-audit --no-fund',
+      { timeoutSecs: 120 }
+    );
     return;
   }
 
@@ -351,13 +382,57 @@ export function setupPreviewProxy(app: Express, containers: Map<string, { id: st
       entry.lastActive = Date.now();
     }
 
-    // Daytona preview: if container has a Daytona preview URL, redirect to it
-    // This MUST be checked BEFORE trying local ports (Daytona sandboxes are remote)
-    // The health check may have updated daytonaPreviewUrl to the correct port (e.g. 5173 for Vite)
+    // Daytona preview: if container has a Daytona preview URL, try to reach it
+    // If the dev server is running, redirect. If not, auto-start it.
     const daytonaUrl = (entry as any).daytonaPreviewUrl;
+    const isDaytona = !!(entry as any).daytona || !!daytonaUrl;
     if (daytonaUrl) {
-      console.log(`[Preview] Daytona preview redirect for ${projectId}: ${daytonaUrl}`);
-      return res.redirect(daytonaUrl);
+      // Quick health check via internal curl (avoids OIDC redirect issues)
+      let daytonaServerReady = false;
+      try {
+        const dc = getDaytonaClient();
+        const curlResult = await dc.execCommand(
+          entry.id,
+          'curl -sf http://localhost:3000 > /dev/null 2>&1 && echo "READY" || curl -sf http://localhost:5173 > /dev/null 2>&1 && echo "READY" || echo "NOTREADY"',
+          { timeoutSecs: 5 },
+        );
+        daytonaServerReady = curlResult.output.includes('READY');
+      } catch {
+        // exec failed — sandbox may be stopped or unreachable
+      }
+
+      if (daytonaServerReady) {
+        console.log(`[Preview] Daytona preview ready, redirecting for ${projectId}: ${daytonaUrl}`);
+        return res.redirect(daytonaUrl);
+      }
+
+      // Dev server not running — try to auto-start
+      console.log(`[Preview] Daytona dev server not ready for ${projectId}, attempting auto-start...`);
+      const now = Date.now();
+      const lastAttempt = autoStartAttempts.get(projectId) || 0;
+      if (now - lastAttempt > AUTO_START_COOLDOWN_MS && !devServerManager.isRunning(projectId)) {
+        autoStartAttempts.set(projectId, now);
+        try {
+          await ensureDependencies(entry.id, projectId, true);
+          const framework = await detectFramework(entry.id, true);
+          console.log(`[Preview] Auto-starting Daytona dev server for ${projectId} (${framework})`);
+          const ports = [3001, 3000, 3004, 3005, 3002]; // standard Daytona port set
+          await devServerManager.start(entry.id, projectId, framework, ports, {
+            daytona: true,
+            daytonaPreviewUrl: daytonaUrl,
+          });
+        } catch (err) {
+          console.warn(`[Preview] Daytona auto-start failed for ${projectId}:`, err);
+        }
+      }
+
+      // Show building page — auto-refreshes until server is ready
+      const errorInfo = devServerManager.getErrorInfo(projectId);
+      return res.status(503).send(friendlyPreviewPage(
+        projectId,
+        'The preview server is starting. This page will auto-refresh when ready.',
+        { showLogs: true, errorDetails: errorInfo.errors, canRetry: true }
+      ));
     }
 
     // Check ports in order: Vite (5173), Next.js (3000), Expo (8081), Expo legacy (19006), Other (8080)
@@ -386,8 +461,8 @@ export function setupPreviewProxy(app: Express, containers: Map<string, { id: st
       if (now - lastAttempt > AUTO_START_COOLDOWN_MS && !devServerManager.isRunning(projectId)) {
         autoStartAttempts.set(projectId, now);
         try {
-          await ensureDependencies(entry.id, projectId);
-          const framework = await detectFramework(entry.id);
+          await ensureDependencies(entry.id, projectId, false);
+          const framework = await detectFramework(entry.id, false);
           console.log(`[Preview] Auto-starting dev server for ${projectId} (${framework})`);
           await devServerManager.start(entry.id, projectId, framework, basePorts);
         } catch (err) {
@@ -608,20 +683,42 @@ export function setupPreviewProxy(app: Express, containers: Map<string, { id: st
   app.get('/api/preview/:projectId/health', async (req, res) => {
     let entry = containers.get(req.params.projectId);
     if (!entry) {
+      // Try Docker recovery first, then Daytona recovery
       entry = await recoverContainerFromDocker(req.params.projectId, containers);
+      if (!entry && process.env.USE_DAYTONA_CONTAINERS === 'true') {
+        try {
+          const dc = getDaytonaClient();
+          const sandboxes = await dc.listSandboxes();
+          const match = sandboxes.find((s: any) => s.labels?.projectId === req.params.projectId);
+          if (match) {
+            const previewUrl = dc.getPreviewUrl(match.id, 3000);
+            entry = {
+              id: match.id,
+              port: 3000,
+              ptyPort: 0,
+              lastActive: Date.now(),
+              daytona: true,
+              daytonaPreviewUrl: previewUrl,
+            } as any;
+            containers.set(req.params.projectId, entry);
+          }
+        } catch (e) {
+          // Daytona recovery failed, continue to 404
+        }
+      }
     }
     if (!entry) {
       return res.status(404).json({ error: 'Container not found' });
     }
 
-    // For Daytona sandboxes, check multiple common dev server ports
+    // For Daytona sandboxes, check multiple common dev server ports via internal curl
     const daytonaUrl = (entry as any)?.daytonaPreviewUrl;
     if (daytonaUrl) {
       // Extract sandboxId from preview URL pattern: https://{port}-{sandboxId}.sandbox.recoder.xyz
       const urlMatch = daytonaUrl.match(/^https?:\/\/\d+-([^.]+)\./);
       const sandboxId = urlMatch?.[1] || entry.id;
 
-      // Check multiple ports: Vite (5173), Next.js (3000), Expo (8081), Other (8080)
+      // Check multiple ports using internal curl inside the sandbox (avoids OIDC redirect issues)
       const portsToCheck = [
         { port: 5173, type: 'Vite (5173)' },
         { port: 3000, type: 'Next.js (3000)' },
@@ -629,27 +726,23 @@ export function setupPreviewProxy(app: Express, containers: Map<string, { id: st
         { port: 8080, type: 'Other (8080)' },
       ];
 
-      const prevRejectUnauthorized = process.env.NODE_TLS_REJECT_UNAUTHORIZED;
-      process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
-
       try {
-        const portResults = await Promise.all(
-          portsToCheck.map(async ({ port, type }) => {
-            const portUrl = `https://${port}-${sandboxId}.sandbox.recoder.xyz`;
-            try {
-              const ctrl = new AbortController();
-              const to = setTimeout(() => ctrl.abort(), 3000);
-              const resp = await fetch(portUrl, { method: 'HEAD', signal: ctrl.signal }).catch(() => null);
-              clearTimeout(to);
-              const responding = resp !== null && resp.status < 500;
-              return { port, responding, type, url: portUrl };
-            } catch {
-              return { port, responding: false, type, url: portUrl };
-            }
-          })
-        );
+        const dc = getDaytonaClient();
+        // Check all ports with a single exec call for efficiency
+        // Each check is in a subshell with ; separator so all checks run
+        const curlCmd = portsToCheck.map(({ port }) =>
+          `(curl -sf http://localhost:${port} > /dev/null 2>&1 && echo ${port}:HTTPOK || echo ${port}:FAIL)`
+        ).join('; ');
 
-        process.env.NODE_TLS_REJECT_UNAUTHORIZED = prevRejectUnauthorized ?? '1';
+        const curlResult = await dc.execCommand(entry.id, curlCmd, { timeoutSecs: 10 });
+        const output = curlResult.output.trim();
+
+        const portResults = portsToCheck.map(({ port, type }) => {
+          const portUrl = `https://${port}-${sandboxId}.sandbox.recoder.xyz`;
+          // Check if port responded successfully (contains HTTPOK marker)
+          const responding = output.includes(`${port}:HTTPOK`);
+          return { port, responding, type, url: portUrl };
+        });
 
         // Find the first responding port and update stored preview URL if different
         const respondingResult = portResults.find(r => r.responding);
@@ -665,7 +758,6 @@ export function setupPreviewProxy(app: Express, containers: Map<string, { id: st
           ports: portResults.map(({ port, responding, type }) => ({ port, responding, type })),
         });
       } catch (_e) {
-        process.env.NODE_TLS_REJECT_UNAUTHORIZED = prevRejectUnauthorized ?? '1';
         return res.json({
           projectId: req.params.projectId,
           daytona: true,

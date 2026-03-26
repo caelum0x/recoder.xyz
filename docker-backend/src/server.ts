@@ -75,6 +75,7 @@ import { domainRouter } from './public-api/routes/domains.js';
 import { a2aRouter, getDockerBackendAgentCard } from './a2a-gateway.js';
 import { openclawAdapterRouter } from './a2a-openclaw-adapter.js';
 import { taskLifecycleRouter, collaborationRouter, heartbeatRouter, getHeartbeatTracker, agentRegistryRouter, sseStreamRouter, wireA2AEventBridge, connectorHealthRouter, claudeConnectorRouter, codexConnectorRouter, cursorConnectorRouter, windsurfConnectorRouter, replitConnectorRouter, contextBridgeRouter, a2aOpenApiRouter, a2aSloMetricsRouter, getA2ASloMetrics, restAdapterRouter, gitAdapterRouter, orchestrationRouter, workflowMessagingRouter, adminRouter, getIntegrationWiringService, disposeTaskLifecycleService } from './a2a/index.js';
+import { workspaceRouter as a2aWorkspaceRouter } from './a2a/workspace.routes.js';
 import { patternRouter } from './a2a/patterns/index.js';
 import { approvalRouter } from './policy/index.js';
 import { startA2AIntentWorker } from './a2a-intent-worker.js';
@@ -1567,6 +1568,44 @@ app.use((req: express.Request, res: express.Response, next: express.NextFunction
 // Daytona sandboxes are stored with daytona: true so all file/exec routes can route correctly
 const containers = new Map<string, ContainerEntry>();
 
+// ── Container map persistence (survives docker-backend restarts) ──
+import { loadStore, debouncedSave } from './persistence.js';
+
+function persistContainers(): void {
+  const data: Record<string, Partial<ContainerEntry>> = {};
+  for (const [k, v] of containers.entries()) {
+    // Explicitly pick serializable fields to avoid circular references
+    data[k] = {
+      id: v.id,
+      lastActive: v.lastActive,
+      port: v.port,
+      ptyPort: v.ptyPort,
+      backgroundDev: v.backgroundDev,
+      userId: v.userId,
+      daytona: (v as any).daytona,
+      daytonaPreviewUrl: (v as any).daytonaPreviewUrl,
+    };
+  }
+  debouncedSave('containers', data, 500);
+}
+
+// Restore containers from disk on startup
+try {
+  const saved = loadStore<Record<string, ContainerEntry>>('containers', {});
+  let restored = 0;
+  for (const [projectId, entry] of Object.entries(saved)) {
+    if (entry && entry.id) {
+      containers.set(projectId, { ...entry, lastActive: Date.now() });
+      restored++;
+    }
+  }
+  if (restored > 0) {
+    logger.info({ restored }, 'Restored container mappings from disk');
+  }
+} catch (e) {
+  logger.warn({ err: e }, 'Failed to restore container mappings');
+}
+
 /**
  * Get container entry, auto-recovering from Daytona if the in-memory mapping
  * was lost (e.g., docker-backend restart). Queries Daytona for sandboxes
@@ -1601,6 +1640,8 @@ async function getOrRecoverContainer(projectId: string): Promise<ContainerEntry 
       daytonaPreviewUrl: previewUrl,
     };
     containers.set(projectId, entry);
+    daytonaSandboxIds.add(match.id);
+    persistContainers();
     logger.info({ projectId, sandboxId: match.id }, 'Auto-recovered container mapping from Daytona');
     return entry;
   } catch (err: any) {
@@ -1742,6 +1783,13 @@ const daytonaSandboxIds = new Set<string>();
 // Expose to git-operations.ts (avoids circular import)
 (global as any).__daytonaSandboxIds = daytonaSandboxIds;
 
+// Populate daytonaSandboxIds from restored container entries
+for (const [, entry] of containers.entries()) {
+  if (entry.daytona && entry.id) {
+    daytonaSandboxIds.add(entry.id);
+  }
+}
+
 async function execInContainer(containerId: string, cmd: string): Promise<string> {
   // Route through Daytona toolbox exec if this is a known sandbox
   if (daytonaSandboxIds.has(containerId)) {
@@ -1847,6 +1895,7 @@ async function ensureContainerRunning(
         unregisterUserContainer(entry.userId, projectId);
       }
       containers.delete(projectId);
+      persistContainers();
       releasePorts(entry.port, entry.ptyPort);
     }
 
@@ -2494,6 +2543,7 @@ app.post('/api/container', containerLimiter, optionalAuthenticateRequest, flexib
         daytonaSandboxIds.add(sandbox.id);
         registerDaytonaId(sandbox.id);
         registerUserContainer(userId, projectId);
+        persistContainers();
         logger.info({ sandboxId: sandbox.id, projectId, previewUrl }, 'Daytona sandbox created for web IDE');
         return res.json({
           containerId: sandbox.id,
@@ -2875,6 +2925,7 @@ app.post('/api/container', containerLimiter, optionalAuthenticateRequest, flexib
         // Register container with user tracking
         containers.set(projectId, { id: resolvedContainerId, lastActive: Date.now(), port: resolvedHostPort, ptyPort: resolvedPtyPort, backgroundDev: false, userId });
         registerUserContainer(userId, projectId);
+        persistContainers();
 
         // Track container in metering system
         try {
@@ -3022,6 +3073,7 @@ app.delete('/api/container/:projectId', optionalAuthenticateRequest, flexiblePro
       unregisterUserContainer(entry.userId, projectId);
     }
     containers.delete(projectId);
+    persistContainers();
 
     res.json({ success: true });
   } catch (err: any) {
@@ -3837,9 +3889,12 @@ app.get('/api/files/:projectId', authenticateRequest, verifyProjectOwnership, as
     entry.lastActive = Date.now();
 
     if (isDaytonaSandbox(entry)) {
-      // Daytona sandbox — list files via toolbox exec
-      const files = await daytonaListFiles(entry.id, safePath);
-      return res.json({ files });
+      // Daytona sandbox — translate /workspace → /home/daytona for Daytona's filesystem
+      const daytonaPath = safePath.replace(/^\/workspace/, '/home/daytona');
+      const files = await daytonaListFiles(entry.id, daytonaPath);
+      // Translate paths back to /workspace/ so the frontend can strip them consistently
+      const normalizedFiles = files.map(f => f.replace(/^\/home\/daytona\//, '/workspace/').replace(/^\/home\/daytona$/, '/workspace'));
+      return res.json({ files: normalizedFiles });
     }
 
     // Docker container
@@ -4091,10 +4146,10 @@ app.get('/api/export/:projectId', authenticateRequest, verifyProjectOwnership, a
     const failed: Array<{ path: string; error: string }> = [];
 
     if (isDaytonaSandbox(entry)) {
-      // Daytona sandbox — use exec to find and read files
+      // Daytona sandbox — use exec to find and read files (Daytona uses /home/daytona/)
       const excludeArgs = excludePatterns.map(p => `-not -path "*/${p}/*" -not -name "${p}"`).join(' ');
       const findResult = await daytonaExec(entry.id,
-        `find /workspace -type f ${excludeArgs} -size -1M 2>/dev/null`,
+        `find /home/daytona -type f ${excludeArgs} -size -1M 2>/dev/null`,
         { timeoutSecs: 30 },
       );
       const filePaths = findResult.output.split('\n').filter(Boolean);
@@ -4103,7 +4158,7 @@ app.get('/api/export/:projectId', authenticateRequest, verifyProjectOwnership, a
       for (let i = 0; i < filePaths.length; i += batchSize) {
         const batch = filePaths.slice(i, i + batchSize);
         const batchPromises = batch.map(async (fullPath) => {
-          const relativePath = fullPath.replace('/workspace/', '');
+          const relativePath = fullPath.replace('/home/daytona/', '');
           try {
             const content = await daytonaReadFile(entry.id, relativePath);
             if (content.includes('\x00')) return null; // Skip binary
@@ -4316,7 +4371,7 @@ app.post('/api/exec/:projectId', authenticateRequest, verifyProjectOwnership, as
       if (background) {
         // Kill existing dev server, then start in background
         const dayCwd = cwd.replace(/\/workspace/g, '/home/daytona');
-        await daytonaExec(entry.id, 'pkill -f "npm run dev|vite|next dev" || true', { timeoutSecs: 5 }).catch(() => {});
+        await daytonaExec(entry.id, 'pkill -f "npm run dev|bun run dev|vite|next dev" || true', { timeoutSecs: 5 }).catch(() => {});
         await new Promise(resolve => setTimeout(resolve, 1000));
         await daytonaExec(entry.id, `mkdir -p "${dayCwd}"`, { timeoutSecs: 5 });
         await daytonaExecBackground(entry.id, command.replace(/\/workspace\//g, '/home/daytona/'), dayCwd);
@@ -4360,7 +4415,7 @@ app.post('/api/exec/:projectId', authenticateRequest, verifyProjectOwnership, as
     // For background commands (like dev servers), start and return immediately
     if (background) {
       // Kill any existing dev server first (exit code 143 is expected and OK)
-      await execCommand(container, `pkill -f "npm run dev|vite|next dev" || true`, true).catch(() => {});
+      await execCommand(container, `pkill -f "npm run dev|bun run dev|vite|next dev" || true`, true).catch(() => {});
       await new Promise(resolve => setTimeout(resolve, 1000));
 
       // Use nohup to keep process running in background
@@ -5372,29 +5427,30 @@ app.ws('/terminal/:projectId', async (ws: WebSocket, req: express.Request) => {
   let session = terminalSessions.get(terminalId);
   
   if (!session) {
-    // Daytona sandbox — use native session/PTY API for real terminal experience.
-    // Falls back to exec-based pseudo-terminal if the session API is unavailable (404).
+    // ════════════════════════════════════════════════════════════
+    // Daytona Sandbox Terminal
+    // ════════════════════════════════════════════════════════════
+    // Uses a shell wrapper script inside the sandbox that provides:
+    //   - Persistent cwd, environment, and aliases across commands
+    //   - Streaming output via a temp file + background polling
+    //   - Tab completion support via compgen
+    //   - Command history (local buffer + arrow key navigation)
+    //   - Ctrl-C to abort running commands
+    //   - Proper ANSI escape handling for terminal display
     if (isDaytonaSandbox(entry)) {
-      const dc = getDaytonaClient();
       const sandboxId = entry.id;
-      let useSessionApi = false;
-      let daytonaSessionId = '';
+      logger.info({ projectId, terminalId, sandboxId: sandboxId.slice(0, 12) }, 'Terminal: Daytona sandbox terminal');
 
-      // ── Try to create a native Daytona session ──
-      try {
-        daytonaSessionId = await dc.createSession(sandboxId, `terminal-${terminalId}`);
-        if (daytonaSessionId) {
-          useSessionApi = true;
-          logger.info({ projectId, terminalId, daytonaSessionId }, 'Terminal: using Daytona native session/PTY');
-        } else {
-          logger.warn({ projectId, terminalId }, 'Terminal: createSession returned empty id, falling back to exec');
-        }
-      } catch (sessionErr: any) {
-        logger.warn(
-          { projectId, terminalId, error: sessionErr.message },
-          'Terminal: Daytona session API unavailable, falling back to exec-based pseudo-terminal',
-        );
-      }
+      // ── State ──
+      let currentCwd = '/workspace';
+      let cmdBuffer = '';
+      let cursorPos = 0;  // cursor position within cmdBuffer
+      let isExecuting = false;
+      let abortRequested = false;
+      const cmdHistory: string[] = [];
+      let historyIdx = -1;  // -1 = not browsing history
+      let savedPartialCmd = '';  // partial command saved when entering history
+      const envExports: string[] = [];  // accumulated export statements
 
       const sendOutput = (text: string) => {
         if (ws.readyState === ws.OPEN) {
@@ -5402,184 +5458,306 @@ app.ws('/terminal/:projectId', async (ws: WebSocket, req: express.Request) => {
         }
       };
 
-      if (useSessionApi && daytonaSessionId) {
-        // ════════════════════════════════════════════════════════════
-        // Native Daytona Session/PTY Mode
-        // ════════════════════════════════════════════════════════════
-
-        // Start a shell in the session so it's interactive
-        let lastCmdId = '';
-        let lastLogOffset = 0;
-        let pollTimer: ReturnType<typeof setInterval> | null = null;
-
-        // Initialize the session with a bash shell
-        try {
-          const initResult = await dc.execInSession(sandboxId, daytonaSessionId, 'cd /home/daytona && exec bash --login');
-          lastCmdId = initResult.cmdId;
-        } catch (initErr: any) {
-          logger.warn({ error: initErr.message }, 'Terminal: session init bash failed, will exec per-command');
+      // Determine initial cwd — prefer /workspace if it exists, else /home/daytona
+      try {
+        const cwdCheck = await daytonaExec(sandboxId, 'test -d /workspace && echo yes || echo no', { timeoutSecs: 5 });
+        if (cwdCheck.output.trim() === 'yes') {
+          currentCwd = '/workspace';
+        } else {
+          currentCwd = '/home/daytona';
         }
+      } catch {
+        currentCwd = '/home/daytona';
+      }
 
-        sendOutput('\r\n$ ');
+      // Helper: build shell preamble that restores cwd + env
+      const shellPreamble = () => {
+        const parts = [`cd "${currentCwd}" 2>/dev/null || cd /`];
+        for (const exp of envExports) {
+          parts.push(exp);
+        }
+        return parts.join(' && ') + ' && ';
+      };
 
-        // Poll for new output from the session
-        const pollSessionLogs = async () => {
-          if (ws.readyState !== ws.OPEN) {
-            if (pollTimer) clearInterval(pollTimer);
+      // Helper: format cwd for prompt
+      const formatPrompt = () => {
+        let shortCwd = currentCwd;
+        if (currentCwd === '/workspace') shortCwd = '~';
+        else if (currentCwd.startsWith('/workspace/')) shortCwd = '~/' + currentCwd.slice('/workspace/'.length);
+        else if (currentCwd === '/home/daytona') shortCwd = '~';
+        else if (currentCwd.startsWith('/home/daytona/')) shortCwd = '~/' + currentCwd.slice('/home/daytona/'.length);
+        return `\x1b[1;32m${shortCwd}\x1b[0m $ `;
+      };
+
+      // Helper: redraw the current line (after cursor movement, history nav, etc.)
+      const redrawLine = () => {
+        // Move to column 0, clear line, print prompt + buffer, reposition cursor
+        const prompt = formatPrompt();
+        // Use raw ANSI: \r = carriage return, \x1b[K = clear to end of line
+        sendOutput(`\r\x1b[K${prompt}${cmdBuffer}`);
+        // If cursor is not at end, move it back
+        const charsFromEnd = cmdBuffer.length - cursorPos;
+        if (charsFromEnd > 0) {
+          sendOutput(`\x1b[${charsFromEnd}D`);
+        }
+      };
+
+      // Helper: execute a command with streaming output
+      const executeCommand = async (cmd: string) => {
+        isExecuting = true;
+        abortRequested = false;
+
+        try {
+          // Detect state-modifying commands and handle specially
+          const trimmedCmd = cmd.trim();
+
+          // Handle bare "cd" or "cd ~"
+          if (trimmedCmd === 'cd' || trimmedCmd === 'cd ~') {
+            const homeCheck = await daytonaExec(sandboxId, 'test -d /workspace && echo /workspace || echo /home/daytona', { timeoutSecs: 5 });
+            currentCwd = homeCheck.output.trim() || '/workspace';
             return;
           }
 
-          try {
-            const logs = await dc.getSessionLogs(sandboxId, daytonaSessionId, lastCmdId || undefined);
-            if (logs && logs.length > lastLogOffset) {
-              const newOutput = logs.slice(lastLogOffset);
-              lastLogOffset = logs.length;
-              // Convert \n to \r\n for terminal display
-              sendOutput(newOutput.replace(/\n/g, '\r\n'));
-            }
-          } catch {
-            // Polling failure is non-fatal — just skip this tick
-          }
-        };
-
-        // Start polling at 200ms intervals for responsive output
-        pollTimer = setInterval(pollSessionLogs, 200);
-
-        // Register RPC handlers
-        rpc.register('terminal.resize', async ({ cols, rows }) => {
-          if (cols && rows) {
-            await dc.resizeSession(sandboxId, daytonaSessionId, cols, rows);
-          }
-          return { success: true };
-        });
-        rpc.register('terminal.clear', async () => {
-          try {
-            await dc.execInSession(sandboxId, daytonaSessionId, 'clear');
-          } catch { /* ignore */ }
-          sendOutput('\x1bc');
-          return { success: true };
-        });
-        rpc.register('terminal.kill', async () => {
-          try {
-            await dc.execInSession(sandboxId, daytonaSessionId, '\x03');
-          } catch { /* ignore */ }
-          return { success: true };
-        });
-        rpc.register('terminal.saveHistory', async () => ({ success: true }));
-        rpc.register('terminal.getHistory', async () => ({ history: [] }));
-        rpc.register('resetTimer', async () => { lifecycleManager.resetTimer(projectId); return { success: true }; });
-
-        let cmdBuffer = '';
-
-        ws.on('message', async (data: Buffer | string) => {
-          if (!terminalRateLimiter.allowMessage(ws as any)) return;
-          entry!.lastActive = Date.now();
-          lifecycleManager.resetTimer(projectId);
-
-          const text = typeof data === 'string' ? data : data.toString('utf-8');
-
-          // Handle JSON messages (ping/pong, RPC)
-          if (typeof data === 'string') {
-            try {
-              const parsed = JSON.parse(data);
-              if (parsed.type === 'ping') {
-                ws.send(JSON.stringify({ type: 'pong', timestamp: Date.now() }));
-                return;
-              }
-              const handled = await rpc.handleMessage(JSON.stringify(parsed));
-              if (handled) return;
-            } catch {
-              // Not JSON — treat as terminal input
-            }
-          }
-
-          // Accumulate characters and execute on Enter
-          for (const ch of text) {
-            if (ch === '\r' || ch === '\n') {
-              sendOutput('\r\n');
-              const cmd = cmdBuffer.trim();
-              cmdBuffer = '';
-
-              if (cmd) {
-                try {
-                  // Reset log offset for new command output
-                  lastLogOffset = 0;
-                  const execResult = await dc.execInSession(sandboxId, daytonaSessionId, cmd);
-                  lastCmdId = execResult.cmdId;
-                  // Give a moment for output, then poll will pick it up
-                  await new Promise(resolve => setTimeout(resolve, 150));
-                  await pollSessionLogs();
-                } catch (err: any) {
-                  sendOutput(`Error: ${err.message}\r\n`);
-                }
-              }
-
-              // Fetch cwd for prompt
-              try {
-                const cwdResult = await dc.execInSession(sandboxId, daytonaSessionId, 'pwd');
-                if (cwdResult.cmdId) {
-                  await new Promise(resolve => setTimeout(resolve, 100));
-                  const cwdLogs = await dc.getSessionLogs(sandboxId, daytonaSessionId, cwdResult.cmdId);
-                  const cwd = cwdLogs.trim().split('\n').pop()?.trim() || '/home/daytona';
-                  const shortCwd = cwd === '/home/daytona' ? '~' : cwd.replace('/home/daytona/', '~/');
-                  sendOutput(`${shortCwd} $ `);
-                } else {
-                  sendOutput('$ ');
-                }
-              } catch {
-                sendOutput('$ ');
-              }
-            } else if (ch === '\x7f' || ch === '\b') {
-              if (cmdBuffer.length > 0) {
-                cmdBuffer = cmdBuffer.slice(0, -1);
-                sendOutput('\b \b');
-              }
-            } else if (ch === '\x03') {
-              cmdBuffer = '';
-              try {
-                await dc.execInSession(sandboxId, daytonaSessionId, '\x03');
-              } catch { /* ignore */ }
-              sendOutput('^C\r\n$ ');
+          // Handle "cd <path>"
+          const cdMatch = trimmedCmd.match(/^cd\s+(.+)/);
+          if (cdMatch) {
+            const target = cdMatch[1].replace(/^['"]|['"]$/g, '').replace(/~/, currentCwd === '/workspace' ? '/workspace' : '/home/daytona');
+            const absTarget = target.startsWith('/') ? target : `${currentCwd}/${target}`;
+            const result = await daytonaExec(sandboxId, `cd "${absTarget}" 2>/dev/null && pwd`, { cwd: currentCwd, timeoutSecs: 5 });
+            if (result.exitCode === 0 && result.output.trim()) {
+              currentCwd = result.output.trim().split('\n').pop()!.trim();
             } else {
-              cmdBuffer += ch;
-              sendOutput(ch);
+              sendOutput(`bash: cd: ${cdMatch[1]}: No such file or directory\r\n`);
+            }
+            return;
+          }
+
+          // Handle "export VAR=val" — persist in envExports
+          const exportMatch = trimmedCmd.match(/^export\s+(\S+=.*)$/);
+          if (exportMatch) {
+            envExports.push(`export ${exportMatch[1]}`);
+            // Also execute to validate
+            await daytonaExec(sandboxId, `${shellPreamble()} export ${exportMatch[1]}`, { timeoutSecs: 5 });
+            return;
+          }
+
+          // Handle "clear"
+          if (trimmedCmd === 'clear' || trimmedCmd === 'reset') {
+            sendOutput('\x1bc');
+            return;
+          }
+
+          // ── Execute command with streaming output ──
+          // For long-running commands, we background the process and poll
+          // a temp output file. For fast commands (<2s), we skip polling
+          // and use the direct exec result for simplicity.
+          const outputFile = `/tmp/.term_out_${terminalId.replace(/[^a-zA-Z0-9]/g, '_')}`;
+          const pidFile = `/tmp/.term_pid_${terminalId.replace(/[^a-zA-Z0-9]/g, '_')}`;
+
+          // Build backgrounded command that writes output to temp file
+          const bgCmd = `${shellPreamble()} (${cmd}) > "${outputFile}" 2>&1; echo "___EXIT:$?:EXIT___" >> "${outputFile}"`;
+
+          // Start the command as a background daemon so we can poll output
+          const daemonCmd = `nohup sh -c '${bgCmd.replace(/'/g, "'\\''")}'  &  echo $! > "${pidFile}"`;
+
+          // Clear output files and start daemon
+          await daytonaExec(sandboxId, `> "${outputFile}"; > "${pidFile}"`, { timeoutSecs: 5 }).catch(() => {});
+          await daytonaExec(sandboxId, daemonCmd, { timeoutSecs: 10 }).catch(() => {});
+
+          // Poll the output file for streaming results
+          let lastReadPos = 0;
+          let exitCode: number | null = null;
+          let pollCount = 0;
+          const MAX_POLLS = 600; // 60 seconds at 100ms interval
+
+          const pollOutput = async (): Promise<boolean> => {
+            if (ws.readyState !== ws.OPEN || abortRequested) return true;
+
+            try {
+              const readResult = await daytonaExec(sandboxId,
+                `tail -c +${lastReadPos + 1} "${outputFile}" 2>/dev/null`,
+                { timeoutSecs: 5 },
+              );
+              if (readResult.output && readResult.output.length > 0) {
+                let chunk = readResult.output;
+
+                // Check for exit marker
+                const exitMatch = chunk.match(/___EXIT:(\d+):EXIT___\n?$/);
+                if (exitMatch) {
+                  exitCode = parseInt(exitMatch[1], 10);
+                  chunk = chunk.replace(/___EXIT:\d+:EXIT___\n?$/, '');
+                }
+
+                if (chunk) {
+                  lastReadPos += Buffer.byteLength(readResult.output, 'utf-8');
+                  // Convert \n to \r\n for terminal display
+                  sendOutput(chunk.replace(/\n/g, '\r\n'));
+                }
+
+                if (exitCode !== null) return true; // command finished
+              }
+            } catch {
+              // Non-fatal polling error
+            }
+            return false;
+          };
+
+          // Poll loop — await each iteration for proper backpressure
+          const startPoll = Date.now();
+          while (pollCount < MAX_POLLS) {
+            const done = await pollOutput();
+            if (done) break;
+            pollCount++;
+            // Adaptive polling: fast at first (50ms), slower after 5s (200ms)
+            const elapsed = Date.now() - startPoll;
+            await new Promise(r => setTimeout(r, elapsed < 5000 ? 50 : 200));
+          }
+
+          // If we timed out on polling, do one final read
+          if (exitCode === null) {
+            await pollOutput();
+          }
+
+          // If nothing was captured via file (fast command or file write race),
+          // run the command directly as a fallback
+          if (lastReadPos === 0 && exitCode === null) {
+            try {
+              const directResult = await daytonaExec(sandboxId,
+                `${shellPreamble()} ${cmd}`,
+                { cwd: currentCwd, timeoutSecs: 60 },
+              );
+              if (directResult.output) {
+                sendOutput(directResult.output.replace(/\n/g, '\r\n'));
+                if (!directResult.output.endsWith('\n')) sendOutput('\r\n');
+              }
+            } catch (fallbackErr: any) {
+              sendOutput(`Error: ${fallbackErr.message}\r\n`);
             }
           }
-        });
 
-        ws.on('close', () => {
-          logger.info({ terminalId, projectId, daytonaSessionId }, 'Daytona session terminal closed');
-          if (pollTimer) clearInterval(pollTimer);
-          // Best-effort cleanup of the Daytona session
-          dc.deleteSession(sandboxId, daytonaSessionId).catch(() => {});
-          terminalSessions.delete(terminalId);
-          wsKeepalive.unregister(ws as any);
-          terminalRateLimiter.untrack(ws as any);
-        });
+          // Clean up temp files (best-effort, non-blocking)
+          daytonaExec(sandboxId, `rm -f "${outputFile}" "${pidFile}" 2>/dev/null`, { timeoutSecs: 5 }).catch(() => {});
 
-        session = { pty: null as any, projectId, rpc };
-        terminalSessions.set(terminalId, session);
-        return; // Skip the Docker terminal setup below
-      }
+          // After command execution, re-read cwd in case the command changed it
+          // (e.g., a script that calls cd, or pushd/popd)
+          try {
+            const cwdResult = await daytonaExec(sandboxId, `${shellPreamble()} pwd`, { timeoutSecs: 5 });
+            if (cwdResult.exitCode === 0 && cwdResult.output.trim()) {
+              currentCwd = cwdResult.output.trim().split('\n').pop()!.trim();
+            }
+          } catch { /* keep existing cwd */ }
 
-      // ════════════════════════════════════════════════════════════
-      // Exec-based Fallback (original pseudo-terminal when session API fails)
-      // ════════════════════════════════════════════════════════════
-      logger.info({ projectId, terminalId }, 'Terminal: using Daytona exec-based pseudo-terminal (fallback)');
+        } finally {
+          isExecuting = false;
+        }
+      };
 
-      let currentCwd = '/workspace';
+      // Helper: tab completion via compgen
+      const handleTabCompletion = async () => {
+        const partial = cmdBuffer.slice(0, cursorPos);
+        const words = partial.split(/\s+/);
+        const lastWord = words[words.length - 1] || '';
 
-      sendOutput('$ ');
+        if (!lastWord) return;
+
+        try {
+          // Use compgen for bash completions
+          const isFirstWord = words.filter(Boolean).length <= 1;
+          const compType = isFirstWord ? '-c' : '-f'; // commands for first word, files otherwise
+          const result = await daytonaExec(sandboxId,
+            `cd "${currentCwd}" 2>/dev/null; compgen ${compType} -- "${lastWord}" 2>/dev/null | head -20`,
+            { timeoutSecs: 5 },
+          );
+
+          if (result.exitCode !== 0 || !result.output.trim()) return;
+
+          const completions = result.output.trim().split('\n').filter(Boolean);
+
+          if (completions.length === 0) {
+            return;
+          } else if (completions.length === 1) {
+            // Single match — complete it
+            const completion = completions[0];
+            const suffix = completion.slice(lastWord.length);
+            if (suffix) {
+              // Insert the completion
+              const before = cmdBuffer.slice(0, cursorPos);
+              const after = cmdBuffer.slice(cursorPos);
+              cmdBuffer = before + suffix + after;
+              cursorPos += suffix.length;
+              // Check if it's a directory — append /
+              if (!isFirstWord) {
+                const isDir = await daytonaExec(sandboxId,
+                  `cd "${currentCwd}" 2>/dev/null; test -d "${completion}" && echo d || echo f`,
+                  { timeoutSecs: 3 },
+                ).catch(() => ({ output: 'f', exitCode: 0 }));
+                if (isDir.output.trim() === 'd' && !cmdBuffer.endsWith('/')) {
+                  cmdBuffer += '/';
+                  cursorPos += 1;
+                } else if (!cmdBuffer.endsWith(' ')) {
+                  cmdBuffer += ' ';
+                  cursorPos += 1;
+                }
+              } else {
+                cmdBuffer += ' ';
+                cursorPos += 1;
+              }
+              redrawLine();
+            }
+          } else {
+            // Multiple matches — show them
+            sendOutput('\r\n');
+            // Format in columns
+            const maxLen = Math.max(...completions.map(c => c.length));
+            const cols = Math.max(1, Math.floor(80 / (maxLen + 2)));
+            for (let i = 0; i < completions.length; i += cols) {
+              const row = completions.slice(i, i + cols).map(c => c.padEnd(maxLen + 2)).join('');
+              sendOutput(row + '\r\n');
+            }
+            // Find common prefix to extend
+            let commonPrefix = completions[0];
+            for (const c of completions) {
+              while (!c.startsWith(commonPrefix)) {
+                commonPrefix = commonPrefix.slice(0, -1);
+              }
+            }
+            if (commonPrefix.length > lastWord.length) {
+              const suffix = commonPrefix.slice(lastWord.length);
+              const before = cmdBuffer.slice(0, cursorPos);
+              const after = cmdBuffer.slice(cursorPos);
+              cmdBuffer = before + suffix + after;
+              cursorPos += suffix.length;
+            }
+            redrawLine();
+          }
+        } catch {
+          // Tab completion failure is non-fatal
+        }
+      };
+
+      // ── Show initial prompt ──
+      sendOutput('\r\n' + formatPrompt());
 
       // Register RPC handlers
       rpc.register('terminal.resize', async () => ({ success: true }));
       rpc.register('terminal.clear', async () => { sendOutput('\x1bc'); return { success: true }; });
-      rpc.register('terminal.kill', async () => ({ success: true }));
+      rpc.register('terminal.kill', async () => {
+        if (isExecuting) {
+          abortRequested = true;
+          // Try to kill the running process in the sandbox
+          const pidFile = `/tmp/.term_pid_${terminalId.replace(/[^a-zA-Z0-9]/g, '_')}`;
+          try {
+            await daytonaExec(sandboxId, `kill -TERM $(cat "${pidFile}" 2>/dev/null) 2>/dev/null || true`, { timeoutSecs: 3 });
+          } catch { /* ignore */ }
+        }
+        return { success: true };
+      });
       rpc.register('terminal.saveHistory', async () => ({ success: true }));
-      rpc.register('terminal.getHistory', async () => ({ history: [] }));
+      rpc.register('terminal.getHistory', async () => ({ history: cmdHistory.slice(-100) }));
       rpc.register('resetTimer', async () => { lifecycleManager.resetTimer(projectId); return { success: true }; });
 
-      let cmdBuffer = '';
+      // ── ANSI escape sequence buffer for multi-byte sequences ──
+      let escapeBuffer = '';
 
       ws.on('message', async (data: Buffer | string) => {
         if (!terminalRateLimiter.allowMessage(ws as any)) return;
@@ -5588,7 +5766,7 @@ app.ws('/terminal/:projectId', async (ws: WebSocket, req: express.Request) => {
 
         const text = typeof data === 'string' ? data : data.toString('utf-8');
 
-        // Handle JSON messages (ping/pong)
+        // Handle JSON messages (ping/pong, RPC)
         if (typeof data === 'string') {
           try {
             const parsed = JSON.parse(data);
@@ -5596,7 +5774,6 @@ app.ws('/terminal/:projectId', async (ws: WebSocket, req: express.Request) => {
               ws.send(JSON.stringify({ type: 'pong', timestamp: Date.now() }));
               return;
             }
-            // RPC dispatch
             const handled = await rpc.handleMessage(JSON.stringify(parsed));
             if (handled) return;
           } catch {
@@ -5604,56 +5781,246 @@ app.ws('/terminal/:projectId', async (ws: WebSocket, req: express.Request) => {
           }
         }
 
-        // Accumulate characters until Enter
-        for (const ch of text) {
+        // If a command is executing, only handle Ctrl-C
+        if (isExecuting) {
+          for (const ch of text) {
+            if (ch === '\x03') {
+              abortRequested = true;
+              sendOutput('^C');
+              const pidFile = `/tmp/.term_pid_${terminalId.replace(/[^a-zA-Z0-9]/g, '_')}`;
+              daytonaExec(sandboxId, `kill -INT $(cat "${pidFile}" 2>/dev/null) 2>/dev/null || true`, { timeoutSecs: 3 }).catch(() => {});
+            }
+          }
+          return;
+        }
+
+        // Process input characters
+        let i = 0;
+        while (i < text.length) {
+          const ch = text[i];
+
+          // Handle ANSI escape sequences (arrow keys, etc.)
+          if (escapeBuffer) {
+            escapeBuffer += ch;
+            i++;
+
+            // CSI sequences: ESC [ ... (final byte is 0x40-0x7e)
+            if (escapeBuffer.length >= 3 && escapeBuffer[1] === '[') {
+              const finalByte = escapeBuffer.charCodeAt(escapeBuffer.length - 1);
+              if (finalByte >= 0x40 && finalByte <= 0x7e) {
+                // Complete CSI sequence
+                const seq = escapeBuffer;
+                escapeBuffer = '';
+
+                if (seq === '\x1b[A') {
+                  // Up arrow — previous history
+                  if (cmdHistory.length > 0) {
+                    if (historyIdx === -1) {
+                      savedPartialCmd = cmdBuffer;
+                      historyIdx = cmdHistory.length - 1;
+                    } else if (historyIdx > 0) {
+                      historyIdx--;
+                    }
+                    cmdBuffer = cmdHistory[historyIdx];
+                    cursorPos = cmdBuffer.length;
+                    redrawLine();
+                  }
+                } else if (seq === '\x1b[B') {
+                  // Down arrow — next history / restore partial
+                  if (historyIdx !== -1) {
+                    if (historyIdx < cmdHistory.length - 1) {
+                      historyIdx++;
+                      cmdBuffer = cmdHistory[historyIdx];
+                    } else {
+                      historyIdx = -1;
+                      cmdBuffer = savedPartialCmd;
+                      savedPartialCmd = '';
+                    }
+                    cursorPos = cmdBuffer.length;
+                    redrawLine();
+                  }
+                } else if (seq === '\x1b[C') {
+                  // Right arrow
+                  if (cursorPos < cmdBuffer.length) {
+                    cursorPos++;
+                    sendOutput('\x1b[C');
+                  }
+                } else if (seq === '\x1b[D') {
+                  // Left arrow
+                  if (cursorPos > 0) {
+                    cursorPos--;
+                    sendOutput('\x1b[D');
+                  }
+                } else if (seq === '\x1b[H' || seq === '\x1b[1~') {
+                  // Home
+                  if (cursorPos > 0) {
+                    sendOutput(`\x1b[${cursorPos}D`);
+                    cursorPos = 0;
+                  }
+                } else if (seq === '\x1b[F' || seq === '\x1b[4~') {
+                  // End
+                  if (cursorPos < cmdBuffer.length) {
+                    sendOutput(`\x1b[${cmdBuffer.length - cursorPos}C`);
+                    cursorPos = cmdBuffer.length;
+                  }
+                } else if (seq === '\x1b[3~') {
+                  // Delete key
+                  if (cursorPos < cmdBuffer.length) {
+                    cmdBuffer = cmdBuffer.slice(0, cursorPos) + cmdBuffer.slice(cursorPos + 1);
+                    redrawLine();
+                  }
+                }
+                // Other CSI sequences are ignored
+              }
+              // If not a final byte, keep accumulating
+              continue;
+            }
+
+            // If escape buffer is getting too long without completion, flush it
+            if (escapeBuffer.length > 6) {
+              escapeBuffer = '';
+            }
+            continue;
+          }
+
+          // ESC starts an escape sequence
+          if (ch === '\x1b') {
+            escapeBuffer = '\x1b';
+            i++;
+            continue;
+          }
+
+          // Enter — execute command
           if (ch === '\r' || ch === '\n') {
+            i++;
             sendOutput('\r\n');
             const cmd = cmdBuffer.trim();
             cmdBuffer = '';
+            cursorPos = 0;
+            historyIdx = -1;
+            savedPartialCmd = '';
 
             if (cmd) {
-              try {
-                // Handle cd specially to track cwd
-                const cdMatch = cmd.match(/^cd\s+(.*)/);
-                if (cdMatch) {
-                  const target = cdMatch[1].replace(/^['"]|['"]$/g, '');
-                  const absTarget = target.startsWith('/') ? target : `${currentCwd}/${target}`;
-                  const checkResult = await daytonaExec(entry!.id, `cd "${absTarget}" && pwd`, { cwd: currentCwd, timeoutSecs: 5 });
-                  if (checkResult.exitCode === 0) {
-                    currentCwd = checkResult.output.trim();
-                  } else {
-                    sendOutput(`bash: cd: ${target}: No such file or directory\r\n`);
-                  }
-                } else {
-                  const result = await daytonaExec(entry!.id, `cd "${currentCwd}" && ${cmd}`, { cwd: currentCwd, timeoutSecs: 30 });
-                  if (result.output) {
-                    // Convert \n to \r\n for terminal
-                    sendOutput(result.output.replace(/\n/g, '\r\n'));
-                    if (!result.output.endsWith('\n')) sendOutput('\r\n');
-                  }
-                }
-              } catch (err: any) {
-                sendOutput(`Error: ${err.message}\r\n`);
+              // Add to history (deduplicate consecutive)
+              if (cmdHistory.length === 0 || cmdHistory[cmdHistory.length - 1] !== cmd) {
+                cmdHistory.push(cmd);
+                if (cmdHistory.length > 500) cmdHistory.shift();
               }
+
+              await executeCommand(cmd);
             }
 
-            // Show prompt
-            const shortCwd = currentCwd === '/workspace' ? '~' : currentCwd.replace('/workspace/', '~/');
-            sendOutput(`${shortCwd} $ `);
-          } else if (ch === '\x7f' || ch === '\b') {
-            // Backspace
-            if (cmdBuffer.length > 0) {
-              cmdBuffer = cmdBuffer.slice(0, -1);
-              sendOutput('\b \b');
-            }
-          } else if (ch === '\x03') {
-            // Ctrl+C
-            cmdBuffer = '';
-            sendOutput('^C\r\n$ ');
-          } else {
-            cmdBuffer += ch;
-            sendOutput(ch); // Echo
+            sendOutput(formatPrompt());
+            continue;
           }
+
+          // Tab — completion
+          if (ch === '\t') {
+            i++;
+            await handleTabCompletion();
+            continue;
+          }
+
+          // Backspace
+          if (ch === '\x7f' || ch === '\b') {
+            i++;
+            if (cursorPos > 0) {
+              cmdBuffer = cmdBuffer.slice(0, cursorPos - 1) + cmdBuffer.slice(cursorPos);
+              cursorPos--;
+              redrawLine();
+            }
+            continue;
+          }
+
+          // Ctrl-C
+          if (ch === '\x03') {
+            i++;
+            cmdBuffer = '';
+            cursorPos = 0;
+            historyIdx = -1;
+            sendOutput('^C\r\n' + formatPrompt());
+            continue;
+          }
+
+          // Ctrl-L — clear screen
+          if (ch === '\x0c') {
+            i++;
+            sendOutput('\x1bc');
+            sendOutput(formatPrompt() + cmdBuffer);
+            continue;
+          }
+
+          // Ctrl-A — home
+          if (ch === '\x01') {
+            i++;
+            if (cursorPos > 0) {
+              sendOutput(`\x1b[${cursorPos}D`);
+              cursorPos = 0;
+            }
+            continue;
+          }
+
+          // Ctrl-E — end
+          if (ch === '\x05') {
+            i++;
+            if (cursorPos < cmdBuffer.length) {
+              sendOutput(`\x1b[${cmdBuffer.length - cursorPos}C`);
+              cursorPos = cmdBuffer.length;
+            }
+            continue;
+          }
+
+          // Ctrl-U — clear line before cursor
+          if (ch === '\x15') {
+            i++;
+            if (cursorPos > 0) {
+              cmdBuffer = cmdBuffer.slice(cursorPos);
+              cursorPos = 0;
+              redrawLine();
+            }
+            continue;
+          }
+
+          // Ctrl-K — clear line after cursor
+          if (ch === '\x0b') {
+            i++;
+            if (cursorPos < cmdBuffer.length) {
+              cmdBuffer = cmdBuffer.slice(0, cursorPos);
+              redrawLine();
+            }
+            continue;
+          }
+
+          // Ctrl-W — delete word before cursor
+          if (ch === '\x17') {
+            i++;
+            if (cursorPos > 0) {
+              const before = cmdBuffer.slice(0, cursorPos);
+              const after = cmdBuffer.slice(cursorPos);
+              const wordStart = before.replace(/\s+$/, '').lastIndexOf(' ') + 1;
+              cmdBuffer = before.slice(0, wordStart) + after;
+              cursorPos = wordStart;
+              redrawLine();
+            }
+            continue;
+          }
+
+          // Regular printable character
+          if (ch.charCodeAt(0) >= 32) {
+            i++;
+            cmdBuffer = cmdBuffer.slice(0, cursorPos) + ch + cmdBuffer.slice(cursorPos);
+            cursorPos++;
+            // If inserting in the middle, need to redraw
+            if (cursorPos < cmdBuffer.length) {
+              redrawLine();
+            } else {
+              sendOutput(ch);
+            }
+            continue;
+          }
+
+          // Skip other control characters
+          i++;
         }
       });
 
@@ -5664,7 +6031,7 @@ app.ws('/terminal/:projectId', async (ws: WebSocket, req: express.Request) => {
         terminalRateLimiter.untrack(ws as any);
       });
 
-      // Store a minimal session
+      // Store session
       session = { pty: null as any, projectId, rpc };
       terminalSessions.set(terminalId, session);
       return; // Skip the Docker terminal setup below
@@ -12520,7 +12887,7 @@ app.ws('/watch/:projectId', async (ws: WebSocket, req: express.Request) => {
   fileWatchClients.get(projectId)!.add(ws as any);
 
   // Start file watcher for this project if not already running
-  fileWatcher.startWatching(entry.id, projectId);
+  fileWatcher.startWatching(entry.id, projectId, isDaytonaSandbox(entry));
 
   logger.info({ projectId, userId: authSession.userId }, 'FileWatch: client connected');
 
@@ -14359,6 +14726,7 @@ app.use('/api/a2a/connectors/replit', replitConnectorRouter);
 app.use('/api/a2a/adapters/rest', restAdapterRouter);
 app.use('/api/a2a/adapters/git', gitAdapterRouter);
 app.use('/api/a2a/context', contextBridgeRouter);
+app.use('/api/a2a/workspaces', a2aWorkspaceRouter);
 app.use('/api/a2a', connectorHealthRouter);
 app.use('/api/a2a/patterns', patternRouter);
 app.use('/api/a2a', a2aOpenApiRouter);
@@ -14915,7 +15283,8 @@ app.post('/api/publish/:projectId', authenticateRequest, verifyProjectOwnership,
 
   try {
     // 1. Detect framework
-    const { buildCmd, outputDir, framework } = await detectBuildOutput(entry.id);
+    const { buildCmd, outputDir: detectedOutputDir, framework } = await detectBuildOutput(entry.id);
+    let outputDir = detectedOutputDir;
     logger.info({ projectId, framework, buildCmd, outputDir }, 'Publish: starting publish');
 
     // 2. Install dependencies if needed
@@ -14947,7 +15316,7 @@ app.post('/api/publish/:projectId', authenticateRequest, verifyProjectOwnership,
         const check = await execInContainer(entry.id, `[ -d /workspace/${dir} ] && echo "EXISTS" || echo "NOPE"`);
         if (check.includes('EXISTS')) {
           logger.info({ dir }, 'Publish: using fallback output dir');
-          // Continue with this dir
+          outputDir = dir;
           found = true;
           break;
         }
