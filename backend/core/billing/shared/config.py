@@ -339,40 +339,8 @@ def can_purchase_credits(tier_name: str) -> bool:
     return tier.can_purchase_credits if tier else False
 
 def is_model_allowed(tier_name: str, model: str) -> bool:
-    tier = TIERS.get(tier_name, TIERS['none'])
-    
-    # Tier has access to all models
-    if 'all' in tier.models:
-        return True
-    
-    from core.ai_models import model_manager
-    resolved_model_id = model_manager.resolve_model_id(model)
-    model_obj = model_manager.get_model(resolved_model_id) if resolved_model_id else None
-    
-    if not model_obj:
-        return False
-    
-    # Check the model's tier_availability from the registry
-    # This is the PRIMARY source of truth for model access - if set, it's definitive
-    if model_obj.tier_availability:
-        if tier_name in ['free', 'none']:
-            # Free tier can only access models with "free" in tier_availability
-            return 'free' in model_obj.tier_availability
-        else:
-            # Paid tiers can access models with "paid" in tier_availability
-            return 'paid' in model_obj.tier_availability
-    
-    # Fallback: only use pattern matching if tier_availability is not set (legacy models)
-    for allowed_pattern in tier.models:
-        if allowed_pattern.lower() in model_obj.name.lower():
-            return True
-        if allowed_pattern.lower() in model_obj.id.lower():
-            return True
-        for alias in model_obj.aliases:
-            if allowed_pattern.lower() in alias.lower():
-                return True
-    
-    return False
+    # Platform is free/BYOK — all models allowed for all tiers
+    return True
 
 def get_project_limit(tier_name: str) -> int:
     tier = TIERS.get(tier_name)
