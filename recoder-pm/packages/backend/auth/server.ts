@@ -4,6 +4,7 @@ import {
   type AuthCoreUser,
 } from "@recoder/auth/session";
 import { verifySession } from "@recoder/auth/verify";
+import { slugify } from "@repo/lib/slugify";
 import { cookies } from "next/headers";
 import { database } from "../database";
 import type { AuthProfile, User } from "./index";
@@ -60,9 +61,18 @@ const ensureProfile = async (
     ? `${coreUser.name}'s Workspace`
     : coreUser.email.split("@")[0] + "'s Workspace";
 
+  let slug = slugify(orgName);
+  const existingOrg = await database.organization.findFirst({
+    where: { slug },
+  });
+  if (existingOrg) {
+    slug = `${slug}-${Math.floor(Math.random() * 1000)}`;
+  }
+
   const newOrg = await database.organization.create({
     data: {
       name: orgName,
+      slug,
       featureStatuses: {
         createMany: {
           data: [
