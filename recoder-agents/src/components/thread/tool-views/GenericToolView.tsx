@@ -157,16 +157,19 @@ export function GenericToolView({
   }, [formattedToolContent, copyToClipboard]);
 
   const isError = React.useMemo(() => {
+    // Explicit success/failure takes priority
+    if (toolResult?.success === true) return false;
     if (toolResult?.success === false) return true;
     if (toolResult?.error) return true;
-    
-    if (typeof toolResult?.output === 'string') {
+
+    // Only use text-matching heuristic when there's no explicit success field
+    if (toolResult?.success === undefined && typeof toolResult?.output === 'string') {
       const output = toolResult.output.toLowerCase();
-      if (output.startsWith('error:') || output.includes('failed') || output.includes('exception')) {
+      if (output.startsWith('error:') || output.startsWith('exception:')) {
         return true;
       }
     }
-    
+
     return !isSuccess;
   }, [toolResult, isSuccess]);
 
