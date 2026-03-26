@@ -6,7 +6,7 @@ import type {
 	DocumentVectorStoreId,
 	DocumentVectorStoreSourceId,
 } from "@recoder/types";
-import { createClient } from "@supabase/supabase-js";
+import { appStorage } from "@/lib/app-storage";
 import { and, eq, lt, or } from "drizzle-orm";
 import { db, documentVectorStoreSources } from "@/db";
 import type { TeamWithSubscription } from "@/services/teams";
@@ -26,14 +26,7 @@ import {
 import { extractTextFromDocument } from "./extract-text";
 import { generateEmbeddings } from "./generate-embeddings";
 
-const supabaseUrl = process.env.SUPABASE_URL;
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_KEY;
-
-if (!supabaseUrl || !supabaseServiceKey) {
-	throw new Error("Missing Supabase credentials");
-}
-
-const supabase = createClient(supabaseUrl, supabaseServiceKey);
+// Storage uses local filesystem (Supabase removed)
 
 interface IngestDocumentOptions {
 	embeddingProfileIds: EmbeddingProfileId[];
@@ -199,8 +192,7 @@ export async function ingestDocument(
 		signal?.throwIfAborted();
 
 		// Download file from storage
-		const { data: fileData, error: downloadError } = await supabase.storage
-			.from(source.storageBucket)
+		const { data: fileData, error: downloadError } = await appStorage()
 			.download(source.storageKey);
 
 		if (downloadError || !fileData) {
