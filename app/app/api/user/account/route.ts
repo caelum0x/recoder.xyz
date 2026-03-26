@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { ensureAppUserFromAuthUser, requireAuth } from "@/lib/auth-helpers";
 import { prisma } from '@/lib/prisma';
+import { auth } from '@/lib/auth-config';
 import { sendVerificationEmailWithCode } from '@/lib/email';
 import {
   assertAccountDeleteResponse,
@@ -373,15 +374,140 @@ export async function DELETE(request: NextRequest) {
       logger.warn('[Account] audit log write failed during delete:', { detail: auditError instanceof Error ? auditError.message : String(auditError) });
     }
 
-    // Delete user (cascade will handle related records)
+    // 1) Revoke all Better Auth sessions server-side so the cookie cache is invalidated.
+    //    This calls through Better Auth's internal adapter which handles the session store.
+    try {
+      await auth.api.revokeSessions({
+        headers: request.headers,
+      });
+    } catch (revokeError) {
+      logger.warn('[Account] Better Auth revokeSessions failed (continuing with deletion):', {
+        detail: revokeError instanceof Error ? revokeError.message : String(revokeError),
+      });
+    }
+
+    // 2) Explicitly delete sessions from BOTH session tables to be thorough.
+    //    The cascade on users.delete should handle this, but we do it explicitly
+    //    first to ensure no orphans remain if cascade fails partially.
+    try {
+      await prisma.session.deleteMany({ where: { userId: user.id } });
+    } catch (e) {
+      logger.warn('[Account] legacy session cleanup failed:', { detail: e instanceof Error ? e.message : String(e) });
+    }
+    try {
+      await prisma.sessions.deleteMany({ where: { userId: user.id } });
+    } catch (e) {
+      logger.warn('[Account] sessions cleanup failed:', { detail: e instanceof Error ? e.message : String(e) });
+    }
+
+    // 3) Delete OAuth accounts from both account tables.
+    try {
+      await prisma.account.deleteMany({ where: { userId: user.id } });
+    } catch (e) {
+      logger.warn('[Account] legacy account cleanup failed:', { detail: e instanceof Error ? e.message : String(e) });
+    }
+    try {
+      await prisma.accounts.deleteMany({ where: { userId: user.id } });
+    } catch (e) {
+      logger.warn('[Account] accounts cleanup failed:', { detail: e instanceof Error ? e.message : String(e) });
+    }
+
+    // 4) Revoke CLI sessions and API keys.
+    try {
+      await prisma.cli_sessions.deleteMany({ where: { userId: user.id } });
+    } catch (e) {
+      logger.warn('[Account] CLI sessions cleanup failed:', { detail: e instanceof Error ? e.message : String(e) });
+    }
+    try {
+      await prisma.api_keys.deleteMany({ where: { userId: user.id } });
+    } catch (e) {
+      logger.warn('[Account] API keys cleanup failed:', { detail: e instanceof Error ? e.message : String(e) });
+    }
+    try {
+      await prisma.user_api_keys.deleteMany({ where: { userId: user.id } });
+    } catch (e) {
+      logger.warn('[Account] user API keys cleanup failed:', { detail: e instanceof Error ? e.message : String(e) });
+    }
+
+    // 5) Delete user preferences.
+    try {
+      await prisma.user_preferences.deleteMany({ where: { userId: user.id } });
+    } catch (e) {
+      logger.warn('[Account] user preferences cleanup failed:', { detail: e instanceof Error ? e.message : String(e) });
+    }
+
+    // 6) Delete data from recoder_backend (threads, agents, projects).
+    //    Uses direct SQL via the backend API — non-blocking, best-effort.
+    try {
+      const backendUrl = process.env.BACKEND_URL || process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000';
+      const adminKey = process.env.RECODER_ADMIN_API_KEY || '';
+      if (adminKey) {
+        await fetch(`${backendUrl}/v1/admin/users/${user.id}`, {
+          method: 'DELETE',
+          headers: { 'X-Admin-Api-Key': adminKey },
+        }).catch(e => logger.warn('[Account] Backend data cleanup failed:', { detail: String(e) }));
+      }
+    } catch (e) {
+      logger.warn('[Account] Backend data cleanup failed:', { detail: e instanceof Error ? e.message : String(e) });
+    }
+
+    // 7) Delete the user record from app table.
     await prisma.users.delete({
       where: { id: user.id }
     });
 
-    return NextResponse.json(assertAccountDeleteResponse({
+    // 8) Delete from Better Auth's user table (separate from app users table).
+    //    This is critical — without this, the auth session persists and the user
+    //    can still log in via OAuth, effectively un-deleting themselves.
+    try {
+      await prisma.user.delete({ where: { id: user.id } });
+    } catch (e) {
+      logger.warn('[Account] Better Auth user record cleanup failed:', { detail: e instanceof Error ? e.message : String(e) });
+    }
+
+    logger.info('[Account] User account deleted successfully', { userId: user.id, email: user.email });
+
+    // 7) Build response with Set-Cookie headers to clear all session cookies.
+    //    This ensures the browser removes the session token even if the redirect
+    //    takes time or the client-side cleanup is delayed.
+    const response = NextResponse.json(assertAccountDeleteResponse({
       success: true,
       message: 'Account deleted successfully'
     }));
+
+    // Clear all known session cookie variants across all relevant domains.
+    const cookieNames = [
+      'recoder.session_token',
+      '__Secure-recoder.session_token',
+      'recoder.session_data',        // cookie cache
+      '__Secure-recoder.session_data', // cookie cache (secure variant)
+    ];
+    const domains = ['.recoder.xyz', 'recoder.xyz', ''];
+    const paths = ['/', '/api'];
+
+    for (const cookieName of cookieNames) {
+      for (const domain of domains) {
+        for (const path of paths) {
+          const parts = [
+            `${cookieName}=`,
+            'Max-Age=0',
+            'Expires=Thu, 01 Jan 1970 00:00:00 GMT',
+            `Path=${path}`,
+          ];
+          if (domain) {
+            parts.push(`Domain=${domain}`);
+          }
+          // Set both with and without Secure/SameSite for maximum coverage.
+          response.headers.append('Set-Cookie', parts.join('; '));
+          response.headers.append(
+            'Set-Cookie',
+            [...parts, 'Secure', 'SameSite=None'].join('; ')
+          );
+        }
+      }
+    }
+
+    return response;
 
   } catch (error) {
     logger.error('Delete account error:', { error: error instanceof Error ? error.message : String(error) });
