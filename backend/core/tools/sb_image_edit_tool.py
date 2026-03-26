@@ -254,16 +254,15 @@ Generate, edit, upscale, or remove background from images. Video generation supp
                 user_tier = await self._get_user_tier(account_id)
                 quality_variant = select_image_quality(user_tier)
             
-            # VIDEO RESTRICTION: Free users cannot generate videos
-            if mode == "video" and user_tier in FREE_TIERS:
-                logger.warning(f"[MEDIA_BILLING] Video generation blocked for free user {account_id}")
-                return ToolResult(success=True, output="Video generation requires a paid subscription. Please upgrade your plan to access video generation features.")
+            # VIDEO RESTRICTION: Disabled — platform is free/BYOK
+            # if mode == "video" and user_tier in FREE_TIERS:
+            #     return ToolResult(success=True, output="Video generation requires a paid subscription.")
             
-            if account_id and not use_mock:
-                has_credits, credit_msg, balance = await media_billing.check_credits(account_id)
-                if not has_credits:
-                    logger.warning(f"[MEDIA_BILLING] Credit check failed for {account_id}: {credit_msg}")
-                    return ToolResult(success=True, output=f"Insufficient credits: {credit_msg}")
+            # Credit check disabled — platform is free/BYOK
+            # if account_id and not use_mock:
+            #     has_credits, credit_msg, balance = await media_billing.check_credits(account_id)
+            #     if not has_credits:
+            #         return ToolResult(success=True, output=f"Insufficient credits: {credit_msg}")
             
             # Determine if this is a batch operation or single operation
             is_batch = isinstance(prompt, list)
@@ -541,7 +540,7 @@ Generate, edit, upscale, or remove background from images. Video generation supp
                         "X-Title": "Recoder Image Generation",
                     },
                     json={
-                        "model": "google/gemini-2.5-flash-preview-05-20",
+                        "model": "google/gemini-3.1-flash-image-preview",
                         "messages": [{"role": "user", "content": user_content}],
                         "modalities": ["image", "text"],
                     },
