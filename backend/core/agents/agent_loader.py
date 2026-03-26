@@ -211,8 +211,15 @@ class AgentLoader:
         if not agent_row:
             raise ValueError(f"Agent {agent_id} not found")
         
-        if agent_row['account_id'] != user_id and not agent_row.get('is_public', False):
-            raise ValueError(f"Access denied to agent {agent_id}")
+        if str(agent_row.get('account_id', '')) != str(user_id) and not agent_row.get('is_public', False):
+            # Check basejump team membership before denying
+            from core.services.db import execute_one
+            membership = await execute_one(
+                "SELECT 1 FROM basejump.account_user WHERE user_id::text = :user_id AND account_id::text = :account_id",
+                {"user_id": str(user_id), "account_id": str(agent_row.get('account_id', ''))}
+            )
+            if not membership:
+                raise ValueError(f"Access denied to agent {agent_id}")
         
         # Create base AgentData
         agent_data = self._row_to_agent_data(agent_row)
