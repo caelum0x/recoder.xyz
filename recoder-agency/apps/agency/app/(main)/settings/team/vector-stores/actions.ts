@@ -6,7 +6,7 @@ import {
 	isEmbeddingProfileId,
 } from "@recoder/protocol";
 import { createId } from "@paralleldrive/cuid2";
-import { createClient } from "@supabase/supabase-js";
+import { appStorage } from "@/lib/app-storage";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { after } from "next/server";
@@ -42,16 +42,7 @@ import type {
 	DocumentVectorStoreUpdateInput,
 } from "./types";
 
-const SUPABASE_URL = process.env.SUPABASE_URL;
-const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY;
-
-if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) {
-	throw new Error(
-		"Missing Supabase configuration. Please set SUPABASE_URL and SUPABASE_SERVICE_KEY.",
-	);
-}
-
-const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
+// Storage uses local filesystem (Supabase removed)
 const DOCUMENT_VECTOR_STORE_STORAGE_PREFIX = "vector-stores";
 
 type IngestabilityCheck = {
@@ -875,8 +866,7 @@ export async function deleteDocumentVectorStore(
 						continue;
 					}
 					try {
-						const { error: storageError } = await supabase.storage
-							.from(bucket)
+						const { error: storageError } = await appStorage()
 							.remove(Array.from(targets));
 						if (storageError) {
 							console.error(
