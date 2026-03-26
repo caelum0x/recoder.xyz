@@ -120,7 +120,7 @@ async def create_webhook(
     row = await execute_one(
         """
         INSERT INTO agent_webhooks (user_id, agent_id, name, url, secret, events, retry_count, timeout_ms)
-        VALUES (:user_id::uuid, :agent_id, :name, :url, :secret, :events, :retry_count, :timeout_ms)
+        VALUES (CAST(:user_id AS uuid), :agent_id, :name, :url, :secret, :events, :retry_count, :timeout_ms)
         RETURNING *
         """,
         {
@@ -282,7 +282,7 @@ async def test_webhook(
     delivery = await execute_one(
         """
         INSERT INTO agent_webhook_deliveries (webhook_id, user_id, event_type, payload, response_status, response_body, status, attempt, delivered_at)
-        VALUES (:webhook_id::uuid, :user_id::uuid, :event_type, :payload, :response_status, :response_body, :status, 1, :delivered_at)
+        VALUES (CAST(:webhook_id AS uuid), CAST(:user_id AS uuid), :event_type, :payload, :response_status, :response_body, :status, 1, :delivered_at)
         RETURNING *
         """,
         {

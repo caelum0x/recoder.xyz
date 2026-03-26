@@ -306,7 +306,7 @@ async def apply_trigger_template(
         row = await execute_one(
             """
             INSERT INTO agent_triggers (agent_id, trigger_type, name, description, config, is_active)
-            VALUES (:agent_id::uuid, 'webhook', :name, :description, :config::jsonb, true)
+            VALUES (CAST(:agent_id AS uuid), 'webhook', :name, :description, CAST(:config AS jsonb), true)
             RETURNING trigger_id, name, trigger_type, config, is_active, created_at::text
             """,
             {
