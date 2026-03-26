@@ -206,13 +206,27 @@ class ToolManager:
                     tool_class = get_tool_class(module_path, class_name)
                     enabled_methods = self._get_enabled_methods_for_tool(tool_name)
                     
-                    self.thread_manager.add_tool(
-                        tool_class,
-                        function_names=enabled_methods,
-                        thread_manager=self.thread_manager,
-                        db_connection=db_connection,
-                        agent_id=agent_id
-                    )
+                    # Pass only kwargs the tool accepts (some don't take db_connection)
+                    tool_kwargs = {
+                        'thread_manager': self.thread_manager,
+                        'agent_id': agent_id,
+                    }
+                    if db_connection is not None:
+                        tool_kwargs['db_connection'] = db_connection
+                    try:
+                        self.thread_manager.add_tool(
+                            tool_class,
+                            function_names=enabled_methods,
+                            **tool_kwargs
+                        )
+                    except TypeError:
+                        # Tool doesn't accept db_connection, try without it
+                        tool_kwargs.pop('db_connection', None)
+                        self.thread_manager.add_tool(
+                            tool_class,
+                            function_names=enabled_methods,
+                            **tool_kwargs
+                        )
                     logger.info(f"✅ Registered agent builder tool: {tool_name}")
                 except (ImportError, AttributeError) as e:
                     logger.warning(f"Failed to load agent builder tool {tool_name}: {e}")
