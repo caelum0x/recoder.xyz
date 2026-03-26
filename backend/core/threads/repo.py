@@ -1123,7 +1123,7 @@ async def save_compressed_messages_batch(
                 ),
             updated_at = NOW()
         FROM (VALUES {', '.join(values_parts)}) AS data(id, compressed_content, is_omission)
-        WHERE m.message_id::text = data.id::text::uuid  -- Cast string to uuid for comparison
+        WHERE m.message_id::text = data.id::text  -- Compare as text
         """
         
         try:
