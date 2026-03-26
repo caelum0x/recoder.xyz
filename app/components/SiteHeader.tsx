@@ -75,6 +75,12 @@ export function SiteHeader({ fixed = true }: SiteHeaderProps) {
                   Dashboard
                 </Link>
                 <LaunchWebIDEButton className="px-4 py-2 text-sm bg-gradient-to-r from-orange-500 to-purple-600 hover:from-orange-600 hover:to-purple-700 rounded-lg transition-colors flex items-center space-x-2" />
+                <Link
+                  href="/auth/signout"
+                  className="px-3 py-1.5 text-sm text-gray-400 hover:text-red-400 transition-colors"
+                >
+                  Sign Out
+                </Link>
               </>
             ) : (
               <>
