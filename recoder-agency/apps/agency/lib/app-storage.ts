@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, writeFileSync, unlinkSync } from "node:fs";
+import { existsSync, mkdirSync, writeFileSync, readFileSync, unlinkSync } from "node:fs";
 import { join, dirname } from "node:path";
 
 const STORAGE_DIR = process.env.AGENCY_STORAGE_DIR || "/root/recoder.xyz/data/agency-storage";
@@ -22,8 +22,9 @@ function ensureDir(filePath: string) {
 	}
 }
 
-interface LocalStorageBucket {
+export interface LocalStorageBucket {
 	upload(path: string, data: Buffer, options?: { contentType?: string; upsert?: boolean }): Promise<{ data: { path: string } | null; error: Error | null }>;
+	download(path: string): Promise<{ data: Blob | null; error: Error | null }>;
 	getPublicUrl(path: string): { data: { publicUrl: string } };
 	remove(paths: string[]): Promise<{ data: null; error: Error | null }>;
 }
@@ -36,6 +37,18 @@ function createLocalStorage(): LocalStorageBucket {
 				ensureDir(fullPath);
 				writeFileSync(fullPath, data);
 				return { data: { path }, error: null };
+			} catch (err) {
+				return { data: null, error: err instanceof Error ? err : new Error(String(err)) };
+			}
+		},
+		async download(path: string) {
+			try {
+				const fullPath = join(STORAGE_DIR, path);
+				if (!existsSync(fullPath)) {
+					return { data: null, error: new Error(`File not found: ${path}`) };
+				}
+				const buffer = readFileSync(fullPath);
+				return { data: new Blob([buffer]), error: null };
 			} catch (err) {
 				return { data: null, error: err instanceof Error ? err : new Error(String(err)) };
 			}

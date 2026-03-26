@@ -51,7 +51,8 @@ const nextConfig: NextConfig = {
 				protocol: "https",
 				hostname: "lh3.googleusercontent.com",
 			},
-			...(process.env.NEXT_PUBLIC_SUPABASE_URL
+			...(process.env.NEXT_PUBLIC_SUPABASE_URL &&
+		!process.env.NEXT_PUBLIC_SUPABASE_URL.includes("placeholder")
 				? [
 						{
 							protocol: "https" as const,
