@@ -50,7 +50,7 @@ class WebSearchResponse(BaseModel):
 @router.get("", response_model=WebSearchResponse, summary="Search the web via SearXNG")
 async def web_search(
     q: str = Query(..., min_length=1, max_length=500, description="Search query"),
-    limit: int = Query(default=10, ge=1, le=50, description="Max results to return"),
+    limit: int = Query(default=15, ge=1, le=50, description="Max results to return"),
     language: str = Query(default="en-US", description="Language for results"),
     time_range: Optional[str] = Query(default=None, description="Time range: day, week, month, year"),
     categories: str = Query(default="general", description="Search categories: general, news, images, etc."),

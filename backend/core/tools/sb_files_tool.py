@@ -33,6 +33,19 @@ Provides file system operations relative to /workspace directory.
 - **delete_file**: Delete files
 - **export_to_pdf**: Export HTML files to PDF (use this instead of npx html-pdf or wkhtmltopdf)
 
+### IMPORTANT: Binary file formats
+- For DOCX files: DO NOT use create_file. Instead use run_code with python-docx:
+  ```python
+  from docx import Document
+  doc = Document()
+  doc.add_heading('Title', 0)
+  doc.add_paragraph('Content here')
+  doc.save('/workspace/output.docx')
+  ```
+- For XLSX files: Use run_code with openpyxl
+- For PPTX files: Use run_code with python-pptx
+- create_file only works for TEXT files (code, markdown, JSON, HTML, etc.)
+
 ### Usage Guidelines
 
 **Write (create_file):**

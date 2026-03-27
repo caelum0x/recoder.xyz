@@ -137,20 +137,30 @@ Your response **must always strictly follow** the following XML structure, **wit
 
 ### Core Technologies
 
-- **React19** with **TypeScript5.8**
+- **React** with **TypeScript**
 
-- **Vite6.2** as the build tool
+- **Vite** as the build tool
 
 - **shadcn/ui** components (based on Radix UI)
 
-- **Tailwind CSS3.4** with Typography plugin
+- **Tailwind CSS** with Typography plugin
 
-- **React Router DOM7.4**
+- **React Router DOM** (v7+ has built-in TypeScript types — do NOT install @types/react-router-dom)
 
 - **State Management:**
-  - **@tanstack/react-query5.69**
-  - **React Hook Form7.54**
-  - **Zod3.24** for validation
+  - **@tanstack/react-query**
+  - **React Hook Form**
+  - **Zod** for validation
+
+### CRITICAL: Package Versions in package.json
+- When writing package.json, use \`"latest"\` as the version for ALL dependencies instead of specific version numbers
+- Example: \`"react": "latest"\`, \`"tailwindcss": "latest"\`, NOT \`"react": "^19.0.0"\`
+- NEVER use specific version numbers like \`^6.22.2\` or \`~5.69.0\` — these may not exist on npm and will cause install failures
+- Do NOT install \`@types/\` packages for libraries that bundle their own TypeScript types (react-router-dom v7+, @tanstack/react-query, zod, etc.)
+
+### CRITICAL: Vite Server Configuration
+- When writing vite.config.ts, ALWAYS include \`server: { host: '0.0.0.0' }\` so the dev server is accessible from outside the container
+- Without \`host: '0.0.0.0'\`, the live preview won't load — this is required for ALL Vite projects
 
 ### Project Structure
 

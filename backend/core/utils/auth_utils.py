@@ -191,7 +191,7 @@ async def _ensure_basejump_account(user_id: str):
 
         # Check if account already exists (fast path)
         existing = await execute_one(
-            "SELECT id FROM basejump.accounts WHERE id = :uid",
+            "SELECT id FROM basejump.accounts WHERE id::text = :uid",
             {"uid": user_id}
         )
         if existing:
@@ -214,11 +214,97 @@ async def _ensure_basejump_account(user_id: str):
             {"uid": user_id}
         )
 
+        # Cross-link: if this user's email matches another account owner,
+        # add membership so they can access data from other login methods
+        # (e.g., email login vs GitHub login for same person).
+        try:
+            await _cross_link_accounts(user_id)
+        except Exception as link_err:
+            logger.warning(f"Cross-link accounts failed for {user_id}: {link_err}")
+
         _provisioned_users.add(user_id)
         logger.info(f"Auto-provisioned basejump account for user {user_id}")
     except Exception as e:
         # Non-fatal — user can still authenticate, just may hit 403 on first request
         logger.warning(f"Auto-provision basejump account failed for {user_id}: {e}")
+
+
+async def _cross_link_accounts(user_id: str):
+    """If this user shares an email with other auth users, grant cross-account membership.
+
+    Handles the case where the same person logs in via email AND GitHub (different user_ids)
+    but should see all their data regardless of which login method they use.
+    """
+    from core.services.db import execute_read, execute_mutate
+
+    # Get this user's email from the auth DB
+    email = None
+    try:
+        engine = await _get_auth_engine()
+        if not engine:
+            return
+        async with engine.connect() as conn:
+            result = await conn.exec_driver_sql(
+                'SELECT email FROM "user" WHERE id::text = $1 LIMIT 1',
+                (user_id,),
+            )
+            row = result.fetchone()
+            if row:
+                email = row[0]
+    except Exception:
+        return  # Can't look up email — skip
+
+    if not email:
+        return
+
+    # Find other auth users with the same email
+    try:
+        engine = await _get_auth_engine()
+        if not engine:
+            return
+        async with engine.connect() as conn:
+            result = await conn.exec_driver_sql(
+                'SELECT id::text FROM "user" WHERE email = $1',
+                (email,),
+            )
+            sibling_ids = [r[0] for r in result.fetchall() if r[0] != user_id]
+    except Exception:
+        sibling_ids = []
+
+    if not sibling_ids:
+        return
+
+    # For each sibling, add cross-membership
+    for sibling_id in sibling_ids:
+        # Get sibling's accounts
+        sibling_accounts = await execute_read(
+            "SELECT account_id::text FROM basejump.account_user WHERE user_id::text = :uid",
+            {"uid": sibling_id}
+        )
+        for acc in sibling_accounts:
+            acc_id = acc['account_id']
+            await execute_mutate(
+                """INSERT INTO basejump.account_user (user_id, account_id, account_role)
+                   VALUES (:uid, :aid, 'owner')
+                   ON CONFLICT (user_id, account_id) DO NOTHING""",
+                {"uid": user_id, "aid": acc_id}
+            )
+
+        # Also add sibling to this user's accounts
+        my_accounts = await execute_read(
+            "SELECT account_id::text FROM basejump.account_user WHERE user_id::text = :uid",
+            {"uid": user_id}
+        )
+        for acc in my_accounts:
+            acc_id = acc['account_id']
+            await execute_mutate(
+                """INSERT INTO basejump.account_user (user_id, account_id, account_role)
+                   VALUES (:uid, :aid, 'owner')
+                   ON CONFLICT (user_id, account_id) DO NOTHING""",
+                {"uid": sibling_id, "aid": acc_id}
+            )
+
+    logger.info(f"Cross-linked accounts for user {user_id} with {len(sibling_ids)} sibling(s)")
 
 
 async def verify_admin_api_key(x_admin_api_key: Optional[str] = Header(None)):
@@ -535,7 +621,7 @@ async def verify_and_authorize_thread_access(client, thread_id: str, user_id: Op
         if user_id:
             # Full query with user role checks for authenticated users
             sql = """
-            SELECT 
+            SELECT
                 t.thread_id,
                 t.account_id,
                 p.is_public as project_is_public,
@@ -586,8 +672,8 @@ async def verify_and_authorize_thread_access(client, thread_id: str, user_id: Op
             structlog.get_logger().debug(f"Admin access granted for thread {thread_id}", user_role=user_role)
             return True
         
-        # Check if user owns the thread
-        if result.get('account_id') == user_id:
+        # Check if user owns the thread (personal account: account_id == user_id)
+        if str(result.get('account_id', '')) == str(user_id):
             return True
         
         # Check if user is a team member of the account

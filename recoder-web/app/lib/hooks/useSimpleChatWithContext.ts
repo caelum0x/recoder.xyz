@@ -470,10 +470,10 @@ export function useSimpleChatWithContext(options: UseChatOptions) {
       // Format context for AI
       const contextPrompt = formatProjectContext(updatedContext);
 
-      // Initial connection timeout (90s for complex requests)
+      // Initial connection timeout (180s for complex requests like code generation)
       let timeoutId = setTimeout(() => {
         abortControllerRef.current?.abort();
-      }, 90000);
+      }, 180000);
 
       try {
         const response = await fetch(api, {

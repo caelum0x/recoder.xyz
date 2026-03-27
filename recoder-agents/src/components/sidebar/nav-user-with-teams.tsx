@@ -400,16 +400,7 @@ export function NavUserWithTeams({
                   <MessageSquare className="h-4 w-4" />
                   <span>Send Feedback</span>
                 </DropdownMenuItem>
-                <DropdownMenuItem
-                  onClick={() => {
-                    setSettingsTab('billing');
-                    setShowSettingsModal(true);
-                  }}
-                  className="gap-2 p-2"
-                >
-                  <CreditCard className="h-4 w-4" />
-                  <span>Billing</span>
-                </DropdownMenuItem>
+                {/* Billing hidden — platform is free */}
                 <DropdownMenuItem
                   onClick={() => {
                     setSettingsTab('usage');

@@ -14,8 +14,14 @@ if [ -f "$ENV_FILE" ]; then
     key="${line%%=*}"
     # Skip PORT and HOSTNAME (controlled by PM2)
     [[ "$key" == "PORT" || "$key" == "HOSTNAME" ]] && continue
-    # Export the variable
-    export "$line" 2>/dev/null || true
+    # Extract value and strip surrounding quotes (double or single)
+    val="${line#*=}"
+    if [[ "$val" =~ ^\"(.*)\"$ ]]; then
+      val="${BASH_REMATCH[1]}"
+    elif [[ "$val" =~ ^\'(.*)\'$ ]]; then
+      val="${BASH_REMATCH[1]}"
+    fi
+    export "$key=$val" 2>/dev/null || true
   done < "$ENV_FILE"
 fi
 

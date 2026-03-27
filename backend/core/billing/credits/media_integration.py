@@ -31,8 +31,8 @@ class MediaBillingIntegration:
     
     @staticmethod
     def is_development_mode() -> bool:
-        """Check if running in development/local mode (skip billing)."""
-        return config.ENV_MODE == EnvMode.LOCAL
+        """Skip billing — platform is free/BYOK, no credit charges."""
+        return True
     
     @staticmethod
     async def check_credits(account_id: str, minimum_required: Decimal = Decimal("0.01")) -> Tuple[bool, str, Optional[Decimal]]:
@@ -46,11 +46,14 @@ class MediaBillingIntegration:
         Returns:
             Tuple of (has_credits, message, current_balance)
         """
+        # Platform is free/BYOK — skip all billing checks
+        return True, "Billing disabled — platform is free", Decimal("999999")
+
         # Skip in development mode
         if MediaBillingIntegration.is_development_mode():
             logger.debug("[MEDIA_BILLING] Development mode - skipping credit check")
             return True, "Development mode", Decimal("999999")
-        
+
         try:
             balance_info = await credit_manager.get_balance(account_id, use_cache=True)
             

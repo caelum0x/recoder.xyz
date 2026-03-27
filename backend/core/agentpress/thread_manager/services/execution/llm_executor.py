@@ -205,12 +205,13 @@ class LLMExecutor:
         tool_choice: str,
         native_tool_calling: bool,
         xml_tool_calling: bool,
-        stream: bool
+        stream: bool,
+        api_key: Optional[str] = None
     ) -> Any:
         llm_call_start = time.time()
-        
+
         stop_sequences = ["|||STOP_AGENT|||"] if xml_tool_calling else None
-        
+
         try:
             llm_response = await make_llm_api_call(
                 prepared_messages, llm_model,
@@ -219,7 +220,8 @@ class LLMExecutor:
                 tools=openapi_tool_schemas,
                 tool_choice=tool_choice if native_tool_calling else "none",
                 stream=stream,
-                stop=stop_sequences if stop_sequences else None
+                stop=stop_sequences if stop_sequences else None,
+                api_key=api_key
             )
             
             if not stream:

@@ -635,6 +635,9 @@ api_router.include_router(website_analysis_router)
 from core.workflows.workflow_api import router as workflow_router
 api_router.include_router(workflow_router)
 
+from core.endpoints.user_keys_api import router as user_keys_router
+api_router.include_router(user_keys_router)
+
 from core.workflows.workflow_templates_api import router as workflow_templates_router
 api_router.include_router(workflow_templates_router)
 

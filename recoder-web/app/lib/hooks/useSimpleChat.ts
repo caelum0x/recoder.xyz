@@ -708,10 +708,10 @@ export function useSimpleChat(options: UseChatOptions) {
 
       abortControllerRef.current = new AbortController();
 
-      // Initial connection timeout (90s for complex requests)
+      // Initial connection timeout (180s for complex requests like code generation)
       let timeoutId = setTimeout(() => {
         abortControllerRef.current?.abort();
-      }, 90000);
+      }, 180000);
 
       // Include all messages including the new user message
       // Use effective history (filters out condensed messages) for API call

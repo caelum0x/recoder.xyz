@@ -70,14 +70,5 @@ def is_tool_allowed(tier_name: str, tool_name: str) -> bool:
 
 
 async def check_tool_access_for_account(account_id: str, tool_name: str) -> ToolAccessResult:
-    try:
-        from core.cache.runtime_cache import get_cached_tier_info
-        tier_info = await get_cached_tier_info(account_id)
-        if not tier_info:
-            return ToolAccessResult(allowed=True)
-
-        tier_name = tier_info.get('name', 'free')
-        return check_tool_access(tier_name, tool_name)
-    except Exception as e:
-        logger.warning(f"Failed to check tool access for {account_id}: {e}")
-        return ToolAccessResult(allowed=True)
+    # Platform is free/BYOK — all tools are accessible to all users
+    return ToolAccessResult(allowed=True)

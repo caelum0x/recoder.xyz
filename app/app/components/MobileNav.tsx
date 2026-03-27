@@ -3,8 +3,9 @@
 import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Menu, X, LayoutDashboard, Bot, BarChart3, Settings, Key, FolderOpen, Sparkles, User, Terminal, Globe, Cpu } from 'lucide-react';
+import { Menu, X, LayoutDashboard, Bot, BarChart3, Settings, Key, FolderOpen, Sparkles, User, Terminal, Globe, Cpu, LogOut } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { signOut } from '@/lib/session-provider';
 
 const bottomTabs = [
   { href: '/dashboard/overview', label: 'Overview', icon: LayoutDashboard },
@@ -148,6 +149,20 @@ export function MobileNav() {
                   </div>
                 </div>
               ))}
+
+              {/* Sign Out */}
+              <div className="mt-2 pt-4 border-t border-white/10">
+                <button
+                  onClick={() => {
+                    setDrawerOpen(false);
+                    signOut();
+                  }}
+                  className="flex items-center space-x-3 px-3 py-2.5 rounded-lg text-sm font-medium text-gray-400 hover:text-red-400 hover:bg-red-500/10 transition-colors w-full"
+                >
+                  <LogOut className="w-4 h-4" />
+                  <span>Sign Out</span>
+                </button>
+              </div>
             </div>
           </nav>
         </div>

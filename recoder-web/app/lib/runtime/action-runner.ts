@@ -119,6 +119,109 @@ export function resetGlobalActionState(): void {
   globalStaticServerStarted = false;
 }
 
+// ============================================
+// ETARGET Recovery: Sanitize bad package versions
+// ============================================
+
+/**
+ * Known @types/ packages that should be removed because the library
+ * bundles its own TypeScript types (causes ETARGET / 404 on npm).
+ */
+const TYPES_PACKAGES_WITH_BUNDLED_TYPES = new Set([
+  '@types/react-router-dom',  // react-router-dom v7+ has built-in types
+  '@types/react-router',      // same
+  '@types/zustand',           // zustand has built-in types
+  '@types/zod',               // zod has built-in types
+  '@types/jotai',             // jotai has built-in types
+]);
+
+/**
+ * Sanitize package.json by replacing specific version strings with "latest"
+ * and removing @types/ packages for libraries that bundle their own types.
+ * Returns the sanitized JSON string, or null if no changes were needed.
+ */
+function sanitizePackageJsonVersions(packageJsonStr: string): { sanitized: string; changed: boolean } {
+  try {
+    const pkg = JSON.parse(packageJsonStr);
+    let changed = false;
+
+    const sanitizeDeps = (deps: Record<string, string> | undefined): Record<string, string> | undefined => {
+      if (!deps) return deps;
+      const result: Record<string, string> = {};
+      for (const [name, version] of Object.entries(deps)) {
+        // Remove known problematic @types/ packages
+        if (TYPES_PACKAGES_WITH_BUNDLED_TYPES.has(name)) {
+          changed = true;
+          continue; // skip this package entirely
+        }
+        // Replace specific versions (^x.y.z, ~x.y.z, x.y.z) with "latest"
+        // but keep "latest", "*", "workspace:*", "file:", "link:", "git:", "http" as-is
+        if (version !== 'latest' && version !== '*' &&
+            !version.startsWith('workspace:') && !version.startsWith('file:') &&
+            !version.startsWith('link:') && !version.startsWith('git') &&
+            !version.startsWith('http')) {
+          result[name] = 'latest';
+          if (version !== 'latest') changed = true;
+        } else {
+          result[name] = version;
+        }
+      }
+      return result;
+    };
+
+    pkg.dependencies = sanitizeDeps(pkg.dependencies);
+    pkg.devDependencies = sanitizeDeps(pkg.devDependencies);
+
+    return {
+      sanitized: JSON.stringify(pkg, null, 2),
+      changed,
+    };
+  } catch {
+    return { sanitized: packageJsonStr, changed: false };
+  }
+}
+
+/**
+ * Ensure vite.config.ts has server.host = '0.0.0.0' so the dev server
+ * is accessible from outside the sandbox container.
+ * Without this, the live preview iframe can't connect.
+ */
+function ensureViteHostConfig(content: string): { content: string; changed: boolean } {
+  // Only process vite config files
+  if (!content.includes('defineConfig')) {
+    return { content, changed: false };
+  }
+
+  // Already has host: '0.0.0.0' — no change needed
+  if (content.includes("host: '0.0.0.0'") || content.includes('host: "0.0.0.0"') || content.includes('host: true')) {
+    return { content, changed: false };
+  }
+
+  // Has server config but no host — inject host
+  if (content.includes('server:') && content.includes('{')) {
+    const result = content.replace(
+      /server:\s*\{/,
+      "server: {\n    host: '0.0.0.0',"
+    );
+    if (result !== content) {
+      return { content: result, changed: true };
+    }
+  }
+
+  // No server config at all — add it before the closing of defineConfig
+  if (!content.includes('server:')) {
+    const result = content.replace(
+      /defineConfig\(\{/,
+      "defineConfig({\n  server: { host: '0.0.0.0' },"
+    );
+    if (result !== content) {
+      return { content: result, changed: true };
+    }
+  }
+
+  return { content, changed: false };
+}
+
 let dockerAvailable: boolean | null = null;
 let lastDockerCheck = 0;
 const DOCKER_CHECK_INTERVAL = 60000;
@@ -770,6 +873,69 @@ export class ActionRunner {
     await this.#dockerExec(`mkdir -p "${fullPath}"`);
   }
 
+  /**
+   * Run npm install with ETARGET recovery.
+   * If the first attempt fails (e.g., ETARGET for non-existent package versions),
+   * sanitize package.json by replacing all specific versions with "latest",
+   * remove @types/ packages for libraries with built-in types, and retry once.
+   */
+  async #npmInstallWithRecovery(): Promise<string> {
+    const npmCmd = 'npm install --legacy-peer-deps --prefer-offline --no-audit --no-fund';
+
+    try {
+      return await this.#dockerExec(npmCmd);
+    } catch (firstError: any) {
+      const errorMsg = firstError?.message || '';
+      const isVersionError = /ETARGET|No matching version|notarget|404 Not Found|ERESOLVE/.test(errorMsg);
+
+      if (!isVersionError) {
+        throw firstError; // Not a version issue, don't retry
+      }
+
+      logger.warn('⚠️ npm install failed with version error, attempting recovery by sanitizing package.json...');
+      logger.warn(`   Error: ${errorMsg.substring(0, 200)}`);
+
+      try {
+        // Read current package.json from container
+        const pkgJsonStr = await this.#dockerExec('cat /workspace/package.json');
+        if (!pkgJsonStr || !pkgJsonStr.trim().startsWith('{')) {
+          throw firstError; // Can't read package.json, re-throw original error
+        }
+
+        const { sanitized, changed } = sanitizePackageJsonVersions(pkgJsonStr);
+
+        if (!changed) {
+          logger.warn('   package.json versions look fine, no changes to make');
+          throw firstError;
+        }
+
+        // Write sanitized package.json back
+        await this.#dockerWriteFile('package.json', sanitized);
+        logger.info('   Sanitized package.json — replaced specific versions with "latest"');
+
+        // Update local file store so UI reflects the change
+        try {
+          const store = await getWorkbenchStore();
+          store.files.setKey(`${WORK_DIR}/package.json`, { type: 'file', content: sanitized, isBinary: false });
+        } catch { /* non-critical */ }
+
+        // Clean node_modules and lock file before retry
+        await this.#dockerExec('rm -rf node_modules package-lock.json');
+
+        // Retry install
+        logger.info('   Retrying npm install with sanitized versions...');
+        const output = await this.#dockerExec(npmCmd);
+        logger.info('✅ npm install succeeded after version sanitization');
+        return output;
+      } catch (recoveryError: any) {
+        // If recovery itself fails, log it and throw the original error
+        if (recoveryError === firstError) throw firstError;
+        logger.error('❌ npm install recovery also failed:', recoveryError?.message?.substring(0, 200));
+        throw recoveryError;
+      }
+    }
+  }
+
   addAction(data: ActionCallbackData) {
     const { actionId } = data;
     logger.debug('➕ [ActionRunner] addAction called:', data.action.type, actionId);
@@ -1281,7 +1447,7 @@ export class ActionRunner {
 
           try {
             logger.info('📦 Installing dependencies with npm...');
-            await this.#dockerExec('npm install --legacy-peer-deps --prefer-offline --no-audit --no-fund');
+            await this.#npmInstallWithRecovery();
             logger.info('✅ Dependencies installed successfully with npm');
 
             // Only mark as complete if we reach this point without exceptions
@@ -1377,7 +1543,7 @@ export class ActionRunner {
         const installMatch = action.content.match(/\b(npm|yarn|pnpm)\s+(install|i\b)(\s+[^&]*)?/);
         if (installMatch) {
           logger.info('📦 Installing with npm...');
-          await this.#dockerExec('npm install --legacy-peer-deps --prefer-offline --no-audit --no-fund');
+          await this.#npmInstallWithRecovery();
         }
 
         // Start dev server via backend API (handles framework detection, port binding, health checks)
@@ -1472,6 +1638,18 @@ export class ActionRunner {
       if (mergedContent) {
         action.content = mergedContent;
         logger.info('📦 Merged package.json dependencies (preserved existing config)');
+      }
+    }
+
+    // 🌐 VITE HOST FIX: Ensure vite.config.ts always has server.host = '0.0.0.0'
+    // so the dev server is accessible from outside the sandbox container.
+    // Without this, non-technical users get ERR_CONNECTION_REFUSED on live preview.
+    const isViteConfig = action.filePath.match(/vite\.config\.(ts|js|mjs)$/);
+    if (isViteConfig && action.content) {
+      const { content: fixedContent, changed } = ensureViteHostConfig(action.content);
+      if (changed) {
+        action.content = fixedContent;
+        logger.info('🌐 Injected server.host = "0.0.0.0" into vite.config for live preview');
       }
     }
 
@@ -2321,7 +2499,7 @@ export class ActionRunner {
 
         // Install dependencies
         try {
-          await this.#dockerExec('npm install --legacy-peer-deps --prefer-offline --no-audit --no-fund');
+          await this.#npmInstallWithRecovery();
           logger.info('✅ Expo dependencies installed with npm');
         } catch (installErr: any) {
           logger.error('❌ Expo npm install failed:', installErr.message);
@@ -2370,7 +2548,7 @@ export class ActionRunner {
         logger.info('✅ Dependencies already installed, skipping reinstall');
       } else {
         logger.info('📦 Installing dependencies with npm...');
-        await this.#dockerExec('npm install --legacy-peer-deps --prefer-offline --no-audit --no-fund');
+        await this.#npmInstallWithRecovery();
         logger.info('✅ Dependencies installed successfully with npm');
 
         // Only mark as complete if we reach this point without exceptions
@@ -2528,7 +2706,7 @@ export class ActionRunner {
 
           // Re-install with the new packages
           try {
-            await this.#dockerExec('npm install --legacy-peer-deps --prefer-offline --no-audit --no-fund');
+            await this.#npmInstallWithRecovery();
             logger.info('✅ Re-installed dependencies with auto-detected packages');
           } catch (installErr: any) {
             logger.warn('⚠️ npm install failed for auto-detected packages:', installErr.message);
