@@ -22,12 +22,23 @@ function getOptionalStringField(value: unknown, key: string): string | undefined
 export async function GET(request: NextRequest) {
   try {
     // Use Better Auth to get session
+    const reqHeaders = await headers();
+    const cookieVal = reqHeaders.get('cookie') || 'NONE';
+    const hasSessionCookie = cookieVal.includes('recoder.session_token');
+    logger.info('Session check starting', {
+      route: 'api/auth/session',
+      hasCookie: hasSessionCookie,
+      cookieLen: cookieVal.length,
+      host: reqHeaders.get('host') || 'NONE',
+      origin: reqHeaders.get('origin') || 'NONE',
+    });
+
     const session = await auth.api.getSession({
-      headers: await headers()
+      headers: reqHeaders
     });
 
     if (!session?.user) {
-      logger.info('No session found', { route: 'api/auth/session' });
+      logger.info('No session found', { route: 'api/auth/session', hasCookie: hasSessionCookie });
       return NextResponse.json(assertAuthSessionGetResponse({ user: null }), { status: 200 });
     }
 
