@@ -611,22 +611,33 @@ export class DaytonaClient {
     await this.execCommand(sandboxId, `mkdir -p "$(dirname '${safePath}')"`, { timeoutSecs: 10 });
 
     if (b64Content.length <= CHUNK_SIZE) {
-      // Small file — single write
-      const command = `echo '${b64Content}' | base64 -d > '${safePath}' && echo '__WRITE_OK__'`;
+      // Small file — single write. Use printf instead of echo to handle large strings.
+      // Verify with a separate check instead of relying on output capture.
+      const command = `printf '%s' '${b64Content}' | base64 -d > '${safePath}'`;
       const result = await this.execCommand(sandboxId, command, { timeoutSecs: 30 });
-      if (result.exitCode !== 0 || !result.output.includes('__WRITE_OK__')) {
+      if (result.exitCode !== 0) {
         throw new Error(`File write to ${filePath} failed (exit ${result.exitCode}): ${result.output}`);
+      }
+      // Verify the file exists (don't rely on __WRITE_OK__ marker which may not be captured)
+      const verify = await this.execCommand(sandboxId, `test -f '${safePath}' && echo OK || echo FAIL`, { timeoutSecs: 5 });
+      if (!verify.output.includes('OK')) {
+        throw new Error(`File write to ${filePath} failed: file not found after write`);
       }
     } else {
       // Large file — write in chunks to avoid shell argument overflow
       await this.execCommand(sandboxId, `> '${safePath}'`, { timeoutSecs: 10 });
       for (let i = 0; i < b64Content.length; i += CHUNK_SIZE) {
         const chunk = b64Content.slice(i, i + CHUNK_SIZE);
-        const command = `echo '${chunk}' | base64 -d >> '${safePath}' && echo '__CHUNK_OK__'`;
+        const command = `printf '%s' '${chunk}' | base64 -d >> '${safePath}'`;
         const result = await this.execCommand(sandboxId, command, { timeoutSecs: 30 });
-        if (result.exitCode !== 0 || !result.output.includes('__CHUNK_OK__')) {
-          throw new Error(`File write chunk to ${filePath} failed at offset ${i}`);
+        if (result.exitCode !== 0) {
+          throw new Error(`File write chunk to ${filePath} failed at offset ${i}: ${result.output}`);
         }
+      }
+      // Verify final file exists
+      const verify = await this.execCommand(sandboxId, `test -f '${safePath}' && echo OK || echo FAIL`, { timeoutSecs: 5 });
+      if (!verify.output.includes('OK')) {
+        throw new Error(`File write to ${filePath} failed: file not found after chunked write`);
       }
     }
   }
