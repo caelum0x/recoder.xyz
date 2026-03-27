@@ -416,7 +416,7 @@ export function setupPreviewProxy(app: Express, containers: Map<string, { id: st
           await ensureDependencies(entry.id, projectId, true);
           const framework = await detectFramework(entry.id, true);
           console.log(`[Preview] Auto-starting Daytona dev server for ${projectId} (${framework})`);
-          const ports = [3001, 3000, 3004, 3005, 3002]; // standard Daytona port set
+          const ports = [5173, 3000, 3001, 3004, 3005, 3002]; // Vite (5173) first, then standard ports
           await devServerManager.start(entry.id, projectId, framework, ports, {
             daytona: true,
             daytonaPreviewUrl: daytonaUrl,
