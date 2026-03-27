@@ -1,5 +1,6 @@
 import { ToastProvider } from "@recoder-internal/ui/toast";
 import { redirect } from "next/navigation";
+import { AgencyCopilot } from "@/components/agency-copilot";
 import { getClientForUser } from "@/lib/agency/get-client-for-user";
 import { getCurrentUser } from "@/lib/get-current-user";
 import { ClientHeader } from "./ui/header";
@@ -25,6 +26,7 @@ export default async function ClientLayout({
 					<main className="flex-1 overflow-y-auto p-6">{children}</main>
 				</div>
 			</div>
+			<AgencyCopilot />
 		</ToastProvider>
 	);
 }

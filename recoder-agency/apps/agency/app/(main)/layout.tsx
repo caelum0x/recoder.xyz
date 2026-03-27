@@ -1,4 +1,5 @@
 import { ToastProvider } from "@recoder-internal/ui/toast";
+import { AgencyCopilot } from "@/components/agency-copilot";
 import { SentryUserWrapper } from "@/components/sentry-user-wrapper";
 import { InternalGiselleClientProvider } from "./internal-giselle-client-provider";
 import { Header } from "./ui/header";
@@ -20,6 +21,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 							</main>
 						</div>
 					</div>
+					<AgencyCopilot />
 				</InternalGiselleClientProvider>
 			</ToastProvider>
 		</SentryUserWrapper>
