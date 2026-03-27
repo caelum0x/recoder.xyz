@@ -68,7 +68,20 @@ export class DevServerManager {
     const startScript = `cd ${workDir} && BROWSER=none nohup ${command} > /tmp/dev.log 2>&1 &`;
 
     if (isDaytona) {
-      await exec(startScript);
+      // Use Daytona session API for persistent background processes.
+      // Regular exec kills the process when the exec session ends.
+      try {
+        const dc = getDaytonaClient();
+        const sessionId = `dev-server-${projectId}`;
+        // Clean up any existing session
+        try { await dc.deleteSession(containerId, sessionId); } catch {}
+        await dc.createSession(containerId, sessionId);
+        await dc.execInSession(containerId, sessionId, `cd ${workDir} && BROWSER=none ${command}`);
+        console.log(`[DevServer] Started via Daytona session: ${sessionId}`);
+      } catch (sessionErr: any) {
+        console.warn(`[DevServer] Session API failed, falling back to exec: ${sessionErr.message}`);
+        await exec(startScript);
+      }
     } else {
       const container = docker.getContainer(containerId);
       const dockerExec = await container.exec({
@@ -438,14 +451,15 @@ export class DevServerManager {
         const dc = getDaytonaClient();
         const curlResult = await dc.execCommand(
           sandboxId,
-          'curl -sf http://localhost:3000 > /dev/null 2>&1 && echo "PORT3000" || curl -sf http://localhost:5173 > /dev/null 2>&1 && echo "PORT5173" || echo "NOTREADY"',
-          { timeoutSecs: 5 },
+          'for p in 5173 5174 5175 5176 3000 3001 8080 8081; do curl -sf http://localhost:$p > /dev/null 2>&1 && echo "PORT$p" && exit 0; done; echo "NOTREADY"',
+          { timeoutSecs: 8 },
         );
         const output = curlResult.output.trim();
-        if (output.includes('PORT3000')) {
-          return { ready: true, port: 3000 };
-        } else if (output.includes('PORT5173')) {
-          return { ready: true, port: 5173 };
+        const portMatch = output.match(/PORT(\d+)/);
+        if (portMatch) {
+          const port = parseInt(portMatch[1], 10);
+          console.log(`[DevServer] Daytona dev server responding on port ${port}`);
+          return { ready: true, port };
         }
       } catch {}
 
