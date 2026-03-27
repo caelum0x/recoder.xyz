@@ -603,12 +603,31 @@ export class DaytonaClient {
    * Kept as fallback for when native filesystem API is unavailable.
    */
   private async uploadFileExec(sandboxId: string, filePath: string, content: string): Promise<void> {
+    const safePath = filePath.replace(/'/g, "'\\''");
     const b64Content = Buffer.from(content, 'utf-8').toString('base64');
-    const command = `mkdir -p "$(dirname '${filePath.replace(/'/g, "'\\''")}')" && echo '${b64Content}' | base64 -d > '${filePath.replace(/'/g, "'\\''")}' && echo '__WRITE_OK__'`;
-    const result = await this.execCommand(sandboxId, command, { timeoutSecs: 30 });
+    const CHUNK_SIZE = 65000; // Match Python backend's chunk size to avoid shell arg overflow
 
-    if (result.exitCode !== 0 || !result.output.includes('__WRITE_OK__')) {
-      throw new Error(`File write to ${filePath} failed (exit ${result.exitCode}): ${result.output}`);
+    // Create parent directory
+    await this.execCommand(sandboxId, `mkdir -p "$(dirname '${safePath}')"`, { timeoutSecs: 10 });
+
+    if (b64Content.length <= CHUNK_SIZE) {
+      // Small file — single write
+      const command = `echo '${b64Content}' | base64 -d > '${safePath}' && echo '__WRITE_OK__'`;
+      const result = await this.execCommand(sandboxId, command, { timeoutSecs: 30 });
+      if (result.exitCode !== 0 || !result.output.includes('__WRITE_OK__')) {
+        throw new Error(`File write to ${filePath} failed (exit ${result.exitCode}): ${result.output}`);
+      }
+    } else {
+      // Large file — write in chunks to avoid shell argument overflow
+      await this.execCommand(sandboxId, `> '${safePath}'`, { timeoutSecs: 10 });
+      for (let i = 0; i < b64Content.length; i += CHUNK_SIZE) {
+        const chunk = b64Content.slice(i, i + CHUNK_SIZE);
+        const command = `echo '${chunk}' | base64 -d >> '${safePath}' && echo '__CHUNK_OK__'`;
+        const result = await this.execCommand(sandboxId, command, { timeoutSecs: 30 });
+        if (result.exitCode !== 0 || !result.output.includes('__CHUNK_OK__')) {
+          throw new Error(`File write chunk to ${filePath} failed at offset ${i}`);
+        }
+      }
     }
   }
 
@@ -648,11 +667,12 @@ export class DaytonaClient {
    * POST /{sandboxId}/toolbox/process/session
    */
   async createSession(sandboxId: string, sessionName?: string): Promise<string> {
+    const sessionId = sessionName || `session-${Date.now()}`;
     const result = await this.toolboxRequest<{ sessionId?: string; id?: string }>(
       'POST', sandboxId, '/process/session',
-      { name: sessionName || `session-${Date.now()}` },
+      { sessionId, name: sessionId },
     );
-    return result?.sessionId || result?.id || '';
+    return result?.sessionId || result?.id || sessionId;
   }
 
   /**
@@ -666,11 +686,30 @@ export class DaytonaClient {
     sessionId: string,
     command: string,
   ): Promise<{ cmdId: string }> {
-    const result = await this.toolboxRequest<{ cmdId?: string; id?: string; commandId?: string }>(
-      'POST', sandboxId, `/process/session/${sessionId}/exec`,
-      { command },
-    );
-    return { cmdId: result?.cmdId || result?.id || result?.commandId || '' };
+    try {
+      const result = await this.toolboxRequest<{ cmdId?: string; id?: string; commandId?: string }>(
+        'POST', sandboxId, `/process/session/${sessionId}/exec`,
+        { command },
+      );
+      return { cmdId: result?.cmdId || result?.id || result?.commandId || '' };
+    } catch (err: any) {
+      const msg = err?.message || '';
+      // Broken pipe = session died. Recreate and retry once.
+      if (msg.includes('broken pipe') || msg.includes('session not found') || msg.includes('no such process')) {
+        logger.warn({ sandboxId, sessionId, error: msg }, 'Session dead, recreating...');
+        try {
+          await this.createSession(sandboxId, sessionId);
+          const retry = await this.toolboxRequest<{ cmdId?: string; id?: string; commandId?: string }>(
+            'POST', sandboxId, `/process/session/${sessionId}/exec`,
+            { command },
+          );
+          return { cmdId: retry?.cmdId || retry?.id || retry?.commandId || '' };
+        } catch (retryErr: any) {
+          throw new Error(`Session exec failed after recreate: ${retryErr.message}`);
+        }
+      }
+      throw err;
+    }
   }
 
   /**
