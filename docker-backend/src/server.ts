@@ -1621,9 +1621,9 @@ async function getOrRecoverContainer(projectId: string): Promise<ContainerEntry 
   try {
     const dc = getDaytonaClient();
     const sandboxes = await dc.listSandboxes();
-    // Find matching sandboxes — prefer running ones, then most recently created
+    // Find matching sandboxes — exclude stopping/error states, prefer running ones
     const matches = sandboxes
-      .filter((s: any) => s.labels?.projectId === projectId)
+      .filter((s: any) => s.labels?.projectId === projectId && s.state !== 'stopping' && s.state !== 'error' && s.state !== 'unknown')
       .sort((a: any, b: any) => {
         // Running sandboxes first
         const aRunning = a.state === 'started' || a.state === 'running' ? 1 : 0;
@@ -2534,17 +2534,26 @@ app.post('/api/container', containerLimiter, optionalAuthenticateRequest, flexib
 
       if (existingDaytona) {
         existingDaytona.lastActive = Date.now();
-        // Ensure it's running
+        // Ensure it's running — if it can't be started, discard and create new
         if (isDaytonaSandbox(existingDaytona)) {
-          await ensureDaytonaSandboxRunning(existingDaytona.id).catch(() => {});
+          try {
+            await ensureDaytonaSandboxRunning(existingDaytona.id);
+          } catch {
+            // Sandbox can't be started (deleted, error state, etc.) — remove from map and fall through to create new
+            logger.warn({ projectId, sandboxId: existingDaytona.id }, 'Recovered sandbox cannot start, creating new one');
+            containers.delete(projectId);
+            existingDaytona = undefined as any;
+          }
         }
-        return res.json({
-          containerId: existingDaytona.id,
-          reused: true,
-          fromPool: false,
-          port: existingDaytona.port,
-          urls: { preview: existingDaytona.daytonaPreviewUrl || `http://localhost:${existingDaytona.port}` },
-        });
+        if (existingDaytona) {
+          return res.json({
+            containerId: existingDaytona.id,
+            reused: true,
+            fromPool: false,
+            port: existingDaytona.port,
+            urls: { preview: existingDaytona.daytonaPreviewUrl || `http://localhost:${existingDaytona.port}` },
+          });
+        }
       }
       try {
         const dc = getDaytonaClient();
