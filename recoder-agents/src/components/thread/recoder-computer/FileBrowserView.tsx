@@ -718,6 +718,18 @@ export function FileBrowserView({
     staleTime: 0,
   });
 
+  // Filter out system/dotfiles at workspace root to show only project files
+  const SYSTEM_DIRS = new Set([
+    'Desktop', 'Documents', 'Downloads', 'Music', 'Pictures', 'Public', 'Templates', 'Videos',
+    '.bashrc', '.bash_logout', '.profile', '.zshrc', '.zcompdump',
+    '.cache', '.config', '.local', '.gnupg', '.gvfs', '.daytona',
+    '.face', '.face.icon', '.ICEauthority',
+  ]);
+  const isWorkspaceRoot = currentPath === '/workspace' || currentPath === '/workspace/' || currentPath === '/home/daytona' || currentPath === '/home/daytona/';
+  const displayFiles = isWorkspaceRoot
+    ? (files || []).filter((f: FileInfo) => !SYSTEM_DIRS.has(f.name) && !f.name.startsWith('.'))
+    : (files || []);
+
   // Utility state
   const [isUploading, setIsUploading] = useState(false);
   const [isDownloadingAll, setIsDownloadingAll] = useState(false);
@@ -1727,7 +1739,7 @@ export function FileBrowserView({
 
   // Files view layout
   if (isLibraryView) {
-    const allFiles = selectedVersion ? versionFiles : files;
+    const allFiles = selectedVersion ? versionFiles : displayFiles;
     // Split files into main outputs and other files
     const mainOutputFiles = allFiles.filter(file => isMainOutput(file, isPresentationFolder));
     const otherFiles = allFiles.filter(file => !isMainOutput(file, isPresentationFolder));
@@ -1979,7 +1991,7 @@ export function FileBrowserView({
 
   // Default side-panel layout (also handles inline-library variant)
   // For inline-library, split into main outputs and other files
-  const allPanelFiles = selectedVersion ? versionFiles : files;
+  const allPanelFiles = selectedVersion ? versionFiles : displayFiles;
   const mainPanelFiles = isInlineLibrary 
     ? allPanelFiles.filter(file => isMainOutput(file, isPresentationFolder))
     : allPanelFiles;
