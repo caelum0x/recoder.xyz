@@ -494,9 +494,9 @@ services:
       - HOME=/home/node
       - TERM=xterm-256color
       - OPENCLAW_GATEWAY_TOKEN=${OPENCLAW_GATEWAY_TOKEN:-recoder_openclaw_prod_2026}
-      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - ANTHROPIC_API_KEY=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
+      - ANTHROPIC_BASE_URL=https://openrouter.ai/api/v1
       - OPENROUTER_API_KEY=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
-      - OPENCLAW_DEFAULT_MODEL=openrouter/anthropic/claude-sonnet-4
       - NODE_OPTIONS=--max_old_space_size=1536
       # Control UI: allow openclaw.recoder.xyz origin for WebSocket
       - OPENCLAW_CONTROL_UI_ALLOWED_ORIGINS=https://openclaw.recoder.xyz
