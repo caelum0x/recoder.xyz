@@ -198,7 +198,7 @@ async def get_user_agent_ids(user_id: str) -> List[str]:
     WHERE account_id::text = :user_id AND current_version_id IS NOT NULL
     """
     rows = await execute(sql, {"user_id": user_id})
-    return [row["agent_id"] for row in rows] if rows else []
+    return [str(row["agent_id"]) for row in rows] if rows else []
 
 
 async def get_agent_count(account_id: str) -> int:

@@ -12,22 +12,41 @@ vi.mock('@/lib/prisma', () => ({
     users: {
       findUnique: vi.fn(),
       update: vi.fn(),
+      delete: vi.fn(),
     },
     user_preferences: {
       findUnique: vi.fn(),
       create: vi.fn(),
       upsert: vi.fn(),
+      deleteMany: vi.fn(),
     },
     sessions: {
       findMany: vi.fn(),
       findFirst: vi.fn(),
       update: vi.fn(),
       updateMany: vi.fn(),
+      deleteMany: vi.fn(),
       count: vi.fn(),
+    },
+    session: {
+      deleteMany: vi.fn(),
+    },
+    account: {
+      deleteMany: vi.fn(),
+    },
+    accounts: {
+      deleteMany: vi.fn(),
     },
     api_keys: {
       updateMany: vi.fn(),
+      deleteMany: vi.fn(),
       count: vi.fn(),
+    },
+    cli_sessions: {
+      deleteMany: vi.fn(),
+    },
+    user_api_keys: {
+      deleteMany: vi.fn(),
     },
     usage_records: {
       aggregate: vi.fn(),
@@ -213,41 +232,32 @@ describe('UserService', () => {
   });
 
   describe('deleteAccount', () => {
-    it('should soft-delete user, revoke sessions and API keys', async () => {
-      mockPrisma.users.update.mockResolvedValue({} as any);
-      mockPrisma.sessions.updateMany.mockResolvedValue({ count: 3 } as any);
-      mockPrisma.api_keys.updateMany.mockResolvedValue({ count: 2 } as any);
+    it('should hard-delete user and all related auth data', async () => {
       mockPrisma.audit_logs.create.mockResolvedValue({} as any);
+      (mockPrisma as any).session.deleteMany.mockResolvedValue({ count: 1 } as any);
+      mockPrisma.sessions.deleteMany.mockResolvedValue({ count: 3 } as any);
+      (mockPrisma as any).account.deleteMany.mockResolvedValue({ count: 1 } as any);
+      (mockPrisma as any).accounts.deleteMany.mockResolvedValue({ count: 1 } as any);
+      (mockPrisma as any).cli_sessions.deleteMany.mockResolvedValue({ count: 0 } as any);
+      (mockPrisma as any).api_keys.deleteMany.mockResolvedValue({ count: 2 } as any);
+      (mockPrisma as any).user_api_keys.deleteMany.mockResolvedValue({ count: 0 } as any);
+      (mockPrisma as any).user_preferences.deleteMany.mockResolvedValue({ count: 1 } as any);
+      (mockPrisma as any).users.delete.mockResolvedValue({} as any);
 
       await service.deleteAccount('user-1');
 
-      // Verify user anonymized
-      expect(mockPrisma.users.update).toHaveBeenCalledWith(
-        expect.objectContaining({
-          data: expect.objectContaining({
-            email: 'deleted_user-1@recoder.xyz',
-            isActive: false,
-          }),
-        })
-      );
+      // Verify sessions hard-deleted from both tables
+      expect((mockPrisma as any).session.deleteMany).toHaveBeenCalledWith({ where: { userId: 'user-1' } });
+      expect(mockPrisma.sessions.deleteMany).toHaveBeenCalledWith({ where: { userId: 'user-1' } });
 
-      // Verify sessions revoked
-      expect(mockPrisma.sessions.updateMany).toHaveBeenCalledWith(
-        expect.objectContaining({
-          where: { userId: 'user-1' },
-          data: expect.objectContaining({ isActive: false }),
-        })
-      );
+      // Verify accounts hard-deleted from both tables
+      expect((mockPrisma as any).account.deleteMany).toHaveBeenCalledWith({ where: { userId: 'user-1' } });
+      expect((mockPrisma as any).accounts.deleteMany).toHaveBeenCalledWith({ where: { userId: 'user-1' } });
 
-      // Verify API keys revoked
-      expect(mockPrisma.api_keys.updateMany).toHaveBeenCalledWith(
-        expect.objectContaining({
-          where: { userId: 'user-1' },
-          data: expect.objectContaining({ isActive: false }),
-        })
-      );
+      // Verify user hard-deleted
+      expect((mockPrisma as any).users.delete).toHaveBeenCalledWith({ where: { id: 'user-1' } });
 
-      // Verify audit log
+      // Verify audit log was written before deletion
       expect(mockPrisma.audit_logs.create).toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.objectContaining({ action: 'account_deleted' }),

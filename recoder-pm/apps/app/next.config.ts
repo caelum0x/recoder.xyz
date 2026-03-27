@@ -41,6 +41,11 @@ let nextConfig: NextConfig = withBackend(
           destination: "/setup",
           permanent: true,
         },
+        {
+          source: "/app",
+          destination: "/",
+          permanent: false,
+        },
       ];
     },
   })

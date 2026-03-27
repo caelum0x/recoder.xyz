@@ -1,0 +1,25 @@
+{
+  "cookies": [
+    {
+      "name": "recoder.session_token",
+      "value": "PX4bZ6f83yuBNUoBiO4WFdnJKKgfsy5m",
+      "domain": ".recoder.xyz",
+      "path": "/",
+      "expires": -1,
+      "httpOnly": true,
+      "secure": true,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "__Secure-recoder.session_token",
+      "value": "PX4bZ6f83yuBNUoBiO4WFdnJKKgfsy5m",
+      "domain": ".recoder.xyz",
+      "path": "/",
+      "expires": -1,
+      "httpOnly": true,
+      "secure": true,
+      "sameSite": "Lax"
+    }
+  ],
+  "origins": []
+}

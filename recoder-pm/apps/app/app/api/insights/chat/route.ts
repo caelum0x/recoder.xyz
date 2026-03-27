@@ -2,6 +2,7 @@ import { withOrganizationSystemPrompt } from "@repo/backend/ai-prompts";
 import { contentToText } from "@repo/editor/lib/tiptap";
 import { log } from "@repo/observability/log";
 import { database } from "@/lib/database";
+import { executeTool, toolDefinitions } from "./copilot-tools";
 
 export const maxDuration = 60;
 
@@ -11,34 +12,59 @@ const OPENROUTER_MODEL =
   process.env.OPENROUTER_TEXT_MODEL || "openai/gpt-4o-mini";
 const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
 
+// Max tool-call round-trips before giving up (prevents infinite loops)
+const MAX_TOOL_ROUNDS = 5;
+
+// ── Types for OpenRouter responses ──────────────────────────────────────────
+
+type OpenRouterToolCall = {
+  id: string;
+  type: "function";
+  function: { name: string; arguments: string };
+};
+
+type OpenRouterChoice = {
+  message: {
+    role: string;
+    content: string | null;
+    tool_calls?: OpenRouterToolCall[];
+  };
+  finish_reason: string;
+};
+
+type OpenRouterResponse = { choices: OpenRouterChoice[] };
+
+type ChatMessage = {
+  role: string;
+  content: string | null;
+  tool_calls?: OpenRouterToolCall[];
+  tool_call_id?: string;
+  name?: string;
+};
+
+// ── Content helpers ─────────────────────────────────────────────────────────
+
 /**
  * Safely extract a text preview from a Feedback content field.
  * Content is stored as TipTap JSON, not a plain string.
  */
-function feedbackContentPreview(
-  content: unknown,
-  maxLen = 100
-): string {
+function feedbackContentPreview(content: unknown, maxLen = 100): string {
   if (!content) {
     return "";
   }
   try {
-    // TipTap JSON document
     if (typeof content === "object") {
       const text = contentToText(content as object);
       return text.length > maxLen ? `${text.slice(0, maxLen)}...` : text;
     }
-    // Fallback: plain string (shouldn't happen, but be safe)
     if (typeof content === "string") {
       return content.length > maxLen
         ? `${content.slice(0, maxLen)}...`
         : content;
     }
   } catch {
-    // If contentToText fails, try JSON.stringify
     try {
-      const raw = JSON.stringify(content).slice(0, maxLen);
-      return raw;
+      return JSON.stringify(content).slice(0, maxLen);
     } catch {
       return "";
     }
@@ -67,7 +93,505 @@ function extractText(msg: Record<string, unknown>): string {
   return "";
 }
 
+// ── Shared request helpers ──────────────────────────────────────────────────
+
+const openRouterHeaders = {
+  Authorization: `Bearer ${OPENROUTER_API_KEY}`,
+  "Content-Type": "application/json",
+  "HTTP-Referer": "https://pm.recoder.xyz",
+  "X-Title": "Recoder PM Copilot",
+};
+
+const STREAM_HEADERS = {
+  "Content-Type": "text/event-stream",
+  "Cache-Control": "no-cache",
+  Connection: "keep-alive",
+  "x-vercel-ai-ui-message-stream": "v1",
+  "x-accel-buffering": "no",
+};
+
+function sseEvent(payload: Record<string, unknown>): string {
+  return `data: ${JSON.stringify(payload)}\n\n`;
+}
+
+type StreamContext = {
+  controller: ReadableStreamDefaultController;
+  encoder: TextEncoder;
+  textPartId: string;
+};
+
+function emitStreamEnd(ctx: StreamContext, sentStart: boolean): void {
+  if (sentStart) {
+    ctx.controller.enqueue(
+      ctx.encoder.encode(sseEvent({ type: "text-end", id: ctx.textPartId }))
+    );
+  }
+  ctx.controller.enqueue(ctx.encoder.encode(sseEvent({ type: "finish-step" })));
+  ctx.controller.enqueue(ctx.encoder.encode(sseEvent({ type: "finish" })));
+  ctx.controller.enqueue(ctx.encoder.encode("data: [DONE]\n\n"));
+  ctx.controller.close();
+}
+
+/**
+ * Parse a single SSE data line and push UIMSP events if text content is found.
+ * Returns the updated `sentStart` flag.
+ */
+function processSSELine(
+  data: string,
+  ctx: StreamContext,
+  prevSentStart: boolean
+): { sentStart: boolean; done: boolean } {
+  if (data === "[DONE]") {
+    emitStreamEnd(ctx, prevSentStart);
+    return { sentStart: prevSentStart, done: true };
+  }
+
+  let updatedSentStart = prevSentStart;
+
+  try {
+    const parsed = JSON.parse(data);
+    const content = parsed.choices?.[0]?.delta?.content;
+    if (typeof content === "string" && content.length > 0) {
+      if (!updatedSentStart) {
+        ctx.controller.enqueue(
+          ctx.encoder.encode(
+            sseEvent({ type: "text-start", id: ctx.textPartId })
+          )
+        );
+        updatedSentStart = true;
+      }
+      ctx.controller.enqueue(
+        ctx.encoder.encode(
+          sseEvent({
+            type: "text-delta",
+            id: ctx.textPartId,
+            delta: content,
+          })
+        )
+      );
+    }
+  } catch {
+    // Skip malformed chunks
+  }
+
+  return { sentStart: updatedSentStart, done: false };
+}
+
+/**
+ * Build a UIMSP streaming Response from an OpenRouter SSE stream.
+ */
+function streamToUIMSP(apiResponse: Response): Response {
+  if (!apiResponse.body) {
+    return Response.json(
+      { error: "No response stream from AI service" },
+      { status: 502 }
+    );
+  }
+
+  const reader = apiResponse.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let sentStart = false;
+  const ctx: StreamContext = {
+    controller: undefined as unknown as ReadableStreamDefaultController,
+    encoder: new TextEncoder(),
+    textPartId: crypto.randomUUID(),
+  };
+
+  const stream = new ReadableStream({
+    start(controller) {
+      ctx.controller = controller;
+      controller.enqueue(ctx.encoder.encode(sseEvent({ type: "start" })));
+      controller.enqueue(ctx.encoder.encode(sseEvent({ type: "start-step" })));
+    },
+    async pull() {
+      const readResult = await reader.read();
+      if (readResult.done) {
+        emitStreamEnd(ctx, sentStart);
+        return;
+      }
+
+      buffer += decoder.decode(readResult.value, { stream: true });
+      const lines = buffer.split("\n");
+      buffer = lines.pop() || "";
+
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed?.startsWith("data: ")) {
+          continue;
+        }
+        const result = processSSELine(trimmed.slice(6), ctx, sentStart);
+        sentStart = result.sentStart;
+        if (result.done) {
+          return;
+        }
+      }
+    },
+    cancel() {
+      reader.cancel();
+    },
+  });
+
+  return new Response(stream, { headers: STREAM_HEADERS });
+}
+
+/**
+ * Build a UIMSP response from a complete text string (no streaming needed).
+ */
+function textToUIMSP(text: string): Response {
+  const encoder = new TextEncoder();
+  const textPartId = crypto.randomUUID();
+
+  const events = [
+    sseEvent({ type: "start" }),
+    sseEvent({ type: "start-step" }),
+    sseEvent({ type: "text-start", id: textPartId }),
+    sseEvent({ type: "text-delta", id: textPartId, delta: text }),
+    sseEvent({ type: "text-end", id: textPartId }),
+    sseEvent({ type: "finish-step" }),
+    sseEvent({ type: "finish" }),
+    "data: [DONE]\n\n",
+  ];
+
+  const body = encoder.encode(events.join(""));
+  return new Response(body, { headers: STREAM_HEADERS });
+}
+
+// ── Workspace context builder ───────────────────────────────────────────────
+
+type WorkspaceContext = {
+  contextString: string;
+  orgName: string;
+};
+
+async function fetchWorkspaceContext(
+  organizationId: string
+): Promise<WorkspaceContext> {
+  const [org, features, feedbackItems, insights, releases, initiatives] =
+    await Promise.all([
+      database.organization
+        .findUnique({
+          where: { id: organizationId },
+          select: { name: true, slug: true },
+        })
+        .catch((err: unknown) => {
+          log.error("Failed to fetch organization", { error: String(err) });
+          return null;
+        }),
+      database.feature
+        .findMany({
+          where: { organizationId },
+          select: {
+            id: true,
+            title: true,
+            status: { select: { name: true } },
+            startAt: true,
+            endAt: true,
+          },
+          take: 30,
+          orderBy: { createdAt: "desc" },
+        })
+        .catch((err: unknown) => {
+          log.error("Failed to fetch features", { error: String(err) });
+          return [];
+        }),
+      database.feedback
+        .findMany({
+          where: { organizationId },
+          select: {
+            title: true,
+            content: true,
+            aiSentiment: true,
+            createdAt: true,
+          },
+          take: 20,
+          orderBy: { createdAt: "desc" },
+        })
+        .catch((err: unknown) => {
+          log.error("Failed to fetch feedback", { error: String(err) });
+          return [];
+        }),
+      database.aiInsight
+        .findMany({
+          where: { organizationId },
+          select: {
+            title: true,
+            description: true,
+            type: true,
+            confidence: true,
+          },
+          take: 10,
+          orderBy: { createdAt: "desc" },
+        })
+        .catch((err: unknown) => {
+          log.error("Failed to fetch AI insights", { error: String(err) });
+          return [];
+        }),
+      database.release
+        .findMany({
+          where: { organizationId },
+          select: { id: true, title: true, state: true, endAt: true },
+          take: 10,
+          orderBy: { endAt: "desc" },
+        })
+        .catch((err: unknown) => {
+          log.error("Failed to fetch releases", { error: String(err) });
+          return [];
+        }),
+      database.initiative
+        .findMany({
+          where: { organizationId },
+          select: { id: true, title: true, state: true },
+          take: 10,
+          orderBy: { createdAt: "desc" },
+        })
+        .catch((err: unknown) => {
+          log.error("Failed to fetch initiatives", { error: String(err) });
+          return [];
+        }),
+    ]);
+
+  const orgName = org?.name || "your organization";
+
+  const contextString = [
+    `**Organization: ${orgName}**`,
+    "",
+    `### Features (${features.length})`,
+    features
+      .map((f) => `- [id:${f.id}] ${f.title} [${f.status?.name || "?"}]`)
+      .join("\n") || "No features yet",
+    "",
+    `### Feedback (${feedbackItems.length})`,
+    feedbackItems
+      .map(
+        (f) =>
+          `- ${f.title}: ${feedbackContentPreview(f.content)} (sentiment: ${f.aiSentiment || "?"})`
+      )
+      .join("\n") || "No feedback yet",
+    "",
+    `### AI Insights (${insights.length})`,
+    insights
+      .map(
+        (i) =>
+          `- [${i.type}] ${i.title}: ${i.description?.slice(0, 100) || ""} (confidence: ${i.confidence || "?"})`
+      )
+      .join("\n") || "No insights computed yet",
+    "",
+    `### Releases (${releases.length})`,
+    releases.map((r) => `- [id:${r.id}] ${r.title} [${r.state}]`).join("\n") ||
+      "No releases yet",
+    "",
+    `### Initiatives (${(initiatives as Array<{ id: string; title: string; state: string }>).length})`,
+    (initiatives as Array<{ id: string; title: string; state: string }>)
+      .map((i) => `- [id:${i.id}] ${i.title} [${i.state}]`)
+      .join("\n") || "No initiatives yet",
+  ].join("\n");
+
+  return { contextString, orgName };
+}
+
+// ── Tool-call loop ──────────────────────────────────────────────────────────
+
+/**
+ * Execute the tool-calling loop. Returns a Response (either UIMSP text
+ * from a non-streaming completion, or a streaming fallback if we exhaust
+ * the round limit).
+ */
+async function runToolCallLoop(
+  apiMessages: ChatMessage[],
+  organizationId: string
+): Promise<Response> {
+  for (let round = 1; round <= MAX_TOOL_ROUNDS; round += 1) {
+    const response = await fetch(OPENROUTER_URL, {
+      method: "POST",
+      headers: openRouterHeaders,
+      body: JSON.stringify({
+        model: OPENROUTER_MODEL,
+        messages: apiMessages,
+        tools: toolDefinitions,
+        stream: false,
+      }),
+    });
+
+    if (!response.ok) {
+      const errText = await response.text();
+      log.error("OpenRouter non-stream error", {
+        status: response.status,
+        body: errText.slice(0, 200),
+      });
+      return Response.json(
+        { error: `AI service error (${response.status})` },
+        { status: 502 }
+      );
+    }
+
+    const result: OpenRouterResponse = await response.json();
+    const choice = result.choices?.[0];
+
+    if (!choice) {
+      return Response.json(
+        { error: "Empty response from AI service" },
+        { status: 502 }
+      );
+    }
+
+    const toolCalls = choice.message.tool_calls;
+
+    // No tool calls — the model produced a final text response
+    if (!toolCalls || toolCalls.length === 0) {
+      return textToUIMSP(choice.message.content || "");
+    }
+
+    // Execute tool calls
+    log.info("Copilot tool calls", {
+      round,
+      tools: toolCalls.map((tc) => tc.function.name),
+      organizationId,
+    });
+
+    apiMessages.push({
+      role: "assistant",
+      content: choice.message.content,
+      tool_calls: toolCalls,
+    });
+
+    for (const toolCall of toolCalls) {
+      const args = parseToolArgs(toolCall);
+      const toolResult = await executeTool(
+        toolCall.function.name,
+        args,
+        organizationId
+      );
+      apiMessages.push({
+        role: "tool",
+        tool_call_id: toolCall.id,
+        name: toolCall.function.name,
+        content: JSON.stringify(toolResult),
+      });
+    }
+  }
+
+  // Exhausted round limit — final streaming call without tools
+  return await finalStreamingCall(apiMessages, organizationId);
+}
+
+function parseToolArgs(toolCall: OpenRouterToolCall): Record<string, unknown> {
+  try {
+    return JSON.parse(toolCall.function.arguments);
+  } catch {
+    log.error("Failed to parse tool arguments", {
+      tool: toolCall.function.name,
+      raw: toolCall.function.arguments,
+    });
+    return {};
+  }
+}
+
+async function finalStreamingCall(
+  apiMessages: ChatMessage[],
+  organizationId: string
+): Promise<Response> {
+  log.warn("Copilot hit max tool rounds", {
+    rounds: MAX_TOOL_ROUNDS,
+    organizationId,
+  });
+
+  const response = await fetch(OPENROUTER_URL, {
+    method: "POST",
+    headers: openRouterHeaders,
+    body: JSON.stringify({
+      model: OPENROUTER_MODEL,
+      messages: apiMessages,
+      stream: true,
+    }),
+  });
+
+  if (!response.ok) {
+    const errText = await response.text();
+    log.error("OpenRouter final stream error", {
+      status: response.status,
+      body: errText.slice(0, 200),
+    });
+    return Response.json(
+      { error: `AI service error (${response.status})` },
+      { status: 502 }
+    );
+  }
+
+  return streamToUIMSP(response);
+}
+
+// ── System prompt builder ───────────────────────────────────────────────────
+
+const SYSTEM_PROMPT_TEMPLATE = `You are a product management co-pilot for the user's workspace. You help them manage THEIR products — not Recoder's products.
+
+Your role:
+- Help the user understand their product data: features, feedback, releases, insights
+- Assist with prioritization, roadmap planning, and decision-making
+- Analyze user feedback patterns and suggest improvements
+- Help draft release notes, feature specs, and status updates
+- Answer questions about their workspace data shown below
+- **Create and update** features, feedback, releases, and initiatives when the user asks you to
+
+When the user asks to "show projects" or "what are my features", present the data below in a clean, organized way.
+When they ask for analysis, provide actionable insights based on the data.
+When they ask you to create or update items, use the available tools. After using a tool, confirm what you did.
+
+IMPORTANT: Each feature, release, and initiative in the data below includes its ID in [id:...] format. Use these IDs when the user asks you to update an existing item.
+
+Their workspace data:
+{{CONTEXT}}
+
+Be concise and actionable. Use markdown formatting. Never reference "Recoder" as a product — this data belongs to the user's organization.`;
+
+// ── Main handler ────────────────────────────────────────────────────────────
+
 export const POST = async (req: Request) => {
+  const validated = await validateRequest(req);
+  if (validated instanceof Response) {
+    return validated;
+  }
+
+  const { chatMessages, organizationId } = validated;
+
+  try {
+    const { contextString } = await fetchWorkspaceContext(organizationId);
+
+    const systemPrompt = await withOrganizationSystemPrompt(
+      organizationId,
+      SYSTEM_PROMPT_TEMPLATE.replace("{{CONTEXT}}", contextString)
+    );
+
+    const apiMessages: ChatMessage[] = [
+      { role: "system", content: systemPrompt },
+      ...chatMessages,
+    ];
+
+    return await runToolCallLoop(apiMessages, organizationId);
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : String(error);
+    log.error("Insights chat error", {
+      error: msg,
+      stack: error instanceof Error ? error.stack : undefined,
+      organizationId,
+    });
+    return Response.json(
+      { error: msg || "Internal server error" },
+      { status: 500 }
+    );
+  }
+};
+
+// ── Request validation ──────────────────────────────────────────────────────
+
+type ValidatedRequest = {
+  chatMessages: Array<{ role: string; content: string }>;
+  organizationId: string;
+};
+
+async function validateRequest(
+  req: Request
+): Promise<ValidatedRequest | Response> {
   let body: { messages?: unknown; organizationId?: string };
   try {
     body = await req.json();
@@ -76,6 +600,7 @@ export const POST = async (req: Request) => {
   }
 
   const { messages, organizationId } = body;
+
   if (!organizationId) {
     return new Response("Organization ID required", { status: 400 });
   }
@@ -90,7 +615,6 @@ export const POST = async (req: Request) => {
     );
   }
 
-  // Convert messages to plain { role, content } for OpenRouter
   const chatMessages: Array<{ role: string; content: string }> = messages
     .filter((m: Record<string, unknown>) =>
       ["user", "assistant", "system"].includes(m.role as string)
@@ -105,280 +629,5 @@ export const POST = async (req: Request) => {
     return new Response("No message content", { status: 400 });
   }
 
-  try {
-    // Gather product context from user's workspace
-    // Each query gets its own .catch so one table failure doesn't crash the whole route
-    const [org, features, feedbackItems, insights, releases, initiatives] = await Promise.all([
-      database.organization.findUnique({
-        where: { id: organizationId },
-        select: { name: true, slug: true },
-      }).catch((err: unknown) => {
-        log.error("Failed to fetch organization", { error: String(err) });
-        return null;
-      }),
-      database.feature.findMany({
-        where: { organizationId },
-        select: { id: true, title: true, status: { select: { name: true } }, startAt: true, endAt: true },
-        take: 30,
-        orderBy: { createdAt: "desc" },
-      }).catch((err: unknown) => {
-        log.error("Failed to fetch features", { error: String(err) });
-        return [];
-      }),
-      database.feedback.findMany({
-        where: { organizationId },
-        select: { title: true, content: true, aiSentiment: true, createdAt: true },
-        take: 20,
-        orderBy: { createdAt: "desc" },
-      }).catch((err: unknown) => {
-        log.error("Failed to fetch feedback", { error: String(err) });
-        return [];
-      }),
-      database.aiInsight.findMany({
-        where: { organizationId },
-        select: {
-          title: true,
-          description: true,
-          type: true,
-          confidence: true,
-        },
-        take: 10,
-        orderBy: { createdAt: "desc" },
-      }).catch((err: unknown) => {
-        log.error("Failed to fetch AI insights", { error: String(err) });
-        return [];
-      }),
-      database.release.findMany({
-        where: { organizationId },
-        select: { title: true, state: true, endAt: true },
-        take: 10,
-        orderBy: { endAt: "desc" },
-      }).catch((err: unknown) => {
-        log.error("Failed to fetch releases", { error: String(err) });
-        return [];
-      }),
-      database.initiative.findMany({
-        where: { organizationId },
-        select: { title: true, state: true },
-        take: 10,
-        orderBy: { createdAt: "desc" },
-      }).catch((err: unknown) => {
-        log.error("Failed to fetch initiatives", { error: String(err) });
-        return [];
-      }),
-    ]);
-
-    const orgName = org?.name || "your organization";
-
-    const context = [
-      `**Organization: ${orgName}**`,
-      "",
-      `### Features (${features.length})`,
-      features.map((f) => `- ${f.title} [${f.status?.name || "?"}]`).join("\n") || "No features yet",
-      "",
-      `### Feedback (${feedbackItems.length})`,
-      feedbackItems
-        .map((f) => `- ${f.title}: ${feedbackContentPreview(f.content)} (sentiment: ${f.aiSentiment || "?"})`)
-        .join("\n") || "No feedback yet",
-      "",
-      `### AI Insights (${insights.length})`,
-      insights
-        .map(
-          (i) =>
-            `- [${i.type}] ${i.title}: ${i.description?.slice(0, 100) || ""} (confidence: ${i.confidence || "?"})`
-        )
-        .join("\n") || "No insights computed yet",
-      "",
-      `### Releases (${releases.length})`,
-      releases.map((r) => `- ${r.title} [${r.state}]`).join("\n") || "No releases yet",
-      "",
-      `### Initiatives (${(initiatives as Array<{title: string; state: string}>).length})`,
-      (initiatives as Array<{title: string; state: string}>).map((i) => `- ${i.title} [${i.state}]`).join("\n") || "No initiatives yet",
-    ].join("\n");
-
-    const systemPrompt = await withOrganizationSystemPrompt(
-      organizationId,
-      `You are a product management co-pilot for the user's workspace. You help them manage THEIR products — not Recoder's products.
-
-Your role:
-- Help the user understand their product data: features, feedback, releases, insights
-- Assist with prioritization, roadmap planning, and decision-making
-- Analyze user feedback patterns and suggest improvements
-- Help draft release notes, feature specs, and status updates
-- Answer questions about their workspace data shown below
-
-When the user asks to "show projects" or "what are my features", present the data below in a clean, organized way.
-When they ask for analysis, provide actionable insights based on the data.
-
-Their workspace data:
-${context}
-
-Be concise and actionable. Use markdown formatting. Never reference "Recoder" as a product — this data belongs to the user's organization.`
-    );
-
-    // Call OpenRouter directly (no AI SDK)
-    const apiMessages = [
-      { role: "system", content: systemPrompt },
-      ...chatMessages,
-    ];
-
-    const apiResponse = await fetch(OPENROUTER_URL, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${OPENROUTER_API_KEY}`,
-        "Content-Type": "application/json",
-        "HTTP-Referer": "https://pm.recoder.xyz",
-        "X-Title": "Recoder PM Copilot",
-      },
-      body: JSON.stringify({
-        model: OPENROUTER_MODEL,
-        messages: apiMessages,
-        stream: true,
-      }),
-    });
-
-    if (!apiResponse.ok) {
-      const errText = await apiResponse.text();
-      log.error("OpenRouter error", {
-        status: apiResponse.status,
-        body: errText.slice(0, 200),
-      });
-      return Response.json(
-        { error: `AI service error (${apiResponse.status})` },
-        { status: 502 }
-      );
-    }
-
-    if (!apiResponse.body) {
-      return Response.json(
-        { error: "No response stream from AI service" },
-        { status: 502 }
-      );
-    }
-
-    // Transform OpenRouter SSE -> UI Message Stream Protocol (AI SDK v5)
-    const reader = apiResponse.body.getReader();
-    const encoder = new TextEncoder();
-    const decoder = new TextDecoder();
-    let buffer = "";
-    const textPartId = crypto.randomUUID();
-    let sentStart = false;
-
-    const stream = new ReadableStream({
-      start(controller) {
-        controller.enqueue(
-          encoder.encode(`data: ${JSON.stringify({ type: "start" })}\n\n`)
-        );
-        controller.enqueue(
-          encoder.encode(`data: ${JSON.stringify({ type: "start-step" })}\n\n`)
-        );
-      },
-      async pull(controller) {
-        while (true) {
-          const { done, value } = await reader.read();
-
-          if (done) {
-            if (sentStart) {
-              controller.enqueue(
-                encoder.encode(
-                  `data: ${JSON.stringify({ type: "text-end", id: textPartId })}\n\n`
-                )
-              );
-            }
-            controller.enqueue(
-              encoder.encode(
-                `data: ${JSON.stringify({ type: "finish-step" })}\n\n`
-              )
-            );
-            controller.enqueue(
-              encoder.encode(`data: ${JSON.stringify({ type: "finish" })}\n\n`)
-            );
-            controller.enqueue(encoder.encode("data: [DONE]\n\n"));
-            controller.close();
-            return;
-          }
-
-          buffer += decoder.decode(value, { stream: true });
-          const lines = buffer.split("\n");
-          buffer = lines.pop() || "";
-
-          for (const line of lines) {
-            const trimmed = line.trim();
-            if (!trimmed?.startsWith("data: ")) {
-              continue;
-            }
-            const data = trimmed.slice(6);
-            if (data === "[DONE]") {
-              if (sentStart) {
-                controller.enqueue(
-                  encoder.encode(
-                    `data: ${JSON.stringify({ type: "text-end", id: textPartId })}\n\n`
-                  )
-                );
-              }
-              controller.enqueue(
-                encoder.encode(
-                  `data: ${JSON.stringify({ type: "finish-step" })}\n\n`
-                )
-              );
-              controller.enqueue(
-                encoder.encode(
-                  `data: ${JSON.stringify({ type: "finish" })}\n\n`
-                )
-              );
-              controller.enqueue(encoder.encode("data: [DONE]\n\n"));
-              controller.close();
-              return;
-            }
-
-            try {
-              const parsed = JSON.parse(data);
-              const content = parsed.choices?.[0]?.delta?.content;
-              if (typeof content === "string" && content.length > 0) {
-                if (!sentStart) {
-                  controller.enqueue(
-                    encoder.encode(
-                      `data: ${JSON.stringify({ type: "text-start", id: textPartId })}\n\n`
-                    )
-                  );
-                  sentStart = true;
-                }
-                controller.enqueue(
-                  encoder.encode(
-                    `data: ${JSON.stringify({ type: "text-delta", id: textPartId, delta: content })}\n\n`
-                  )
-                );
-              }
-            } catch {
-              // Skip malformed chunks
-            }
-          }
-        }
-      },
-      cancel() {
-        reader.cancel();
-      },
-    });
-
-    return new Response(stream, {
-      headers: {
-        "Content-Type": "text/event-stream",
-        "Cache-Control": "no-cache",
-        Connection: "keep-alive",
-        "x-vercel-ai-ui-message-stream": "v1",
-        "x-accel-buffering": "no",
-      },
-    });
-  } catch (error) {
-    const msg = error instanceof Error ? error.message : String(error);
-    log.error("Insights chat error", {
-      error: msg,
-      stack: error instanceof Error ? error.stack : undefined,
-      organizationId,
-    });
-    return Response.json(
-      { error: msg || "Internal server error" },
-      { status: 500 }
-    );
-  }
-};
+  return { chatMessages, organizationId };
+}

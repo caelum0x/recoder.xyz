@@ -246,7 +246,7 @@ export async function daytonaGetWorkspaceState(
   try {
     const countResult = await dc.execCommand(
       sandboxId,
-      'find /workspace -type f -not -path "*/node_modules/*" -not -path "*/.git/*" 2>/dev/null | wc -l',
+      'find /home/daytona -type f -not -path "*/node_modules/*" -not -path "*/.git/*" 2>/dev/null | wc -l',
       { timeoutSecs: 15 },
     );
     fileCount = parseInt(countResult.output.trim(), 10) || 0;

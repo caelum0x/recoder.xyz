@@ -55,7 +55,13 @@ function SignInForm() {
         onSuccess: () => {
           setSuccess(true);
           setTimeout(() => {
-            router.push(returnUrl);
+            // Use window.location.href for cross-subdomain redirects (e.g. https://web.recoder.xyz)
+            // router.push() only works for same-origin relative paths
+            if (returnUrl.startsWith('http')) {
+              window.location.href = returnUrl;
+            } else {
+              router.push(returnUrl);
+            }
           }, 1000);
         },
         onError: (ctx) => {
@@ -149,7 +155,12 @@ function SignInForm() {
       }
 
       setSuccess(true);
-      router.push(returnUrl);
+      // Use window.location.href for cross-subdomain redirects
+      if (returnUrl.startsWith('http')) {
+        window.location.href = returnUrl;
+      } else {
+        router.push(returnUrl);
+      }
     } catch (err: any) {
       setError(err.message || 'Failed to verify 2FA code');
       setLoading(false);

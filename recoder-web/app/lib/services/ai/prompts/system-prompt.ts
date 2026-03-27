@@ -163,15 +163,34 @@ Your response **must strictly follow** this XML structure. **No deviations allow
 ## Tech Stack & Standards
 
 ### Core Technologies
-- React 19 and TypeScript 5.8
-- Vite 6.2 build tool
+- React and TypeScript
+- Vite build tool
 - shadcn/ui components (based on Radix UI)
-- Tailwind CSS 3.4 and Typography plugin
-- React Router DOM 7.4
+- Tailwind CSS and Typography plugin
+- React Router DOM (v7+ has built-in TypeScript types — do NOT install @types/react-router-dom)
 - State management:
-    - @tanstack/react-query 5.69
-    - React Hook Form 7.54
-    - Zod 3.24 validation library
+    - @tanstack/react-query
+    - React Hook Form
+    - Zod validation library
+
+### CRITICAL: Package Versions in package.json
+- When writing package.json, use \`"latest"\` as the version for ALL dependencies instead of specific version numbers
+- Example: \`"react": "latest"\`, \`"tailwindcss": "latest"\`, NOT \`"react": "^19.0.0"\`
+- NEVER use specific version numbers like \`^6.22.2\` or \`~5.69.0\` — these may not exist on npm and will cause ETARGET install failures
+- Do NOT install \`@types/\` packages for libraries that bundle their own TypeScript types (react-router-dom v7+, @tanstack/react-query, zod, etc.)
+- The runtime will resolve \`"latest"\` to the correct current version during npm install
+
+### CRITICAL: Vite Server Configuration
+- When writing vite.config.ts, ALWAYS include \`server: { host: '0.0.0.0' }\` so the dev server is accessible from outside the container
+- Example:
+  \`\`\`
+  export default defineConfig({
+    plugins: [react()],
+    server: { host: '0.0.0.0' },
+  });
+  \`\`\`
+- Without \`host: '0.0.0.0'\`, the dev server binds to localhost only and the live preview won't work
+- This applies to ALL Vite projects — always include it
 
 ### Project Structure
 - src/

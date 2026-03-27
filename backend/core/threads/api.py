@@ -829,13 +829,12 @@ async def get_thread_messages(
                     'thread_id': msg.get('thread_id'),
                     'type': msg_type,
                     'is_llm_message': msg.get('is_llm_message'),
+                    'content': msg.get('content'),
                     'metadata': msg.get('metadata', {}),
                     'created_at': msg.get('created_at'),
                     'updated_at': msg.get('updated_at'),
                     'agent_id': msg.get('agent_id'),
                 }
-                if msg_type == 'user':
-                    optimized_msg['content'] = msg.get('content')
                 optimized_list.append(optimized_msg)
             return optimized_list
         

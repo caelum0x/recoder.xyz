@@ -319,7 +319,7 @@ export function FileViewerView({
     const validateFolder = async () => {
       const sandboxUrl = project.sandbox.sandbox_url;
       const sanitizedName = presentationFolderInfo.presentationName!.replace(/[^a-zA-Z0-9\-_]/g, '').toLowerCase();
-      const metadataUrl = `${sandboxUrl}/workspace/presentations/${sanitizedName}/metadata.json?t=${Date.now()}`;
+      const metadataUrl = `${sandboxUrl}/presentations/${sanitizedName}/metadata.json?t=${Date.now()}`;
 
       try {
         const response = await fetch(metadataUrl, {

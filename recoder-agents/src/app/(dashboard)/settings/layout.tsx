@@ -36,7 +36,7 @@ export default function SettingsLayout({
   const pathname = usePathname();
 
   return (
-    <div className="container mx-auto max-w-7xl px-3 sm:px-4 py-4 sm:py-8">
+    <div className="container mx-auto max-w-7xl px-3 sm:px-4 py-4 sm:py-8 h-full overflow-y-auto">
       <div className="flex flex-col md:flex-row gap-6 md:gap-8">
         {/* Desktop sidebar nav */}
         <nav className="hidden md:flex flex-col w-56 shrink-0 space-y-1">
@@ -86,7 +86,7 @@ export default function SettingsLayout({
         </nav>
 
         {/* Content area */}
-        <div className="flex-1 min-w-0">{children}</div>
+        <div className="flex-1 min-w-0 overflow-y-auto max-h-[calc(100vh-8rem)]">{children}</div>
       </div>
     </div>
   );

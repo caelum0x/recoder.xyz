@@ -36,12 +36,9 @@ import { terminalSync } from '~/lib/terminal-sync';
 // Lazy-loaded bottom panels — only fetched when their tab is active
 const LogsPanel = lazy(() => import('./LogsPanel').then(m => ({ default: m.LogsPanel })));
 const ProblemsPanel = lazy(() => import('./ProblemsPanel').then(m => ({ default: m.ProblemsPanel })));
-const SearchPanel = lazy(() => import('./SearchPanel').then(m => ({ default: m.SearchPanel })));
 const AppConsolePanel = lazy(() => import('./AppConsolePanel').then(m => ({ default: m.AppConsolePanel })));
-const GitPanel = lazy(() => import('./GitPanel').then(m => ({ default: m.GitPanel })));
-const DiffViewer = lazy(() => import('./DiffViewer').then(m => ({ default: m.DiffViewer })));
-const PackageManagerPanel = lazy(() => import('./PackageManagerPanel').then(m => ({ default: m.PackageManagerPanel })));
 const SecretsPanel = lazy(() => import('./SecretsPanel').then(m => ({ default: m.SecretsPanel })));
+// SearchPanel, GitPanel, DiffViewer, PackageManagerPanel lazy imports removed — panels not functional with Daytona sandboxes
 // Note: DatabaseExplorer removed - needs security rewrite
 import { useStore as useNanoStore } from '@nanostores/react';
 import { errorCountAtom, criticalErrorCountAtom } from '~/lib/stores/errors';
@@ -97,7 +94,7 @@ const DEFAULT_EDITOR_SIZE = 100 - DEFAULT_TERMINAL_SIZE;
 const editorSettings: EditorSettings = { tabSize: 2 };
 
 type BottomPanelView = 'terminal' | 'logs' | 'problems' | 'console' | 'secrets';
-type SidebarView = 'files' | 'search' | 'git' | 'packages' | 'architecture';
+type SidebarView = 'files' | 'architecture';
 
 export const EditorPanel = memo(
   ({
@@ -145,7 +142,7 @@ export const EditorPanel = memo(
     const [terminalNames, setTerminalNames] = useState<string[]>(['Terminal 1']);
     const [bottomPanelView, setBottomPanelView] = useState<BottomPanelView>('terminal');
     const [sidebarView, setSidebarView] = useState<SidebarView>('files');
-    const [diffView, setDiffView] = useState<{ path: string; original: string; modified: string } | null>(null);
+    // diffView state removed — Git panel (which triggered it) is not functional
     const [replLauncherExpanded, setReplLauncherExpanded] = useState(false);
     const [showFileHistory, setShowFileHistory] = useState(false);
     const [showHistorySearch, setShowHistorySearch] = useState(false);
@@ -275,17 +272,10 @@ export const EditorPanel = memo(
         const target = e.target as HTMLElement;
         const isInput = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA';
 
-        if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === 'f') {
-          e.preventDefault();
-          setSidebarView('search');
-        }
+        // Cmd+Shift+F (search) and Cmd+Shift+G (git) shortcuts disabled — panels not functional with Daytona sandboxes
         if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === 'e') {
           e.preventDefault();
           setSidebarView('files');
-        }
-        if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === 'g') {
-          e.preventDefault();
-          setSidebarView('git');
         }
         // Cmd+` or Ctrl+` to toggle terminal
         if ((e.metaKey || e.ctrlKey) && e.key === '`') {
@@ -503,9 +493,7 @@ export const EditorPanel = memo(
 
     // PERFORMANCE: Memoize sidebar view setters
     const handleSetFilesView = useCallback(() => setSidebarView('files'), []);
-    const handleSetSearchView = useCallback(() => setSidebarView('search'), []);
-    const handleSetGitView = useCallback(() => setSidebarView('git'), []);
-    const handleSetPackagesView = useCallback(() => setSidebarView('packages'), []);
+    // handleSetSearchView, handleSetGitView, handleSetPackagesView removed — panels not functional
     const handleSetArchView = useCallback(() => setSidebarView('architecture'), []);
 
     // PERFORMANCE: Memoize bottom panel view setters
@@ -649,66 +637,7 @@ export const EditorPanel = memo(
                     <span className="i-ph:tree-structure-duotone" />
                     Files
                   </button>
-                  <button
-                    onClick={handleSetSearchView}
-                    className={classNames(
-                      'flex-1 px-3 py-2 text-sm flex items-center justify-center gap-1.5 transition-colors',
-                      sidebarView === 'search'
-                        ? 'bg-recoder-elements-background-depth-2 text-recoder-elements-textPrimary border-b-2 border-blue-500'
-                        : 'text-recoder-elements-textTertiary hover:bg-recoder-elements-background-depth-2 hover:text-recoder-elements-textSecondary'
-                    )}
-                    title="Search - Find in files (Cmd+Shift+F)"
-                    aria-label="Search files"
-                    aria-selected={sidebarView === 'search'}
-                  >
-                    <span className="i-ph:magnifying-glass" />
-                    Search
-                  </button>
-                  <button
-                    onClick={handleSetGitView}
-                    className={classNames(
-                      'flex-1 px-3 py-2 text-sm flex items-center justify-center gap-1.5 transition-colors',
-                      sidebarView === 'git'
-                        ? 'bg-recoder-elements-background-depth-2 text-recoder-elements-textPrimary border-b-2 border-purple-500'
-                        : 'text-recoder-elements-textTertiary hover:bg-recoder-elements-background-depth-2 hover:text-recoder-elements-textSecondary'
-                    )}
-                    title="Source Control - Git changes and history (Cmd+Shift+G)"
-                    aria-label="Git source control"
-                    aria-selected={sidebarView === 'git'}
-                  >
-                    <span className="i-ph:git-branch" />
-                    Git
-                  </button>
-                  <button
-                    onClick={handleSetPackagesView}
-                    className={classNames(
-                      'flex-1 px-3 py-2 text-sm flex items-center justify-center gap-1.5 transition-colors',
-                      sidebarView === 'packages'
-                        ? 'bg-recoder-elements-background-depth-2 text-recoder-elements-textPrimary border-b-2 border-green-500'
-                        : 'text-recoder-elements-textTertiary hover:bg-recoder-elements-background-depth-2 hover:text-recoder-elements-textSecondary'
-                    )}
-                    title="Package Manager - Install and manage dependencies"
-                    aria-label="Package manager"
-                    aria-selected={sidebarView === 'packages'}
-                  >
-                    <span className="i-ph:package" />
-                    Pkgs
-                  </button>
-                  <button
-                    onClick={handleSetArchView}
-                    className={classNames(
-                      'flex-1 px-3 py-2 text-sm flex items-center justify-center gap-1.5 transition-colors',
-                      sidebarView === 'architecture'
-                        ? 'bg-recoder-elements-background-depth-2 text-recoder-elements-textPrimary border-b-2 border-orange-500'
-                        : 'text-recoder-elements-textTertiary hover:bg-recoder-elements-background-depth-2 hover:text-recoder-elements-textSecondary'
-                    )}
-                    title="Architecture - Project structure and stats overview"
-                    aria-label="Project architecture"
-                    aria-selected={sidebarView === 'architecture'}
-                  >
-                    <span className="i-ph:stack" />
-                    Arch
-                  </button>
+                  {/* Search, Git, Packages, Architecture tabs hidden — not yet functional with Daytona sandboxes */}
                 </div>
                 
                 {/* Sidebar Content */}
@@ -732,39 +661,8 @@ export const EditorPanel = memo(
                       />
                     </PanelErrorBoundary>
                   )}
-                  {sidebarView === 'search' && (
-                    <PanelErrorBoundary panelName="Search">
-                      <Suspense fallback={<div className="flex items-center justify-center h-full text-recoder-elements-textTertiary text-sm">Loading...</div>}>
-                        <SearchPanel
-                          onFileOpen={(file, line, column) => {
-                            onFileSelect?.(`${WORK_DIR}/${file}`);
-                          }}
-                        />
-                      </Suspense>
-                    </PanelErrorBoundary>
-                  )}
-                  {sidebarView === 'git' && (
-                    <PanelErrorBoundary panelName="Git">
-                      <Suspense fallback={<div className="flex items-center justify-center h-full text-recoder-elements-textTertiary text-sm">Loading...</div>}>
-                        <GitPanel
-                          files={files || {}}
-                          onFileSelect={onFileSelect}
-                          onShowDiff={(path, original, modified) => {
-                            setDiffView({ path, original, modified });
-                          }}
-                        />
-                      </Suspense>
-                    </PanelErrorBoundary>
-                  )}
-                  {sidebarView === 'packages' && (
-                    <PanelErrorBoundary panelName="Package Manager">
-                      <Suspense fallback={<div className="flex items-center justify-center h-full text-recoder-elements-textTertiary text-sm">Loading...</div>}>
-                        <PackageManagerPanel
-                          files={files || {}}
-                        />
-                      </Suspense>
-                    </PanelErrorBoundary>
-                  )}
+                  {/* Search, Git, Packages panels removed — not functional with Daytona sandboxes.
+                       Panel files preserved for future re-enablement. */}
                   {sidebarView === 'architecture' && (
                     <PanelErrorBoundary panelName="Architecture">
                       <ProjectPlanPanel
@@ -976,94 +874,7 @@ export const EditorPanel = memo(
                   )}
                 </button>
 
-                {/* Tab: Logs */}
-                <button
-                  className={classNames(
-                    'flex items-center text-sm cursor-pointer gap-1.5 px-3 py-2 h-full whitespace-nowrap rounded-full',
-                    {
-                      'bg-recoder-elements-background-depth-3 text-recoder-elements-textPrimary': bottomPanelView === 'logs',
-                      'bg-recoder-elements-background-depth-2 text-recoder-elements-textSecondary hover:bg-recoder-elements-background-depth-3':
-                        bottomPanelView !== 'logs',
-                    },
-                  )}
-                  onClick={handleSetLogsView}
-                  aria-label="Logs panel"
-                  aria-selected={bottomPanelView === 'logs'}
-                  role="tab"
-                >
-                  <div className="i-ph:file-text-duotone text-lg" aria-hidden="true" />
-                  Logs
-                </button>
-
-                {/* Tab: Problems */}
-                <button
-                  className={classNames(
-                    'flex items-center text-sm cursor-pointer gap-1.5 px-3 py-2 h-full whitespace-nowrap rounded-full',
-                    {
-                      'bg-recoder-elements-background-depth-3 text-recoder-elements-textPrimary': bottomPanelView === 'problems',
-                      'bg-recoder-elements-background-depth-2 text-recoder-elements-textSecondary hover:bg-recoder-elements-background-depth-3':
-                        bottomPanelView !== 'problems',
-                    },
-                  )}
-                  onClick={handleSetProblemsView}
-                  aria-label={`Problems panel${errorCount > 0 ? `, ${errorCount} issues` : ''}`}
-                  aria-selected={bottomPanelView === 'problems'}
-                  role="tab"
-                >
-                  <div className={classNames('text-lg', criticalErrorCount > 0 ? 'i-ph:x-circle-fill text-red-500' : 'i-ph:warning-circle-duotone')} aria-hidden="true" />
-                  Problems
-                  {errorCount > 0 && (
-                    <span className={classNames(
-                      'ml-1 px-1.5 py-0.5 text-xs rounded-full',
-                      criticalErrorCount > 0 ? 'bg-red-500/20 text-red-400' : 'bg-yellow-500/20 text-yellow-400'
-                    )} aria-label={`${errorCount} issues`}>
-                      {errorCount}
-                    </span>
-                  )}
-                </button>
-
-                {/* Tab: Console */}
-                <button
-                  className={classNames(
-                    'flex items-center text-sm cursor-pointer gap-1.5 px-3 py-2 h-full whitespace-nowrap rounded-full',
-                    {
-                      'bg-recoder-elements-background-depth-3 text-recoder-elements-textPrimary': bottomPanelView === 'console',
-                      'bg-recoder-elements-background-depth-2 text-recoder-elements-textSecondary hover:bg-recoder-elements-background-depth-3':
-                        bottomPanelView !== 'console',
-                    },
-                  )}
-                  onClick={handleSetConsoleView}
-                  aria-label={`Console panel${consoleEntryCount > 0 ? `, ${consoleEntryCount} logs` : ''}`}
-                  aria-selected={bottomPanelView === 'console'}
-                  role="tab"
-                >
-                  <div className={classNames('text-lg', consoleErrorCount > 0 ? 'i-ph:code-fill text-red-500' : 'i-ph:code-duotone')} aria-hidden="true" />
-                  Console
-                  {consoleErrorCount > 0 && (
-                    <span className="ml-1 px-1.5 py-0.5 text-xs rounded-full bg-red-500/20 text-red-400" aria-label={`${consoleErrorCount} errors`}>
-                      {consoleErrorCount}
-                    </span>
-                  )}
-                </button>
-
-                {/* Tab: Secrets */}
-                <button
-                  className={classNames(
-                    'flex items-center text-sm cursor-pointer gap-1.5 px-3 py-2 h-full whitespace-nowrap rounded-full',
-                    {
-                      'bg-recoder-elements-background-depth-3 text-recoder-elements-textPrimary': bottomPanelView === 'secrets',
-                      'bg-recoder-elements-background-depth-2 text-recoder-elements-textSecondary hover:bg-recoder-elements-background-depth-3':
-                        bottomPanelView !== 'secrets',
-                    },
-                  )}
-                  onClick={handleSetSecretsView}
-                  aria-label="Secrets panel - manage environment variables"
-                  aria-selected={bottomPanelView === 'secrets'}
-                  role="tab"
-                >
-                  <div className="i-ph:key-duotone text-lg text-yellow-400" aria-hidden="true" />
-                  Secrets
-                </button>
+                {/* Logs, Problems, Console, Secrets tabs hidden — not functional with Daytona sandboxes */}
 
                 {/* Terminal tabs (only show when terminal view is active) */}
                 {bottomPanelView === 'terminal' && (
@@ -1180,6 +991,15 @@ export const EditorPanel = memo(
                         onFileSelect?.(filePath);
                       }
                     }}
+                    onFixWithAI={(errors) => {
+                      // Dispatch to chat for AI fix
+                      const prompt = errors.map(e =>
+                        `${e.severity}: ${e.message}${e.filePath ? ` in ${e.filePath}` : ''}${e.line ? ` (line ${e.line})` : ''}`
+                      ).join('\n');
+                      window.dispatchEvent(new CustomEvent('recoder:fix-errors', {
+                        detail: { prompt: `Fix these errors:\n${prompt}`, errors }
+                      }));
+                    }}
                   />
                 </Suspense>
               )}
@@ -1207,17 +1027,7 @@ export const EditorPanel = memo(
         onProblemsClick={handleOpenProblems}
       />
 
-      {/* Diff Viewer Modal */}
-      {diffView && (
-        <Suspense fallback={null}>
-          <DiffViewer
-            filePath={diffView.path}
-            original={diffView.original}
-            modified={diffView.modified}
-            onClose={() => setDiffView(null)}
-          />
-        </Suspense>
-      )}
+      {/* Diff Viewer Modal removed — was only triggered from Git panel which is not functional */}
 
       {/* File History Modal */}
       {showFileHistory && editorDocument && (

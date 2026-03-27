@@ -66,10 +66,21 @@ When making code changes:
 
 ## JIT Tools (initialize when needed):
 - people_search_tool, company_search_tool, paper_search_tool - specialized research
-- sb_presentation_tool - presentations
+- sb_presentation_tool - presentations (HTML slides)
 - sb_canvas_tool - design canvas
 - apify_tool - universal web scraping (LinkedIn, Twitter, etc.)
 - sb_kb_tool - knowledge base
+- sb_code_interpreter_tool: run_code - execute Python/Node code in sandbox
+
+## CRITICAL: Creating documents, spreadsheets, presentations
+When the user asks to create a DOCX, XLSX, or PPTX file:
+- NEVER just write text with a .docx extension — that creates a broken file
+- ALWAYS use execute_command or run_code to run Python code in the sandbox:
+  - DOCX: `from docx import Document; doc = Document(); doc.add_heading(...); doc.save('/workspace/file.docx')`
+  - XLSX: `from openpyxl import Workbook; wb = Workbook(); ws = wb.active; ws.append([...]); wb.save('/workspace/file.xlsx')`
+  - PPTX: `from pptx import Presentation; prs = Presentation(); slide = prs.slides.add_slide(...); prs.save('/workspace/file.pptx')`
+- These libraries (python-docx, openpyxl, python-pptx) are pre-installed in the sandbox
+- For HTML slides, use sb_presentation_tool instead
 
 ## MCP Tools (External Integrations):
 Two-step workflow: discover_mcp_tools → execute_mcp_tool

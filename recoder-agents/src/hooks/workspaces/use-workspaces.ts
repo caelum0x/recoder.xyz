@@ -1,7 +1,7 @@
 'use client';
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { backendApi } from '@/lib/api-client';
+import { dockerBackendApi } from '@/lib/docker-backend-api';
 import { useWorkspaceStore } from '@/stores/workspace-store';
 import type { A2AWorkspace, WorkspaceSettings } from '@recoder/shared/a2a';
 
@@ -12,42 +12,13 @@ const workspaceKeys = {
   agents: (id: string) => [...workspaceKeys.all, 'agents', id] as const,
 };
 
-// Backend returns a different shape than A2AWorkspace — map it
-interface BackendWorkspace {
-  id: string;
-  user_id: string;
-  workspace_name: string;
-  description?: string;
-  color?: string;
-  icon?: string;
-  agent_ids?: string[];
-  thread_ids?: string[];
-  is_default?: boolean;
-  member_count?: number;
-  agent_count?: number;
-  thread_count?: number;
-  created_at: string;
-  updated_at: string;
-}
-
-function mapBackendToA2A(ws: BackendWorkspace): A2AWorkspace {
-  return {
-    workspaceId: ws.id,
-    name: ws.workspace_name,
-    projectId: '',
-    ownerId: ws.user_id,
-    memberAgentIds: ws.agent_ids || [],
-    defaultChannelId: '',
-    settings: {
-      autoRouting: false,
-      approvalRequired: false,
-      worktreeIsolation: false,
-      maxConcurrentTasks: 5,
-      defaultOrchestrationPattern: 'direct',
-    },
-    createdAt: ws.created_at,
-    updatedAt: ws.updated_at,
-  };
+/**
+ * A2A workspace list response from docker-backend.
+ * The workspace service returns { workspaces: A2AWorkspace[], total: number }.
+ */
+interface WorkspaceListResponse {
+  workspaces: A2AWorkspace[];
+  total: number;
 }
 
 export function useWorkspaces() {
@@ -56,11 +27,10 @@ export function useWorkspaces() {
   return useQuery({
     queryKey: workspaceKeys.list(),
     queryFn: async () => {
-      const res = await backendApi.get<BackendWorkspace[]>('/workspaces');
+      const res = await dockerBackendApi.get<WorkspaceListResponse>('/api/a2a/workspaces');
       if (res.success && res.data) {
-        const workspaces = res.data.map(mapBackendToA2A);
-        setWorkspaces(workspaces);
-        return { workspaces, total: workspaces.length };
+        setWorkspaces(res.data.workspaces);
+        return res.data;
       }
       throw new Error(res.error?.message || 'Failed to fetch workspaces');
     },
@@ -74,8 +44,8 @@ export function useWorkspace(id: string | null) {
   return useQuery({
     queryKey: workspaceKeys.detail(id ?? ''),
     queryFn: async () => {
-      const res = await backendApi.get<BackendWorkspace>(`/workspaces/${id}`);
-      if (res.success && res.data) return mapBackendToA2A(res.data);
+      const res = await dockerBackendApi.get<A2AWorkspace>(`/api/a2a/workspaces/${id}`);
+      if (res.success && res.data) return res.data;
       throw new Error(res.error?.message || 'Failed to fetch workspace');
     },
     enabled: !!id,
@@ -95,11 +65,14 @@ export function useCreateWorkspace() {
       memberAgentIds?: string[];
       settings?: Partial<WorkspaceSettings>;
     }) => {
-      const res = await backendApi.post<BackendWorkspace>('/workspaces', {
-        workspace_name: input.name,
-        description: '',
+      const res = await dockerBackendApi.post<A2AWorkspace>('/api/a2a/workspaces', {
+        name: input.name,
+        projectId: input.projectId,
+        ownerId: input.ownerId,
+        memberAgentIds: input.memberAgentIds,
+        settings: input.settings,
       });
-      if (res.success && res.data) return mapBackendToA2A(res.data);
+      if (res.success && res.data) return res.data;
       throw new Error(res.error?.message || 'Failed to create workspace');
     },
     onSuccess: (workspace) => {
@@ -115,10 +88,11 @@ export function useUpdateWorkspace() {
 
   return useMutation({
     mutationFn: async ({ id, ...input }: { id: string; name?: string; settings?: Partial<WorkspaceSettings> }) => {
-      const res = await backendApi.patch<BackendWorkspace>(`/workspaces/${id}`, {
-        ...(input.name ? { workspace_name: input.name } : {}),
+      const res = await dockerBackendApi.patch<A2AWorkspace>(`/api/a2a/workspaces/${id}`, {
+        ...(input.name ? { name: input.name } : {}),
+        ...(input.settings ? { settings: input.settings } : {}),
       });
-      if (res.success && res.data) return mapBackendToA2A(res.data);
+      if (res.success && res.data) return res.data;
       throw new Error(res.error?.message || 'Failed to update workspace');
     },
     onSuccess: (workspace) => {
@@ -134,7 +108,7 @@ export function useDeleteWorkspace() {
 
   return useMutation({
     mutationFn: async (id: string) => {
-      const res = await backendApi.delete(`/workspaces/${id}`);
+      const res = await dockerBackendApi.delete(`/api/a2a/workspaces/${id}`);
       if (res.success) return id;
       throw new Error(res.error?.message || 'Failed to delete workspace');
     },
@@ -149,10 +123,9 @@ export function useWorkspaceAgents(wsId: string | null) {
   return useQuery({
     queryKey: workspaceKeys.agents(wsId ?? ''),
     queryFn: async () => {
-      // Backend workspace includes agent_ids in the detail response
-      const res = await backendApi.get<BackendWorkspace>(`/workspaces/${wsId}`);
+      const res = await dockerBackendApi.get<{ agents: string[] }>(`/api/a2a/workspaces/${wsId}/agents`);
       if (res.success && res.data) {
-        return { agents: res.data.agent_ids || [], total: (res.data.agent_ids || []).length };
+        return { agents: res.data.agents || [], total: (res.data.agents || []).length };
       }
       throw new Error(res.error?.message || 'Failed to fetch agents');
     },
@@ -166,9 +139,9 @@ export function useAddWorkspaceAgent() {
 
   return useMutation({
     mutationFn: async ({ wsId, agentId }: { wsId: string; agentId: string }) => {
-      const res = await backendApi.post<{ workspace_id: string; agent_id: string; added: boolean }>(
-        `/workspaces/${wsId}/agents`,
-        { agent_id: agentId },
+      const res = await dockerBackendApi.post<{ workspace_id: string; agent_id: string; added: boolean }>(
+        `/api/a2a/workspaces/${wsId}/agents`,
+        { agentId },
       );
       if (res.success && res.data) return res.data;
       throw new Error(res.error?.message || 'Failed to add agent');
@@ -185,7 +158,7 @@ export function useRemoveWorkspaceAgent() {
 
   return useMutation({
     mutationFn: async ({ wsId, agentId }: { wsId: string; agentId: string }) => {
-      const res = await backendApi.delete(`/workspaces/${wsId}/agents/${agentId}`);
+      const res = await dockerBackendApi.delete(`/api/a2a/workspaces/${wsId}/agents/${agentId}`);
       if (res.success) return { wsId, agentId };
       throw new Error(res.error?.message || 'Failed to remove agent');
     },

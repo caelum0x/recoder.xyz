@@ -27,26 +27,22 @@ async def get_user_locale(user_id: str, client=None) -> str:
     try:
         metadata = {}
 
+        # Check user_preferences table for language setting
         row = await execute_one(
             """
-            SELECT raw_user_meta_data
-            FROM auth.users
-            WHERE id = :user_id::uuid
+            SELECT language
+            FROM user_preferences
+            WHERE user_id::text = :user_id
             LIMIT 1
             """,
             {"user_id": user_id},
         )
-        if row and isinstance(row.get("raw_user_meta_data"), dict):
-            metadata = row["raw_user_meta_data"]
+        if row:
+            locale = row.get("language")
+            if locale and locale in SUPPORTED_LOCALES:
+                logger.debug(f"Found user locale preference: {locale} for user {user_id}")
+                return locale
 
-        locale = metadata.get('locale') if isinstance(metadata, dict) else None
-        if locale and locale in SUPPORTED_LOCALES:
-            logger.debug(f"Found user locale preference: {locale} for user {user_id}")
-            return locale
-        elif locale:
-            logger.warning(f"Invalid locale '{locale}' for user {user_id}, not in supported locales: {SUPPORTED_LOCALES}")
-        
-        logger.debug(f"No locale preference found for user {user_id}, using default: {DEFAULT_LOCALE}")
         return DEFAULT_LOCALE
         
     except Exception as e:

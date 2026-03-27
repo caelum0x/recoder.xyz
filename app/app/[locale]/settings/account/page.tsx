@@ -156,11 +156,16 @@ export default function AccountSettingsPage() {
     }
   };
 
+  const [deleting, setDeleting] = useState(false);
+
   const handleDeleteAccount = async () => {
     if (!showDeleteConfirm) {
       setShowDeleteConfirm(true);
       return;
     }
+
+    setDeleting(true);
+    setError('');
 
     try {
       const response = await fetch('/api/user/account', {
@@ -168,11 +173,40 @@ export default function AccountSettingsPage() {
         credentials: 'include'
       });
 
-      if (response.ok) {
-        window.location.href = '/';
+      const data = await response.json();
+
+      if (response.ok && data.success) {
+        // Clear all session cookies client-side as an extra safety measure.
+        // The server already sets Set-Cookie headers to expire them, but
+        // belt-and-suspenders is appropriate for account deletion.
+        const cookieNames = [
+          'recoder.session_token',
+          '__Secure-recoder.session_token',
+          'recoder.session_data',
+          '__Secure-recoder.session_data',
+        ];
+        for (const name of cookieNames) {
+          document.cookie = `${name}=; Max-Age=0; Path=/; Domain=.recoder.xyz;`;
+          document.cookie = `${name}=; Max-Age=0; Path=/;`;
+        }
+
+        // Clear any cached session data in localStorage/sessionStorage.
+        try {
+          localStorage.clear();
+          sessionStorage.clear();
+        } catch {
+          // Storage might not be available; ignore.
+        }
+
+        // Force a full page navigation (not SPA) to ensure all state is cleared.
+        window.location.replace('/');
+      } else {
+        setError(data.error || 'Failed to delete account. Please try again.');
+        setDeleting(false);
       }
     } catch (err) {
-      setError('Failed to delete account');
+      setError('Network error while deleting account. Please try again.');
+      setDeleting(false);
     }
   };
 
@@ -344,16 +378,26 @@ export default function AccountSettingsPage() {
                 <div className="pt-4 border-t border-white/10">
                   <button
                     onClick={handleDeleteAccount}
-                    className={`w-full px-4 py-3 rounded-lg font-medium transition-all flex items-center justify-center space-x-2 ${
+                    disabled={deleting}
+                    className={`w-full px-4 py-3 rounded-lg font-medium transition-all flex items-center justify-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed ${
                       showDeleteConfirm
                         ? 'bg-red-500 hover:bg-red-600 text-white'
                         : 'bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 text-red-400'
                     }`}
                   >
-                    <Trash2 className="w-5 h-5" />
-                    <span>{showDeleteConfirm ? 'Click Again to Confirm Delete' : 'Delete Account'}</span>
+                    {deleting ? (
+                      <>
+                        <Loader2 className="w-5 h-5 animate-spin" />
+                        <span>Deleting account...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Trash2 className="w-5 h-5" />
+                        <span>{showDeleteConfirm ? 'Click Again to Confirm Delete' : 'Delete Account'}</span>
+                      </>
+                    )}
                   </button>
-                  {showDeleteConfirm && (
+                  {showDeleteConfirm && !deleting && (
                     <p className="mt-2 text-xs text-red-400 text-center">
                       This action is permanent and cannot be undone
                     </p>
