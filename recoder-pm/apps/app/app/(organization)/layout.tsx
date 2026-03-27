@@ -13,6 +13,7 @@ import type { CSSProperties, ReactNode } from "react";
 import { Suspense } from "react";
 import { Sidebar } from "@/components/sidebar";
 import { database } from "@/lib/database";
+import { AiCopilotChat } from "./insights/components/ai-copilot-chat";
 import { Forms } from "./components/forms";
 import { Navbar } from "./components/navbar";
 
@@ -70,6 +71,7 @@ const OrganizationLayout = async ({
       <Suspense fallback={null}>
         <Forms />
       </Suspense>
+      <AiCopilotChat organizationId={organizationId} />
     </SidebarProvider>
   );
 };
