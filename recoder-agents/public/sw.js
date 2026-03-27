@@ -1,4 +1,4 @@
-const CACHE_NAME = 'recoder-agents-v4';
+const CACHE_NAME = 'recoder-agents-v5';
 const STATIC_ASSETS = ['/manifest.json'];
 
 self.addEventListener('install', (event) => {

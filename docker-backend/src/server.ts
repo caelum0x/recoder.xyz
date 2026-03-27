@@ -2559,8 +2559,7 @@ app.post('/api/container', containerLimiter, optionalAuthenticateRequest, flexib
         const dc = getDaytonaClient();
         const sandbox = await dc.createSandbox({
           labels: { projectId, source: 'web-ide' },
-          autoStopInterval: 60,
-          autoArchiveInterval: 120,
+          // Uses 43200s (12hr) defaults from daytona-client.ts — do NOT override here
           public: true,
         });
 
