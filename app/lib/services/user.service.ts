@@ -260,46 +260,46 @@ export class UserService {
   }
 
   /**
-   * Delete user account
+   * Delete user account — hard delete.
+   * Removes sessions, accounts, API keys, and the user record itself.
+   * FK cascade on the users table handles most related records, but we
+   * explicitly delete auth-critical rows first for safety.
    */
   async deleteAccount(userId: string) {
     try {
-      // Soft delete - just mark as inactive and anonymize
-      await prisma.users.update({
+      // Log account deletion first (before data is gone).
+      try {
+        await prisma.audit_logs.create({
+          data: {
+            id: crypto.randomUUID(),
+            userId,
+            action: 'account_deleted',
+            resource: 'user',
+          },
+        });
+      } catch (auditError) {
+        logger.warn('Audit log write failed during account deletion', { error: String(auditError) });
+      }
+
+      // Delete sessions from both tables.
+      try { await prisma.session.deleteMany({ where: { userId } }); } catch { /* cascade will handle */ }
+      try { await prisma.sessions.deleteMany({ where: { userId } }); } catch { /* cascade will handle */ }
+
+      // Delete OAuth accounts from both tables.
+      try { await prisma.account.deleteMany({ where: { userId } }); } catch { /* cascade will handle */ }
+      try { await prisma.accounts.deleteMany({ where: { userId } }); } catch { /* cascade will handle */ }
+
+      // Delete CLI sessions and API keys.
+      try { await prisma.cli_sessions.deleteMany({ where: { userId } }); } catch { /* cascade will handle */ }
+      try { await prisma.api_keys.deleteMany({ where: { userId } }); } catch { /* cascade will handle */ }
+      try { await prisma.user_api_keys.deleteMany({ where: { userId } }); } catch { /* cascade will handle */ }
+
+      // Delete user preferences.
+      try { await prisma.user_preferences.deleteMany({ where: { userId } }); } catch { /* cascade will handle */ }
+
+      // Hard delete the user record (cascade handles remaining FKs).
+      await prisma.users.delete({
         where: { id: userId },
-        data: {
-          email: `deleted_${userId}@recoder.xyz`, // Free up email
-          isActive: false,
-          updatedAt: new Date()
-        },
-      });
-
-      // Revoke all sessions
-      await prisma.sessions.updateMany({
-        where: { userId },
-        data: {
-          isActive: false,
-          updatedAt: new Date(),
-        },
-      });
-
-      // Revoke all API keys
-      await prisma.api_keys.updateMany({
-        where: { userId },
-        data: {
-          isActive: false,
-          updatedAt: new Date()
-        },
-      });
-
-      // Log account deletion
-      await prisma.audit_logs.create({
-        data: {
-          id: crypto.randomUUID(),
-          userId,
-          action: 'account_deleted',
-          resource: 'user',
-        },
       });
 
     } catch (error) {

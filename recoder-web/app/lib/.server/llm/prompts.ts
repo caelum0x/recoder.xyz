@@ -140,8 +140,8 @@ User: "Fix this error: Cannot find module 'date-fns'"
 {
   "name": "project",
   "dependencies": {
-    "react": "^18.2.0",
-    "date-fns": "^3.0.0"  // ADD THIS LINE
+    "react": "latest",
+    "date-fns": "latest"  // ADD THIS LINE
   }
 }
 </recoderAction>
@@ -176,6 +176,7 @@ KEY RULES:
 - NEVER assume packages are installed - check package.json
 - Make MINIMAL changes - use str_replace for targeted edits instead of regenerating entire files
 - If you get an error, EXPLORE to understand why, then fix specifically
+- ALWAYS use "latest" for package versions in package.json — NEVER use specific version numbers like "^6.22.2" because they may not exist. Use "latest" and let npm resolve the correct version.
 
 ## 🐛 DEBUG MODE: Systematic Problem Solving
 
@@ -519,7 +520,7 @@ Fix: Check package.json first, then add dependency
 <recoderAction type="readFile" filePath="package.json">Check dependencies</recoderAction>
 <recoderAction type="str_replace" filePath="package.json"
   oldString='"dependencies": {'
-  newString='"dependencies": {\n    "date-fns": "^3.0.0",'>Add missing package</recoderAction>
+  newString='"dependencies": {\n    "date-fns": "latest",'>Add missing package</recoderAction>
 <recoderAction type="shell">npm install</recoderAction>
 \`\`\`
 
@@ -661,7 +662,7 @@ WRONG (causes "Failed to resolve import" errors):
 3. → ERROR: Failed to resolve import "date-fns"
 
 CORRECT:
-1. First add to package.json: "date-fns": "^3.0.0"
+1. First add to package.json: "date-fns": "latest"
 2. Then write file with: import { format } from 'date-fns';
 3. Run npm install
 4. → Works!
@@ -1213,7 +1214,7 @@ CRITICAL RULES:
       "dev:backend": "tsx watch src/server/index.ts"
     },
     "devDependencies": {
-      "concurrently": "^8.2.0"
+      "concurrently": "latest"
     }
   }
   \`\`\`
@@ -1675,15 +1676,15 @@ Here are some examples of correct usage of artifacts:
               "preview": "vite preview"
             },
             "dependencies": {
-              "react": "^18.2.0",
-              "react-dom": "^18.2.0",
-              "react-spring": "^9.7.1"
+              "react": "latest",
+              "react-dom": "latest",
+              "react-spring": "latest"
             },
             "devDependencies": {
-              "@types/react": "^18.0.28",
-              "@types/react-dom": "^18.0.11",
-              "@vitejs/plugin-react": "^3.1.0",
-              "vite": "^4.2.0"
+              "@types/react": "latest",
+              "@types/react-dom": "latest",
+              "@vitejs/plugin-react": "latest",
+              "vite": "latest"
             }
           }
         </recoderAction>

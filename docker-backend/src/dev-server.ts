@@ -420,20 +420,32 @@ export class DevServerManager {
   private async waitForDaytonaReady(previewUrl: string, maxWaitMs: number = 30000): Promise<{ ready: boolean; port?: number }> {
     const startTime = Date.now();
     const checkInterval = 2000;
-    console.log(`[DevServer] Waiting for Daytona preview ready: ${previewUrl}`);
+
+    // Extract sandboxId from previewUrl pattern: https://{port}-{sandboxId}.sandbox.recoder.xyz
+    const urlMatch = previewUrl.match(/^https?:\/\/\d+-([^.]+)\./);
+    const sandboxId = urlMatch?.[1];
+    if (!sandboxId) {
+      console.log(`[DevServer] Cannot extract sandboxId from preview URL: ${previewUrl}`);
+      return { ready: false };
+    }
+
+    console.log(`[DevServer] Waiting for Daytona preview ready (sandbox: ${sandboxId.slice(0, 12)})`);
 
     while (Date.now() - startTime < maxWaitMs) {
       try {
-        const ctrl = new AbortController();
-        const timeout = setTimeout(() => ctrl.abort(), 3000);
-        const prevTls = process.env.NODE_TLS_REJECT_UNAUTHORIZED;
-        process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
-        const resp = await fetch(previewUrl, { method: 'HEAD', signal: ctrl.signal }).catch(() => null);
-        process.env.NODE_TLS_REJECT_UNAUTHORIZED = prevTls ?? '1';
-        clearTimeout(timeout);
-
-        if (resp && resp.status < 500) {
+        // Use internal curl inside the sandbox to check if dev server is responding
+        // This avoids the OIDC redirect that happens via the external daytona-proxy
+        const dc = getDaytonaClient();
+        const curlResult = await dc.execCommand(
+          sandboxId,
+          'curl -sf http://localhost:3000 > /dev/null 2>&1 && echo "PORT3000" || curl -sf http://localhost:5173 > /dev/null 2>&1 && echo "PORT5173" || echo "NOTREADY"',
+          { timeoutSecs: 5 },
+        );
+        const output = curlResult.output.trim();
+        if (output.includes('PORT3000')) {
           return { ready: true, port: 3000 };
+        } else if (output.includes('PORT5173')) {
+          return { ready: true, port: 5173 };
         }
       } catch {}
 

@@ -132,8 +132,7 @@ export function UserSettingsModal({
     const isProduction = isProductionMode();
     const tabs: Tab[] = [
         { id: 'general', label: 'General', icon: Settings },
-        { id: 'plan', label: 'Plan', icon: Zap },
-        { id: 'billing', label: 'Billing', icon: CreditCard },
+        // Plan & Billing hidden — platform is free
         { id: 'usage', label: 'Usage', icon: TrendingDown },
         { id: 'memory', label: 'Memory', icon: Brain },
         ...(!isProduction ? [{ id: 'referrals' as TabId, label: 'Referrals', icon: Users }] : []),

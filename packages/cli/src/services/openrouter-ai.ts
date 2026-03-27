@@ -58,7 +58,7 @@ export class OpenRouterAI {
   private productionEngineURL: string;
   
   constructor() {
-    this.apiKey = process.env.OPENROUTER_API_KEY || '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';
+    this.apiKey = process.env.OPENROUTER_API_KEY || '';
     this.productionEngineURL = process.env.PRODUCTION_ENGINE_URL || 'http://localhost:3100';
     
     if (!this.apiKey) {

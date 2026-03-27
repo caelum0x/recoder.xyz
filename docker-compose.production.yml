@@ -208,8 +208,8 @@ services:
       - STRICT_AUTH=false
       - ALLOW_LOCALHOST_ORIGIN=true
       - AUTH_DATABASE_URL=postgresql://recoder:recoder_prod_2026@host.docker.internal:5432/recoder_main
-      - INTERNAL_SERVICE_KEY=recoder_internal_service_key_2026
-      - APP_API_URL=https://recoder.xyz
+      - INTERNAL_SERVICE_KEY=d697a3fe80fb0d39757e5aba840815eb8e49b3a29c513da3c64660ed1aa58654
+      - APP_API_URL=http://host.docker.internal:3000
       # --- A2A inter-service communication ---
       - RECODER_A2A_SHARED_SECRET=${RECODER_A2A_SHARED_SECRET}
       - RECODER_A2A_REDIS_URL=redis://:${REDIS_PASSWORD}@recoder-redis:6379/0
@@ -289,7 +289,7 @@ services:
       - MAIN_SITE_INTERNAL_URL=http://host.docker.internal:3000
       - VITE_MAIN_SITE_URL=https://recoder.xyz
       - DATABASE_URL=postgresql://recoder:recoder_prod_2026@host.docker.internal:5432/recoder_main
-      - INTERNAL_SERVICE_KEY=recoder_internal_service_key_2026
+      - INTERNAL_SERVICE_KEY=d697a3fe80fb0d39757e5aba840815eb8e49b3a29c513da3c64660ed1aa58654
       - OPENROUTER_API_KEY=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
       # A2A
       - RECODER_A2A_SHARED_SECRET=${RECODER_A2A_SHARED_SECRET}
@@ -494,6 +494,9 @@ services:
       - HOME=/home/node
       - TERM=xterm-256color
       - OPENCLAW_GATEWAY_TOKEN=${OPENCLAW_GATEWAY_TOKEN:-recoder_openclaw_prod_2026}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - OPENROUTER_API_KEY=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
+      - OPENCLAW_DEFAULT_MODEL=openrouter/anthropic/claude-sonnet-4
       - NODE_OPTIONS=--max_old_space_size=1536
       # Control UI: allow openclaw.recoder.xyz origin for WebSocket
       - OPENCLAW_CONTROL_UI_ALLOWED_ORIGINS=https://openclaw.recoder.xyz

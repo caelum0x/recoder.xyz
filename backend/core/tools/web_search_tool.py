@@ -87,7 +87,7 @@ Sources:
 
 ```
 # Correct - batch all queries
-web_search(query=["Tesla news 2025", "Tesla stock", "Tesla products"], num_results=5)
+web_search(query=["Tesla news 2025", "Tesla stock", "Tesla products"], num_results=10)
 
 # Wrong - never do this
 web_search(query="Tesla news")
@@ -276,8 +276,8 @@ Usage notes:
                     },
                     "num_results": {
                         "type": "integer",
-                        "description": "**OPTIONAL** - Number of search results to return per query (1-20). Default: 5.",
-                        "default": 5
+                        "description": "**OPTIONAL** - Number of search results to return per query (1-30). Default: 10.",
+                        "default": 10
                     }
                 },
                 "required": ["query"],
@@ -288,7 +288,7 @@ Usage notes:
     async def web_search(
         self,
         query: str | list[str],
-        num_results: int = 5
+        num_results: int = 10
     ) -> ToolResult:
         """
         Search the web using DuckDuckGo to find relevant and up-to-date information.
@@ -298,16 +298,16 @@ Usage notes:
         try:
             # Normalize num_results
             if num_results is None:
-                num_results = 5
+                num_results = 10
             elif isinstance(num_results, int):
-                num_results = max(1, min(num_results, 20))
+                num_results = max(1, min(num_results, 30))
             elif isinstance(num_results, str):
                 try:
-                    num_results = max(1, min(int(num_results), 20))
+                    num_results = max(1, min(int(num_results), 30))
                 except ValueError:
-                    num_results = 5
+                    num_results = 10
             else:
-                num_results = 5
+                num_results = 10
 
             # Handle JSON-encoded array strings
             if isinstance(query, str) and query.strip().startswith('['):
@@ -901,8 +901,8 @@ Usage notes:
                     },
                     "max_results": {
                         "type": "integer",
-                        "description": "**OPTIONAL** - Number of news results to return (1-20). Default: 5.",
-                        "default": 5
+                        "description": "**OPTIONAL** - Number of news results to return (1-30). Default: 10.",
+                        "default": 10
                     }
                 },
                 "required": ["query"],
@@ -913,7 +913,7 @@ Usage notes:
     async def news_search(
         self,
         query: str,
-        max_results: int = 5
+        max_results: int = 10
     ) -> ToolResult:
         """Search recent news using DuckDuckGo News."""
         try:
@@ -925,8 +925,8 @@ Usage notes:
                 try:
                     max_results = int(max_results)
                 except (ValueError, TypeError):
-                    max_results = 5
-            max_results = max(1, min(max_results, 20))
+                    max_results = 10
+            max_results = max(1, min(max_results, 30))
 
             logging.info(f"[WebSearch] News search: '{query}', max_results={max_results}")
             start_time = time.time()
@@ -945,7 +945,7 @@ Usage notes:
             logging.error(f"[WebSearch] News search error: {e}")
             return self.fail_response(f"News search error: {str(e)[:200]}")
 
-    async def _news_search(self, query: str, max_results: int = 5) -> dict:
+    async def _news_search(self, query: str, max_results: int = 10) -> dict:
         """Search recent news using SearXNG with news category. Falls back to DuckDuckGo News."""
         # Try SearXNG news category first
         try:

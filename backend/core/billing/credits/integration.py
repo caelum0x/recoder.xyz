@@ -11,8 +11,8 @@ from ..shared.cache_utils import invalidate_account_state_cache
 class BillingIntegration:
     @staticmethod
     async def check_and_reserve_credits(account_id: str, estimated_tokens: int = 10000, wait_for_cache_ms: int = 0) -> Tuple[bool, str, Optional[str]]:
-        if config.ENV_MODE == EnvMode.LOCAL:
-            return True, "Local mode", None
+        # Platform is free/BYOK — no credit charges
+        return True, "Billing disabled", None
         
         try:
             import asyncio
@@ -77,10 +77,13 @@ class BillingIntegration:
     
     @staticmethod
     async def check_model_and_billing_access(
-        account_id: str, 
-        model_name: Optional[str], 
+        account_id: str,
+        model_name: Optional[str],
         client=None
     ) -> Tuple[bool, str, Dict]:
+        # Platform is free/BYOK — skip all billing and model access checks
+        return True, "Billing disabled — platform is free", {"billing_disabled": True}
+
         if config.ENV_MODE == EnvMode.LOCAL:
             logger.debug("Running in local development mode - skipping all billing and model access checks")
             return True, "Local development mode", {"local_mode": True}
@@ -132,8 +135,8 @@ class BillingIntegration:
         cache_read_tokens: int = 0,
         cache_creation_tokens: int = 0
     ) -> Dict:
-        if config.ENV_MODE == EnvMode.LOCAL:
-            return {'success': True, 'cost': 0, 'new_balance': 999999}
+        # Platform is free/BYOK — no credit charges
+        return {'success': True, 'cost': 0, 'new_balance': 999999}
 
         # Handle cache reads and writes separately with actual pricing
         if cache_read_tokens > 0 or cache_creation_tokens > 0:

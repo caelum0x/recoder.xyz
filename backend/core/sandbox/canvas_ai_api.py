@@ -347,50 +347,72 @@ async def _generate_image_openrouter(prompt: str) -> Optional[str]:
 
 
 async def process_with_replicate_remove_bg(image_bytes: bytes, mime_type: str) -> str:
-    """Remove background using Replicate's 851-labs/background-remover. Requires REPLICATE_API_TOKEN."""
-    _get_replicate_token_or_raise()
-    
-    # Convert bytes to data URL
-    image_b64 = base64.b64encode(image_bytes).decode('utf-8')
-    image_data_url = f"data:{mime_type};base64,{image_b64}"
-    
-    logger.info("Calling Replicate 851-labs/background-remover")
-    
-    try:
-        # Wrap replicate.run() in thread pool to avoid blocking event loop
-        output = await asyncio.to_thread(
-            replicate.run,
-            "851-labs/background-remover:a029dff38972b5fda4ec5d75d7d1cd25aeff621d2cf4946a41055d7db66b80bc",
-            input={"image": image_data_url}
-        )
-        return _replicate_output_to_base64(output, "png")
-    except Exception as e:
-        logger.error(f"Replicate remove_bg error: {e}")
-        raise Exception(f"Background removal failed: {str(e)}")
+    """Remove background. Uses Replicate if configured, otherwise falls back to OpenRouter Gemini."""
+    config = get_config()
+
+    if config.REPLICATE_API_TOKEN:
+        try:
+            _get_replicate_token_or_raise()
+
+            # Convert bytes to data URL
+            image_b64 = base64.b64encode(image_bytes).decode('utf-8')
+            image_data_url = f"data:{mime_type};base64,{image_b64}"
+
+            logger.info("Calling Replicate 851-labs/background-remover")
+
+            # Wrap replicate.run() in thread pool to avoid blocking event loop
+            output = await asyncio.to_thread(
+                replicate.run,
+                "851-labs/background-remover:a029dff38972b5fda4ec5d75d7d1cd25aeff621d2cf4946a41055d7db66b80bc",
+                input={"image": image_data_url}
+            )
+            return _replicate_output_to_base64(output, "png")
+        except Exception as e:
+            logger.warning(f"Replicate remove_bg failed, trying OpenRouter: {e}")
+
+    # Fallback: use OpenRouter Gemini
+    logger.info("Using OpenRouter Gemini for background removal")
+    prompt = (
+        "Remove the background from this image completely. Keep only the main subject/object "
+        "with clean edges. The background should be transparent. Preserve all details of the subject. "
+        "Output the result as a PNG image with transparent background."
+    )
+    return await process_with_gemini(image_bytes, mime_type, prompt, "gemini-flash")
 
 
 async def process_with_replicate_upscale(image_bytes: bytes, mime_type: str) -> str:
-    """Upscale image using Replicate's recraft-ai/recraft-crisp-upscale. Requires REPLICATE_API_TOKEN."""
-    _get_replicate_token_or_raise()
-    
-    # Convert bytes to data URL
-    image_b64 = base64.b64encode(image_bytes).decode('utf-8')
-    image_data_url = f"data:{mime_type};base64,{image_b64}"
-    
-    logger.info("Calling Replicate recraft-ai/recraft-crisp-upscale")
-    
-    try:
-        # Wrap replicate.run() in thread pool to avoid blocking event loop
-        output = await asyncio.to_thread(
-            replicate.run,
-            "recraft-ai/recraft-crisp-upscale",
-            input={"image": image_data_url}
-        )
-        # Output is webp format
-        return _replicate_output_to_base64(output, "webp")
-    except Exception as e:
-        logger.error(f"Replicate upscale error: {e}")
-        raise Exception(f"Upscale failed: {str(e)}")
+    """Upscale image. Uses Replicate if configured, otherwise falls back to OpenRouter Gemini."""
+    config = get_config()
+
+    if config.REPLICATE_API_TOKEN:
+        try:
+            _get_replicate_token_or_raise()
+
+            # Convert bytes to data URL
+            image_b64 = base64.b64encode(image_bytes).decode('utf-8')
+            image_data_url = f"data:{mime_type};base64,{image_b64}"
+
+            logger.info("Calling Replicate recraft-ai/recraft-crisp-upscale")
+
+            # Wrap replicate.run() in thread pool to avoid blocking event loop
+            output = await asyncio.to_thread(
+                replicate.run,
+                "recraft-ai/recraft-crisp-upscale",
+                input={"image": image_data_url}
+            )
+            # Output is webp format
+            return _replicate_output_to_base64(output, "webp")
+        except Exception as e:
+            logger.warning(f"Replicate upscale failed, trying OpenRouter: {e}")
+
+    # Fallback: use OpenRouter Gemini
+    logger.info("Using OpenRouter Gemini for image upscale")
+    prompt = (
+        "Upscale this image to higher resolution. Enhance details, improve clarity, "
+        "and increase quality while maintaining the original content and style exactly. "
+        "Make it sharper and more detailed. Output the enhanced image."
+    )
+    return await process_with_gemini(image_bytes, mime_type, prompt, "gemini-flash")
 
 
 @router.post("/process", response_model=ImageEditResponse)
@@ -465,9 +487,15 @@ async def process_image(
             result_base64 = await process_with_gemini(image_bytes, mime_type, prompt, "gemini-flash")
         
         # BILLING: Deduct credits for successful processing
-        # Determine the actual Replicate/OpenRouter model used
-        billing_model = MODELS.get(model_key, model_key)
-        provider = "replicate" if model_key.startswith("replicate-") else "openrouter"
+        # Determine the actual provider used (may fall back to OpenRouter if Replicate not configured)
+        config = get_config()
+        has_replicate = bool(config.REPLICATE_API_TOKEN)
+        if has_replicate and model_key.startswith("replicate-"):
+            provider = "replicate"
+            billing_model = MODELS.get(model_key, model_key)
+        else:
+            provider = "openrouter"
+            billing_model = MODELS.get("gemini-flash", model_key)
         
         # For GPT Image 1.5, specify quality variant for correct pricing
         billing_kwargs = {
@@ -763,6 +791,11 @@ class ConvertToSvgResponse(BaseModel):
 async def _convert_with_recraft(image_data_url: str) -> Optional[str]:
     """Try recraft-ai/recraft-vectorize, returns SVG string or None on failure."""
     try:
+        config = get_config()
+        if not config.REPLICATE_API_TOKEN:
+            logger.info("Skipping recraft vectorize: REPLICATE_API_TOKEN not configured")
+            return None
+        _get_replicate_token()
         output = replicate.run(
             "recraft-ai/recraft-vectorize",
             input={"image": image_data_url}
@@ -883,8 +916,14 @@ async def detect_text(
         )
     
     try:
+        config = get_config()
+        if not config.REPLICATE_API_TOKEN:
+            return OCRResponse(
+                success=False,
+                error="OCR requires REPLICATE_API_TOKEN. Please configure it in backend/.env."
+            )
         _get_replicate_token()
-        
+
         # Extract image data
         try:
             mime_type, image_bytes, clean_b64 = extract_image_data(request.image_base64)
@@ -894,13 +933,13 @@ async def detect_text(
                 success=False,
                 error=f"Invalid base64 image data: {str(e)}"
             )
-        
+
         # Build data URL for Replicate
         if request.image_base64.startswith('data:'):
             image_data_url = request.image_base64
         else:
             image_data_url = f"data:{mime_type};base64,{clean_b64}"
-        
+
         logger.info("Calling Replicate datalab-to/ocr")
         
         try:

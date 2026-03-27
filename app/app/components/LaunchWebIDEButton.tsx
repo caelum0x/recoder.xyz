@@ -26,44 +26,17 @@ export function LaunchWebIDEButton({
   const handleClick = async (e: React.MouseEvent) => {
     e.preventDefault();
 
+    const webIdeUrl = getRecoderWebUrlClient();
+
     // Check 1: User must be logged in
     if (!session?.user) {
-      router.push('/auth/signin?redirect=/');
+      // Redirect to sign-in with the Web IDE as the post-login destination
+      router.push(`/auth/signin?redirect=${encodeURIComponent(webIdeUrl)}`);
       return;
     }
 
-    setLoading(true);
-
-    try {
-      const response = await fetch('/api/user/ai-provider-keys', { credentials: 'include' });
-
-      if (response.status === 401) {
-        router.push('/auth/signin?redirect=/settings/ai-providers?redirect=web-ide');
-        return;
-      }
-
-      const data = response.ok ? await response.json() : { success: false, keys: [] };
-      const hasApiKey = Boolean(data.success && data.keys && data.keys.length > 0);
-
-      if (!hasApiKey) {
-        setShowModal(true);
-        return;
-      }
-    } catch {
-      setShowModal(true);
-      return;
-    } finally {
-      setLoading(false);
-    }
-
-    // Non-blocking analytics
-    fetch('/api/platform/access', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ platform: 'web' }),
-    }).catch(() => {});
-
-    // All checks passed - launch the Web IDE directly
+    // Platform has server-side AI keys configured — no user API key needed.
+    // Launch directly.
     window.location.href = getRecoderWebUrlClient();
   };
 

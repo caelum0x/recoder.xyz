@@ -116,13 +116,15 @@ function RunRow({
 }: {
   run: {
     id: string;
-    agent_name: string;
+    agent_name?: string;
     model: string;
     status: string;
     started_at: string;
     completed_at?: string;
-    token_count: number;
-    estimated_cost: number;
+    token_count?: number;
+    total_tokens?: number;
+    estimated_cost?: number;
+    cost?: number;
   };
 }) {
   const statusConf = STATUS_CONFIG[run.status] ?? STATUS_CONFIG.pending;
@@ -142,7 +144,7 @@ function RunRow({
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
             <span className="text-sm font-medium truncate">
-              {run.agent_name}
+              {run.agent_name || 'Agent'}
             </span>
             <Badge
               variant="outline"
@@ -180,11 +182,11 @@ function RunRow({
         </span>
         <span className="flex items-center gap-1 w-16 tabular-nums">
           <Zap className="h-3 w-3" />
-          {run.token_count.toLocaleString()}
+          {(run.token_count ?? run.total_tokens ?? 0).toLocaleString()}
         </span>
         <span className="flex items-center gap-1 w-14 tabular-nums">
           <Coins className="h-3 w-3" />
-          ${run.estimated_cost.toFixed(2)}
+          ${(run.estimated_cost ?? run.cost ?? 0).toFixed(2)}
         </span>
       </div>
 

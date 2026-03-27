@@ -57,7 +57,7 @@ module.exports = {
       name: 'recoder-backend',
       cwd: '/root/recoder.xyz/backend',
       script: '.venv/bin/gunicorn',
-      args: 'api:app -w 2 -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:8000 --timeout 75 --max-requests 500 --max-requests-jitter 50 --graceful-timeout 30',
+      args: 'api:app -w 2 -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:8000 --timeout 300 --max-requests 500 --max-requests-jitter 50 --graceful-timeout 30',
       interpreter: 'none',
       max_memory_restart: '1000M',
       restart_delay: 3000,

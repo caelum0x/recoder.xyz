@@ -9,6 +9,7 @@ from core.agentpress.prompt_caching import add_cache_control
 from core.agents.pipeline.ux_streaming import stream_context_usage, stream_summarizing
 from core.agents.pipeline.stateless.context.manager import ContextManager
 from core.agentpress.context_manager import ContextManager as ToolCallValidator
+from core.services.user_keys import resolve_api_key
 
 
 class ExecutionEngine:
@@ -206,6 +207,28 @@ class ExecutionEngine:
                 compressed=True
             )
 
+        # BYOK: resolve user's API key for the LLM provider
+        user_api_key = None
+        try:
+            model = self._state.model_name or ""
+            if "openrouter" in model.lower() or "/" in model:
+                user_api_key = await resolve_api_key(
+                    self._state.account_id, "openrouter",
+                    env_fallback=config.OPENROUTER_API_KEY
+                )
+            elif "anthropic" in model.lower() or "claude" in model.lower():
+                user_api_key = await resolve_api_key(
+                    self._state.account_id, "anthropic",
+                    env_fallback=getattr(config, 'ANTHROPIC_API_KEY', None)
+                )
+            elif "openai" in model.lower() or "gpt" in model.lower():
+                user_api_key = await resolve_api_key(
+                    self._state.account_id, "openai",
+                    env_fallback=getattr(config, 'OPENAI_API_KEY', None)
+                )
+        except Exception as key_err:
+            logger.warning(f"[BYOK] Failed to resolve user key: {key_err}")
+
         executor = LLMExecutor()
         try:
             response = await executor.execute(
@@ -217,7 +240,8 @@ class ExecutionEngine:
                 tool_choice="auto",
                 native_tool_calling=processor_config.native_tool_calling,
                 xml_tool_calling=processor_config.xml_tool_calling,
-                stream=True
+                stream=True,
+                api_key=user_api_key
             )
         except Exception as e:
             error_msg = str(e)[:200]

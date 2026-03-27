@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 import Link from 'next/link';
-import { Menu, Plus, Zap, MessageCircle, PanelLeftOpen, PanelLeftClose, Search, Users, FolderOpen, Network, Code, Share2, Clock, Store, LayoutTemplate, CreditCard, FileBarChart, Play, Star, Trophy, BookOpen, GitBranch, CalendarClock, FlaskConical, Activity, ShieldAlert } from 'lucide-react';
+import { Menu, Plus, Zap, MessageCircle, PanelLeftOpen, PanelLeftClose, Search, Users, FolderOpen, Network, Code, Share2, Clock, Store, LayoutTemplate, FileBarChart, Play, Star, Trophy, BookOpen, GitBranch, CalendarClock, FlaskConical, Activity, ShieldAlert } from 'lucide-react';
 
 import { NavAgents } from '@/components/sidebar/nav-agents';
 import { NavWorkers } from '@/components/sidebar/nav-workers';
@@ -729,18 +729,7 @@ export function SidebarLeft({
               <FileBarChart className="h-4 w-4" />
               Reports
             </Link>
-            <Link
-              href="/billing/plans"
-              className={cn(
-                "flex items-center gap-2 rounded-lg px-3 py-2 text-sm transition-colors",
-                "text-muted-foreground hover:text-foreground hover:bg-muted/50",
-                pathname?.startsWith('/billing') && "text-foreground bg-muted/50"
-              )}
-              onClick={() => isMobile && setOpenMobile(false)}
-            >
-              <CreditCard className="h-4 w-4" />
-              Billing
-            </Link>
+            {/* Billing hidden — platform is free */}
             <Link
               href="/developers"
               className={cn(

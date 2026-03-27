@@ -51,19 +51,38 @@ export async function buildAppInstallationClient(installationId: number) {
 }
 
 function isPlaceholder(val: string | undefined): boolean {
-	return !val || val === "placeholder" || val.length < 8;
+	if (!val) return true;
+	const trimmed = val.replace(/^["']|["']$/g, "");
+	return !trimmed || trimmed === "placeholder" || trimmed.length < 4;
+}
+
+/** Strip surrounding double or single quotes that bash `export "$line"` may keep. */
+function stripQuotes(val: string): string {
+	if (
+		(val.startsWith('"') && val.endsWith('"')) ||
+		(val.startsWith("'") && val.endsWith("'"))
+	) {
+		return val.slice(1, -1);
+	}
+	return val;
 }
 
 function resolvePrivateKey(): string | null {
 	// Try direct PEM key first
-	const raw = process.env.GITHUB_APP_PRIVATE_KEY;
+	let raw = process.env.GITHUB_APP_PRIVATE_KEY;
+	if (raw) {
+		raw = stripQuotes(raw);
+	}
 	if (raw && raw.includes("-----BEGIN")) {
 		// Handle escaped newlines from env files
 		return raw.replace(/\\n/g, "\n");
 	}
 
 	// Fall back to base64-encoded key
-	const b64 = process.env.GITHUB_APP_PRIVATE_KEY_BASE64;
+	let b64 = process.env.GITHUB_APP_PRIVATE_KEY_BASE64;
+	if (b64) {
+		b64 = stripQuotes(b64);
+	}
 	if (b64 && b64.length > 100) {
 		try {
 			return Buffer.from(b64, "base64").toString("utf-8");

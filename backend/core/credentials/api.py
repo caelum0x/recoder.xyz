@@ -203,7 +203,7 @@ async def store_credential_profile(
     user_id: str = Depends(verify_and_get_user_id_from_jwt)
 ):
     try:
-        profile_service = get_profile_service(db)
+        profile_service = get_profile_service(None)
         
         profile_id = await profile_service.store_profile(
             account_id=user_id,
@@ -242,7 +242,7 @@ async def get_user_credential_profiles(
     user_id: str = Depends(verify_and_get_user_id_from_jwt)
 ):
     try:
-        profile_service = get_profile_service(db)
+        profile_service = get_profile_service(None)
         profiles = await profile_service.get_all_user_profiles(user_id)
         
         return [
@@ -273,7 +273,7 @@ async def get_credential_profiles_for_mcp(
     try:
         decoded_name = decode_mcp_qualified_name(mcp_qualified_name)
         
-        profile_service = get_profile_service(db)
+        profile_service = get_profile_service(None)
         profiles = await profile_service.get_profiles(user_id, decoded_name)
         
         return [
@@ -302,7 +302,7 @@ async def get_credential_profile(
     user_id: str = Depends(verify_and_get_user_id_from_jwt)
 ):
     try:
-        profile_service = get_profile_service(db)
+        profile_service = get_profile_service(None)
         profile = await profile_service.get_profile(user_id, profile_id)
         
         if not profile:
@@ -333,7 +333,7 @@ async def set_default_credential_profile(
     user_id: str = Depends(verify_and_get_user_id_from_jwt)
 ):
     try:
-        profile_service = get_profile_service(db)
+        profile_service = get_profile_service(None)
         success = await profile_service.set_default_profile(user_id, profile_id)
         
         if not success:
@@ -352,7 +352,7 @@ async def delete_credential_profile(
     user_id: str = Depends(verify_and_get_user_id_from_jwt)
 ):
     try:
-        profile_service = get_profile_service(db)
+        profile_service = get_profile_service(None)
         success = await profile_service.delete_profile(user_id, profile_id)
         
         if not success:
@@ -371,7 +371,7 @@ async def bulk_delete_credential_profiles(
     user_id: str = Depends(verify_and_get_user_id_from_jwt)
 ):
     try:
-        profile_service = get_profile_service(db)
+        profile_service = get_profile_service(None)
         deleted_count = 0
         failed_profiles = []
         for profile_id in request.profile_ids:
@@ -401,7 +401,7 @@ async def get_composio_profiles(
     user_id: str = Depends(verify_and_get_user_id_from_jwt)
 ):
     try:
-        profile_service = get_profile_service(db)
+        profile_service = get_profile_service(None)
 
         try:
             from core.composio_integration.composio_profile_service import ComposioProfileService
@@ -502,7 +502,7 @@ async def get_composio_mcp_url(
         from core.composio_integration.composio_profile_service import ComposioProfileService
         composio_service = ComposioProfileService()
 
-        profile_service = get_profile_service(db)
+        profile_service = get_profile_service(None)
         profile = await profile_service.get_profile(user_id, profile_id)
         
         if not profile:

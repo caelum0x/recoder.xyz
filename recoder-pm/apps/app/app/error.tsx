@@ -33,7 +33,7 @@ const ErrorPage = ({ error, reset }: ErrorProperties) => {
           <div className="mt-4 flex items-center gap-2">
             <Button onClick={() => reset()}>Try again</Button>
             <Button asChild variant="link">
-              <Link href="/app">Return to App</Link>
+              <Link href="/">Return to App</Link>
             </Button>
           </div>
         </EmptyState>

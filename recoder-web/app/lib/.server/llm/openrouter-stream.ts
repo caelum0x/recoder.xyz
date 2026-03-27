@@ -327,11 +327,11 @@ async function attemptStreamRequest(
   maxTokens: number,
   temperature: number
 ): Promise<ReadableStream<Uint8Array>> {
-  // Add timeout for initial connection (90s for complex requests)
+  // Add timeout for initial connection (180s for complex code generation requests)
   const controller = new AbortController();
   const timeoutId = setTimeout(() => {
     controller.abort();
-  }, 90000);
+  }, 180000);
 
   let response: Response;
   try {

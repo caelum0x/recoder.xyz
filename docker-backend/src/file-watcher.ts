@@ -8,10 +8,12 @@
  * - Graceful error handling with consecutive error tracking and exponential backoff
  * - Auto-stops watching after too many consecutive errors with client notification
  * - Health status reporting to connected clients
+ * - Supports both Docker containers and Daytona sandboxes
  */
 
 import Docker from 'dockerode';
 import { EventEmitter } from 'events';
+import { getDaytonaClient } from './daytona-client.js';
 
 const docker = new Docker();
 
@@ -52,6 +54,7 @@ export class FileWatcher extends EventEmitter {
     currentPollInterval: number;
     pollsWithoutChanges: number;
     lastSuccessfulPoll: number;
+    isDaytona: boolean;
   }>();
   private recentEvents = new Map<string, Map<string, number>>(); // projectId -> Map of event keys -> timestamp (for LRU)
   private readonly DEBOUNCE_MS = 3000; // Deduplicate events within 3 seconds (aligned with frontend)
@@ -223,8 +226,12 @@ export class FileWatcher extends EventEmitter {
     if (!watcher) return;
 
     clearInterval(watcher.interval);
-    const container = docker.getContainer(watcher.containerId);
-    watcher.interval = this.createPollingInterval(container, projectId, watcher.lastCheck);
+    if (watcher.isDaytona) {
+      watcher.interval = this.createDaytonaPollingInterval(watcher.containerId, projectId, watcher.lastCheck);
+    } else {
+      const container = docker.getContainer(watcher.containerId);
+      watcher.interval = this.createPollingInterval(container, projectId, watcher.lastCheck);
+    }
   }
 
   /**
@@ -339,9 +346,9 @@ export class FileWatcher extends EventEmitter {
   }
 
   /**
-   * Start watching a container's /workspace directory
+   * Start watching a container's /workspace directory (or /home/daytona for Daytona sandboxes)
    */
-  async startWatching(containerId: string, projectId: string): Promise<void> {
+  async startWatching(containerId: string, projectId: string, isDaytona: boolean = false): Promise<void> {
     const existingWatcher = this.watchers.get(projectId);
     if (existingWatcher) {
       // If already watching the same container, just return
@@ -354,16 +361,17 @@ export class FileWatcher extends EventEmitter {
       this.stopWatching(projectId);
     }
 
-    const container = docker.getContainer(containerId);
     const lastCheck = new Map<string, number>();
 
     // Initial file scan
     try {
-      const files = await this.getFileList(container);
+      const files = isDaytona
+        ? await this.getDaytonaFileList(containerId)
+        : await this.getFileList(docker.getContainer(containerId));
       for (const file of files) {
         lastCheck.set(file.path, file.mtime);
       }
-      this.log('info', `Initial scan for ${projectId}`, { fileCount: files.length });
+      this.log('info', `Initial scan for ${projectId}`, { fileCount: files.length, isDaytona });
     } catch (e) {
       // Don't fail completely - container might still be starting up
       this.log('warn', `Initial file scan failed for ${projectId}, will retry during polling`, {
@@ -380,16 +388,22 @@ export class FileWatcher extends EventEmitter {
       currentPollInterval: MIN_POLL_INTERVAL,
       pollsWithoutChanges: 0,
       lastSuccessfulPoll: Date.now(),
+      isDaytona,
     };
 
     this.watchers.set(projectId, watcherState);
 
     // Start polling for changes
-    watcherState.interval = this.createPollingInterval(container, projectId, lastCheck);
+    if (isDaytona) {
+      watcherState.interval = this.createDaytonaPollingInterval(containerId, projectId, lastCheck);
+    } else {
+      watcherState.interval = this.createPollingInterval(docker.getContainer(containerId), projectId, lastCheck);
+    }
 
     this.log('info', `Started watching ${projectId}`, {
       containerId: containerId.slice(0, 12),
       pollInterval: MIN_POLL_INTERVAL,
+      isDaytona,
     });
 
     // Send initial healthy status
@@ -469,6 +483,131 @@ export class FileWatcher extends EventEmitter {
     }
 
     return dedupedChanges;
+  }
+
+  /**
+   * Create a Daytona-specific polling interval that uses exec-based file listing
+   */
+  private createDaytonaPollingInterval(
+    sandboxId: string,
+    projectId: string,
+    lastCheck: Map<string, number>
+  ): NodeJS.Timeout {
+    const poll = async () => {
+      const watcher = this.watchers.get(projectId);
+      if (!watcher) return;
+
+      try {
+        const files = await this.getDaytonaFileList(sandboxId);
+        const currentFiles = new Map<string, number>();
+        const changes: FileChangeEvent[] = [];
+
+        watcher.consecutiveErrors = 0;
+        watcher.lastSuccessfulPoll = Date.now();
+
+        for (const file of files) {
+          currentFiles.set(file.path, file.mtime);
+
+          const lastMtime = lastCheck.get(file.path);
+          if (!lastMtime) {
+            changes.push({ type: 'create', path: file.path, timestamp: file.mtime });
+          } else if (file.mtime > lastMtime) {
+            changes.push({ type: 'modify', path: file.path, timestamp: file.mtime });
+          }
+        }
+
+        for (const [path] of lastCheck) {
+          if (!currentFiles.has(path)) {
+            changes.push({ type: 'delete', path, timestamp: Date.now() });
+          }
+        }
+
+        lastCheck.clear();
+        for (const [path, mtime] of currentFiles) {
+          lastCheck.set(path, mtime);
+        }
+
+        this.adjustPollInterval(projectId, changes.length > 0);
+
+        if (changes.length > 0) {
+          const nonExcluded = changes.filter(c => !this.isPathExcluded(projectId, c.path));
+          if (nonExcluded.length < changes.length) {
+            this.log('info', `${projectId}: Filtered ${changes.length - nonExcluded.length} self-written paths`);
+          }
+
+          if (nonExcluded.length > 0) {
+            const dedupedChanges = this.deduplicateEvents(projectId, nonExcluded);
+            if (dedupedChanges.length > 0) {
+              this.log('info', `${projectId}: ${dedupedChanges.length} file changes detected`, {
+                duplicatesFiltered: nonExcluded.length - dedupedChanges.length,
+              });
+              this.emit('changes', { projectId, changes: dedupedChanges });
+            }
+          }
+        }
+      } catch (e) {
+        watcher.consecutiveErrors++;
+
+        if (watcher.consecutiveErrors % ERROR_LOG_INTERVAL === 1) {
+          this.log('warn', `Error polling ${projectId} (Daytona)`, {
+            consecutiveErrors: watcher.consecutiveErrors,
+            error: (e as Error).message || String(e),
+          });
+        }
+
+        if (watcher.consecutiveErrors === 1 || watcher.consecutiveErrors % ERROR_LOG_INTERVAL === 0) {
+          this.sendWatcherStatus(projectId);
+        }
+
+        if (watcher.consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
+          this.log('error', `Too many errors for ${projectId}, stopping watcher`, {
+            consecutiveErrors: watcher.consecutiveErrors,
+            maxAllowed: MAX_CONSECUTIVE_ERRORS,
+          });
+
+          this.emit('watcher_died', {
+            projectId,
+            containerId: watcher.containerId,
+            consecutiveErrors: watcher.consecutiveErrors,
+            lastSuccessfulPoll: watcher.lastSuccessfulPoll,
+            message: 'File watcher stopped due to too many consecutive errors. Sandbox may have stopped.',
+          });
+
+          this.stopWatching(projectId);
+        }
+      }
+    };
+
+    poll();
+    const currentWatcher = this.watchers.get(projectId);
+    return setInterval(poll, currentWatcher?.currentPollInterval || MIN_POLL_INTERVAL);
+  }
+
+  /**
+   * Get file list with modification times from a Daytona sandbox via exec
+   */
+  private async getDaytonaFileList(sandboxId: string): Promise<Array<{ path: string; mtime: number }>> {
+    const dc = getDaytonaClient();
+    const result = await dc.execCommand(
+      sandboxId,
+      'find /home/daytona -type f -not -path "*/node_modules/*" -not -path "*/.git/*" -printf "%T@ %p\\n" 2>/dev/null',
+      { timeoutSecs: 10 },
+    );
+
+    const files: Array<{ path: string; mtime: number }> = [];
+    const lines = result.output.trim().split('\n').filter(Boolean);
+
+    for (const line of lines) {
+      const match = line.match(/^(\d+(?:\.\d+)?)\s+(.+)$/);
+      if (match) {
+        const mtime = Math.floor(parseFloat(match[1]) * 1000);
+        // Normalize Daytona paths to match /workspace/ convention for the frontend
+        const path = match[2].replace('/home/daytona/', '');
+        files.push({ path, mtime });
+      }
+    }
+
+    return files;
   }
 
   /**

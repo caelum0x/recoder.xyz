@@ -242,62 +242,7 @@ export const Workbench = memo(({ chatStarted, isStreaming }: WorkspaceProps) => 
                     >
                       <div className="i-ph:terminal" />
                     </PanelHeaderButton>
-                    <PanelHeaderButton
-                      className={`mr-1 text-sm ${activePanel === 'supabase' ? 'text-green-500' : ''}`}
-                      onClick={() => togglePanel('supabase')}
-                      title="Supabase"
-                    >
-                      <div className="i-ph:database" />
-                    </PanelHeaderButton>
-                    <PanelHeaderButton
-                      className={`mr-1 text-sm ${activePanel === 'database' ? 'text-blue-500' : ''}`}
-                      onClick={() => togglePanel('database')}
-                      title="Database (Neon)"
-                    >
-                      <div className="i-ph:hard-drives" />
-                    </PanelHeaderButton>
-                    <PanelHeaderButton
-                      className={`mr-1 text-sm ${activePanel === 'themes' ? 'text-purple-500' : ''}`}
-                      onClick={() => togglePanel('themes')}
-                      title="Themes"
-                    >
-                      <div className="i-ph:palette" />
-                    </PanelHeaderButton>
-                    <PanelHeaderButton
-                      className={`mr-1 text-sm ${activePanel === 'prompts' ? 'text-orange-500' : ''}`}
-                      onClick={() => togglePanel('prompts')}
-                      title="Prompt Library"
-                    >
-                      <div className="i-ph:note-pencil" />
-                    </PanelHeaderButton>
-                    <PanelHeaderButton
-                      className={`mr-1 text-sm ${activePanel === 'proposals' ? 'text-yellow-500' : ''}`}
-                      onClick={() => togglePanel('proposals')}
-                      title="Proposals"
-                    >
-                      <div className="i-ph:git-diff" />
-                    </PanelHeaderButton>
-                    <PanelHeaderButton
-                      className={`mr-1 text-sm ${activePanel === 'collaborators' ? 'text-cyan-500' : ''}`}
-                      onClick={() => togglePanel('collaborators')}
-                      title="GitHub Collaborators"
-                    >
-                      <div className="i-ph:users-three" />
-                    </PanelHeaderButton>
-                    <PanelHeaderButton
-                      className={`mr-1 text-sm ${activePanel === 'agent-team' ? 'text-emerald-500' : ''}`}
-                      onClick={() => togglePanel('agent-team')}
-                      title="Agent Team"
-                    >
-                      <div className="i-ph:users" />
-                    </PanelHeaderButton>
-                    <PanelHeaderButton
-                      className={`mr-1 text-sm ${activePanel === 'vercel' ? 'text-white' : ''}`}
-                      onClick={() => togglePanel('vercel')}
-                      title="Vercel"
-                    >
-                      <div className="i-ph:rocket-launch" />
-                    </PanelHeaderButton>
+                    {/* Integration panels hidden — not yet functional end-to-end */}
                   </>
                 )}
                 <IconButton

@@ -32,8 +32,8 @@ export const fixMissingDependencyExample: FewShotMessage[] = [
 {
   "name": "my-app",
   "dependencies": {
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0"
+    "react": "latest",
+    "react-dom": "latest"
   }
 }`
   },
@@ -46,9 +46,9 @@ export const fixMissingDependencyExample: FewShotMessage[] = [
 {
   "name": "my-app",
   "dependencies": {
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0",
-    "date-fns": "^3.0.0"
+    "react": "latest",
+    "react-dom": "latest",
+    "date-fns": "latest"
   }
 }
 </recoderAction>
@@ -1428,19 +1428,19 @@ export const createCompleteAppExample: FewShotMessage[] = [
     "preview": "vite preview"
   },
   "dependencies": {
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0",
-    "lucide-react": "^0.344.0"
+    "react": "latest",
+    "react-dom": "latest",
+    "lucide-react": "latest"
   },
   "devDependencies": {
-    "@types/react": "^18.2.56",
-    "@types/react-dom": "^18.2.19",
-    "@vitejs/plugin-react": "^4.2.1",
-    "autoprefixer": "^10.4.17",
-    "postcss": "^8.4.35",
-    "tailwindcss": "^3.4.1",
-    "typescript": "^5.3.3",
-    "vite": "^5.1.4"
+    "@types/react": "latest",
+    "@types/react-dom": "latest",
+    "@vitejs/plugin-react": "latest",
+    "autoprefixer": "latest",
+    "postcss": "latest",
+    "tailwindcss": "latest",
+    "typescript": "latest",
+    "vite": "latest"
   }
 }
 </recoderAction>
@@ -1777,18 +1777,18 @@ export const createMobileAppExample: FewShotMessage[] = [
     "start": "npx expo start"
   },
   "dependencies": {
-    "expo": "~50.0.0",
-    "expo-router": "~3.4.0",
-    "expo-status-bar": "~1.11.0",
-    "react": "18.2.0",
-    "react-native": "0.73.2",
-    "react-native-safe-area-context": "4.8.2",
-    "react-native-screens": "~3.29.0",
-    "@expo/vector-icons": "^14.0.0"
+    "expo": "latest",
+    "expo-router": "latest",
+    "expo-status-bar": "latest",
+    "react": "latest",
+    "react-native": "latest",
+    "react-native-safe-area-context": "latest",
+    "react-native-screens": "latest",
+    "@expo/vector-icons": "latest"
   },
   "devDependencies": {
-    "@types/react": "~18.2.45",
-    "typescript": "^5.3.0"
+    "@types/react": "latest",
+    "typescript": "latest"
   }
 }
 </recoderAction>

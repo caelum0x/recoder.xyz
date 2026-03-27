@@ -51,7 +51,9 @@ export default function DevelopersLayout({ children }: { children: React.ReactNo
         </div>
       </div>
 
-      {children}
+      <div className="flex-1 overflow-y-auto">
+        {children}
+      </div>
     </div>
   );
 }
