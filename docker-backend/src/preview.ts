@@ -691,10 +691,10 @@ export function setupPreviewProxy(app: Express, containers: Map<string, { id: st
           const sandboxes = await dc.listSandboxes();
           const match = sandboxes.find((s: any) => s.labels?.projectId === req.params.projectId);
           if (match) {
-            const previewUrl = dc.getPreviewUrl(match.id, 3000);
+            const previewUrl = dc.getPreviewUrl(match.id, 5173);
             entry = {
               id: match.id,
-              port: 3000,
+              port: 5173,
               ptyPort: 0,
               lastActive: Date.now(),
               daytona: true,
@@ -709,6 +709,16 @@ export function setupPreviewProxy(app: Express, containers: Map<string, { id: st
     }
     if (!entry) {
       return res.status(404).json({ error: 'Container not found' });
+    }
+
+    // For Daytona sandboxes, ensure sandbox is running before checking ports
+    if ((entry as any)?.daytona) {
+      try {
+        const dc = getDaytonaClient();
+        await dc.getOrStartSandbox(entry.id, 15000);
+      } catch {
+        // Non-fatal — sandbox may already be running or start may timeout
+      }
     }
 
     // For Daytona sandboxes, check multiple common dev server ports via internal curl
