@@ -2565,6 +2565,14 @@ app.post('/api/container', containerLimiter, optionalAuthenticateRequest, flexib
           }
         }
 
+        // Create /workspace -> /home/daytona symlink (Daytona sandboxes use /home/daytona as home)
+        try {
+          await dc.execCommand(sandbox.id, 'test -L /workspace || ln -sf /home/daytona /workspace', { timeoutSecs: 10 });
+          logger.info({ sandboxId: sandbox.id }, 'Created /workspace symlink');
+        } catch (symlinkErr: any) {
+          logger.warn({ sandboxId: sandbox.id, err: symlinkErr.message }, 'Failed to create /workspace symlink');
+        }
+
         // Default to 5173 (Vite) — will be updated when dev server starts and detects actual port
         const defaultPort = 5173;
         const previewUrl = dc.getPreviewUrl(sandbox.id, defaultPort);
