@@ -114,18 +114,17 @@ export async function fetchFileContent(
   token: string
 ): Promise<string | Blob | any> {
   const normalizedPath = normalizePath(filePath);
-  
-  const url = new URL(`${process.env.NEXT_PUBLIC_BACKEND_URL}/sandboxes/${sandboxId}/files/content`);
+
+  // Use same-origin proxy to avoid cross-subdomain cookie issues.
+  // The proxy route at /api/files/content reads the session cookie
+  // (which is always available on the same origin) and forwards
+  // the request to the Python backend.
+  const url = new URL('/api/files/content', window.location.origin);
+  url.searchParams.append('sandboxId', sandboxId);
   url.searchParams.append('path', normalizedPath);
-  
-  const headers: Record<string, string> = {};
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
-  }
-  
+
   const response = await fetch(url.toString(), {
-    headers,
-    credentials: 'include',
+    credentials: 'include', // sends same-origin cookies
   });
   
   if (!response.ok) {
