@@ -125,6 +125,7 @@ export async function fetchFileContent(
   
   const response = await fetch(url.toString(), {
     headers,
+    credentials: 'include',
   });
   
   if (!response.ok) {

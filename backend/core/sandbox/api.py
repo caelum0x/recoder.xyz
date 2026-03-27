@@ -470,7 +470,7 @@ async def read_file(
     original_path = path
     path = normalize_path(path)
     
-    logger.debug(f"Received file read request for sandbox {sandbox_id}, path: {path}, user_id: {user_id}")
+    logger.info(f"[FILE_READ] sandbox={sandbox_id[:8]}..., path={path}, user_id={'authenticated' if user_id else 'ANONYMOUS'}")
     if original_path != path:
         logger.debug(f"Normalized path from '{original_path}' to '{path}'")
 
