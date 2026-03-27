@@ -306,8 +306,8 @@ export class DaytonaClient {
       public: options?.public ?? true,
       env_vars: options?.envVars || {},
       labels: options?.labels || {},
-      auto_stop_interval: options?.autoStopInterval ?? 60,
-      auto_archive_interval: options?.autoArchiveInterval ?? 120,
+      auto_stop_interval: options?.autoStopInterval ?? 43200,
+      auto_archive_interval: options?.autoArchiveInterval ?? 43200,
       ...(options?.resources ? {
         resources: {
           cpu: options.resources.cpu,
@@ -387,7 +387,8 @@ export class DaytonaClient {
     let fullCommand = command;
     if (options?.cwd) {
       // cd to cwd if it exists, otherwise use home dir
-      fullCommand = `cd ${JSON.stringify(options.cwd)} 2>/dev/null || cd /home/daytona 2>/dev/null || true; ${command}`;
+      const safeCwd = options.cwd.replace(/'/g, "'\\''");
+      fullCommand = `cd '${safeCwd}' 2>/dev/null || cd /home/daytona 2>/dev/null || true; ${command}`;
     }
     const wrappedCommand = `sh -c ${JSON.stringify(fullCommand)}`;
 
