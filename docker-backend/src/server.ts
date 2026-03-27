@@ -1635,10 +1635,21 @@ async function getOrRecoverContainer(projectId: string): Promise<ContainerEntry 
     const match = matches[0];
     if (!match) return undefined;
 
-    const isRunning = match.state === 'started' || match.state === 'running';
+    let isRunning = match.state === 'started' || match.state === 'running';
     if (!isRunning) {
-      // Try to start it
-      try { await dc.getOrStartSandbox(match.id, 30000); } catch {}
+      // Try to start the sandbox
+      try {
+        const started = await dc.getOrStartSandbox(match.id, 30000);
+        isRunning = started.state === 'started' || started.state === 'running';
+      } catch (startErr: any) {
+        logger.warn({ projectId, sandboxId: match.id, err: startErr.message }, 'Failed to start sandbox, skipping');
+        isRunning = false;
+      }
+      // If still not running after start attempt, don't use this sandbox
+      if (!isRunning) {
+        logger.warn({ projectId, sandboxId: match.id, state: match.state }, 'Sandbox could not be started, returning undefined');
+        return undefined;
+      }
     }
 
     const previewUrl = dc.getPreviewUrl(match.id, 5173);
@@ -2510,9 +2521,23 @@ app.post('/api/container', containerLimiter, optionalAuthenticateRequest, flexib
 
     // Daytona-first: if USE_DAYTONA_CONTAINERS is set, create via Daytona
     if (isDaytonaConfigured() && process.env.USE_DAYTONA_CONTAINERS === 'true') {
-      const existingDaytona = containers.get(projectId);
+      // Check in-memory map first
+      let existingDaytona = containers.get(projectId);
+
+      // If not in memory, recover from Daytona API (prevents duplicate sandbox creation after restart)
+      if (!existingDaytona) {
+        const recovered = await getOrRecoverContainer(projectId);
+        if (recovered) {
+          existingDaytona = recovered;
+        }
+      }
+
       if (existingDaytona) {
         existingDaytona.lastActive = Date.now();
+        // Ensure it's running
+        if (isDaytonaSandbox(existingDaytona)) {
+          await ensureDaytonaSandboxRunning(existingDaytona.id).catch(() => {});
+        }
         return res.json({
           containerId: existingDaytona.id,
           reused: true,
