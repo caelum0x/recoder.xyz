@@ -208,9 +208,8 @@ export class DaytonaClient {
     timeoutMs?: number,
   ): Promise<T> {
     const toolboxBase = await this.getToolboxProxyUrl();
-    // Path format: /api/toolbox/{sandboxId}/toolbox/{operation}
-    // The first /toolbox is the proxy route, the second is the sandbox's toolbox service prefix
-    const url = `${toolboxBase}/${sandboxId}/toolbox${path}`;
+    // Path format: /toolbox/{sandboxId}/{operation}
+    const url = `${toolboxBase}/${sandboxId}${path}`;
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), timeoutMs || this.timeoutMs);
 
@@ -253,12 +252,13 @@ export class DaytonaClient {
     }
 
     // Use the main Daytona API at port 3900 for toolbox operations.
-    // The toolbox endpoint path is: /api/toolbox/{sandboxId}/toolbox/{operation}
+    // The toolbox endpoint path is: /toolbox/{sandboxId}/toolbox/{operation}
+    // NOT /api/toolbox/ — the /api prefix returns 404.
     // From inside Docker, use host.docker.internal to reach the host.
     const isDocker = require('fs').existsSync('/.dockerenv');
     this._toolboxProxyUrl = isDocker
-      ? 'http://host.docker.internal:3900/api/toolbox'
-      : `${this.baseUrl.replace(/\/api$/, '')}/api/toolbox`;
+      ? 'http://host.docker.internal:3900/toolbox'
+      : `${this.baseUrl.replace(/\/api$/, '')}/toolbox`;
     logger.info({ toolboxProxyUrl: this._toolboxProxyUrl }, 'Using Daytona API toolbox URL');
     return this._toolboxProxyUrl;
   }
@@ -509,7 +509,7 @@ export class DaytonaClient {
   async downloadFileNative(sandboxId: string, filePath: string): Promise<string> {
     const absPath = filePath.startsWith('/') ? filePath : `/home/daytona/${filePath}`;
     const toolboxBase = await this.getToolboxProxyUrl();
-    const url = `${toolboxBase}/${sandboxId}/toolbox/filesystem/download?path=${encodeURIComponent(absPath)}`;
+    const url = `${toolboxBase}/${sandboxId}/filesystem/download?path=${encodeURIComponent(absPath)}`;
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), this.timeoutMs);
 
