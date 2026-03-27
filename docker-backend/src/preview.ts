@@ -393,10 +393,19 @@ export function setupPreviewProxy(app: Express, containers: Map<string, { id: st
         const dc = getDaytonaClient();
         const curlResult = await dc.execCommand(
           entry.id,
-          'curl -sf http://localhost:3000 > /dev/null 2>&1 && echo "READY" || curl -sf http://localhost:5173 > /dev/null 2>&1 && echo "READY" || echo "NOTREADY"',
-          { timeoutSecs: 5 },
+          'for p in 5173 5174 5175 5176 3000 3001 8080 8081; do curl -sf http://localhost:$p > /dev/null 2>&1 && echo "READY:$p" && exit 0; done; echo "NOTREADY"',
+          { timeoutSecs: 8 },
         );
-        daytonaServerReady = curlResult.output.includes('READY');
+        const readyMatch = curlResult.output.match(/READY:(\d+)/);
+        daytonaServerReady = !!readyMatch;
+        if (readyMatch) {
+          const detectedPort = parseInt(readyMatch[1], 10);
+          const newPreviewUrl = dc.getPreviewUrl(entry.id, detectedPort);
+          if (newPreviewUrl !== (entry as any).daytonaPreviewUrl) {
+            (entry as any).daytonaPreviewUrl = newPreviewUrl;
+            console.log(`[Preview] Updated Daytona preview URL to port ${detectedPort}`);
+          }
+        }
       } catch {
         // exec failed — sandbox may be stopped or unreachable
       }
@@ -739,9 +748,13 @@ export function setupPreviewProxy(app: Express, containers: Map<string, { id: st
       // Check multiple ports using internal curl inside the sandbox (avoids OIDC redirect issues)
       const portsToCheck = [
         { port: 5173, type: 'Vite (5173)' },
+        { port: 5174, type: 'Vite (5174)' },
+        { port: 5175, type: 'Vite (5175)' },
+        { port: 5176, type: 'Vite (5176)' },
         { port: 3000, type: 'Next.js (3000)' },
-        { port: 8081, type: 'Expo (8081)' },
+        { port: 3001, type: 'Dev (3001)' },
         { port: 8080, type: 'Other (8080)' },
+        { port: 8081, type: 'Expo (8081)' },
       ];
 
       try {
