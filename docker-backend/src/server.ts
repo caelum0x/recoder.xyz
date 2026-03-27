@@ -4460,7 +4460,8 @@ app.post('/api/exec/:projectId', authenticateRequest, verifyProjectOwnership, as
       // Foreground exec — convert /workspace/ paths to /home/daytona/ for Daytona sandboxes
       const dayCwd = cwd.replace(/\/workspace/g, '/home/daytona');
       const dayCmd = command.replace(/\/workspace\//g, '/home/daytona/').replace(/\/workspace(?=["'\s]|$)/g, '/home/daytona');
-      const result = await daytonaExec(entry.id, `cd "${dayCwd}" && ${dayCmd}`, { cwd: dayCwd, timeoutSecs: 60 });
+      // Don't add cd here — execCommand handles cwd internally
+      const result = await daytonaExec(entry.id, dayCmd, { cwd: dayCwd, timeoutSecs: 60 });
       return res.json({ output: result.output, success: result.exitCode === 0, exitCode: result.exitCode });
     }
 
