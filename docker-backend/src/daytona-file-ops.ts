@@ -225,8 +225,13 @@ export async function daytonaExecBackground(
   cwd: string = '/home/daytona',
 ): Promise<void> {
   const dc = getDaytonaClient();
-  const sanitizedCommand = command.replace(/[`$\\]/g, '\\$&');
-  const script = `cd "${cwd.replace(/"/g, '\\"')}" && BROWSER=none nohup setsid ${sanitizedCommand} > /tmp/dev.log 2>&1 &`;
+  // Don't escape $ — it breaks $PATH which npm/node need.
+  // Only escape backticks to prevent command injection.
+  const safeCmd = command.replace(/`/g, '\\`');
+  const safeCwd = cwd.replace(/'/g, "'\\''");
+  // Use nohup + setsid + disown to keep process alive after exec returns.
+  // Write PID to file so we can track it later.
+  const script = `cd '${safeCwd}' && BROWSER=none nohup setsid ${safeCmd} > /tmp/dev.log 2>&1 & echo $! > /tmp/dev.pid`;
   await dc.execCommand(sandboxId, script, { timeoutSecs: 10 });
 }
 
