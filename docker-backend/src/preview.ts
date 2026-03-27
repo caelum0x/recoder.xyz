@@ -689,7 +689,15 @@ export function setupPreviewProxy(app: Express, containers: Map<string, { id: st
         try {
           const dc = getDaytonaClient();
           const sandboxes = await dc.listSandboxes();
-          const match = sandboxes.find((s: any) => s.labels?.projectId === req.params.projectId);
+          const matches = sandboxes
+            .filter((s: any) => s.labels?.projectId === req.params.projectId)
+            .sort((a: any, b: any) => {
+              const aR = a.state === 'started' || a.state === 'running' ? 1 : 0;
+              const bR = b.state === 'started' || b.state === 'running' ? 1 : 0;
+              if (aR !== bR) return bR - aR;
+              return (b.createdAt || '').localeCompare(a.createdAt || '');
+            });
+          const match = matches[0];
           if (match) {
             const previewUrl = dc.getPreviewUrl(match.id, 5173);
             entry = {

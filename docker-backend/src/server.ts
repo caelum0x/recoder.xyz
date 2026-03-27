@@ -1621,7 +1621,18 @@ async function getOrRecoverContainer(projectId: string): Promise<ContainerEntry 
   try {
     const dc = getDaytonaClient();
     const sandboxes = await dc.listSandboxes();
-    const match = sandboxes.find((s: any) => s.labels?.projectId === projectId);
+    // Find matching sandboxes — prefer running ones, then most recently created
+    const matches = sandboxes
+      .filter((s: any) => s.labels?.projectId === projectId)
+      .sort((a: any, b: any) => {
+        // Running sandboxes first
+        const aRunning = a.state === 'started' || a.state === 'running' ? 1 : 0;
+        const bRunning = b.state === 'started' || b.state === 'running' ? 1 : 0;
+        if (aRunning !== bRunning) return bRunning - aRunning;
+        // Then by creation time (newest first)
+        return (b.createdAt || '').localeCompare(a.createdAt || '');
+      });
+    const match = matches[0];
     if (!match) return undefined;
 
     const isRunning = match.state === 'started' || match.state === 'running';
@@ -1630,10 +1641,10 @@ async function getOrRecoverContainer(projectId: string): Promise<ContainerEntry 
       try { await dc.getOrStartSandbox(match.id, 30000); } catch {}
     }
 
-    const previewUrl = dc.getPreviewUrl(match.id, 3000);
+    const previewUrl = dc.getPreviewUrl(match.id, 5173);
     const entry: ContainerEntry = {
       id: match.id,
-      port: 3000,
+      port: 5173,
       ptyPort: 0,
       lastActive: Date.now(),
       daytona: true,
@@ -2529,11 +2540,13 @@ app.post('/api/container', containerLimiter, optionalAuthenticateRequest, flexib
           }
         }
 
-        const previewUrl = dc.getPreviewUrl(sandbox.id, 3000);
+        // Default to 5173 (Vite) — will be updated when dev server starts and detects actual port
+        const defaultPort = 5173;
+        const previewUrl = dc.getPreviewUrl(sandbox.id, defaultPort);
         containers.set(projectId, {
           id: sandbox.id,
           lastActive: Date.now(),
-          port: 3000,
+          port: defaultPort,
           ptyPort: 0,
           backgroundDev: false,
           userId,
