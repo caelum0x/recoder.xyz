@@ -208,8 +208,8 @@ export class DaytonaClient {
     timeoutMs?: number,
   ): Promise<T> {
     const toolboxBase = await this.getToolboxProxyUrl();
-    // Path format: /toolbox/{sandboxId}/{operation}
-    const url = `${toolboxBase}/${sandboxId}${path}`;
+    // Path format: /api/toolbox/{sandboxId}/toolbox/{operation}
+    const url = `${toolboxBase}/${sandboxId}/toolbox${path}`;
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), timeoutMs || this.timeoutMs);
 
@@ -252,13 +252,13 @@ export class DaytonaClient {
     }
 
     // Use the main Daytona API at port 3900 for toolbox operations.
-    // The toolbox endpoint path is: /toolbox/{sandboxId}/toolbox/{operation}
-    // NOT /api/toolbox/ — the /api prefix returns 404.
+    // The toolbox endpoint path is: /api/toolbox/{sandboxId}/toolbox/{operation}
+    // (double "toolbox" is intentional — first is the proxy route, second is sandbox service prefix)
     // From inside Docker, use host.docker.internal to reach the host.
     const isDocker = require('fs').existsSync('/.dockerenv');
     this._toolboxProxyUrl = isDocker
-      ? 'http://host.docker.internal:3900/toolbox'
-      : `${this.baseUrl.replace(/\/api$/, '')}/toolbox`;
+      ? 'http://host.docker.internal:3900/api/toolbox'
+      : `${this.baseUrl.replace(/\/api$/, '')}/api/toolbox`;
     logger.info({ toolboxProxyUrl: this._toolboxProxyUrl }, 'Using Daytona API toolbox URL');
     return this._toolboxProxyUrl;
   }
@@ -381,10 +381,10 @@ export class DaytonaClient {
     command: string,
     options?: { cwd?: string; timeoutSecs?: number },
   ): Promise<ExecResult> {
-    // Wrap in sh -c to enable shell features (pipes, redirects, &&, etc.)
-    // The Python SDK does the same: base64-encodes + sh -c
-    const b64Cmd = Buffer.from(command, 'utf-8').toString('base64');
-    const wrappedCommand = `sh -c "echo '${b64Cmd}' | base64 -d | sh"`;
+    // Wrap in sh -c so shell features (pipes, redirects, &&, etc.) work.
+    // Use JSON.stringify to properly escape the command for the sh -c argument.
+    // This avoids the old base64 double-encoding that broke large commands.
+    const wrappedCommand = `sh -c ${JSON.stringify(command)}`;
 
     const payload: Record<string, unknown> = {
       command: wrappedCommand,
@@ -509,7 +509,7 @@ export class DaytonaClient {
   async downloadFileNative(sandboxId: string, filePath: string): Promise<string> {
     const absPath = filePath.startsWith('/') ? filePath : `/home/daytona/${filePath}`;
     const toolboxBase = await this.getToolboxProxyUrl();
-    const url = `${toolboxBase}/${sandboxId}/filesystem/download?path=${encodeURIComponent(absPath)}`;
+    const url = `${toolboxBase}/${sandboxId}/toolbox/filesystem/download?path=${encodeURIComponent(absPath)}`;
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), this.timeoutMs);
 
@@ -602,43 +602,73 @@ export class DaytonaClient {
    * Write a file to a sandbox using exec + base64 encoding.
    * Kept as fallback for when native filesystem API is unavailable.
    */
+  /**
+   * ROOT CAUSE FIX for file writes failing silently:
+   *
+   * Problem: execCommand() wraps commands in sh -c "echo '{base64_of_command}' | base64 -d | sh"
+   * When the command contains 65KB+ of base64 file content, the outer echo argument
+   * exceeds shell limits (~128KB), causing silent failure (exit 0, empty output).
+   *
+   * Fix: Call the Daytona /process/execute API directly with sh -c and the raw command.
+   * The API passes the command string to exec(), which passes it to sh.
+   * sh -c "printf '%s' '{b64}' | base64 -d > file" works because printf handles
+   * the argument directly, and the command goes through the API's JSON body
+   * (no size limit) not through shell argument parsing.
+   *
+   * For very large files (>50KB of content = ~68KB base64), we chunk the base64
+   * into a temp file first, then decode in a separate call.
+   */
   private async uploadFileExec(sandboxId: string, filePath: string, content: string): Promise<void> {
     const safePath = filePath.replace(/'/g, "'\\''");
     const b64Content = Buffer.from(content, 'utf-8').toString('base64');
-    const CHUNK_SIZE = 65000; // Match Python backend's chunk size to avoid shell arg overflow
+
+    // Helper: call Daytona API directly (no double-encoding via execCommand)
+    const rawExec = async (cmd: string, timeoutSecs = 30): Promise<{ exitCode: number; output: string }> => {
+      const shCmd = `sh -c ${JSON.stringify(cmd)}`;
+      const result = await this.toolboxRequest<{ result?: string; exitCode?: number; code?: number }>(
+        'POST', sandboxId, '/process/execute',
+        { command: shCmd, timeout: timeoutSecs },
+        timeoutSecs * 1000 + 5000,
+      );
+      return {
+        output: result?.result || '',
+        exitCode: result?.exitCode ?? result?.code ?? 0,
+      };
+    };
 
     // Create parent directory
-    await this.execCommand(sandboxId, `mkdir -p "$(dirname '${safePath}')"`, { timeoutSecs: 10 });
+    const dir = filePath.substring(0, filePath.lastIndexOf('/'));
+    if (dir) {
+      await rawExec(`mkdir -p '${dir.replace(/'/g, "'\\''")}'`, 10);
+    }
 
-    if (b64Content.length <= CHUNK_SIZE) {
-      // Small file — single write. Use printf instead of echo to handle large strings.
-      // Verify with a separate check instead of relying on output capture.
-      const command = `printf '%s' '${b64Content}' | base64 -d > '${safePath}'`;
-      const result = await this.execCommand(sandboxId, command, { timeoutSecs: 30 });
-      if (result.exitCode !== 0) {
-        throw new Error(`File write to ${filePath} failed (exit ${result.exitCode}): ${result.output}`);
+    // For files up to ~40KB base64 (fits in a single printf argument)
+    const SINGLE_LIMIT = 40000;
+    if (b64Content.length <= SINGLE_LIMIT) {
+      const r = await rawExec(`printf '%s' '${b64Content}' | base64 -d > '${safePath}'`);
+      if (r.exitCode !== 0) {
+        throw new Error(`File write to ${filePath} failed (exit ${r.exitCode}): ${r.output}`);
       }
-      // Verify the file exists (don't rely on __WRITE_OK__ marker which may not be captured)
-      const verify = await this.execCommand(sandboxId, `test -f '${safePath}' && echo OK || echo FAIL`, { timeoutSecs: 5 });
-      if (!verify.output.includes('OK')) {
-        throw new Error(`File write to ${filePath} failed: file not found after write`);
+      return;
+    }
+
+    // Large files: write base64 chunks to temp file, then decode
+    const tmpFile = `/tmp/_upload_${Date.now()}.b64`;
+    const CHUNK = 40000;
+
+    for (let i = 0; i < b64Content.length; i += CHUNK) {
+      const chunk = b64Content.slice(i, i + CHUNK);
+      const op = i === 0 ? '>' : '>>';
+      const r = await rawExec(`printf '%s' '${chunk}' ${op} '${tmpFile}'`);
+      if (r.exitCode !== 0) {
+        throw new Error(`File write chunk failed at offset ${i} for ${filePath}: ${r.output}`);
       }
-    } else {
-      // Large file — write in chunks to avoid shell argument overflow
-      await this.execCommand(sandboxId, `> '${safePath}'`, { timeoutSecs: 10 });
-      for (let i = 0; i < b64Content.length; i += CHUNK_SIZE) {
-        const chunk = b64Content.slice(i, i + CHUNK_SIZE);
-        const command = `printf '%s' '${chunk}' | base64 -d >> '${safePath}'`;
-        const result = await this.execCommand(sandboxId, command, { timeoutSecs: 30 });
-        if (result.exitCode !== 0) {
-          throw new Error(`File write chunk to ${filePath} failed at offset ${i}: ${result.output}`);
-        }
-      }
-      // Verify final file exists
-      const verify = await this.execCommand(sandboxId, `test -f '${safePath}' && echo OK || echo FAIL`, { timeoutSecs: 5 });
-      if (!verify.output.includes('OK')) {
-        throw new Error(`File write to ${filePath} failed: file not found after chunked write`);
-      }
+    }
+
+    // Decode and move to target
+    const r = await rawExec(`base64 -d < '${tmpFile}' > '${safePath}' && rm -f '${tmpFile}'`);
+    if (r.exitCode !== 0) {
+      throw new Error(`File decode failed for ${filePath} (exit ${r.exitCode}): ${r.output}`);
     }
   }
 
