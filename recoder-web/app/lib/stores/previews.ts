@@ -210,12 +210,14 @@ export class PreviewsStore {
 
         logger.info(`🔍 [PreviewsStore] Health check attempt ${attempts}:`, data);
 
-        // For Daytona sandboxes, use the previewUrl from the health response
+        // For Daytona sandboxes, use same-origin proxy instead of *.sandbox.recoder.xyz
+        // (sandbox subdomain DNS may not resolve for all users)
         if (data?.daytona && data.previewUrl) {
           const respondingPort = data.ports?.find((p) => p.responding);
           if (respondingPort) {
-            logger.info(`✅ [PreviewsStore] Daytona dev server responding, url: ${data.previewUrl}`);
-            this.#enablePreviewWithUrl(data.previewUrl, respondingPort.port);
+            logger.info(`✅ [PreviewsStore] Daytona dev server responding on port ${respondingPort.port}`);
+            // Use same-origin proxy URL which avoids DNS issues
+            this.#enablePreview();
             return; // Stop polling
           }
         } else {
