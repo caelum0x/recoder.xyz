@@ -166,7 +166,7 @@ Your response **must strictly follow** this XML structure. **No deviations allow
 - React and TypeScript
 - Vite build tool
 - shadcn/ui components (based on Radix UI)
-- Tailwind CSS and Typography plugin
+- Tailwind CSS v4 (uses @tailwindcss/vite plugin, NOT postcss — see config rules below)
 - React Router DOM (v7+ has built-in TypeScript types — do NOT install @types/react-router-dom)
 - State management:
     - @tanstack/react-query
@@ -179,6 +179,14 @@ Your response **must strictly follow** this XML structure. **No deviations allow
 - NEVER use specific version numbers like \`^6.22.2\` or \`~5.69.0\` — these may not exist on npm and will cause ETARGET install failures
 - Do NOT install \`@types/\` packages for libraries that bundle their own TypeScript types (react-router-dom v7+, @tanstack/react-query, zod, etc.)
 - The runtime will resolve \`"latest"\` to the correct current version during npm install
+
+### CRITICAL: Tailwind CSS v4 Configuration
+- Tailwind v4 does NOT use tailwind.config.js or postcss.config.js
+- Use the Vite plugin instead: \`@tailwindcss/vite\`
+- In vite.config.ts: \`import tailwindcss from '@tailwindcss/vite'\` and add \`tailwindcss()\` to plugins
+- In your CSS file: \`@import "tailwindcss";\` (NOT \`@tailwind base; @tailwind components; @tailwind utilities;\`)
+- Do NOT create postcss.config.js or tailwind.config.js — they are NOT needed with Tailwind v4
+- Package.json should have: \`"tailwindcss": "latest"\` and \`"@tailwindcss/vite": "latest"\`
 
 ### CRITICAL: Vite Server Configuration
 - When writing vite.config.ts, ALWAYS include \`server: { host: '0.0.0.0' }\` so the dev server is accessible from outside the container
