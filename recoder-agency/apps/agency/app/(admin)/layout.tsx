@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { ToastProvider } from "@recoder-internal/ui/toast";
+import { AgencyCopilot } from "@/components/agency-copilot";
 import { fetchCurrentTeam } from "@/services/teams";
 import { AdminHeader } from "./ui/header";
 import { AdminSidebar } from "./ui/sidebar";
@@ -30,6 +31,7 @@ export default async function AdminLayout({
 					<main className="flex-1 overflow-y-auto p-6">{children}</main>
 				</div>
 			</div>
+			<AgencyCopilot />
 		</ToastProvider>
 	);
 }

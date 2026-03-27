@@ -1,7 +1,5 @@
-import { currentOrganizationId } from "@repo/backend/auth/utils";
 import type { Metadata } from "next";
 import { Suspense } from "react";
-import { AiCopilotChat } from "./components/ai-copilot-chat";
 import { AiInsightsSection } from "./components/ai-insights";
 import { ContradictionsSection } from "./components/contradictions";
 import { DataHealthSection } from "./components/data-health";
@@ -22,8 +20,6 @@ export const metadata: Metadata = {
 };
 
 const Insights = async () => {
-  const organizationId = await currentOrganizationId();
-
   return (
     <div className="divide-y">
       <Suspense fallback={null}>
@@ -44,7 +40,6 @@ const Insights = async () => {
       <FeaturesSection />
       <InitiativesSection />
       <RoadmapSection />
-      {organizationId && <AiCopilotChat organizationId={organizationId} />}
     </div>
   );
 };
