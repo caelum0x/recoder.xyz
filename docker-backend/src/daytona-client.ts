@@ -382,13 +382,18 @@ export class DaytonaClient {
     options?: { cwd?: string; timeoutSecs?: number },
   ): Promise<ExecResult> {
     // Wrap in sh -c so shell features (pipes, redirects, &&, etc.) work.
-    // Use JSON.stringify to properly escape the command for the sh -c argument.
-    // This avoids the old base64 double-encoding that broke large commands.
-    const wrappedCommand = `sh -c ${JSON.stringify(command)}`;
+    // Embed cwd in the command itself (not as API param) because the Daytona
+    // API's cwd param fails if the directory doesn't exist yet.
+    let fullCommand = command;
+    if (options?.cwd) {
+      // cd to cwd if it exists, otherwise use home dir
+      fullCommand = `cd ${JSON.stringify(options.cwd)} 2>/dev/null || cd /home/daytona 2>/dev/null || true; ${command}`;
+    }
+    const wrappedCommand = `sh -c ${JSON.stringify(fullCommand)}`;
 
     const payload: Record<string, unknown> = {
       command: wrappedCommand,
-      ...(options?.cwd ? { cwd: options.cwd } : {}),
+      // Don't pass cwd to API — handled in the command itself
       ...(options?.timeoutSecs ? { timeout: options.timeoutSecs } : {}),
     };
 
