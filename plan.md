@@ -1,148 +1,156 @@
 # Recoder Platform — Honest Status
 
-Last updated: 2026-03-26 (by user + AI, based on actual browser testing)
-
-**IMPORTANT**: Only mark something "WORKS" if the USER confirmed it in browser. Everything else is "BROKEN" or "NOT TESTED".
+Last updated: 2026-03-27 00:00 UTC — based on USER browser testing
 
 ---
 
 ## 1. Agents (agents.recoder.xyz)
 
-### What actually works (user-confirmed):
+### User-confirmed working:
 - Plain text chat
-- Web search (limited — only first ~5 links)
+- Web search (first ~5 links)
+- Agent runs tools (execute command, python3) — actions visible in UI
+- Files tab shows sandbox directory listing
 
-### What's broken (user-confirmed):
-| Issue | Status |
+### User-confirmed broken:
+| Issue | Detail |
 |-------|--------|
-| **Chats not saved** — messages disappear on refresh | BROKEN |
-| **Sidebar: Chats/Workers/Spaces/Triggers** — click but nothing happens | BROKEN |
-| **Agent tools** — slides, excel, docs, powerpoint, coding produce no output | BROKEN |
-| **Image generation** — "Replicate API token not configured" | BROKEN (missing env var) |
-| **Video generation** — not working | BROKEN |
-| **Runs page** — gives error | BROKEN |
-| **Pipeline page** — 404 for specific pipeline IDs | BROKEN (RLS policy blocks queries) |
-| **Credentials page** — `/v1/secure-mcp/composio-profiles` returns 500 | BROKEN |
-| **Webhooks page** — `/v1/agent-webhooks/webhooks` returns 500 | BROKEN |
-| **Settings pages** — not scrollable (account, all settings) | BROKEN (CSS overflow issue) |
-| **Billing page** — should be removed/hidden | NOT NEEDED |
-| **Monitoring** — no active data, likely non-functional | NO DATA |
-| **CORS on /agents/active-runs** — "No Access-Control-Allow-Origin" | BROKEN |
-| **sandbox/status endpoint** — repeated 500 errors | BROKEN |
+| **DOCX output empty** | Agent says "created at /workspace/claude_code_report.docx" but file is empty. Python script runs but produces no output. |
+| **DOCX preview doesn't show content** | Shows filename, not rendered document content. DocxPreview component exists but sandbox stops (archived) before fetch. |
+| **Files/History empty** | Shows "Nothing here yet" even after agent creates files |
+| **CORS blocks project data** | `/v1/projects/{id}` blocked by CORS intermittently → sandbox ID not available → preview falls back to icon |
+| **ERR_HTTP2_PROTOCOL_ERROR** | SSE streams (notifications, realtime) still fail intermittently |
 
-### Code changes made but NOT deployed:
-- T10-T16: hundreds of backend fixes (::text casts, RLS, CORS, SSE) — all sitting in local git
-- None of these are live on production
+### Not tested yet by user:
+- Sidebar Chats/Workers/Spaces/Triggers (deployed, needs login test)
+- Settings scroll, Credentials, Webhooks (deployed)
+- Slides, Excel, Image tools (backend verified, needs browser test)
+- Chat persistence (backend fix deployed)
 
 ---
 
 ## 2. Agency (agency.recoder.xyz)
 
-### What works (user assessment):
-- Basics work — manual notebook-style content
-- Copilot can chat
+### User-confirmed:
+- Login page works
+- Basics work (notebook-style manual content)
+- **NO COPILOT VISIBLE** — user says "agency do not have copilot none of the pages I did not see any copilot"
 
-### What's broken:
-| Issue | Status |
+### User-confirmed broken:
+| Issue | Detail |
 |-------|--------|
-| **Workflows page** — different/weird UI, not functional | BROKEN |
-| **Vector stores page** — different UI, not working | BROKEN |
-| **Copilot** — can chat but can't actually do agency operations (create projects, manage clients, etc.) | LIMITED |
-| **Error page** — "Something went wrong, Error ID: 1933642381" on some pages | BROKEN |
+| **Copilot not visible** | Copilot tool calling code was deployed to API route but there's no copilot UI on agency pages. The copilot only exists on the project detail page, not globally. |
+| **Workflows page** | Different/weird UI, not functional |
+| **Vector stores page** | Different UI, not working |
 
 ### What's needed:
-- Copilot should be able to create/edit/manage agency data (like Cursor/VSCode copilot does for code)
-- Workflows and vector store UIs need to match rest of agency design
+- Add copilot UI to agency dashboard/sidebar (not just project page)
+- Copilot needs to be accessible from ALL agency pages like Cursor/VSCode
 
 ---
 
 ## 3. PM (pm.recoder.xyz)
 
-### What works (user assessment):
+### User-confirmed working:
 - Basics work
-- Copilot can chat
+- Copilot can chat and reads from features page
+- PM pages: Home, Activity, Insights, Plan, Feedback, Interviews, Initiatives, Features, Proposals, Ship, Roadmap, Gantt, Calendar, Releases, Changelog, Users, Companies
 
-### What's broken:
-| Issue | Status |
+### User-confirmed issues:
+| Issue | Detail |
 |-------|--------|
-| **Copilot** — can chat but can't update/edit PM data | LIMITED |
-| **Insights chat** — `/api/insights/chat` returns 500 | BROKEN (TipTap JSON .slice() TypeError) |
-| **React #418** — hydration mismatch | BROKEN (cosmetic) |
+| **Copilot only on Insights** | Needs to be on ALL PM pages, not just Insights |
+| **Features page has Recoder's test data** | Shows "Recoder Web IDE", "Recoder A2A" etc. — these are my seed data, not user data. Need to remove for real users. |
+| **Feature connections** | "Connect feature" shows GitHub/Linear/Jira options but "Install GitHub app" — not set up |
 
 ### What's needed:
-- Copilot should be able to create/edit issues, update project status, manage sprints (like a PM assistant)
+- Remove Recoder-specific seed features from user accounts
+- Make copilot accessible on ALL pages
+- Set up GitHub app for feature connections
 
 ---
 
 ## 4. OpenClaw (openclaw.recoder.xyz)
 
-### What works (user assessment):
-- Would work if connections and health are set up
+### User-confirmed:
+- Dashboard loads with full UI
+- Health badge shows "OK"
+- All sidebar items visible (Chat, Channels, Instances, Sessions, Cron Jobs, Agents, Skills, Nodes, Config, Debug, Logs)
 
-### What's broken:
-| Issue | Status |
-|-------|--------|
-| **Gateway disconnected** — "gateway token mismatch" (1008) | BROKEN (config issue) |
-| **Health/connections** — not working | BROKEN |
-| **All channels** (WhatsApp, Telegram, Discord, etc.) — not configured | NOT SET UP |
+### Status: BEST platform right now
 
 ---
 
 ## 5. Web IDE (web.recoder.xyz)
 
-### What works (user assessment):
-- Can generate code
-- Can do basic stuff
+### User-confirmed:
+- Can generate code (AI writes files)
+- Container creates successfully
+- Files appear in sidebar (claude_code_report.py visible)
 
-### What's broken:
-| Issue | Status |
+### User-confirmed broken:
+| Issue | Detail |
 |-------|--------|
-| **Live preview** — no preview loads for projects | BROKEN |
-| **Live links** — not working | BROKEN |
-| **Publish** — not working | BROKEN |
-| **Vercel integration** — not functional on workbench | BROKEN |
-| **Search panel** — can't actually search anything | BROKEN / MOCK |
-| **Git panel** — not functional | BROKEN / MOCK |
-| **Packages panel** — can't search or install | BROKEN / MOCK |
-| **Terminal** — exists but limited | PARTIAL |
-| **Logs/Errors/other panels** — not working or functional | BROKEN |
+| **Preview times out** | "Dev server health check timed out after 30 attempts" — npm install or dev server never starts |
+| **Chat times out** | "Chat request timed out (90608ms)" — AI response takes too long |
+| **DOCX empty** | Agent creates .py file but .docx output is empty |
+| **Auth falls back to anonymous** | "Session token not found in cookies. Auth will fall back to anonymous mode." |
+| **No live preview** | Preview URL generated but iframe shows nothing |
 
-### User suggestion:
-- Remove non-functional panels (search, git, packages) rather than showing broken UI
+### What's needed:
+- Fix dev server startup in Daytona sandbox
+- Fix AI response timeout (90s not enough)
+- Fix anonymous auth fallback
 
 ---
 
-## Infrastructure
+## 6. recoder.xyz
 
-| Component | Details |
-|-----------|---------|
-| **Server** | Hetzner 77.42.23.19, 16GB RAM |
-| **Database** | PostgreSQL 17 @ 127.0.0.1:5432 |
-| **Databases** | `recoder_main` (auth), `recoder_backend` (data), `recoder_pm` |
-| **Sandbox** | Daytona localhost:3900 |
-| **SSH** | `ssh -i ~/.ssh/id_ed25519_hetzner root@77.42.23.19` |
+### User-confirmed:
+- Landing page works
+- Login form works (redirects to PM, Web IDE)
 
----
-
-## What needs to happen (priority order):
-
-1. **Deploy all local code changes to production** — nothing fixed in T10-T16 is live
-2. **Run DB migrations** on production (pipeline RLS fix, etc.)
-3. **Add missing env vars** on production (REPLICATE_API_TOKEN or switch to OpenRouter)
-4. **Test each fix in browser after deploy** — don't claim fixed until user confirms
-5. **Fix remaining broken items one at a time, deploy, test each one**
+### Issues:
+- Sign Out not visible on landing page (only shows when logged in)
+- Recoder seed data appears in PM features for all users
 
 ---
 
-## Pattern to avoid:
-1. Fix backend SQL with curl test -> claim "WORKS"
-2. User tests in browser -> still broken
-3. Fix more backend -> claim "WORKS" again
-4. Repeat for 4 days
+## Latest user feedback (2026-03-27):
 
-## Pattern to follow:
-1. Fix code
-2. Deploy to production
-3. User tests in browser
-4. If broken, investigate what the BROWSER actually sees (not what curl shows)
-5. Only mark "WORKS" after user confirms
+### Agents:
+- DOCX says "Loading space_tech.docx / Retrying..." — won't render content
+- Agent says it created report but file is empty on Files tab
+- Actions show python3 ran but output not visible
+- Files tab shows /workspace listing (home dir junk: .ICEauthority, .bashrc, Desktop, etc.) not project files
+
+### Web IDE:
+- Preview health check times out after 30 attempts
+- Chat request times out at 90s
+- "Session token not found in cookies" — auth broken, falls back to anonymous
+- Preview URL generated but iframe blank
+
+### PM:
+- Copilot works on Features page but needs to work on ALL pages (Home, Activity, Insights, Plan, Feedback, Interviews, Initiatives, Features, Proposals, Ship, Roadmap, Gantt, Calendar, Releases, Changelog, Users, Companies)
+- Features page has Recoder-specific seed data (Recoder Web IDE, A2A etc.) — bad for other users
+- "Connect feature" shows GitHub/Linear/Jira but none set up
+
+### Agency:
+- NO copilot visible anywhere — not on any page
+- Workflows/vector stores have different weird UI
+
+### OpenClaw:
+- Best platform — health shows OK, dashboard works
+
+---
+
+## Priority — What to fix next:
+
+1. **Web IDE auth** — "Session token not found" blocks everything. Fix cross-domain cookie issue.
+2. **Web IDE preview** — dev server health check timeout. Daytona recovery in preview.ts deployed but needs verification.
+3. **Agent DOCX rendering** — DocxPreview shows "Loading/Retrying" because sandbox stops before file can be fetched.
+4. **Agent Files tab** — shows /home/daytona junk files instead of project workspace files.
+5. **Agency copilot UI** — add copilot chat to all agency pages (global sidebar/floating button).
+6. **PM copilot on all pages** — not just Insights page.
+7. **Remove Recoder seed data** — from PM features for non-Recoder users.
+8. **PM Feature connections** — GitHub/Linear/Jira setup.
