@@ -7,6 +7,9 @@ import {
   Rocket,
   ArrowRight,
   FileText,
+  Video,
+  Github,
+  MessageSquare,
   Network,
   Boxes
 } from 'lucide-react';
