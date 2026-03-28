@@ -75,35 +75,39 @@ Daytona preview redirects to `https://{port}-{sandboxId}.sandbox.recoder.xyz` wh
 
 ---
 
-## Priority Order (Post-Deploy)
+## Priority Order (Updated 2026-03-28 18:30 UTC)
 
-### Phase 0: Fix model ID (IMMEDIATE — blocks everything)
-1. Replace `google/gemini-2.0-flash` → `google/gemini-2.0-flash-001` everywhere
-2. Redeploy + restart backend, agency, PM
-3. Verify agents chat works
-4. Verify copilots respond
+### Phase 0: Deploy Batch 2 — IN PROGRESS (Agent 1 deploying)
+All code fixes done. Deploy script: `bash scripts/deploy-batch2.sh`
+- ~~Model ID fix~~ DONE
+- ~~Preview X-Frame-Options~~ DONE
+- ~~Agency accountLinking~~ DONE
+- ~~OpenClaw removal~~ DONE
+- ~~Name generator~~ DONE
+- ~~Code output display~~ DONE
+After deploy: verify in browser (agents chat, web IDE preview, agency copilot, sign-out)
 
-### Phase 1: Fix Web IDE preview
-1. Fix X-Frame-Options: nginx sets SAMEORIGIN globally → blocks preview iframe from loading docker.recoder.xyz content
-2. Fix: either proxy inline (no redirect) or strip X-Frame-Options for preview routes in nginx
-3. Fix publish 500
-4. Test: create project → generate code → see live preview
+### Phase 1: Browser Verification (after deploy)
+1. agents.recoder.xyz — send chat, verify response
+2. agents.recoder.xyz — create DOCX, verify tool + preview
+3. web.recoder.xyz — create project, check preview loads in iframe
+4. web.recoder.xyz — try publish
+5. agency.recoder.xyz — copilot responds
+6. agency.recoder.xyz — GitHub connect (should auto-link now)
+7. recoder.xyz — sign out works
+8. openclaw.recoder.xyz — redirects to agency
 
-### Phase 2: Fix remaining platforms
-1. Agency GitHub `account_not_linked` — Better Auth OAuth linking issue
-2. Test sign-out on recoder.xyz
-3. PM is DONE — don't touch (copilot works, refresh issue deferred)
-
-### Phase 3: Agent Tools End-to-End
+### Phase 2: Agent Tools End-to-End
 1. DOCX creation: chat → run_code → python-docx → file → preview
-2. File serving from sandbox
-3. Image display from sandbox URL
+2. File serving from sandbox (should work via `/api/files/content` proxy)
+3. Image display (fallback to agents API proxy, no S3 needed)
 4. Slides, Excel, Canvas tools
 
-### Phase 4: Infrastructure
-1. Configure R2 storage (Cloudflare free tier)
-2. Investigate crash loops
-3. Memory optimization
+### Phase 3: Infrastructure
+1. Configure R2 storage (Cloudflare free tier) — persistent file storage
+2. Investigate crash loops (agents 334, agency 216, PM 329 restarts)
+3. Memory optimization (agents 428MB, PM 460MB)
+4. Rotate exposed API keys (git history)
 
 ### Phase 5: OpenClaw → Extract, Remove, Replace
 
