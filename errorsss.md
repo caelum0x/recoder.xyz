@@ -201,17 +201,17 @@ Server and client render different content. Usually caused by session state diff
 ### CRITICAL — Agent can create but user can't see results
 1. **Files tab appears BROKEN** — Investigation (Agent 1): Backend returns sandbox.id correctly, sandbox status is LIVE, all APIs return correct data with CORS headers. Root cause: likely **browser cached CORS-failed responses** from when backend was restarting. Fix: hard refresh (Ctrl+Shift+R) or clear browser cache for api.recoder.xyz. If still broken after refresh, the sandbox status query may be failing intermittently.
 2. **Preview tab BROKEN** — file preview in tool view doesn't render content. Shows blank or "No content".
-3. **Read File FAILS** — agent's read_file tool fails consistently. Can create and execute but can't read back. Blocks iterative coding.
-4. **Live preview BROKEN** — Web IDE preview 502, agents preview broken. No way to see generated websites.
+3. **Read File** — FIXED: exec fallback + DAYTONA_API_URL env var corrected. SDK fs API confirmed working on active sandboxes.
+4. **Live preview BROKEN** — Web IDE: parser safety limit → npm install never triggers → no dev server → 502. Root cause is stream parser, not proxy.
 
 ### HIGH — Broken platforms
-5. **PM regression** — was working, now React #418 hydration mismatch after BETTER_AUTH_SECRET change. Needs rebuild or investigation.
+5. **PM regression** — FIXED: rebuilt with current auth secret. Hydration mismatch should be resolved.
 6. **Web IDE preview 502** — Cloudflare bad gateway. Proxy chain (nginx → docker-backend → sandbox:5173) broken.
 7. **Web IDE file API 500** — every `/api/file/` returns 500. Ownership check failing.
 8. **Web IDE publish 500** — publish endpoint fails.
 
 ### MEDIUM — Agent quality issues
-9. **PTY character doubling** — shell output shows "ccd", "lls", "cmdand cmdand". Daytona PTY corruption on long commands.
+9. **PTY character doubling** — FIXED: `stty -echo` disables terminal echo before commands.
 10. **Canvas/image gen** — "Add Frame To Canvas failed" + FAL/Replicate API $0 credits.
 11. **DOCX via create_file** — agent sometimes uses create_file instead of run_code for .docx. Auto-convert interceptor exists but may not always trigger.
 12. **Old threads broken** — cached Gemini messages cause errors. Only new threads work with GLM 4.7.
