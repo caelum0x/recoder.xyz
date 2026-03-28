@@ -18,7 +18,7 @@
 #                  -> docker-backend   (3100)  api.recoder.xyz (container orchestration)
 #                  -> recoder-web      (5173)  web.recoder.xyz (Remix IDE)
 #                  -> recoder-agents   (3001)  app.recoder.xyz (Next.js agents dashboard)
-#                  -> openclaw-gateway (18789) internal A2A gateway
+#                  -> openclaw-gateway (18789) REMOVED 2026-03-28
 #
 # All internal ports are NOT exposed to the host. Nginx is the sole ingress.
 #
@@ -228,8 +228,8 @@ services:
       - RECODER_A2A_AGENT_ID=docker-backend
       - RECODER_A2A_ADMIN_TOKEN=${RECODER_A2A_ADMIN_TOKEN:-}
       - RECODER_A2A_BRIDGE_TOKEN=${RECODER_A2A_BRIDGE_TOKEN:-}
-      - RECODER_A2A_EGRESS_ALLOWLIST=http://recoder-web:5173,http://openclaw-gateway:18789
-      - RECODER_A2A_ALLOWED_AGENTS=codex,claude_code,recoder-web,docker-backend,openclaw-gateway,recoder-agency,recoder-pm
+      - RECODER_A2A_EGRESS_ALLOWLIST=http://recoder-web:5173
+      - RECODER_A2A_ALLOWED_AGENTS=codex,claude_code,recoder-web,docker-backend,recoder-agency,recoder-pm
       # Tier-1 connector flags
       - RECODER_A2A_ENABLE_CODEX=${RECODER_A2A_ENABLE_CODEX:-true}
       - RECODER_A2A_ENABLE_CLAUDE_CODE=${RECODER_A2A_ENABLE_CLAUDE_CODE:-true}
@@ -479,46 +479,8 @@ services:
           memory: 512M
     stop_grace_period: 30s
 
-  # OpenClaw A2A Gateway — openclaw.recoder.xyz
-  # The docker-entrypoint.sh writes openclaw.json before starting, which:
-  #   - Disables device pairing for the Control UI (browser auto-connects)
-  #   - Allows the production origin for WebSocket connections
-  #   - Trusts the nginx reverse proxy for correct client IP detection
-  openclaw-gateway:
-    build: ./openclaw
-    container_name: openclaw-gateway
-    <<: *restart-policy
-    ports:
-      - "18789:18789"
-    environment:
-      - HOME=/home/node
-      - TERM=xterm-256color
-      - OPENCLAW_GATEWAY_TOKEN=${OPENCLAW_GATEWAY_TOKEN:-recoder_openclaw_prod_2026}
-      - ANTHROPIC_API_KEY=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
-      - ANTHROPIC_BASE_URL=https://openrouter.ai/api/v1
-      - OPENROUTER_API_KEY=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
-      - NODE_OPTIONS=--max_old_space_size=1536
-      # Control UI: allow openclaw.recoder.xyz origin for WebSocket
-      - OPENCLAW_CONTROL_UI_ALLOWED_ORIGINS=https://openclaw.recoder.xyz
-      # Trust common Docker bridge gateway IPs (exact match, no CIDR)
-      - OPENCLAW_TRUSTED_PROXIES=172.17.0.1,172.18.0.1,172.19.0.1,172.20.0.1,172.21.0.1,172.22.0.1
-    volumes:
-      - openclaw_workspace:/home/node/.openclaw/workspace
-    command: ["node", "dist/index.js", "gateway", "--allow-unconfigured", "--bind", "lan", "--port", "18789"]
-    networks:
-      - recoder
-    healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://localhost:18789/health').then(r=>process.exit(r.status<400?0:1)).catch(()=>process.exit(1))"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 20s
-    logging: *default-logging
-    deploy:
-      resources:
-        limits:
-          cpus: "1"
-          memory: 2G
+  # OpenClaw — REMOVED (2026-03-28). See extracted-from-openclaw/
+  # Gateway code extracted. Redirect to agency.recoder.xyz via nginx.
 
   # ===========================================================================
   # Reverse Proxy — sole public ingress (ports 80 + 443)
@@ -736,8 +698,8 @@ volumes:
   redis_data:
   postgres_data:
   backend_data:
-  openclaw_config:
-  openclaw_workspace:
+  # openclaw_config: — REMOVED
+  # openclaw_workspace: — REMOVED
   prometheus_data:
   alertmanager_data:
   grafana_data:
