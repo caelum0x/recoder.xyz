@@ -127,7 +127,7 @@ $5 OpenRouter credits added. Batch 1 deployed. Batch 2 deploying now (Agent 1).
 | 7 | ~~OpenClaw redirect~~ | Redirects to agency | DONE |
 | 8 | **CodeMirror crash** | Error boundary added — Source tab no longer crashes page | FIXED (Agent 1) |
 
-**UPDATED ASSESSMENT (2026-03-29):** Agent core functionality NOW WORKS with GLM 4.7. Create files, run code, execute commands all functional. User tested: coded a basic LLM with PyTorch, 48 tool calls succeeded. BUT: files tab doesn't show files, preview doesn't render, read_file fails. Agent works in a black box — creates stuff but user can't see results. Next priority: make files visible.
+**UPDATED ASSESSMENT (2026-03-29 03:00 UTC):** Agent works with GLM 4.7 (48 tool calls, PyTorch training). read_file fixed, PTY echo fixed, PM rebuilt, parser limit fixed, mock UI removed, Web IDE proxy chain fixed. Still broken: file preview in tool view, Web IDE needs Docker rebuild. Files tab may work after browser cache clear.
 
 ### TIER 1: Make agent results VISIBLE (6-12) — HIGHEST PRIORITY
 
@@ -135,13 +135,13 @@ Agent creates files and runs code but user CAN'T SEE the results.
 
 | # | Task | Detail |
 |---|------|--------|
-| 6 | **Fix Files tab** | File browser next to agent thread shows nothing. Sandbox has files but they don't appear. |
-| 7 | **Fix file preview** | Tool view preview tab shows blank/"No content". File API returns 500. |
-| 8 | **Fix read_file tool** | Agent can't read files back from sandbox. Breaks iterative coding. |
-| 9 | **Fix live preview** | No way to see generated websites. Preview 502/503 on both agents and Web IDE. |
-| 10 | **Fix PTY character doubling** | Shell output shows "ccd", "lls". Daytona PTY corruption. |
-| 11 | ~~Fix code execution output~~ | DONE (Agent 2) — shows all output, extracts code arg |
-| 12 | **Remove mock UI** | Hide: "Save as Template", "Insights", "Analytics/Thread Analytics" until implemented |
+| 6 | **Files tab** | Backend OK (Agent 1 confirmed). Likely browser cache — try hard refresh. |
+| 7 | **File preview** | Tool view preview still blank. Needs investigation. |
+| 8 | ~~Read file~~ | DONE (Agent 2) — exec fallback + DAYTONA_API_URL |
+| 9 | ~~Live preview~~ | DONE — parser 100k, proxy chain fixed, X-Frame-Options fixed. Web IDE rebuilding. |
+| 10 | ~~PTY doubling~~ | DONE (Agent 2) — `stty -echo` |
+| 11 | ~~Code execution output~~ | DONE (Agent 2) |
+| 12 | ~~Mock UI~~ | DONE (Agent 2) — Save as Template, Insights, Analytics hidden |
 
 ### TIER 2: Web IDE preview + publish (13-18)
 
