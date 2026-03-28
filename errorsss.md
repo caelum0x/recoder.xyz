@@ -162,9 +162,34 @@ Server and client render different content. Usually caused by session state diff
 6. **Exposed API keys** — OpenRouter key was in docker-compose. Removed with OpenClaw, but git history still has it.
 7. **DB password** — was broken (auth failed), fixed by resetting to `recoder_prod_2026`. Root cause unknown — may have been changed by Agent 2's env sync.
 
-## Next Phase: recoder.xyz Website
+## Website & Docs Issues
 
-1. **Remove OpenClaw references** — clean up any mentions of OpenClaw from the recoder.xyz website/landing page
-2. **API docs** — document backend API endpoints for external integrations
-3. **A2A docs** — document Agent-to-Agent protocol
-4. **Coding docs** — developer documentation for the platform
+### recoder.xyz Landing Page
+- Lists "10 Services" including **OpenClaw** — needs removal (OpenClaw abandoned)
+- Mock links to non-existent pages (Agents, Plan, Platform, Docs, Dashboard)
+- "Recoder API" shown as service but docs page is empty/broken
+- All docs pages shown as empty or failed
+
+### Pages to Fix/Create
+- `/docs` — empty, needs content
+- `/docs/api` — API reference (endpoints for external integrations)
+- `/docs/a2a` — A2A protocol docs (agent-to-agent communication)
+- Landing page service list — remove OpenClaw, update descriptions
+- Dashboard links — verify all navigation targets exist
+
+### A2A Bridge
+- `npx recoder-a2a` connects but reconnects repeatedly ("Connected to A2A bridge as claude_code" x7)
+- Bridge works but client drops/reconnects — anonymous auth, no persistent session
+- Needs: test actual A2A message passing, not just connection
+
+## Remaining Issues (Priority Order)
+
+1. **Agents chat 400** — empty messages to Gemini
+2. **PM regression** — hydration mismatch after auth secret change
+3. **Web IDE preview 502** — proxy chain broken
+4. **Web IDE file/publish 500** — ownership check failing
+5. **Canvas/image gen** — FAL API quota
+6. **Landing page** — mock links, OpenClaw reference, empty docs
+7. **A2A reconnect loop** — anonymous auth causes repeated connections
+8. **R2 storage keys** — endpoint set, needs access keys
+9. **Crash loop counts** — restart counters high (cosmetic after rebuilds)
