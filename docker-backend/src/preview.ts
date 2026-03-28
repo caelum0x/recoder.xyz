@@ -411,10 +411,12 @@ export function setupPreviewProxy(app: Express, containers: Map<string, { id: st
       }
 
       if (daytonaServerReady) {
-        // Use the (potentially updated) preview URL from entry, not the stale daytonaUrl captured earlier
-        const currentPreviewUrl = (entry as any).daytonaPreviewUrl || daytonaUrl;
-        console.log(`[Preview] Daytona preview ready, redirecting for ${projectId}: ${currentPreviewUrl}`);
-        return res.redirect(currentPreviewUrl);
+        // Proxy through docker-backend instead of redirecting to *.sandbox.recoder.xyz
+        // This avoids needing wildcard SSL cert to be trusted by browsers
+        const dockerUrl = process.env.DOCKER_PUBLIC_URL || 'https://docker.recoder.xyz';
+        const proxyUrl = `${dockerUrl}/api/sandbox-preview/${projectId}`;
+        console.log(`[Preview] Daytona preview ready, proxying for ${projectId} via ${proxyUrl}`);
+        return res.redirect(proxyUrl);
       }
 
       // Dev server not running — try to auto-start
@@ -675,19 +677,79 @@ export function setupPreviewProxy(app: Express, containers: Map<string, { id: st
     return proxy(req, res, next);
   });
 
+  // Helper: proxy request to Daytona sandbox dev server port
+  async function handleSandboxPreview(
+    req: any, res: any,
+    containers: Map<string, any>,
+    subPath: string
+  ) {
+    const projectId = req.params.projectId;
+    let entry = containers.get(projectId);
+    if (!entry) {
+      entry = await recoverContainerFromDocker(projectId, containers);
+    }
+    if (!entry?.id) {
+      return res.status(404).send('<h1>Sandbox not found</h1><p>The preview container is not running.</p>');
+    }
+    try {
+      const dc = getDaytonaClient();
+      const port = entry.port || 5173;
+      // Use Daytona toolbox API to forward the request to the sandbox port
+      const toolboxBase = process.env.DAYTONA_TOOLBOX_PROXY_URL
+        || `http://localhost:3900/api/toolbox`;
+      const forwardUrl = `${toolboxBase}/${entry.id}/toolbox/port-forward/${port}/${subPath}${req.url.includes('?') ? '?' + req.url.split('?')[1] : ''}`;
+
+      const proxyRes = await fetch(forwardUrl, {
+        method: req.method,
+        headers: {
+          'Host': `localhost:${port}`,
+          'Accept': req.headers.accept || '*/*',
+        },
+      });
+
+      res.status(proxyRes.status);
+      const ct = proxyRes.headers.get('content-type');
+      if (ct) res.setHeader('Content-Type', ct);
+      // Allow iframe embedding
+      res.removeHeader('X-Frame-Options');
+      res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+
+      const body = Buffer.from(await proxyRes.arrayBuffer());
+      res.send(body);
+    } catch (e: any) {
+      console.error(`[SandboxPreview] Proxy error for ${projectId}:`, e.message);
+      res.status(502).send(`<h1>Preview unavailable</h1><p>${e.message}</p>`);
+    }
+  }
+
   app.get('/api/preview/:projectId/url', async (req, res) => {
     let entry = containers.get(req.params.projectId);
     if (!entry) {
       entry = await recoverContainerFromDocker(req.params.projectId, containers);
     }
-    // For Daytona sandboxes, return the Daytona preview URL directly
+    // For Daytona sandboxes, proxy through docker-backend instead of using
+    // the external *.sandbox.recoder.xyz URL — avoids needing wildcard SSL cert
     const daytonaUrl = (entry as any)?.daytonaPreviewUrl;
     if (daytonaUrl) {
-      return res.json({ url: daytonaUrl, port: entry?.port || 3000, daytona: true });
+      // Return a docker.recoder.xyz proxy URL that we handle internally
+      const dockerUrl = process.env.DOCKER_PUBLIC_URL || 'https://docker.recoder.xyz';
+      const proxyUrl = `${dockerUrl}/api/sandbox-preview/${req.params.projectId}`;
+      return res.json({ url: proxyUrl, port: entry?.port || 3000, daytona: true });
     }
     const port = entry?.port || 0;
     const baseUrl = process.env.PUBLIC_URL || `https://web.recoder.xyz`;
     res.json({ url: `${baseUrl}/preview/${req.params.projectId}`, port });
+  });
+
+  // Sandbox preview proxy — forwards requests to Daytona sandbox dev server
+  // This avoids needing *.sandbox.recoder.xyz wildcard SSL cert.
+  // Uses Daytona port-forward via toolbox API.
+  app.all('/api/sandbox-preview/:projectId', async (req, res) => {
+    return handleSandboxPreview(req, res, containers, '');
+  });
+  app.all('/api/sandbox-preview/:projectId/*', async (req, res) => {
+    const subPath = req.url.split('/api/sandbox-preview/' + req.params.projectId + '/')[1] || '';
+    return handleSandboxPreview(req, res, containers, subPath);
   });
 
   // Health check - shows which ports are responding
@@ -719,7 +781,7 @@ export function setupPreviewProxy(app: Express, containers: Map<string, { id: st
               daytona: true,
               daytonaPreviewUrl: previewUrl,
             } as any;
-            containers.set(req.params.projectId, entry);
+            containers.set(req.params.projectId, entry as any);
           }
         } catch (e) {
           // Daytona recovery failed, continue to 404

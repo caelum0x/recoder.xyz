@@ -130,8 +130,9 @@ async def generate_icon_and_colors(name: str, description: str = "") -> Dict[str
     """
     logger.debug(f"Generating icon and colors for: {name}")
     try:
-        model_name = "openai/gpt-5-nano-2025-08-07"
-        
+        from core.ai_models import FREE_MODEL_ID
+        model_name = FREE_MODEL_ID
+
         frontend_colors = [
             "#000000", "#FFFFFF", "#6366F1", "#10B981", "#F59E0B", 
             "#EF4444", "#8B5CF6", "#EC4899", "#14B8A6", "#F97316",

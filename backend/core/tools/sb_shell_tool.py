@@ -197,6 +197,28 @@ Usage notes:
             tool_call_id = get_current_tool_call_id() or f"cmd_{str(uuid4())[:8]}"
             logger.debug(f"[SHELL STREAMING] Using tool_call_id: {tool_call_id}")
             
+            # Rewrite python3 -c / python -c / node -e commands to use temp files
+            # PTY corrupts long inline commands (character doubling, line wrapping)
+            import re as _re
+            inline_match = _re.match(
+                r"""^(python3?|node)\s+(-[ce])\s+(['"])(.*)\3\s*$""",
+                command, _re.DOTALL,
+            )
+            if inline_match and len(command) > 80:
+                interpreter = inline_match.group(1)
+                code_body = inline_match.group(4)
+                ext = "py" if "python" in interpreter else "js"
+                import hashlib
+                h = hashlib.md5(code_body.encode()).hexdigest()[:8]
+                tmp = f"/tmp/_inline_{h}.{ext}"
+                # Write code to file first, then run
+                import base64
+                b64 = base64.b64encode(code_body.encode("utf-8")).decode("ascii")
+                pre_cmd = f"printf '%s' '{b64}' | base64 -d > {tmp}"
+                await self.sandbox.process.exec(pre_cmd, timeout=10)
+                command = f"{interpreter} {tmp}; __e=$?; rm -f {tmp}; exit $__e"
+                logger.info(f"[SHELL] Rewrote inline {interpreter} command ({len(code_body)} chars) to temp file {tmp}")
+
             # Track output for streaming
             output_buffer = []
             exit_code = 0

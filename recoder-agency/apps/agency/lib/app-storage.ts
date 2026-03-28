@@ -12,7 +12,14 @@ const PUBLIC_URL_BASE = process.env.AGENCY_STORAGE_PUBLIC_URL || "https://agency
  */
 function isSupabaseConfigured(): boolean {
 	const url = process.env.SUPABASE_URL || "";
-	return url.length > 0 && !url.includes("placeholder");
+	// Only use Supabase if URL points to a real Supabase instance (not placeholder or localhost)
+	return (
+		url.length > 0 &&
+		!url.includes("placeholder") &&
+		!url.includes("localhost") &&
+		!url.includes("127.0.0.1") &&
+		url.includes("supabase")
+	);
 }
 
 function ensureDir(filePath: string) {

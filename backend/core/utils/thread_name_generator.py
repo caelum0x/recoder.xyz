@@ -24,7 +24,9 @@ async def generate_and_update_thread_name(thread_id: str, prompt: str):
     
     try:
         # Use same model and approach as project name generation
-        model_name = "openai/gpt-5-nano-2025-08-07"
+        # Use the platform default model (free tier) instead of hardcoded paid model
+        from core.ai_models import FREE_MODEL_ID
+        model_name = FREE_MODEL_ID
         
         system_prompt = """Generate a concise but accurate and meaningful title (2-6 words) for a chat thread.
 
@@ -54,8 +56,9 @@ Respond with JSON: {"title": "Your Title"}"""
         response = await make_llm_api_call(
             messages=messages,
             model_name=model_name,
-            max_tokens=1200,  # Reasoning models need tokens for chain-of-thought before output
-            temperature=0.7,
+            max_tokens=80,
+            temperature=0.3,
+            frequency_penalty=1.5,
             response_format={"type": "json_object"},
             stream=False
         )
@@ -86,6 +89,15 @@ Respond with JSON: {"title": "Your Title"}"""
             logger.warning(f"Failed to get valid response from LLM for thread {thread_id} naming. Response: {response}")
 
         if generated_name:
+            # Truncate to max 80 chars and remove repetition
+            generated_name = generated_name[:80].strip()
+            # Detect repetition: if same phrase appears 2+ times, keep only first occurrence
+            words = generated_name.split()
+            if len(words) > 6:
+                half = len(words) // 2
+                first_half = ' '.join(words[:half])
+                if first_half in generated_name[len(first_half):]:
+                    generated_name = first_half.strip()
             logger.info(f"Storing thread {thread_id} with name: '{generated_name}'")
 
             updated_rows = await execute_mutate(

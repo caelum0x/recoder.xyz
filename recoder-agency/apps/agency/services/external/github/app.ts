@@ -78,6 +78,22 @@ function resolvePrivateKey(): string | null {
 		return raw.replace(/\\n/g, "\n");
 	}
 
+	// Try file path (shared with main app)
+	const keyPath =
+		process.env.GITHUB_APP_PRIVATE_KEY_PATH ||
+		process.env.GITHUB_PRIVATE_KEY_PATH;
+	if (keyPath) {
+		try {
+			const { readFileSync } = require("node:fs");
+			const content = readFileSync(keyPath, "utf-8");
+			if (content.includes("-----BEGIN")) {
+				return content;
+			}
+		} catch {
+			// file not found — fall through
+		}
+	}
+
 	// Fall back to base64-encoded key
 	let b64 = process.env.GITHUB_APP_PRIVATE_KEY_BASE64;
 	if (b64) {

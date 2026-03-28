@@ -4,7 +4,7 @@ import { createOpenAI } from "@ai-sdk/openai";
  * Default model to use for agency AI operations via OpenRouter.
  * OpenRouter model IDs use the format "provider/model-name".
  */
-const DEFAULT_MODEL_ID = "openai/gpt-4o-mini";
+const DEFAULT_MODEL_ID = "google/gemini-2.0-flash-001";
 
 /**
  * Create an AI SDK model instance routed through OpenRouter.

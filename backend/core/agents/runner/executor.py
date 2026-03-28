@@ -133,7 +133,7 @@ async def execute_agent_run(
                         "timestamp": datetime.now(timezone.utc).isoformat(),
                         "pipeline": "stateless"
                     }
-                    await redis.stream_add(stream_key, {"data": json.dumps(timing_msg)}, maxlen=200, approximate=True)
+                    await redis.stream_add(stream_key, {"data": json.dumps(timing_msg)}, maxlen=1000, approximate=True)
                 except Exception:
                     pass
 
@@ -146,7 +146,7 @@ async def execute_agent_run(
                         logger.debug(f"[STREAM] Sending assistant complete: message_id={response.get('message_id')}")
 
             try:
-                await redis.stream_add(stream_key, {"data": json.dumps(response)}, maxlen=200, approximate=True)
+                await redis.stream_add(stream_key, {"data": json.dumps(response)}, maxlen=1000, approximate=True)
 
                 if not stream_ttl_set:
                     try:
@@ -185,7 +185,7 @@ async def execute_agent_run(
 
             completion_msg = {"type": "status", "status": "completed", "message": "Completed successfully"}
             try:
-                await redis.stream_add(stream_key, {'data': json.dumps(completion_msg)}, maxlen=200, approximate=True)
+                await redis.stream_add(stream_key, {'data': json.dumps(completion_msg)}, maxlen=1000, approximate=True)
             except Exception:
                 logger.warning(f"Failed to write completion message to Redis stream {stream_key}")
 

@@ -195,6 +195,15 @@ class LLMExecutor:
         
         return prepared_messages, actual_tokens
     
+    # Free model fallback list — when one is rate-limited (429), try the next
+    FREE_MODEL_FALLBACKS = [
+        "openrouter/stepfun/step-3.5-flash:free",
+        "openrouter/qwen/qwen3-coder:free",
+        "openrouter/nvidia/nemotron-3-super-120b-a12b:free",
+        "openrouter/google/gemma-3-27b-it:free",
+        "openrouter/mistralai/mistral-small-3.1-24b-instruct:free",
+    ]
+
     async def execute(
         self,
         prepared_messages: List[Dict[str, Any]],
@@ -212,28 +221,52 @@ class LLMExecutor:
 
         stop_sequences = ["|||STOP_AGENT|||"] if xml_tool_calling else None
 
-        try:
-            llm_response = await make_llm_api_call(
-                prepared_messages, llm_model,
-                temperature=llm_temperature,
-                max_tokens=llm_max_tokens,
-                tools=openapi_tool_schemas,
-                tool_choice=tool_choice if native_tool_calling else "none",
-                stream=stream,
-                stop=stop_sequences if stop_sequences else None,
-                api_key=api_key
+        # Build list of models to try: primary + fallbacks for free models
+        models_to_try = [llm_model]
+        if ":free" in llm_model:
+            models_to_try.extend(
+                m for m in self.FREE_MODEL_FALLBACKS if m != llm_model
             )
-            
-            if not stream:
-                logger.debug(f"⏱️ [TIMING] LLM API call (non-streaming): {(time.time() - llm_call_start) * 1000:.1f}ms")
-            else:
-                logger.debug(f"⏱️ [TIMING] LLM API call initiated (streaming): {(time.time() - llm_call_start) * 1000:.1f}ms")
-            
-            return llm_response
-            
-        except LLMError as e:
-            logger.error(f"❌ LLMError: {e}")
-            return {"type": "status", "status": "error", "message": str(e)}
+
+        last_error = None
+        for attempt_model in models_to_try:
+            try:
+                llm_response = await make_llm_api_call(
+                    prepared_messages, attempt_model,
+                    temperature=llm_temperature,
+                    max_tokens=llm_max_tokens,
+                    tools=openapi_tool_schemas,
+                    tool_choice=tool_choice if native_tool_calling else "none",
+                    stream=stream,
+                    stop=stop_sequences if stop_sequences else None,
+                    api_key=api_key
+                )
+
+                if attempt_model != llm_model:
+                    logger.info(f"🔄 Model fallback succeeded: {llm_model} -> {attempt_model}")
+
+                if not stream:
+                    logger.debug(f"⏱️ [TIMING] LLM API call (non-streaming): {(time.time() - llm_call_start) * 1000:.1f}ms")
+                else:
+                    logger.debug(f"⏱️ [TIMING] LLM API call initiated (streaming): {(time.time() - llm_call_start) * 1000:.1f}ms")
+
+                return llm_response
+
+            except LLMError as e:
+                last_error = e
+                error_str = str(e)
+                # Only retry on rate limit (429) or temporary errors
+                if "429" in error_str or "rate" in error_str.lower() or "temporarily" in error_str.lower():
+                    logger.warning(f"⚠️ Model {attempt_model} rate-limited, trying fallback...")
+                    await asyncio.sleep(1)  # Brief pause before retry
+                    continue
+                # Non-retryable error — stop immediately
+                logger.error(f"❌ LLMError: {e}")
+                return {"type": "status", "status": "error", "message": str(e)}
+
+        # All models exhausted
+        logger.error(f"❌ All models rate-limited. Last error: {last_error}")
+        return {"type": "status", "status": "error", "message": f"All free models are currently rate-limited. Please try again in a few minutes or add your own API key in Settings."}
     
     @staticmethod
     def update_generation_tracking(
