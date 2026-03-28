@@ -150,6 +150,7 @@ class SandboxFileReaderTool(SandboxToolsBase):
         try:
             cleaned_path = self.clean_path(file_path)
             full_path = f"{self.workspace_path}/{cleaned_path}"
+            logger.info(f"[ReadFile] Reading: {cleaned_path} (full: {full_path})")
 
             if self._is_image_file(cleaned_path):
                 return {
@@ -383,11 +384,11 @@ class SandboxFileReaderTool(SandboxToolsBase):
             }
 
         except Exception as e:
-            logger.error(f"[ReadFile] Error reading {file_path}: {e}", exc_info=True)
+            logger.error(f"[ReadFile] EXCEPTION reading {file_path}: {type(e).__name__}: {e}", exc_info=True)
             return {
                 "file_path": file_path,
                 "success": False,
-                "error": str(e)
+                "error": f"{type(e).__name__}: {str(e)}"
             }
 
     @openapi_schema({
@@ -437,8 +438,11 @@ Usage:
         limit: Optional[int] = None
     ) -> ToolResult:
         try:
+            logger.info(f"[ReadFile] read_file called: file_path={file_path}, file_paths={file_paths}")
             await self._ensure_sandbox()
-            await self._wait_for_uploads()
+            logger.info(f"[ReadFile] Sandbox ready: {self.sandbox_id}")
+            # Skip upload wait — it blocks for 60s if stale Redis key exists
+            # await self._wait_for_uploads()
 
             if file_paths:
                 paths_to_read = file_paths[:MAX_BATCH_SIZE]
