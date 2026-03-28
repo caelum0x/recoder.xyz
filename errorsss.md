@@ -196,21 +196,30 @@ Server and client render different content. Usually caused by session state diff
 - Bridge works but client drops/reconnects — anonymous auth, no persistent session
 - Needs: test actual A2A message passing, not just connection
 
-## Remaining Issues (Priority Order)
+## Remaining Issues (Priority Order, updated 2026-03-29)
 
-1. **Agents** — Chat 400 fixed but platform is SAME as before this session: only plain chat + web search work. All tools broken. Additionally:
-   - Asking to "code a website" crashes the frontend: `TypeError: Cannot read properties of undefined (reading 'length')` in CodeMirror parser (`nextChild`). Page fills with errors, becomes unusable.
-   - This is a CodeMirror/editor crash when the LLM streams code — the code viewer can't handle the streamed content format.
-   - DOCX: "Run: Code failed", file mostly empty
-   - Canvas: frame + image gen both fail (FAL $0)
-   - Tasks: creation fails intermittently
-   - File preview: always "No content" (file API 500)
-2. **PM regression** — hydration mismatch after auth secret change
-3. **Web IDE preview 502** — proxy chain broken
-4. **Web IDE file/publish 500** — ownership check failing
-5. **Canvas/image gen** — FAL API quota
-6. **Landing page** — mock links, OpenClaw reference, empty docs
-7. **Agents UI mocks** — "Save as Template", "Insights", "Analytics" panels are mock/non-functional. "Thread Analytics" shows "No analytics computed yet" with Calculate button that does nothing useful. Should be removed or hidden until implemented.
-7. **A2A reconnect loop** — anonymous auth causes repeated connections
-8. **R2 storage keys** — endpoint set, needs access keys
-9. **Crash loop counts** — restart counters high (cosmetic after rebuilds)
+### CRITICAL — Agent can create but user can't see results
+1. **Files tab BROKEN** — file browser next to agent thread doesn't show sandbox files. Agent creates files successfully but user can't see them.
+2. **Preview tab BROKEN** — file preview in tool view doesn't render content. Shows blank or "No content".
+3. **Read File FAILS** — agent's read_file tool fails. Can create files but can't read them back.
+4. **Live preview BROKEN** — Web IDE preview 502, agents preview broken. No way to see generated websites.
+
+### HIGH — Broken platforms
+5. **PM regression** — was working, now React #418 hydration mismatch after BETTER_AUTH_SECRET change. Needs rebuild or investigation.
+6. **Web IDE preview 502** — Cloudflare bad gateway. Proxy chain (nginx → docker-backend → sandbox:5173) broken.
+7. **Web IDE file API 500** — every `/api/file/` returns 500. Ownership check failing.
+8. **Web IDE publish 500** — publish endpoint fails.
+
+### MEDIUM — Agent quality issues
+9. **PTY character doubling** — shell output shows "ccd", "lls", "cmdand cmdand". Daytona PTY corruption on long commands.
+10. **Canvas/image gen** — "Add Frame To Canvas failed" + FAL/Replicate API $0 credits.
+11. **DOCX via create_file** — agent sometimes uses create_file instead of run_code for .docx. Auto-convert interceptor exists but may not always trigger.
+12. **Old threads broken** — cached Gemini messages cause errors. Only new threads work with GLM 4.7.
+13. **ERR_CONNECTION_RESET** — SSE streams drop intermittently.
+
+### LOW — UI/UX
+14. **Mock UI elements** — "Save as Template", "Insights", "Analytics/Thread Analytics" are non-functional mocks. Should be hidden.
+15. **Landing page** — lists OpenClaw (abandoned), mock links to non-existent pages, empty docs.
+16. **A2A reconnect loop** — bridge connects but drops/reconnects repeatedly.
+17. **R2 storage keys** — endpoint configured, needs Cloudflare access keys.
+18. **Crash loop counters** — high restart counts (cosmetic, from rebuilds).
