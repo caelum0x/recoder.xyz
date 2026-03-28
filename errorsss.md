@@ -131,8 +131,16 @@ Agent 1 is deploying batch 2. Deploy script: `bash scripts/deploy-batch2.sh`
   - `vault.petra.app` postMessage error — browser extension interference, not our code
 - **Root cause chain:** LLM generates big response → parser hits safety limit → stream appears infinite → auto-install never triggers → no npm install → no dev server → health check fails → preview shows "server down"
 
+### Agents (agents.recoder.xyz) — PARTIAL (updated 2026-03-29)
+- **Model switched to GLM 4.7** (`MAIN_LLM_MODEL=openrouter/z-ai/glm-4.7`) — avoids Gemini empty parts bug
+- **File creation: WORKS** — create_file tool succeeded (HTML files)
+- **Preview tab: BROKEN** — file preview in tool view doesn't render
+- **Source tab: CRASHING** — CodeMirror parser crashes on `undefined.length` (Agent 1 fixing with error boundary)
+- **Old threads still broken** — cached Gemini messages cause errors. Only NEW threads work.
+- **Empty message filter deployed** — handles null, "", [], empty text parts
+
 ### Key Errors
-**Agent chat:**
+**Agent chat (old threads):**
 ```
 OpenrouterException - Provider returned error, code 400
 "Unable to submit request because it must include at least one parts field"
