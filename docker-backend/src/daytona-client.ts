@@ -306,8 +306,8 @@ export class DaytonaClient {
       public: options?.public ?? true,
       env_vars: options?.envVars || {},
       labels: options?.labels || {},
-      auto_stop_interval: options?.autoStopInterval ?? 43200,
-      auto_archive_interval: options?.autoArchiveInterval ?? 43200,
+      autoStopInterval: options?.autoStopInterval ?? 43200,
+      autoArchiveInterval: options?.autoArchiveInterval ?? 43200,
       ...(options?.resources ? {
         resources: {
           cpu: options.resources.cpu,
@@ -381,20 +381,29 @@ export class DaytonaClient {
     command: string,
     options?: { cwd?: string; timeoutSecs?: number },
   ): Promise<ExecResult> {
-    // Wrap in sh -c so shell features (pipes, redirects, &&, etc.) work.
-    // Embed cwd in the command itself (not as API param) because the Daytona
-    // API's cwd param fails if the directory doesn't exist yet.
+    // Build the full command with optional cwd prefix
     let fullCommand = command;
     if (options?.cwd) {
-      // cd to cwd if it exists, otherwise use home dir
       const safeCwd = options.cwd.replace(/'/g, "'\\''");
       fullCommand = `cd '${safeCwd}' 2>/dev/null || cd /home/daytona 2>/dev/null || true; ${command}`;
     }
-    const wrappedCommand = `sh -c ${JSON.stringify(fullCommand)}`;
+
+    let execCmd: string;
+
+    // Short commands: inline sh -c (fast, no temp file overhead)
+    // Long commands: write to temp file then execute (avoids JSON.stringify mangling)
+    if (fullCommand.length < 500) {
+      execCmd = `sh -c ${JSON.stringify(fullCommand)}`;
+    } else {
+      // Encode command as base64 and decode in the sandbox to avoid any escaping issues
+      const b64 = Buffer.from(fullCommand, 'utf-8').toString('base64');
+      const tmpScript = `/tmp/_cmd_${Date.now()}.sh`;
+      // printf the base64 (no shell escaping needed for base64 chars) then decode and run
+      execCmd = `printf '%s' '${b64}' | base64 -d > ${tmpScript} && sh ${tmpScript}; __e=$?; rm -f ${tmpScript}; exit $__e`;
+    }
 
     const payload: Record<string, unknown> = {
-      command: wrappedCommand,
-      // Don't pass cwd to API — handled in the command itself
+      command: execCmd,
       ...(options?.timeoutSecs ? { timeout: options.timeoutSecs } : {}),
     };
 
