@@ -69,7 +69,7 @@ export const RECODER_SERVICES: RecoderService[] = [
     healthPath: '/health',
     healthResponseType: 'json',
     showInSwitcher: false,
-    internal: false,
+    internal: true,
   },
   {
     id: 'backend',
