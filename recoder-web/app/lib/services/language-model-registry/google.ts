@@ -195,9 +195,9 @@ export const google = {
   }),
 
   // Current production models
-  "google/gemini-2.0-flash": defineLanguageModel({
+  "google/gemini-2.0-flash-001": defineLanguageModel({
     provider: googleProvider,
-    id: "google/gemini-2.0-flash",
+    id: "google/gemini-2.0-flash-001",
     name: "Gemini 2.0 Flash",
     description:
       "Gemini 2.0 Flash is a fast, efficient model with strong multimodal capabilities and native tool use.",

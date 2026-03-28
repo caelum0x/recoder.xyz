@@ -103,6 +103,31 @@ class SandboxCodeInterpreterTool(SandboxToolsBase):
 
             logger.info(f"[CodeInterpreter] Executing {language} code ({len(code)} chars, timeout={timeout}s)")
 
+            # Auto-install common Python packages if code imports them
+            if language == "python":
+                auto_install_map = {
+                    "docx": "python-docx",
+                    "openpyxl": "openpyxl",
+                    "pptx": "python-pptx",
+                    "pandas": "pandas",
+                    "matplotlib": "matplotlib",
+                    "numpy": "numpy",
+                    "requests": "requests",
+                    "PIL": "Pillow",
+                    "bs4": "beautifulsoup4",
+                }
+                packages_to_install = []
+                for import_name, pip_name in auto_install_map.items():
+                    if f"import {import_name}" in code or f"from {import_name}" in code:
+                        packages_to_install.append(pip_name)
+                if packages_to_install:
+                    pip_cmd = f"pip install -q {' '.join(packages_to_install)} 2>/dev/null"
+                    try:
+                        await self.sandbox.process.exec(pip_cmd, timeout=60)
+                        logger.info(f"[CodeInterpreter] Auto-installed: {', '.join(packages_to_install)}")
+                    except Exception as e:
+                        logger.warning(f"[CodeInterpreter] Auto-install failed: {e}")
+
             # Always write code to a temp file to avoid PTY corruption with inline commands.
             # Daytona PTY doubles characters and breaks on nested quotes in long inline commands.
             import hashlib

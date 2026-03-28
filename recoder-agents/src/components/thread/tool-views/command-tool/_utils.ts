@@ -40,7 +40,7 @@ export function extractCommandData(
     }
   }
   
-  const command = args.command || null;
+  const command = args.command || args.code || null;
   const sessionName = args.session_name || args.sessionName || null;
   const cwd = args.cwd || args.working_directory || null;
 

@@ -58,33 +58,36 @@ Respond with JSON: {"title": "Your Title"}"""
             model_name=model_name,
             max_tokens=80,
             temperature=0.3,
-            frequency_penalty=1.5,
+            frequency_penalty=0.5,
             response_format={"type": "json_object"},
             stream=False
         )
 
         generated_name = None
-        
+
         if response and response.get('choices') and response['choices'][0].get('message'):
             raw_content = response['choices'][0]['message'].get('content', '').strip()
             try:
                 parsed_response = json.loads(raw_content)
-                
+
                 if isinstance(parsed_response, dict):
-                    # Extract title
-                    title = parsed_response.get('title', '').strip()
+                    # Accept "title" or "name" key (models may use either)
+                    title = (parsed_response.get('title') or parsed_response.get('name') or '').strip()
                     if title:
                         generated_name = title.strip('\'" \n\t')
                         logger.debug(f"LLM generated name for thread {thread_id}: '{generated_name}'")
                 else:
                     logger.warning(f"LLM returned non-dict JSON for thread {thread_id}: {parsed_response}")
-                    
-            except json.JSONDecodeError as e:
-                logger.warning(f"Failed to parse LLM JSON response for thread {thread_id}: {e}. Raw content: {raw_content}")
-                # Fallback to extracting title from raw content
-                cleaned_content = raw_content.strip('\'" \n\t{}')
-                if cleaned_content:
-                    generated_name = cleaned_content[:50]  # Limit fallback title length
+
+            except json.JSONDecodeError:
+                # Not JSON — use first line as title, strip any JSON artifacts
+                cleaned = raw_content.strip('\'" \n\t{}[]')
+                # Remove JSON key prefixes like "title": or "name":
+                for prefix in ['"title":', '"name":', 'title:', 'name:']:
+                    if cleaned.lower().startswith(prefix):
+                        cleaned = cleaned[len(prefix):].strip().strip('"\'')
+                if cleaned and len(cleaned) < 80:
+                    generated_name = cleaned
         else:
             logger.warning(f"Failed to get valid response from LLM for thread {thread_id} naming. Response: {response}")
 

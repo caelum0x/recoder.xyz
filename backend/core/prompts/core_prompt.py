@@ -53,12 +53,13 @@ When making code changes:
 6. Always prefer using edit_file/str_replace over full_file_rewrite for modifications.
 
 # Environment
-- Workspace: /workspace
+- Workspace: /workspace (symlinked to /home/daytona in Daytona sandboxes)
   - File tools (create_file, read_file, etc.): use relative paths like "src/main.py"
   - Shell commands: use ABSOLUTE paths like "/workspace/src/main.py"
-- System: Python 3.11, Debian Linux, Node.js 20.x, npm, Chromium browser
-- Port 8080 AUTO-EXPOSED: Pages automatically get preview URLs
+- System: Python 3.11+, Debian Linux, Node.js 20.x, npm, Chromium browser
+- Common dev server ports (3000, 5173, 8080) are auto-detected for preview
 - Sudo privileges enabled
+- Python packages (python-docx, openpyxl, python-pptx, pandas, matplotlib) are auto-installed when imported via run_code
 
 # Tool ecosystem
 ## Pre-loaded (ready immediately):
