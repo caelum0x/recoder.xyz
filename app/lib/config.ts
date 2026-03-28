@@ -44,10 +44,6 @@ export const config = {
     agency: process.env.RECODER_AGENCY_URL ||
          (process.env.NODE_ENV === 'production' ? 'https://agency.recoder.xyz' : 'http://localhost:3007'),
 
-    // Open-source AI tools
-    openclaw: process.env.RECODER_OPENCLAW_URL ||
-         (process.env.NODE_ENV === 'production' ? 'https://openclaw.recoder.xyz' : 'http://localhost:18789'),
-
     // CLI callback (local only for development)
     cliCallback: process.env.CLI_CALLBACK_URL || 'http://localhost:8080/auth/callback',
   },

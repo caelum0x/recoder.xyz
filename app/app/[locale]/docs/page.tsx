@@ -126,8 +126,7 @@ export default function DocsPage() {
       articles: [
         { title: 'Agents Platform', href: '/docs/platform/agents', status: 'available' },
         { title: 'Project Management', href: '/docs/platform/pm', status: 'available' },
-        { title: 'Agency Workflows', href: '/docs/platform/agency', status: 'available' },
-        { title: 'OpenClaw Channels', href: '/docs/platform/openclaw', status: 'available' }
+        { title: 'Agency Workflows', href: '/docs/platform/agency', status: 'available' }
       ]
     }
   ];

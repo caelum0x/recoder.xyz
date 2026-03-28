@@ -30,7 +30,6 @@ export const SURFACE_ORIGINS = {
   agency: "https://agency.recoder.xyz",
   studio: "https://studio.recoder.xyz",
   pm: "https://pm.recoder.xyz",
-  openclaw: "https://openclaw.recoder.xyz",
   backend: "https://api.recoder.xyz",
   api: "https://api.recoder.xyz",
 } as const;

@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { Check, ArrowRight, Globe, Terminal, Code2, Bot, Workflow, Sparkles, Database, Server, X } from 'lucide-react';
+import { Check, ArrowRight, Globe, Code2, Bot, Workflow, Sparkles, Database, Server, X } from 'lucide-react';
 import { RECODER_SERVICES, getServiceUrlClient } from '@/lib/config/platforms';
 import { SiteHeader } from '@/components/SiteHeader';
 import { SiteFooter } from '@/components/SiteFooter';
@@ -15,7 +15,6 @@ const serviceIcons: Record<string, React.ElementType> = {
   pm: Database,
   studio: Sparkles,
   agency: Workflow,
-  openclaw: Terminal,
 };
 
 const plans = [

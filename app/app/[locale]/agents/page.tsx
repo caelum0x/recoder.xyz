@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { ArrowRight, Bot, Workflow, Code2, Terminal, Sparkles, Globe } from 'lucide-react';
+import { ArrowRight, Bot, Workflow, Code2, Sparkles, Globe } from 'lucide-react';
 import { getServiceUrlClient } from '@/lib/config/platforms';
 import { SiteHeader } from '@/components/SiteHeader';
 import { SiteFooter } from '@/components/SiteFooter';
@@ -39,14 +39,6 @@ const agentPlatforms = [
     color: 'from-indigo-500 to-violet-500',
     features: ['AI insights', 'RICE scoring', 'PRD generation', 'Feedback analysis'],
   },
-  {
-    id: 'openclaw',
-    name: 'OpenClaw',
-    description: 'Open-source AI tools and agent framework. Build custom agents, manage workflows, and extend the ecosystem with plugins.',
-    icon: Terminal,
-    color: 'from-green-500 to-emerald-500',
-    features: ['Open-source agents', 'Plugin system', 'CLI tools', 'Workflow automation'],
-  },
 ];
 
 export default function AgentsPage() {
@@ -68,7 +60,7 @@ export default function AgentsPage() {
             {' '}for Every Task
           </h1>
           <p className="text-xl text-gray-400 max-w-2xl mx-auto mb-12">
-            Five specialized platforms for building, deploying, and managing AI agents.
+            Four specialized platforms for building, deploying, and managing AI agents.
             From autonomous coding to AI-first project management.
           </p>
         </div>

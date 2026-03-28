@@ -34,8 +34,7 @@ export default function WorkflowsPage() {
 {`                     Social Channels
                   (WhatsApp, Telegram, etc.)
                            |
-                    OpenClaw Gateway
-                      (port 18789)
+                    Agency Gateway
                            |
                +--- keyword routing ---+
                |           |           |
