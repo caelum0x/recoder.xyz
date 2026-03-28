@@ -1,12 +1,12 @@
 # Recoder Platform — Task List
 
-Last updated: 2026-03-28 (verified by deep codebase investigation)
+Last updated: 2026-03-28 18:30 UTC
 
 ---
 
-## Platform Assessment (2026-03-28, post-deployment)
+## Platform Assessment
 
-$5 OpenRouter credits added. All fixes deployed and rebuilt on server.
+$5 OpenRouter credits added. Batch 1 deployed. Batch 2 deploying now (Agent 1).
 
 ### 1. Agents (agents.recoder.xyz)
 **Works:** LLM responds (gemini-2.0-flash via OpenRouter), thread created
@@ -113,15 +113,17 @@ $5 OpenRouter credits added. All fixes deployed and rebuilt on server.
 
 ## TASKS — Priority Order (Updated)
 
-### TIER 0: Fix model ID + redeploy (IMMEDIATE)
+### TIER 0: Deploy Batch 2 + Verify (IMMEDIATE)
 
 | # | Task | Detail | Status |
 |---|------|--------|--------|
-| 1 | **Fix model ID everywhere** | `google/gemini-2.0-flash` → `google/gemini-2.0-flash-001` | DONE (Agent 1) — all files fixed, needs deploy |
-| 2 | **Redeploy to server** | rsync + restart backend + rebuild PM/Agency | Blocked on #1 |
-| 3 | **Verify agents chat works** | Send message, get LLM response | After #2 |
-| 4 | **Verify PM/Agency copilots** | Floating chat responds | After #2 |
-| 5 | **Verify sign-out** | No ESM crash | After #2 |
+| 1 | ~~Fix model ID everywhere~~ | `gemini-2.0-flash` → `gemini-2.0-flash-001` | DONE (Agent 1) |
+| 2 | **Deploy batch 2** | `bash scripts/deploy-batch2.sh` | Agent 1 deploying |
+| 3 | **Verify agents chat** | Send message, get LLM response | After deploy |
+| 4 | **Verify agency copilot** | Floating chat responds | After deploy |
+| 5 | **Verify sign-out** | No ESM crash | After deploy |
+| 6 | **Verify Web IDE preview** | iframe loads without X-Frame-Options block | After deploy |
+| 7 | **Verify OpenClaw redirect** | openclaw.recoder.xyz → agency.recoder.xyz | After deploy |
 
 ### TIER 1: Make agent tools work (6-12)
 
@@ -132,7 +134,7 @@ $5 OpenRouter credits added. All fixes deployed and rebuilt on server.
 | 8 | **Fix image display** | Serve from sandbox URL instead of requiring S3 |
 | 9 | **Fix slides tool** | python-pptx in sandbox → PPTX preview |
 | 10 | **Fix data/excel tool** | openpyxl/pandas in sandbox |
-| 11 | **Fix code execution output** | Show stdout/stderr inline in chat |
+| 11 | ~~Fix code execution output~~ | DONE (Agent 2) — shows all output, extracts code arg |
 | 12 | **Fix canvas tool** | HTML5/SVG generation and iframe preview |
 
 ### TIER 2: Web IDE preview + publish (13-18)
@@ -140,7 +142,7 @@ $5 OpenRouter credits added. All fixes deployed and rebuilt on server.
 | # | Task | Detail |
 |---|------|--------|
 | 13 | **Fix Web IDE auth** | Ensure `INTERNAL_SERVICE_KEY` set, recoder.xyz reachable internally from docker-backend |
-| 14 | **Fix live preview** | Option A: wildcard DNS for `*.sandbox.recoder.xyz`. Option B: internal proxy |
+| 14 | ~~Fix live preview~~ | DONE (Agent 2) — inline proxy, nginx X-Frame-Options override |
 | 15 | **Fix publish pipeline** | Build → tar → serve at `/published/{slug}/` |
 | 16 | **Fix chat timeout** | Ensure LLM calls don't hang — add request-level timeout |
 | 17 | **Remove broken panels** | Hide Search, Git, Packages from workbench sidebar |
@@ -152,7 +154,7 @@ $5 OpenRouter credits added. All fixes deployed and rebuilt on server.
 |---|------|--------|
 | 19 | **PM copilot write actions** | Create features, update status, add feedback via tool calling |
 | 20 | **Agency copilot write actions** | Create clients, projects, deliverables via tool calling |
-| 21 | **Fix agency GitHub `account_not_linked`** | ROOT CAUSE: Agency has duplicate Better Auth instance + `/api/auth/[...all]` route. Remove agency auth API, proxy to recoder.xyz. Files: `lib/auth/better-auth.ts`, `app/api/auth/[...all]/route.ts` |
+| 21 | ~~Fix agency GitHub `account_not_linked`~~ | DONE (Agent 2) — accountLinking enabled in shared @recoder/auth. Auto-links by email. |
 | 22 | ~~Fix double copilot~~ | Agent 2 already removed duplicate |
 | 23 | **Clean PM seed data** | Remove any test data from features page |
 | 24 | **PM connect features** | Show "not configured" gracefully for GitHub/Linear/Jira |

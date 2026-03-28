@@ -1,86 +1,100 @@
 # Recoder Platform — Error Registry
 
-Last updated: 2026-03-28 16:00 UTC (post-deploy user testing)
+Last updated: 2026-03-28 18:30 UTC
 
 ---
 
-## BLOCKER: Invalid Model ID on OpenRouter
+## Status: All Code Fixes Done, Batch 2 Awaiting Deploy
 
-`google/gemini-2.0-flash` does NOT exist on OpenRouter. Valid ID: `google/gemini-2.0-flash-001`.
-Breaks: agents (400 error), agency copilot (500). Registry on server has `-001` suffix but actual error shows without it — mismatch needs investigation.
+Agent 1 is deploying batch 2. Deploy script: `bash scripts/deploy-batch2.sh`
 
 ---
 
-## Post-Deploy Test Results (2026-03-28)
+## Per-Platform Status
 
-### 1. Agents (agents.recoder.xyz) — BROKEN
-- LLM calls fail: `google/gemini-2.0-flash is not a valid model ID` (400)
-- Thread names: garbage JSON (`{"name": "...and paypal template..."}`)
-- No chat, no tools, no functionality
+### 1. Agents (agents.recoder.xyz)
+**Last test:** BROKEN — `google/gemini-2.0-flash` invalid model ID (400)
+**Fixes ready:** Model ID → `-001`, worker timeout 60s, Redis maxlen 1000, code output display, name generator, auto-install packages
+**After deploy:** Should work — needs browser verification
 
-### 2. Web IDE (web.recoder.xyz) — PARTIAL
-- **WORKS:** AI code generation (26 files), npm install, dev server starts on port 5173
-- **BROKEN:** Preview 502, `X-Frame-Options: sameorigin` blocks iframe, file API 500, publish 500, docker.recoder.xyz connection refused
+### 2. Web IDE (web.recoder.xyz)
+**Last test:** PARTIAL — code gen works, preview broken (X-Frame-Options + 502)
+**Fixes ready:** Preview inline proxy (no cross-origin), nginx `/api/sandbox-preview/` override, publish Daytona paths, error detail, upload fallback URL
+**After deploy:** Preview should load in iframe. Publish needs testing.
 
-### 3. Agency (agency.recoder.xyz) — BROKEN
-- Copilot: 500 on POST `/api/agency/copilot-chat` (invalid model ID)
-- GitHub auth: `account_not_linked` error
-- Workflows page: GitHub auth error
+### 3. Agency (agency.recoder.xyz)
+**Last test:** BROKEN — copilot 500 (model ID), GitHub `account_not_linked`
+**Fixes ready:** Model ID → `-001`, accountLinking enabled in shared @recoder/auth
+**After deploy:** Copilot should respond. GitHub linking should work.
 
-### 4. PM (pm.recoder.xyz) — WORKING
-- User confirmed: copilot works, can read data + write (created a release via copilot)
-- Only issue: new data needs page refresh to appear
-- Uses `OPENROUTER_TEXT_MODEL=openai/gpt-4o-mini` — works with credits
-- Status: DONE for now, don't touch
+### 4. PM (pm.recoder.xyz) — WORKING (don't touch)
+**User confirmed:** Copilot reads + writes. Created release via copilot. Refresh needed for new data.
 
 ### 5. recoder.xyz (auth) — UNTESTED
-- Sign-out fix deployed but not tested in browser
+**Fix deployed (batch 1):** Sign-out calls `/api/auth/sign-out` instead of broken page
 
-### 6. OpenClaw (openclaw.recoder.xyz) — ABANDONED
-- Decision: abandon as standalone. 400k-line TS agent (~400MB RAM, 195+ restarts) with no vertical value over open-source.
-- No chat works, no health, vcpeer crash-looping.
-- Plan: extract social gateways (WA/TG/Gmail/Meet/Teams/LinkedIn) into Agency.
-- Replacement candidates: IronClaw (Rust, 15MB, secure) or ZeroClaw (Rust, 5MB, instant boot) or build into Agency directly.
-- See Phase 5 in plan.md for full ecosystem analysis and execution plan.
-
----
-
-## Fixes Deployed This Session
-
-| Fix | Status |
-|-----|--------|
-| Sign-out ESM crash | Deployed, UNTESTED |
-| Web IDE MODEL_MAPPING | Deployed, code gen works |
-| Web IDE OpenRouter fallback | Deployed |
-| Worker timeout 60s | Deployed |
-| Redis stream maxlen 1000 | Deployed |
-| Agency client copilot removed | Deployed |
-| Agency double copilot removed | Deployed |
-| File browser filter | Deployed |
-| Empty file verification | Deployed |
-| PM security check | Deployed |
-| docker-backend TS errors fixed | Deployed |
-| Preview redirect to proxy | Deployed, still broken (X-Frame-Options) |
-| **Preview X-Frame-Options** (Agent 2) | Fixed locally — proxy inline instead of redirect, nginx override added |
-| **Thread/project name generator** (Agent 2) | Fixed locally — frequency_penalty 1.5→0.5, accepts "name" or "title" key |
-| **Publish error detail** (Agent 2) | Fixed locally — error message now includes actual cause instead of generic "Publish failed" |
-| **Upload fallback URL** (Agent 2) | Fixed locally — S3 fallback now uses agents file API proxy instead of unreachable `*.sandbox.recoder.xyz` |
-| **Code execution output** (Agent 2) | Fixed locally — `run_code` now shows code + output (was hidden by strict filter + missing `code` arg extraction) |
-| **Model ID -001** (Agent 1) | Fixed locally — `google/gemini-2.0-flash` → `-001` in all files (registry, models, language-model-registry, PM, Agency) |
-| **Publish Daytona paths** (Agent 1) | Fixed locally — build output verification uses `/home/daytona/` for Daytona sandboxes |
-| **Code interpreter auto-install** (Agent 1) | Fixed locally — auto-installs python-docx, openpyxl, python-pptx, pandas, matplotlib etc. before execution |
-| **Agency GitHub root cause** (Agent 1) | Documented — duplicate Better Auth instance on agency conflicts with recoder.xyz. |
-| **Agency account_not_linked** (Agent 2) | Fixed locally — added `accountLinking: { enabled: true, trustedProviders: ["github","google"] }` to shared @recoder/auth |
-| **OpenClaw removal** (Agent 2) | Done locally — extracted gateways to `extracted-from-openclaw/`, removed from nginx + docker-compose, redirect to agency |
-| **Code execution output** (Agent 2) | Fixed locally — CommandToolView shows all output, extracts `code` arg for run_code |
+### 6. OpenClaw (openclaw.recoder.xyz) — REMOVED
+**Code extracted** to `extracted-from-openclaw/` (social gateways, agents, gateway core)
+**Nginx:** Redirects to `agency.recoder.xyz`
+**Docker:** Service removed from docker-compose
+**On deploy:** Run `bash scripts/remove-openclaw.sh` to stop PM2 + remove containers
 
 ---
 
-## What Needs Fixing Next
+## All Fixes (Both Agents)
 
-1. ~~**Model ID**~~ — FIXED (Agent 1): `google/gemini-2.0-flash` → `google/gemini-2.0-flash-001` in all files. Needs deploy.
-2. ~~**X-Frame-Options**~~ — FIXED: preview handler now proxies inline (no cross-origin redirect), nginx `/api/sandbox-preview/` strips X-Frame-Options. Needs deploy.
-3. **docker.recoder.xyz 502** — container healthy, port 3100 exposed, nginx config correct. Likely transient from server overload during builds. Needs retest after deploy.
-4. ~~**Agency GitHub `account_not_linked`**~~ — FIXED (Agent 2): Added `accountLinking` to shared @recoder/auth. Auto-links GitHub/Google when email matches. Needs deploy + rebuild agency.
-5. **Publish** — PARTIALLY FIXED (Agent 1): build output verification now uses Daytona-aware paths. Needs deploy + test.
-6. ~~**OpenClaw removal**~~ — DONE (Agent 2): Code extracted to `extracted-from-openclaw/`, nginx redirects to agency, docker-compose service removed. On deploy: stop vcpeer/vcpeer-cron PM2 services, remove openclaw-gateway container.
+### Batch 1 — Already Deployed
+| Fix | Agent |
+|-----|-------|
+| Sign-out ESM crash | 1 |
+| Web IDE MODEL_MAPPING | 1 |
+| Web IDE OpenRouter fallback | 1 |
+| Worker timeout 20s → 60s | 1 |
+| Redis stream maxlen 200 → 1000 | 1 |
+| Agency client copilot removed (401 fix) | 1 |
+| Agency double copilot removed | 1 |
+| File browser system file filter | 1 |
+| Empty file write verification (test -s) | 1 |
+| PM organizationId security check | 1 |
+| docker-backend TS errors | 1 |
+
+### Batch 2 — Awaiting Deploy
+| Fix | Agent |
+|-----|-------|
+| Model ID `gemini-2.0-flash` → `gemini-2.0-flash-001` | 1 |
+| Code interpreter auto-install packages | 1 |
+| Publish Daytona-aware paths | 1 |
+| Core prompt improvements | 1 |
+| Language model registry IDs | 1 |
+| Preview X-Frame-Options (inline proxy) | 2 |
+| nginx `/api/sandbox-preview/` override | 2 |
+| Thread/project name generator (freq penalty + keys) | 2 |
+| Publish error detail | 2 |
+| Upload fallback URL (agents API proxy) | 2 |
+| Code execution output display | 2 |
+| Agency accountLinking (auto-link GitHub/Google) | 2 |
+| OpenClaw removal (nginx + docker-compose) | 2 |
+| Deploy + removal scripts | 2 |
+
+---
+
+## After Deploy — What to Test
+
+1. **agents.recoder.xyz** — send chat message, verify LLM responds
+2. **agents.recoder.xyz** — ask to create a DOCX, verify tool runs + file created
+3. **web.recoder.xyz** — create project, generate code, check preview iframe loads
+4. **web.recoder.xyz** — try publish button
+5. **agency.recoder.xyz** — copilot floating button, send message
+6. **agency.recoder.xyz** — GitHub integration (Settings → Account → Connect GitHub)
+7. **recoder.xyz** — sign out button
+8. **openclaw.recoder.xyz** — should redirect to agency.recoder.xyz
+
+---
+
+## Remaining Issues (Post-Deploy)
+
+1. **docker.recoder.xyz 502** — likely transient from server overload. Retest after clean deploy.
+2. **R2 storage** — no S3 configured. File uploads fall back to sandbox API proxy (works but not persistent).
+3. **Crash loops** — agents (334), agency (216), PM (329) restart counts. Need investigation of root causes.
+4. **PM refresh** — new data from copilot needs page refresh. Deferred.
+5. **Exposed API keys** — OpenRouter key was in docker-compose. Removed with OpenClaw, but git history still has it.
