@@ -131,13 +131,19 @@ Agent 1 is deploying batch 2. Deploy script: `bash scripts/deploy-batch2.sh`
   - `vault.petra.app` postMessage error — browser extension interference, not our code
 - **Root cause chain:** LLM generates big response → parser hits safety limit → stream appears infinite → auto-install never triggers → no npm install → no dev server → health check fails → preview shows "server down"
 
-### Agents (agents.recoder.xyz) — PARTIAL (updated 2026-03-29)
-- **Model switched to GLM 4.7** (`MAIN_LLM_MODEL=openrouter/z-ai/glm-4.7`) — avoids Gemini empty parts bug
-- **File creation: WORKS** — create_file tool succeeded (HTML files)
+### Agents (agents.recoder.xyz) — WORKING (updated 2026-03-29 00:40 UTC)
+- **Model: GLM 4.7** (`MAIN_LLM_MODEL=openrouter/z-ai/glm-4.7`) — $0.39/$1.75 per M tokens
+- **File creation: WORKS** — create_file creates real files in sandbox
+- **Code execution: WORKS** — execute_command runs Python, pip install, PyTorch training all work
+- **Agent coded a basic LLM** — created basic_llm.py, trained transformer model, generated text. 48 tool calls in one session!
+- **Source tab: FIXED** — error boundary prevents CodeMirror crash, falls back to plain text
+- **PTY character doubling** — shell output shows doubled chars ("ccd", "lls") — Daytona PTY issue
+- **Files tab: BROKEN** — file browser next to agent doesn't show files
 - **Preview tab: BROKEN** — file preview in tool view doesn't render
-- **Source tab: CRASHING** — CodeMirror parser crashes on `undefined.length` (Agent 1 fixing with error boundary)
-- **Old threads still broken** — cached Gemini messages cause errors. Only NEW threads work.
-- **Empty message filter deployed** — handles null, "", [], empty text parts
+- **Read File: FAILS** — agent can't read files back from sandbox
+- **ERR_CONNECTION_RESET** — SSE streams drop intermittently
+- **Mock UI: "Save as Template", "Analytics/Insights"** — non-functional, should be hidden
+- **Old threads broken** — cached Gemini messages cause errors. Only NEW threads work with GLM 4.7.
 
 ### Key Errors
 **Agent chat (old threads):**
@@ -204,6 +210,7 @@ Server and client render different content. Usually caused by session state diff
 4. **Web IDE file/publish 500** — ownership check failing
 5. **Canvas/image gen** — FAL API quota
 6. **Landing page** — mock links, OpenClaw reference, empty docs
+7. **Agents UI mocks** — "Save as Template", "Insights", "Analytics" panels are mock/non-functional. "Thread Analytics" shows "No analytics computed yet" with Calculate button that does nothing useful. Should be removed or hidden until implemented.
 7. **A2A reconnect loop** — anonymous auth causes repeated connections
 8. **R2 storage keys** — endpoint set, needs access keys
 9. **Crash loop counts** — restart counters high (cosmetic after rebuilds)
