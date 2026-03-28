@@ -69,7 +69,10 @@ Breaks: agents (400 error), agency copilot (500). Registry on server has `-001` 
 | **Model ID -001** (Agent 1) | Fixed locally — `google/gemini-2.0-flash` → `-001` in all files (registry, models, language-model-registry, PM, Agency) |
 | **Publish Daytona paths** (Agent 1) | Fixed locally — build output verification uses `/home/daytona/` for Daytona sandboxes |
 | **Code interpreter auto-install** (Agent 1) | Fixed locally — auto-installs python-docx, openpyxl, python-pptx, pandas, matplotlib etc. before execution |
-| **Agency GitHub root cause** (Agent 1) | Documented — duplicate Better Auth instance on agency conflicts with recoder.xyz. Deferred (complex). |
+| **Agency GitHub root cause** (Agent 1) | Documented — duplicate Better Auth instance on agency conflicts with recoder.xyz. |
+| **Agency account_not_linked** (Agent 2) | Fixed locally — added `accountLinking: { enabled: true, trustedProviders: ["github","google"] }` to shared @recoder/auth |
+| **OpenClaw removal** (Agent 2) | Done locally — extracted gateways to `extracted-from-openclaw/`, removed from nginx + docker-compose, redirect to agency |
+| **Code execution output** (Agent 2) | Fixed locally — CommandToolView shows all output, extracts `code` arg for run_code |
 
 ---
 
@@ -78,6 +81,6 @@ Breaks: agents (400 error), agency copilot (500). Registry on server has `-001` 
 1. ~~**Model ID**~~ — FIXED (Agent 1): `google/gemini-2.0-flash` → `google/gemini-2.0-flash-001` in all files. Needs deploy.
 2. ~~**X-Frame-Options**~~ — FIXED: preview handler now proxies inline (no cross-origin redirect), nginx `/api/sandbox-preview/` strips X-Frame-Options. Needs deploy.
 3. **docker.recoder.xyz 502** — container healthy, port 3100 exposed, nginx config correct. Likely transient from server overload during builds. Needs retest after deploy.
-4. **Agency GitHub `account_not_linked`** — ROOT CAUSE FOUND (Agent 1): Agency has its OWN Better Auth instance (`recoder-agency/apps/agency/lib/auth/better-auth.ts`) + its own `/api/auth/[...all]` route. Both recoder.xyz AND agency write to the same `recoder_main` DB but via different Prisma clients. GitHub OAuth starts on recoder.xyz, callback hits agency's separate auth → can't find account → `account_not_linked`. **Fix:** Remove agency's auth API route, make it proxy to recoder.xyz instead. Complex — defer until agents/web IDE work.
-5. **Publish** — PARTIALLY FIXED (Agent 1): build output verification now uses Daytona-aware paths (`/home/daytona/` vs `/workspace/`). Was using `execInContainer` for Daytona sandboxes. Needs deploy + test.
-6. **OpenClaw removal** — stop vcpeer, remove containers, extract gateways first (see plan.md Phase 5)
+4. ~~**Agency GitHub `account_not_linked`**~~ — FIXED (Agent 2): Added `accountLinking` to shared @recoder/auth. Auto-links GitHub/Google when email matches. Needs deploy + rebuild agency.
+5. **Publish** — PARTIALLY FIXED (Agent 1): build output verification now uses Daytona-aware paths. Needs deploy + test.
+6. ~~**OpenClaw removal**~~ — DONE (Agent 2): Code extracted to `extracted-from-openclaw/`, nginx redirects to agency, docker-compose service removed. On deploy: stop vcpeer/vcpeer-cron PM2 services, remove openclaw-gateway container.

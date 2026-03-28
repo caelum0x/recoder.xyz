@@ -99,6 +99,10 @@ export function createAuth(options: {
         },
       }),
     ],
+    accountLinking: {
+      enabled: true,
+      trustedProviders: ["github", "google"],
+    },
     socialProviders: {
       ...(env.GITHUB_APP_CLIENT_ID && env.GITHUB_APP_CLIENT_SECRET
         ? {
