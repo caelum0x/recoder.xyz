@@ -27,16 +27,21 @@ Breaks: agents (400 error), agency copilot (500). Registry on server has `-001` 
 - GitHub auth: `account_not_linked` error
 - Workflows page: GitHub auth error
 
-### 4. PM (pm.recoder.xyz) — UNTESTED
-- Has `OPENROUTER_TEXT_MODEL=openai/gpt-4o-mini` env override — may work with credits
+### 4. PM (pm.recoder.xyz) — WORKING
+- User confirmed: copilot works, can read data + write (created a release via copilot)
+- Only issue: new data needs page refresh to appear
+- Uses `OPENROUTER_TEXT_MODEL=openai/gpt-4o-mini` — works with credits
+- Status: DONE for now, don't touch
 
 ### 5. recoder.xyz (auth) — UNTESTED
 - Sign-out fix deployed but not tested in browser
 
-### 6. OpenClaw (openclaw.recoder.xyz) — NOT WORKING
-- No chat messages work
-- Health checks fail
-- No A2A agent configured
+### 6. OpenClaw (openclaw.recoder.xyz) — ABANDONED
+- Decision: abandon as standalone. 400k-line TS agent (~400MB RAM, 195+ restarts) with no vertical value over open-source.
+- No chat works, no health, vcpeer crash-looping.
+- Plan: extract social gateways (WA/TG/Gmail/Meet/Teams/LinkedIn) into Agency.
+- Replacement candidates: IronClaw (Rust, 15MB, secure) or ZeroClaw (Rust, 5MB, instant boot) or build into Agency directly.
+- See Phase 5 in plan.md for full ecosystem analysis and execution plan.
 
 ---
 
@@ -65,5 +70,5 @@ Breaks: agents (400 error), agency copilot (500). Registry on server has `-001` 
 2. **X-Frame-Options** — nginx sets SAMEORIGIN globally, blocks preview iframe from web.recoder.xyz loading docker.recoder.xyz content
 3. **docker.recoder.xyz 502** — container healthy but browser gets 502/connection refused
 4. **Agency GitHub** — `account_not_linked` Better Auth error
-5. **OpenClaw** — no chat functionality, no A2A agent
-6. **Publish** — POST /api/publish returns 500
+5. **Publish** — POST /api/publish returns 500
+6. **OpenClaw removal** — stop vcpeer, remove containers, extract gateways first (see plan.md Phase 5)

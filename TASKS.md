@@ -100,8 +100,11 @@ $5 OpenRouter credits added. All fixes deployed and rebuilt on server.
 - GitHub auth gives `account_not_linked` error from Better Auth
 - Workflows page gives Better Auth error on GitHub auth attempt
 
-### PM (pm.recoder.xyz) — NOT TESTED
-- Likely same invalid model ID error
+### PM (pm.recoder.xyz) — WORKING
+- User confirmed: copilot reads PM data, creates releases, write actions work
+- Only issue: new data needs page refresh to appear (deferred)
+- Uses `OPENROUTER_TEXT_MODEL=openai/gpt-4o-mini` — works with credits
+- DO NOT TOUCH until other platforms are done
 
 ### recoder.xyz (auth) — NOT TESTED
 - Sign-out fix deployed but not verified
@@ -197,27 +200,37 @@ $5 OpenRouter credits added. All fixes deployed and rebuilt on server.
 | 55 | Error messages | Helpful descriptions |
 | 56 | Toast notifications | Success/error feedback |
 | 57 | Cross-subdomain logout | Sign out clears all sessions |
-| 58 | OpenClaw health/connections | Gateway config |
+| 58 | ~~OpenClaw~~ | ABANDONED — see Phase 5 in plan.md |
 | 59 | Web IDE button styling | Match design system |
 | 60 | Error boundaries | React errors don't crash pages |
 
-### TIER 7: Features & Testing (61-80)
+### TIER 7: OpenClaw Extraction & Removal (61-65)
 
 | # | Task | Detail |
 |---|------|--------|
-| 61 | Knowledge base | Agent memory |
-| 62 | A2A protocol | Agent-to-agent |
-| 63 | Team collaboration | Multi-user |
-| 64 | Webhook triggers | External events |
-| 65 | Custom domains | Web IDE published sites |
-| 66 | Vercel deploy | One-click from Web IDE |
-| 67 | Database panels | Neon/Supabase in Web IDE |
-| 68 | Scheduled agent runs | Cron-based |
-| 69 | Billing (Stripe) | When ready |
-| 70 | Getting started guide | User docs |
-| 71 | API reference | Endpoint docs |
-| 72 | BYOK guide | How to add keys |
-| 73 | Playwright E2E — agents | Automated testing |
+| 61 | Extract social gateways | WhatsApp, Telegram, Gmail, Meet, Teams, LinkedIn code from OpenClaw |
+| 62 | Extract PIC agents | Study/port coding agents to Recoder Agents |
+| 63 | Stop vcpeer + remove containers | Frees ~400MB RAM |
+| 64 | Remove nginx OpenClaw block | Clean up server config |
+| 65 | Evaluate IronClaw vs build-into-Agency | Pick replacement gateway approach |
+
+### TIER 8: Features & Testing (66-80)
+
+| # | Task | Detail |
+|---|------|--------|
+| 66 | Knowledge base | Agent memory |
+| 67 | A2A protocol | Agent-to-agent |
+| 68 | Team collaboration | Multi-user |
+| 69 | Webhook triggers | External events |
+| 70 | Custom domains | Web IDE published sites |
+| 71 | Vercel deploy | One-click from Web IDE |
+| 72 | Database panels | Neon/Supabase in Web IDE |
+| 73 | Scheduled agent runs | Cron-based |
+| 74 | Billing (Stripe) | When ready |
+| 75 | Getting started guide | User docs |
+| 76 | API reference | Endpoint docs |
+| 77 | BYOK guide | How to add keys |
+| 78 | Playwright E2E — agents | Automated testing |
 | 74 | Playwright E2E — Web IDE | Automated testing |
 | 75 | Playwright E2E — auth | Automated testing |
 | 76 | Backend API tests | pytest |

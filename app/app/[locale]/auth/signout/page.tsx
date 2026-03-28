@@ -7,7 +7,7 @@
 
 import { useEffect, useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { signOut } from '@/lib/auth-client';
+import { signOut } from '@/lib/session-provider';
 import { Terminal, LogOut, ArrowLeft, CheckCircle, Loader2 } from 'lucide-react';
 import Link from 'next/link';
 import { SiteHeader } from '@/components/SiteHeader';
@@ -27,27 +27,20 @@ function SignOutContent() {
 
   async function handleSignOut() {
     try {
-      await signOut({
-        fetchOptions: {
-          onSuccess: () => {
-            setStatus('success');
-            // Clear any local storage items
-            if (typeof window !== 'undefined') {
-              localStorage.removeItem('recoder-session');
-              localStorage.removeItem('recoder-user');
-            }
-            // Redirect after a short delay
-            setTimeout(() => {
-              router.push(redirectUrl);
-            }, 1500);
-          },
-          onError: (ctx) => {
-            console.error('Sign out error:', ctx.error);
-            setError(ctx.error.message || 'Failed to sign out');
-            setStatus('error');
-          },
-        },
-      });
+      const response = await signOut();
+      if (response && response.ok) {
+        setStatus('success');
+        if (typeof window !== 'undefined') {
+          localStorage.removeItem('recoder-session');
+          localStorage.removeItem('recoder-user');
+        }
+        setTimeout(() => {
+          router.push(redirectUrl);
+        }, 1500);
+      } else {
+        setError('Sign out request failed');
+        setStatus('error');
+      }
     } catch (err: any) {
       console.error('Sign out exception:', err);
       setError(err?.message || 'An unexpected error occurred');

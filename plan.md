@@ -91,9 +91,8 @@ Daytona preview redirects to `https://{port}-{sandboxId}.sandbox.recoder.xyz` wh
 
 ### Phase 2: Fix remaining platforms
 1. Agency GitHub `account_not_linked` — Better Auth OAuth linking issue
-2. OpenClaw — no chat, no health, no A2A agent
-3. Test PM copilot with credits
-4. Test sign-out on recoder.xyz
+2. Test sign-out on recoder.xyz
+3. PM is DONE — don't touch (copilot works, refresh issue deferred)
 
 ### Phase 3: Agent Tools End-to-End
 1. DOCX creation: chat → run_code → python-docx → file → preview
@@ -105,6 +104,69 @@ Daytona preview redirects to `https://{port}-{sandboxId}.sandbox.recoder.xyz` wh
 1. Configure R2 storage (Cloudflare free tier)
 2. Investigate crash loops
 3. Memory optimization
+
+### Phase 5: OpenClaw → Extract, Remove, Replace
+
+OpenClaw is ABANDONED as standalone. Running the full 400k-line TypeScript agent (~400MB RAM, 195+ restarts) just for a gateway is wasteful when Recoder Agents IS the agent platform.
+
+#### Why Not Keep It
+- ~400MB RAM for a gateway we barely use
+- 195+ crash restarts (vcpeer)
+- No meaningful customization over open-source OpenClaw
+- The "agent" part duplicates what agents.recoder.xyz already does
+- The only valuable piece is the social messaging gateway layer
+
+#### The Claw Ecosystem (for replacement)
+
+| Variant | Lang | RAM | Best For | Repo |
+|---------|------|-----|----------|------|
+| **IronClaw** | Rust+WASM | ~15MB | Security-first gateway, zero-trust sandbox | nearai/ironclaw |
+| **ZeroClaw** | Rust | ~5MB | Ultra-light, 22+ LLM providers, instant boot | zeroclaw-labs/zeroclaw |
+| **NanoClaw** | Python | ~50MB | 500-line core, container isolation per chat | qwibitai/nanoclaw |
+| **Nanobot** | Python | ~45MB | Most popular alt (26k stars), knowledge graph | hkuDS/nanobot |
+| **PicoClaw** | Go | ~10MB | Single binary, runs on $10 boards | sipeed/picoclaw |
+| **TinyClaw** | Various | tiny | Multi-agent, self-healing, 2-line install | jlia0/tinyclaw |
+| **MiniClaw** | C | ~2MB | ESP32/IoT Telegram gateway | 8421bit/MiniClaw |
+| **ZeptoClaw** | Rust | ~6MB | Multi-tenant production | qhkm/zeptoclaw |
+| **Moltworker** | TS | serverless | Cloudflare Workers, no hardware | cloudflare/moltworker |
+| **Better Gateway** | TS | plugin | Monaco IDE + xterm + auto-reconnect WS | ThisIsJeron/openclaw-better-gateway |
+
+#### Execution Plan
+
+**Step 1: Extract before removing**
+- Social gateway code: WhatsApp, Telegram, Gmail, Meet, Teams, LinkedIn
+- PIC agents (coding agents — study/port to Recoder Agents)
+- Recoder-branded skills/configs
+
+**Step 2: Remove from server (frees ~400MB + CPU)**
+- Stop `vcpeer` + `vcpeer-cron` PM2 services
+- Remove `openclaw-gateway` Docker container
+- Remove OpenClaw server block from nginx
+- Clean up `openclaw.recoder.xyz` DNS
+
+**Step 3: Replace with lightweight gateway**
+
+**Recommended: IronClaw + Better Gateway**
+- IronClaw (Rust, 15MB) as the secure gateway core
+- Better Gateway plugin for UI (Monaco, xterm, WebSocket)
+- Deploy as single binary on Hetzner
+- Connect to Agency via A2A protocol or webhooks
+- Port extracted social gateways as IronClaw plugins
+
+**Alternative: Build into Agency directly**
+- Add gateway API routes to Agency's Next.js backend
+- WhatsApp Business API, Telegram Bot API, Gmail API directly
+- No extra process — simplest architecture
+- Couples messaging to Agency's lifecycle (tradeoff)
+
+**Step 4: Repurpose `openclaw.recoder.xyz`**
+- Redirect to Agency's channel management page
+- Or use as gateway admin UI if IronClaw is deployed separately
+
+Recommended combo: **IronClaw (core) + Better Gateway (UX)** as Agency's gateway/channel layer.
+Alternative: **ZeroClaw** if we want minimal Hetzner footprint.
+
+Other notable: NemoClaw (NVIDIA enterprise), Moltworker (Cloudflare serverless), TinyClaw, ZeptoClaw, MiniClaw (ESP32). "Clawdia" = pet name, not a fork.
 
 ---
 
