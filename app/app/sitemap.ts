@@ -61,11 +61,10 @@ const blogPostPages: SitemapPage[] = [
 // ── Platform pages ────────────────────────────────────────────────────────
 const platformPages: SitemapPage[] = [
   { path: '/platform',                changeFrequency: 'weekly',   priority: 0.9 },
+  { path: '/platform/agents',         changeFrequency: 'weekly',   priority: 0.8 },
   { path: '/platform/agency',         changeFrequency: 'weekly',   priority: 0.8 },
   { path: '/platform/api',            changeFrequency: 'weekly',   priority: 0.8 },
-  { path: '/platform/chat',           changeFrequency: 'weekly',   priority: 0.8 },
   { path: '/platform/pm',             changeFrequency: 'weekly',   priority: 0.8 },
-  { path: '/platform/studio',         changeFrequency: 'weekly',   priority: 0.8 },
   { path: '/platform/web',            changeFrequency: 'weekly',   priority: 0.8 },
 ];
 

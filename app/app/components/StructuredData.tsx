@@ -188,12 +188,12 @@ export function PlatformServiceSchema({
 
 // --- Individual service schema components ---
 
-export function RecoderStudioSchema() {
+export function RecoderAgentsSchema() {
   return (
     <PlatformServiceSchema
-      name="Recoder Agency"
-      description="AI agent workflow platform for designing, building, and deploying AI agent pipelines with visual interface, canary deployments, and real-time monitoring."
-      url="https://recoder.xyz/platform/agency"
+      name="Recoder Agents"
+      description="AI agent IDE with multi-turn conversations, 40+ model support, agent configuration, snapshots, and real-time monitoring."
+      url="https://recoder.xyz/platform/agents"
       applicationCategory="DeveloperApplication"
     />
   );
@@ -203,19 +203,8 @@ export function RecoderAgencySchema() {
   return (
     <PlatformServiceSchema
       name="Recoder Agency"
-      description="Multi-agent orchestration platform for building, deploying, and managing collaborative AI agent workflows with role definitions, inter-agent communication, custom triggers, and performance monitoring."
+      description="AI-powered agency workflows for managing clients, projects, quotes, and deliverables with template library and client portal."
       url="https://recoder.xyz/platform/agency"
-      applicationCategory="DeveloperApplication"
-    />
-  );
-}
-
-export function RecoderFrontendSchema() {
-  return (
-    <PlatformServiceSchema
-      name="Recoder Frontend"
-      description="Autonomous AI coding environment with browser automation, sandboxed execution, multi-model support including Claude, GPT-4, and Gemini, Git integration, and end-to-end development workflow automation."
-      url="https://recoder.xyz/platform/frontend"
       applicationCategory="DeveloperApplication"
     />
   );
@@ -224,8 +213,8 @@ export function RecoderFrontendSchema() {
 export function RecoderWebSchema() {
   return (
     <PlatformServiceSchema
-      name="Recoder Web"
-      description="Browser-based AI IDE supporting 40+ AI models via BYOK, real-time preview, integrated terminal, WebContainer-based execution, and instant deployment for full-stack development."
+      name="Recoder Web IDE"
+      description="Browser-based AI IDE supporting 40+ AI models via BYOK, real-time preview, integrated terminal, and instant deployment for full-stack development."
       url="https://recoder.xyz/platform/web"
       applicationCategory="DeveloperApplication"
     />
@@ -243,34 +232,12 @@ export function RecoderPMSchema() {
   );
 }
 
-export function RecoderBackendSchema() {
-  return (
-    <PlatformServiceSchema
-      name="Recoder Backend"
-      description="FastAPI AI processing engine handling multi-model orchestration, sandbox management, browser automation, file operations, and real-time agent execution with scalable async architecture."
-      url="https://recoder.xyz/platform/backend"
-      applicationCategory="DeveloperApplication"
-    />
-  );
-}
-
 export function RecoderAPISchema() {
   return (
     <PlatformServiceSchema
       name="Recoder API"
       description="Unified API gateway and task engine with real-time streaming, queue management, rate limiting, BYOK proxy, public API versioning, and A2A (Agent-to-Agent) protocol support."
       url="https://recoder.xyz/platform/api"
-      applicationCategory="DeveloperApplication"
-    />
-  );
-}
-
-export function RecoderChatSchema() {
-  return (
-    <PlatformServiceSchema
-      name="Recoder Chat"
-      description="AI conversation interface for coding assistance with multi-AI model conversations, code context awareness, artifact generation, and cross-platform session synchronization."
-      url="https://recoder.xyz/platform/chat"
       applicationCategory="DeveloperApplication"
     />
   );
@@ -283,14 +250,11 @@ export function RecoderChatSchema() {
 export function AllPlatformServicesSchema() {
   return (
     <>
-      <RecoderStudioSchema />
+      <RecoderAgentsSchema />
       <RecoderAgencySchema />
-      <RecoderFrontendSchema />
       <RecoderWebSchema />
       <RecoderPMSchema />
-      <RecoderBackendSchema />
       <RecoderAPISchema />
-      <RecoderChatSchema />
     </>
   );
 }

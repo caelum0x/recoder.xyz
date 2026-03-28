@@ -136,7 +136,12 @@ def get_action_prompt(action: str, user_prompt: Optional[str] = None) -> str:
 
 
 async def process_with_replicate_gpt(image_bytes: bytes, mime_type: str, prompt: str) -> str:
-    """Process image using GPT Image 1.5. Uses Replicate if configured, otherwise falls back to OpenRouter Gemini."""
+    """Process image using GPT Image 1.5 via Replicate, with OpenRouter Gemini as fallback.
+
+    Falls back to OpenRouter when:
+    - REPLICATE_API_TOKEN is not configured, OR
+    - Replicate call fails (quota exceeded, rate limit, etc.)
+    """
     config = get_config()
 
     if not config.REPLICATE_API_TOKEN:
@@ -170,8 +175,13 @@ async def process_with_replicate_gpt(image_bytes: bytes, mime_type: str, prompt:
 
         return _replicate_output_to_base64(output_list[0], "png")
     except Exception as e:
-        logger.error(f"Replicate GPT error: {e}")
-        raise Exception(f"GPT image edit failed: {str(e)}")
+        logger.warning(f"Replicate GPT error ({e}), falling back to OpenRouter Gemini")
+        # Fall back to OpenRouter Gemini instead of crashing
+        try:
+            return await process_with_gemini(image_bytes, mime_type, prompt, "gemini-flash")
+        except Exception as gemini_err:
+            logger.error(f"OpenRouter Gemini fallback also failed: {gemini_err}")
+            raise Exception(f"Image edit failed. Replicate: {str(e)}. OpenRouter: {str(gemini_err)}")
 
 
 async def process_with_gemini(
@@ -606,6 +616,9 @@ The result should be a high-quality merged image."""
         config = get_config()
         use_replicate = bool(config.REPLICATE_API_TOKEN)
 
+        merged_image = None
+        actual_provider = "openrouter"
+
         if use_replicate:
             _get_replicate_token()
             logger.info(f"Calling Replicate openai/gpt-image-1.5 for merge with {len(input_images)} images")
@@ -625,18 +638,20 @@ The result should be a high-quality merged image."""
                 if len(output_list) == 0:
                     raise Exception("No output from GPT image model")
                 merged_image = _replicate_output_to_base64(output_list[0], "png")
+                actual_provider = "replicate"
             except Exception as e:
-                logger.error(f"GPT Image merge failed: {e}")
-                raise Exception(f"Merge failed: {str(e)}")
-        else:
+                logger.warning(f"GPT Image merge failed ({e}), falling back to OpenRouter Gemini")
+
+        if merged_image is None:
             # Use OpenRouter Gemini for merging (send first image + prompt)
             logger.info(f"Using OpenRouter Gemini for merge with {len(input_images)} images")
             first_mime, first_bytes, _ = extract_image_data(input_images[0])
             merged_image = await process_with_gemini(first_bytes, first_mime, merge_prompt, "gemini-flash")
+            actual_provider = "openrouter"
 
         # BILLING: Deduct credits for successful merge
-        billing_provider = "replicate" if use_replicate else "openrouter"
-        billing_model = "openai/gpt-image-1.5" if use_replicate else MODELS["gemini-flash"]
+        billing_provider = actual_provider
+        billing_model = "openai/gpt-image-1.5" if actual_provider == "replicate" else MODELS["gemini-flash"]
         await media_billing.deduct_media_credits(
             account_id=user_id,
             provider=billing_provider,
@@ -721,9 +736,10 @@ async def generate_images(
                         logger.error(f"Failed to process output: {e}")
                         continue
             except Exception as e:
-                logger.error(f"Flux generation failed: {e}")
-                return ImageGenerateResponse(success=False, error=str(e)[:150])
-        else:
+                logger.warning(f"Flux generation failed ({e}), falling back to OpenRouter Gemini")
+                # Fall through to OpenRouter fallback below
+
+        if len(generated_images) == 0:
             # Use OpenRouter Gemini for image generation
             logger.info(f"Generating {num_to_generate} images via OpenRouter Gemini")
             for i in range(num_to_generate):
@@ -747,7 +763,8 @@ async def generate_images(
             )
 
         # BILLING: Deduct credits for successful generation
-        billing_model = "black-forest-labs/flux-schnell" if use_replicate else MODELS["gemini-flash"]
+        # Determine which provider actually produced the images
+        billing_model = "black-forest-labs/flux-schnell" if (use_replicate and len(generated_images) > 0 and generated_images[0].startswith("data:image/webp")) else MODELS["gemini-flash"]
         await media_billing.deduct_replicate_image(
             account_id=user_id,
             model=billing_model,
