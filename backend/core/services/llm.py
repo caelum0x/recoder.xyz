@@ -144,10 +144,18 @@ def _strip_internal_properties(messages: List[Dict[str, Any]]) -> List[Dict[str,
         if not isinstance(msg, dict):
             cleaned_messages.append(msg)
             continue
-        
+
         cleaned_msg = {k: v for k, v in msg.items() if k not in _INTERNAL_MESSAGE_PROPERTIES}
+
+        # Gemini requires every message to have non-null content ("parts" field).
+        # Assistant messages with only tool_calls have content=None in OpenAI format.
+        # Fix: set empty string content so Gemini doesn't reject the request.
+        if cleaned_msg.get('role') == 'assistant' and cleaned_msg.get('content') is None:
+            if cleaned_msg.get('tool_calls'):
+                cleaned_msg['content'] = ''
+
         cleaned_messages.append(cleaned_msg)
-    
+
     return cleaned_messages
 
 
@@ -170,7 +178,22 @@ async def make_llm_api_call(
     frequency_penalty: Optional[float] = 0.2,
 ) -> Union[Dict[str, Any], AsyncGenerator, ModelResponse]:
     messages = _strip_internal_properties(messages)
-    
+
+    # Gemini rejects messages with empty content ("must include at least one parts field").
+    # Ensure every message has non-empty content, or a tool_calls array.
+    cleaned_messages = []
+    for msg in messages:
+        content = msg.get("content")
+        has_tool_calls = bool(msg.get("tool_calls"))
+        if content or has_tool_calls or msg.get("role") == "system":
+            cleaned_messages.append(msg)
+        elif msg.get("role") == "assistant" and not content and not has_tool_calls:
+            # Empty assistant message — add placeholder to avoid Gemini 400
+            cleaned_messages.append({**msg, "content": " "})
+        else:
+            logger.debug(f"[LLM] Skipping message with empty content: role={msg.get('role')}")
+    messages = cleaned_messages
+
     if model_name == "mock-ai":
         logger.info(f"[LLM] Using mock provider for testing")
         from core.test_harness.mock_llm import get_mock_provider
