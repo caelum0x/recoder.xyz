@@ -75,6 +75,14 @@ Agent 1 is deploying batch 2. Deploy script: `bash scripts/deploy-batch2.sh`
 | Agency accountLinking (auto-link GitHub/Google) | 2 |
 | OpenClaw removal (nginx + docker-compose) | 2 |
 | Deploy + removal scripts | 2 |
+| recoder-web Docker rebuild (Agent 1) | Model ID fix now in Web IDE container |
+| **CORRECTION:** GitHub/Google OAuth keys ARE configured | In app/.env, agency/.env.local, pm/.env — Agent 2's check only looked at backend/.env |
+| BETTER_AUTH_SECRET synced (Agent 2) | Agency+PM now use same secret as recoder.xyz |
+| INTERNAL_SERVICE_KEY added to app (Agent 2) | Docker-backend ownership check can now succeed |
+| AUTH_DATABASE_URL added to app (Agent 2) | Auth was failing — Prisma couldn't connect to DB. 503 on all auth endpoints. Fixed. |
+| Replicate API key added (Agent 2) | Video generation unblocked |
+| Disk cleanup (Agent 2) | Freed 35GB — removed OpenClaw image, 116 stale sandbox volumes, build cache |
+| R2 endpoint configured (Agent 2) | `S3_ENDPOINT_URL` set, needs access keys from Cloudflare |
 
 ---
 
@@ -93,8 +101,14 @@ Agent 1 is deploying batch 2. Deploy script: `bash scripts/deploy-batch2.sh`
 
 ## Remaining Issues (Post-Deploy)
 
-1. **docker.recoder.xyz 502** — likely transient from server overload. Retest after clean deploy.
-2. **R2 storage** — no S3 configured. File uploads fall back to sandbox API proxy (works but not persistent).
-3. **Crash loops** — agents (334), agency (216), PM (329) restart counts. Need investigation of root causes.
-4. **PM refresh** — new data from copilot needs page refresh. Deferred.
-5. **Exposed API keys** — OpenRouter key was in docker-compose. Removed with OpenClaw, but git history still has it.
+1. **R2 storage keys** — endpoint configured, needs `S3_ACCESS_KEY_ID` + `S3_SECRET_ACCESS_KEY` from Cloudflare R2 dashboard
+2. **Crash loops** — agents (334), agency (216), PM (329) restart counts. Need root cause investigation.
+3. **PM refresh** — new data from copilot needs page refresh. Deferred.
+4. **Exposed API keys** — OpenRouter key was in docker-compose. Removed with OpenClaw, but git history still has it.
+
+## Next Phase: recoder.xyz Website
+
+1. **Remove OpenClaw references** — clean up any mentions of OpenClaw from the recoder.xyz website/landing page
+2. **API docs** — document backend API endpoints for external integrations
+3. **A2A docs** — document Agent-to-Agent protocol
+4. **Coding docs** — developer documentation for the platform

@@ -103,8 +103,15 @@ After deploy: verify in browser (agents chat, web IDE preview, agency copilot, s
 3. Image display (fallback to agents API proxy, no S3 needed)
 4. Slides, Excel, Canvas tools
 
-### Phase 3: Infrastructure
-1. Configure R2 storage (Cloudflare free tier) — persistent file storage
+### Phase 3: recoder.xyz Website + Documentation
+1. Remove OpenClaw references from recoder.xyz landing page and navigation
+2. API documentation — document all backend endpoints for external integrations
+3. A2A protocol documentation — Agent-to-Agent communication spec
+4. Developer/coding documentation — how to build on the platform
+5. Getting started guide — user onboarding (sign up, create agent, BYOK setup)
+
+### Phase 4: Infrastructure
+1. R2 storage keys (endpoint configured, needs access keys from Cloudflare)
 2. Investigate crash loops (agents 334, agency 216, PM 329 restarts)
 3. Memory optimization (agents 428MB, PM 460MB)
 4. Rotate exposed API keys (git history)

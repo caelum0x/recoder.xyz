@@ -159,20 +159,31 @@ $5 OpenRouter credits added. Batch 1 deployed. Batch 2 deploying now (Agent 1).
 | 23 | **Clean PM seed data** | Remove any test data from features page |
 | 24 | **PM connect features** | Show "not configured" gracefully for GitHub/Linear/Jira |
 
-### TIER 4: Infrastructure (25-34)
+### TIER 4: recoder.xyz Website + Documentation (25-32)
 
 | # | Task | Detail |
 |---|------|--------|
-| 25 | **Investigate agents crash loop** | `pm2 logs recoder-agents --err --lines 100` |
-| 26 | **Investigate agency crash loop** | Likely Supabase placeholder ENOTFOUND |
-| 27 | **Investigate PM crash loop** | Prisma or memory issue |
-| 28 | **Configure R2 storage** | Cloudflare R2 free tier — unblocks file upload/download |
-| 29 | **Fix nginx SSE buffering** | `proxy_buffering off` for SSE endpoints |
-| 30 | **Configure sandbox DNS** | `*.sandbox.recoder.xyz` wildcard → Daytona |
-| 31 | **Database backups** | pg_dump cron job |
-| 32 | **Rotate exposed API keys** | Keys in git history |
-| 33 | **Health endpoints** | `/health` on every service |
-| 34 | **Memory optimization** | Agents 397MB, PM 177MB |
+| 25 | **Remove OpenClaw references from website** | Clean landing page, navigation, any mentions of OpenClaw |
+| 26 | **API documentation** | Document backend API endpoints (`/v1/threads`, `/v1/agents`, BYOK, etc.) |
+| 27 | **A2A protocol documentation** | Agent-to-Agent communication spec and usage guide |
+| 28 | **Coding/developer docs** | How to build on the platform, extend agents, create tools |
+| 29 | **Getting started guide** | User onboarding: sign up → create agent → use tools → BYOK setup |
+| 30 | **BYOK setup guide** | Step-by-step: get API key from OpenRouter/Anthropic/OpenAI → paste in settings |
+| 31 | **Platform overview page** | What each surface does (Agents, Web IDE, Agency, PM) |
+| 32 | **Changelog/release notes** | What shipped, what's new |
+
+### TIER 5: Infrastructure (33-40)
+
+| # | Task | Detail |
+|---|------|--------|
+| 33 | **Investigate crash loops** | agents (334), agency (216), PM (329) restarts |
+| 34 | **R2 storage keys** | Endpoint configured, needs access keys from Cloudflare |
+| 35 | **Database backups** | pg_dump cron job |
+| 36 | **Rotate exposed API keys** | Keys in git history |
+| 37 | **Health endpoints** | `/health` on every service |
+| 38 | **Memory optimization** | Agents 428MB, PM 460MB |
+| 39 | **Zombie process cleanup** | 195 defunct containerd-shim processes |
+| 40 | **Disk monitoring** | Set up alert at 85% usage |
 
 ### TIER 5: Agents sidebar pages (35-48)
 
