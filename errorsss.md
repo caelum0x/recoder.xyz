@@ -184,7 +184,7 @@ Server and client render different content. Usually caused by session state diff
 
 ## Remaining Issues (Priority Order)
 
-1. **Agents chat 400** — empty messages to Gemini
+1. **Agents** — Chat 400 fixed but platform is SAME as before this session: only plain chat + web search work. All tools broken (DOCX fails, canvas fails, code execution fails, tasks fail, file preview fails). No improvement from TIER 1 tasks.
 2. **PM regression** — hydration mismatch after auth secret change
 3. **Web IDE preview 502** — proxy chain broken
 4. **Web IDE file/publish 500** — ownership check failing
