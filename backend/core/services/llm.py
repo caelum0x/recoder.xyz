@@ -180,18 +180,35 @@ async def make_llm_api_call(
     messages = _strip_internal_properties(messages)
 
     # Gemini rejects messages with empty content ("must include at least one parts field").
-    # Ensure every message has non-empty content, or a tool_calls array.
+    # content can be: None, "", [], [{"type":"text","text":""}], or valid string/list.
+    def _has_content(msg):
+        c = msg.get("content")
+        if c is None or c == "" or c == []:
+            return False
+        if isinstance(c, list):
+            # Check if all parts are empty
+            return any(
+                (p.get("text", "").strip() if isinstance(p, dict) else str(p).strip())
+                for p in c
+            )
+        if isinstance(c, str):
+            return bool(c.strip())
+        return bool(c)
+
     cleaned_messages = []
     for msg in messages:
-        content = msg.get("content")
         has_tool_calls = bool(msg.get("tool_calls"))
-        if content or has_tool_calls or msg.get("role") == "system":
+        role = msg.get("role", "")
+        if _has_content(msg) or has_tool_calls or role == "system":
             cleaned_messages.append(msg)
-        elif msg.get("role") == "assistant" and not content and not has_tool_calls:
+        elif role == "assistant":
             # Empty assistant message — add placeholder to avoid Gemini 400
             cleaned_messages.append({**msg, "content": " "})
         else:
-            logger.debug(f"[LLM] Skipping message with empty content: role={msg.get('role')}")
+            logger.warning(f"[LLM] Dropping empty message: role={role} content={repr(msg.get('content'))[:100]}")
+
+    if len(cleaned_messages) < len(messages):
+        logger.warning(f"[LLM] Cleaned {len(messages) - len(cleaned_messages)} empty messages ({len(messages)} → {len(cleaned_messages)})")
     messages = cleaned_messages
 
     if model_name == "mock-ai":
