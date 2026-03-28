@@ -4,10 +4,8 @@
 
 set -e
 
-echo "=== Stopping OpenClaw PM2 services ==="
-pm2 stop vcpeer vcpeer-cron 2>/dev/null || true
-pm2 delete vcpeer vcpeer-cron 2>/dev/null || true
-pm2 save
+echo "=== OpenClaw Docker cleanup only ==="
+echo "NOTE: vcpeer and vcpeer-cron are NOT OpenClaw — DO NOT touch them"
 
 echo "=== Stopping OpenClaw Docker container ==="
 docker stop openclaw-gateway 2>/dev/null || true
@@ -25,9 +23,7 @@ echo "=== Done ==="
 echo "OpenClaw removed. openclaw.recoder.xyz now redirects to agency.recoder.xyz"
 echo ""
 echo "Freed resources:"
-echo "  - ~400MB RAM (OpenClaw gateway)"
-echo "  - ~120MB RAM (vcpeer + vcpeer-cron)"
-echo "  - 1 Docker container"
+echo "  - OpenClaw Docker container + volumes"
 echo "  - 2 Docker volumes"
 echo ""
 pm2 list | grep -E "name|recoder|vcpeer"
