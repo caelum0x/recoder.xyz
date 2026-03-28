@@ -113,75 +113,94 @@ class SandboxFilesTool(SandboxToolsBase):
         """Auto-convert text content to real binary DOCX/XLSX/PPTX using sandbox Python."""
         await self._ensure_sandbox()
         full_path = self._get_full_path(file_path)
+        parent_dir = '/'.join(full_path.split('/')[:-1])
+        if parent_dir:
+            await self.sandbox.process.exec(f"mkdir -p '{parent_dir}'", timeout=10)
 
-        # Escape content for Python string
-        escaped = text_content.replace('\\', '\\\\').replace("'", "\\'").replace('\n', '\\n').replace('\r', '')
+        # Write content to temp file in sandbox (avoids shell escaping issues)
+        import base64
+        b64_content = base64.b64encode(text_content.encode('utf-8')).decode('ascii')
+        await self.sandbox.process.exec(
+            f"echo '{b64_content}' | base64 -d > /tmp/_docgen_content.txt", timeout=10
+        )
 
+        # Write the conversion script to sandbox
         if ext == 'docx':
-            script = (
-                f"from docx import Document\n"
-                f"doc = Document()\n"
-                f"content = '{escaped}'\n"
-                f"for para in content.split('\\n'):\n"
-                f"    p = para.strip()\n"
-                f"    if p.startswith('# '):\n"
-                f"        doc.add_heading(p[2:], level=1)\n"
-                f"    elif p.startswith('## '):\n"
-                f"        doc.add_heading(p[3:], level=2)\n"
-                f"    elif p.startswith('### '):\n"
-                f"        doc.add_heading(p[4:], level=3)\n"
-                f"    elif p.startswith('- '):\n"
-                f"        doc.add_paragraph(p[2:], style='List Bullet')\n"
-                f"    elif p:\n"
-                f"        doc.add_paragraph(p)\n"
-                f"doc.save('{full_path}')\n"
-                f"print('OK')"
-            )
+            script = f"""
+import sys
+from docx import Document
+doc = Document()
+with open('/tmp/_docgen_content.txt', 'r') as f:
+    content = f.read()
+for para in content.split('\\n'):
+    p = para.strip()
+    if not p:
+        continue
+    if p.startswith('# '):
+        doc.add_heading(p[2:], level=1)
+    elif p.startswith('## '):
+        doc.add_heading(p[3:], level=2)
+    elif p.startswith('### '):
+        doc.add_heading(p[4:], level=3)
+    elif p.startswith('- ') or p.startswith('* '):
+        doc.add_paragraph(p[2:], style='List Bullet')
+    else:
+        doc.add_paragraph(p)
+doc.save('{full_path}')
+print('OK')
+"""
         elif ext == 'xlsx':
-            script = (
-                f"from openpyxl import Workbook\n"
-                f"wb = Workbook()\n"
-                f"ws = wb.active\n"
-                f"content = '{escaped}'\n"
-                f"for i, line in enumerate(content.split('\\n'), 1):\n"
-                f"    for j, cell in enumerate(line.split('\\t') if '\\t' in line else [line], 1):\n"
-                f"        ws.cell(row=i, column=j, value=cell.strip())\n"
-                f"wb.save('{full_path}')\n"
-                f"print('OK')"
-            )
+            script = f"""
+from openpyxl import Workbook
+wb = Workbook()
+ws = wb.active
+with open('/tmp/_docgen_content.txt', 'r') as f:
+    content = f.read()
+for i, line in enumerate(content.split('\\n'), 1):
+    cells = line.split('\\t') if '\\t' in line else [line]
+    for j, cell in enumerate(cells, 1):
+        ws.cell(row=i, column=j, value=cell.strip())
+wb.save('{full_path}')
+print('OK')
+"""
         elif ext == 'pptx':
-            script = (
-                f"from pptx import Presentation\n"
-                f"from pptx.util import Inches\n"
-                f"prs = Presentation()\n"
-                f"content = '{escaped}'\n"
-                f"for slide_text in content.split('\\n\\n'):\n"
-                f"    slide = prs.slides.add_slide(prs.slide_layouts[1])\n"
-                f"    lines = slide_text.strip().split('\\n')\n"
-                f"    if lines:\n"
-                f"        slide.shapes.title.text = lines[0].lstrip('#').strip()\n"
-                f"    if len(lines) > 1:\n"
-                f"        slide.placeholders[1].text = '\\n'.join(lines[1:])\n"
-                f"prs.save('{full_path}')\n"
-                f"print('OK')"
-            )
+            script = f"""
+from pptx import Presentation
+prs = Presentation()
+with open('/tmp/_docgen_content.txt', 'r') as f:
+    content = f.read()
+for slide_text in content.split('\\n\\n'):
+    slide = prs.slides.add_slide(prs.slide_layouts[1])
+    lines = slide_text.strip().split('\\n')
+    if lines:
+        slide.shapes.title.text = lines[0].lstrip('#').strip()
+    if len(lines) > 1:
+        slide.placeholders[1].text = '\\n'.join(lines[1:])
+prs.save('{full_path}')
+print('OK')
+"""
         else:
             return self.fail_response(f"Unsupported binary format: .{ext}")
 
+        # Write script to temp file and execute
+        script_b64 = base64.b64encode(script.encode('utf-8')).decode('ascii')
+        await self.sandbox.process.exec(
+            f"echo '{script_b64}' | base64 -d > /tmp/_docgen_script.py", timeout=10
+        )
+
         try:
-            result = await self.sandbox.process.exec(f"python3 -c '{script}'", timeout=30)
+            result = await self.sandbox.process.exec("python3 /tmp/_docgen_script.py", timeout=30)
             if result.exit_code == 0 and 'OK' in (result.result or ''):
-                logger.info(f"[AUTO-CONVERT] Created real .{ext} at {full_path} via python-docx/openpyxl/pptx")
+                logger.info(f"[AUTO-CONVERT] Created real .{ext} at {full_path}")
                 return self.success_response(f"Created {file_path} (real {ext.upper()} binary format)")
             else:
                 logger.warning(f"[AUTO-CONVERT] Failed: exit={result.exit_code} output={result.result}")
-                # Fallback: write as text anyway
                 write_ok = await self.write_file(full_path, text_content.encode())
-                return self.success_response(f"Created {file_path} (text format — binary conversion failed)")
+                return self.success_response(f"Created {file_path} (text fallback)")
         except Exception as e:
             logger.warning(f"[AUTO-CONVERT] Exception: {e}")
             write_ok = await self.write_file(full_path, text_content.encode())
-            return self.success_response(f"Created {file_path} (text format — binary conversion unavailable)")
+            return self.success_response(f"Created {file_path} (text fallback)")
 
     async def _file_exists(self, path: str) -> bool:
         """Check if a file exists in the sandbox"""
@@ -272,7 +291,15 @@ Usage:
             # and writes plain text with a binary extension. Intercept and use the correct library.
             ext = file_path.rsplit('.', 1)[-1].lower() if '.' in file_path else ''
             if ext in ('docx', 'xlsx', 'pptx'):
-                return await self._create_binary_document(file_path, file_contents, ext)
+                logging.info(f"[AUTO-CONVERT] Intercepting {ext} file: {file_path} ({len(file_contents)} chars)")
+                try:
+                    result = await self._create_binary_document(file_path, file_contents, ext)
+                    logging.info(f"[AUTO-CONVERT] Success: {file_path}")
+                    return result
+                except Exception as e:
+                    logging.error(f"[AUTO-CONVERT] FAILED for {file_path}: {e}")
+                    # Fall through to regular write so the file is at least created
+                    pass
 
             # Ensure sandbox is initialized
             await self._ensure_sandbox()
