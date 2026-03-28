@@ -617,33 +617,108 @@ Generate, edit, upscale, or remove background from images. Video generation supp
                     return image_filename
                 return image_filename
             
-            # Use OpenRouter as primary image generation path (Gemini image models).
-            # Only fall back to Replicate if REPLICATE_API_TOKEN is explicitly set.
+            # Image generation with fallback chain:
+            # 1. Try OpenRouter (Gemini) first — cheaper and no quota issues
+            # 2. Fall back to Replicate (GPT Image 1.5) if OpenRouter fails
+            # Either provider can work independently; we try both before giving up.
             config = get_config()
-            use_replicate = bool(config.REPLICATE_API_TOKEN)
+            has_openrouter = bool(config.OPENROUTER_API_KEY or os.getenv("OPENROUTER_API_KEY"))
+            has_replicate = bool(config.REPLICATE_API_TOKEN)
 
-            if not use_replicate and mode in ("generate", "edit"):
-                logger.info(f"Using OpenRouter for image {mode} (primary path)")
+            if not has_openrouter and not has_replicate:
+                return self.fail_response("Image generation not available. Set OPENROUTER_API_KEY or REPLICATE_API_TOKEN in backend/.env.")
 
-                # For edit mode, read the source image so OpenRouter can process it
-                edit_image_bytes = None
-                if mode == "edit":
-                    if not image_path:
-                        return self.fail_response("'image_path' is required for edit mode.")
-                    edit_image_bytes = await self._get_image_bytes(image_path)
-                    if isinstance(edit_image_bytes, ToolResult):
-                        return edit_image_bytes
+            # For edit mode, read source image upfront (needed by both providers)
+            edit_image_bytes = None
+            if mode == "edit":
+                if not image_path:
+                    return self.fail_response("'image_path' is required for edit mode.")
+                edit_image_bytes = await self._get_image_bytes(image_path)
+                if isinstance(edit_image_bytes, ToolResult):
+                    return edit_image_bytes
 
-                image_url = await self._generate_image_openrouter(prompt, image_bytes=edit_image_bytes)
-                if image_url:
-                    if image_url.startswith("data:"):
-                        b64_data = image_url.split(",", 1)[1]
-                        result_bytes = base64.b64decode(b64_data)
+            # --- Attempt 1: OpenRouter (Gemini) ---
+            openrouter_error = None
+            if has_openrouter:
+                try:
+                    logger.info(f"Using OpenRouter for image {mode} (primary path)")
+                    image_url = await self._generate_image_openrouter(prompt, image_bytes=edit_image_bytes)
+                    if image_url:
+                        if image_url.startswith("data:"):
+                            b64_data = image_url.split(",", 1)[1]
+                            result_bytes = base64.b64decode(b64_data)
+                        else:
+                            async with get_http_client() as http_client:
+                                dl_response = await http_client.get(image_url)
+                                dl_response.raise_for_status()
+                                result_bytes = dl_response.content
+
+                        smart_filename = await generate_smart_filename(
+                            prompt=prompt,
+                            file_type="image",
+                            extension="png"
+                        )
+                        sandbox_path = f"{self.workspace_path}/{smart_filename}"
+                        await self.write_file(sandbox_path, result_bytes)
+                        return smart_filename
                     else:
-                        async with get_http_client() as http_client:
-                            dl_response = await http_client.get(image_url)
-                            dl_response.raise_for_status()
-                            result_bytes = dl_response.content
+                        openrouter_error = "No image returned"
+                        logger.warning(f"OpenRouter image {mode} returned no image, will try Replicate fallback")
+                except Exception as e:
+                    openrouter_error = str(e)
+                    logger.warning(f"OpenRouter image {mode} failed ({openrouter_error}), will try Replicate fallback")
+
+            # --- Attempt 2: Replicate (GPT Image 1.5) ---
+            if has_replicate:
+                try:
+                    self._get_replicate_token()
+                    logger.info(f"Using Replicate for image {mode} (fallback path)")
+
+                    if mode == "generate":
+                        logger.info(f"Calling Replicate openai/gpt-image-1.5 for generation (quality={quality}, aspect_ratio={aspect_ratio})")
+                        output = await asyncio.to_thread(
+                            replicate.run,
+                            "openai/gpt-image-1.5",
+                            input={
+                                "prompt": prompt,
+                                "aspect_ratio": aspect_ratio,
+                                "number_of_images": 1,
+                                "quality": quality,
+                            }
+                        )
+                    elif mode == "edit":
+                        image_b64 = base64.b64encode(edit_image_bytes).decode('utf-8')
+                        image_data_url = f"data:image/png;base64,{image_b64}"
+
+                        logger.info(f"Calling Replicate openai/gpt-image-1.5 for editing (quality={quality}, aspect_ratio={aspect_ratio}) with image_path='{image_path}' (image size: {len(edit_image_bytes)} bytes)")
+                        output = await asyncio.to_thread(
+                            replicate.run,
+                            "openai/gpt-image-1.5",
+                            input={
+                                "prompt": prompt,
+                                "input_images": [image_data_url],
+                                "aspect_ratio": aspect_ratio,
+                                "number_of_images": 1,
+                                "quality": quality,
+                            }
+                        )
+                    else:
+                        return self.fail_response("Invalid mode. Use 'generate' or 'edit'.")
+
+                    # Process Replicate output
+                    output_list = list(output) if hasattr(output, '__iter__') and not hasattr(output, 'read') else [output]
+                    if len(output_list) == 0:
+                        return self.fail_response("No output from image model")
+
+                    first_output = output_list[0]
+                    if hasattr(first_output, 'read'):
+                        result_bytes = first_output.read()
+                    else:
+                        url = str(first_output.url) if hasattr(first_output, 'url') else str(first_output)
+                        async with get_http_client() as client:
+                            response = await client.get(url)
+                            response.raise_for_status()
+                            result_bytes = response.content
 
                     smart_filename = await generate_smart_filename(
                         prompt=prompt,
@@ -653,77 +728,16 @@ Generate, edit, upscale, or remove background from images. Video generation supp
                     sandbox_path = f"{self.workspace_path}/{smart_filename}"
                     await self.write_file(sandbox_path, result_bytes)
                     return smart_filename
-                logger.error(f"Image {mode} failed via OpenRouter. Check OPENROUTER_API_KEY in backend/.env.")
-                return self.fail_response(f"Image {mode} failed. Please ensure OPENROUTER_API_KEY is set in backend/.env and restart.")
 
-            if use_replicate:
-                # Replicate path (only when REPLICATE_API_TOKEN is configured)
-                self._get_replicate_token()
+                except Exception as e:
+                    logger.error(f"Replicate image {mode} also failed: {e}")
+                    # Both providers failed — report both errors
+                    if openrouter_error:
+                        return self.fail_response(f"Image {mode} failed. OpenRouter: {openrouter_error}. Replicate: {str(e)}")
+                    return self.fail_response(f"Image {mode} failed via Replicate: {str(e)}")
 
-                if mode == "generate":
-                    logger.info(f"Calling Replicate openai/gpt-image-1.5 for generation (quality={quality}, aspect_ratio={aspect_ratio})")
-                    output = await asyncio.to_thread(
-                        replicate.run,
-                        "openai/gpt-image-1.5",
-                        input={
-                            "prompt": prompt,
-                            "aspect_ratio": aspect_ratio,
-                            "number_of_images": 1,
-                            "quality": quality,
-                        }
-                    )
-                elif mode == "edit":
-                    if not image_path:
-                        return self.fail_response("'image_path' is required for edit mode.")
-
-                    image_bytes = await self._get_image_bytes(image_path)
-                    if isinstance(image_bytes, ToolResult):
-                        return image_bytes
-
-                    image_b64 = base64.b64encode(image_bytes).decode('utf-8')
-                    image_data_url = f"data:image/png;base64,{image_b64}"
-
-                    logger.info(f"Calling Replicate openai/gpt-image-1.5 for editing (quality={quality}, aspect_ratio={aspect_ratio}) with image_path='{image_path}' (image size: {len(image_bytes)} bytes)")
-                    output = await asyncio.to_thread(
-                        replicate.run,
-                        "openai/gpt-image-1.5",
-                        input={
-                            "prompt": prompt,
-                            "input_images": [image_data_url],
-                            "aspect_ratio": aspect_ratio,
-                            "number_of_images": 1,
-                            "quality": quality,
-                        }
-                    )
-                else:
-                    return self.fail_response("Invalid mode. Use 'generate' or 'edit'.")
-
-                # Process Replicate output
-                output_list = list(output) if hasattr(output, '__iter__') and not hasattr(output, 'read') else [output]
-                if len(output_list) == 0:
-                    return self.fail_response("No output from image model")
-
-                first_output = output_list[0]
-                if hasattr(first_output, 'read'):
-                    result_bytes = first_output.read()
-                else:
-                    url = str(first_output.url) if hasattr(first_output, 'url') else str(first_output)
-                    async with get_http_client() as client:
-                        response = await client.get(url)
-                        response.raise_for_status()
-                        result_bytes = response.content
-
-                smart_filename = await generate_smart_filename(
-                    prompt=prompt,
-                    file_type="image",
-                    extension="png"
-                )
-                sandbox_path = f"{self.workspace_path}/{smart_filename}"
-                await self.write_file(sandbox_path, result_bytes)
-
-                return smart_filename
-
-            return self.fail_response("Image generation not available. Set OPENROUTER_API_KEY or REPLICATE_API_TOKEN in backend/.env.")
+            # OpenRouter was tried but failed, and no Replicate key available
+            return self.fail_response(f"Image {mode} failed via OpenRouter ({openrouter_error}). Set REPLICATE_API_TOKEN as fallback.")
 
         except Exception as e:
             error_message = str(e)
