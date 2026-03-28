@@ -25,7 +25,6 @@ const DEFAULT_PATHS = [
   UI_RECODER_WORKSPACE_PATH,
   '/Users/arhansubasi/recoder.xyz/backend',
   '/Users/arhansubasi/recoder.xyz/docker-backend',
-  '/Users/arhansubasi/recoder.xyz/openclaw',
   '/Users/arhansubasi/recoder.xyz/packages',
   '/Users/arhansubasi/recoder.xyz/recoder-agency',
   '/Users/arhansubasi/recoder.xyz/recoder-pm',
@@ -104,36 +103,30 @@ const LANE_CATALOG: SubagentLane[] = [
   },
   {
     laneId: 'A7',
-    title: 'OpenClaw ecosystem',
-    paths: ['/Users/arhansubasi/recoder.xyz/openclaw'],
-    validationCommands: ['pnpm -C /Users/arhansubasi/recoder.xyz/openclaw test'],
-  },
-  {
-    laneId: 'A8',
     title: 'Shared packages',
     paths: ['/Users/arhansubasi/recoder.xyz/packages'],
     validationCommands: ['pnpm -C /Users/arhansubasi/recoder.xyz run typecheck'],
   },
   {
-    laneId: 'A9',
+    laneId: 'A8',
     title: 'Agency product',
     paths: ['/Users/arhansubasi/recoder.xyz/recoder-agency'],
     validationCommands: ['pnpm -C /Users/arhansubasi/recoder.xyz/recoder-agency check'],
   },
   {
-    laneId: 'A10',
+    laneId: 'A9',
     title: 'PM product',
     paths: ['/Users/arhansubasi/recoder.xyz/recoder-pm'],
     validationCommands: ['pnpm -C /Users/arhansubasi/recoder.xyz/recoder-pm check'],
   },
   {
-    laneId: 'A11',
+    laneId: 'A10',
     title: 'Skill system',
     paths: ['/Users/arhansubasi/recoder.xyz/recoder-skill'],
     validationCommands: ['pnpm -C /Users/arhansubasi/recoder.xyz/recoder-skill run test'],
   },
   {
-    laneId: 'A12',
+    laneId: 'A11',
     title: 'Tools and evals',
     paths: ['/Users/arhansubasi/recoder.xyz/tools'],
     validationCommands: [

@@ -140,7 +140,6 @@ check_service "backend (Python)"   "https://backend.recoder.xyz/v1/health"
 check_service "pm"                 "https://pm.recoder.xyz/"
 check_service "studio"             "https://studio.recoder.xyz/"
 check_service "agency"             "https://agency.recoder.xyz/"
-check_service "openclaw"           "https://openclaw.recoder.xyz/health"
 
 echo ""
 echo "Ecosystem: $((ECOSYSTEM_TOTAL - ECOSYSTEM_FAIL))/${ECOSYSTEM_TOTAL} services healthy"

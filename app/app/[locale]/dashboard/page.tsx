@@ -22,7 +22,6 @@ const serviceIcons: Record<string, React.ElementType> = {
   pm: Database,
   studio: Sparkles,
   agency: Workflow,
-  openclaw: Terminal,
 };
 
 interface ServiceHealthEntry {

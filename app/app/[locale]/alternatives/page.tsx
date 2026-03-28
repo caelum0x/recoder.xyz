@@ -131,7 +131,7 @@ const comparisonData: ComparisonRow[] = [
   },
   {
     feature: 'Open source components',
-    recoder: 'Partial (OpenClaw)',
+    recoder: 'Partial',
     cursor: 'No',
     replit: 'Partial',
     copilot: 'No',
@@ -203,7 +203,7 @@ const differentiators: Differentiator[] = [
     icon: Server,
     title: 'Self-Hostable & Open',
     description:
-      'Deploy Recoder on your own infrastructure for complete data sovereignty. Ideal for enterprises and teams with strict compliance requirements. OpenClaw components are open source, so you can inspect and extend the platform.',
+      'Deploy Recoder on your own infrastructure for complete data sovereignty. Ideal for enterprises and teams with strict compliance requirements. Select components are open source, so you can inspect and extend the platform.',
     gradient: 'from-green-500 to-emerald-600',
   },
 ];

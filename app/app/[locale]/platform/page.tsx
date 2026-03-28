@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { ArrowRight, Globe, Bot, Code2, Database, Sparkles, Workflow, Terminal } from 'lucide-react';
+import { ArrowRight, Globe, Bot, Code2, Database, Sparkles, Workflow } from 'lucide-react';
 import { RECODER_SERVICES, getServiceUrlClient } from '@/lib/config/platforms';
 import { SiteHeader } from '@/components/SiteHeader';
 import { SiteFooter } from '@/components/SiteFooter';
@@ -13,7 +13,6 @@ const serviceIcons: Record<string, React.ElementType> = {
   pm: Database,
   studio: Sparkles,
   agency: Workflow,
-  openclaw: Terminal,
 };
 
 const serviceColors: Record<string, string> = {
@@ -23,7 +22,6 @@ const serviceColors: Record<string, string> = {
   pm: 'from-blue-500 to-indigo-500',
   studio: 'from-indigo-500 to-violet-500',
   agency: 'from-purple-500 to-pink-500',
-  openclaw: 'from-green-500 to-emerald-500',
 };
 
 export default function PlatformPage() {

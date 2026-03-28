@@ -3,7 +3,7 @@ import { auth } from '@/lib/auth-config';
 import { logger } from '@/lib/logger';
 
 interface PlatformAccessRequest {
-  platform: 'web' | 'frontend' | 'studio' | 'pm' | 'agency' | 'openclaw' | 'cli' | 'extension';
+  platform: 'web' | 'frontend' | 'studio' | 'pm' | 'agency' | 'cli' | 'extension';
   userId?: string;
   redirect?: string;
 }
@@ -14,7 +14,6 @@ const PLATFORM_URLS: Record<string, string> = {
   studio: process.env.RECODER_STUDIO_URL || (process.env.NODE_ENV === 'production' ? 'https://agency.recoder.xyz' : 'http://localhost:3007'),
   pm: process.env.RECODER_PM_URL || (process.env.NODE_ENV === 'production' ? 'https://pm.recoder.xyz' : 'http://localhost:3004'),
   agency: process.env.RECODER_AGENCY_URL || (process.env.NODE_ENV === 'production' ? 'https://agency.recoder.xyz' : 'http://localhost:3007'),
-  openclaw: process.env.RECODER_OPENCLAW_URL || (process.env.NODE_ENV === 'production' ? 'https://openclaw.recoder.xyz' : 'http://localhost:18789'),
   cli: '/cli',
   extension: '/extension',
 };
