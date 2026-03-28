@@ -75,31 +75,31 @@ Daytona preview redirects to `https://{port}-{sandboxId}.sandbox.recoder.xyz` wh
 
 ---
 
-## Priority Order (Updated 2026-03-28 18:30 UTC)
+## Priority Order (Updated 2026-03-29 01:00 UTC)
 
-### Phase 0: Deploy Batch 2 — IN PROGRESS (Agent 1 deploying)
-All code fixes done. Deploy script: `bash scripts/deploy-batch2.sh`
-- ~~Model ID fix~~ DONE
-- ~~Preview X-Frame-Options~~ DONE
-- ~~Agency accountLinking~~ DONE
+### Phase 0: DONE
+- ~~Model: gemini → GLM 4.7~~ DONE — agent creates files, runs code, 48 tool calls
+- ~~Deploy all fixes~~ DONE
 - ~~OpenClaw removal~~ DONE
-- ~~Name generator~~ DONE
-- ~~Code output display~~ DONE
-After deploy: verify in browser (agents chat, web IDE preview, agency copilot, sign-out)
+- ~~Sign-in~~ DONE
+- ~~CodeMirror crash~~ DONE — error boundary
 
-### Phase 1: Browser Verification (after deploy)
-1. agents.recoder.xyz — send chat, verify response
-2. agents.recoder.xyz — create DOCX, verify tool + preview
-3. web.recoder.xyz — create project, check preview loads in iframe
-4. web.recoder.xyz — try publish
-5. agency.recoder.xyz — copilot responds
-6. agency.recoder.xyz — GitHub connect (should auto-link now)
-7. recoder.xyz — sign out works
-8. openclaw.recoder.xyz — redirects to agency
+### Phase 1: Make agent results VISIBLE (NEXT — highest priority)
+Agent works in a black box. Creates files and runs code but user can't see anything.
+1. **Fix Files tab** — sandbox has files but browser shows nothing
+2. **Fix file preview** — tool view preview shows blank
+3. **Fix read_file** — agent can't read files back
+4. **Fix live preview** — 502 on generated websites
 
-### Phase 2: Agent Tools End-to-End
-1. DOCX creation: chat → run_code → python-docx → file → preview
-2. File serving from sandbox (should work via `/api/files/content` proxy)
+### Phase 2: Fix remaining platforms
+1. **PM regression** — hydration mismatch, was working before auth secret change
+2. **Web IDE preview** — 502 from Cloudflare, proxy chain broken
+3. **Web IDE publish** — 500
+4. **Agency workflows** — Giselle engine 500s
+
+### Phase 3: Agent tools quality
+1. DOCX via run_code (not create_file)
+2. File serving from sandbox
 3. Image display (fallback to agents API proxy, no S3 needed)
 4. Slides, Excel, Canvas tools
 
