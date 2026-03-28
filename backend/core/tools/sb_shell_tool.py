@@ -251,9 +251,10 @@ Usage notes:
                     pty_size=PtySize(cols=120, rows=40)
                 )
                 
-                # Always cd to workspace directory since PTY starts in container's WORKDIR (/app)
-                await pty_handle.send_input(f"cd {cwd}\n")
-                await asyncio.sleep(0.1)
+                # Disable echo to prevent character doubling ("ccd", "lls")
+                # and cd to workspace directory
+                await pty_handle.send_input(f"stty -echo 2>/dev/null; cd {cwd}\n")
+                await asyncio.sleep(0.2)
                 
                 # Add marker to detect completion
                 marker = f"__CMD_DONE_{str(uuid4())[:8]}__"
