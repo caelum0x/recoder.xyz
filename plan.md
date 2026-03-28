@@ -84,24 +84,29 @@ Daytona preview redirects to `https://{port}-{sandboxId}.sandbox.recoder.xyz` wh
 - ~~Sign-in~~ DONE
 - ~~CodeMirror crash~~ DONE — error boundary
 
-### Phase 1: Make agent results VISIBLE (NEXT — highest priority)
-Agent works in a black box. Creates files and runs code but user can't see anything.
-1. **Fix Files tab** — sandbox has files but browser shows nothing
-2. **Fix file preview** — tool view preview shows blank
-3. **Fix read_file** — agent can't read files back
-4. **Fix live preview** — 502 on generated websites
+### Phase 1: MOSTLY DONE
+- ~~Fix read_file~~ DONE — exec fallback + DAYTONA_API_URL
+- ~~Fix PTY doubling~~ DONE — `stty -echo`
+- ~~PM regression~~ DONE — rebuilt
+- ~~Web IDE parser limit~~ DONE — 10k→100k
+- ~~Web IDE proxy chain~~ DONE — inline proxy, X-Frame-Options, nginx override
+- ~~Mock UI removed~~ DONE — Save as Template, Insights, Analytics hidden
+- **Files tab** — backend OK, likely browser cache. User: hard refresh.
+- **File preview** — still blank in tool view. Needs investigation.
+- **Web IDE rebuild** — in progress (Docker build)
 
-### Phase 2: Fix remaining platforms
-1. **PM regression** — hydration mismatch, was working before auth secret change
-2. **Web IDE preview** — 502 from Cloudflare, proxy chain broken
-3. **Web IDE publish** — 500
-4. **Agency workflows** — Giselle engine 500s
+### Phase 2: Remaining work
+1. **Agency workflows** — Giselle engine 500s (deferred — Supabase dependency)
+2. **Canvas/image gen** — FAL/Replicate API credits needed
+3. **Old threads** — Gemini history broken. Only new threads work.
+4. **Sandbox URLs** — `*.sandbox.recoder.xyz` DNS not configured
+5. **Landing page** — final cleanup (OpenClaw references mostly removed)
 
-### Phase 3: Agent tools quality
+### Phase 3: Quality + polish
 1. DOCX via run_code (not create_file)
-2. File serving from sandbox
-3. Image display (fallback to agents API proxy, no S3 needed)
-4. Slides, Excel, Canvas tools
+2. Image display from sandbox URL
+3. Slides, Excel tools
+4. A2A message passing (not just connection)
 
 ### Phase 3: recoder.xyz Website + Documentation
 1. Remove OpenClaw references from recoder.xyz landing page and navigation
