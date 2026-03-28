@@ -98,7 +98,7 @@ export default function PlanPage() {
           <h1 className="text-5xl md:text-6xl font-bold mb-6">
             One Platform,{' '}
             <span className="bg-gradient-to-r from-orange-500 to-purple-600 bg-clip-text text-transparent">
-              10 Services
+              All Services
             </span>
           </h1>
           <p className="text-xl text-gray-400 max-w-2xl mx-auto mb-4">
