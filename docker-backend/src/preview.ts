@@ -737,28 +737,50 @@ export function setupPreviewProxy(app: Express, containers: Map<string, { id: st
     }
     try {
       const port = entry.port || 5173;
-      // Use Daytona toolbox API to forward the request to the sandbox port
-      const toolboxBase = process.env.DAYTONA_TOOLBOX_PROXY_URL
-        || `http://localhost:3900/api/toolbox`;
-      const forwardUrl = `${toolboxBase}/${entry.id}/toolbox/port-forward/${port}/${subPath}${req.url.includes('?') ? '?' + req.url.split('?')[1] : ''}`;
+      // Use internal Daytona proxy (port 4000) for sandbox preview — avoids going through public internet
+      // The Daytona proxy handles {port}-{sandboxId} routing internally, same as *.sandbox.recoder.xyz
+      const daytonaProxyHost = process.env.DAYTONA_PROXY_HOST || 'host.docker.internal:4000';
+      const forwardUrl = `http://${daytonaProxyHost}/${subPath}${req.url.includes('?') ? '?' + req.url.split('?')[1] : ''}`;
 
-      const proxyRes = await fetch(forwardUrl, {
-        method: req.method,
-        headers: {
-          'Host': `localhost:${port}`,
-          'Accept': req.headers.accept || '*/*',
-        },
+      // Use Node http.request instead of fetch — fetch may silently override Host header
+      const proxyHost = process.env.DAYTONA_PROXY_HOST || 'host.docker.internal';
+      const proxyPort = parseInt(process.env.DAYTONA_PROXY_PORT || '4000', 10);
+      const sandboxHost = `${port}-${entry.id}.sandbox.recoder.xyz`;
+      const requestPath = `/${subPath}${req.url.includes('?') ? '?' + req.url.split('?')[1] : ''}`;
+
+      const http = await import('http');
+      const proxyResult = await new Promise<{ status: number; headers: Record<string, string>; body: Buffer }>((resolve, reject) => {
+        const proxyReq = http.request({
+          hostname: proxyHost,
+          port: proxyPort,
+          path: requestPath,
+          method: req.method,
+          headers: {
+            'Host': sandboxHost,
+            'Accept': req.headers.accept || '*/*',
+          },
+        }, (proxyRes) => {
+          const chunks: Buffer[] = [];
+          proxyRes.on('data', (chunk: Buffer) => chunks.push(chunk));
+          proxyRes.on('end', () => {
+            const headers: Record<string, string> = {};
+            for (const [k, v] of Object.entries(proxyRes.headers)) {
+              if (typeof v === 'string') headers[k] = v;
+            }
+            resolve({ status: proxyRes.statusCode || 502, headers, body: Buffer.concat(chunks) });
+          });
+        });
+        proxyReq.on('error', reject);
+        proxyReq.setTimeout(15000, () => { proxyReq.destroy(); reject(new Error('Proxy timeout')); });
+        proxyReq.end();
       });
 
-      res.status(proxyRes.status);
-      const ct = proxyRes.headers.get('content-type');
-      if (ct) res.setHeader('Content-Type', ct);
-      // Allow iframe embedding
+      res.status(proxyResult.status);
+      if (proxyResult.headers['content-type']) res.setHeader('Content-Type', proxyResult.headers['content-type']);
       res.removeHeader('X-Frame-Options');
       res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
-
-      const body = Buffer.from(await proxyRes.arrayBuffer());
-      res.send(body);
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      res.send(proxyResult.body);
     } catch (e: any) {
       console.error(`[SandboxPreview] Proxy error for ${projectId}:`, e.message);
       res.status(502).send(`<h1>Preview unavailable</h1><p>${e.message}</p>`);
