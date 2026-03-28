@@ -200,7 +200,7 @@ Server and client render different content. Usually caused by session state diff
 
 ### CRITICAL — Agent can create but user can't see results
 1. **Files tab appears BROKEN** — Investigation (Agent 1): Backend returns sandbox.id correctly, sandbox status is LIVE, all APIs return correct data with CORS headers. Root cause: likely **browser cached CORS-failed responses** from when backend was restarting. Fix: hard refresh (Ctrl+Shift+R) or clear browser cache for api.recoder.xyz. If still broken after refresh, the sandbox status query may be failing intermittently.
-2. **Preview tab BROKEN** — file preview in tool view doesn't render content. Shows blank or "No content".
+2. **Preview tab** — FIXED: rawArguments now populated in historical tool calls. Content extraction pipeline has data.
 3. **Read File** — FIXED: exec fallback + DAYTONA_API_URL env var corrected. SDK fs API confirmed working on active sandboxes.
 4. **Live preview BROKEN** — Web IDE: parser safety limit → npm install never triggers → no dev server → 502. Root cause is stream parser, not proxy.
 
@@ -212,16 +212,16 @@ Server and client render different content. Usually caused by session state diff
 
 ### MEDIUM — Agent quality issues
 9. **PTY character doubling** — FIXED: `stty -echo` disables terminal echo before commands.
-10. **Canvas/image gen** — "Add Frame To Canvas failed" + FAL/Replicate API $0 credits.
+10. **Canvas/image gen** — FIXED: OpenRouter↔Replicate fallback chain. Video: fal→SiliconFlow→Replicate. Canvas: Replicate→Gemini fallback.
 11. **DOCX via create_file** — agent sometimes uses create_file instead of run_code for .docx. Auto-convert interceptor exists but may not always trigger.
-12. **Old threads broken** — cached Gemini messages cause errors. Only new threads work with GLM 4.7.
+12. **Old threads** — FIXED: tool results with empty content get "(empty result)" placeholder instead of being dropped. Null arguments normalized to '{}'. Preserves tool call pairing.
 13. **ERR_CONNECTION_RESET** — Cloudflare HTTP/2 stream resets. Backend sends pings every 5s, `: connected` on open. Not a code bug — Cloudflare infra limitation.
 14. **Command output not captured** — long-running Python scripts (PyTorch training) show no output. Shell timeout or PTY buffering.
 15. **Sandbox URLs unreachable** — `*.sandbox.recoder.xyz` DNS not configured. Agent generates preview links that don't resolve.
 
 ### LOW — UI/UX
 14. **Mock UI elements** — "Save as Template", "Insights", "Analytics/Thread Analytics" are non-functional mocks. Should be hidden.
-15. **Landing page** — lists OpenClaw (abandoned), mock links to non-existent pages, empty docs.
+15. **Landing page** — FIXED: "6 products"→"5", OpenClaw/Studio/Chat pages redirect, stale schemas removed, sitemap cleaned.
 16. **A2A reconnect loop** — bridge connects but drops/reconnects repeatedly.
 17. **R2 storage keys** — endpoint configured, needs Cloudflare access keys.
 18. **Crash loop counters** — high restart counts (cosmetic, from rebuilds).
