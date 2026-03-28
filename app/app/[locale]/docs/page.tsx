@@ -3,15 +3,10 @@ import Link from 'next/link';
 import {
   BookOpen,
   Terminal,
-  Globe,
-  MessageSquare,
   Code2,
   Rocket,
   ArrowRight,
   FileText,
-  Video,
-  Github,
-  Sparkles,
   Network,
   Boxes
 } from 'lucide-react';
@@ -47,65 +42,40 @@ export default function DocsPage() {
       description: 'Quick setup guides and first steps with Recoder',
       icon: Rocket,
       articles: [
-        { title: 'Installation Guide', href: '/docs/installation', status: 'available' },
-        { title: 'First Project', href: '/docs/first-project', status: 'available' },
-        { title: 'Authentication Setup', href: '/docs/auth-setup', status: 'available' },
-        { title: 'API Keys Configuration', href: '/docs/api-keys', status: 'available' }
+        { title: 'Getting Started Guide', href: '/docs/getting-started', status: 'available' },
+        { title: 'BYOK Setup (Bring Your Own Key)', href: '/docs/byok', status: 'available' },
+        { title: 'API Keys Configuration', href: '/docs/api-keys', status: 'available' },
+        { title: 'FAQ', href: '/docs/faq', status: 'available' }
       ]
     },
     {
-      title: 'CLI Documentation',
-      description: 'Complete reference for the Recoder CLI',
+      title: 'CLI & Web IDE',
+      description: 'Terminal and web-based development tools',
       icon: Terminal,
       articles: [
-        { title: 'CLI Commands Reference', href: '/docs/cli/commands', status: 'available' },
-        { title: 'Natural Language Interface', href: '/docs/cli/natural-language', status: 'available' },
-        { title: 'Multi-AI Integration', href: '/docs/cli/multi-ai', status: 'available' },
-        { title: 'Project Templates', href: '/docs/cli/templates', status: 'coming-soon' }
+        { title: 'CLI Overview', href: '/docs/cli', status: 'available' },
+        { title: 'Web IDE + CLI Sync', href: '/docs/web-cli-sync', status: 'available' },
+        { title: 'Supported Models', href: '/docs/models', status: 'available' }
       ]
     },
     {
-      title: 'Web Platform',
-      description: 'Using the web-based development environment',
-      icon: Globe,
-      articles: [
-        { title: 'Platform Overview', href: '/docs/web/overview', status: 'available' },
-        { title: 'Code Generation', href: '/docs/web/code-generation', status: 'available' },
-        { title: 'Real-time Collaboration', href: '/docs/web/collaboration', status: 'available' },
-        { title: 'Deployment Pipeline', href: '/docs/web/deployment', status: 'coming-soon' }
-      ]
-    },
-    {
-      title: 'Chat Platform',
-      description: 'AI-powered chat interface for development',
-      icon: MessageSquare,
-      articles: [
-        { title: 'Chat Interface Guide', href: '/docs/chat/interface', status: 'available' },
-        { title: 'Artifact Generation', href: '/docs/chat/artifacts', status: 'available' },
-        { title: 'Context Management', href: '/docs/chat/context', status: 'available' },
-        { title: 'Custom Prompts', href: '/docs/chat/prompts', status: 'coming-soon' }
-      ]
-    },
-    {
-      title: 'AI Providers',
-      description: 'Working with different AI models and providers',
+      title: 'API Keys & Providers',
+      description: 'Configure AI model providers',
       icon: Code2,
       articles: [
-        { title: 'Supported Providers', href: '/docs/ai/providers', status: 'available' },
-        { title: 'Model Selection', href: '/docs/ai/model-selection', status: 'available' },
-        { title: 'Custom Models', href: '/docs/ai/custom-models', status: 'available' },
-        { title: 'Local AI Setup (Ollama)', href: '/docs/ai/local-setup', status: 'available' }
+        { title: 'OpenRouter Setup', href: '/docs/api-keys/openrouter', status: 'available' },
+        { title: 'Anthropic Setup', href: '/docs/api-keys/anthropic', status: 'available' },
+        { title: 'OpenAI Setup', href: '/docs/api-keys/openai', status: 'available' }
       ]
     },
     {
       title: 'API Reference',
-      description: 'Complete API documentation for developers',
+      description: 'Complete REST API documentation for developers',
       icon: FileText,
       articles: [
-        { title: 'REST API Overview', href: '/docs/api/rest', status: 'available' },
-        { title: 'Authentication', href: '/docs/api/auth', status: 'available' },
-        { title: 'WebSocket Events', href: '/docs/api/websocket', status: 'available' },
-        { title: 'Rate Limits', href: '/docs/api/rate-limits', status: 'available' }
+        { title: 'REST API Reference', href: '/docs/api-reference', status: 'available' },
+        { title: 'WebSocket Events', href: '/docs/api-reference#websocket', status: 'coming-soon' },
+        { title: 'Rate Limits', href: '/docs/api-reference#rate-limits', status: 'coming-soon' }
       ]
     },
     {
@@ -120,13 +90,13 @@ export default function DocsPage() {
       ]
     },
     {
-      title: 'Platform Integration',
-      description: 'Connect agents, PM, agency, and social channels',
+      title: 'Platform',
+      description: 'Agents, PM, Agency — the Recoder ecosystem',
       icon: Boxes,
       articles: [
-        { title: 'Agents Platform', href: '/docs/platform/agents', status: 'available' },
-        { title: 'Project Management', href: '/docs/platform/pm', status: 'available' },
-        { title: 'Agency Workflows', href: '/docs/platform/agency', status: 'available' }
+        { title: 'Agents Platform', href: '/docs/platform/agents', status: 'coming-soon' },
+        { title: 'Project Management', href: '/docs/platform/pm', status: 'coming-soon' },
+        { title: 'Agency Workflows', href: '/docs/platform/agency', status: 'coming-soon' }
       ]
     }
   ];
