@@ -152,7 +152,8 @@ export function useThreadToolCalls(
             source: matchingToolCall.source || 'xml',
           },
           toolResult: {
-            success: toolResult?.success !== false,
+            // Coerce success to proper boolean — handles string "true", number 1, etc.
+            success: toolResult?.success === true || toolResult?.success === 'true' || toolResult?.success === 'True' || toolResult?.success === 1 || (toolResult?.success !== false && toolResult?.success !== 'false' && toolResult?.success !== 0 && toolResult?.error == null),
             output: toolResult?.output,
             error: toolResult?.error || null,
           },

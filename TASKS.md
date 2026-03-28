@@ -120,25 +120,28 @@ $5 OpenRouter credits added. Batch 1 deployed. Batch 2 deploying now (Agent 1).
 |---|------|--------|--------|
 | 1 | ~~Fix model ID everywhere~~ | `gemini-2.0-flash` → `gemini-2.0-flash-001` | DONE (Agent 1) |
 | 2 | ~~Deploy batch 2~~ | All deployed + OpenClaw removed + DB password fixed | DONE |
-| 3 | **Agents chat** | Chat 400 fixed but tools still all broken. Same state as before session. | PARTIAL |
+| 3 | **Agents chat + tools** | GLM 4.7: chat works, create_file works, execute_command works, Python/PyTorch runs. 48 tool calls in one session. | WORKING |
 | 4 | **Agents canvas** | "Add Frame To Canvas failed" + FAL/Replicate $0 credits | NOT FIXED |
 | 5 | **Sign-in** | WORKS | DONE |
-| 6 | **A2A bridge** | Connects but reconnects repeatedly | PARTIAL |
+| 6 | **A2A bridge** | Connects, reconnects repeatedly | PARTIAL |
 | 7 | ~~OpenClaw redirect~~ | Redirects to agency | DONE |
+| 8 | **CodeMirror crash** | Error boundary added — Source tab no longer crashes page | FIXED (Agent 1) |
 
-**HONEST ASSESSMENT: After a full day of work with 2 agents, the platform is in the same state as this morning — only plain chat + web search work on agents. All tools, Web IDE preview, PM (regression), canvas, DOCX, code execution remain broken. The infrastructure changes (model switch, auth secrets, OpenClaw removal) were necessary but did not result in any new features working for the user.**
+**UPDATED ASSESSMENT (2026-03-29):** Agent core functionality NOW WORKS with GLM 4.7. Create files, run code, execute commands all functional. User tested: coded a basic LLM with PyTorch, 48 tool calls succeeded. BUT: files tab doesn't show files, preview doesn't render, read_file fails. Agent works in a black box — creates stuff but user can't see results. Next priority: make files visible.
 
-### TIER 1: Make agent tools work (6-12)
+### TIER 1: Make agent results VISIBLE (6-12) — HIGHEST PRIORITY
+
+Agent creates files and runs code but user CAN'T SEE the results.
 
 | # | Task | Detail |
 |---|------|--------|
-| 6 | **DOCX creation end-to-end** | Chat → agent calls run_code → python-docx → file in sandbox → preview |
-| 7 | **Fix sandbox file serving** | `/api/files/content` proxy returns actual file bytes, not auth error |
-| 8 | **Fix image display** | Serve from sandbox URL instead of requiring S3 |
-| 9 | **Fix slides tool** | python-pptx in sandbox → PPTX preview |
-| 10 | **Fix data/excel tool** | openpyxl/pandas in sandbox |
+| 6 | **Fix Files tab** | File browser next to agent thread shows nothing. Sandbox has files but they don't appear. |
+| 7 | **Fix file preview** | Tool view preview tab shows blank/"No content". File API returns 500. |
+| 8 | **Fix read_file tool** | Agent can't read files back from sandbox. Breaks iterative coding. |
+| 9 | **Fix live preview** | No way to see generated websites. Preview 502/503 on both agents and Web IDE. |
+| 10 | **Fix PTY character doubling** | Shell output shows "ccd", "lls". Daytona PTY corruption. |
 | 11 | ~~Fix code execution output~~ | DONE (Agent 2) — shows all output, extracts code arg |
-| 12 | **Fix canvas tool** | HTML5/SVG generation and iframe preview |
+| 12 | **Remove mock UI** | Hide: "Save as Template", "Insights", "Analytics/Thread Analytics" until implemented |
 
 ### TIER 2: Web IDE preview + publish (13-18)
 

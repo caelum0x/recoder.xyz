@@ -290,11 +290,9 @@ class ToolExecutor:
                 logger.info(f"[ToolExecutor] DEBUG: tool_fn={tool_fn}, module={getattr(tool_fn, '__module__', 'unknown')}, qualname={getattr(tool_fn, '__qualname__', 'unknown')}")
 
             if tool_fn:
-                if name == "create_slide":
-                    logger.info(f"[ToolExecutor] About to call create_slide...")
+                logger.info(f"[ToolExecutor] Calling tool: {name}")
                 result = await tool_fn(**parsed)
-                if name == "create_slide":
-                    logger.info(f"[ToolExecutor] create_slide returned: success={getattr(result, 'success', 'N/A')}, output={str(getattr(result, 'output', 'N/A'))[:200]}")
+                logger.info(f"[ToolExecutor] Tool {name} returned: success={getattr(result, 'success', 'N/A')}, output_len={len(str(getattr(result, 'output', '')))}")
                 if hasattr(result, 'success') and hasattr(result, 'output'):
                     success = result.success
                     output = result.output
