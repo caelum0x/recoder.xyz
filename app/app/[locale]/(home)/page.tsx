@@ -223,7 +223,7 @@ export default function HomePage() {
 
           {/* Value pills */}
           <div className="flex flex-wrap items-center justify-center gap-4 text-sm text-gray-500">
-            {['6 products', '40+ AI models', 'A2A / MCP ready', 'Open source core'].map((v) => (
+            {['5 products', '40+ AI models', 'A2A / MCP ready', 'Open source core'].map((v) => (
               <span key={v} className="flex items-center gap-2">
                 <span className="w-1.5 h-1.5 rounded-full bg-green-500" />
                 {v}
@@ -277,7 +277,7 @@ export default function HomePage() {
           <div className="text-center mb-16 space-y-4">
             <h2 className="text-4xl md:text-5xl font-bold">The Platform</h2>
             <p className="text-lg text-gray-400 max-w-2xl mx-auto">
-              Six purpose-built products that work together — or independently.
+              Five purpose-built products that work together — or independently.
             </p>
           </div>
 
@@ -515,7 +515,7 @@ export default function HomePage() {
         <div className="container mx-auto max-w-5xl">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
             {[
-              { value: '6', label: 'Products', color: 'text-orange-500' },
+              { value: '5', label: 'Products', color: 'text-orange-500' },
               { value: '40+', label: 'AI Models', color: 'text-purple-500' },
               { value: '17', label: 'MCP Servers', color: 'text-cyan-400' },
               { value: '$0', label: 'To Start', color: 'text-green-400' },

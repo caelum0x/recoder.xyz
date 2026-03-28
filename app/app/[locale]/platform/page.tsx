@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { ArrowRight, Globe, Bot, Code2, Database, Sparkles, Workflow } from 'lucide-react';
+import { ArrowRight, Globe, Bot, Code2, Database, Workflow } from 'lucide-react';
 import { RECODER_SERVICES, getServiceUrlClient } from '@/lib/config/platforms';
 import { SiteHeader } from '@/components/SiteHeader';
 import { SiteFooter } from '@/components/SiteFooter';
@@ -11,7 +11,6 @@ const serviceIcons: Record<string, React.ElementType> = {
   agents: Bot,
   web: Code2,
   pm: Database,
-  studio: Sparkles,
   agency: Workflow,
 };
 
@@ -20,7 +19,6 @@ const serviceColors: Record<string, string> = {
   agents: 'from-blue-500 to-cyan-500',
   web: 'from-orange-500 to-yellow-500',
   pm: 'from-blue-500 to-indigo-500',
-  studio: 'from-indigo-500 to-violet-500',
   agency: 'from-purple-500 to-pink-500',
 };
 

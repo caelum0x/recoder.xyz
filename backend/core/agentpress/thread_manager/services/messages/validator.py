@@ -23,16 +23,34 @@ class MessageValidator:
             
             func_data = tc.get('function', {})
             args = func_data.get('arguments', '')
-            
-            if isinstance(args, str):
-                try:
-                    parsed = json.loads(args)
-                    if isinstance(parsed, dict):
-                        valid_tool_calls.append(tc)
-                    else:
-                        logger.warning(f"Removing tool call {tc.get('id')}: arguments not a dict")
-                except json.JSONDecodeError as e:
-                    logger.warning(f"Removing tool call {tc.get('id')}: invalid JSON - {str(e)[:50]}")
+
+            # Normalize None/missing arguments to empty JSON object —
+            # old Gemini-format messages may have null arguments after model switch.
+            if args is None:
+                normalized_tc = tc.copy()
+                normalized_tc['function'] = tc['function'].copy()
+                normalized_tc['function']['arguments'] = '{}'
+                valid_tool_calls.append(normalized_tc)
+                needs_normalization = True
+                logger.debug(f"Normalized tool call {tc.get('id')}: null arguments -> empty object")
+            elif isinstance(args, str):
+                if not args.strip():
+                    # Empty string arguments — normalize to empty JSON object
+                    normalized_tc = tc.copy()
+                    normalized_tc['function'] = tc['function'].copy()
+                    normalized_tc['function']['arguments'] = '{}'
+                    valid_tool_calls.append(normalized_tc)
+                    needs_normalization = True
+                    logger.debug(f"Normalized tool call {tc.get('id')}: empty string arguments -> empty object")
+                else:
+                    try:
+                        parsed = json.loads(args)
+                        if isinstance(parsed, dict):
+                            valid_tool_calls.append(tc)
+                        else:
+                            logger.warning(f"Removing tool call {tc.get('id')}: arguments not a dict")
+                    except json.JSONDecodeError as e:
+                        logger.warning(f"Removing tool call {tc.get('id')}: invalid JSON - {str(e)[:50]}")
             elif isinstance(args, dict):
                 try:
                     normalized_tc = tc.copy()

@@ -773,12 +773,16 @@ Generate, edit, upscale, or remove background from images. Video generation supp
                 # For mock, return a descriptive mock filename
                 return f"Mock Video {uuid.uuid4().hex[:6]}.mp4"
             
-            # Video generation via fal.ai (Wan2.1) or SiliconFlow (Wan2.2) — no Replicate needed
+            # Video generation fallback chain:
+            # 1. fal.ai (Wan2.1) — primary
+            # 2. SiliconFlow (Wan2.2) — secondary
+            # 3. Replicate (seedance-1.5-pro) — tertiary fallback
             fal_key = os.getenv("FAL_KEY") or os.getenv("FAL_API_KEY")
             sf_key = os.getenv("SILICONFLOW_API_KEY")
-            replicate_key = os.getenv("REPLICATE_API_TOKEN")
+            config = get_config()
+            replicate_key = config.REPLICATE_API_TOKEN or os.getenv("REPLICATE_API_TOKEN")
             if not fal_key and not sf_key and not replicate_key:
-                return self.fail_response("Video generation requires FAL_KEY or SILICONFLOW_API_KEY. Please configure one in backend/.env.")
+                return self.fail_response("Video generation requires FAL_KEY, SILICONFLOW_API_KEY, or REPLICATE_API_TOKEN. Please configure one in backend/.env.")
 
             opts = video_options or {}
             has_image = bool(image_path)
@@ -787,150 +791,220 @@ Generate, edit, upscale, or remove background from images. Video generation supp
 
             # ── fal.ai path (primary) ──
             if fal_key:
-                ar = str(opts.get("aspect_ratio", "16:9"))
-                fal_body: dict = {
+                try:
+                    ar = str(opts.get("aspect_ratio", "16:9"))
+                    fal_body: dict = {
+                        "prompt": prompt,
+                        "aspect_ratio": ar,
+                        "resolution": "720p",
+                        "num_frames": 81,
+                        "frames_per_second": 16,
+                        "enable_safety_checker": False,
+                    }
+                    if opts.get("negative_prompt"):
+                        fal_body["negative_prompt"] = opts["negative_prompt"]
+                    if "seed" in opts:
+                        try:
+                            fal_body["seed"] = int(opts["seed"])
+                        except (ValueError, TypeError):
+                            pass
+
+                    logger.info(f"Submitting video to fal.ai (wan-t2v): '{prompt[:60]}...'")
+
+                    async with httpx.AsyncClient(timeout=300) as client:
+                        resp = await client.post(
+                            "https://fal.run/fal-ai/wan-t2v",
+                            json=fal_body,
+                            headers={"Authorization": f"Key {fal_key}", "Content-Type": "application/json"},
+                        )
+                        if resp.status_code != 200:
+                            raise Exception(f"fal.ai video failed ({resp.status_code}): {resp.text[:200]}")
+                        data = resp.json()
+                        video_info = data.get("video", {})
+                        video_url = video_info.get("url") if isinstance(video_info, dict) else None
+                        if not video_url:
+                            raise Exception(f"fal.ai returned no video URL: {str(data)[:200]}")
+
+                    # Download
+                    async with httpx.AsyncClient(timeout=120) as client:
+                        dl = await client.get(video_url)
+                        dl.raise_for_status()
+                        result_bytes = dl.content
+
+                    smart_filename = await generate_smart_filename(prompt=prompt, file_type="video", extension="mp4")
+                    sandbox_path = f"{self.workspace_path}/{smart_filename}"
+                    await self.write_file(sandbox_path, result_bytes)
+                    logger.info(f"Video saved via fal.ai: {smart_filename}")
+                    return smart_filename
+                except Exception as e:
+                    logger.warning(f"fal.ai video failed, will try fallback: {e}")
+
+            # ── SiliconFlow path (secondary) ──
+            if not sf_key and not replicate_key:
+                return self.fail_response("Video generation failed. No fallback provider available (FAL_KEY failed, SILICONFLOW_API_KEY and REPLICATE_API_TOKEN not set).")
+
+            sf_succeeded = False
+            if sf_key:
+                try:
+                    # Determine model: text-to-video or image-to-video
+                    model = "Wan-AI/Wan2.2-I2V-A14B" if has_image else "Wan-AI/Wan2.2-T2V-A14B"
+
+                    # Map aspect_ratio to image_size
+                    ar = str(opts.get("aspect_ratio", "16:9"))
+                    size_map = {"16:9": "1280x720", "9:16": "720x1280", "1:1": "960x960"}
+                    image_size = size_map.get(ar, "1280x720")
+
+                    submit_body: dict = {
+                        "model": model,
+                        "prompt": prompt,
+                        "image_size": image_size,
+                    }
+                    if opts.get("negative_prompt"):
+                        submit_body["negative_prompt"] = opts["negative_prompt"]
+                    if "seed" in opts:
+                        try:
+                            submit_body["seed"] = int(opts["seed"])
+                        except (ValueError, TypeError):
+                            pass
+
+                    # Image-to-video: attach base64 image
+                    if has_image:
+                        if isinstance(image_path, list):
+                            image_path = image_path[0] if image_path else None
+                        if image_path:
+                            image_bytes = await self._get_image_bytes(image_path)
+                            if isinstance(image_bytes, ToolResult):
+                                raise Exception(f"Could not read image: {image_bytes.output}")
+                            submit_body["image"] = f"data:image/png;base64,{base64.b64encode(image_bytes).decode()}"
+
+                    logger.info(f"Submitting video to SiliconFlow ({model}): '{prompt[:60]}...'")
+
+                    # 1. Submit
+                    async with httpx.AsyncClient(timeout=30) as client:
+                        resp = await client.post(
+                            "https://api.siliconflow.cn/v1/video/submit",
+                            json=submit_body,
+                            headers={"Authorization": f"Bearer {sf_key}", "Content-Type": "application/json"},
+                        )
+                        if resp.status_code != 200:
+                            raise Exception(f"SiliconFlow submit failed ({resp.status_code}): {resp.text[:200]}")
+                        request_id = resp.json().get("requestId")
+                        if not request_id:
+                            raise Exception(f"SiliconFlow returned no requestId: {resp.text[:200]}")
+
+                    logger.info(f"SiliconFlow video request submitted: {request_id}")
+
+                    # 2. Poll for result (max 5 min)
+                    video_url = None
+                    for attempt in range(60):
+                        await asyncio.sleep(5)
+                        async with httpx.AsyncClient(timeout=15) as client:
+                            status_resp = await client.post(
+                                "https://api.siliconflow.cn/v1/video/status",
+                                json={"requestId": request_id},
+                                headers={"Authorization": f"Bearer {sf_key}", "Content-Type": "application/json"},
+                            )
+                        if status_resp.status_code != 200:
+                            continue
+                        status_data = status_resp.json()
+                        state = status_data.get("status", "")
+                        if state == "Succeed":
+                            videos = status_data.get("results", {}).get("videos", [])
+                            if videos:
+                                video_url = videos[0].get("url")
+                            break
+                        elif state == "Failed":
+                            reason = status_data.get("reason", "Unknown")
+                            raise Exception(f"Video generation failed: {reason}")
+                        # InQueue or InProgress — keep polling
+
+                    if not video_url:
+                        raise Exception("Video generation timed out after 5 minutes.")
+
+                    # 3. Download video
+                    async with httpx.AsyncClient(timeout=120) as client:
+                        dl_resp = await client.get(video_url)
+                        dl_resp.raise_for_status()
+                        result_bytes = dl_resp.content
+
+                    # Generate smart filename using LLM based on the prompt
+                    smart_filename = await generate_smart_filename(
+                        prompt=prompt,
+                        file_type="video",
+                        extension="mp4"
+                    )
+                    sandbox_path = f"{self.workspace_path}/{smart_filename}"
+                    await self.write_file(sandbox_path, result_bytes)
+
+                    logger.info(f"Video saved via SiliconFlow: {smart_filename}")
+                    sf_succeeded = True
+                    return smart_filename
+                except Exception as e:
+                    logger.warning(f"SiliconFlow video failed, will try Replicate fallback: {e}")
+
+            # ── Replicate path (tertiary fallback via seedance-1.5-pro) ──
+            if not sf_succeeded and replicate_key:
+                self._get_replicate_token()
+                logger.info(f"Using Replicate seedance-1.5-pro for video generation: '{prompt[:60]}...'")
+
+                replicate_input: dict = {
                     "prompt": prompt,
-                    "aspect_ratio": ar,
-                    "resolution": "720p",
-                    "num_frames": 81,
-                    "frames_per_second": 16,
-                    "enable_safety_checker": False,
+                    "duration": int(opts.get("duration", 5)),
                 }
-                if opts.get("negative_prompt"):
-                    fal_body["negative_prompt"] = opts["negative_prompt"]
                 if "seed" in opts:
                     try:
-                        fal_body["seed"] = int(opts["seed"])
+                        replicate_input["seed"] = int(opts["seed"])
                     except (ValueError, TypeError):
                         pass
 
-                logger.info(f"Submitting video to fal.ai (wan-t2v): '{prompt[:60]}...'")
+                # Image-to-video: attach image
+                if has_image:
+                    _img_path = image_path
+                    if isinstance(_img_path, list):
+                        _img_path = _img_path[0] if _img_path else None
+                    if _img_path:
+                        _img_bytes = await self._get_image_bytes(_img_path)
+                        if not isinstance(_img_bytes, ToolResult):
+                            _img_b64 = base64.b64encode(_img_bytes).decode('utf-8')
+                            replicate_input["image"] = f"data:image/png;base64,{_img_b64}"
 
-                async with httpx.AsyncClient(timeout=300) as client:
-                    resp = await client.post(
-                        "https://fal.run/fal-ai/wan-t2v",
-                        json=fal_body,
-                        headers={"Authorization": f"Key {fal_key}", "Content-Type": "application/json"},
-                    )
-                    if resp.status_code != 200:
-                        logger.error(f"fal.ai video failed ({resp.status_code}): {resp.text[:200]}")
-                        return self.fail_response(f"Video generation failed ({resp.status_code}): {resp.text[:200]}")
-                    data = resp.json()
-                    video_info = data.get("video", {})
-                    video_url = video_info.get("url") if isinstance(video_info, dict) else None
-                    if not video_url:
-                        return self.fail_response(f"fal.ai returned no video URL: {str(data)[:200]}")
+                output = await asyncio.to_thread(
+                    replicate.run,
+                    "bytedance/seedance-1.5-pro",
+                    input=replicate_input,
+                )
 
-                # Download
-                async with httpx.AsyncClient(timeout=120) as client:
-                    dl = await client.get(video_url)
-                    dl.raise_for_status()
-                    result_bytes = dl.content
+                # Replicate video output: could be a FileOutput or URL
+                if hasattr(output, 'read'):
+                    result_bytes = output.read()
+                elif hasattr(output, '__iter__') and not isinstance(output, (str, bytes)):
+                    output_list = list(output)
+                    if len(output_list) == 0:
+                        return self.fail_response("No output from Replicate video model")
+                    first = output_list[0]
+                    if hasattr(first, 'read'):
+                        result_bytes = first.read()
+                    else:
+                        url = str(first.url) if hasattr(first, 'url') else str(first)
+                        async with httpx.AsyncClient(timeout=120) as client:
+                            dl_resp = await client.get(url)
+                            dl_resp.raise_for_status()
+                            result_bytes = dl_resp.content
+                else:
+                    url = str(output.url) if hasattr(output, 'url') else str(output)
+                    async with httpx.AsyncClient(timeout=120) as client:
+                        dl_resp = await client.get(url)
+                        dl_resp.raise_for_status()
+                        result_bytes = dl_resp.content
 
                 smart_filename = await generate_smart_filename(prompt=prompt, file_type="video", extension="mp4")
                 sandbox_path = f"{self.workspace_path}/{smart_filename}"
                 await self.write_file(sandbox_path, result_bytes)
-                logger.info(f"Video saved via fal.ai: {smart_filename}")
+
+                logger.info(f"Video saved via Replicate: {smart_filename}")
                 return smart_filename
 
-            # ── SiliconFlow path (fallback) ──
-            if not sf_key:
-                return self.fail_response("Video generation requires FAL_KEY or SILICONFLOW_API_KEY.")
-
-            # Determine model: text-to-video or image-to-video
-            model = "Wan-AI/Wan2.2-I2V-A14B" if has_image else "Wan-AI/Wan2.2-T2V-A14B"
-
-            # Map aspect_ratio to image_size
-            ar = str(opts.get("aspect_ratio", "16:9"))
-            size_map = {"16:9": "1280x720", "9:16": "720x1280", "1:1": "960x960"}
-            image_size = size_map.get(ar, "1280x720")
-
-            submit_body: dict = {
-                "model": model,
-                "prompt": prompt,
-                "image_size": image_size,
-            }
-            if opts.get("negative_prompt"):
-                submit_body["negative_prompt"] = opts["negative_prompt"]
-            if "seed" in opts:
-                try:
-                    submit_body["seed"] = int(opts["seed"])
-                except (ValueError, TypeError):
-                    pass
-
-            # Image-to-video: attach base64 image
-            if has_image:
-                if isinstance(image_path, list):
-                    image_path = image_path[0] if image_path else None
-                if image_path:
-                    image_bytes = await self._get_image_bytes(image_path)
-                    if isinstance(image_bytes, ToolResult):
-                        return image_bytes
-                    submit_body["image"] = f"data:image/png;base64,{base64.b64encode(image_bytes).decode()}"
-
-            logger.info(f"Submitting video to SiliconFlow ({model}): '{prompt[:60]}...'")
-
-            import httpx
-
-            # 1. Submit
-            async with httpx.AsyncClient(timeout=30) as client:
-                resp = await client.post(
-                    "https://api.siliconflow.cn/v1/video/submit",
-                    json=submit_body,
-                    headers={"Authorization": f"Bearer {sf_key}", "Content-Type": "application/json"},
-                )
-                if resp.status_code != 200:
-                    return self.fail_response(f"SiliconFlow submit failed ({resp.status_code}): {resp.text[:200]}")
-                request_id = resp.json().get("requestId")
-                if not request_id:
-                    return self.fail_response(f"SiliconFlow returned no requestId: {resp.text[:200]}")
-
-            logger.info(f"SiliconFlow video request submitted: {request_id}")
-
-            # 2. Poll for result (max 5 min)
-            video_url = None
-            for attempt in range(60):
-                await asyncio.sleep(5)
-                async with httpx.AsyncClient(timeout=15) as client:
-                    status_resp = await client.post(
-                        "https://api.siliconflow.cn/v1/video/status",
-                        json={"requestId": request_id},
-                        headers={"Authorization": f"Bearer {sf_key}", "Content-Type": "application/json"},
-                    )
-                if status_resp.status_code != 200:
-                    continue
-                status_data = status_resp.json()
-                state = status_data.get("status", "")
-                if state == "Succeed":
-                    videos = status_data.get("results", {}).get("videos", [])
-                    if videos:
-                        video_url = videos[0].get("url")
-                    break
-                elif state == "Failed":
-                    reason = status_data.get("reason", "Unknown")
-                    return self.fail_response(f"Video generation failed: {reason}")
-                # InQueue or InProgress — keep polling
-
-            if not video_url:
-                return self.fail_response("Video generation timed out after 5 minutes.")
-
-            # 3. Download video
-            async with httpx.AsyncClient(timeout=120) as client:
-                dl_resp = await client.get(video_url)
-                dl_resp.raise_for_status()
-                result_bytes = dl_resp.content
-            
-            # Generate smart filename using LLM based on the prompt
-            smart_filename = await generate_smart_filename(
-                prompt=prompt,
-                file_type="video",
-                extension="mp4"
-            )
-            sandbox_path = f"{self.workspace_path}/{smart_filename}"
-            await self.write_file(sandbox_path, result_bytes)
-
-            logger.info(f"Video saved: {smart_filename}")
-            return smart_filename
+            return self.fail_response("Video generation failed via all available providers.")
 
         except Exception as e:
             error_message = str(e)

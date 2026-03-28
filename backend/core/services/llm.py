@@ -149,10 +149,15 @@ def _strip_internal_properties(messages: List[Dict[str, Any]]) -> List[Dict[str,
 
         # Gemini requires every message to have non-null content ("parts" field).
         # Assistant messages with only tool_calls have content=None in OpenAI format.
-        # Fix: set empty string content so Gemini doesn't reject the request.
+        # Fix: set non-empty placeholder so Gemini doesn't reject the request.
         if cleaned_msg.get('role') == 'assistant' and cleaned_msg.get('content') is None:
             if cleaned_msg.get('tool_calls'):
-                cleaned_msg['content'] = ''
+                cleaned_msg['content'] = ' '
+
+        # Tool result messages must always have non-null, non-empty content.
+        # Old Gemini-format messages may have content=None after model switch.
+        if cleaned_msg.get('role') == 'tool' and not cleaned_msg.get('content'):
+            cleaned_msg['content'] = '(empty result)'
 
         cleaned_messages.append(cleaned_msg)
 
@@ -198,9 +203,15 @@ async def make_llm_api_call(
     cleaned_messages = []
     for msg in messages:
         has_tool_calls = bool(msg.get("tool_calls"))
+        has_tool_call_id = bool(msg.get("tool_call_id"))
         role = msg.get("role", "")
         if _has_content(msg) or has_tool_calls or role == "system":
             cleaned_messages.append(msg)
+        elif role == "tool" or has_tool_call_id:
+            # Tool result messages MUST be kept even with empty content —
+            # they pair with assistant tool_calls. Dropping them breaks
+            # pairing and causes "must include at least one parts field" errors.
+            cleaned_messages.append({**msg, "content": "(empty result)"})
         elif role == "assistant":
             # Empty assistant message — add placeholder to avoid Gemini 400
             cleaned_messages.append({**msg, "content": " "})
