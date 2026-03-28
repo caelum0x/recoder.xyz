@@ -120,11 +120,13 @@ $5 OpenRouter credits added. Batch 1 deployed. Batch 2 deploying now (Agent 1).
 |---|------|--------|--------|
 | 1 | ~~Fix model ID everywhere~~ | `gemini-2.0-flash` → `gemini-2.0-flash-001` | DONE (Agent 1) |
 | 2 | ~~Deploy batch 2~~ | All deployed + OpenClaw removed + DB password fixed | DONE |
-| 3 | **Agents chat** | BROKEN — Gemini 400 "must include at least one parts field". Empty message body sent to LLM. | NEEDS FIX |
-| 4 | **Agents canvas** | BROKEN — "Add Frame To Canvas failed" + "API quota exceeded" on image gen | NEEDS FIX |
-| 5 | **Sign-in** | WORKS — DB password reset fixed the 503 | DONE |
-| 6 | **A2A bridge** | WORKS — npx recoder-a2a connects via wss://docker.recoder.xyz | DONE |
-| 7 | ~~OpenClaw redirect~~ | openclaw.recoder.xyz → agency.recoder.xyz | DONE |
+| 3 | **Agents chat** | Chat 400 fixed but tools still all broken. Same state as before session. | PARTIAL |
+| 4 | **Agents canvas** | "Add Frame To Canvas failed" + FAL/Replicate $0 credits | NOT FIXED |
+| 5 | **Sign-in** | WORKS | DONE |
+| 6 | **A2A bridge** | Connects but reconnects repeatedly | PARTIAL |
+| 7 | ~~OpenClaw redirect~~ | Redirects to agency | DONE |
+
+**HONEST ASSESSMENT: After a full day of work with 2 agents, the platform is in the same state as this morning — only plain chat + web search work on agents. All tools, Web IDE preview, PM (regression), canvas, DOCX, code execution remain broken. The infrastructure changes (model switch, auth secrets, OpenClaw removal) were necessary but did not result in any new features working for the user.**
 
 ### TIER 1: Make agent tools work (6-12)
 
