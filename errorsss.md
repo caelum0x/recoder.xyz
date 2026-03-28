@@ -206,16 +206,16 @@ Server and client render different content. Usually caused by session state diff
 
 ### HIGH — Broken platforms
 5. **PM regression** — FIXED: rebuilt with current auth secret. Hydration mismatch should be resolved.
-6. **Web IDE preview 502** — Cloudflare bad gateway. Proxy chain (nginx → docker-backend → sandbox:5173) broken.
-7. **Web IDE file API 500** — every `/api/file/` returns 500. Ownership check failing.
-8. **Web IDE publish 500** — publish endpoint fails.
+6. **Web IDE preview 502** — FIXED: parser limit 10k→100k allows large responses. Proxy chain + X-Frame-Options + inline proxy all fixed. Needs Docker rebuild (in progress).
+7. **Web IDE file API 500** — INTERNAL_SERVICE_KEY set on both app + docker-backend. Should work now.
+8. **Web IDE publish 500** — Daytona paths fixed (Agent 1). Needs testing after rebuild.
 
 ### MEDIUM — Agent quality issues
 9. **PTY character doubling** — FIXED: `stty -echo` disables terminal echo before commands.
 10. **Canvas/image gen** — "Add Frame To Canvas failed" + FAL/Replicate API $0 credits.
 11. **DOCX via create_file** — agent sometimes uses create_file instead of run_code for .docx. Auto-convert interceptor exists but may not always trigger.
 12. **Old threads broken** — cached Gemini messages cause errors. Only new threads work with GLM 4.7.
-13. **ERR_CONNECTION_RESET** — SSE streams drop intermittently.
+13. **ERR_CONNECTION_RESET** — Cloudflare HTTP/2 stream resets. Backend sends pings every 5s, `: connected` on open. Not a code bug — Cloudflare infra limitation.
 14. **Command output not captured** — long-running Python scripts (PyTorch training) show no output. Shell timeout or PTY buffering.
 15. **Sandbox URLs unreachable** — `*.sandbox.recoder.xyz` DNS not configured. Agent generates preview links that don't resolve.
 
