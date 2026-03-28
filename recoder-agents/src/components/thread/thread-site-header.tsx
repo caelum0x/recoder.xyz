@@ -1,7 +1,7 @@
 'use client';
 
 import { Button } from "@/components/ui/button"
-import { Upload, PanelRightOpen, PanelRightClose, Copy, Check, Menu, Brain, Download, BarChart3 } from "lucide-react"
+import { Upload, PanelRightOpen, PanelRightClose, Copy, Check, Menu, Brain, Download } from "lucide-react"
 import { toast } from "@/lib/toast"
 import {
   Tooltip,
@@ -15,12 +15,8 @@ import { SharePopover } from "@/components/sidebar/share-modal"
 import { ModeIndicator } from "@/components/thread/mode-indicator"
 import { useSidebar } from "@/components/ui/sidebar"
 import { useThreadMemorySettings, useUpdateThreadMemorySettings } from "@/hooks/memory/use-memory"
-import { SaveAsTemplateDialog } from "@/components/thread/save-as-template-dialog"
 import { ThreadMessageSearch } from "@/components/thread/thread-message-search"
 import { ThreadExportDialog } from "@/components/thread/thread-export-dialog"
-import { BookmarksPanel } from "@/components/thread/bookmarks-panel"
-import { ConversationInsightsPanel } from "@/components/thread/conversation-insights-panel"
-import { ThreadAnalyticsHeaderButton } from "@/components/thread/thread-analytics-header-button"
 
 interface ThreadSiteHeaderProps {
   threadId?: string;
@@ -135,29 +131,7 @@ export function SiteHeader({
               </SharePopover>
             ) : null}
 
-            {threadId && variant !== 'shared' && (
-              <SaveAsTemplateDialog
-                threadName={projectName}
-                agentId={agentId}
-                messages={messages}
-              />
-            )}
-
-            {threadId && variant !== 'shared' && (
-              <BookmarksPanel threadId={threadId} />
-            )}
-
-            {threadId && variant !== 'shared' && (
-              <div className="relative">
-                <ConversationInsightsPanel threadId={threadId} />
-              </div>
-            )}
-
-            {threadId && variant !== 'shared' && (
-              <div className="relative">
-                <ThreadAnalyticsHeaderButton threadId={threadId} />
-              </div>
-            )}
+            {/* Save as Template, Insights, Analytics hidden — not functional yet */}
 
             {threadId && variant !== 'shared' && (
               <ThreadExportDialog threadId={threadId} threadName={projectName}>
