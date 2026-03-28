@@ -103,6 +103,11 @@ def setup_api_keys() -> None:
     if getattr(config, 'AWS_BEARER_TOKEN_BEDROCK', None):
         os.environ["AWS_BEARER_TOKEN_BEDROCK"] = config.AWS_BEARER_TOKEN_BEDROCK
 
+    # Ollama — local model inference (free, no API key needed)
+    ollama_base = getattr(config, 'OLLAMA_API_BASE', None) or os.environ.get('OLLAMA_API_BASE')
+    if ollama_base:
+        os.environ["OLLAMA_API_BASE"] = ollama_base
+
 
 def _configure_openai_compatible(model_name: str, api_key: Optional[str], api_base: Optional[str]) -> None:
     if not model_name.startswith("openai-compatible/"):
@@ -275,15 +280,15 @@ async def _wrap_streaming_response(response, start_time: float, model_name: str,
     try:
         if ttft_seconds is not None:
             yield {"__llm_ttft_seconds__": ttft_seconds, "model": model_name}
-        
+
         async for chunk in response:
             chunk_count += 1
             current_time = time_module.monotonic()
             gap_ms = (current_time - last_chunk_time) * 1000
-            
+
             if gap_ms > 500 and chunk_count > 1:
                 logger.warning(f"[LLM] ⚠️ Chunk #{chunk_count} gap: {gap_ms:.0f}ms (model={model_name})")
-            
+
             last_chunk_time = current_time
             
             # Capture debug info

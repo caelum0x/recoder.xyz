@@ -19,7 +19,6 @@ import { createChangeOrder } from "./change-order-actions";
 import { CostSection } from "./cost-section";
 import { DeliverableSection } from "./deliverable-section";
 import { InvoiceSection } from "./invoice-section";
-import { ProjectCopilot } from "./project-copilot";
 import { ProjectStatusControl } from "./project-status-control";
 import { ProjectTransitionHistory } from "./project-transition-history";
 import { RetryClientTransitionPanel } from "./retry-client-transition-panel";
@@ -632,7 +631,6 @@ export default async function ProjectDetailPage({
 						label: deliverable.milestoneLabel,
 					}))}
 			/>
-		<ProjectCopilot projectId={projectId} />
 		</div>
 	);
 }

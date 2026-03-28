@@ -64,6 +64,29 @@ function getPublicMainSiteUrl(): string {
  * Verify session by calling main site's better-auth API
  * This reads the shared cookie and verifies it with the main site
  */
+/**
+ * Extract session token from cookie header.
+ * Better Auth uses __Secure-recoder.session_token (production)
+ * or recoder.session_token (dev).
+ */
+function extractSessionToken(cookieHeader: string): string | null {
+  const cookieNames = [
+    '__Secure-recoder.session_token',
+    'recoder.session_token',
+    'better-auth.session_token',
+    '__Secure-better-auth.session_token',
+  ];
+  for (const name of cookieNames) {
+    // Match name=value, handling URL-encoded and quoted values
+    const regex = new RegExp(`(?:^|;\\s*)${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}=([^;]*)`);
+    const match = cookieHeader.match(regex);
+    if (match?.[1]) {
+      return decodeURIComponent(match[1]);
+    }
+  }
+  return null;
+}
+
 export async function verifySession(request: Request): Promise<Session | null> {
   try {
     const mainSiteUrl = getInternalMainSiteUrl();
@@ -74,14 +97,28 @@ export async function verifySession(request: Request): Promise<Session | null> {
       return null;
     }
 
-    // Call main site's session verification endpoint
-    // The cookie will be automatically sent to the main site since it's on the same domain
+    // Extract session token from cookie to pass as Bearer token.
+    // Cookies are domain-scoped to .recoder.xyz — when the server-side fetch
+    // goes to an internal URL (host.docker.internal), the cookies don't apply.
+    // Passing the token explicitly as Authorization header works around this.
+    const sessionToken = extractSessionToken(cookieHeader);
+
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    };
+
+    if (sessionToken) {
+      // Pass token as both cookie AND Bearer so it works regardless of
+      // whether the internal URL matches the cookie domain or not.
+      headers['Cookie'] = cookieHeader;
+      headers['Authorization'] = `Bearer ${sessionToken}`;
+    } else {
+      headers['Cookie'] = cookieHeader;
+    }
+
     const response = await fetch(`${mainSiteUrl}/api/auth/session`, {
       method: 'GET',
-      headers: {
-        'Cookie': cookieHeader,
-        'Content-Type': 'application/json',
-      },
+      headers,
       credentials: 'include',
     });
 

@@ -1,4 +1,5 @@
 import { withOrganizationSystemPrompt } from "@repo/backend/ai-prompts";
+import { currentOrganizationId } from "@repo/backend/auth/utils";
 import { contentToText } from "@repo/editor/lib/tiptap";
 import { log } from "@repo/observability/log";
 import { database } from "@/lib/database";
@@ -9,7 +10,7 @@ export const maxDuration = 60;
 // OpenRouter config -- read once at module load
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
 const OPENROUTER_MODEL =
-  process.env.OPENROUTER_TEXT_MODEL || "openai/gpt-4o-mini";
+  process.env.OPENROUTER_TEXT_MODEL || "google/gemini-2.0-flash-001";
 const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
 
 // Max tool-call round-trips before giving up (prevents infinite loops)
@@ -150,7 +151,9 @@ function processSSELine(
 
   try {
     const parsed = JSON.parse(data);
-    const content = parsed.choices?.[0]?.delta?.content;
+    const delta = parsed.choices?.[0]?.delta;
+    // Some free models (step-3.5-flash, nemotron) return content in reasoning field
+    const content = delta?.content ?? delta?.reasoning ?? null;
     if (typeof content === "string" && content.length > 0) {
       if (!updatedSentStart) {
         ctx.controller.enqueue(
@@ -439,7 +442,7 @@ async function runToolCallLoop(
 
     // No tool calls — the model produced a final text response
     if (!toolCalls || toolCalls.length === 0) {
-      return textToUIMSP(choice.message.content || "");
+      return textToUIMSP(choice.message.content || choice.message.reasoning || "");
     }
 
     // Execute tool calls
@@ -604,6 +607,13 @@ async function validateRequest(
   if (!organizationId) {
     return new Response("Organization ID required", { status: 400 });
   }
+
+  // Verify the authenticated user belongs to this organization
+  const userOrgId = await currentOrganizationId();
+  if (!userOrgId || userOrgId !== organizationId) {
+    return new Response("Unauthorized", { status: 403 });
+  }
+
   if (!(messages && Array.isArray(messages)) || messages.length === 0) {
     return new Response("Messages required", { status: 400 });
   }

@@ -376,7 +376,7 @@ function GoLiveButton() {
         onClick={handleGoLive}
         disabled={isLoading}
         className={classNames(
-          'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-all',
+          'flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all shadow-lg hover:shadow-xl',
           isPublished
             ? 'bg-green-600 hover:bg-green-500 text-white'
             : isLoading

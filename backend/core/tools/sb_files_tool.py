@@ -189,6 +189,12 @@ print('OK')
         )
 
         try:
+            # Ensure required library is installed (pip install is fast if already present)
+            pkg_map = {'docx': 'python-docx', 'xlsx': 'openpyxl', 'pptx': 'python-pptx'}
+            pkg = pkg_map.get(ext, '')
+            if pkg:
+                await self.sandbox.process.exec(f"pip install -q {pkg} 2>/dev/null", timeout=30)
+
             result = await self.sandbox.process.exec("python3 /tmp/_docgen_script.py", timeout=30)
             if result.exit_code == 0 and 'OK' in (result.result or ''):
                 logger.info(f"[AUTO-CONVERT] Created real .{ext} at {full_path}")
@@ -196,7 +202,7 @@ print('OK')
             else:
                 logger.warning(f"[AUTO-CONVERT] Failed: exit={result.exit_code} output={result.result}")
                 write_ok = await self.write_file(full_path, text_content.encode())
-                return self.success_response(f"Created {file_path} (text fallback)")
+                return self.success_response(f"Created {file_path} (text fallback — install {pkg} manually)")
         except Exception as e:
             logger.warning(f"[AUTO-CONVERT] Exception: {e}")
             write_ok = await self.write_file(full_path, text_content.encode())
@@ -307,6 +313,9 @@ Usage:
             full_path = self._get_full_path(file_path)
             if await self._file_exists(full_path):
                 return self.fail_response(f"File '{file_path}' already exists. Use update_file to modify existing files.")
+
+            if not file_contents or not file_contents.strip():
+                return self.fail_response(f"Cannot create '{file_path}' with empty content. Provide actual file contents.")
             
             # Create parent directories if needed
             parent_dir = '/'.join(full_path.split('/')[:-1])

@@ -51,15 +51,18 @@ class Configuration:
     AGENT_TOOL_EXECUTION_STRATEGY: str = "parallel"  # "parallel" or "sequential"
     
     # Model selection
-    # Options: "bedrock", "anthropic", "minimax", "grok", "openai"
-    MAIN_LLM: str = "bedrock"
+    # Options: "bedrock", "anthropic", "minimax", "grok", "openai", "openrouter"
+    MAIN_LLM: str = "openrouter"
     # Optional: Override the default model for the selected provider
     # If not set, uses the default model for the provider:
     #   - anthropic: anthropic/claude-haiku-4-5-20251001
     #   - grok: openrouter/x-ai/grok-4.1-fast
     #   - openai: openrouter/openai/gpt-4o-mini
     #   - minimax: openrouter/minimax/minimax-m2.1
+    #   - ollama: ollama_chat/qwen2.5-coder:7b (local, free)
     MAIN_LLM_MODEL: Optional[str] = None
+    # Ollama local inference (free, no API key)
+    OLLAMA_API_BASE: Optional[str] = None
     # ============================================
     
     # ===== PRESENCE CONFIGURATION =====

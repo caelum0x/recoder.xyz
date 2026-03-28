@@ -91,7 +91,8 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
     const bodyHash = await sha256Hex(body);
     const payload = [timestamp, nonce, 'POST', verifyPathname, bodyHash].join('.');
     const signature = await hmacSha256Hex(internalServiceKey, payload);
-    const mainSiteUrl = env?.MAIN_SITE_URL || process.env.MAIN_SITE_URL || 'https://recoder.xyz';
+    const mainSiteUrl = env?.MAIN_SITE_INTERNAL_URL || process.env.MAIN_SITE_INTERNAL_URL
+      || env?.MAIN_SITE_URL || process.env.MAIN_SITE_URL || 'https://recoder.xyz';
 
     // Verify token with main app
     const verifyResponse = await fetch(`${mainSiteUrl}${verifyPathname}`, {

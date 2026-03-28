@@ -9,6 +9,9 @@ import { requireAdminRole } from "@/services/teams";
 
 export const maxDuration = 60;
 
+const OPENROUTER_MODEL =
+	process.env.OPENROUTER_TEXT_MODEL || "google/gemini-2.0-flash-001";
+
 type ChatMessage = {
 	role: "system" | "user" | "assistant" | "tool";
 	content: string | null;
@@ -131,7 +134,7 @@ Be concise, actionable, and professional. Reference specific deliverables and st
 				"Content-Type": "application/json",
 			},
 			body: JSON.stringify({
-				model: "openai/gpt-4o-mini",
+				model: OPENROUTER_MODEL,
 				messages: fullMessages,
 				max_tokens: 1500,
 				temperature: 0.3,
@@ -164,7 +167,7 @@ Be concise, actionable, and professional. Reference specific deliverables and st
 	// ── No tool calls: stream a plain response ──────────────────
 	if (!toolCalls || toolCalls.length === 0) {
 		// The model already returned a text response, stream it as SSE
-		const content = assistantMessage?.content || "";
+		const content = assistantMessage?.content || assistantMessage?.reasoning || "";
 		return streamText(content);
 	}
 
@@ -209,7 +212,7 @@ Be concise, actionable, and professional. Reference specific deliverables and st
 				"Content-Type": "application/json",
 			},
 			body: JSON.stringify({
-				model: "openai/gpt-4o-mini",
+				model: OPENROUTER_MODEL,
 				messages: followUpMessages,
 				max_tokens: 1500,
 				temperature: 0.3,

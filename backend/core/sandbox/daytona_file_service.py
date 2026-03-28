@@ -51,12 +51,15 @@ class DaytonaFileService:
                             timeout=self.timeout,
                         )
 
-                # Verify
-                verify = await sandbox.process.exec(f"test -f '{path}' && echo OK", timeout=10)
-                if "OK" in (verify.result or ""):
+                # Verify file exists AND has content (test -s checks non-empty)
+                verify = await sandbox.process.exec(f"test -s '{path}' && echo OK || (test -f '{path}' && echo EMPTY || echo MISSING)", timeout=10)
+                verify_result = verify.result or ""
+                if "OK" in verify_result:
                     return True
-
-                logger.warning(f"[DaytonaFileService] write_file verify failed for {path}")
+                if "EMPTY" in verify_result:
+                    logger.error(f"[DaytonaFileService] write_file created EMPTY file at {path}")
+                else:
+                    logger.warning(f"[DaytonaFileService] write_file verify failed for {path}")
             except Exception as e:
                 logger.warning(f"[DaytonaFileService] write_file attempt {attempt+1} error: {e}")
 
