@@ -95,16 +95,17 @@ $5 OpenRouter credits added. Batch 1 deployed. Batch 2 deploying now (Agent 1).
 - Container itself is healthy (Docker reports "Up, healthy")
 - Dev server starts successfully on port 5173 inside container
 
-### Agency (agency.recoder.xyz) — BROKEN
-- Copilot returns 500: `POST /api/agency/copilot-chat 500` — same invalid model ID
-- GitHub auth gives `account_not_linked` error from Better Auth
-- Workflows page gives Better Auth error on GitHub auth attempt
+### Agency (agency.recoder.xyz) — PARTIAL
+- **Copilot: WORKS** (kinda — responds to chat)
+- **Workflows/playground: BROKEN** — 500 errors, "Failed to create and start task from stage" (Server Components render error). This is the Giselle workflow engine, not our copilot code.
+- GitHub auth: `account_not_linked` (known, deferred — duplicate Better Auth instance)
 
-### PM (pm.recoder.xyz) — WORKING
-- User confirmed: copilot reads PM data, creates releases, write actions work
-- Only issue: new data needs page refresh to appear (deferred)
-- Uses `OPENROUTER_TEXT_MODEL=openai/gpt-4o-mini` — works with credits
-- DO NOT TOUCH until other platforms are done
+### PM (pm.recoder.xyz) — BROKEN (REGRESSION)
+- Was confirmed working before this deploy session
+- Now: React Error #418 (SSR hydration mismatch) — page may not render properly
+- Random domain 404s (analytics/tracking with expired domains)
+- Root cause likely: BETTER_AUTH_SECRET change invalidated sessions, or PM needs rebuild with new secret
+- Uses `OPENROUTER_TEXT_MODEL=openai/gpt-4o-mini` — model itself should work
 
 ### recoder.xyz (auth) — NOT TESTED
 - Sign-out fix deployed but not verified
@@ -118,12 +119,12 @@ $5 OpenRouter credits added. Batch 1 deployed. Batch 2 deploying now (Agent 1).
 | # | Task | Detail | Status |
 |---|------|--------|--------|
 | 1 | ~~Fix model ID everywhere~~ | `gemini-2.0-flash` → `gemini-2.0-flash-001` | DONE (Agent 1) |
-| 2 | **Deploy batch 2** | `bash scripts/deploy-batch2.sh` | Agent 1 deploying |
-| 3 | **Verify agents chat** | Send message, get LLM response | After deploy |
-| 4 | **Verify agency copilot** | Floating chat responds | After deploy |
-| 5 | **Verify sign-out** | No ESM crash | After deploy |
-| 6 | **Verify Web IDE preview** | iframe loads without X-Frame-Options block | After deploy |
-| 7 | **Verify OpenClaw redirect** | openclaw.recoder.xyz → agency.recoder.xyz | After deploy |
+| 2 | ~~Deploy batch 2~~ | All deployed + OpenClaw removed + DB password fixed | DONE |
+| 3 | **Agents chat** | BROKEN — Gemini 400 "must include at least one parts field". Empty message body sent to LLM. | NEEDS FIX |
+| 4 | **Agents canvas** | BROKEN — "Add Frame To Canvas failed" + "API quota exceeded" on image gen | NEEDS FIX |
+| 5 | **Sign-in** | WORKS — DB password reset fixed the 503 | DONE |
+| 6 | **A2A bridge** | WORKS — npx recoder-a2a connects via wss://docker.recoder.xyz | DONE |
+| 7 | ~~OpenClaw redirect~~ | openclaw.recoder.xyz → agency.recoder.xyz | DONE |
 
 ### TIER 1: Make agent tools work (6-12)
 
