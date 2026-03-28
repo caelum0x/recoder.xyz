@@ -57,7 +57,7 @@ async def generate_and_update_project_name(project_id: str, prompt: str):
             model_name=model_name,
             max_tokens=100,
             temperature=0.3,
-            frequency_penalty=1.5,
+            frequency_penalty=0.5,
             response_format={"type": "json_object"},
             stream=False
         )
@@ -71,7 +71,7 @@ async def generate_and_update_project_name(project_id: str, prompt: str):
                 parsed_response = json.loads(raw_content)
                 
                 if isinstance(parsed_response, dict):
-                    title = parsed_response.get('title', '').strip()
+                    title = (parsed_response.get('title') or parsed_response.get('name') or '').strip()
                     if title:
                         generated_name = title.strip('\'" \n\t')
                         logger.debug(f"LLM generated name for project {project_id}: '{generated_name}'")

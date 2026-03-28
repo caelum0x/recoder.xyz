@@ -129,19 +129,8 @@ export function CommandToolView({
     // If it's a non-blocking command, don't show output section
     if (isNonBlockingCommand) return false;
 
-    // Check if output contains actual command results (not just status messages)
-    const actualOutputPatterns = [
-      'root@',
-      'COMMAND_DONE_',
-      'Count:',
-      'date:',
-      'ls:',
-      'pwd:'
-    ];
-
-    return actualOutputPatterns.some(pattern =>
-      displayOutput.includes(pattern)
-    ) || displayOutput.trim().length > 50; // Arbitrary threshold for "substantial" output
+    // Show any non-empty output — don't filter by patterns or length
+    return displayOutput.trim().length > 0;
   }, [displayOutput, isNonBlockingCommand]);
 
   const formattedOutput = React.useMemo(() => {
