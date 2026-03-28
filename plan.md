@@ -150,8 +150,7 @@ OpenClaw is ABANDONED as standalone. Running the full 400k-line TypeScript agent
 - Recoder-branded skills/configs
 
 **Step 2: Remove from server (frees ~400MB + CPU)**
-- Stop `vcpeer` + `vcpeer-cron` PM2 services
-- Remove `openclaw-gateway` Docker container
+- Remove `openclaw-gateway` Docker container (NOTE: vcpeer is NOT OpenClaw — do not touch)
 - Remove OpenClaw server block from nginx
 - Clean up `openclaw.recoder.xyz` DNS
 
