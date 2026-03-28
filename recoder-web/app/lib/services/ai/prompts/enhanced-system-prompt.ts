@@ -143,7 +143,7 @@ Your response **must always strictly follow** the following XML structure, **wit
 
 - **shadcn/ui** components (based on Radix UI)
 
-- **Tailwind CSS** with Typography plugin
+- **Tailwind CSS v3** (use \`"tailwindcss": "^3.4"\` — NOT v4, NOT "latest")
 
 - **React Router DOM** (v7+ has built-in TypeScript types — do NOT install @types/react-router-dom)
 
@@ -153,14 +153,23 @@ Your response **must always strictly follow** the following XML structure, **wit
   - **Zod** for validation
 
 ### CRITICAL: Package Versions in package.json
-- When writing package.json, use \`"latest"\` as the version for ALL dependencies instead of specific version numbers
-- Example: \`"react": "latest"\`, \`"tailwindcss": "latest"\`, NOT \`"react": "^19.0.0"\`
+- When writing package.json, use \`"latest"\` as the version for ALL dependencies EXCEPT tailwindcss
+- Example: \`"react": "latest"\`, \`"tailwindcss": "^3.4"\`, NOT \`"react": "^19.0.0"\`
 - NEVER use specific version numbers like \`^6.22.2\` or \`~5.69.0\` — these may not exist on npm and will cause install failures
 - Do NOT install \`@types/\` packages for libraries that bundle their own TypeScript types (react-router-dom v7+, @tanstack/react-query, zod, etc.)
+
+### CRITICAL: Tailwind CSS v3 Configuration (NOT v4)
+- Use Tailwind CSS v3 with PostCSS. Do NOT use Tailwind v4 or \`@tailwindcss/vite\`.
+- package.json devDependencies: \`"tailwindcss": "^3.4"\`, \`"postcss": "^8.4"\`, \`"autoprefixer": "^10.4"\`
+- Create postcss.config.js with \`tailwindcss: {}\` and \`autoprefixer: {}\` plugins
+- Create tailwind.config.js with content: \`['./index.html', './src/**/*.{js,ts,jsx,tsx}']\`
+- In src/index.css use: \`@tailwind base; @tailwind components; @tailwind utilities;\`
+- Do NOT use \`@import "tailwindcss"\` — that is Tailwind v4 syntax
 
 ### CRITICAL: Vite Server Configuration
 - When writing vite.config.ts, ALWAYS include \`server: { host: '0.0.0.0' }\` so the dev server is accessible from outside the container
 - Without \`host: '0.0.0.0'\`, the live preview won't load — this is required for ALL Vite projects
+- Do NOT add \`@tailwindcss/vite\` to the Vite plugins — use PostCSS instead
 
 ### Project Structure
 

@@ -402,7 +402,11 @@ async def get_composio_profiles(
 ):
     try:
         profile_service = get_profile_service(None)
+    except Exception as svc_err:
+        logger.warning(f"Credential profile service unavailable: {svc_err}")
+        return ComposioCredentialsResponse(success=True, toolkits=[], total_profiles=0)
 
+    try:
         try:
             from core.composio_integration.composio_profile_service import ComposioProfileService
             composio_service = ComposioProfileService()
@@ -410,7 +414,11 @@ async def get_composio_profiles(
             logger.warning(f"Composio integration unavailable (import failed): {import_err}")
             return ComposioCredentialsResponse(success=True, toolkits=[], total_profiles=0)
 
-        all_profiles = await profile_service.get_all_user_profiles(user_id)
+        try:
+            all_profiles = await profile_service.get_all_user_profiles(user_id)
+        except Exception as db_err:
+            logger.warning(f"Could not load credential profiles (table may not exist): {db_err}")
+            return ComposioCredentialsResponse(success=True, toolkits=[], total_profiles=0)
 
         composio_profiles = [
             profile for profile in all_profiles

@@ -229,6 +229,21 @@ export async function daytonaExecBackground(
   // Only escape backticks to prevent command injection.
   const safeCmd = command.replace(/`/g, '\\`');
   const safeCwd = cwd.replace(/'/g, "'\\''");
+
+  // Kill any existing dev server processes first to prevent port conflicts
+  // (vite increments port when busy: 5173→5174→5175→...)
+  try {
+    await dc.execCommand(sandboxId,
+      `kill -9 $(cat /tmp/dev.pid 2>/dev/null) 2>/dev/null; ` +
+      `pkill -9 -f 'node|npm|vite|next' 2>/dev/null || ` +
+      `(ps -eo pid,args 2>/dev/null | grep -E 'node|npm|vite|next' | grep -v grep | awk '{print $1}' | while read pid; do kill -9 "$pid" 2>/dev/null; done); ` +
+      `rm -f /tmp/dev.pid; sleep 1; true`,
+      { timeoutSecs: 10 },
+    );
+  } catch {
+    // Non-fatal — proceed with starting the new process
+  }
+
   // Use nohup + setsid + disown to keep process alive after exec returns.
   // Write PID to file so we can track it later.
   const script = `cd '${safeCwd}' && BROWSER=none nohup setsid ${safeCmd} > /tmp/dev.log 2>&1 & echo $! > /tmp/dev.pid`;
@@ -288,7 +303,7 @@ export async function daytonaGetWorkspaceState(
     try {
       const curlResult = await dc.execCommand(
         sandboxId,
-        'curl -sf -o /dev/null -w "%{http_code}" http://localhost:3000 2>/dev/null || curl -sf -o /dev/null -w "%{http_code}" http://localhost:5173 2>/dev/null || echo "000"',
+        'for p in 5173 5174 5175 5176 5177 5178 3000 3001 8080 8081; do curl -sf http://localhost:$p > /dev/null 2>&1 && echo "200" && exit 0; done; echo "000"',
         { timeoutSecs: 5 },
       );
       const code = parseInt(curlResult.output.trim(), 10);
@@ -324,15 +339,14 @@ export async function ensureDaytonaSandboxRunning(
           { timeoutSecs: 5 },
         );
         if (checkResult.output?.includes('HAS_DEV')) {
-          // Check if dev server is already running
+          // Check if dev server is already running on any common port
           const portCheck = await dc.execCommand(sandboxId,
-            'curl -sf -o /dev/null -w "%{http_code}" http://localhost:3000 2>/dev/null || echo "000"',
+            'for p in 5173 5174 5175 5176 5177 5178 3000 3001; do curl -sf http://localhost:$p > /dev/null 2>&1 && echo "FOUND:$p" && exit 0; done; echo "NONE"',
             { timeoutSecs: 5 },
           );
-          const code = parseInt(portCheck.output?.trim() || '0', 10);
-          if (code === 0 || code >= 500) {
+          if (portCheck.output?.includes('NONE')) {
             logger.info({ sandboxId }, 'Daytona: dev server not running after restart, auto-starting');
-            await daytonaExecBackground(sandboxId, 'npm run dev -- --host 0.0.0.0 --port 3000', '/home/daytona');
+            await daytonaExecBackground(sandboxId, 'npm run dev -- --host 0.0.0.0', '/home/daytona');
           }
         }
       } catch (devErr: any) {

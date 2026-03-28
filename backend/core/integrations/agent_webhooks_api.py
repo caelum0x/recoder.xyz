@@ -143,33 +143,38 @@ async def list_webhooks(
     agent_id: Optional[str] = Query(None),
     user_id: str = Depends(verify_and_get_user_id_from_jwt),
 ):
-    if agent_id:
-        rows = await execute(
-            """
-            SELECT w.*,
-                   0 AS delivered_count,
-                   0 AS total_delivery_count,
-                   NULL::timestamptz AS last_delivery_at
-            FROM agent_webhooks w
-            WHERE w.user_id::text = :user_id AND w.agent_id = :agent_id
-            ORDER BY w.created_at DESC
-            """,
-            {"user_id": user_id, "agent_id": agent_id},
-        )
-    else:
-        rows = await execute(
-            """
-            SELECT w.*,
-                   0 AS delivered_count,
-                   0 AS total_delivery_count,
-                   NULL::timestamptz AS last_delivery_at
-            FROM agent_webhooks w
-            WHERE w.user_id::text = :user_id
-            ORDER BY w.created_at DESC
-            """,
-            {"user_id": user_id},
-        )
-    return {"webhooks": [_serialize_webhook(r) for r in rows]}
+    try:
+        if agent_id:
+            rows = await execute(
+                """
+                SELECT w.*,
+                       0 AS delivered_count,
+                       0 AS total_delivery_count,
+                       NULL::timestamptz AS last_delivery_at
+                FROM agent_webhooks w
+                WHERE w.user_id::text = :user_id AND w.agent_id = :agent_id
+                ORDER BY w.created_at DESC
+                """,
+                {"user_id": user_id, "agent_id": agent_id},
+            )
+        else:
+            rows = await execute(
+                """
+                SELECT w.*,
+                       0 AS delivered_count,
+                       0 AS total_delivery_count,
+                       NULL::timestamptz AS last_delivery_at
+                FROM agent_webhooks w
+                WHERE w.user_id::text = :user_id
+                ORDER BY w.created_at DESC
+                """,
+                {"user_id": user_id},
+            )
+        return {"webhooks": [_serialize_webhook(r) for r in rows]}
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).warning(f"Webhooks query failed (table may not exist): {e}")
+        return {"webhooks": []}
 
 
 @router.patch("/webhooks/{webhook_id}", summary="Update webhook")
