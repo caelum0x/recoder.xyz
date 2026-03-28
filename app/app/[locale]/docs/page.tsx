@@ -105,7 +105,7 @@ export default function DocsPage() {
     { title: 'Getting Started', href: '/docs/getting-started', icon: Rocket, description: 'Set up your account in 5 minutes' },
     { title: 'FAQ', href: '/docs/faq', icon: BookOpen, description: 'Frequently asked questions' },
     { title: 'Install CLI', href: '/cli', icon: Terminal, description: 'Get started with the command line' },
-    { title: 'Open Web Platform', href: '/platform/web', icon: Globe, description: 'Launch the web interface' }
+    { title: 'Open Web Platform', href: '/platform/web', icon: Boxes, description: 'Launch the web interface' }
   ];
 
   return (
