@@ -6,10 +6,17 @@ Context: Forked from Kortix Suna. 8+ months of work. Most features still broken.
 ## What ACTUALLY works (user-confirmed in browser):
 1. Plain text chat on agents
 2. Web search (SearXNG, first ~5 links)
-3. Web IDE live preview (confirmed "E2E" text rendered)
-4. Web IDE terminal (npm install works)
-5. Agency/PM pages load
-6. OpenClaw dashboard loads
+3. Agency/PM pages load
+4. OpenClaw dashboard loads
+5. Web IDE can generate code files
+6. At maximum user saw a Vite error on Web IDE live preview — never a working preview in the actual recoder web UI
+
+## What was FALSELY claimed as working:
+- Web IDE live preview — sandbox URL returns data via curl/API but never rendered in the actual web.recoder.xyz iframe
+- Web IDE terminal — npm install worked once via API test but breaks in the UI (broken pipe, PTY issues)
+- DOCX creation — backend creates 37KB file but frontend shows 310-380 byte text file or "Loading... Retrying"
+- Image generation — OpenRouter generates but display fails
+- "50+ tasks completed" — most were backend-only fixes that never worked in browser
 
 ## What does NOT work (user-confirmed broken):
 1. DOCX preview — "Loading... Retrying..."
