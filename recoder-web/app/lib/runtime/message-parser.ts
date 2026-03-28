@@ -160,8 +160,8 @@ export class StreamingMessageParser {
     }
 
     state.parseAttempts++;
-    if (state.parseAttempts > 10000) {
-      logger.error('Parser safety limit reached');
+    if (state.parseAttempts > 100000) {
+      logger.error('Parser safety limit reached after 100k parse calls');
       return input.substring(state.position);
     }
 
