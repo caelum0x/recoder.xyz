@@ -182,6 +182,49 @@ async function recoverContainerFromDocker(
   }
 }
 
+/**
+ * Recover a Daytona sandbox for a project by querying the Daytona API.
+ * Agent-created sandboxes are only in Daytona (not Docker), so we need
+ * to look them up separately. Uses the same pattern as the health check.
+ */
+async function recoverContainerFromDaytona(
+  projectId: string,
+  containers: Map<string, any>
+): Promise<any | undefined> {
+  if (process.env.USE_DAYTONA_CONTAINERS !== 'true') return undefined;
+  try {
+    const dc = getDaytonaClient();
+    const sandboxes = await dc.listSandboxes();
+    const matches = sandboxes
+      .filter((s: any) => s.labels?.projectId === projectId || s.labels?.id === projectId)
+      .sort((a: any, b: any) => {
+        const aR = a.state === 'started' || a.state === 'running' ? 1 : 0;
+        const bR = b.state === 'started' || b.state === 'running' ? 1 : 0;
+        if (aR !== bR) return bR - aR;
+        return (b.createdAt || '').localeCompare(a.createdAt || '');
+      });
+    const match = matches[0];
+    if (match) {
+      const previewUrl = dc.getPreviewUrl(match.id, 5173);
+      const entry = {
+        id: match.id,
+        port: 5173,
+        ptyPort: 0,
+        lastActive: Date.now(),
+        daytona: true,
+        daytonaPreviewUrl: previewUrl,
+      } as any;
+      containers.set(projectId, entry);
+      console.log(`🔄 [Preview] Recovered Daytona sandbox for ${projectId}: ${match.id} (state: ${match.state})`);
+      return entry;
+    }
+    return undefined;
+  } catch (err) {
+    console.warn(`[Preview] Daytona recovery failed for ${projectId}:`, (err as any).message);
+    return undefined;
+  }
+}
+
 // Friendly preview HTML for build/errors
 function friendlyPreviewPage(projectId: string, message: string, options: { showLogs?: boolean; errorDetails?: string[]; canRetry?: boolean } = {}) {
   const { showLogs = false, errorDetails = [], canRetry = true } = options;
@@ -370,12 +413,13 @@ export function setupPreviewProxy(app: Express, containers: Map<string, { id: st
 
     if (!entry) {
       console.warn(`[Preview] Request for unknown project: ${projectId}`);
-      // Try to recover container info from Docker API
+      // Try Docker first, then Daytona (agent-created sandboxes)
       entry = await recoverContainerFromDocker(projectId, containers);
-      
       if (!entry) {
-        // Return a friendly 404/placeholder so the iframe shows a clear message
-        return res.status(404).send(friendlyPreviewPage(projectId, 'No running container was found for this project.')); 
+        entry = await recoverContainerFromDaytona(projectId, containers);
+      }
+      if (!entry) {
+        return res.status(404).send(friendlyPreviewPage(projectId, 'No running container was found for this project.'));
       }
     } else {
       // Update last active time
@@ -684,6 +728,9 @@ export function setupPreviewProxy(app: Express, containers: Map<string, { id: st
     let entry = containers.get(projectId);
     if (!entry) {
       entry = await recoverContainerFromDocker(projectId, containers);
+    }
+    if (!entry) {
+      entry = await recoverContainerFromDaytona(projectId, containers);
     }
     if (!entry?.id) {
       return res.status(404).send('<h1>Sandbox not found</h1><p>The preview container is not running.</p>');
