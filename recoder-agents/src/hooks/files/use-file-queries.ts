@@ -208,7 +208,13 @@ export function useFileContentQuery(
         throw new Error('Missing required parameters');
       }
 
-      const token = await requireSessionAccessToken();
+      // The proxy route handles auth via cookies — token is optional
+      let token = '';
+      try {
+        token = await requireSessionAccessToken() || '';
+      } catch {
+        // Token unavailable — proxy will use cookie auth instead
+      }
       return fetchFileContent(sandboxId, normalizedPath, effectiveContentType, token);
     },
     enabled: Boolean(sandboxId && normalizedPath && (options.enabled !== false)),
