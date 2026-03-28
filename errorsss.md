@@ -199,7 +199,7 @@ Server and client render different content. Usually caused by session state diff
 ## Remaining Issues (Priority Order, updated 2026-03-29)
 
 ### CRITICAL — Agent can create but user can't see results
-1. **Files tab BROKEN** — file browser next to agent thread doesn't show sandbox files. Agent creates files successfully but user can't see them.
+1. **Files tab appears BROKEN** — Investigation (Agent 1): Backend returns sandbox.id correctly, sandbox status is LIVE, all APIs return correct data with CORS headers. Root cause: likely **browser cached CORS-failed responses** from when backend was restarting. Fix: hard refresh (Ctrl+Shift+R) or clear browser cache for api.recoder.xyz. If still broken after refresh, the sandbox status query may be failing intermittently.
 2. **Preview tab BROKEN** — file preview in tool view doesn't render content. Shows blank or "No content".
 3. **Read File FAILS** — agent's read_file tool fails. Can create files but can't read them back.
 4. **Live preview BROKEN** — Web IDE preview 502, agents preview broken. No way to see generated websites.
