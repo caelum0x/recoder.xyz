@@ -1,7 +1,7 @@
 /**
  * Shared workflow contract version constants.
  *
- * All consumers (openclaw, docker-backend, desktop, recoder-web) should
+ * All consumers (docker-backend, desktop, recoder-web) should
  * import and reference these constants so parity checks can compare
  * versions instead of brittle string-matching.
  */

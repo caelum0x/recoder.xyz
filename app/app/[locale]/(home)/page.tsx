@@ -79,18 +79,6 @@ const PRODUCTS = [
     features: ['Client portal', 'Quote generation', 'Deliverable tracking', 'Template library'],
   },
   {
-    id: 'openclaw',
-    name: 'OpenClaw',
-    tagline: 'Voice + WhatsApp AI gateway',
-    description:
-      'Open-source voice and messaging gateway. Connect AI agents to phone calls, WhatsApp, and more.',
-    href: () => 'https://openclaw.recoder.xyz',
-    external: true,
-    color: 'cyan',
-    icon: Phone,
-    features: ['Voice AI', 'WhatsApp integration', 'Open source', 'Multi-channel'],
-  },
-  {
     id: 'cli',
     name: 'recoder-code',
     tagline: 'CLI for developers',
@@ -425,7 +413,6 @@ export default function HomePage() {
                 <span className="px-3 py-1.5 rounded border border-purple-500/20 text-purple-400">Web IDE</span>
                 <span className="px-3 py-1.5 rounded border border-blue-500/20 text-blue-400">PM</span>
                 <span className="px-3 py-1.5 rounded border border-emerald-500/20 text-emerald-400">Agency</span>
-                <span className="px-3 py-1.5 rounded border border-cyan-500/20 text-cyan-400">OpenClaw</span>
               </div>
             </div>
           </div>

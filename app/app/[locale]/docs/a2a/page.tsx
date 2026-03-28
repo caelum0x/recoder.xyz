@@ -105,11 +105,11 @@ npx recoder-a2a-sdk`}
 |  Agent Registry     |  Audit Trail       |
 +----------+--------------+---------------+
            |              |
-     +-----+-----+  +----+-----+
-     | Python    |  | OpenClaw |
-     | Backend   |  | Gateway  |
-     | (Agents)  |  | (Social) |
-     +-----------+  +----------+`}
+     +-----+-----+
+     | Python    |
+     | Backend   |
+     | (Agents)  |
+     +-----------+
               </pre>
             </div>
           </section>
@@ -174,7 +174,7 @@ npx recoder-a2a-sdk`}
               Social Channel Integration
             </h2>
             <p className="text-zinc-400 mb-4">
-              OpenClaw connects WhatsApp, Telegram, Teams, and more to the Recoder platform.
+              Recoder Agency connects WhatsApp, Telegram, Teams, and more to the Recoder platform.
               Messages from social channels are automatically routed to PM or Agency based on content.
             </p>
             <div className="grid gap-3 sm:grid-cols-2">

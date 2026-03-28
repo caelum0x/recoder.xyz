@@ -52,7 +52,6 @@ export class SessionSyncManager {
       'frontend.recoder.xyz',   // Legacy alias for agents
       'agency.recoder.xyz',     // AI agent workflows
       'pm.recoder.xyz',         // Project management
-      'openclaw.recoder.xyz',   // Open-source AI tools
     ];
 
     return domains.map(domain => `https://${domain}/api/auth/sync?token=${encodeURIComponent(syncToken)}`);
@@ -163,7 +162,6 @@ export class SessionSyncManager {
       'frontend.recoder.xyz',
       'agency.recoder.xyz',
       'pm.recoder.xyz',
-      'openclaw.recoder.xyz',
     ].filter(domain => domain !== currentDomain);
 
     const syncResults = await Promise.allSettled(
@@ -220,7 +218,6 @@ export class SessionSyncManager {
       'frontend.recoder.xyz',
       'agency.recoder.xyz',
       'pm.recoder.xyz',
-      'openclaw.recoder.xyz',
     ].filter(domain => domain !== currentDomain);
 
     const logoutPromises = recoderDomains.map(async (domain) => {

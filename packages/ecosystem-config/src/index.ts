@@ -4,8 +4,7 @@ export type EcosystemAppId =
   | "agency"
   | "pm"
   | "ui"
-  | "agents"
-  | "openclaw";
+  | "agents";
 
 export interface EcosystemApp {
   id: EcosystemAppId;
@@ -86,7 +85,6 @@ export const RECODER_ECOSYSTEM_URLS = {
   pm: "https://pm.recoder.xyz",
   ui: "https://ui.recoder.xyz",
   agents: "https://agents.recoder.xyz",
-  openclaw: "https://openclaw.recoder.xyz",
   stagingHome: "https://staging.recoder.xyz",
 } as const;
 
@@ -150,12 +148,6 @@ export const RECODER_ECOSYSTEM_APPS: readonly EcosystemApp[] = [
     label: "Agents",
     description: "AI Agent IDE",
     href: RECODER_ECOSYSTEM_URLS.agents,
-  },
-  {
-    id: "openclaw",
-    label: "OpenClaw",
-    description: "Open-source AI Tools",
-    href: RECODER_ECOSYSTEM_URLS.openclaw,
   },
   {
     id: "ui",

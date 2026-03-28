@@ -107,18 +107,7 @@ export const RECODER_SERVICES: RecoderService[] = [
     showInSwitcher: SWITCHER_SERVICE_IDS.has('agency'),
     internal: false,
   },
-  {
-    id: 'openclaw',
-    label: 'OpenClaw',
-    description: 'Open-source AI tools',
-    productionUrl: RECODER_ECOSYSTEM_URLS.openclaw,
-    devUrl: 'http://localhost:18789',
-    port: 18789,
-    healthPath: '/health',
-    healthResponseType: 'json',
-    showInSwitcher: SWITCHER_SERVICE_IDS.has('openclaw'),
-    internal: false,
-  },
+  // OpenClaw removed (2026-03-28) — redirects to agency.recoder.xyz
   {
     id: 'redis',
     label: 'Redis',

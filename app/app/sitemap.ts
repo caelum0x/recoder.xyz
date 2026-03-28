@@ -64,7 +64,6 @@ const platformPages: SitemapPage[] = [
   { path: '/platform/agency',         changeFrequency: 'weekly',   priority: 0.8 },
   { path: '/platform/api',            changeFrequency: 'weekly',   priority: 0.8 },
   { path: '/platform/chat',           changeFrequency: 'weekly',   priority: 0.8 },
-  { path: '/platform/openclaw',       changeFrequency: 'weekly',   priority: 0.8 },
   { path: '/platform/pm',             changeFrequency: 'weekly',   priority: 0.8 },
   { path: '/platform/studio',         changeFrequency: 'weekly',   priority: 0.8 },
   { path: '/platform/web',            changeFrequency: 'weekly',   priority: 0.8 },

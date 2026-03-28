@@ -254,17 +254,6 @@ export function RecoderBackendSchema() {
   );
 }
 
-export function OpenClawSchema() {
-  return (
-    <PlatformServiceSchema
-      name="OpenClaw"
-      description="Open-source AI agent framework with CLI workflow management, plugin and extension system, lane-based parallel execution, diagnostics, and JSON schema for DevOps automation."
-      url="https://recoder.xyz/platform/openclaw"
-      applicationCategory="DeveloperApplication"
-    />
-  );
-}
-
 export function RecoderAPISchema() {
   return (
     <PlatformServiceSchema
@@ -300,7 +289,6 @@ export function AllPlatformServicesSchema() {
       <RecoderWebSchema />
       <RecoderPMSchema />
       <RecoderBackendSchema />
-      <OpenClawSchema />
       <RecoderAPISchema />
       <RecoderChatSchema />
     </>
