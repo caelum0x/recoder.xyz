@@ -117,7 +117,7 @@ $5 OpenRouter credits added. All fixes deployed and rebuilt on server.
 
 | # | Task | Detail | Status |
 |---|------|--------|--------|
-| 1 | **Fix model ID everywhere** | `google/gemini-2.0-flash` → `google/gemini-2.0-flash-001` | Fixed locally, needs deploy |
+| 1 | **Fix model ID everywhere** | `google/gemini-2.0-flash` → `google/gemini-2.0-flash-001` | DONE (Agent 1) — all files fixed, needs deploy |
 | 2 | **Redeploy to server** | rsync + restart backend + rebuild PM/Agency | Blocked on #1 |
 | 3 | **Verify agents chat works** | Send message, get LLM response | After #2 |
 | 4 | **Verify PM/Agency copilots** | Floating chat responds | After #2 |
@@ -152,8 +152,8 @@ $5 OpenRouter credits added. All fixes deployed and rebuilt on server.
 |---|------|--------|
 | 19 | **PM copilot write actions** | Create features, update status, add feedback via tool calling |
 | 20 | **Agency copilot write actions** | Create clients, projects, deliverables via tool calling |
-| 21 | **Fix agency client portal 401** | Remove copilot from client layout or add client-safe endpoint |
-| 22 | **Fix double copilot on project page** | Remove one of the two overlapping copilot buttons |
+| 21 | **Fix agency GitHub `account_not_linked`** | ROOT CAUSE: Agency has duplicate Better Auth instance + `/api/auth/[...all]` route. Remove agency auth API, proxy to recoder.xyz. Files: `lib/auth/better-auth.ts`, `app/api/auth/[...all]/route.ts` |
+| 22 | ~~Fix double copilot~~ | Agent 2 already removed duplicate |
 | 23 | **Clean PM seed data** | Remove any test data from features page |
 | 24 | **PM connect features** | Show "not configured" gracefully for GitHub/Linear/Jira |
 

@@ -174,9 +174,9 @@ export const openrouter = {
     url: "https://openrouter.ai/models/google/gemini-2.5-pro",
   }),
 
-  "openrouter/google/gemini-2.0-flash": defineLanguageModel({
+  "openrouter/google/gemini-2.0-flash-001": defineLanguageModel({
     provider: openrouterProvider,
-    id: "openrouter/google/gemini-2.0-flash",
+    id: "openrouter/google/gemini-2.0-flash-001",
     name: "Gemini 2.0 Flash (OpenRouter)",
     description:
       "Google's Gemini 2.0 Flash accessed via OpenRouter for unified billing and fallback routing.",
@@ -202,7 +202,7 @@ export const openrouter = {
     defaultConfiguration: {
       temperature: 1.0,
     },
-    url: "https://openrouter.ai/models/google/gemini-2.0-flash",
+    url: "https://openrouter.ai/models/google/gemini-2.0-flash-001",
   }),
 
   // Meta Llama models via OpenRouter

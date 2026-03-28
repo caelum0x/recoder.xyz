@@ -15387,13 +15387,18 @@ app.post('/api/publish/:projectId', authenticateRequest, verifyProjectOwnership,
     logger.info({ projectId }, 'Publish: build complete');
 
     // 4. Verify build output exists
-    const checkOutput = await execInContainer(entry.id, `ls -la /workspace/${outputDir}/ 2>/dev/null | head -5 || echo "NOT_FOUND"`);
+    const isDaytona = daytonaSandboxIds.has(entry.id);
+    const workDir = isDaytona ? '/home/daytona' : '/workspace';
+    const exec = isDaytona
+      ? async (cmd: string) => (await daytonaExec(entry.id, cmd, { timeoutSecs: 30 })).output
+      : (cmd: string) => execInContainer(entry.id, cmd);
+    const checkOutput = await exec(`ls -la ${workDir}/${outputDir}/ 2>/dev/null | head -5 || echo "NOT_FOUND"`);
     if (checkOutput.includes('NOT_FOUND')) {
       // Try common fallbacks
       const fallbackDirs = ['dist', 'build', 'out', '.next/static'];
       let found = false;
       for (const dir of fallbackDirs) {
-        const check = await execInContainer(entry.id, `[ -d /workspace/${dir} ] && echo "EXISTS" || echo "NOPE"`);
+        const check = await exec(`[ -d ${workDir}/${dir} ] && echo "EXISTS" || echo "NOPE"`);
         if (check.includes('EXISTS')) {
           logger.info({ dir }, 'Publish: using fallback output dir');
           outputDir = dir;
@@ -15469,7 +15474,8 @@ app.post('/api/publish/:projectId', authenticateRequest, verifyProjectOwnership,
     sendSuccess(res, { url, slug, publishedAt });
   } catch (error: any) {
     logger.error({ err: error, projectId }, 'Publish: failed to publish project');
-    return sendError(res, createError(ErrorCode.INTERNAL_ERROR, 'Publish failed'));
+    const detail = error?.message || 'Unknown error';
+    return sendError(res, createError(ErrorCode.INTERNAL_ERROR, `Publish failed: ${detail}`));
   }
 }));
 

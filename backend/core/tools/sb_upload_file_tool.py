@@ -156,19 +156,18 @@ class SandboxUploadFileTool(SandboxToolsBase):
                 return self.success_response(message)
                 
             except Exception as e:
-                logger.warning(f"S3 upload failed, falling back to sandbox URL: {str(e)}")
-                # Fallback: serve file directly from sandbox
+                logger.warning(f"S3 upload failed, falling back to sandbox file API: {str(e)}")
+                # Fallback: serve file via backend API (no S3 needed)
                 sandbox_id = self.sandbox.id if hasattr(self.sandbox, 'id') else None
                 if sandbox_id:
-                    sandbox_url = f"https://8080-{sandbox_id}.sandbox.recoder.xyz"
-                    # Strip /workspace prefix for the URL
-                    url_path = full_path.replace('/workspace/', '').replace('/home/daytona/', '')
                     from urllib.parse import quote
-                    download_url = f"{sandbox_url}/{quote(url_path)}"
-                    message = f"📁 File '{original_filename}' created!\n"
-                    message += f"📏 Size: {self._format_file_size(file_info.size)}\n"
-                    message += f"🔗 Download: {download_url}\n"
-                    message += f"\n💡 File is available in the sandbox workspace."
+                    # Use the agents file content proxy — works without S3 or wildcard DNS
+                    api_url = f"https://api.recoder.xyz/v1/sandboxes/{sandbox_id}/files/content?path={quote(full_path)}"
+                    agents_url = f"https://agents.recoder.xyz/api/files/content?sandboxId={sandbox_id}&path={quote(full_path)}"
+                    message = f"File '{original_filename}' created!\n"
+                    message += f"Size: {self._format_file_size(file_info.size)}\n"
+                    message += f"Download: {agents_url}\n"
+                    message += f"\nFile is available in the sandbox workspace at {file_path}."
                     return self.success_response(message)
                 return self.fail_response(f"Failed to upload file to secure storage: {str(e)}")
                 
