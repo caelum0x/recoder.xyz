@@ -24,14 +24,31 @@ const AGENT_ID = process.env.RECODER_AGENT_ID || 'claude_code';
 let ws = null;
 let wsConnected = false;
 let wsMessages = [];
+let reconnectAttempts = 0;
+let pingInterval = null;
 
 function connectBridge() {
   try {
     const WebSocket = require('ws');
+    if (ws) { try { ws.terminate(); } catch {} }
     ws = new WebSocket(A2A_URL, { headers: { 'x-agent-id': AGENT_ID, 'x-capabilities': JSON.stringify(['execute', 'plan', 'edit']) } });
-    ws.on('open', () => { wsConnected = true; process.stderr.write(`[recoder-a2a] Connected to A2A bridge as ${AGENT_ID}\n`); });
-    ws.on('message', (data) => { wsMessages.push(JSON.parse(data.toString())); });
-    ws.on('close', () => { wsConnected = false; setTimeout(connectBridge, 5000); });
+    ws.on('open', () => {
+      wsConnected = true;
+      reconnectAttempts = 0;
+      if (!pingInterval) process.stderr.write(`[recoder-a2a] Connected to A2A bridge as ${AGENT_ID}\n`);
+      // Send ping every 30s to prevent Cloudflare idle timeout
+      if (pingInterval) clearInterval(pingInterval);
+      pingInterval = setInterval(() => { if (ws && wsConnected) try { ws.ping(); } catch {} }, 30000);
+    });
+    ws.on('message', (data) => { try { wsMessages.push(JSON.parse(data.toString())); } catch {} });
+    ws.on('close', () => {
+      wsConnected = false;
+      if (pingInterval) { clearInterval(pingInterval); pingInterval = null; }
+      // Exponential backoff: 5s, 10s, 20s, 40s, max 60s
+      const delay = Math.min(5000 * Math.pow(2, reconnectAttempts), 60000);
+      reconnectAttempts++;
+      setTimeout(connectBridge, delay);
+    });
     ws.on('error', () => { wsConnected = false; });
   } catch {
     process.stderr.write('[recoder-a2a] ws module not found — A2A bridge disabled (install: npm install ws)\n');
