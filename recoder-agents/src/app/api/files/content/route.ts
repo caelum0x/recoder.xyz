@@ -22,8 +22,11 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
   }
 
-  // Proxy to Python backend
-  const backendUrl = process.env.BACKEND_INTERNAL_URL || process.env.NEXT_PUBLIC_BACKEND_URL || 'https://api.recoder.xyz/v1';
+  // Proxy to Python backend — ensure /v1 prefix
+  let backendUrl = process.env.BACKEND_INTERNAL_URL || process.env.NEXT_PUBLIC_BACKEND_URL || 'https://api.recoder.xyz/v1';
+  if (!backendUrl.endsWith('/v1')) {
+    backendUrl = backendUrl.replace(/\/$/, '') + '/v1';
+  }
   const url = `${backendUrl}/sandboxes/${sandboxId}/files/content?path=${encodeURIComponent(filePath)}`;
 
   try {
