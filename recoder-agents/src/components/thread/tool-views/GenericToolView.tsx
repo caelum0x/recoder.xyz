@@ -157,16 +157,20 @@ export function GenericToolView({
   }, [formattedToolContent, copyToClipboard]);
 
   const isError = React.useMemo(() => {
-    // Explicit success/failure takes priority
-    if (toolResult?.success === true) return false;
-    if (toolResult?.success === false) return true;
+    // Coerce success to boolean — handles string "true"/"True", number 1, etc.
+    // The backend sends boolean but it can get stringified through JSON/SSE/DB
+    const successValue = toolResult?.success;
+    if (successValue === true || successValue === 'true' || successValue === 'True' || successValue === 1) return false;
+    if (successValue === false || successValue === 'false' || successValue === 'False' || successValue === 0) return true;
     if (toolResult?.error) return true;
 
     // Only use text-matching heuristic when there's no explicit success field
-    if (toolResult?.success === undefined && typeof toolResult?.output === 'string') {
-      const output = toolResult.output.toLowerCase();
-      if (output.startsWith('error:') || output.startsWith('exception:')) {
-        return true;
+    if (successValue === undefined || successValue === null) {
+      if (typeof toolResult?.output === 'string') {
+        const output = toolResult.output.toLowerCase();
+        if (output.startsWith('error:') || output.startsWith('exception:')) {
+          return true;
+        }
       }
     }
 

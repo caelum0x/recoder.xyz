@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef, useEffect } from 'react';
+import React, { useState, useMemo, useRef, useEffect, Component, type ErrorInfo, type ReactNode } from 'react';
 import {
   ExternalLink,
   Code,
@@ -27,6 +27,27 @@ import { HtmlRenderer, JsonRenderer } from '@/components/file-renderers';
 import dynamic from 'next/dynamic';
 import { cn } from '@/lib/utils';
 import { DocxPreview } from '@/components/file-previews/DocxPreview';
+
+// Error boundary to catch CodeMirror parser crashes (undefined.length in nextChild)
+class CodeEditorErrorBoundary extends Component<{children: ReactNode; fallbackContent?: string}, {hasError: boolean}> {
+  state = { hasError: false };
+  static getDerivedStateFromError() { return { hasError: true }; }
+  componentDidCatch(error: Error, info: ErrorInfo) {
+    console.error('[CodeEditor] Parser crash caught:', error.message);
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="w-full p-4 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded">
+          <pre className="text-xs text-zinc-600 dark:text-zinc-400 whitespace-pre-wrap overflow-auto max-h-96 font-mono">
+            {this.props.fallbackContent || 'Code preview unavailable — content too large or malformed'}
+          </pre>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 // Lazy load SpreadsheetViewer as it imports Syncfusion (~1-2 MB)
 const SpreadsheetViewer = dynamic(
@@ -982,12 +1003,14 @@ export function FileOperationToolView({
     // For all other files, use CodeEditor in read-only mode
     return (
       <div className="w-full max-w-full bg-white dark:bg-zinc-900 min-w-0">
-        <CodeEditor
-          content={processUnicodeContent(fileContent)}
-          fileName={fileName}
-          readOnly={true}
-          className="w-full max-w-full"
-        />
+        <CodeEditorErrorBoundary fallbackContent={processUnicodeContent(fileContent)}>
+          <CodeEditor
+            content={processUnicodeContent(fileContent)}
+            fileName={fileName}
+            readOnly={true}
+            className="w-full max-w-full"
+          />
+        </CodeEditorErrorBoundary>
       </div>
     );
   };
@@ -1028,13 +1051,15 @@ export function FileOperationToolView({
     // when streaming large files.
     return (
       <div className="w-full max-w-full bg-white dark:bg-zinc-900 min-w-0">
-        <CodeEditor
-          content={processUnicodeContent(fileContent)}
-          fileName={fileName}
-          readOnly={true}
-          className="w-full max-w-full"
-          showLineNumbers={true}
-        />
+        <CodeEditorErrorBoundary fallbackContent={processUnicodeContent(fileContent)}>
+          <CodeEditor
+            content={processUnicodeContent(fileContent)}
+            fileName={fileName}
+            readOnly={true}
+            className="w-full max-w-full"
+            showLineNumbers={true}
+          />
+        </CodeEditorErrorBoundary>
       </div>
     );
   };

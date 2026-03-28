@@ -297,13 +297,13 @@ Usage:
             # and writes plain text with a binary extension. Intercept and use the correct library.
             ext = file_path.rsplit('.', 1)[-1].lower() if '.' in file_path else ''
             if ext in ('docx', 'xlsx', 'pptx'):
-                logging.info(f"[AUTO-CONVERT] Intercepting {ext} file: {file_path} ({len(file_contents)} chars)")
+                logger.info(f"[AUTO-CONVERT] Intercepting {ext} file: {file_path} ({len(file_contents)} chars)")
                 try:
                     result = await self._create_binary_document(file_path, file_contents, ext)
-                    logging.info(f"[AUTO-CONVERT] Success: {file_path}")
+                    logger.info(f"[AUTO-CONVERT] Success: {file_path}")
                     return result
                 except Exception as e:
-                    logging.error(f"[AUTO-CONVERT] FAILED for {file_path}: {e}")
+                    logger.error(f"[AUTO-CONVERT] FAILED for {file_path}: {e}")
                     # Fall through to regular write so the file is at least created
                     pass
 
