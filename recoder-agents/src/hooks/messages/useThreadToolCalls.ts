@@ -144,11 +144,17 @@ export function useThreadToolCalls(
             }
           }
         }
+        // Preserve rawArguments for FileOperationToolView's content extraction
+        const rawArgs = typeof matchingToolCall.arguments === 'string'
+          ? matchingToolCall.arguments
+          : matchingToolCall.arguments ? JSON.stringify(matchingToolCall.arguments) : undefined;
+
         pairs.push({
           toolCall: {
             tool_call_id: matchingToolCall.tool_call_id,
             function_name: matchingToolCall.function_name,
             arguments: normalizedArguments,
+            rawArguments: rawArgs,
             source: matchingToolCall.source || 'xml',
           },
           toolResult: {
