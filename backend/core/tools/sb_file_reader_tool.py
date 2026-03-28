@@ -158,6 +158,8 @@ class SandboxFileReaderTool(SandboxToolsBase):
                     "error": f"'{cleaned_path}' is an image file. Use load_image instead of read_file for images."
                 }
 
+            # Check file exists — SDK fs.get_file_info can fail on Daytona, fall back to exec
+            file_info = None
             try:
                 file_info = await self.sandbox.fs.get_file_info(full_path)
                 if file_info.is_dir:
@@ -167,11 +169,32 @@ class SandboxFileReaderTool(SandboxToolsBase):
                         "error": f"Path '{cleaned_path}' is a directory, not a file."
                     }
             except Exception:
-                return {
-                    "file_path": cleaned_path,
-                    "success": False,
-                    "error": f"File not found: '{cleaned_path}'"
-                }
+                # Fallback: check via exec (more reliable on Daytona)
+                try:
+                    check = await self.sandbox.process.exec(
+                        f"test -f {shlex.quote(full_path)} && stat -c '%s' {shlex.quote(full_path)} || echo 'NOT_FOUND'",
+                        timeout=10
+                    )
+                    check_result = (check.result or "").strip()
+                    if "NOT_FOUND" in check_result or check.exit_code != 0:
+                        return {
+                            "file_path": cleaned_path,
+                            "success": False,
+                            "error": f"File not found: '{cleaned_path}'"
+                        }
+                    # Create a minimal file_info-like object
+                    class _MinimalFileInfo:
+                        def __init__(self, size):
+                            self.size = size
+                            self.is_dir = False
+                    file_info = _MinimalFileInfo(int(check_result) if check_result.isdigit() else 0)
+                except Exception as fallback_err:
+                    logger.warning(f"[ReadFile] Both fs.get_file_info and exec fallback failed for {cleaned_path}: {fallback_err}")
+                    return {
+                        "file_path": cleaned_path,
+                        "success": False,
+                        "error": f"File not found: '{cleaned_path}'"
+                    }
 
 
             file_type = self._get_file_type(cleaned_path)
