@@ -393,7 +393,7 @@ export function setupPreviewProxy(app: Express, containers: Map<string, { id: st
         const dc = getDaytonaClient();
         const curlResult = await dc.execCommand(
           entry.id,
-          'for p in 5173 5174 5175 5176 3000 3001 8080 8081; do curl -sf http://localhost:$p > /dev/null 2>&1 && echo "READY:$p" && exit 0; done; echo "NOTREADY"',
+          'for p in 5173 5174 5175 5176 5177 5178 5179 5180 4173 4174 3000 3001 8080 8081; do curl -sf http://localhost:$p > /dev/null 2>&1 && echo "READY:$p" && exit 0; done; echo "NOTREADY"',
           { timeoutSecs: 8 },
         );
         const readyMatch = curlResult.output.match(/READY:(\d+)/);
@@ -411,8 +411,10 @@ export function setupPreviewProxy(app: Express, containers: Map<string, { id: st
       }
 
       if (daytonaServerReady) {
-        console.log(`[Preview] Daytona preview ready, redirecting for ${projectId}: ${daytonaUrl}`);
-        return res.redirect(daytonaUrl);
+        // Use the (potentially updated) preview URL from entry, not the stale daytonaUrl captured earlier
+        const currentPreviewUrl = (entry as any).daytonaPreviewUrl || daytonaUrl;
+        console.log(`[Preview] Daytona preview ready, redirecting for ${projectId}: ${currentPreviewUrl}`);
+        return res.redirect(currentPreviewUrl);
       }
 
       // Dev server not running — try to auto-start
@@ -751,6 +753,12 @@ export function setupPreviewProxy(app: Express, containers: Map<string, { id: st
         { port: 5174, type: 'Vite (5174)' },
         { port: 5175, type: 'Vite (5175)' },
         { port: 5176, type: 'Vite (5176)' },
+        { port: 5177, type: 'Vite (5177)' },
+        { port: 5178, type: 'Vite (5178)' },
+        { port: 5179, type: 'Vite (5179)' },
+        { port: 5180, type: 'Vite (5180)' },
+        { port: 4173, type: 'Vite Preview (4173)' },
+        { port: 4174, type: 'Vite Preview (4174)' },
         { port: 3000, type: 'Next.js (3000)' },
         { port: 3001, type: 'Dev (3001)' },
         { port: 8080, type: 'Other (8080)' },

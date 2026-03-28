@@ -166,7 +166,7 @@ Your response **must strictly follow** this XML structure. **No deviations allow
 - React and TypeScript
 - Vite build tool
 - shadcn/ui components (based on Radix UI)
-- Tailwind CSS v4 (uses @tailwindcss/vite plugin, NOT postcss — see config rules below)
+- Tailwind CSS v3 (use \`"tailwindcss": "^3.4"\` — NOT v4, NOT "latest")
 - React Router DOM (v7+ has built-in TypeScript types — do NOT install @types/react-router-dom)
 - State management:
     - @tanstack/react-query
@@ -174,19 +174,40 @@ Your response **must strictly follow** this XML structure. **No deviations allow
     - Zod validation library
 
 ### CRITICAL: Package Versions in package.json
-- When writing package.json, use \`"latest"\` as the version for ALL dependencies instead of specific version numbers
-- Example: \`"react": "latest"\`, \`"tailwindcss": "latest"\`, NOT \`"react": "^19.0.0"\`
+- When writing package.json, use \`"latest"\` as the version for ALL dependencies EXCEPT tailwindcss
+- Example: \`"react": "latest"\`, \`"tailwindcss": "^3.4"\`, NOT \`"react": "^19.0.0"\`
 - NEVER use specific version numbers like \`^6.22.2\` or \`~5.69.0\` — these may not exist on npm and will cause ETARGET install failures
 - Do NOT install \`@types/\` packages for libraries that bundle their own TypeScript types (react-router-dom v7+, @tanstack/react-query, zod, etc.)
 - The runtime will resolve \`"latest"\` to the correct current version during npm install
 
-### CRITICAL: Tailwind CSS v4 Configuration
-- Tailwind v4 does NOT use tailwind.config.js or postcss.config.js
-- Use the Vite plugin instead: \`@tailwindcss/vite\`
-- In vite.config.ts: \`import tailwindcss from '@tailwindcss/vite'\` and add \`tailwindcss()\` to plugins
-- In your CSS file: \`@import "tailwindcss";\` (NOT \`@tailwind base; @tailwind components; @tailwind utilities;\`)
-- Do NOT create postcss.config.js or tailwind.config.js — they are NOT needed with Tailwind v4
-- Package.json should have: \`"tailwindcss": "latest"\` and \`"@tailwindcss/vite": "latest"\`
+### CRITICAL: Tailwind CSS v3 Configuration (NOT v4)
+- Use Tailwind CSS v3 with PostCSS. Do NOT use Tailwind v4 or \`@tailwindcss/vite\`.
+- package.json devDependencies MUST include: \`"tailwindcss": "^3.4"\`, \`"postcss": "^8.4"\`, \`"autoprefixer": "^10.4"\`
+- Create \`postcss.config.js\`:
+  \`\`\`
+  export default {
+    plugins: {
+      tailwindcss: {},
+      autoprefixer: {},
+    },
+  };
+  \`\`\`
+- Create \`tailwind.config.js\`:
+  \`\`\`
+  /** @type {import('tailwindcss').Config} */
+  export default {
+    content: ['./index.html', './src/**/*.{js,ts,jsx,tsx}'],
+    theme: { extend: {} },
+    plugins: [],
+  };
+  \`\`\`
+- In \`src/index.css\`, use the v3 directives:
+  \`\`\`
+  @tailwind base;
+  @tailwind components;
+  @tailwind utilities;
+  \`\`\`
+- Do NOT use \`@import "tailwindcss"\` — that is Tailwind v4 syntax and will break the build
 
 ### CRITICAL: Vite Server Configuration
 - When writing vite.config.ts, ALWAYS include \`server: { host: '0.0.0.0' }\` so the dev server is accessible from outside the container
@@ -199,6 +220,7 @@ Your response **must strictly follow** this XML structure. **No deviations allow
   \`\`\`
 - Without \`host: '0.0.0.0'\`, the dev server binds to localhost only and the live preview won't work
 - This applies to ALL Vite projects — always include it
+- Do NOT add \`@tailwindcss/vite\` to the Vite plugins — use PostCSS instead (see Tailwind section above)
 
 ### Project Structure
 - src/

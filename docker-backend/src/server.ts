@@ -4786,7 +4786,21 @@ app.post('/api/dev-server/start', authenticateRequest, async (req: Authenticated
     });
     entry.backgroundDev = true;
 
-    res.json(result);
+    // Update container entry with the actual port detected by the dev server
+    if (result.ready && result.port) {
+      entry.port = result.port;
+      if (isDaytonaSandbox(entry)) {
+        const dc = getDaytonaClient();
+        (entry as any).daytonaPreviewUrl = dc.getPreviewUrl(entry.id, result.port);
+        logger.info({ projectId: safeProjectId, port: result.port }, 'Updated preview URL to actual dev server port');
+      }
+      persistContainers();
+    }
+
+    res.json({
+      ...result,
+      previewUrl: isDaytonaSandbox(entry) ? (entry as any).daytonaPreviewUrl : undefined,
+    });
   } catch (err: any) {
     logger.error({ err }, 'dev server start failed');
     res.status(500).json({ error: err.message });
