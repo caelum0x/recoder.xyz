@@ -710,11 +710,11 @@ class ModelFactory:
     def create_openrouter_free() -> Model:
         return Model(
             id="openrouter/free",
-            name="Auto (Free)",
-            litellm_model_id="openrouter/openrouter/auto",
+            name="Gemini Flash (Free)",
+            litellm_model_id="openrouter/google/gemini-2.0-flash-exp:free",
             provider=ModelProvider.OPENROUTER,
             aliases=["free", "Auto Free", "openrouter/auto"],
-            context_window=200_000,
+            context_window=1_000_000,
             capabilities=[
                 ModelCapability.CHAT,
                 ModelCapability.FUNCTION_CALLING,

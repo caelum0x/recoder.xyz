@@ -225,7 +225,7 @@ export default function DashboardLayoutContent({
     <Suspense fallback={null}>
       <PlatformNav currentApp="agents" />
     </Suspense>
-    <div className="flex-1 overflow-hidden">
+    <div className="flex-1 overflow-hidden flex flex-col">
     <NovuInboxProvider>
     <AppProviders
       showSidebar={true}

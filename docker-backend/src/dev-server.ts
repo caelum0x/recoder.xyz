@@ -54,8 +54,21 @@ export class DevServerManager {
 
     // Kill any existing dev server first
     try {
-      const killPattern = this.getKillPattern(framework);
-      await exec(`pkill -f "${killPattern}" || true`);
+      if (isDaytona) {
+        // Daytona slim sandbox may not have pkill — use layered kill strategy:
+        // 1. Kill PID from file (left by previous daytonaExecBackground)
+        // 2. Try pkill (works if procps installed)
+        // 3. Fallback to ps+grep+kill (universal POSIX)
+        await exec(
+          `kill -9 $(cat /tmp/dev.pid 2>/dev/null) 2>/dev/null; ` +
+          `pkill -9 -f 'node|npm|vite|next' 2>/dev/null || ` +
+          `(ps -eo pid,args 2>/dev/null | grep -E 'node|npm|vite|next' | grep -v grep | awk '{print $1}' | while read pid; do kill -9 "$pid" 2>/dev/null; done); ` +
+          `rm -f /tmp/dev.pid; true`
+        );
+      } else {
+        const killPattern = this.getKillPattern(framework);
+        await exec(`pkill -f "${killPattern}" || true`);
+      }
       await new Promise(resolve => setTimeout(resolve, 1000));
     } catch {}
 
@@ -135,11 +148,17 @@ export class DevServerManager {
     const framework = info?.framework || 'vite';
 
     try {
-      const killPattern = this.getKillPattern(framework);
-      const cmd = `pkill -f "${killPattern}" || true`;
       if (isDaytona) {
+        // Layered kill strategy for Daytona slim sandbox
+        const cmd =
+          `kill -9 $(cat /tmp/dev.pid 2>/dev/null) 2>/dev/null; ` +
+          `pkill -9 -f 'node|npm|vite|next' 2>/dev/null || ` +
+          `(ps -eo pid,args 2>/dev/null | grep -E 'node|npm|vite|next' | grep -v grep | awk '{print $1}' | while read pid; do kill -9 "$pid" 2>/dev/null; done); ` +
+          `rm -f /tmp/dev.pid; true`;
         await this.daytonaExec(containerId, cmd);
       } else {
+        const killPattern = this.getKillPattern(framework);
+        const cmd = `pkill -f "${killPattern}" || true`;
         await this.execCommand(docker.getContainer(containerId), cmd);
       }
       this.servers.delete(projectId);
@@ -451,7 +470,7 @@ export class DevServerManager {
         const dc = getDaytonaClient();
         const curlResult = await dc.execCommand(
           sandboxId,
-          'for p in 5173 5174 5175 5176 3000 3001 8080 8081; do curl -sf http://localhost:$p > /dev/null 2>&1 && echo "PORT$p" && exit 0; done; echo "NOTREADY"',
+          'for p in 5173 5174 5175 5176 5177 5178 5179 5180 3000 3001 4173 4174 8080 8081; do curl -sf http://localhost:$p > /dev/null 2>&1 && echo "PORT$p" && exit 0; done; echo "NOTREADY"',
           { timeoutSecs: 8 },
         );
         const output = curlResult.output.trim();
