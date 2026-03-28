@@ -725,10 +725,14 @@ export function FileBrowserView({
     '.cache', '.config', '.local', '.gnupg', '.gvfs', '.daytona',
     '.face', '.face.icon', '.ICEauthority',
   ]);
-  const isWorkspaceRoot = currentPath === '/workspace' || currentPath === '/workspace/' || currentPath === '/home/daytona' || currentPath === '/home/daytona/';
-  const displayFiles = isWorkspaceRoot
-    ? (files || []).filter((f: FileInfo) => !SYSTEM_DIRS.has(f.name) && !f.name.startsWith('.'))
-    : (files || []);
+  const isWorkspaceRoot = currentPath === '/workspace' || currentPath === '/workspace/' || currentPath === '/home/daytona' || currentPath === '/home/daytona/' || currentPath === '' || currentPath === '/' || currentPath === '/root' || currentPath === '/root/';
+  const displayFiles = (files || []).filter((f: FileInfo) => {
+    // Always filter system dirs
+    if (SYSTEM_DIRS.has(f.name)) return false;
+    // Filter dotfiles at root level (they're system configs, not project files)
+    if (isWorkspaceRoot && f.name.startsWith('.')) return false;
+    return true;
+  });
 
   // Utility state
   const [isUploading, setIsUploading] = useState(false);

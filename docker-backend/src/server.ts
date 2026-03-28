@@ -478,9 +478,9 @@ async function verifySessionToken(token: string): Promise<{ userId: string; sess
   }
 
   try {
-    // Use AbortController for fetch timeout (5 seconds)
+    // Use AbortController for fetch timeout (10 seconds — generous for localhost)
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 5000);
+    const timeoutId = setTimeout(() => controller.abort(), 10000);
 
     try {
       // Use the existing Better Auth verify-token endpoint
@@ -546,9 +546,9 @@ async function checkProjectOwnership(userId: string, projectId: string): Promise
   }
 
   try {
-    // Use AbortController for fetch timeout (5 seconds)
+    // Use AbortController for fetch timeout (10 seconds — generous for localhost)
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 5000);
+    const timeoutId = setTimeout(() => controller.abort(), 10000);
 
     try {
       const pathname = '/api/project/verify-ownership';
@@ -1341,7 +1341,8 @@ const PERSIST_WORKSPACE = true;
 const docker = new Docker();
 
 // App API URL for fetching user tokens
-const APP_API_URL = process.env.APP_API_URL || 'https://recoder.xyz';
+// Default to localhost (same-server) to avoid 5s roundtrip through Cloudflare
+const APP_API_URL = process.env.APP_API_URL || 'http://127.0.0.1:3000';
 // Validated at startup (line 265) — guaranteed non-empty in production
 const INTERNAL_SERVICE_KEY = process.env.INTERNAL_SERVICE_KEY ?? '';
 
@@ -15356,9 +15357,13 @@ app.post('/api/publish/:projectId', authenticateRequest, verifyProjectOwnership,
     let outputDir = detectedOutputDir;
     logger.info({ projectId, framework, buildCmd, outputDir }, 'Publish: starting publish');
 
-    // 2. Install dependencies if needed
+    // 2. Install dependencies if needed (longer timeout for npm install)
     try {
-      await execInContainer(entry.id, 'cd /workspace && [ -d node_modules ] || npm install');
+      if (daytonaSandboxIds.has(entry.id)) {
+        await daytonaExec(entry.id, 'cd /home/daytona && [ -d node_modules ] || npm install --legacy-peer-deps', { timeoutSecs: 120 });
+      } else {
+        await execInContainer(entry.id, 'cd /workspace && [ -d node_modules ] || npm install');
+      }
     } catch {
       // node_modules might already exist
     }
@@ -15370,9 +15375,15 @@ app.post('/api/publish/:projectId', authenticateRequest, verifyProjectOwnership,
       } catch { /* may already be installed */ }
     }
 
-    // 3. Run build
+    // 3. Run build (longer timeout — builds can take 2+ minutes)
     logger.info({ projectId }, 'Publish: building project');
-    const buildOutput = await execInContainer(entry.id, `cd /workspace && ${buildCmd} 2>&1`);
+    let buildOutput: string;
+    if (daytonaSandboxIds.has(entry.id)) {
+      const buildResult = await daytonaExec(entry.id, `cd /home/daytona && ${buildCmd} 2>&1`, { timeoutSecs: 180 });
+      buildOutput = buildResult.output;
+    } else {
+      buildOutput = await execInContainer(entry.id, `cd /workspace && ${buildCmd} 2>&1`);
+    }
     logger.info({ projectId }, 'Publish: build complete');
 
     // 4. Verify build output exists

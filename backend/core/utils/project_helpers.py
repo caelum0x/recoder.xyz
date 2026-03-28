@@ -32,8 +32,9 @@ async def generate_and_update_project_name(project_id: str, prompt: str):
     logger.info(f"Starting background task to generate name and icon for project: {project_id}")
     
     try:
-        model_name = "openai/gpt-5-nano-2025-08-07"
-        
+        from core.ai_models import FREE_MODEL_ID
+        model_name = FREE_MODEL_ID
+
         relevant_icons = RELEVANT_ICONS
         system_prompt = f"""You are a helpful assistant that generates extremely concise titles (2-4 words maximum) and selects appropriate icons for chat threads.
 
@@ -54,8 +55,9 @@ async def generate_and_update_project_name(project_id: str, prompt: str):
         response = await make_llm_api_call(
             messages=messages,
             model_name=model_name,
-            max_tokens=1000,  # Reasoning models need tokens for chain-of-thought before output
-            temperature=0.7,
+            max_tokens=100,
+            temperature=0.3,
+            frequency_penalty=1.5,
             response_format={"type": "json_object"},
             stream=False
         )
@@ -94,6 +96,16 @@ async def generate_and_update_project_name(project_id: str, prompt: str):
             logger.warning(f"Failed to get valid response from LLM for project {project_id} naming. Response: {response}")
 
         if generated_name:
+            # Hard truncate + repetition detection
+            generated_name = generated_name[:60].strip()
+            words = generated_name.split()
+            if len(words) > 4:
+                # Detect repeating phrase
+                for phrase_len in range(2, len(words) // 2 + 1):
+                    phrase = ' '.join(words[:phrase_len])
+                    if generated_name.count(phrase) >= 2:
+                        generated_name = phrase.strip()
+                        break
             update_data = {"name": generated_name}
             if selected_icon:
                 update_data["icon_name"] = selected_icon

@@ -198,10 +198,11 @@ class ModelFactory:
         default_models = {
             "bedrock": BedrockConfig.get_haiku_arn(),
             "anthropic": "anthropic/claude-haiku-4-5-20251001",
-            "grok": "openrouter/qwen/qwen3-coder",
-            "openai": "openrouter/qwen/qwen3-coder",
-            "minimax": "openrouter/qwen/qwen3-coder",
-            "kimi": "openrouter/qwen/qwen3-coder",
+            "grok": "openrouter/google/gemini-2.0-flash-001",
+            "openai": "openrouter/google/gemini-2.0-flash-001",
+            "minimax": "openrouter/google/gemini-2.0-flash-001",
+            "kimi": "openrouter/google/gemini-2.0-flash-001",
+            "openrouter": "openrouter/google/gemini-2.0-flash-001",
         }
 
         if main_llm == "kimi":
@@ -308,14 +309,13 @@ class ModelFactory:
                 enabled=True,
             )
         elif main_llm == "openrouter":
-            # Generic OpenRouter - use custom model or fallback to minimax
             return Model(
                 id="recoder/basic",
                 name="Recoder Basic",
-                litellm_model_id=custom_model or default_models["minimax"],
+                litellm_model_id=custom_model or default_models["openrouter"],
                 provider=ModelProvider.OPENROUTER,
                 aliases=["recoder-basic", "Recoder Basic"],
-                context_window=200_000,
+                context_window=1_000_000,
                 capabilities=[
                     ModelCapability.CHAT,
                     ModelCapability.FUNCTION_CALLING,
@@ -330,7 +330,7 @@ class ModelFactory:
             return Model(
                 id="recoder/basic",
                 name="Recoder Basic",
-                litellm_model_id=custom_model or default_models["minimax"],
+                litellm_model_id=custom_model or default_models.get(main_llm, "openrouter/google/gemini-2.0-flash-001"),
                 provider=ModelProvider.OPENROUTER,
                 aliases=["recoder-basic", "Recoder Basic"],
                 context_window=200_000,
@@ -351,14 +351,15 @@ class ModelFactory:
     @staticmethod
     def create_power_model(main_llm: str, custom_model: Optional[str] = None) -> Model:
         # Default models per provider
-        # Use claude-sonnet for reliable tool calling (slides, excel, coding, image gen)
+        # Gemini 2.0 Flash: cheap ($0.10/$0.40 per M), fast, tool calling, vision
         default_models = {
             "bedrock": BedrockConfig.get_haiku_arn(),
             "anthropic": "anthropic/claude-haiku-4-5-20251001",
-            "grok": "openrouter/anthropic/claude-sonnet-4",
-            "openai": "openrouter/anthropic/claude-sonnet-4",
-            "minimax": "openrouter/anthropic/claude-sonnet-4",
-            "kimi": "openrouter/anthropic/claude-sonnet-4",
+            "grok": "openrouter/google/gemini-2.0-flash-001",
+            "openai": "openrouter/google/gemini-2.0-flash-001",
+            "minimax": "openrouter/google/gemini-2.0-flash-001",
+            "kimi": "openrouter/google/gemini-2.0-flash-001",
+            "openrouter": "openrouter/google/gemini-2.0-flash-001",
         }
 
         if main_llm == "kimi":
@@ -468,14 +469,13 @@ class ModelFactory:
                 enabled=True,
             )
         elif main_llm == "openrouter":
-            # Generic OpenRouter - use custom model or fallback to minimax
             return Model(
                 id="recoder/power",
                 name="Recoder",
-                litellm_model_id=custom_model or default_models["minimax"],
+                litellm_model_id=custom_model or default_models["openrouter"],
                 provider=ModelProvider.OPENROUTER,
                 aliases=["recoder-power", "Recoder POWER Mode", "Recoder Power", "Recoder Advanced Mode", "Recoder"],
-                context_window=200_000,
+                context_window=1_000_000,
                 capabilities=[
                     ModelCapability.CHAT,
                     ModelCapability.FUNCTION_CALLING,
@@ -490,7 +490,7 @@ class ModelFactory:
             return Model(
                 id="recoder/power",
                 name="Recoder",
-                litellm_model_id=custom_model or default_models["minimax"],
+                litellm_model_id=custom_model or default_models.get(main_llm, "openrouter/google/gemini-2.0-flash-001"),
                 provider=ModelProvider.OPENROUTER,
                 aliases=["recoder-power", "Recoder POWER Mode", "Recoder Power", "Recoder Advanced Mode", "Recoder"],
                 context_window=200_000,
@@ -710,8 +710,8 @@ class ModelFactory:
     def create_openrouter_free() -> Model:
         return Model(
             id="openrouter/free",
-            name="Gemini Flash (Free)",
-            litellm_model_id="openrouter/google/gemini-2.0-flash-exp:free",
+            name="Step Flash (Free)",
+            litellm_model_id="openrouter/stepfun/step-3.5-flash:free",
             provider=ModelProvider.OPENROUTER,
             aliases=["free", "Auto Free", "openrouter/auto"],
             context_window=1_000_000,

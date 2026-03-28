@@ -14,6 +14,7 @@ class ModelProvider(Enum):
     XAI = "xai"
     MOONSHOTAI = "moonshotai"
     MINIMAX = "minimax"
+    OLLAMA = "ollama"
 
 class ModelCapability(Enum):
     CHAT = "chat"

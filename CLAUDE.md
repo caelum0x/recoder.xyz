@@ -54,3 +54,12 @@ This file is the root operating context for Claude/Codex-style assistants in thi
 
 - Before file changes: `before_action({ action: "description" })`
 - After changes: `after_action({ action: "what was done", success: true })`
+
+## gstack
+
+Use /browse from gstack for all web browsing. Never use mcp__claude-in-chrome__* tools.
+Available skills: /office-hours, /plan-ceo-review, /plan-eng-review, /plan-design-review,
+/design-consultation, /design-shotgun, /review, /ship, /land-and-deploy, /canary, /benchmark,
+/browse, /connect-chrome, /qa, /qa-only, /design-review, /setup-browser-cookies, /setup-deploy,
+/retro, /investigate, /document-release, /codex, /cso, /autoplan, /careful, /freeze, /guard,
+/unfreeze, /gstack-upgrade.

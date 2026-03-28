@@ -103,19 +103,32 @@ class SandboxCodeInterpreterTool(SandboxToolsBase):
 
             logger.info(f"[CodeInterpreter] Executing {language} code ({len(code)} chars, timeout={timeout}s)")
 
-            # Use sandbox.process.exec for shell-based execution
+            # Always write code to a temp file to avoid PTY corruption with inline commands.
+            # Daytona PTY doubles characters and breaks on nested quotes in long inline commands.
+            import hashlib
+            code_hash = hashlib.md5(code.encode()).hexdigest()[:8]
+
             if language == "python":
-                # Write code to temp file and execute
-                escaped_code = code.replace("'", "'\\''")
-                cmd = f"python3 -c '{escaped_code}'"
+                tmp_file = f"/tmp/_code_{code_hash}.py"
+                runner_cmd = f"python3 {tmp_file}"
             elif language in ("javascript", "typescript"):
-                escaped_code = code.replace("'", "'\\''")
-                runner = "node" if language == "javascript" else "npx ts-node"
-                cmd = f"{runner} -e '{escaped_code}'"
+                ext = "js" if language == "javascript" else "ts"
+                tmp_file = f"/tmp/_code_{code_hash}.{ext}"
+                runner_cmd = f"node {tmp_file}" if language == "javascript" else f"npx ts-node {tmp_file}"
             else:
                 return self.fail_response(f"Unsupported language: {language}. Use python, javascript, or typescript.")
 
-            response = await self.sandbox.process.exec(cmd, timeout=timeout)
+            # Write code to temp file via sandbox file API (bypasses PTY entirely)
+            try:
+                await self.sandbox.fs.upload_file(tmp_file, code.encode('utf-8'))
+            except Exception:
+                # Fallback: write via base64 to avoid escaping issues
+                import base64
+                b64 = base64.b64encode(code.encode('utf-8')).decode('ascii')
+                await self.sandbox.process.exec(f"echo '{b64}' | base64 -d > {tmp_file}", timeout=10)
+
+            # Execute the temp file
+            response = await self.sandbox.process.exec(f"{runner_cmd}; __e=$?; rm -f {tmp_file}; exit $__e", timeout=timeout)
 
             output = response.result or ""
             exit_code = response.exit_code

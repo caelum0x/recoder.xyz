@@ -68,7 +68,7 @@ export function UserMenu() {
   }
 
   function handleSignOut() {
-    window.location.href = `${getMainSiteUrl()}/auth/signout`;
+    window.location.href = `${getMainSiteUrl()}/api/auth/sign-out?callbackURL=${encodeURIComponent(window.location.origin)}`;
   }
 
   function goToSettings() {

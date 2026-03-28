@@ -364,12 +364,33 @@ async def traced_http_exception_handler(request: Request, exc: HTTPException):
 
 @app.exception_handler(Exception)
 async def traced_unhandled_exception_handler(request: Request, exc: Exception):
-    """Catch-all for unhandled exceptions — return 500 with trace metadata."""
+    """Catch-all for unhandled exceptions — return 500 with trace metadata.
+
+    Special case: PostgreSQL 'relation does not exist' errors return empty
+    results instead of 500, since many tables may not be migrated yet.
+    """
     trace_ctx: TraceContext | None = get_trace_context()
     try:
         error_str = str(exc)
     except Exception:
         error_str = f"Error of type {type(exc).__name__}"
+
+    # Graceful degradation for missing tables — return empty data instead of 500
+    if "relation" in error_str and "does not exist" in error_str:
+        logger.warning(f"Missing table query: {error_str} — returning empty result for {request.url.path}")
+        return JSONResponse(
+            status_code=200,
+            content={"data": [], "items": [], "results": [], "total": 0, "success": True},
+        )
+
+    # Graceful degradation for missing columns
+    if "column" in error_str and "does not exist" in error_str:
+        logger.warning(f"Missing column query: {error_str} — returning empty result for {request.url.path}")
+        return JSONResponse(
+            status_code=200,
+            content={"data": [], "items": [], "results": [], "total": 0, "success": True},
+        )
+
     logger.error(f"Unhandled exception: {error_str}", exc_info=exc)
 
     body: dict = {"detail": "Internal server error"}

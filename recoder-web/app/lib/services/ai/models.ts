@@ -16,6 +16,32 @@ const logger = createScopedLogger('AIModels');
  * All available AI models
  */
 export const AI_MODELS: AIModel[] = [
+  // Default — cheap, fast, tool calling, vision
+  {
+    id: 'google/gemini-2.0-flash-001',
+    name: 'Gemini 2.0 Flash',
+    provider: 'google',
+    contextWindow: 1000000,
+    maxOutput: 8192,
+    supportsVision: true,
+    supportsFunctionCalling: true,
+    supportsThinking: true,
+    inputCostPer1M: 0.10,
+    outputCostPer1M: 0.40,
+  },
+  // Free Models (no cost, slow, rate-limited)
+  {
+    id: 'stepfun/step-3.5-flash:free',
+    name: 'Step Flash (Free)',
+    provider: 'openrouter',
+    contextWindow: 256000,
+    maxOutput: 8192,
+    supportsVision: false,
+    supportsFunctionCalling: true,
+    supportsThinking: true,
+    inputCostPer1M: 0,
+    outputCostPer1M: 0,
+  },
   // Anthropic Models
   {
     id: 'anthropic/claude-sonnet-4',
@@ -229,10 +255,10 @@ export const AI_MODELS: AIModel[] = [
  * Map from model ID to internal provider model name
  */
 export const MODEL_MAPPING: Record<string, string> = {
-  'gpt-4-1': 'chat-model-reasoning-azure',
-  'gpt-4-1-mini': 'chat-model-reasoning-azure-mini',
-  'claude-4-0-sonnet': 'chat-model-reasoning-anthropic',
-  'gemini-2-5-pro': 'chat-model-reasoning-google',
+  'gpt-4-1': 'openai/gpt-4o',
+  'gpt-4-1-mini': 'openai/gpt-4o-mini',
+  'claude-4-0-sonnet': 'anthropic/claude-sonnet-4',
+  'gemini-2-5-pro': 'google/gemini-2.5-pro-preview',
   'deepseek-v3': 'deepseek/deepseek-chat',
   'deepseek-r1': 'deepseek/deepseek-r1',
 };
@@ -242,13 +268,13 @@ export const MODEL_MAPPING: Record<string, string> = {
  */
 export const DEFAULT_MODELS = {
   /** Default model for file edit operations */
-  FILE_EDIT: 'gpt-4-1-mini',
+  FILE_EDIT: 'google/gemini-2.0-flash-001',
   /** Default fallback model */
-  FALLBACK: 'anthropic/claude-3.5-sonnet',
+  FALLBACK: 'google/gemini-2.0-flash-001',
   /** Default model for file edit fallback */
-  FILE_EDIT_FALLBACK: 'anthropic/claude-3-haiku',
+  FILE_EDIT_FALLBACK: 'google/gemini-2.0-flash-001',
   /** Default model for new projects */
-  NEW_PROJECT: 'anthropic/claude-3.5-sonnet',
+  NEW_PROJECT: 'google/gemini-2.0-flash-001',
 } as const;
 
 // ============================================================================
@@ -333,9 +359,10 @@ export function selectModel(
     }
   }
 
-  // Return mapped model or original
+  // Return mapped model, or the model ID directly if it's a known model, or fallback
   return (
     MODEL_MAPPING[modelToUse] ||
+    (getModelById(modelToUse) ? modelToUse : null) ||
     (isFileEdit ? DEFAULT_MODELS.FILE_EDIT_FALLBACK : DEFAULT_MODELS.FALLBACK)
   );
 }

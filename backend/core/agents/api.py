@@ -1156,7 +1156,7 @@ async def stream_agent_run(
             timeout_count = 0
             ping_count = 0
             received_data = False
-            MAX_PINGS_WITHOUT_DATA = 4
+            MAX_PINGS_WITHOUT_DATA = 12
             catchup_ids = set()  # Track IDs seen during catch-up for deduplication
 
             try:

@@ -95,16 +95,22 @@ export async function generateStreamResponse(
     // Select model
     const selectedModel = selectModel(context.userPlan, config.modelId, config.isFileEdit);
 
-    // Get provider and configuration
-    const provider = getProviderFromModelId(selectedModel);
-    const providerConfig = buildProviderConfig(provider);
+    // Get provider and configuration — fall back to OpenRouter if direct provider key missing
+    let provider = getProviderFromModelId(selectedModel);
+    let providerConfig = buildProviderConfig(provider);
+    let actualModel = getActualModelId(selectedModel, provider);
+
+    if (!providerConfig && provider !== 'openrouter') {
+      // Direct provider key not set — try routing through OpenRouter
+      logger.info(`[AI] No ${provider} API key, falling back to OpenRouter for ${selectedModel}`);
+      provider = 'openrouter';
+      providerConfig = buildProviderConfig('openrouter');
+      actualModel = selectedModel; // OpenRouter uses full model IDs
+    }
 
     if (!providerConfig) {
       throw new Error(`No API key configured for provider: ${provider}`);
     }
-
-    // Get actual model ID for provider
-    const actualModel = getActualModelId(selectedModel, provider);
 
     // Build provider options
     const providerOptions = buildProviderOptions(selectedModel, config.thinking);

@@ -103,6 +103,11 @@ const defaultRegistry: ToolViewRegistryType = {
   'browser-screenshot': BrowserToolView,
 
   'execute-command': CommandToolView,
+  'execute_command': CommandToolView,
+  'run_code': CommandToolView,
+  'run-code': CommandToolView,
+  'run_repl': CommandToolView,
+  'run-repl': CommandToolView,
   'check-command-output': CheckCommandOutputToolView,
   'terminate-command': TerminateCommandToolView,
   'list-commands': ListCommandsToolView,
