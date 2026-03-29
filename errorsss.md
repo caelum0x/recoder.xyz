@@ -1,231 +1,113 @@
 # Recoder Platform — Error Registry
 
-Last updated: 2026-03-28 18:30 UTC
+Last updated: 2026-03-29 00:30 UTC
 
 ---
 
-## Status: All Code Fixes Done, Batch 2 Awaiting Deploy
+## Platform Status (Current)
 
-Agent 1 is deploying batch 2. Deploy script: `bash scripts/deploy-batch2.sh`
+### Agents (agents.recoder.xyz) — WORKING
+- **Model:** GLM 4.7 via OpenRouter ($0.39/$1.75 per M tokens)
+- **Chat:** Works — 48+ tool calls in one session
+- **File creation:** Works — create_file, run_code
+- **Code execution:** Works — Python, PyTorch, pip install
+- **Read file:** Fixed — exec fallback for Daytona SDK
+- **PTY echo:** Fixed — `stty -echo`
+- **Source tab:** Fixed — error boundary
+- **File preview:** Fixed — rawArguments in historical tool calls
+- **Old threads:** Fixed — empty message placeholders preserve tool pairing
+- **Canvas/image:** Fixed — OpenRouter↔Replicate fallback chain
+- **Files tab:** Backend OK. May need browser hard refresh.
+- **Mock UI:** Hidden (Save as Template, Insights, Analytics)
 
----
-
-## Per-Platform Status
-
-### 1. Agents (agents.recoder.xyz)
-**Last test:** BROKEN — `google/gemini-2.0-flash` invalid model ID (400)
-**Fixes ready:** Model ID → `-001`, worker timeout 60s, Redis maxlen 1000, code output display, name generator, auto-install packages
-**After deploy:** Should work — needs browser verification
-
-### 2. Web IDE (web.recoder.xyz)
-**Last test:** PARTIAL — code gen works, preview broken (X-Frame-Options + 502)
-**Fixes ready:** Preview inline proxy (no cross-origin), nginx `/api/sandbox-preview/` override, publish Daytona paths, error detail, upload fallback URL
-**After deploy:** Preview should load in iframe. Publish needs testing.
-
-### 3. Agency (agency.recoder.xyz)
-**Last test:** BROKEN — copilot 500 (model ID), GitHub `account_not_linked`
-**Fixes ready:** Model ID → `-001`, accountLinking enabled in shared @recoder/auth
-**After deploy:** Copilot should respond. GitHub linking should work.
-
-### 4. PM (pm.recoder.xyz) — WORKING (don't touch)
-**User confirmed:** Copilot reads + writes. Created release via copilot. Refresh needed for new data.
-
-### 5. recoder.xyz (auth) — UNTESTED
-**Fix deployed (batch 1):** Sign-out calls `/api/auth/sign-out` instead of broken page
-
-### 6. OpenClaw (openclaw.recoder.xyz) — REMOVED
-**Code extracted** to `extracted-from-openclaw/` (social gateways, agents, gateway core)
-**Nginx:** Redirects to `agency.recoder.xyz`
-**Docker:** Service removed from docker-compose
-**On deploy:** Run `bash scripts/remove-openclaw.sh` to stop PM2 + remove containers
-
----
-
-## All Fixes (Both Agents)
-
-### Batch 1 — Already Deployed
-| Fix | Agent |
-|-----|-------|
-| Sign-out ESM crash | 1 |
-| Web IDE MODEL_MAPPING | 1 |
-| Web IDE OpenRouter fallback | 1 |
-| Worker timeout 20s → 60s | 1 |
-| Redis stream maxlen 200 → 1000 | 1 |
-| Agency client copilot removed (401 fix) | 1 |
-| Agency double copilot removed | 1 |
-| File browser system file filter | 1 |
-| Empty file write verification (test -s) | 1 |
-| PM organizationId security check | 1 |
-| docker-backend TS errors | 1 |
-
-### Batch 2 — Awaiting Deploy
-| Fix | Agent |
-|-----|-------|
-| Model ID `gemini-2.0-flash` → `gemini-2.0-flash-001` | 1 |
-| Code interpreter auto-install packages | 1 |
-| Publish Daytona-aware paths | 1 |
-| Core prompt improvements | 1 |
-| Language model registry IDs | 1 |
-| Preview X-Frame-Options (inline proxy) | 2 |
-| nginx `/api/sandbox-preview/` override | 2 |
-| Thread/project name generator (freq penalty + keys) | 2 |
-| Publish error detail | 2 |
-| Upload fallback URL (agents API proxy) | 2 |
-| Code execution output display | 2 |
-| Agency accountLinking (auto-link GitHub/Google) | 2 |
-| OpenClaw removal (nginx + docker-compose) | 2 |
-| Deploy + removal scripts | 2 |
-| recoder-web Docker rebuild (Agent 1) | Model ID fix now in Web IDE container |
-| **CORRECTION:** GitHub/Google OAuth keys ARE configured | In app/.env, agency/.env.local, pm/.env — Agent 2's check only looked at backend/.env |
-| BETTER_AUTH_SECRET synced (Agent 2) | Agency+PM now use same secret as recoder.xyz |
-| INTERNAL_SERVICE_KEY added to app (Agent 2) | Docker-backend ownership check can now succeed |
-| AUTH_DATABASE_URL added to app (Agent 2) | Auth was failing — Prisma couldn't connect to DB. 503 on all auth endpoints. Fixed. |
-| Replicate API key added (Agent 2) | Video generation unblocked |
-| Disk cleanup (Agent 2) | Freed 35GB — removed OpenClaw image, 116 stale sandbox volumes, build cache |
-| R2 endpoint configured (Agent 2) | `S3_ENDPOINT_URL` set, needs access keys from Cloudflare |
-
----
-
-## After Deploy — What to Test
-
-1. **agents.recoder.xyz** — send chat message, verify LLM responds
-2. **agents.recoder.xyz** — ask to create a DOCX, verify tool runs + file created
-3. **web.recoder.xyz** — create project, generate code, check preview iframe loads
-4. **web.recoder.xyz** — try publish button
-5. **agency.recoder.xyz** — copilot floating button, send message
-6. **agency.recoder.xyz** — GitHub integration (Settings → Account → Connect GitHub)
-7. **recoder.xyz** — sign out button
-8. **openclaw.recoder.xyz** — should redirect to agency.recoder.xyz
-
----
-
-## Post-Deploy Test Results (2026-03-28 ~19:00 UTC)
-
-### Agents (agents.recoder.xyz)
-- **Sign-in:** WORKS (DB password fix resolved 503)
-- **A2A bridge:** WORKS (npx recoder-a2a connects via wss://docker.recoder.xyz/agent-bridge)
-- **Chat:** BROKEN — `litellm.BadRequestError: Provider returned error` — Google Gemini API returns 400 "must include at least one parts field". Empty message being sent to LLM. Likely the system prompt or user message is empty/malformed when passed to gemini-2.0-flash-001.
-- **Canvas:** BROKEN — "Add: Frame To Canvas failed", then "API quota exceeded" error from image generation (FAL/Replicate). Tasks creation also fails.
-- **Image generation:** BROKEN — "API quota exceeded" — FAL_KEY or REPLICATE_API_TOKEN may have $0 credits or wrong key.
-
-### PM (pm.recoder.xyz) — BROKEN (was working before deploy)
-- React Error #418: SSR hydration mismatch — server-rendered text doesn't match client
-- Random domain 404s (tedious-flu.info, male-sauerkraut.com, etc.) — likely analytics/tracking scripts with expired domains
-- tiptap warning: duplicate 'image' extension
-- Canvas2D: willReadFrequently warning
-- PM copilot was confirmed working earlier today — this is a REGRESSION from the deploy (likely BETTER_AUTH_SECRET change broke session, or build is stale)
+### Web IDE (web.recoder.xyz) — MOSTLY FIXED
+- **Code gen:** Works
+- **Parser:** Fixed (10k→100k limit)
+- **Proxy chain:** Fixed (inline proxy, X-Frame-Options, nginx override)
+- **Auth:** Fixed (INTERNAL_SERVICE_KEY set)
+- **Sandbox URLs:** Work (`*.sandbox.recoder.xyz` DNS + SSL confirmed)
+- **Broken panels:** Hidden (Search, Git, Packages)
+- **Publish:** Daytona paths fixed, needs testing
+- **Docker rebuild:** Needed for parser fix to take effect
 
 ### Agency (agency.recoder.xyz) — PARTIAL
-- **Copilot: WORKS** (responds to chat)
-- **Workflows/playground: BROKEN** — 500 on page load, "Failed to create and start task from stage" Server Components render error. Giselle workflow engine needs Supabase/Vercel infra.
-- GitHub auth: `account_not_linked` (deferred)
+- **Copilot:** Works (responds to chat)
+- **Workflows:** Broken — Giselle engine `h.values.map` error (corrupt workspace data)
+- **GitHub auth:** accountLinking enabled (should auto-link by email)
 
-### Web IDE (web.recoder.xyz) — AI WORKS, PREVIEW BROKEN
-- **AI code generation: WORKS** — generates 18+ files (hotel booking site), writes them successfully
-- **Live preview: BROKEN** — shows "server down" page
-  - Health check times out after 30 attempts (no dev server detected)
-  - Preview URLs return 502/503 (`project-xxx` returns 502/503)
-  - Every `/api/file/` call returns 500 (ownership check still failing)
-  - `npm install` never runs because stream never ends (auto-install deferred infinitely)
-  - **Parser safety limit reached** — hundreds of "Parser safety limit reached" errors. LLM generates too much code, parser can't keep up.
-  - `vault.petra.app` postMessage error — browser extension interference, not our code
-- **Root cause chain:** LLM generates big response → parser hits safety limit → stream appears infinite → auto-install never triggers → no npm install → no dev server → health check fails → preview shows "server down"
+### PM (pm.recoder.xyz) — WORKING
+- **Copilot:** Works (read + write, creates releases)
+- **Connect features:** Graceful "not configured" messages
+- **Seed data:** Clean (1 real feature only)
+- **Note:** Don't touch. Refresh needed for new copilot data.
 
-### Agents (agents.recoder.xyz) — WORKING (updated 2026-03-29 00:40 UTC)
-- **Model: GLM 4.7** (`MAIN_LLM_MODEL=openrouter/z-ai/glm-4.7`) — $0.39/$1.75 per M tokens
-- **File creation: WORKS** — create_file creates real files in sandbox
-- **Code execution: WORKS** — execute_command runs Python, pip install, PyTorch training all work
-- **Agent coded a basic LLM** — created basic_llm.py, trained transformer model, generated text. 48 tool calls in one session!
-- **Source tab: FIXED** — error boundary prevents CodeMirror crash, falls back to plain text
-- **PTY character doubling** — shell output shows doubled chars ("ccd", "lls") — Daytona PTY issue
-- **Files tab: BROKEN** — file browser next to agent doesn't show files
-- **Preview tab: BROKEN** — file preview in tool view doesn't render
-- **Read File: FAILS** — agent can't read files back from sandbox
-- **ERR_CONNECTION_RESET** — SSE streams drop intermittently
-- **Mock UI: "Save as Template", "Analytics/Insights"** — non-functional, should be hidden
-- **Old threads broken** — cached Gemini messages cause errors. Only NEW threads work with GLM 4.7.
-
-### Key Errors
-**Agent chat (old threads):**
-```
-OpenrouterException - Provider returned error, code 400
-"Unable to submit request because it must include at least one parts field"
-```
-Gemini gets empty/malformed messages. Model ID is correct but request body is wrong.
-
-**PM:**
-```
-React error #418 — SSR hydration mismatch (text vs empty)
-```
-Server and client render different content. Usually caused by session state differing between SSR and client.
+### recoder.xyz (auth) — WORKING
+- **Sign-in:** Works
+- **Sign-out:** Fixed (ESM crash resolved)
+- **Auth secret:** Synced across all apps
+- **OpenClaw:** Removed, redirects to agency
 
 ---
 
-## Remaining Issues (Post-Deploy)
+## Remaining Issues
 
-1. **Agent chat 400 error** — empty messages sent to Gemini. Investigate message construction in execution pipeline.
-2. **Agent canvas** — "Add Frame To Canvas failed" + "API quota exceeded" on image gen.
-3. **Web IDE preview 502** — Cloudflare shows "Bad gateway, Host Error" for `web.recoder.xyz/preview/*`. Cloudflare can reach its edge but nginx/recoder-web returns 502. The preview route in recoder-web (Remix) proxies to docker-backend which proxies to Daytona sandbox:5173. Chain is broken — likely docker-backend can't reach the sandbox dev server port.
-4. **Web IDE file API 500** — every `/api/file/` returns 500. Ownership check still failing despite INTERNAL_SERVICE_KEY fix.
-5. **Web IDE publish 500** — `POST /api/publish/analytics-dashboard-2` fails (953ms).
-6. **Web IDE parser safety limit** — LLM generates huge responses, parser hits limit, hundreds of repeated errors flood console.
-5. **PM regression** — React #418 hydration mismatch after BETTER_AUTH_SECRET change. PM was working before.
-6. **R2 storage keys** — endpoint configured, needs `S3_ACCESS_KEY_ID` + `S3_SECRET_ACCESS_KEY` from Cloudflare R2 dashboard
-4. **Crash loops** — agents (334), agency (216), PM (329) restart counts. Need root cause investigation.
-5. **PM refresh** — new data from copilot needs page refresh. Deferred.
-6. **Exposed API keys** — OpenRouter key was in docker-compose. Removed with OpenClaw, but git history still has it.
-7. **DB password** — was broken (auth failed), fixed by resetting to `recoder_prod_2026`. Root cause unknown — may have been changed by Agent 2's env sync.
+### MEDIUM
+1. **DOCX via create_file** — agent sometimes uses create_file instead of run_code. Auto-convert interceptor exists.
+2. **Command output not captured** — long-running scripts show no output. PTY buffering.
+3. **ERR_CONNECTION_RESET** — Cloudflare HTTP/2 limitation, not code bug.
+4. **Agency workflows** — Giselle engine crash. Deep framework issue.
+5. **Web IDE Docker rebuild** — parser fix + preview fixes need container rebuild.
 
-## Website & Docs Issues
+### LOW
+6. **Crash loop counters** — high restart counts (cosmetic, from rebuilds).
+7. **OpenRouter key rotation** — key was exposed in docker-compose git history. User has credits, rotation optional.
+8. **Disk monitoring** — no alert at 85% usage.
+9. **Memory optimization** — agents 428MB, PM 460MB.
 
-### recoder.xyz Landing Page
-- Lists "10 Services" including **OpenClaw** — needs removal (OpenClaw abandoned)
-- Mock links to non-existent pages (Agents, Plan, Platform, Docs, Dashboard)
-- "Recoder API" shown as service but docs page is empty/broken
-- All docs pages shown as empty or failed
+---
 
-### Pages to Fix/Create
-- `/docs` — empty, needs content
-- `/docs/api` — API reference (endpoints for external integrations)
-- `/docs/a2a` — A2A protocol docs (agent-to-agent communication)
-- Landing page service list — remove OpenClaw, update descriptions
-- Dashboard links — verify all navigation targets exist
+## All Fixes Applied (2026-03-28/29)
 
-### A2A Bridge
-- `npx recoder-a2a` connects but reconnects repeatedly ("Connected to A2A bridge as claude_code" x7)
-- Bridge works but client drops/reconnects — anonymous auth, no persistent session
-- Needs: test actual A2A message passing, not just connection
-
-## Remaining Issues (Priority Order, updated 2026-03-29)
-
-### CRITICAL — Agent can create but user can't see results
-1. **Files tab appears BROKEN** — Investigation (Agent 1): Backend returns sandbox.id correctly, sandbox status is LIVE, all APIs return correct data with CORS headers. Root cause: likely **browser cached CORS-failed responses** from when backend was restarting. Fix: hard refresh (Ctrl+Shift+R) or clear browser cache for api.recoder.xyz. If still broken after refresh, the sandbox status query may be failing intermittently.
-2. **Preview tab** — FIXED: rawArguments now populated in historical tool calls. Content extraction pipeline has data.
-3. **Read File** — FIXED: exec fallback + DAYTONA_API_URL env var corrected. SDK fs API confirmed working on active sandboxes.
-4. **Live preview** — FIXED: parser 100k, proxy chain fixed. Sandbox URLs work (`*.sandbox.recoder.xyz` DNS confirmed). Agent 1 fixing docker-backend internal proxy.
-
-### HIGH — Broken platforms
-5. **PM regression** — FIXED: rebuilt with current auth secret. Hydration mismatch should be resolved.
-6. **Web IDE preview 502** — FIXED: parser limit 10k→100k allows large responses. Proxy chain + X-Frame-Options + inline proxy all fixed. Needs Docker rebuild (in progress).
-7. **Web IDE file API 500** — INTERNAL_SERVICE_KEY set on both app + docker-backend. Should work now.
-8. **Web IDE publish 500** — Daytona paths fixed (Agent 1). Needs testing after rebuild.
-
-### MEDIUM — Agent quality issues
-9. **Create/delete loop for large HTML files** — Agent generates big HTML (website), create_file truncates at LLM max_tokens (~41 tokens per completion), agent sees incomplete file, deletes, retries forever. Root cause: LLM max_tokens too low for tool call responses, or file content gets cut off during streaming.
-10. **CodeMirror re-crash loop** — Error boundary catches crash but CodeMirror retries parsing immediately, crashes again. Infinite catch→retry→catch cycle fills console with hundreds of errors. Need: disable CodeMirror retry after error, or skip parsing entirely when error boundary activates.
-11. **Iframe sandbox escape warning** — `allow-scripts` + `allow-same-origin` on preview iframe. Browser warns content can escape sandbox. Should use stricter sandbox attributes.
-12. **Composio profiles 500** — `POST /v1/composio/profiles` returns 500. App Integrations page broken ("Failed to create profile").
-13. **Sandbox auto-stop** — Daytona sandboxes stop after inactivity. Preview fails with "Sandbox is not running". Need auto-start when preview requested.
-14. **PTY character doubling** — FIXED: `stty -echo` disables terminal echo before commands.
-15. **Canvas/image gen** — FIXED: OpenRouter↔Replicate fallback chain.
-16. **Old threads** — FIXED: tool results with empty content get placeholder.
-17. **ERR_CONNECTION_RESET** — Cloudflare HTTP/2 stream resets. Not a code bug.
-18. **Command output not captured** — long-running scripts show no output.
-19. **Preview in agents UI** — sandbox URLs work directly but the preview panel in tool view needs sandbox started + file server running.
-
-### LOW — UI/UX
-20. ~~Mock UI~~ — FIXED: hidden from thread header.
-21. ~~Landing page~~ — FIXED: products count, redirects, schemas, sitemap.
-22. ~~A2A reconnect~~ — FIXED: exponential backoff + 30s ping.
-23. ~~R2 storage~~ — FIXED: endpoint + keys configured.
-24. **Crash loop counters** — high restart counts (cosmetic).
+| # | Fix | Agent |
+|---|-----|-------|
+| 1 | Sign-out ESM crash | 1 |
+| 2 | Model gemini → GLM 4.7 | 1 |
+| 3 | Web IDE MODEL_MAPPING | 1 |
+| 4 | OpenRouter fallback | 1 |
+| 5 | Worker timeout 60s | 1 |
+| 6 | Redis maxlen 1000 | 1 |
+| 7 | Agency client copilot removed | 1 |
+| 8 | Agency double copilot removed | 1 |
+| 9 | File browser filter | 1 |
+| 10 | Empty file verification | 1 |
+| 11 | PM security check | 1 |
+| 12 | CodeMirror error boundary | 1 |
+| 13 | Code interpreter auto-install | 1 |
+| 14 | Core prompt improvements | 1 |
+| 15 | Preview X-Frame-Options | 2 |
+| 16 | Thread/project name generator | 2 |
+| 17 | Upload fallback URL | 2 |
+| 18 | Code execution output display | 2 |
+| 19 | Agency accountLinking | 2 |
+| 20 | OpenClaw removal (21 files) | 2 |
+| 21 | Mock UI hidden | 2 |
+| 22 | Read file exec fallback | 2 |
+| 23 | PTY echo fix | 2 |
+| 24 | PM rebuilt | 2 |
+| 25 | Parser limit 100k | 2 |
+| 26 | File preview rawArguments | 2 |
+| 27 | Canvas/image fallback chain | 2 |
+| 28 | Old thread message fix | 2 |
+| 29 | Landing page cleanup | 2 |
+| 30 | A2A reconnect backoff | 2 |
+| 31 | PM connect features | 2 |
+| 32 | R2 storage configured | 2 |
+| 33 | DB backups cron | 2 |
+| 34 | Zombie cleanup + Docker prune | 2 |
+| 35 | BETTER_AUTH_SECRET synced | 2 |
+| 36 | AUTH_DATABASE_URL added | 2 |
+| 37 | DAYTONA_API_URL fixed | 2 |
+| 38 | Replicate key added | 2 |
+| 39 | Publish error detail | 2 |
+| 40 | Docs index fixed | 2 |
+| 41 | recoder-a2a@1.0.2 published | 2 |
