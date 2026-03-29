@@ -80,25 +80,39 @@ Last updated: 2026-03-29 00:30 UTC
 20. **Recoder API gateway** — `api.recoder.xyz` needs proper documentation and developer portal.
 
 ### HIGH — Agents sidebar pages (ALL non-functional)
-ALL pages in the agents sidebar are mock/empty/non-functional:
-- **Workers** — no functionality
-- **Spaces** — no functionality
-- **Triggers** — no functionality
-- **Shared** — no functionality
-- **Favorites** — no functionality
-- **Marketplace** — no functionality
-- **Templates** — no functionality
-- **Prompts** — no functionality
-- **Activity** — no functionality
-- **Runs** — no functionality
-- **Monitoring** — no functionality
-- **Incidents** — no functionality
-- **Schedules** — no functionality
-- **Pipelines** — no functionality
-- **Leaderboard** — no functionality
-- **A/B Tests** — no functionality
-- **Reports** — no functionality
-- **Developers** — no functionality
+Backend API audit + frontend code audit (2026-03-29):
+
+**Backend endpoints that return 404 (don't exist):**
+- `/v1/workers` — 404
+- `/v1/spaces` — 404
+- `/v1/marketplace/templates` — 404
+- `/v1/activity` — 404
+- `/v1/runs` — 404
+- `/v1/monitoring/metrics` — 404
+- `/v1/leaderboard` — 404
+- `/v1/reports` — 404
+- `/v1/developers` — 404
+- `/v1/agents/shared` — 404
+- `/v1/agents/favorites` — 404
+- `/v1/knowledge-base` — 404
+
+**Backend endpoints that return 200 but empty data:**
+- `/v1/triggers` — `[]`
+- `/v1/incidents` — `[]`
+- `/v1/schedules` — `[]`
+- `/v1/pipelines` — `[]`
+- `/v1/ab-tests` — `[]`
+- `/v1/composio/profiles` — `{"profiles":[]}`
+
+**Frontend pages with ZERO API calls (pure UI, no backend):**
+ALL 22 dashboard pages except `runs` and `activity` have zero API calls:
+Workers, Spaces, Triggers, Shared, Favorites, Marketplace, Templates, Prompts, Monitoring, Incidents, Schedules, Pipelines, Reports, Developers, Agents, Bookmarks, Collaboration, Credits, Dashboard, Exports, Knowledge, Onboarding, Operations, Shared, Summaries, Workspaces
+
+**recoder.xyz dashboard pages with zero API calls:**
+Billing, Overview, Projects, Team — all stub/placeholder (5 lines each)
+
+**Settings pages (23 total) — most are UI-only:**
+Only `api-keys` (57 API calls), `account` (4), `notifications` (3), `integrations` (2) have real backend integration. The rest (19 pages) are frontend-only UI with no backend.
 
 ### HIGH — Agent tools broken
 ALL specialized agent tools fail:
