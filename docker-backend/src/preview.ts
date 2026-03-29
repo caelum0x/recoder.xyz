@@ -205,10 +205,13 @@ async function recoverContainerFromDaytona(
       });
     const match = matches[0];
     if (match) {
-      const previewUrl = dc.getPreviewUrl(match.id, 5173);
+      // Default to 8080 (common for file servers in agent sandboxes)
+      // The preview route's health check will detect the actual port
+      const defaultPort = 8080;
+      const previewUrl = dc.getPreviewUrl(match.id, defaultPort);
       const entry = {
         id: match.id,
-        port: 5173,
+        port: defaultPort,
         ptyPort: 0,
         lastActive: Date.now(),
         daytona: true,
@@ -444,6 +447,8 @@ export function setupPreviewProxy(app: Express, containers: Map<string, { id: st
         daytonaServerReady = !!readyMatch;
         if (readyMatch) {
           const detectedPort = parseInt(readyMatch[1], 10);
+          // Update BOTH the preview URL and the port on the entry
+          entry.port = detectedPort;
           const newPreviewUrl = dc.getPreviewUrl(entry.id, detectedPort);
           if (newPreviewUrl !== (entry as any).daytonaPreviewUrl) {
             (entry as any).daytonaPreviewUrl = newPreviewUrl;
@@ -747,6 +752,7 @@ export function setupPreviewProxy(app: Express, containers: Map<string, { id: st
       const proxyPort = parseInt(process.env.DAYTONA_PROXY_PORT || '4000', 10);
       const sandboxHost = `${port}-${entry.id}.sandbox.recoder.xyz`;
       const requestPath = `/${subPath}${req.url.includes('?') ? '?' + req.url.split('?')[1] : ''}`;
+      console.log(`[SandboxPreview] Proxying: ${proxyHost}:${proxyPort}${requestPath} Host: ${sandboxHost}`);
 
       const http = await import('http');
       const proxyResult = await new Promise<{ status: number; headers: Record<string, string>; body: Buffer }>((resolve, reject) => {
