@@ -103,24 +103,35 @@ Daytona preview redirects to `https://{port}-{sandboxId}.sandbox.recoder.xyz` wh
 5. **Composio integrations 500** — App Integrations page broken.
 6. **Agency workflows** — Giselle engine 500s (deferred).
 
-### Phase 3: Quality + polish
-1. DOCX via run_code (not create_file)
-2. Image display from sandbox URL
-3. Slides, Excel tools
-4. A2A message passing (not just connection)
+### Phase 3: Agent quality
+1. Fix create/delete loop — increase max_tokens for tool responses
+2. Fix CodeMirror re-crash — disable retry after error boundary catch
+3. Fix sandbox auto-stop — auto-wake on preview/file access
+4. Fix preview panel in agents — use direct sandbox URL in iframe
+5. DOCX via run_code (not create_file)
+6. A2A end-to-end test (not just connection)
 
-### Phase 3: recoder.xyz Website + Documentation
-1. Remove OpenClaw references from recoder.xyz landing page and navigation
-2. API documentation — document all backend endpoints for external integrations
-3. A2A protocol documentation — Agent-to-Agent communication spec
-4. Developer/coding documentation — how to build on the platform
-5. Getting started guide — user onboarding (sign up, create agent, BYOK setup)
+### Phase 4: Web IDE
+1. Docker rebuild with all fixes (parser 100k, proxy, X-Frame-Options)
+2. Test publish pipeline
+3. Verify file API works with INTERNAL_SERVICE_KEY
+4. Test live preview in Web IDE
 
-### Phase 4: Infrastructure
-1. R2 storage keys (endpoint configured, needs access keys from Cloudflare)
-2. Investigate crash loops (agents 334, agency 216, PM 329 restarts)
-3. Memory optimization (agents 428MB, PM 460MB)
-4. Rotate exposed API keys (git history)
+### Phase 5: recoder.xyz Website + Documentation
+1. Polish landing page — verify all links, design cleanup
+2. **Recoder API docs** — document `/v1/threads`, `/v1/agents`, BYOK, sandbox, files endpoints
+3. **A2A protocol docs** — Agent-to-Agent communication spec and integration guide
+4. **Developer docs** — how to extend agents, create tools, build on the platform
+5. **Getting started guide** — user onboarding: sign up → create agent → use tools → BYOK setup
+6. **API gateway portal** — api.recoder.xyz developer portal
+
+### Phase 6: Platform cleanup
+1. Fix Composio integrations 500
+2. Fix Agency workflows (Giselle engine)
+3. Test PM thoroughly (copilot write actions, all pages)
+4. Memory optimization
+5. Key rotation
+6. Monitoring alerts
 
 ### Phase 5: OpenClaw → Extract, Remove, Replace
 
