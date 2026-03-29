@@ -51,18 +51,40 @@ Last updated: 2026-03-29 00:30 UTC
 
 ## Remaining Issues
 
-### MEDIUM
-1. **DOCX via create_file** — agent sometimes uses create_file instead of run_code. Auto-convert interceptor exists.
-2. **Command output not captured** — long-running scripts show no output. PTY buffering.
-3. **ERR_CONNECTION_RESET** — Cloudflare HTTP/2 limitation, not code bug.
-4. **Agency workflows** — Giselle engine crash. Deep framework issue.
-5. **Web IDE Docker rebuild** — parser fix + preview fixes need container rebuild.
+### HIGH — Agent UX
+1. **Create/delete loop for large HTML** — Agent generates big website HTML, create_file truncates (LLM max_tokens ~41 completion tokens), agent sees incomplete, deletes, retries forever. Need: increase max_tokens for tool responses.
+2. **CodeMirror re-crash loop** — Error boundary catches crash but CodeMirror retries parsing immediately, crashes again. Console floods with hundreds of errors. Need: disable retry on error or skip parsing after catch.
+3. **Sandbox auto-stop** — Daytona sandboxes stop after inactivity. Preview/file operations fail with "Sandbox is not running". Need: auto-wake on preview/file access.
+4. **Preview panel in agents** — Direct sandbox URLs work (`*.sandbox.recoder.xyz`) but the inline preview panel needs sandbox started + file server running + docker-backend proxy working. First call works, health check re-runs fail on subsequent calls.
+
+### HIGH — Web IDE
+5. **Web IDE Docker rebuild needed** — parser fix (100k), preview proxy, X-Frame-Options all need container rebuild to take effect.
+6. **Web IDE publish** — Daytona paths fixed but untested after rebuild.
+7. **Web IDE file API 500** — INTERNAL_SERVICE_KEY set but needs verification after rebuild.
+
+### MEDIUM — Platform
+8. **Agency workflows** — Giselle engine crash (`h.values.map` error). Deep framework/Supabase issue.
+9. **Composio integrations 500** — `POST /v1/composio/profiles` returns 500. App Integrations page broken.
+10. **A2A not tested** — Bridge connects but actual message passing untested. Need end-to-end test.
+11. **PM refresh issue** — New data from copilot needs page refresh (deferred).
+12. **DOCX via create_file** — agent sometimes uses create_file instead of run_code. Auto-convert interceptor exists.
+13. **Command output not captured** — long-running scripts show no output.
+14. **ERR_CONNECTION_RESET** — Cloudflare HTTP/2 limitation, not code bug.
+
+### MEDIUM — Website & Docs
+15. **recoder.xyz polish** — Landing page needs final cleanup, links verified, design polish.
+16. **API documentation** — No docs for backend API endpoints (`/v1/threads`, `/v1/agents`, BYOK, etc.).
+17. **A2A protocol docs** — No documentation for Agent-to-Agent communication.
+18. **Developer docs** — No docs on how to build on the platform, extend agents, create tools.
+19. **Getting started guide** — No user onboarding docs (sign up → create agent → BYOK setup).
+20. **Recoder API gateway** — `api.recoder.xyz` needs proper documentation and developer portal.
 
 ### LOW
-6. **Crash loop counters** — high restart counts (cosmetic, from rebuilds).
-7. **OpenRouter key rotation** — key was exposed in docker-compose git history. User has credits, rotation optional.
-8. **Disk monitoring** — no alert at 85% usage.
-9. **Memory optimization** — agents 428MB, PM 460MB.
+21. **Crash loop counters** — high restart counts (cosmetic, from rebuilds).
+22. **OpenRouter key rotation** — key was in git history. Rotation optional.
+23. **Disk monitoring** — no alert at 85% usage.
+24. **Memory optimization** — agents 428MB, PM 460MB.
+25. **Iframe sandbox escape** — `allow-scripts` + `allow-same-origin` warning on preview iframe.
 
 ---
 
