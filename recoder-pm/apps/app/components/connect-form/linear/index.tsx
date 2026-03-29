@@ -99,15 +99,10 @@ export const LinearSelector = ({ linearApiKey }: LinearSelectorProperties) => {
 
   if (!linearApiKey) {
     return (
-      <Button asChild>
-        <a
-          href="/api/integrations/linear/start"
-          rel="noopener noreferrer"
-          target="_blank"
-        >
-          Install Linear app
-        </a>
-      </Button>
+      <p className="text-muted-foreground text-sm">
+        Linear is not configured. Please ask an admin to set up the Linear
+        integration in Settings.
+      </p>
     );
   }
 

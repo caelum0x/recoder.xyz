@@ -1,5 +1,4 @@
 import type { AtlassianInstallation } from "@repo/backend/prisma/client";
-import { Button } from "@repo/design-system/components/ui/button";
 import { OrDivider } from "@/components/or-divider";
 import { JiraIssueCreator } from "./jira-issue-creator";
 import { JiraIssuePicker } from "./jira-issue-picker";
@@ -11,15 +10,10 @@ type JiraSelectorProperties = {
 export const JiraSelector = ({ jiraAccessToken }: JiraSelectorProperties) => {
   if (!jiraAccessToken) {
     return (
-      <Button asChild>
-        <a
-          href="/settings/integrations/jira"
-          rel="noopener noreferrer"
-          target="_blank"
-        >
-          Install Jira app
-        </a>
-      </Button>
+      <p className="text-muted-foreground text-sm">
+        Jira is not configured. Please ask an admin to set up the Jira
+        integration in Settings.
+      </p>
     );
   }
 
