@@ -129,51 +129,38 @@ ALL specialized agent tools fail:
 
 **The platform is ~90% frontend UI with no backend.** Comprehensive audit found:
 
-#### Agents Dashboard — 60+ pages, most are empty shells
-**Pages with NO backend at all (0 API calls):**
-Workers, Spaces, Triggers, Shared, Favorites, Marketplace, Templates, Prompts, Monitoring, Incidents, Schedules, Pipelines, Reports, Developers, Agents, Bookmarks, Collaboration, Credits, Dashboard, Exports, Knowledge, Onboarding, Operations, Shared, Summaries, Workspaces
+#### CORRECTION: Backend has 227 routers — many features DO have backends
+**Previous audit was WRONG about "no backend."** The frontend pages use hooks/stores that call the backend indirectly. The Python backend at `backend/` has 227 registered routers covering:
+- Agent CRUD, tools, scheduling, benchmarks, AB tests, versioning, health, quotas
+- Thread analytics, search, bookmarks, tags, sentiment, summaries, exports, branches
+- Webhooks, triggers, workflows, collaboration rooms, marketplace
+- Admin: analytics, billing, feedback, notifications, stress test, system status
+- Billing, user preferences, workspace management
 
-**Pages with hooks that call non-existent endpoints:**
-- Collaboration rooms — `useCollaborationRooms()` etc. → no backend
-- Monitoring — `useActiveRuns()`, `useMonitorStats()` → no backend
-- Analytics/sentiment — `useSentimentOverview()` → no backend
-- Operations — `useBulkOperations()` → partially implemented
-- Marketplace — `useMarketplaceListings()` → not wired to storage
-- Agents/leaderboard — `useAgentLeaderboard()` → no calculation
-- Agents/queue — `useRunQueue()`, `useEnqueueRun()` → no queue system
-- Agents/memory — context management UI → no backend storage
-- Agents/plugins — plugin UI → no execution
-- Agents/personas — CRUD works but personas not used
-- Billing/costs — `useCostSummary()`, `useBudgets()` → no cost tracking
-- Developer/playground — API playground → no execution
-- Triggers — creation works but no execution engine
-- Schedules — UI but no background scheduler
-- Webhooks — full UI but delivery tracking not implemented
+**What's ACTUALLY broken vs what has backend but may not work end-to-end:**
+The issue is NOT "no backend" — it's that the frontend→backend integration may be broken (wrong URLs, auth issues, empty data, unimplemented business logic, or features that need configuration/data to show anything).
 
-**Settings pages (23 total, 19 are frontend-only):**
-Only api-keys, account, notifications, integrations connect to backend. Rest are UI decoration.
+**Pages confirmed returning 404 (these endpoints genuinely don't exist under the tested URL pattern):**
+workers (`/v1/workers`), spaces (`/v1/spaces`), marketplace (`/v1/marketplace/templates`), monitoring metrics (`/v1/monitoring/metrics`), leaderboard (`/v1/leaderboard`), reports (`/v1/reports`), developers (`/v1/developers`), knowledge-base (`/v1/knowledge-base`)
 
-**Admin pages (14 total, mostly incomplete):**
-analytics, audit, features, feedback, health, metrics, notifications, quotas, sandbox-pool, stateless, stress-test, users, utils — all have UI but incomplete backends.
+**Note:** Some of these may exist under different URL patterns (e.g., `/v1/agents/leaderboard` instead of `/v1/leaderboard`). The backend has routers for all these features — the 404s may be URL mismatches.
 
-#### recoder.xyz Dashboard — 5 stubs
-Billing, Overview, Projects, Team — all 5-line placeholder pages.
+**Endpoints that return empty arrays (backend exists, just no data):**
+triggers, incidents, schedules, pipelines, ab-tests, composio — these WORK but have no data created yet.
 
 #### PM — Partially working
-- Copilot: WORKS
+- Copilot: WORKS (read + write)
 - Roadmap/Gantt: UI exists but data not populated
-- Calendar/Release views: render but no event data
-- Changelog: view-only, can't create/edit
+- Changelog: view-only
+- Data pages, Insights pages: UI scaffold, needs verification
 
 #### Agency — Partial
 - Copilot: WORKS
 - Workflows: Giselle engine broken
 - Services/quotes: placeholder UI
 
-#### Backend API — 12 missing endpoints + 10 stubs
-**404 endpoints:** workers, spaces, marketplace, activity, runs, monitoring, leaderboard, reports, developers, shared, favorites, knowledge-base
-**Stub endpoints (200 but empty):** triggers, incidents, schedules, pipelines, ab-tests, composio
-**Missing backend services:** collaboration rooms, cost tracking, sentiment analysis, benchmarking, auto-tagging, rate limiter enforcement, webhook delivery
+#### recoder.xyz Dashboard
+Billing, Overview, Projects, Team — stub pages (may have backend routers but frontend is minimal)
 
 ### MEDIUM — Backend stubs and broken endpoints
 **Email notifications** — `channel_dispatcher.py:32` logs "not implemented" and returns `True` (fake success). Emails silently skipped.
