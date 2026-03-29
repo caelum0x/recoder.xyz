@@ -175,6 +175,55 @@ Billing, Overview, Projects, Team — all 5-line placeholder pages.
 **Stub endpoints (200 but empty):** triggers, incidents, schedules, pipelines, ab-tests, composio
 **Missing backend services:** collaboration rooms, cost tracking, sentiment analysis, benchmarking, auto-tagging, rate limiter enforcement, webhook delivery
 
+### MEDIUM — Backend stubs and broken endpoints
+**Email notifications** — `channel_dispatcher.py:32` logs "not implemented" and returns `True` (fake success). Emails silently skipped.
+**Langfuse tracing** — `langfuse.py:15-58` mock classes when not configured. All tracing is no-op.
+**Vapi webhooks** — `vapi_api.py` all 3 endpoints return generic 500 on any error.
+**Export API** — `export_api.py` PDF/DOCX export returns generic 500 with no error distinction.
+**Windsurf connector** — `windsurf-connector-runtime.service.ts:17` Tier-2 stub. Wire protocol not implemented.
+**Plugin registry** — `plugin_registry_api.py` CRUD works but generic 500 on all errors.
+**Composio profiles** — `credentials/api.py:399-501` graceful degradation returns empty arrays when table/service missing.
+
+### MEDIUM — Web IDE stubs and disabled features
+**Cloud AI** — `api.chat.ts:391` disabled (missing GOOGLE_CLOUD_PROJECT). Enterprise feature non-functional.
+**Code Assist** — `api.chat.ts:478` disabled (requires Google OAuth2Client).
+**Trigger resolution** — `api.triggers.ts:160` returns placeholder/null instead of real data.
+**Domain verification** — `api.domains.ts:57` generates mock ownership data instead of Cloudflare verification.
+**Build progress** — removed from Workbench (was showing mock "Creating files..." UI).
+**Integration panels** — hidden in Workbench ("not yet functional end-to-end").
+
+### MEDIUM — Agency stubs
+**API Keys edit/delete** — `agency/settings/team/api-keys/` placeholder handlers (console.log only).
+**Data Query Node** — UI implemented, backend stubbed. Behind `dataStoreFlag` feature flag.
+**WebSearch Action** — `action-node-properties-panel/index.tsx:107` commented out with TODO.
+**Properties Panel** — `new-editor/properties-panel.tsx` minimal placeholder content.
+**Services/quotes** — placeholder UI.
+
+### MEDIUM — Agents premium features (blocked for free tier)
+**MCP Store** — `mcp-configuration-new.tsx:120` shows Lock icon, opens pricing modal.
+**Composio integrations** — `composio-registry.tsx:260` shows "Upgrade" button for free tier.
+**Premium models** — `model-selector.tsx:350` Lock icon on inaccessible models.
+**Scheduled triggers** — `one-click-integrations.tsx:200` disabled with "UPGRADE" tooltip.
+**Event triggers** — `one-click-integrations.tsx:248` disabled.
+**Custom workers** — `nav-workers.tsx:63` blocked for free tier.
+**App credentials page** — `settings/credentials/page.tsx` full "Coming Soon" placeholder.
+**Notification toggle** — `settings/notifications/page.tsx:268` disabled with no-op handler.
+
+### NEW FINDINGS — Web IDE hidden features + PM gaps
+
+**recoder-web: 3 panels hidden despite being fully implemented:**
+- **SearchPanel** — code complete, API works (`POST /api/search/:projectId`), but NO toggle button in Workbench
+- **GitPanel** — code complete, but NO toggle button (only GitCollaboratorsPanel accessible)
+- **PackageManagerPanel** — code complete, all 5 API endpoints work (search/install/uninstall/update/list), but NO toggle button
+- Root cause: `togglePanel()` function exists but is never called from any panel button. Buttons were removed.
+
+**recoder-pm: partially implemented features:**
+- **Changelog** — view-only, can't create/edit entries
+- **Roadmap/Gantt** — UI renders but no data populated
+- **Data pages** (6 pages: analytics-events, companies, support-tickets, users) — UI scaffolding only
+- **Insights sub-pages** (5 pages: ai-insights, contradictions, opportunity-scoring, data-health, session-recordings) — UI with "Run" buttons but computation unverified
+- **Integration settings** — Slack, Zendesk, Session Recordings pages exist but not wired to backends
+
 ### LOW
 26. **Crash loop counters** — high restart counts (cosmetic, from rebuilds).
 27. **OpenRouter key rotation** — key was in git history. Rotation optional.
