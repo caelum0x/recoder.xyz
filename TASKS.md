@@ -169,7 +169,7 @@ Agent creates files and runs code but user CAN'T SEE the results.
 
 | # | Task | Detail |
 |---|------|--------|
-| 25 | **Remove OpenClaw references from website** | Clean landing page, navigation, any mentions of OpenClaw |
+| 25 | ~~Remove OpenClaw references~~ | DONE — 21 app files cleaned, redirects, schemas, sitemap |
 | 26 | **API documentation** | Document backend API endpoints (`/v1/threads`, `/v1/agents`, BYOK, etc.) |
 | 27 | **A2A protocol documentation** | Agent-to-Agent communication spec and usage guide |
 | 28 | **Coding/developer docs** | How to build on the platform, extend agents, create tools |
@@ -183,7 +183,7 @@ Agent creates files and runs code but user CAN'T SEE the results.
 | # | Task | Detail |
 |---|------|--------|
 | 33 | **Investigate crash loops** | agents (334), agency (216), PM (329) restarts |
-| 34 | **R2 storage keys** | Endpoint configured, needs access keys from Cloudflare |
+| 34 | ~~R2 storage~~ | DONE — endpoint + keys configured |
 | 35 | **Database backups** | pg_dump cron job |
 | 36 | **Rotate exposed API keys** | Keys in git history |
 | 37 | **Health endpoints** | `/health` on every service |
