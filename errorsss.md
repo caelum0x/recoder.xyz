@@ -125,12 +125,62 @@ ALL specialized agent tools fail:
 - **Image generation** — API quota issues
 - **Video generation** — Replicate key added but untested
 
+### COMPREHENSIVE AUDIT (2026-03-29) — 100+ features are UI shell only
+
+**The platform is ~90% frontend UI with no backend.** Comprehensive audit found:
+
+#### Agents Dashboard — 60+ pages, most are empty shells
+**Pages with NO backend at all (0 API calls):**
+Workers, Spaces, Triggers, Shared, Favorites, Marketplace, Templates, Prompts, Monitoring, Incidents, Schedules, Pipelines, Reports, Developers, Agents, Bookmarks, Collaboration, Credits, Dashboard, Exports, Knowledge, Onboarding, Operations, Shared, Summaries, Workspaces
+
+**Pages with hooks that call non-existent endpoints:**
+- Collaboration rooms — `useCollaborationRooms()` etc. → no backend
+- Monitoring — `useActiveRuns()`, `useMonitorStats()` → no backend
+- Analytics/sentiment — `useSentimentOverview()` → no backend
+- Operations — `useBulkOperations()` → partially implemented
+- Marketplace — `useMarketplaceListings()` → not wired to storage
+- Agents/leaderboard — `useAgentLeaderboard()` → no calculation
+- Agents/queue — `useRunQueue()`, `useEnqueueRun()` → no queue system
+- Agents/memory — context management UI → no backend storage
+- Agents/plugins — plugin UI → no execution
+- Agents/personas — CRUD works but personas not used
+- Billing/costs — `useCostSummary()`, `useBudgets()` → no cost tracking
+- Developer/playground — API playground → no execution
+- Triggers — creation works but no execution engine
+- Schedules — UI but no background scheduler
+- Webhooks — full UI but delivery tracking not implemented
+
+**Settings pages (23 total, 19 are frontend-only):**
+Only api-keys, account, notifications, integrations connect to backend. Rest are UI decoration.
+
+**Admin pages (14 total, mostly incomplete):**
+analytics, audit, features, feedback, health, metrics, notifications, quotas, sandbox-pool, stateless, stress-test, users, utils — all have UI but incomplete backends.
+
+#### recoder.xyz Dashboard — 5 stubs
+Billing, Overview, Projects, Team — all 5-line placeholder pages.
+
+#### PM — Partially working
+- Copilot: WORKS
+- Roadmap/Gantt: UI exists but data not populated
+- Calendar/Release views: render but no event data
+- Changelog: view-only, can't create/edit
+
+#### Agency — Partial
+- Copilot: WORKS
+- Workflows: Giselle engine broken
+- Services/quotes: placeholder UI
+
+#### Backend API — 12 missing endpoints + 10 stubs
+**404 endpoints:** workers, spaces, marketplace, activity, runs, monitoring, leaderboard, reports, developers, shared, favorites, knowledge-base
+**Stub endpoints (200 but empty):** triggers, incidents, schedules, pipelines, ab-tests, composio
+**Missing backend services:** collaboration rooms, cost tracking, sentiment analysis, benchmarking, auto-tagging, rate limiter enforcement, webhook delivery
+
 ### LOW
 26. **Crash loop counters** — high restart counts (cosmetic, from rebuilds).
 27. **OpenRouter key rotation** — key was in git history. Rotation optional.
 28. **Disk monitoring** — no alert at 85% usage.
 29. **Memory optimization** — agents 428MB, PM 460MB.
-30. **Iframe sandbox escape** — `allow-scripts` + `allow-same-origin` warning on preview iframe.
+30. **Iframe sandbox escape** — `allow-scripts` + `allow-same-origin` warning.
 
 ---
 
