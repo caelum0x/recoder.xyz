@@ -211,17 +211,21 @@ Server and client render different content. Usually caused by session state diff
 8. **Web IDE publish 500** — Daytona paths fixed (Agent 1). Needs testing after rebuild.
 
 ### MEDIUM — Agent quality issues
-9. **PTY character doubling** — FIXED: `stty -echo` disables terminal echo before commands.
-10. **Canvas/image gen** — FIXED: OpenRouter↔Replicate fallback chain. Video: fal→SiliconFlow→Replicate. Canvas: Replicate→Gemini fallback.
-11. **DOCX via create_file** — agent sometimes uses create_file instead of run_code for .docx. Auto-convert interceptor exists but may not always trigger.
-12. **Old threads** — FIXED: tool results with empty content get "(empty result)" placeholder instead of being dropped. Null arguments normalized to '{}'. Preserves tool call pairing.
-13. **ERR_CONNECTION_RESET** — Cloudflare HTTP/2 stream resets. Backend sends pings every 5s, `: connected` on open. Not a code bug — Cloudflare infra limitation.
-14. **Command output not captured** — long-running Python scripts (PyTorch training) show no output. Shell timeout or PTY buffering.
-15. **Sandbox URLs** — FIXED: `*.sandbox.recoder.xyz` wildcard DNS works. Direct URLs return 200. Internal proxy being fixed by Agent 1.
+9. **Create/delete loop for large HTML files** — Agent generates big HTML (website), create_file truncates at LLM max_tokens (~41 tokens per completion), agent sees incomplete file, deletes, retries forever. Root cause: LLM max_tokens too low for tool call responses, or file content gets cut off during streaming.
+10. **CodeMirror re-crash loop** — Error boundary catches crash but CodeMirror retries parsing immediately, crashes again. Infinite catch→retry→catch cycle fills console with hundreds of errors. Need: disable CodeMirror retry after error, or skip parsing entirely when error boundary activates.
+11. **Iframe sandbox escape warning** — `allow-scripts` + `allow-same-origin` on preview iframe. Browser warns content can escape sandbox. Should use stricter sandbox attributes.
+12. **Composio profiles 500** — `POST /v1/composio/profiles` returns 500. App Integrations page broken ("Failed to create profile").
+13. **Sandbox auto-stop** — Daytona sandboxes stop after inactivity. Preview fails with "Sandbox is not running". Need auto-start when preview requested.
+14. **PTY character doubling** — FIXED: `stty -echo` disables terminal echo before commands.
+15. **Canvas/image gen** — FIXED: OpenRouter↔Replicate fallback chain.
+16. **Old threads** — FIXED: tool results with empty content get placeholder.
+17. **ERR_CONNECTION_RESET** — Cloudflare HTTP/2 stream resets. Not a code bug.
+18. **Command output not captured** — long-running scripts show no output.
+19. **Preview in agents UI** — sandbox URLs work directly but the preview panel in tool view needs sandbox started + file server running.
 
 ### LOW — UI/UX
-14. ~~Mock UI~~ — FIXED: hidden from thread header.
-15. ~~Landing page~~ — FIXED: products count, redirects, schemas, sitemap.
-16. ~~A2A reconnect~~ — FIXED: exponential backoff + 30s ping. Published recoder-a2a@1.0.2.
-17. ~~R2 storage~~ — FIXED: endpoint + keys configured, backend restarted.
-18. **Crash loop counters** — high restart counts (cosmetic, from rebuilds).
+20. ~~Mock UI~~ — FIXED: hidden from thread header.
+21. ~~Landing page~~ — FIXED: products count, redirects, schemas, sitemap.
+22. ~~A2A reconnect~~ — FIXED: exponential backoff + 30s ping.
+23. ~~R2 storage~~ — FIXED: endpoint + keys configured.
+24. **Crash loop counters** — high restart counts (cosmetic).
