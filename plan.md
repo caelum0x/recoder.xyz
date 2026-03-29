@@ -95,12 +95,13 @@ Daytona preview redirects to `https://{port}-{sandboxId}.sandbox.recoder.xyz` wh
 - **File preview** — still blank in tool view. Needs investigation.
 - **Web IDE rebuild** — in progress (Docker build)
 
-### Phase 2: Remaining work
-1. **Agency workflows** — Giselle engine 500s (deferred — Supabase dependency)
-2. **Canvas/image gen** — FAL/Replicate API credits needed
-3. **Old threads** — Gemini history broken. Only new threads work.
-4. **Sandbox URLs** — `*.sandbox.recoder.xyz` DNS not configured
-5. **Landing page** — final cleanup (OpenClaw references mostly removed)
+### Phase 2: Current blockers (2026-03-29)
+1. **Create/delete loop** — Agent can't create large HTML files. LLM max_tokens too low for big file_contents, file truncated, agent retries forever. Fix: increase max_tokens or chunk file creation.
+2. **CodeMirror re-crash loop** — Error boundary catches but CodeMirror retries. Console floods with errors. Fix: disable retry after error catch.
+3. **Preview in agents UI** — sandbox URLs work directly (`*.sandbox.recoder.xyz` confirmed) but tool view preview needs sandbox started + file server. Docker-backend proxy works for first call then health check fails.
+4. **Sandbox auto-stop** — Daytona sandboxes stop after inactivity. Preview/file operations fail with "Sandbox is not running". Need auto-wake on access.
+5. **Composio integrations 500** — App Integrations page broken.
+6. **Agency workflows** — Giselle engine 500s (deferred).
 
 ### Phase 3: Quality + polish
 1. DOCX via run_code (not create_file)
