@@ -151,7 +151,7 @@ Agent creates files and runs code but user CAN'T SEE the results.
 | 14 | ~~Fix live preview~~ | DONE (Agent 2) — inline proxy, nginx X-Frame-Options override |
 | 15 | **Fix publish pipeline** | Build → tar → serve at `/published/{slug}/` |
 | 16 | **Fix chat timeout** | Ensure LLM calls don't hang — add request-level timeout |
-| 17 | **Remove broken panels** | Hide Search, Git, Packages from workbench sidebar |
+| 17 | ~~Remove broken panels~~ | DONE — already hidden (confirmed by Agent 2) |
 | 18 | **Test terminal** | Verify common commands work through Daytona |
 
 ### TIER 3: Platform copilots (19-24)
@@ -162,8 +162,8 @@ Agent creates files and runs code but user CAN'T SEE the results.
 | 20 | **Agency copilot write actions** | Create clients, projects, deliverables via tool calling |
 | 21 | ~~Fix agency GitHub `account_not_linked`~~ | DONE (Agent 2) — accountLinking enabled in shared @recoder/auth. Auto-links by email. |
 | 22 | ~~Fix double copilot~~ | Agent 2 already removed duplicate |
-| 23 | **Clean PM seed data** | Remove any test data from features page |
-| 24 | **PM connect features** | Show "not configured" gracefully for GitHub/Linear/Jira |
+| 23 | ~~Clean PM seed data~~ | DONE — only 1 real feature ("landing"), no test data |
+| 24 | ~~PM connect features~~ | DONE (Agent 2) — graceful "not configured" messages |
 
 ### TIER 4: recoder.xyz Website + Documentation (25-32)
 
@@ -184,11 +184,11 @@ Agent creates files and runs code but user CAN'T SEE the results.
 |---|------|--------|
 | 33 | **Investigate crash loops** | agents (334), agency (216), PM (329) restarts |
 | 34 | ~~R2 storage~~ | DONE — endpoint + keys configured |
-| 35 | **Database backups** | pg_dump cron job |
+| 35 | ~~Database backups~~ | DONE — daily cron 3AM, 7-day retention |
 | 36 | **Rotate exposed API keys** | Keys in git history |
 | 37 | **Health endpoints** | `/health` on every service |
 | 38 | **Memory optimization** | Agents 428MB, PM 460MB |
-| 39 | **Zombie process cleanup** | 195 defunct containerd-shim processes |
+| 39 | ~~Zombie cleanup~~ | DONE — 205 zombies killed, Docker 56GB freed |
 | 40 | **Disk monitoring** | Set up alert at 85% usage |
 
 ### TIER 5: Agents sidebar pages (35-48)
