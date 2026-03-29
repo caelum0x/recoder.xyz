@@ -79,12 +79,44 @@ Last updated: 2026-03-29 00:30 UTC
 19. **Getting started guide** — No user onboarding docs (sign up → create agent → BYOK setup).
 20. **Recoder API gateway** — `api.recoder.xyz` needs proper documentation and developer portal.
 
+### HIGH — Agents sidebar pages (ALL non-functional)
+ALL pages in the agents sidebar are mock/empty/non-functional:
+- **Workers** — no functionality
+- **Spaces** — no functionality
+- **Triggers** — no functionality
+- **Shared** — no functionality
+- **Favorites** — no functionality
+- **Marketplace** — no functionality
+- **Templates** — no functionality
+- **Prompts** — no functionality
+- **Activity** — no functionality
+- **Runs** — no functionality
+- **Monitoring** — no functionality
+- **Incidents** — no functionality
+- **Schedules** — no functionality
+- **Pipelines** — no functionality
+- **Leaderboard** — no functionality
+- **A/B Tests** — no functionality
+- **Reports** — no functionality
+- **Developers** — no functionality
+
+### HIGH — Agent tools broken
+ALL specialized agent tools fail:
+- **DOCX creation** — create_file truncates, auto-convert sometimes works
+- **XLSX/Excel** — untested, likely same issues
+- **PPTX/Slides** — untested, likely same issues
+- **Deep Research mode** — not working
+- **Coding with live preview** — files created but preview broken (sandbox auto-stop)
+- **Canvas** — "Add Frame To Canvas failed" + image gen quota
+- **Image generation** — API quota issues
+- **Video generation** — Replicate key added but untested
+
 ### LOW
-21. **Crash loop counters** — high restart counts (cosmetic, from rebuilds).
-22. **OpenRouter key rotation** — key was in git history. Rotation optional.
-23. **Disk monitoring** — no alert at 85% usage.
-24. **Memory optimization** — agents 428MB, PM 460MB.
-25. **Iframe sandbox escape** — `allow-scripts` + `allow-same-origin` warning on preview iframe.
+26. **Crash loop counters** — high restart counts (cosmetic, from rebuilds).
+27. **OpenRouter key rotation** — key was in git history. Rotation optional.
+28. **Disk monitoring** — no alert at 85% usage.
+29. **Memory optimization** — agents 428MB, PM 460MB.
+30. **Iframe sandbox escape** — `allow-scripts` + `allow-same-origin` warning on preview iframe.
 
 ---
 
