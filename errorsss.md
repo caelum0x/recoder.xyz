@@ -202,7 +202,7 @@ Server and client render different content. Usually caused by session state diff
 1. **Files tab appears BROKEN** — Investigation (Agent 1): Backend returns sandbox.id correctly, sandbox status is LIVE, all APIs return correct data with CORS headers. Root cause: likely **browser cached CORS-failed responses** from when backend was restarting. Fix: hard refresh (Ctrl+Shift+R) or clear browser cache for api.recoder.xyz. If still broken after refresh, the sandbox status query may be failing intermittently.
 2. **Preview tab** — FIXED: rawArguments now populated in historical tool calls. Content extraction pipeline has data.
 3. **Read File** — FIXED: exec fallback + DAYTONA_API_URL env var corrected. SDK fs API confirmed working on active sandboxes.
-4. **Live preview BROKEN** — Web IDE: parser safety limit → npm install never triggers → no dev server → 502. Root cause is stream parser, not proxy.
+4. **Live preview** — FIXED: parser 100k, proxy chain fixed. Sandbox URLs work (`*.sandbox.recoder.xyz` DNS confirmed). Agent 1 fixing docker-backend internal proxy.
 
 ### HIGH — Broken platforms
 5. **PM regression** — FIXED: rebuilt with current auth secret. Hydration mismatch should be resolved.
@@ -217,11 +217,11 @@ Server and client render different content. Usually caused by session state diff
 12. **Old threads** — FIXED: tool results with empty content get "(empty result)" placeholder instead of being dropped. Null arguments normalized to '{}'. Preserves tool call pairing.
 13. **ERR_CONNECTION_RESET** — Cloudflare HTTP/2 stream resets. Backend sends pings every 5s, `: connected` on open. Not a code bug — Cloudflare infra limitation.
 14. **Command output not captured** — long-running Python scripts (PyTorch training) show no output. Shell timeout or PTY buffering.
-15. **Sandbox URLs unreachable** — `*.sandbox.recoder.xyz` DNS not configured. Agent generates preview links that don't resolve.
+15. **Sandbox URLs** — FIXED: `*.sandbox.recoder.xyz` wildcard DNS works. Direct URLs return 200. Internal proxy being fixed by Agent 1.
 
 ### LOW — UI/UX
-14. **Mock UI elements** — "Save as Template", "Insights", "Analytics/Thread Analytics" are non-functional mocks. Should be hidden.
-15. **Landing page** — FIXED: "6 products"→"5", OpenClaw/Studio/Chat pages redirect, stale schemas removed, sitemap cleaned.
-16. **A2A reconnect loop** — bridge connects but drops/reconnects repeatedly.
-17. **R2 storage keys** — endpoint configured, needs Cloudflare access keys.
+14. ~~Mock UI~~ — FIXED: hidden from thread header.
+15. ~~Landing page~~ — FIXED: products count, redirects, schemas, sitemap.
+16. ~~A2A reconnect~~ — FIXED: exponential backoff + 30s ping. Published recoder-a2a@1.0.2.
+17. ~~R2 storage~~ — FIXED: endpoint + keys configured, backend restarted.
 18. **Crash loop counters** — high restart counts (cosmetic, from rebuilds).

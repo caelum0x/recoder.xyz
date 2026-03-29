@@ -135,8 +135,8 @@ Agent creates files and runs code but user CAN'T SEE the results.
 
 | # | Task | Detail |
 |---|------|--------|
-| 6 | **Files tab** | Backend OK (Agent 1 confirmed). Likely browser cache — try hard refresh. |
-| 7 | **File preview** | Tool view preview still blank. Needs investigation. |
+| 6 | **Files tab** | Backend OK. Likely browser cache — hard refresh. |
+| 7 | ~~File preview~~ | DONE (Agent 2) — rawArguments populated in historical tool calls |
 | 8 | ~~Read file~~ | DONE (Agent 2) — exec fallback + DAYTONA_API_URL |
 | 9 | ~~Live preview~~ | DONE — parser 100k, proxy chain fixed, X-Frame-Options fixed. Web IDE rebuilding. |
 | 10 | ~~PTY doubling~~ | DONE (Agent 2) — `stty -echo` |
@@ -147,7 +147,7 @@ Agent creates files and runs code but user CAN'T SEE the results.
 
 | # | Task | Detail |
 |---|------|--------|
-| 13 | **Fix Web IDE auth** | Ensure `INTERNAL_SERVICE_KEY` set, recoder.xyz reachable internally from docker-backend |
+| 13 | ~~Fix Web IDE auth~~ | DONE — INTERNAL_SERVICE_KEY set on both sides |
 | 14 | ~~Fix live preview~~ | DONE (Agent 2) — inline proxy, nginx X-Frame-Options override |
 | 15 | **Fix publish pipeline** | Build → tar → serve at `/published/{slug}/` |
 | 16 | **Fix chat timeout** | Ensure LLM calls don't hang — add request-level timeout |
