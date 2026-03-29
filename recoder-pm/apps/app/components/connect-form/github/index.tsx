@@ -2,7 +2,6 @@ import type { GitHubInstallation } from "@repo/backend/prisma/client";
 import { Button } from "@repo/design-system/components/ui/button";
 import { handleError } from "@repo/design-system/lib/handle-error";
 import type { RestEndpointMethodTypes } from "@repo/github";
-import Image from "next/image";
 import { useState } from "react";
 import { OrDivider } from "@/components/or-divider";
 import { useConnectForm } from "../use-connect-form";
@@ -118,22 +117,10 @@ export const GitHubSelector = ({
 
   if (!githubAppInstallationId) {
     return (
-      <Button asChild>
-        <a
-          href="/api/integrations/github/start"
-          rel="noopener noreferrer"
-          target="_blank"
-        >
-          <Image
-            alt=""
-            className="mr-2 h-4 w-4"
-            height={16}
-            src="/github.svg"
-            width={16}
-          />
-          Install GitHub app
-        </a>
-      </Button>
+      <p className="text-muted-foreground text-sm">
+        GitHub is not configured. Please ask an admin to set up the GitHub
+        integration in Settings.
+      </p>
     );
   }
 
