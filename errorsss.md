@@ -211,11 +211,8 @@ Billing, Overview, Projects, Team — all 5-line placeholder pages.
 
 ### NEW FINDINGS — Web IDE hidden features + PM gaps
 
-**recoder-web: 3 panels hidden despite being fully implemented:**
-- **SearchPanel** — code complete, API works (`POST /api/search/:projectId`), but NO toggle button in Workbench
-- **GitPanel** — code complete, but NO toggle button (only GitCollaboratorsPanel accessible)
-- **PackageManagerPanel** — code complete, all 5 API endpoints work (search/install/uninstall/update/list), but NO toggle button
-- Root cause: `togglePanel()` function exists but is never called from any panel button. Buttons were removed.
+**recoder-web: 3 panels intentionally removed:**
+- **SearchPanel, GitPanel, PackageManagerPanel** — code exists but panels were removed because they were mock/non-functional with different UI than the rest of the workbench. API endpoints exist but frontend integration was broken.
 
 **recoder-pm: partially implemented features:**
 - **Changelog** — view-only, can't create/edit entries
@@ -223,6 +220,20 @@ Billing, Overview, Projects, Team — all 5-line placeholder pages.
 - **Data pages** (6 pages: analytics-events, companies, support-tickets, users) — UI scaffolding only
 - **Insights sub-pages** (5 pages: ai-insights, contradictions, opportunity-scoring, data-health, session-recordings) — UI with "Run" buttons but computation unverified
 - **Integration settings** — Slack, Zendesk, Session Recordings pages exist but not wired to backends
+
+### NEW FINDINGS — recoder.xyz app + backend
+
+**recoder.xyz "Coming Soon" pages:**
+- `/settings/integrations/` — GitHub, GitLab, Jira, Slack, Discord all "Coming Soon" badges, no backend
+- `/plan/` — pricing page shows "Coming Soon" for premium tiers (no billing implemented)
+- `/integrations/` — integrations page placeholder
+
+**Backend tools that are guide-only (no actual methods):**
+- `sb_spreadsheet_tool.py` — usage_guide only, delegates to create_file + execute_command. No actual tool methods.
+- `sb_canvas_tool.py` — full implementation (1062 lines) but frontend integration broken
+
+**Deployment platforms (Web IDE):**
+- `PlatformSelector.tsx` — shows "Coming Soon" for deployment platforms, no backend
 
 ### LOW
 26. **Crash loop counters** — high restart counts (cosmetic, from rebuilds).
