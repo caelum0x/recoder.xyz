@@ -109,6 +109,19 @@ Daytona preview redirects to `https://{port}-{sandboxId}.sandbox.recoder.xyz` wh
 3. Fix sandbox auto-stop — auto-wake on preview/file access
 4. Fix preview panel in agents — use direct sandbox URL in iframe
 5. DOCX via run_code (not create_file)
+
+### Reality Check (corrected 2026-03-29)
+Backend has 227 routers — it's NOT "no backend." The real issues are:
+- **Frontend→backend URL mismatches** — 8 endpoints 404 (may exist under different URL patterns)
+- **Empty data** — 6 endpoints return 200 but `[]` (features work, just no data created)
+- **3 separate auth systems** — recoder.xyz (Better Auth), agency (own Better Auth), PM (Supabase Auth)
+- **docker-backend migration mode** — STRICT_AUTH off = any user accesses any project
+- **recoder-web model hardcoded** — model selector is cosmetic, server uses claude-3-5-sonnet
+- **8 premium features** blocked with pricing modal (no billing live)
+- **Backend swallows DB errors** — missing migrations return `{data:[], success:true}`
+- **Agency/PM fully self-contained** — no shared auth or data with the rest of the platform
+
+See errorsss.md for full architecture map and detailed audit.
 6. A2A end-to-end test (not just connection)
 
 ### Phase 4: Web IDE
