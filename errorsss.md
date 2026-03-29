@@ -276,3 +276,53 @@ Billing, Overview, Projects, Team — stub pages (may have backend routers but f
 | 39 | Publish error detail | 2 |
 | 40 | Docs index fixed | 2 |
 | 41 | recoder-a2a@1.0.2 published | 2 |
+
+---
+
+## Architecture Map (2026-03-29)
+
+```
+nginx (public entry)
+  recoder.xyz        → app/           :3000  (Next.js — auth, billing, settings)
+  api.recoder.xyz    → backend/       :8000  (Python FastAPI — 227 routers, agent engine)
+  docker.recoder.xyz → docker-backend/:3100  (Express — Web IDE containers, A2A gateway)
+  web.recoder.xyz    → recoder-web/   :5173  (Remix — Web IDE frontend, originally "bolt")
+  agents.recoder.xyz → recoder-agents/:3001  (Next.js — agents dashboard frontend)
+  agency.recoder.xyz → recoder-agency/:3007  (Next.js — Giselle workflows + agency CRUD)
+  pm.recoder.xyz     → recoder-pm/    :3004  (Next.js — product management)
+  *.sandbox          → daytona-proxy  :4000  (Daytona sandbox preview)
+```
+
+### Databases
+- `recoder_main` — auth (Better Auth sessions, users, accounts, API keys)
+- `recoder_backend` — agents data (threads, projects, sandboxes, tools, billing)
+- `recoder_pm` — PM data (features, feedback, initiatives, releases) + pgvector
+
+### Auth (3 SEPARATE systems — NOT unified)
+1. **recoder.xyz** — Better Auth (cookie: `__Secure-recoder.session_token`, domain: `.recoder.xyz`)
+2. **recoder-agency** — its own Better Auth instance (INDEPENDENT — separate user registration)
+3. **recoder-pm** — Supabase Auth via `@repo/backend` (THIRD auth system)
+
+`recoder-agents` and `recoder-web` use recoder.xyz auth via cross-subdomain cookie.
+`docker-backend` verifies via HTTP call to `recoder.xyz/api/auth/verify-token`.
+`backend/` verifies via direct SQL query to `recoder_main.sessions` table.
+
+### Cross-Service Dependencies
+```
+recoder-agents → api.recoder.xyz (all data) + docker.recoder.xyz (sandbox) + recoder.xyz (auth cookie)
+recoder-web    → docker.recoder.xyz (containers) + recoder.xyz (auth) + LLM providers (BYOK)
+docker-backend → recoder.xyz (auth verify) + Docker/Daytona (sandboxes) + Redis
+backend/       → recoder_main DB (auth) + recoder_backend DB (data) + Redis + Daytona/E2B
+recoder-agency → self-contained (own DB, own auth, OpenRouter for LLM)
+recoder-pm     → self-contained (own DB, own auth, OpenRouter for LLM)
+```
+
+### Critical Architecture Gaps
+1. **3 separate auth systems** — users must register separately for agency and PM
+2. **docker-backend migration mode** — STRICT_AUTH off, any user can access any project
+3. **recoder-web model hardcoded** — `claude-3-5-sonnet-20240620` in server code, model selector is cosmetic
+4. **app/app/lib/auth.ts is a STUB** — mock providers, empty callbacks. Real auth is in `app/lib/auth-config.ts`
+5. **Backend swallows DB errors** — `relation does not exist` returns `{data:[], success:true}` hiding missing migrations
+6. **docker-backend still references OpenClaw** — `PUBLIC_OPENCLAW_GATEWAY_URL` env var and adapter router still mounted
+7. **WebContainer disabled in recoder-web** — returns never-resolving Promise, all execution via docker-backend
+8. **Backend has basejump references** — `auth_utils.py` inserts into `basejump.accounts` which may not exist
