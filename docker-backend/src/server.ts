@@ -407,6 +407,14 @@ async function authenticateWebSocket(
   // Try query string first (standard for WebSockets)
   let token = req.query.token as string;
 
+  // Fall back to Authorization header (used by recoder-a2a MCP clients)
+  if (!token) {
+    const authHeader = req.headers.authorization;
+    if (authHeader?.startsWith('Bearer ')) {
+      token = authHeader.slice(7);
+    }
+  }
+
   // Fall back to cookies
   if (!token) {
     const cookies = parseCookies(req.headers.cookie);
@@ -15385,6 +15393,8 @@ async function detectBuildOutput(entry: ContainerEntry): Promise<{ buildCmd: str
 app.post('/api/publish/:projectId', authenticateRequest, verifyProjectOwnership, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
   const { projectId } = req.params;
   const userId = req.userId || 'anonymous';
+  const existingSlug = getSlugForProject(projectId);
+  let slug = existingSlug;
 
   const entry = await getOrRecoverContainer(projectId);
   if (!entry) {
@@ -15453,7 +15463,7 @@ app.post('/api/publish/:projectId', authenticateRequest, verifyProjectOwnership,
 
     // 5. Generate slug
     const projectName = req.body?.name || projectId;
-    const slug = registerSlug(projectId, generateSlug(projectName));
+    slug = existingSlug || registerSlug(projectId, generateSlug(projectName));
 
     // 6. Copy build output from container to host
     const publishedDir = getPublishedPath(slug);
@@ -15468,13 +15478,23 @@ app.post('/api/publish/:projectId', authenticateRequest, verifyProjectOwnership,
 
     // Copy build output from container/sandbox to host
     if (isDaytonaSandbox(entry)) {
-      // Daytona: use tar + base64 via exec to stream files out of sandbox
+      // Daytona: archive inside the sandbox, store it as base64 text, then
+      // return that text in the same exec call. Raw tar bytes are not safe
+      // to stream through toolbox exec output.
       const daytonaOutputDir = `${workDir}/${outputDir}`.trim();
-      const tarResult = await daytonaExec(entry.id, `cd "${daytonaOutputDir}" && tar cf - . | base64 -w0`, { timeoutSecs: 120 });
-      if (!tarResult.output || tarResult.exitCode !== 0) {
-        throw new Error(`Failed to archive build output from sandbox: ${tarResult.output?.slice(0, 200)}`);
+      const archivePath = '/tmp/recoder-publish.b64';
+      const archiveResult = await daytonaExec(
+        entry.id,
+        `rm -f ${archivePath} && tar cf - -C ${daytonaOutputDir} . | base64 > ${archivePath} && cat ${archivePath}`,
+        { timeoutSecs: 120 },
+      );
+      await daytonaExec(entry.id, `rm -f ${archivePath}`, { timeoutSecs: 10 }).catch(() => {});
+      if (archiveResult.exitCode !== 0 || !archiveResult.output.trim()) {
+        throw new Error(`Failed to archive build output from sandbox: ${archiveResult.output?.slice(0, 200)}`);
       }
-      const tarBuf = Buffer.from(tarResult.output.trim(), 'base64');
+
+      const archiveBase64 = archiveResult.output;
+      const tarBuf = Buffer.from(archiveBase64.replace(/\s+/g, ''), 'base64');
       const tarPath = `${tmpDir}/_archive.tar`;
       const fsSync = await import('fs');
       fsSync.writeFileSync(tarPath, tarBuf);
@@ -15513,6 +15533,10 @@ app.post('/api/publish/:projectId', authenticateRequest, verifyProjectOwnership,
 
     sendSuccess(res, { url, slug, publishedAt });
   } catch (error: any) {
+    if (!existingSlug && slug) {
+      unregisterSlug(projectId);
+      slug = null;
+    }
     logger.error({ err: error, projectId }, 'Publish: failed to publish project');
     const detail = error?.message || 'Unknown error';
     return sendError(res, createError(ErrorCode.INTERNAL_ERROR, `Publish failed: ${detail}`));
@@ -15545,6 +15569,13 @@ app.get('/api/publish-status/:projectId', authenticateRequest, verifyProjectOwne
 
   const slug = getSlugForProject(projectId);
   if (!slug) {
+    return sendSuccess(res, { published: false });
+  }
+
+  const fs = await import('fs');
+  const publishedDir = getPublishedPath(slug);
+  if (!fs.existsSync(publishedDir)) {
+    unregisterSlug(projectId);
     return sendSuccess(res, { published: false });
   }
 
