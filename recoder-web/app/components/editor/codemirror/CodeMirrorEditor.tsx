@@ -51,6 +51,7 @@ import { indentGuides, toggleIndentGuides } from './indent-guides';
 import { inlineEditExtension } from './inline-edit-widget';
 
 const logger = createScopedLogger('CodeMirrorEditor');
+const CODEMIRROR_PLAIN_TEXT_FALLBACK_CHARS = 512 * 1024;
 
 export interface EditorDocument {
   value: string;
@@ -187,6 +188,7 @@ export const CodeMirrorEditor = memo(
 
     // State to trigger re-render when view is ready
     const [viewReady, setViewReady] = useState(false);
+    const [editorFailure, setEditorFailure] = useState<string | null>(null);
 
     const containerRef = useRef<HTMLDivElement | null>(null);
     const viewRef = useRef<EditorView | undefined>(undefined);
@@ -198,6 +200,14 @@ export const CodeMirrorEditor = memo(
     const onSaveRef = useRef(onSave);
     const onGotoDefinitionRef = useRef(onGotoDefinition);
     const onReferencesFoundRef = useRef(onReferencesFound);
+    const isLargeTextDocument = !!doc && !doc.isBinary && doc.value.length > CODEMIRROR_PLAIN_TEXT_FALLBACK_CHARS;
+    const usePlainTextFallback = !!editorFailure || isLargeTextDocument;
+
+    const handleEditorException = useCallback((error: unknown) => {
+      const message = error instanceof Error ? error.message : String(error);
+      logger.error('CodeMirror internal error:', error);
+      setEditorFailure(message || 'Unknown editor error');
+    }, []);
 
     /**
      * This effect is used to avoid side effects directly in the render function
@@ -214,6 +224,15 @@ export const CodeMirrorEditor = memo(
     });
 
     useEffect(() => {
+      setEditorFailure(null);
+    }, [doc?.filePath]);
+
+    useEffect(() => {
+      if (usePlainTextFallback || !containerRef.current) {
+        setViewReady(false);
+        return;
+      }
+
       const onUpdate = debounce((update: EditorUpdate) => {
         onChangeRef.current?.(update);
       }, debounceChange);
@@ -279,7 +298,7 @@ export const CodeMirrorEditor = memo(
         viewRef.current = undefined;
         setViewReady(false);
       };
-    }, []);
+    }, [debounceChange, usePlainTextFallback, handleEditorException]);
 
     useEffect(() => {
       if (!viewRef.current) {
@@ -314,6 +333,10 @@ export const CodeMirrorEditor = memo(
     }, [projectId, enableLSP]);
 
     useEffect(() => {
+      if (usePlainTextFallback || !editorStatesRef.current || !viewRef.current) {
+        return;
+      }
+
       const editorStates = editorStatesRef.current!;
       const view = viewRef.current!;
       const theme = themeRef.current!;
@@ -360,6 +383,7 @@ export const CodeMirrorEditor = memo(
           ],
           enableCodeFolding: preferences.editor.codeFolding,
           enableStickyScroll: preferences.editor.stickyScroll,
+          onException: handleEditorException,
         });
 
         view.setState(state);
@@ -401,6 +425,7 @@ export const CodeMirrorEditor = memo(
           enableLSP,
           enableCodeFolding: preferences.editor.codeFolding,
           enableStickyScroll: preferences.editor.stickyScroll,
+          onException: handleEditorException,
         });
 
         editorStates.set(doc.filePath, state);
@@ -419,7 +444,7 @@ export const CodeMirrorEditor = memo(
         autoFocusOnDocumentChange,
         doc as TextEditorDocument,
       );
-    }, [doc?.value, editable, doc?.filePath, autoFocusOnDocumentChange, projectId, enableLSP]);
+    }, [doc?.value, editable, doc?.filePath, autoFocusOnDocumentChange, projectId, enableLSP, usePlainTextFallback, handleEditorException]);
 
     // Update diagnostics (red underlines) and error highlighting when errors change
     useEffect(() => {
@@ -603,13 +628,25 @@ export const CodeMirrorEditor = memo(
       });
     }, [doc?.filePath, pendingNavigation]);
 
-    return (
+      return (
       <div className={classNames('relative h-full flex', className)}>
         <div className="flex-1 h-full overflow-hidden relative">
-          {doc?.isBinary && <BinaryContent />}
-          <div className="h-full overflow-auto" ref={containerRef} />
+          {doc?.isBinary ? (
+            <BinaryContent />
+          ) : usePlainTextFallback ? (
+            <div className="h-full overflow-auto bg-recoder-elements-background-depth-1 p-3">
+              <div className="mb-3 rounded border border-recoder-elements-borderColor bg-recoder-elements-background-depth-2 p-2 text-xs text-recoder-elements-textSecondary">
+                {editorFailure
+                  ? `CodeMirror crashed for this file. Showing plain text fallback. ${editorFailure}`
+                  : `File is too large for CodeMirror (${doc?.value.length ?? 0} chars). Showing plain text fallback.`}
+              </div>
+              <pre className="whitespace-pre-wrap break-words font-mono text-sm text-recoder-elements-textPrimary">{doc?.value ?? ''}</pre>
+            </div>
+          ) : (
+            <div className="h-full overflow-auto" ref={containerRef} />
+          )}
         </div>
-        {showMinimap && viewReady && !doc?.isBinary && (
+        {showMinimap && viewReady && !doc?.isBinary && !usePlainTextFallback && (
           <div className="h-full border-l border-recoder-elements-borderColor flex-shrink-0">
             <Minimap
               view={viewRef.current}
@@ -640,6 +677,7 @@ interface EditorStateOptions {
   enableLSP?: boolean;
   enableCodeFolding?: boolean;
   enableStickyScroll?: boolean;
+  onException?: (error: unknown) => void;
 }
 
 function newEditorState(options: EditorStateOptions) {
@@ -657,6 +695,7 @@ function newEditorState(options: EditorStateOptions) {
     enableLSP = true,
     enableCodeFolding = true,
     enableStickyScroll = true,
+    onException,
   } = options;
 
   // Get effective config (applies cleanMode overrides)
@@ -694,6 +733,9 @@ function newEditorState(options: EditorStateOptions) {
 
           return false;
         },
+      }),
+      EditorView.exceptionSink.of((exception) => {
+        onException?.(exception);
       }),
       getTheme(theme, settings, effectiveConfig),
       history(),
@@ -740,6 +782,10 @@ function newEditorState(options: EditorStateOptions) {
         position: 'absolute',
         parent: document.body,
         tooltipSpace: (view) => {
+          if (!view.dom || !view.dom.isConnected) {
+            return { top: 0, left: 0, bottom: window.innerHeight, right: window.innerWidth };
+          }
+
           const rect = view.dom.getBoundingClientRect();
 
           return {

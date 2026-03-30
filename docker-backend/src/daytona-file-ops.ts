@@ -325,15 +325,18 @@ export async function ensureDaytonaSandboxRunning(
 ): Promise<{ running: boolean; restarted: boolean; error?: string }> {
   const dc = getDaytonaClient();
   try {
+    const initialSandbox = await dc.getSandbox(sandboxId);
+    const initialState = initialSandbox.state;
     const sandbox = await dc.getOrStartSandbox(sandboxId, 30000);
     const isRunning = sandbox.state === 'started' || sandbox.state === 'running';
-    const wasRestarted = sandbox.state !== 'started';
+    const wasRestarted = ['stopped', 'archived', 'archiving'].includes(initialState);
 
     // After restarting a stopped sandbox, all processes (including dev server) are gone.
     // Auto-restart the dev server if package.json exists and has a dev script.
     if (isRunning && wasRestarted) {
       logger.info({ sandboxId }, 'Daytona: sandbox was restarted, checking if dev server needs restart');
       try {
+        await dc.execCommand(sandboxId, 'test -L /workspace || ln -sf /home/daytona /workspace', { timeoutSecs: 10 });
         const checkResult = await dc.execCommand(sandboxId,
           'test -f /home/daytona/package.json && grep -q \'"dev"\' /home/daytona/package.json && echo HAS_DEV || echo NO_DEV',
           { timeoutSecs: 5 },
