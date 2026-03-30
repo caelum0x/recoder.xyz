@@ -1,41 +1,42 @@
 # Recoder Platform — Master Plan
 
-Last updated: 2026-03-28 (deep codebase investigation)
+Last updated: 2026-03-31 (Codex verification + Recoder coordination)
 
 ---
 
-## Current State (Post-Deploy Testing 2026-03-28 ~16:00 UTC)
+## Current State (Verified 2026-03-31)
 
-$5 added to OpenRouter. All fixes deployed. But new critical error found.
+This top section supersedes older notes below where they conflict.
 
-### What Actually Works (user-confirmed post-deploy)
-- All 5 platforms load (200 status)
-- Login on recoder.xyz
-- Web IDE: AI generates code (26 files), npm install, dev server starts on 5173
+### What Is Verified Now
+- Agents are no longer blocked by the old OpenRouter model typo in the main app paths. The repo now uses `google/gemini-2.0-flash-001` in the primary backend/web surfaces, and Agents are documented elsewhere in this file as working with GLM 4.7.
+- Direct Web IDE smoke tests against `docker-backend` proved Daytona container creation, file write, file read, exec, snapshot, and Vite startup all work.
+- The real Web IDE backend blockers were identified and fixed in commit `80f616d5`:
+  - `docker-backend/src/preview.ts`: preview proxy now preserves Daytona subpaths and rewrites absolute Vite asset URLs.
+  - `docker-backend/src/server.ts`: publish detection now uses the correct Daytona workspace root and unwraps `daytonaExec(...).output`.
+- `recoder-web/app/lib/runtime/action-runner.ts` now contains an ENOTEMPTY retry path that removes stale `node_modules` and retries `npm install`.
 
-### What Does NOT Work (user-confirmed post-deploy)
-- **Agents: NOTHING** — `google/gemini-2.0-flash` is not a valid OpenRouter model ID. All LLM calls fail with 400.
-- **Agency copilot: 500** — same invalid model ID. Also GitHub auth gives `account_not_linked` error.
-- **PM copilot: untested** — likely same model ID error.
-- **Web IDE preview: 502/503** — docker.recoder.xyz returns 502, X-Frame-Options blocks iframe, file API returns 500.
-- **Web IDE publish: 500** — publish endpoint fails.
-- **Sign-out: untested**
-- **Thread names: garbage** — repetitive JSON output shown raw in UI.
+### Additional Fixes Pushed In `bf8f1944`
+- `backend/core/agents/pipeline/stateless/coordinator/execution.py`: raised coordinator output budget from `16384` to `32768` to reduce large-file truncation loops.
+- `backend/core/agents/pipeline/stateless/coordinator/stateless.py`: allows more consecutive `finish_reason=length` continuations and explicitly tells the model to append instead of delete/recreate.
+- `recoder-web/app/components/editor/codemirror/CodeMirrorEditor.tsx`: adds a plain-text fallback for CodeMirror crashes and for files larger than 512 KB.
+- `docker-backend/src/server.ts`: ignores empty `Authorization: Bearer ` headers so cookie auth still works, and makes the optional container auth path honor `STRICT_AUTH=true`.
+- `docker-backend/src/server.ts` + `docker-backend/src/daytona-file-ops.ts`: auto-resume stopped Daytona sandboxes on normal project access and correctly detect real restart events before reviving the dev server.
 
----
+### What Still Needs Deployment/Browser Verification
+- Deploy commit `bf8f1944` together with the earlier `80f616d5` preview/publish fixes and verify the updated services are live.
+- Verify preview and publish end-to-end in the browser against the deployed stack.
+- Re-enable deployed `STRICT_AUTH=true` and repeat the browser smoke test with a real authenticated session.
 
-## Root Blocker: Wrong Model ID
+### Historical Note
+- The older "root blocker is wrong model ID" section is now historical. That was a real blocker on 2026-03-28, but it is no longer the primary platform blocker.
+- The older "cross-origin cookie is the Web IDE root cause" theory was disproven by direct smoke tests.
 
-`google/gemini-2.0-flash` does NOT exist on OpenRouter. Valid ID is `google/gemini-2.0-flash-001`.
-
-| Platform | Current (BROKEN) | Correct |
-|----------|-----------------|---------|
-| Agents backend | `openrouter/google/gemini-2.0-flash` | `openrouter/google/gemini-2.0-flash-001` |
-| Web IDE | `google/gemini-2.0-flash` | `google/gemini-2.0-flash-001` |
-| Agency copilot | `google/gemini-2.0-flash` | `google/gemini-2.0-flash-001` |
-| PM copilot | `google/gemini-2.0-flash` | `google/gemini-2.0-flash-001` |
-
-**Fix done locally in all files. Needs redeploy.**
+## Current Remaining Priorities (2026-03-31, post-`bf8f1944`)
+1. Deploy the pushed fixes from `bf8f1944`.
+2. Browser verification of preview + publish on the deployed stack.
+3. Re-enable deployed `STRICT_AUTH=true` and re-run authenticated smoke tests.
+4. If browser smoke still fails, capture the exact failing endpoint/step instead of revisiting the disproven cookie theory.
 
 ---
 
@@ -75,7 +76,7 @@ Daytona preview redirects to `https://{port}-{sandboxId}.sandbox.recoder.xyz` wh
 
 ---
 
-## Priority Order (Updated 2026-03-29 01:00 UTC)
+## Priority Order (Updated 2026-03-30 18:30 UTC)
 
 ### Phase 0: DONE
 - ~~Model: gemini → GLM 4.7~~ DONE — agent creates files, runs code, 48 tool calls
@@ -100,8 +101,10 @@ Daytona preview redirects to `https://{port}-{sandboxId}.sandbox.recoder.xyz` wh
 2. **CodeMirror re-crash loop** — Error boundary catches but CodeMirror retries. Console floods with errors. Fix: disable retry after error catch.
 3. **Preview in agents UI** — sandbox URLs work directly (`*.sandbox.recoder.xyz` confirmed) but tool view preview needs sandbox started + file server. Docker-backend proxy works for first call then health check fails.
 4. **Sandbox auto-stop** — Daytona sandboxes stop after inactivity. Preview/file operations fail with "Sandbox is not running". Need auto-wake on access.
-5. **Composio integrations 500** — App Integrations page broken.
-6. **Agency workflows** — Giselle engine 500s (deferred).
+5. ~~Composio integrations 500~~ DONE (Agent 3) — EncryptionService delegation, 200 OK verified
+6. ~~Agency workflows~~ DONE (Agent 3) — atomic writes + resilient workspace loading
+7. ~~A2A messaging~~ DONE (Agent 3) — intent routing + channel broadcast, LLM E2E test passed
+8. ~~Landing page~~ DONE (Agent 3) — OpenClaw/dead links/service count fixed
 
 ### Phase 3: Agent quality
 1. Fix create/delete loop — increase max_tokens for tool responses
@@ -124,11 +127,32 @@ Backend has 227 routers — it's NOT "no backend." The real issues are:
 See errorsss.md for full architecture map and detailed audit.
 6. A2A end-to-end test (not just connection)
 
-### Phase 4: Web IDE
-1. Docker rebuild with all fixes (parser 100k, proxy, X-Frame-Options)
-2. Test publish pipeline
-3. Verify file API works with INTERNAL_SERVICE_KEY
-4. Test live preview in Web IDE
+### Phase 4: Web IDE — PARTIALLY FIXED (2026-03-31)
+**Cookie theory was WRONG.** Codex smoke test proved cookies DO arrive (userId 38ee13d3 returned). The real blockers were:
+
+**Root causes (found and fixed):**
+1. **Preview proxy** — `handleSandboxPreview` sent ALL asset requests to `/`, losing paths like `/@vite/client`. FIXED in preview.ts (commit 80f616d5): `getProxySubPath()` preserves paths, `rewritePreviewBody()` rewrites absolute Vite URLs.
+2. **Publish detection** — `detectBuildOutput()` read `/workspace/package.json` but Daytona uses `/home/daytona/`. FIXED in server.ts: explicit workspace root for Daytona.
+3. **A2A REST→bridge gap** — `POST /api/a2a/tasks` never dispatched to bridge-connected agents. FIXED in task-lifecycle.routes.ts: `dispatchTaskToBridgeIfOnline()`.
+
+**Docker-backend env (current production):**
+- `USE_DAYTONA_CONTAINERS=true` — correct, sandbox creation via Daytona
+- `STRICT_AUTH=false` — security downgrade, but cookies work so can re-enable after testing
+- `DAYTONA_SERVER_URL=http://host.docker.internal:3900/api` — correct for Docker networking
+- `MAIN_SITE_URL=https://recoder.xyz` — fixed (was localhost:3000)
+
+**Verified working (Codex smoke test 2026-03-30):**
+- Container creation via Daytona
+- File write/read to sandbox
+- Command exec in sandbox
+- Snapshot create
+- Dev server starts (Vite on 5173)
+- Direct sandbox URL works (`*.sandbox.recoder.xyz`)
+
+**Still needs browser testing:**
+1. Preview loads in iframe with rewritten asset URLs
+2. Publish produces live link
+3. Re-enable STRICT_AUTH=true (cookies confirmed working)
 
 ### Phase 5: recoder.xyz Website + Documentation
 1. Polish landing page — verify all links, design cleanup
