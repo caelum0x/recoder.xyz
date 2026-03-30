@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef, useEffect, Component, type ErrorInfo, type ReactNode } from 'react';
+import React, { useState, useMemo, useRef, useEffect, Component, type ReactNode } from 'react';
 import {
   ExternalLink,
   Code,
@@ -28,11 +28,16 @@ import dynamic from 'next/dynamic';
 import { cn } from '@/lib/utils';
 import { DocxPreview } from '@/components/file-previews/DocxPreview';
 
-// Error boundary to catch CodeMirror parser crashes (undefined.length in nextChild)
+// Size threshold above which CodeMirror is skipped entirely (prevents parser crashes on huge files)
+const CODEMIRROR_MAX_SIZE = 512 * 1024; // 512 KB
+
+// Error boundary to catch CodeMirror parser crashes (undefined.length in nextChild).
+// Once an error is caught, the boundary stays in fallback mode permanently — no resets
+// on prop changes — to prevent re-crash loops from streaming content updates.
 class CodeEditorErrorBoundary extends Component<{children: ReactNode; fallbackContent?: string}, {hasError: boolean}> {
   state = { hasError: false };
   static getDerivedStateFromError() { return { hasError: true }; }
-  componentDidCatch(error: Error, info: ErrorInfo) {
+  componentDidCatch(error: Error) {
     console.error('[CodeEditor] Parser crash caught:', error.message);
   }
   render() {
@@ -47,6 +52,17 @@ class CodeEditorErrorBoundary extends Component<{children: ReactNode; fallbackCo
     }
     return this.props.children;
   }
+}
+
+/** Render file content as plain <pre> when CodeMirror would crash on large/malformed content */
+function PlainCodeFallback({ content, className }: { content: string; className?: string }) {
+  return (
+    <div className={cn("w-full p-4 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded", className)}>
+      <pre className="text-xs text-zinc-600 dark:text-zinc-400 whitespace-pre-wrap overflow-auto max-h-[80vh] font-mono">
+        {content}
+      </pre>
+    </div>
+  );
 }
 
 // Lazy load SpreadsheetViewer as it imports Syncfusion (~1-2 MB)
@@ -1000,12 +1016,16 @@ export function FileOperationToolView({
       );
     }
 
-    // For all other files, use CodeEditor in read-only mode
+    // For all other files, use CodeEditor in read-only mode (skip for huge files)
+    const processed = processUnicodeContent(fileContent);
+    if (processed.length > CODEMIRROR_MAX_SIZE) {
+      return <PlainCodeFallback content={processed} className="max-w-full" />;
+    }
     return (
       <div className="w-full max-w-full bg-white dark:bg-zinc-900 min-w-0">
-        <CodeEditorErrorBoundary fallbackContent={processUnicodeContent(fileContent)}>
+        <CodeEditorErrorBoundary fallbackContent={processed}>
           <CodeEditor
-            content={processUnicodeContent(fileContent)}
+            content={processed}
             fileName={fileName}
             readOnly={true}
             className="w-full max-w-full"
@@ -1048,12 +1068,16 @@ export function FileOperationToolView({
 
     // PERFORMANCE FIX: Use CodeEditor (which uses virtualized CodeMirror) instead of
     // creating individual DOM elements for each line. This prevents browser hangs
-    // when streaming large files.
+    // when streaming large files. Skip CodeMirror entirely for very large files.
+    const processedSource = processUnicodeContent(fileContent);
+    if (processedSource.length > CODEMIRROR_MAX_SIZE) {
+      return <PlainCodeFallback content={processedSource} className="max-w-full" />;
+    }
     return (
       <div className="w-full max-w-full bg-white dark:bg-zinc-900 min-w-0">
-        <CodeEditorErrorBoundary fallbackContent={processUnicodeContent(fileContent)}>
+        <CodeEditorErrorBoundary fallbackContent={processedSource}>
           <CodeEditor
-            content={processUnicodeContent(fileContent)}
+            content={processedSource}
             fileName={fileName}
             readOnly={true}
             className="w-full max-w-full"

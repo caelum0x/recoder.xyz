@@ -264,6 +264,27 @@ function updateActivity(sandbox: SandboxRecord): void {
   saveSandboxesStore();
 }
 
+/**
+ * Ensure a sandbox is running, starting it if stopped.
+ * Returns true if sandbox is now running, false if it could not be started.
+ */
+async function ensureSandboxRunning(sandbox: SandboxRecord): Promise<{ ok: boolean; error?: string }> {
+  if (sandbox.state === 'running') return { ok: true };
+  if (sandbox.state === 'creating' || sandbox.state === 'error' || sandbox.state === 'deleted') {
+    return { ok: false, error: `Sandbox is in non-recoverable state: ${sandbox.state}` };
+  }
+  if (!sandbox.containerId || !deps) return { ok: false, error: 'No container or deps' };
+
+  try {
+    await deps.startContainer(sandbox.containerId);
+    sandbox.state = 'running';
+    updateActivity(sandbox);
+    return { ok: true };
+  } catch (err: any) {
+    return { ok: false, error: err.message };
+  }
+}
+
 // ==================== Auto-cleanup ====================
 
 /**
@@ -563,12 +584,15 @@ router.post(
     }
 
     if (sandbox.state !== 'running') {
-      sendApiError(res, {
-        code: 'SANDBOX_NOT_RUNNING',
-        message: 'Sandbox is not running',
-        details: { state: sandbox.state },
-      }, req.requestId);
-      return;
+      const start = await ensureSandboxRunning(sandbox);
+      if (!start.ok) {
+        sendApiError(res, {
+          code: 'SANDBOX_NOT_RUNNING',
+          message: `Sandbox is ${sandbox.state} and could not be started: ${start.error}`,
+          details: { state: sandbox.state },
+        }, req.requestId);
+        return;
+      }
     }
 
     if (!sandbox.containerId) {
@@ -650,11 +674,14 @@ router.post(
     }
 
     if (sandbox.state !== 'running') {
-      sendApiError(res, {
-        code: 'SANDBOX_NOT_RUNNING',
-        message: 'Sandbox is not running',
-      }, req.requestId);
-      return;
+      const start = await ensureSandboxRunning(sandbox);
+      if (!start.ok) {
+        sendApiError(res, {
+          code: 'SANDBOX_NOT_RUNNING',
+          message: `Sandbox is ${sandbox.state} and could not be started: ${start.error}`,
+        }, req.requestId);
+        return;
+      }
     }
 
     if (!sandbox.containerId) {
@@ -743,11 +770,14 @@ router.get(
     }
 
     if (sandbox.state !== 'running') {
-      sendApiError(res, {
-        code: 'SANDBOX_NOT_RUNNING',
-        message: 'Sandbox is not running',
-      }, req.requestId);
-      return;
+      const start = await ensureSandboxRunning(sandbox);
+      if (!start.ok) {
+        sendApiError(res, {
+          code: 'SANDBOX_NOT_RUNNING',
+          message: `Sandbox is ${sandbox.state} and could not be started: ${start.error}`,
+        }, req.requestId);
+        return;
+      }
     }
 
     if (!sandbox.containerId) {
@@ -840,11 +870,14 @@ router.get(
     }
 
     if (sandbox.state !== 'running') {
-      sendApiError(res, {
-        code: 'SANDBOX_NOT_RUNNING',
-        message: 'Sandbox is not running',
-      }, req.requestId);
-      return;
+      const start = await ensureSandboxRunning(sandbox);
+      if (!start.ok) {
+        sendApiError(res, {
+          code: 'SANDBOX_NOT_RUNNING',
+          message: `Sandbox is ${sandbox.state} and could not be started: ${start.error}`,
+        }, req.requestId);
+        return;
+      }
     }
 
     if (!sandbox.containerId) {
@@ -908,11 +941,14 @@ router.delete(
     }
 
     if (sandbox.state !== 'running') {
-      sendApiError(res, {
-        code: 'SANDBOX_NOT_RUNNING',
-        message: 'Sandbox is not running',
-      }, req.requestId);
-      return;
+      const start = await ensureSandboxRunning(sandbox);
+      if (!start.ok) {
+        sendApiError(res, {
+          code: 'SANDBOX_NOT_RUNNING',
+          message: `Sandbox is ${sandbox.state} and could not be started: ${start.error}`,
+        }, req.requestId);
+        return;
+      }
     }
 
     if (!sandbox.containerId) {
@@ -982,10 +1018,20 @@ router.post(
       return;
     }
 
-    if (sandbox.state !== 'running' || !sandbox.containerId) {
+    if (sandbox.state !== 'running') {
+      const start = await ensureSandboxRunning(sandbox);
+      if (!start.ok) {
+        sendApiError(res, {
+          code: 'SANDBOX_NOT_RUNNING',
+          message: `Sandbox is ${sandbox.state} and could not be started: ${start.error}`,
+        }, req.requestId);
+        return;
+      }
+    }
+    if (!sandbox.containerId) {
       sendApiError(res, {
-        code: 'SANDBOX_NOT_RUNNING',
-        message: 'Sandbox is not running',
+        code: 'INTERNAL_ERROR',
+        message: 'Sandbox has no associated container',
       }, req.requestId);
       return;
     }
