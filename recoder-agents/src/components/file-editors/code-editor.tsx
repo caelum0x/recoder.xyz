@@ -488,10 +488,25 @@ export function CodeEditor({
   // Theme selection
   const theme = mounted && resolvedTheme === 'dark' ? vscodeDark : xcodeLight;
 
+  // Track internal CodeMirror crashes (parser errors, tree-sitter failures, etc.)
+  // These happen in requestAnimationFrame callbacks that React error boundaries can't catch.
+  // Reset when file changes so a crash on one file doesn't permanently disable CodeMirror.
+  const [cmCrashed, setCmCrashed] = useState(false);
+  useEffect(() => { setCmCrashed(false); }, [fileName]);
+
   // Extensions - ensure we only include valid extensions
   const extensions = useMemo(() => {
     const exts: any[] = [];
-    
+
+    // Catch internal CodeMirror exceptions (parser crashes, nextChild errors)
+    // that fire outside React's render cycle and flood the console.
+    exts.push(
+      EditorView.exceptionSink.of((error) => {
+        console.warn('[CodeMirror] Internal error suppressed:', error.message);
+        setCmCrashed(true);
+      })
+    );
+
     // Add language extension if available (filter out null/undefined)
     if (langExtension && langExtension.length > 0) {
       const validLangExts = langExtension.filter(ext => ext != null);
@@ -499,13 +514,13 @@ export function CodeEditor({
         exts.push(...validLangExts);
       }
     }
-    
+
     // Always add these core extensions
     exts.push(
       EditorView.lineWrapping,
       keymap.of([indentWithTab])
     );
-    
+
     return exts;
   }, [langExtension]);
 
@@ -642,7 +657,12 @@ export function CodeEditor({
         )}
         style={readOnly ? undefined : { contain: 'strict' }}
       >
-        {mounted && (
+        {mounted && cmCrashed ? (
+          /* CodeMirror internal parser crashed — render plain text instead of retrying */
+          <pre className="text-xs text-zinc-600 dark:text-zinc-400 whitespace-pre-wrap overflow-auto p-4 font-mono">
+            {localContent}
+          </pre>
+        ) : mounted ? (
           <CodeMirror
             value={localContent}
             onChange={handleChange}
@@ -668,13 +688,13 @@ export function CodeEditor({
             editable={!readOnly}
             className={cn(
               "w-full max-w-full text-sm",
-              readOnly 
+              readOnly
                 ? "[&_.cm-scroller]:!overflow-visible" // No scroll in read-only, parent handles it
                 : "[&_.cm-editor]:max-h-full [&_.cm-scroller]:overflow-auto"
             )}
             height={editorHeight}
           />
-        )}
+        ) : null}
       </div>
     </div>
   );

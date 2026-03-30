@@ -8,6 +8,7 @@ import http from 'http';
 import Docker from 'dockerode';
 import { devServerManager } from './dev-server.js';
 import { getDaytonaClient } from './daytona-client.js';
+import { ensureDaytonaSandboxRunning } from './daytona-file-ops.js';
 
 const docker = new Docker();
 const autoStartAttempts = new Map<string, number>();
@@ -434,6 +435,25 @@ export function setupPreviewProxy(app: Express, containers: Map<string, { id: st
     const daytonaUrl = (entry as any).daytonaPreviewUrl;
     const isDaytona = !!(entry as any).daytona || !!daytonaUrl;
     if (daytonaUrl) {
+      // Auto-wake: ensure sandbox is running before any exec/health checks.
+      // Daytona sandboxes stop after inactivity; this restarts them transparently.
+      try {
+        const wakeResult = await ensureDaytonaSandboxRunning(entry.id);
+        if (!wakeResult.running) {
+          console.warn(`[Preview] Sandbox ${entry.id} could not be started: ${wakeResult.error}`);
+          return res.status(503).send(friendlyPreviewPage(
+            projectId,
+            `Sandbox is stopped and could not be restarted: ${wakeResult.error || 'unknown error'}`,
+            { canRetry: true }
+          ));
+        }
+        if (wakeResult.restarted) {
+          console.log(`[Preview] Sandbox ${entry.id} was auto-restarted for preview`);
+        }
+      } catch (wakeErr: any) {
+        console.warn(`[Preview] Auto-wake failed for ${entry.id}:`, wakeErr.message);
+      }
+
       // Quick health check via internal curl (avoids OIDC redirect issues)
       let daytonaServerReady = false;
       try {
