@@ -15308,11 +15308,19 @@ import { execSync, execFileSync } from 'child_process';
 /**
  * Detect the build output directory based on framework/package.json
  */
-async function detectBuildOutput(containerId: string): Promise<{ buildCmd: string; outputDir: string; framework: string }> {
+function getContainerWorkspaceRoot(entry: { id: string; daytona?: boolean }): '/home/daytona' | '/workspace' {
+  return entry.daytona === true || daytonaSandboxIds.has(entry.id) ? '/home/daytona' : '/workspace';
+}
+
+async function detectBuildOutput(entry: ContainerEntry): Promise<{ buildCmd: string; outputDir: string; framework: string; workspaceRoot: '/home/daytona' | '/workspace' }> {
+  const workspaceRoot = getContainerWorkspaceRoot(entry);
+
   // Read package.json to detect framework
   let pkgJson: any = {};
   try {
-    const pkgRaw = await execInContainer(containerId, 'cat /workspace/package.json 2>/dev/null || echo "{}"');
+    const pkgRaw = isDaytonaSandbox(entry) || daytonaSandboxIds.has(entry.id)
+      ? (await daytonaExec(entry.id, `cat ${workspaceRoot}/package.json 2>/dev/null || echo "{}"`, { timeoutSecs: 10 })).output
+      : await execInContainer(entry.id, `cat ${workspaceRoot}/package.json 2>/dev/null || echo "{}"`);
     pkgJson = JSON.parse(pkgRaw);
   } catch {
     // ignore
@@ -15323,22 +15331,22 @@ async function detectBuildOutput(containerId: string): Promise<{ buildCmd: strin
 
   // Detect framework and set build command + output dir
   if (deps['next']) {
-    return { buildCmd: 'npm run build', outputDir: '.next', framework: 'nextjs' };
+    return { buildCmd: 'npm run build', outputDir: '.next', framework: 'nextjs', workspaceRoot };
   }
   if (deps['@remix-run/react'] || deps['@remix-run/dev']) {
-    return { buildCmd: 'npm run build', outputDir: 'build/client', framework: 'remix' };
+    return { buildCmd: 'npm run build', outputDir: 'build/client', framework: 'remix', workspaceRoot };
   }
   if (deps['expo'] || deps['react-native']) {
-    return { buildCmd: 'npx expo export --platform web', outputDir: 'dist', framework: 'expo' };
+    return { buildCmd: 'npx expo export --platform web', outputDir: 'dist', framework: 'expo', workspaceRoot };
   }
   if (deps['react-scripts']) {
-    return { buildCmd: 'npm run build', outputDir: 'build', framework: 'cra' };
+    return { buildCmd: 'npm run build', outputDir: 'build', framework: 'cra', workspaceRoot };
   }
   if (deps['vite']) {
-    return { buildCmd: 'npm run build', outputDir: 'dist', framework: 'vite' };
+    return { buildCmd: 'npm run build', outputDir: 'dist', framework: 'vite', workspaceRoot };
   }
   // Fallback
-  return { buildCmd: 'npm run build', outputDir: 'dist', framework: 'unknown' };
+  return { buildCmd: 'npm run build', outputDir: 'dist', framework: 'unknown', workspaceRoot };
 }
 
 // POST /api/publish/:projectId - Build and publish a project
@@ -15353,16 +15361,17 @@ app.post('/api/publish/:projectId', authenticateRequest, verifyProjectOwnership,
 
   try {
     // 1. Detect framework
-    const { buildCmd, outputDir: detectedOutputDir, framework } = await detectBuildOutput(entry.id);
+    const { buildCmd, outputDir: detectedOutputDir, framework, workspaceRoot } = await detectBuildOutput(entry);
     let outputDir = detectedOutputDir;
-    logger.info({ projectId, framework, buildCmd, outputDir }, 'Publish: starting publish');
+    const isDaytona = isDaytonaSandbox(entry) || daytonaSandboxIds.has(entry.id);
+    logger.info({ projectId, framework, buildCmd, outputDir, workspaceRoot }, 'Publish: starting publish');
 
     // 2. Install dependencies if needed (longer timeout for npm install)
     try {
-      if (daytonaSandboxIds.has(entry.id)) {
-        await daytonaExec(entry.id, 'cd /home/daytona && [ -d node_modules ] || npm install --legacy-peer-deps', { timeoutSecs: 120 });
+      if (isDaytona) {
+        await daytonaExec(entry.id, `cd ${workspaceRoot} && [ -d node_modules ] || npm install --legacy-peer-deps`, { timeoutSecs: 120 });
       } else {
-        await execInContainer(entry.id, 'cd /workspace && [ -d node_modules ] || npm install');
+        await execInContainer(entry.id, `cd ${workspaceRoot} && [ -d node_modules ] || npm install`);
       }
     } catch {
       // node_modules might already exist
@@ -15378,17 +15387,16 @@ app.post('/api/publish/:projectId', authenticateRequest, verifyProjectOwnership,
     // 3. Run build (longer timeout — builds can take 2+ minutes)
     logger.info({ projectId }, 'Publish: building project');
     let buildOutput: string;
-    if (daytonaSandboxIds.has(entry.id)) {
-      const buildResult = await daytonaExec(entry.id, `cd /home/daytona && ${buildCmd} 2>&1`, { timeoutSecs: 180 });
+    if (isDaytona) {
+      const buildResult = await daytonaExec(entry.id, `cd ${workspaceRoot} && ${buildCmd} 2>&1`, { timeoutSecs: 180 });
       buildOutput = buildResult.output;
     } else {
-      buildOutput = await execInContainer(entry.id, `cd /workspace && ${buildCmd} 2>&1`);
+      buildOutput = await execInContainer(entry.id, `cd ${workspaceRoot} && ${buildCmd} 2>&1`);
     }
     logger.info({ projectId }, 'Publish: build complete');
 
     // 4. Verify build output exists
-    const isDaytona = daytonaSandboxIds.has(entry.id);
-    const workDir = isDaytona ? '/home/daytona' : '/workspace';
+    const workDir = workspaceRoot;
     const exec = isDaytona
       ? async (cmd: string) => (await daytonaExec(entry.id, cmd, { timeoutSecs: 30 })).output
       : (cmd: string) => execInContainer(entry.id, cmd);
@@ -15407,7 +15415,7 @@ app.post('/api/publish/:projectId', authenticateRequest, verifyProjectOwnership,
         }
       }
       if (!found) {
-        return sendError(res, createError(ErrorCode.INTERNAL_ERROR, `Build output not found at /workspace/${outputDir}. Build may have failed.`));
+        return sendError(res, createError(ErrorCode.INTERNAL_ERROR, `Build output not found at ${workDir}/${outputDir}. Build may have failed.`));
       }
     }
 
@@ -15429,7 +15437,7 @@ app.post('/api/publish/:projectId', authenticateRequest, verifyProjectOwnership,
     // Copy build output from container/sandbox to host
     if (isDaytonaSandbox(entry)) {
       // Daytona: use tar + base64 via exec to stream files out of sandbox
-      const daytonaOutputDir = `/home/daytona/${outputDir}`;
+      const daytonaOutputDir = `${workDir}/${outputDir}`;
       const tarResult = await daytonaExec(entry.id, `cd "${daytonaOutputDir}" && tar cf - . | base64 -w0`, { timeoutSecs: 120 });
       if (!tarResult.output || tarResult.exitCode !== 0) {
         throw new Error(`Failed to archive build output from sandbox: ${tarResult.output?.slice(0, 200)}`);
