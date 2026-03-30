@@ -97,9 +97,9 @@ export default function DocsPage() {
       description: 'Agents, PM, Agency — the Recoder ecosystem',
       icon: Boxes,
       articles: [
-        { title: 'Agents Platform', href: '/docs/platform/agents', status: 'coming-soon' },
-        { title: 'Project Management', href: '/docs/platform/pm', status: 'coming-soon' },
-        { title: 'Agency Workflows', href: '/docs/platform/agency', status: 'coming-soon' }
+        { title: 'Agents Platform', href: '/platform/agents', status: 'available' },
+        { title: 'Project Management', href: '/platform/pm', status: 'available' },
+        { title: 'Agency Workflows', href: '/platform/agency', status: 'available' }
       ]
     }
   ];
@@ -206,7 +206,7 @@ export default function DocsPage() {
                   Step-by-step video guides for common workflows
                 </p>
                 <Link 
-                  href="/docs/videos" 
+                  href="/learn" 
                   className="inline-block px-6 py-2 border border-white/10 hover:border-white/20 rounded-lg transition-colors"
                 >
                   Watch Tutorials

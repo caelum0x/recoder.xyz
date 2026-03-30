@@ -399,7 +399,7 @@ export default function DeveloperToolsPage() {
                   Core API Endpoints
                 </h3>
                 <Link 
-                  href="/docs/api"
+                  href="/docs/api-reference"
                   className="text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 font-medium"
                 >
                   Full Documentation →

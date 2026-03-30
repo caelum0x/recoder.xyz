@@ -470,7 +470,7 @@ export default function IntegrationsSettingsPage() {
             </p>
             <div className="flex space-x-3">
               <Link
-                href="/docs/api"
+                href="/docs/api-reference"
                 className="px-4 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg font-medium transition-all flex items-center space-x-2"
               >
                 <Code2 className="w-4 h-4" />

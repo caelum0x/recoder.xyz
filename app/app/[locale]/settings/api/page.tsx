@@ -348,7 +348,7 @@ export default function APISettingsPage() {
                 <AlertCircle className="w-5 h-5 text-orange-500 mt-0.5 flex-shrink-0" />
                 <div className="text-sm text-gray-400">
                   <strong className="text-white">Need help?</strong> Check out the{' '}
-                  <Link href="/docs/api" className="text-orange-500 hover:text-orange-400 underline">
+                  <Link href="/docs/api-reference" className="text-orange-500 hover:text-orange-400 underline">
                     API documentation
                   </Link>{' '}
                   for more information about OpenRouter and model configuration.
