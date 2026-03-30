@@ -1,4 +1,5 @@
 import asyncio
+import json
 import time
 import uuid
 from typing import Dict, Any, AsyncGenerator
@@ -117,6 +118,7 @@ class StatelessCoordinator(BaseCoordinator):
     ) -> AsyncGenerator[Dict[str, Any], None]:
         should_continue_loop = True
         auto_continue_count = 0
+        consecutive_length_count = 0
 
         while self._state.should_continue() and should_continue_loop:
             self._thread_run_id = str(uuid.uuid4())
@@ -142,6 +144,7 @@ class StatelessCoordinator(BaseCoordinator):
 
             should_auto_continue = False
             force_terminate = False
+            last_finish_reason = None
 
             async for chunk in execution_engine.execute_step():
                 yield chunk
@@ -150,6 +153,16 @@ class StatelessCoordinator(BaseCoordinator):
                     force_terminate = True
                 if cont:
                     should_auto_continue = True
+                # Track finish reason for truncation guidance
+                if chunk.get("type") == "status":
+                    raw_content = chunk.get("content", {})
+                    if isinstance(raw_content, str):
+                        try:
+                            raw_content = json.loads(raw_content)
+                        except (json.JSONDecodeError, TypeError):
+                            raw_content = {}
+                    if isinstance(raw_content, dict) and raw_content.get("finish_reason"):
+                        last_finish_reason = raw_content["finish_reason"]
 
             await idempotency.mark_step(ctx.agent_run_id, step)
             metrics.record_step(time.time() - step_start)
@@ -166,6 +179,36 @@ class StatelessCoordinator(BaseCoordinator):
                 self._state.complete()
                 should_continue_loop = False
                 break
+
+            # Track consecutive length finishes to detect create/delete loops.
+            # Reset counter when finish reason is not "length" (e.g., tool_calls).
+            if last_finish_reason == "length":
+                consecutive_length_count += 1
+            else:
+                consecutive_length_count = 0
+
+            # Stop after 2 consecutive length finishes — the LLM is stuck in a
+            # truncation loop (creates file, truncated, deletes, retries).
+            if consecutive_length_count >= 2:
+                logger.info("[Coordinator] Stopping: 2 consecutive finish_reason=length (truncation loop)")
+                self._state.complete()
+                should_continue_loop = False
+                break
+
+            # When continuing after max-tokens truncation, inject guidance so the LLM
+            # doesn't delete and recreate files that were already written with truncated content.
+            if last_finish_reason == "length":
+                self._state._messages.append({
+                    "role": "user",
+                    "content": (
+                        "[System] Your previous response was truncated due to output length limits. "
+                        "Any files already created or modified are saved as-is. "
+                        "Do NOT delete and recreate them. Continue from where you left off or "
+                        "acknowledge the task is done."
+                    ),
+                    "message_id": str(uuid.uuid4()),
+                })
+                logger.info("[Coordinator] Injected truncation guidance after finish_reason=length")
 
             auto_continue_count += 1
             logger.debug(f"[Coordinator] Auto-continue #{auto_continue_count}")

@@ -235,7 +235,7 @@ class ExecutionEngine:
                 prepared_messages=prepared,
                 llm_model=self._state.model_name,
                 llm_temperature=0,
-                llm_max_tokens=None,
+                llm_max_tokens=16384,
                 openapi_tool_schemas=self._state.tool_schemas,
                 tool_choice="auto",
                 native_tool_calling=processor_config.native_tool_calling,
