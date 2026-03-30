@@ -4,7 +4,7 @@ import { OrganizationSchema, WebApplicationSchema, FAQPageSchema } from '@/app/c
 export const metadata: Metadata = {
   title: 'Recoder — Your AI Agent Platform',
   description:
-    'Build, deploy, and orchestrate AI agents across code, projects, clients, and voice. 6 products, 40+ AI models, A2A/MCP ready.',
+    'Build, deploy, and orchestrate AI agents across code, projects, clients, and voice. 5 products, 40+ AI models, A2A/MCP ready.',
   openGraph: {
     title: 'Recoder — Your AI Agent Platform',
     description:
