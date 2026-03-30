@@ -33,7 +33,8 @@ const app = express();
 const publicBaseUrl = process.env.RECODER_WEB_URL || process.env.MAIN_SITE_URL || 'https://web.recoder.xyz';
 
 // Docker backend URL for preview proxy (internal, not via nginx for /preview/ routes)
-const DOCKER_BACKEND_URL = process.env.DOCKER_URL
+const DOCKER_BACKEND_URL = process.env.DOCKER_BACKEND_URL
+  || process.env.DOCKER_URL
   || process.env.VITE_DOCKER_BACKEND_URL
   || 'https://docker.recoder.xyz';
 
@@ -67,7 +68,7 @@ app.use('/preview', createProxyMiddleware({
   target: DOCKER_BACKEND_URL,
   changeOrigin: true,
   ws: true,
-  // Don't rewrite path — keep /preview/:projectId as-is
+  pathRewrite: (path) => (path.startsWith('/preview') ? path : `/preview${path}`),
   onProxyRes: (proxyRes) => {
     // Remove restrictive headers that the docker-backend or nginx might add
     delete proxyRes.headers['x-frame-options'];

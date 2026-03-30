@@ -15465,7 +15465,7 @@ app.post('/api/publish/:projectId', authenticateRequest, verifyProjectOwnership,
     // Copy build output from container/sandbox to host
     if (isDaytonaSandbox(entry)) {
       // Daytona: use tar + base64 via exec to stream files out of sandbox
-      const daytonaOutputDir = `${workDir}/${outputDir}`;
+      const daytonaOutputDir = `${workDir}/${outputDir}`.trim();
       const tarResult = await daytonaExec(entry.id, `cd "${daytonaOutputDir}" && tar cf - . | base64 -w0`, { timeoutSecs: 120 });
       if (!tarResult.output || tarResult.exitCode !== 0) {
         throw new Error(`Failed to archive build output from sandbox: ${tarResult.output?.slice(0, 200)}`);
