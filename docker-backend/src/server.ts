@@ -374,7 +374,10 @@ function getSessionTokenFromRequest(req: express.Request): string | null {
   // First try Authorization header
   const authHeader = req.headers.authorization;
   if (authHeader?.startsWith('Bearer ')) {
-    return authHeader.replace('Bearer ', '');
+    const bearerToken = authHeader.slice('Bearer '.length).trim();
+    if (bearerToken) {
+      return bearerToken;
+    }
   }
 
   // Then try cookies - Better Auth uses prefix.session_token format
@@ -617,6 +620,10 @@ function isLocalhostOrigin(origin: string): boolean {
  * (e.g., container creation from web.recoder.xyz for anonymous/local projects).
  */
 function optionalAuthenticateRequest(req: AuthenticatedRequest, res: express.Response, next: express.NextFunction) {
+  if (STRICT_AUTH) {
+    return authenticateRequest(req, res, next);
+  }
+
   const token = getSessionTokenFromRequest(req);
 
   if (!token) {
@@ -1614,7 +1621,28 @@ try {
  */
 async function getOrRecoverContainer(projectId: string): Promise<ContainerEntry | undefined> {
   const existing = containers.get(projectId);
-  if (existing) return existing;
+  if (existing) {
+    existing.lastActive = Date.now();
+
+    if (!isDaytonaSandbox(existing)) {
+      return existing;
+    }
+
+    daytonaSandboxIds.add(existing.id);
+
+    const status = await ensureDaytonaSandboxRunning(existing.id);
+    if (status.running) {
+      return existing;
+    }
+
+    logger.warn(
+      { projectId, sandboxId: existing.id, error: status.error },
+      'Stored Daytona sandbox could not be resumed, clearing cached mapping',
+    );
+    containers.delete(projectId);
+    daytonaSandboxIds.delete(existing.id);
+    persistContainers();
+  }
 
   // Try to recover from Daytona
   if (!isDaytonaConfigured() || process.env.USE_DAYTONA_CONTAINERS !== 'true') return undefined;
