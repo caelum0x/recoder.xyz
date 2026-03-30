@@ -1,12 +1,35 @@
 # Recoder Platform — Task List
 
-Last updated: 2026-03-28 18:30 UTC
+Last updated: 2026-03-31 22:40 UTC
 
 ---
 
 ## Platform Assessment
 
 $5 OpenRouter credits added. Batch 1 deployed. Batch 2 deploying now (Agent 1).
+
+## 2026-03-31 Correction
+
+This top section supersedes older task notes below where they conflict.
+
+- The old Web IDE cookie theory is no longer the best explanation. Direct backend smoke tests proved Daytona container creation, file write/read, exec, snapshot, and Vite startup work.
+- The concrete backend fixes were:
+  - `docker-backend/src/preview.ts` — preserve preview subpaths and rewrite absolute Vite asset URLs.
+  - `docker-backend/src/server.ts` — use the correct Daytona workspace root and unwrap `daytonaExec(...).output` during publish detection.
+- Those backend fixes were pushed in commit `80f616d5`.
+- `recoder-web/app/lib/runtime/action-runner.ts` now contains an ENOTEMPTY cleanup+retry path for stale `node_modules`.
+- Commit `bf8f1944` was then pushed with the remaining local code fixes for:
+  - create/delete loop mitigation,
+  - CodeMirror crash/large-file fallback,
+  - sandbox auto-resume,
+  - strict-auth-safe empty bearer handling plus strict-mode enforcement on container create/delete.
+- Current work is deployment/browser verification of the pushed commits, not rediscovering root cause.
+
+## Current Remaining Priorities (2026-03-31, post-`bf8f1944`)
+1. Deploy `bf8f1944` and confirm the updated services are live.
+2. Browser verification of preview + publish.
+3. Re-enable deployed `STRICT_AUTH=true` and repeat authenticated smoke tests.
+4. Capture the exact failing step only if browser verification still fails.
 
 ### 1. Agents (agents.recoder.xyz)
 **Works:** LLM responds (gemini-2.0-flash via OpenRouter), thread created
@@ -70,6 +93,32 @@ $5 OpenRouter credits added. Batch 1 deployed. Batch 2 deploying now (Agent 1).
 - [x] Auth timeout 5s → 10s
 - [x] Server .env MAIN_LLM_MODEL override removed
 
+## FIXES DEPLOYED (2026-03-30 Agent 3)
+
+- [x] Composio 500 → replaced broken encryption with existing EncryptionService (base64 + integrity hash)
+- [x] Agency workflow crash → atomic write-then-rename in fs-storage-driver (prevents truncated workspace.json)
+- [x] Agency page crash → resilient workspace loading in stage-apps.ts (skip corrupt workspaces)
+- [x] A2A channel messaging → broadcastToWorkspace relay to all workspace peers via WebSocket
+- [x] A2A intent routing → new message type handler routes tasks from sender to target agent by ID
+- [x] A2A Bearer auth → WebSocket connections accept Authorization header (used by recoder-a2a MCP)
+- [x] Landing page → removed "10 services", OpenClaw, Studio references; fixed dead footer links
+- [x] Stale platform pages → removed /platform/openclaw, /platform/studio, /platform/chat
+- [x] docker-backend rebuilt + redeployed with all A2A fixes
+- [x] recoder-a2a MCP configured locally for Claude Code (claude_code) + Codex (codex)
+- [x] Web IDE Docker rebuilt (parser 100k, max_tokens 32k, CodeMirror guard, sandbox keepalive)
+- [x] Web IDE MAIN_SITE_URL fixed (was localhost:3000, now https://recoder.xyz)
+- [x] docker-backend: USE_DAYTONA_CONTAINERS=true, STRICT_AUTH=false, DAYTONA_SERVER_URL fixed
+- [x] recoder-a2a MCP v2.2 — 8 tools, real-time WS bridge, heartbeat, inbound task inbox/respond
+- [x] A2A REST→bridge dispatch — POST /api/a2a/tasks now dispatches to bridge-connected agents (task-lifecycle.routes.ts)
+- [x] Preview proxy fix — asset paths preserved, Vite URLs rewritten (preview.ts commit 80f616d5)
+- [x] Publish Daytona fix — detectBuildOutput uses /home/daytona/ workspace root (server.ts)
+- [x] recoder-a2a npm package synced to v2.2.0 (packages/recoder-a2a/)
+- [x] A2A full round-trip verified: Claude Code ↔ Codex via bridge (real-time task send/receive/respond)
+- [x] Disk cleanup: 32GB recovered (143GB→111GB, 76%)
+- [ ] **WEB IDE STILL BROKEN** — files don't write to sandbox (cross-origin cookie not arriving at docker-backend)
+- [ ] **WEB IDE PREVIEW BROKEN** — health check loops forever because no files in sandbox
+- [ ] **WEB IDE PUBLISH BROKEN** — 500 because no files to build
+
 ## CRITICAL ERRORS FOUND POST-DEPLOY (2026-03-28 ~16:00 UTC)
 
 ### BLOCKER: Invalid Model ID — `google/gemini-2.0-flash` does NOT exist on OpenRouter
@@ -123,11 +172,11 @@ $5 OpenRouter credits added. Batch 1 deployed. Batch 2 deploying now (Agent 1).
 | 3 | **Agents chat + tools** | GLM 4.7: chat works, create_file works, execute_command works, Python/PyTorch runs. 48 tool calls in one session. | WORKING |
 | 4 | **Agents canvas** | "Add Frame To Canvas failed" + FAL/Replicate $0 credits | NOT FIXED |
 | 5 | **Sign-in** | WORKS | DONE |
-| 6 | **A2A bridge** | Connects, reconnects repeatedly | PARTIAL |
+| 6 | ~~A2A bridge~~ | Full E2E working: intent routing, channel messaging, LLM-powered test passed | DONE (Agent 3) |
 | 7 | ~~OpenClaw redirect~~ | Redirects to agency | DONE |
 | 8 | **CodeMirror crash** | Error boundary added — Source tab no longer crashes page | FIXED (Agent 1) |
 
-**UPDATED ASSESSMENT (2026-03-29 03:00 UTC):** Agent works with GLM 4.7 (48 tool calls, PyTorch training). read_file fixed, PTY echo fixed, PM rebuilt, parser limit fixed, mock UI removed, Web IDE proxy chain fixed. Still broken: file preview in tool view, Web IDE needs Docker rebuild. Files tab may work after browser cache clear.
+**UPDATED ASSESSMENT (2026-03-30 18:30 UTC):** Agent works with GLM 4.7 (48 tool calls, PyTorch training). A2A bridge fully working (intent routing + channel messaging + LLM-powered E2E test). Composio profiles fixed (was 500, now 200). Agency workflows fixed (atomic writes + resilient loading). Landing page cleaned (no OpenClaw, no dead links). recoder-a2a MCP configured for local Claude Code + Codex. Still remaining: Web IDE Docker rebuild, publish pipeline, docs content.
 
 ### TIER 1: Make agent results VISIBLE (6-12) — HIGHEST PRIORITY
 
