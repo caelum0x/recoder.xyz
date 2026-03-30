@@ -1,10 +1,25 @@
 # Recoder Platform — Error Registry
 
-Last updated: 2026-03-29 00:30 UTC
+Last updated: 2026-03-31 22:40 UTC
 
 ---
 
 ## Platform Status (Current)
+
+## Current Priority Order (2026-03-31, post-`bf8f1944`)
+1. Deploy `bf8f1944` to the affected services.
+2. Browser verification of preview + publish.
+3. Re-enable deployed `STRICT_AUTH=true` and repeat authenticated smoke tests.
+4. If verification still fails, isolate the exact failing endpoint instead of reopening the old cookie theory.
+
+### Status Correction
+- The previous "remaining priorities" list for create/delete loop, CodeMirror re-crash, sandbox auto-stop, and strict-auth hardening is now stale at the code level.
+- Those fixes were pushed in commit `bf8f1944`:
+  - create/delete loop mitigation in the Python stateless coordinator,
+  - CodeMirror plain-text fallback for crashes/large files,
+  - Daytona auto-resume on normal project access,
+  - strict-auth-safe empty bearer handling plus strict-mode enforcement on container create/delete.
+- The main unresolved work is deployment plus browser verification, not rediscovery of root cause.
 
 ### Agents (agents.recoder.xyz) — WORKING
 - **Model:** GLM 4.7 via OpenRouter ($0.39/$1.75 per M tokens)
@@ -20,19 +35,23 @@ Last updated: 2026-03-29 00:30 UTC
 - **Files tab:** Backend OK. May need browser hard refresh.
 - **Mock UI:** Hidden (Save as Template, Insights, Analytics)
 
-### Web IDE (web.recoder.xyz) — MOSTLY FIXED
-- **Code gen:** Works
-- **Parser:** Fixed (10k→100k limit)
-- **Proxy chain:** Fixed (inline proxy, X-Frame-Options, nginx override)
-- **Auth:** Fixed (INTERNAL_SERVICE_KEY set)
-- **Sandbox URLs:** Work (`*.sandbox.recoder.xyz` DNS + SSL confirmed)
-- **Broken panels:** Hidden (Search, Git, Packages)
-- **Publish:** Daytona paths fixed, needs testing
-- **Docker rebuild:** Needed for parser fix to take effect
+### Web IDE (web.recoder.xyz) — PARTIALLY FIXED (2026-03-31)
+- **Code gen:** Works — LLM generates code, files write to Daytona sandbox (confirmed by Codex smoke test)
+- **Root cause was NOT cookies:** Codex proved cookies DO arrive (userId 38ee13d3 in server logs). Real bugs were preview proxy + publish path detection.
+- **Container creation:** Works via Daytona (USE_DAYTONA_CONTAINERS=true)
+- **File I/O:** Works — write, read, exec all confirmed via direct API test
+- **Preview:** FIXED — preview.ts now preserves asset subpaths and rewrites Vite URLs (commit 80f616d5). Needs browser testing.
+- **Publish:** FIXED — detectBuildOutput uses correct Daytona /home/daytona/ root. Needs browser testing.
+- **Auto-stop recovery:** FIXED IN CODE — `bf8f1944` resumes stopped Daytona sandboxes during normal project lookup and only restarts the dev server after a real stop/archive wake.
+- **STRICT_AUTH path:** FIXED IN CODE — `bf8f1944` ignores empty bearer headers and makes the optional container auth path respect `STRICT_AUTH=true`.
+- **Docker rebuild done:** parser 100k, max_tokens 32k, CodeMirror DOM guard, sandbox keepalive, preview proxy fix, publish fix all baked in
+- **MAIN_SITE_URL:** Fixed (was localhost:3000, now https://recoder.xyz)
+- **STRICT_AUTH=false** — security downgrade still in place, can re-enable after confirming browser works
+- **Needs browser testing:** preview iframe rendering and publish end-to-end
 
-### Agency (agency.recoder.xyz) — PARTIAL
+### Agency (agency.recoder.xyz) — WORKING
 - **Copilot:** Works (responds to chat)
-- **Workflows:** Broken — Giselle engine `h.values.map` error (corrupt workspace data)
+- **Workflows:** Fixed (Agent 3) — atomic writes prevent workspace.json corruption, resilient loading skips corrupt workspaces
 - **GitHub auth:** accountLinking enabled (should auto-link by email)
 
 ### PM (pm.recoder.xyz) — WORKING
@@ -52,27 +71,29 @@ Last updated: 2026-03-29 00:30 UTC
 ## Remaining Issues
 
 ### HIGH — Agent UX
-1. **Create/delete loop for large HTML** — Agent generates big website HTML, create_file truncates (LLM max_tokens ~41 completion tokens), agent sees incomplete, deletes, retries forever. Need: increase max_tokens for tool responses.
-2. **CodeMirror re-crash loop** — Error boundary catches crash but CodeMirror retries parsing immediately, crashes again. Console floods with hundreds of errors. Need: disable retry on error or skip parsing after catch.
-3. **Sandbox auto-stop** — Daytona sandboxes stop after inactivity. Preview/file operations fail with "Sandbox is not running". Need: auto-wake on preview/file access.
+1. ~~**Create/delete loop for large HTML**~~ — FIXED IN CODE (`bf8f1944`). Coordinator token budget raised and truncation loop handling relaxed.
+2. ~~**CodeMirror re-crash loop**~~ — FIXED IN CODE (`bf8f1944`). Plain-text fallback added after internal editor failures and for large files.
+3. ~~**Sandbox auto-stop**~~ — FIXED IN CODE (`bf8f1944`). Existing Daytona sandboxes auto-resume on access.
 4. **Preview panel in agents** — Direct sandbox URLs work (`*.sandbox.recoder.xyz`) but the inline preview panel needs sandbox started + file server running + docker-backend proxy working. First call works, health check re-runs fail on subsequent calls.
 
-### HIGH — Web IDE
-5. **Web IDE Docker rebuild needed** — parser fix (100k), preview proxy, X-Frame-Options all need container rebuild to take effect.
-6. **Web IDE publish** — Daytona paths fixed but untested after rebuild.
-7. **Web IDE file API 500** — INTERNAL_SERVICE_KEY set but needs verification after rebuild.
+### ~~CRITICAL — Web IDE~~ PARTIALLY FIXED (2026-03-31)
+5. ~~**Files don't write to sandbox**~~ — FIXED. Cookie theory was WRONG. Codex smoke test proved files write/read/exec all work. STRICT_AUTH=false allows anonymous, cookies also confirmed arriving with real userId.
+6. ~~**Preview never loads**~~ — FIXED (commit 80f616d5). Root cause: preview proxy sent all asset requests to `/`, losing `/@vite/client` etc. Now preserves subpaths + rewrites Vite URLs. Needs browser verification.
+7. ~~**Publish fails (500)**~~ — FIXED. `detectBuildOutput()` now uses correct `/home/daytona/` root for Daytona sandboxes. `dist/` confirmed existing after build.
+8. **docker-backend env (intentional):** `USE_DAYTONA_CONTAINERS=true` (correct), `STRICT_AUTH=false` (security downgrade, can re-enable), `DAYTONA_SERVER_URL=http://host.docker.internal:3900/api` (correct for Docker networking).
+9. ~~**recoder-web .env**~~ — FIXED. `MAIN_SITE_URL=https://recoder.xyz` at runtime. Redirect works.
 
 ### MEDIUM — Platform
-8. **Agency workflows** — Giselle engine crash (`h.values.map` error). Deep framework/Supabase issue.
-9. **Composio integrations 500** — `POST /v1/composio/profiles` returns 500. App Integrations page broken.
-10. **A2A not tested** — Bridge connects but actual message passing untested. Need end-to-end test.
+8. ~~**Agency workflows**~~ — FIXED (Agent 3). Atomic writes + resilient loading.
+9. ~~**Composio integrations 500**~~ — FIXED (Agent 3). Replaced broken encryption with EncryptionService.
+10. ~~**A2A messaging**~~ — FIXED (Agent 3). Intent routing + channel broadcast + Bearer auth. 15/15 test, LLM E2E verified.
 11. **PM refresh issue** — New data from copilot needs page refresh (deferred).
 12. **DOCX via create_file** — agent sometimes uses create_file instead of run_code. Auto-convert interceptor exists.
 13. **Command output not captured** — long-running scripts show no output.
 14. **ERR_CONNECTION_RESET** — Cloudflare HTTP/2 limitation, not code bug.
 
 ### MEDIUM — Website & Docs
-15. **recoder.xyz polish** — Landing page needs final cleanup, links verified, design polish.
+15. ~~**recoder.xyz polish**~~ — FIXED (Agent 3). OpenClaw removed, dead links fixed, service count corrected.
 16. **API documentation** — No docs for backend API endpoints (`/v1/threads`, `/v1/agents`, BYOK, etc.).
 17. **A2A protocol docs** — No documentation for Agent-to-Agent communication.
 18. **Developer docs** — No docs on how to build on the platform, extend agents, create tools.
@@ -231,7 +252,7 @@ Billing, Overview, Projects, Team — stub pages (may have backend routers but f
 
 ---
 
-## All Fixes Applied (2026-03-28/29)
+## All Fixes Applied (2026-03-28/29/30)
 
 | # | Fix | Agent |
 |---|-----|-------|
@@ -276,6 +297,16 @@ Billing, Overview, Projects, Team — stub pages (may have backend routers but f
 | 39 | Publish error detail | 2 |
 | 40 | Docs index fixed | 2 |
 | 41 | recoder-a2a@1.0.2 published | 2 |
+| 42 | Composio 500 → EncryptionService delegation | 3 |
+| 43 | Giselle atomic writes (fs-storage-driver) | 3 |
+| 44 | Giselle resilient workspace loading (stage-apps) | 3 |
+| 45 | A2A channel.message broadcast to workspace peers | 3 |
+| 46 | A2A intent routing (task assignment by agent ID) | 3 |
+| 47 | A2A Bearer token auth for WebSocket | 3 |
+| 48 | Landing page: OpenClaw/Studio/dead links removed | 3 |
+| 49 | Stale platform pages removed (openclaw/studio/chat) | 3 |
+| 50 | docker-backend rebuilt + redeployed | 3 |
+| 51 | recoder-a2a MCP configured local (Claude Code + Codex) | 3 |
 
 ---
 
