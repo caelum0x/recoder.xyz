@@ -119,6 +119,7 @@ class StatelessCoordinator(BaseCoordinator):
         should_continue_loop = True
         auto_continue_count = 0
         consecutive_length_count = 0
+        max_consecutive_length_finishes = 4
 
         while self._state.should_continue() and should_continue_loop:
             self._thread_run_id = str(uuid.uuid4())
@@ -187,10 +188,13 @@ class StatelessCoordinator(BaseCoordinator):
             else:
                 consecutive_length_count = 0
 
-            # Stop after 2 consecutive length finishes — the LLM is stuck in a
-            # truncation loop (creates file, truncated, deletes, retries).
-            if consecutive_length_count >= 2:
-                logger.info("[Coordinator] Stopping: 2 consecutive finish_reason=length (truncation loop)")
+            # Allow a few consecutive length finishes for legitimately large file
+            # generation, but still terminate if the model is clearly stuck.
+            if consecutive_length_count >= max_consecutive_length_finishes:
+                logger.info(
+                    "[Coordinator] Stopping: %s consecutive finish_reason=length (truncation loop)",
+                    max_consecutive_length_finishes,
+                )
                 self._state.complete()
                 should_continue_loop = False
                 break
@@ -203,8 +207,9 @@ class StatelessCoordinator(BaseCoordinator):
                     "content": (
                         "[System] Your previous response was truncated due to output length limits. "
                         "Any files already created or modified are saved as-is. "
-                        "Do NOT delete and recreate them. Continue from where you left off or "
-                        "acknowledge the task is done."
+                        "Do NOT delete and recreate them. Continue from where you left off, "
+                        "append only the missing remainder, or make a targeted edit to finish the file. "
+                        "Never restart the file from the beginning unless the user explicitly asks."
                     ),
                     "message_id": str(uuid.uuid4()),
                 })
