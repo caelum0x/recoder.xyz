@@ -15,6 +15,22 @@ const autoStartAttempts = new Map<string, number>();
 const autoInstallAttempts = new Map<string, number>();
 const AUTO_START_COOLDOWN_MS = 10000;
 const AUTO_INSTALL_COOLDOWN_MS = 60000;
+const DAYTONA_PORT_CANDIDATES = [
+  { port: 5173, type: 'Vite (5173)' },
+  { port: 5174, type: 'Vite (5174)' },
+  { port: 5175, type: 'Vite (5175)' },
+  { port: 5176, type: 'Vite (5176)' },
+  { port: 5177, type: 'Vite (5177)' },
+  { port: 5178, type: 'Vite (5178)' },
+  { port: 5179, type: 'Vite (5179)' },
+  { port: 5180, type: 'Vite (5180)' },
+  { port: 4173, type: 'Vite Preview (4173)' },
+  { port: 4174, type: 'Vite Preview (4174)' },
+  { port: 3000, type: 'Next.js (3000)' },
+  { port: 3001, type: 'Dev (3001)' },
+  { port: 8080, type: 'Other (8080)' },
+  { port: 8081, type: 'Expo (8081)' },
+];
 
 async function execInContainer(containerId: string, cmd: string): Promise<string> {
   const container = docker.getContainer(containerId);
@@ -106,6 +122,111 @@ async function ensureDependencies(containerId: string, projectId: string, isDayt
     containerId,
     'cd /workspace && npm install --legacy-peer-deps --no-audit --no-fund'
   );
+}
+
+function getDaytonaProxyHost(): string {
+  const raw = process.env.DAYTONA_PROXY_HOST || 'host.docker.internal:4000';
+  return raw.includes(':') ? raw.split(':')[0] : raw;
+}
+
+function getDaytonaProxyPort(): number {
+  const raw = process.env.DAYTONA_PROXY_HOST || 'host.docker.internal:4000';
+  if (raw.includes(':')) {
+    const parsed = parseInt(raw.split(':')[1], 10);
+    if (!Number.isNaN(parsed)) return parsed;
+  }
+  return parseInt(process.env.DAYTONA_PROXY_PORT || '4000', 10);
+}
+
+async function probeDaytonaPort(entry: { id: string }, port: number, path: string = '/'): Promise<boolean> {
+  const proxyHost = getDaytonaProxyHost();
+  const proxyPort = getDaytonaProxyPort();
+  const sandboxHost = `${port}-${entry.id}.sandbox.recoder.xyz`;
+
+  return await new Promise<boolean>((resolve) => {
+    const req = http.request({
+      hostname: proxyHost,
+      port: proxyPort,
+      path,
+      method: 'GET',
+      headers: {
+        Host: sandboxHost,
+        Accept: '*/*',
+      },
+      timeout: 4000,
+    }, (resp) => {
+      const status = resp.statusCode || 0;
+      resp.resume();
+      resolve(status > 0 && status < 500);
+    });
+
+    req.on('error', () => resolve(false));
+    req.on('timeout', () => {
+      req.destroy();
+      resolve(false);
+    });
+    req.end();
+  });
+}
+
+function getProxySubPath(req: { params?: Record<string, string>; url?: string }): string {
+  const wildcardPath = req.params?.['0'];
+  if (typeof wildcardPath === 'string' && wildcardPath.length > 0) {
+    return wildcardPath.replace(/^\/+/, '');
+  }
+
+  const requestUrl = typeof req.url === 'string' ? req.url : '';
+  const pathOnly = requestUrl.split('?')[0].replace(/^\/+/, '');
+  return pathOnly === '/' ? '' : pathOnly;
+}
+
+function getQuerySuffix(req: { originalUrl?: string; url?: string }): string {
+  const urlWithQuery = typeof req.originalUrl === 'string' && req.originalUrl.includes('?')
+    ? req.originalUrl
+    : (typeof req.url === 'string' ? req.url : '');
+  const queryStart = urlWithQuery.indexOf('?');
+  return queryStart >= 0 ? urlWithQuery.slice(queryStart) : '';
+}
+
+function shouldRewritePreviewBody(contentType: string, requestPath: string): boolean {
+  return contentType.includes('text/html') ||
+    contentType.includes('javascript') ||
+    contentType.includes('ecmascript') ||
+    /\.(?:[cm]?[jt]sx?)$/i.test(requestPath);
+}
+
+function rewritePreviewBody(body: string, proxyPrefix: string, contentType: string): string {
+  const normalizedPrefix = proxyPrefix.replace(/\/+$/, '');
+  const proxyRoot = `${normalizedPrefix}/`;
+  const absolutePathGuard = '(?!\\/|preview\\/|api\\/sandbox-preview\\/)';
+  let modifiedBody = body;
+
+  if (contentType.includes('text/html')) {
+    modifiedBody = modifiedBody
+      .replace(new RegExp(`(<script[^>]+src=["'])\\/${absolutePathGuard}`, 'gi'), `$1${proxyRoot}`)
+      .replace(new RegExp(`(<link[^>]+href=["'])\\/${absolutePathGuard}`, 'gi'), `$1${proxyRoot}`)
+      .replace(new RegExp(`(<img[^>]+src=["'])\\/${absolutePathGuard}`, 'gi'), `$1${proxyRoot}`)
+      .replace(new RegExp(`(<source[^>]+src=["'])\\/${absolutePathGuard}`, 'gi'), `$1${proxyRoot}`)
+      .replace(new RegExp(`(import\\s+[^"']*["'])\\/${absolutePathGuard}`, 'gi'), `$1${proxyRoot}`)
+      .replace(new RegExp(`(new\\s+URL\\s*\\(\\s*["'])\\/${absolutePathGuard}`, 'gi'), `$1${proxyRoot}`);
+
+    if (modifiedBody.includes('<head>') && !modifiedBody.includes('data-recoder-error-handler')) {
+      modifiedBody = modifiedBody.replace('<head>', '<head>' + ERROR_CAPTURE_SCRIPT);
+    } else if (/<head\b/i.test(modifiedBody) && !modifiedBody.includes('data-recoder-error-handler')) {
+      modifiedBody = modifiedBody.replace(/<head[^>]*>/i, (match) => match + ERROR_CAPTURE_SCRIPT);
+    }
+  }
+
+  if (contentType.includes('javascript') || contentType.includes('ecmascript') || !contentType) {
+    modifiedBody = modifiedBody
+      .replace(new RegExp(`(from\\s+["'])\\/${absolutePathGuard}`, 'g'), `$1${proxyRoot}`)
+      .replace(new RegExp(`(import\\s+["'])\\/${absolutePathGuard}`, 'g'), `$1${proxyRoot}`)
+      .replace(new RegExp(`(export\\s+.*from\\s+["'])\\/${absolutePathGuard}`, 'g'), `$1${proxyRoot}`)
+      .replace(new RegExp(`(import\\s*\\(\\s*["'])\\/${absolutePathGuard}`, 'g'), `$1${proxyRoot}`)
+      .replace(new RegExp(`(new\\s+URL\\s*\\(\\s*["'])\\/${absolutePathGuard}`, 'g'), `$1${proxyRoot}`);
+  }
+
+  return modifiedBody;
 }
 
 // Helper to escape HTML entities
@@ -454,35 +575,28 @@ export function setupPreviewProxy(app: Express, containers: Map<string, { id: st
         console.warn(`[Preview] Auto-wake failed for ${entry.id}:`, wakeErr.message);
       }
 
-      // Quick health check via internal curl (avoids OIDC redirect issues)
+      // Quick health check via the internal Daytona proxy.
+      // Do not rely on curl existing inside the sandbox.
       let daytonaServerReady = false;
-      try {
-        const dc = getDaytonaClient();
-        const curlResult = await dc.execCommand(
-          entry.id,
-          'for p in 5173 5174 5175 5176 5177 5178 5179 5180 4173 4174 3000 3001 8080 8081; do curl -sf http://localhost:$p > /dev/null 2>&1 && echo "READY:$p" && exit 0; done; echo "NOTREADY"',
-          { timeoutSecs: 8 },
-        );
-        const readyMatch = curlResult.output.match(/READY:(\d+)/);
-        daytonaServerReady = !!readyMatch;
-        if (readyMatch) {
-          const detectedPort = parseInt(readyMatch[1], 10);
-          // Update BOTH the preview URL and the port on the entry
-          entry.port = detectedPort;
-          const newPreviewUrl = dc.getPreviewUrl(entry.id, detectedPort);
+      for (const { port } of DAYTONA_PORT_CANDIDATES) {
+        if (await probeDaytonaPort(entry, port)) {
+          const dc = getDaytonaClient();
+          daytonaServerReady = true;
+          entry.port = port;
+          const newPreviewUrl = dc.getPreviewUrl(entry.id, port);
           if (newPreviewUrl !== (entry as any).daytonaPreviewUrl) {
             (entry as any).daytonaPreviewUrl = newPreviewUrl;
-            console.log(`[Preview] Updated Daytona preview URL to port ${detectedPort}`);
+            console.log(`[Preview] Updated Daytona preview URL to port ${port}`);
           }
+          break;
         }
-      } catch {
-        // exec failed — sandbox may be stopped or unreachable
       }
 
       if (daytonaServerReady) {
         // Proxy inline — no redirect to docker.recoder.xyz (avoids X-Frame-Options cross-origin block)
         console.log(`[Preview] Daytona preview ready, proxying inline for ${projectId}`);
-        return handleSandboxPreview(req, res, containers, '');
+        const subPath = getProxySubPath(req);
+        return handleSandboxPreview(req, res, containers, subPath, `/preview/${projectId}`);
       }
 
       // Dev server not running — try to auto-start
@@ -747,7 +861,8 @@ export function setupPreviewProxy(app: Express, containers: Map<string, { id: st
   async function handleSandboxPreview(
     req: any, res: any,
     containers: Map<string, any>,
-    subPath: string
+    subPath: string,
+    proxyPrefix: string,
   ) {
     const projectId = req.params.projectId;
     let entry = containers.get(projectId);
@@ -764,14 +879,13 @@ export function setupPreviewProxy(app: Express, containers: Map<string, { id: st
       const port = entry.port || 5173;
       // Use internal Daytona proxy (port 4000) for sandbox preview — avoids going through public internet
       // The Daytona proxy handles {port}-{sandboxId} routing internally, same as *.sandbox.recoder.xyz
-      const daytonaProxyHost = process.env.DAYTONA_PROXY_HOST || 'host.docker.internal:4000';
-      const forwardUrl = `http://${daytonaProxyHost}/${subPath}${req.url.includes('?') ? '?' + req.url.split('?')[1] : ''}`;
-
       // Use Node http.request instead of fetch — fetch may silently override Host header
-      const proxyHost = process.env.DAYTONA_PROXY_HOST || 'host.docker.internal';
-      const proxyPort = parseInt(process.env.DAYTONA_PROXY_PORT || '4000', 10);
+      const proxyHost = getDaytonaProxyHost();
+      const proxyPort = getDaytonaProxyPort();
       const sandboxHost = `${port}-${entry.id}.sandbox.recoder.xyz`;
-      const requestPath = `/${subPath}${req.url.includes('?') ? '?' + req.url.split('?')[1] : ''}`;
+      const querySuffix = getQuerySuffix(req);
+      const normalizedSubPath = (subPath || '').replace(/^\/+/, '');
+      const requestPath = normalizedSubPath ? `/${normalizedSubPath}${querySuffix}` : `/${querySuffix}`;
       console.log(`[SandboxPreview] Proxying: ${proxyHost}:${proxyPort}${requestPath} Host: ${sandboxHost}`);
 
       const http = await import('http');
@@ -802,11 +916,25 @@ export function setupPreviewProxy(app: Express, containers: Map<string, { id: st
       });
 
       res.status(proxyResult.status);
-      if (proxyResult.headers['content-type']) res.setHeader('Content-Type', proxyResult.headers['content-type']);
+      const contentType = proxyResult.headers['content-type'] || '';
+      const responseBody = shouldRewritePreviewBody(contentType, normalizedSubPath)
+        ? Buffer.from(rewritePreviewBody(proxyResult.body.toString('utf8'), proxyPrefix, contentType), 'utf8')
+        : proxyResult.body;
+
+      for (const [key, value] of Object.entries(proxyResult.headers)) {
+        if (!value) continue;
+        if (['content-length', 'x-frame-options', 'content-security-policy', 'cross-origin-embedder-policy', 'cross-origin-opener-policy'].includes(key)) {
+          continue;
+        }
+        res.setHeader(key, value);
+      }
+
+      if (contentType) res.setHeader('Content-Type', contentType);
+      res.setHeader('Content-Length', Buffer.byteLength(responseBody));
       res.removeHeader('X-Frame-Options');
       res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
       res.setHeader('Access-Control-Allow-Origin', '*');
-      res.send(proxyResult.body);
+      res.send(responseBody);
     } catch (e: any) {
       console.error(`[SandboxPreview] Proxy error for ${projectId}:`, e.message);
       res.status(502).send(`<h1>Preview unavailable</h1><p>${e.message}</p>`);
@@ -836,11 +964,11 @@ export function setupPreviewProxy(app: Express, containers: Map<string, { id: st
   // This avoids needing *.sandbox.recoder.xyz wildcard SSL cert.
   // Uses Daytona port-forward via toolbox API.
   app.all('/api/sandbox-preview/:projectId', async (req, res) => {
-    return handleSandboxPreview(req, res, containers, '');
+    return handleSandboxPreview(req, res, containers, '', `/api/sandbox-preview/${req.params.projectId}`);
   });
   app.all('/api/sandbox-preview/:projectId/*', async (req, res) => {
-    const subPath = req.url.split('/api/sandbox-preview/' + req.params.projectId + '/')[1] || '';
-    return handleSandboxPreview(req, res, containers, subPath);
+    const subPath = getProxySubPath(req);
+    return handleSandboxPreview(req, res, containers, subPath, `/api/sandbox-preview/${req.params.projectId}`);
   });
 
   // Health check - shows which ports are responding
@@ -894,69 +1022,34 @@ export function setupPreviewProxy(app: Express, containers: Map<string, { id: st
     }
 
     // For Daytona sandboxes, check multiple common dev server ports via internal curl
+    // Probe through the Daytona proxy instead of relying on curl inside the sandbox.
     const daytonaUrl = (entry as any)?.daytonaPreviewUrl;
     if (daytonaUrl) {
       // Extract sandboxId from preview URL pattern: https://{port}-{sandboxId}.sandbox.recoder.xyz
       const urlMatch = daytonaUrl.match(/^https?:\/\/\d+-([^.]+)\./);
       const sandboxId = urlMatch?.[1] || entry.id;
+      const portResults = await Promise.all(
+        DAYTONA_PORT_CANDIDATES.map(async ({ port, type }) => {
+          const responding = await probeDaytonaPort(entry, port);
+          return { port, responding, type, url: `https://${port}-${sandboxId}.sandbox.recoder.xyz` };
+        }),
+      );
 
-      // Check multiple ports using internal curl inside the sandbox (avoids OIDC redirect issues)
-      const portsToCheck = [
-        { port: 5173, type: 'Vite (5173)' },
-        { port: 5174, type: 'Vite (5174)' },
-        { port: 5175, type: 'Vite (5175)' },
-        { port: 5176, type: 'Vite (5176)' },
-        { port: 5177, type: 'Vite (5177)' },
-        { port: 5178, type: 'Vite (5178)' },
-        { port: 5179, type: 'Vite (5179)' },
-        { port: 5180, type: 'Vite (5180)' },
-        { port: 4173, type: 'Vite Preview (4173)' },
-        { port: 4174, type: 'Vite Preview (4174)' },
-        { port: 3000, type: 'Next.js (3000)' },
-        { port: 3001, type: 'Dev (3001)' },
-        { port: 8080, type: 'Other (8080)' },
-        { port: 8081, type: 'Expo (8081)' },
-      ];
-
-      try {
-        const dc = getDaytonaClient();
-        // Check all ports with a single exec call for efficiency
-        // Each check is in a subshell with ; separator so all checks run
-        const curlCmd = portsToCheck.map(({ port }) =>
-          `(curl -sf http://localhost:${port} > /dev/null 2>&1 && echo ${port}:HTTPOK || echo ${port}:FAIL)`
-        ).join('; ');
-
-        const curlResult = await dc.execCommand(entry.id, curlCmd, { timeoutSecs: 10 });
-        const output = curlResult.output.trim();
-
-        const portResults = portsToCheck.map(({ port, type }) => {
-          const portUrl = `https://${port}-${sandboxId}.sandbox.recoder.xyz`;
-          // Check if port responded successfully (contains HTTPOK marker)
-          const responding = output.includes(`${port}:HTTPOK`);
-          return { port, responding, type, url: portUrl };
-        });
-
-        // Find the first responding port and update stored preview URL if different
-        const respondingResult = portResults.find(r => r.responding);
-        const effectivePreviewUrl = respondingResult?.url || daytonaUrl;
-        if (respondingResult && effectivePreviewUrl !== daytonaUrl) {
-          (entry as any).daytonaPreviewUrl = effectivePreviewUrl;
-        }
-
-        return res.json({
-          projectId: req.params.projectId,
-          daytona: true,
-          previewUrl: effectivePreviewUrl,
-          ports: portResults.map(({ port, responding, type }) => ({ port, responding, type })),
-        });
-      } catch (_e) {
-        return res.json({
-          projectId: req.params.projectId,
-          daytona: true,
-          previewUrl: daytonaUrl,
-          ports: [{ port: entry.port || 3000, responding: false, type: 'Daytona preview' }],
-        });
+      const respondingResult = portResults.find(r => r.responding);
+      const effectivePreviewUrl = respondingResult?.url || daytonaUrl;
+      if (respondingResult) {
+        entry.port = respondingResult.port;
       }
+      if (respondingResult && effectivePreviewUrl !== daytonaUrl) {
+        (entry as any).daytonaPreviewUrl = effectivePreviewUrl;
+      }
+
+      return res.json({
+        projectId: req.params.projectId,
+        daytona: true,
+        previewUrl: effectivePreviewUrl,
+        ports: portResults.map(({ port, responding, type }) => ({ port, responding, type })),
+      });
     }
 
     const basePorts = [entry.port + 1, entry.port, entry.port + 4, entry.port + 5, entry.port + 2];
