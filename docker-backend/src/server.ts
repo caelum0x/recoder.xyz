@@ -1629,6 +1629,7 @@ async function getOrRecoverContainer(projectId: string): Promise<ContainerEntry 
     }
 
     daytonaSandboxIds.add(existing.id);
+    registerDaytonaId(existing.id);
 
     const status = await ensureDaytonaSandboxRunning(existing.id);
     if (status.running) {
@@ -1641,6 +1642,7 @@ async function getOrRecoverContainer(projectId: string): Promise<ContainerEntry 
     );
     containers.delete(projectId);
     daytonaSandboxIds.delete(existing.id);
+    unregisterDaytonaId(existing.id);
     persistContainers();
   }
 
@@ -1692,6 +1694,7 @@ async function getOrRecoverContainer(projectId: string): Promise<ContainerEntry 
     };
     containers.set(projectId, entry);
     daytonaSandboxIds.add(match.id);
+    registerDaytonaId(match.id);
     persistContainers();
     logger.info({ projectId, sandboxId: match.id }, 'Auto-recovered container mapping from Daytona');
     return entry;
@@ -1838,6 +1841,7 @@ const daytonaSandboxIds = new Set<string>();
 for (const [, entry] of containers.entries()) {
   if (entry.daytona && entry.id) {
     daytonaSandboxIds.add(entry.id);
+    registerDaytonaId(entry.id);
   }
 }
 
