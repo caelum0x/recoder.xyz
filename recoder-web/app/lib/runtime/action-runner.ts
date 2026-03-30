@@ -886,6 +886,19 @@ export class ActionRunner {
       return await this.#dockerExec(npmCmd);
     } catch (firstError: any) {
       const errorMsg = firstError?.message || '';
+
+      // ENOTEMPTY: stale node_modules in Daytona sandbox — clean and retry
+      if (/ENOTEMPTY|directory not empty/.test(errorMsg)) {
+        logger.warn('⚠️ npm install hit ENOTEMPTY — cleaning node_modules and retrying...');
+        try {
+          await this.#dockerExec('rm -rf node_modules');
+          return await this.#dockerExec(npmCmd);
+        } catch (retryError: any) {
+          logger.error('❌ npm install retry after cleanup also failed:', retryError?.message?.substring(0, 200));
+          throw retryError;
+        }
+      }
+
       const isVersionError = /ETARGET|No matching version|notarget|404 Not Found|ERESOLVE/.test(errorMsg);
 
       if (!isVersionError) {
