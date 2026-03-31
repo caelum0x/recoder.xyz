@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Maximize2, Presentation } from 'lucide-react';
-import { buildSandboxFileUrl, fetchSandboxHtmlAsBlobUrl } from '@/lib/utils/url';
+import { buildSandboxFileUrl, constructHtmlPreviewUrl, fetchSandboxHtmlAsBlobUrl } from '@/lib/utils/url';
 import { Project } from '@/lib/api/threads';
 
 interface SlideMetadata {
@@ -41,9 +41,19 @@ export function PresentationSlideCard({
     return refreshTimestamp ? `${url}?t=${refreshTimestamp}` : url;
   }, [project?.sandbox?.id, slide.file_path, refreshTimestamp]);
 
+  const directSlideUrl = useMemo(() => {
+    const url = constructHtmlPreviewUrl(project?.sandbox?.sandbox_url, slide.file_path);
+    if (!url) return null;
+    return refreshTimestamp ? `${url}?t=${refreshTimestamp}` : url;
+  }, [project?.sandbox?.sandbox_url, slide.file_path, refreshTimestamp]);
+
   // Fetch slide HTML with auth and create blob URL for iframe
   useEffect(() => {
-    if (!slideApiUrl) {
+    if (directSlideUrl || !slideApiUrl) {
+      if (prevBlobUrlRef.current) {
+        URL.revokeObjectURL(prevBlobUrlRef.current);
+        prevBlobUrlRef.current = null;
+      }
       setBlobUrl(null);
       return;
     }
@@ -64,7 +74,7 @@ export function PresentationSlideCard({
     return () => {
       cancelled = true;
     };
-  }, [slideApiUrl]);
+  }, [slideApiUrl, directSlideUrl]);
 
   // Cleanup blob URL on unmount
   useEffect(() => {
@@ -75,8 +85,9 @@ export function PresentationSlideCard({
     };
   }, []);
 
-  // Use blob URL for the iframe (auth-safe), fall back to direct URL for public sandboxes
-  const slidePreviewUrl = blobUrl || slideApiUrl;
+  // Prefer the real sandbox file URL so relative presentation assets keep their
+  // directory context. Fall back to fetched/blob content if sandbox_url is absent.
+  const slidePreviewUrl = directSlideUrl || blobUrl || slideApiUrl;
 
   useEffect(() => {
     if (!containerRef) return;
@@ -218,4 +229,3 @@ export function PresentationSlideCard({
     </div>
   );
 }
-

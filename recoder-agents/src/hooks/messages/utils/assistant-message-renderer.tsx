@@ -14,7 +14,7 @@ import { ToolCard } from '@/components/thread/content/ToolCard';
 import { ApifyApprovalInline } from '@/components/thread/content/ApifyApprovalInline';
 import type { ApifyApproval } from '@/hooks/apify/use-apify-approvals';
 import { MediaGenerationInline } from '@/components/thread/content/MediaGenerationInline';
-import { constructHtmlPreviewUrl } from '@/lib/utils/url';
+import { buildSandboxFileUrl, constructHtmlPreviewUrl, fetchSandboxFile } from '@/lib/utils/url';
 import { InlineCheckout, extractInlineCheckout } from '@/components/thread/content/InlineCheckout';
 import { UpgradeButtonCTA, extractUpgradeButton } from '@/components/thread/content/UpgradeButtonCTA';
 
@@ -317,7 +317,7 @@ function SlideInlineThumbnail({
 
   // Fetch metadata to get proper slide URL
   React.useEffect(() => {
-    if (!project?.sandbox?.sandbox_url || !slideInfo?.presentationName) {
+    if (!project?.sandbox?.id || !slideInfo?.presentationName) {
       setIsLoadingMetadata(false);
       return;
     }
@@ -325,21 +325,27 @@ function SlideInlineThumbnail({
     const fetchMetadata = async () => {
       try {
         const sanitizedName = slideInfo.presentationName.replace(/[^a-zA-Z0-9\-_]/g, '').toLowerCase();
-        const metadataUrl = constructHtmlPreviewUrl(
-          project.sandbox.sandbox_url,
+        const metadataUrl = buildSandboxFileUrl(
+          project.sandbox.id,
           `presentations/${sanitizedName}/metadata.json`
         );
 
-        const response = await fetch(`${metadataUrl}?t=${Date.now()}`, {
+        if (!metadataUrl) {
+          setIsLoadingMetadata(false);
+          return;
+        }
+
+        const response = await fetchSandboxFile(`${metadataUrl}?t=${Date.now()}`, {
           cache: 'no-cache',
-          headers: { 'Cache-Control': 'no-cache' },
         });
 
         if (response.ok) {
           const data = await response.json();
           const slideData = data.slides?.[slideInfo.slideNumber];
           if (slideData?.file_path) {
-            const url = constructHtmlPreviewUrl(project.sandbox.sandbox_url, slideData.file_path);
+            const url =
+              constructHtmlPreviewUrl(project.sandbox.sandbox_url, slideData.file_path) ||
+              buildSandboxFileUrl(project.sandbox.id, slideData.file_path);
             setSlideUrl(url);
           }
         }
@@ -351,7 +357,7 @@ function SlideInlineThumbnail({
     };
 
     fetchMetadata();
-  }, [project?.sandbox?.sandbox_url, slideInfo?.presentationName, slideInfo?.slideNumber]);
+  }, [project?.sandbox?.id, project?.sandbox?.sandbox_url, slideInfo?.presentationName, slideInfo?.slideNumber]);
 
   const isLoading = externalLoading || isLoadingMetadata;
   const showShimmer = isLoading || !slideUrl || !iframeLoaded;

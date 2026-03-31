@@ -32,6 +32,7 @@ import {
 import { getSessionAccessToken, requireSessionAccessToken } from '@/lib/auth/session-token';
 import { useDownloadRestriction } from '@/hooks/billing';
 import { cn } from '@/lib/utils';
+import { buildSandboxFileUrl, fetchSandboxFile } from '@/lib/utils/url';
 import { useRecoderComputerStore } from '@/stores/recoder-computer-store';
 import { PresentationViewer } from '../tool-views/presentation-tools/PresentationViewer';
 import { FullScreenPresentationViewer } from '../tool-views/presentation-tools/FullScreenPresentationViewer';
@@ -303,7 +304,7 @@ export function FileViewerView({
 
   useEffect(() => {
     // Only validate folders, not slide files
-    if (!presentationFolderInfo.isFolder || !presentationFolderInfo.presentationName || !project?.sandbox?.sandbox_url) {
+    if (!presentationFolderInfo.isFolder || !presentationFolderInfo.presentationName || !project?.sandbox?.id) {
       setIsFolderValidated(null);
       folderValidationRef.current = null;
       return;
@@ -317,12 +318,20 @@ export function FileViewerView({
     }
 
     const validateFolder = async () => {
-      const sandboxUrl = project.sandbox.sandbox_url;
       const sanitizedName = presentationFolderInfo.presentationName!.replace(/[^a-zA-Z0-9\-_]/g, '').toLowerCase();
-      const metadataUrl = `${sandboxUrl}/presentations/${sanitizedName}/metadata.json?t=${Date.now()}`;
+      const metadataUrl = buildSandboxFileUrl(
+        project.sandbox!.id!,
+        `presentations/${sanitizedName}/metadata.json`
+      );
+
+      if (!metadataUrl) {
+        folderValidationRef.current = validationKey;
+        setIsFolderValidated(false);
+        return;
+      }
 
       try {
-        const response = await fetch(metadataUrl, {
+        const response = await fetchSandboxFile(`${metadataUrl}?t=${Date.now()}`, {
           method: 'HEAD',
           cache: 'no-cache',
         });
@@ -336,7 +345,7 @@ export function FileViewerView({
     };
 
     validateFolder();
-  }, [presentationFolderInfo.isFolder, presentationFolderInfo.presentationName, project?.sandbox?.sandbox_url, isFolderValidated]);
+  }, [presentationFolderInfo.isFolder, presentationFolderInfo.presentationName, project?.sandbox?.id, isFolderValidated]);
 
   // Determine if this is a valid presentation
   // - Slide files: always valid (the file existing proves it's a real presentation)
