@@ -24,8 +24,7 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
                           cookies.includes('recoder.session') ||
                           cookies.includes('session_token');
   
-  logger.info('Cookies received:', cookies);
-  logger.info('Has session token:', hasSessionToken);
+  logger.info('Auth cookie present on index request:', hasSessionToken);
 
   // Skip auth check in local development for docker-backend testing
   const isDevelopment = process.env.NODE_ENV !== 'production';

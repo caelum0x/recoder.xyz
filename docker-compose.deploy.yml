@@ -103,6 +103,9 @@ services:
       - NODE_ENV=production
       - PORT=5173
       - DOCKER_BACKEND_URL=http://recoder-docker-backend:3100
+      - MAIN_SITE_URL=https://recoder.xyz
+      - MAIN_SITE_INTERNAL_URL=http://host.docker.internal:3000
+      - VITE_MAIN_SITE_URL=https://recoder.xyz
       - VITE_DOCKER_BACKEND_URL=http://recoder-docker-backend:3100
       - RECODER_A2A_SHARED_SECRET=${RECODER_A2A_SHARED_SECRET}
       - RECODER_A2A_AGENT_ID=recoder-web
@@ -113,6 +116,8 @@ services:
       - RECODER_A2A_TOOL_CALL_HANDLER_URL=http://recoder-docker-backend:3100/api/a2a/intent/tool_call
       - RECODER_A2A_WORKER_TOKEN=${RECODER_A2A_WORKER_TOKEN}
       - RECODER_A2A_EGRESS_ALLOWLIST=http://recoder-docker-backend:3100
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://localhost:5173/api/health',{redirect:'manual'}).then(r => process.exit(r.status < 400 ? 0 : 1)).catch(() => process.exit(1))"]
       interval: 30s

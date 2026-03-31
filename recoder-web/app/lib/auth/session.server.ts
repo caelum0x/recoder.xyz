@@ -60,6 +60,14 @@ function getPublicMainSiteUrl(): string {
     || (process.env.NODE_ENV === 'production' ? 'https://recoder.xyz' : 'http://localhost:3000');
 }
 
+function getSessionVerificationUrls(): string[] {
+  const urls = [getInternalMainSiteUrl(), getPublicMainSiteUrl()]
+    .map((url) => url.trim().replace(/\/+$/, ''))
+    .filter((url) => url.length > 0);
+
+  return [...new Set(urls)];
+}
+
 /**
  * Verify session by calling main site's better-auth API
  * This reads the shared cookie and verifies it with the main site
@@ -89,7 +97,6 @@ function extractSessionToken(cookieHeader: string): string | null {
 
 export async function verifySession(request: Request): Promise<Session | null> {
   try {
-    const mainSiteUrl = getInternalMainSiteUrl();
     const cookieHeader = request.headers.get('Cookie');
 
     if (!cookieHeader) {
@@ -116,38 +123,54 @@ export async function verifySession(request: Request): Promise<Session | null> {
       headers['Cookie'] = cookieHeader;
     }
 
-    const response = await fetch(`${mainSiteUrl}/api/auth/session`, {
-      method: 'GET',
-      headers,
-      credentials: 'include',
-    });
+    let lastStatus: number | null = null;
 
-    if (!response.ok) {
-      logger.info('[Auth] Session verification failed:', response.status);
-      return null;
+    for (const mainSiteUrl of getSessionVerificationUrls()) {
+      try {
+        const response = await fetch(`${mainSiteUrl}/api/auth/session`, {
+          method: 'GET',
+          headers,
+          credentials: 'include',
+        });
+
+        if (!response.ok) {
+          lastStatus = response.status;
+          logger.warn(`[Auth] Session verification failed via ${mainSiteUrl}: ${response.status}`);
+          continue;
+        }
+
+        const data = await response.json() as SessionApiResponse;
+
+        if (!data?.user) {
+          logger.warn(`[Auth] No user in session response from ${mainSiteUrl}`);
+          continue;
+        }
+
+        logger.info('[Auth] Session verified for user:', data.user.email);
+
+        return {
+          user: {
+            id: data.user.id,
+            email: data.user.email,
+            name: data.user.name ?? null,
+            image: data.user.image ?? null,
+            subscriptionPlan: data.user.subscriptionPlan ?? 'free',
+            subscriptionStatus: data.user.subscriptionStatus ?? 'active',
+          },
+          sessionId: data.session?.id ?? '',
+          expiresAt: data.session?.expiresAt ? new Date(data.session.expiresAt) : new Date(),
+        };
+      } catch (error) {
+        logger.warn(`[Auth] Session verification fetch failed via ${mainSiteUrl}:`, error);
+      }
     }
 
-    const data = await response.json() as SessionApiResponse;
-
-    if (!data?.user) {
-      logger.info('[Auth] No user in session response');
-      return null;
+    if (lastStatus !== null) {
+      logger.info('[Auth] Session verification failed for all origins, last status:', lastStatus);
+    } else {
+      logger.info('[Auth] Session verification failed for all origins');
     }
-
-    logger.info('[Auth] Session verified for user:', data.user.email);
-
-    return {
-      user: {
-        id: data.user.id,
-        email: data.user.email,
-        name: data.user.name ?? null,
-        image: data.user.image ?? null,
-        subscriptionPlan: data.user.subscriptionPlan ?? 'free',
-        subscriptionStatus: data.user.subscriptionStatus ?? 'active',
-      },
-      sessionId: data.session?.id ?? '',
-      expiresAt: data.session?.expiresAt ? new Date(data.session.expiresAt) : new Date(),
-    };
+    return null;
   } catch (error) {
     logger.error('[Auth] Error verifying session:', error);
     return null;
