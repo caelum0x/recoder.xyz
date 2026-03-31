@@ -179,6 +179,7 @@ Your response **must strictly follow** this XML structure. **No deviations allow
 - NEVER use specific version numbers like \`^6.22.2\` or \`~5.69.0\` — these may not exist on npm and will cause ETARGET install failures
 - Do NOT install \`@types/\` packages for libraries that bundle their own TypeScript types (react-router-dom v7+, @tanstack/react-query, zod, etc.)
 - The runtime will resolve \`"latest"\` to the correct current version during npm install
+- If you add \`recharts\`, also add \`react-is\` as a dependency so the preview can resolve Recharts correctly
 
 ### CRITICAL: Tailwind CSS v3 Configuration (NOT v4)
 - Use Tailwind CSS v3 with PostCSS. Do NOT use Tailwind v4 or \`@tailwindcss/vite\`.

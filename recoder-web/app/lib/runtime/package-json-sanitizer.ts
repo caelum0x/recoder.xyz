@@ -17,6 +17,10 @@ const PINNED_TOOLCHAIN_VERSIONS: Record<string, string> = {
   autoprefixer: '^10.4.21',
 };
 
+const REQUIRED_RUNTIME_PEERS: Record<string, string[]> = {
+  recharts: ['react-is'],
+};
+
 interface PackageJsonShape {
   dependencies?: Record<string, string>;
   devDependencies?: Record<string, string>;
@@ -35,47 +39,95 @@ function hasTailwindToolchain(pkg: PackageJsonShape): boolean {
   );
 }
 
+function getAllDependencies(pkg: PackageJsonShape): Record<string, string> {
+  return {
+    ...pkg.dependencies,
+    ...pkg.devDependencies,
+  };
+}
+
+function getPreferredPeerVersion(pkg: PackageJsonShape, peerName: string): string {
+  const allDeps = getAllDependencies(pkg);
+
+  if (peerName === 'react-is') {
+    return allDeps.react || 'latest';
+  }
+
+  return 'latest';
+}
+
+function normalizeRequiredRuntimePeers(pkg: PackageJsonShape): boolean {
+  let changed = false;
+
+  for (const [packageName, peers] of Object.entries(REQUIRED_RUNTIME_PEERS)) {
+    const targetDeps = pkg.dependencies?.[packageName]
+      ? (pkg.dependencies ||= {})
+      : pkg.devDependencies?.[packageName]
+        ? (pkg.devDependencies ||= {})
+        : null;
+
+    if (!targetDeps) {
+      continue;
+    }
+
+    for (const peerName of peers) {
+      if (pkg.dependencies?.[peerName] || pkg.devDependencies?.[peerName]) {
+        continue;
+      }
+
+      targetDeps[peerName] = getPreferredPeerVersion(pkg, peerName);
+      changed = true;
+    }
+  }
+
+  return changed;
+}
+
 export function normalizeTailwindToolchainPackageJson(
   packageJsonStr: string
 ): { sanitized: string; changed: boolean } {
   try {
     const pkg = JSON.parse(packageJsonStr) as PackageJsonShape;
-    let changed = false;
+    const hadTailwindToolchain = hasTailwindToolchain(pkg);
+    const peersChanged = normalizeRequiredRuntimePeers(pkg);
+    let changed = peersChanged;
 
-    if (!hasTailwindToolchain(pkg)) {
+    if (!hadTailwindToolchain && !peersChanged) {
       return { sanitized: packageJsonStr, changed: false };
     }
 
-    const sources = [pkg.dependencies, pkg.devDependencies];
-    const devDependencies = { ...(pkg.devDependencies || {}) };
+    if (hadTailwindToolchain) {
+      const sources = [pkg.dependencies, pkg.devDependencies];
+      const devDependencies = { ...(pkg.devDependencies || {}) };
 
-    for (const deps of sources) {
-      if (!deps) {
-        continue;
+      for (const deps of sources) {
+        if (!deps) {
+          continue;
+        }
+
+        for (const pkgName of TAILWIND_V4_ONLY_PACKAGES) {
+          if (deps[pkgName]) {
+            delete deps[pkgName];
+            delete devDependencies[pkgName];
+            changed = true;
+          }
+        }
       }
 
-      for (const pkgName of TAILWIND_V4_ONLY_PACKAGES) {
-        if (deps[pkgName]) {
-          delete deps[pkgName];
-          delete devDependencies[pkgName];
+      for (const [pkgName, version] of Object.entries(PINNED_TOOLCHAIN_VERSIONS)) {
+        if (pkg.dependencies && pkg.dependencies[pkgName]) {
+          delete pkg.dependencies[pkgName];
+          changed = true;
+        }
+
+        if (devDependencies[pkgName] !== version) {
+          devDependencies[pkgName] = version;
           changed = true;
         }
       }
+
+      pkg.devDependencies = devDependencies;
     }
-
-    for (const [pkgName, version] of Object.entries(PINNED_TOOLCHAIN_VERSIONS)) {
-      if (pkg.dependencies && pkg.dependencies[pkgName]) {
-        delete pkg.dependencies[pkgName];
-        changed = true;
-      }
-
-      if (devDependencies[pkgName] !== version) {
-        devDependencies[pkgName] = version;
-        changed = true;
-      }
-    }
-
-    pkg.devDependencies = devDependencies;
 
     return {
       sanitized: changed ? JSON.stringify(pkg, null, 2) : packageJsonStr,

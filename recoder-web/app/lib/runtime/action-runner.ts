@@ -83,6 +83,37 @@ let globalNpmInstallComplete = false; // ✅ NEW: Track if install has completed
 let globalStaticServerStarted = false; // 🌐 Track if static file server was started
 let globalActionsInProgress = 0; // 🔒 Track number of actions currently executing
 
+interface MissingFileStrReplaceDecision {
+  allowAutoCreate: boolean;
+  reason?: string;
+}
+
+export function evaluateMissingFileStrReplace(
+  filePath: string,
+  oldString: string,
+  newString: string,
+): MissingFileStrReplaceDecision {
+  if (oldString.trim().length > 0) {
+    return {
+      allowAutoCreate: false,
+      reason: 'str_replace requires an existing file when oldString is provided',
+    };
+  }
+
+  if (filePath === 'package.json' || filePath.endsWith('/package.json')) {
+    try {
+      JSON.parse(newString);
+    } catch {
+      return {
+        allowAutoCreate: false,
+        reason: 'package.json auto-create requires complete valid JSON',
+      };
+    }
+  }
+
+  return { allowAutoCreate: true };
+}
+
 /**
  * Get the number of actions currently in progress (used by streaming timeout)
  */
@@ -3449,8 +3480,17 @@ export class ActionRunner {
         await new Promise(r => setTimeout(r, 200));
       }
 
-      // If file doesn't exist, auto-create it with the newString content as a fallback
+      // If file doesn't exist, only auto-create when the replacement is a full-file payload.
       if (!fileExists) {
+        const decision = evaluateMissingFileStrReplace(action.filePath, action.oldString, action.newString);
+
+        if (!decision.allowAutoCreate) {
+          const reason = decision.reason || 'str_replace cannot create this file safely';
+          const message = `File "${action.filePath}" does not exist. ${reason}. Use a file action or write the complete file contents first.`;
+          logger.warn(message);
+          throw new Error(message);
+        }
+
         logger.warn(`str_replace target file "${action.filePath}" does not exist, auto-creating with newString content`);
 
         // Create parent directories
