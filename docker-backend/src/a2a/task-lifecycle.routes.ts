@@ -22,7 +22,9 @@ import {
   A2AErrorCodeEnum,
   buildA2AError,
   type A2AError,
+  type TaskEnvelope,
 } from '@recoder/shared/a2a';
+import { getAgentBridgeService } from './agent-bridge.service';
 import {
   getTaskLifecycleService,
   type CreateTaskInput,
@@ -61,6 +63,85 @@ function sendSuccess<T>(res: Response, data: T, statusCode = 200): void {
 function sendError(res: Response, httpStatus: number, error: A2AError): void {
   const response: A2AErrorResponse = { success: false, error };
   res.status(httpStatus).json(response);
+}
+
+function extractBridgePrompt(payload: unknown): string {
+  if (typeof payload === 'string') {
+    return payload;
+  }
+
+  if (Array.isArray(payload)) {
+    for (const part of payload) {
+      const prompt = extractBridgePrompt(part);
+      if (prompt) return prompt;
+    }
+    return '';
+  }
+
+  if (!payload || typeof payload !== 'object') {
+    return '';
+  }
+
+  const record = payload as Record<string, unknown>;
+  if (record.kind === 'text' && typeof record.text === 'string') {
+    return record.text;
+  }
+  if (typeof record.task === 'string') {
+    return record.task;
+  }
+  if (typeof record.prompt === 'string') {
+    return record.prompt;
+  }
+  if (typeof record.content === 'string') {
+    return record.content;
+  }
+
+  return '';
+}
+
+function extractBridgeIntent(payload: unknown): string | undefined {
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+    return undefined;
+  }
+
+  const intent = (payload as Record<string, unknown>).intent;
+  return typeof intent === 'string' && intent.trim() ? intent : undefined;
+}
+
+function dispatchTaskToBridgeIfOnline(task: TaskEnvelope): void {
+  const assigneeId = task.assignee?.agent_id;
+  if (!assigneeId) return;
+
+  const bridge = getAgentBridgeService();
+  if (!bridge.isAgentOnline(assigneeId)) {
+    return;
+  }
+
+  const prompt = extractBridgePrompt(task.payload);
+  const intent = extractBridgeIntent(task.payload);
+  const delivered = bridge.sendToAgent(assigneeId, {
+    type: 'task.assigned',
+    taskId: task.id,
+    prompt,
+    ...(intent ? { intent } : {}),
+    context: {
+      source: 'a2a-rest',
+      from: task.requester?.agent_id || 'unknown',
+      workspace_id: task.workspace_id,
+      thread_id: task.thread_id,
+      trace_id: task.trace_id,
+      connector: task.connector,
+      payload: task.payload,
+    },
+  });
+
+  if (delivered) {
+    const connected = bridge.getAgent(assigneeId);
+    if (connected) connected.status = 'working';
+    logger.info({ taskId: task.id, assigneeId }, 'REST-created task dispatched to bridge-connected agent');
+  } else {
+    logger.warn({ taskId: task.id, assigneeId }, 'failed to dispatch REST-created task to bridge-connected agent');
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -102,6 +183,9 @@ taskLifecycleRouter.post(
         sendError(res, result.httpStatus, result.error);
         return;
       }
+
+      // Bridge dispatch is best-effort — task creation should still succeed.
+      try { dispatchTaskToBridgeIfOnline(result.data); } catch {}
 
       sendSuccess(res, result.data, 201);
     } catch (err) {

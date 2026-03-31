@@ -413,11 +413,11 @@ function parseViteErrors(logs: string): ParsedBuildError[] {
   const lines = logs.split('\n');
 
   const matchViteHeader = (line: string): RegExpMatchArray | null =>
-    line.match(/\[vite\]\s*(?:Internal server error|Error):\s*(.+)\s*$/i)
+    line.match(/\[vite\](?:\s*\([^)]*\))?\s*(?:Internal server error|Pre-transform error|Error):\s*(.+)\s*$/i)
     || line.match(/^\[?plugin:vite:[^\]]+\]?\s*(.+)\s*$/i);
 
   const isViteHeaderLine = (line: string): boolean =>
-    /\[vite\]\s*(?:Internal server error|Error):/i.test(line)
+    /\[vite\](?:\s*\([^)]*\))?\s*(?:Internal server error|Pre-transform error|Error):/i.test(line)
     || /^\[?plugin:vite:[^\]]+\]?/i.test(line);
 
   // Vite error blocks start with a header line and may include Plugin/File/stack context.
@@ -433,25 +433,26 @@ function parseViteErrors(logs: string): ParsedBuildError[] {
     for (let j = i + 1; j < lines.length; j++) {
       const detailLine = lines[j];
       const trimmed = detailLine.trim();
+      const normalizedTrimmed = trimmed.replace(/^\[[^\]]+\]\s*/, '').trimStart();
 
       if (!trimmed) break;
       if (isViteHeaderLine(detailLine)) break;
       if (/^X\s*\[ERROR\]/.test(detailLine)) break;
-      if (/^\S/.test(detailLine) && !/^(Plugin:|File:|at\b|\d+\s*\||\^|\/|[A-Za-z0-9_./-]+\.(?:[jt]sx?|css|scss|sass|less|html):)/.test(trimmed)) {
+      if (/^\S/.test(detailLine) && !/^(Plugin:|File:|at\b|\d+\s*\||\^|\/|[A-Za-z0-9_./-]+\.(?:[jt]sx?|css|scss|sass|less|html):)/.test(normalizedTrimmed)) {
         break;
       }
 
       detailLines.push(detailLine);
 
-      const fileMatch = trimmed.match(/^File:\s*(.+?):(\d+):(\d+)$/);
+      const fileMatch = normalizedTrimmed.match(/^File:\s*(.+?):(\d+|undefined):(\d+|null|NaN)$/);
       if (fileMatch) {
         filePath = normalizeFilePath(fileMatch[1]);
-        lineNumber = parseInt(fileMatch[2], 10);
-        columnNumber = parseInt(fileMatch[3], 10);
+        lineNumber = /^\d+$/.test(fileMatch[2]) ? parseInt(fileMatch[2], 10) : undefined;
+        columnNumber = /^\d+$/.test(fileMatch[3]) ? parseInt(fileMatch[3], 10) : undefined;
         continue;
       }
 
-      const rawPathMatch = trimmed.match(/^(.+\.(?:[jt]sx?|css|scss|sass|less|html)):(\d+|undefined):(\d+|null)$/);
+      const rawPathMatch = normalizedTrimmed.match(/^(.+\.(?:[jt]sx?|css|scss|sass|less|html)):(\d+|undefined):(\d+|null|NaN)$/);
       if (rawPathMatch) {
         filePath = normalizeFilePath(rawPathMatch[1]);
         lineNumber = /^\d+$/.test(rawPathMatch[2]) ? parseInt(rawPathMatch[2], 10) : undefined;
@@ -460,7 +461,7 @@ function parseViteErrors(logs: string): ParsedBuildError[] {
       }
 
       if (!filePath) {
-        const stackMatch = trimmed.match(/\(?([^\s():]+\.(?:[jt]sx?|css|scss|sass|less|html)):(\d+):(\d+)\)?/);
+        const stackMatch = normalizedTrimmed.match(/\(?([^\s():]+\.(?:[jt]sx?|css|scss|sass|less|html)):(\d+):(\d+)\)?/);
         if (stackMatch) {
           filePath = normalizeFilePath(stackMatch[1]);
           lineNumber = parseInt(stackMatch[2], 10);
@@ -645,6 +646,14 @@ function parseRuntimeErrors(logs: string): ParsedBuildError[] {
 
     while ((match = pattern.exec(logs)) !== null) {
       const [rawError, message, file, line, col] = match;
+      const contextStart = Math.max(0, match.index - 80);
+      const contextEnd = Math.min(logs.length, match.index + rawError.length + 80);
+      const context = logs.slice(contextStart, contextEnd);
+
+      // Let the Vite parser own Vite/client overlay errors.
+      if (/\[vite\]|\[?plugin:vite:/i.test(context)) {
+        continue;
+      }
 
       // Determine type from error name
       let type: ParsedBuildError['type'] = 'runtime';

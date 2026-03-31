@@ -562,7 +562,7 @@ async function verifySessionToken(token: string): Promise<{ userId: string; sess
 
 // Check if user owns the project
 async function checkProjectOwnership(userId: string, projectId: string): Promise<boolean> {
-  if (!userId || !projectId || !INTERNAL_SERVICE_KEY) {
+  if (!userId || !projectId) {
     return false;
   }
 
@@ -571,6 +571,19 @@ async function checkProjectOwnership(userId: string, projectId: string): Promise
   const cached = ownershipCache.get(cacheKey);
   if (cached && cached.expiresAt > Date.now()) {
     return cached.isOwner;
+  }
+
+  // Fast-path: check local containers map (survives restarts via containers.json)
+  const localEntry = containers.get(projectId);
+  if (localEntry?.userId) {
+    const isOwner = localEntry.userId === userId;
+    ownershipCache.set(cacheKey, { isOwner, expiresAt: Date.now() + OWNERSHIP_CACHE_TTL });
+    return isOwner;
+  }
+
+  // Fallback: remote ownership check (requires INTERNAL_SERVICE_KEY)
+  if (!INTERNAL_SERVICE_KEY) {
+    return false;
   }
 
   try {
