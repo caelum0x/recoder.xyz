@@ -27,7 +27,7 @@ const plans = [
       '6 sessions per day',
       '40+ AI models via BYOK',
       'Web IDE + CLI access',
-      'All 10 platform services',
+      'All platform services',
       'Community support',
     ],
     cta: 'Start Free',
@@ -98,7 +98,7 @@ export default function PlanPage() {
           <h1 className="text-5xl md:text-6xl font-bold mb-6">
             One Platform,{' '}
             <span className="bg-gradient-to-r from-orange-500 to-purple-600 bg-clip-text text-transparent">
-              All Services
+              5 Products
             </span>
           </h1>
           <p className="text-xl text-gray-400 max-w-2xl mx-auto mb-4">
@@ -234,13 +234,13 @@ export default function PlanPage() {
             <div className="p-6 space-y-4">
               <h3 className="text-lg font-semibold text-white">You Already Have Everything!</h3>
               <p className="text-gray-300">
-                During beta, all 10 platform services are free with BYOK (Bring Your Own Key). Paid plans with platform-provided API keys are coming soon.
+                During beta, all platform services are free with BYOK (Bring Your Own Key). Paid plans with platform-provided API keys are coming soon.
               </p>
               <div className="p-4 bg-green-500/10 border border-green-500/20 rounded-xl">
                 <div className="flex items-start space-x-3">
                   <Check className="w-5 h-5 text-green-400 mt-0.5 flex-shrink-0" />
                   <p className="text-sm text-gray-300">
-                    You get full access to every service — Web IDE, CLI, Studio, PM, Agency, and more — completely free during beta.
+                    You get full access to every service — Agents, Web IDE, PM, Agency, and CLI — completely free during beta.
                   </p>
                 </div>
               </div>

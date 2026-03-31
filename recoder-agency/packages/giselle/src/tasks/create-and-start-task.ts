@@ -36,4 +36,5 @@ export async function createAndStartTask(
 		onGenerationComplete: args.callbacks?.generationComplete,
 		onGenerationError: args.callbacks?.generationError,
 	});
+	return { task };
 }

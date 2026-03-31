@@ -2,13 +2,11 @@ import Link from 'next/link';
 
 const FOOTER_LINKS = [
   { href: '/agents', label: 'Agents' },
-  { href: '/pricing', label: 'Pricing' },
-  { href: '/blog', label: 'Blog' },
-  { href: '/enterprise', label: 'Enterprise' },
-  { href: '/alternatives', label: 'Alternatives' },
+  { href: '/plan', label: 'Pricing' },
+  { href: '/platform', label: 'Platform' },
   { href: '/docs', label: 'Docs' },
   { href: '/docs/api-reference', label: 'API Reference' },
-  { href: '/changelog', label: 'Changelog' },
+  { href: '/docs/a2a', label: 'A2A Protocol' },
   { href: '/legal/privacy', label: 'Privacy' },
   { href: '/legal/terms', label: 'Terms' },
   { href: 'https://github.com/recoderxyz', label: 'GitHub', external: true },
