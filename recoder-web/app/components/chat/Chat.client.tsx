@@ -291,7 +291,10 @@ export const ChatImpl = memo(({ chatId, projectId, projectName, projectFramework
   // 🔧 FIX: Track if onFinish already triggered a save to prevent double saves
   const onFinishSavedRef = useRef<boolean>(false);
 
-  // Code context for AI awareness
+  // Code context for AI awareness.
+  // Stored in a ref so it's always current at fetch time (avoids React batch-update
+  // race where setCodeContext schedules a re-render but the fetch fires first).
+  const codeContextRef = useRef<string>('');
   const [codeContext, setCodeContext] = useState<string>('');
 
   // Edit intent analyzer - analyzes user input to predict affected files
@@ -320,6 +323,7 @@ export const ChatImpl = memo(({ chatId, projectId, projectName, projectFramework
       // Priority 1: focused context from edit intent (already cached via shared cache)
       if (focusedContext && editIntent && intentRequiresCodeChanges(editIntent)) {
         logger.debug('Using focused context from edit intent analyzer');
+        codeContextRef.current = focusedContext;
         setCodeContext(focusedContext);
         return focusedContext;
       }
@@ -329,7 +333,8 @@ export const ChatImpl = memo(({ chatId, projectId, projectName, projectFramework
       if (context) {
         const { generateContextPrompt } = await import('~/lib/services/code-context');
         const xml = generateContextPrompt(context, userMessage, 4000);
-        setCodeContext(xml);
+        codeContextRef.current = xml;  // sync — available immediately at fetch time
+        setCodeContext(xml);           // async — for any downstream state consumers
         return xml;
       }
     } catch (error) {
@@ -363,8 +368,11 @@ export const ChatImpl = memo(({ chatId, projectId, projectName, projectFramework
       customTools, // Pass custom tools to server
       mcpTools, // Pass MCP tools to server
       projectId: projectIdForDocker, // Project ID for context loading
-      codeContext, // Pre-loaded code context
+      codeContext, // Pre-loaded code context (stale-safe fallback via getBody below)
     },
+    // getBody is called at fetch time — always uses the latest codeContextRef value,
+    // bypassing the React state batch-update race condition in sendMessage.
+    getBody: () => ({ codeContext: codeContextRef.current }),
     onError: (error) => {
       logger.error('Request failed\n\n', error);
       logger.error('❌ Chat API error:', error);
