@@ -32,7 +32,7 @@ import {
 import { getSessionAccessToken, requireSessionAccessToken } from '@/lib/auth/session-token';
 import { useDownloadRestriction } from '@/hooks/billing';
 import { cn } from '@/lib/utils';
-import { buildSandboxFileUrl, fetchSandboxFile } from '@/lib/utils/url';
+import { appendUrlSearchParam, buildSandboxFileUrl, fetchSandboxFile } from '@/lib/utils/url';
 import { useRecoderComputerStore } from '@/stores/recoder-computer-store';
 import { PresentationViewer } from '../tool-views/presentation-tools/PresentationViewer';
 import { FullScreenPresentationViewer } from '../tool-views/presentation-tools/FullScreenPresentationViewer';
@@ -331,7 +331,7 @@ export function FileViewerView({
       }
 
       try {
-        const response = await fetchSandboxFile(`${metadataUrl}?t=${Date.now()}`, {
+        const response = await fetchSandboxFile(appendUrlSearchParam(metadataUrl, 't', Date.now()), {
           method: 'GET',
           cache: 'no-cache',
         });

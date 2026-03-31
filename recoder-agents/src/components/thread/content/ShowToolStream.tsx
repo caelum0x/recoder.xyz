@@ -4,7 +4,7 @@ import { getToolIcon, getUserFriendlyToolName, extractPrimaryParam } from '@/com
 import { AppIcon } from '../tool-views/shared/AppIcon';
 import { useSmoothToolField } from '@/hooks/messages';
 import { ToolCard } from './ToolCard';
-import { buildSandboxFileUrl, constructHtmlPreviewUrl, fetchSandboxFile } from '@/lib/utils/url';
+import { appendUrlSearchParam, buildSandboxFileUrl, constructHtmlPreviewUrl, fetchSandboxFile } from '@/lib/utils/url';
 import type { Project } from '@/lib/api/threads';
 import { useQueryClient } from '@tanstack/react-query';
 import { threadKeys } from '@/hooks/threads/keys';
@@ -242,7 +242,7 @@ const SlideStreamPreview: React.FC<{
                     return;
                 }
 
-                const response = await fetchSandboxFile(`${metadataUrl}?t=${Date.now()}`, {
+                const response = await fetchSandboxFile(appendUrlSearchParam(metadataUrl, 't', Date.now()), {
                     cache: 'no-cache',
                 });
 
