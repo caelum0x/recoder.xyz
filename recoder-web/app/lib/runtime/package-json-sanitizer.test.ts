@@ -52,4 +52,20 @@ describe('package-json-sanitizer', () => {
     expect(parsed.devDependencies.autoprefixer).toBe('^10.4.21');
     expect(parsed.devDependencies['@types/react-router-dom']).toBeUndefined();
   });
+
+  it('adds react-is when recharts is present without its runtime peer', () => {
+    const input = JSON.stringify({
+      dependencies: {
+        react: '^19.1.0',
+        recharts: 'latest',
+      },
+    });
+
+    const { sanitized, changed } = normalizeTailwindToolchainPackageJson(input);
+    const parsed = JSON.parse(sanitized);
+
+    expect(changed).toBe(true);
+    expect(parsed.dependencies.recharts).toBe('latest');
+    expect(parsed.dependencies['react-is']).toBe('^19.1.0');
+  });
 });
