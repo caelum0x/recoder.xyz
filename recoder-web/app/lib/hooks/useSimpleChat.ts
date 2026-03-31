@@ -151,6 +151,8 @@ export interface Message {
 interface UseChatOptions {
   api: string;
   body?: Record<string, unknown>;
+  /** Called at fetch time to get always-fresh body fields (e.g. codeContext ref). Merged after body. */
+  getBody?: () => Record<string, unknown>;
   onError?: (error: Error) => void;
   onFinish?: (message: Message) => void;
   onResponse?: (response: Response) => void;
@@ -378,6 +380,7 @@ export function useSimpleChat(options: UseChatOptions) {
   const {
     api,
     body: extraBody,
+    getBody,
     onError,
     onFinish,
     onResponse,
@@ -402,8 +405,12 @@ export function useSimpleChat(options: UseChatOptions) {
 
   // Always-fresh ref for extraBody so callbacks read the latest model/provider
   // even when called from stale closures (e.g. auto-fix deferred sends).
+  // Supports both static object and function form — function is called at fetch
+  // time so callers can provide always-current values (e.g. codeContext ref).
   const extraBodyRef = useRef(extraBody);
   extraBodyRef.current = extraBody;
+  const getBodyRef = useRef(getBody);
+  getBodyRef.current = getBody;
 
   const [messages, setMessages] = useState<Message[]>(initialMessages);
   const [isLoading, setIsLoading] = useState(false);
@@ -722,7 +729,7 @@ export function useSimpleChat(options: UseChatOptions) {
         const response = await fetch(api, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ messages: allMessages, ...extraBodyRef.current }),
+          body: JSON.stringify({ messages: allMessages, ...extraBodyRef.current, ...(getBodyRef.current?.() ?? {}) }),
           signal: abortControllerRef.current.signal,
         });
 
