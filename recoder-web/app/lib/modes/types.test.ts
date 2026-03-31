@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   getWebToolCapabilityPrompt,
   getWebToolProviderCapability,
+  getToolsForMode,
   resolveWebToolProvider,
   resolveWebToolProviderFromRuntime,
 } from './types';
@@ -32,5 +33,18 @@ describe('web tool provider capability matrix', () => {
     expect(prompt).toContain('ACTIVE_WEB_TOOL_PROVIDER: openai');
     expect(prompt).toContain('web_crawl is NOT supported');
     expect(prompt).toContain('providerHint="openai"');
+  });
+
+  it('exposes canonical runtime tool names to the model', () => {
+    const codeTools = getToolsForMode('code');
+
+    expect(codeTools).toContain('file');
+    expect(codeTools).toContain('shell');
+    expect(codeTools).toContain('str_replace');
+    expect(codeTools).toContain('edit_file');
+    expect(codeTools).toContain('web_search');
+    expect(codeTools).not.toContain('createFile');
+    expect(codeTools).not.toContain('runShellCommand');
+    expect(codeTools).not.toContain('webSearch');
   });
 });

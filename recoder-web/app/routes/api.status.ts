@@ -9,18 +9,19 @@ export async function loader() {
     status: 'operational',
     
     tools: {
-      total: 18,
+      total: 23,
       categories: {
-        fileOperations: 8,
-        searchDiscovery: 4, 
-        advancedAI: 3,
+        fileOperations: 10,
+        searchDiscovery: 6,
+        advancedAI: 4,
         projectManagement: 3
       },
       list: [
-        'readFile', 'readManyFiles', 'listFiles', 'createFile', 'createFiles',
-        'strReplace', 'editFile', 'glob', 'searchFiles', 'ripGrep', 
-        'webSearch', 'webFetch', 'delegateSubagent', 'memory',
-        'importStarterTemplate', 'cloneGitHubRepo', 'runShellCommand'
+        'file', 'shell', 'importStarter', 'cloneGitHub', 'cloneUrl',
+        'readFile', 'listFiles', 'searchFiles', 'str_replace', 'delegate_subagent',
+        'ripgrep_search', 'edit_file', 'read_many_files', 'web_search', 'web_fetch',
+        'web_crawl', 'github_documents', 'copy_project', 'memory_operation',
+        'glob_search', 'multi_apply_diff', 'spawn_task', 'switch_mode'
       ]
     },
     
