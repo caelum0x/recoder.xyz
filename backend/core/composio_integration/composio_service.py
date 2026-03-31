@@ -29,7 +29,7 @@ class ComposioIntegrationService:
         self.auth_config_service = AuthConfigService(api_key)
         self.connected_account_service = ConnectedAccountService(api_key)
         self.mcp_server_service = MCPServerService(api_key)
-        self.profile_service = ComposioProfileService() if db_connection is not None else None
+        self.profile_service = ComposioProfileService()
     
     async def integrate_toolkit(
         self, 

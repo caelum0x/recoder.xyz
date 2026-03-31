@@ -1,6 +1,6 @@
 # Recoder Platform — Error Registry
 
-Last updated: 2026-03-31 (post live Nike presentation fix)
+Last updated: 2026-03-31 (post live Nike presentation fix + browser verification)
 
 ---
 
@@ -11,6 +11,7 @@ Last updated: 2026-03-31 (post live Nike presentation fix)
 This top block supersedes conflicting notes below.
 
 - The Nike presentation issue on `agents.recoder.xyz` is fixed live.
+- Browser verification is complete: the Nike slides render in the actual agents UI.
 - The old state where `recoder-agents` was stopped or the fix was undeployed is stale.
 - Two root causes were involved:
   1. frontend presentation viewers were corrupting same-origin proxy URLs by appending cache-busting as a second `?`
@@ -22,11 +23,11 @@ This top block supersedes conflicting notes below.
 - The real remaining priorities are broader browser verification and infra hardening, not the old Nike blank-presentation root cause.
 
 ## Current Priority Order (2026-03-31, post-`77cd90bb`)
-1. Browser-verify the fixed Nike presentation flow after a hard refresh.
-2. Browser-verify Web IDE preview + publish on the latest deployed build.
-3. Prevent Hetzner backend DB credential drift (`recoder-6ko`).
-4. Restore git-based deployability on the Hetzner app checkout (`recoder-o66`).
-5. Re-enable deployed `STRICT_AUTH=true` only after browser verification stays green.
+1. Browser-verify Web IDE preview + publish on the latest deployed build.
+2. Prevent Hetzner backend DB credential drift (`recoder-6ko`).
+3. Restore git-based deployability on the Hetzner app checkout (`recoder-o66`).
+4. Re-enable deployed `STRICT_AUTH=true` only after broader browser verification stays green.
+5. Continue broader agents IDE/browser verification beyond the Nike presentation path.
 
 ### Status Correction
 - The previous "remaining priorities" list for create/delete loop, CodeMirror re-crash, sandbox auto-stop, and strict-auth hardening is now stale at the code level.

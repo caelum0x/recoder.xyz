@@ -2,7 +2,7 @@
   "cookies": [
     {
       "name": "recoder.session_token",
-      "value": "PX4bZ6f83yuBNUoBiO4WFdnJKKgfsy5m",
+      "value": "zFDqWKb9t6b73TCvPs83I5OPFwVbTu1J",
       "domain": ".recoder.xyz",
       "path": "/",
       "expires": -1,
@@ -12,7 +12,7 @@
     },
     {
       "name": "__Secure-recoder.session_token",
-      "value": "PX4bZ6f83yuBNUoBiO4WFdnJKKgfsy5m",
+      "value": "zFDqWKb9t6b73TCvPs83I5OPFwVbTu1J",
       "domain": ".recoder.xyz",
       "path": "/",
       "expires": -1,
