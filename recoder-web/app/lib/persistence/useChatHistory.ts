@@ -14,7 +14,7 @@ import { resetGlobalActionState, markNpmInstallComplete } from '~/lib/runtime/ac
 import { normalizeTailwindToolchainPackageJson } from '~/lib/runtime/package-json-sanitizer';
 import { fetchProjectErrors } from '~/lib/hooks/useErrors';
 import { formatErrorsForAI } from '~/lib/services/auto-fix';
-import { resolveSandboxProjectId } from '~/lib/services/sandbox-project-id';
+import { isLikelySandboxProjectId, resolveSandboxProjectId } from '~/lib/services/sandbox-project-id';
 import { canAutoFix, setAutoFixing } from '~/lib/stores/errors';
 import { dockerPost, dockerGet, DOCKER_URL } from '~/lib/services/docker-api';
 import * as chatSessions from '~/lib/stores/chat-sessions';
@@ -36,6 +36,11 @@ let globalNpmInstallPromise: Promise<void> | null = null;
  * Called after dev server starts to catch errors early
  */
 async function checkAndAutoFixErrors(projectId: string): Promise<void> {
+  if (!isLikelySandboxProjectId(projectId)) {
+    logger.warn('⚠️ [AutoFix] Skipping error check for invalid projectId:', projectId);
+    return;
+  }
+
   // Wait a bit for dev server to fully initialize and show errors
   await new Promise(resolve => setTimeout(resolve, 3000));
 
@@ -643,6 +648,11 @@ async function markContainerReady(projectId: string) {
 }
 
 async function startDevServerOnly(projectId: string): Promise<boolean> {
+  if (!isLikelySandboxProjectId(projectId)) {
+    logger.warn('⚠️ [startDevServerOnly] Invalid projectId:', projectId);
+    return false;
+  }
+
   try {
     const state = await checkWorkspaceHasFiles(projectId);
     if (state.devServerRunning) {
@@ -710,6 +720,11 @@ async function startDevServerOnly(projectId: string): Promise<boolean> {
  * 🚀 OPTIMIZED: Uses bun for faster installs (no peer dep issues)
  */
 async function runNpmInstallWithCoordination(projectId: string): Promise<boolean> {
+  if (!isLikelySandboxProjectId(projectId)) {
+    logger.warn('⚠️ [runInstallWithCoordination] Invalid projectId:', projectId);
+    return false;
+  }
+
   // If already running, wait for it to complete
   if (globalNpmInstallRunning && globalNpmInstallPromise) {
     logger.info('⏳ [runInstallWithCoordination] bun install already running, waiting...');
@@ -1029,12 +1044,14 @@ export function useChatHistory() {
   const [initialMessages, setInitialMessages] = useState<Message[]>([]);
   const [ready, setReady] = useState<boolean>(false);
   const [urlId, setUrlId] = useState<string | undefined>();
-  const [currentProjectId, setCurrentProjectId] = useState<string | undefined>(projectId);
+  const [currentProjectId, setCurrentProjectId] = useState<string | undefined>(
+    isLikelySandboxProjectId(projectId) ? projectId : undefined
+  );
   const workbenchProjectId = useStore(workbenchStore.projectId);
   const previousPathRef = useRef<string>(location.pathname);
 
   useEffect(() => {
-    if (projectId) {
+    if (isLikelySandboxProjectId(projectId)) {
       setCurrentProjectId(projectId);
     }
   }, [projectId]);
@@ -1405,6 +1422,9 @@ export function useChatHistory() {
 
       // Don't modify the messages - save them as-is
       const enhancedMessages = messages;
+      const persistedProjectId = isLikelySandboxProjectId(currentProjectId)
+        ? currentProjectId
+        : undefined;
 
       // Try database first with file snapshot
       // Always mark chats from recoder-web as 'web' source
@@ -1415,7 +1435,7 @@ export function useChatHistory() {
         finalDescription,
         firstArtifact?.id,
         fileSnapshot,
-        currentProjectId,
+        persistedProjectId,
         'web', // Mark as web source
         user // Pass authenticated user from context
       );
@@ -1430,7 +1450,7 @@ export function useChatHistory() {
         const sessionMetadata: ChatSessionMetadata = {
           id: finalChatId,
           urlId: finalUrlId,
-          projectId: currentProjectId,
+          projectId: persistedProjectId,
           title: finalDescription || 'Untitled Chat',
           description: finalDescription,
           messageCount: messages.length,
