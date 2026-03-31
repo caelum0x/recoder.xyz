@@ -14,7 +14,7 @@ import { ToolCard } from '@/components/thread/content/ToolCard';
 import { ApifyApprovalInline } from '@/components/thread/content/ApifyApprovalInline';
 import type { ApifyApproval } from '@/hooks/apify/use-apify-approvals';
 import { MediaGenerationInline } from '@/components/thread/content/MediaGenerationInline';
-import { buildSandboxFileUrl, constructHtmlPreviewUrl, fetchSandboxFile } from '@/lib/utils/url';
+import { appendUrlSearchParam, buildSandboxFileUrl, constructHtmlPreviewUrl, fetchSandboxFile } from '@/lib/utils/url';
 import { InlineCheckout, extractInlineCheckout } from '@/components/thread/content/InlineCheckout';
 import { UpgradeButtonCTA, extractUpgradeButton } from '@/components/thread/content/UpgradeButtonCTA';
 
@@ -335,7 +335,7 @@ function SlideInlineThumbnail({
           return;
         }
 
-        const response = await fetchSandboxFile(`${metadataUrl}?t=${Date.now()}`, {
+        const response = await fetchSandboxFile(appendUrlSearchParam(metadataUrl, 't', Date.now()), {
           cache: 'no-cache',
         });
 

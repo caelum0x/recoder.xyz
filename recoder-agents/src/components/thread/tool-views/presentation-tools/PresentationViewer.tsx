@@ -31,7 +31,7 @@ import { RecoderLoader } from '@/components/ui/recoder-loader';
 import { ToolViewProps } from '../types';
 import { formatTimestamp, getToolTitle } from '../utils';
 import { downloadPresentation, handleGoogleSlidesUpload } from '../utils/presentation-utils';
-import { buildSandboxFileUrl, fetchSandboxFile } from '@/lib/utils/url';
+import { appendUrlSearchParam, buildSandboxFileUrl, fetchSandboxFile } from '@/lib/utils/url';
 import { CodeBlockCode } from '@/components/ui/code-block';
 import { FullScreenPresentationViewer } from './FullScreenPresentationViewer';
 import { DownloadFormat } from '../utils/presentation-utils';
@@ -310,7 +310,7 @@ export function PresentationViewer({
       );
       
       // Add cache-busting parameter to ensure fresh data
-      const urlWithCacheBust = `${metadataUrl}?t=${Date.now()}`;
+      const urlWithCacheBust = appendUrlSearchParam(metadataUrl, 't', Date.now());
       
       const response = await fetchSandboxFile(urlWithCacheBust, {
         cache: 'no-cache',
@@ -509,7 +509,7 @@ export function PresentationViewer({
         );
         
         try {
-          const response = await fetchSandboxFile(`${metadataUrl}?t=${Date.now()}`, {
+          const response = await fetchSandboxFile(appendUrlSearchParam(metadataUrl, 't', Date.now()), {
             cache: 'no-cache',
             headers: { 'Cache-Control': 'no-cache' },
           });

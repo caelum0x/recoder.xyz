@@ -59,6 +59,33 @@ export function buildSandboxFileUrl(
 }
 
 /**
+ * Append or replace a search parameter on either absolute URLs or same-origin
+ * relative URLs without corrupting existing encoded query params.
+ */
+export function appendUrlSearchParam(
+  url: string | undefined,
+  key: string,
+  value: string | number,
+): string | undefined {
+  if (!url) return undefined;
+
+  try {
+    const isAbsolute = /^[a-zA-Z][a-zA-Z\d+\-.]*:/.test(url);
+    const parsed = new URL(url, isAbsolute ? undefined : 'https://placeholder.invalid');
+    parsed.searchParams.set(key, String(value));
+
+    if (isAbsolute) {
+      return parsed.toString();
+    }
+
+    return `${parsed.pathname}${parsed.search}${parsed.hash}`;
+  } catch {
+    const separator = url.includes('?') ? '&' : '?';
+    return `${url}${separator}${encodeURIComponent(key)}=${encodeURIComponent(String(value))}`;
+  }
+}
+
+/**
  * Build auth headers for sandbox file requests.
  * Returns headers object with Bearer token if available.
  */

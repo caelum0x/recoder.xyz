@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Maximize2, Presentation } from 'lucide-react';
-import { buildSandboxFileUrl, constructHtmlPreviewUrl, fetchSandboxHtmlAsBlobUrl } from '@/lib/utils/url';
+import { appendUrlSearchParam, buildSandboxFileUrl, constructHtmlPreviewUrl, fetchSandboxHtmlAsBlobUrl } from '@/lib/utils/url';
 import { Project } from '@/lib/api/threads';
 
 interface SlideMetadata {
@@ -38,13 +38,13 @@ export function PresentationSlideCard({
   const slideApiUrl = useMemo(() => {
     if (!project?.sandbox?.id) return null;
     const url = buildSandboxFileUrl(project?.sandbox?.id, slide.file_path);
-    return refreshTimestamp ? `${url}?t=${refreshTimestamp}` : url;
+    return refreshTimestamp ? appendUrlSearchParam(url, 't', refreshTimestamp) : url;
   }, [project?.sandbox?.id, slide.file_path, refreshTimestamp]);
 
   const directSlideUrl = useMemo(() => {
     const url = constructHtmlPreviewUrl(project?.sandbox?.sandbox_url, slide.file_path);
     if (!url) return null;
-    return refreshTimestamp ? `${url}?t=${refreshTimestamp}` : url;
+    return refreshTimestamp ? appendUrlSearchParam(url, 't', refreshTimestamp) : url;
   }, [project?.sandbox?.sandbox_url, slide.file_path, refreshTimestamp]);
 
   // Fetch slide HTML with auth and create blob URL for iframe

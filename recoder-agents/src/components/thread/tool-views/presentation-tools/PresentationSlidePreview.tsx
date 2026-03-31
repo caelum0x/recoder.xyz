@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { PresentationSlideCard } from './PresentationSlideCard';
-import { buildSandboxFileUrl, fetchSandboxFile } from '@/lib/utils/url';
+import { appendUrlSearchParam, buildSandboxFileUrl, fetchSandboxFile } from '@/lib/utils/url';
 import { Project } from '@/lib/api/threads';
 import { RefreshCw, Presentation } from 'lucide-react';
 import { RecoderLoader } from '@/components/ui/recoder-loader';
@@ -68,7 +68,7 @@ export function PresentationSlidePreview({
         `presentations/${sanitizedName}/metadata.json`
       );
 
-      const urlWithCacheBust = `${metadataUrl}?t=${Date.now()}`;
+      const urlWithCacheBust = appendUrlSearchParam(metadataUrl, 't', Date.now());
 
 
       const response = await fetchSandboxFile(urlWithCacheBust, {
@@ -182,4 +182,3 @@ export function PresentationSlidePreview({
     />
   );
 }
-
