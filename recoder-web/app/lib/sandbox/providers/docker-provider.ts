@@ -22,6 +22,7 @@ import {
   type SandboxFile,
   type SandboxProviderConfig,
 } from '../types';
+import { getSessionToken } from '~/lib/services/docker-api';
 import { createScopedLogger } from '~/utils/logger';
 
 const logger = createScopedLogger('DockerProvider');
@@ -46,10 +47,23 @@ export class DockerProvider extends SandboxProvider {
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
     };
-    if (this.authToken) {
-      headers['Authorization'] = `Bearer ${this.authToken}`;
+    const token = this.authToken || getSessionToken();
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
     }
     return headers;
+  }
+
+  private async request(path: string, init: RequestInit = {}): Promise<Response> {
+    const headers = new Headers(this.getHeaders());
+    const initHeaders = new Headers(init.headers || {});
+    initHeaders.forEach((value, key) => headers.set(key, value));
+
+    return fetch(`${this.apiEndpoint}${path}`, {
+      ...init,
+      headers,
+      credentials: 'include',
+    });
   }
 
   /**
@@ -75,9 +89,7 @@ export class DockerProvider extends SandboxProvider {
   async createSandbox(): Promise<SandboxInfo> {
     try {
       // Verify connection to Docker backend
-      const healthResponse = await fetch(`${this.apiEndpoint}/health`, {
-        headers: this.getHeaders(),
-      });
+      const healthResponse = await this.request('/health');
 
       if (!healthResponse.ok) {
         throw new Error('Docker backend not available');
@@ -85,9 +97,8 @@ export class DockerProvider extends SandboxProvider {
 
       // If we have a project ID, try to create/connect to that container
       if (this.projectId) {
-        const response = await fetch(`${this.apiEndpoint}/api/container`, {
+        const response = await this.request('/api/container', {
           method: 'POST',
-          headers: this.getHeaders(),
           body: JSON.stringify({
             projectId: this.projectId,
           }),
@@ -122,9 +133,8 @@ export class DockerProvider extends SandboxProvider {
     const projectId = this.getProjectId();
 
     try {
-      const response = await fetch(`${this.apiEndpoint}/api/exec/${projectId}`, {
+      const response = await this.request(`/api/exec/${projectId}`, {
         method: 'POST',
-        headers: this.getHeaders(),
         body: JSON.stringify({ command }),
       });
 
@@ -479,9 +489,8 @@ body {
     const projectId = this.getProjectId();
 
     try {
-      const response = await fetch(`${this.apiEndpoint}/api/dev-server/start`, {
+      const response = await this.request('/api/dev-server/start', {
         method: 'POST',
-        headers: this.getHeaders(),
         body: JSON.stringify({ projectId }),
       });
 
@@ -506,9 +515,8 @@ body {
     const projectId = this.getProjectId();
 
     try {
-      await fetch(`${this.apiEndpoint}/api/dev-server/stop`, {
+      await this.request('/api/dev-server/stop', {
         method: 'POST',
-        headers: this.getHeaders(),
         body: JSON.stringify({ projectId }),
       });
     } catch {
@@ -526,9 +534,8 @@ body {
 
     // Try using the backend's restart endpoint
     try {
-      const response = await fetch(`${this.apiEndpoint}/api/dev-server/restart`, {
+      const response = await this.request('/api/dev-server/restart', {
         method: 'POST',
-        headers: this.getHeaders(),
         body: JSON.stringify({ projectId }),
       });
 
@@ -556,9 +563,7 @@ body {
     const projectId = this.getProjectId();
 
     try {
-      const response = await fetch(`${this.apiEndpoint}/api/dev-server/status/${projectId}`, {
-        headers: this.getHeaders(),
-      });
+      const response = await this.request(`/api/dev-server/status/${projectId}`);
 
       if (response.ok) {
         return await response.json();
