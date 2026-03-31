@@ -1525,6 +1525,12 @@ const PUBLIC_DOCKER_BACKEND_URL =
   process.env.BACKEND_PUBLIC_URL ||
   'https://docker.recoder.xyz';
 
+const PUBLIC_WEB_PREVIEW_URL =
+  process.env.PUBLIC_URL ||
+  process.env.RECODER_WEB_URL ||
+  process.env.MAIN_SITE_URL ||
+  'https://web.recoder.xyz';
+
 const PUBLIC_DOCKER_BACKEND_WS_URL = PUBLIC_DOCKER_BACKEND_URL
   .replace('https://', 'wss://')
   .replace('http://', 'ws://');
@@ -9564,8 +9570,8 @@ app.post('/api/tunnel/start', authenticateRequest, async (req: AuthenticatedRequ
   try {
     // Get the local URL to tunnel
     // The preview URL proxies to the container's dev server
-    const BACKEND_URL = PUBLIC_DOCKER_BACKEND_URL;
-    const localUrl = `${BACKEND_URL}/preview/${projectId}`;
+    const previewBaseUrl = PUBLIC_WEB_PREVIEW_URL.replace(/\/+$/, '');
+    const localUrl = `${previewBaseUrl}/preview/${projectId}`;
 
     // Mark as starting
     activeTunnels.set(projectId, {
@@ -17366,7 +17372,7 @@ server.listen(PORT, async () => {
   startupInfo('server', 'docker backend running', {
     port: PORT,
     image: IMAGE_NAME,
-    previewUrlPattern: `${PUBLIC_DOCKER_BACKEND_URL}/preview/{projectId}`,
+    previewUrlPattern: `${PUBLIC_WEB_PREVIEW_URL.replace(/\/+$/, '')}/preview/{projectId}`,
     collaborationUrlPattern: `${PUBLIC_DOCKER_BACKEND_WS_URL}/collab?projectId=XXX&file=YYY`,
     lspStartEndpoint: '/api/lsp/:projectId/start',
   });
