@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { promises as fs } from "node:fs";
 import { dirname, join, resolve, relative } from "node:path";
 import type * as z from "zod/v4";
@@ -68,7 +69,11 @@ export function fsStorageDriver(config: FsStorageDriverConfig): GiselleStorage {
 			const data = params.schema
 				? params.schema.parse(params.data)
 				: params.data;
-			await fs.writeFile(fullPath, JSON.stringify(data), "utf8");
+			// Atomic write: write to temp file in same directory, then rename.
+			// rename() is atomic on POSIX when src and dest are on the same filesystem.
+			const tmpPath = `${fullPath}.${randomUUID()}.tmp`;
+			await fs.writeFile(tmpPath, JSON.stringify(data), "utf8");
+			await fs.rename(tmpPath, fullPath);
 		},
 
 		async getBlob(
@@ -118,7 +123,10 @@ export function fsStorageDriver(config: FsStorageDriverConfig): GiselleStorage {
 			const fullPath = assertSafePath(config.root, path);
 			await ensureDir(fullPath);
 			const uint8Array = new Uint8Array(data);
-			await fs.writeFile(fullPath, uint8Array);
+			// Atomic write: write to temp file, then rename.
+			const tmpPath = `${fullPath}.${randomUUID()}.tmp`;
+			await fs.writeFile(tmpPath, uint8Array);
+			await fs.rename(tmpPath, fullPath);
 		},
 
 		async copy(source: string, destination: string): Promise<void> {

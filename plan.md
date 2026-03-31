@@ -1,6 +1,6 @@
 # Recoder Platform — Master Plan
 
-Last updated: 2026-03-31 (live Nike presentation fix + Hetzner backend DB realignment)
+Last updated: 2026-03-31 (live Nike presentation fix verified in browser + Hetzner backend DB realignment)
 
 ---
 
@@ -9,6 +9,7 @@ Last updated: 2026-03-31 (live Nike presentation fix + Hetzner backend DB realig
 This section supersedes conflicting notes below.
 
 - The Nike presentation blank-state issue on `agents.recoder.xyz` is fixed live.
+- Browser verification is now complete as well: the Nike slide deck renders in the real UI.
 - `recoder-agents` is deployed and online in PM2.
 - The live failure had two separate root causes:
   1. presentation viewers were corrupting same-origin proxy URLs by appending cache-busting as a second `?`, which broke the encoded `path` query param and caused `metadata.json` 404s
@@ -21,6 +22,7 @@ This section supersedes conflicting notes below.
   - Nike `metadata.json` proxy via `agents.recoder.xyz/api/files/content?...&t=...` returns `200`
   - Nike `slide_01.html` proxy via `agents.recoder.xyz/api/files/content?...&t=...` returns `200`
   - Nike image proxy via `agents.recoder.xyz/api/files/content?...&t=...` returns `200`
+  - the Nike presentation renders in `agents.recoder.xyz` itself, not just via direct file URLs
 - Follow-up infra work:
   1. `recoder-6ko` — prevent Hetzner backend DB credential drift
   2. `recoder-o66` — restore git-based deployability on the Hetzner app checkout

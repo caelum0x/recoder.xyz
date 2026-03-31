@@ -694,6 +694,17 @@ export function useAutoErrorFix(options: UseAutoErrorFixOptions = {}) {
     resetWsBackoff();
   }, [projectId, resetWsBackoff]);
 
+  // ---- Clear hash when cooldown expires ----
+  // After a failed fix, lastErrorHashRef prevents polling from re-detecting
+  // the same errors. When the cooldown timer fires and resets cooldownUntil
+  // to 0, we clear the hash so the next poll can re-detect errors and
+  // re-queue a fix attempt.
+  useEffect(() => {
+    if (autoFixState.cooldownUntil === 0 && !autoFixState.isFixing) {
+      lastErrorHashRef.current = '';
+    }
+  }, [autoFixState.cooldownUntil, autoFixState.isFixing]);
+
   // ============================================
   // NEW: Listen for compile-errors-detected events
   // ============================================

@@ -1,13 +1,12 @@
 import json
-import hashlib
+import base64
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import List, Optional, Dict, Any
 from uuid import uuid4
-from cryptography.fernet import Fernet
-import os
 
-from core.services.db import Table, execute, execute_one, execute_read, execute_mutate
+from core.credentials.credential_service import EncryptionService
+from core.services.db import Table, execute_read, execute_mutate
 from core.utils.logger import logger
 
 
@@ -35,24 +34,18 @@ class ComposioProfile:
 class ComposioProfileService:
     def __init__(self):
         self._table = Table("user_mcp_credential_profiles")
+        self._encryption = EncryptionService()
 
-    def _get_encryption_key(self) -> bytes:
-        key = os.getenv("ENCRYPTION_KEY")
-        if not key:
-            raise ValueError("ENCRYPTION_KEY environment variable is required")
-        return key.encode()
+    def _encrypt_config(self, config: Dict[str, Any]) -> tuple[str, str]:
+        """Encrypt config dict, return (base64-encoded ciphertext, sha256 hash)."""
+        encrypted_bytes, config_hash = self._encryption.encrypt_config(config)
+        encoded = base64.b64encode(encrypted_bytes).decode('utf-8')
+        return encoded, config_hash
 
-    def _encrypt_config(self, config_json: str) -> str:
-        fernet = Fernet(self._get_encryption_key())
-        return fernet.encrypt(config_json.encode()).decode()
-
-    def _decrypt_config(self, encrypted_config: str) -> Dict[str, Any]:
-        fernet = Fernet(self._get_encryption_key())
-        decrypted = fernet.decrypt(encrypted_config.encode()).decode()
-        return json.loads(decrypted)
-
-    def _generate_config_hash(self, config_json: str) -> str:
-        return hashlib.sha256(config_json.encode()).hexdigest()
+    def _decrypt_config(self, encrypted_config: str, config_hash: str) -> Dict[str, Any]:
+        """Decrypt base64-encoded ciphertext with integrity verification."""
+        encrypted_bytes = base64.b64decode(encrypted_config)
+        return self._encryption.decrypt_config(encrypted_bytes, config_hash)
 
     def _build_config(
         self,
@@ -110,9 +103,7 @@ class ComposioProfileService:
             config = self._build_config(
                 toolkit_slug, toolkit_name, mcp_url, redirect_url, user_id, connected_account_id
             )
-            config_json = json.dumps(config, sort_keys=True)
-            encrypted_config = self._encrypt_config(config_json)
-            config_hash = self._generate_config_hash(config_json)
+            encrypted_config, config_hash = self._encrypt_config(config)
             
             mcp_qualified_name = f"composio.{toolkit_slug}"
             profile_id = str(uuid4())
@@ -182,11 +173,11 @@ class ComposioProfileService:
             if not profile_data:
                 raise ValueError(f"Profile {profile_id} not found")
 
-            config = self._decrypt_config(profile_data['encrypted_config'])
-            
+            config = self._decrypt_config(profile_data['encrypted_config'], profile_data['config_hash'])
+
             if config.get('type') != 'composio':
                 raise ValueError(f"Profile {profile_id} is not a Composio profile")
-            
+
             return {
                 "name": config['toolkit_name'],
                 "type": "composio",
@@ -197,42 +188,42 @@ class ComposioProfileService:
                 },
                 "enabledTools": []
             }
-            
+
         except Exception as e:
             logger.error(f"Failed to get MCP config for profile {profile_id}: {e}", exc_info=True)
             raise
-    
+
     async def get_mcp_url_for_runtime(self, profile_id: str) -> str:
         try:
             profile_data = await self._table.get("profile_id", profile_id)
 
             if not profile_data:
                 raise ValueError(f"Profile {profile_id} not found")
-            
-            config = self._decrypt_config(profile_data['encrypted_config'])
-            
+
+            config = self._decrypt_config(profile_data['encrypted_config'], profile_data['config_hash'])
+
             if config.get('type') != 'composio':
                 raise ValueError(f"Profile {profile_id} is not a Composio profile")
-            
+
             mcp_url = config.get('mcp_url')
             if not mcp_url:
                 raise ValueError(f"Profile {profile_id} has no MCP URL")
-            
+
             logger.debug(f"Retrieved MCP URL for profile {profile_id}")
             return mcp_url
-            
+
         except Exception as e:
             logger.error(f"Failed to get MCP URL for profile {profile_id}: {e}", exc_info=True)
             raise
 
     async def get_profile_config(self, profile_id: str) -> Dict[str, Any]:
         try:
-            row = await self._table.get("profile_id", profile_id, cols="encrypted_config")
+            row = await self._table.get("profile_id", profile_id, cols="encrypted_config, config_hash")
 
             if not row:
                 raise ValueError(f"Profile {profile_id} not found")
 
-            return self._decrypt_config(row['encrypted_config'])
+            return self._decrypt_config(row['encrypted_config'], row['config_hash'])
             
         except Exception as e:
             logger.error(f"Failed to get config for profile {profile_id}: {e}", exc_info=True)
@@ -254,7 +245,7 @@ class ComposioProfileService:
 
             profiles = []
             for row in rows:
-                config = self._decrypt_config(row['encrypted_config'])
+                config = self._decrypt_config(row['encrypted_config'], row['config_hash'])
                 
                 profile = ComposioProfile(
                     profile_id=row['profile_id'],

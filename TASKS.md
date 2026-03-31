@@ -1,16 +1,31 @@
 # Recoder Platform — Task List
 
-Last updated: 2026-03-31 22:40 UTC
+Last updated: 2026-03-31 (post live Nike presentation fix + browser verification)
 
 ---
 
 ## Platform Assessment
 
-$5 OpenRouter credits added. Batch 1 deployed. Batch 2 deploying now (Agent 1).
+$5 OpenRouter credits added. The Nike presentation path on `agents.recoder.xyz` is now fixed live. Historical notes below remain for context but are stale where they conflict with the correction section.
 
 ## 2026-03-31 Correction
 
 This top section supersedes older task notes below where they conflict.
+
+- The Nike presentation issue on `agents.recoder.xyz` is no longer open.
+- Browser verification is complete: the Nike slides render in the real agents UI.
+- The real root causes were:
+  1. presentation viewers were corrupting same-origin proxy URLs by appending cache-busting as a second `?`
+  2. `recoder-backend` on Hetzner had Postgres credential drift, so authenticated file proxy reads still failed with backend `500`
+- Both are fixed live now:
+  - shared URL fix committed in `77cd90bb`
+  - host Postgres `recoder` role password realigned to the DSNs in `backend/.env`
+  - `recoder-agents` and `recoder-backend` restarted successfully in PM2
+- Verified live:
+  - proxied Nike `metadata.json` returns `200`
+  - proxied Nike `slide_01.html` returns `200`
+  - proxied Nike image `slide1_logo.jpg` returns `200`
+- The current work is broader browser verification and infra hardening, not the old Nike blank-presentation root cause.
 
 - The old Web IDE cookie theory is no longer the best explanation. Direct backend smoke tests proved Daytona container creation, file write/read, exec, snapshot, and Vite startup work.
 - The concrete backend fixes were:
@@ -25,18 +40,25 @@ This top section supersedes older task notes below where they conflict.
   - strict-auth-safe empty bearer handling plus strict-mode enforcement on container create/delete.
 - Current work is deployment/browser verification of the pushed commits, not rediscovering root cause.
 
-## Current Remaining Priorities (2026-03-31, post-`bf8f1944`)
-1. Deploy `bf8f1944` and confirm the updated services are live.
-2. Browser verification of preview + publish.
-3. Re-enable deployed `STRICT_AUTH=true` and repeat authenticated smoke tests.
-4. Capture the exact failing step only if browser verification still fails.
+## Immediate Follow-ups
+
+1. Browser-verify Web IDE preview + publish on the currently deployed build.
+2. Prevent Hetzner backend DB credential drift (`recoder-6ko`).
+3. Restore git-based deployability on the Hetzner app host (`recoder-o66`).
+4. Re-enable deployed `STRICT_AUTH=true` only after broader browser verification passes.
+5. Continue broader agents IDE/browser verification beyond the Nike presentation path.
+
+## Current Remaining Priorities (2026-03-31, post-`77cd90bb`)
+1. Browser-verify Web IDE preview + publish on the currently deployed build.
+2. Prevent Hetzner backend DB credential drift (`recoder-6ko`).
+3. Restore git-based deployability on the Hetzner app host (`recoder-o66`).
+4. Re-enable deployed `STRICT_AUTH=true` only after broader browser verification passes.
+5. Continue broader agents IDE/browser verification beyond the Nike presentation path.
 
 ### 1. Agents (agents.recoder.xyz)
-**Works:** LLM responds (gemini-2.0-flash via OpenRouter), thread created
+**Works:** LLM responds, file proxy works, Nike presentation metadata/slide/image proxy works, Nike slides render in the real agents UI
 **Broken:**
-- Thread name generator produces repetitive JSON garbage ({"name": "...and paypal template and paypal..."}) — displayed raw in UI
-- First run used stale env `MAIN_LLM_MODEL=ollama_chat/qwen2.5-coder:3b` (107s TTFT). Fixed by commenting out env var.
-- Need to test with new thread after backend restart
+- Broader agent IDE/coding loops remain open beyond the Nike presentation path
 
 ### 2. Web IDE (web.recoder.xyz)
 **Works:** AI generates code (26 files), npm install succeeds, dev server starts on port 5173
@@ -306,3 +328,49 @@ Agent creates files and runs code but user CAN'T SEE the results.
 | 78 | Security audit | OWASP top 10 |
 | 79 | Video generation | FAL_KEY needed |
 | 80 | Usage analytics | Token/storage tracking |
+Preview URLs — biggest immediate win                                                                                                                                                
+                                                                                                                                                                                      
+  Right now: Daytona starts Vite on port 5173 → docker-backend has to proxy it via preview.ts → nginx has to route it → 30-second health check loop → asset URL rewriting to fix
+  broken paths → still sometimes blank white.                                                                                                                                         
+                                                                           
+  With Zrok: sandbox starts → docker-backend calls zrok.share({ target: 'localhost:5173' }) via the Node.js SDK → Zrok creates an encrypted tunnel from inside the sandbox directly to
+   the Zrok frontend → URL is ready in ~2 seconds. Browser talks directly to Vite through the tunnel. No proxy, no asset rewriting, no health check. Vite HMR WebSockets work natively
+   through the tunnel. The whole preview.ts file becomes unnecessary.                                                                                                                 
+                                                                           
+  Reserved tokens make it permanent: {projectId}.preview.recoder.xyz stays the same URL even when the sandbox stops and restarts. The iframe never needs to reload.                   
+  
+  ---                                                                                                                                                                                 
+  A2A — solves the identity problem that's been the hardest to fix         
+                                                                                                                                                                                      
+  Right now: agent identity is a string ("claude_code"). Two Claude Code instances are the same identity. Task inbox has no way to route to the right one. Claiming tasks,
+  deduplication, session routing — all require application-level hacks.                                                                                                               
+                                                                           
+  With Ziti: each Claude Code terminal runs zrok enable once, stores a real X.509 certificate in ~/.zrok/. That certificate IS the identity — cryptographically unique per terminal,  
+  per machine. The bridge sees:                                            
+                                                                                                                                                                                      
+  instance A: { type: "claude_code", fingerprint: "a1b2c3...", machine: "macbook-arhan" }                                                                                             
+  instance B: { type: "claude_code", fingerprint: "d4e5f6...", machine: "ci-runner" }                                                                                                 
+                                                                                                                                                                                      
+  Two instances, different fingerprints, different inboxes. Task claiming works. Notifications route correctly. If you want to kill an agent session, revoke the Ziti identity —      
+  immediately locked out without changing any secret anywhere else.                                                                                                                   
+                                                                                                                                                                                      
+  And in phase 2 (when you migrate A2A transport to Ziti fabric), the bridge itself has no public port. Agents connect through the overlay. No nginx entry for                        
+  wss://docker.recoder.xyz, no firewall rule, no TLS cert management. The network fabric handles it.
+                                                                                                                                                                                      
+  ---                                                                      
+  Sandbox — cleans up the DNS/nginx operational mess
+                                                                                                                                                                                      
+  Right now: every new sandbox port needs *.sandbox.recoder.xyz wildcard DNS + nginx proxy block + CORS headers configured per pattern. Adding a new port (say port 3000 for a Node
+  backend alongside 5173 for the frontend) means nginx config changes.                                                                                                                
+                                                                           
+  With Zrok pre-installed in the Daytona base image: the sandbox creates its own tunnels. Port 5173 gets a tunnel. Port 3000 gets a tunnel. Port 8080 gets a tunnel. All done         
+  programmatically from inside the sandbox or from docker-backend via the SDK. No nginx touch needed for any of it. CORS is handled at the Zrok controller level once, applies
+  everywhere.                                                                                                                                                                         
+                                                                           
+  ---
+  The thing that makes it genuinely different from ngrok/localtunnel:
+                                                                                                                                                                                      
+  Those tools are tunnels. Ziti is a network fabric — the tunnel IS the network, not a workaround for network limitations. Every participant (sandbox, docker-backend, Claude Code,
+  Codex) is a first-class node on the fabric with a real identity. So "sandbox talks to A2A bridge" and "browser accesses sandbox preview" and "Claude Code connects to A2A" are all  
+  the same system, not three separate tunnel configurations.               
+                                                                                                                                   
