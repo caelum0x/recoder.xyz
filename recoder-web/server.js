@@ -81,7 +81,7 @@ const previewProxy = createProxyMiddleware({
   },
   onError: (err, req, res) => {
     console.error('[Preview Proxy] Error:', err.message);
-    if (!res.headersSent) {
+    if (res && typeof res.writeHead === 'function' && typeof res.end === 'function' && !res.headersSent) {
       res.writeHead(502, { 'Content-Type': 'text/html' });
       res.end(`
         <html><body style="font-family:system-ui;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;background:#f7fafc">
@@ -92,6 +92,19 @@ const previewProxy = createProxyMiddleware({
           </div>
         </body></html>
       `);
+      return;
+    }
+
+    // WebSocket upgrade failures hand us a raw socket, not an HTTP response.
+    if (res && typeof res.end === 'function') {
+      try {
+        res.end('HTTP/1.1 502 Bad Gateway\r\nConnection: close\r\n\r\n');
+        return;
+      } catch (_) {}
+    }
+
+    if (res && typeof res.destroy === 'function') {
+      res.destroy();
     }
   },
 });

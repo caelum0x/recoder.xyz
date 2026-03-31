@@ -1,14 +1,16 @@
 #!/usr/bin/env node
 /**
- * Recoder A2A MCP Server for Claude Code
+ * Recoder A2A MCP Server for Claude Code, Codex, and Cursor
  *
- * Provides 6 tools to interact with the Recoder platform:
+ * Provides 8 tools to interact with the Recoder platform:
  * - recoder_list_agents: List connected A2A agents
  * - recoder_list_tasks: View A2A task queue
  * - recoder_send_task: Send task to another agent via A2A
  * - recoder_create_thread: Create agent thread with Daytona sandbox
  * - recoder_sandbox_exec: Execute code in isolated sandbox
  * - recoder_get_thread: Get thread messages (including AI responses)
+ * - recoder_inbox: Check inbound tasks assigned to this agent
+ * - recoder_task_respond: Respond to an inbound task
  */
 
 const DOCKER_URL = process.env.RECODER_DOCKER_URL || 'https://docker.recoder.xyz';
@@ -16,38 +18,116 @@ const API_URL = process.env.RECODER_API_URL || 'https://api.recoder.xyz';
 const A2A_URL = process.env.RECODER_A2A_URL || `${DOCKER_URL.replace('https:', 'wss:').replace('http:', 'ws:')}/agent-bridge`;
 const DAYTONA_URL = process.env.RECODER_DAYTONA_URL || 'http://localhost:3900/api';
 const DAYTONA_KEY = process.env.DAYTONA_API_KEY || '';
-const API_TOKEN = process.env.RECODER_API_TOKEN || process.env.RECODER_SESSION_TOKEN || '';
+const RAW_AUTH_TOKEN = process.env.RECODER_API_TOKEN || '';
 const AGENT_ID = process.env.RECODER_AGENT_ID || 'claude_code';
+
+function isRecoderApiKeyPair(value) {
+  if (!value || typeof value !== 'string' || !value.includes(':')) return false;
+  const [publicKey, secretKey] = value.split(':', 2);
+  return publicKey.startsWith('pk_') && secretKey.startsWith('sk_');
+}
+
+const PYTHON_API_KEY = isRecoderApiKeyPair(RAW_AUTH_TOKEN) ? RAW_AUTH_TOKEN : '';
+const _rawSessionToken = process.env.RECODER_SESSION_TOKEN || (PYTHON_API_KEY ? '' : RAW_AUTH_TOKEN);
+const PLATFORM_TOKEN = (() => {
+  try { return decodeURIComponent(_rawSessionToken); } catch { return _rawSessionToken; }
+})();
+
+function buildPlatformHeaders(extraHeaders = {}) {
+  const headers = { ...extraHeaders };
+  if (PLATFORM_TOKEN) headers.Authorization = `Bearer ${PLATFORM_TOKEN}`;
+  return headers;
+}
+
+function buildPythonApiHeaders(extraHeaders = {}) {
+  const headers = { ...extraHeaders };
+  if (PYTHON_API_KEY) headers['x-api-key'] = PYTHON_API_KEY;
+  else if (PLATFORM_TOKEN) headers.Authorization = `Bearer ${PLATFORM_TOKEN}`;
+  return headers;
+}
 
 // ── WebSocket A2A Bridge Connection ──
 
 let ws = null;
 let wsConnected = false;
-let wsMessages = [];
-let reconnectAttempts = 0;
-let pingInterval = null;
+let wsReconnectTimer = null;
+let wsHeartbeatInterval = null;
+let wsRetries = 0;
+const WS_MAX_RETRIES = 10;
+
+// Inbound task queue
+const inboundTasks = [];
+const MAX_INBOUND_TASKS = 50;
+
+function handleBridgeMessage(msg) {
+  switch (msg.type) {
+    case 'registered':
+      process.stderr.write(`[recoder-a2a] Registered: ${msg.agentId} workspaces: ${JSON.stringify(msg.workspaces || [])}\n`);
+      break;
+    case 'task.assigned': {
+      const task = {
+        taskId: msg.taskId,
+        prompt: msg.prompt || msg.task || '',
+        context: msg.context || {},
+        from: msg.from || msg.context?.source || 'unknown',
+        worktreeBranch: msg.worktreeBranch || null,
+        receivedAt: new Date().toISOString(),
+        status: 'pending',
+      };
+      inboundTasks.unshift(task);
+      if (inboundTasks.length > MAX_INBOUND_TASKS) inboundTasks.pop();
+      process.stderr.write(`[recoder-a2a] Task assigned: ${task.taskId} from ${task.from}\n`);
+      wsSend({ type: 'task.progress', taskId: task.taskId, progress: 0, output: `Task received by ${AGENT_ID}` });
+      break;
+    }
+    case 'task.cancelled': {
+      const idx = inboundTasks.findIndex(t => t.taskId === msg.taskId);
+      if (idx >= 0) inboundTasks[idx].status = 'cancelled';
+      break;
+    }
+    case 'ping':
+      wsSend({ type: 'heartbeat' });
+      break;
+    default:
+      break;
+  }
+}
+
+function wsSend(obj) {
+  if (ws && wsConnected) {
+    try { ws.send(JSON.stringify(obj)); } catch {}
+  }
+}
 
 function connectBridge() {
+  if (wsReconnectTimer) { clearTimeout(wsReconnectTimer); wsReconnectTimer = null; }
+  if (wsHeartbeatInterval) { clearInterval(wsHeartbeatInterval); wsHeartbeatInterval = null; }
   try {
     const WebSocket = require('ws');
-    if (ws) { try { ws.terminate(); } catch {} }
-    ws = new WebSocket(A2A_URL, { headers: { 'x-agent-id': AGENT_ID, 'x-capabilities': JSON.stringify(['execute', 'plan', 'edit']) } });
+    if (ws) { try { ws.removeAllListeners(); ws.terminate(); } catch {} ws = null; }
+    const bridgeUrl = PLATFORM_TOKEN
+      ? `${A2A_URL}?token=${encodeURIComponent(PLATFORM_TOKEN)}&agentId=${AGENT_ID}&capabilities=execute,plan,edit`
+      : A2A_URL;
+    ws = new WebSocket(bridgeUrl, {
+      headers: { 'x-agent-id': AGENT_ID, 'x-capabilities': JSON.stringify(['execute', 'plan', 'edit']) },
+      handshakeTimeout: 10000,
+    });
     ws.on('open', () => {
       wsConnected = true;
-      reconnectAttempts = 0;
-      if (!pingInterval) process.stderr.write(`[recoder-a2a] Connected to A2A bridge as ${AGENT_ID}\n`);
-      // Send ping every 30s to prevent Cloudflare idle timeout
-      if (pingInterval) clearInterval(pingInterval);
-      pingInterval = setInterval(() => { if (ws && wsConnected) try { ws.ping(); } catch {} }, 30000);
+      wsRetries = 0;
+      process.stderr.write(`[recoder-a2a] Connected to A2A bridge as ${AGENT_ID}\n`);
+      wsHeartbeatInterval = setInterval(() => wsSend({ type: 'heartbeat' }), 25000);
     });
-    ws.on('message', (data) => { try { wsMessages.push(JSON.parse(data.toString())); } catch {} });
+    ws.on('message', (data) => {
+      try { handleBridgeMessage(JSON.parse(data.toString())); } catch {}
+    });
     ws.on('close', () => {
       wsConnected = false;
-      if (pingInterval) { clearInterval(pingInterval); pingInterval = null; }
-      // Exponential backoff: 5s, 10s, 20s, 40s, max 60s
-      const delay = Math.min(5000 * Math.pow(2, reconnectAttempts), 60000);
-      reconnectAttempts++;
-      setTimeout(connectBridge, delay);
+      if (wsHeartbeatInterval) { clearInterval(wsHeartbeatInterval); wsHeartbeatInterval = null; }
+      if (wsRetries < WS_MAX_RETRIES) {
+        wsRetries++;
+        wsReconnectTimer = setTimeout(connectBridge, Math.min(5000 * wsRetries, 30000));
+      }
     });
     ws.on('error', () => { wsConnected = false; });
   } catch {
@@ -55,8 +135,7 @@ function connectBridge() {
   }
 }
 
-// Connect in background (don't block MCP startup)
-setTimeout(connectBridge, 100);
+setTimeout(connectBridge, 500);
 
 // ── MCP Protocol (JSON-RPC over stdio) ──
 
@@ -139,13 +218,30 @@ const TOOLS = [
       required: ['command'],
     },
   },
+  {
+    name: 'recoder_inbox',
+    description: 'Check inbound tasks assigned to this agent via the A2A bridge. Shows pending tasks from other agents.',
+    inputSchema: { type: 'object', properties: {}, required: [] },
+  },
+  {
+    name: 'recoder_task_respond',
+    description: 'Respond to an inbound task — complete it with a result or mark it as failed.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        task_id: { type: 'string', description: 'Task ID from recoder_inbox' },
+        result: { type: 'string', description: 'Result/response to send back' },
+        status: { type: 'string', enum: ['complete', 'failed'], default: 'complete' },
+      },
+      required: ['task_id', 'result'],
+    },
+  },
 ];
 
 // ── Helpers ──
 
 async function apiFetch(url, options = {}) {
-  const headers = { ...options.headers };
-  if (API_TOKEN) headers['Authorization'] = `Bearer ${API_TOKEN}`;
+  const headers = buildPlatformHeaders(options.headers);
   const res = await fetch(url, { ...options, headers });
   if (!res.ok) {
     const text = await res.text().catch(() => '');
@@ -175,7 +271,6 @@ async function handleToolCall(name, args) {
     }
 
     case 'recoder_send_task': {
-      // Try WebSocket first (real-time)
       if (wsConnected && ws) {
         ws.send(JSON.stringify({
           type: 'intent',
@@ -186,15 +281,13 @@ async function handleToolCall(name, args) {
         }));
         return `Task sent to ${args.target_agent} via A2A bridge (real-time).\nIntent: ${args.intent || 'execute'}\nTask: ${args.task}`;
       }
-
-      // Fallback to REST API
       const data = await apiFetch(`${DOCKER_URL}/api/a2a/tasks`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           workspace_id: 'ws_default',
           thread_id: `thread_${Date.now()}`,
-          requester: { agent_id: AGENT_ID, platform: 'claude_code' },
+          requester: { agent_id: AGENT_ID, platform: AGENT_ID },
           assignee: { agent_id: args.target_agent, platform: args.target_agent },
           connector: { type: 'bridge', protocol: 'websocket', connector_id: 'mcp-bridge', platform: 'recoder' },
           payload: { intent: args.intent || 'execute', task: args.task },
@@ -204,9 +297,8 @@ async function handleToolCall(name, args) {
     }
 
     case 'recoder_create_thread': {
-      const authHeaders = API_TOKEN ? { 'Authorization': `Bearer ${API_TOKEN}` } : {};
+      const authHeaders = buildPythonApiHeaders();
       const agentId = args.agent_id || '7e91f872-2407-42ac-bfcb-ea69a496e85c';
-
       const threadRes = await fetch(`${API_URL}/v1/threads`, {
         method: 'POST',
         headers: { ...authHeaders, 'Content-Type': 'application/json' },
@@ -214,7 +306,6 @@ async function handleToolCall(name, args) {
       });
       const threadData = await threadRes.json();
       if (!threadData.thread_id) return `Error: ${JSON.stringify(threadData)}`;
-
       if (args.prompt) {
         const form = new URLSearchParams();
         form.append('prompt', args.prompt);
@@ -222,7 +313,7 @@ async function handleToolCall(name, args) {
         form.append('agent_id', agentId);
         const startRes = await fetch(`${API_URL}/v1/agent/start`, {
           method: 'POST',
-          headers: { ...authHeaders, 'Content-Type': 'application/x-www-form-urlencoded' },
+          headers: buildPythonApiHeaders({ 'Content-Type': 'application/x-www-form-urlencoded' }),
           body: form.toString(),
         });
         const startData = await startRes.json();
@@ -232,7 +323,7 @@ async function handleToolCall(name, args) {
     }
 
     case 'recoder_get_thread': {
-      const authHeaders = API_TOKEN ? { 'Authorization': `Bearer ${API_TOKEN}` } : {};
+      const authHeaders = buildPythonApiHeaders();
       const res = await fetch(`${API_URL}/v1/threads/${args.thread_id}/messages`, { headers: authHeaders });
       const messages = await res.json();
       const msgs = Array.isArray(messages) ? messages : messages.messages || messages.items || [];
@@ -247,36 +338,79 @@ async function handleToolCall(name, args) {
     case 'recoder_sandbox_exec': {
       if (!DAYTONA_KEY) return 'Error: DAYTONA_API_KEY not configured.';
       const dHeaders = { 'Authorization': `Bearer ${DAYTONA_KEY}`, 'Content-Type': 'application/json' };
-      const baseUrl = DAYTONA_URL.replace('/api', '');
-
+      const baseUrl = DAYTONA_URL.replace(/\/api\/?$/, '');
       let sandboxId = args.sandbox_id;
       let createdNew = false;
-
       if (!sandboxId) {
-        const createRes = await fetch(`${DAYTONA_URL}/sandbox`, {
-          method: 'POST', headers: dHeaders,
-          body: JSON.stringify({ image: 'daytonaio/sandbox:0.5.0-slim', public: true, auto_stop_interval: 10 }),
-        });
-        const sb = await createRes.json();
+        const createUrl = `${DAYTONA_URL}/sandbox`;
+        let createRes;
+        try {
+          createRes = await fetch(createUrl, {
+            method: 'POST', headers: dHeaders,
+            body: JSON.stringify({ image: 'daytonaio/sandbox:0.5.0-slim', public: true, auto_stop_interval: 10 }),
+          });
+        } catch (fetchErr) {
+          return `Sandbox fetch error: ${fetchErr.message}\nURL: ${createUrl}`;
+        }
+        const createText = await createRes.text();
+        if (!createRes.ok) return `Error creating sandbox (HTTP ${createRes.status}): ${createText.slice(0, 300)}`;
+        let sb;
+        try { sb = JSON.parse(createText); } catch { return `Sandbox response not JSON:\n${createText.slice(0, 500)}`; }
         if (!sb.id) return `Error creating sandbox: ${JSON.stringify(sb)}`;
         sandboxId = sb.id;
         createdNew = true;
         await new Promise(r => setTimeout(r, 5000));
       }
-
-      const execRes = await fetch(`${baseUrl}/sandbox/${sandboxId}/toolbox/process/exec`, {
-        method: 'POST', headers: dHeaders,
-        body: JSON.stringify({ command: args.command }),
-      });
-      const result = await execRes.json();
-
-      // Auto-cleanup if we created it
+      const execUrl = `${baseUrl}/api/toolbox/${sandboxId}/toolbox/process/execute`;
+      const shellCommand = `sh -c ${JSON.stringify(args.command)}`;
+      let execRes;
+      try {
+        execRes = await fetch(execUrl, { method: 'POST', headers: dHeaders, body: JSON.stringify({ command: shellCommand }) });
+      } catch (fetchErr) {
+        return `Sandbox exec error: ${fetchErr.message}\nURL: ${execUrl}`;
+      }
+      const execText = await execRes.text();
+      let result;
+      try { result = JSON.parse(execText); } catch { return `Exec not JSON (HTTP ${execRes.status}):\n${execText.slice(0, 500)}`; }
       if (createdNew) {
         fetch(`${DAYTONA_URL}/sandbox/${sandboxId}`, { method: 'DELETE', headers: dHeaders }).catch(() => {});
       }
-
       const output = result.result || result.output || result.stdout || JSON.stringify(result);
       return `Sandbox: ${sandboxId}${createdNew ? ' (auto-created)' : ''}\nExit: ${result.exitCode ?? result.exit_code ?? '?'}\n\n${output}`;
+    }
+
+    case 'recoder_inbox': {
+      const pending = inboundTasks.filter(t => t.status === 'pending');
+      const recent = inboundTasks.filter(t => t.status !== 'pending').slice(0, 5);
+      if (!pending.length && !recent.length) return `No inbound tasks.\nBridge: ${wsConnected ? 'connected' : 'disconnected'}`;
+      const lines = [];
+      if (pending.length) {
+        lines.push(`── Pending (${pending.length}) ──`);
+        for (const t of pending) {
+          lines.push(`• [${t.taskId}] from:${t.from} at:${t.receivedAt}`);
+          lines.push(`  ${t.prompt.slice(0, 200)}`);
+        }
+      }
+      if (recent.length) {
+        lines.push(`\n── Recent (${recent.length}) ──`);
+        for (const t of recent) lines.push(`• [${t.taskId}] ${t.status} from:${t.from}`);
+      }
+      lines.push(`\nBridge: ${wsConnected ? 'connected' : 'disconnected'}`);
+      return lines.join('\n');
+    }
+
+    case 'recoder_task_respond': {
+      const task = inboundTasks.find(t => t.taskId === args.task_id);
+      if (!task) return `Task ${args.task_id} not found in inbox.`;
+      const isComplete = (args.status || 'complete') === 'complete';
+      if (isComplete) {
+        wsSend({ type: 'task.complete', taskId: args.task_id, result: args.result });
+        task.status = 'completed';
+      } else {
+        wsSend({ type: 'task.failed', taskId: args.task_id, error: args.result });
+        task.status = 'failed';
+      }
+      return `Task ${args.task_id} marked as ${task.status}. Response sent via bridge.`;
     }
 
     default:
@@ -293,7 +427,7 @@ async function handleMessage(msg) {
       respond(id, {
         protocolVersion: '2024-11-05',
         capabilities: { tools: {} },
-        serverInfo: { name: 'recoder-a2a', version: '2.0.0' },
+        serverInfo: { name: 'recoder-a2a', version: '2.2.0' },
       });
       break;
     case 'notifications/initialized':
@@ -316,7 +450,11 @@ async function handleMessage(msg) {
   }
 }
 
-process.stderr.write('[recoder-a2a] Recoder A2A MCP Server v2.0\n');
+// Prevent uncaught errors from killing the MCP server
+process.on('uncaughtException', (err) => { process.stderr.write(`[recoder-a2a] uncaught: ${err.message}\n`); });
+process.on('unhandledRejection', (err) => { process.stderr.write(`[recoder-a2a] unhandled rejection: ${err}\n`); });
+
+process.stderr.write('[recoder-a2a] Recoder A2A MCP Server v2.2\n');
 process.stderr.write(`[recoder-a2a] API: ${API_URL} | A2A: ${A2A_URL}\n`);
 if (DAYTONA_KEY) process.stderr.write('[recoder-a2a] Daytona sandbox enabled\n');
-if (API_TOKEN) process.stderr.write('[recoder-a2a] API auth configured\n');
+if (PLATFORM_TOKEN || PYTHON_API_KEY) process.stderr.write('[recoder-a2a] API auth configured\n');

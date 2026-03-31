@@ -61,11 +61,12 @@ Visit [https://recoder.xyz/tr/dashboard/api-keys](https://recoder.xyz/tr/dashboa
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `RECODER_API_TOKEN` | Yes | Your Recoder API token |
+| `RECODER_API_TOKEN` | Yes | Bearer token for Docker/A2A routes, or a Recoder API key in `pk_xxx:sk_xxx` format for `api.recoder.xyz` |
+| `RECODER_SESSION_TOKEN` | No | Better Auth session token. Use this when `RECODER_API_TOKEN` is a `pk_xxx:sk_xxx` API key but A2A/WebSocket routes still need Bearer auth |
 | `RECODER_DOCKER_URL` | No | Docker backend URL (default: `https://docker.recoder.xyz`) |
 | `RECODER_API_URL` | No | API URL (default: `https://api.recoder.xyz`) |
 | `DAYTONA_API_KEY` | No | Daytona API key for sandbox execution |
-| `DAYTONA_URL` | No | Daytona API URL |
+| `RECODER_DAYTONA_URL` | No | Daytona API URL |
 
 ## How It Works
 

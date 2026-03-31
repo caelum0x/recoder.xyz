@@ -799,19 +799,21 @@ export const EditorPanel = memo(
                     </Panel>
                   </PanelGroup>
                 ) : (
-                  <CodeMirrorEditor
-                    theme={theme}
-                    editable={!isStreaming && editorDocument !== undefined}
-                    settings={editorSettings}
-                    doc={editorDocument}
-                    autoFocusOnDocumentChange={!isMobile()}
-                    onScroll={onEditorScroll}
-                    onChange={onEditorChange}
-                    onSave={onFileSave}
-                    onGotoDefinition={handleGotoDefinition}
-                    showMinimap={showMinimap}
-                    projectId={projectId ?? undefined}
-                  />
+                  <PanelErrorBoundary panelName="CodeMirror Editor">
+                    <CodeMirrorEditor
+                      theme={theme}
+                      editable={!isStreaming && editorDocument !== undefined}
+                      settings={editorSettings}
+                      doc={editorDocument}
+                      autoFocusOnDocumentChange={!isMobile()}
+                      onScroll={onEditorScroll}
+                      onChange={onEditorChange}
+                      onSave={onFileSave}
+                      onGotoDefinition={handleGotoDefinition}
+                      showMinimap={showMinimap}
+                      projectId={projectId ?? undefined}
+                    />
+                  </PanelErrorBoundary>
                 )}
               </div>
             </Panel>

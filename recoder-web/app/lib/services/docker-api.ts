@@ -110,6 +110,8 @@ function getSessionToken(): string | null {
   const cookieNames = [
     '__Secure-recoder.session_token',  // Production with Secure cookies
     'recoder.session_token',            // Development
+    '__Secure-better-auth.session_token',
+    'better-auth.session_token',
     '__Secure-session_token',           // Production without prefix
     'session_token',                    // Fallback
     'recoder_session_token',            // Alternative format

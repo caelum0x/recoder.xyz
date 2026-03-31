@@ -16,8 +16,30 @@ const API_URL = process.env.RECODER_API_URL || 'https://api.recoder.xyz';
 const A2A_URL = process.env.RECODER_A2A_URL || `${DOCKER_URL.replace('https:', 'wss:').replace('http:', 'ws:')}/agent-bridge`;
 const DAYTONA_URL = process.env.RECODER_DAYTONA_URL || 'http://localhost:3900/api';
 const DAYTONA_KEY = process.env.DAYTONA_API_KEY || '';
-const API_TOKEN = process.env.RECODER_API_TOKEN || process.env.RECODER_SESSION_TOKEN || '';
+const RAW_AUTH_TOKEN = process.env.RECODER_API_TOKEN || '';
 const AGENT_ID = process.env.RECODER_AGENT_ID || 'claude_code';
+
+function isRecoderApiKeyPair(value) {
+  if (!value || typeof value !== 'string' || !value.includes(':')) return false;
+  const [publicKey, secretKey] = value.split(':', 2);
+  return publicKey.startsWith('pk_') && secretKey.startsWith('sk_');
+}
+
+const PYTHON_API_KEY = isRecoderApiKeyPair(RAW_AUTH_TOKEN) ? RAW_AUTH_TOKEN : '';
+const PLATFORM_TOKEN = process.env.RECODER_SESSION_TOKEN || (PYTHON_API_KEY ? '' : RAW_AUTH_TOKEN);
+
+function buildPlatformHeaders(extraHeaders = {}) {
+  const headers = { ...extraHeaders };
+  if (PLATFORM_TOKEN) headers.Authorization = `Bearer ${PLATFORM_TOKEN}`;
+  return headers;
+}
+
+function buildPythonApiHeaders(extraHeaders = {}) {
+  const headers = { ...extraHeaders };
+  if (PYTHON_API_KEY) headers['x-api-key'] = PYTHON_API_KEY;
+  else if (PLATFORM_TOKEN) headers.Authorization = `Bearer ${PLATFORM_TOKEN}`;
+  return headers;
+}
 
 // ── WebSocket A2A Bridge Connection ──
 
@@ -28,7 +50,8 @@ let wsMessages = [];
 function connectBridge() {
   try {
     const WebSocket = require('ws');
-    ws = new WebSocket(A2A_URL, { headers: { 'x-agent-id': AGENT_ID, 'x-capabilities': JSON.stringify(['execute', 'plan', 'edit']) } });
+    const bridgeUrl = PLATFORM_TOKEN ? `${A2A_URL}?token=${encodeURIComponent(PLATFORM_TOKEN)}&agentId=${AGENT_ID}&capabilities=execute,plan,edit` : A2A_URL;
+    ws = new WebSocket(bridgeUrl, { headers: { 'x-agent-id': AGENT_ID, 'x-capabilities': JSON.stringify(['execute', 'plan', 'edit']) } });
     ws.on('open', () => { wsConnected = true; process.stderr.write(`[recoder-a2a] Connected to A2A bridge as ${AGENT_ID}\n`); });
     ws.on('message', (data) => { wsMessages.push(JSON.parse(data.toString())); });
     ws.on('close', () => { wsConnected = false; setTimeout(connectBridge, 5000); });
@@ -127,8 +150,7 @@ const TOOLS = [
 // ── Helpers ──
 
 async function apiFetch(url, options = {}) {
-  const headers = { ...options.headers };
-  if (API_TOKEN) headers['Authorization'] = `Bearer ${API_TOKEN}`;
+  const headers = buildPlatformHeaders(options.headers);
   const res = await fetch(url, { ...options, headers });
   if (!res.ok) {
     const text = await res.text().catch(() => '');
@@ -177,7 +199,7 @@ async function handleToolCall(name, args) {
         body: JSON.stringify({
           workspace_id: 'ws_default',
           thread_id: `thread_${Date.now()}`,
-          requester: { agent_id: AGENT_ID, platform: 'claude_code' },
+          requester: { agent_id: AGENT_ID, platform: AGENT_ID },
           assignee: { agent_id: args.target_agent, platform: args.target_agent },
           connector: { type: 'bridge', protocol: 'websocket', connector_id: 'mcp-bridge', platform: 'recoder' },
           payload: { intent: args.intent || 'execute', task: args.task },
@@ -187,7 +209,7 @@ async function handleToolCall(name, args) {
     }
 
     case 'recoder_create_thread': {
-      const authHeaders = API_TOKEN ? { 'Authorization': `Bearer ${API_TOKEN}` } : {};
+      const authHeaders = buildPythonApiHeaders();
       const agentId = args.agent_id || '7e91f872-2407-42ac-bfcb-ea69a496e85c';
 
       const threadRes = await fetch(`${API_URL}/v1/threads`, {
@@ -205,7 +227,7 @@ async function handleToolCall(name, args) {
         form.append('agent_id', agentId);
         const startRes = await fetch(`${API_URL}/v1/agent/start`, {
           method: 'POST',
-          headers: { ...authHeaders, 'Content-Type': 'application/x-www-form-urlencoded' },
+          headers: buildPythonApiHeaders({ 'Content-Type': 'application/x-www-form-urlencoded' }),
           body: form.toString(),
         });
         const startData = await startRes.json();
@@ -215,7 +237,7 @@ async function handleToolCall(name, args) {
     }
 
     case 'recoder_get_thread': {
-      const authHeaders = API_TOKEN ? { 'Authorization': `Bearer ${API_TOKEN}` } : {};
+      const authHeaders = buildPythonApiHeaders();
       const res = await fetch(`${API_URL}/v1/threads/${args.thread_id}/messages`, { headers: authHeaders });
       const messages = await res.json();
       const msgs = Array.isArray(messages) ? messages : messages.messages || messages.items || [];
@@ -230,7 +252,7 @@ async function handleToolCall(name, args) {
     case 'recoder_sandbox_exec': {
       if (!DAYTONA_KEY) return 'Error: DAYTONA_API_KEY not configured.';
       const dHeaders = { 'Authorization': `Bearer ${DAYTONA_KEY}`, 'Content-Type': 'application/json' };
-      const baseUrl = DAYTONA_URL.replace('/api', '');
+      const baseUrl = DAYTONA_URL.replace(/\/api\/?$/, '');
 
       let sandboxId = args.sandbox_id;
       let createdNew = false;
@@ -247,9 +269,10 @@ async function handleToolCall(name, args) {
         await new Promise(r => setTimeout(r, 5000));
       }
 
-      const execRes = await fetch(`${baseUrl}/sandbox/${sandboxId}/toolbox/process/exec`, {
+      const shellCommand = `sh -c ${JSON.stringify(args.command)}`;
+      const execRes = await fetch(`${baseUrl}/api/toolbox/${sandboxId}/toolbox/process/execute`, {
         method: 'POST', headers: dHeaders,
-        body: JSON.stringify({ command: args.command }),
+        body: JSON.stringify({ command: shellCommand }),
       });
       const result = await execRes.json();
 
@@ -302,4 +325,4 @@ async function handleMessage(msg) {
 process.stderr.write('[recoder-a2a] Recoder A2A MCP Server v2.0\n');
 process.stderr.write(`[recoder-a2a] API: ${API_URL} | A2A: ${A2A_URL}\n`);
 if (DAYTONA_KEY) process.stderr.write('[recoder-a2a] Daytona sandbox enabled\n');
-if (API_TOKEN) process.stderr.write('[recoder-a2a] API auth configured\n');
+if (PLATFORM_TOKEN || PYTHON_API_KEY) process.stderr.write('[recoder-a2a] API auth configured\n');
