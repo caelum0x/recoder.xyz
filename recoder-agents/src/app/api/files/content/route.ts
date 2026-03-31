@@ -8,7 +8,7 @@ import { extractSessionToken } from '@recoder/auth/edge';
  *
  * GET /api/files/content?sandboxId=xxx&path=/workspace/file.docx
  */
-export async function GET(request: NextRequest) {
+async function proxyFileContent(request: NextRequest, method: 'GET' | 'HEAD') {
   const sandboxId = request.nextUrl.searchParams.get('sandboxId');
   const filePath = request.nextUrl.searchParams.get('path');
 
@@ -31,25 +31,52 @@ export async function GET(request: NextRequest) {
 
   try {
     const response = await fetch(url, {
+      method,
       headers: { 'Authorization': `Bearer ${token}` },
     });
 
     if (!response.ok) {
+      if (method === 'HEAD') {
+        return new NextResponse(null, { status: response.status });
+      }
       return new NextResponse(await response.text(), { status: response.status });
     }
 
-    // Stream the response body through
-    const contentType = response.headers.get('content-type') || 'application/octet-stream';
+    const headers: Record<string, string> = {
+      'Cache-Control': response.headers.get('cache-control') || 'private, max-age=60',
+    };
+
+    const contentType = response.headers.get('content-type');
+    if (contentType) {
+      headers['Content-Type'] = contentType;
+    }
+
+    const contentDisposition = response.headers.get('content-disposition');
+    if (contentDisposition) {
+      headers['Content-Disposition'] = contentDisposition;
+    }
+
+    const contentLength = response.headers.get('content-length');
+    if (contentLength) {
+      headers['Content-Length'] = contentLength;
+    }
+
+    if (method === 'HEAD') {
+      return new NextResponse(null, { status: 200, headers });
+    }
+
     const body = await response.arrayBuffer();
 
-    return new NextResponse(body, {
-      status: 200,
-      headers: {
-        'Content-Type': contentType,
-        'Cache-Control': 'private, max-age=60',
-      },
-    });
+    return new NextResponse(body, { status: 200, headers });
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 502 });
   }
+}
+
+export async function GET(request: NextRequest) {
+  return proxyFileContent(request, 'GET');
+}
+
+export async function HEAD(request: NextRequest) {
+  return proxyFileContent(request, 'HEAD');
 }

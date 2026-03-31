@@ -20,7 +20,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { buildSandboxFileUrl, fetchSandboxFile, fetchSandboxHtmlAsBlobUrl } from '@/lib/utils/url';
+import { buildSandboxFileUrl, constructHtmlPreviewUrl, fetchSandboxFile, fetchSandboxHtmlAsBlobUrl } from '@/lib/utils/url';
 import { downloadPresentation, DownloadFormat, handleGoogleSlidesUpload } from '../utils/presentation-utils';
 import { useDownloadRestriction } from '@/hooks/billing';
 
@@ -336,11 +336,23 @@ export function FullScreenPresentationViewer({
       const [scale, setScale] = useState(1);
       const [blobUrl, setBlobUrl] = useState<string | null>(null);
       const prevBlobRef = useRef<string | null>(null);
+      const directSlideUrl = useMemo(() => {
+        const url = constructHtmlPreviewUrl(sandboxUrl, slide.file_path);
+        if (!url) return null;
+        return `${url}?t=${refreshTimestamp}`;
+      }, [sandboxUrl, slide.file_path, refreshTimestamp]);
 
       // Fetch slide HTML with auth and create blob URL
       useEffect(() => {
-        // In editor mode, we use the sandbox URL directly (different origin, not our API)
-        if (showEditor || !sandboxId) return;
+        // Prefer the real sandbox file URL so relative asset paths work.
+        if (showEditor || directSlideUrl || !sandboxId) {
+          if (prevBlobRef.current) {
+            URL.revokeObjectURL(prevBlobRef.current);
+            prevBlobRef.current = null;
+          }
+          setBlobUrl(null);
+          return;
+        }
 
         let cancelled = false;
         const slideUrl = buildSandboxFileUrl(sandboxId, slide.file_path);
@@ -356,7 +368,7 @@ export function FullScreenPresentationViewer({
         })();
 
         return () => { cancelled = true; };
-      }, [sandboxId, slide.file_path, refreshTimestamp, showEditor]);
+      }, [sandboxId, slide.file_path, refreshTimestamp, showEditor, directSlideUrl]);
 
       // Cleanup blob on unmount
       useEffect(() => {
@@ -412,7 +424,7 @@ export function FullScreenPresentationViewer({
       // In editor mode, use the sandbox URL directly; otherwise use auth blob URL
       const iframeSrc = showEditor
         ? `${sandboxUrl}/api/html/${slide.file_path}/editor`
-        : blobUrl || buildSandboxFileUrl(sandboxId, slide.file_path);
+        : directSlideUrl || blobUrl || buildSandboxFileUrl(sandboxId, slide.file_path);
 
       return (
         <div className="w-full h-full flex items-center justify-center bg-transparent">

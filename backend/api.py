@@ -490,6 +490,7 @@ app.add_middleware(
     allow_headers=[
         "Content-Type",
         "Authorization",
+        "Cache-Control",
         "X-Project-Id",
         "X-MCP-URL",
         "X-MCP-Type",

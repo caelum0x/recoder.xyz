@@ -4,7 +4,7 @@ import { getToolIcon, getUserFriendlyToolName, extractPrimaryParam } from '@/com
 import { AppIcon } from '../tool-views/shared/AppIcon';
 import { useSmoothToolField } from '@/hooks/messages';
 import { ToolCard } from './ToolCard';
-import { constructHtmlPreviewUrl } from '@/lib/utils/url';
+import { buildSandboxFileUrl, constructHtmlPreviewUrl, fetchSandboxFile } from '@/lib/utils/url';
 import type { Project } from '@/lib/api/threads';
 import { useQueryClient } from '@tanstack/react-query';
 import { threadKeys } from '@/hooks/threads/keys';
@@ -219,7 +219,7 @@ const SlideStreamPreview: React.FC<{
             return;
         }
 
-        if (!project?.sandbox?.sandbox_url || !presentationName || !slideNumber) {
+        if (!project?.sandbox?.id || !presentationName || !slideNumber) {
             return; // Don't set loading to false - wait for data
         }
 
@@ -232,21 +232,27 @@ const SlideStreamPreview: React.FC<{
         const fetchMetadata = async (retry: number = 0) => {
             try {
                 const sanitizedName = presentationName.replace(/[^a-zA-Z0-9\-_]/g, '').toLowerCase();
-                const metadataUrl = constructHtmlPreviewUrl(
-                    project.sandbox.sandbox_url,
+                const metadataUrl = buildSandboxFileUrl(
+                    project.sandbox.id,
                     `presentations/${sanitizedName}/metadata.json`
                 );
 
-                const response = await fetch(`${metadataUrl}?t=${Date.now()}`, {
+                if (!metadataUrl) {
+                    setIsLoadingMetadata(false);
+                    return;
+                }
+
+                const response = await fetchSandboxFile(`${metadataUrl}?t=${Date.now()}`, {
                     cache: 'no-cache',
-                    headers: { 'Cache-Control': 'no-cache' },
                 });
 
                 if (response.ok) {
                     const data = await response.json();
                     const slideData = data.slides?.[slideNumber];
                     if (slideData?.file_path) {
-                        const url = constructHtmlPreviewUrl(project.sandbox.sandbox_url, slideData.file_path);
+                        const url =
+                            constructHtmlPreviewUrl(project.sandbox.sandbox_url, slideData.file_path) ||
+                            buildSandboxFileUrl(project.sandbox.id, slideData.file_path);
                         setSlideUrl(url);
                         setIsLoadingMetadata(false);
                         return;
@@ -280,7 +286,7 @@ const SlideStreamPreview: React.FC<{
                 clearTimeout(retryTimeoutRef.current);
             }
         };
-    }, [project?.sandbox?.sandbox_url, presentationName, slideNumber, isCompleted, isStreaming]);
+    }, [project?.sandbox?.id, project?.sandbox?.sandbox_url, presentationName, slideNumber, isCompleted, isStreaming]);
 
     // During streaming, always show shimmer with generating state
     const isGenerating = !isCompleted || isStreaming;
@@ -1020,4 +1026,4 @@ export const ShowToolStream: React.FC<ShowToolStreamProps> = ({
             />
         </div>
     );
-}; 
+};
