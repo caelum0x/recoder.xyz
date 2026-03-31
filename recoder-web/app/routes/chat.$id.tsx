@@ -19,7 +19,7 @@ export async function loader({ params, context }: LoaderFunctionArgs) {
 
       // Look up chat session -> project -> framework/templateId
       const results = await sql`
-        SELECT p.framework, p."templateId"
+        SELECT p.id, p.framework, p."templateId"
         FROM chat_sessions cs
         JOIN projects p ON p.id = cs."projectId"
         WHERE cs.id = ${chatId} OR cs."urlId" = ${chatId}
@@ -29,6 +29,7 @@ export async function loader({ params, context }: LoaderFunctionArgs) {
       if (results.length > 0) {
         return json({
           id: chatId,
+          projectId: results[0].id || undefined,
           projectFramework: results[0].framework || undefined,
           projectTemplateId: results[0].templateId || undefined,
         });

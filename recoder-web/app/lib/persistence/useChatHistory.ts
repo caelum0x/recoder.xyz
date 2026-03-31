@@ -1,5 +1,6 @@
 import { useLoaderData, useNavigate, useLocation } from '@remix-run/react';
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { useStore } from '@nanostores/react';
 import { atom } from 'nanostores';
 import type { Message } from 'ai';
 import { toast } from 'react-toastify';
@@ -10,8 +11,10 @@ import { useAuth } from '~/lib/contexts/AuthContext';
 import { getOrCreateAnonymousId } from '~/utils/anonymous-id';
 import { getCurrentUserId } from '~/lib/stores/user';
 import { resetGlobalActionState, markNpmInstallComplete } from '~/lib/runtime/action-runner';
+import { normalizeTailwindToolchainPackageJson } from '~/lib/runtime/package-json-sanitizer';
 import { fetchProjectErrors } from '~/lib/hooks/useErrors';
 import { formatErrorsForAI } from '~/lib/services/auto-fix';
+import { resolveSandboxProjectId } from '~/lib/services/sandbox-project-id';
 import { canAutoFix, setAutoFixing } from '~/lib/stores/errors';
 import { dockerPost, dockerGet, DOCKER_URL } from '~/lib/services/docker-api';
 import * as chatSessions from '~/lib/stores/chat-sessions';
@@ -102,6 +105,7 @@ export interface ChatHistoryItem {
   id: string;
   urlId?: string;
   description?: string;
+  projectId?: string;
   messages: Message[];
   timestamp: string;
   fileSnapshot?: Record<string, string>;
@@ -608,6 +612,7 @@ async function loadChatFromDatabase(mixedId: string): Promise<ChatHistoryItem | 
         id: chat.id,
         urlId: chat.urlId,
         description: chat.description,
+        projectId: chat.projectId,
         messages: chat.messages || [],
         timestamp: chat.timestamp,
         fileSnapshot: chat.fileSnapshot, // Pass fileSnapshot through
@@ -741,6 +746,21 @@ async function runNpmInstallWithCoordination(projectId: string): Promise<boolean
       // 🚀 OPTIMIZATION: Check if node_modules is valid before cleaning
       const checkResult = await execWithRetry<{ output?: string }>({ command: 'test -d /workspace/node_modules/.bin && echo "valid" || echo "invalid"' });
       const isValid = checkResult.output?.includes('valid');
+
+      try {
+        const pkgJsonResult = await execWithRetry<{ output?: string }>({ command: 'cat /workspace/package.json' });
+        const { sanitized, changed } = normalizeTailwindToolchainPackageJson(pkgJsonResult.output || '');
+
+        if (changed) {
+          await dockerPost(`/api/file/${projectId}`, {
+            path: '/workspace/package.json',
+            content: sanitized,
+          });
+          logger.info('🧰 [runInstallWithCoordination] Normalized Tailwind/PostCSS toolchain before install');
+        }
+      } catch (error) {
+        logger.debug('⚠️ [runInstallWithCoordination] package.json normalization skipped:', error);
+      }
 
       if (!isValid) {
         logger.info('🧹 [runInstallWithCoordination] Cleaning invalid node_modules...');
@@ -1010,7 +1030,20 @@ export function useChatHistory() {
   const [ready, setReady] = useState<boolean>(false);
   const [urlId, setUrlId] = useState<string | undefined>();
   const [currentProjectId, setCurrentProjectId] = useState<string | undefined>(projectId);
+  const workbenchProjectId = useStore(workbenchStore.projectId);
   const previousPathRef = useRef<string>(location.pathname);
+
+  useEffect(() => {
+    if (projectId) {
+      setCurrentProjectId(projectId);
+    }
+  }, [projectId]);
+
+  useEffect(() => {
+    if (workbenchProjectId) {
+      setCurrentProjectId(workbenchProjectId);
+    }
+  }, [workbenchProjectId]);
 
   // Clear session state when navigating to home page (new conversation)
   useEffect(() => {
@@ -1059,6 +1092,15 @@ export function useChatHistory() {
 
       if (mixedId) {
       const handleLoadedChat = async (chat: ChatHistoryItem): Promise<void> => {
+        const resolvedProjectId = resolveSandboxProjectId({
+          preferredProjectId: projectId,
+          storedProjectId: chat.projectId,
+          urlId: chat.urlId,
+          chatId: chat.id,
+        });
+
+        setCurrentProjectId(resolvedProjectId);
+
         // Mark workbench as restored chat with the file paths AND messageIds from snapshot
         // This prevents ActionRunner from re-creating files that already exist
         // But allows NEW messages (after restoration) to create files normally
@@ -1096,9 +1138,7 @@ export function useChatHistory() {
               workbenchStore.showWorkbench.set(true);
 
               // 🚀 OPTIMIZATION: Restore files FIRST, then run npm install
-              // Use the urlId as projectId for consistency
-              const projectId = chat.urlId || chat.id || mixedId;
-              logger.info(`📂 [useChatHistory] Restoring past chat files to Docker, projectId: ${projectId}`);
+              logger.info(`📂 [useChatHistory] Restoring past chat files to Docker, projectId: ${resolvedProjectId}`);
 
               // Check if package.json exists
               const hasPackageJson = Object.keys(chat.fileSnapshot!).some(path =>
@@ -1106,7 +1146,7 @@ export function useChatHistory() {
               );
 
               // First restore files (this also creates the container)
-              const dockerRestored = await restoreFilesToDocker(projectId, chat.fileSnapshot!);
+              const dockerRestored = await restoreFilesToDocker(resolvedProjectId, chat.fileSnapshot!);
 
               if (dockerRestored) {
                 logger.info('✅ [useChatHistory] Files restored to Docker container');
@@ -1120,9 +1160,9 @@ export function useChatHistory() {
                 if (hasPackageJson) {
                   // If dev server is already running, just mark ready
                   try {
-                    const state = await checkWorkspaceHasFiles(projectId);
+                    const state = await checkWorkspaceHasFiles(resolvedProjectId);
                     if (state.devServerRunning) {
-                      await markContainerReady(projectId);
+                      await markContainerReady(resolvedProjectId);
                       return;
                     }
                   } catch {
@@ -1131,22 +1171,22 @@ export function useChatHistory() {
 
                   // Check if node_modules exists and is recent
                   try {
-                    const checkResult = await dockerPost<{ output?: string }>(`/api/exec/${projectId}`, { command: 'test -d node_modules && find node_modules -maxdepth 0 -mtime -1' });
+                    const checkResult = await dockerPost<{ output?: string }>(`/api/exec/${resolvedProjectId}`, { command: 'test -d node_modules && find node_modules -maxdepth 0 -mtime -1' });
 
                     if (!checkResult.output?.trim()) {
                       logger.info('📦 [useChatHistory] Running bun install after file restoration...');
-                      runNpmInstallWithCoordination(projectId).catch(err => {
+                      runNpmInstallWithCoordination(resolvedProjectId).catch(err => {
                         logger.warn('⚠️ [useChatHistory] bun install failed:', err);
                       });
                     } else {
                       logger.info('⚡ [useChatHistory] Skipping install - node_modules is recent');
-                      startDevServerOnly(projectId).catch(err => {
+                      startDevServerOnly(resolvedProjectId).catch(err => {
                         logger.warn('⚠️ [useChatHistory] start dev server failed:', err);
                       });
                     }
                   } catch (e) {
                     logger.info('📦 [useChatHistory] Running bun install after file restoration...');
-                    runNpmInstallWithCoordination(projectId).catch(err => {
+                    runNpmInstallWithCoordination(resolvedProjectId).catch(err => {
                       logger.warn('⚠️ [useChatHistory] bun install failed:', err);
                     });
                   }
@@ -1154,7 +1194,7 @@ export function useChatHistory() {
 
                 // Trigger auto-fix after restoration
                 setTimeout(() => {
-                  checkAndAutoFixErrors(projectId).catch(err => {
+                  checkAndAutoFixErrors(resolvedProjectId).catch(err => {
                     logger.warn('⚠️ [useChatHistory] Auto-fix failed:', err);
                   });
                 }, 2000);
