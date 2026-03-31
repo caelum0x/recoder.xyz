@@ -3,12 +3,13 @@
  */
 
 import { createProxyMiddleware } from 'http-proxy-middleware';
-import type { Express } from 'express';
+import type { Express, Request } from 'express';
 import http from 'http';
 import Docker from 'dockerode';
+import WebSocket from 'ws';
 import { devServerManager } from './dev-server.js';
 import { getDaytonaClient } from './daytona-client.js';
-import { ensureDaytonaSandboxRunning } from './daytona-file-ops.js';
+import { daytonaGetLogs, ensureDaytonaSandboxRunning } from './daytona-file-ops.js';
 
 const docker = new Docker();
 const autoStartAttempts = new Map<string, number>();
@@ -31,6 +32,10 @@ const DAYTONA_PORT_CANDIDATES = [
   { port: 8080, type: 'Other (8080)' },
   { port: 8081, type: 'Expo (8081)' },
 ];
+
+type WsExpressApp = Express & {
+  ws: (route: string, handler: (ws: WebSocket, req: Request) => void | Promise<void>) => void;
+};
 
 async function execInContainer(containerId: string, cmd: string): Promise<string> {
   const container = docker.getContainer(containerId);
@@ -169,6 +174,43 @@ async function probeDaytonaPort(entry: { id: string }, port: number, path: strin
   });
 }
 
+async function detectDaytonaPortFromLogs(entry: { id: string }): Promise<number | null> {
+  try {
+    const logs = await daytonaGetLogs(entry.id, 120);
+    const matches = [...logs.matchAll(/(?:Local:\s+http:\/\/localhost:|Network:\s+http:\/\/[^\s:]+:)(\d+)/g)];
+
+    for (let i = matches.length - 1; i >= 0; i--) {
+      const port = parseInt(matches[i][1], 10);
+      if (!DAYTONA_PORT_CANDIDATES.some((candidate) => candidate.port === port)) {
+        continue;
+      }
+      if (await probeDaytonaPort(entry, port, '/@vite/client')) {
+        return port;
+      }
+    }
+  } catch {
+    // Best-effort only.
+  }
+
+  return null;
+}
+
+async function findReadyDaytonaPort(entry: { id: string; port?: number }): Promise<number | null> {
+  const preferredPort = await detectDaytonaPortFromLogs(entry);
+  const candidatePorts = DAYTONA_PORT_CANDIDATES.map(({ port }) => port);
+  const portsToTry = preferredPort
+    ? [preferredPort, ...candidatePorts.filter((port) => port !== preferredPort)]
+    : candidatePorts;
+
+  for (const port of portsToTry) {
+    if (await probeDaytonaPort(entry, port)) {
+      return port;
+    }
+  }
+
+  return null;
+}
+
 function getProxySubPath(req: { params?: Record<string, string>; url?: string }): string {
   const wildcardPath = req.params?.['0'];
   if (typeof wildcardPath === 'string' && wildcardPath.length > 0) {
@@ -195,7 +237,17 @@ function shouldRewritePreviewBody(contentType: string, requestPath: string): boo
     /\.(?:[cm]?[jt]sx?)$/i.test(requestPath);
 }
 
-function rewritePreviewBody(body: string, proxyPrefix: string, contentType: string): string {
+function rewriteViteHmrClient(body: string, proxyPrefix: string): string {
+  const normalizedPrefix = proxyPrefix.replace(/\/+$/, '');
+  const socketTarget = normalizedPrefix ? `${normalizedPrefix}/` : '/';
+  return body
+    .replace(/const serverHost = "[^"]*";/, `const serverHost = \`${'${importMetaUrl.host}'}${socketTarget}\`;`)
+    .replace(/const socketHost = `[^`]+`;/, `const socketHost = \`${'${importMetaUrl.host}'}${socketTarget}\`;`)
+    .replace(/const directSocketHost = "[^"]*";/, `const directSocketHost = \`${'${importMetaUrl.host}'}${socketTarget}\`;`)
+    .replace(/const base = "[^"]*" \|\| "\/";/, `const base = "${socketTarget}" || "/";`);
+}
+
+function rewritePreviewBody(body: string, proxyPrefix: string, contentType: string, requestPath: string = ''): string {
   const normalizedPrefix = proxyPrefix.replace(/\/+$/, '');
   const proxyRoot = `${normalizedPrefix}/`;
   const absolutePathGuard = '(?!\\/|preview\\/|api\\/sandbox-preview\\/)';
@@ -224,6 +276,10 @@ function rewritePreviewBody(body: string, proxyPrefix: string, contentType: stri
       .replace(new RegExp(`(export\\s+.*from\\s+["'])\\/${absolutePathGuard}`, 'g'), `$1${proxyRoot}`)
       .replace(new RegExp(`(import\\s*\\(\\s*["'])\\/${absolutePathGuard}`, 'g'), `$1${proxyRoot}`)
       .replace(new RegExp(`(new\\s+URL\\s*\\(\\s*["'])\\/${absolutePathGuard}`, 'g'), `$1${proxyRoot}`);
+
+    if (requestPath === '@vite/client') {
+      modifiedBody = rewriteViteHmrClient(modifiedBody, normalizedPrefix);
+    }
   }
 
   return modifiedBody;
@@ -524,7 +580,118 @@ const ERROR_CAPTURE_SCRIPT = `
 </script>
 `;
 
-export function setupPreviewProxy(app: Express, containers: Map<string, { id: string; lastActive: number; port: number }>) {
+export function setupPreviewProxy(app: WsExpressApp, containers: Map<string, { id: string; lastActive: number; port: number }>) {
+  app.ws('/preview/:projectId', async (clientWs: WebSocket, req: any) => {
+    const { projectId } = req.params;
+    let entry = containers.get(projectId) as any;
+
+    if (!entry) {
+      entry = await recoverContainerFromDocker(projectId, containers);
+    }
+    if (!entry) {
+      entry = await recoverContainerFromDaytona(projectId, containers);
+    }
+    if (!entry?.id) {
+      clientWs.close(1013, 'Preview target not found');
+      return;
+    }
+
+    const querySuffix = getQuerySuffix(req);
+    const upstreamPath = querySuffix ? `/${querySuffix}` : '/';
+    const protocolHeader = req.headers['sec-websocket-protocol'];
+    const protocols = typeof protocolHeader === 'string'
+      ? protocolHeader.split(',').map((value: string) => value.trim()).filter(Boolean)
+      : undefined;
+
+    let upstreamUrl = '';
+    let upstreamHeaders: Record<string, string> | undefined;
+
+    if (entry.daytona || entry.daytonaPreviewUrl) {
+      try {
+        const wakeResult = await ensureDaytonaSandboxRunning(entry.id);
+        if (!wakeResult.running) {
+          clientWs.close(1013, 'Sandbox is not running');
+          return;
+        }
+      } catch {
+        clientWs.close(1013, 'Sandbox wake failed');
+        return;
+      }
+
+      const targetPort = await findReadyDaytonaPort(entry);
+      if (!targetPort) {
+        clientWs.close(1013, 'Preview websocket target not ready');
+        return;
+      }
+      entry.port = targetPort;
+
+      const proxyHost = getDaytonaProxyHost();
+      const proxyPort = getDaytonaProxyPort();
+      const sandboxHost = `${targetPort}-${entry.id}.sandbox.recoder.xyz`;
+      upstreamUrl = `ws://${proxyHost}:${proxyPort}${upstreamPath}`;
+      upstreamHeaders = { Host: sandboxHost };
+    } else {
+      const basePorts = [entry.port + 1, entry.port, entry.port + 4, entry.port + 5, entry.port + 2];
+      let targetPort = 0;
+      for (const port of basePorts) {
+        if (await checkPort(port)) {
+          targetPort = port;
+          break;
+        }
+      }
+      if (!targetPort) {
+        clientWs.close(1013, 'Preview websocket target not ready');
+        return;
+      }
+      upstreamUrl = `ws://${PREVIEW_TARGET_HOST}:${targetPort}${upstreamPath}`;
+    }
+
+    const upstreamWs = protocols?.length
+      ? new WebSocket(upstreamUrl, protocols, { headers: upstreamHeaders })
+      : new WebSocket(upstreamUrl, { headers: upstreamHeaders });
+
+    upstreamWs.on('open', () => {
+      console.log(`🔌 [Preview WS] Connected ${projectId} -> ${upstreamUrl}`);
+    });
+
+    upstreamWs.on('message', (data, isBinary) => {
+      if (clientWs.readyState === WebSocket.OPEN) {
+        clientWs.send(data, { binary: isBinary });
+      }
+    });
+
+    clientWs.on('message', (data) => {
+      if (upstreamWs.readyState === WebSocket.OPEN) {
+        upstreamWs.send(data);
+      }
+    });
+
+    upstreamWs.on('close', (code, reason) => {
+      if (clientWs.readyState === WebSocket.OPEN || clientWs.readyState === WebSocket.CONNECTING) {
+        clientWs.close(code || 1000, reason.toString() || undefined);
+      }
+    });
+
+    clientWs.on('close', (code, reason) => {
+      if (upstreamWs.readyState === WebSocket.OPEN || upstreamWs.readyState === WebSocket.CONNECTING) {
+        upstreamWs.close(code || 1000, reason.toString() || undefined);
+      }
+    });
+
+    upstreamWs.on('error', (error) => {
+      console.warn(`[Preview WS] Upstream error for ${projectId}:`, (error as Error).message);
+      if (clientWs.readyState === WebSocket.OPEN || clientWs.readyState === WebSocket.CONNECTING) {
+        clientWs.close(1011, 'Preview websocket upstream error');
+      }
+    });
+
+    clientWs.on('error', (error) => {
+      console.warn(`[Preview WS] Client error for ${projectId}:`, (error as Error).message);
+      if (upstreamWs.readyState === WebSocket.OPEN || upstreamWs.readyState === WebSocket.CONNECTING) {
+        upstreamWs.close(1001, 'Client disconnected');
+      }
+    });
+  });
 
   app.use('/preview/:projectId', async (req, res, next) => {
     const { projectId } = req.params;
@@ -577,18 +744,15 @@ export function setupPreviewProxy(app: Express, containers: Map<string, { id: st
 
       // Quick health check via the internal Daytona proxy.
       // Do not rely on curl existing inside the sandbox.
-      let daytonaServerReady = false;
-      for (const { port } of DAYTONA_PORT_CANDIDATES) {
-        if (await probeDaytonaPort(entry, port)) {
-          const dc = getDaytonaClient();
-          daytonaServerReady = true;
-          entry.port = port;
-          const newPreviewUrl = dc.getPreviewUrl(entry.id, port);
-          if (newPreviewUrl !== (entry as any).daytonaPreviewUrl) {
-            (entry as any).daytonaPreviewUrl = newPreviewUrl;
-            console.log(`[Preview] Updated Daytona preview URL to port ${port}`);
-          }
-          break;
+      const readyPort = await findReadyDaytonaPort(entry);
+      const daytonaServerReady = readyPort !== null;
+      if (readyPort !== null) {
+        const dc = getDaytonaClient();
+        entry.port = readyPort;
+        const newPreviewUrl = dc.getPreviewUrl(entry.id, readyPort);
+        if (newPreviewUrl !== (entry as any).daytonaPreviewUrl) {
+          (entry as any).daytonaPreviewUrl = newPreviewUrl;
+          console.log(`[Preview] Updated Daytona preview URL to port ${readyPort}`);
         }
       }
 
@@ -918,7 +1082,7 @@ export function setupPreviewProxy(app: Express, containers: Map<string, { id: st
       res.status(proxyResult.status);
       const contentType = proxyResult.headers['content-type'] || '';
       const responseBody = shouldRewritePreviewBody(contentType, normalizedSubPath)
-        ? Buffer.from(rewritePreviewBody(proxyResult.body.toString('utf8'), proxyPrefix, contentType), 'utf8')
+        ? Buffer.from(rewritePreviewBody(proxyResult.body.toString('utf8'), proxyPrefix, contentType, normalizedSubPath), 'utf8')
         : proxyResult.body;
 
       for (const [key, value] of Object.entries(proxyResult.headers)) {
@@ -1035,7 +1199,10 @@ export function setupPreviewProxy(app: Express, containers: Map<string, { id: st
         }),
       );
 
-      const respondingResult = portResults.find(r => r.responding);
+      const preferredPort = await detectDaytonaPortFromLogs(entry);
+      const respondingResult = (preferredPort !== null
+        ? portResults.find((result) => result.port === preferredPort && result.responding)
+        : undefined) || portResults.find((result) => result.responding);
       const effectivePreviewUrl = respondingResult?.url || daytonaUrl;
       if (respondingResult) {
         entry.port = respondingResult.port;

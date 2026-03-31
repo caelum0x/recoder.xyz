@@ -186,19 +186,43 @@ function isAutoFixable(error: BuildError): boolean {
   return fixableTypes.includes(error.type);
 }
 
+function stripAnsi(value: string): string {
+  return value.replace(/\u001b\[[0-9;]*m/g, '');
+}
+
+function normalizeErrorLine(value?: string): string {
+  return stripAnsi(value || '').replace(/\s+/g, ' ').trim();
+}
+
+function normalizeErrorBlock(value?: string): string {
+  return stripAnsi(value || '').trim();
+}
+
+function getPreferredErrorMessage(error: BuildError): string {
+  const candidates = [
+    normalizeErrorLine(error.message),
+    normalizeErrorLine(error.shortMessage),
+    normalizeErrorLine(error.rawError),
+  ];
+
+  return candidates.find((candidate) => candidate.length >= 5) || '';
+}
+
 function formatErrorsForAI(errors: BuildError[]): string {
   if (errors.length === 0) return '';
 
-  // Filter out obviously broken/partial lines to avoid useless prompts (e.g. "F")
-  const filteredErrors = errors.filter((error) => {
-    const message = (error.message || '').trim();
-    return message.length >= 5;
-  });
+  const preparedErrors = errors
+    .map((error) => ({
+      error,
+      preferredMessage: getPreferredErrorMessage(error),
+      rawBlock: normalizeErrorBlock(error.rawError),
+    }))
+    .filter(({ preferredMessage }) => preferredMessage.length >= 5);
 
-  if (filteredErrors.length === 0) return '';
+  if (preparedErrors.length === 0) return '';
 
-  const errorDetails = filteredErrors.map((error, index) => {
-    let detail = `Error ${index + 1}: ${error.message}`;
+  const errorDetails = preparedErrors.map(({ error, preferredMessage, rawBlock }, index) => {
+    let detail = `Error ${index + 1}: ${preferredMessage}`;
 
     if (error.filePath) {
       detail += `\nFile: ${error.filePath}`;
@@ -208,8 +232,8 @@ function formatErrorsForAI(errors: BuildError[]): string {
       }
     }
 
-    if (error.rawError && error.rawError !== error.message) {
-      detail += `\n\nRaw error:\n${error.rawError}`;
+    if (rawBlock && normalizeErrorLine(rawBlock) !== preferredMessage) {
+      detail += `\n\nRaw error:\n${rawBlock}`;
     }
 
     return detail;
