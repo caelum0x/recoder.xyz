@@ -16,6 +16,25 @@ const REGEX_CACHE = {
   aggressivePath: /(?:filePath|filepath|path)\s*=\s*["']?([^"'\s>]+)["']?/i,
 };
 
+const ACTION_TYPE_ALIASES: Record<string, ActionType> = {
+  createFile: 'file',
+  createFiles: 'file',
+  runShellCommand: 'shell',
+  importStarterTemplate: 'importStarter',
+  cloneGitHubRepo: 'cloneGitHub',
+  readManyFiles: 'read_many_files',
+  strReplace: 'str_replace',
+  editFile: 'edit_file',
+  delegateSubagent: 'delegate_subagent',
+  webSearch: 'web_search',
+  webFetch: 'web_fetch',
+  webCrawl: 'web_crawl',
+  memory: 'memory_operation',
+  ripGrep: 'ripgrep_search',
+  glob: 'glob_search',
+  copyProject: 'copy_project',
+};
+
 function validateShellCommand(content: string): { valid: boolean; reason?: string } {
   const normalized = content.replace(/\n/g, ' ').toLowerCase();
   const forbiddenPatterns = [
@@ -332,7 +351,8 @@ export class StreamingMessageParser {
 
   #parseActionTag(input: string, actionOpenIndex: number, actionEndIndex: number) {
     const actionTag = input.slice(actionOpenIndex, actionEndIndex + 1);
-    const actionType = this.#extractAttribute(actionTag, 'type') as ActionType;
+    const rawActionType = this.#extractAttribute(actionTag, 'type');
+    const actionType = this.#normalizeActionType(rawActionType);
 
     const actionAttributes = { type: actionType, content: '' };
 
@@ -411,6 +431,89 @@ export class StreamingMessageParser {
       (actionAttributes as any).filePath = filePath || '';
       (actionAttributes as any).oldString = oldString || '';
       (actionAttributes as any).newString = newString || '';
+    } else if (actionType === 'memory_operation') {
+      const operation = this.#extractAttribute(actionTag, 'operation') as string;
+      const key = this.#extractAttribute(actionTag, 'key') as string;
+      const value = this.#extractAttribute(actionTag, 'value') as string;
+      if (operation === 'store' || operation === 'retrieve' || operation === 'list') {
+        (actionAttributes as any).operation = operation;
+      }
+      if (key) {
+        (actionAttributes as any).key = key;
+      }
+      if (value) {
+        (actionAttributes as any).value = value;
+      }
+    } else if (actionType === 'glob_search') {
+      const pattern = this.#extractAttribute(actionTag, 'pattern') as string;
+      const exclude = this.#parseCsvAttribute(this.#extractAttribute(actionTag, 'exclude') as string | undefined);
+      const maxDepth = this.#extractAttribute(actionTag, 'maxDepth') as string;
+      (actionAttributes as any).pattern = pattern || '';
+      if (exclude && exclude.length > 0) {
+        (actionAttributes as any).exclude = exclude;
+      }
+      if (maxDepth) {
+        const parsed = Number.parseInt(maxDepth, 10);
+        if (!Number.isNaN(parsed) && parsed > 0) {
+          (actionAttributes as any).maxDepth = parsed;
+        }
+      }
+    } else if (actionType === 'ripgrep_search') {
+      const query = this.#extractAttribute(actionTag, 'query') as string;
+      const filePattern = this.#extractAttribute(actionTag, 'filePattern') as string;
+      const caseSensitive = this.#extractAttribute(actionTag, 'caseSensitive') as string;
+      const maxResults = this.#extractAttribute(actionTag, 'maxResults') as string;
+      (actionAttributes as any).query = query || '';
+      if (filePattern) {
+        (actionAttributes as any).filePattern = filePattern;
+      }
+      if (caseSensitive === 'true') {
+        (actionAttributes as any).caseSensitive = true;
+      } else if (caseSensitive === 'false') {
+        (actionAttributes as any).caseSensitive = false;
+      }
+      if (maxResults) {
+        const parsed = Number.parseInt(maxResults, 10);
+        if (!Number.isNaN(parsed) && parsed > 0) {
+          (actionAttributes as any).maxResults = parsed;
+        }
+      }
+    } else if (actionType === 'edit_file') {
+      let filePath = this.#extractAttribute(actionTag, 'filePath') as string;
+      if (!filePath) filePath = this.#extractAttribute(actionTag, 'filepath') as string;
+      if (!filePath) filePath = this.#extractAttribute(actionTag, 'path') as string;
+      const operation = this.#extractAttribute(actionTag, 'operation') as string;
+      const lineNumber = this.#extractAttribute(actionTag, 'lineNumber') as string;
+      const endLineNumber = this.#extractAttribute(actionTag, 'endLineNumber') as string;
+      (actionAttributes as any).filePath = filePath || '';
+      if (operation === 'insert' || operation === 'delete' || operation === 'replace') {
+        (actionAttributes as any).operation = operation;
+      }
+      if (lineNumber) {
+        const parsed = Number.parseInt(lineNumber, 10);
+        if (!Number.isNaN(parsed) && parsed > 0) {
+          (actionAttributes as any).lineNumber = parsed;
+        }
+      }
+      if (endLineNumber) {
+        const parsed = Number.parseInt(endLineNumber, 10);
+        if (!Number.isNaN(parsed) && parsed > 0) {
+          (actionAttributes as any).endLineNumber = parsed;
+        }
+      }
+    } else if (actionType === 'read_many_files') {
+      const filePathsAttr = this.#extractAttribute(actionTag, 'filePaths') as string;
+      const maxFileSize = this.#extractAttribute(actionTag, 'maxFileSize') as string;
+      const filePaths = this.#parseCsvAttribute(filePathsAttr);
+      if (filePaths && filePaths.length > 0) {
+        (actionAttributes as any).filePaths = filePaths;
+      }
+      if (maxFileSize) {
+        const parsed = Number.parseInt(maxFileSize, 10);
+        if (!Number.isNaN(parsed) && parsed > 0) {
+          (actionAttributes as any).maxFileSize = parsed;
+        }
+      }
     } else if (actionType === 'delegate_subagent') {
       const taskDescription = this.#extractAttribute(actionTag, 'taskDescription') as string;
       const agentType = this.#extractAttribute(actionTag, 'agentType') as string;
@@ -588,6 +691,14 @@ export class StreamingMessageParser {
     match = tag.match(REGEX_CACHE.noQuotes(attributeName));
     if (match) return match[1];
     return undefined;
+  }
+
+  #normalizeActionType(actionType?: string): ActionType | undefined {
+    if (!actionType) {
+      return undefined;
+    }
+
+    return (ACTION_TYPE_ALIASES[actionType] || actionType) as ActionType;
   }
 
   #parseCsvAttribute(value?: string): string[] | undefined {

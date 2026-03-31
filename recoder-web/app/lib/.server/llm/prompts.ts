@@ -252,7 +252,7 @@ Step 2 - Clarify:
 - Where should user data be stored?"
 
 Step 3 - Plan (create PLAN.md):
-<recoderAction type="createFile" filePath="PLAN.md">
+<recoderAction type="file" filePath="PLAN.md">
 # Authentication Implementation Plan
 
 ## Architecture
@@ -351,52 +351,52 @@ export function NewComponent() { return <div>Hello</div>; }
 ## 🌐 INTERNET ACCESS: Use Web Tools for Current Info
 
 ✅ Search for solutions:
-<recoderAction type="webSearch" query="Python FastAPI error solutions 2026">Search for current solutions</recoderAction>
+<recoderAction type="web_search" query="Python FastAPI error solutions 2026">Search for current solutions</recoderAction>
 
 ✅ Fetch documentation:
-<recoderAction type="webFetch" url="https://docs.python.org/3/tutorial/" selector=".body">Get latest Python docs</recoderAction>
+<recoderAction type="web_fetch" url="https://docs.python.org/3/tutorial/" selector=".body">Get latest Python docs</recoderAction>
 
 ## 🧠 MEMORY: Remember Important Context
 
 ✅ Store project info:
-<recoderAction type="memory" operation="store" key="project_structure" value="Python FastAPI backend with PostgreSQL">Remember project details</recoderAction>
+<recoderAction type="memory_operation" operation="store" key="project_structure" value="Python FastAPI backend with PostgreSQL">Remember project details</recoderAction>
 
 ✅ Retrieve context:
-<recoderAction type="memory" operation="retrieve" key="project_structure">Get stored project info</recoderAction>
+<recoderAction type="memory_operation" operation="retrieve" key="project_structure">Get stored project info</recoderAction>
 
 ## 🔍 ADVANCED SEARCH: Use Right Tool for Job
 
 ✅ Fast codebase search:
-<recoderAction type="ripGrep" query="def main" filePattern="*.py">Fast search in Python files</recoderAction>
+<recoderAction type="ripgrep_search" query="def main" filePattern="*.py">Fast search in Python files</recoderAction>
 
 ✅ Pattern matching:
-<recoderAction type="glob" pattern="**/*.{py,rs,go,java}" exclude="__pycache__">Find all code files</recoderAction>
+<recoderAction type="glob_search" pattern="**/*.{py,rs,go,java}" exclude="__pycache__">Find all code files</recoderAction>
 
 ## 🤖 PARALLEL EXECUTION: Delegate Complex Tasks
 
 ✅ Delegate to specialists:
-<recoderAction type="delegateSubagent" agentType="coder" taskDescription="Implement Rust web server with Actix">Let specialist handle complex coding</recoderAction>
+<recoderAction type="delegate_subagent" agentType="coder" taskDescription="Implement Rust web server with Actix">Let specialist handle complex coding</recoderAction>
 
 ## 🎯 TOOL USAGE BEST PRACTICES
 
 ### When to Use Each Tool:
 
-**readFile vs readManyFiles:**
+**readFile vs read_many_files:**
 - Use \`readFile\` for 1-3 files
-- Use \`readManyFiles\` for 4+ files (more efficient)
+- Use \`read_many_files\` for 4+ files (more efficient)
 
-**searchFiles vs ripGrep:**
+**searchFiles vs ripgrep_search:**
 - Use \`searchFiles\` for simple text search
-- Use \`ripGrep\` for large codebases (10x faster)
+- Use \`ripgrep_search\` for large codebases (10x faster)
 
-**str_replace vs editFile vs multiApplyDiff:**
+**str_replace vs edit_file vs multi_apply_diff:**
 - Use \`str_replace\` for single text replacement in one file
-- Use \`editFile\` for line-based operations (insert/delete specific lines)
+- Use \`edit_file\` for line-based operations (insert/delete specific lines)
 - Use \`multi_apply_diff\` for ATOMIC changes across MULTIPLE files (all succeed or all fail)
 
-**webSearch vs webFetch:**
-- Use \`webSearch\` to find information/solutions
-- Use \`webFetch\` to read specific documentation pages
+**web_search vs web_fetch:**
+- Use \`web_search\` to find information/solutions
+- Use \`web_fetch\` to read specific documentation pages
 
 **browserAutomation:** (Web testing and scraping)
 - Use for automated browser testing, form filling, and web scraping
@@ -438,9 +438,9 @@ export function NewComponent() { return <div>Hello</div>; }
   - Finding similar patterns across the codebase
   - Understanding how features are implemented
 
-**glob vs listFiles:**
+**glob_search vs listFiles:**
 - Use \`listFiles\` for simple directory listing
-- Use \`glob\` for complex patterns like \`**/*.{ts,tsx,py}\`
+- Use \`glob_search\` for complex patterns like \`**/*.{ts,tsx,py}\`
 
 **memory operations:**
 - \`store\` - Save important context for later
@@ -537,7 +537,7 @@ Then fix based on actual type structure
 \`\`\`
 Error: Build fails with cryptic message
 Fix: Read the full error, search for similar issues
-<recoderAction type="webSearch" query="[exact error message] solution 2026">Find recent solutions</recoderAction>
+<recoderAction type="web_search" query="[exact error message] solution 2026">Find recent solutions</recoderAction>
 <recoderAction type="readFile" filePath="package.json">Check build scripts</recoderAction>
 \`\`\`
 </agentic_workflow>
