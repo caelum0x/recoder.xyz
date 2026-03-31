@@ -96,9 +96,98 @@ export async function fetchSandboxFile(
 }
 
 /**
+ * Resolve a relative or sandbox-absolute asset path to a normalized absolute
+ * sandbox path (rooted at /home/daytona/...).
+ * Returns null for external URLs (http/https/data/blob/protocol-relative).
+ */
+function resolveToSandboxPath(src: string, fileDir: string): string | null {
+  if (
+    !src ||
+    src.startsWith('data:') ||
+    src.startsWith('http://') ||
+    src.startsWith('https://') ||
+    src.startsWith('blob:') ||
+    src.startsWith('//')
+  ) {
+    return null;
+  }
+
+  let absolutePath: string;
+
+  if (src.startsWith('./') || src.startsWith('../') || !/^\//.test(src)) {
+    // Relative path — resolve against the slide's directory
+    const parts = `${fileDir}/${src}`.split('/');
+    const resolved: string[] = [];
+    for (const part of parts) {
+      if (part === '..') {
+        resolved.pop();
+      } else if (part !== '.' && part !== '') {
+        resolved.push(part);
+      }
+    }
+    absolutePath = `/${resolved.join('/')}`;
+  } else {
+    // Absolute path within sandbox (e.g. /workspace/..., /home/daytona/..., /projects/...)
+    absolutePath = src.replace(/^\/workspace\//, '');
+    if (!absolutePath.startsWith('/home/daytona/')) {
+      absolutePath = `/home/daytona${absolutePath}`;
+    }
+  }
+
+  return absolutePath;
+}
+
+/**
+ * Rewrite local asset references (img src, CSS url()) inside HTML to use the
+ * same-origin sandbox file proxy.  Because the iframe has allow-same-origin,
+ * these proxy requests carry session cookies automatically.
+ */
+function rewriteHtmlAssetPaths(
+  html: string,
+  sandboxId: string,
+  fileDir: string,
+): string {
+  const makeProxyUrl = (resolvedPath: string) =>
+    `${SANDBOX_FILE_PROXY_PATH}?${new URLSearchParams({ sandboxId, path: resolvedPath }).toString()}`;
+
+  // Rewrite <img src="..."> and <source src="...">
+  html = html.replace(
+    /\b(src|href)=(["'])([^"']+)\2/gi,
+    (match, attr, quote, src) => {
+      // Only rewrite src/href that point to image/asset-like paths, skip page links
+      const lower = src.toLowerCase();
+      if (
+        lower.endsWith('.html') ||
+        lower.endsWith('.htm') ||
+        lower.startsWith('#') ||
+        lower.startsWith('javascript:') ||
+        lower.startsWith('mailto:')
+      ) {
+        return match;
+      }
+      const resolved = resolveToSandboxPath(src, fileDir);
+      if (!resolved) return match;
+      return `${attr}=${quote}${makeProxyUrl(resolved)}${quote}`;
+    },
+  );
+
+  // Rewrite CSS url(...) for background images etc.
+  html = html.replace(/\burl\((["']?)([^"')]+)\1\)/gi, (match, quote, src) => {
+    const resolved = resolveToSandboxPath(src, fileDir);
+    if (!resolved) return match;
+    return `url(${quote}${makeProxyUrl(resolved)}${quote})`;
+  });
+
+  return html;
+}
+
+/**
  * Fetch an HTML file from the sandbox and return a blob URL suitable for iframe src.
  * This bypasses the iframe auth problem: browsers can't send Bearer tokens via iframe src,
  * so we fetch the content via JS with auth headers and create a blob URL.
+ *
+ * Local asset paths (img src, CSS url()) are rewritten to the same-origin proxy so
+ * they load correctly inside the blob iframe (which has allow-same-origin set).
  */
 export async function fetchSandboxHtmlAsBlobUrl(
   url: string,
@@ -106,7 +195,22 @@ export async function fetchSandboxHtmlAsBlobUrl(
   try {
     const response = await fetchSandboxFile(url);
     if (!response.ok) return null;
-    const html = await response.text();
+    let html = await response.text();
+
+    // Rewrite local asset paths so they resolve inside the blob iframe
+    try {
+      const parsed = typeof URL !== 'undefined' ? new URL(url, 'https://placeholder.invalid') : null;
+      const sandboxId = parsed?.searchParams.get('sandboxId') ?? null;
+      const rawPath = parsed?.searchParams.get('path') ?? null;
+
+      if (sandboxId && rawPath) {
+        const fileDir = rawPath.substring(0, rawPath.lastIndexOf('/'));
+        html = rewriteHtmlAssetPaths(html, sandboxId, fileDir);
+      }
+    } catch {
+      // If rewriting fails, continue with original HTML
+    }
+
     const blob = new Blob([html], { type: 'text/html' });
     return URL.createObjectURL(blob);
   } catch {

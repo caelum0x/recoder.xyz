@@ -332,7 +332,7 @@ export function FileViewerView({
 
       try {
         const response = await fetchSandboxFile(`${metadataUrl}?t=${Date.now()}`, {
-          method: 'HEAD',
+          method: 'GET',
           cache: 'no-cache',
         });
         
