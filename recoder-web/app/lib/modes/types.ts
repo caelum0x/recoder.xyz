@@ -124,7 +124,7 @@ ALWAYS confirm with the user before making changes.`
 3. Track progress across all subtasks
 4. Synthesize results into a coherent solution
 
-Use delegateSubagent to assign work:
+Use delegate_subagent to assign work:
 - architect: For planning and design
 - code: For implementation
 - debug: For fixing issues
@@ -136,12 +136,12 @@ Maintain a clear task list and update status as work progresses.`
 
 // Tool definitions for each group
 export const TOOL_GROUPS: Record<ToolGroup, string[]> = {
-  read: ['readFile', 'readManyFiles', 'listFiles', 'searchFiles', 'ripGrep', 'glob'],
-  edit: ['createFile', 'createFiles', 'strReplace', 'editFile', 'copyProject'],
-  browser: ['webSearch', 'webFetch', 'webCrawl'],
-  command: ['runShellCommand'],
-  mcp: ['mcpTool'],
-  delegate: ['delegateSubagent']
+  read: ['readFile', 'read_many_files', 'listFiles', 'searchFiles', 'ripgrep_search', 'glob_search'],
+  edit: ['file', 'str_replace', 'edit_file', 'multi_apply_diff', 'copy_project'],
+  browser: ['web_search', 'web_fetch', 'web_crawl'],
+  command: ['shell'],
+  mcp: [],
+  delegate: ['delegate_subagent']
 };
 
 export interface WebToolProviderCapability {

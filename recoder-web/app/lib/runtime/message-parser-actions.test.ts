@@ -100,4 +100,66 @@ describe('StreamingMessageParser action parsing', () => {
     expect((action as any).context).toBe('sync contracts');
     expect((action as any).strict).toBe(true);
   });
+
+  it('normalizes legacy camelCase action aliases to canonical runtime names', () => {
+    const onActionClose = vi.fn<(data: ActionCallbackData) => void>();
+    const parser = new StreamingMessageParser({
+      artifactElement: () => '',
+      callbacks: { onActionClose },
+    });
+
+    const input = `<recoderArtifact id="a5" title="legacy aliases">
+<recoderAction type="createFile" filePath="src/App.tsx">export default function App() { return null; }</recoderAction>
+<recoderAction type="runShellCommand">npm install</recoderAction>
+<recoderAction type="webSearch" query="vite react docs">Search docs</recoderAction>
+<recoderAction type="delegateSubagent" taskDescription="Ship auth flow" agentType="coder">Delegate</recoderAction>
+</recoderArtifact>`;
+
+    parser.parse('msg-5', input);
+
+    const actions = onActionClose.mock.calls.map((call) => call[0].action);
+
+    expect(actions[0].type).toBe('file');
+    expect((actions[0] as any).filePath).toBe('src/App.tsx');
+    expect(actions[1].type).toBe('shell');
+    expect(actions[2].type).toBe('web_search');
+    expect((actions[2] as any).query).toBe('vite react docs');
+    expect(actions[3].type).toBe('delegate_subagent');
+    expect((actions[3] as any).taskDescription).toBe('Ship auth flow');
+  });
+
+  it('parses advanced canonical tool attributes that previously fell through', () => {
+    const onActionClose = vi.fn<(data: ActionCallbackData) => void>();
+    const parser = new StreamingMessageParser({
+      artifactElement: () => '',
+      callbacks: { onActionClose },
+    });
+
+    const input = `<recoderArtifact id="a6" title="advanced tools">
+<recoderAction type="memory_operation" operation="store" key="project_kind" value="finance app">Store memory</recoderAction>
+<recoderAction type="glob_search" pattern="src/**/*.{ts,tsx}" exclude="node_modules,dist" maxDepth="4">Glob files</recoderAction>
+<recoderAction type="ripgrep_search" query="useEffect" filePattern="*.tsx" caseSensitive="false" maxResults="25">Search code</recoderAction>
+<recoderAction type="edit_file" filePath="src/App.tsx" operation="replace" lineNumber="12" endLineNumber="15">const x = 1;</recoderAction>
+<recoderAction type="read_many_files" filePaths="src/App.tsx,src/main.tsx" maxFileSize="4096">Read files</recoderAction>
+</recoderArtifact>`;
+
+    parser.parse('msg-6', input);
+
+    const actions = onActionClose.mock.calls.map((call) => call[0].action as any);
+
+    expect(actions[0].type).toBe('memory_operation');
+    expect(actions[0].operation).toBe('store');
+    expect(actions[0].key).toBe('project_kind');
+    expect(actions[1].type).toBe('glob_search');
+    expect(actions[1].pattern).toBe('src/**/*.{ts,tsx}');
+    expect(actions[1].exclude).toEqual(['node_modules', 'dist']);
+    expect(actions[2].type).toBe('ripgrep_search');
+    expect(actions[2].maxResults).toBe(25);
+    expect(actions[3].type).toBe('edit_file');
+    expect(actions[3].lineNumber).toBe(12);
+    expect(actions[3].endLineNumber).toBe(15);
+    expect(actions[4].type).toBe('read_many_files');
+    expect(actions[4].filePaths).toEqual(['src/App.tsx', 'src/main.tsx']);
+    expect(actions[4].maxFileSize).toBe(4096);
+  });
 });
