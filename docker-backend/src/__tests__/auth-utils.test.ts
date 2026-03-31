@@ -172,6 +172,27 @@ describe('Auth Utils', () => {
       expect(isStrictAuthMode()).toBe(false);
     });
   });
+
+  describe('isLikelySandboxProjectId', () => {
+    it('accepts generated sandbox ids', async () => {
+      const { isLikelySandboxProjectId } = await import('../auth-utils');
+
+      expect(isLikelySandboxProjectId('project-1774919650071')).toBe(true);
+    });
+
+    it('accepts UUID sandbox ids', async () => {
+      const { isLikelySandboxProjectId } = await import('../auth-utils');
+
+      expect(isLikelySandboxProjectId('08074008-5622-4396-b2d3-4d062c3e1c8d')).toBe(true);
+    });
+
+    it('rejects route slugs that are not sandbox ids', async () => {
+      const { isLikelySandboxProjectId } = await import('../auth-utils');
+
+      expect(isLikelySandboxProjectId('hello-world')).toBe(false);
+      expect(isLikelySandboxProjectId('landing-page-redesign')).toBe(false);
+    });
+  });
 });
 
 describe('Auth Migration Mode Scenarios', () => {

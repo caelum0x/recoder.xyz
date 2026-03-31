@@ -127,7 +127,11 @@ import {
   daytonaGetLogs,
 } from './daytona-file-ops.js';
 import { templateManager } from './templates/index.js';
-import { getProjectIdFromRequest, isStrictAuthMode } from './auth-utils.js';
+import {
+  getProjectIdFromRequest,
+  isLikelySandboxProjectId,
+  isStrictAuthMode,
+} from './auth-utils.js';
 import { type ContainerCreationEntry, withCreationTimeout, isCreationStale } from './container-creation.js';
 // Deployment modules are lazily imported to avoid requiring node-fetch/form-data at startup
 const getVercelDeploy = () => import('./deployment/vercel.js');
@@ -764,6 +768,10 @@ function verifyProjectOwnership(req: AuthenticatedRequest, res: express.Response
     return res.status(400).json({ error: 'Project ID required' });
   }
 
+  if (!isLikelySandboxProjectId(projectId)) {
+    return res.status(400).json({ error: 'Invalid sandbox project ID' });
+  }
+
   // In migration mode, allow anonymous users
   if (req.userId === 'anonymous' && !STRICT_AUTH) {
     logWarning(ErrorCode.AUTHZ_PROJECT_ACCESS_DENIED, 'Anonymous project access accepted in migration mode', {
@@ -817,6 +825,10 @@ function flexibleProjectOwnership(req: AuthenticatedRequest, res: express.Respon
 
   if (!projectId) {
     return res.status(400).json({ error: 'Project ID required' });
+  }
+
+  if (!isLikelySandboxProjectId(projectId)) {
+    return res.status(400).json({ error: 'Invalid sandbox project ID' });
   }
 
   // Allow anonymous users to access containers (web.recoder.xyz anonymous mode)
@@ -4820,6 +4832,10 @@ app.post('/api/dev-server/start', authenticateRequest, async (req: Authenticated
     const { projectId, framework = 'vite' } = req.body;
     const safeProjectId = sanitizeProjectId(projectId);
 
+    if (!isLikelySandboxProjectId(safeProjectId)) {
+      return res.status(400).json({ error: 'Invalid sandbox project ID' });
+    }
+
     // Verify ownership (skip in non-strict mode for web IDE)
     if (STRICT_AUTH) {
       const isOwner = await checkProjectOwnership(req.userId!, safeProjectId);
@@ -4875,6 +4891,10 @@ app.post('/api/dev-server/stop', authenticateRequest, async (req: AuthenticatedR
     const { projectId } = req.body;
     const safeProjectId = sanitizeProjectId(projectId);
 
+    if (!isLikelySandboxProjectId(safeProjectId)) {
+      return res.status(400).json({ error: 'Invalid sandbox project ID' });
+    }
+
     // Verify ownership (skip in non-strict mode)
     if (STRICT_AUTH) {
       const isOwner = await checkProjectOwnership(req.userId!, safeProjectId);
@@ -4907,6 +4927,10 @@ app.post('/api/dev-server/restart', authenticateRequest, async (req: Authenticat
   try {
     const { projectId } = req.body;
     const safeProjectId = sanitizeProjectId(projectId);
+
+    if (!isLikelySandboxProjectId(safeProjectId)) {
+      return res.status(400).json({ error: 'Invalid sandbox project ID' });
+    }
 
     // Verify ownership
     const isOwner = await checkProjectOwnership(req.userId!, safeProjectId);
@@ -4988,6 +5012,10 @@ app.post('/api/dev-server/force-retry', authenticateRequest, async (req: Authent
   try {
     const { projectId } = req.body;
     const safeProjectId = sanitizeProjectId(projectId);
+
+    if (!isLikelySandboxProjectId(safeProjectId)) {
+      return res.status(400).json({ error: 'Invalid sandbox project ID' });
+    }
 
     // Verify ownership
     const entry = containers.get(safeProjectId);
@@ -5520,6 +5548,11 @@ app.use((req, res, next) => {
 app.ws('/terminal/:projectId', async (ws: WebSocket, req: express.Request) => {
   const { projectId } = req.params;
   const terminalId = req.query.terminalId as string || `term-${Date.now()}`;
+
+  if (!isLikelySandboxProjectId(projectId)) {
+    ws.close(1008, 'Invalid sandbox project ID');
+    return;
+  }
 
   logger.info({ projectId, terminalId }, 'Terminal: WebSocket connection attempt');
   logger.info({ origin: req.headers.origin, ip: req.ip }, 'Terminal: connection details');

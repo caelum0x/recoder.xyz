@@ -7,6 +7,7 @@ import type { Express, Request } from 'express';
 import http from 'http';
 import Docker from 'dockerode';
 import WebSocket from 'ws';
+import { isLikelySandboxProjectId } from './auth-utils.js';
 import { devServerManager } from './dev-server.js';
 import { getDaytonaClient } from './daytona-client.js';
 import { daytonaGetLogs, ensureDaytonaSandboxRunning } from './daytona-file-ops.js';
@@ -141,6 +142,11 @@ function getDaytonaProxyPort(): number {
     if (!Number.isNaN(parsed)) return parsed;
   }
   return parseInt(process.env.DAYTONA_PROXY_PORT || '4000', 10);
+}
+
+function getValidatedPreviewProjectId(rawProjectId?: string): string | null {
+  const projectId = String(rawProjectId || '').trim();
+  return isLikelySandboxProjectId(projectId) ? projectId : null;
 }
 
 async function probeDaytonaPort(entry: { id: string }, port: number, path: string = '/'): Promise<boolean> {
@@ -582,7 +588,11 @@ const ERROR_CAPTURE_SCRIPT = `
 
 export function setupPreviewProxy(app: WsExpressApp, containers: Map<string, { id: string; lastActive: number; port: number }>) {
   app.ws('/preview/:projectId', async (clientWs: WebSocket, req: any) => {
-    const { projectId } = req.params;
+    const projectId = getValidatedPreviewProjectId(req.params.projectId);
+    if (!projectId) {
+      clientWs.close(1008, 'Invalid sandbox project ID');
+      return;
+    }
     let entry = containers.get(projectId) as any;
 
     if (!entry) {
@@ -694,7 +704,12 @@ export function setupPreviewProxy(app: WsExpressApp, containers: Map<string, { i
   });
 
   app.use('/preview/:projectId', async (req, res, next) => {
-    const { projectId } = req.params;
+    const projectId = getValidatedPreviewProjectId(req.params.projectId);
+    if (!projectId) {
+      return res
+        .status(404)
+        .send(friendlyPreviewPage('invalid-project', 'Invalid preview project ID.'));
+    }
     let entry = containers.get(projectId);
 
     res.removeHeader('Cross-Origin-Embedder-Policy');
@@ -1106,9 +1121,14 @@ export function setupPreviewProxy(app: WsExpressApp, containers: Map<string, { i
   }
 
   app.get('/api/preview/:projectId/url', async (req, res) => {
-    let entry = containers.get(req.params.projectId);
+    const projectId = getValidatedPreviewProjectId(req.params.projectId);
+    if (!projectId) {
+      return res.status(400).json({ error: 'Invalid sandbox project ID' });
+    }
+
+    let entry = containers.get(projectId);
     if (!entry) {
-      entry = await recoverContainerFromDocker(req.params.projectId, containers);
+      entry = await recoverContainerFromDocker(projectId, containers);
     }
     // For Daytona sandboxes, proxy through docker-backend instead of using
     // the external *.sandbox.recoder.xyz URL — avoids needing wildcard SSL cert
@@ -1116,37 +1136,52 @@ export function setupPreviewProxy(app: WsExpressApp, containers: Map<string, { i
     if (daytonaUrl) {
       // Return a docker.recoder.xyz proxy URL that we handle internally
       const dockerUrl = process.env.DOCKER_PUBLIC_URL || 'https://docker.recoder.xyz';
-      const proxyUrl = `${dockerUrl}/api/sandbox-preview/${req.params.projectId}`;
+      const proxyUrl = `${dockerUrl}/api/sandbox-preview/${projectId}`;
       return res.json({ url: proxyUrl, port: entry?.port || 3000, daytona: true });
     }
     const port = entry?.port || 0;
     const baseUrl = process.env.PUBLIC_URL || `https://web.recoder.xyz`;
-    res.json({ url: `${baseUrl}/preview/${req.params.projectId}`, port });
+    res.json({ url: `${baseUrl}/preview/${projectId}`, port });
   });
 
   // Sandbox preview proxy — forwards requests to Daytona sandbox dev server
   // This avoids needing *.sandbox.recoder.xyz wildcard SSL cert.
   // Uses Daytona port-forward via toolbox API.
   app.all('/api/sandbox-preview/:projectId', async (req, res) => {
-    return handleSandboxPreview(req, res, containers, '', `/api/sandbox-preview/${req.params.projectId}`);
+    const projectId = getValidatedPreviewProjectId(req.params.projectId);
+    if (!projectId) {
+      return res.status(400).json({ error: 'Invalid sandbox project ID' });
+    }
+
+    return handleSandboxPreview(req, res, containers, '', `/api/sandbox-preview/${projectId}`);
   });
   app.all('/api/sandbox-preview/:projectId/*', async (req, res) => {
+    const projectId = getValidatedPreviewProjectId(req.params.projectId);
+    if (!projectId) {
+      return res.status(400).json({ error: 'Invalid sandbox project ID' });
+    }
+
     const subPath = getProxySubPath(req);
-    return handleSandboxPreview(req, res, containers, subPath, `/api/sandbox-preview/${req.params.projectId}`);
+    return handleSandboxPreview(req, res, containers, subPath, `/api/sandbox-preview/${projectId}`);
   });
 
   // Health check - shows which ports are responding
   app.get('/api/preview/:projectId/health', async (req, res) => {
-    let entry = containers.get(req.params.projectId);
+    const projectId = getValidatedPreviewProjectId(req.params.projectId);
+    if (!projectId) {
+      return res.status(400).json({ error: 'Invalid sandbox project ID' });
+    }
+
+    let entry = containers.get(projectId);
     if (!entry) {
       // Try Docker recovery first, then Daytona recovery
-      entry = await recoverContainerFromDocker(req.params.projectId, containers);
+      entry = await recoverContainerFromDocker(projectId, containers);
       if (!entry && process.env.USE_DAYTONA_CONTAINERS === 'true') {
         try {
           const dc = getDaytonaClient();
           const sandboxes = await dc.listSandboxes();
           const matches = sandboxes
-            .filter((s: any) => s.labels?.projectId === req.params.projectId)
+            .filter((s: any) => s.labels?.projectId === projectId)
             .sort((a: any, b: any) => {
               const aR = a.state === 'started' || a.state === 'running' ? 1 : 0;
               const bR = b.state === 'started' || b.state === 'running' ? 1 : 0;
@@ -1164,7 +1199,7 @@ export function setupPreviewProxy(app: WsExpressApp, containers: Map<string, { i
               daytona: true,
               daytonaPreviewUrl: previewUrl,
             } as any;
-            containers.set(req.params.projectId, entry as any);
+            containers.set(projectId, entry as any);
           }
         } catch (e) {
           // Daytona recovery failed, continue to 404
@@ -1212,7 +1247,7 @@ export function setupPreviewProxy(app: WsExpressApp, containers: Map<string, { i
       }
 
       return res.json({
-        projectId: req.params.projectId,
+        projectId,
         daytona: true,
         previewUrl: effectivePreviewUrl,
         ports: portResults.map(({ port, responding, type }) => ({ port, responding, type })),
@@ -1232,22 +1267,18 @@ export function setupPreviewProxy(app: WsExpressApp, containers: Map<string, { i
       }))
     );
 
-    res.json({ projectId: req.params.projectId, ports: portStatus });
+    res.json({ projectId, ports: portStatus });
   });
 
   // New: Read-only logs endpoint - returns last N lines of the project's container logs
   app.get('/api/preview/:projectId/logs', async (req, res) => {
-    // Normalize and validate projectId
-    const projectId = String(req.params.projectId || '').trim();
-
-    // Basic validation: non-empty and only allow alphanumeric, dash, underscore
-    const validId = /^[a-zA-Z0-9_-]+$/.test(projectId);
-    if (!projectId || !validId || projectId === 'undefined' || projectId === 'null') {
-      console.warn(`⚠️ [Preview Logs] Invalid projectId received: "${projectId}" from ${req.ip || req.socket?.remoteAddress}`);
+    const projectId = getValidatedPreviewProjectId(req.params.projectId);
+    if (!projectId) {
+      console.warn(`⚠️ [Preview Logs] Invalid projectId received: "${req.params.projectId}" from ${req.ip || req.socket?.remoteAddress}`);
       res.setHeader('Content-Type', 'application/json; charset=utf-8');
       return res.status(400).json({ 
         error: 'Invalid project ID', 
-        message: 'Project ID is required and must contain only letters, numbers, dash or underscore.' 
+        message: 'Project ID must be a sandbox project ID.' 
       });
     }
 
