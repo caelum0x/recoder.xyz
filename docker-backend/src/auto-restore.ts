@@ -331,8 +331,17 @@ function truncateMessage(message: string, maxLength: number = 100): string {
 }
 
 function normalizeFilePath(filePath: string): string {
+  if (filePath.startsWith('/home/daytona/')) {
+    return `/workspace/${filePath.slice('/home/daytona/'.length)}`;
+  }
   // Remove /workspace prefix for cleaner display, but keep it for matching
-  return filePath.startsWith('/workspace/') ? filePath : `/workspace/${filePath.replace(/^\.\//, '')}`;
+  if (filePath.startsWith('/workspace/')) {
+    return filePath;
+  }
+  if (filePath.startsWith('/')) {
+    return filePath;
+  }
+  return `/workspace/${filePath.replace(/^\.\//, '')}`;
 }
 
 /**
@@ -401,29 +410,67 @@ function parseTypeScriptErrors(logs: string): ParsedBuildError[] {
 function parseViteErrors(logs: string): ParsedBuildError[] {
   const errors: ParsedBuildError[] = [];
   const timestamp = Date.now();
+  const lines = logs.split('\n');
 
-  // Vite error with stack trace
-  const vitePattern = /\[vite\]\s*(?:Internal server error|Error):\s*(.+?)(?:\n\s+at\s+(?:\S+\s+)?\(?([^\s():]+):(\d+):(\d+)\)?)?/gi;
-  let match;
+  // Vite error blocks start with a header line and may include Plugin/File/stack context.
+  for (let i = 0; i < lines.length; i++) {
+    const headerMatch = lines[i].match(/\[vite\]\s*(?:Internal server error|Error):\s*(.+)\s*$/i);
+    if (!headerMatch) continue;
 
-  while ((match = vitePattern.exec(logs)) !== null) {
-    const [rawError, message, file, line, col] = match;
+    const detailLines = [lines[i]];
+    let filePath: string | undefined;
+    let lineNumber: number | undefined;
+    let columnNumber: number | undefined;
+
+    for (let j = i + 1; j < lines.length; j++) {
+      const detailLine = lines[j];
+      const trimmed = detailLine.trim();
+
+      if (!trimmed) break;
+      if (/^\[vite\]\s*(?:Internal server error|Error):/i.test(detailLine)) break;
+      if (/^X\s*\[ERROR\]/.test(detailLine)) break;
+      if (/^\S/.test(detailLine) && !/^(Plugin:|File:|at\b)/.test(trimmed)) break;
+
+      detailLines.push(detailLine);
+
+      const fileMatch = trimmed.match(/^File:\s*(.+?):(\d+):(\d+)$/);
+      if (fileMatch) {
+        filePath = normalizeFilePath(fileMatch[1]);
+        lineNumber = parseInt(fileMatch[2], 10);
+        columnNumber = parseInt(fileMatch[3], 10);
+        continue;
+      }
+
+      if (!filePath) {
+        const stackMatch = trimmed.match(/\(?([^\s():]+\.(?:[jt]sx?|css|scss|sass|less|html)):(\d+):(\d+)\)?/);
+        if (stackMatch) {
+          filePath = normalizeFilePath(stackMatch[1]);
+          lineNumber = parseInt(stackMatch[2], 10);
+          columnNumber = parseInt(stackMatch[3], 10);
+        }
+      }
+    }
+
+    const message = headerMatch[1].trim();
     errors.push({
       id: generateErrorId(),
       type: message.toLowerCase().includes('syntax') ? 'syntax' : 'build',
       severity: 'error',
-      message: message.trim(),
-      shortMessage: truncateMessage(message.trim()),
-      filePath: file ? normalizeFilePath(file) : undefined,
-      line: line ? parseInt(line, 10) : undefined,
-      column: col ? parseInt(col, 10) : undefined,
+      message,
+      shortMessage: truncateMessage(message),
+      filePath,
+      line: lineNumber,
+      column: columnNumber,
       source: 'vite',
-      rawError,
+      rawError: detailLines.join('\n'),
       timestamp,
     });
+
+    i += detailLines.length - 1;
   }
 
   // esbuild style errors: X [ERROR] message
+  let match;
   const esbuildPattern = /X\s*\[ERROR\]\s*(.+?)\n\s*([^\s:]+):(\d+):(\d+):/g;
 
   while ((match = esbuildPattern.exec(logs)) !== null) {

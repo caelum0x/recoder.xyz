@@ -64,7 +64,7 @@ if (!hasExplicitDockerUrl) {
 // This makes the preview iframe same-origin with web.recoder.xyz,
 // eliminating all CSP frame-src, X-Frame-Options, and COEP issues.
 // ============================================================
-app.use('/preview', createProxyMiddleware({
+const previewProxy = createProxyMiddleware({
   target: DOCKER_BACKEND_URL,
   changeOrigin: true,
   ws: true,
@@ -94,7 +94,9 @@ app.use('/preview', createProxyMiddleware({
       `);
     }
   },
-}));
+});
+
+app.use('/preview', previewProxy);
 
 console.log(`📺 Preview proxy: /preview/* -> ${DOCKER_BACKEND_URL}/preview/*`);
 
@@ -182,6 +184,12 @@ app.use(async (req, res, next) => {
 const port = process.env.PORT || 5173;
 const server = app.listen(port, '0.0.0.0', () => {
   console.log('🚀 Server running at http://0.0.0.0:' + port);
+});
+
+server.on('upgrade', (req, socket, head) => {
+  if (req.url?.startsWith('/preview/') && typeof previewProxy.upgrade === 'function') {
+    previewProxy.upgrade(req, socket, head);
+  }
 });
 
 // Graceful shutdown — drain in-flight requests on SIGTERM/SIGINT
