@@ -27,6 +27,10 @@ import {
 import { signalBatchWriteStart, signalBatchWriteEnd } from '~/lib/hooks/useFileWatcher';
 import { isMorphConfigured, applyMorphEditToFile } from '~/lib/services/morph-fast-apply';
 import { classifyError } from '~/lib/services/error-classifier';
+import {
+  normalizeTailwindToolchainPackageJson,
+  sanitizePackageJsonVersions,
+} from './package-json-sanitizer';
 import { 
   runTypeCheck, 
   formatTypeCheckErrors, 
@@ -117,68 +121,6 @@ export function resetGlobalActionState(): void {
   globalAutoInstallTriggered = false;
   globalNpmInstallComplete = false;
   globalStaticServerStarted = false;
-}
-
-// ============================================
-// ETARGET Recovery: Sanitize bad package versions
-// ============================================
-
-/**
- * Known @types/ packages that should be removed because the library
- * bundles its own TypeScript types (causes ETARGET / 404 on npm).
- */
-const TYPES_PACKAGES_WITH_BUNDLED_TYPES = new Set([
-  '@types/react-router-dom',  // react-router-dom v7+ has built-in types
-  '@types/react-router',      // same
-  '@types/zustand',           // zustand has built-in types
-  '@types/zod',               // zod has built-in types
-  '@types/jotai',             // jotai has built-in types
-]);
-
-/**
- * Sanitize package.json by replacing specific version strings with "latest"
- * and removing @types/ packages for libraries that bundle their own types.
- * Returns the sanitized JSON string, or null if no changes were needed.
- */
-function sanitizePackageJsonVersions(packageJsonStr: string): { sanitized: string; changed: boolean } {
-  try {
-    const pkg = JSON.parse(packageJsonStr);
-    let changed = false;
-
-    const sanitizeDeps = (deps: Record<string, string> | undefined): Record<string, string> | undefined => {
-      if (!deps) return deps;
-      const result: Record<string, string> = {};
-      for (const [name, version] of Object.entries(deps)) {
-        // Remove known problematic @types/ packages
-        if (TYPES_PACKAGES_WITH_BUNDLED_TYPES.has(name)) {
-          changed = true;
-          continue; // skip this package entirely
-        }
-        // Replace specific versions (^x.y.z, ~x.y.z, x.y.z) with "latest"
-        // but keep "latest", "*", "workspace:*", "file:", "link:", "git:", "http" as-is
-        if (version !== 'latest' && version !== '*' &&
-            !version.startsWith('workspace:') && !version.startsWith('file:') &&
-            !version.startsWith('link:') && !version.startsWith('git') &&
-            !version.startsWith('http')) {
-          result[name] = 'latest';
-          if (version !== 'latest') changed = true;
-        } else {
-          result[name] = version;
-        }
-      }
-      return result;
-    };
-
-    pkg.dependencies = sanitizeDeps(pkg.dependencies);
-    pkg.devDependencies = sanitizeDeps(pkg.devDependencies);
-
-    return {
-      sanitized: JSON.stringify(pkg, null, 2),
-      changed,
-    };
-  } catch {
-    return { sanitized: packageJsonStr, changed: false };
-  }
 }
 
 /**
@@ -881,6 +823,27 @@ export class ActionRunner {
    */
   async #npmInstallWithRecovery(): Promise<string> {
     const npmCmd = 'npm install --legacy-peer-deps --prefer-offline --no-audit --no-fund';
+
+    try {
+      const pkgJsonStr = await this.#dockerExec('cat /workspace/package.json');
+      if (pkgJsonStr && pkgJsonStr.trim().startsWith('{')) {
+        const { sanitized, changed } = normalizeTailwindToolchainPackageJson(pkgJsonStr);
+
+        if (changed) {
+          await this.#dockerWriteFile('package.json', sanitized);
+          logger.info('   Normalized package.json Tailwind/PostCSS toolchain before install');
+
+          try {
+            const store = await getWorkbenchStore();
+            store.files.setKey(`${WORK_DIR}/package.json`, { type: 'file', content: sanitized, isBinary: false });
+          } catch {
+            // UI sync is best-effort only.
+          }
+        }
+      }
+    } catch {
+      // If package.json isn't available yet, continue with the normal install path.
+    }
 
     try {
       return await this.#dockerExec(npmCmd);

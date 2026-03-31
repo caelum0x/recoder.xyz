@@ -27,6 +27,7 @@ import { cubicEasingFn } from '~/utils/easings';
 import { createScopedLogger, renderLogger } from '~/utils/logger';
 import { showSmartError } from '~/lib/errors/toast-error';
 import { projectContextCache } from '~/lib/services/project-context-cache';
+import { resolveSandboxProjectId } from '~/lib/services/sandbox-project-id';
 import { BaseChat } from './BaseChat';
 import { CloneUrlModal } from './CloneUrlModal';
 import { commandPaletteOpen } from '~/lib/stores/command-palette';
@@ -210,8 +211,12 @@ export const ChatImpl = memo(({ chatId, projectId, projectName, projectFramework
 
   const [animationScope, animate] = useAnimate();
 
-  // Generate stable project ID for Docker backend
-  const [projectIdForDocker] = useState(() => chatId || `project-${Date.now()}`);
+  // Generate a stable sandbox project ID. Route slugs like "hello-world"
+  // are chat identifiers, not valid Docker project ids.
+  const [projectIdForDocker] = useState(() => resolveSandboxProjectId({
+    preferredProjectId: projectId,
+    chatId,
+  }));
 
   // Set project ID for Docker backend and initialize project state
   // Pass framework/templateId so the backend can configure the container appropriately
