@@ -659,10 +659,7 @@ export class WorkbenchStore {
     if (!this.#currentProjectId) return;
 
     try {
-      const resp = await dockerGet(`/api/files/${this.#currentProjectId}`) as Response;
-      if (!resp.ok) return;
-
-      const data = await resp.json() as { files: any[] };
+      await dockerGet<{ files: any[] }>(`/api/files/${this.#currentProjectId}`);
       // Update files store with new file list
       // The files are returned as { files: [...] }
       logger.info('[WorkbenchStore] Refreshed file list from Docker');

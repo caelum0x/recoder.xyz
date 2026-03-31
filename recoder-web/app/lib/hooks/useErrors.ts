@@ -44,21 +44,16 @@ export async function fetchProjectErrors(projectId: string): Promise<ErrorsRespo
   if (!projectId) return null;
 
   try {
-    const response = await dockerGet(`/api/errors/${projectId}?tail=200`) as Response;
-
-    if (!response.ok) {
-      if (response.status === 404) {
-        clearErrors();
-        return null;
-      }
-      throw new Error(`Failed to fetch errors: ${response.status}`);
-    }
-
-    const data = await response.json() as ErrorsResponse;
+    const data = await dockerGet<ErrorsResponse>(`/api/errors/${projectId}?tail=200`);
     setErrors(data);
     return data;
   } catch (err: any) {
-    logger.error('[fetchProjectErrors] Error:', err.message);
+    if (err?.statusCode === 404) {
+      clearErrors();
+      return null;
+    }
+
+    logger.error('[fetchProjectErrors] Error:', err?.message || err);
     return null;
   }
 }

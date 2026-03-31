@@ -443,6 +443,7 @@ export class ChatHistoryDB {
     id: string;
     urlId: string;
     description?: string;
+    projectId?: string;
     messages: Message[];
     fileSnapshot?: Record<string, string>;
   } | null> {
@@ -475,6 +476,7 @@ export class ChatHistoryDB {
       id: session.id,
       urlId: session.urlId,
       description: session.description || undefined,
+      projectId: session.projectId,
       messages,
       fileSnapshot,
     };

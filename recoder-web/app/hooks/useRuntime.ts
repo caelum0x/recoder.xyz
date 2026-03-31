@@ -85,11 +85,7 @@ export function useRuntime(projectId: string) {
   const writeFile = useCallback(
     async (path: string, content: string) => {
       if (state.mode === 'docker' && DOCKER_URL) {
-        const res = await dockerPost(`/api/file/${projectId}`, { path: `/workspace${path}`, content }) as Response;
-        if (!res.ok) {
-          const data = (await res.json()) as ApiResponse;
-          throw new Error(data.error || 'Write failed');
-        }
+        await dockerPost(`/api/file/${projectId}`, { path: `/workspace${path}`, content });
       } else if (wcRef.current) {
         const dir = path.substring(0, path.lastIndexOf('/'));
         if (dir) await wcRef.current.fs.mkdir(dir, { recursive: true });
@@ -103,9 +99,7 @@ export function useRuntime(projectId: string) {
   const readFile = useCallback(
     async (path: string): Promise<string> => {
       if (state.mode === 'docker' && DOCKER_URL) {
-        const res = await dockerGet(`/api/file/${projectId}?path=/workspace${path}`) as Response;
-        const data = (await res.json()) as ApiResponse;
-        if (!res.ok) throw new Error(data.error || 'Read failed');
+        const data = await dockerGet<ApiResponse>(`/api/file/${projectId}?path=/workspace${path}`);
         return data.content || '';
       } else if (wcRef.current) {
         return await wcRef.current.fs.readFile(path, 'utf-8');
@@ -119,9 +113,7 @@ export function useRuntime(projectId: string) {
   const exec = useCallback(
     async (command: string, cwd: string = '/'): Promise<string> => {
       if (state.mode === 'docker' && DOCKER_URL) {
-        const res = await dockerPost(`/api/exec/${projectId}`, { command, cwd: `/workspace${cwd}` }) as Response;
-        const data = (await res.json()) as ApiResponse;
-        if (!res.ok) throw new Error(data.error || 'Exec failed');
+        const data = await dockerPost<ApiResponse>(`/api/exec/${projectId}`, { command, cwd: `/workspace${cwd}` });
         return data.output || '';
       } else if (wcRef.current) {
         const [cmd, ...args] = command.split(' ');
