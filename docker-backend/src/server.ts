@@ -400,10 +400,17 @@ function getSessionTokenFromRequest(req: express.Request): string | null {
 
 // WebSocket authentication helper
 // For WebSockets, token is passed via query string (?token=xxx) or cookies
+interface WebSocketAuthOptions {
+  allowAnonymous?: boolean;
+}
+
 async function authenticateWebSocket(
   ws: WebSocket,
-  req: express.Request
+  req: express.Request,
+  options: WebSocketAuthOptions = {},
 ): Promise<{ userId: string; sessionId: string } | null> {
+  const allowAnonymous = options.allowAnonymous ?? !STRICT_AUTH;
+
   // Try query string first (standard for WebSockets)
   let token = req.query.token as string;
 
@@ -431,12 +438,15 @@ async function authenticateWebSocket(
 
   if (!token) {
     // In migration mode, allow anonymous access with warning
-    if (!STRICT_AUTH) {
+    if (allowAnonymous && !STRICT_AUTH) {
       logWarning(ErrorCode.AUTH_REQUIRED, 'Anonymous WebSocket connection in migration mode', {
         path: req.path,
       });
       return { userId: 'anonymous', sessionId: 'anon' };
     }
+    logWarning(ErrorCode.AUTH_REQUIRED, 'Rejected WebSocket connection without auth token', {
+      path: req.path,
+    });
     ws.close(1008, 'Authentication required');
     return null;
   }
@@ -444,12 +454,15 @@ async function authenticateWebSocket(
   const session = await verifySessionToken(token);
   if (!session) {
     // In migration mode, allow with warning
-    if (!STRICT_AUTH) {
+    if (allowAnonymous && !STRICT_AUTH) {
       logWarning(ErrorCode.AUTH_INVALID_TOKEN, 'Invalid WebSocket token accepted in migration mode', {
         path: req.path,
       });
       return { userId: 'anonymous', sessionId: 'anon' };
     }
+    logWarning(ErrorCode.AUTH_INVALID_TOKEN, 'Rejected WebSocket connection with invalid token', {
+      path: req.path,
+    });
     ws.close(1008, 'Invalid or expired session');
     return null;
   }
@@ -1973,9 +1986,11 @@ app.get('/health', (_, res) => {
   try {
     const sloSummary = getA2ASloMetrics().getSummary();
     const heartbeat = getHeartbeatTracker();
+    const bridgeStats = getAgentBridgeService().getStats();
     a2aStatus = {
       enabled: true,
       agents: heartbeat.getAllRecords().length,
+      bridgeConnections: bridgeStats.totalConnections,
       slo: {
         connectors: sloSummary.connectors,
         approvals: sloSummary.approvals,
@@ -13236,7 +13251,7 @@ import { getAgentBridgeService } from './a2a/agent-bridge.service.js';
 
 app.ws('/agent-bridge', async (ws: WebSocket, req: express.Request) => {
   // Authenticate WebSocket connection
-  const authSession = await authenticateWebSocket(ws, req);
+  const authSession = await authenticateWebSocket(ws, req, { allowAnonymous: false });
   if (!authSession) return;
 
   // Register for keepalive (ping/pong every 30s, timeout after 60s)
