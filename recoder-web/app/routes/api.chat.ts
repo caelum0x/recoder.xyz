@@ -867,6 +867,19 @@ RULES:
       messages = injectPlanningContext(messages, hasExistingFiles) as Messages;
     }
 
+    // When the client already sent file context, instruct the model to skip exploration
+    // and immediately output file write actions for modification requests.
+    if (codeContext && codeContext.length > 100 &&
+        (isErrorFixRequest(lastUserMsg) || isModificationRequest(lastUserMsg))) {
+      messages.push({
+        role: 'system',
+        content: `FILE CONTEXT ALREADY PROVIDED: The <project_context> section above contains the current file contents for this project.
+You do NOT need to use readFile, listFiles, or searchFiles — you already have the information.
+IMMEDIATELY output <recoderAction type="str_replace"> or <recoderAction type="file"> actions to implement the requested change.
+Do NOT say "I will update..." without also outputting the actual action tags in this same response.`,
+      });
+    }
+
     // Inject quality enforcement prompt for all requests
     const qualityPrompt = getQualityEnforcementPrompt(requestType);
     if (qualityPrompt) {
