@@ -908,6 +908,25 @@ export class ActionRunner {
         }
       }
 
+      // EJSONPARSE: package.json was corrupted (e.g. by an auto-fix that wrote a fragment).
+      // Try to restore the last known-good content from the undo history, then retry.
+      if (/EJSONPARSE|JSON\.parse|Unexpected non-whitespace|package\.json must be actual JSON/.test(errorMsg)) {
+        logger.warn('⚠️ npm install hit EJSONPARSE — package.json is invalid. Attempting restore from undo history...');
+        try {
+          const backup = this.#originalFileContents.get('package.json');
+          if (backup && backup.trim().startsWith('{')) {
+            JSON.parse(backup); // verify the backup is itself valid JSON
+            await this.#dockerWriteFile('package.json', backup);
+            logger.info('   Restored package.json from backup, retrying install...');
+            return await this.#dockerExec(npmCmd);
+          }
+        } catch {
+          // Backup unavailable or also invalid — fall through to throw
+        }
+        logger.error('❌ package.json is corrupt and no valid backup is available. Ask the AI to rewrite package.json completely.');
+        throw firstError;
+      }
+
       const isVersionError = /ETARGET|No matching version|notarget|404 Not Found|ERESOLVE/.test(errorMsg);
 
       if (!isVersionError) {
@@ -1714,6 +1733,18 @@ export class ActionRunner {
       const morphResult = await this.#tryMorphApply(this.#projectId, action.filePath, action.content);
       if (morphResult.used && morphResult.content) {
         action.content = morphResult.content;
+      }
+    }
+
+    // 🔒 JSON GUARD: Reject invalid JSON before writing package.json.
+    // Auto-fix LLMs sometimes output only a fragment (e.g. bare dependencies block)
+    // which corrupts the file and causes EJSONPARSE on the next npm install.
+    if ((action.filePath === 'package.json' || action.filePath.endsWith('/package.json')) && action.content?.trim()) {
+      try {
+        JSON.parse(action.content);
+      } catch (jsonErr) {
+        logger.error(`❌ Refusing to write invalid JSON to ${action.filePath}. Content starts: ${action.content.substring(0, 120)}`);
+        throw new Error(`package.json content is not valid JSON: ${(jsonErr as Error).message}. Write the complete, valid JSON object.`);
       }
     }
 
@@ -3534,6 +3565,24 @@ export class ActionRunner {
         // ✅ VALIDATION: Validate the modified file content
         try {
           const fileContent = await this.#dockerExec(`cat "${filePath}"`);
+
+          // 🔒 JSON GUARD: if str_replace produced invalid JSON in package.json, roll it back
+          if ((action.filePath === 'package.json' || action.filePath.endsWith('/package.json')) && fileContent?.trim()) {
+            try {
+              JSON.parse(fileContent);
+            } catch {
+              const backup = this.#originalFileContents.get(action.filePath) || this.#originalFileContents.get('package.json');
+              if (backup) {
+                logger.error(`❌ str_replace produced invalid JSON in ${action.filePath} — rolling back`);
+                await this.#dockerWriteFile(action.filePath, backup);
+                throw new Error(`str_replace produced invalid JSON in ${action.filePath}. The replacement was rolled back. Write the complete, valid JSON object instead.`);
+              } else {
+                logger.error(`❌ str_replace produced invalid JSON in ${action.filePath} — no backup available`);
+                throw new Error(`str_replace produced invalid JSON in ${action.filePath}. Write the complete, valid JSON object instead.`);
+              }
+            }
+          }
+
           const validationResult = await validateCode(fileContent, action.filePath, this.#projectId || undefined);
 
           // Store validation result in action state
