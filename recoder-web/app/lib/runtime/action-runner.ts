@@ -31,6 +31,7 @@ import {
   normalizeTailwindToolchainPackageJson,
   sanitizePackageJsonVersions,
 } from './package-json-sanitizer';
+import { isLikelySandboxProjectId } from '~/lib/services/sandbox-project-id';
 import { 
   runTypeCheck, 
   formatTypeCheckErrors, 
@@ -288,7 +289,7 @@ const PROTECTED_CONFIG_FILES = new Set([
 
 export class ActionRunner {
   #currentExecutionPromise: Promise<void> = Promise.resolve();
-  #chatId: string | null = null;
+  #messageId: string | null = null;
   #modifiedFiles: Array<{ path: string; content: string }> = [];
   #repositoryCloned: boolean = false;
   #clonedRepoUrl: string | null = null;
@@ -347,9 +348,10 @@ export class ActionRunner {
 
   actions: ActionsMap = map({});
 
-  constructor(chatId?: string) {
-    this.#chatId = chatId || null;
-    this.#projectId = chatId || `project-${Date.now()}`;
+  constructor(projectId?: string) {
+    this.#projectId = isLikelySandboxProjectId(projectId)
+      ? projectId
+      : `project-${Date.now()}`;
 
     // Configure file batcher with progress callback
     configureFileBatcher({
@@ -450,6 +452,19 @@ export class ActionRunner {
    */
   getProjectId(): string | null {
     return this.#projectId;
+  }
+
+  setProjectId(projectId?: string | null): void {
+    if (!isLikelySandboxProjectId(projectId)) {
+      return;
+    }
+
+    this.#projectId = projectId;
+    setFileBatcherProject(projectId);
+  }
+
+  setMessageId(messageId?: string | null): void {
+    this.#messageId = messageId || null;
   }
 
   /**
@@ -932,10 +947,10 @@ export class ActionRunner {
     this.#streamingActive = true;
 
     // 🔍 PROPOSAL MODE: Start collecting file changes for this message
-    if (this.#chatId && !this.#proposalStarted) {
+    if (this.#messageId && !this.#proposalStarted) {
       getWorkbenchStore().then(store => {
         if (store.isProposalModeEnabled()) {
-          store.startProposal(this.#chatId!);
+          store.startProposal(this.#messageId!);
           this.#proposalStarted = true;
         }
       }).catch((err) => { logger.warn('[ActionRunner] Failed to start proposal:', err); });
@@ -1774,7 +1789,7 @@ export class ActionRunner {
         const fileName = action.filePath.split('/').pop() || action.filePath;
 
         // Add file change to the current proposal
-        wbStore.addFileChangeToProposal(this.#chatId || 'unknown', {
+        wbStore.addFileChangeToProposal(this.#messageId || 'unknown', {
           name: fileName,
           path: action.filePath,
           summary: changeType === 'create' ? `Create ${fileName}` : `Update ${fileName}`,
@@ -1926,10 +1941,10 @@ export class ActionRunner {
           logger.info(`📦 Batch flush complete: ${result.successCount}/${result.totalFiles} files`);
 
           // Trigger GitHub sync after batch completes
-          if (this.#chatId && this.#modifiedFiles.length > 0) {
+          if (this.#modifiedFiles.length > 0) {
             const filesToSync = [...this.#modifiedFiles];
             this.#modifiedFiles = [];
-            autoSyncToGitHub(this.#chatId, filesToSync);
+            autoSyncToGitHub(null, filesToSync);
           }
         }
       } catch (error) {
@@ -1958,10 +1973,10 @@ export class ActionRunner {
     }
 
     // Trigger GitHub sync after flush
-    if (this.#chatId && this.#modifiedFiles.length > 0) {
+    if (this.#modifiedFiles.length > 0) {
       const filesToSync = [...this.#modifiedFiles];
       this.#modifiedFiles = [];
-      autoSyncToGitHub(this.#chatId, filesToSync);
+      autoSyncToGitHub(null, filesToSync);
     }
 
     return result;
@@ -5005,10 +5020,10 @@ export class ActionRunner {
     this.#firstArtifactComplete = true;
 
     // 🔍 PROPOSAL MODE: Finalize the proposal now that all actions are collected
-    if (this.#chatId) {
+    if (this.#messageId) {
       getWorkbenchStore().then(store => {
         if (store.isProposalModeEnabled()) {
-          const proposal = store.finalizeProposal(this.#chatId!, 'AI Changes');
+          const proposal = store.finalizeProposal(this.#messageId!, 'AI Changes');
           if (proposal) {
             logger.info(`[ActionRunner] 🔍 Proposal finalized: ${proposal.id} with ${proposal.filesChanged.length} files`);
           }
@@ -5028,10 +5043,10 @@ export class ActionRunner {
         logger.warn('Post-stream batch flush failed:', err);
       });
     }
-    if (this.#chatId && this.#modifiedFiles.length > 0) {
+    if (this.#modifiedFiles.length > 0) {
       const filesToSync = [...this.#modifiedFiles];
       this.#modifiedFiles = [];
-      autoSyncToGitHub(this.#chatId, filesToSync);
+      autoSyncToGitHub(null, filesToSync);
     }
 
     const orphans = this.getOrphanedActions();

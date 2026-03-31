@@ -451,6 +451,10 @@ export class WorkbenchStore {
     this.#currentProjectId = projectId;
     this.projectId.set(projectId);
 
+    for (const artifact of Object.values(this.artifacts.get())) {
+      artifact?.runner?.setProjectId(projectId);
+    }
+
     // 🔒 CRITICAL FIX: Ensure container exists FIRST before any other API calls
     // This prevents 404 errors from terminal, preview, files, etc.
     let containerExists = false;
@@ -987,6 +991,7 @@ export class WorkbenchStore {
       logger.error('[WorkbenchStore] CRITICAL: No projectId when creating ActionRunner');
     }
     const runner = new ActionRunner(projectIdToUse || undefined);
+    runner.setMessageId(messageId);
     logger.info(`[WorkbenchStore] ActionRunner created with projectId: ${projectIdToUse}`);
     
     // 🔧 CRITICAL FIX: Only mark runner as restored if THIS messageId was part of the restored chat.
