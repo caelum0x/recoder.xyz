@@ -35,6 +35,8 @@ function getSessionToken(): string | null {
   const cookieNames = [
     '__Secure-recoder.session_token',
     'recoder.session_token',
+    '__Secure-better-auth.session_token',
+    'better-auth.session_token',
     '__Secure-session_token',
     'session_token',
     'recoder_session_token',
@@ -239,7 +241,18 @@ function formatErrorsForAI(errors: BuildError[]): string {
     return detail;
   }).join('\n\n---\n\n');
 
-  return `[AUTO-FIX] Fix these build/runtime errors blocking the preview:\n\n${errorDetails}\n\nPlease fix all errors above. The app won't run until these are resolved.`;
+  // Add specific guidance for module/dependency resolution errors
+  const hasMissingImport = preparedErrors.some(({ error }) => error.type === 'module');
+  const hasNpmError = preparedErrors.some(({ error }) => error.source === 'npm');
+  let suffix = '\n\nPlease fix all errors above. The app won\'t run until these are resolved.';
+  if (hasMissingImport) {
+    suffix += '\n\nFor missing imports: use a shell action `npm install <package-name>` to add the missing package. Do NOT edit package.json directly — write the complete file or use npm install.';
+  }
+  if (hasNpmError) {
+    suffix += '\n\nFor npm errors: check that package.json is valid JSON. If rewriting it, always write the COMPLETE valid JSON object, not just a fragment.';
+  }
+
+  return `[AUTO-FIX] Fix these build/runtime errors blocking the preview:\n\n${errorDetails}${suffix}`;
 }
 
 function getBackoffDelay(attemptCount: number): number {
