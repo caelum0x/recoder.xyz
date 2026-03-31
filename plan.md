@@ -1,42 +1,1037 @@
 # Recoder Platform — Master Plan
 
-Last updated: 2026-03-31 (Codex verification + Recoder coordination)
+Last updated: 2026-03-31 (live Nike presentation fix + Hetzner backend DB realignment)
 
 ---
 
-## Current State (Verified 2026-03-31)
+## Current Correction — 2026-03-31
+
+This section supersedes conflicting notes below.
+
+- The Nike presentation blank-state issue on `agents.recoder.xyz` is fixed live.
+- `recoder-agents` is deployed and online in PM2.
+- The live failure had two separate root causes:
+  1. presentation viewers were corrupting same-origin proxy URLs by appending cache-busting as a second `?`, which broke the encoded `path` query param and caused `metadata.json` 404s
+  2. `recoder-backend` on Hetzner had Postgres credential drift, so authenticated file proxy reads still failed with backend `500` until the host `recoder` role password was realigned
+- Both are fixed now:
+  - shared URL handling was corrected in `recoder-agents/src/lib/utils/url.ts` and all affected presentation callers
+  - the host Postgres `recoder` password was realigned to the DSNs already configured in `/root/recoder.xyz/backend/.env`
+  - `recoder-agents` and `recoder-backend` were restarted successfully in PM2
+- Verified live after deployment:
+  - Nike `metadata.json` proxy via `agents.recoder.xyz/api/files/content?...&t=...` returns `200`
+  - Nike `slide_01.html` proxy via `agents.recoder.xyz/api/files/content?...&t=...` returns `200`
+  - Nike image proxy via `agents.recoder.xyz/api/files/content?...&t=...` returns `200`
+- Follow-up infra work:
+  1. `recoder-6ko` — prevent Hetzner backend DB credential drift
+  2. `recoder-o66` — restore git-based deployability on the Hetzner app checkout
+
+## Historical Plan Notes
+
+The roadmap below remains useful, but older claims elsewhere that the Nike presentation fix was not deployed, that `recoder-agents` was stopped, or that the Nike issue was still open are stale.
+
+## IMPLEMENTATION ROADMAP
+
+> Sprints are ordered by value/effort ratio. Each sprint is independently shippable. No sprint depends on the next one starting.
+
+---
+
+### Sprint A — Zero-Infra Quick Wins (this week, ~2–3 days)
+*No new servers. No docker-compose changes. Pure npm install + code.*
+
+**A1. Excalidraw canvas in recoder-agents**
+- `npm install @excalidraw/excalidraw` in `recoder-agents`
+- Create `CanvasPanel.tsx` component wrapping `<Excalidraw>` with `initialData` prop
+- Add canvas tool to agent tool sidebar (replace broken FAL canvas)
+- Wire up `recoder_canvas_update` A2A MCP tool: agent writes JSON elements → broadcast to all connected clients via existing WS bridge → canvas updates live
+- Files: `recoder-agents/src/components/canvas/CanvasPanel.tsx`, new MCP tool in `mcp/recoder-a2a-server.js`
+- Success: agent can say "draw a flowchart of X" → canvas updates in UI
+
+**A2. Steel + Stagehand browser agent tools**
+- `npm install @steel-dev/steel-client` in `backend/` (Python: `pip install steel-sdk`)
+- Self-host Steel via `docker run -p 3000:3000 ghcr.io/steel-dev/steel` (add to docker-compose.deploy.yml)
+- Add `browser_navigate`, `browser_act`, `browser_extract`, `browser_screenshot` tools to agent tool registry in `backend/core/tools/`
+- Use Stagehand's `act("...")` API for natural language browser control
+- Expose via existing tool execution pipeline
+- Success: agent can browse a URL, click a button, extract text, take screenshot — all as tool calls
+
+**A3. DuckDB in-process data layer**
+- `npm install duckdb` in `docker-backend` (or `pip install duckdb` in backend)
+- Add `recoder_query_data` MCP tool: accepts SQL, runs against agent's in-memory DuckDB instance, returns JSON rows
+- Add `recoder_load_csv` / `recoder_load_json` tools: ingest data into DuckDB from agent's scratchpad
+- Wire to A2A scratchpad: DuckDB results auto-written to `scratchpad/data/{key}` for other agents to read
+- Files: new `docker-backend/src/a2a/duckdb-tool.ts`
+- Success: agent can load a CSV from sandbox, run a GROUP BY, return results — no Python pandas needed
+
+---
+
+### Sprint B — A2A Hardening (this week, ~2 days)
+*Fix the known A2A gaps. Deploy Redis store. Publish npm.*
+
+**B1. Push notifications (inbox as push, not poll)**
+- In `mcp/recoder-a2a-server.js`: when a new task arrives for an agent, emit MCP `notifications/message` to all connected MCP clients of that agent type
+- Use MCP SDK's `server.notification()` call on the active transport
+- Add `recoder_subscribe` tool: client registers interest in task types, gets notified immediately on arrival
+- Files: `mcp/recoder-a2a-server.js`, `packages/recoder-a2a/index.js`
+- Success: Claude Code terminal shows a notification the moment Codex sends a message, without polling
+
+**B2. Terminal auto-discovery + task claim/lock**
+- Add `sessionId: uuid()` generated on MCP client connect, stored in bridge's agent registry
+- `recoder_inbox` marks returned tasks as `claimedBy: sessionId` atomically (Redis SETNX)
+- Second instance calling `recoder_inbox` sees those tasks as `claimed`, skips them
+- Add `recoder_list_agents` tool: returns all connected terminals with `{ agentType, sessionId, connectedAt, workspaceDir }`
+- Files: `docker-backend/src/a2a/agent-bridge.service.ts`, `mcp/recoder-a2a-server.js`
+- Success: two Claude Code terminals each get their own inbox; no duplicate task reads
+
+**B3. Deploy Redis task store to production**
+- `rsync packages/recoder-a2a/ root@77.42.23.19:/root/recoder.xyz/packages/recoder-a2a/`
+- On server: `cd /root/recoder.xyz/mcp && npm install ../packages/recoder-a2a`
+- Restart `recoder-a2a-server` process (or rebuild docker-backend if embedded)
+- Verify: send task from Claude, restart server, task still visible in inbox
+- Success: tasks survive process restarts
+
+**B4. Publish recoder-a2a to npm**
+- Bump version in `packages/recoder-a2a/package.json` to `2.3.0`
+- `cd packages/recoder-a2a && npm publish --access public`
+- Update `packages/recoder-code/packages/cli/mcp/recoder-a2a-server.js` to use published version
+- Update README with new tools and Redis setup docs
+- Success: `npm install recoder-a2a` gets the Redis-backed version
+
+---
+
+### Sprint C — Zrok Preview URLs (1 week)
+*Eliminate the 30-second health check. Make preview URL instant and permanent.*
+
+**C1. Self-host Zrok stack on Hetzner**
+- Add to `docker-compose.deploy.yml`:
+  ```yaml
+  ziti-controller:
+    image: openziti/ziti-controller:latest
+    ports: ["1280:1280"]
+  ziti-router:
+    image: openziti/ziti-router:latest
+    ports: ["3022:3022"]
+  zrok-controller:
+    image: openziti/zrok:latest
+    ports: ["18080:18080"]
+    environment:
+      - ZROK_POSTGRES_URL=postgresql://recoder:recoder_prod_2026@host.docker.internal:5432/recoder_backend
+  ```
+- Run `zrok2 bootstrap` to generate identities and policies
+- Add nginx upstream: `*.preview.recoder.xyz` → Zrok frontend (port 18080)
+- Add Cloudflare wildcard DNS: `*.preview.recoder.xyz → 77.42.23.19`
+- Success: Zrok web console accessible at `zrok.recoder.xyz`
+
+**C2. docker-backend Zrok integration**
+- `npm install @openziti/zrok` in `docker-backend`
+- In `docker-backend/src/server.ts` container creation route: after Daytona sandbox starts, call `zrok.share({ mode: ShareMode.Public, target: 'localhost:5173', token: projectId })`
+- Store `previewUrl` in `containers` map and persist to `containers.json`
+- Return `previewUrl` in container creation response
+- Update `recoder-web` frontend: use `previewUrl` from API response directly in iframe, skip health check loop
+- Files: `docker-backend/src/server.ts`, `recoder-web/app/lib/services/docker-api.ts`, `recoder-web/app/components/workbench/Preview.tsx`
+- Success: preview URL appears in ~2 seconds, iframe loads immediately, no polling
+
+**C3. Remove preview.ts proxy (after C2 stable)**
+- Delete health-check polling loop from `PreviewsStore`
+- Simplify `Preview.tsx` to just render the Zrok URL in iframe
+- Remove asset URL rewriting from `preview.ts` (no longer needed — Zrok tunnel proxies directly)
+- Success: `preview.ts` shrinks from 400+ lines to ~50 lines
+
+**C4. Publish flow via Zrok Frontdoor**
+- Reserved share token = permanent URL: `{projectId}.preview.recoder.xyz` (survives sandbox stop/start)
+- Publish = enable Frontdoor on the reserved share → always-on, served by `zrok2-share.service`
+- Publish button in UI calls new endpoint `POST /api/publish/{projectId}/frontdoor`
+- Custom domain: user can CNAME their domain to `{projectId}.preview.recoder.xyz`
+- Files: `docker-backend/src/server.ts` publish route, `recoder-web/app/components/header/HeaderActionButtons.client.tsx`
+- Success: publish works, live URL permanent, custom domains possible
+
+---
+
+### Sprint D — Workflow Engine: Replace Giselle (1 week)
+*Fix Agency workflows with a real durable execution engine.*
+
+**D1. Deploy Hatchet**
+- Add to `docker-compose.deploy.yml`:
+  ```yaml
+  hatchet-engine:
+    image: ghcr.io/hatchet-dev/hatchet/hatchet-engine:latest
+    environment:
+      - DATABASE_URL=postgresql://recoder:recoder_prod_2026@host.docker.internal:5432/recoder_backend
+    ports: ["7070:7070"]
+  hatchet-api:
+    image: ghcr.io/hatchet-dev/hatchet/hatchet-api:latest
+    ports: ["8080:8080"]
+  ```
+- Run Hatchet migrations against `recoder_backend`
+- Success: Hatchet dashboard accessible, engine running
+
+**D2. Port Agency workflows to Hatchet**
+- Install `@hatchet-dev/typescript-sdk` in `recoder-agency`
+- For each Giselle workflow node type: create a Hatchet worker that handles that node's execution
+- `AgencyWorkflowWorker`: TypeScript class with `@hatchet.step()` decorators for each node type (LLM, HTTP, code, branch)
+- Replace Giselle's `fs-storage-driver` workflow execution with `hatchet.run(workflowId, input)`
+- Keep Giselle's UI (Reactflow graph) — just swap the execution backend
+- Files: new `recoder-agency/apps/agency/app/workers/`, update `stage-apps.ts`
+- Success: Agency workflows execute reliably, survive restarts, show progress in Hatchet dashboard
+
+**D3. A2A trigger integration**
+- Hatchet workers can receive A2A tasks: `recoder_send_task({ to: "agency-workflow", type: "run_workflow", workflowId })` triggers a Hatchet run
+- Wire `Trigger.dev` (Apache 2.0, TypeScript) for the webhook/event side: GitHub push → Trigger.dev event → Hatchet workflow run
+- Files: `docker-backend/src/a2a/task-lifecycle.routes.ts`
+- Success: external events (GitHub push, PM feature created) trigger agency workflows via A2A
+
+---
+
+### Sprint E — Vector Search + Agent Memory (1 week)
+*Give agents persistent, searchable memory.*
+
+**E1. Deploy Qdrant**
+- Add to `docker-compose.deploy.yml`:
+  ```yaml
+  qdrant:
+    image: qdrant/qdrant:latest
+    volumes: ["qdrant-data:/qdrant/storage"]
+    ports: ["6333:6333"]
+  ```
+- ~1 GB RAM with quantization enabled (add `quantization_config` in collection config)
+- Success: Qdrant API accessible at `http://qdrant:6333`
+
+**E2. Agent memory MCP tools**
+- `npm install @qdrant/js-client-rest` in `docker-backend`
+- Implement `recoder_remember({ content, type, tags })`: embed content via OpenRouter embedding API → store in Qdrant collection `agent-memory-{userId}`
+- Implement `recoder_recall({ query, limit })`: embed query → semantic search Qdrant → return top matches
+- Implement `recoder_forget({ id })`: delete vector by ID
+- Session start: bridge auto-injects last 10 relevant memories as context in task payloads
+- Files: new `docker-backend/src/a2a/memory-store.ts`, new MCP tools in `mcp/recoder-a2a-server.js`
+- Success: Claude remembers "this user prefers Tailwind over CSS modules" across sessions
+
+**E3. Semantic code search**
+- Index project files in Qdrant when sandbox is created: chunk files, embed, store with `{ projectId, filePath, lineRange }`
+- Add `recoder_search_code({ query })` MCP tool: "find all places where auth is checked" → semantic search → returns file locations
+- Re-index on file write (debounced, 5s)
+- Files: `docker-backend/src/a2a/code-search.ts`
+- Success: agents can semantically search the codebase, not just grep
+
+**E4. LanceDB for lightweight per-agent local memory**
+- `npm install vectordb` (LanceDB) in `docker-backend`
+- Use for session-scoped memory that doesn't need persistence: scratchpad entries, current task context
+- Zero infra — runs in-process, data in `/data/lance/{sessionId}/`
+- Files: `docker-backend/src/a2a/scratchpad.ts`
+- Success: agents share structured data within a session without a server call
+
+---
+
+### Sprint F — Search: Meilisearch (3 days)
+*Fast, AI-hybrid search across all platform content.*
+
+**F1. Deploy Meilisearch**
+- Add to `docker-compose.deploy.yml`:
+  ```yaml
+  meilisearch:
+    image: getmeili/meilisearch:latest
+    environment:
+      - MEILI_MASTER_KEY=${MEILI_MASTER_KEY}
+    volumes: ["meili-data:/meili_data"]
+    ports: ["7700:7700"]
+  ```
+- ~500 MB RAM. Persistent volume for index data.
+- Success: Meilisearch API accessible, admin UI at port 7700
+
+**F2. Index platform content**
+- Index recoder-agents threads: `{ id, title, messages[], projectId, userId, createdAt }`
+- Index files in active sandboxes: `{ projectId, path, content }` (for code search)
+- Index recoder-pm features/feedback: `{ id, title, description, status }`
+- Index recoder-agency clients/projects: `{ id, name, brief, status }`
+- Indexing jobs run via Hatchet (Sprint D) on content creation/update
+- Success: search returns results across all platform content
+
+**F3. `recoder_search` MCP tool**
+- Routes to Meilisearch with hybrid (text + vector) mode
+- Searches: threads, files, PM features, docs, agent outputs
+- Results cached in A2A scratchpad by query hash (TTL 1h)
+- Any agent can call `recoder_search({ q: "auth middleware implementation", sources: ["code","threads"] })`
+- Files: new MCP tool in `mcp/recoder-a2a-server.js`, `docker-backend/src/a2a/search-proxy.ts`
+- Success: shared search cache — Claude researches, Codex benefits from same results
+
+---
+
+### Sprint G — Chatwoot: Replace OpenClaw Social Gateway (3 days)
+*Free 400MB RAM. Get a proper omnichannel inbox.*
+
+**G1. Deploy Chatwoot**
+- Add to `docker-compose.deploy.yml`:
+  ```yaml
+  chatwoot:
+    image: chatwoot/chatwoot:latest
+    environment:
+      - DATABASE_URL=postgresql://recoder:recoder_prod_2026@host.docker.internal:5432/recoder_backend
+      - REDIS_URL=redis://:password@recoder-redis:6379/0
+      - SECRET_KEY_BASE=${CHATWOOT_SECRET}
+    ports: ["3005:3000"]
+  ```
+- Run `rails db:chatwoot_prepare`
+- nginx: `chat.recoder.xyz` → port 3005
+- Success: Chatwoot admin at `chat.recoder.xyz`
+
+**G2. Wire social channels**
+- Connect WhatsApp Business API inbox
+- Connect Telegram Bot inbox
+- Connect Gmail inbox (OAuth)
+- Each conversation tagged with `{ userId, agentId }` for routing
+- Success: messages from WhatsApp/Telegram/Gmail appear in Chatwoot inbox
+
+**G3. A2A webhook integration**
+- Chatwoot webhook → `POST /api/a2a/webhook/chatwoot` on docker-backend
+- docker-backend translates Chatwoot event to A2A task: `{ type: "message", channel, from, content }`
+- Dispatches to agent with `capability: ["chat:reply"]`
+- Agent responds → A2A `reply` task → docker-backend → Chatwoot API → sends reply to user on original channel
+- Files: `docker-backend/src/a2a/webhook-gateway.ts`
+- Success: user sends WhatsApp message → agent responds via Chatwoot → reply delivered on WhatsApp
+
+**G4. Stop OpenClaw, free RAM**
+- After Chatwoot handles all social channels: `docker stop openclaw-gateway`
+- Remove from docker-compose.deploy.yml
+- Frees ~400MB RAM
+- Success: server RAM drops 400MB, social messaging still works via Chatwoot
+
+---
+
+### Sprint H — Infrastructure Upgrades (1 week, parallel)
+*Swap heavier infra for leaner alternatives.*
+
+**H1. VictoriaMetrics (replace Prometheus)**
+- Add to docker-compose.deploy.yml: `victoriametrics` service
+- Configure as Prometheus remote_write target OR direct scrape
+- Same PromQL queries work unchanged
+- Remove Prometheus container (save 300–500MB RAM)
+- Update Grafana datasource to VictoriaMetrics
+- Files: `docker-compose.deploy.yml`, `monitoring/` configs
+
+**H2. OpenMeter (usage metering)**
+- Deploy OpenMeter + ClickHouse sidecar
+- Instrument docker-backend: emit usage events on every LLM call `{ userId, model, inputTokens, outputTokens, projectId }`
+- Emit on every sandbox exec, file operation, publish
+- Dashboard: per-user token spend, per-project cost, per-model breakdown
+- Foundation for billing: when Stripe is added, OpenMeter provides the metering data
+- Files: `docker-backend/src/metering/openmeter-client.ts`
+
+**H3. Flagsmith (feature flags)**
+- Deploy Flagsmith (`docker run flagsmith/flagsmith`)
+- Replace env-var feature flags in `recoder-web`, `recoder-agents`, `app/` with Flagsmith SDK calls
+- Enables: gradual rollouts of new features, A/B test AI model configs, kill-switch for broken features
+- Files: add `@flagsmith/js-client` to each frontend
+
+**H4. Umami (web analytics)**
+- Deploy Umami (`docker run ghcr.io/umami-software/umami`)
+- Add `<script>` to `app/` (recoder.xyz), `recoder-agents`, `recoder-web`
+- Track: page views, sign-up funnel, feature usage, conversion
+- GDPR compliant, no cookies, no consent banner needed
+
+---
+
+### Sprint I — NATS Event Bus (3 days)
+*Replace Redis pub/sub in A2A with purpose-built messaging.*
+
+**I1. Deploy NATS with JetStream**
+- Add to docker-compose.deploy.yml: `nats:nats:latest` with JetStream enabled, ~20MB RAM
+- Configure streams: `A2A_TASKS`, `A2A_EVENTS`, `A2A_MEMORY`
+- Success: NATS accessible at `nats://recoder-nats:4222`
+
+**I2. Migrate A2A event bus to NATS**
+- Replace Redis pub/sub calls in `agent-bridge.service.ts` with NATS publish/subscribe
+- `npm install nats` in docker-backend
+- Keep Redis for task store (Redis SETNX for claim/lock works well)
+- NATS handles: real-time event fan-out, push notifications, channel broadcasts
+- Redis handles: persistent task state, scratchpad KV, ownership cache
+- Files: `docker-backend/src/a2a/agent-bridge.service.ts`
+- Success: A2A events are 10x lower latency, NATS dashboard shows message flow
+
+---
+
+### Sprint J — Developer Docs + API Portal (1 week)
+*Build the docs that don't exist.*
+
+**J1. Starlight developer docs site**
+- `npm create astro@latest -- --template starlight` in new `docs/` directory
+- Sections: Getting Started, API Reference, A2A Protocol, MCP Tools, BYOK Setup, Self-Hosting
+- Add to docker-compose: `docs` service, nginx: `docs.recoder.xyz` → docs build output
+- Auto-generate API reference from OpenAPI spec (backend has FastAPI → auto-generates OpenAPI)
+- Success: `docs.recoder.xyz` is live with basic content
+
+**J2. A2A protocol documentation**
+- Document: task schema, message types, MCP tools, WebSocket protocol, enrollment flow
+- Code examples: Claude Code session, Codex session, custom agent
+- Interactive playground: send test A2A messages from the docs page
+- Files: `docs/src/content/docs/a2a/`
+
+**J3. Payload CMS for recoder.xyz content**
+- `npm install payload` in `app/` (Next.js — Payload embeds natively)
+- Collections: blog posts, changelog entries, case studies, job postings
+- Replaces hardcoded content in landing page with CMS-managed content
+- Files: `app/payload.config.ts`, new collections
+
+---
+
+### Sprint K — Agent Coding Capability (2 weeks)
+*Make recoder-agents actually code, not just do HTML.*
+
+**K1. Smolagents integration**
+- `pip install smolagents` in `backend/`
+- Create `SmolagentsExecutor` class: wraps agent tool calls in Smolagents' code-first execution loop
+- Smolagents writes Python to call tools → executes in Daytona sandbox → result back to LLM
+- This gives the agent a proper "write code → run code → see output → fix code" loop
+- Files: `backend/core/agents/executors/smolagents_executor.py`
+- Success: agent writes a Python script, runs it in sandbox, sees output, iterates
+
+**K2. Ollama in Daytona sandbox base image**
+- Add to Daytona sandbox Dockerfile: `RUN curl -fsSL https://ollama.ai/install.sh | sh`
+- Pre-pull a small model: `RUN ollama pull qwen2.5-coder:3b` (2GB, fits in sandbox)
+- Expose via `recoder_local_llm` MCP tool: agents call local model for cheap inference (docstring generation, code comments, quick Q&A)
+- Reserve expensive API calls (Claude/GPT-4) for complex reasoning
+- Success: agents use local model for 80% of calls, API only for hard problems
+
+**K3. OpenHands reference integration**
+- Study OpenHands' Agent-Computer Interface (ACI) — how it structures tool use for software engineering
+- Port the core patterns to recoder-agents: structured file edit format, test-run-fix loop, git integration
+- DO NOT fork the full OpenHands stack (too heavy) — extract the patterns
+- Files: `backend/core/agents/patterns/aci.py`
+- Success: agents follow structured software engineering workflow (not just "write files and hope")
+
+---
+
+### Sprint L — Ziti Transport for A2A (future, 2+ weeks)
+*Zero-port agent networking. Cryptographic identity.*
+
+**L1. Ziti enrollment for Claude Code / Codex**
+- Ship `recoder-a2a` npm package with Ziti enrollment: `npx recoder-a2a enroll` → stores identity in `~/.recoder/ziti/`
+- Each terminal gets unique X.509 fingerprint
+- Bridge validates Ziti identity on connect instead of Bearer token
+- Success: two Claude Code instances have distinct identities, no shared-secret auth
+
+**L2. Migrate A2A WebSocket to Ziti service**
+- Register docker-backend A2A bridge as a Ziti service (no public port needed)
+- Agents connect via Ziti fabric instead of `wss://docker.recoder.xyz`
+- nginx `docker.recoder.xyz` becomes optional (kept for backwards compat)
+- Success: A2A works from any network, zero firewall rules, end-to-end encrypted
+
+---
+
+## Sprint Priority Summary
+
+| Sprint | Est. Time | Impact | Depends On |
+|--------|-----------|--------|------------|
+| **A** — Excalidraw + Steel + DuckDB | 2–3 days | Agents get canvas + browser + data | Nothing |
+| **B** — A2A hardening + npm | 2 days | Fix A2A usability now | Nothing |
+| **C** — Zrok preview URLs | 1 week | Eliminates biggest Web IDE pain | Nothing |
+| **D** — Hatchet workflow engine | 1 week | Fix Agency workflows | Nothing |
+| **E** — Qdrant + agent memory | 1 week | Foundation for AI quality | Nothing |
+| **F** — Meilisearch | 3 days | Shared search across platform | E (optional) |
+| **G** — Chatwoot + free OpenClaw RAM | 3 days | Free 400MB, add social inbox | Nothing |
+| **H** — VictoriaMetrics + OpenMeter + Flagsmith + Umami | 1 week | Infra lean-up + billing foundation | Nothing |
+| **I** — NATS event bus | 3 days | Better A2A messaging | B |
+| **J** — Docs site (Starlight) | 1 week | Developer onboarding | Nothing |
+| **K** — Agent coding capability | 2 weeks | Core agent value prop | E |
+| **L** — Ziti transport | 2+ weeks | Zero-port, cryptographic identity | C |
+
+---
+
+## agents.recoder.xyz — Investigation 2026-03-31
+
+### What Was Broken (Nike Presentation — 58 agent actions, no visible output)
+
+Three separate root causes blocked the presentation creation flow:
+
+#### 1. CORS — `cache-control` header blocked (FIXED ✓)
+- **Symptom**: `cache-control is not allowed by Access-Control-Allow-Headers in preflight response` on `api.recoder.xyz/v1/sandboxes/{id}/files/content`
+- **Root cause**: nginx.conf for `api.recoder.xyz` had `Cache-Control` missing from `Access-Control-Allow-Headers` in the OPTIONS response. nginx `add_header` outside `if { return 204; }` blocks is NOT inherited by the if block ("if is evil" bug).
+- **Fix applied**: `/etc/nginx/nginx.conf` — added `Cache-Control` to all 6 `Access-Control-Allow-Headers` lines AND moved all CORS headers INSIDE the `if ($request_method = 'OPTIONS') { return 204; }` blocks.
+- **Verified**: `curl -X OPTIONS api.recoder.xyz/v1/sandboxes/... -H 'Access-Control-Request-Headers: cache-control'` → returns `access-control-allow-headers: ... Cache-Control` ✓
+
+#### 2. Sandbox subdomain CORS — duplicate `Access-Control-Allow-Origin` (FIXED ✓)
+- **Symptom**: `The 'Access-Control-Allow-Origin' header contains multiple values 'https://agents.recoder.xyz, *'` on `8080-{sandboxId}.sandbox.recoder.xyz`
+- **Root cause**: nginx sandbox location block set `add_header Access-Control-Allow-Origin "*"` AND proxied to Daytona which also adds its own origin header → double header.
+- **Fix applied**: Added `proxy_hide_header Access-Control-Allow-Origin` before setting `add_header Access-Control-Allow-Origin "$http_origin"`.
+- **Verified**: `curl -X OPTIONS 8080-{id}.sandbox.recoder.xyz` → returns single `access-control-allow-origin: https://agents.recoder.xyz` ✓
+
+#### 3. Presentation slide images — 404/not loading (FIX LOCAL, NOT DEPLOYED)
+- **Symptom**: Slide preview iframe shows blank/broken images. Agent creates slides with `<img src="../images/slide1_logo.jpg">`.
+- **Root cause**: `fetchSandboxHtmlAsBlobUrl` fetches HTML and creates a `blob:` URL. When the iframe renders from a blob URL, relative paths like `../images/filename.jpg` have no meaningful base URL to resolve against. They resolve relative to `blob:https://agents.recoder.xyz/uuid` which is useless.
+- **Confirmed**: Nike sandbox `19f19be2` — images exist at `/workspace/presentations/images/` (1.7MB total, 5 images). Slides at `/workspace/presentations/nike/slide_0{1-5}.html` correctly use `../images/` relative paths. `/workspace` is a symlink to `/home/daytona/`.
+- **Fix**: Updated `recoder-agents/src/lib/utils/url.ts` → `fetchSandboxHtmlAsBlobUrl` now:
+  1. Parses `sandboxId` and file `path` from the proxy URL
+  2. Calls `rewriteHtmlAssetPaths()` which resolves all `<img src>`, `<source src>`, `href` and CSS `url()` references
+  3. Converts `../images/filename.jpg` → `/api/files/content?sandboxId={id}&path=/home/daytona/presentations/images/filename.jpg`
+  4. The iframe has `allow-same-origin` so same-origin proxy requests carry session cookies ✓
+  5. Also handles absolute sandbox paths: `/projects/{id}/images/` → `/home/daytona/projects/{id}/images/`
+- **Status**: Fix built locally, `.next` synced to server. **recoder-agents is currently STOPPED** because `prerender-manifest.json` was not included in initial tarball deploy.
+
+### recoder-agents Deployment — BLOCKED
+- **Current state**: PM2 shows `stopped` for `recoder-agents`. Error: `ENOENT: prerender-manifest.json`
+- **Root cause**: Server has only 3GB available RAM + swap fully saturated (4GB/4GB). Next.js build is OOM killed on server. Must build locally and deploy.
+- **What was done**: Built locally (succeeded), created `.next` tarball. First deploy was missing `prerender-manifest.json`. Full tarball (`/tmp/next-full.tar.gz` with all `*.json`) was ready to deploy but user paused deployment.
+- **To complete deployment**:
+  ```bash
+  # On server:
+  cd /root/recoder.xyz/recoder-agents && tar -xzf /tmp/next-full.tar.gz && pm2 restart recoder-agents
+  # Or re-upload /tmp/next-full.tar.gz if it was cleaned up
+  ```
+- **Memory issue**: Server RAM is consistently full. Consider adding swap or restarting low-priority services before build attempts.
+
+### nginx.conf vs sites-enabled — IMPORTANT
+- **Real config**: `/etc/nginx/nginx.conf` (1739 lines) — this is what nginx loads
+- **Decoy**: `/etc/nginx/sites-enabled/recoder-production.conf` — NOT included in nginx.conf, NOT loaded, edits here have NO effect
+- **Local copy**: `/Users/arhansubasi/recoder.xyz/nginx-production.conf` — kept in sync with server after each nginx change
+
+### agents.recoder.xyz — Known Remaining Issues
+1. **Presentation images not loading** — fix implemented but not yet deployed (recoder-agents stopped)
+2. **recoder-agents stopped** — needs manual deployment restart (see above)
+3. **FullScreenPresentationViewer** — also uses blob iframe approach, will benefit from same path-rewriting fix once deployed
+4. **Server memory pressure** — 11GB/15GB used, 4GB swap full. Next.js builds will fail until memory is freed or more swap added.
+5. **Agent can't do real coding** — agent handles HTML/CSS fine but cannot build full apps (React, Node, etc.) end-to-end. Coding with live preview loop is broken: files created but sandbox auto-stops, preview breaks. This is the core agent IDE value prop and is not working.
+
+---
+
+## A2A — Current State & Roadmap (2026-03-31)
+
+### What Works
+- Full round-trip Claude Code ↔ Codex via bridge (send task / receive / respond)
+- Intent routing (tasks dispatched to target agent by ID)
+- Channel messaging (broadcast to workspace peers)
+- Bearer token auth on WebSocket connections
+- `recoder_inbox`, `recoder_send_task`, `recoder_task_respond` MCP tools functional
+- In-memory task store works within a session
+
+### What Needs to Be Built
+
+#### 1. Inbox as Push Notification (Priority: HIGH)
+- **Current**: `recoder_inbox` is poll-based — Claude/Codex must call it to check for messages
+- **Needed**: Push/event model — when a message arrives, Claude Code gets notified immediately (like an email notification), not just when it polls
+- **How**: MCP server should emit a notification event to the connected client when a new inbound task arrives. Claude Code's MCP SDK supports server-sent notifications. Add a notification channel so Claude doesn't miss messages from Codex.
+
+#### 2. Auto-Discovery of Claude Code + Codex Terminals (Priority: HIGH)
+- **Current**: Agent IDs are hardcoded (`claude_code`, `codex`). Two Claude Code instances both read the same tasks (no deduplication by session/terminal).
+- **Needed**: Each Claude Code / Codex terminal instance registers itself with a unique session ID on MCP connect. The A2A server maintains a live registry of connected terminals with their agent type, session ID, and capabilities. Messages route to the correct specific terminal, not just "any claude_code".
+- **Problem observed**: Two Claude Code instances reading the same inbox items — tasks should be claimed (locked) once read by one instance.
+
+#### 3. Task Claim / Lock (Priority: HIGH)
+- **Current**: Multiple instances of the same agent type can read the same pending task
+- **Needed**: `recoder_inbox` marks tasks as "claimed" by the reading session, preventing other instances from picking them up. Add `claimedBy: sessionId` field and filter in inbox listing.
+
+#### 4. Persistent Task Store — Deploy to Production (Priority: HIGH)
+- **Current on server**: `mcp/recoder-a2a-server.js` still uses in-memory `inboundTasks` array — all tasks lost on restart
+- **Fixed locally**: `packages/recoder-a2a` has Redis-backed task store (commit `60d1bde9`)
+- **To deploy**: rsync + restart `recoder-a2a-server.js` on server, run `npm install` in the mcp directory
+
+#### 5. npm Package Release (Priority: MEDIUM)
+- `packages/recoder-a2a` has significant improvements (Redis store, improved protocol) that are not yet published to npm
+- Current version in package.json needs to be bumped and `npm publish` run
+- `packages/recoder-code/packages/cli/mcp/recoder-a2a-server.js` also updated but not synced to released package
+
+#### 6. A2A Message Threading & History (Priority: MEDIUM)
+- Tasks should have thread context (reply chains, not just isolated messages)
+- History should persist per-conversation, not just last 5 completed
+
+#### 7. Workspace Discovery (Priority: MEDIUM)
+- When Claude Code starts, it should broadcast its presence to the A2A bridge
+- Bridge maintains a live map: `{ agentId, sessionId, workspaceDir, capabilities, connectedAt }`
+- Other agents can query this to find active Claude Code / Codex instances and their workspaces
+
+### A2A Opportunity Space — Deep Dive
+
+The A2A bridge is already working. What follows is what it becomes.
+
+---
+
+#### 1. Networking: OpenZiti + Zrok
+
+**License**: Apache 2.0 — commercial use, forking, embedding all permitted.
+
+**The problem today**:
+- Sandbox previews need `*.sandbox.recoder.xyz` wildcard DNS + nginx proxy block + 30-second health check loop before URL is known
+- A2A WebSocket on a public port needs TLS cert + nginx + open firewall rule per service
+- Agent identity is a shared secret (JWT) — two Claude Code instances look identical to the bridge
+
+**What Zrok/Ziti is**: OpenZiti is a zero-trust network fabric. Every participant gets a cryptographic X.509 identity managed by a Ziti controller. Traffic routes over the Ziti overlay — no open ports, no IP routing, end-to-end encrypted. Zrok is the user-facing layer: shareable URLs, web console, enrollments.
+
+**Self-hosted stack on Hetzner** (all Go binaries, very lean):
+```
+Ziti Controller   :1280   — manages identities and policies
+Ziti Router       :3022   — routes encrypted traffic between endpoints
+Zrok Controller   :18080  — Zrok API + web console
+PostgreSQL        — reuse recoder_backend (Zrok supports Postgres natively)
+nginx             — add *.preview.recoder.xyz → Zrok frontend (one-time)
+```
+Additional RAM: ~150–250MB total. Runs alongside existing stack.
+
+**The Node.js SDK is the critical unlock**: `@openziti/zrok` npm package has Express integration and a full REST API wrapper. docker-backend creates tunnels programmatically — no subprocess, no shell exec:
+
+```typescript
+// docker-backend: when sandbox is created
+import { share, ShareMode, BackendMode } from '@openziti/zrok'
+
+const tunnel = await share({
+  mode: ShareMode.Public,
+  backendMode: BackendMode.Proxy,
+  target: `localhost:${sandboxPort}`,
+  token: projectId,  // reserved token → deterministic, persistent URL
+})
+// → https://{projectId}.preview.recoder.xyz  (immediate, no polling)
+containers.set(projectId, { ...entry, previewUrl: tunnel.shareUrl })
+```
+
+This replaces the entire `preview.ts` proxy + health-check loop. URL is available immediately. No 30-second wait. No asset URL rewriting needed — requests go directly through the Zrok tunnel to Vite.
+
+**Reserved tokens** = persistent preview URLs. `{projectId}.preview.recoder.xyz` survives sandbox restarts. Frontend always uses the same iframe URL. Vite HMR works through the tunnel. Publish gets its own permanent Frontdoor URL (`zrok2-share.service` systemd unit).
+
+**Agent identity**: Each Claude Code / Codex terminal runs `zrok enable <token>` once → stores identity in `~/.zrok/`. Cryptographically unique per terminal. Bridge sees distinct Ziti fingerprints for each instance:
+```
+{ agentType: "claude_code", zitiFingerprint: "abc123...", sessionId: "unique-per-terminal" }
+```
+Two Claude Code instances → two different fingerprints → inbox deduplication at network layer. Revoke an agent by revoking its Ziti identity — no secret rotation across all services.
+
+**Fork strategy**: Apache 2.0 permits full fork + commercial use with no upstreaming requirement.
+- Use as-is first (deploy official binaries, use `@openziti/zrok` npm package)
+- Fork when we need: Recoder auth integration on tunnel endpoints, custom `recoder.xyz` branding in web console, per-project quotas/billing hooks, tunnel analytics piped to our metrics stack
+- Pre-install Zrok binary in Daytona sandbox base image — every sandbox gets `zrok` available without any provisioning step
+
+**Migration path** (additive, zero breaking changes):
+1. Deploy Ziti Controller + Router + Zrok Controller (docker-compose service)
+2. Add `@openziti/zrok` to docker-backend, use for new sandboxes only
+3. New projects get Zrok preview URLs; existing use current nginx proxy
+4. Once stable: remove `preview.ts` health-check loop, keep nginx proxy as fallback
+5. Phase 2 (optional): migrate A2A WebSocket to Ziti fabric for zero-port agent comms
+
+**Net result**: The entire `*.sandbox.recoder.xyz` wildcard DNS, nginx proxy config, asset URL rewriting, and 30-second health check disappears. Preview URL available in ~2 seconds. Published sites get permanent subdomains. Agent identity is cryptographic.
+
+---
+
+#### 2. Planning: Multi-Agent Task Board
+
+**The problem today**: Claude Code and Codex work in isolation. Each has its own TodoWrite. There's no shared view of what either is doing or what's left. Coordination is manual ("hey Codex, go implement X").
+
+**What to build**: A persistent shared task board backed by Redis. Every task has:
+```
+{ id, title, description, status, owner, claimedBy, dependencies, createdBy, createdAt, completedAt }
+```
+
+**TodoWrite sync**: When Claude Code calls `TodoWrite`, the A2A MCP server intercepts it and mirrors the todo list to the shared task board under the current session. Codex (and the user via dashboard) sees Claude's active todos live.
+
+**Planning session**: A2A task type `{ type: "plan", goal }` — both Claude and Codex receive it. Claude decomposes into subtasks. Codex reviews and adds its own. Both negotiate ownership. Result: a shared task tree with assigned owners that both can execute against.
+
+**Dependency tracking**: Task B can declare `dependsOn: [taskA.id]`. The bridge won't route task B to any agent until task A is `completed`. Enables sequential workflows without manual coordination.
+
+**PM integration**: Planning tasks auto-create recoder-pm features. A task with `{ type: "feature" }` hits the PM API and creates a trackable feature with the same title/description. Development work and product tracking stay in sync without manual entry.
+
+**What to build**:
+- `recoder_create_task`, `recoder_claim_task`, `recoder_update_task`, `recoder_task_board` MCP tools
+- TodoWrite hook that syncs Claude's todos to the shared board
+- Dependency resolver in the bridge: gates task dispatch until deps are met
+- PM webhook: completed tasks with `type: "feature"` call `/api/features` on recoder-pm
+
+---
+
+#### 3. Research: SearchNGSX + Shared Findings
+
+**The problem today**: Every agent researches independently. Claude searches, Codex searches. Same queries, same cost, no sharing. Research results live in conversation context and disappear.
+
+**SearchNGSX integration**: A2A MCP tool `recoder_search` routes to SearchNGSX internally. Any agent calls it with a query, gets back structured results. Results are cached by query hash in the A2A scratchpad (see below) — same query by different agents hits cache instead of re-searching.
+
+**Research task type**:
+```
+{ type: "research", query, depth: "shallow"|"deep", sources: ["web","codebase","docs","memory"] }
+```
+Dispatched to whichever agent has `capability: "research"` registered. The research agent does the heavy lifting (multiple web fetches, LLM synthesis) and returns:
+```
+{ findings: [...], sources: [...], confidence, summary, storedAt: "scratchpad/research/{hash}" }
+```
+Any other agent can read the findings without re-running the research.
+
+**Web crawl dispatch**: Task type `{ type: "crawl", url, extractSchema }` — agent dispatches a crawl job, gets back structured data matching the schema. Useful for: "crawl this API docs page and extract all endpoints", "crawl this GitHub repo README and summarize".
+
+**What to build**:
+- `recoder_search` MCP tool → SearchNGSX proxy with Redis cache
+- Research task handler in the bridge (routes to a designated research agent or spins one up)
+- Crawl task handler (wraps a headless fetch + LLM extraction)
+- Cache store: `research:{queryHash}` → findings, TTL 24h
+
+---
+
+#### 4. Data: Shared Scratchpad (Lightweight Panda)
+
+**The problem today**: Agents have no shared memory. Claude learns something useful about the codebase → that knowledge lives in Claude's context → Codex doesn't know it → Codex makes the same mistakes or rediscovers the same things.
+
+**The scratchpad**: A Redis-backed key-value store accessible to all agents via MCP tools. Keys are namespaced: `session/{sessionId}/findings`, `project/{projectId}/patterns`, `agent/{agentId}/memory`.
+
+```
+recoder_write_scratchpad({ key: "research/auth-flow", value: { ... }, ttl: 3600 })
+recoder_read_scratchpad({ key: "research/auth-flow" })
+recoder_list_scratchpad({ prefix: "research/" })
+recoder_subscribe_scratchpad({ key: "research/*" })  // notified on writes
+```
+
+**Handoff pattern**:
+1. Claude researches the auth flow, writes findings to `project/123/auth-flow`
+2. Claude sends Codex a task: "implement login page, see scratchpad key project/123/auth-flow"
+3. Codex reads the findings, implements with full context
+4. Codex writes its implementation decisions to `project/123/impl-decisions`
+5. Claude reviews with full context of both research AND implementation decisions
+
+**Panda-style tables**: For structured data (lists of files, test results, API endpoints), agents write arrays of objects to scratchpad keys. Other agents can filter/query them. No SQL, just JSON. Lightweight enough to pass around in MCP responses.
+
+**Subscriptions**: Agents can subscribe to scratchpad key patterns. When Codex writes to `project/123/tests-failing`, Claude gets notified immediately via the push notification system (see issue #1 above). Enables reactive workflows without polling.
+
+**What to build**:
+- Redis-backed scratchpad store in A2A bridge
+- `recoder_write_scratchpad`, `recoder_read_scratchpad`, `recoder_list_scratchpad` MCP tools
+- Subscription system: scratchpad writes trigger A2A notifications to subscribed agents
+- TTL management: session-scoped keys expire with session, project-scoped keys persist
+
+---
+
+#### 5. Capability-Based Routing
+
+**The problem today**: Agent IDs are hardcoded (`claude_code`, `codex`). If you add a new agent — say a specialized SQL agent or a testing agent — you have to update routing logic everywhere.
+
+**Capability registry**: Agents register with a capability list on connect:
+```
+{ agentId: "claude_code", sessionId: "abc", capabilities: ["code:typescript", "code:python", "research", "write:docs"], costTier: "medium", latency: "medium" }
+```
+
+**Capability-based dispatch**:
+```
+{ type: "task", requires: ["code:rust"] }
+→ bridge finds agents with "code:rust", picks the one with lowest load
+```
+
+**Orchestrator-level optimization**: Tasks can declare `optimize: "cost"` or `optimize: "speed"`. Bridge picks the cheapest capable agent or the fastest one. Haiku for simple tasks, Opus for complex ones, automatically.
+
+**Specialization without configuration**: Add a new agent that registers `["sql:postgres", "db:optimize"]` — immediately all SQL-related tasks route to it without any config changes. The capability is the contract.
+
+**What to build**:
+- Capability registration on bridge connect (`hello` message includes capabilities array)
+- Capability index in bridge: `Map<capability, agentId[]>`
+- `recoder_find_agents` MCP tool: query by capability, get back matching agent IDs
+- Dispatch resolver: given task requirements, pick best agent from index
+
+---
+
+#### 6. Streaming Task Output
+
+**The problem today**: Codex works on a task, Claude gets the final result. No visibility into the process. If Codex goes in the wrong direction, Claude can't intervene until the full (wrong) answer comes back.
+
+**Streaming**: Task responses emit tokens via the existing WebSocket connection as they're generated. The bridge fans them out to subscribers. Claude Code sees Codex's output token-by-token in its terminal or a side panel.
+
+**Live collaboration**: Claude and Codex can work on the same problem simultaneously. Both stream their partial outputs. Each can react to the other's partial output (Codex sees "Claude is about to add a middleware" → Codex adjusts its approach). This is real-time pair programming between AI agents.
+
+**Interrupt**: Agent A can send `{ type: "interrupt", taskId }` to agent B mid-stream. "Stop, wrong direction." Agent B pauses, receives a correction, continues. Like a human developer saying "wait, actually..."
+
+**What to build**:
+- Streaming task response type: `{ taskId, chunk, done: false }` messages over WebSocket
+- Fan-out: bridge delivers stream chunks to all subscribers of that task
+- MCP streaming: `recoder_stream_task` tool returns an async iterator
+- Interrupt signal: `recoder_interrupt_task` sends stop signal to executing agent
+
+---
+
+#### 7. Trigger / Webhook Gateway
+
+**The problem today**: The only way to kick off agent work is a human typing in a chat. No automation, no external triggers, no schedules.
+
+**Event bus**: The A2A bridge becomes an event router. External events arrive via HTTP webhooks or internal triggers, get translated into A2A tasks, dispatched to the right agent.
+
+```
+GitHub push   → { type: "code_review", pr_url, branch }  → capability: ["code:review"]
+Slack message → { type: "summarize", text }              → capability: ["write:summary"]
+Cron @ 9am    → { type: "daily_standup" }               → capability: ["research", "write:docs"]
+PM feature    → { type: "implement", feature_id }        → capability: ["code:typescript"]
+```
+
+**OpenClaw replacement**: Instead of a separate OpenClaw gateway process (~400MB), the A2A bridge handles all incoming webhooks. WhatsApp/Telegram/Gmail messages arrive at the bridge, get routed to the right agent based on content type. This is the natural replacement for what OpenClaw was trying to do — but built on the A2A primitive we already have.
+
+**What to build**:
+- Webhook receiver route in docker-backend: `POST /api/a2a/webhook/{source}`
+- Event translator: converts GitHub/Slack/etc payloads to A2A task format
+- Cron scheduler: bridge reads cron tasks from Redis, fires them at the right time
+- Trigger registration MCP tool: `recoder_register_trigger({ event, condition, task_template })`
+
+---
+
+#### 8. Per-Agent Memory
+
+**The problem today**: Every Claude Code session starts cold. It doesn't remember that this user prefers TypeScript with strict mode, or that this project uses a specific pattern, or that a certain approach was tried and failed.
+
+**Memory store**: Persistent key-value store per `(agentId, userId)` pair. Survives session restarts. Agents read their memory at session start, write new memories during work.
+
+```
+recoder_remember({ key: "user/coding-style", value: "prefers functional, avoids classes, uses Zod for validation" })
+recoder_recall({ key: "user/*" })
+recoder_forget({ key: "user/coding-style" })
+```
+
+**Shared memories**: With permission, agents share memories. Claude's memory about a user's preferences is accessible to Codex so both stay consistent. Memory is a first-class A2A resource.
+
+**Memory types**: `preference` (how user likes things), `fact` (things that are true about the project), `pattern` (approaches that worked or failed), `credential` (project-specific env vars — encrypted).
+
+**What to build**:
+- `recoder_remember`, `recoder_recall`, `recoder_forget` MCP tools
+- Memory store: Redis hash per `(agentId, userId)`, persistent (no TTL by default)
+- Memory injection: bridge injects relevant memories into task context automatically
+- Cross-agent sharing: `recoder_share_memory({ key, with: "codex" })`
+
+---
+
+#### Architecture: What the Bridge Becomes
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                     A2A Bridge (docker-backend)                          │
+├──────────────┬─────────────┬──────────────┬─────────────┬───────────────┤
+│Agent Registry│ Task Queue  │  Scratchpad  │Memory Store │  Cost Ledger  │
+│ capabilities │ Redis+claim │  Redis KV    │ Redis/agent │ per-msg cost  │
+│ Ziti identity│ dep-gating  │ subscriptions│  persistent │ token counts  │
+├──────────────┴─────────────┴──────────────┴─────────────┴───────────────┤
+│  Event Bus: GitHub push / Slack / cron / PM features / webhooks         │
+│  Search Proxy: recoder_search → SearchNGSX → cached in Scratchpad       │
+├─────────────────────────────────────────────────────────────────────────┤
+│  Zrok integration: programmatic tunnel create/destroy via @openziti/zrok │
+│  Sandbox preview URL available in ~2s, persistent across restarts        │
+├─────────────────────────────────────────────────────────────────────────┤
+│  Transport layer: raw WebSocket today → Ziti overlay fabric (phase 2)   │
+└─────────────────────────────────────────────────────────────────────────┘
+       │                    │                    │                 │
+  Claude Code           Codex           recoder-web AI      recoder-agents AI
+  Ziti identity      Ziti identity       API client           API client
+  MCP client         MCP client         HTTP client           HTTP client
+  unique session     unique session
+```
+
+**Hetzner server after Zrok integration**:
+```
+Existing:
+  nginx                   → routes all public traffic
+  recoder.xyz (app)       :3000
+  api.recoder.xyz         :8000
+  docker.recoder.xyz      :3100  (A2A bridge + docker-backend)
+  recoder-redis           :6379
+
+Added (all internal):
+  Ziti Controller         :1280  (~50MB RAM)
+  Ziti Router             :3022  (~50MB RAM)
+  Zrok Controller         :18080 (~80MB RAM, uses existing Postgres)
+
+nginx additions (one-time):
+  *.preview.recoder.xyz   → Zrok frontend
+  zrok.recoder.xyz        → Zrok web console
+```
+
+**Implementation priority order** (each step is independently shippable):
+
+| Step | What | Value |
+|------|------|-------|
+| 1 | Deploy Zrok stack on Hetzner | Infrastructure ready |
+| 2 | `@openziti/zrok` in docker-backend + sandbox tunnel on create | Instant preview URLs |
+| 3 | Push notifications in MCP server | Claude notified when Codex messages |
+| 4 | Terminal auto-discovery + task claim/lock | Multi-instance works correctly |
+| 5 | Scratchpad MCP tools | Shared agent memory |
+| 6 | SearchNGSX proxy tool | Shared research cache |
+| 7 | Persistent memory per agent | Agents remember preferences |
+| 8 | TodoWrite sync to shared task board | Live coordination |
+| 9 | PM integration (tasks → features) | Dev work tracked automatically |
+| 10 | Webhook/trigger gateway | External event automation |
+| 11 | Capability-based routing | Agent specialization |
+| 12 | Streaming task output | Live collaboration |
+| 13 | Ziti transport for A2A (phase 2) | Zero-port architecture |
+
+Every step is additive. Step 1–2 alone eliminates the biggest infrastructure pain point. Steps 3–4 fix the current A2A usability problems. Steps 5–9 turn it into a real multi-agent platform. Steps 10–13 are the long-term vision.
+
+**The fork question**: Start with official Zrok binaries + `@openziti/zrok` npm package. Fork when we have specific needs: Recoder auth on tunnel endpoints (verify Better Auth session before allowing preview access), custom branding in the web console, per-project bandwidth quotas tied to Recoder billing, tunnel analytics in the Recoder dashboard. The Apache 2.0 license gives full freedom — fork at any point, no constraints.
+
+---
+
+## Open Source Arsenal — Permissive-Licensed Projects for Recoder
+
+**License key**: ✅ MIT / Apache 2.0 / BSD — fork + embed commercially, no restrictions. ⚠️ AGPL/SSPL/BSL — require commercial license or open-sourcing your product.
+
+> Zrok/Ziti is already documented above. SearchNGSX already in use. This section covers everything else.
+
+---
+
+### Immediate Wins (solve known broken things)
+
+| Project | License | What it replaces / adds | RAM | Notes |
+|---------|---------|------------------------|-----|-------|
+| **Hatchet** | ✅ MIT | Replaces broken Giselle workflow engine | ~1 GB | Go + Postgres-backed, durable execution, simplest Temporal alternative, TS/Python SDKs |
+| **Trigger.dev** | ✅ Apache 2.0 | A2A webhook/trigger gateway, background jobs | 256 MB dev | TypeScript-native, best DX for TS codebase, serverless-compatible, self-hostable |
+| **Steel** | ✅ MIT | Headless browser for agents (NOT Browserless — that's SSPL) | ~500 MB–1 GB | Built specifically for AI agents, session management API, open-source Browserless drop-in |
+| **Stagehand** | ✅ MIT | Natural language browser control on top of Playwright | ~300 MB | `act("click the login button")` — AI-driven browser automation, MCP-compatible |
+| **Chatwoot** | ✅ MIT | Replace OpenClaw social gateway | ~4 GB | Omnichannel inbox: WhatsApp, Telegram, Instagram, Gmail, Line, SMS + AI agent webhook hooks. Rails + Vue. |
+| **NATS + JetStream** | ✅ Apache 2.0 | A2A event bus, replace Redis pub/sub for real-time messaging | ~20–50 MB | Single Go binary, sub-ms pub/sub + persistent queues + KV store. Microscopic RAM. |
+| **Excalidraw** | ✅ MIT | Agent canvas (replace FAL/Replicate-gated canvas) | Browser-only | Embeds as a React component. Real-time collab built in. Zero infra. Ship canvas feature this week. |
+
+---
+
+### Search & Data
+
+| Project | License | What it does | RAM | Notes |
+|---------|---------|-------------|-----|-------|
+| **Meilisearch** | ✅ MIT | Full-text search with AI hybrid mode | ~500 MB–2 GB | Sub-50ms, typo-tolerance, hybrid vector+text search. Better than SearchNGSX for structured queries. Use alongside or instead. |
+| **Qdrant** | ✅ Apache 2.0 | Vector DB for agent memory, semantic code search, RAG | 1 GB+ | Rust, production-grade, sparse+dense hybrid, quantization reduces RAM 97%. Best choice for embedding-backed features. |
+| **LanceDB** | ✅ Apache 2.0 | Embedded vector store (no server) | In-process | Runs inside Node/Python process. No infra. Perfect for per-agent local memory that doesn't need a server. |
+| **DuckDB** | ✅ MIT | In-process analytical SQL ("lightweight Panda") | 500 MB–2.4 GB | Embedded, SQL-native OLAP, WebAssembly port. Agents can run `SELECT` on structured data without a database server. The "Panda" the user mentioned. |
+| **Polars** | ✅ MIT | Fast DataFrame ops in Python | Varies | Rust-core, lazy evaluation, 10x faster than Pandas on large data. For Python agents doing data work. |
+
+---
+
+### Observability & Metrics
+
+| Project | License | What it does | RAM | Notes |
+|---------|---------|-------------|-----|-------|
+| **VictoriaMetrics** | ✅ Apache 2.0 | Drop-in Prometheus replacement | 10x less than Prometheus | Go binary, handles millions of series, 7x less RAM than InfluxDB. Replace current Prometheus+Grafana stack. |
+| **SigNoz** | ✅ Apache 2.0 | Logs + traces + metrics unified (Datadog alternative) | 4–8 GB | ClickHouse backend, native OpenTelemetry, full APM. If budget for RAM. |
+| **HyperDX** | ✅ MIT | Session replay + logs + traces | ~4 GB | Developer-focused UX, unified observability. Alternative to SigNoz. |
+| **OpenTelemetry Collector** | ✅ Apache 2.0 | Instrumentation standard — collect from everything | ~50–100 MB | Not a backend, just the collection layer. Instrument all services once, route to any backend. |
+| **Umami** | ✅ MIT | Website analytics (Google Analytics replacement) | ~500 MB | Cookie-less, GDPR compliant, 2KB script, Next.js app. Add to recoder.xyz marketing pages. |
+
+---
+
+### Billing & Metering
+
+| Project | License | What it does | RAM | Notes |
+|---------|---------|-------------|-----|-------|
+| **OpenMeter** | ✅ Apache 2.0 | Usage-based metering for APIs and tokens | ~512 MB–1 GB | Go, ClickHouse backend, designed specifically for AI/API billing. Ingests millions of usage events/sec. Track token consumption per user per agent. |
+| **Kill Bill** | ✅ Apache 2.0 | Full subscription billing platform | 1–4 GB (JVM) | Java, enterprise-grade, subscription catalog + invoicing + plugins. Heavy but complete. Use if Stripe isn't enough. |
+
+---
+
+### Feature Flags & A/B Testing
+
+| Project | License | What it does | RAM | Notes |
+|---------|---------|-------------|-----|-------|
+| **Flagsmith** | ✅ BSD 3-Clause | Feature flags + remote config | ~768 MB | Lightest self-hosted option. Replace current env-var feature flag system. |
+| **GrowthBook** | ✅ MIT (core) | Feature flags + A/B testing + stats | ~512 MB–1 GB | Statistical analysis built in. Test different AI models, prompts, UI variants. |
+
+---
+
+### AI Agent Frameworks
+
+| Project | License | What it does | RAM | Notes |
+|---------|---------|-------------|-----|-------|
+| **Smolagents** | ✅ Apache 2.0 | Embeddable code-executing agent framework | Library only | HuggingFace, ~1,000 lines total, agents write + run Python, MCP-compatible. Embed in recoder-agents backend to give agents proper code execution loop. |
+| **OpenHands** | ✅ MIT (core) | Full web UI for AI software dev agent | 2–4 GB | MIT core (enterprise dir excluded). Full web IDE + multi-agent architecture. Benchmark: SWE-bench state-of-the-art. Study/fork for recoder-agents coding capability. |
+| **SWE-agent** | ✅ MIT | Research-grade software engineering agent | ~1–2 GB | Princeton NLP, CLI-only, Agent-Computer Interface (ACI) design. Good reference for how to structure tool use for coding tasks. |
+| **Browser-Use** | ✅ MIT | Python AI browser agent | ~200–400 MB + model | Lets agents browse and interact with websites. LangChain/CrewAI integration. |
+
+---
+
+### Local LLM
+
+| Project | License | What it does | RAM | Notes |
+|---------|---------|-------------|-----|-------|
+| **Ollama** | ✅ MIT | Local model serving, single binary | Model-dependent (8 GB for 3B) | OpenAI-compatible API. Pre-install in Daytona sandbox base image → agents have a local model for cheap inference tasks without API calls. |
+| **vLLM** | ✅ Apache 2.0 | GPU inference at scale | 24–80 GB VRAM | PagedAttention gives 2–4x more concurrent requests. For production GPU inference when you have hardware. |
+
+---
+
+### Content & Docs
+
+| Project | License | What it does | RAM | Notes |
+|---------|---------|-------------|-----|-------|
+| **Payload CMS** | ✅ MIT | Headless CMS, TypeScript-native, embeds in Next.js | ~512 MB–1 GB | Auto-generates admin panel from TS schema. Use for recoder.xyz blog, changelog, marketing content. |
+| **Starlight** | ✅ MIT | Developer docs site (Astro-based) | Static build-time | Faster than Docusaurus, Astro Islands. Use for API docs, developer portal, A2A protocol docs. |
+
+---
+
+### Crawling & Web Scraping
+
+| Project | License | What it does | RAM | Notes |
+|---------|---------|-------------|-----|-------|
+| **Crawlee** | ✅ Apache 2.0 | Production web scraping + crawling framework | ~200 MB–1 GB | TypeScript, Playwright/Puppeteer backends, proxy rotation, anti-bot bypass. For the A2A research crawl task type. |
+
+---
+
+### ⚠️ Projects That Look Right But Aren't Permissive
+
+| Project | License | Problem |
+|---------|---------|---------|
+| **Browserless** | SSPL | Cannot embed in closed-source commercial product. Use **Steel** (MIT) instead. |
+| **Windmill** | AGPL v3 | Must open-source your product or buy commercial license. Use **Trigger.dev** (Apache 2.0) instead. |
+| **Inngest (runtime)** | SSPL | Same SaaS restriction. SDKs are MIT but the server needs a license for commercial embedding. |
+| **Restate (runtime)** | BSL | Cannot build competing workflow-as-a-service. |
+| **n8n** | Sustainable Use License | Not permissive. |
+| **Plausible** | AGPL | Not permissive for SaaS. Use **Umami** (MIT) instead. |
+| **PostHog** | MIT core | 16 GB RAM minimum — only viable if you have the hardware. |
+| **Temporal** | MIT | But 32 GB+ RAM for production cluster. Use **Hatchet** (MIT, ~1 GB) for same durable execution pattern at 1/32 the RAM. |
+
+---
+
+### Priority Order for Integration
+
+| Priority | Project | Why Now |
+|----------|---------|---------|
+| 1 | **Excalidraw** | Embed as React component in recoder-agents — canvas feature works this week, zero infra |
+| 2 | **Steel + Stagehand** | Agents can browse the web, take screenshots, interact with UIs |
+| 3 | **NATS** | Replace Redis pub/sub in A2A — 20MB instead of 200MB, built for this exact use case |
+| 4 | **Hatchet or Trigger.dev** | Fix Agency workflows properly — durable execution that actually works |
+| 5 | **Qdrant** | Agent memory + semantic search — foundation for everything AI-quality |
+| 6 | **DuckDB** | In-process data layer for agents — no server, pure npm install |
+| 7 | **Meilisearch** | Upgrade/replace SearchNGSX with hybrid AI search |
+| 8 | **Chatwoot** | Replace OpenClaw social gateway — frees 400MB RAM, adds proper inbox UI |
+| 9 | **OpenMeter** | Usage metering before billing — know what costs what |
+| 10 | **VictoriaMetrics** | Replace Prometheus — same API, 10x less RAM |
+| 11 | **Flagsmith** | Replace env-var feature flags with proper system |
+| 12 | **Umami** | Add analytics to recoder.xyz (currently none) |
+| 13 | **Starlight** | Build the developer docs that don't exist yet |
+| 14 | **Ollama in sandbox** | Local model in every Daytona sandbox for cheap agent inference |
+
+---
+
+## Current State — recoder-web (web.recoder.xyz) — Browser-Verified 2026-03-31
 
 This top section supersedes older notes below where they conflict.
+**All issues below are for `recoder-web` (web.recoder.xyz Web IDE), NOT recoder-agents.**
 
-### What Is Verified Now
-- Agents are no longer blocked by the old OpenRouter model typo in the main app paths. The repo now uses `google/gemini-2.0-flash-001` in the primary backend/web surfaces, and Agents are documented elsewhere in this file as working with GLM 4.7.
-- Direct Web IDE smoke tests against `docker-backend` proved Daytona container creation, file write, file read, exec, snapshot, and Vite startup all work.
-- The real Web IDE backend blockers were identified and fixed in commit `80f616d5`:
-  - `docker-backend/src/preview.ts`: preview proxy now preserves Daytona subpaths and rewrites absolute Vite asset URLs.
-  - `docker-backend/src/server.ts`: publish detection now uses the correct Daytona workspace root and unwraps `daytonaExec(...).output`.
-- `recoder-web/app/lib/runtime/action-runner.ts` now contains an ENOTEMPTY retry path that removes stale `node_modules` and retries `npm install`.
+### What Works in recoder-web (Browser Confirmed)
+- Daytona sandbox creation, container ready
+- `npm install && npm run dev` split and executed correctly
+- package.json normalization (Tailwind/PostCSS) runs before install
+- Daytona preview URL resolves: `*.sandbox.recoder.xyz` is live
+- iframe loads the preview URL (no more 502)
+- Dev server starts on port 5173, health check passes
 
-### Additional Fixes Pushed In `bf8f1944`
-- `backend/core/agents/pipeline/stateless/coordinator/execution.py`: raised coordinator output budget from `16384` to `32768` to reduce large-file truncation loops.
-- `backend/core/agents/pipeline/stateless/coordinator/stateless.py`: allows more consecutive `finish_reason=length` continuations and explicitly tells the model to append instead of delete/recreate.
-- `recoder-web/app/components/editor/codemirror/CodeMirrorEditor.tsx`: adds a plain-text fallback for CodeMirror crashes and for files larger than 512 KB.
-- `docker-backend/src/server.ts`: ignores empty `Authorization: Bearer ` headers so cookie auth still works, and makes the optional container auth path honor `STRICT_AUTH=true`.
-- `docker-backend/src/server.ts` + `docker-backend/src/daytona-file-ops.ts`: auto-resume stopped Daytona sandboxes on normal project access and correctly detect real restart events before reviving the dev server.
+### What Is Broken in recoder-web (Browser Logs 2026-03-31)
+1. **Preview shows blank white** — Two causes:
+   - `index.css 500` — asset 500 while Vite reconnects: `[vite] server connection lost. Polling for restart...`
+   - `lucide-react.js: does not provide export named 'Github'` — SyntaxError in preview, installed version doesn't have `Github` export. Auto-fix is not resolving it.
+2. **File writes intermittently 500** — `POST docker.recoder.xyz/api/file/{projectId} 500` on some writes. File written to local store immediately (UI stays consistent) but docker sync fails → Vite doesn't see changes → stale preview content.
+3. **No continuous auto-fix loop** — `useAutoErrorFix` detects iframe runtime errors but does not re-trigger after first pass. Errors persist unresolved.
+4. **Framework detection returns "unknown"** — `detectFramework` can't identify the project type; dev server starts but may miss optimal config.
+5. **Publish broken** — `POST docker.recoder.xyz/api/publish/{projectId} 500`. Publish button turns blue and stays there, no live URL generated.
+6. **Chat history not saving** — `POST /api/chat-history 500` (all 3 retry attempts fail). recoder-web internal route, likely DB or auth config issue.
+7. **No continuous build/fix/modify cycle** — The core Web IDE loop is incomplete: AI generates code ✓ → files write ✓ → dev server starts ✓ → errors in preview NOT auto-fixed → preview stays broken.
 
-### What Still Needs Deployment/Browser Verification
-- Deploy commit `bf8f1944` together with the earlier `80f616d5` preview/publish fixes and verify the updated services are live.
-- Verify preview and publish end-to-end in the browser against the deployed stack.
-- Re-enable deployed `STRICT_AUTH=true` and repeat the browser smoke test with a real authenticated session.
+### Root Causes to Fix
+- **File 500s on docker-backend**: `/api/file/:projectId` returns 500 for new projects. `checkProjectOwnership` local map is empty until `/api/container` POST runs and populates it — first file write for a brand-new project arrives before the map entry exists, falls through to HTTP check which returns 401.
+- **`/api/publish` 500**: Check docker-backend logs — likely Daytona slug detection or copy failure.
+- **`/api/chat-history` 500**: recoder-web Remix route — check DB connection string or session cookie forwarding.
+- **lucide-react `Github` missing**: Auto-fix catches SyntaxErrors but needs to instruct LLM to replace unknown icon names with valid ones, not just reinstall.
+- **Auto-fix not looping**: `useAutoErrorFix` should re-arm after each fix attempt and keep firing until errors clear or max retries hit.
+
+### Previous recoder-web Fixes (Still In Effect)
+- `checkProjectOwnership` resolves from local containers map first (commit `60d1bde9`) — no more AUTHZ_OWNERSHIP_CHECK_FAILED spam for known projects.
+- package.json JSON guard in action-runner — rejects invalid JSON fragments before write (commit `725ea3e0`).
+- EJSONPARSE recovery — restores package.json from backup if npm install hits corrupt JSON.
+- `useAutoErrorFix` guidance — tells LLM to use `npm install` not direct package.json edits.
 
 ### Historical Note
 - The older "root blocker is wrong model ID" section is now historical. That was a real blocker on 2026-03-28, but it is no longer the primary platform blocker.
 - The older "cross-origin cookie is the Web IDE root cause" theory was disproven by direct smoke tests.
 
-## Current Remaining Priorities (2026-03-31, post-`bf8f1944`)
-1. Deploy the pushed fixes from `bf8f1944`.
-2. Browser verification of preview + publish on the deployed stack.
-3. Re-enable deployed `STRICT_AUTH=true` and re-run authenticated smoke tests.
-4. If browser smoke still fails, capture the exact failing endpoint/step instead of revisiting the disproven cookie theory.
+## Current Remaining Priorities — recoder-web (2026-03-31)
+1. **Fix file write 500s** — populate containers map entry before first file write, or handle missing-entry case in ownership check.
+2. **Fix auto-fix loop** — `useAutoErrorFix` must re-trigger after each fix attempt until errors clear (max 3–5 cycles).
+3. **Fix publish 500** — investigate docker-backend `/api/publish` logs, fix Daytona copy/slug path.
+4. **Fix chat history 500** — check recoder-web `/api/chat-history` route and DB/session config.
+5. **Lucide-react icon fix** — improve auto-fix prompt to substitute invalid icon names with valid alternatives.
+6. **Deploy and browser-verify** — all fixes need to go to production and be confirmed in browser, not just in code.
 
 ---
 
@@ -453,3 +1448,50 @@ Dashboard
      CODEX_AVAILABLE                                                                                                                         
      DIFF_SIZE: 274                  
      OLD_CFG: not_set                                                                         
+
+     Preview URLs — biggest immediate win                                                                                                                                                
+                                                                                                                                                                                      
+  Right now: Daytona starts Vite on port 5173 → docker-backend has to proxy it via preview.ts → nginx has to route it → 30-second health check loop → asset URL rewriting to fix
+  broken paths → still sometimes blank white.                                                                                                                                         
+                                                                           
+  With Zrok: sandbox starts → docker-backend calls zrok.share({ target: 'localhost:5173' }) via the Node.js SDK → Zrok creates an encrypted tunnel from inside the sandbox directly to
+   the Zrok frontend → URL is ready in ~2 seconds. Browser talks directly to Vite through the tunnel. No proxy, no asset rewriting, no health check. Vite HMR WebSockets work natively
+   through the tunnel. The whole preview.ts file becomes unnecessary.                                                                                                                 
+                                                                           
+  Reserved tokens make it permanent: {projectId}.preview.recoder.xyz stays the same URL even when the sandbox stops and restarts. The iframe never needs to reload.                   
+  
+  ---                                                                                                                                                                                 
+  A2A — solves the identity problem that's been the hardest to fix         
+                                                                                                                                                                                      
+  Right now: agent identity is a string ("claude_code"). Two Claude Code instances are the same identity. Task inbox has no way to route to the right one. Claiming tasks,
+  deduplication, session routing — all require application-level hacks.                                                                                                               
+                                                                           
+  With Ziti: each Claude Code terminal runs zrok enable once, stores a real X.509 certificate in ~/.zrok/. That certificate IS the identity — cryptographically unique per terminal,  
+  per machine. The bridge sees:                                            
+                                                                                                                                                                                      
+  instance A: { type: "claude_code", fingerprint: "a1b2c3...", machine: "macbook-arhan" }                                                                                             
+  instance B: { type: "claude_code", fingerprint: "d4e5f6...", machine: "ci-runner" }                                                                                                 
+                                                                                                                                                                                      
+  Two instances, different fingerprints, different inboxes. Task claiming works. Notifications route correctly. If you want to kill an agent session, revoke the Ziti identity —      
+  immediately locked out without changing any secret anywhere else.                                                                                                                   
+                                                                                                                                                                                      
+  And in phase 2 (when you migrate A2A transport to Ziti fabric), the bridge itself has no public port. Agents connect through the overlay. No nginx entry for                        
+  wss://docker.recoder.xyz, no firewall rule, no TLS cert management. The network fabric handles it.
+                                                                                                                                                                                      
+  ---                                                                      
+  Sandbox — cleans up the DNS/nginx operational mess
+                                                                                                                                                                                      
+  Right now: every new sandbox port needs *.sandbox.recoder.xyz wildcard DNS + nginx proxy block + CORS headers configured per pattern. Adding a new port (say port 3000 for a Node
+  backend alongside 5173 for the frontend) means nginx config changes.                                                                                                                
+                                                                           
+  With Zrok pre-installed in the Daytona base image: the sandbox creates its own tunnels. Port 5173 gets a tunnel. Port 3000 gets a tunnel. Port 8080 gets a tunnel. All done         
+  programmatically from inside the sandbox or from docker-backend via the SDK. No nginx touch needed for any of it. CORS is handled at the Zrok controller level once, applies
+  everywhere.                                                                                                                                                                         
+                                                                           
+  ---
+  The thing that makes it genuinely different from ngrok/localtunnel:
+                                                                                                                                                                                      
+  Those tools are tunnels. Ziti is a network fabric — the tunnel IS the network, not a workaround for network limitations. Every participant (sandbox, docker-backend, Claude Code,
+  Codex) is a first-class node on the fabric with a real identity. So "sandbox talks to A2A bridge" and "browser accesses sandbox preview" and "Claude Code connects to A2A" are all  
+  the same system, not three separate tunnel configurations.               
+                                                                                                                                   
