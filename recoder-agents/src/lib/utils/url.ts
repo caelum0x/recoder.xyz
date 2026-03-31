@@ -1,10 +1,48 @@
 import { getSessionAccessToken } from '@/lib/auth/session-token';
 
-const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'https://api.recoder.xyz/v1';
+const SANDBOX_FILE_PROXY_PATH = '/api/files/content';
+
+function extractSandboxPathFromUrl(filePath: string): string {
+  if (!filePath.includes('://') && !filePath.includes('/sandboxes/') && !filePath.includes('/files/content')) {
+    return filePath;
+  }
+
+  try {
+    if (filePath.includes('://')) {
+      const parsed = new URL(filePath);
+      const pathParam = parsed.searchParams.get('path');
+      if (pathParam) return decodeURIComponent(pathParam);
+    }
+
+    const pathMatch = filePath.match(/[?&]path=([^&]+)/);
+    if (pathMatch) {
+      return decodeURIComponent(pathMatch[1]);
+    }
+  } catch {
+    // Fall through and return the original path.
+  }
+
+  return filePath;
+}
+
+function normalizeSandboxFilePath(filePath: string): string {
+  let processedPath = extractSandboxPathFromUrl(filePath).trim();
+
+  processedPath = processedPath.replace(/^\/workspace\//, '');
+
+  if (!processedPath.startsWith('/home/daytona/') && !processedPath.startsWith('home/daytona/')) {
+    processedPath = `/home/daytona/${processedPath.replace(/^\//, '')}`;
+  } else if (!processedPath.startsWith('/')) {
+    processedPath = `/${processedPath}`;
+  }
+
+  return processedPath;
+}
 
 /**
- * Build a URL to serve sandbox file content through the backend API proxy.
- * Replaces direct sandbox URL access (which is unreachable from browser).
+ * Build a same-origin URL for sandbox file content.
+ * Agents proxies this through /api/files/content so the browser can rely on
+ * the session cookie instead of making cross-origin sandbox/API requests.
  */
 export function buildSandboxFileUrl(
   sandboxId: string | undefined,
@@ -12,13 +50,12 @@ export function buildSandboxFileUrl(
 ): string | undefined {
   if (!sandboxId || !filePath) return undefined;
 
-  let processedPath = filePath;
-  processedPath = processedPath.replace(/^\/workspace\//, '');
-  if (!processedPath.startsWith('/home/daytona/') && !processedPath.startsWith('home/daytona/')) {
-    processedPath = `/home/daytona/${processedPath.replace(/^\//, '')}`;
-  }
+  const params = new URLSearchParams({
+    sandboxId,
+    path: normalizeSandboxFilePath(filePath),
+  });
 
-  return `${BACKEND_URL}/sandboxes/${sandboxId}/files/content?path=${encodeURIComponent(processedPath)}`;
+  return `${SANDBOX_FILE_PROXY_PATH}?${params.toString()}`;
 }
 
 /**
@@ -40,7 +77,8 @@ export async function getSandboxAuthHeaders(): Promise<Record<string, string>> {
 
 /**
  * Fetch sandbox file content with authentication.
- * Uses Bearer token auth since cross-origin cookies are blocked.
+ * The primary path is same-origin cookie auth through the agents proxy;
+ * the Bearer token is kept as a fallback for callers that still need it.
  */
 export async function fetchSandboxFile(
   url: string,

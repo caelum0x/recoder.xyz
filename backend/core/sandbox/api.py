@@ -555,7 +555,6 @@ async def read_file(
                 content=content,
                 media_type=mime_type,
                 headers={
-                    "Access-Control-Allow-Origin": "*",
                     "Cache-Control": "no-cache",
                 },
             )
