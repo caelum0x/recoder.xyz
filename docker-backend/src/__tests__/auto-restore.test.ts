@@ -59,4 +59,21 @@ plugin:vite:import-analysis] Failed to resolve import "./App" from "src/main.tsx
     expect(viteError?.line).toBe(4);
     expect(viteError?.column).toBe(16);
   });
+
+  it('parses Daytona Vite pre-transform errors instead of collapsing them into runtime noise', () => {
+    const logs = `
+[dev:client] 1:20:40 AM [vite] (client) Pre-transform error: [postcss] It looks like you're trying to use \`tailwindcss\` directly as a PostCSS plugin. The PostCSS plugin has moved to a separate package, so to continue using Tailwind CSS with PostCSS you'll need to install \`@tailwindcss/postcss\` and update your PostCSS configuration.
+[dev:client]   Plugin: vite:css
+[dev:client]   File: /home/daytona/src/index.css:undefined:NaN
+`;
+
+    const errors = parseAllErrors(logs);
+    const viteError = errors.find((error) => error.source === 'vite');
+    const runtimeNoise = errors.find((error) => error.source === 'runtime' && error.message === '[');
+
+    expect(viteError).toBeDefined();
+    expect(viteError?.message).toContain('It looks like you\'re trying to use `tailwindcss` directly as a PostCSS plugin');
+    expect(viteError?.filePath).toBe('/workspace/src/index.css');
+    expect(runtimeNoise).toBeUndefined();
+  });
 });

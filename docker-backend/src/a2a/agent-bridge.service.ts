@@ -375,16 +375,93 @@ export class AgentBridgeService {
 
       case 'channel.message': {
         if (!agentId) break;
+        const channelWorkspaceId = msg.channelId as string | undefined;
+
+        // 1. Persist to collaboration service for history
         try {
           const collab = getCollaborationSvc();
           collab.sendMessage({
-            threadId: 'default',
+            threadId: channelWorkspaceId || 'default',
             senderAgentId: agentId,
             text: msg.content as string,
           });
         } catch (err) {
-          logger.warn({ agentId, err }, 'failed to relay channel message');
+          logger.warn({ agentId, err }, 'failed to persist channel message');
         }
+
+        // 2. Relay to all other agents in the same workspace via WebSocket
+        if (channelWorkspaceId) {
+          for (const peer of this.agents.values()) {
+            if (peer.agentId === agentId) continue; // skip sender
+            if (!peer.workspaceIds.includes(channelWorkspaceId)) continue;
+            this.sendToAgent(peer.agentId, {
+              type: 'channel.message',
+              channelId: channelWorkspaceId,
+              from: agentId,
+              content: msg.content,
+            });
+          }
+        }
+
+        // 3. Publish event for SSE subscribers
+        getA2AEventBus().publish({
+          id: `evt_${uuid().replace(/-/g, '').slice(0, 16)}`,
+          type: A2AEventType.MessageNew,
+          timestamp: new Date().toISOString(),
+          data: {
+            channelId: channelWorkspaceId,
+            from: agentId,
+            content: msg.content,
+          },
+          workspaceId: channelWorkspaceId,
+        });
+        break;
+      }
+
+      case 'intent': {
+        // Sent by recoder-a2a MCP clients (recoder_send_task tool)
+        if (!agentId) break;
+        const targetAgentId = msg.target as string;
+        if (!targetAgentId) {
+          logger.warn({ agentId }, 'intent message missing target agent');
+          break;
+        }
+
+        const delivered = this.sendToAgent(targetAgentId, {
+          type: 'task.assigned',
+          taskId: `task_${uuid().replace(/-/g, '').slice(0, 16)}`,
+          from: agentId,
+          intent: msg.intent || 'execute',
+          prompt: msg.task as string,
+          context: { source: 'a2a-bridge', from: agentId },
+        });
+
+        // Acknowledge back to sender
+        this.sendToAgent(agentId, {
+          type: 'intent.ack',
+          target: targetAgentId,
+          delivered,
+          reason: delivered ? undefined : 'target agent not connected',
+        });
+
+        // Publish event
+        getA2AEventBus().publish({
+          id: `evt_${uuid().replace(/-/g, '').slice(0, 16)}`,
+          type: A2AEventType.TaskSubmitted,
+          timestamp: new Date().toISOString(),
+          data: {
+            from: agentId,
+            target: targetAgentId,
+            intent: msg.intent,
+            task: msg.task,
+            delivered,
+          },
+        });
+
+        logger.info(
+          { from: agentId, target: targetAgentId, delivered, intent: msg.intent },
+          'intent routed via bridge',
+        );
         break;
       }
 

@@ -85,6 +85,18 @@ export const Preview = memo(() => {
   const [canvasConnected, setCanvasConnected] = useState(false);
   const [canvasUrl, setCanvasUrl] = useState('');
 
+  // Sandbox keepalive — ping preview proxy every 5 min to prevent Daytona auto-stop
+  useEffect(() => {
+    if (!projectId || !containerReady) return;
+
+    const KEEPALIVE_MS = 5 * 60 * 1000;
+    const timer = setInterval(() => {
+      dockerGet(`/api/preview/${projectId}/health`).catch(() => {});
+    }, KEEPALIVE_MS);
+
+    return () => clearInterval(timer);
+  }, [projectId, containerReady]);
+
   // Hot reload visual indicator state
   const [reloadState, setReloadState] = useState<'idle' | 'pending' | 'reloading'>('idle');
 

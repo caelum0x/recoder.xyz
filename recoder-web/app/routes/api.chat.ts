@@ -279,7 +279,7 @@ Click here to get started: ${process.env.MAIN_SITE_URL || 'http://localhost:3000
   let provider: string = 'openrouter'; // Default provider
   let model: string | undefined;
   let requestBody: any;
-  let maxTokens: number = 16000; // Increased from 8000 for longer, complete responses
+  let maxTokens: number = 32000; // Increased from 16000 to prevent file truncation in create_file (create/delete loop fix)
   let temperature: number = 0.7;
   let topP: number = 0.9;
   let topK: number = 40;
@@ -318,7 +318,7 @@ Click here to get started: ${process.env.MAIN_SITE_URL || 'http://localhost:3000
     }
 
     // Extract inference parameters with defaults
-    maxTokens = requestBody.maxTokens || 16000;
+    maxTokens = requestBody.maxTokens || 32000;
     temperature = requestBody.temperature ?? 0.7;
     topP = requestBody.topP ?? 0.9;
     topK = requestBody.topK ?? 40;

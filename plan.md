@@ -275,3 +275,181 @@ S3_ENDPOINT_URL + keys                  — Cloudflare R2 storage
 5. Verify in browser — NOT claimed fixed until user confirms
 6. pm2 logs <service> --err --lines 20
 ```
+hats our current sittuation                                                                                                            
+
+⏺ Current Platform Status (2026-03-28 ~19:00 UTC)
+
+  ┌──────────────────────┬────────────┬──────────────────────────────────────────────────────────────────────┐
+  │       Platform       │   Status   │                               Details                                │
+  ├──────────────────────┼────────────┼──────────────────────────────────────────────────────────────────────┤
+  │ recoder.xyz          │ WORKS      │ Sign-in works (DB password fixed)                                    │
+  ├──────────────────────┼────────────┼──────────────────────────────────────────────────────────────────────┤
+  │ agents.recoder.xyz   │ BROKEN     │ Chat 400 (empty messages to Gemini), canvas fails                    │
+  ├──────────────────────┼────────────┼──────────────────────────────────────────────────────────────────────┤
+  │ web.recoder.xyz      │ PARTIAL    │ AI generates code, but preview 502, publish 500, file API 500        │
+  ├──────────────────────┼────────────┼──────────────────────────────────────────────────────────────────────┤
+  │ pm.recoder.xyz       │ REGRESSION │ Was working, now React #418 hydration error after auth secret change │
+  ├──────────────────────┼────────────┼──────────────────────────────────────────────────────────────────────┤
+  │ agency.recoder.xyz   │ PARTIAL    │ Copilot works, workflows/playground broken (Giselle infra)           │
+  ├──────────────────────┼────────────┼──────────────────────────────────────────────────────────────────────┤
+  │ openclaw.recoder.xyz │ REMOVED    │ Redirects to agency (freed ~520MB RAM)                               │
+  ├──────────────────────┼────────────┼──────────────────────────────────────────────────────────────────────┤
+  │ A2A bridge           │ WORKS      │ wss://docker.recoder.xyz connects                                    │
+  └──────────────────────┴────────────┴──────────────────────────────────────────────────────────────────────┘
+
+  What Was Fixed Today
+
+  - Model defaults: bedrock → OpenRouter gemini-2.0-flash-001
+  - Sign-out ESM crash, BYOK model selection, worker timeout, file browser filter, empty file verification, PM security, code interpreter
+  auto-install, publish Daytona paths, core prompt, preview X-Frame-Options, thread name generator, upload fallback, code output display,
+  agency account linking, OpenClaw removal, auth secrets synced, DB password reset
+
+  What's Still Broken (Priority Order)
+
+  1. Agents chat — Gemini gets empty messages (400). Need to investigate the execution pipeline.
+  2. PM regression — auth secret change broke sessions. Likely needs PM rebuild with new secret.
+  3. Web IDE preview — 502 from Cloudflare. Proxy chain can't reach sandbox dev server.
+  4. Web IDE file/publish 500 — ownership check still failing.
+  5. Canvas/image gen — FAL API quota exceeded.
+
+  What Should We Do Next?
+
+  The agents chat 400 is the #1 blocker — it affects the core product. The error says messages are empty when they reach Gemini. This is a
+  backend code investigation, not infra.
+
+  The PM regression is likely a quick fix — just rebuild PM so it picks up the new BETTER_AUTH_SECRET.
+
+  Want me to tackle either one?
+
+⏺ Ran 1 stop hook (ctrl+o to expand)
+  ⎿  Stop hook error: Failed with non-blocking status code: /bin/sh:
+  /Users/arhansubasi/.claude/plugins/cache/claude-plugins-official/ralph-loop/unknown/hooks/stop-hook.sh: Permission denied
+
+❯ also add these we have mock link and not exisitng pages and we need to test a2a  One Platform, 10 Services                                 
+                                                                                                                                             
+The complete AI development ecosystem. Every plan includes access to all platform services.                                                  
+                                                                                                                                             
+                                                                                                                                             
+                                                                                                                                             
+Ecosystem Services                                                                                                                           
+                                                                                                                                             
+Recoder Hub                                                                                                                                  
+                                                                                                                                             
+Dashboard, auth & settings                                                                                                                   
+                                                                                                                                             
+Recoder Agents                                                                                                                               
+                                                                                                                                             
+AI agent IDE                                                                                                                                 
+                                                                                                                                             
+Recoder Web                                                                                                                                  
+                                                                                                                                             
+Web AI IDE                                                                                                                                   
+                                                                                                                                             
+Recoder API                                                                                                                                  
+                                                                                                                                             
+Unified API gateway & task engine                                                                                                            
+                                                                                                                                             
+Recoder PM                                                                                                                                   
+                                                                                                                                             
+Project management                                                                                                                           
+                                                                                                                                             
+Recoder Agency                                                                                                                               
+                                                                                                                                             
+AI agent workflows                                                                                                                           
+                                                                                                                                             
+OpenClaw                                                                                                                                     
+                                                                                                                                             
+Open-so                                                                                                                                      
+… +47 lines …                                                                                                                                
+                                                                                                                                             
+Plan                                                                                                                                         
+                                                                                                                                             
+                                                                                                                                             
+                                                                                                                                             
+Platform                                                                                                                                     
+                                                                                                                                             
+                                                                                                                                             
+                                                                                                                                             
+Docs                                                                                                                                         
+                                                                                                                                             
+                                                                                                                                             
+                                                                                                                                             
+Dashboard                                                                                                                                    
+                                                                                                                                             
+                                                                                                                                             
+                                                                                                                                             
+                                                                                                                                             
+                                                                                                                                             
+                                                                                                                                             
+                                                                                                                                             
+ recoder api and all docs shown as empty or failed pages              hile that builds, let me sync the OpenClaw-removed files to the server 
+ and check the A2A reconnection issue.                                                                                                       
+                                                                                                                                             
+⏺ Bash(rsync -avz --relative \                                                                                                               
+        app/app/\[locale\]/\(home\)/page.tsx \…)                                                                                             
+  ⎿  Transfer starting: 146 files                                                                                                            
+     app/                                                                                                                                    
+     app/app/                                                                                                                                
+     … +36 lines (ctrl+o to expand)                                                                                                          
+                                                                                                                                             
+⏺ Files synced. Now let me check the A2A reconnection loop — the bridge keeps dropping.                                                      
+                                                                                                                                             
+⏺ Bash(ssh -i ~/.ssh/id_ed25519_hetzner root@77.42.23.19 "docker logs recoder-docker-backend --tail 20 2>&1 | grep -i                        
+      'agent.*bridge\|websocket\|a2a\|disconnect\|close…)                                                                                    
+  ⎿  {                                                                                                                                       
+       "level": 30,                                                                                                                          
+       "time": 1774723922523,                                                                                                                
+     … +57 lines (ctrl+o to expand)                                                                                                          
+                                                                                                                                             
+⏺ The A2A reconnection is because the client connects anonymously (no auth token) and might be creating multiple connections. Not a critical 
+  bug — it works but reconnects.                                                                                                             
+                                                                                                                                             
+  Now let me check the existing docs pages and build out the API + A2A documentation.                                                        
+                                                                                                                                             
+  Read 1 file (ctrl+o to expand)                                                                                                             
+                                                                                      tep 4: Two-pass review                                                                                                                    
+                                                                                                                                             
+  Pre-Landing Review: 3 issues (0 critical, 3 informational)                                                                                 
+                                                                                                                                             
+  Pass 1 — CRITICAL                                                                                                                          
+                                                                                                                                             
+  SQL & Data Safety: No SQL changes. Clean.                       
+  Race Conditions & Concurrency: ensureSandboxRunning() mutates in-memory state in a single-process Express server. No real race. Clean.
+  LLM Output Trust Boundary: No LLM output flows into DB writes. Clean.                                                                      
+  Shell Injection: No subprocess calls. Clean.
+  Enum & Value Completeness: finish_reason split from combined check to separate checks. All existing values still handled. Clean.           
+                                                                                                                                             
+  Pass 2 — INFORMATIONAL                                                                                                                     
+                                                                                                                                             
+  1. [INFORMATIONAL] stateless.py:185 — Injected message role                                                                                
+  The truncation guidance uses "role": "user" with a [System] prefix. Some models may treat this as real user input and respond to it
+  conversationally instead of following the instruction. Using "role": "system" is more semantically correct but not all providers support   
+  mid-conversation system messages.                               
+  Recommendation: Leave as-is. The [System] prefix convention works with most OpenRouter-routed models. Worst case the LLM responds to it,   
+  which is still better than the delete/recreate loop.                                                                                       
+   
+  2. [INFORMATIONAL] execution.py:238 — Hardcoded max_tokens=16384                                                                           
+  Some smaller models (e.g., older 4k context models) may reject this value. Litellm typically clamps to the model's max, but behavior varies
+   by provider.                                                                                                                              
+  Recommendation: Acceptable. The platform uses modern models (GLM 4.7, Claude, GPT-4) which all support 16k+ output tokens.
+                                                                                                                                             
+  3. [INFORMATIONAL] preview.ts:457 — Silent catch on auto-wake failure                                                                      
+  If ensureDaytonaSandboxRunning throws (vs returning {running: false}), the catch at line 457 logs a warning and falls through to the health
+   check, which will also fail. The user sees a "starting" page either way.                                                                  
+  Recommendation: No action needed. The health check handles the failure path.
+                                                                                                                                             
+  Out-of-scope change noted: composio_profile_service.py appears in the diff (switching from Fernet to EncryptionService). This is unrelated 
+  to the 4 fixes and was likely staged separately.                                                                                           
+                                                                                                                                             
+  Step 5: Fix-First                                               
+
+  No AUTO-FIX items. No ASK items. All findings are informational and acceptable as-is.                                                      
+   
+  Step 5.7: Adversarial review                                                                                                               
+                                                                  
+⏺ Bash(DIFF_INS=$(git diff origin/main --stat | tail -1 | grep -oE '[0-9]+ insertion' | grep -oE '[0-9]+' || echo "0")                       
+      DIFF_DEL=$(git diff origin/main --stat | tail -1…)                                  
+  ⎿  /Users/arhansubasi/.nvm/versions/node/v24.10.0/bin/codex
+     CODEX_AVAILABLE                                                                                                                         
+     DIFF_SIZE: 274                  
+     OLD_CFG: not_set                                                                         

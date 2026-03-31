@@ -47,6 +47,8 @@ function getSessionToken(): string | null {
   const cookieNames = [
     '__Secure-recoder.session_token',
     'recoder.session_token',
+    '__Secure-better-auth.session_token',
+    'better-auth.session_token',
     '__Secure-session_token',
     'session_token',
     'recoder_session_token',
