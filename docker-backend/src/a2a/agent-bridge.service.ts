@@ -32,6 +32,7 @@ import { v4 as uuid } from 'uuid';
 import { getA2AEventBus, A2AEventType } from './a2a-event-bus';
 import { getWorkspaceService } from './workspace.service';
 import { getCollaborationSvc } from './collaboration.service';
+import { getHeartbeatTracker } from './heartbeat-tracker.service';
 import { createLogger } from '../logger';
 
 const logger = createLogger('agent-bridge');
@@ -69,6 +70,23 @@ export class AgentBridgeService {
     this.startHeartbeatSweep();
   }
 
+  private recordBridgeHeartbeat(agent: Pick<ConnectedAgent, 'agentId' | 'userId' | 'capabilities' | 'workspaceIds'>): void {
+    getHeartbeatTracker().recordHeartbeat(agent.agentId, 'healthy', {
+      source: 'bridge',
+      userId: agent.userId,
+      capabilityCount: agent.capabilities.length,
+      workspaceCount: agent.workspaceIds.length,
+    });
+  }
+
+  private removeBridgeHeartbeat(agentId: string): void {
+    const tracker = getHeartbeatTracker();
+    const record = tracker.getRecord(agentId);
+    if (record?.metadata?.source === 'bridge') {
+      tracker.removeAgent(agentId);
+    }
+  }
+
   // -----------------------------------------------------------------------
   // Agent connection lifecycle
   // -----------------------------------------------------------------------
@@ -103,6 +121,7 @@ export class AgentBridgeService {
 
     this.agents.set(agentId, agent);
     this.socketToAgent.set(ws, agentId);
+    this.recordBridgeHeartbeat(agent);
 
     // Auto-add to workspace member lists
     const wsSvc = getWorkspaceService();
@@ -136,6 +155,7 @@ export class AgentBridgeService {
 
     this.socketToAgent.delete(agent.socket);
     this.agents.delete(agentId);
+    this.removeBridgeHeartbeat(agentId);
 
     // Publish agent.offline
     const bus = getA2AEventBus();
@@ -292,6 +312,7 @@ export class AgentBridgeService {
           const agent = this.agents.get(agentId);
           if (agent) {
             agent.lastHeartbeat = new Date().toISOString();
+            this.recordBridgeHeartbeat(agent);
           }
         }
         break;
