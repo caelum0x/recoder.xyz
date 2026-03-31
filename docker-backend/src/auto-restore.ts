@@ -412,9 +412,17 @@ function parseViteErrors(logs: string): ParsedBuildError[] {
   const timestamp = Date.now();
   const lines = logs.split('\n');
 
+  const matchViteHeader = (line: string): RegExpMatchArray | null =>
+    line.match(/\[vite\]\s*(?:Internal server error|Error):\s*(.+)\s*$/i)
+    || line.match(/^\[?plugin:vite:[^\]]+\]?\s*(.+)\s*$/i);
+
+  const isViteHeaderLine = (line: string): boolean =>
+    /\[vite\]\s*(?:Internal server error|Error):/i.test(line)
+    || /^\[?plugin:vite:[^\]]+\]?/i.test(line);
+
   // Vite error blocks start with a header line and may include Plugin/File/stack context.
   for (let i = 0; i < lines.length; i++) {
-    const headerMatch = lines[i].match(/\[vite\]\s*(?:Internal server error|Error):\s*(.+)\s*$/i);
+    const headerMatch = matchViteHeader(lines[i]);
     if (!headerMatch) continue;
 
     const detailLines = [lines[i]];
@@ -427,9 +435,11 @@ function parseViteErrors(logs: string): ParsedBuildError[] {
       const trimmed = detailLine.trim();
 
       if (!trimmed) break;
-      if (/^\[vite\]\s*(?:Internal server error|Error):/i.test(detailLine)) break;
+      if (isViteHeaderLine(detailLine)) break;
       if (/^X\s*\[ERROR\]/.test(detailLine)) break;
-      if (/^\S/.test(detailLine) && !/^(Plugin:|File:|at\b)/.test(trimmed)) break;
+      if (/^\S/.test(detailLine) && !/^(Plugin:|File:|at\b|\d+\s*\||\^|\/|[A-Za-z0-9_./-]+\.(?:[jt]sx?|css|scss|sass|less|html):)/.test(trimmed)) {
+        break;
+      }
 
       detailLines.push(detailLine);
 
@@ -438,6 +448,14 @@ function parseViteErrors(logs: string): ParsedBuildError[] {
         filePath = normalizeFilePath(fileMatch[1]);
         lineNumber = parseInt(fileMatch[2], 10);
         columnNumber = parseInt(fileMatch[3], 10);
+        continue;
+      }
+
+      const rawPathMatch = trimmed.match(/^(.+\.(?:[jt]sx?|css|scss|sass|less|html)):(\d+|undefined):(\d+|null)$/);
+      if (rawPathMatch) {
+        filePath = normalizeFilePath(rawPathMatch[1]);
+        lineNumber = /^\d+$/.test(rawPathMatch[2]) ? parseInt(rawPathMatch[2], 10) : undefined;
+        columnNumber = /^\d+$/.test(rawPathMatch[3]) ? parseInt(rawPathMatch[3], 10) : undefined;
         continue;
       }
 
@@ -452,9 +470,25 @@ function parseViteErrors(logs: string): ParsedBuildError[] {
     }
 
     const message = headerMatch[1].trim();
+    const lowerMessage = message.toLowerCase();
+    let type: ParsedBuildError['type'] = 'build';
+    if (
+      lowerMessage.includes('failed to resolve import')
+      || lowerMessage.includes('cannot find module')
+      || lowerMessage.includes('module not found')
+    ) {
+      type = 'module';
+    } else if (lowerMessage.includes('syntax') || lowerMessage.includes('unexpected token')) {
+      type = 'syntax';
+    } else if (lowerMessage.includes('referenceerror')) {
+      type = 'reference';
+    } else if (lowerMessage.includes('typeerror')) {
+      type = 'type';
+    }
+
     errors.push({
       id: generateErrorId(),
-      type: message.toLowerCase().includes('syntax') ? 'syntax' : 'build',
+      type,
       severity: 'error',
       message,
       shortMessage: truncateMessage(message),
@@ -713,6 +747,8 @@ export function hasBlockingErrors(logs: string): boolean {
     /npm ERR!/i,
     /ERESOLVE/i,
     /\[vite\].*Error/i,
+    /^\[?plugin:vite:/im,
+    /Failed to resolve import/i,
     /X\s*\[ERROR\]/i,
   ];
 
