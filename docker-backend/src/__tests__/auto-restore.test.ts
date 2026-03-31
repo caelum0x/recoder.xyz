@@ -21,4 +21,42 @@ describe('parseAllErrors', () => {
     expect(viteError?.line).toBe(1);
     expect(viteError?.column).toBe(0);
   });
+
+  it('parses plugin-prefixed Vite CSS overlay errors', () => {
+    const logs = `
+[plugin:vite:css] [postcss] It looks like you're trying to use \`tailwindcss\` directly as a PostCSS plugin. The PostCSS plugin has moved to a separate package.
+/home/daytona/src/index.css:undefined:null
+    at at (/home/daytona/node_modules/tailwindcss/dist/lib.js:38:1643)
+`;
+
+    const errors = parseAllErrors(logs);
+    const viteError = errors.find((error) => error.source === 'vite');
+
+    expect(viteError).toBeDefined();
+    expect(viteError?.message).toContain("It looks like you're trying to use `tailwindcss` directly as a PostCSS plugin");
+    expect(viteError?.filePath).toBe('/workspace/src/index.css');
+    expect(viteError?.line).toBeUndefined();
+    expect(viteError?.column).toBeUndefined();
+  });
+
+  it('parses plugin-prefixed Vite import analysis errors with file coordinates', () => {
+    const logs = `
+plugin:vite:import-analysis] Failed to resolve import "./App" from "src/main.tsx". Does the file exist?
+/home/daytona/src/main.tsx:4:16
+2  |  import ReactDOM from "react-dom/client";
+3  |  import { HashRouter } from "react-router-dom";
+4  |  import App from "./App";
+   |                   ^
+`;
+
+    const errors = parseAllErrors(logs);
+    const viteError = errors.find((error) => error.source === 'vite');
+
+    expect(viteError).toBeDefined();
+    expect(viteError?.type).toBe('module');
+    expect(viteError?.message).toContain('Failed to resolve import "./App"');
+    expect(viteError?.filePath).toBe('/workspace/src/main.tsx');
+    expect(viteError?.line).toBe(4);
+    expect(viteError?.column).toBe(16);
+  });
 });
