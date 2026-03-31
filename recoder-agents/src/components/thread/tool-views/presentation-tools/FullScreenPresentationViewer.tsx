@@ -20,7 +20,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { buildSandboxFileUrl, constructHtmlPreviewUrl, fetchSandboxFile, fetchSandboxHtmlAsBlobUrl } from '@/lib/utils/url';
+import { appendUrlSearchParam, buildSandboxFileUrl, constructHtmlPreviewUrl, fetchSandboxFile, fetchSandboxHtmlAsBlobUrl } from '@/lib/utils/url';
 import { downloadPresentation, DownloadFormat, handleGoogleSlidesUpload } from '../utils/presentation-utils';
 import { useDownloadRestriction } from '@/hooks/billing';
 
@@ -119,7 +119,7 @@ export function FullScreenPresentationViewer({
         `presentations/${sanitizedPresentationName}/metadata.json`
       );
       
-      const urlWithCacheBust = `${metadataUrl}?t=${Date.now()}`;
+      const urlWithCacheBust = appendUrlSearchParam(metadataUrl, 't', Date.now());
 
 
       const response = await fetchSandboxFile(urlWithCacheBust, {
@@ -339,7 +339,7 @@ export function FullScreenPresentationViewer({
       const directSlideUrl = useMemo(() => {
         const url = constructHtmlPreviewUrl(sandboxUrl, slide.file_path);
         if (!url) return null;
-        return `${url}?t=${refreshTimestamp}`;
+        return appendUrlSearchParam(url, 't', refreshTimestamp);
       }, [sandboxUrl, slide.file_path, refreshTimestamp]);
 
       // Fetch slide HTML with auth and create blob URL
@@ -356,7 +356,7 @@ export function FullScreenPresentationViewer({
 
         let cancelled = false;
         const slideUrl = buildSandboxFileUrl(sandboxId, slide.file_path);
-        const slideUrlWithCacheBust = `${slideUrl}?t=${refreshTimestamp}`;
+        const slideUrlWithCacheBust = appendUrlSearchParam(slideUrl, 't', refreshTimestamp);
 
         (async () => {
           const url = await fetchSandboxHtmlAsBlobUrl(slideUrlWithCacheBust);
