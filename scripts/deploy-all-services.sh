@@ -226,11 +226,19 @@ CONTAINER_NAMES=(
   openclaw-gateway
   recoder-app
 )
+NETWORK_NAME="recoder-network"
 
 cleanup_named_containers() {
   for name in "${CONTAINER_NAMES[@]}"; do
     docker rm -f "$name" 2>/dev/null || true
   done
+}
+
+ensure_shared_network() {
+  if ! docker network inspect "${NETWORK_NAME}" >/dev/null 2>&1; then
+    echo "Creating shared Docker network: ${NETWORK_NAME}"
+    docker network create "${NETWORK_NAME}" >/dev/null
+  fi
 }
 
 # Remove stale generated/legacy files that can survive rsync and break Next typecheck.
@@ -257,6 +265,9 @@ echo "--- Stopping and removing existing containers ---"
 docker compose -f docker-compose.deploy.yml down --remove-orphans 2>/dev/null || true
 # Also remove any standalone containers with matching names
 cleanup_named_containers
+
+echo "--- Ensuring shared Docker network exists ---"
+ensure_shared_network
 
 echo "--- Starting Redis ---"
 docker compose -f docker-compose.deploy.yml up -d --build redis
