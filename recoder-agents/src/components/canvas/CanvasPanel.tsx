@@ -10,6 +10,7 @@ import type {
   AppState,
   BinaryFiles,
   ExcalidrawInitialDataState,
+  ExcalidrawImperativeAPI,
 } from '@excalidraw/excalidraw/types';
 import type { ExcalidrawElement } from '@excalidraw/excalidraw/element/types';
 import { Button } from '@/components/ui/button';
@@ -39,6 +40,8 @@ interface CanvasPanelProps {
   fileName: string;
   className?: string;
   onSave?: (content: string) => Promise<void>;
+  /** Thread ID used to subscribe to live agent canvas updates via SSE */
+  threadId?: string;
 }
 
 function serializeScene(
@@ -49,12 +52,13 @@ function serializeScene(
   return serializeExcalidrawScene({ elements: [...elements], appState, files });
 }
 
-export function CanvasPanel({ content, fileName, className, onSave }: CanvasPanelProps) {
+export function CanvasPanel({ content, fileName, className, onSave, threadId }: CanvasPanelProps) {
   const { resolvedTheme } = useTheme();
   const [instanceKey, setInstanceKey] = useState(0);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
+  const excalidrawAPIRef = useRef<ExcalidrawImperativeAPI | null>(null);
   const lastSavedContentRef = useRef('');
   const draftContentRef = useRef('');
   const draftSceneRef = useRef<{
@@ -146,6 +150,28 @@ export function CanvasPanel({ content, fileName, className, onSave }: CanvasPane
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [handleSave, hasUnsavedChanges, isSaving, onSave]);
 
+  // Live canvas updates via SSE — agent calls recoder_canvas_update MCP tool →
+  // docker-backend broadcasts → recoder-agents /api/canvas/subscribe SSE → here.
+  useEffect(() => {
+    if (!threadId) return;
+
+    const es = new EventSource(`/api/canvas/subscribe/${threadId}`);
+
+    es.onmessage = (event) => {
+      try {
+        const payload = JSON.parse(event.data) as { type: string; elements?: ExcalidrawElement[] };
+        if (payload.type === 'canvas_update' && Array.isArray(payload.elements) && excalidrawAPIRef.current) {
+          // Non-destructive patch: preserves viewport/selection/appState
+          excalidrawAPIRef.current.updateScene({ elements: payload.elements });
+        }
+      } catch {
+        // ignore malformed events
+      }
+    };
+
+    return () => es.close();
+  }, [threadId]);
+
   return (
     <div className={cn('flex h-full w-full min-h-0 flex-col bg-background', className)}>
       <div className="flex h-12 items-center justify-between border-b px-3">
@@ -175,6 +201,7 @@ export function CanvasPanel({ content, fileName, className, onSave }: CanvasPane
           key={instanceKey}
           initialData={initialData}
           onChange={handleChange}
+          excalidrawAPI={(api) => { excalidrawAPIRef.current = api; }}
           theme={resolvedTheme === 'dark' ? 'dark' : 'light'}
           name={fileName}
           detectScroll

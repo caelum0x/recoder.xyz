@@ -17405,6 +17405,57 @@ startupInfo('routes.web-search', `registered (SearXNG at ${SEARXNG_BASE_URL})`);
 
 // ==================== END SEARXNG WEB SEARCH PROXY ====================
 
+// ==================== A2A CANVAS UPDATE ====================
+// Agents call recoder_canvas_update MCP tool → POSTs here → bridge broadcasts to UI clients.
+// Optional: if RECODER_A2A_CANVAS_HANDLER_URL is set, also relays to the SSE endpoint in
+// recoder-agents so the browser's CanvasPanel can call excalidrawAPI.updateScene().
+
+const CANVAS_HANDLER_URL = process.env.RECODER_A2A_CANVAS_HANDLER_URL || '';
+
+app.post('/api/a2a/canvas-update', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const { projectId, threadId, elements } = req.body as {
+    projectId?: string;
+    threadId?: string;
+    elements?: unknown;
+  };
+
+  if (!projectId || !Array.isArray(elements)) {
+    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'projectId and elements[] required'));
+  }
+
+  const bridge = getAgentBridgeService();
+  bridge.broadcastToWorkspace(projectId, {
+    type: 'canvas_update',
+    projectId,
+    threadId: threadId || '',
+    elements,
+    timestamp: Date.now(),
+  } as any);
+
+  // Forward to recoder-agents SSE relay if configured
+  if (CANVAS_HANDLER_URL) {
+    try {
+      await fetch(CANVAS_HANDLER_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${process.env.INTERNAL_SERVICE_KEY || ''}`,
+        },
+        body: JSON.stringify({ projectId, threadId, elements }),
+        signal: AbortSignal.timeout(5000),
+      });
+    } catch (err) {
+      logger.warn({ err, url: CANVAS_HANDLER_URL }, 'canvas handler relay failed (non-fatal)');
+    }
+  }
+
+  sendSuccess(res, { broadcasted: true, projectId, elementCount: elements.length });
+}));
+
+startupInfo('routes.canvas-update', 'registered');
+
+// ==================== END A2A CANVAS UPDATE ====================
+
 // Register shutdown handlers
 process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
 process.on('SIGINT', () => gracefulShutdown('SIGINT'));
