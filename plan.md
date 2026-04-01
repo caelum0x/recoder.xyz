@@ -1,12 +1,41 @@
 # Recoder Platform — Master Plan
 
-Last updated: 2026-03-31 (live Nike presentation fix verified in browser + Hetzner backend DB realignment)
+Last updated: 2026-04-01 (recoder-web follow-up edit fixes pushed; live web verification still pending)
 
 ---
 
-## Current Correction — 2026-03-31
+## Current Correction — 2026-04-01
 
 This section supersedes conflicting notes below.
+
+- The latest `recoder-web` follow-up edit fixes are now pushed on the active branch, but they are not yet marked as deployed live.
+- The user-visible problem being addressed is deeper than auto-fix: initial UI generation often worked, but follow-up prompts like "make the buttons bigger" or "turn this into a finance app" could stall, re-explore unnecessarily, or return weak/no file actions.
+- Three related root causes have now been corrected in branch:
+  1. model-facing prompts and mode tool exposure were advertising legacy action names like `createFile`, `runShellCommand`, and `webSearch` while the runtime path expects canonical names like `file`, `shell`, and `web_search`
+  2. follow-up chat requests could send stale or missing `codeContext` because the client loaded updated file context into React state asynchronously, but the request body could be serialized before that state landed
+  3. when file context was already present, the server/prompt path could still nudge the model into exploration-first behavior instead of emitting write actions immediately
+- The fixes now pushed are:
+  - action-name alignment across prompt/tool exposure, parser normalization, and status reporting
+  - fetch-time `codeContext` sourcing via a ref-backed `getBody()` path in `useSimpleChat`
+  - a fast-path prompt/server rule telling the model to skip exploration and emit write actions immediately when `<project_context>` is already present for a modification request
+- Code status:
+  - pushed commits: `ad8adb3c`, `7dcec353`, `77e7f698`
+  - local recoder-web gates passed before push:
+    - `pnpm --dir recoder-web exec vitest run app/lib/modes/types.test.ts app/lib/runtime/message-parser-actions.test.ts`
+    - `pnpm --dir recoder-web exec tsc --noEmit --pretty false`
+    - `pnpm --dir recoder-web build`
+- Live-status note:
+  - these fixes are branch-complete and pushed
+  - production/browser verification for `web.recoder.xyz` multi-turn editing still needs to be run explicitly before claiming the issue is fixed live
+- Immediate next verification:
+  1. create a simple UI in `web.recoder.xyz`
+  2. send a follow-up edit request that should modify existing files, not regenerate from scratch
+  3. confirm the assistant emits concrete write actions and the preview changes in the same turn
+  4. confirm error-fix follow-ups also reuse current file context instead of re-exploring
+
+## Current Correction — 2026-03-31
+
+This section remains accurate for the agents-side Nike presentation recovery.
 
 - The Nike presentation blank-state issue on `agents.recoder.xyz` is fixed live.
 - Browser verification is now complete as well: the Nike slide deck renders in the real UI.
