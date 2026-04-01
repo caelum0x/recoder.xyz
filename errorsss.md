@@ -1,6 +1,6 @@
 # Recoder Platform — Error Registry
 
-Last updated: 2026-04-01 (Hetzner safe cleanup reduced unexpected checkout drift from 45 to 17; remaining work is split into branch-sync vs local-overlap buckets)
+Last updated: 2026-04-01 (Hetzner safe cleanup reduced unexpected checkout drift from 45 to 17; remaining work is split into branch-sync vs local-overlap buckets, with the workflow metering/qdrant overlap now under active cleanup)
 
 ---
 
@@ -70,6 +70,9 @@ This top block also supersedes older notes that still describe Hetzner backend D
   2. 32 deterministic cleanup candidates were applied live on Hetzner after backup (10 tracked reset-to-branch candidates + 22 host-only removals)
   3. the current live audit is now 17 unexpected source-drift entries
   4. those 17 are split into 7 host-untracked but branch-tracked additions (`recoder-0xz`) and 10 overlap/manual-review entries that collide with current local work (`recoder-h3y`)
+- One of those overlap slices is now explicitly being landed instead of left dirty:
+  1. `recoder-32x` tracks the remaining `workflow-step-executor` metering hooks and the portable Qdrant healthcheck change in `docker-compose.deploy.yml`
+  2. the workflow executor now reads runtime env lazily and has focused regression coverage for metering payloads/durations
 - Result:
   - Hetzner DB credential drift should now fail fast during deploy/closeout instead of surfacing later as agent/backend `500`s
   - Hetzner app deployability is restored; remaining host cleanup is now the 17-entry `recoder-025` remainder
