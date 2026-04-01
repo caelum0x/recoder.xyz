@@ -62,9 +62,12 @@ export class RedisTaskStore implements TaskStore {
     this.redis = new Redis(options.redisUrl, {
       maxRetriesPerRequest: 3,
       retryStrategy: (times) => {
-        if (times > 5) return null; // give up after 5 retries
-        return Math.min(times * 200, 3000);
+        // Never give up — exponential backoff capped at 30s.
+        // A Redis blip that outlasts 5 retries would permanently break
+        // task persistence without this.
+        return Math.min(times * 500, 30000);
       },
+      reconnectOnError: () => true,
       lazyConnect: true,
     });
 

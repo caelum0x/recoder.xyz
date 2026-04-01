@@ -45,9 +45,10 @@ class SessionStore {
       this.redis = new Redis(REDIS_URL, {
         maxRetriesPerRequest: 3,
         retryStrategy: (times) => {
-          if (times > 3) return null;
-          return Math.min(times * 100, 3000);
+          // Never give up — exponential backoff capped at 30s.
+          return Math.min(times * 500, 30000);
         },
+        reconnectOnError: () => true,
         lazyConnect: true,
       });
 
