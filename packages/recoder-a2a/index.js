@@ -462,6 +462,33 @@ const TOOLS = [
       required: ['sandbox_id', 'operation'],
     },
   },
+  {
+    name: 'recoder_workflow_run',
+    description: 'Execute a multi-step workflow inline. Supports step types: llm (call AI model), http (make HTTP request), code (run code in sandbox), branch (conditional), trigger (run another workflow). Steps execute sequentially with shared context.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        steps: {
+          type: 'array',
+          description: 'Ordered list of workflow steps',
+          items: {
+            type: 'object',
+            properties: {
+              name: { type: 'string', description: 'Human-readable step name' },
+              type: { type: 'string', enum: ['llm', 'http', 'code', 'branch', 'trigger'], description: 'Step type' },
+              config: {
+                type: 'object',
+                description: 'Step configuration. llm: {prompt, model?, system?}. http: {url, method?, headers?, body?}. code: {code, language?, sandboxId?}. branch: {condition}. trigger: {workflowId, input?}.',
+              },
+            },
+            required: ['name', 'type', 'config'],
+          },
+        },
+        context: { type: 'object', description: 'Initial context variables (accessible via {{key}} in prompts/URLs)' },
+      },
+      required: ['steps'],
+    },
+  },
 ];
 
 // ── Helpers ──
@@ -792,23 +819,45 @@ async function handleToolCall(name, args) {
     case 'recoder_local_llm': {
       if (!args.prompt || !args.sandbox_id) throw new Error('prompt and sandbox_id required');
       const model = args.model || 'qwen2.5-coder:3b';
-      // Start Ollama (idempotent) then query it
       const dHeaders = { 'Authorization': `Bearer ${DAYTONA_KEY}`, 'Content-Type': 'application/json' };
       const baseUrl = DAYTONA_URL.replace(/\/api\/?$/, '');
       const execUrl = `${baseUrl}/api/toolbox/${args.sandbox_id}/toolbox/process/execute`;
-      // Ensure ollama is serving (nohup, idempotent)
-      await fetch(execUrl, {
-        method: 'POST', headers: dHeaders,
-        body: JSON.stringify({ command: 'sh -c "pgrep ollama || (nohup ollama serve > /tmp/ollama.log 2>&1 &) && sleep 2"' }),
-      }).catch(() => {});
-      // Run the prompt through ollama
-      const ollamaRes = await fetch(execUrl, {
-        method: 'POST', headers: dHeaders,
-        body: JSON.stringify({ command: `sh -c "echo ${JSON.stringify(args.prompt)} | ollama run ${model} 2>/dev/null"` }),
-      });
-      const ollamaData = await ollamaRes.json();
-      const output = ollamaData.result || ollamaData.output || ollamaData.stdout || JSON.stringify(ollamaData);
-      return `Model: ${model}\n\n${output}`;
+
+      const sandboxExec = async (cmd) => {
+        const res = await fetch(execUrl, { method: 'POST', headers: dHeaders, body: JSON.stringify({ command: cmd }) });
+        return res.json();
+      };
+
+      // 1. Install Ollama if missing (idempotent, ~3s if already installed)
+      await sandboxExec('sh -c "command -v ollama || curl -fsSL https://ollama.ai/install.sh | sh"').catch(() => {});
+
+      // 2. Start Ollama server if not running (nohup, idempotent)
+      await sandboxExec('sh -c "pgrep -x ollama || (nohup ollama serve > /tmp/ollama.log 2>&1 &) && sleep 2"').catch(() => {});
+
+      // 3. Pull model if not already present (idempotent, ~30s first time)
+      const listResult = await sandboxExec(`sh -c "ollama list 2>/dev/null | grep -q '${model.replace(/[^a-zA-Z0-9._:-]/g, '')}' && echo FOUND || echo MISSING"`).catch(() => ({}));
+      const listOut = listResult.result || listResult.stdout || '';
+      if (!listOut.includes('FOUND')) {
+        await sandboxExec(`sh -c "ollama pull ${model.replace(/[^a-zA-Z0-9._:-]/g, '')} 2>&1"`).catch(() => {});
+      }
+
+      // 4. Use Ollama HTTP API for structured prompt (more reliable than piping)
+      const ollamaApiRes = await sandboxExec(
+        `sh -c "curl -s http://localhost:11434/api/generate -d '${JSON.stringify({ model, prompt: args.prompt, stream: false }).replace(/'/g, "'\\''")}'"`,
+      );
+      const apiOutput = ollamaApiRes.result || ollamaApiRes.stdout || '';
+
+      // Parse Ollama API JSON response
+      let response;
+      try {
+        const parsed = JSON.parse(apiOutput);
+        response = parsed.response || apiOutput;
+      } catch {
+        // Fallback: raw output (e.g. if curl didn't get JSON)
+        response = apiOutput;
+      }
+
+      return `Model: ${model}\n\n${response}`;
     }
 
     case 'recoder_canvas_update': {
@@ -990,6 +1039,28 @@ async function handleToolCall(name, args) {
           : `Commit failed: ${data.message}`;
       }
       throw new Error(`Unknown git operation: ${op}`);
+    }
+
+    case 'recoder_workflow_run': {
+      if (!args.steps || !Array.isArray(args.steps) || args.steps.length === 0) {
+        throw new Error('steps[] is required (non-empty array)');
+      }
+      const data = await apiFetch(`${DOCKER_URL}/api/a2a/workflows/run-steps`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          steps: args.steps,
+          context: args.context || {},
+        }),
+      });
+      const result = data.data;
+      const summary = result.results?.map((r, i) => {
+        const output = typeof r.output === 'object'
+          ? JSON.stringify(r.output).slice(0, 300)
+          : String(r.output ?? '').slice(0, 300);
+        return `${i + 1}. [${r.type}] ${r.step} (${r.durationMs}ms): ${output}`;
+      }).join('\n') ?? 'No results';
+      return `Workflow ${result.success ? 'SUCCEEDED' : 'FAILED'} (${result.results?.length ?? 0} steps)\n\n${summary}`;
     }
 
     default:
