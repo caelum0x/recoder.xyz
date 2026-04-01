@@ -642,7 +642,13 @@ export class DockerSandbox extends BaseSandbox {
   }
 
   getHost(port: number): string {
-    // Docker preview URL format
+    // Use same-origin proxy path so the preview iframe is served from web.recoder.xyz.
+    // This eliminates X-Frame-Options cross-origin issues because the Remix proxy
+    // (server.js /preview/ → docker-backend) strips restrictive headers from upstream.
+    if (typeof window !== 'undefined') {
+      return `${window.location.origin}/preview/${this.projectId}/${port}`;
+    }
+    // SSR fallback (not used for iframe src, just for initial render)
     const dockerUrl = this.dockerUrl || getDockerUrl();
     const baseUrl = dockerUrl.replace(/^http/, '');
     return `http${baseUrl}/preview/${this.projectId}/${port}`;
