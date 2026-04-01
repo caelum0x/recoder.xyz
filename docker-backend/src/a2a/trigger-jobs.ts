@@ -83,13 +83,8 @@ async function executeJobInline(job: JobPayload): Promise<void> {
     }
 
     case 'notification.send': {
-      const { dispatch_to_channels } = await import('../../backend/core/notifications/channel_dispatcher.js').catch(() => ({
-        dispatch_to_channels: async () => {},
-      }));
-      // This import path won't work in docker-backend — but we have the channel_dispatcher in the Python backend
-      // For docker-backend, we call the API instead
       const { userId, eventType, payload } = job.data as { userId: string; eventType: string; payload: Record<string, unknown> };
-      logger.info({ userId, eventType }, '[trigger-jobs] Notification dispatch (inline)');
+      logger.info({ userId, eventType, payload }, '[trigger-jobs] Notification dispatch (inline fallback)');
       break;
     }
 
