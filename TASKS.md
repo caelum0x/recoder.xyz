@@ -1,6 +1,6 @@
 # Recoder Platform — Task List
 
-Last updated: 2026-04-01 (post live Nike presentation fix; canvas-mode Excalidraw routing fixed in branch)
+Last updated: 2026-04-01 (Hetzner git checkout repaired; Recoder MCP management endpoints restored live)
 
 ---
 
@@ -75,24 +75,31 @@ This supersedes older task notes that still treat deploy-network breakage, root 
   - `scripts/check-hetzner-db-env-drift.sh` now checks the local Postgres DSNs in `backend/.env`, `app/.env.production`, and `recoder-agents/.env.local` against live Hetzner Postgres auth
   - that check is wired into both `scripts/deploy-all-services.sh` and `scripts/production-external-closeout.sh`
   - current live Hetzner run passes for all checked DSNs
+- `recoder-o66` is fixed live:
+  - the Hetzner deploy key is registered on GitHub
+  - the host checkout now points at `git@github.com:caelum0x/recoder.xyz.git`
+  - the active branch again tracks origin, and `git pull --ff-only` works on `/root/recoder.xyz`
+  - remaining host cleanup is tracked in `recoder-zgp`
+- `recoder-8sm` is fixed live:
+  - Recoder MCP `recoder_list_agents`, `recoder_list_tasks`, and `recoder_send_task` were returning `502`
+  - root cause was `recoder-docker-backend` crash-looping on a mixed DuckDB A3 deploy state where runtime source imports landed without the `duckdb` module in the image
+  - rebuilding `recoder-docker-backend` from the repaired stable Hetzner checkout restored `docker.recoder.xyz/health` and the MCP management endpoints
 
 ## Immediate Follow-ups
 
 1. Browser-verify Web IDE preview + publish on the currently deployed build.
 2. Deploy and browser-verify the new `recoder-agents` canvas-mode Excalidraw routing. Branch-complete and pushed on `2026-04-01`; live deployment still pending.
-3. Restore git-based deployability on the Hetzner app host (`recoder-o66`).
-   **Status (2026-04-01):** Deploy key generated on Hetzner. SSH + remote configured. Needs GitHub deploy key setup:
-   - Public key: `ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAILpBvLhkB257nYFqR6Uv+oGNPiI8wHa8hh9wK1TAoix5 hetzner-deploy-key`
-   - Add at: github.com/recoder-xyz/recoder → Settings → Deploy keys → Add (read-only)
-   - Then on Hetzner: `cd /root/recoder.xyz && git fetch --depth=1 origin main && git reset --hard origin/main`
-4. Re-enable deployed `STRICT_AUTH=true` only after broader browser verification passes.
-5. Continue broader agents IDE/browser verification beyond the Nike presentation path.
+3. Audit the remaining dirty Hetzner app checkout after the git repair (`recoder-zgp`).
+4. Validate the DuckDB A3 rollout before deployment (`recoder-avg`).
+5. Re-enable deployed `STRICT_AUTH=true` only after broader browser verification passes.
+6. Continue broader agents IDE/browser verification beyond the Nike presentation path.
 
 ## Current Remaining Priorities (2026-03-31, post-`77cd90bb`)
 1. Browser-verify Web IDE preview + publish on the currently deployed build.
-2. Restore git-based deployability on the Hetzner app host (`recoder-o66`).
-3. Re-enable deployed `STRICT_AUTH=true` only after broader browser verification passes.
-4. Continue broader agents IDE/browser verification beyond the Nike presentation path.
+2. Audit the remaining dirty Hetzner app host checkout after the git repair (`recoder-zgp`).
+3. Validate the DuckDB A3 rollout before deployment (`recoder-avg`).
+4. Re-enable deployed `STRICT_AUTH=true` only after broader browser verification passes.
+5. Continue broader agents IDE/browser verification beyond the Nike presentation path.
 
 ### 1. Agents (agents.recoder.xyz)
 **Works:** LLM responds, file proxy works, Nike presentation metadata/slide/image proxy works, Nike slides render in the real agents UI
@@ -100,14 +107,11 @@ This supersedes older task notes that still treat deploy-network breakage, root 
 - Broader agent IDE/coding loops remain open beyond the Nike presentation path
 
 ### 2. Web IDE (web.recoder.xyz)
-**Works:** AI generates code (26 files), npm install succeeds, dev server starts on port 5173
-**Broken:**
-- `docker.recoder.xyz` returns 502 Bad Gateway — preview iframe can't load
-- `X-Frame-Options: sameorigin` on docker.recoder.xyz blocks iframe embedding from web.recoder.xyz
-- Every `/api/file/` call returns 500 (ownership check fails, bypassed in migration mode)
-- Preview health check times out after 30 attempts
-- Publish returns 500
-- `docker.recoder.xyz` directly shows "connection refused" in browser
+**Works:** AI generates code (26 files), npm install succeeds, dev server starts on port 5173, and `docker.recoder.xyz/health` is back to `200` after the April 1 backend rebuild
+**Open / Unverified:**
+- browser verification of preview iframe rendering on the current deployed build
+- browser verification of publish on the current deployed build
+- re-enabling `STRICT_AUTH=true` only after that browser verification stays green
 
 ### 3. Agency (agency.recoder.xyz)
 **Deployed:** Model switched to gemini-2.0-flash, env var support added
