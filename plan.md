@@ -4,6 +4,29 @@ Last updated: 2026-04-01 (Sprint B2 deployed + agency SearXNG web-search + recod
 
 ---
 
+## Current Correction — 2026-04-01 (infra)
+
+This section supersedes older Redis / `web.recoder.xyz` runtime notes below.
+
+- `docker-backend` is now back on a real password-protected `recoder-redis` container in production.
+- The live April 1 failure was infra drift:
+  1. Hetzner had a stray passwordless `recoder-redis-old` container still attached to `recoder-network`
+  2. deployed env/config already expected `REDIS_URL=redis://:...@redis:6379/0`
+  3. that mismatch produced noisy Redis auth/retry failures and made the Sprint B Redis path unreliable after restarts
+- `web.recoder.xyz` also had a separate restart regression:
+  1. the runtime image pruned `vite-plugin-node-polyfills`
+  2. the built Remix server bundle still imported `vite-plugin-node-polyfills/shims/buffer`
+  3. after restart, `web.recoder.xyz/api/health` returned `500` until the runtime package was restored
+- Both are now fixed live:
+  - production Redis was migrated onto a proper `recoder-redis` container with `--requirepass`
+  - `recoder-backend` was restarted and `docker.recoder.xyz/health` is healthy again with A2A enabled
+  - `recoder-web/Dockerfile` was corrected so the runtime image keeps `vite-plugin-node-polyfills`
+  - `recoder-web` was rebuilt/replaced on Hetzner and `web.recoder.xyz/api/health` is healthy again
+- Immediate remaining infra follow-up:
+  1. `recoder-cy0` — finish the compose/network root-cause fix so deploys stop trying to replace `recoder-network`
+  2. Root cause now confirmed: the deploy script still used `docker compose down` against a stack whose shared network had drifted into a mixed state after manual incident recoveries. `recoder-web` and `recoder-redis` were live on `recoder-network` without Compose labels, so a stack-wide teardown path remained unsafe even after the network was marked `external: true`.
+  3. In-progress fix: deploy by reconciling only the rebuilt service containers by name and keep the shared `recoder-network` up for the rest of the stack, instead of tearing the whole Compose project down.
+
 ## Current Correction — 2026-04-01
 
 This section supersedes conflicting notes below.
