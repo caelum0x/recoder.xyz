@@ -1,6 +1,6 @@
 # Recoder Platform — Task List
 
-Last updated: 2026-04-01 (Hetzner git checkout repaired; Recoder MCP management endpoints restored live)
+Last updated: 2026-04-01 (Hetzner checkout drift audited and backed up; follow-up narrowed to unexpected source drift cleanup)
 
 ---
 
@@ -85,18 +85,27 @@ This supersedes older task notes that still treat deploy-network breakage, root 
   - root cause was `recoder-docker-backend` crash-looping on a mixed DuckDB A3 deploy state where runtime source imports landed without the `duckdb` module in the image
   - rebuilding `recoder-docker-backend` from the repaired stable Hetzner checkout restored `docker.recoder.xyz/health` and the MCP management endpoints
   - a new deploy guardrail now exists in branch: `scripts/check-hetzner-docker-backend-build-context.sh`, wired into `scripts/deploy-all-services.sh`, and it passes on Hetzner after removing the stale untracked `docker-backend` source files that caused the mixed-state rebuild
+- `recoder-zgp` is complete:
+  - a new audit script exists in branch: `scripts/check-hetzner-checkout-drift.sh`
+  - it is wired into `scripts/production-external-closeout.sh`
+  - live Hetzner result after safe cleanup is now:
+    - 8 allowed runtime entries
+    - 1 known nested repo drift (`recoder-web/starters`)
+    - 45 unexpected source-drift entries
+  - the same script can now create a backup archive before cleanup, and one was written on Hetzner under `/root/recoder.xyz/backups/checkout-drift-20260401-181818/`
+  - cleanup of those 45 entries is split to `recoder-025`
 
 ## Immediate Follow-ups
 
 1. Browser-verify Web IDE preview + publish on the currently deployed build.
 2. Deploy and browser-verify the new `recoder-agents` canvas-mode Excalidraw routing. Branch-complete and pushed on `2026-04-01`; live deployment still pending.
-3. Audit the remaining dirty Hetzner app checkout after the git repair (`recoder-zgp`).
+3. Clean the remaining 45 unexpected source-drift entries on the Hetzner app checkout (`recoder-025`).
 4. Re-enable deployed `STRICT_AUTH=true` only after broader browser verification passes.
 5. Continue broader agents IDE/browser verification beyond the Nike presentation path.
 
 ## Current Remaining Priorities (2026-03-31, post-`77cd90bb`)
 1. Browser-verify Web IDE preview + publish on the currently deployed build.
-2. Audit the remaining dirty Hetzner app host checkout after the git repair (`recoder-zgp`).
+2. Clean the remaining 45 unexpected source-drift entries on the Hetzner app host checkout (`recoder-025`).
 3. Re-enable deployed `STRICT_AUTH=true` only after broader browser verification passes.
 4. Continue broader agents IDE/browser verification beyond the Nike presentation path.
 
