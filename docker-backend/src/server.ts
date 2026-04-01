@@ -13317,6 +13317,8 @@ app.ws('/agent-bridge', async (ws: WebSocket, req: express.Request) => {
 
   // Extract registration data from query params (initial connection)
   const agentId = (req.query.agentId as string) || `local_${authSession.userId}_${Date.now()}`;
+  const sessionId = (req.query.sessionId as string) || undefined;
+  const label = (req.query.label as string) || undefined;
   const capabilities = req.query.capabilities
     ? (req.query.capabilities as string).split(',')
     : [];
@@ -13324,13 +13326,14 @@ app.ws('/agent-bridge', async (ws: WebSocket, req: express.Request) => {
     ? (req.query.workspaceIds as string).split(',')
     : [];
 
-  // Register the agent
-  const agent = bridge.registerAgent(ws as any, agentId, authSession.userId, capabilities, workspaceIds);
+  // Register the agent — sessionId allows multiple instances of the same agentId to coexist
+  const agent = bridge.registerAgent(ws as any, agentId, authSession.userId, capabilities, workspaceIds, sessionId, label);
 
   // Send registration confirmation
   ws.send(JSON.stringify({
     type: 'registered',
     agentId: agent.agentId,
+    sessionId: agent.sessionId,
     workspaces: agent.workspaceIds,
   }));
 
@@ -13357,7 +13360,24 @@ app.ws('/agent-bridge', async (ws: WebSocket, req: express.Request) => {
     logger.error({ err, agentId }, 'AgentBridge: connection error');
   });
 
-  logger.info({ agentId, userId: authSession.userId }, 'AgentBridge: agent connected');
+  logger.info({ agentId, sessionId: agent.sessionId, userId: authSession.userId }, 'AgentBridge: agent connected');
+});
+
+// GET /api/a2a/bridge/agents — live connected bridge sessions
+app.get('/api/a2a/bridge/agents', async (req: express.Request, res: express.Response) => {
+  try {
+    const sessions = getAgentBridgeService().listConnectedSessions();
+    res.json({
+      success: true,
+      data: {
+        sessions,
+        total: sessions.length,
+      },
+    });
+  } catch (err) {
+    logger.error({ err }, 'Error listing bridge sessions');
+    res.status(500).json({ success: false, error: 'Internal error' });
+  }
 });
 
 // ==================== MOBILE API ENDPOINTS ====================
