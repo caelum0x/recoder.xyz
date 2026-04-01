@@ -11,8 +11,7 @@ type TemplateComponentProperties = {
 export const TemplateComponent = async ({
   id,
 }: TemplateComponentProperties) => {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- stale Prisma client missing version field
-  const template = await (database.template as any).findUnique({
+  const template = await database.template.findUnique({
     where: { id },
     select: {
       id: true,
@@ -20,7 +19,7 @@ export const TemplateComponent = async ({
       description: true,
       version: true,
     },
-  }) as { id: string; title: string; description: string | null; version?: number } | null;
+  });
 
   if (!template) {
     return null;
