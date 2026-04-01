@@ -676,7 +676,7 @@ async def list_apps_with_triggers(
         raise HTTPException(status_code=502, detail="Composio API error")
     except Exception as e:
         logger.error(f"Error building apps-with-triggers list: {e}")
-        raise HTTPException(status_code=500, detail="Internal server error")
+        raise HTTPException(status_code=500, detail=f"Internal error: {type(e).__name__}: {e}")
 
 
 @router.get("/triggers/apps/{toolkit_slug}")
@@ -692,7 +692,7 @@ async def list_triggers_for_app(
         raise HTTPException(status_code=502, detail="Composio API error")
     except Exception as e:
         logger.error(f"Error listing triggers for app {toolkit_slug}: {e}")
-        raise HTTPException(status_code=500, detail="Internal server error")
+        raise HTTPException(status_code=500, detail=f"Internal error: {type(e).__name__}: {e}")
 
 
 @router.get("/triggers/schema/{trigger_slug}")
@@ -708,7 +708,7 @@ async def get_trigger_schema(
         raise
     except Exception as e:
         logger.error(f"Failed to get trigger schema for {trigger_slug}: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Internal server error")
+        raise HTTPException(status_code=500, detail=f"Internal error: {type(e).__name__}: {e}")
 
 
 class CreateComposioTriggerRequest(BaseModel):

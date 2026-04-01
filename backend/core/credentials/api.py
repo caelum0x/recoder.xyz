@@ -145,7 +145,7 @@ async def store_credential(
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         logger.error(f"Error storing credential: {e}")
-        raise HTTPException(status_code=500, detail="Internal server error")
+        raise HTTPException(status_code=500, detail=f"Internal error: {type(e).__name__}: {e}")
 
 
 @router.get("/credentials", response_model=List[CredentialResponse])
@@ -171,7 +171,7 @@ async def get_user_credentials(
         
     except Exception as e:
         logger.error(f"Error getting user credentials: {e}")
-        raise HTTPException(status_code=500, detail="Internal server error")
+        raise HTTPException(status_code=500, detail=f"Internal error: {type(e).__name__}: {e}")
 
 
 @router.delete("/credentials/{mcp_qualified_name:path}")
@@ -194,7 +194,7 @@ async def delete_credential(
         raise
     except Exception as e:
         logger.error(f"Error deleting credential: {e}")
-        raise HTTPException(status_code=500, detail="Internal server error")
+        raise HTTPException(status_code=500, detail=f"Internal error: {type(e).__name__}: {e}")
 
 
 @router.post("/credential-profiles", response_model=CredentialProfileResponse)
@@ -234,7 +234,7 @@ async def store_credential_profile(
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         logger.error(f"Error storing credential profile: {e}")
-        raise HTTPException(status_code=500, detail="Internal server error")
+        raise HTTPException(status_code=500, detail=f"Internal error: {type(e).__name__}: {e}")
 
 
 @router.get("/credential-profiles", response_model=List[CredentialProfileResponse])
@@ -262,7 +262,7 @@ async def get_user_credential_profiles(
         
     except Exception as e:
         logger.error(f"Error getting user credential profiles: {e}")
-        raise HTTPException(status_code=500, detail="Internal server error")
+        raise HTTPException(status_code=500, detail=f"Internal error: {type(e).__name__}: {e}")
 
 
 @router.get("/credential-profiles/{mcp_qualified_name:path}", response_model=List[CredentialProfileResponse])
@@ -293,7 +293,7 @@ async def get_credential_profiles_for_mcp(
         
     except Exception as e:
         logger.error(f"Error getting credential profiles for MCP: {e}")
-        raise HTTPException(status_code=500, detail="Internal server error")
+        raise HTTPException(status_code=500, detail=f"Internal error: {type(e).__name__}: {e}")
 
 
 @router.get("/credential-profiles/profile/{profile_id}", response_model=CredentialProfileResponse)
@@ -324,7 +324,7 @@ async def get_credential_profile(
         raise HTTPException(status_code=403, detail="Access denied to profile")
     except Exception as e:
         logger.error(f"Error getting credential profile: {e}")
-        raise HTTPException(status_code=500, detail="Internal server error")
+        raise HTTPException(status_code=500, detail=f"Internal error: {type(e).__name__}: {e}")
 
 
 @router.put("/credential-profiles/{profile_id}/set-default")
@@ -343,7 +343,7 @@ async def set_default_credential_profile(
         
     except Exception as e:
         logger.error(f"Error setting default profile: {e}")
-        raise HTTPException(status_code=500, detail="Internal server error")
+        raise HTTPException(status_code=500, detail=f"Internal error: {type(e).__name__}: {e}")
 
 
 @router.delete("/credential-profiles/{profile_id}")
@@ -362,7 +362,7 @@ async def delete_credential_profile(
         
     except Exception as e:
         logger.error(f"Error deleting profile: {e}")
-        raise HTTPException(status_code=500, detail="Internal server error")
+        raise HTTPException(status_code=500, detail=f"Internal error: {type(e).__name__}: {e}")
 
 
 @router.post("/credential-profiles/bulk-delete", response_model=BulkDeleteProfilesResponse)
@@ -393,7 +393,7 @@ async def bulk_delete_credential_profiles(
         )
     except Exception as e:
         logger.error(f"Error performing bulk deletion: {e}")
-        raise HTTPException(status_code=500, detail="Internal server error")
+        raise HTTPException(status_code=500, detail=f"Internal error: {type(e).__name__}: {e}")
 
 
 @router.get("/composio-profiles", response_model=ComposioCredentialsResponse)
@@ -498,7 +498,7 @@ async def get_composio_profiles(
 
     except Exception as e:
         logger.error(f"Error getting Composio profiles: {e}")
-        raise HTTPException(status_code=500, detail="Internal server error")
+        raise HTTPException(status_code=500, detail=f"Internal error: {type(e).__name__}: {e}")
 
 
 @router.get("/composio-profiles/{profile_id}/mcp-url", response_model=ComposioMcpUrlResponse)
@@ -539,4 +539,4 @@ async def get_composio_mcp_url(
         raise
     except Exception as e:
         logger.error(f"Error getting Composio MCP URL: {e}")
-        raise HTTPException(status_code=500, detail="Internal server error") 
+        raise HTTPException(status_code=500, detail=f"Internal error: {type(e).__name__}: {e}") 

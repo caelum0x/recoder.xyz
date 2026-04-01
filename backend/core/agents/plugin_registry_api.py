@@ -108,7 +108,7 @@ async def create_plugin(
         logger.error(f"create_plugin error: {exc}")
         if "unique" in str(exc).lower():
             raise HTTPException(status_code=409, detail="Plugin with this name already exists")
-        raise HTTPException(status_code=500, detail="Failed to create plugin")
+        raise HTTPException(status_code=500, detail=f"Failed to create plugin: {exc}")
 
 
 @router.get(
@@ -295,7 +295,7 @@ async def install_plugin(
         )
     except Exception as exc:
         logger.error(f"install_plugin error: {exc}")
-        raise HTTPException(status_code=500, detail="Failed to install plugin")
+        raise HTTPException(status_code=500, detail=f"Failed to install plugin: {exc}")
 
     # Increment install_count (best-effort)
     try:
@@ -458,7 +458,7 @@ async def rate_plugin(
         )
     except Exception as exc:
         logger.error(f"rate_plugin error: {exc}")
-        raise HTTPException(status_code=500, detail="Failed to submit rating")
+        raise HTTPException(status_code=500, detail=f"Failed to submit rating: {exc}")
 
     # Recalculate aggregate rating on the plugin
     try:

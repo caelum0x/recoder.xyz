@@ -28,14 +28,48 @@ async def send_to_channel(
         elif channel_type == "discord":
             return await _send_discord(webhook_url, event_type, payload)
         elif channel_type == "email":
-            # Email channels don't use webhooks in the same way; log only
-            logger.info(f"[DISPATCH] Email channel dispatch for event={event_type} (not implemented via webhook)")
-            return True
+            return await _send_email(webhook_url, event_type, payload)
         else:
             logger.warning(f"[DISPATCH] Unknown channel type: {channel_type}")
             return False
     except Exception as e:
         logger.error(f"[DISPATCH] Failed to send to {channel_type}: {e}")
+        return False
+
+
+async def _send_email(recipient_email: str, event_type: str, payload: dict) -> bool:
+    """Send a notification email via the platform EmailService (Mailtrap)."""
+    try:
+        from core.services.email import email_service
+
+        if not email_service.client:
+            logger.warning("[DISPATCH] Email service not configured (MAILTRAP_API_TOKEN missing)")
+            return False
+
+        import mailtrap as mt
+
+        title = payload.get("title", event_type)
+        message = payload.get("message", "")
+
+        mail = mt.Mail(
+            sender=mt.Address(email=email_service.sender_email, name=email_service.sender_name),
+            to=[mt.Address(email=recipient_email)],
+            subject=f"[Recoder] {title}",
+            text=f"{title}\n\n{message}\n\n---\nEvent: {event_type}\nRecoder Notifications",
+            html=f"""<div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:20px">
+<h2 style="margin:0 0 12px">{title}</h2>
+<p style="color:#333;line-height:1.6">{message}</p>
+<hr style="border:none;border-top:1px solid #eee;margin:20px 0">
+<p style="color:#999;font-size:12px">Event: {event_type} | Recoder Notifications</p>
+</div>""",
+            category="notification",
+        )
+
+        email_service.client.send(mail)
+        logger.debug(f"[DISPATCH] Email notification sent to {recipient_email}: {event_type}")
+        return True
+    except Exception as e:
+        logger.error(f"[DISPATCH] Email send failed to {recipient_email}: {e}")
         return False
 
 
