@@ -9,7 +9,7 @@ bd ready              # Find available work
 bd show <id>          # View issue details
 bd update <id> --claim  # Claim work atomically
 bd close <id>         # Complete work
-bd sync               # Sync with git
+bd vc status          # Optional: inspect pending Dolt-backed issue state
 ```
 
 ## Non-Interactive Shell Commands
@@ -108,6 +108,8 @@ bd automatically syncs with git:
 - Exports to `.beads/issues.jsonl` after changes (5s debounce)
 - Imports from JSONL when newer (e.g., after `git pull`)
 - No manual export/import needed!
+- On this repo's installed CLI (`bd 0.59.0`), there is no `bd sync` command.
+- If you need an explicit Dolt commit/push workflow, use `bd vc commit` or `bd dolt commit`/`bd dolt push`.
 
 ### Important Rules
 
@@ -133,7 +135,7 @@ For more details, see README.md and docs/QUICKSTART.md.
 4. **PUSH TO REMOTE** - This is MANDATORY:
    ```bash
    git pull --rebase
-   bd sync
+   bd vc status   # optional visibility only; auto-sync handles JSONL import/export
    git push
    git status  # MUST show "up to date with origin"
    ```
