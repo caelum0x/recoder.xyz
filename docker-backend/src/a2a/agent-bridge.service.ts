@@ -42,6 +42,9 @@ const logger = createLogger('agent-bridge');
 // ---------------------------------------------------------------------------
 
 export interface ConnectedAgent {
+  /** Unique per connection — generated if not supplied by the client. */
+  sessionId: string;
+  /** Agent type / logical identity (e.g. "claude_code", "codex"). Multiple sessions can share the same agentId. */
   agentId: string;
   userId: string;
   socket: WebSocket;
@@ -50,6 +53,8 @@ export interface ConnectedAgent {
   status: 'online' | 'working' | 'idle';
   connectedAt: string;
   lastHeartbeat: string;
+  /** Optional human-readable label (e.g. machine hostname passed by the client). */
+  label?: string;
 }
 
 interface BridgeMessage {
@@ -62,7 +67,11 @@ interface BridgeMessage {
 // ---------------------------------------------------------------------------
 
 export class AgentBridgeService {
+  /** Primary registry: sessionId → ConnectedAgent */
   private readonly agents = new Map<string, ConnectedAgent>();
+  /** Secondary index: agentId (type) → Set<sessionId>. Lets us fan-out by type. */
+  private readonly agentTypeIndex = new Map<string, Set<string>>();
+  /** Socket → sessionId */
   private readonly socketToAgent = new Map<WebSocket, string>();
   private heartbeatInterval: ReturnType<typeof setInterval> | null = null;
 
@@ -70,20 +79,22 @@ export class AgentBridgeService {
     this.startHeartbeatSweep();
   }
 
-  private recordBridgeHeartbeat(agent: Pick<ConnectedAgent, 'agentId' | 'userId' | 'capabilities' | 'workspaceIds'>): void {
-    getHeartbeatTracker().recordHeartbeat(agent.agentId, 'healthy', {
+  private recordBridgeHeartbeat(agent: Pick<ConnectedAgent, 'sessionId' | 'agentId' | 'userId' | 'capabilities' | 'workspaceIds'>): void {
+    // Track by sessionId so each session has its own heartbeat slot
+    getHeartbeatTracker().recordHeartbeat(agent.sessionId, 'healthy', {
       source: 'bridge',
+      agentId: agent.agentId,
       userId: agent.userId,
       capabilityCount: agent.capabilities.length,
       workspaceCount: agent.workspaceIds.length,
     });
   }
 
-  private removeBridgeHeartbeat(agentId: string): void {
+  private removeBridgeHeartbeat(sessionId: string): void {
     const tracker = getHeartbeatTracker();
-    const record = tracker.getRecord(agentId);
+    const record = tracker.getRecord(sessionId);
     if (record?.metadata?.source === 'bridge') {
-      tracker.removeAgent(agentId);
+      tracker.removeAgent(sessionId);
     }
   }
 
@@ -97,18 +108,26 @@ export class AgentBridgeService {
     userId: string,
     capabilities: string[] = [],
     workspaceIds: string[] = [],
+    sessionId?: string,
+    label?: string,
   ): ConnectedAgent {
-    // Disconnect existing connection for same agentId (reconnect case)
-    const existing = this.agents.get(agentId);
-    if (existing && existing.socket !== ws) {
+    // Use provided sessionId or generate a unique one.
+    // Multiple sessions of the same agentId (e.g. two "claude_code" terminals) are
+    // allowed — they each get their own slot in the registry.
+    const resolvedSessionId = sessionId || `${agentId}_${uuid().replace(/-/g, '').slice(0, 12)}`;
+
+    // If a session with this exact sessionId is reconnecting, close the stale socket first.
+    const existingSession = this.agents.get(resolvedSessionId);
+    if (existingSession && existingSession.socket !== ws) {
       try {
-        existing.socket.close(1000, 'Replaced by new connection');
+        existingSession.socket.close(1000, 'Replaced by new connection with same sessionId');
       } catch { /* ignore */ }
-      this.socketToAgent.delete(existing.socket);
+      this.socketToAgent.delete(existingSession.socket);
     }
 
     const now = new Date().toISOString();
     const agent: ConnectedAgent = {
+      sessionId: resolvedSessionId,
       agentId,
       userId,
       socket: ws,
@@ -117,10 +136,17 @@ export class AgentBridgeService {
       status: 'online',
       connectedAt: now,
       lastHeartbeat: now,
+      label,
     };
 
-    this.agents.set(agentId, agent);
-    this.socketToAgent.set(ws, agentId);
+    this.agents.set(resolvedSessionId, agent);
+    this.socketToAgent.set(ws, resolvedSessionId);
+
+    // Maintain the agentId → sessionId[] secondary index
+    if (!this.agentTypeIndex.has(agentId)) {
+      this.agentTypeIndex.set(agentId, new Set());
+    }
+    this.agentTypeIndex.get(agentId)!.add(resolvedSessionId);
     this.recordBridgeHeartbeat(agent);
 
     // Auto-add to workspace member lists
@@ -142,20 +168,39 @@ export class AgentBridgeService {
     }
 
     logger.info(
-      { agentId, userId, workspaces: workspaceIds.length, capabilities: capabilities.length },
+      { agentId, sessionId: resolvedSessionId, userId, workspaces: workspaceIds.length, capabilities: capabilities.length },
       'agent registered via bridge',
     );
 
     return agent;
   }
 
-  unregisterAgent(agentId: string): void {
-    const agent = this.agents.get(agentId);
+  /** Unregister by sessionId (preferred) or fall back to first session of agentId. */
+  unregisterAgent(sessionIdOrAgentId: string): void {
+    // Try exact sessionId first
+    let agent = this.agents.get(sessionIdOrAgentId);
+    if (!agent) {
+      // Fall back: if it looks like an agentId type, close the first session
+      const sessions = this.agentTypeIndex.get(sessionIdOrAgentId);
+      if (sessions && sessions.size > 0) {
+        const firstSessionId = sessions.values().next().value;
+        if (firstSessionId) agent = this.agents.get(firstSessionId);
+      }
+    }
     if (!agent) return;
 
+    const { sessionId, agentId } = agent;
+
     this.socketToAgent.delete(agent.socket);
-    this.agents.delete(agentId);
-    this.removeBridgeHeartbeat(agentId);
+    this.agents.delete(sessionId);
+    this.removeBridgeHeartbeat(sessionId);
+
+    // Remove from agentType index
+    const sessions = this.agentTypeIndex.get(agentId);
+    if (sessions) {
+      sessions.delete(sessionId);
+      if (sessions.size === 0) this.agentTypeIndex.delete(agentId);
+    }
 
     // Publish agent.offline
     const bus = getA2AEventBus();
@@ -165,18 +210,18 @@ export class AgentBridgeService {
         id: `evt_${uuid().replace(/-/g, '').slice(0, 16)}`,
         type: A2AEventType.AgentOffline,
         timestamp: now,
-        data: { agentId, isLocal: true },
+        data: { agentId, sessionId, isLocal: true },
         workspaceId: wsId,
       });
     }
 
-    logger.info({ agentId }, 'agent unregistered from bridge');
+    logger.info({ agentId, sessionId }, 'agent unregistered from bridge');
   }
 
   unregisterBySocket(ws: WebSocket): void {
-    const agentId = this.socketToAgent.get(ws);
-    if (agentId) {
-      this.unregisterAgent(agentId);
+    const sessionId = this.socketToAgent.get(ws);
+    if (sessionId) {
+      this.unregisterAgent(sessionId);
     }
   }
 
@@ -190,27 +235,85 @@ export class AgentBridgeService {
     return all.filter((a) => a.workspaceIds.includes(workspaceId));
   }
 
-  getAgent(agentId: string): ConnectedAgent | undefined {
-    return this.agents.get(agentId);
+  /**
+   * Look up an agent by sessionId (exact) or by agentId type (returns first session).
+   * Returns undefined if not found.
+   */
+  getAgent(sessionIdOrAgentId: string): ConnectedAgent | undefined {
+    // Exact sessionId match
+    const bySession = this.agents.get(sessionIdOrAgentId);
+    if (bySession) return bySession;
+    // Fall back: first session for that agentId type
+    const sessions = this.agentTypeIndex.get(sessionIdOrAgentId);
+    if (sessions && sessions.size > 0) {
+      const firstSessionId = sessions.values().next().value;
+      if (firstSessionId) return this.agents.get(firstSessionId);
+    }
+    return undefined;
   }
 
+  /** Returns true if at least one session of the given agentId type is connected. */
   isAgentOnline(agentId: string): boolean {
+    // Check agentId type index (multiple sessions allowed)
+    const sessions = this.agentTypeIndex.get(agentId);
+    if (sessions && sessions.size > 0) return true;
+    // Also check as exact sessionId fallback
     return this.agents.has(agentId);
+  }
+
+  /** All sessions connected for a given agentId type. */
+  getSessionsForAgent(agentId: string): ConnectedAgent[] {
+    const sessions = this.agentTypeIndex.get(agentId);
+    if (!sessions || sessions.size === 0) return [];
+    return [...sessions].flatMap((sid) => {
+      const a = this.agents.get(sid);
+      return a ? [a] : [];
+    });
+  }
+
+  /**
+   * Returns a serializable snapshot of all connected sessions (no socket reference).
+   */
+  listConnectedSessions(): Array<Omit<ConnectedAgent, 'socket'>> {
+    return [...this.agents.values()].map(({ socket: _socket, ...rest }) => rest);
   }
 
   // -----------------------------------------------------------------------
   // Messaging
   // -----------------------------------------------------------------------
 
-  sendToAgent(agentId: string, message: BridgeMessage): boolean {
-    const agent = this.agents.get(agentId);
-    if (!agent || agent.socket.readyState !== WebSocket.OPEN) return false;
+  /**
+   * Send to a specific session by sessionId, or fan out to ALL sessions of an agentId type.
+   * Returns true if at least one delivery succeeded.
+   */
+  sendToAgent(agentIdOrSessionId: string, message: BridgeMessage): boolean {
+    // Try exact sessionId first
+    const bySession = this.agents.get(agentIdOrSessionId);
+    if (bySession) {
+      return this.deliverToSession(bySession, message);
+    }
 
+    // Fan out to all sessions of that agentId type
+    const sessions = this.agentTypeIndex.get(agentIdOrSessionId);
+    if (!sessions || sessions.size === 0) return false;
+
+    let anyDelivered = false;
+    for (const sid of sessions) {
+      const agent = this.agents.get(sid);
+      if (agent && this.deliverToSession(agent, message)) {
+        anyDelivered = true;
+      }
+    }
+    return anyDelivered;
+  }
+
+  private deliverToSession(agent: ConnectedAgent, message: BridgeMessage): boolean {
+    if (agent.socket.readyState !== WebSocket.OPEN) return false;
     try {
       agent.socket.send(JSON.stringify(message));
       return true;
     } catch (err) {
-      logger.warn({ agentId, err }, 'failed to send message to agent');
+      logger.warn({ agentId: agent.agentId, sessionId: agent.sessionId, err }, 'failed to send message to agent session');
       return false;
     }
   }
@@ -218,40 +321,38 @@ export class AgentBridgeService {
   broadcastToWorkspace(workspaceId: string, message: BridgeMessage): void {
     for (const agent of this.agents.values()) {
       if (agent.workspaceIds.includes(workspaceId)) {
-        this.sendToAgent(agent.agentId, message);
+        this.sendToAgent(agent.sessionId, message);
       }
     }
   }
 
   // -----------------------------------------------------------------------
-  // Workspace join/leave
+  // Workspace join/leave (accepts sessionId or agentId)
   // -----------------------------------------------------------------------
 
-  joinWorkspace(agentId: string, workspaceId: string): boolean {
-    const agent = this.agents.get(agentId);
+  joinWorkspace(sessionIdOrAgentId: string, workspaceId: string): boolean {
+    const agent = this.getAgent(sessionIdOrAgentId);
     if (!agent) return false;
 
     if (!agent.workspaceIds.includes(workspaceId)) {
       agent.workspaceIds.push(workspaceId);
     }
 
-    // Add to workspace member list
-    getWorkspaceService().addAgent(workspaceId, agentId);
+    getWorkspaceService().addAgent(workspaceId, agent.agentId);
 
-    // Publish online event
     getA2AEventBus().publish({
       id: `evt_${uuid().replace(/-/g, '').slice(0, 16)}`,
       type: A2AEventType.AgentOnline,
       timestamp: new Date().toISOString(),
-      data: { agentId, isLocal: true },
+      data: { agentId: agent.agentId, sessionId: agent.sessionId, isLocal: true },
       workspaceId,
     });
 
     return true;
   }
 
-  leaveWorkspace(agentId: string, workspaceId: string): boolean {
-    const agent = this.agents.get(agentId);
+  leaveWorkspace(sessionIdOrAgentId: string, workspaceId: string): boolean {
+    const agent = this.getAgent(sessionIdOrAgentId);
     if (!agent) return false;
 
     agent.workspaceIds = agent.workspaceIds.filter((id) => id !== workspaceId);
@@ -260,7 +361,7 @@ export class AgentBridgeService {
       id: `evt_${uuid().replace(/-/g, '').slice(0, 16)}`,
       type: A2AEventType.AgentOffline,
       timestamp: new Date().toISOString(),
-      data: { agentId, isLocal: true },
+      data: { agentId: agent.agentId, sessionId: agent.sessionId, isLocal: true },
       workspaceId,
     });
 
@@ -272,7 +373,10 @@ export class AgentBridgeService {
   // -----------------------------------------------------------------------
 
   handleMessage(ws: WebSocket, raw: string): void {
-    const agentId = this.socketToAgent.get(ws);
+    // socketToAgent now maps to sessionId
+    const sessionId = this.socketToAgent.get(ws);
+    const agent = sessionId ? this.agents.get(sessionId) : undefined;
+    const agentId = agent?.agentId;
 
     let msg: BridgeMessage;
     try {
@@ -285,49 +389,44 @@ export class AgentBridgeService {
     switch (msg.type) {
       case 'register': {
         // Registration is handled separately in the WS handler (needs userId from auth)
-        // This handles re-registration over an existing connection
-        if (agentId) {
-          const agent = this.agents.get(agentId);
-          if (agent) {
-            if (Array.isArray(msg.capabilities)) {
-              agent.capabilities = msg.capabilities as string[];
-            }
-            if (Array.isArray(msg.workspaceIds)) {
-              for (const wsId of msg.workspaceIds as string[]) {
-                this.joinWorkspace(agentId, wsId);
-              }
-            }
-            this.sendToAgent(agentId, {
-              type: 'registered',
-              agentId,
-              workspaces: agent.workspaceIds,
-            });
+        // This handles capability/workspace updates over an existing connection
+        if (sessionId && agent) {
+          if (Array.isArray(msg.capabilities)) {
+            agent.capabilities = msg.capabilities as string[];
           }
+          if (Array.isArray(msg.workspaceIds)) {
+            for (const wsId of msg.workspaceIds as string[]) {
+              this.joinWorkspace(sessionId, wsId);
+            }
+          }
+          this.sendToAgent(sessionId, {
+            type: 'registered',
+            agentId,
+            sessionId,
+            workspaces: agent.workspaceIds,
+          });
         }
         break;
       }
 
       case 'heartbeat': {
-        if (agentId) {
-          const agent = this.agents.get(agentId);
-          if (agent) {
-            agent.lastHeartbeat = new Date().toISOString();
-            this.recordBridgeHeartbeat(agent);
-          }
+        if (sessionId && agent) {
+          agent.lastHeartbeat = new Date().toISOString();
+          this.recordBridgeHeartbeat(agent);
         }
         break;
       }
 
       case 'task.progress': {
-        if (!agentId) break;
-        const bus = getA2AEventBus();
-        bus.publish({
+        if (!sessionId || !agentId) break;
+        getA2AEventBus().publish({
           id: `evt_${uuid().replace(/-/g, '').slice(0, 16)}`,
           type: A2AEventType.TaskProgress,
           timestamp: new Date().toISOString(),
           taskId: msg.taskId as string,
           data: {
             agentId,
+            sessionId,
             progress: msg.progress,
             output: msg.output,
           },
@@ -336,11 +435,8 @@ export class AgentBridgeService {
       }
 
       case 'task.complete': {
-        if (!agentId) break;
-        const agent = this.agents.get(agentId);
-        if (agent) {
-          agent.status = 'idle';
-        }
+        if (!sessionId || !agentId) break;
+        if (agent) agent.status = 'idle';
         getA2AEventBus().publish({
           id: `evt_${uuid().replace(/-/g, '').slice(0, 16)}`,
           type: A2AEventType.TaskCompleted,
@@ -348,6 +444,7 @@ export class AgentBridgeService {
           taskId: msg.taskId as string,
           data: {
             agentId,
+            sessionId,
             result: msg.result,
           },
         });
@@ -355,11 +452,8 @@ export class AgentBridgeService {
       }
 
       case 'task.failed': {
-        if (!agentId) break;
-        const agent = this.agents.get(agentId);
-        if (agent) {
-          agent.status = 'idle';
-        }
+        if (!sessionId || !agentId) break;
+        if (agent) agent.status = 'idle';
         getA2AEventBus().publish({
           id: `evt_${uuid().replace(/-/g, '').slice(0, 16)}`,
           type: A2AEventType.TaskFailed,
@@ -367,6 +461,7 @@ export class AgentBridgeService {
           taskId: msg.taskId as string,
           data: {
             agentId,
+            sessionId,
             error: msg.error,
           },
         });
@@ -374,27 +469,26 @@ export class AgentBridgeService {
       }
 
       case 'channel.message': {
-        if (!agentId) break;
+        if (!sessionId || !agentId) break;
         const channelWorkspaceId = msg.channelId as string | undefined;
 
         // 1. Persist to collaboration service for history
         try {
-          const collab = getCollaborationSvc();
-          collab.sendMessage({
+          getCollaborationSvc().sendMessage({
             threadId: channelWorkspaceId || 'default',
             senderAgentId: agentId,
             text: msg.content as string,
           });
         } catch (err) {
-          logger.warn({ agentId, err }, 'failed to persist channel message');
+          logger.warn({ agentId, sessionId, err }, 'failed to persist channel message');
         }
 
-        // 2. Relay to all other agents in the same workspace via WebSocket
+        // 2. Relay to all other sessions in the same workspace (skip sender session)
         if (channelWorkspaceId) {
           for (const peer of this.agents.values()) {
-            if (peer.agentId === agentId) continue; // skip sender
+            if (peer.sessionId === sessionId) continue; // skip sender
             if (!peer.workspaceIds.includes(channelWorkspaceId)) continue;
-            this.sendToAgent(peer.agentId, {
+            this.sendToAgent(peer.sessionId, {
               type: 'channel.message',
               channelId: channelWorkspaceId,
               from: agentId,
@@ -420,37 +514,39 @@ export class AgentBridgeService {
 
       case 'intent': {
         // Sent by recoder-a2a MCP clients (recoder_send_task tool)
-        if (!agentId) break;
+        if (!sessionId || !agentId) break;
         const targetAgentId = msg.target as string;
         if (!targetAgentId) {
-          logger.warn({ agentId }, 'intent message missing target agent');
+          logger.warn({ agentId, sessionId }, 'intent message missing target agent');
           break;
         }
 
+        // Fan out to all sessions of the target agentId type
         const delivered = this.sendToAgent(targetAgentId, {
           type: 'task.assigned',
           taskId: `task_${uuid().replace(/-/g, '').slice(0, 16)}`,
           from: agentId,
+          fromSession: sessionId,
           intent: msg.intent || 'execute',
           prompt: msg.task as string,
-          context: { source: 'a2a-bridge', from: agentId },
+          context: { source: 'a2a-bridge', from: agentId, fromSession: sessionId },
         });
 
-        // Acknowledge back to sender
-        this.sendToAgent(agentId, {
+        // Acknowledge back to sender session
+        this.sendToAgent(sessionId, {
           type: 'intent.ack',
           target: targetAgentId,
           delivered,
           reason: delivered ? undefined : 'target agent not connected',
         });
 
-        // Publish event
         getA2AEventBus().publish({
           id: `evt_${uuid().replace(/-/g, '').slice(0, 16)}`,
           type: A2AEventType.TaskSubmitted,
           timestamp: new Date().toISOString(),
           data: {
             from: agentId,
+            fromSession: sessionId,
             target: targetAgentId,
             intent: msg.intent,
             task: msg.task,
@@ -459,16 +555,16 @@ export class AgentBridgeService {
         });
 
         logger.info(
-          { from: agentId, target: targetAgentId, delivered, intent: msg.intent },
+          { from: agentId, fromSession: sessionId, target: targetAgentId, delivered, intent: msg.intent },
           'intent routed via bridge',
         );
         break;
       }
 
       case 'join_workspace': {
-        if (agentId && msg.workspaceId) {
-          this.joinWorkspace(agentId, msg.workspaceId as string);
-          this.sendToAgent(agentId, {
+        if (sessionId && msg.workspaceId) {
+          this.joinWorkspace(sessionId, msg.workspaceId as string);
+          this.sendToAgent(sessionId, {
             type: 'workspace.joined',
             workspaceId: msg.workspaceId,
           });
@@ -477,9 +573,9 @@ export class AgentBridgeService {
       }
 
       case 'leave_workspace': {
-        if (agentId && msg.workspaceId) {
-          this.leaveWorkspace(agentId, msg.workspaceId as string);
-          this.sendToAgent(agentId, {
+        if (sessionId && msg.workspaceId) {
+          this.leaveWorkspace(sessionId, msg.workspaceId as string);
+          this.sendToAgent(sessionId, {
             type: 'workspace.left',
             workspaceId: msg.workspaceId,
           });
@@ -488,7 +584,7 @@ export class AgentBridgeService {
       }
 
       default:
-        logger.debug({ type: msg.type, agentId }, 'unknown bridge message type');
+        logger.debug({ type: msg.type, agentId, sessionId }, 'unknown bridge message type');
     }
   }
 
@@ -500,14 +596,14 @@ export class AgentBridgeService {
     // Every 60s, check for agents that haven't sent a heartbeat in 90s
     this.heartbeatInterval = setInterval(() => {
       const cutoff = Date.now() - 90_000;
-      for (const [agentId, agent] of this.agents) {
+      for (const [sessionId, agent] of this.agents) {
         const lastBeat = new Date(agent.lastHeartbeat).getTime();
         if (lastBeat < cutoff) {
-          logger.info({ agentId }, 'agent timed out, disconnecting');
+          logger.info({ agentId: agent.agentId, sessionId }, 'agent session timed out, disconnecting');
           try {
             agent.socket.close(1000, 'Heartbeat timeout');
           } catch { /* ignore */ }
-          this.unregisterAgent(agentId);
+          this.unregisterAgent(sessionId);
         }
       }
     }, 60_000);
@@ -555,6 +651,7 @@ export class AgentBridgeService {
     }
     this.agents.clear();
     this.socketToAgent.clear();
+    this.agentTypeIndex.clear();
   }
 }
 
