@@ -59,6 +59,7 @@ services:
       - RECODER_A2A_HANDOFF_HANDLER_URL=http://recoder-web:5173/api/a2a/intents/handoff
       - RECODER_A2A_TOOL_CALL_HANDLER_URL=http://recoder-web:5173/api/a2a/intents/tool_call
       - RECODER_A2A_DEFAULT_HANDLER_URL=http://recoder-web:5173/api/a2a/intents/execute
+      - RECODER_A2A_CANVAS_HANDLER_URL=http://recoder-agents:3001/api/canvas/push
       - RECODER_A2A_WORKER_TOKEN=${RECODER_A2A_WORKER_TOKEN}
       # A2A gateway identity and security
       - RECODER_A2A_AGENT_ID=docker-backend
@@ -66,11 +67,14 @@ services:
       - RECODER_A2A_BRIDGE_TOKEN=${RECODER_A2A_BRIDGE_TOKEN:-}
       - RECODER_A2A_EGRESS_ALLOWLIST=http://recoder-web:5173,http://openclaw-gateway:18789
       - RECODER_A2A_ALLOWED_AGENTS=codex,claude_code,recoder-web,docker-backend,openclaw-gateway,recoder-agency,recoder-pm
+      - QDRANT_URL=http://qdrant:6333
       # Tier-1 connector flags (runtime image installs codex/claude CLIs).
       - RECODER_A2A_ENABLE_CODEX=${RECODER_A2A_ENABLE_CODEX:-true}
       - RECODER_A2A_ENABLE_CLAUDE_CODE=${RECODER_A2A_ENABLE_CLAUDE_CODE:-true}
     depends_on:
       redis:
+        condition: service_healthy
+      qdrant:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-sf", "http://localhost:3100/health"]
@@ -405,9 +409,37 @@ services:
     profiles:
       - build-base
 
+  # ================================================================
+  # Qdrant — Vector store for agent memory and semantic code search
+  # ================================================================
+  qdrant:
+    image: qdrant/qdrant:v1.9.2
+    container_name: recoder-qdrant
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:6333:6333"
+    volumes:
+      - qdrant-data:/qdrant/storage
+    environment:
+      - QDRANT__SERVICE__HTTP_PORT=6333
+      - QDRANT__SERVICE__ENABLE_TLS=false
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:6333/healthz || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 1G
+    networks:
+      - recoder
+
 volumes:
   backend-data:
   redis-data:
+  qdrant-data:
   openclaw-config:
   openclaw-workspace:
   prometheus-data:
