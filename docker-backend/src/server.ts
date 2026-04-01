@@ -80,6 +80,10 @@ import { memoryRouter } from './a2a/memory.routes.js';
 import { codeSearchRouter } from './a2a/code-search.routes.js';
 import { searchRouter } from './a2a/search.routes.js';
 import { webhookRouter } from './a2a/webhook.routes.js';
+import { duckdbRouter } from './a2a/duckdb.routes.js';
+import { indexFile as codeSearchIndexFile } from './a2a/code-search.js';
+import { indexFile as meiliIndexFile, indexThread as meiliIndexThread } from './a2a/search-proxy.js';
+import { trackLlmCall, trackSandboxExec, trackFileOp, trackPublish } from './metering/openmeter-client.js';
 import { patternRouter } from './a2a/patterns/index.js';
 import { approvalRouter } from './policy/index.js';
 import { startA2AIntentWorker } from './a2a-intent-worker.js';
@@ -3357,6 +3361,24 @@ app.post('/api/file/:projectId', authenticateRequest, verifyProjectOwnership, as
       durationMs: Date.now() - fileOpStartTime,
     });
 
+    // ── Sprint E/F deep wiring: auto-index on file write ──
+    // Qdrant semantic code search — debounced re-index (non-blocking)
+    codeSearchIndexFile({ projectId, filePath: safePath, content }).catch((e: unknown) => {
+      logger.debug({ err: e, projectId, path: safePath }, 'code-search index skipped');
+    });
+    // Meilisearch full-text file index (non-blocking)
+    meiliIndexFile({ projectId, path: safePath, content }).catch((e: unknown) => {
+      logger.debug({ err: e, projectId, path: safePath }, 'meili file index skipped');
+    });
+    // OpenMeter usage metering
+    trackFileOp({
+      userId: req.userId ?? 'anonymous',
+      projectId,
+      operation: 'write',
+      filePath: safePath,
+      sizeBytes: Buffer.byteLength(content ?? '', 'utf8'),
+    });
+
     res.json({ success: true });
   } catch (err: any) {
     logger.error({ projectId, path: safePath, error: err.message, stack: err.stack?.split('\n')[1]?.trim() }, 'file write failed');
@@ -3498,6 +3520,19 @@ app.post('/api/files/:projectId/batch', authenticateRequest, verifyProjectOwners
       durationMs: Date.now() - batchOpStartTime,
       fileCount: sanitizedFiles.length,
     });
+
+    // ── Sprint E/F deep wiring: auto-index + meter every file in batch ──
+    for (const file of sanitizedFiles as Array<{ path: string; content: string }>) {
+      codeSearchIndexFile({ projectId, filePath: file.path, content: file.content }).catch(() => {});
+      meiliIndexFile({ projectId, path: file.path, content: file.content }).catch(() => {});
+      trackFileOp({
+        userId: req.userId ?? 'anonymous',
+        projectId,
+        operation: 'write',
+        filePath: file.path,
+        sizeBytes: Buffer.byteLength(file.content ?? '', 'utf8'),
+      });
+    }
 
     res.json({ success: failedFiles.length === 0, count: sanitizedFiles.length, failedFiles });
   } catch (err: any) {
@@ -4551,7 +4586,15 @@ app.post('/api/exec/:projectId', authenticateRequest, verifyProjectOwnership, as
       const dayCwd = cwd.replace(/\/workspace/g, '/home/daytona');
       const dayCmd = command.replace(/\/workspace\//g, '/home/daytona/').replace(/\/workspace(?=["'\s]|$)/g, '/home/daytona');
       // Don't add cd here — execCommand handles cwd internally
+      const execStartMs = Date.now();
       const result = await daytonaExec(entry.id, dayCmd, { cwd: dayCwd, timeoutSecs: 60 });
+      trackSandboxExec({
+        userId: req.userId ?? 'anonymous',
+        projectId,
+        command: command.slice(0, 200),
+        durationMs: Date.now() - execStartMs,
+        exitCode: result.exitCode ?? 0,
+      });
       return res.json({ output: result.output, success: result.exitCode === 0, exitCode: result.exitCode });
     }
 
@@ -4642,7 +4685,15 @@ app.post('/api/exec/:projectId', authenticateRequest, verifyProjectOwnership, as
        }
      }
 
+    const dockerExecStartMs = Date.now();
     const output = await execCommand(container, `cd "${cwd}" && ${command}`);
+    trackSandboxExec({
+      userId: req.userId ?? 'anonymous',
+      projectId,
+      command: command.slice(0, 200),
+      durationMs: Date.now() - dockerExecStartMs,
+      exitCode: 0,
+    });
     res.json({ output, success: true, exitCode: 0 });
   } catch (err: any) {
     const errMsg = err.message || '';
@@ -14932,6 +14983,7 @@ app.use('/api/a2a/memory', authenticateRequest, memoryRouter);
 app.use('/api/a2a/code-search', codeSearchRouter);
 app.use('/api/a2a/search', searchRouter);
 app.use('/api/a2a/webhook', webhookRouter);
+app.use('/api/a2a/data', duckdbRouter);
 app.use('/api/a2a', connectorHealthRouter);
 app.use('/api/a2a/patterns', patternRouter);
 app.use('/api/a2a', a2aOpenApiRouter);
@@ -15625,6 +15677,7 @@ app.post('/api/publish/:projectId', authenticateRequest, verifyProjectOwnership,
 
     const url = `https://web.recoder.xyz/published/${slug}`;
     logger.info({ projectId, url }, 'Publish: project published');
+    trackPublish({ userId: req.userId ?? 'anonymous', projectId, slug: slug!, target: 'web' });
 
     sendSuccess(res, { url, slug, publishedAt });
   } catch (error: any) {
