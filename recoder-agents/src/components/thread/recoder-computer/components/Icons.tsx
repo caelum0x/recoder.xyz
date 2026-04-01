@@ -1,4 +1,5 @@
 import { ReactNode } from 'react';
+import { isExcalidrawFileName } from '@/lib/canvas/excalidraw';
 
 export const FolderIcon = () => (
   <svg viewBox="0 0 64 64" className="w-full h-full">
@@ -234,6 +235,10 @@ interface FileIconInfo {
 export function getFileIconByName(fileName: string, isDirectory: boolean = false): ReactNode {
   if (isDirectory) {
     return <FolderIcon />;
+  }
+
+  if (isExcalidrawFileName(fileName)) {
+    return <ImageFileIcon />;
   }
   
   const ext = fileName.includes('.') 

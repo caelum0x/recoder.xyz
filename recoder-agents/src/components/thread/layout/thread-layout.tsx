@@ -11,6 +11,7 @@ import {
   ResizablePanel,
   ResizableHandle,
 } from '@/components/ui/resizable';
+import { isExcalidrawFileName } from '@/lib/canvas/excalidraw';
 import { useRecoderComputerStore } from '@/stores/recoder-computer-store';
 
 interface ThreadLayoutProps {
@@ -174,6 +175,10 @@ export const ThreadLayout = memo(function ThreadLayout({
 
   const isSuiteMode = useMemo(() => {
     if (selectedFilePath) {
+      if (isExcalidrawFileName(selectedFilePath)) {
+        return true;
+      }
+
       const ext = selectedFilePath.split('.').pop()?.toLowerCase();
       if (SUITE_MODE_FILE_EXTENSIONS.includes(ext || '')) {
         return true;

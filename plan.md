@@ -1,6 +1,6 @@
 # Recoder Platform — Master Plan
 
-Last updated: 2026-04-01 (recoder-web follow-up edit fixes pushed; live web verification still pending)
+Last updated: 2026-04-01 (recoder-web follow-up edit fixes pushed; Excalidraw board foundation landed in recoder-agents)
 
 ---
 
@@ -70,6 +70,9 @@ The roadmap below remains useful, but older claims elsewhere that the Nike prese
 *No new servers. No docker-compose changes. Pure npm install + code.*
 
 **A1. Excalidraw canvas in recoder-agents**
+- 2026-04-01 progress:
+  `recoder-agents` now supports dedicated `.excalidraw` and `.excalidraw.json` board files via `src/components/canvas/CanvasPanel.tsx`, while legacy `.kanvax` files remain on the existing backend image-composition contract.
+  Remaining A1 work is agent-side board creation/update tooling and live broadcast wiring (`recoder_canvas_update`) so agents can drive the board directly.
 - `npm install @excalidraw/excalidraw` in `recoder-agents`
 - Create `CanvasPanel.tsx` component wrapping `<Excalidraw>` with `initialData` prop
 - Add canvas tool to agent tool sidebar (replace broken FAL canvas)
