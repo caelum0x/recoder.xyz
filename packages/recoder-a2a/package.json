@@ -1,6 +1,6 @@
 {
   "name": "recoder-a2a",
-  "version": "2.6.0",
+  "version": "2.8.0",
   "description": "Recoder A2A MCP Server — Connect Claude Code, Codex, and Cursor to the Recoder platform",
   "bin": {
     "recoder-a2a": "index.js"

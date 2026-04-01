@@ -253,6 +253,73 @@ const TOOLS = [
     },
   },
   {
+    name: 'recoder_remember',
+    description: 'Store a persistent memory entry for this user. Memories survive across sessions and are semantically searchable. Use for preferences, facts, decisions, and patterns worth remembering.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        content: { type: 'string', description: 'What to remember (a fact, preference, decision, or pattern)' },
+        type: { type: 'string', enum: ['preference', 'fact', 'task', 'code', 'decision', 'error'], default: 'fact', description: 'Memory type for filtering' },
+        tags: { type: 'array', items: { type: 'string' }, description: 'Optional tags for categorization' },
+      },
+      required: ['content'],
+    },
+  },
+  {
+    name: 'recoder_recall',
+    description: 'Search persistent memory semantically. Returns the most relevant stored memories for a query. Use at session start to inject user context.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        query: { type: 'string', description: 'Natural language query to search memories' },
+        limit: { type: 'number', default: 10, description: 'Max results to return (1-50)' },
+        type: { type: 'string', enum: ['preference', 'fact', 'task', 'code', 'decision', 'error'], description: 'Filter by memory type (optional)' },
+      },
+      required: ['query'],
+    },
+  },
+  {
+    name: 'recoder_forget',
+    description: 'Delete a specific memory entry by ID (returned by recoder_recall).',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        id: { type: 'string', description: 'Memory entry ID to delete' },
+      },
+      required: ['id'],
+    },
+  },
+  {
+    name: 'recoder_search_code',
+    description: 'Semantic code search across an indexed project. Finds code by intent, not just exact text match. Example: "find all places where auth is checked".',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        project_id: { type: 'string', description: 'Project ID to search within' },
+        query: { type: 'string', description: 'Natural language query describing what you want to find' },
+        limit: { type: 'number', default: 10, description: 'Max results (1-20)' },
+      },
+      required: ['project_id', 'query'],
+    },
+  },
+  {
+    name: 'recoder_search',
+    description: 'Search across all Recoder platform content: threads, files, PM features, and agency projects. Uses Meilisearch hybrid (text + semantic) search. Results are cached per session for 1 hour.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        q: { type: 'string', description: 'Search query (natural language or keywords)' },
+        sources: {
+          type: 'array',
+          items: { type: 'string', enum: ['threads', 'files', 'pm_features', 'agency_items'] },
+          description: 'Content sources to search (default: all)',
+        },
+        limit: { type: 'number', default: 10, description: 'Max results (1-50)' },
+      },
+      required: ['q'],
+    },
+  },
+  {
     name: 'recoder_canvas_update',
     description: 'Push live Excalidraw element updates to a canvas board open in the Recoder agents UI. The browser\'s CanvasPanel will call updateScene() immediately, adding or replacing elements without a full reload.',
     inputSchema: {
@@ -527,6 +594,75 @@ async function handleToolCall(name, args) {
       return `Task ${args.task_id} → ${targetState}.\nState: ${transData.data?.state || transData.state}`;
     }
 
+    case 'recoder_remember': {
+      const body = {
+        content: args.content,
+        type: args.type || 'fact',
+        tags: args.tags || [],
+        agentId: AGENT_ID,
+      };
+      const data = await apiFetch(`${DOCKER_URL}/api/a2a/memory`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      const entry = data.data;
+      return `Memory stored.\nID: ${entry.id}\nType: ${entry.type}\nContent: ${entry.content.slice(0, 120)}`;
+    }
+
+    case 'recoder_recall': {
+      const limit = Math.min(Math.max(Number(args.limit) || 10, 1), 50);
+      const body = { query: args.query, limit, ...(args.type ? { type: args.type } : {}) };
+      const data = await apiFetch(`${DOCKER_URL}/api/a2a/memory/search`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      const entries = data.data || [];
+      if (!entries.length) return 'No relevant memories found.';
+      return entries.map((e, i) =>
+        `[${i + 1}] ID:${e.id} type:${e.type} score:${e.score?.toFixed(2) ?? '?'} tags:${(e.tags || []).join(',') || 'none'}\n    ${e.content.slice(0, 200)}`
+      ).join('\n\n');
+    }
+
+    case 'recoder_forget': {
+      const data = await apiFetch(`${DOCKER_URL}/api/a2a/memory/${encodeURIComponent(args.id)}`, {
+        method: 'DELETE',
+      });
+      return data.data?.deleted ? `Memory ${args.id} deleted.` : `Memory ${args.id} not found.`;
+    }
+
+    case 'recoder_search_code': {
+      if (!args.project_id || !args.query) throw new Error('project_id and query are required');
+      const limit = Math.min(Math.max(Number(args.limit) || 10, 1), 20);
+      const data = await apiFetch(`${DOCKER_URL}/api/a2a/code-search/search`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ projectId: args.project_id, query: args.query, limit }),
+      });
+      const results = data.data || [];
+      if (!results.length) return 'No code matches found. The project may not be indexed yet.';
+      return results.map((r, i) =>
+        `[${i + 1}] ${r.filePath} lines ${r.lineStart}-${r.lineEnd} (score:${r.score?.toFixed(2) ?? '?'})\n${r.content.slice(0, 300)}`
+      ).join('\n\n---\n\n');
+    }
+
+    case 'recoder_search': {
+      if (!args.q) throw new Error('q (query) is required');
+      const limit = Math.min(Math.max(Number(args.limit) || 10, 1), 50);
+      const body = { q: args.q, limit, ...(args.sources ? { sources: args.sources } : {}) };
+      const data = await apiFetch(`${DOCKER_URL}/api/a2a/search`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      const results = data.data || [];
+      if (!results.length) return 'No results found.';
+      return results.map((r, i) =>
+        `[${i + 1}] [${r.source}] ${r.title} (score:${r.score?.toFixed(2) ?? '?'})\n    ${r.snippet.replace(/\n/g, ' ').slice(0, 200)}`
+      ).join('\n\n');
+    }
+
     case 'recoder_canvas_update': {
       if (!args.project_id || !Array.isArray(args.elements)) {
         throw new Error('project_id and elements[] are required');
@@ -557,7 +693,7 @@ async function handleMessage(msg) {
       respond(id, {
         protocolVersion: '2024-11-05',
         capabilities: { tools: {} },
-        serverInfo: { name: 'recoder-a2a', version: '2.6.0' },
+        serverInfo: { name: 'recoder-a2a', version: '2.8.0' },
       });
       break;
     case 'notifications/initialized':
