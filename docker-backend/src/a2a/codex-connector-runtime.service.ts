@@ -28,6 +28,8 @@ import {
   AuditSeverityEnum,
 } from '@recoder/shared/a2a';
 import { getAgentRegistryService } from './agent-registry.service';
+import { getA2AEventBus, A2AEventType } from './a2a-event-bus';
+import { extractTaskStreamChunk } from './task-stream-payload';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -76,6 +78,8 @@ export interface CodexExecuteInput {
   taskId: string;
   prompt: string;
   requester: RecoderAgentIdentity;
+  workspaceId?: string;
+  threadId?: string;
   /** Optional artifacts (files) to pass to Codex. */
   artifacts?: Array<{ filename: string; content: string }>;
 }
@@ -152,6 +156,7 @@ export class CodexConnectorRuntime extends EventEmitter {
   private lastError: string | null = null;
   private stderrBuffer: string[] = [];
   private activeTasks = new Set<string>();
+  private taskContexts = new Map<string, { workspaceId?: string; threadId?: string }>();
 
   constructor(config?: Partial<CodexConnectorConfig>) {
     super();
@@ -270,6 +275,10 @@ export class CodexConnectorRuntime extends EventEmitter {
     }
 
     this.activeTasks.add(input.taskId);
+    this.taskContexts.set(input.taskId, {
+      workspaceId: input.workspaceId,
+      threadId: input.threadId,
+    });
     this.lastActivity = new Date().toISOString();
 
     try {
@@ -296,7 +305,9 @@ export class CodexConnectorRuntime extends EventEmitter {
             ? resultObj.message
             : JSON.stringify(result);
 
+      this.publishTaskStream(input.taskId, resultText, true);
       this.activeTasks.delete(input.taskId);
+      this.taskContexts.delete(input.taskId);
 
       return {
         taskId: input.taskId,
@@ -306,7 +317,10 @@ export class CodexConnectorRuntime extends EventEmitter {
       };
     } catch (err) {
       this.activeTasks.delete(input.taskId);
+      this.taskContexts.delete(input.taskId);
       const message = err instanceof Error ? err.message : String(err);
+
+      this.publishTaskStream(input.taskId, message, true);
 
       this.emit('audit', createAuditEvent({
         id: `evt_${randomUUID()}`,
@@ -332,6 +346,7 @@ export class CodexConnectorRuntime extends EventEmitter {
   /** Cancel a task via tasks/cancel. */
   async cancelTask(taskId: string): Promise<unknown> {
     this.activeTasks.delete(taskId);
+    this.taskContexts.delete(taskId);
     return this.sendJsonRpc('tasks/cancel', { id: taskId });
   }
 
@@ -442,6 +457,10 @@ export class CodexConnectorRuntime extends EventEmitter {
         // Emit generic message events for streaming
         if (msg.method === 'tasks/update') {
           this.emit('task-update', msg.params);
+          const taskId = this.resolveTaskId(msg.params);
+          if (taskId) {
+            this.publishTaskStream(taskId, extractTaskStreamChunk(msg.params));
+          }
         }
       } catch {
         // Not JSON — ignore
@@ -543,6 +562,41 @@ export class CodexConnectorRuntime extends EventEmitter {
     } catch {
       // Registry may not be available — non-fatal
     }
+  }
+
+  private resolveTaskId(payload: unknown): string | null {
+    if (payload && typeof payload === 'object') {
+      const taskId = (payload as Record<string, unknown>).taskId;
+      if (typeof taskId === 'string' && taskId.trim().length > 0) return taskId;
+      const id = (payload as Record<string, unknown>).id;
+      if (typeof id === 'string' && id.trim().length > 0) return id;
+      const taskIdSnake = (payload as Record<string, unknown>).task_id;
+      if (typeof taskIdSnake === 'string' && taskIdSnake.trim().length > 0) return taskIdSnake;
+    }
+
+    if (this.activeTasks.size === 1) {
+      return Array.from(this.activeTasks)[0] ?? null;
+    }
+
+    return null;
+  }
+
+  private publishTaskStream(taskId: string, chunk: string, done = false): void {
+    if (!taskId || (!chunk && !done)) return;
+
+    const context = this.taskContexts.get(taskId);
+    getA2AEventBus().publish({
+      id: `evt_${randomUUID()}`,
+      type: A2AEventType.TaskStream,
+      timestamp: new Date().toISOString(),
+      taskId,
+      workspaceId: context?.workspaceId,
+      data: {
+        agentId: CODEX_CONNECTOR_IDENTITY.id,
+        chunk,
+        done,
+      },
+    });
   }
 }
 

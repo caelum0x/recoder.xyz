@@ -76,6 +76,17 @@ vi.mock('./agent-registry.service', () => ({
   }),
 }));
 
+const publishMock = vi.fn();
+
+vi.mock('../a2a-event-bus', () => ({
+  A2AEventType: {
+    TaskStream: 'task.stream',
+  },
+  getA2AEventBus: () => ({
+    publish: publishMock,
+  }),
+}));
+
 // ---------------------------------------------------------------------------
 // Import after mocks
 // ---------------------------------------------------------------------------
@@ -402,6 +413,7 @@ describe('WindsurfConnectorRuntime', () => {
         method: 'tasks/update',
         params: {
           taskId: 'task-123',
+          message: 'Windsurf is applying edits',
           state: 'completed',
         },
       }) + '\n',
@@ -412,6 +424,15 @@ describe('WindsurfConnectorRuntime', () => {
       state: 'completed',
     }));
     expect(runtime.getState().activeTasks).toBe(0);
+    expect(publishMock).toHaveBeenCalledWith(expect.objectContaining({
+      type: 'task.stream',
+      taskId: 'task-123',
+      data: expect.objectContaining({
+        agentId: 'windsurf-connector',
+        chunk: 'Windsurf is applying edits',
+        done: false,
+      }),
+    }));
   });
 
   it('returns failure when connector is not running', async () => {

@@ -1,6 +1,6 @@
 # Recoder Platform — Master Plan
 
-Last updated: 2026-04-01 (Hetzner safe cleanup reduced unexpected checkout drift from 45 to 17; the workflow metering/qdrant overlap is landed, and the agents file-proxy HEAD mismatch is now deployed on the backend)
+Last updated: 2026-04-01 (Hetzner safe cleanup reduced unexpected checkout drift from 45 to 17; workflow streaming producers are now landed for workflow/Codex/Claude/Windsurf, and TodoWrite now mirrors into the shared A2A scratchpad in agent-backed sessions)
 
 ---
 
@@ -761,7 +761,7 @@ Two Claude Code instances → two different fingerprints → inbox deduplication
 { id, title, description, status, owner, claimedBy, dependencies, createdBy, createdAt, completedAt }
 ```
 
-**TodoWrite sync**: When Claude Code calls `TodoWrite`, the A2A MCP server intercepts it and mirrors the todo list to the shared task board under the current session. Codex (and the user via dashboard) sees Claude's active todos live.
+**TodoWrite sync**: The branch now has the data-plane foundation for this, but the correct interception point turned out to be the tool itself instead of the MCP server. In agent-backed Recoder sessions, `packages/recoder-code/.../todoWrite.ts` mirrors the current todo list to the shared A2A scratchpad under `todo-board:<agentId>` while keeping the local per-session todo JSON as the source of truth. That gives other agents shared visibility without filesystem access. The longer-term Redis/dashboard board can build on the same normalized todo data.
 
 **Planning session**: A2A task type `{ type: "plan", goal }` — both Claude and Codex receive it. Claude decomposes into subtasks. Codex reviews and adds its own. Both negotiate ownership. Result: a shared task tree with assigned owners that both can execute against.
 
@@ -771,7 +771,7 @@ Two Claude Code instances → two different fingerprints → inbox deduplication
 
 **What to build**:
 - `recoder_create_task`, `recoder_claim_task`, `recoder_update_task`, `recoder_task_board` MCP tools
-- TodoWrite hook that syncs Claude's todos to the shared board
+- Promote the current TodoWrite scratchpad mirror into a first-class shared board/dashboard surface
 - Dependency resolver in the bridge: gates task dispatch until deps are met
 - PM webhook: completed tasks with `type: "feature"` call `/api/features` on recoder-pm
 
@@ -876,7 +876,10 @@ recoder_subscribe_scratchpad({ key: "research/*" })  // notified on writes
 - Branch already had the bridge-side streaming foundation in `4322699e`: subscribe, fan-out, and interrupt over the A2A bridge.
 - The remaining MCP-side gap is now closed for consumers: `recoder_stream_task` uses MCP `notifications/progress` when the caller provides a `progressToken`, so chunk updates are request-scoped instead of only appearing as generic debug notifications.
 - Backend event taxonomy now includes typed `task.stream` and `task.interrupted` events, with regression coverage for bridge fan-out, cleanup on `done=true`, and interrupt routing.
-- Remaining work is narrower than before: more execution runtimes still need to actively emit `task.stream` during long-running work. The consumer contract, bridge transport, and interrupt path are no longer the blocker.
+- Producer-side adoption is now landed too for the main long-running execution paths:
+  - `workflow-step-executor` publishes typed `task.stream` chunks/finals during OpenRouter SSE execution
+  - `codex-connector-runtime`, `claude-connector-runtime`, and `windsurf-connector-runtime` now publish typed `task.stream` events while they work instead of only local update notifications
+- Remaining work is live verification and any future runtime-specific adoption beyond those paths. The consumer contract, bridge transport, and core producer contract are no longer the blocker.
 
 **What to build**:
 - Streaming task response type: `{ taskId, chunk, done: false }` messages over WebSocket

@@ -22,6 +22,7 @@ describe('TodoWriteTool', () => {
   let tool: TodoWriteTool;
   let mockAbortSignal: AbortSignal;
   let mockConfig: Config;
+  const fetchMock = vi.fn();
 
   beforeEach(() => {
     mockConfig = {
@@ -30,9 +31,13 @@ describe('TodoWriteTool', () => {
     tool = new TodoWriteTool(mockConfig);
     mockAbortSignal = new AbortController().signal;
     vi.clearAllMocks();
+    vi.stubGlobal('fetch', fetchMock);
+    vi.unstubAllEnvs();
   });
 
   afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
     vi.restoreAllMocks();
   });
 
@@ -154,6 +159,7 @@ describe('TodoWriteTool', () => {
         expect.stringContaining('"todos"'),
         'utf-8',
       );
+      expect(fetchMock).not.toHaveBeenCalled();
     });
 
     it('should replace todos with new ones', async () => {
@@ -232,6 +238,76 @@ describe('TodoWriteTool', () => {
         expect.stringContaining('test-session-123.json'),
         expect.stringContaining('"todos"'),
         'utf-8',
+      );
+    });
+
+    it('mirrors todos to the shared scratchpad in agent-backed sessions', async () => {
+      const params: TodoWriteParams = {
+        todos: [{ id: '1', content: 'Shared Task', status: 'in_progress' }],
+      };
+
+      vi.stubEnv('RECODER_DOCKER_URL', 'https://docker.recoder.xyz');
+      vi.stubEnv('RECODER_AGENT_ID', 'codex');
+      vi.stubEnv('RECODER_SESSION_ID', 'shared-session-1');
+      vi.stubEnv('RECODER_API_TOKEN', 'secret-token');
+      fetchMock.mockResolvedValue({
+        ok: true,
+      } as Response);
+      mockFs.mkdir.mockResolvedValue(undefined);
+      mockFs.writeFile.mockResolvedValue(undefined);
+
+      const invocation = tool.build(params);
+      const result = await invocation.execute(mockAbortSignal);
+
+      expect(result.llmContent).toContain('success');
+      expect(fetchMock).toHaveBeenCalledWith(
+        'https://docker.recoder.xyz/api/a2a/scratchpad/write',
+        expect.objectContaining({
+          method: 'POST',
+          headers: expect.objectContaining({
+            'Content-Type': 'application/json',
+            Authorization: 'Bearer secret-token',
+          }),
+        }),
+      );
+
+      const [, request] = fetchMock.mock.calls[0] as [string, RequestInit];
+      const payload = JSON.parse(String(request.body));
+      expect(payload.sessionId).toBe('shared-session-1');
+      expect(payload.agentId).toBe('codex');
+      expect(payload.key).toBe('todo-board:codex');
+      expect(request.signal).toBeDefined();
+      expect(payload.value).toEqual(
+        expect.objectContaining({
+          type: 'todo_board',
+          agentId: 'codex',
+          localSessionId: 'test-session-123',
+          todos: params.todos,
+        }),
+      );
+    });
+
+    it('keeps local todo writes successful when scratchpad mirroring fails', async () => {
+      const params: TodoWriteParams = {
+        todos: [{ id: '1', content: 'Fallback Task', status: 'pending' }],
+      };
+
+      vi.stubEnv('RECODER_DOCKER_URL', 'https://docker.recoder.xyz');
+      vi.stubEnv('RECODER_AGENT_ID', 'claude_code');
+      vi.stubEnv('RECODER_SESSION_ID', 'shared-session-2');
+      fetchMock.mockRejectedValue(new Error('network down'));
+      mockFs.mkdir.mockResolvedValue(undefined);
+      mockFs.writeFile.mockResolvedValue(undefined);
+
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const invocation = tool.build(params);
+      const result = await invocation.execute(mockAbortSignal);
+
+      expect(result.llmContent).toContain('success');
+      expect(mockFs.writeFile).toHaveBeenCalled();
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(warnSpy).toHaveBeenCalledWith(
+        expect.stringContaining('[TodoWriteTool] Scratchpad mirror skipped: network down'),
       );
     });
   });

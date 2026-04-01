@@ -55,9 +55,24 @@ vi.mock('../agent-registry.service', () => ({
   }),
 }));
 
-vi.mock('@recoder/shared/a2a', () => ({
-  envelopeToClaudeCode: vi.fn((msg: unknown) => msg),
-  claudeCodeToEnvelope: vi.fn((msg: unknown) => ({ converted: true, ...msg as object })),
+vi.mock('@recoder/shared/a2a', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@recoder/shared/a2a')>();
+  return {
+    ...actual,
+    envelopeToClaudeCode: vi.fn((msg: unknown) => msg),
+    claudeCodeToEnvelope: vi.fn((msg: unknown) => ({ converted: true, ...(msg as object) })),
+  };
+});
+
+const publishMock = vi.fn();
+
+vi.mock('../a2a-event-bus', () => ({
+  A2AEventType: {
+    TaskStream: 'task.stream',
+  },
+  getA2AEventBus: () => ({
+    publish: publishMock,
+  }),
 }));
 
 // ---------------------------------------------------------------------------
@@ -507,6 +522,15 @@ describe('ClaudeConnectorRuntime', () => {
       expect(result.resultText).toBe('Tool result');
       expect(result.raw).toBeDefined();
       expect(result.envelope).toBeDefined();
+      expect(publishMock).toHaveBeenCalledWith(expect.objectContaining({
+        type: 'task.stream',
+        taskId: 'task-1',
+        data: expect.objectContaining({
+          agentId: 'claude-code-connector',
+          chunk: 'Tool result',
+          done: true,
+        }),
+      }));
     });
 
     it('emits task:start and task:complete events', async () => {
@@ -943,7 +967,7 @@ describe('ClaudeConnectorRuntime', () => {
         JSON.stringify({
           jsonrpc: '2.0',
           method: 'notifications/progress',
-          params: { taskId: 'task-x', progress: 50 },
+          params: { taskId: 'task-x', progress: 50, message: 'Indexing files' },
         }) + '\n',
       );
 
@@ -951,6 +975,15 @@ describe('ClaudeConnectorRuntime', () => {
 
       expect(notifications.length).toBe(1);
       expect(notifications[0].method).toBe('notifications/progress');
+      expect(publishMock).toHaveBeenCalledWith(expect.objectContaining({
+        type: 'task.stream',
+        taskId: 'task-x',
+        data: expect.objectContaining({
+          agentId: 'claude-code-connector',
+          chunk: 'Indexing files',
+          done: false,
+        }),
+      }));
     });
 
     it('ignores non-JSON lines in stdout', async () => {
