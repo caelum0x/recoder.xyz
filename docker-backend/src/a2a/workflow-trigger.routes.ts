@@ -61,7 +61,7 @@ router.post('/run', async (req: Request, res: Response) => {
 
 // POST /api/a2a/workflows/run-steps
 // Execute a list of workflow steps directly (bypass Hatchet for ad-hoc runs).
-// This is the deep execution path — each step runs through the real executors.
+// Each step type has a concrete executor: llm, http, code, branch, trigger.
 router.post('/run-steps', async (req: Request, res: Response) => {
   const { steps, context = {} } = req.body as {
     steps?: Array<{
@@ -77,23 +77,7 @@ router.post('/run-steps', async (req: Request, res: Response) => {
   }
 
   try {
-    // Dynamic import to avoid circular dependency issues
-    const { executeWorkflowSteps } = await import(
-      '../../recoder-agency/apps/agency/app/workers/workflow-worker.js'
-    ).catch(() => {
-      // If the agency worker is not accessible, use inline execution
-      return {
-        executeWorkflowSteps: async (
-          _steps: unknown[],
-          _ctx: Record<string, unknown>,
-        ) => ({
-          success: false as const,
-          results: [{ step: 'init', type: 'error', output: { error: 'workflow-worker not accessible from docker-backend' }, durationMs: 0 }],
-          context: _ctx,
-        }),
-      };
-    });
-
+    const { executeWorkflowSteps } = await import('./workflow-step-executor.js');
     const result = await executeWorkflowSteps(steps, context);
     ok(res, result);
   } catch (err) {
