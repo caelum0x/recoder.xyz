@@ -310,6 +310,8 @@ export function CanvasToolView({
                 content={typeof canvasContent === 'string' ? canvasContent : ''}
                 fileName={fileName}
                 className="h-full w-full"
+                filePath={resolvedCanvasPath || undefined}
+                sandboxId={sandboxId}
               />
             ) : (
               <CanvasRenderer

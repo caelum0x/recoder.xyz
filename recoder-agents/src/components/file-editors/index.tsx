@@ -248,6 +248,8 @@ export function EditableFileRenderer({
             fileName={fileName}
             className="h-full w-full"
             onSave={onSave}
+            filePath={filePath}
+            sandboxId={project?.sandbox?.id}
           />
         ) : (
           <CanvasRenderer
@@ -331,4 +333,3 @@ export { UnifiedMarkdown } from '@/components/markdown';
 
 // Re-export utilities
 export { processUnicodeContent, getFileTypeFromExtension, getLanguageFromExtension } from './utils';
-

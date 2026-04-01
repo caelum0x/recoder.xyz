@@ -53,11 +53,12 @@ This supersedes older notes that still describe agent canvas mode as a design/ba
   - mode panel, chat input label, and new-thread canvas starter now all use the same Excalidraw-oriented board actions/prompts
   - legacy stored action ids normalize cleanly to the new board actions so existing local UI state does not break
   - thread tool-view routing now recognizes `.excalidraw` board writes and refreshes them through the inline canvas view instead of only treating `.kanvax` files as canvas updates
+  - `CanvasPanel` now reacts to the same `canvas-tool-updated` file-refresh events, refetching the matching board file from the sandbox so open Excalidraw editors update after agent file writes even without a separate `recoder_canvas_update` call
 - Local verification:
-  - `pnpm --dir recoder-agents exec vitest run src/lib/canvas/excalidraw.test.ts src/lib/utils/file-types.test.ts src/lib/canvas/mode-config.test.ts src/components/thread/tool-views/canvas-tool/_utils.test.ts` passed
+  - `pnpm --dir recoder-agents exec vitest run src/lib/canvas/excalidraw.test.ts src/lib/canvas/mode-config.test.ts src/lib/canvas/live-updates.test.ts src/lib/utils/file-types.test.ts src/components/thread/tool-views/canvas-tool/_utils.test.ts` passed
 - Remaining A1 work:
   - deploy/browser-verify the new canvas mode flow
-  - add agent-side board mutation/live broadcast (`recoder_canvas_update`) so agents can actively draw/update the board after creation
+  - strengthen explicit agent-side board mutation/live broadcast (`recoder_canvas_update`) so agents can actively draw/update the board incrementally without depending on file-write refreshes
 
 ## 2026-04-01 Correction (Hetzner infra)
 
