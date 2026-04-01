@@ -17,6 +17,10 @@ This section supersedes older Redis / `web.recoder.xyz` runtime notes below.
   1. the runtime image pruned `vite-plugin-node-polyfills`
   2. the built Remix server bundle still imported `vite-plugin-node-polyfills/shims/buffer`
   3. after restart, `web.recoder.xyz/api/health` returned `500` until the runtime package was restored
+- The deploy environment path is also normalized again:
+  1. the repo root `.env` is now excluded from deploy rsync
+  2. the deploy script owns the minimal Hetzner root `.env` used for Compose interpolation
+  3. ad-hoc `docker compose -f docker-compose.deploy.yml config` on Hetzner no longer emits misleading unset-variable warnings for the shared deploy vars
 - Both are now fixed live:
   - production Redis was migrated onto a proper `recoder-redis` container with `--requirepass`
   - `recoder-backend` was restarted and `docker.recoder.xyz/health` is healthy again with A2A enabled
