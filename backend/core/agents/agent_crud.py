@@ -484,7 +484,7 @@ async def delete_agent(agent_id: str, user_id: str = Depends(verify_and_get_user
         raise
     except Exception as e:
         logger.error(f"Error deleting agent {agent_id}: {str(e)}")
-        raise HTTPException(status_code=500, detail="Internal server error")
+        raise HTTPException(status_code=500, detail=f"Internal error: {type(e).__name__}: {e}")
 
 @router.get("/agents", response_model=AgentsResponse, summary="List Agents", operation_id="list_agents")
 async def get_agents(

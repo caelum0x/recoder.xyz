@@ -177,7 +177,7 @@ async def create_template_from_agent(
         except Exception:
             error_str = f"Error of type {type(e).__name__}"
         logger.error(f"Error creating template from agent {request.agent_id}: {error_str}")
-        raise HTTPException(status_code=500, detail="Internal server error")
+        raise HTTPException(status_code=500, detail=f"Internal error: {type(e).__name__}: {e}")
 
 
 @router.post("/{template_id}/publish")
@@ -218,7 +218,7 @@ async def publish_template(
         except Exception:
             error_str = f"Error of type {type(e).__name__}"
         logger.error(f"Error publishing template {template_id}: {error_str}")
-        raise HTTPException(status_code=500, detail="Internal server error")
+        raise HTTPException(status_code=500, detail=f"Internal error: {type(e).__name__}: {e}")
 
 
 @router.post("/{template_id}/unpublish")
@@ -250,7 +250,7 @@ async def unpublish_template(
         except Exception:
             error_str = f"Error of type {type(e).__name__}"
         logger.error(f"Error unpublishing template {template_id}: {error_str}")
-        raise HTTPException(status_code=500, detail="Internal server error")
+        raise HTTPException(status_code=500, detail=f"Internal error: {type(e).__name__}: {e}")
 
 
 @router.delete("/{template_id}")
@@ -282,7 +282,7 @@ async def delete_template(
         except Exception:
             error_str = f"Error of type {type(e).__name__}"
         logger.error(f"Error deleting template {template_id}: {error_str}")
-        raise HTTPException(status_code=500, detail="Internal server error")
+        raise HTTPException(status_code=500, detail=f"Internal error: {type(e).__name__}: {e}")
 
 
 @router.post("/install", response_model=InstallationResponse)
@@ -351,7 +351,7 @@ async def install_template(
         except Exception:
             error_str = f"Error of type {type(e).__name__}"
         logger.error(f"Error installing template {request.template_id}: {error_str}")
-        raise HTTPException(status_code=500, detail="Internal server error")
+        raise HTTPException(status_code=500, detail=f"Internal error: {type(e).__name__}: {e}")
 
 
 from core.utils.pagination import PaginationParams
@@ -415,7 +415,7 @@ async def get_all_recoder_templates(
         except Exception:
             error_str = f"Error of type {type(e).__name__}"
         logger.error(f"Error getting all Recoder templates: {error_str}")
-        raise HTTPException(status_code=500, detail="Internal server error")
+        raise HTTPException(status_code=500, detail=f"Internal error: {type(e).__name__}: {e}")
 
 @router.get("/marketplace", response_model=MarketplaceTemplatesResponse)
 async def get_marketplace_templates(
@@ -488,7 +488,7 @@ async def get_marketplace_templates(
         except Exception:
             error_str = f"Error of type {type(e).__name__}"
         logger.error(f"Error getting marketplace templates: {error_str}")
-        raise HTTPException(status_code=500, detail="Internal server error")
+        raise HTTPException(status_code=500, detail=f"Internal error: {type(e).__name__}: {e}")
 
 
 @router.get("/my", response_model=MarketplaceTemplatesResponse)
@@ -545,7 +545,7 @@ async def get_my_templates(
         except Exception:
             error_str = f"Error of type {type(e).__name__}"
         logger.error(f"Error getting templates for user {user_id}: {error_str}")
-        raise HTTPException(status_code=500, detail="Internal server error")
+        raise HTTPException(status_code=500, detail=f"Internal error: {type(e).__name__}: {e}")
 
 
 @router.get("/public/{template_id}", response_model=TemplateResponse)
@@ -587,7 +587,7 @@ async def get_public_template(template_id: str):
         except Exception:
             error_str = f"Error of type {type(e).__name__}"
         logger.error(f"Unexpected error getting public template {template_id}: {error_str}")
-        raise HTTPException(status_code=500, detail="Internal server error")
+        raise HTTPException(status_code=500, detail=f"Internal error: {type(e).__name__}: {e}")
 
 
 @router.get("/{template_id}", response_model=TemplateResponse)
@@ -613,4 +613,4 @@ async def get_template(
         except Exception:
             error_str = f"Error of type {type(e).__name__}"
         logger.error(f"Error getting template {template_id}: {error_str}")
-        raise HTTPException(status_code=500, detail="Internal server error")
+        raise HTTPException(status_code=500, detail=f"Internal error: {type(e).__name__}: {e}")

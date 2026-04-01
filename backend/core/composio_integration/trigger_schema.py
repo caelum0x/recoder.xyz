@@ -45,4 +45,4 @@ class TriggerSchemaService:
             raise HTTPException(status_code=500, detail="Failed to fetch trigger schema")
         except Exception as e:
             logger.error(f"Unexpected error fetching trigger schema: {e}")
-            raise HTTPException(status_code=500, detail="Internal server error")
+            raise HTTPException(status_code=500, detail=f"Internal error: {type(e).__name__}: {e}")

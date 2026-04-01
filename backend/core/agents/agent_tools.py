@@ -95,7 +95,7 @@ async def get_custom_mcp_tools_for_agent(
         raise
     except Exception as e:
         logger.error(f"Error getting custom MCP tools for agent {agent_id}: {e}")
-        raise HTTPException(status_code=500, detail="Internal server error")
+        raise HTTPException(status_code=500, detail=f"Internal error: {type(e).__name__}: {e}")
 
 @router.post("/agents/{agent_id}/custom-mcp-tools", summary="Update Agent Custom MCP Tools", operation_id="update_agent_custom_mcp_tools")
 async def update_custom_mcp_tools_for_agent(
@@ -216,7 +216,7 @@ async def update_custom_mcp_tools_for_agent(
         raise
     except Exception as e:
         logger.error(f"Error updating custom MCP tools for agent {agent_id}: {e}")
-        raise HTTPException(status_code=500, detail="Internal server error")
+        raise HTTPException(status_code=500, detail=f"Internal error: {type(e).__name__}: {e}")
 
 @router.put("/agents/{agent_id}/custom-mcp-tools", summary="Update Agent Custom MCPs", operation_id="update_agent_custom_mcps")
 async def update_agent_custom_mcps(
@@ -344,7 +344,7 @@ async def update_agent_custom_mcps(
         raise
     except Exception as e:
         logger.error(f"Error updating agent custom MCPs: {e}")
-        raise HTTPException(status_code=500, detail="Internal server error")
+        raise HTTPException(status_code=500, detail=f"Internal error: {type(e).__name__}: {e}")
 
 @router.get("/agents/{agent_id}/tools", summary="Get Agent Tools", operation_id="get_agent_tools")
 async def get_agent_tools(
