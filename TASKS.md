@@ -1,6 +1,6 @@
 # Recoder Platform — Task List
 
-Last updated: 2026-04-01 (Hetzner safe cleanup reduced unexpected checkout drift from 45 to 17; remaining work is split into branch-sync vs local-overlap buckets)
+Last updated: 2026-04-01 (Hetzner safe cleanup reduced unexpected checkout drift from 45 to 17; remaining work is split into branch-sync vs local-overlap buckets, and one workflow/deploy overlap slice is now being landed with tests)
 
 ---
 
@@ -101,6 +101,7 @@ This supersedes older task notes that still treat deploy-network breakage, root 
   - the remaining 17 are now split into:
     - `recoder-0xz` — 7 host-untracked but branch-tracked additions that should arrive via clean checkout sync/deploy
     - `recoder-h3y` — 10 entries that overlap current local work and need manual reconciliation
+  - `recoder-32x` is the active overlap sub-slice for the remaining workflow-step metering hooks and the portable Qdrant healthcheck change; those are being landed with focused validation instead of carried as local dirt
 
 ## Immediate Follow-ups
 
