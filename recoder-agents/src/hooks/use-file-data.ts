@@ -6,7 +6,7 @@
 import React from 'react';
 import { useFileContentQuery } from './files/use-file-queries';
 import { getFileType } from '@/lib/utils/file-utils';
-import { isImageFile, isPdfExtension, isSpreadsheetExtension, isCsvExtension, isHtmlExtension, isMarkdownExtension, isJsonExtension, isVideoExtension, isTextExtension, isKanvaxExtension, isDocxExtension } from '@/lib/utils/file-types';
+import { isImageFile, isPdfExtension, isSpreadsheetExtension, isCsvExtension, isHtmlExtension, isMarkdownExtension, isJsonExtension, isVideoExtension, isTextExtension, isKanvaxExtension, isDocxExtension, isExcalidrawFile } from '@/lib/utils/file-types';
 
 export interface UseFileDataOptions {
     enabled?: boolean;
@@ -55,7 +55,8 @@ export function useFileData(
     const isPlainText = isTextExtension(extension);
     const isKanvax = isKanvaxExtension(extension);
     const isDocx = isDocxExtension(extension);
-    const isText = isHtml || isMarkdown || isJson || isCsv || isPlainText || isKanvax;
+    const isExcalidraw = isExcalidrawFile(filepath || '');
+    const isText = isHtml || isMarkdown || isJson || isCsv || isPlainText || isKanvax || isExcalidraw;
 
     // Determine content type for query
     const needsBlob = isImage || isPdf || isSpreadsheet || isVideo || isDocx;
@@ -113,4 +114,3 @@ export function useFileData(
         isText,
     };
 }
-

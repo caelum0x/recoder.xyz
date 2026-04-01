@@ -1,3 +1,5 @@
+import { isExcalidrawFileName } from '@/lib/canvas/excalidraw';
+
 /**
  * Centralized file type utilities
  * Single source of truth for file type detection and preview capabilities
@@ -14,6 +16,7 @@ export const PREVIEWABLE_EXTENSIONS = [
   'pdf',
   'txt',
   'kanvax',
+  'excalidraw',
 ] as const;
 
 // Image extensions
@@ -53,7 +56,7 @@ export function isPreviewableExtension(ext: string): boolean {
  * Check if file path is previewable
  */
 export function isPreviewableFile(filepath: string): boolean {
-  return isPreviewableExtension(getExtension(filepath));
+  return isPreviewableExtension(getExtension(filepath)) || isExcalidrawFile(filepath);
 }
 
 /**
@@ -138,6 +141,13 @@ export function isKanvaxFile(filepath: string): boolean {
 }
 
 /**
+ * Check if file is an Excalidraw board
+ */
+export function isExcalidrawFile(filepath: string): boolean {
+  return isExcalidrawFileName(filepath);
+}
+
+/**
  * Check if file is a video
  */
 export function isVideoExtension(ext: string): boolean {
@@ -150,4 +160,3 @@ export function isVideoExtension(ext: string): boolean {
 export function isVideoFile(filepath: string): boolean {
   return isVideoExtension(getExtension(filepath));
 }
-
