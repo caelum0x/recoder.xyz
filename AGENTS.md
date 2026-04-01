@@ -108,7 +108,7 @@ bd automatically syncs with git:
 - Exports to `.beads/issues.jsonl` after changes (5s debounce)
 - Imports from JSONL when newer (e.g., after `git pull`)
 - No manual export/import needed!
-- On this repo's installed CLI (`bd 0.59.0`), there is no `bd sync` command.
+- On this repo's installed CLI (`bd 0.59.0`), auto-sync is the normal workflow.
 - If you need an explicit Dolt commit/push workflow, use `bd vc commit` or `bd dolt commit`/`bd dolt push`.
 
 ### Important Rules
