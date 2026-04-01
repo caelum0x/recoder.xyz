@@ -61,6 +61,11 @@ vi.mock('./task-lifecycle.service', () => ({
   getTaskLifecycleService: () => ({
     createTask: vi.fn(() => ({ ok: true, data: { id: 'task-123' } })),
     transitionTask: vi.fn(() => ({ ok: true })),
+    startTask: vi.fn(),
+    completeTask: vi.fn(),
+    failTask: vi.fn(),
+    getTask: vi.fn(() => ({ ok: true, data: { id: 'task-123', state: 'working' } })),
+    cancelTask: vi.fn(() => ({ ok: true, data: { state: 'cancelled' } })),
   }),
   generateId: vi.fn((prefix: string) => `${prefix}-test-id`),
 }));
@@ -240,6 +245,65 @@ describe('WindsurfConnectorRuntime', () => {
     expect(result).toEqual({ text: 'world' });
   });
 
+  it('gets task status via JSON-RPC', async () => {
+    const startPromise = runtime.start();
+    await vi.advanceTimersByTimeAsync(600);
+    await startPromise;
+
+    const statusPromise = runtime.getTaskStatus('task-123');
+
+    const writtenData = mockProc.stdin.write.mock.calls[0][0] as string;
+    const parsed = JSON.parse(writtenData.trim());
+    expect(parsed.method).toBe('tasks/get');
+    expect(parsed.params).toEqual({ id: 'task-123' });
+
+    mockProc.stdout.emit('data', Buffer.from(
+      JSON.stringify({ jsonrpc: '2.0', id: parsed.id, result: { state: 'working' } }) + '\n',
+    ));
+
+    await expect(statusPromise).resolves.toEqual({ state: 'working' });
+  });
+
+  it('cancels task via JSON-RPC and clears active task state', async () => {
+    const startPromise = runtime.start();
+    await vi.advanceTimersByTimeAsync(600);
+    await startPromise;
+
+    (runtime as any).activeTasks.add('task-123');
+    const cancelPromise = runtime.cancelTask('task-123', 'user-requested');
+
+    const writtenData = mockProc.stdin.write.mock.calls[0][0] as string;
+    const parsed = JSON.parse(writtenData.trim());
+    expect(parsed.method).toBe('tasks/cancel');
+    expect(parsed.params).toEqual({ id: 'task-123', reason: 'user-requested' });
+    expect(runtime.getState().activeTasks).toBe(0);
+
+    mockProc.stdout.emit('data', Buffer.from(
+      JSON.stringify({ jsonrpc: '2.0', id: parsed.id, result: { cancelled: true } }) + '\n',
+    ));
+
+    await expect(cancelPromise).resolves.toEqual({ cancelled: true });
+  });
+
+  it('responds to approval via JSON-RPC', async () => {
+    const startPromise = runtime.start();
+    await vi.advanceTimersByTimeAsync(600);
+    await startPromise;
+
+    const approvalPromise = runtime.respondToApproval('approval-1', true, 'looks good');
+
+    const writtenData = mockProc.stdin.write.mock.calls[0][0] as string;
+    const parsed = JSON.parse(writtenData.trim());
+    expect(parsed.method).toBe('approvals/respond');
+    expect(parsed.params).toEqual({ id: 'approval-1', approved: true, reason: 'looks good' });
+
+    mockProc.stdout.emit('data', Buffer.from(
+      JSON.stringify({ jsonrpc: '2.0', id: parsed.id, result: { resumed: true } }) + '\n',
+    ));
+
+    await expect(approvalPromise).resolves.toEqual({ resumed: true });
+  });
+
   it('rejects on JSON-RPC error response', async () => {
     const startPromise = runtime.start();
     await vi.advanceTimersByTimeAsync(600);
@@ -292,6 +356,62 @@ describe('WindsurfConnectorRuntime', () => {
     expect(result.success).toBe(true);
     expect(result.taskId).toBe('task-001');
     expect(result.resultText).toBe('Bug fixed!');
+    expect(runtime.getState().activeTasks).toBe(0);
+  });
+
+  it('emits approval-request notifications from bridge output', async () => {
+    const startPromise = runtime.start();
+    await vi.advanceTimersByTimeAsync(600);
+    await startPromise;
+
+    const handler = vi.fn();
+    runtime.on('approval-request', handler);
+
+    mockProc.stdout.emit('data', Buffer.from(
+      JSON.stringify({
+        jsonrpc: '2.0',
+        method: 'approvals/request',
+        params: {
+          taskId: 'task-123',
+          id: 'approval-9',
+          action: 'write_file',
+          description: 'Allow writing file?',
+        },
+      }) + '\n',
+    ));
+
+    expect(handler).toHaveBeenCalledWith(expect.objectContaining({
+      taskId: 'task-123',
+      approvalId: 'approval-9',
+      action: 'write_file',
+    }));
+  });
+
+  it('emits task-update notifications and clears finished tasks', async () => {
+    const startPromise = runtime.start();
+    await vi.advanceTimersByTimeAsync(600);
+    await startPromise;
+
+    (runtime as any).activeTasks.add('task-123');
+    const handler = vi.fn();
+    runtime.on('task-update', handler);
+
+    mockProc.stdout.emit('data', Buffer.from(
+      JSON.stringify({
+        jsonrpc: '2.0',
+        method: 'tasks/update',
+        params: {
+          taskId: 'task-123',
+          state: 'completed',
+        },
+      }) + '\n',
+    ));
+
+    expect(handler).toHaveBeenCalledWith(expect.objectContaining({
+      taskId: 'task-123',
+      state: 'completed',
+    }));
+    expect(runtime.getState().activeTasks).toBe(0);
   });
 
   it('returns failure when connector is not running', async () => {

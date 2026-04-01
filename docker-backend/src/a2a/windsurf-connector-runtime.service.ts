@@ -14,8 +14,10 @@
  * 6. **Manages** process lifecycle: start, stop, restart, health checks.
  * 7. **Handles** errors: process crash, timeout, stderr.
  *
- * NOTE: This is a Tier-2 scaffold. The wire protocol methods are stubbed
- * pending Windsurf's bridge API specification (RFC: shared/src/a2a/rfcs/tier2/windsurf.md).
+ * NOTE: Windsurf's exact bridge method names are configurable because the
+ * public wire protocol is still settling. The runtime now treats execute,
+ * task-status, cancel, and approval as first-class JSON-RPC operations
+ * instead of faking control-plane state only in the local lifecycle layer.
  *
  * Consumed by: windsurf-connector.routes.ts, server.ts
  */
@@ -62,6 +64,18 @@ export interface WindsurfConnectorConfig {
   restartDelayMs: number;
   /** Whether to auto-restart on process crash. */
   autoRestart: boolean;
+  /** JSON-RPC method used to execute a task. */
+  executeMethod: string;
+  /** JSON-RPC method used to query task status. */
+  taskStatusMethod: string;
+  /** JSON-RPC method used to cancel a task. */
+  cancelMethod: string;
+  /** JSON-RPC method used to respond to an approval request. */
+  approvalResponseMethod: string;
+  /** Notification method emitted by the bridge when approval is required. */
+  approvalRequestMethod: string;
+  /** Notification method emitted by the bridge for task progress/state. */
+  taskUpdateMethod: string;
 }
 
 export interface WindsurfConnectorState {
@@ -72,6 +86,7 @@ export interface WindsurfConnectorState {
   restartCount: number;
   error: string | null;
   pendingRequests: number;
+  activeTasks: number;
 }
 
 export interface WindsurfExecuteInput {
@@ -100,6 +115,14 @@ export interface WindsurfStreamChunk {
   raw?: unknown;
 }
 
+export interface WindsurfApprovalRequest {
+  taskId: string;
+  approvalId: string;
+  action?: string;
+  description?: string;
+  details?: Record<string, unknown>;
+}
+
 interface PendingRequest {
   resolve: (value: unknown) => void;
   reject: (error: Error) => void;
@@ -122,6 +145,12 @@ const DEFAULT_CONFIG: WindsurfConnectorConfig = {
   maxRestartAttempts: Number(process.env.WINDSURF_CONNECTOR_MAX_RESTART_ATTEMPTS || 3),
   restartDelayMs: Number(process.env.WINDSURF_CONNECTOR_RESTART_DELAY_MS || 2_000),
   autoRestart: process.env.WINDSURF_CONNECTOR_AUTO_RESTART !== 'false',
+  executeMethod: process.env.WINDSURF_EXECUTE_METHOD || 'windsurf/execute',
+  taskStatusMethod: process.env.WINDSURF_TASK_STATUS_METHOD || 'tasks/get',
+  cancelMethod: process.env.WINDSURF_CANCEL_METHOD || 'tasks/cancel',
+  approvalResponseMethod: process.env.WINDSURF_APPROVAL_RESPONSE_METHOD || 'approvals/respond',
+  approvalRequestMethod: process.env.WINDSURF_APPROVAL_REQUEST_METHOD || 'approvals/request',
+  taskUpdateMethod: process.env.WINDSURF_TASK_UPDATE_METHOD || 'tasks/update',
 };
 
 // ---------------------------------------------------------------------------
@@ -150,6 +179,7 @@ export class WindsurfConnectorRuntime extends EventEmitter {
   private restartCount = 0;
   private lastError: string | null = null;
   private stderrBuffer: string[] = [];
+  private activeTasks = new Set<string>();
 
   /** Implements ConnectorProcess.connectorId */
   readonly connectorId = 'windsurf';
@@ -182,6 +212,7 @@ export class WindsurfConnectorRuntime extends EventEmitter {
       restartCount: this.restartCount,
       error: this.lastError,
       pendingRequests: this.pendingRequests.size,
+      activeTasks: this.activeTasks.size,
     };
   }
 
@@ -251,6 +282,7 @@ export class WindsurfConnectorRuntime extends EventEmitter {
       req.reject(new Error('Connector stopping'));
       this.pendingRequests.delete(id);
     }
+    this.activeTasks.clear();
 
     if (this._process) {
       const proc = this._process;
@@ -284,15 +316,11 @@ export class WindsurfConnectorRuntime extends EventEmitter {
   }
 
   // -------------------------------------------------------------------------
-  // Task execution (Tier-2 stub -- wire protocol TBD)
+  // Task execution
   // -------------------------------------------------------------------------
 
   /**
    * Execute a task via the Windsurf bridge.
-   *
-   * NOTE: This is a stub. The actual wire protocol (method names, payload
-   * schemas) will be implemented once Windsurf's bridge API spec is available.
-   * See: shared/src/a2a/rfcs/tier2/windsurf.md
    */
   async executeTask(input: WindsurfExecuteInput): Promise<WindsurfExecuteResult> {
     if (!this.isRunning()) {
@@ -304,25 +332,30 @@ export class WindsurfConnectorRuntime extends EventEmitter {
     }
 
     this.lastActivity = new Date().toISOString();
+    this.activeTasks.add(input.taskId);
 
     try {
       // Transition task to 'working' state
       const lifecycle = getTaskLifecycleService();
       lifecycle.startTask(input.taskId, WINDSURF_CONNECTOR_IDENTITY.id);
 
-      // --- STUB: Send request to Windsurf bridge ---
-      // When the wire protocol is known, this will call:
-      //   const wireMsg = envelopeToWindsurf(envelope);
-      //   const response = await this.sendJsonRpc('windsurf/execute', wireMsg);
-      //   const result = windsurfToEnvelope(response);
-      const response = await this.sendJsonRpc('windsurf/execute', {
+      const response = await this.sendJsonRpc(this.config.executeMethod, {
+        id: input.taskId,
         prompt: input.prompt,
         workspace_id: input.workspaceId,
         thread_id: input.threadId,
         artifacts: input.artifacts,
       });
 
-      const resultText = typeof response === 'string' ? response : JSON.stringify(response);
+      const responseObj = response as Record<string, unknown> | string | null;
+      const resultText =
+        typeof responseObj === 'string'
+          ? responseObj
+          : typeof responseObj?.result === 'string'
+            ? responseObj.result
+            : typeof responseObj?.message === 'string'
+              ? responseObj.message
+              : JSON.stringify(response);
 
       // Transition task to 'completed'
       lifecycle.completeTask(
@@ -330,6 +363,7 @@ export class WindsurfConnectorRuntime extends EventEmitter {
         { text: resultText, data: { raw: response } },
         WINDSURF_CONNECTOR_IDENTITY.id,
       );
+      this.activeTasks.delete(input.taskId);
 
       return {
         taskId: input.taskId,
@@ -339,6 +373,7 @@ export class WindsurfConnectorRuntime extends EventEmitter {
       };
     } catch (err) {
       const errMsg = err instanceof Error ? err.message : String(err);
+      this.activeTasks.delete(input.taskId);
 
       // Transition task to 'failed'
       try {
@@ -362,6 +397,27 @@ export class WindsurfConnectorRuntime extends EventEmitter {
         error: errMsg,
       };
     }
+  }
+
+  async getTaskStatus(taskId: string): Promise<unknown> {
+    return this.sendJsonRpc(this.config.taskStatusMethod, { id: taskId });
+  }
+
+  async cancelTask(taskId: string, reason?: string): Promise<unknown> {
+    this.activeTasks.delete(taskId);
+    return this.sendJsonRpc(this.config.cancelMethod, { id: taskId, reason });
+  }
+
+  async respondToApproval(
+    approvalId: string,
+    approved: boolean,
+    reason?: string,
+  ): Promise<unknown> {
+    return this.sendJsonRpc(this.config.approvalResponseMethod, {
+      id: approvalId,
+      approved,
+      reason,
+    });
   }
 
   // -------------------------------------------------------------------------
@@ -431,6 +487,8 @@ export class WindsurfConnectorRuntime extends EventEmitter {
         logger.info({ code, signal }, 'Windsurf process exited');
         const wasRunning = this.status === 'running';
         this._process = null;
+        this.rejectAllPending(`Windsurf process exited (code=${code}, signal=${signal})`);
+        this.activeTasks.clear();
 
         if (wasRunning && this.config.autoRestart && this.restartCount < this.config.maxRestartAttempts) {
           this.status = 'error';
@@ -513,7 +571,13 @@ export class WindsurfConnectorRuntime extends EventEmitter {
     }
   }
 
-  private handleJsonRpcMessage(msg: { id?: string; result?: unknown; error?: { code: number; message: string; data?: unknown } }): void {
+  private handleJsonRpcMessage(msg: {
+    id?: string;
+    method?: string;
+    params?: Record<string, unknown>;
+    result?: unknown;
+    error?: { code: number; message: string; data?: unknown };
+  }): void {
     this.lastActivity = new Date().toISOString();
 
     if (msg.id && this.pendingRequests.has(msg.id)) {
@@ -528,8 +592,41 @@ export class WindsurfConnectorRuntime extends EventEmitter {
       }
     }
 
+    if (msg.method === this.config.approvalRequestMethod) {
+      this.emit('approval-request', {
+        taskId: typeof msg.params?.taskId === 'string' ? msg.params.taskId : '',
+        approvalId: typeof msg.params?.id === 'string' ? msg.params.id : '',
+        action: typeof msg.params?.action === 'string' ? msg.params.action : undefined,
+        description: typeof msg.params?.description === 'string' ? msg.params.description : undefined,
+        details: msg.params,
+      } as WindsurfApprovalRequest);
+    }
+
+    if (msg.method === this.config.taskUpdateMethod) {
+      const taskId = typeof msg.params?.taskId === 'string'
+        ? msg.params.taskId
+        : typeof msg.params?.id === 'string'
+          ? msg.params.id
+          : null;
+      const state = typeof msg.params?.state === 'string' ? msg.params.state : null;
+
+      if (taskId && state && ['completed', 'failed', 'cancelled', 'stopped'].includes(state)) {
+        this.activeTasks.delete(taskId);
+      }
+
+      this.emit('task-update', msg.params);
+    }
+
     // Emit for stream subscribers
     this.emit('message', msg);
+  }
+
+  private rejectAllPending(reason: string): void {
+    for (const [id, pending] of this.pendingRequests) {
+      clearTimeout(pending.timer);
+      pending.reject(new Error(reason));
+      this.pendingRequests.delete(id);
+    }
   }
 
   // -------------------------------------------------------------------------
