@@ -454,6 +454,40 @@ services:
       - recoder
 
   # ================================================================
+  # Trigger.dev — Background job execution (indexing, email, webhooks)
+  # Apache 2.0, self-hosted, long-running tasks with retries + queues.
+  # Dashboard: http://localhost:3010
+  # ================================================================
+  trigger-dev:
+    image: ghcr.io/triggerdotdev/trigger.dev:latest
+    container_name: recoder-trigger
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3010:3000"
+    environment:
+      - DATABASE_URL=postgresql://recoder:recoder_prod_2026@host.docker.internal:5432/recoder_backend
+      - DIRECT_URL=postgresql://recoder:recoder_prod_2026@host.docker.internal:5432/recoder_backend
+      - SESSION_SECRET=${TRIGGER_SESSION_SECRET:-recoder_trigger_session_secret}
+      - MAGIC_LINK_SECRET=${TRIGGER_MAGIC_LINK_SECRET:-recoder_trigger_magic_link_secret}
+      - ENCRYPTION_KEY=${TRIGGER_ENCRYPTION_KEY:-recoder_trigger_encryption_key_32ch}
+      - LOGIN_ORIGIN=http://localhost:3010
+      - APP_ORIGIN=http://localhost:3010
+      - V3_ENABLED=true
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:3000/healthcheck || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+    networks:
+      - recoder
+
+  # ================================================================
   # Steel — Managed browser pool for agent web automation
   # Provides anti-detection, session persistence, CDP access.
   # ================================================================
