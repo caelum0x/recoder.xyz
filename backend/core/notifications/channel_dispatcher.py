@@ -38,38 +38,43 @@ async def send_to_channel(
 
 
 async def _send_email(recipient_email: str, event_type: str, payload: dict) -> bool:
-    """Send a notification email via the platform EmailService (Mailtrap)."""
+    """Send a notification email via Resend (RESEND_API_KEY)."""
+    import os
+    api_key = os.getenv("RESEND_API_KEY")
+    if not api_key:
+        logger.warning("[DISPATCH] RESEND_API_KEY not set — email skipped")
+        return False
+
     try:
-        from core.services.email import email_service
-
-        if not email_service.client:
-            logger.warning("[DISPATCH] Email service not configured (MAILTRAP_API_TOKEN missing)")
-            return False
-
-        import mailtrap as mt
+        import resend
+        resend.api_key = api_key
 
         title = payload.get("title", event_type)
         message = payload.get("message", "")
+        sender = os.getenv("RESEND_SENDER_EMAIL", "notifications@recoder.xyz")
 
-        mail = mt.Mail(
-            sender=mt.Address(email=email_service.sender_email, name=email_service.sender_name),
-            to=[mt.Address(email=recipient_email)],
-            subject=f"[Recoder] {title}",
-            text=f"{title}\n\n{message}\n\n---\nEvent: {event_type}\nRecoder Notifications",
-            html=f"""<div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:20px">
+        params: resend.Emails.SendParams = {
+            "from": f"Recoder <{sender}>",
+            "to": [recipient_email],
+            "subject": f"[Recoder] {title}",
+            "html": f"""<div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:20px">
 <h2 style="margin:0 0 12px">{title}</h2>
 <p style="color:#333;line-height:1.6">{message}</p>
 <hr style="border:none;border-top:1px solid #eee;margin:20px 0">
 <p style="color:#999;font-size:12px">Event: {event_type} | Recoder Notifications</p>
 </div>""",
-            category="notification",
-        )
+            "text": f"{title}\n\n{message}\n\n---\nEvent: {event_type}\nRecoder Notifications",
+            "tags": [{"name": "event_type", "value": event_type}],
+        }
 
-        email_service.client.send(mail)
-        logger.debug(f"[DISPATCH] Email notification sent to {recipient_email}: {event_type}")
+        result = resend.Emails.send(params)
+        logger.debug(f"[DISPATCH] Resend email sent to {recipient_email}: {event_type} id={result.get('id', '?')}")
         return True
+    except ImportError:
+        logger.warning("[DISPATCH] resend package not installed — pip install resend")
+        return False
     except Exception as e:
-        logger.error(f"[DISPATCH] Email send failed to {recipient_email}: {e}")
+        logger.error(f"[DISPATCH] Resend email failed to {recipient_email}: {e}")
         return False
 
 
