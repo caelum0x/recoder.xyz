@@ -1,6 +1,6 @@
 # Recoder Platform — Master Plan
 
-Last updated: 2026-04-01 (Sprint B2 deployed + agency SearXNG web-search + recoder-pm Prisma cleanup deployed)
+Last updated: 2026-04-01 (Hetzner git checkout repaired; Recoder MCP management endpoints restored live)
 
 ---
 
@@ -30,11 +30,19 @@ This section supersedes older Redis / `web.recoder.xyz` runtime notes below.
   - `recoder-backend` was restarted and `docker.recoder.xyz/health` is healthy again with A2A enabled
   - `recoder-web/Dockerfile` was corrected so the runtime image keeps `vite-plugin-node-polyfills`
   - `recoder-web` was rebuilt/replaced on Hetzner and `web.recoder.xyz/api/health` is healthy again
+- The Hetzner app checkout is repaired too:
+  - the host deploy key is registered on GitHub
+  - `/root/recoder.xyz` now points at `git@github.com:caelum0x/recoder.xyz.git`
+  - the active branch again tracks `origin/fix/agent-blockers-create-loop-codemirror-sandbox-autowake`
+  - `git pull --ff-only` works on the host checkout again
+- A short Recoder MCP outage was also fixed live on April 1:
+  1. `recoder_list_agents`, `recoder_list_tasks`, and `recoder_send_task` started failing with `502`
+  2. `docker.recoder.xyz/health` was also returning `502`, which narrowed the problem to `recoder-docker-backend`
+  3. live root cause was a mixed DuckDB A3 deploy state: runtime source tried to import `duckdb-tool.ts`, but the running image did not contain the `duckdb` module
+  4. rebuilding `recoder-docker-backend` from the repaired stable Hetzner checkout restored `/health` and the MCP management endpoints
 - Immediate remaining infra follow-up:
-  1. `recoder-cy0` — finish the compose/network root-cause fix so deploys stop trying to replace `recoder-network`
-  2. Root cause now confirmed: the deploy script still used `docker compose down` against a stack whose shared network had drifted into a mixed state after manual incident recoveries. `recoder-web` and `recoder-redis` were live on `recoder-network` without Compose labels, so a stack-wide teardown path remained unsafe even after the network was marked `external: true`.
-  3. The live Redis re-convergence also exposed a second infra bug: Hetzner already had a host-level `redis-server` bound to `127.0.0.1:6379`, so the Compose-managed Redis container could never start while `docker-compose.deploy.yml` still published `127.0.0.1:6379:6379`.
-  4. Fixed live: deploy now avoids stack-wide `docker compose down`, Redis is no longer published onto the host, the Redis exporter healthcheck uses the image’s real binary entrypoint, `recoder-web` / `recoder-redis` / `recoder-redis-exporter` were re-converged under Compose ownership on `recoder-network`, and local Hetzner Postgres DSNs now have a fail-fast drift check.
+  1. `recoder-zgp` — audit the remaining dirty/untracked Hetzner checkout after the git repair
+  2. `recoder-avg` — validate the DuckDB A3 rollout path before deploying it, so a mixed checkout/image state cannot crash `recoder-docker-backend` again
 
 ## Current Correction — 2026-04-01
 
@@ -86,7 +94,7 @@ This section remains accurate for the agents-side Nike presentation recovery.
   - the Nike presentation renders in `agents.recoder.xyz` itself, not just via direct file URLs
 - Follow-up infra work:
   1. `recoder-6ko` — prevent Hetzner backend DB credential drift
-  2. `recoder-o66` — restore git-based deployability on the Hetzner app checkout
+  2. `recoder-o66` — fixed live; remaining host cleanup moved to `recoder-zgp`
 
 ## Historical Plan Notes
 
