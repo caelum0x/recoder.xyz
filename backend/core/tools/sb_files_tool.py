@@ -117,11 +117,15 @@ class SandboxFilesTool(SandboxToolsBase):
         if parent_dir:
             await self.sandbox.process.exec(f"mkdir -p '{parent_dir}'", timeout=10)
 
-        # Write content to temp file in sandbox (avoids shell escaping issues)
+        # Write content to temp file in sandbox using heredoc to avoid shell escaping issues.
+        # Previous approach used echo + base64 which truncated on large content or single quotes.
         import base64
         b64_content = base64.b64encode(text_content.encode('utf-8')).decode('ascii')
+        # Split into 76-char lines to avoid shell line-length limits
+        chunked = '\n'.join(b64_content[i:i+76] for i in range(0, len(b64_content), 76))
         await self.sandbox.process.exec(
-            f"echo '{b64_content}' | base64 -d > /tmp/_docgen_content.txt", timeout=10
+            f"cat <<'__RECODER_B64_EOF__' | base64 -d > /tmp/_docgen_content.txt\n{chunked}\n__RECODER_B64_EOF__",
+            timeout=30
         )
 
         # Write the conversion script to sandbox
@@ -182,10 +186,12 @@ print('OK')
         else:
             return self.fail_response(f"Unsupported binary format: .{ext}")
 
-        # Write script to temp file and execute
+        # Write script to temp file using heredoc (avoids truncation on large scripts)
         script_b64 = base64.b64encode(script.encode('utf-8')).decode('ascii')
+        chunked_script = '\n'.join(script_b64[i:i+76] for i in range(0, len(script_b64), 76))
         await self.sandbox.process.exec(
-            f"echo '{script_b64}' | base64 -d > /tmp/_docgen_script.py", timeout=10
+            f"cat <<'__RECODER_SCRIPT_EOF__' | base64 -d > /tmp/_docgen_script.py\n{chunked_script}\n__RECODER_SCRIPT_EOF__",
+            timeout=15
         )
 
         try:
