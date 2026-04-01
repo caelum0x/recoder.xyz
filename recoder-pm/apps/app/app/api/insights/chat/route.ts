@@ -28,6 +28,7 @@ type OpenRouterChoice = {
   message: {
     role: string;
     content: string | null;
+    reasoning?: string | null;
     tool_calls?: OpenRouterToolCall[];
   };
   finish_reason: string;

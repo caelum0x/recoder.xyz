@@ -11,22 +11,6 @@ import { ContradictionActions } from "./components/contradiction-actions";
 import { ContradictionsStatus } from "./components/contradictions-status";
 import { RunContradictionsButton } from "./components/run-contradictions-button";
 
-// The Prisma client types are stale and missing the status/snoozedUntil/resolvedAt
-// fields that exist in the source schema. These type helpers are needed until the
-// client is regenerated with a valid database connection.
-type ContradictionWhereInput = Record<string, unknown>;
-type ContradictionSelect = Record<string, boolean>;
-type ContradictionRow = {
-  id: string;
-  title: string;
-  description: string;
-  type: string;
-  confidence: number;
-  createdAt: Date;
-  sources: unknown;
-  status: string;
-  snoozedUntil: Date | null;
-};
 
 const typeLabels: Record<string, string> = {
   FEEDBACK_VS_USAGE: "Feedback vs Usage",
@@ -113,7 +97,7 @@ const ContradictionsPage = async ({
 
   const now = new Date();
 
-  const whereClause: ContradictionWhereInput =
+  const whereClause =
     statusFilter === "all"
       ? { organizationId }
       : statusFilter === "snoozed"
@@ -128,7 +112,7 @@ const ContradictionsPage = async ({
             }
           : { organizationId, status: statusFilter };
 
-  const contradictionSelect: ContradictionSelect = {
+  const contradictionSelect = {
     id: true,
     title: true,
     description: true,
@@ -141,13 +125,12 @@ const ContradictionsPage = async ({
   };
 
   const [contradictions, job] = await Promise.all([
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- stale Prisma client missing status field
-    (database.contradiction as any).findMany({
+    database.contradiction.findMany({
       where: whereClause,
       orderBy: { createdAt: "desc" },
       take: 50,
       select: contradictionSelect,
-    }) as Promise<ContradictionRow[]>,
+    }),
     database.aiJob.findFirst({
       where: { organizationId, type: "CONTRADICTIONS" },
       orderBy: { createdAt: "desc" },
