@@ -1,6 +1,6 @@
 # Recoder Platform — Master Plan
 
-Last updated: 2026-04-01 (Hetzner checkout drift audited and backed up; follow-up narrowed to unexpected source drift cleanup)
+Last updated: 2026-04-01 (Hetzner safe cleanup reduced unexpected checkout drift from 45 to 17; remaining work is split into branch-sync vs local-overlap buckets)
 
 ---
 
@@ -41,8 +41,16 @@ This section supersedes older Redis / `web.recoder.xyz` runtime notes below.
   3. live root cause was a mixed DuckDB A3 deploy state: runtime source tried to import `duckdb-tool.ts`, but the running image did not contain the `duckdb` module
   4. rebuilding `recoder-docker-backend` from the repaired stable Hetzner checkout restored `/health` and the MCP management endpoints
   5. a new deploy guardrail now exists in branch: `scripts/check-hetzner-docker-backend-build-context.sh`, wired into `scripts/deploy-all-services.sh`, and it was verified to pass on Hetzner after removing the stale untracked `docker-backend` source files that caused the mixed-state rebuild
+- Hetzner checkout cleanup is now further along too:
+  1. a new classifier exists in branch: `scripts/classify-hetzner-unexpected-drift.sh`
+  2. the backed-up 45-entry unexpected-drift manifest was classified before touching the host checkout
+  3. safe cleanup was applied live for 32 deterministic paths (10 tracked reset-to-branch candidates + 22 host-only removals)
+  4. the current live Hetzner audit is down to 17 unexpected source-drift entries
+  5. that 17-entry remainder is now split into 7 host-untracked but branch-tracked additions and 10 entries that overlap current local unpublished work
 - Immediate remaining infra follow-up:
-  1. `recoder-025` — clean the 45 remaining unexpected source-drift entries on the Hetzner app checkout after the audit/backup pass
+  1. `recoder-025` — finish the remaining 17 unexpected source-drift entries on the Hetzner app checkout
+  2. `recoder-0xz` — sync the 7 branch-tracked additions into the Hetzner checkout cleanly
+  3. `recoder-h3y` — reconcile the 10 overlap/manual-review entries against current local work
 
 ## Current Correction — 2026-04-01
 
@@ -94,7 +102,7 @@ This section remains accurate for the agents-side Nike presentation recovery.
   - the Nike presentation renders in `agents.recoder.xyz` itself, not just via direct file URLs
 - Follow-up infra work:
   1. `recoder-6ko` — prevent Hetzner backend DB credential drift
-  2. `recoder-o66` — fixed live; checkout audit is complete, an unexpected-drift backup now exists under `/root/recoder.xyz/backups/checkout-drift-20260401-181818/`, and the remaining host cleanup is `recoder-025`
+  2. `recoder-o66` — fixed live; checkout audit is complete, an unexpected-drift backup exists under `/root/recoder.xyz/backups/checkout-drift-20260401-181818/`, and the remaining host cleanup is now the 17-entry `recoder-025` remainder
 
 ## Historical Plan Notes
 
