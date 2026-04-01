@@ -261,9 +261,13 @@ if [ -n "${PORT_3000_PIDS}" ]; then
   kill -9 ${PORT_3000_PIDS} 2>/dev/null || true
 fi
 
-echo "--- Stopping and removing existing containers ---"
-docker compose -f docker-compose.deploy.yml down --remove-orphans 2>/dev/null || true
-# Also remove any standalone containers with matching names
+echo "--- Removing rebuilt service containers ---"
+# Do not run `docker compose down` here. This stack now relies on a shared
+# external network, and incident recoveries have already produced a mix of
+# compose-managed and manually replaced containers on that network. A full
+# `down` invites stack-level network teardown and can fail on still-live
+# endpoints. Remove only the service containers we actively rebuild and let
+# `docker compose up` reconcile the rest in place.
 cleanup_named_containers
 
 echo "--- Ensuring shared Docker network exists ---"
