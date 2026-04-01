@@ -99,11 +99,11 @@ This top block supersedes conflicting notes below.
 5. **Agent can't do real coding (apps)** — Agent handles HTML/CSS but cannot complete full coding tasks (React apps, Node services, etc.) end-to-end. Sandbox auto-stop + broken preview loop means the coding → run → see output cycle doesn't close. This is the core agent IDE value proposition.
 
 ### HIGH — A2A (works but incomplete)
-6. **A2A inbox is poll-only** — No push notifications. Claude Code only sees new Codex messages if it calls `recoder_inbox`. Should push a notification event to the MCP client when a task arrives.
+6. ~~**A2A inbox is poll-only**~~ — FIXED (commit `a0fb23fd`). MCP server now emits `notifications/message` to stdout when `task.assigned` arrives. Claude Code sees new tasks immediately without polling.
 7. **No terminal auto-discovery** — Agent IDs are hardcoded. Two Claude Code instances both claim the same inbox (no session deduplication). Bridge needs a live registry of connected terminals with unique session IDs.
 8. **No task claim/lock** — Multiple agent instances of the same type pick up the same pending task. Tasks need a `claimedBy: sessionId` field set on first read.
-9. **In-memory task store on server** — `mcp/recoder-a2a-server.js` on production still uses in-memory array; all tasks lost on server restart. Redis-backed store is done locally (commit `60d1bde9`) but not deployed.
-10. **recoder-a2a npm package not published** — Significant updates to `packages/recoder-a2a` (Redis store, improved protocol) sitting locally, not yet bumped + published to npm.
+9. ~~**In-memory task store on server**~~ — FIXED. Redis store is deployed in docker-backend (`redis-task-store.ts`); `getTaskLifecycleService()` uses Redis when `REDIS_URL` is set (confirmed set on production). Tasks persist across restarts.
+10. **recoder-a2a npm package not published** — v2.3.0 bumped locally with push notification support. npm login required to publish (`npm login` then `cd packages/recoder-a2a && npm publish --access public`).
 
 ### ~~CRITICAL — Web IDE~~ PARTIALLY FIXED (2026-03-31)
 5. ~~**Files don't write to sandbox**~~ — FIXED. Cookie theory was WRONG. Codex smoke test proved files write/read/exec all work. STRICT_AUTH=false allows anonymous, cookies also confirmed arriving with real userId.
