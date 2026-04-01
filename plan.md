@@ -25,7 +25,8 @@ This section supersedes older Redis / `web.recoder.xyz` runtime notes below.
 - Immediate remaining infra follow-up:
   1. `recoder-cy0` — finish the compose/network root-cause fix so deploys stop trying to replace `recoder-network`
   2. Root cause now confirmed: the deploy script still used `docker compose down` against a stack whose shared network had drifted into a mixed state after manual incident recoveries. `recoder-web` and `recoder-redis` were live on `recoder-network` without Compose labels, so a stack-wide teardown path remained unsafe even after the network was marked `external: true`.
-  3. In-progress fix: deploy by reconciling only the rebuilt service containers by name and keep the shared `recoder-network` up for the rest of the stack, instead of tearing the whole Compose project down.
+  3. The live Redis re-convergence also exposed a second infra bug: Hetzner already had a host-level `redis-server` bound to `127.0.0.1:6379`, so the Compose-managed Redis container could never start while `docker-compose.deploy.yml` still published `127.0.0.1:6379:6379`.
+  4. Fixed live: deploy now avoids stack-wide `docker compose down`, Redis is no longer published onto the host, the Redis exporter healthcheck uses the image’s real binary entrypoint, and `recoder-web` / `recoder-redis` / `recoder-redis-exporter` were re-converged under Compose ownership on `recoder-network`.
 
 ## Current Correction — 2026-04-01
 
