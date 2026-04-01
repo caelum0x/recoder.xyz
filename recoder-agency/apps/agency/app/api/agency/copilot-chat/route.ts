@@ -9,14 +9,20 @@ import { requireCurrentTeamRole } from "@/services/teams";
 
 export const maxDuration = 60;
 
+const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
 const OPENROUTER_MODEL =
 	process.env.OPENROUTER_TEXT_MODEL || "google/gemini-2.0-flash-001";
+const OPENROUTER_TIMEOUT_MS = (() => {
+	const configured = Number(process.env.OPENROUTER_REQUEST_TIMEOUT_MS);
+	return Number.isFinite(configured) && configured > 0 ? configured : 45_000;
+})();
 
 type ChatMessage = {
 	role: "system" | "user" | "assistant" | "tool";
 	content: string | null;
 	tool_calls?: ToolCall[];
 	tool_call_id?: string;
+	name?: string;
 };
 
 type ToolCall = {
@@ -28,16 +34,44 @@ type ToolCall = {
 	};
 };
 
+function isTimeoutError(error: unknown): boolean {
+	return (
+		error instanceof Error &&
+		(error.name === "AbortError" || error.name === "TimeoutError")
+	);
+}
+
+function timeoutErrorResponse() {
+	return NextResponse.json(
+		{
+			error: `AI request timed out after ${Math.round(
+				OPENROUTER_TIMEOUT_MS / 1000,
+			)}s`,
+		},
+		{ status: 504 },
+	);
+}
+
+function fetchOpenRouter(
+	apiKey: string,
+	body: Record<string, unknown>,
+): Promise<Response> {
+	return fetch(OPENROUTER_URL, {
+		method: "POST",
+		headers: {
+			Authorization: `Bearer ${apiKey}`,
+			"Content-Type": "application/json",
+		},
+		body: JSON.stringify(body),
+		signal: AbortSignal.timeout(OPENROUTER_TIMEOUT_MS),
+	});
+}
+
 export async function POST(req: Request) {
 	// Auth: require any team role (admin, member, ops, pm)
 	let teamDbId: number;
 	try {
-		const team = await requireCurrentTeamRole([
-			"admin",
-			"member",
-			"ops",
-			"pm",
-		]);
+		const team = await requireCurrentTeamRole(["admin", "member", "ops", "pm"]);
 		teamDbId = team.dbId;
 	} catch {
 		return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -112,9 +146,7 @@ export async function POST(req: Request) {
 		`### Deliverables (${allDeliverables.length})`,
 		...allDeliverables
 			.slice(0, 30)
-			.map(
-				(d) => `- ${d.name} (id: ${d.id}) [${d.type}] status=${d.status}`,
-			),
+			.map((d) => `- ${d.name} (id: ${d.id}) [${d.type}] status=${d.status}`),
 		"",
 		`### Quotes (${allQuotes.length})`,
 		...allQuotes.map(
@@ -149,30 +181,26 @@ Be concise, actionable, and professional. Reference specific data points. Sugges
 	];
 
 	// Step 1: Non-streaming call to detect tool usage
-	const firstResponse = await fetch(
-		"https://openrouter.ai/api/v1/chat/completions",
-		{
-			method: "POST",
-			headers: {
-				Authorization: `Bearer ${apiKey}`,
-				"Content-Type": "application/json",
-			},
-			body: JSON.stringify({
-				model: OPENROUTER_MODEL,
-				messages: fullMessages,
-				max_tokens: 1500,
-				temperature: 0.3,
-				stream: false,
-				tools: copilotToolDefinitions,
-			}),
-		},
-	);
+	let firstResponse: Response;
+	try {
+		firstResponse = await fetchOpenRouter(apiKey, {
+			model: OPENROUTER_MODEL,
+			messages: fullMessages,
+			max_tokens: 1500,
+			temperature: 0.3,
+			stream: false,
+			tools: copilotToolDefinitions,
+			tool_choice: "auto",
+		});
+	} catch (error) {
+		if (isTimeoutError(error)) {
+			return timeoutErrorResponse();
+		}
+		throw error;
+	}
 
 	if (!firstResponse.ok) {
-		return NextResponse.json(
-			{ error: "AI request failed" },
-			{ status: 500 },
-		);
+		return NextResponse.json({ error: "AI request failed" }, { status: 500 });
 	}
 
 	const firstData = await firstResponse.json();
@@ -190,7 +218,8 @@ Be concise, actionable, and professional. Reference specific data points. Sugges
 
 	// No tool calls: stream a plain response
 	if (!toolCalls || toolCalls.length === 0) {
-		const content = assistantMessage?.content || assistantMessage?.reasoning || "";
+		const content =
+			assistantMessage?.content || assistantMessage?.reasoning || "";
 		return streamText(content);
 	}
 
@@ -216,6 +245,7 @@ Be concise, actionable, and professional. Reference specific data points. Sugges
 		toolMessages.push({
 			role: "tool",
 			tool_call_id: call.id,
+			name: call.function.name,
 			content: JSON.stringify(result),
 		});
 	}
@@ -223,23 +253,21 @@ Be concise, actionable, and professional. Reference specific data points. Sugges
 	// Step 2: Streaming call with tool results
 	const followUpMessages: ChatMessage[] = [...fullMessages, ...toolMessages];
 
-	const streamResponse = await fetch(
-		"https://openrouter.ai/api/v1/chat/completions",
-		{
-			method: "POST",
-			headers: {
-				Authorization: `Bearer ${apiKey}`,
-				"Content-Type": "application/json",
-			},
-			body: JSON.stringify({
-				model: OPENROUTER_MODEL,
-				messages: followUpMessages,
-				max_tokens: 1500,
-				temperature: 0.3,
-				stream: true,
-			}),
-		},
-	);
+	let streamResponse: Response;
+	try {
+		streamResponse = await fetchOpenRouter(apiKey, {
+			model: OPENROUTER_MODEL,
+			messages: followUpMessages,
+			max_tokens: 1500,
+			temperature: 0.3,
+			stream: true,
+		});
+	} catch (error) {
+		if (isTimeoutError(error)) {
+			return timeoutErrorResponse();
+		}
+		throw error;
+	}
 
 	if (!streamResponse.ok) {
 		return NextResponse.json(
@@ -275,9 +303,7 @@ function streamText(text: string): Response {
 					},
 				],
 			};
-			controller.enqueue(
-				encoder.encode(`data: ${JSON.stringify(chunk)}\n\n`),
-			);
+			controller.enqueue(encoder.encode(`data: ${JSON.stringify(chunk)}\n\n`));
 
 			const doneChunk = {
 				choices: [
