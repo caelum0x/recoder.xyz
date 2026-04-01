@@ -25,6 +25,56 @@ litellm.num_retries = int(os.environ.get("LITELLM_NUM_RETRIES", 1))
 litellm.request_timeout = int(os.environ.get("LITELLM_REQUEST_TIMEOUT", 300))  # 5 min (was 30 min)
 litellm.stream_timeout = int(os.environ.get("LITELLM_STREAM_TIMEOUT", 120))    # 2 min per-chunk
 
+# ── OpenMeter usage reporting ────────────────────────────────────
+OPENMETER_URL = os.environ.get("OPENMETER_URL", "")
+
+
+def _report_usage_to_openmeter(
+    response,
+    model_name: str,
+    duration_ms: int = 0,
+    user_id: str = "system",
+) -> None:
+    """Report LLM token usage to OpenMeter (fire-and-forget, best-effort)."""
+    if not OPENMETER_URL:
+        return
+    try:
+        usage = getattr(response, "usage", None)
+        if not usage:
+            return
+        input_tokens = getattr(usage, "prompt_tokens", 0) or 0
+        output_tokens = getattr(usage, "completion_tokens", 0) or 0
+        if input_tokens == 0 and output_tokens == 0:
+            return
+
+        import aiohttp
+
+        async def _send():
+            try:
+                async with aiohttp.ClientSession() as session:
+                    await session.post(
+                        f"{OPENMETER_URL}/api/v1/events",
+                        json={
+                            "type": "llm_call",
+                            "subject": user_id,
+                            "data": {
+                                "model": model_name,
+                                "input_tokens": input_tokens,
+                                "output_tokens": output_tokens,
+                                "total_tokens": input_tokens + output_tokens,
+                                "provider": "litellm",
+                                "duration_ms": duration_ms,
+                            },
+                        },
+                        timeout=aiohttp.ClientTimeout(total=3),
+                    )
+            except Exception:
+                pass  # Best-effort, never block the response
+
+        asyncio.get_running_loop().create_task(_send())
+    except Exception:
+        pass
+
 from litellm.integrations.custom_logger import CustomLogger
 
 class LLMTimingCallback(CustomLogger):
@@ -320,6 +370,10 @@ async def make_llm_api_call(
             )
             duration = time_module.monotonic() - call_start
             logger.info(f"[LLM] {duration:.2f}s {model_name}")
+
+            # Report token usage to OpenMeter
+            _report_usage_to_openmeter(response, model_name, int(duration * 1000))
+
             return response
 
     except asyncio.TimeoutError:
@@ -416,7 +470,11 @@ async def _wrap_streaming_response(response, start_time: float, model_name: str,
         duration = time_module.monotonic() - start_time if start_time else 0.0
         if duration > 0:
             logger.info(f"[LLM] {duration:.2f}s total, {chunk_count} chunks - {model_name}")
-        
+
+        # Report streaming usage to OpenMeter (usage comes in final chunk)
+        if hasattr(response, '_hidden_params'):
+            _report_usage_to_openmeter(response, model_name, int(duration * 1000))
+
         # Save debug output with correlation_id
         if debug_chunks is not None:
             _save_debug_output(model_name, accumulated_content, accumulated_tool_calls, debug_chunks, finish_reason, chunk_count, duration, correlation_id)
