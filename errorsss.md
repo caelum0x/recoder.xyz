@@ -1,6 +1,6 @@
 # Recoder Platform — Error Registry
 
-Last updated: 2026-04-01 (Hetzner safe cleanup reduced unexpected checkout drift from 45 to 17; the workflow metering/qdrant overlap is landed, and the agents file-proxy HEAD mismatch now has a backend fix in branch)
+Last updated: 2026-04-01 (Hetzner safe cleanup reduced unexpected checkout drift from 45 to 17; the workflow metering/qdrant overlap is landed, and the agents file-proxy HEAD mismatch is now deployed on the backend)
 
 ---
 
@@ -24,7 +24,9 @@ This top block supersedes conflicting notes below.
 - The old unexplained `HEAD /api/files/content` mismatch is no longer unexplained either:
   1. the agents Next route was already exporting `HEAD`
   2. the real 405 root cause was backend only exposing `GET /sandboxes/{sandbox_id}/files/content`
-  3. branch now adds a matching backend `HEAD` route that shares the same response builder/headers as `GET`
+  3. branch added a matching backend `HEAD` route that shares the same response builder/headers as `GET`
+  4. that backend fix is now deployed on Hetzner, and direct `HEAD` to the Nike metadata path returns `200`
+  5. the only remaining follow-up is authenticated end-to-end verification through `agents.recoder.xyz/api/files/content` (`recoder-e5a`)
 
 ## Current Correction (2026-04-01)
 
