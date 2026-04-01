@@ -340,18 +340,36 @@ async def _wrap_streaming_response(response, start_time: float, model_name: str,
     import time as time_module
     chunk_count = 0
     last_chunk_time = time_module.monotonic()
-    
+    # Max time to wait for a single chunk before aborting the stream (env-configurable)
+    chunk_stall_timeout = float(os.environ.get("LLM_CHUNK_STALL_TIMEOUT", "60"))
+
     # Debug output collection
     debug_chunks = [] if (config and getattr(config, 'DEBUG_SAVE_LLM_IO', False)) else None
     accumulated_content = ""
     accumulated_tool_calls = []
     finish_reason = None
-    
+
+    async def _next_chunk(aiter):
+        """Get next chunk with stall timeout protection."""
+        return await asyncio.wait_for(aiter.__anext__(), timeout=chunk_stall_timeout)
+
     try:
         if ttft_seconds is not None:
             yield {"__llm_ttft_seconds__": ttft_seconds, "model": model_name}
 
-        async for chunk in response:
+        aiter = response.__aiter__()
+        while True:
+            try:
+                chunk = await _next_chunk(aiter)
+            except StopAsyncIteration:
+                break
+            except asyncio.TimeoutError:
+                logger.error(
+                    f"[LLM] Stream stalled — no chunk received in {chunk_stall_timeout}s "
+                    f"(model={model_name}, chunks_so_far={chunk_count}). Aborting stream."
+                )
+                break
+
             chunk_count += 1
             current_time = time_module.monotonic()
             gap_ms = (current_time - last_chunk_time) * 1000
