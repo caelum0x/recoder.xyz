@@ -15,12 +15,21 @@
  */
 
 import { createLogger } from '../logger';
+import { trackLlmCall, trackSandboxExec } from '../metering/openmeter-client.js';
 
 const logger = createLogger('workflow-step-executor');
 
-const OPENROUTER_KEY = process.env.OPENROUTER_API_KEY ?? '';
-const DAYTONA_URL = process.env.DAYTONA_SERVER_URL ?? 'http://localhost:3900/api';
-const DAYTONA_KEY = process.env.DAYTONA_API_KEY ?? '';
+function getOpenRouterKey(): string {
+  return process.env.OPENROUTER_API_KEY ?? '';
+}
+
+function getDaytonaUrl(): string {
+  return process.env.DAYTONA_SERVER_URL ?? 'http://localhost:3900/api';
+}
+
+function getDaytonaKey(): string {
+  return process.env.DAYTONA_API_KEY ?? '';
+}
 
 // ---------------------------------------------------------------------------
 // Types
@@ -57,9 +66,11 @@ async function executeLlmStep(
   const model = String(config.model ?? 'anthropic/claude-sonnet-4-20250514');
   const systemPrompt = config.system ? String(config.system) : undefined;
   const maxTokens = Number(config.maxTokens ?? 2048);
+  const openRouterKey = getOpenRouterKey();
+  const startedAt = Date.now();
 
   if (!prompt) throw new Error('llm step requires config.prompt');
-  if (!OPENROUTER_KEY) throw new Error('OPENROUTER_API_KEY not configured');
+  if (!openRouterKey) throw new Error('OPENROUTER_API_KEY not configured');
 
   // Inject context variables into prompt via {{key}} placeholders
   const resolvedPrompt = prompt.replace(
@@ -74,7 +85,7 @@ async function executeLlmStep(
   const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
     method: 'POST',
     headers: {
-      Authorization: `Bearer ${OPENROUTER_KEY}`,
+      Authorization: `Bearer ${openRouterKey}`,
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({ model, messages, max_tokens: maxTokens }),
@@ -92,6 +103,21 @@ async function executeLlmStep(
   };
 
   const content = data.choices?.[0]?.message?.content ?? '';
+  const inputTokens = data.usage?.prompt_tokens ?? 0;
+  const outputTokens = data.usage?.completion_tokens ?? 0;
+  const durationMs = Date.now() - startedAt;
+
+  const userId = String(context._userId ?? 'workflow');
+  trackLlmCall({
+    userId,
+    model,
+    inputTokens,
+    outputTokens,
+    provider: 'openrouter',
+    projectId: String(context._projectId ?? ''),
+    durationMs,
+  });
+
   return {
     content,
     model,
@@ -164,12 +190,15 @@ async function executeCodeStep(
   const language = String(config.language ?? 'python');
   const sandboxId = String(config.sandboxId ?? context.sandboxId ?? '');
   const timeoutMs = Number(config.timeoutMs ?? 60_000);
+  const daytonaKey = getDaytonaKey();
+  const daytonaUrl = getDaytonaUrl();
+  const startedAt = Date.now();
 
   if (!code) throw new Error('code step requires config.code');
   if (!sandboxId) throw new Error('code step requires config.sandboxId or context.sandboxId');
-  if (!DAYTONA_KEY) throw new Error('DAYTONA_API_KEY not configured');
+  if (!daytonaKey) throw new Error('DAYTONA_API_KEY not configured');
 
-  const baseUrl = DAYTONA_URL.replace(/\/api\/?$/, '');
+  const baseUrl = daytonaUrl.replace(/\/api\/?$/, '');
   const execUrl = `${baseUrl}/api/toolbox/${sandboxId}/toolbox/process/execute`;
 
   let command: string;
@@ -186,7 +215,7 @@ async function executeCodeStep(
   const res = await fetch(execUrl, {
     method: 'POST',
     headers: {
-      Authorization: `Bearer ${DAYTONA_KEY}`,
+      Authorization: `Bearer ${daytonaKey}`,
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({ command }),
@@ -201,11 +230,20 @@ async function executeCodeStep(
     exit_code?: number;
   };
 
-  return {
-    stdout: data.result ?? data.stdout ?? '',
-    stderr: data.stderr ?? '',
-    exitCode: data.exitCode ?? data.exit_code ?? -1,
-  };
+  const stdout = data.result ?? data.stdout ?? '';
+  const stderr = data.stderr ?? '';
+  const exitCode = data.exitCode ?? data.exit_code ?? -1;
+  const durationMs = Date.now() - startedAt;
+
+  trackSandboxExec({
+    userId: String(context._userId ?? 'workflow'),
+    projectId: String(context._projectId ?? sandboxId),
+    command: command.slice(0, 200),
+    durationMs,
+    exitCode,
+  });
+
+  return { stdout, stderr, exitCode };
 }
 
 function executeBranchStep(

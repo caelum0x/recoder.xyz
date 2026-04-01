@@ -1,6 +1,6 @@
 # Recoder Platform — Master Plan
 
-Last updated: 2026-04-01 (Hetzner safe cleanup reduced unexpected checkout drift from 45 to 17; remaining work is split into branch-sync vs local-overlap buckets)
+Last updated: 2026-04-01 (Hetzner safe cleanup reduced unexpected checkout drift from 45 to 17; remaining work is split into branch-sync vs local-overlap buckets, and the workflow metering/qdrant overlap slice is now being landed cleanly)
 
 ---
 
@@ -51,6 +51,7 @@ This section supersedes older Redis / `web.recoder.xyz` runtime notes below.
   1. `recoder-025` — finish the remaining 17 unexpected source-drift entries on the Hetzner app checkout
   2. `recoder-0xz` — sync the 7 branch-tracked additions into the Hetzner checkout cleanly
   3. `recoder-h3y` — reconcile the 10 overlap/manual-review entries against current local work
+  4. `recoder-32x` — land the remaining workflow-step metering + Qdrant healthcheck overlap with tests instead of carrying it as local drift
 
 ## Current Correction — 2026-04-01
 
