@@ -123,7 +123,8 @@ The roadmap below remains useful, but older claims elsewhere that the Nike prese
   Canvas mode entry points are now aligned to that board workflow through a shared config in `src/lib/canvas/mode-config.ts`: the mode panel, chat mode label, and new-thread empty state now steer users toward board/diagram/wireframe/flowchart prompts that explicitly create `.excalidraw` boards under `/workspace/canvases/` instead of stale image-generation prompts.
   The thread tool-view path now also recognizes generic file writes to `.excalidraw` boards as canvas updates, so inline canvas results can refresh/render through the shared canvas view instead of assuming every board write is `.kanvax`.
   The backend live-update path is now unified too: `docker-backend` no longer shadows `/api/a2a/canvas-update` with two competing handlers. The route module is the single source of truth for validating updates, publishing `canvas.update` to the A2A event bus, broadcasting to the workspace bridge, and relaying to `recoder-agents` SSE when a `threadId` is present. Regression coverage now exists in `docker-backend/src/a2a/__tests__/canvas-routes.test.ts`.
-  Remaining A1 work is now narrower: agent behavior still needs to actively call `recoder_canvas_update` during board-edit flows, and the full live board update path still needs browser verification in the deployed UI.
+  The Excalidraw editor path now also refreshes deterministically from board file writes: `CanvasPanel` listens to the same `canvas-tool-updated` events used by the legacy canvas renderer, refetches the matching board file from the sandbox, and applies the updated board content unless the user has local unsaved edits. That means agents can visibly update an open board after writing the `.excalidraw` file even if they do not emit a separate `recoder_canvas_update` call.
+  Remaining A1 work is now narrower: explicit agent behavior should still call `recoder_canvas_update` for in-progress incremental drawing without waiting on a file write/refetch cycle, and the full live board update path still needs browser verification in the deployed UI.
 - `npm install @excalidraw/excalidraw` in `recoder-agents`
 - Create `CanvasPanel.tsx` component wrapping `<Excalidraw>` with `initialData` prop
 - Add canvas tool to agent tool sidebar (replace broken FAL canvas)
@@ -516,6 +517,50 @@ The roadmap below remains useful, but older claims elsewhere that the Nike prese
 | **J** — Docs site (Starlight) | 1 week | Developer onboarding | Nothing |
 | **K** — Agent coding capability | 2 weeks | Core agent value prop | E |
 | **L** — Ziti transport | 2+ weeks | Zero-port, cryptographic identity | C |
+
+---
+
+## Agent Sidebar 404 Endpoint Audit (2026-04-01)
+
+Frontend pages call `/v1/{path}` → Python backend at `api.recoder.xyz`. Audit of all 12 reported 404s:
+
+### EXISTS — URL mismatch (frontend calls wrong path)
+
+| Frontend calls | Backend actual path | Router file | Fix |
+|---|---|---|---|
+| `/v1/runs` | `/v1/agents/runs` | `core/agents/api.py:951` | Add alias `/v1/runs` → `/v1/agents/runs` |
+| `/v1/leaderboard` | `/v1/agents/leaderboard` | `core/agents/agent_comparison_api.py:491` | Add alias `/v1/leaderboard` → `/v1/agents/leaderboard` |
+| `/v1/agents/favorites` | `/v1/favorites` | `core/favorites/favorites_api.py` (prefix `/favorites`) + `core/agents/agent_favorites_api.py` (prefix `/agents`) | **Both exist** — `/v1/agents/{id}/favorites` + `/v1/favorites`. Check which the frontend calls. |
+| `/v1/agents/shared` | `/v1/collaboration/...` | `core/sharing/sharing_api.py` (prefix `/collaboration`) | Add alias `/v1/agents/shared` → forward to collaboration |
+| `/v1/marketplace/templates` | `/v1/marketplace/listings` | `core/marketplace/marketplace_api.py:219` | Add alias `/v1/marketplace/templates` → `/v1/marketplace/listings` |
+
+### EXISTS — sub-endpoints work but root listing missing
+
+| Frontend calls | Backend has | Fix |
+|---|---|---|
+| `/v1/activity` | `/v1/platform/activity` + `/v1/agents/activity` + `/v1/workspaces/activity` | Add `/v1/activity` alias → `/v1/platform/activity` |
+| `/v1/monitoring/metrics` | `/v1/monitor/...` + `/v1/sandbox/...` + `/v1/resources/...` | Add `/v1/monitoring/metrics` → aggregate from monitor endpoints |
+| `/v1/reports` | `/v1/reports/usage-summary` etc. | **Works** — prefix `/reports` exists, sub-routes work. Frontend may be calling root `/v1/reports` which has no GET handler. |
+| `/v1/knowledge-base` | `/v1/knowledge-base/folders` etc. | **Works** — prefix `/knowledge-base` exists. Frontend may need `/v1/knowledge-base` root listing. |
+
+### DOES NOT EXIST — no backend at all
+
+| Frontend calls | Status | Fix |
+|---|---|---|
+| `/v1/workers` | **No router** — no concept of "workers" in backend | Create stub returning A2A bridge connected agents as "workers" |
+| `/v1/spaces` | **No router** — backend has `/workspaces/` (activity only) | Create stub mapping spaces → workspaces |
+| `/v1/developers` | **No router** — frontend-only hub page | Create minimal stub or make frontend not call API |
+
+### Action Plan
+
+**Phase 1 — Add alias routes (5 mismatches, ~30 min):**
+Create `backend/core/routes/alias_routes.py` with redirect/proxy handlers for the 5 URL mismatches.
+
+**Phase 2 — Add root listing handlers (4 partial, ~1 hr):**
+Add GET `/` handlers to reports, knowledge-base, activity, monitoring routers.
+
+**Phase 3 — Create worker/space stubs (2 missing, ~30 min):**
+Workers → return A2A bridge agents. Spaces → return workspaces.
 
 ---
 

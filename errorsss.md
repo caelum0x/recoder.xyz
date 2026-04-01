@@ -33,12 +33,13 @@ This top block also supersedes older notes that still describe agent canvas mode
   - `recoder-agents/src/components/thread/content/NewThreadEmptyState.tsx`
   - `recoder-agents/src/components/thread/chat-input/chat-input.tsx`
 - The thread tool-view layer also now recognizes `.excalidraw` file writes as canvas updates instead of only handling `.kanvax`, so inline board results can refresh/render after generic file operations.
+- The Excalidraw editor path now uses the same deterministic refresh channel: `CanvasPanel` listens for `canvas-tool-updated`, refetches the matching board file from the sandbox, and reapplies board content unless the user has unsaved local edits. This closes the gap where an open Excalidraw board could stay stale unless the model also emitted `recoder_canvas_update`.
 - Legacy stored action ids (`create`, `edit`, `upscale`, `remove-bg`) now normalize to board-oriented actions (`board`, `diagram`, `wireframe`, `flowchart`) so existing UI state does not break while the product language changes.
 - Status note:
-  - targeted tests for the shared canvas mode config pass locally
+  - targeted Excalidraw/canvas refresh tests pass locally
   - this routing fix is branch-complete, but not yet marked as deployed live
 - Remaining A1 gap:
-  - agent-side board mutation/live broadcast is still not done, so the open work is active board updates, not board entry-point routing
+  - explicit agent-side incremental board mutation/live broadcast is still not done, so the open work is now stronger real-time tool usage plus browser verification, not board entry-point discovery or basic board-file refresh
 
 ## Current Correction (2026-04-01, Hetzner infra)
 

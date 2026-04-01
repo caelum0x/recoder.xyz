@@ -18,10 +18,16 @@ import { RecoderLoader } from '@/components/ui/recoder-loader';
 import { toast } from '@/lib/toast';
 import { cn } from '@/lib/utils';
 import {
+  consumePendingCanvasRefreshEvent,
+  doesCanvasRefreshMatchFilePath,
+  normalizeCanvasWorkspacePath,
+} from '@/lib/canvas/live-updates';
+import {
   getExcalidrawDisplayName,
   parseExcalidrawScene,
   serializeExcalidrawScene,
 } from '@/lib/canvas/excalidraw';
+import { useFileContent } from '@/hooks/files';
 
 const Excalidraw = dynamic(
   () => import('@excalidraw/excalidraw').then((mod) => mod.Excalidraw),
@@ -42,6 +48,8 @@ interface CanvasPanelProps {
   onSave?: (content: string) => Promise<void>;
   /** Thread ID used to subscribe to live agent canvas updates via SSE */
   threadId?: string;
+  filePath?: string;
+  sandboxId?: string;
 }
 
 function serializeScene(
@@ -52,23 +60,37 @@ function serializeScene(
   return serializeExcalidrawScene({ elements: [...elements], appState, files });
 }
 
-export function CanvasPanel({ content, fileName, className, onSave, threadId }: CanvasPanelProps) {
+export function CanvasPanel({
+  content,
+  fileName,
+  className,
+  onSave,
+  threadId,
+  filePath,
+  sandboxId,
+}: CanvasPanelProps) {
   const { resolvedTheme } = useTheme();
   const [instanceKey, setInstanceKey] = useState(0);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [syncedContent, setSyncedContent] = useState(content);
 
   const excalidrawAPIRef = useRef<ExcalidrawImperativeAPI | null>(null);
   const lastSavedContentRef = useRef('');
   const draftContentRef = useRef('');
+  const pendingExternalRefreshRef = useRef(false);
   const draftSceneRef = useRef<{
     elements: readonly ExcalidrawElement[];
     appState: AppState;
     files: BinaryFiles;
   } | null>(null);
+  const resolvedFilePath = useMemo(() => normalizeCanvasWorkspacePath(filePath), [filePath]);
+  const { refetch: refetchContent } = useFileContent(sandboxId, resolvedFilePath || undefined, {
+    enabled: false,
+  });
 
   const initialData = useMemo<ExcalidrawInitialDataState>(() => {
-    const parsed = parseExcalidrawScene(content);
+    const parsed = parseExcalidrawScene(syncedContent);
 
     return {
       ...parsed,
@@ -83,7 +105,11 @@ export function CanvasPanel({ content, fileName, className, onSave, threadId }: 
       },
       scrollToContent: parsed.elements.length > 0,
     } as ExcalidrawInitialDataState;
-  }, [content, resolvedTheme]);
+  }, [resolvedTheme, syncedContent]);
+
+  useEffect(() => {
+    setSyncedContent(content);
+  }, [content, fileName]);
 
   useEffect(() => {
     const normalized = serializeScene(
@@ -122,6 +148,7 @@ export function CanvasPanel({ content, fileName, className, onSave, threadId }: 
     try {
       setIsSaving(true);
       await onSave(draftContentRef.current);
+      setSyncedContent(draftContentRef.current);
       lastSavedContentRef.current = draftContentRef.current;
       setHasUnsavedChanges(false);
       toast.success('Board saved');
@@ -132,6 +159,25 @@ export function CanvasPanel({ content, fileName, className, onSave, threadId }: 
       setIsSaving(false);
     }
   }, [onSave]);
+
+  const refreshFromSandboxFile = useCallback(async () => {
+    if (!sandboxId || !resolvedFilePath) {
+      return;
+    }
+
+    if (hasUnsavedChanges || isSaving) {
+      pendingExternalRefreshRef.current = true;
+      return;
+    }
+
+    const result = await refetchContent();
+    const nextContent = result.data;
+
+    if (typeof nextContent === 'string') {
+      pendingExternalRefreshRef.current = false;
+      setSyncedContent(nextContent);
+    }
+  }, [hasUnsavedChanges, isSaving, refetchContent, resolvedFilePath, sandboxId]);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -171,6 +217,37 @@ export function CanvasPanel({ content, fileName, className, onSave, threadId }: 
 
     return () => es.close();
   }, [threadId]);
+
+  useEffect(() => {
+    if (!resolvedFilePath) return;
+
+    const handleCanvasUpdate = (event: CustomEvent<{ canvasPath: string; timestamp: number }>) => {
+      if (!doesCanvasRefreshMatchFilePath(resolvedFilePath, event.detail.canvasPath)) {
+        return;
+      }
+
+      void refreshFromSandboxFile();
+    };
+
+    window.addEventListener('canvas-tool-updated', handleCanvasUpdate as EventListener);
+
+    const pendingEvents = window.__pendingCanvasRefreshEvents;
+    if (consumePendingCanvasRefreshEvent(resolvedFilePath, pendingEvents)) {
+      void refreshFromSandboxFile();
+    }
+
+    return () => {
+      window.removeEventListener('canvas-tool-updated', handleCanvasUpdate as EventListener);
+    };
+  }, [refreshFromSandboxFile, resolvedFilePath]);
+
+  useEffect(() => {
+    if (!pendingExternalRefreshRef.current || hasUnsavedChanges || isSaving) {
+      return;
+    }
+
+    void refreshFromSandboxFile();
+  }, [hasUnsavedChanges, isSaving, refreshFromSandboxFile]);
 
   return (
     <div className={cn('flex h-full w-full min-h-0 flex-col bg-background', className)}>
