@@ -1,6 +1,6 @@
 # Recoder Platform — Master Plan
 
-Last updated: 2026-04-01 (recoder-web follow-up edit fixes pushed; Excalidraw board foundation and canvas-mode routing landed in recoder-agents)
+Last updated: 2026-04-01 (Sprint B2 deployed: session dedup + task claim/lock + unlimited bridge reconnect + REST-task inbox)
 
 ---
 
