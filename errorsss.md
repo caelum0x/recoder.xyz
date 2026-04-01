@@ -1,6 +1,6 @@
 # Recoder Platform — Error Registry
 
-Last updated: 2026-04-01 (Hetzner checkout drift audited and backed up; follow-up narrowed to unexpected source drift cleanup)
+Last updated: 2026-04-01 (Hetzner safe cleanup reduced unexpected checkout drift from 45 to 17; remaining work is split into branch-sync vs local-overlap buckets)
 
 ---
 
@@ -64,13 +64,18 @@ This top block also supersedes older notes that still describe Hetzner backend D
   2. it is wired into `scripts/production-external-closeout.sh`
   3. the live Hetzner audit now classifies the checkout as 8 allowed runtime entries, 1 known nested-repo drift (`recoder-web/starters`), and 45 unexpected source-drift entries after safe cleanup
   4. the same script can now back up unexpected source drift before cleanup, and a live backup archive was written on Hetzner under `/root/recoder.xyz/backups/checkout-drift-20260401-181818/`
+- `recoder-025` then moved forward:
+  1. `scripts/classify-hetzner-unexpected-drift.sh` now classifies the backed-up unexpected-drift manifest against the local branch
+  2. 32 deterministic cleanup candidates were applied live on Hetzner after backup (10 tracked reset-to-branch candidates + 22 host-only removals)
+  3. the current live audit is now 17 unexpected source-drift entries
+  4. those 17 are split into 7 host-untracked but branch-tracked additions (`recoder-0xz`) and 10 overlap/manual-review entries that collide with current local work (`recoder-h3y`)
 - Result:
   - Hetzner DB credential drift should now fail fast during deploy/closeout instead of surfacing later as agent/backend `500`s
-  - Hetzner app deployability is restored; remaining host cleanup is now `recoder-025`
+  - Hetzner app deployability is restored; remaining host cleanup is now the 17-entry `recoder-025` remainder
 
 ## Current Priority Order (2026-04-01, post-`recoder-8sm`)
 1. Browser-verify Web IDE preview + publish on the latest deployed build.
-2. Clean the remaining 45 unexpected source-drift entries on the Hetzner app checkout (`recoder-025`).
+2. Clean the remaining 17 unexpected source-drift entries on the Hetzner app checkout (`recoder-025`).
 3. Re-enable deployed `STRICT_AUTH=true` only after broader browser verification stays green.
 4. Continue broader agents IDE/browser verification beyond the Nike presentation path.
 

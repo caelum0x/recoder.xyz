@@ -1,6 +1,6 @@
 # Recoder Platform — Task List
 
-Last updated: 2026-04-01 (Hetzner checkout drift audited and backed up; follow-up narrowed to unexpected source drift cleanup)
+Last updated: 2026-04-01 (Hetzner safe cleanup reduced unexpected checkout drift from 45 to 17; remaining work is split into branch-sync vs local-overlap buckets)
 
 ---
 
@@ -93,19 +93,25 @@ This supersedes older task notes that still treat deploy-network breakage, root 
     - 1 known nested repo drift (`recoder-web/starters`)
     - 45 unexpected source-drift entries
   - the same script can now create a backup archive before cleanup, and one was written on Hetzner under `/root/recoder.xyz/backups/checkout-drift-20260401-181818/`
-  - cleanup of those 45 entries is split to `recoder-025`
+  - cleanup of those 45 entries was then classified before touching the host checkout
+- `recoder-025` is partially complete:
+  - 32 deterministic cleanup candidates were applied live on Hetzner after backup (10 tracked reset-to-branch candidates + 22 host-only removals)
+  - current live remainder is 17 unexpected source-drift entries
+  - the remaining 17 are now split into:
+    - `recoder-0xz` — 7 host-untracked but branch-tracked additions that should arrive via clean checkout sync/deploy
+    - `recoder-h3y` — 10 entries that overlap current local work and need manual reconciliation
 
 ## Immediate Follow-ups
 
 1. Browser-verify Web IDE preview + publish on the currently deployed build.
 2. Deploy and browser-verify the new `recoder-agents` canvas-mode Excalidraw routing. Branch-complete and pushed on `2026-04-01`; live deployment still pending.
-3. Clean the remaining 45 unexpected source-drift entries on the Hetzner app checkout (`recoder-025`).
+3. Clean the remaining 17 unexpected source-drift entries on the Hetzner app checkout (`recoder-025`).
 4. Re-enable deployed `STRICT_AUTH=true` only after broader browser verification passes.
 5. Continue broader agents IDE/browser verification beyond the Nike presentation path.
 
 ## Current Remaining Priorities (2026-03-31, post-`77cd90bb`)
 1. Browser-verify Web IDE preview + publish on the currently deployed build.
-2. Clean the remaining 45 unexpected source-drift entries on the Hetzner app host checkout (`recoder-025`).
+2. Clean the remaining 17 unexpected source-drift entries on the Hetzner app host checkout (`recoder-025`).
 3. Re-enable deployed `STRICT_AUTH=true` only after broader browser verification passes.
 4. Continue broader agents IDE/browser verification beyond the Nike presentation path.
 
