@@ -1,0 +1,120 @@
+/**
+ * @module workflow-trigger.routes
+ *
+ * HTTP routes for triggering Hatchet workflows via A2A.
+ * Mounted at /api/a2a/workflows
+ *
+ * POST /run           Trigger a workflow by ID with input context
+ * POST /run-steps     Execute a list of workflow steps directly (ad-hoc)
+ * GET  /health        Check Hatchet connectivity
+ */
+
+import { Router } from 'express';
+import type { Request, Response } from 'express';
+import { logger } from '../logger.js';
+
+const HATCHET_HOST = process.env.HATCHET_CLIENT_HOST ?? 'localhost:7077';
+const HATCHET_API = process.env.HATCHET_API_URL ?? 'http://hatchet-api:8080';
+
+const router = Router();
+
+function ok(res: Response, data: unknown): void {
+  res.json({ success: true, data });
+}
+
+function fail(res: Response, status: number, message: string): void {
+  res.status(status).json({ success: false, error: message });
+}
+
+// POST /api/a2a/workflows/run
+// Trigger a Hatchet workflow run with input context.
+// If Hatchet is not available, returns an error with instructions.
+router.post('/run', async (req: Request, res: Response) => {
+  const { workflowId, input = {} } = req.body as {
+    workflowId?: string;
+    input?: Record<string, unknown>;
+  };
+
+  if (!workflowId) return fail(res, 400, 'workflowId is required');
+
+  try {
+    // Try to trigger via Hatchet API
+    const triggerRes = await fetch(`${HATCHET_API}/api/v1/workflows/${workflowId}/trigger`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ input }),
+      signal: AbortSignal.timeout(15_000),
+    });
+
+    if (!triggerRes.ok) {
+      const text = await triggerRes.text().catch(() => '');
+      throw new Error(`Hatchet trigger failed ${triggerRes.status}: ${text.slice(0, 200)}`);
+    }
+
+    const data = (await triggerRes.json()) as { workflowRunId?: string };
+    ok(res, { workflowRunId: data.workflowRunId ?? 'unknown', workflowId, status: 'triggered' });
+  } catch (err) {
+    logger.warn({ err, workflowId }, '[workflow-trigger] Hatchet trigger failed');
+    fail(res, 503, err instanceof Error ? err.message : 'Hatchet not available');
+  }
+});
+
+// POST /api/a2a/workflows/run-steps
+// Execute a list of workflow steps directly (bypass Hatchet for ad-hoc runs).
+// This is the deep execution path — each step runs through the real executors.
+router.post('/run-steps', async (req: Request, res: Response) => {
+  const { steps, context = {} } = req.body as {
+    steps?: Array<{
+      type: 'llm' | 'http' | 'code' | 'branch' | 'trigger';
+      config: Record<string, unknown>;
+      name: string;
+    }>;
+    context?: Record<string, unknown>;
+  };
+
+  if (!steps || !Array.isArray(steps) || steps.length === 0) {
+    return fail(res, 400, 'steps[] is required');
+  }
+
+  try {
+    // Dynamic import to avoid circular dependency issues
+    const { executeWorkflowSteps } = await import(
+      '../../recoder-agency/apps/agency/app/workers/workflow-worker.js'
+    ).catch(() => {
+      // If the agency worker is not accessible, use inline execution
+      return {
+        executeWorkflowSteps: async (
+          _steps: unknown[],
+          _ctx: Record<string, unknown>,
+        ) => ({
+          success: false as const,
+          results: [{ step: 'init', type: 'error', output: { error: 'workflow-worker not accessible from docker-backend' }, durationMs: 0 }],
+          context: _ctx,
+        }),
+      };
+    });
+
+    const result = await executeWorkflowSteps(steps, context);
+    ok(res, result);
+  } catch (err) {
+    logger.warn({ err }, '[workflow-trigger] run-steps failed');
+    fail(res, 500, err instanceof Error ? err.message : 'Step execution failed');
+  }
+});
+
+// GET /api/a2a/workflows/health
+router.get('/health', async (_req: Request, res: Response) => {
+  try {
+    const hatchetRes = await fetch(`${HATCHET_API}/api/v1/meta`, {
+      signal: AbortSignal.timeout(5_000),
+    });
+    ok(res, {
+      hatchet: hatchetRes.ok ? 'connected' : 'unreachable',
+      host: HATCHET_HOST,
+    });
+  } catch {
+    ok(res, { hatchet: 'disconnected', host: HATCHET_HOST });
+  }
+});
+
+export { router as workflowTriggerRouter };

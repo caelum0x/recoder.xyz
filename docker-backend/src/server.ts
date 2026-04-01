@@ -80,10 +80,13 @@ import { memoryRouter } from './a2a/memory.routes.js';
 import { codeSearchRouter } from './a2a/code-search.routes.js';
 import { searchRouter } from './a2a/search.routes.js';
 import { webhookRouter } from './a2a/webhook.routes.js';
+import { workflowTriggerRouter } from './a2a/workflow-trigger.routes.js';
 import { duckdbRouter } from './a2a/duckdb.routes.js';
+import { canvasRouter } from './a2a/canvas.routes.js';
 import { indexFile as codeSearchIndexFile } from './a2a/code-search.js';
 import { indexFile as meiliIndexFile, indexThread as meiliIndexThread } from './a2a/search-proxy.js';
 import { trackLlmCall, trackSandboxExec, trackFileOp, trackPublish } from './metering/openmeter-client.js';
+import { createPreviewShare, destroyPreviewShare, reservePreviewShare } from './zrok-preview.js';
 import { patternRouter } from './a2a/patterns/index.js';
 import { approvalRouter } from './policy/index.js';
 import { startA2AIntentWorker } from './a2a-intent-worker.js';
@@ -2693,13 +2696,35 @@ app.post('/api/container', containerLimiter, optionalAuthenticateRequest, flexib
         registerDaytonaId(sandbox.id);
         registerUserContainer(userId, projectId);
         persistContainers();
-        logger.info({ sandboxId: sandbox.id, projectId, previewUrl }, 'Daytona sandbox created for web IDE');
+
+        // ── Sprint C: Zrok instant preview URL (non-blocking upgrade) ──
+        let finalPreviewUrl = previewUrl;
+        try {
+          const zrokShare = await createPreviewShare({
+            sandboxId: sandbox.id,
+            projectId,
+            targetPort: defaultPort,
+          });
+          if (zrokShare) {
+            finalPreviewUrl = zrokShare.previewUrl;
+            const stored = containers.get(projectId);
+            if (stored) {
+              stored.daytonaPreviewUrl = finalPreviewUrl;
+              persistContainers();
+            }
+            logger.info({ projectId, zrokUrl: finalPreviewUrl }, 'Zrok preview share active');
+          }
+        } catch (zrokErr) {
+          logger.debug({ err: zrokErr, projectId }, 'Zrok share skipped — using Daytona preview');
+        }
+
+        logger.info({ sandboxId: sandbox.id, projectId, previewUrl: finalPreviewUrl }, 'Daytona sandbox created for web IDE');
         return res.json({
           containerId: sandbox.id,
           reused: false,
           fromPool: false,
           port: 3000,
-          urls: { preview: previewUrl },
+          urls: { preview: finalPreviewUrl },
           daytona: true,
         });
       } catch (err: any) {
@@ -3203,6 +3228,11 @@ app.delete('/api/container/:projectId', optionalAuthenticateRequest, flexiblePro
     try { getMeteringCollector().untrackContainer(entry.id); } catch (_) {}
     try { healthMonitor.unregisterContainer(entry.id); } catch (_) {}
     try { resourceOptimizer.unregisterContainer(entry.id); } catch (_) {}
+
+    // ── Sprint C: Clean up Zrok share on container delete ──
+    destroyPreviewShare(projectId).catch((zrokErr) => {
+      logger.debug({ err: zrokErr, projectId }, 'Zrok share cleanup skipped');
+    });
 
     if (isDaytonaSandbox(entry)) {
       // Daytona sandbox — delete via Daytona API
@@ -14983,7 +15013,9 @@ app.use('/api/a2a/memory', authenticateRequest, memoryRouter);
 app.use('/api/a2a/code-search', codeSearchRouter);
 app.use('/api/a2a/search', searchRouter);
 app.use('/api/a2a/webhook', webhookRouter);
+app.use('/api/a2a/workflows', workflowTriggerRouter);
 app.use('/api/a2a/data', duckdbRouter);
+app.use('/api/a2a/canvas-update', canvasRouter);
 app.use('/api/a2a', connectorHealthRouter);
 app.use('/api/a2a/patterns', patternRouter);
 app.use('/api/a2a', a2aOpenApiRouter);
@@ -15679,7 +15711,17 @@ app.post('/api/publish/:projectId', authenticateRequest, verifyProjectOwnership,
     logger.info({ projectId, url }, 'Publish: project published');
     trackPublish({ userId: req.userId ?? 'anonymous', projectId, slug: slug!, target: 'web' });
 
-    sendSuccess(res, { url, slug, publishedAt });
+    // ── Sprint C: Reserve Zrok share for permanent published URL ──
+    let zrokUrl: string | null = null;
+    try {
+      const reserved = await reservePreviewShare(projectId);
+      if (reserved) {
+        zrokUrl = reserved.previewUrl;
+        logger.info({ projectId, zrokUrl }, 'Publish: Zrok frontdoor reserved');
+      }
+    } catch { /* non-fatal */ }
+
+    sendSuccess(res, { url, slug, publishedAt, ...(zrokUrl ? { zrokUrl } : {}) });
   } catch (error: any) {
     if (!existingSlug && slug) {
       unregisterSlug(projectId);
