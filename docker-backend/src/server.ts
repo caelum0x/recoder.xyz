@@ -16576,13 +16576,23 @@ app.post('/api/themes/generate', authenticateRequest, asyncHandler(async (req: A
     return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'provider must be anthropic, openai, google, or openrouter'));
   }
 
-  const prompt = await generateThemePrompt({
+  const startMs = Date.now();
+  const { prompt, inputTokens, outputTokens } = await generateThemePrompt({
     images,
     keywords: keywords || '',
     generationMode,
     model,
     apiKey,
     provider: provider as ThemeProvider,
+  });
+
+  trackLlmCall({
+    userId: req.userId!,
+    model,
+    provider,
+    inputTokens,
+    outputTokens,
+    durationMs: Date.now() - startMs,
   });
 
   sendSuccess(res, { prompt });
