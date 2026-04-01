@@ -44,8 +44,13 @@ export function createAppDesignerPersistenceController(args: {
 	 * undefined is OK if not implementable (in that case, rely on confirm only)
 	 */
 	saveBestEffort?: (payload: Workspace) => void;
+
+	/**
+	 * Called when a save fails. Use to show user feedback (e.g., toast).
+	 */
+	onSaveError?: (error: unknown) => void;
 }): AppDesignerPersistence {
-	const { store, debounceMs, save, saveBestEffort } = args;
+	const { store, debounceMs, save, saveBestEffort, onSaveError } = args;
 
 	let timer: ReturnType<typeof setTimeout> | null = null;
 	let inFlight: Promise<void> | null = null;
@@ -86,6 +91,8 @@ export function createAppDesignerPersistenceController(args: {
 				if (!hasChangesSinceSaveStarted) {
 					setDirty(false);
 				}
+			} catch (error) {
+				onSaveError?.(error);
 			} finally {
 				inFlight = null;
 				if (queued) {

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { isLightpandaAvailable, scrapeWithLightpanda } from "./lightpanda";
 
 export const selfMadeProviderName = "self-made" as const;
 
@@ -20,12 +21,13 @@ type SelfMadeScrapeResult = {
 /**
  * Scrapes the content of a given URL and returns the result in the specified formats.
  *
+ * Uses Lightpanda headless browser when available (renders JavaScript, handles SPAs).
+ * Falls back to plain HTTP fetch for static pages or when Lightpanda is not installed.
+ *
  * @param {string} url - The URL to scrape. Must be a valid URL.
- * @param {("html" | "markdown")[]} [formats=["html"]] - An optional array specifying the desired output formats.
- *        - "html": Includes the raw HTML content.
- *        - "markdown": Includes the content converted to Markdown.
- * @returns {Promise<SelfMadeScrapeResult>} A promise resolving to an object containing the scraped URL, title, HTML, and/or Markdown.
- * @throws {Error} If the URL is invalid or if the fetch operation fails.
+ * @param {("html" | "markdown")[]} [formats=["html"]] - Output formats to include.
+ * @returns {Promise<SelfMadeScrapeResult>} Scraped content with URL, title, HTML, and/or Markdown.
+ * @throws {Error} If the URL is invalid or the fetch operation fails.
  */
 export async function scrapeUrl(
 	url: string,
@@ -36,6 +38,16 @@ export async function scrapeUrl(
 	} catch {
 		throw new Error(`Invalid URL: ${url}`);
 	}
+
+	// Prefer Lightpanda for JS-rendered pages when available on this server.
+	if (isLightpandaAvailable()) {
+		try {
+			return await scrapeWithLightpanda(url, formats);
+		} catch {
+			// Lightpanda failed — fall through to plain fetch
+		}
+	}
+
 	const res = await fetch(url, {
 		headers: {
 			"User-Agent":
@@ -46,7 +58,7 @@ export async function scrapeUrl(
 		throw new Error(`Failed to fetch: ${res.status} ${res.statusText}`);
 	}
 	const content = await res.text();
-	const contentType = res.headers.get("content-type") || "";
+	const contentType = res.headers.get("content-type") ?? "";
 
 	// Check if the content is already plain text/markdown
 	const normalizedUrl = url.toLowerCase();
@@ -61,19 +73,15 @@ export async function scrapeUrl(
 
 	// Extract title from HTML (only if it's HTML content)
 	const match = content.match(/<title>([\s\S]*?)<\/title>/i);
-	const title = match ? match[1].trim() : url.split("/").pop() || "Untitled";
+	const title = match ? match[1].trim() : (url.split("/").pop() ?? "Untitled");
 
 	let markdown = "";
 	if (formats.includes("markdown")) {
 		if (isPlainText) {
-			// If it's already plain text/markdown, use it directly
 			markdown = content;
 		} else {
-			// If it's HTML, convert it to markdown using defuddle/node (accepts string | JSDOM)
 			const Defuddle = (await import("defuddle/node")).Defuddle;
-			const result = await Defuddle(content, url, {
-				markdown: true,
-			});
+			const result = await Defuddle(content, url, { markdown: true });
 			markdown = result.content;
 		}
 	}

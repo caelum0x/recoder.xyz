@@ -2,6 +2,7 @@ import { z } from "zod";
 import { SelfMadeWebSearchProvider, selfMadeProviderName } from "./self-made";
 
 export { scrapeUrl as selfMadeScrapeUrl } from "./self-made";
+export { type SearXNGResult, searchWithSearXNG } from "./searxng";
 export { type WebSearchResult, webSearch } from "./web-search";
 
 export const WebSearchProviderSchema = SelfMadeWebSearchProvider;

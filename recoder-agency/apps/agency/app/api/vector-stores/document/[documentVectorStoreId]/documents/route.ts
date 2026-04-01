@@ -35,6 +35,7 @@ export const runtime = "nodejs";
 export const maxDuration = 800;
 
 const STORAGE_PREFIX = "vector-stores";
+const STORAGE_BUCKET = "public-assets";
 
 async function fetchTeam() {
 	try {
