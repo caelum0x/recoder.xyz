@@ -7,6 +7,10 @@ import { ArrowLeft, Check } from 'lucide-react';
 import Image from 'next/image';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import {
+  canvasModeExamplePrompts,
+  canvasStarterCategories,
+} from '@/lib/canvas/mode-config';
 
 // Import icons
 import {
@@ -104,13 +108,8 @@ export const modeConfigs: ModeConfig[] = [
     name: 'Canvas',
     icon: <PenTool className="w-4 h-4" />,
     iconName: 'PenTool',
-    description: 'Design and create visuals',
-    examplePrompts: [
-      'Design a social media banner',
-      'Create an infographic about climate change',
-      'Build a wireframe for a mobile app',
-      'Design a logo concept',
-    ],
+    description: 'Sketch whiteboards, diagrams, and flows',
+    examplePrompts: canvasModeExamplePrompts,
   },
   {
     id: 'video',
@@ -300,46 +299,6 @@ const docsCategories = [
 ];
 
 // ============================================================================
-// CANVAS STARTER DATA
-// ============================================================================
-// Menu icon component
-const Menu = ({ className }: { className?: string }) => (
-  <svg className={className} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <line x1="4" x2="20" y1="12" y2="12"/><line x1="4" x2="20" y1="6" y2="6"/><line x1="4" x2="20" y1="18" y2="18"/>
-  </svg>
-);
-
-const canvasCategories = [
-  {
-    id: 'web',
-    label: 'Web Pages',
-    templates: [
-      { id: 'landing', icon: Globe, label: 'Landing Page', description: 'Hero, features, CTA', prompt: 'Initialize the tools. Create a modern landing page with hero section, feature highlights, testimonials, pricing, and call-to-action. Use a clean design with subtle gradients.' },
-      { id: 'pricing', icon: DollarSign, label: 'Pricing Page', description: 'Pricing tiers comparison', prompt: 'Initialize the tools. Design a pricing page with plan comparison cards, feature checklists, toggle for monthly/annual, and highlighted recommended plan.' },
-      { id: 'blog', icon: Newspaper, label: 'Blog Layout', description: 'Article page design', prompt: 'Initialize the tools. Design a blog article page with reading-optimized typography, author info, table of contents, related posts, and newsletter signup.' },
-    ],
-  },
-  {
-    id: 'components',
-    label: 'Components',
-    templates: [
-      { id: 'card', icon: Layout, label: 'Product Card', description: 'E-commerce product card', prompt: 'Initialize the tools. Create a product card component with image, title, price, rating stars, add-to-cart button. Make it responsive with hover effects.' },
-      { id: 'form', icon: FileText, label: 'Contact Form', description: 'Form with validation', prompt: 'Initialize the tools. Design a contact form with name, email, message fields, validation states, success/error messages, and submit button.' },
-      { id: 'nav', icon: Menu, label: 'Navigation', description: 'Navbar with mobile menu', prompt: 'Initialize the tools. Create a responsive navigation bar with logo, menu items, dropdown, mobile hamburger menu, and sticky scroll behavior.' },
-    ],
-  },
-  {
-    id: 'marketing',
-    label: 'Marketing',
-    templates: [
-      { id: 'email', icon: Mail, label: 'Email Template', description: 'Newsletter design', prompt: 'Initialize the tools. Design a professional email newsletter template with header, featured article, content sections, CTA buttons, and footer with social links.' },
-      { id: 'banner', icon: ImageIcon, label: 'Banner', description: 'Promotional banner', prompt: 'Initialize the tools. Create a promotional banner with headline, supporting text, CTA button, and eye-catching visuals. Make multiple sizes (leaderboard, square, skyscraper).' },
-      { id: 'social', icon: Smartphone, label: 'Social Post', description: 'Instagram/Twitter post', prompt: 'Initialize the tools. Design a social media post template for Instagram with image area, text overlay, brand elements, and multiple layout variations.' },
-    ],
-  },
-];
-
-// ============================================================================
 // VIDEO STARTER DATA
 // ============================================================================
 const videoCategories = [
@@ -434,7 +393,7 @@ const modeStarterConfigs: Record<string, ModeStarterConfig> = {
   slides: { title: 'Create Presentation', subtitle: 'Choose a template or describe what you need' },
   sheets: { title: 'Create Spreadsheet', subtitle: 'Choose a category to get started' },
   docs: { title: 'Create Document', subtitle: 'Choose a document type' },
-  canvas: { title: 'Create Design', subtitle: 'Choose what you want to design' },
+  canvas: { title: 'Create Board', subtitle: 'Choose a whiteboard, diagram, or flow to start with' },
   video: { title: 'Create Video', subtitle: 'Choose a video type' },
   research: { title: 'Deep Research', subtitle: 'Choose a research category' },
 };
@@ -725,7 +684,7 @@ export function NewThreadEmptyState({ onSubmit, className }: NewThreadEmptyState
 
         <ScrollArea className="flex-1">
           <div className="space-y-6 pb-4">
-            {canvasCategories.map((category, catIndex) => (
+            {canvasStarterCategories.map((category, catIndex) => (
               <motion.div
                 key={category.id}
                 initial={{ opacity: 0, y: 8 }}

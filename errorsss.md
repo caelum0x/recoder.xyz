@@ -1,6 +1,6 @@
 # Recoder Platform — Error Registry
 
-Last updated: 2026-03-31 (post live Nike presentation fix + browser verification)
+Last updated: 2026-04-01 (post live Nike presentation fix; canvas-mode Excalidraw routing fixed in branch)
 
 ---
 
@@ -21,6 +21,25 @@ This top block supersedes conflicting notes below.
   - proxied Nike `slide_01.html` returns `200`
   - proxied Nike presentation image returns `200`
 - The real remaining priorities are broader browser verification and infra hardening, not the old Nike blank-presentation root cause.
+
+## Current Correction (2026-04-01)
+
+This top block also supersedes older notes that still describe agent canvas mode as an image/banner/logo workflow.
+
+- `recoder-agents` now has the Excalidraw board foundation plus branch-local canvas-mode routing for board creation.
+- The user-facing root cause was not only missing Excalidraw rendering. Canvas entry points were still duplicated across the UI with stale image-generation prompts and action labels, so normal canvas mode continued to steer users into the legacy `.kanvax`/image-edit mental model.
+- The branch fix centralizes canvas mode in `recoder-agents/src/lib/canvas/mode-config.ts` and rewires:
+- The branch fix centralizes canvas mode in `recoder-agents/src/lib/canvas/mode-config.ts` and rewires:
+  - `recoder-agents/src/components/dashboard/recoder-modes-panel.tsx`
+  - `recoder-agents/src/components/thread/content/NewThreadEmptyState.tsx`
+  - `recoder-agents/src/components/thread/chat-input/chat-input.tsx`
+- The thread tool-view layer also now recognizes `.excalidraw` file writes as canvas updates instead of only handling `.kanvax`, so inline board results can refresh/render after generic file operations.
+- Legacy stored action ids (`create`, `edit`, `upscale`, `remove-bg`) now normalize to board-oriented actions (`board`, `diagram`, `wireframe`, `flowchart`) so existing UI state does not break while the product language changes.
+- Status note:
+  - targeted tests for the shared canvas mode config pass locally
+  - this routing fix is branch-complete, but not yet marked as deployed live
+- Remaining A1 gap:
+  - agent-side board mutation/live broadcast is still not done, so the open work is active board updates, not board entry-point routing
 
 ## Current Priority Order (2026-03-31, post-`77cd90bb`)
 1. Browser-verify Web IDE preview + publish on the latest deployed build.
