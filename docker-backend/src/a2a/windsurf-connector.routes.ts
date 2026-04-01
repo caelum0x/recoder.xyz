@@ -16,7 +16,9 @@
  * | POST   | /task/:taskId/cancel   | Cancel a running task                |
  * | POST   | /approval/:approvalId  | Respond to an approval request       |
  *
- * NOTE: Tier-2 scaffold. Wire protocol methods are stubbed.
+ * NOTE: Windsurf bridge method names remain configurable, but the runtime now
+ * drives execute/status/cancel/approval through the child process instead of
+ * mutating only local lifecycle state.
  */
 
 import { Router, type Request, type Response } from 'express';
@@ -304,6 +306,16 @@ windsurfConnectorRouter.post('/restart', async (_req: Request, res: Response) =>
 
 windsurfConnectorRouter.get('/task/:taskId', async (req: Request, res: Response) => {
   try {
+    const runtime = getWindsurfConnectorRuntime();
+
+    if (!runtime.isRunning()) {
+      sendError(res, 503, buildA2AError({
+        code: A2AErrorCodeEnum.ConnectorUnavailable,
+        message: 'Windsurf connector is not running.',
+      }));
+      return;
+    }
+
     const { taskId } = req.params;
 
     if (!taskId) {
@@ -314,24 +326,10 @@ windsurfConnectorRouter.get('/task/:taskId', async (req: Request, res: Response)
       return;
     }
 
-    const lifecycle = getTaskLifecycleService();
-    const result = lifecycle.getTask(taskId);
-
-    if (!result.ok) {
-      sendError(res, result.httpStatus, result.error);
-      return;
-    }
-
-    const envelope = result.data;
+    const status = await runtime.getTaskStatus(taskId);
     sendSuccess(res, {
       taskId,
-      state: envelope.state,
-      connector: envelope.connector,
-      result: envelope.result,
-      error: envelope.error,
-      createdAt: envelope.created_at,
-      updatedAt: envelope.updated_at,
-      history: envelope.history,
+      status,
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
@@ -361,21 +359,18 @@ windsurfConnectorRouter.post('/task/:taskId/cancel', async (req: Request, res: R
       return;
     }
 
-    // Transition the task to cancelled via lifecycle service
-    const lifecycle = getTaskLifecycleService();
-    const result = lifecycle.cancelTask(taskId, reason || 'Cancelled via Windsurf connector API');
+    const result = await runtime.cancelTask(taskId, reason);
 
-    if (!result.ok) {
-      sendError(res, result.httpStatus, result.error);
-      return;
-    }
+    // Keep the local lifecycle mirror in sync as best effort.
+    const lifecycle = getTaskLifecycleService();
+    lifecycle.cancelTask(taskId, reason || 'Cancelled via Windsurf connector API');
 
     logger.info({ taskId, reason }, 'Task cancelled via Windsurf connector');
 
     sendSuccess(res, {
       taskId,
       cancelled: true,
-      state: result.data.state,
+      result,
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
@@ -423,33 +418,23 @@ windsurfConnectorRouter.post('/approval/:approvalId', async (req: Request, res: 
       return;
     }
 
-    const lifecycle = getTaskLifecycleService();
+    const result = await runtime.respondToApproval(approvalId, approved, reason);
 
     // Convention: approvalId is either the taskId itself or prefixed with the taskId.
     const taskId = approvalId.includes(':') ? approvalId.split(':')[0] : approvalId;
-    const taskResult = lifecycle.getTask(taskId);
-
-    if (!taskResult.ok) {
-      sendError(res, taskResult.httpStatus, taskResult.error);
-      return;
-    }
-
-    if (approved) {
-      // Resume the task -- emit event for orchestrator to pick up
-      runtime.emit('approval:granted', { approvalId, taskId, reason });
-      logger.info({ approvalId, taskId, reason }, 'Approval granted for Windsurf connector task');
-    } else {
-      // Reject -- cancel the task
+    if (!approved) {
+      const lifecycle = getTaskLifecycleService();
       lifecycle.cancelTask(taskId, reason || `Approval ${approvalId} denied`);
-      runtime.emit('approval:denied', { approvalId, taskId, reason });
       logger.info({ approvalId, taskId, reason }, 'Approval denied for Windsurf connector task');
+    } else {
+      logger.info({ approvalId, taskId, reason }, 'Approval granted for Windsurf connector task');
     }
 
     sendSuccess(res, {
       approvalId,
       approved,
       taskId,
-      result: approved ? 'resumed' : 'cancelled',
+      result,
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);

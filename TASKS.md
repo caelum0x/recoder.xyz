@@ -66,6 +66,17 @@ This supersedes older notes that still describe agent canvas mode as a design/ba
   - deploy/browser-verify the new canvas mode flow
   - strengthen explicit agent-side board mutation/live broadcast (`recoder_canvas_update`) so agents can actively draw/update the board incrementally without depending on file-write refreshes
 
+## 2026-04-01 Correction (connector backend)
+
+This supersedes older notes that treated the Windsurf connector as an unfixable stub.
+
+- Branch now has a real Windsurf JSON-RPC control plane for:
+  - task status
+  - task cancel
+  - approval response
+  - active-task tracking and bridge notification handling
+- Remaining work is live bridge compatibility verification, not basic backend implementation.
+
 ## 2026-04-01 Correction (Hetzner infra)
 
 This supersedes older task notes that still treat deploy-network breakage, root `.env` drift, or unguarded local Postgres DSNs as the current top Hetzner blockers.

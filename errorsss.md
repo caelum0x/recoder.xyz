@@ -278,7 +278,7 @@ Billing, Overview, Projects, Team — stub pages (may have backend routers but f
 **Langfuse tracing** — NOT BROKEN: Properly implemented with mock fallback when LANGFUSE keys not set. This is config, not code.
 **Vapi webhooks** — ~~generic 500~~ FIXED: Now returns actual error type and message in 500 detail.
 **Export API** — NOT BROKEN: Already returns proper 503 for missing deps and str(e) in 500 detail. errorsss.md was wrong.
-**Windsurf connector** — 583-line real implementation. BLOCKED on Windsurf bridge API spec (protocol TBD). Cannot fix in code.
+**Windsurf connector** — backend control plane is now partially fixed in code. The runtime now sends execute, task-status, cancel, and approval response over JSON-RPC, and the routes no longer fake cancel/approval only in the local lifecycle layer. Remaining risk is real bridge compatibility with Windsurf method names/payloads, not absence of a backend control plane.
 **Plugin registry** — ~~generic 500~~ FIXED: Now includes actual error in detail.
 **43 generic 500s across 10 files** — ALL FIXED: credentials/api, triggers/api, agent_crud, agent_tools, composio, templates/api, presentations_api, vapi_api now return real error messages.
 **Composio profiles** — `credentials/api.py:399-501` graceful degradation returns empty arrays when table/service missing. WORKING AS DESIGNED.
