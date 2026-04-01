@@ -320,6 +320,19 @@ const TOOLS = [
     },
   },
   {
+    name: 'recoder_local_llm',
+    description: 'Call a local Ollama model inside the sandbox for cheap inference. Use for docstrings, code comments, simple Q&A. Saves expensive API calls for complex reasoning.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        prompt: { type: 'string', description: 'Prompt for the local model' },
+        model: { type: 'string', default: 'qwen2.5-coder:3b', description: 'Ollama model name' },
+        sandbox_id: { type: 'string', description: 'Sandbox ID where Ollama is running' },
+      },
+      required: ['prompt', 'sandbox_id'],
+    },
+  },
+  {
     name: 'recoder_canvas_update',
     description: 'Push live Excalidraw element updates to a canvas board open in the Recoder agents UI. The browser\'s CanvasPanel will call updateScene() immediately, adding or replacing elements without a full reload.',
     inputSchema: {
@@ -334,6 +347,43 @@ const TOOLS = [
         },
       },
       required: ['project_id', 'elements'],
+    },
+  },
+  {
+    name: 'recoder_query_data',
+    description: 'Run SQL against the session\'s in-memory DuckDB instance. Use for data analysis, aggregations, and joins. Results are available in the scratchpad if scratchpad_key is provided.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        sql: { type: 'string', description: 'SQL query to execute against DuckDB (SELECT, CREATE TABLE, etc.)' },
+        scratchpad_key: { type: 'string', description: 'Optional key to store results in scratchpad for other agents' },
+      },
+      required: ['sql'],
+    },
+  },
+  {
+    name: 'recoder_load_csv',
+    description: 'Load CSV data into a named DuckDB table in the session. After loading, query with recoder_query_data.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        table_name: { type: 'string', description: 'Name for the new table (alphanumeric and underscore only)' },
+        csv_content: { type: 'string', description: 'Raw CSV content (first row treated as header by default)' },
+        has_header: { type: 'boolean', default: true, description: 'Whether the first row is a header' },
+      },
+      required: ['table_name', 'csv_content'],
+    },
+  },
+  {
+    name: 'recoder_load_json',
+    description: 'Load a JSON array of objects into a named DuckDB table in the session. After loading, query with recoder_query_data.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        table_name: { type: 'string', description: 'Name for the new table' },
+        records: { type: 'array', items: { type: 'object' }, description: 'Array of objects to load as rows' },
+      },
+      required: ['table_name', 'records'],
     },
   },
 ];
@@ -663,6 +713,28 @@ async function handleToolCall(name, args) {
       ).join('\n\n');
     }
 
+    case 'recoder_local_llm': {
+      if (!args.prompt || !args.sandbox_id) throw new Error('prompt and sandbox_id required');
+      const model = args.model || 'qwen2.5-coder:3b';
+      // Start Ollama (idempotent) then query it
+      const dHeaders = { 'Authorization': `Bearer ${DAYTONA_KEY}`, 'Content-Type': 'application/json' };
+      const baseUrl = DAYTONA_URL.replace(/\/api\/?$/, '');
+      const execUrl = `${baseUrl}/api/toolbox/${args.sandbox_id}/toolbox/process/execute`;
+      // Ensure ollama is serving (nohup, idempotent)
+      await fetch(execUrl, {
+        method: 'POST', headers: dHeaders,
+        body: JSON.stringify({ command: 'sh -c "pgrep ollama || (nohup ollama serve > /tmp/ollama.log 2>&1 &) && sleep 2"' }),
+      }).catch(() => {});
+      // Run the prompt through ollama
+      const ollamaRes = await fetch(execUrl, {
+        method: 'POST', headers: dHeaders,
+        body: JSON.stringify({ command: `sh -c "echo ${JSON.stringify(args.prompt)} | ollama run ${model} 2>/dev/null"` }),
+      });
+      const ollamaData = await ollamaRes.json();
+      const output = ollamaData.result || ollamaData.output || ollamaData.stdout || JSON.stringify(ollamaData);
+      return `Model: ${model}\n\n${output}`;
+    }
+
     case 'recoder_canvas_update': {
       if (!args.project_id || !Array.isArray(args.elements)) {
         throw new Error('project_id and elements[] are required');
@@ -679,6 +751,60 @@ async function handleToolCall(name, args) {
       return `Canvas updated: ${args.elements.length} element(s) pushed to project ${args.project_id}. The board in the Recoder UI will update live.`;
     }
 
+    case 'recoder_query_data': {
+      if (!args.sql) throw new Error('sql is required');
+      const body = {
+        sql: args.sql,
+        ...(args.scratchpad_key ? { scratchpad_key: args.scratchpad_key } : {}),
+        agent_id: AGENT_ID,
+      };
+      const data = await apiFetch(`${DOCKER_URL}/api/a2a/data/query`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      const result = data.data;
+      const header = `Rows: ${result.rowCount}${result.truncated ? ` (truncated to ${result.rows.length})` : ''}\nColumns: ${result.columns.join(', ')}\n`;
+      if (!result.rows.length) return header + '\n(no rows returned)';
+      const rows = result.rows.slice(0, 20).map((r, i) =>
+        `[${i + 1}] ${JSON.stringify(r)}`
+      ).join('\n');
+      return header + '\n' + rows + (result.rows.length > 20 ? `\n... and ${result.rows.length - 20} more rows` : '');
+    }
+
+    case 'recoder_load_csv': {
+      if (!args.table_name || !args.csv_content) throw new Error('table_name and csv_content are required');
+      const body = {
+        table_name: args.table_name,
+        csv_content: args.csv_content,
+        has_header: args.has_header !== false,
+        agent_id: AGENT_ID,
+      };
+      const data = await apiFetch(`${DOCKER_URL}/api/a2a/data/load/csv`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      const result = data.data;
+      return `Table "${args.table_name}" created: ${result.rowCount} rows, columns: ${result.columns.join(', ')}. Use recoder_query_data to query it.`;
+    }
+
+    case 'recoder_load_json': {
+      if (!args.table_name || !Array.isArray(args.records)) throw new Error('table_name and records[] are required');
+      const body = {
+        table_name: args.table_name,
+        records: args.records,
+        agent_id: AGENT_ID,
+      };
+      const data = await apiFetch(`${DOCKER_URL}/api/a2a/data/load/json`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      const result = data.data;
+      return `Table "${args.table_name}" created: ${result.rowCount} rows, columns: ${result.columns.join(', ')}. Use recoder_query_data to query it.`;
+    }
+
     default:
       throw new Error(`Unknown tool: ${name}`);
   }
@@ -693,7 +819,7 @@ async function handleMessage(msg) {
       respond(id, {
         protocolVersion: '2024-11-05',
         capabilities: { tools: {} },
-        serverInfo: { name: 'recoder-a2a', version: '2.8.0' },
+        serverInfo: { name: 'recoder-a2a', version: '2.9.0' },
       });
       break;
     case 'notifications/initialized':
