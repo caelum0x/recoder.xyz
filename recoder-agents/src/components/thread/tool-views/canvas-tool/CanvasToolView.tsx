@@ -21,6 +21,11 @@ import { Button } from '@/components/ui/button';
 import { useFileContent } from '@/hooks/files';
 import { CanvasRenderer } from '@/components/file-renderers/canvas-renderer';
 import { formatTimestamp } from '../utils';
+import { CanvasPanel } from '@/components/canvas/CanvasPanel';
+import {
+  getExcalidrawDisplayName,
+  isExcalidrawFileName,
+} from '@/lib/canvas/excalidraw';
 
 // Module-level Set to track which tool_call_ids we've already emitted refresh events for
 const refreshedToolCalls = new Set<string>();
@@ -120,6 +125,7 @@ export function CanvasToolView({
   }, [canvasPath, args.canvas_path, canvasName]);
 
   const fileName = resolvedCanvasPath?.split('/').pop() || 'Canvas';
+  const isExcalidrawCanvas = resolvedCanvasPath ? isExcalidrawFileName(resolvedCanvasPath) : false;
   const sandboxId = project?.sandbox?.id;
 
   // Load canvas file content
@@ -219,7 +225,13 @@ export function CanvasToolView({
   // Get clean canvas name for display
   const displayName = useMemo(() => {
     const raw = canvasName || canvasPath?.split('/').pop() || fileName || 'Canvas';
-    return raw.trim().replace(/[\r\n]+/g, '').replace(/\s+$/g, '').replace(/\.kanvax$/, '') || 'Canvas';
+    const sanitized = raw.trim().replace(/[\r\n]+/g, '').replace(/\s+$/g, '');
+
+    if (isExcalidrawFileName(sanitized)) {
+      return getExcalidrawDisplayName(sanitized) || 'Canvas';
+    }
+
+    return sanitized.replace(/\.kanvax$/i, '') || 'Canvas';
   }, [canvasName, canvasPath, fileName]);
 
   if (!toolCall) return null;
@@ -293,13 +305,21 @@ export function CanvasToolView({
           </div>
         ) : canvasContent ? (
           <div className="h-full min-h-[400px]" key={refreshKey}>
-            <CanvasRenderer
-              content={typeof canvasContent === 'string' ? canvasContent : ''}
-              filePath={resolvedCanvasPath || ''}
-              fileName={fileName}
-              sandboxId={sandboxId}
-              className="h-full w-full"
-            />
+            {isExcalidrawCanvas ? (
+              <CanvasPanel
+                content={typeof canvasContent === 'string' ? canvasContent : ''}
+                fileName={fileName}
+                className="h-full w-full"
+              />
+            ) : (
+              <CanvasRenderer
+                content={typeof canvasContent === 'string' ? canvasContent : ''}
+                filePath={resolvedCanvasPath || ''}
+                fileName={fileName}
+                sandboxId={sandboxId}
+                className="h-full w-full"
+              />
+            )}
           </div>
         ) : (
           <div className="flex flex-col items-center justify-center h-full py-12 px-6 bg-gradient-to-b from-white to-zinc-50 dark:from-zinc-950 dark:to-zinc-900">

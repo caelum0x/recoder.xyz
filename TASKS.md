@@ -1,6 +1,6 @@
 # Recoder Platform — Task List
 
-Last updated: 2026-03-31 (post live Nike presentation fix + browser verification)
+Last updated: 2026-04-01 (post live Nike presentation fix; canvas-mode Excalidraw routing fixed in branch)
 
 ---
 
@@ -40,13 +40,33 @@ This top section supersedes older task notes below where they conflict.
   - strict-auth-safe empty bearer handling plus strict-mode enforcement on container create/delete.
 - Current work is deployment/browser verification of the pushed commits, not rediscovering root cause.
 
+## 2026-04-01 Correction
+
+This supersedes older notes that still describe agent canvas mode as a design/banner/image workflow.
+
+- The Excalidraw file/editor foundation is already landed in `recoder-agents`, and the next A1 slice is now implemented in branch: canvas mode entry points route into board-oriented workflows instead of stale image prompts.
+- Root cause:
+  1. canvas action labels/prompts were duplicated in multiple UI entry points
+  2. those entry points still advertised image-generation actions, which made the new `.excalidraw` path hard to discover and easy for the agent to miss
+- Branch fix:
+  - shared canvas config in `recoder-agents/src/lib/canvas/mode-config.ts`
+  - mode panel, chat input label, and new-thread canvas starter now all use the same Excalidraw-oriented board actions/prompts
+  - legacy stored action ids normalize cleanly to the new board actions so existing local UI state does not break
+  - thread tool-view routing now recognizes `.excalidraw` board writes and refreshes them through the inline canvas view instead of only treating `.kanvax` files as canvas updates
+- Local verification:
+  - `pnpm --dir recoder-agents exec vitest run src/lib/canvas/excalidraw.test.ts src/lib/utils/file-types.test.ts src/lib/canvas/mode-config.test.ts src/components/thread/tool-views/canvas-tool/_utils.test.ts` passed
+- Remaining A1 work:
+  - deploy/browser-verify the new canvas mode flow
+  - add agent-side board mutation/live broadcast (`recoder_canvas_update`) so agents can actively draw/update the board after creation
+
 ## Immediate Follow-ups
 
 1. Browser-verify Web IDE preview + publish on the currently deployed build.
-2. Prevent Hetzner backend DB credential drift (`recoder-6ko`).
-3. Restore git-based deployability on the Hetzner app host (`recoder-o66`).
-4. Re-enable deployed `STRICT_AUTH=true` only after broader browser verification passes.
-5. Continue broader agents IDE/browser verification beyond the Nike presentation path.
+2. Deploy and browser-verify the new `recoder-agents` canvas-mode Excalidraw routing.
+3. Prevent Hetzner backend DB credential drift (`recoder-6ko`).
+4. Restore git-based deployability on the Hetzner app host (`recoder-o66`).
+5. Re-enable deployed `STRICT_AUTH=true` only after broader browser verification passes.
+6. Continue broader agents IDE/browser verification beyond the Nike presentation path.
 
 ## Current Remaining Priorities (2026-03-31, post-`77cd90bb`)
 1. Browser-verify Web IDE preview + publish on the currently deployed build.

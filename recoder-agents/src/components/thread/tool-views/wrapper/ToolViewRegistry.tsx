@@ -352,9 +352,10 @@ export function ToolView({ toolCall, toolResult, ...props }: ToolViewProps) {
 
   // Get file path directly from tool call arguments (from metadata)
   const filePath = toolCall?.arguments?.file_path || toolCall?.arguments?.target_file || toolCall?.arguments?.canvas_path;
+  const { isValid: isCanvasFile, canvasName } = parseCanvasFilePath(filePath);
   
-  // Emit canvas refresh for ANY tool with canvas_path that completes successfully
-  const canvasPath = toolCall?.arguments?.canvas_path;
+  // Emit canvas refresh for tools that update a canvas file, even if they used generic file actions.
+  const canvasPath = toolCall?.arguments?.canvas_path || (isCanvasFile ? filePath : null);
   const toolCallId = toolCall?.tool_call_id;
   
   useEffect(() => {
@@ -383,9 +384,6 @@ export function ToolView({ toolCall, toolResult, ...props }: ToolViewProps) {
 
   // check if the file path is a presentation slide
   const { isValid: isPresentationSlide, presentationName, slideNumber } = parsePresentationSlidePath(filePath);
-
-  // check if the file path is a canvas file
-  const { isValid: isCanvasFile, canvasName } = parseCanvasFilePath(filePath);
 
   // define presentation-related tools that shouldn't be transformed
   const presentationTools = [

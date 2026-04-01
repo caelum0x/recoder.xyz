@@ -1,6 +1,6 @@
 # Recoder Platform — Master Plan
 
-Last updated: 2026-04-01 (recoder-web follow-up edit fixes pushed; Excalidraw board foundation landed in recoder-agents)
+Last updated: 2026-04-01 (recoder-web follow-up edit fixes pushed; Excalidraw board foundation and canvas-mode routing landed in recoder-agents)
 
 ---
 
@@ -72,7 +72,9 @@ The roadmap below remains useful, but older claims elsewhere that the Nike prese
 **A1. Excalidraw canvas in recoder-agents**
 - 2026-04-01 progress:
   `recoder-agents` now supports dedicated `.excalidraw` and `.excalidraw.json` board files via `src/components/canvas/CanvasPanel.tsx`, while legacy `.kanvax` files remain on the existing backend image-composition contract.
-  Remaining A1 work is agent-side board creation/update tooling and live broadcast wiring (`recoder_canvas_update`) so agents can drive the board directly.
+  Canvas mode entry points are now aligned to that board workflow through a shared config in `src/lib/canvas/mode-config.ts`: the mode panel, chat mode label, and new-thread empty state now steer users toward board/diagram/wireframe/flowchart prompts that explicitly create `.excalidraw` boards under `/workspace/canvases/` instead of stale image-generation prompts.
+  The thread tool-view path now also recognizes generic file writes to `.excalidraw` boards as canvas updates, so inline canvas results can refresh/render through the shared canvas view instead of assuming every board write is `.kanvax`.
+  Remaining A1 work is agent-side board mutation tooling and live broadcast wiring (`recoder_canvas_update`) so agents can actively draw/update boards after creation.
 - `npm install @excalidraw/excalidraw` in `recoder-agents`
 - Create `CanvasPanel.tsx` component wrapping `<Excalidraw>` with `initialData` prop
 - Add canvas tool to agent tool sidebar (replace broken FAL canvas)
