@@ -138,9 +138,13 @@ async def lifespan(app: FastAPI):
         try:
             from core.services.db import execute_one
             await execute_one("SELECT 1", {})
-            logger.debug("Database connection pool warmed up")
+            logger.info("Database connection verified at startup")
         except Exception as e:
-            logger.warning(f"Failed to warm up database connection pool: {e}")
+            logger.error(
+                f"FATAL: Database unreachable at startup — check DATABASE_URL credentials. "
+                f"Error: {e}. Aborting startup to prevent silent degradation."
+            )
+            raise RuntimeError(f"Database connection failed at startup: {e}") from e
         
         # Pre-load tool classes and schemas to avoid first-request delay
         from core.utils.tool_discovery import warm_up_tools_cache

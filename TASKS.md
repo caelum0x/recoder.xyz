@@ -62,9 +62,13 @@ This supersedes older notes that still describe agent canvas mode as a design/ba
 ## Immediate Follow-ups
 
 1. Browser-verify Web IDE preview + publish on the currently deployed build.
-2. Deploy and browser-verify the new `recoder-agents` canvas-mode Excalidraw routing.
+2. ~~Deploy~~ the new `recoder-agents` canvas-mode Excalidraw routing. DEPLOYED (2026-04-01) — browser-verify pending.
 3. Prevent Hetzner backend DB credential drift (`recoder-6ko`).
 4. Restore git-based deployability on the Hetzner app host (`recoder-o66`).
+   **Status (2026-04-01):** Deploy key generated on Hetzner. SSH + remote configured. Needs GitHub deploy key setup:
+   - Public key: `ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAILpBvLhkB257nYFqR6Uv+oGNPiI8wHa8hh9wK1TAoix5 hetzner-deploy-key`
+   - Add at: github.com/recoder-xyz/recoder → Settings → Deploy keys → Add (read-only)
+   - Then on Hetzner: `cd /root/recoder.xyz && git fetch --depth=1 origin main && git reset --hard origin/main`
 5. Re-enable deployed `STRICT_AUTH=true` only after broader browser verification passes.
 6. Continue broader agents IDE/browser verification beyond the Nike presentation path.
 

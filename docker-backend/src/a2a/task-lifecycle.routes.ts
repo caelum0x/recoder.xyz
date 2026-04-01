@@ -307,6 +307,44 @@ taskLifecycleRouter.get(
 );
 
 // ---------------------------------------------------------------------------
+// POST /:taskId/claim -- Claim a task for exclusive processing by a session
+// ---------------------------------------------------------------------------
+
+taskLifecycleRouter.post(
+  '/:taskId/claim',
+  (req: Request, res: Response) => {
+    try {
+      const { taskId } = req.params;
+      const { session_id, agent_id } = req.body ?? {};
+
+      if (!session_id || typeof session_id !== 'string') {
+        sendError(res, 400, buildA2AError({
+          code: A2AErrorCodeEnum.MissingEnvelopeField,
+          message: 'session_id is required',
+        }));
+        return;
+      }
+
+      const service = getTaskLifecycleService();
+      const result = service.claimTask(taskId, session_id, typeof agent_id === 'string' ? agent_id : 'unknown');
+
+      if (!result.ok) {
+        sendError(res, result.httpStatus, result.error);
+        return;
+      }
+
+      sendSuccess(res, result.data);
+    } catch (err) {
+      logger.error({ err, taskId: req.params.taskId }, 'unhandled error in POST /api/a2a/tasks/:taskId/claim');
+      sendError(res, 500, buildA2AError({
+        code: A2AErrorCodeEnum.InternalError,
+        message: 'Internal server error while claiming task',
+      }));
+    }
+  },
+);
+
+// ---------------------------------------------------------------------------
 // GET / -- List tasks with optional filters
 // ---------------------------------------------------------------------------
 
