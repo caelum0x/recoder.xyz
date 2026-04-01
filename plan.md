@@ -1,6 +1,6 @@
 # Recoder Platform — Master Plan
 
-Last updated: 2026-04-01 (Hetzner safe cleanup reduced unexpected checkout drift from 45 to 17; the workflow metering/qdrant overlap is landed, and the agents file-proxy HEAD mismatch now has a backend fix in branch)
+Last updated: 2026-04-01 (Hetzner safe cleanup reduced unexpected checkout drift from 45 to 17; the workflow metering/qdrant overlap is landed, and the agents file-proxy HEAD mismatch is now deployed on the backend)
 
 ---
 
@@ -104,7 +104,8 @@ This section remains accurate for the agents-side Nike presentation recovery.
 - Follow-up infra work:
   1. `recoder-6ko` — prevent Hetzner backend DB credential drift
   2. `recoder-o66` — fixed live; checkout audit is complete, an unexpected-drift backup exists under `/root/recoder.xyz/backups/checkout-drift-20260401-181818/`, and the remaining host cleanup is now the 17-entry `recoder-025` remainder
-  3. `recoder-tai` — the underlying agents `HEAD /api/files/content` mismatch is now fixed in branch by adding backend `HEAD /sandboxes/{sandbox_id}/files/content`; live deployment/verification still remains
+  3. `recoder-tai` — closed: backend now exposes `HEAD /sandboxes/{sandbox_id}/files/content`, was deployed to Hetzner, and direct backend `HEAD` for the Nike metadata path now returns `200`
+  4. `recoder-e5a` — remaining follow-up is authenticated end-to-end verification through `agents.recoder.xyz/api/files/content`
 
 ## Historical Plan Notes
 
