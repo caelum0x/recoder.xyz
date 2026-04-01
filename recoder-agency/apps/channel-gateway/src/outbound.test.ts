@@ -21,11 +21,11 @@ function createResponse(): MockResponse {
 	const res = {
 		statusCodeCaptured: undefined,
 		bodyCaptured: "",
-		writeHead(statusCode: number) {
+		writeHead(this: MockResponse, statusCode: number) {
 			this.statusCodeCaptured = statusCode;
 			return this;
 		},
-		end(chunk?: string) {
+		end(this: MockResponse, chunk?: string) {
 			this.bodyCaptured = chunk ?? "";
 			return this;
 		},

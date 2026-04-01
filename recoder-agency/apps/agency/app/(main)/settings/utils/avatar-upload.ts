@@ -136,7 +136,7 @@ export async function uploadAvatar(
 		throw new Error("Failed to get avatar URL");
 	}
 
-	return appStorage().getPublicUrl(uploadResult.data.path).data.publicUrl;
+	return appStorage().getPublicUrl(uploadResult.data!.path).data.publicUrl;
 }
 
 /**

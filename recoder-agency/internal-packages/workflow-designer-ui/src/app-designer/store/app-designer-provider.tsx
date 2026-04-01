@@ -4,7 +4,7 @@ import type { LanguageModelProvider } from "@recoder/language-model";
 import type { Workspace } from "@recoder/protocol";
 import type { GiselleClient } from "@recoder/react";
 import { usePathname } from "next/navigation";
-import { createContext, useContext, useEffect, useRef, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import { AppConnectionStateSyncProvider } from "./app-connection-state-sync-provider";
 import {
 	type AppDesignerStoreApi,
@@ -67,12 +67,16 @@ export function AppDesignerProvider({
 	const [storeApi] = useState(() =>
 		createAppDesignerStore({ initialWorkspace, llmProviders }),
 	);
+	const handleSaveError = useCallback((error: unknown) => {
+		console.error("[AppDesigner] Workspace save failed:", error);
+	}, []);
 	const [persistence] = useState(() =>
 		createAppDesignerPersistenceController({
 			store: storeApi,
 			debounceMs,
 			save,
 			saveBestEffort,
+			onSaveError: handleSaveError,
 		}),
 	);
 

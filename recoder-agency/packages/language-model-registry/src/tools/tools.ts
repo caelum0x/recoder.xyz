@@ -3,6 +3,7 @@ import { githubApi } from "./github";
 import { googleWebSearch } from "./google-web-search";
 import { openaiWebSearch } from "./openai-web-search";
 import { postgres } from "./postgres";
+import { recoderWebSearch } from "./recoder-web-search";
 
 export * from "./tool";
 
@@ -12,6 +13,7 @@ export const languageModelTools = [
 	googleWebSearch,
 	openaiWebSearch,
 	postgres,
+	recoderWebSearch,
 ] as const;
 
 export const languageModelToolNames = languageModelTools.map(

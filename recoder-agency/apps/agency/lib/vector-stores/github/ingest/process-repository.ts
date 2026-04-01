@@ -64,6 +64,9 @@ const CONTENT_PROCESSORS: Record<
 	blob: async ({ repositoryIndex, embeddingProfileId, trigger, team }) => {
 		const { owner, repo, installationId, teamDbId } = repositoryIndex;
 		const octokit = buildOctokit(installationId);
+		if (octokit === null) {
+			throw new Error("GitHub App credentials not configured");
+		}
 		const commit = await fetchDefaultBranchHead(octokit, owner, repo);
 
 		const embeddingComplete = createIngestEmbeddingCallback({
@@ -114,8 +117,12 @@ const CONTENT_PROCESSORS: Record<
 
 		const headers = buildAiGatewayHeaders(team);
 
+		const prAuthConfig = buildGitHubAuthConfig(installationId);
+		if (prAuthConfig === null) {
+			throw new Error("GitHub App credentials not configured");
+		}
 		await ingestGitHubPullRequests({
-			githubAuthConfig: buildGitHubAuthConfig(installationId),
+			githubAuthConfig: prAuthConfig,
 			source: { owner, repo },
 			teamDbId,
 			embeddingProfileId,
@@ -153,8 +160,12 @@ const CONTENT_PROCESSORS: Record<
 
 		const headers = buildAiGatewayHeaders(team);
 
+		const issueAuthConfig = buildGitHubAuthConfig(installationId);
+		if (issueAuthConfig === null) {
+			throw new Error("GitHub App credentials not configured");
+		}
 		await ingestGitHubIssues({
-			githubAuthConfig: buildGitHubAuthConfig(installationId),
+			githubAuthConfig: issueAuthConfig,
 			source: { owner, repo },
 			teamDbId,
 			embeddingProfileId,
