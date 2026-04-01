@@ -21,9 +21,13 @@ import {
   type AuditEventSink,
 } from './task-lifecycle.service';
 import { getHeartbeatTracker } from './heartbeat-tracker.service';
+import { createNatsEventBus, type NatsEventBus } from './nats-event-bus';
 import { createLogger } from '../logger';
 
 const logger = createLogger('a2a-event-bridge');
+
+// NATS event bus singleton — initialised lazily in wireA2AEventBridge
+let _natsEventBus: NatsEventBus | null = null;
 
 // ---------------------------------------------------------------------------
 // Audit event type -> SSE event type mapping
@@ -110,6 +114,20 @@ export function wireA2AEventBridge(): void {
     };
 
     eventBus.publish(event);
+
+    // ── NATS JetStream publish (non-blocking, best-effort) ──
+    // Mirrors every task lifecycle event to NATS A2A_TASKS stream so
+    // external consumers (multi-process bridge, monitoring) get real-time feed.
+    if (_natsEventBus) {
+      const natsSubject = `task.${auditEvent.event_type.replace('task.', '')}`;
+      _natsEventBus.publish('A2A_TASKS', natsSubject, {
+        id: event.id,
+        type: event.type,
+        timestamp: event.timestamp,
+        taskId: event.taskId,
+        data: event.data,
+      }).catch(() => {}); // fire-and-forget — NATS is a supplement, not primary
+    }
   };
 
   lifecycleService.addAuditSink(auditSink);
@@ -143,6 +161,22 @@ export function wireA2AEventBridge(): void {
 
   heartbeatTracker.events.on('agent:online', _heartbeatOnlineListener);
   heartbeatTracker.events.on('agent:offline', _heartbeatOfflineListener);
+
+  // ── Bootstrap NATS event bus (non-blocking) ──
+  // Connects to NATS if NATS_URL is set; otherwise creates a no-op bus.
+  // All NATS publishes above become live once this resolves.
+  createNatsEventBus()
+    .then((bus) => {
+      _natsEventBus = bus;
+      if (bus.isConnected()) {
+        logger.info('NATS JetStream event bus connected — task lifecycle events will be mirrored');
+      } else {
+        logger.info('NATS event bus initialised in no-op mode (NATS not available)');
+      }
+    })
+    .catch((err) => {
+      logger.warn({ err }, 'NATS event bus bootstrap failed — continuing without NATS');
+    });
 
   _bridgeWired = true;
   logger.info('A2A event bridge wired: TaskLifecycleService + HeartbeatTracker -> A2AEventBus');
