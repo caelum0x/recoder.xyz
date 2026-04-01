@@ -37,6 +37,7 @@ SEARCH_TOOLS = [
 
 UTILITY_TOOLS = [
     ('browser_tool', 'core.tools.browser_tool', 'BrowserTool'),
+    ('steel_browser_tool', 'core.tools.steel_browser_tool', 'SteelBrowserTool'),
     ('vapi_voice_tool', 'core.tools.vapi_voice_tool', 'VapiVoiceTool'),
     ('reality_defender_tool', 'core.tools.reality_defender_tool', 'RealityDefenderTool'),
     ('apify_tool', 'core.tools.apify_tool', 'ApifyTool'),
