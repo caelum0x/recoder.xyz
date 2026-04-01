@@ -110,12 +110,13 @@ class SandboxComputerUseTool(SandboxToolsBase):
 
     async def _write_and_run_script(self, script_content: str, script_path: str, timeout: int = 60) -> str:
         """Write a script to the sandbox and execute it. Returns stdout."""
-        # Write the script using base64 to avoid shell escaping issues
+        # Write the script using base64 heredoc to avoid shell escaping/truncation
         b64 = base64.b64encode(script_content.encode()).decode()
         await self.sandbox.process.exec(
-            f"echo '{b64}' | base64 -d > {script_path} && chmod +x {script_path}",
+            f"cat <<'__B64EOF__' | base64 -d > {script_path}\n{b64}\n__B64EOF__",
             timeout=10
         )
+        await self.sandbox.process.exec(f"chmod +x {script_path}", timeout=5)
         result = await self.sandbox.process.exec(f"bash {script_path}", timeout=timeout)
         return (result.result or "").strip()
 

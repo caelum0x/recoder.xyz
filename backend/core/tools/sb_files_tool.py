@@ -117,16 +117,11 @@ class SandboxFilesTool(SandboxToolsBase):
         if parent_dir:
             await self.sandbox.process.exec(f"mkdir -p '{parent_dir}'", timeout=10)
 
-        # Write content to temp file in sandbox using heredoc to avoid shell escaping issues.
-        # Previous approach used echo + base64 which truncated on large content or single quotes.
-        import base64
-        b64_content = base64.b64encode(text_content.encode('utf-8')).decode('ascii')
-        # Split into 76-char lines to avoid shell line-length limits
-        chunked = '\n'.join(b64_content[i:i+76] for i in range(0, len(b64_content), 76))
-        await self.sandbox.process.exec(
-            f"cat <<'__RECODER_B64_EOF__' | base64 -d > /tmp/_docgen_content.txt\n{chunked}\n__RECODER_B64_EOF__",
-            timeout=30
-        )
+        # Write content to sandbox temp file via the chunked file service (handles any size).
+        # Previous heredoc approach truncated when base64 exceeded shell buffer limits.
+        content_written = await self.write_file('/tmp/_docgen_content.txt', text_content.encode('utf-8'))
+        if not content_written:
+            return self.fail_response(f"Failed to stage content for {ext.upper()} conversion")
 
         # Write the conversion script to sandbox
         if ext == 'docx':
@@ -186,13 +181,10 @@ print('OK')
         else:
             return self.fail_response(f"Unsupported binary format: .{ext}")
 
-        # Write script to temp file using heredoc (avoids truncation on large scripts)
-        script_b64 = base64.b64encode(script.encode('utf-8')).decode('ascii')
-        chunked_script = '\n'.join(script_b64[i:i+76] for i in range(0, len(script_b64), 76))
-        await self.sandbox.process.exec(
-            f"cat <<'__RECODER_SCRIPT_EOF__' | base64 -d > /tmp/_docgen_script.py\n{chunked_script}\n__RECODER_SCRIPT_EOF__",
-            timeout=15
-        )
+        # Write script to sandbox temp file via chunked file service
+        script_written = await self.write_file('/tmp/_docgen_script.py', script.encode('utf-8'))
+        if not script_written:
+            return self.fail_response(f"Failed to stage conversion script for {ext.upper()}")
 
         try:
             # Ensure required library is installed (pip install is fast if already present)

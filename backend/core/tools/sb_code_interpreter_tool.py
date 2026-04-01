@@ -147,10 +147,10 @@ class SandboxCodeInterpreterTool(SandboxToolsBase):
             try:
                 await self.sandbox.fs.upload_file(tmp_file, code.encode('utf-8'))
             except Exception:
-                # Fallback: write via base64 to avoid escaping issues
+                # Fallback: write via base64 heredoc to avoid escaping/truncation
                 import base64
                 b64 = base64.b64encode(code.encode('utf-8')).decode('ascii')
-                await self.sandbox.process.exec(f"echo '{b64}' | base64 -d > {tmp_file}", timeout=10)
+                await self.sandbox.process.exec(f"cat <<'__B64EOF__' | base64 -d > {tmp_file}\n{b64}\n__B64EOF__", timeout=10)
 
             # Execute the temp file
             response = await self.sandbox.process.exec(f"{runner_cmd}; __e=$?; rm -f {tmp_file}; exit $__e", timeout=timeout)

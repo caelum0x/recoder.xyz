@@ -11,7 +11,8 @@
  */
 
 import dns from 'dns';
-import { promisify } from 'util';
+import { promisify, randomUUID } from 'util';
+import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
 import { execSync, execFileSync } from 'child_process';
@@ -528,16 +529,9 @@ export function stopSslRenewalScheduler(): void {
 
 // ==================== Helpers ====================
 
-function generateVerificationToken(projectId: string, domain: string): string {
-  // Simple hash-like token for verification
-  const input = `${projectId}:${domain}:${Date.now()}`;
-  let hash = 0;
-  for (let i = 0; i < input.length; i++) {
-    const char = input.charCodeAt(i);
-    hash = ((hash << 5) - hash) + char;
-    hash |= 0;
-  }
-  return Math.abs(hash).toString(36) + crypto.randomUUID().slice(0, 8);
+function generateVerificationToken(_projectId: string, _domain: string): string {
+  // Crypto-grade random token for domain ownership verification
+  return `recoder-verify-${crypto.randomBytes(16).toString('hex')}`;
 }
 
 /**

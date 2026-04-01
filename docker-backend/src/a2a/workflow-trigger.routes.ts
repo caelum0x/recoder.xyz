@@ -76,10 +76,20 @@ router.post('/run-steps', async (req: Request, res: Response) => {
     return fail(res, 400, 'steps[] is required');
   }
 
+  const durable = req.query.durable === 'true' || req.body.durable === true;
+
   try {
-    const { executeWorkflowSteps } = await import('./workflow-step-executor.js');
-    const result = await executeWorkflowSteps(steps, context);
-    ok(res, result);
+    if (durable) {
+      // Durable execution via Upstash Workflow — survives crashes, auto-resumes
+      const { executeDurableWorkflow } = await import('./durable-workflow.js');
+      const result = await executeDurableWorkflow(steps, context);
+      ok(res, result);
+    } else {
+      // Direct execution — faster, no durability guarantees
+      const { executeWorkflowSteps } = await import('./workflow-step-executor.js');
+      const result = await executeWorkflowSteps(steps, context);
+      ok(res, result);
+    }
   } catch (err) {
     logger.warn({ err }, '[workflow-trigger] run-steps failed');
     fail(res, 500, err instanceof Error ? err.message : 'Step execution failed');

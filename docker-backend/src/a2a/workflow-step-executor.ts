@@ -16,11 +16,95 @@
 
 import { createLogger } from '../logger';
 import { trackLlmCall, trackSandboxExec } from '../metering/openmeter-client.js';
+import { getA2AEventBus, A2AEventType } from './a2a-event-bus';
+import { v4 as uuid } from 'uuid';
 
 const logger = createLogger('workflow-step-executor');
 
 function getOpenRouterKey(): string {
   return process.env.OPENROUTER_API_KEY ?? '';
+}
+
+// ---------------------------------------------------------------------------
+// Streaming LLM response consumer
+// ---------------------------------------------------------------------------
+
+/**
+ * Consume an SSE streaming response from OpenRouter.
+ * Publishes token chunks as A2A task.progress events so SSE subscribers
+ * see live output, then returns the assembled content.
+ */
+async function consumeStreamingResponse(
+  res: globalThis.Response,
+  model: string,
+  context: Record<string, unknown>,
+): Promise<unknown> {
+  const reader = res.body!.getReader();
+  const decoder = new TextDecoder();
+  let content = '';
+  let inputTokens = 0;
+  let outputTokens = 0;
+  let chunkCount = 0;
+  const taskId = context._taskId ? String(context._taskId) : undefined;
+  const workspaceId = context._workspaceId ? String(context._workspaceId) : undefined;
+  const bus = getA2AEventBus();
+
+  try {
+    let buffer = '';
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+
+      // Parse SSE lines
+      const lines = buffer.split('\n');
+      buffer = lines.pop() ?? '';
+
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue;
+        const data = line.slice(6).trim();
+        if (data === '[DONE]') continue;
+
+        try {
+          const chunk = JSON.parse(data) as {
+            choices?: Array<{ delta?: { content?: string } }>;
+            usage?: { prompt_tokens?: number; completion_tokens?: number };
+          };
+
+          const delta = chunk.choices?.[0]?.delta?.content ?? '';
+          if (delta) {
+            content += delta;
+            chunkCount++;
+
+            // Publish token chunk as progress event (batched to reduce noise)
+            if (chunkCount % 3 === 0 || delta.length > 20) {
+              bus.publish({
+                id: `evt_${uuid().replace(/-/g, '').slice(0, 16)}`,
+                type: A2AEventType.TaskProgress,
+                timestamp: new Date().toISOString(),
+                data: { type: 'token', content: delta, accumulated: content.length, model },
+                taskId,
+                workspaceId,
+              });
+            }
+          }
+
+          if (chunk.usage) {
+            inputTokens = chunk.usage.prompt_tokens ?? 0;
+            outputTokens = chunk.usage.completion_tokens ?? 0;
+          }
+        } catch { /* malformed SSE line */ }
+      }
+    }
+  } finally {
+    reader.releaseLock();
+  }
+
+  const userId = String(context._userId ?? 'workflow');
+  trackLlmCall({ userId, model, inputTokens, outputTokens, provider: 'openrouter', projectId: String(context._projectId ?? '') });
+
+  return { content, model, usage: { prompt_tokens: inputTokens, completion_tokens: outputTokens }, streamed: true, chunks: chunkCount };
 }
 
 function getDaytonaUrl(): string {
@@ -66,8 +150,8 @@ async function executeLlmStep(
   const model = String(config.model ?? 'anthropic/claude-sonnet-4-20250514');
   const systemPrompt = config.system ? String(config.system) : undefined;
   const maxTokens = Number(config.maxTokens ?? 2048);
+  const shouldStream = config.stream !== false; // default: stream
   const openRouterKey = getOpenRouterKey();
-  const startedAt = Date.now();
 
   if (!prompt) throw new Error('llm step requires config.prompt');
   if (!openRouterKey) throw new Error('OPENROUTER_API_KEY not configured');
@@ -88,7 +172,13 @@ async function executeLlmStep(
       Authorization: `Bearer ${openRouterKey}`,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ model, messages, max_tokens: maxTokens }),
+    body: JSON.stringify({
+      model,
+      messages,
+      max_tokens: maxTokens,
+      stream: shouldStream,
+      ...(shouldStream ? { stream_options: { include_usage: true } } : {}),
+    }),
     signal: AbortSignal.timeout(120_000),
   });
 
@@ -97,6 +187,12 @@ async function executeLlmStep(
     throw new Error(`LLM call failed ${res.status}: ${text.slice(0, 200)}`);
   }
 
+  // ── Streaming path: parse SSE chunks and publish progress events ──
+  if (shouldStream && res.body) {
+    return consumeStreamingResponse(res, model, context);
+  }
+
+  // ── Non-streaming path ──
   const data = (await res.json()) as {
     choices?: Array<{ message?: { content?: string } }>;
     usage?: { prompt_tokens?: number; completion_tokens?: number };
