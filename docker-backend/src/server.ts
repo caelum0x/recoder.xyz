@@ -80,6 +80,7 @@ import { memoryRouter } from './a2a/memory.routes.js';
 import { codeSearchRouter } from './a2a/code-search.routes.js';
 import { searchRouter } from './a2a/search.routes.js';
 import { webhookRouter } from './a2a/webhook.routes.js';
+import { scratchpadRouter } from './a2a/scratchpad.routes.js';
 import { workflowTriggerRouter } from './a2a/workflow-trigger.routes.js';
 import { duckdbRouter } from './a2a/duckdb.routes.js';
 import { createCanvasRouter } from './a2a/canvas.routes.js';
@@ -15013,6 +15014,7 @@ app.use('/api/a2a/memory', authenticateRequest, memoryRouter);
 app.use('/api/a2a/code-search', codeSearchRouter);
 app.use('/api/a2a/search', searchRouter);
 app.use('/api/a2a/webhook', webhookRouter);
+app.use('/api/a2a/scratchpad', scratchpadRouter);
 app.use('/api/a2a/workflows', workflowTriggerRouter);
 app.use('/api/a2a/data', duckdbRouter);
 app.use('/api/a2a/canvas-update', authenticateRequest, createCanvasRouter({

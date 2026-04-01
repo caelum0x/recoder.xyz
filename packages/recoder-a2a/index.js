@@ -348,6 +348,34 @@ const TOOLS = [
     },
   },
   {
+    name: 'recoder_write_scratchpad',
+    description: 'Write a key/value pair to the shared session scratchpad. Other agents in the same session can read it. Use for sharing research findings, intermediate results, and structured data between agents.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        key: { type: 'string', description: 'Key name (e.g. "research/auth-flow", "data/users")' },
+        value: { description: 'Any JSON-serializable value to store' },
+      },
+      required: ['key', 'value'],
+    },
+  },
+  {
+    name: 'recoder_read_scratchpad',
+    description: 'Read a value from the shared session scratchpad by key.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        key: { type: 'string', description: 'Key to read' },
+      },
+      required: ['key'],
+    },
+  },
+  {
+    name: 'recoder_list_scratchpad',
+    description: 'List all keys and values in the current session scratchpad.',
+    inputSchema: { type: 'object', properties: {}, required: [] },
+  },
+  {
     name: 'recoder_canvas_update',
     description: 'Push live Excalidraw element updates to a canvas board open in the Recoder agents UI. The browser\'s CanvasPanel will call updateScene() immediately, adding or replacing elements without a full reload.',
     inputSchema: {
@@ -858,6 +886,40 @@ async function handleToolCall(name, args) {
       }
 
       return `Model: ${model}\n\n${response}`;
+    }
+
+    case 'recoder_write_scratchpad': {
+      if (!args.key) throw new Error('key is required');
+      const writeData = await apiFetch(`${DOCKER_URL}/api/a2a/scratchpad/write`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId: SESSION_ID, agentId: AGENT_ID, key: args.key, value: args.value }),
+      });
+      const entry = writeData.data;
+      return `Written: ${args.key} (session: ${SESSION_ID}, updated: ${entry?.updatedAt || 'now'})`;
+    }
+
+    case 'recoder_read_scratchpad': {
+      if (!args.key) throw new Error('key is required');
+      const readData = await apiFetch(`${DOCKER_URL}/api/a2a/scratchpad/read`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId: SESSION_ID, key: args.key }),
+      });
+      const val = readData.data;
+      if (!val) return `Key "${args.key}" not found in scratchpad.`;
+      const display = typeof val.value === 'string' ? val.value : JSON.stringify(val.value, null, 2);
+      return `Key: ${val.key}\nAgent: ${val.agentId}\nUpdated: ${val.updatedAt}\n\n${display.slice(0, 3000)}`;
+    }
+
+    case 'recoder_list_scratchpad': {
+      const listData = await apiFetch(`${DOCKER_URL}/api/a2a/scratchpad/list?sessionId=${encodeURIComponent(SESSION_ID)}`);
+      const entries = listData.data || [];
+      if (!entries.length) return `Scratchpad is empty (session: ${SESSION_ID})`;
+      return entries.map((e, i) => {
+        const preview = typeof e.value === 'string' ? e.value.slice(0, 80) : JSON.stringify(e.value).slice(0, 80);
+        return `[${i + 1}] ${e.key} (by ${e.agentId}, ${e.updatedAt})\n    ${preview}`;
+      }).join('\n\n');
     }
 
     case 'recoder_canvas_update': {
