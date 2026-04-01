@@ -1,6 +1,6 @@
 # Recoder Platform — Master Plan
 
-Last updated: 2026-04-01 (Sprint B2 deployed: session dedup + task claim/lock + unlimited bridge reconnect + REST-task inbox)
+Last updated: 2026-04-01 (Sprint B2 deployed + agency SearXNG web-search + recoder-pm Prisma cleanup deployed)
 
 ---
 
