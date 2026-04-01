@@ -119,10 +119,11 @@ This top block also supersedes older notes that still describe agent canvas mode
 
 ### HIGH — A2A (works but incomplete)
 6. ~~**A2A inbox is poll-only**~~ — FIXED (commit `a0fb23fd`). MCP server now emits `notifications/message` to stdout when `task.assigned` arrives. Claude Code sees new tasks immediately without polling.
-7. **No terminal auto-discovery** — Agent IDs are hardcoded. Two Claude Code instances both claim the same inbox (no session deduplication). Bridge needs a live registry of connected terminals with unique session IDs.
-8. **No task claim/lock** — Multiple agent instances of the same type pick up the same pending task. Tasks need a `claimedBy: sessionId` field set on first read.
+7. ~~**No terminal auto-discovery**~~ — FIXED (Sprint B2). Each MCP server instance now generates a unique `SESSION_ID` on startup (`AGENT_ID_<timestamp><rand>`). Session ID is passed in bridge URL (`&sessionId=...`) and shown in `recoder_inbox`/`recoder_list_agents` output. Multiple instances can be distinguished by their SESSION_ID.
+8. ~~**No task claim/lock**~~ — FIXED (Sprint B2). Server: `TaskLifecycleService.claimTask()` + `POST /api/a2a/tasks/:taskId/claim` endpoint (deployed). Client: `recoder_task_respond` claims before transitioning REST tasks; `recoder_inbox` shows `[claimed:mine]` badge. Returns 409 if claimed by different session.
 9. ~~**In-memory task store on server**~~ — FIXED. Redis store is deployed in docker-backend (`redis-task-store.ts`); `getTaskLifecycleService()` uses Redis when `REDIS_URL` is set (confirmed set on production). Tasks persist across restarts.
-10. **recoder-a2a npm package not published** — v2.3.0 bumped locally with push notification support. npm login required to publish (`npm login` then `cd packages/recoder-a2a && npm publish --access public`).
+10. **recoder-a2a npm package not published** — v2.4.0 bumped locally (Sprint B2 + session dedup). npm login required to publish (`! npm login` then `cd packages/recoder-a2a && npm publish --access public`).
+11. **Bridge WS max retries exhausted** — Was capped at 10 retries. FIXED (Sprint B2): changed to 9999 (effectively unlimited). Bridge now stays connected indefinitely across MCP server restarts.
 
 ### ~~CRITICAL — Web IDE~~ PARTIALLY FIXED (2026-03-31)
 5. ~~**Files don't write to sandbox**~~ — FIXED. Cookie theory was WRONG. Codex smoke test proved files write/read/exec all work. STRICT_AUTH=false allows anonymous, cookies also confirmed arriving with real userId.
