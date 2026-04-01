@@ -18,6 +18,7 @@ const DAYTONA_URL = process.env.RECODER_DAYTONA_URL || 'http://localhost:3900/ap
 const DAYTONA_KEY = process.env.DAYTONA_API_KEY || '';
 const RAW_AUTH_TOKEN = process.env.RECODER_API_TOKEN || '';
 const AGENT_ID = process.env.RECODER_AGENT_ID || 'claude_code';
+const SESSION_ID = process.env.RECODER_SESSION_ID || `${AGENT_ID}_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`;
 
 function isRecoderApiKeyPair(value) {
   if (!value || typeof value !== 'string' || !value.includes(':')) return false;
@@ -51,7 +52,7 @@ let wsConnected = false;
 let wsReconnectTimer = null;
 let wsHeartbeatInterval = null;
 let wsRetries = 0;
-const WS_MAX_RETRIES = 10;
+const WS_MAX_RETRIES = 9999; // effectively unlimited — reconnect until process exits
 
 // Inbound task queue — tasks assigned to this agent by the bridge
 const inboundTasks = [];    // { taskId, prompt, context, from, receivedAt, status: 'pending'|'accepted'|'completed'|'failed' }
@@ -72,7 +73,7 @@ function pushNotification(level, data) {
 function handleBridgeMessage(msg) {
   switch (msg.type) {
     case 'registered':
-      process.stderr.write(`[recoder-a2a] Registered on bridge: ${msg.agentId} workspaces: ${JSON.stringify(msg.workspaces || [])}\n`);
+      process.stderr.write(`[recoder-a2a] Registered on bridge: ${msg.agentId} session:${msg.sessionId || SESSION_ID} workspaces: ${JSON.stringify(msg.workspaces || [])}\n`);
       break;
 
     case 'task.assigned': {
@@ -133,8 +134,8 @@ function connectBridge() {
     const WebSocket = require('ws');
     if (ws) { try { ws.removeAllListeners(); ws.terminate(); } catch {} ws = null; }
     const bridgeUrl = PLATFORM_TOKEN
-      ? `${A2A_URL}?token=${encodeURIComponent(PLATFORM_TOKEN)}&agentId=${AGENT_ID}&capabilities=execute,plan,edit`
-      : A2A_URL;
+      ? `${A2A_URL}?token=${encodeURIComponent(PLATFORM_TOKEN)}&agentId=${AGENT_ID}&sessionId=${encodeURIComponent(SESSION_ID)}&capabilities=execute,plan,edit`
+      : `${A2A_URL}?agentId=${AGENT_ID}&sessionId=${encodeURIComponent(SESSION_ID)}`;
     ws = new WebSocket(bridgeUrl, {
       headers: { 'x-agent-id': AGENT_ID, 'x-capabilities': JSON.stringify(['execute', 'plan', 'edit']) },
       handshakeTimeout: 10000,
@@ -285,11 +286,39 @@ async function apiFetch(url, options = {}) {
 async function handleToolCall(name, args) {
   switch (name) {
     case 'recoder_list_agents': {
-      const data = await apiFetch(`${DOCKER_URL}/api/a2a/agents`);
-      const agents = data.agents || [];
-      if (!agents.length) return 'No agents registered.';
-      const lines = agents.map(a => `• ${a.agent_id} (${a.platform}) — ${a.enabled ? '✓' : '✗'} health:${a.health}`);
-      lines.push(`\nA2A bridge: ${wsConnected ? 'connected' : 'disconnected'}`);
+      const lines = [];
+      lines.push(`This session: ${AGENT_ID}:${SESSION_ID}`);
+      lines.push(`A2A bridge: ${wsConnected ? 'connected' : 'disconnected'}`);
+
+      // Live bridge sessions (shows unique session IDs per terminal)
+      try {
+        const bridgeData = await apiFetch(`${DOCKER_URL}/api/a2a/bridge/agents`);
+        const sessions = bridgeData.data?.sessions || [];
+        if (sessions.length) {
+          lines.push(`\n── Live Bridge Sessions (${sessions.length}) ──`);
+          for (const s of sessions) {
+            const isMe = s.sessionId === SESSION_ID;
+            lines.push(`• ${s.agentId} session:${s.sessionId}${isMe ? ' [this terminal]' : ''} status:${s.status} since:${s.connectedAt?.slice(0, 16)}`);
+          }
+        } else {
+          lines.push('\n── No live bridge sessions ──');
+        }
+      } catch {
+        lines.push('\n── Bridge sessions unavailable ──');
+      }
+
+      // Registered agents from agent registry (platform-wide, may include offline)
+      try {
+        const data = await apiFetch(`${DOCKER_URL}/api/a2a/agents`);
+        const agents = data.agents || [];
+        if (agents.length) {
+          lines.push(`\n── Registered Agents (${agents.length}) ──`);
+          for (const a of agents) {
+            lines.push(`• ${a.agent_id} (${a.platform}) health:${a.health}`);
+          }
+        }
+      } catch {}
+
       return lines.join('\n');
     }
 
@@ -428,14 +457,41 @@ async function handleToolCall(name, args) {
     case 'recoder_inbox': {
       const pending = inboundTasks.filter(t => t.status === 'pending');
       const recent = inboundTasks.filter(t => t.status !== 'pending').slice(0, 5);
-      if (!pending.length && !recent.length) return `No inbound tasks.\nBridge: ${wsConnected ? 'connected' : 'disconnected'}`;
-      const lines = [];
+
+      // Also fetch unclaimed REST tasks assigned to this agent (works when bridge is disconnected)
+      let restPending = [];
+      try {
+        const restData = await apiFetch(`${DOCKER_URL}/api/a2a/tasks?assignee_agent_id=${encodeURIComponent(AGENT_ID)}&state=submitted&limit=20`);
+        const allRest = restData.data?.tasks || [];
+        restPending = allRest.filter(t => {
+          const claim = t.metadata?.claimedBy;
+          return !claim || claim.sessionId === SESSION_ID;
+        });
+      } catch {}
+
+      if (!pending.length && !recent.length && !restPending.length) {
+        return `No inbound tasks.\nSession: ${SESSION_ID}\nBridge: ${wsConnected ? 'connected' : 'disconnected'}`;
+      }
+
+      const lines = [`Session: ${SESSION_ID}`];
       if (pending.length) {
-        lines.push(`── Pending (${pending.length}) ──`);
+        lines.push(`\n── Bridge Tasks (${pending.length}) ──`);
         for (const t of pending) {
           lines.push(`• [${t.taskId}] from:${t.from} at:${t.receivedAt}`);
           lines.push(`  ${t.prompt.slice(0, 200)}`);
           if (t.worktreeBranch) lines.push(`  branch: ${t.worktreeBranch}`);
+        }
+      }
+      if (restPending.length) {
+        lines.push(`\n── REST Tasks (${restPending.length}) ──`);
+        for (const t of restPending) {
+          const claimedByMe = t.metadata?.claimedBy?.sessionId === SESSION_ID;
+          const payload = t.payload;
+          const prompt = (typeof payload === 'object' && payload !== null)
+            ? (payload.text || payload.prompt || payload.task || JSON.stringify(payload)).slice(0, 150)
+            : String(payload || '').slice(0, 150);
+          lines.push(`• [${t.id}] from:${t.requester?.agent_id} state:${t.state}${claimedByMe ? ' [claimed:mine]' : ''}`);
+          lines.push(`  ${prompt}`);
         }
       }
       if (recent.length) {
@@ -449,17 +505,42 @@ async function handleToolCall(name, args) {
     }
 
     case 'recoder_task_respond': {
-      const task = inboundTasks.find(t => t.taskId === args.task_id);
-      if (!task) return `Task ${args.task_id} not found in inbox.`;
-      const isComplete = (args.status || 'complete') === 'complete';
-      if (isComplete) {
-        wsSend({ type: 'task.complete', taskId: args.task_id, result: args.result });
-        task.status = 'completed';
-      } else {
-        wsSend({ type: 'task.failed', taskId: args.task_id, error: args.result });
-        task.status = 'failed';
+      const wsTask = inboundTasks.find(t => t.taskId === args.task_id);
+      if (wsTask) {
+        const isComplete = (args.status || 'complete') === 'complete';
+        if (isComplete) {
+          wsSend({ type: 'task.complete', taskId: args.task_id, result: args.result });
+          wsTask.status = 'completed';
+        } else {
+          wsSend({ type: 'task.failed', taskId: args.task_id, error: args.result });
+          wsTask.status = 'failed';
+        }
+        return `Task ${args.task_id} marked as ${wsTask.status}. Response sent via bridge.`;
       }
-      return `Task ${args.task_id} marked as ${task.status}. Response sent via bridge.`;
+      // REST task: claim then transition
+      const isComplete = (args.status || 'complete') === 'complete';
+      const targetState = isComplete ? 'completed' : 'failed';
+      try {
+        await apiFetch(`${DOCKER_URL}/api/a2a/tasks/${args.task_id}/claim`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ session_id: SESSION_ID, agent_id: AGENT_ID }),
+        });
+      } catch (claimErr) {
+        if ((claimErr.message || '').includes('409')) return `Task ${args.task_id} is claimed by another session.`;
+      }
+      const transData = await apiFetch(`${DOCKER_URL}/api/a2a/tasks/${args.task_id}/transition`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          target_state: targetState,
+          triggered_by: `${AGENT_ID}:${SESSION_ID}`,
+          ...(isComplete
+            ? { result: { output: args.result }, reason: 'Task completed' }
+            : { error: { message: args.result, code: 'agent_error' }, reason: 'Task failed' }),
+        }),
+      });
+      return `Task ${args.task_id} → ${targetState}.\nState: ${transData.data?.state || transData.state}`;
     }
 
     default:
@@ -476,7 +557,7 @@ async function handleMessage(msg) {
       respond(id, {
         protocolVersion: '2024-11-05',
         capabilities: { tools: {} },
-        serverInfo: { name: 'recoder-a2a', version: '2.3.0' },
+        serverInfo: { name: 'recoder-a2a', version: '2.5.0' },
       });
       break;
     case 'notifications/initialized':
@@ -504,7 +585,7 @@ async function handleMessage(msg) {
 process.on('uncaughtException', (err) => { process.stderr.write(`[recoder-a2a] uncaught: ${err.message}\n`); });
 process.on('unhandledRejection', (err) => { process.stderr.write(`[recoder-a2a] unhandled rejection: ${err}\n`); });
 
-process.stderr.write('[recoder-a2a] Recoder A2A MCP Server v2.2\n');
+process.stderr.write('[recoder-a2a] Recoder A2A MCP Server v2.5.0\n');
 process.stderr.write(`[recoder-a2a] API: ${API_URL} | A2A: ${A2A_URL}\n`);
 if (DAYTONA_KEY) process.stderr.write('[recoder-a2a] Daytona sandbox enabled\n');
 if (PLATFORM_TOKEN || PYTHON_API_KEY) process.stderr.write('[recoder-a2a] API auth configured\n');

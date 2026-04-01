@@ -820,6 +820,68 @@ export class TaskLifecycleService {
   // Helpers
   // -----------------------------------------------------------------------
 
+  /**
+   * Atomically claim a task for exclusive processing by a given session.
+   * Idempotent: re-claiming by the same session returns the existing envelope.
+   * Returns 409 if already claimed by a different session.
+   */
+  claimTask(taskId: string, sessionId: string, agentId: string): ServiceResult<TaskEnvelope> {
+    const envelope = this.store.get(taskId);
+    if (!envelope) {
+      return {
+        ok: false,
+        httpStatus: 404,
+        error: buildA2AError({
+          code: A2AErrorCodeEnum.TaskNotFound,
+          message: `Task not found: ${taskId}`,
+          details: { task_id: taskId },
+        }),
+      };
+    }
+
+    if (isTerminalState(envelope.state)) {
+      return {
+        ok: false,
+        httpStatus: 422,
+        error: buildA2AError({
+          code: A2AErrorCodeEnum.InvalidStateTransition,
+          message: `Cannot claim task in terminal state '${envelope.state}'`,
+          details: { task_id: taskId, current_state: envelope.state },
+        }),
+      };
+    }
+
+    const existingClaim = envelope.metadata?.claimedBy as { sessionId: string; agentId: string } | undefined;
+
+    if (existingClaim && existingClaim.sessionId !== sessionId) {
+      return {
+        ok: false,
+        httpStatus: 409,
+        error: buildA2AError({
+          code: A2AErrorCodeEnum.InvalidStateTransition,
+          message: `Task ${taskId} is already claimed by session ${existingClaim.sessionId}`,
+          details: { task_id: taskId, claimed_by_session: existingClaim.sessionId },
+        }),
+      };
+    }
+
+    // Idempotent: same session re-claiming
+    if (existingClaim && existingClaim.sessionId === sessionId) {
+      return { ok: true, data: envelope };
+    }
+
+    const updated: TaskEnvelope = {
+      ...envelope,
+      metadata: {
+        ...envelope.metadata,
+        claimedBy: { sessionId, agentId, claimedAt: new Date().toISOString() },
+      },
+    };
+    this.store.set(taskId, updated);
+    logger.info({ task_id: taskId, sessionId, agentId }, 'task claimed');
+    return { ok: true, data: updated };
+  }
+
   /** Expose the store for testing / advanced use. */
   getStore(): TaskStore {
     return this.store;
