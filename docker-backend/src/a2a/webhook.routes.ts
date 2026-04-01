@@ -38,16 +38,22 @@ router.post('/chatwoot', (req: Request, res: Response) => {
   const payload = req.body as Record<string, unknown>;
   logger.debug({ event: payload.event }, '[webhook.routes] Chatwoot event received');
 
-  setImmediate(async () => {
-    try {
-      const event = normalizeChatwootEvent(payload as unknown as Parameters<typeof normalizeChatwootEvent>[0]);
-      if (!event) return; // Ignored event type (outgoing, status update, etc.)
-
-      await dispatchWebhookToA2A(event);
-    } catch (err) {
-      logger.warn({ err }, '[webhook.routes] Chatwoot dispatch failed');
-    }
-  });
+  // Dispatch via Trigger.dev background job (retries, observability)
+  // Falls back to inline execution if Trigger.dev unavailable
+  import('./trigger-jobs.js')
+    .then(({ queueWebhookProcess }) => queueWebhookProcess(payload))
+    .catch(() => {
+      // Module not available — execute inline as before
+      setImmediate(async () => {
+        try {
+          const event = normalizeChatwootEvent(payload as unknown as Parameters<typeof normalizeChatwootEvent>[0]);
+          if (!event) return;
+          await dispatchWebhookToA2A(event);
+        } catch (err) {
+          logger.warn({ err }, '[webhook.routes] Chatwoot dispatch failed');
+        }
+      });
+    });
 });
 
 // POST /api/a2a/webhook/chatwoot/reply
