@@ -1,6 +1,6 @@
 # Recoder Platform — Master Plan
 
-Last updated: 2026-04-01 (Hetzner git checkout repaired; Recoder MCP management endpoints restored live)
+Last updated: 2026-04-01 (Hetzner checkout drift audited and backed up; follow-up narrowed to unexpected source drift cleanup)
 
 ---
 
@@ -42,7 +42,7 @@ This section supersedes older Redis / `web.recoder.xyz` runtime notes below.
   4. rebuilding `recoder-docker-backend` from the repaired stable Hetzner checkout restored `/health` and the MCP management endpoints
   5. a new deploy guardrail now exists in branch: `scripts/check-hetzner-docker-backend-build-context.sh`, wired into `scripts/deploy-all-services.sh`, and it was verified to pass on Hetzner after removing the stale untracked `docker-backend` source files that caused the mixed-state rebuild
 - Immediate remaining infra follow-up:
-  1. `recoder-zgp` — audit the remaining dirty/untracked Hetzner checkout after the git repair
+  1. `recoder-025` — clean the 45 remaining unexpected source-drift entries on the Hetzner app checkout after the audit/backup pass
 
 ## Current Correction — 2026-04-01
 
@@ -94,7 +94,7 @@ This section remains accurate for the agents-side Nike presentation recovery.
   - the Nike presentation renders in `agents.recoder.xyz` itself, not just via direct file URLs
 - Follow-up infra work:
   1. `recoder-6ko` — prevent Hetzner backend DB credential drift
-  2. `recoder-o66` — fixed live; remaining host cleanup moved to `recoder-zgp`
+  2. `recoder-o66` — fixed live; checkout audit is complete, an unexpected-drift backup now exists under `/root/recoder.xyz/backups/checkout-drift-20260401-181818/`, and the remaining host cleanup is `recoder-025`
 
 ## Historical Plan Notes
 

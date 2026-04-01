@@ -167,6 +167,23 @@ check_hetzner_db_env_drift() {
   '
 }
 
+check_hetzner_checkout_drift() {
+  if ! require_cmd ssh; then
+    skip "ssh not installed; skipping Hetzner checkout drift audit"
+    return 2
+  fi
+
+  local ssh_opts=(-o StrictHostKeyChecking=no -o ConnectTimeout=10)
+  if [[ -f "$SSH_KEY" ]]; then
+    ssh_opts+=(-i "$SSH_KEY")
+  fi
+
+  ssh "${ssh_opts[@]}" "$SSH_HOST" '
+    cd /root/recoder.xyz
+    bash scripts/check-hetzner-checkout-drift.sh
+  '
+}
+
 run_sso_matrix() {
   if [[ "$RUN_SSO_MATRIX" != "true" ]]; then
     skip "RUN_SSO_MATRIX=false; skipping SSO/logout matrix"
@@ -185,6 +202,7 @@ run_or_fail "Admin email config endpoint" check_admin_email_config
 run_or_fail "Live verification email send (admin test)" send_test_email
 run_or_fail "Neon DB quota probe (simple SELECT now())" check_neon_quota
 run_or_fail "Hetzner DB env drift check" check_hetzner_db_env_drift
+run_or_fail "Hetzner checkout drift audit" check_hetzner_checkout_drift
 
 if bash scripts/monitoring-test-fire.sh; then
   pass "Alertmanager synthetic fire script"

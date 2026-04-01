@@ -1,6 +1,6 @@
 # Recoder Platform — Error Registry
 
-Last updated: 2026-04-01 (Hetzner git checkout repaired; Recoder MCP management endpoints restored live)
+Last updated: 2026-04-01 (Hetzner checkout drift audited and backed up; follow-up narrowed to unexpected source drift cleanup)
 
 ---
 
@@ -59,13 +59,18 @@ This top block also supersedes older notes that still describe Hetzner backend D
   2. the real failure was `recoder-docker-backend` crash-looping on a mixed DuckDB A3 deploy state where runtime source imports landed without the `duckdb` module in the image
   3. rebuilding `recoder-docker-backend` from the repaired stable Hetzner checkout restored `docker.recoder.xyz/health` and the MCP management endpoints
   4. a new deploy guardrail now exists in branch: `scripts/check-hetzner-docker-backend-build-context.sh`, wired into `scripts/deploy-all-services.sh`, and it passes on Hetzner after removing the stale untracked `docker-backend` source files that triggered the mixed-state rebuild
+- `recoder-zgp` is also complete:
+  1. a new audit script exists in branch: `scripts/check-hetzner-checkout-drift.sh`
+  2. it is wired into `scripts/production-external-closeout.sh`
+  3. the live Hetzner audit now classifies the checkout as 8 allowed runtime entries, 1 known nested-repo drift (`recoder-web/starters`), and 45 unexpected source-drift entries after safe cleanup
+  4. the same script can now back up unexpected source drift before cleanup, and a live backup archive was written on Hetzner under `/root/recoder.xyz/backups/checkout-drift-20260401-181818/`
 - Result:
   - Hetzner DB credential drift should now fail fast during deploy/closeout instead of surfacing later as agent/backend `500`s
-  - Hetzner app deployability is restored; remaining host cleanup is now `recoder-zgp`
+  - Hetzner app deployability is restored; remaining host cleanup is now `recoder-025`
 
 ## Current Priority Order (2026-04-01, post-`recoder-8sm`)
 1. Browser-verify Web IDE preview + publish on the latest deployed build.
-2. Audit the remaining dirty Hetzner app checkout after the git repair (`recoder-zgp`).
+2. Clean the remaining 45 unexpected source-drift entries on the Hetzner app checkout (`recoder-025`).
 3. Re-enable deployed `STRICT_AUTH=true` only after broader browser verification stays green.
 4. Continue broader agents IDE/browser verification beyond the Nike presentation path.
 
