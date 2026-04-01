@@ -155,7 +155,7 @@ async def get_providers():
 
     except Exception as e:
         logger.error(f"Error getting providers: {e}")
-        raise HTTPException(status_code=500, detail="Internal server error")
+        raise HTTPException(status_code=500, detail=f"Internal error: {type(e).__name__}: {e}")
 
 @router.get("/agents/{agent_id}/triggers", response_model=List[TriggerResponse])
 async def get_agent_triggers(
@@ -189,7 +189,7 @@ async def get_agent_triggers(
         
     except Exception as e:
         logger.error(f"Error getting agent triggers: {e}")
-        raise HTTPException(status_code=500, detail="Internal server error")
+        raise HTTPException(status_code=500, detail=f"Internal error: {type(e).__name__}: {e}")
 
 
 @router.get("", response_model=List[Dict[str, Any]])
@@ -308,7 +308,7 @@ async def get_agent_upcoming_runs(
         
     except Exception as e:
         logger.error(f"Error getting upcoming runs: {e}")
-        raise HTTPException(status_code=500, detail="Internal server error")
+        raise HTTPException(status_code=500, detail=f"Internal error: {type(e).__name__}: {e}")
 
 
 @router.post("/agents/{agent_id}/triggers", response_model=TriggerResponse)
@@ -372,7 +372,7 @@ async def create_agent_trigger(
         raise
     except Exception as e:
         logger.error(f"Error creating trigger: {e}")
-        raise HTTPException(status_code=500, detail="Internal server error")
+        raise HTTPException(status_code=500, detail=f"Internal error: {type(e).__name__}: {e}")
 
 
 @router.get("/{trigger_id}", response_model=TriggerResponse)
@@ -412,7 +412,7 @@ async def get_trigger(
         raise
     except Exception as e:
         logger.error(f"Error getting trigger: {e}")
-        raise HTTPException(status_code=500, detail="Internal server error")
+        raise HTTPException(status_code=500, detail=f"Internal error: {type(e).__name__}: {e}")
 
 
 @router.put("/{trigger_id}", response_model=TriggerResponse)
@@ -466,7 +466,7 @@ async def update_trigger(
         raise
     except Exception as e:
         logger.error(f"Error updating trigger: {e}")
-        raise HTTPException(status_code=500, detail="Internal server error")
+        raise HTTPException(status_code=500, detail=f"Internal error: {type(e).__name__}: {e}")
 
 
 @router.delete("/{trigger_id}")
@@ -500,7 +500,7 @@ async def delete_trigger(
         raise
     except Exception as e:
         logger.error(f"Error deleting trigger: {e}")
-        raise HTTPException(status_code=500, detail="Internal server error")
+        raise HTTPException(status_code=500, detail=f"Internal error: {type(e).__name__}: {e}")
 
 
 class TriggerExecution(BaseModel):
@@ -598,7 +598,7 @@ async def get_trigger_executions(
         raise
     except Exception as e:
         logger.error(f"Error getting trigger executions: {e}")
-        raise HTTPException(status_code=500, detail="Internal server error")
+        raise HTTPException(status_code=500, detail=f"Internal error: {type(e).__name__}: {e}")
 
 
 @router.post("/{trigger_id}/webhook")

@@ -57,7 +57,7 @@ async def get_presentation_template_image(template_name: str):
         raise
     except Exception as e:
         logger.error(f"Error serving template image: {e}")
-        raise HTTPException(status_code=500, detail="Internal server error")
+        raise HTTPException(status_code=500, detail=f"Internal error: {type(e).__name__}: {e}")
 
 
 @router.get("/{template_name}/pdf", summary="Get Presentation Template PDF")
@@ -91,7 +91,7 @@ async def get_presentation_template_pdf(template_name: str):
         raise
     except Exception as e:
         logger.error(f"Error serving template PDF: {e}")
-        raise HTTPException(status_code=500, detail="Internal server error")
+        raise HTTPException(status_code=500, detail=f"Internal error: {type(e).__name__}: {e}")
 
 
 @router.get("/{template_name}/info", summary="Get Template Info", response_model=TemplateInfo)
@@ -141,7 +141,7 @@ async def get_template_info(template_name: str):
         raise
     except Exception as e:
         logger.error(f"Error getting template info: {e}")
-        raise HTTPException(status_code=500, detail="Internal server error")
+        raise HTTPException(status_code=500, detail=f"Internal error: {type(e).__name__}: {e}")
 
 
 @router.get("/{template_name}/slides/{slide_number}", summary="Get Slide HTML")
@@ -166,7 +166,7 @@ async def get_slide_html(template_name: str, slide_number: int):
         raise
     except Exception as e:
         logger.error(f"Error serving slide HTML: {e}")
-        raise HTTPException(status_code=500, detail="Internal server error")
+        raise HTTPException(status_code=500, detail=f"Internal error: {type(e).__name__}: {e}")
 
 
 @router.get("/{template_name}/assets/{filename:path}", summary="Get Template Asset")
@@ -192,5 +192,5 @@ async def get_template_asset(template_name: str, filename: str):
         raise
     except Exception as e:
         logger.error(f"Error serving template asset: {e}")
-        raise HTTPException(status_code=500, detail="Internal server error")
+        raise HTTPException(status_code=500, detail=f"Internal error: {type(e).__name__}: {e}")
 
