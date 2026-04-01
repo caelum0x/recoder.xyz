@@ -15,6 +15,9 @@
  * Sessions are evicted after 2h of inactivity (same TTL as scratchpad).
  */
 
+import fs from 'node:fs';
+import path from 'node:path';
+import os from 'node:os';
 import Database from 'duckdb';
 import { logger } from '../logger.js';
 import { scratchpadSet } from './scratchpad.js';
@@ -139,18 +142,17 @@ export async function loadCsv(params: {
   const safe = tableName.replace(/[^a-zA-Z0-9_]/g, '_');
   const { con } = getSession(sessionId);
 
-  // Write CSV to DuckDB temp table via read_csv_auto
-  // We pass the CSV as a string via a VALUES clause trick using read_csv
-  const escaped = csvContent.replace(/'/g, "''");
-  const headerStr = hasHeader ? 'true' : 'false';
+  // Write CSV to temp file — DuckDB's read_csv_auto reads from the filesystem
+  const tmpFile = path.join(os.tmpdir(), `duckdb_csv_${Date.now()}_${Math.random().toString(36).slice(2, 8)}.csv`);
+  fs.writeFileSync(tmpFile, csvContent, 'utf-8');
 
-  const sql = `CREATE OR REPLACE TABLE "${safe}" AS
-    SELECT * FROM read_csv_auto(
-      (SELECT * FROM (VALUES ('${escaped}')) AS t(data)),
-      header = ${headerStr}
-    )`;
-
-  await runExec(con, sql);
+  try {
+    const headerStr = hasHeader ? 'true' : 'false';
+    const escapedPath = tmpFile.replace(/'/g, "''");
+    await runExec(con, `CREATE OR REPLACE TABLE "${safe}" AS SELECT * FROM read_csv_auto('${escapedPath}', header = ${headerStr})`);
+  } finally {
+    try { fs.unlinkSync(tmpFile); } catch { /* ok */ }
+  }
 
   const info = await runQuery(con, `SELECT COUNT(*) as cnt FROM "${safe}"`);
   const cols = await runQuery(con, `DESCRIBE "${safe}"`);

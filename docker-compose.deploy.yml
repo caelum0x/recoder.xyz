@@ -71,6 +71,11 @@ services:
       - OPENMETER_URL=http://openmeter:8888
       - FLAGSMITH_URL=http://flagsmith:8000
       - NATS_URL=nats://nats:4222
+      - ZROK_API_URL=http://zrok-controller:18080
+      - ZROK_TOKEN=${ZROK_TOKEN:-}
+      - ZROK_FRONTEND=${ZROK_FRONTEND:-preview.recoder.xyz}
+      - HATCHET_CLIENT_TOKEN=${HATCHET_CLIENT_TOKEN:-}
+      - HATCHET_CLIENT_HOST=hatchet-engine:7077
       # Tier-1 connector flags (runtime image installs codex/claude CLIs).
       - RECODER_A2A_ENABLE_CODEX=${RECODER_A2A_ENABLE_CODEX:-true}
       - RECODER_A2A_ENABLE_CLAUDE_CODE=${RECODER_A2A_ENABLE_CLAUDE_CODE:-true}
@@ -448,6 +453,115 @@ services:
       - recoder
 
   # ================================================================
+  # Hatchet — Durable workflow execution engine (replaces Giselle)
+  # Dashboard: http://localhost:8080 (admin)
+  # API: http://localhost:7077 (gRPC for workers)
+  # Bootstrap: docker exec recoder-hatchet /hatchet-admin quickstart --skip create-tenant
+  # ================================================================
+  hatchet-engine:
+    image: ghcr.io/hatchet-dev/hatchet/hatchet-engine:latest
+    container_name: recoder-hatchet
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:7077:7077"
+    environment:
+      - DATABASE_URL=postgresql://recoder:recoder_prod_2026@host.docker.internal:5432/recoder_backend
+      - SERVER_GRPC_BIND_ADDRESS=0.0.0.0
+      - SERVER_GRPC_PORT=7077
+      - SERVER_AUTH_SET_IF_NOT_EXISTS=true
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:7077/live || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+    networks:
+      - recoder
+
+  hatchet-api:
+    image: ghcr.io/hatchet-dev/hatchet/hatchet-api:latest
+    container_name: recoder-hatchet-api
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8084:8080"
+    environment:
+      - DATABASE_URL=postgresql://recoder:recoder_prod_2026@host.docker.internal:5432/recoder_backend
+      - SERVER_AUTH_SET_IF_NOT_EXISTS=true
+    depends_on:
+      hatchet-engine:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8080/api/live || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          cpus: '0.3'
+          memory: 256M
+    networks:
+      - recoder
+
+  # ================================================================
+  # Zrok — Zero-trust overlay tunnels for instant preview URLs
+  # Provides {projectId}.preview.recoder.xyz → sandbox:5173
+  # Prerequisite: Cloudflare wildcard DNS *.preview.recoder.xyz → 77.42.23.19
+  # Bootstrap: docker exec recoder-zrok zrok admin bootstrap
+  # ================================================================
+  zrok-controller:
+    image: openziti/zrok:latest
+    container_name: recoder-zrok
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:18080:18080"
+    environment:
+      - ZROK_ADMIN_TOKEN=${ZROK_ADMIN_TOKEN:-recoder_zrok_admin}
+      - ZROK_API_ENDPOINT=http://0.0.0.0:18080
+      - PFXLOG_NO_JSON=true
+    command: ["controller", "/etc/zrok/ctrl.yml"]
+    volumes:
+      - zrok-data:/var/lib/zrok
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:18080/api/v1/version || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          cpus: '0.3'
+          memory: 256M
+    networks:
+      - recoder
+
+  zrok-frontend:
+    image: openziti/zrok:latest
+    container_name: recoder-zrok-frontend
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8082:8080"
+    command: ["access", "public", "--headless"]
+    environment:
+      - ZROK_API_ENDPOINT=http://zrok-controller:18080
+    depends_on:
+      zrok-controller:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: '0.2'
+          memory: 128M
+    networks:
+      - recoder
+
+  # ================================================================
   # Docs — Starlight developer documentation (docs.recoder.xyz)
   # Build: cd docs/site && npm install && npm run build
   # Serves static output via nginx
@@ -659,6 +773,7 @@ volumes:
   openclaw-workspace:
   victoriametrics-data:
   nats-data:
+  zrok-data:
   alertmanager-data:
   grafana-data:
 
