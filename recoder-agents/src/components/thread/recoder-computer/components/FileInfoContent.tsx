@@ -3,6 +3,7 @@
 import { memo, useState } from 'react';
 import { Folder, File, Calendar, MapPin, Copy, Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { isExcalidrawFileName } from '@/lib/canvas/excalidraw';
 import { getFileIconByName } from './Icons';
 import { toast } from '@/lib/toast';
 
@@ -38,6 +39,7 @@ const formatDate = (dateStr?: string): string => {
 
 const getFileType = (name: string, isDirectory: boolean): string => {
   if (isDirectory) return 'Folder';
+  if (isExcalidrawFileName(name)) return 'Excalidraw Board';
   
   const ext = name.includes('.') ? name.split('.').pop()?.toLowerCase() : null;
   if (!ext) return 'File';

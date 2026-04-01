@@ -14,6 +14,8 @@ import { PptxRenderer } from '@/components/file-renderers/pptx-renderer';
 import { DocxRenderer } from '@/components/file-renderers/docx-renderer';
 import { HtmlRenderer } from '@/components/file-renderers/html-renderer';
 import { CanvasRenderer } from '@/components/file-renderers/canvas-renderer';
+import { CanvasPanel } from '@/components/canvas/CanvasPanel';
+import { isExcalidrawFileName } from '@/lib/canvas/excalidraw';
 import { constructHtmlPreviewUrl } from '@/lib/utils/url';
 import { processUnicodeContent, getFileTypeFromExtension, getLanguageFromExtension } from './utils';
 
@@ -98,6 +100,8 @@ export function getEditableFileType(fileName: string): EditableFileType {
   const pptxExtensions = ['pptx', 'ppt'];
   const canvasExtensions = ['kanvax'];
 
+  if (isExcalidrawFileName(fileName)) return 'canvas';
+
   if (markdownExtensions.includes(extension)) return 'markdown';
   if (htmlExtensions.includes(extension)) return 'html';
   if (codeExtensions.includes(extension)) return 'code';
@@ -153,6 +157,7 @@ export function EditableFileRenderer({
   onMarkdownEditorReady,
 }: EditableFileRendererProps) {
   const fileType = getEditableFileType(fileName);
+  const isExcalidrawCanvas = isExcalidrawFileName(fileName);
   const isHtmlFile = fileName.toLowerCase().endsWith('.html') || fileName.toLowerCase().endsWith('.htm');
 
   // HTML preview URL for HTML files
@@ -237,14 +242,23 @@ export function EditableFileRenderer({
           onFullScreen={onFullScreen}
         />
       ) : fileType === 'canvas' ? (
-        <CanvasRenderer
-          content={content}
-          filePath={filePath}
-          fileName={fileName}
-          sandboxId={project?.sandbox?.id}
-          className="h-full w-full"
-          onSave={onSave}
-        />
+        isExcalidrawCanvas ? (
+          <CanvasPanel
+            content={content}
+            fileName={fileName}
+            className="h-full w-full"
+            onSave={onSave}
+          />
+        ) : (
+          <CanvasRenderer
+            content={content}
+            filePath={filePath}
+            fileName={fileName}
+            sandboxId={project?.sandbox?.id}
+            className="h-full w-full"
+            onSave={onSave}
+          />
+        )
       ) : fileType === 'html' && htmlPreviewUrl ? (
         // HTML files - show preview (could add split view editor later)
         <HtmlRenderer
@@ -317,5 +331,4 @@ export { UnifiedMarkdown } from '@/components/markdown';
 
 // Re-export utilities
 export { processUnicodeContent, getFileTypeFromExtension, getLanguageFromExtension } from './utils';
-
 
