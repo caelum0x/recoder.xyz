@@ -453,6 +453,33 @@ services:
       - recoder
 
   # ================================================================
+  # Steel — Managed browser pool for agent web automation
+  # Provides anti-detection, session persistence, CDP access.
+  # ================================================================
+  steel:
+    image: ghcr.io/steel-dev/steel-browser:latest
+    container_name: recoder-steel
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3009:3000"
+    environment:
+      - STEEL_LOG_LEVEL=info
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:3000/health || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+    shm_size: '1gb'
+    networks:
+      - recoder
+
+  # ================================================================
   # Hatchet — Durable workflow execution engine (replaces Giselle)
   # Dashboard: http://localhost:8080 (admin)
   # API: http://localhost:7077 (gRPC for workers)
