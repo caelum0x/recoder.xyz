@@ -1,6 +1,6 @@
 # Recoder Platform — Error Registry
 
-Last updated: 2026-04-01 (Hetzner safe cleanup reduced unexpected checkout drift from 45 to 17; remaining work is split into branch-sync vs local-overlap buckets, with the workflow metering/qdrant overlap now under active cleanup)
+Last updated: 2026-04-01 (Hetzner safe cleanup reduced unexpected checkout drift from 45 to 17; the workflow metering/qdrant overlap is landed, and the agents file-proxy HEAD mismatch now has a backend fix in branch)
 
 ---
 
@@ -21,6 +21,10 @@ This top block supersedes conflicting notes below.
   - proxied Nike `slide_01.html` returns `200`
   - proxied Nike presentation image returns `200`
 - The real remaining priorities are broader browser verification and infra hardening, not the old Nike blank-presentation root cause.
+- The old unexplained `HEAD /api/files/content` mismatch is no longer unexplained either:
+  1. the agents Next route was already exporting `HEAD`
+  2. the real 405 root cause was backend only exposing `GET /sandboxes/{sandbox_id}/files/content`
+  3. branch now adds a matching backend `HEAD` route that shares the same response builder/headers as `GET`
 
 ## Current Correction (2026-04-01)
 
