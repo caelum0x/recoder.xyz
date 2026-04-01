@@ -42,6 +42,7 @@ import {
   publishMemberJoined,
   publishMemberLeft,
 } from './a2a-event-bridge';
+import { indexThread as meiliIndexThread } from './search-proxy';
 import { createLogger } from '../logger';
 
 const logger = createLogger('a2a-collaboration-routes');
@@ -317,6 +318,14 @@ collaborationRouter.post(
         id: thread.id,
         channelId: req.params.channelId,
         title: thread.title,
+        createdAt: thread.createdAt,
+      });
+
+      // Index in Meilisearch for cross-platform search — fire-and-forget
+      void meiliIndexThread({
+        id: thread.id,
+        title: thread.title,
+        projectId: req.params.channelId,
         createdAt: thread.createdAt,
       });
 
