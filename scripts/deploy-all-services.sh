@@ -211,6 +211,9 @@ if [ "$MISSING_ENV" -eq 1 ]; then
   exit 1
 fi
 
+echo "--- Checking local Postgres DSNs against live Hetzner auth ---"
+bash scripts/check-hetzner-db-env-drift.sh
+
 # Prevent concurrent deploy runs from racing on container names.
 if command -v flock >/dev/null 2>&1; then
   exec 9>/root/.deploy-build.lock

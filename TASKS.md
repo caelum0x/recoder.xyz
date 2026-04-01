@@ -59,25 +59,40 @@ This supersedes older notes that still describe agent canvas mode as a design/ba
   - deploy/browser-verify the new canvas mode flow
   - add agent-side board mutation/live broadcast (`recoder_canvas_update`) so agents can actively draw/update the board after creation
 
+## 2026-04-01 Correction (Hetzner infra)
+
+This supersedes older task notes that still treat deploy-network breakage, root `.env` drift, or unguarded local Postgres DSNs as the current top Hetzner blockers.
+
+- `recoder-cy0` is fixed live:
+  - deploy no longer depends on stack-wide `docker compose down`
+  - Redis is no longer published onto the host, avoiding the `127.0.0.1:6379` collision with the host `redis-server`
+  - `recoder-web`, `recoder-redis`, and `recoder-redis-exporter` were re-converged under Compose ownership on `recoder-network`
+- `recoder-xxp` is fixed live:
+  - repo-root `/.env` is excluded from deploy rsync
+  - Hetzner root `.env` is restored to the minimal Compose-interpolation form
+  - raw `docker compose -f docker-compose.deploy.yml config` on Hetzner now runs without bogus unset-variable warnings
+- `recoder-6ko` is fixed in source and validated live:
+  - `scripts/check-hetzner-db-env-drift.sh` now checks the local Postgres DSNs in `backend/.env`, `app/.env.production`, and `recoder-agents/.env.local` against live Hetzner Postgres auth
+  - that check is wired into both `scripts/deploy-all-services.sh` and `scripts/production-external-closeout.sh`
+  - current live Hetzner run passes for all checked DSNs
+
 ## Immediate Follow-ups
 
 1. Browser-verify Web IDE preview + publish on the currently deployed build.
 2. Deploy and browser-verify the new `recoder-agents` canvas-mode Excalidraw routing. Branch-complete and pushed on `2026-04-01`; live deployment still pending.
-3. Prevent Hetzner backend DB credential drift (`recoder-6ko`).
-4. Restore git-based deployability on the Hetzner app host (`recoder-o66`).
+3. Restore git-based deployability on the Hetzner app host (`recoder-o66`).
    **Status (2026-04-01):** Deploy key generated on Hetzner. SSH + remote configured. Needs GitHub deploy key setup:
    - Public key: `ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAILpBvLhkB257nYFqR6Uv+oGNPiI8wHa8hh9wK1TAoix5 hetzner-deploy-key`
    - Add at: github.com/recoder-xyz/recoder → Settings → Deploy keys → Add (read-only)
    - Then on Hetzner: `cd /root/recoder.xyz && git fetch --depth=1 origin main && git reset --hard origin/main`
-5. Re-enable deployed `STRICT_AUTH=true` only after broader browser verification passes.
-6. Continue broader agents IDE/browser verification beyond the Nike presentation path.
+4. Re-enable deployed `STRICT_AUTH=true` only after broader browser verification passes.
+5. Continue broader agents IDE/browser verification beyond the Nike presentation path.
 
 ## Current Remaining Priorities (2026-03-31, post-`77cd90bb`)
 1. Browser-verify Web IDE preview + publish on the currently deployed build.
-2. Prevent Hetzner backend DB credential drift (`recoder-6ko`).
-3. Restore git-based deployability on the Hetzner app host (`recoder-o66`).
-4. Re-enable deployed `STRICT_AUTH=true` only after broader browser verification passes.
-5. Continue broader agents IDE/browser verification beyond the Nike presentation path.
+2. Restore git-based deployability on the Hetzner app host (`recoder-o66`).
+3. Re-enable deployed `STRICT_AUTH=true` only after broader browser verification passes.
+4. Continue broader agents IDE/browser verification beyond the Nike presentation path.
 
 ### 1. Agents (agents.recoder.xyz)
 **Works:** LLM responds, file proxy works, Nike presentation metadata/slide/image proxy works, Nike slides render in the real agents UI
