@@ -58,17 +58,16 @@ This top block also supersedes older notes that still describe Hetzner backend D
   1. `recoder_list_agents`, `recoder_list_tasks`, and `recoder_send_task` were failing with `502`
   2. the real failure was `recoder-docker-backend` crash-looping on a mixed DuckDB A3 deploy state where runtime source imports landed without the `duckdb` module in the image
   3. rebuilding `recoder-docker-backend` from the repaired stable Hetzner checkout restored `docker.recoder.xyz/health` and the MCP management endpoints
+  4. a new deploy guardrail now exists in branch: `scripts/check-hetzner-docker-backend-build-context.sh`, wired into `scripts/deploy-all-services.sh`, and it passes on Hetzner after removing the stale untracked `docker-backend` source files that triggered the mixed-state rebuild
 - Result:
   - Hetzner DB credential drift should now fail fast during deploy/closeout instead of surfacing later as agent/backend `500`s
   - Hetzner app deployability is restored; remaining host cleanup is now `recoder-zgp`
-  - future DuckDB A3 deployment safety is tracked separately in `recoder-avg`
 
 ## Current Priority Order (2026-04-01, post-`recoder-8sm`)
 1. Browser-verify Web IDE preview + publish on the latest deployed build.
 2. Audit the remaining dirty Hetzner app checkout after the git repair (`recoder-zgp`).
-3. Validate the DuckDB A3 rollout path before deploying it (`recoder-avg`).
-4. Re-enable deployed `STRICT_AUTH=true` only after broader browser verification stays green.
-5. Continue broader agents IDE/browser verification beyond the Nike presentation path.
+3. Re-enable deployed `STRICT_AUTH=true` only after broader browser verification stays green.
+4. Continue broader agents IDE/browser verification beyond the Nike presentation path.
 
 ### Status Correction
 - The previous "remaining priorities" list for create/delete loop, CodeMirror re-crash, sandbox auto-stop, and strict-auth hardening is now stale at the code level.

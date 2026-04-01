@@ -40,9 +40,9 @@ This section supersedes older Redis / `web.recoder.xyz` runtime notes below.
   2. `docker.recoder.xyz/health` was also returning `502`, which narrowed the problem to `recoder-docker-backend`
   3. live root cause was a mixed DuckDB A3 deploy state: runtime source tried to import `duckdb-tool.ts`, but the running image did not contain the `duckdb` module
   4. rebuilding `recoder-docker-backend` from the repaired stable Hetzner checkout restored `/health` and the MCP management endpoints
+  5. a new deploy guardrail now exists in branch: `scripts/check-hetzner-docker-backend-build-context.sh`, wired into `scripts/deploy-all-services.sh`, and it was verified to pass on Hetzner after removing the stale untracked `docker-backend` source files that caused the mixed-state rebuild
 - Immediate remaining infra follow-up:
   1. `recoder-zgp` — audit the remaining dirty/untracked Hetzner checkout after the git repair
-  2. `recoder-avg` — validate the DuckDB A3 rollout path before deploying it, so a mixed checkout/image state cannot crash `recoder-docker-backend` again
 
 ## Current Correction — 2026-04-01
 
