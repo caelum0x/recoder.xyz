@@ -80,22 +80,42 @@ export class AgentBridgeService {
     this.startHeartbeatSweep();
   }
 
-  private recordBridgeHeartbeat(agent: Pick<ConnectedAgent, 'sessionId' | 'agentId' | 'userId' | 'capabilities' | 'workspaceIds'>): void {
-    // Track by sessionId so each session has its own heartbeat slot
-    getHeartbeatTracker().recordHeartbeat(agent.sessionId, 'healthy', {
+  private recordBridgeHeartbeat(agent: Pick<ConnectedAgent, 'agentId' | 'userId'>): void {
+    const sessions = this.getSessionsForAgent(agent.agentId);
+    const workspaceIds = new Set<string>();
+    const capabilities = new Set<string>();
+
+    for (const session of sessions) {
+      for (const workspaceId of session.workspaceIds) {
+        workspaceIds.add(workspaceId);
+      }
+      for (const capability of session.capabilities) {
+        capabilities.add(capability);
+      }
+    }
+
+    getHeartbeatTracker().recordHeartbeat(agent.agentId, 'healthy', {
       source: 'bridge',
-      agentId: agent.agentId,
       userId: agent.userId,
-      capabilityCount: agent.capabilities.length,
-      workspaceCount: agent.workspaceIds.length,
+      sessionCount: Math.max(sessions.length, 1),
+      capabilityCount: capabilities.size,
+      workspaceCount: workspaceIds.size,
     });
   }
 
-  private removeBridgeHeartbeat(sessionId: string): void {
+  private removeBridgeHeartbeat(agentId: string): void {
     const tracker = getHeartbeatTracker();
-    const record = tracker.getRecord(sessionId);
+    const remainingSessions = this.getSessionsForAgent(agentId);
+
+    if (remainingSessions.length > 0) {
+      const primarySession = remainingSessions[0];
+      this.recordBridgeHeartbeat(primarySession);
+      return;
+    }
+
+    const record = tracker.getRecord(agentId);
     if (record?.metadata?.source === 'bridge') {
-      tracker.removeAgent(sessionId);
+      tracker.removeAgent(agentId);
     }
   }
 
@@ -194,14 +214,13 @@ export class AgentBridgeService {
 
     this.socketToAgent.delete(agent.socket);
     this.agents.delete(sessionId);
-    this.removeBridgeHeartbeat(sessionId);
-
     // Remove from agentType index
     const sessions = this.agentTypeIndex.get(agentId);
     if (sessions) {
       sessions.delete(sessionId);
       if (sessions.size === 0) this.agentTypeIndex.delete(agentId);
     }
+    this.removeBridgeHeartbeat(agentId);
 
     // Publish agent.offline
     const bus = getA2AEventBus();

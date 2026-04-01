@@ -224,6 +224,16 @@ export class A2AEventBus {
   private readonly retention = getA2ARetentionWindowConfig();
   private readonly recentEvents: Array<{ event: A2AEvent; expiresAt: number }> = [];
 
+  // ── NATS integration ────────────────────────────────────────────────────
+  // Lazy-loaded: connectNats() initialises these. All publish() calls mirror
+  // to NATS if connected; a NATS subscriber feeds remote events back into
+  // the local EventEmitter for cross-process fan-in.
+  private _nats: { js: any; codec: any; nc: any } | null = null;
+  private _natsConnected = false;
+  /** Track event IDs published by this instance to avoid re-emitting our own NATS messages. */
+  private readonly _localEventIds = new Set<string>();
+  private static readonly LOCAL_ID_CAP = 10_000;
+
   constructor() {
     this.emitter = new EventEmitter();
     // Allow many concurrent SSE listeners without warning
@@ -241,6 +251,109 @@ export class A2AEventBus {
       }
       logger.info({ count: persisted.length }, 'loaded persisted A2A events');
     }
+
+    // Non-blocking NATS bootstrap
+    void this.connectNats();
+  }
+
+  // -----------------------------------------------------------------------
+  // NATS lifecycle
+  // -----------------------------------------------------------------------
+
+  /**
+   * Connect to NATS JetStream and subscribe to the A2A_EVENTS stream.
+   * Events published by other processes are fed into the local EventEmitter
+   * so SSE subscribers see them without additional wiring.
+   */
+  private async connectNats(): Promise<void> {
+    const natsUrl = process.env.NATS_URL;
+    if (!natsUrl) {
+      logger.debug('NATS_URL not set — event bus operating in local-only mode');
+      return;
+    }
+
+    let natsLib: any;
+    try {
+      natsLib = await (Function('return import("nats")')() as Promise<any>);
+    } catch {
+      logger.debug('nats package not installed — event bus operating in local-only mode');
+      return;
+    }
+
+    try {
+      const nc = await natsLib.connect({ servers: natsUrl });
+      const js = nc.jetstream();
+      const jsm = await nc.jetstreamManager();
+      const codec = natsLib.JSONCodec();
+
+      // Ensure A2A_EVENTS stream exists (catches all a2a.> subjects)
+      const streamName = 'A2A_EVENTS';
+      const streamConfig = {
+        name: streamName,
+        subjects: ['a2a.>'],
+        max_age: 6 * 60 * 60 * 1_000_000_000, // 6h retention (nanoseconds)
+        storage: 'file' as const,
+        retention: 'limits' as const,
+        discard: 'old' as const,
+      };
+
+      try {
+        await jsm.streams.info(streamName);
+      } catch {
+        await jsm.streams.add(streamConfig);
+        logger.info('Created NATS JetStream stream: A2A_EVENTS');
+      }
+
+      this._nats = { js, codec, nc };
+      this._natsConnected = true;
+
+      // ── Cross-process fan-in: subscribe to a2a.> and emit locally ──
+      const sub = nc.subscribe('a2a.>');
+      (async () => {
+        for await (const msg of sub) {
+          try {
+            const event = codec.decode(msg.data) as A2AEvent;
+            // Skip events we published ourselves
+            if (this._localEventIds.has(event.id)) continue;
+            // Emit into local EventEmitter so SSE consumers see it
+            this.emitter.emit(GLOBAL_EVENT, event);
+            if (event.taskId) this.emitter.emit(taskEventKey(event.taskId), event);
+            if (event.channelId) this.emitter.emit(channelEventKey(event.channelId), event);
+            if (event.workspaceId) this.emitter.emit(workspaceEventKey(event.workspaceId), event);
+          } catch (err) {
+            logger.debug({ err }, 'NATS message decode error');
+          }
+        }
+      })().catch(() => {});
+
+      logger.info({ url: natsUrl }, 'A2A event bus connected to NATS — all events mirrored');
+    } catch (err) {
+      logger.warn({ err }, 'NATS connection failed — event bus operating in local-only mode');
+    }
+  }
+
+  /**
+   * Publish an event to NATS JetStream (non-blocking, best-effort).
+   * Subject format: a2a.{event_type} e.g. a2a.task.submitted, a2a.canvas.update
+   */
+  private publishToNats(event: A2AEvent): void {
+    if (!this._nats || !this._natsConnected) return;
+
+    // Track our own event IDs so we don't re-emit them from the NATS subscriber
+    this._localEventIds.add(event.id);
+    if (this._localEventIds.size > A2AEventBus.LOCAL_ID_CAP) {
+      // Trim oldest 2000 entries (Set preserves insertion order)
+      const iter = this._localEventIds.values();
+      for (let i = 0; i < 2000; i++) {
+        const { value } = iter.next();
+        if (value !== undefined) this._localEventIds.delete(value);
+      }
+    }
+
+    const subject = `a2a.${event.type}`;
+    this._nats.js.publish(subject, this._nats.codec.encode(event)).catch(() => {
+      // Fire-and-forget — NATS is supplementary to the local EventEmitter
+    });
   }
 
   // -----------------------------------------------------------------------
@@ -265,23 +378,14 @@ export class A2AEventBus {
       'event published',
     );
 
-    // Global stream
+    // Local EventEmitter dispatch (in-process SSE consumers)
     this.emitter.emit(GLOBAL_EVENT, event);
+    if (event.taskId) this.emitter.emit(taskEventKey(event.taskId), event);
+    if (event.channelId) this.emitter.emit(channelEventKey(event.channelId), event);
+    if (event.workspaceId) this.emitter.emit(workspaceEventKey(event.workspaceId), event);
 
-    // Task-scoped stream
-    if (event.taskId) {
-      this.emitter.emit(taskEventKey(event.taskId), event);
-    }
-
-    // Channel-scoped stream
-    if (event.channelId) {
-      this.emitter.emit(channelEventKey(event.channelId), event);
-    }
-
-    // Workspace-scoped stream
-    if (event.workspaceId) {
-      this.emitter.emit(workspaceEventKey(event.workspaceId), event);
-    }
+    // NATS JetStream publish (cross-process fan-out)
+    this.publishToNats(event);
   }
 
   private trackEvent(event: A2AEvent): void {
@@ -389,9 +493,19 @@ export class A2AEventBus {
     return this.emitter.listenerCount(workspaceEventKey(workspaceId));
   }
 
-  /** Remove all listeners (for testing / shutdown). */
+  /** Whether NATS JetStream is connected for cross-process event mirroring. */
+  get natsConnected(): boolean {
+    return this._natsConnected;
+  }
+
+  /** Remove all listeners and close NATS (for testing / shutdown). */
   removeAllListeners(): void {
     this.emitter.removeAllListeners();
+    if (this._nats && this._natsConnected) {
+      this._natsConnected = false;
+      this._nats.nc.drain().catch(() => {});
+      this._nats = null;
+    }
   }
 
   /** Return recent retained events (newest last). */
