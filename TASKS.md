@@ -62,7 +62,7 @@ This supersedes older notes that still describe agent canvas mode as a design/ba
 ## Immediate Follow-ups
 
 1. Browser-verify Web IDE preview + publish on the currently deployed build.
-2. ~~Deploy~~ the new `recoder-agents` canvas-mode Excalidraw routing. DEPLOYED (2026-04-01) — browser-verify pending.
+2. Deploy and browser-verify the new `recoder-agents` canvas-mode Excalidraw routing. Branch-complete and pushed on `2026-04-01`; live deployment still pending.
 3. Prevent Hetzner backend DB credential drift (`recoder-6ko`).
 4. Restore git-based deployability on the Hetzner app host (`recoder-o66`).
    **Status (2026-04-01):** Deploy key generated on Hetzner. SSH + remote configured. Needs GitHub deploy key setup:

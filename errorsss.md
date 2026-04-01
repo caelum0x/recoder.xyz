@@ -29,7 +29,6 @@ This top block also supersedes older notes that still describe agent canvas mode
 - `recoder-agents` now has the Excalidraw board foundation plus branch-local canvas-mode routing for board creation.
 - The user-facing root cause was not only missing Excalidraw rendering. Canvas entry points were still duplicated across the UI with stale image-generation prompts and action labels, so normal canvas mode continued to steer users into the legacy `.kanvax`/image-edit mental model.
 - The branch fix centralizes canvas mode in `recoder-agents/src/lib/canvas/mode-config.ts` and rewires:
-- The branch fix centralizes canvas mode in `recoder-agents/src/lib/canvas/mode-config.ts` and rewires:
   - `recoder-agents/src/components/dashboard/recoder-modes-panel.tsx`
   - `recoder-agents/src/components/thread/content/NewThreadEmptyState.tsx`
   - `recoder-agents/src/components/thread/chat-input/chat-input.tsx`
