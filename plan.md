@@ -21,6 +21,10 @@ This section supersedes older Redis / `web.recoder.xyz` runtime notes below.
   1. the repo root `.env` is now excluded from deploy rsync
   2. the deploy script owns the minimal Hetzner root `.env` used for Compose interpolation
   3. ad-hoc `docker compose -f docker-compose.deploy.yml config` on Hetzner no longer emits misleading unset-variable warnings for the shared deploy vars
+- A DB credential drift guardrail is now in place too:
+  1. `scripts/check-hetzner-db-env-drift.sh` validates the backend/app/agents local Postgres DSNs against the live Hetzner Postgres auth
+  2. that check now runs in both `scripts/deploy-all-services.sh` and `scripts/production-external-closeout.sh`
+  3. it was validated live on Hetzner and currently passes for `backend/.env`, `app/.env.production`, and `recoder-agents/.env.local`
 - Both are now fixed live:
   - production Redis was migrated onto a proper `recoder-redis` container with `--requirepass`
   - `recoder-backend` was restarted and `docker.recoder.xyz/health` is healthy again with A2A enabled
@@ -30,7 +34,7 @@ This section supersedes older Redis / `web.recoder.xyz` runtime notes below.
   1. `recoder-cy0` — finish the compose/network root-cause fix so deploys stop trying to replace `recoder-network`
   2. Root cause now confirmed: the deploy script still used `docker compose down` against a stack whose shared network had drifted into a mixed state after manual incident recoveries. `recoder-web` and `recoder-redis` were live on `recoder-network` without Compose labels, so a stack-wide teardown path remained unsafe even after the network was marked `external: true`.
   3. The live Redis re-convergence also exposed a second infra bug: Hetzner already had a host-level `redis-server` bound to `127.0.0.1:6379`, so the Compose-managed Redis container could never start while `docker-compose.deploy.yml` still published `127.0.0.1:6379:6379`.
-  4. Fixed live: deploy now avoids stack-wide `docker compose down`, Redis is no longer published onto the host, the Redis exporter healthcheck uses the image’s real binary entrypoint, and `recoder-web` / `recoder-redis` / `recoder-redis-exporter` were re-converged under Compose ownership on `recoder-network`.
+  4. Fixed live: deploy now avoids stack-wide `docker compose down`, Redis is no longer published onto the host, the Redis exporter healthcheck uses the image’s real binary entrypoint, `recoder-web` / `recoder-redis` / `recoder-redis-exporter` were re-converged under Compose ownership on `recoder-network`, and local Hetzner Postgres DSNs now have a fail-fast drift check.
 
 ## Current Correction — 2026-04-01
 

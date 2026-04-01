@@ -40,12 +40,24 @@ This top block also supersedes older notes that still describe agent canvas mode
 - Remaining A1 gap:
   - agent-side board mutation/live broadcast is still not done, so the open work is active board updates, not board entry-point routing
 
+## Current Correction (2026-04-01, Hetzner infra)
+
+This top block also supersedes older notes that still describe Hetzner backend DB credential drift as an unguarded live risk.
+
+- `recoder-cy0` is fixed live: shared-network deploys no longer depend on stack-wide `docker compose down`, Redis is not published onto the host anymore, and `recoder-web` / `recoder-redis` / `recoder-redis-exporter` are back under Compose ownership.
+- `recoder-xxp` is fixed live: the deploy path now excludes the repo-root `/.env` from rsync, the Hetzner root `.env` is back to the minimal Compose-interpolation form, and ad-hoc `docker compose config` runs without misleading unset-variable warnings.
+- `recoder-6ko` is also now guarded in branch and validated live:
+  1. `scripts/check-hetzner-db-env-drift.sh` verifies the local Postgres DSNs in `backend/.env`, `app/.env.production`, and `recoder-agents/.env.local` against the live Hetzner Postgres auth
+  2. that check is wired into both the deploy path and the external closeout path
+  3. the live Hetzner run currently passes
+- Result:
+  - Hetzner DB credential drift should now fail fast during deploy/closeout instead of surfacing later as agent/backend `500`s
+
 ## Current Priority Order (2026-03-31, post-`77cd90bb`)
 1. Browser-verify Web IDE preview + publish on the latest deployed build.
-2. Prevent Hetzner backend DB credential drift (`recoder-6ko`).
-3. Restore git-based deployability on the Hetzner app checkout (`recoder-o66`).
-4. Re-enable deployed `STRICT_AUTH=true` only after broader browser verification stays green.
-5. Continue broader agents IDE/browser verification beyond the Nike presentation path.
+2. Restore git-based deployability on the Hetzner app checkout (`recoder-o66`).
+3. Re-enable deployed `STRICT_AUTH=true` only after broader browser verification stays green.
+4. Continue broader agents IDE/browser verification beyond the Nike presentation path.
 
 ### Status Correction
 - The previous "remaining priorities" list for create/delete loop, CodeMirror re-crash, sandbox auto-stop, and strict-auth hardening is now stale at the code level.
