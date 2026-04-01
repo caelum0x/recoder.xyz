@@ -82,6 +82,21 @@ This section supersedes conflicting notes below.
   3. confirm the assistant emits concrete write actions and the preview changes in the same turn
   4. confirm error-fix follow-ups also reuse current file context instead of re-exploring
 
+## Current Correction — 2026-04-01 (connector backend)
+
+This section supersedes older notes that described the Windsurf connector as execute-only plus fake local cancel/approval handling.
+
+- The Windsurf connector now drives all core control-plane actions through JSON-RPC:
+  1. task execution
+  2. task status lookup
+  3. task cancellation
+  4. approval response
+- The runtime now also tracks active task count and emits approval/task-update notifications from bridge output.
+- Remaining work is narrower now:
+  1. verify the exact production Windsurf bridge method names against a real binary
+  2. adjust env overrides if the default `tasks/get`, `tasks/cancel`, or `approvals/respond` names differ
+  3. browser/live verification after that
+
 ## Current Correction — 2026-03-31
 
 This section remains accurate for the agents-side Nike presentation recovery.
