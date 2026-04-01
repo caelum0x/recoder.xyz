@@ -38,6 +38,7 @@ import {
   parseJsonTextBody,
 } from './task-lifecycle.middleware';
 import { createLogger } from '../logger';
+import { getRecentContext } from './memory-store';
 
 const logger = createLogger('a2a-task-routes');
 
@@ -108,7 +109,7 @@ function extractBridgeIntent(payload: unknown): string | undefined {
   return typeof intent === 'string' && intent.trim() ? intent : undefined;
 }
 
-function dispatchTaskToBridgeIfOnline(task: TaskEnvelope): void {
+async function dispatchTaskToBridgeIfOnline(task: TaskEnvelope): Promise<void> {
   const assigneeId = task.assignee?.agent_id;
   if (!assigneeId) return;
 
@@ -119,6 +120,13 @@ function dispatchTaskToBridgeIfOnline(task: TaskEnvelope): void {
 
   const prompt = extractBridgePrompt(task.payload);
   const intent = extractBridgeIntent(task.payload);
+
+  // Fetch agent's recent memory context before dispatch
+  const connected = bridge.getAgent(assigneeId);
+  const memoryContext = connected?.userId && prompt
+    ? await getRecentContext({ query: prompt, userId: connected.userId })
+    : [];
+
   const delivered = bridge.sendToAgent(assigneeId, {
     type: 'task.assigned',
     taskId: task.id,
@@ -132,13 +140,13 @@ function dispatchTaskToBridgeIfOnline(task: TaskEnvelope): void {
       trace_id: task.trace_id,
       connector: task.connector,
       payload: task.payload,
+      ...(memoryContext.length > 0 ? { memoryContext } : {}),
     },
   });
 
   if (delivered) {
-    const connected = bridge.getAgent(assigneeId);
     if (connected) connected.status = 'working';
-    logger.info({ taskId: task.id, assigneeId }, 'REST-created task dispatched to bridge-connected agent');
+    logger.info({ taskId: task.id, assigneeId, memoryEntries: memoryContext.length }, 'REST-created task dispatched to bridge-connected agent');
   } else {
     logger.warn({ taskId: task.id, assigneeId }, 'failed to dispatch REST-created task to bridge-connected agent');
   }
@@ -184,8 +192,8 @@ taskLifecycleRouter.post(
         return;
       }
 
-      // Bridge dispatch is best-effort — task creation should still succeed.
-      try { dispatchTaskToBridgeIfOnline(result.data); } catch {}
+      // Bridge dispatch is best-effort and async (memory lookup) — fire-and-forget.
+      void dispatchTaskToBridgeIfOnline(result.data);
 
       sendSuccess(res, result.data, 201);
     } catch (err) {

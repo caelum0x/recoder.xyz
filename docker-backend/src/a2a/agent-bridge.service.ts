@@ -34,6 +34,7 @@ import { getWorkspaceService } from './workspace.service';
 import { getCollaborationSvc } from './collaboration.service';
 import { getHeartbeatTracker } from './heartbeat-tracker.service';
 import { createLogger } from '../logger';
+import { getRecentContext } from './memory-store';
 
 const logger = createLogger('agent-bridge');
 
@@ -521,43 +522,62 @@ export class AgentBridgeService {
           break;
         }
 
-        // Fan out to all sessions of the target agentId type
-        const delivered = this.sendToAgent(targetAgentId, {
-          type: 'task.assigned',
-          taskId: `task_${uuid().replace(/-/g, '').slice(0, 16)}`,
-          from: agentId,
-          fromSession: sessionId,
-          intent: msg.intent || 'execute',
-          prompt: msg.task as string,
-          context: { source: 'a2a-bridge', from: agentId, fromSession: sessionId },
-        });
+        // Capture locals for the async closure
+        const intentTaskId = `task_${uuid().replace(/-/g, '').slice(0, 16)}`;
+        const intentPrompt = msg.task as string;
+        const intentType = msg.intent || 'execute';
+        const intentFrom = agentId;
+        const intentFromSession = sessionId;
 
-        // Acknowledge back to sender session
-        this.sendToAgent(sessionId, {
-          type: 'intent.ack',
-          target: targetAgentId,
-          delivered,
-          reason: delivered ? undefined : 'target agent not connected',
-        });
+        // Async: fetch target agent's memory context, then dispatch — fire-and-forget
+        void (async () => {
+          const targetAgent = this.getAgent(targetAgentId);
+          const memoryContext = targetAgent?.userId && intentPrompt
+            ? await getRecentContext({ query: intentPrompt, userId: targetAgent.userId })
+            : [];
 
-        getA2AEventBus().publish({
-          id: `evt_${uuid().replace(/-/g, '').slice(0, 16)}`,
-          type: A2AEventType.TaskSubmitted,
-          timestamp: new Date().toISOString(),
-          data: {
-            from: agentId,
-            fromSession: sessionId,
+          const delivered = this.sendToAgent(targetAgentId, {
+            type: 'task.assigned',
+            taskId: intentTaskId,
+            from: intentFrom,
+            fromSession: intentFromSession,
+            intent: intentType,
+            prompt: intentPrompt,
+            context: {
+              source: 'a2a-bridge',
+              from: intentFrom,
+              fromSession: intentFromSession,
+              ...(memoryContext.length > 0 ? { memoryContext } : {}),
+            },
+          });
+
+          // Acknowledge back to sender session
+          this.sendToAgent(intentFromSession, {
+            type: 'intent.ack',
             target: targetAgentId,
-            intent: msg.intent,
-            task: msg.task,
             delivered,
-          },
-        });
+            reason: delivered ? undefined : 'target agent not connected',
+          });
 
-        logger.info(
-          { from: agentId, fromSession: sessionId, target: targetAgentId, delivered, intent: msg.intent },
-          'intent routed via bridge',
-        );
+          getA2AEventBus().publish({
+            id: `evt_${uuid().replace(/-/g, '').slice(0, 16)}`,
+            type: A2AEventType.TaskSubmitted,
+            timestamp: new Date().toISOString(),
+            data: {
+              from: intentFrom,
+              fromSession: intentFromSession,
+              target: targetAgentId,
+              intent: intentType,
+              task: intentPrompt,
+              delivered,
+            },
+          });
+
+          logger.info(
+            { from: intentFrom, fromSession: intentFromSession, target: targetAgentId, delivered, intent: intentType, memoryEntries: memoryContext.length },
+            'intent routed via bridge',
+          );
+        })();
         break;
       }
 

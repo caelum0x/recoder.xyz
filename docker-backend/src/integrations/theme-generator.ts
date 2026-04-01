@@ -18,6 +18,18 @@ export interface GenerateThemeParams {
   provider: Provider;
 }
 
+export interface ThemeGenerationResult {
+  prompt: string;
+  inputTokens: number;
+  outputTokens: number;
+}
+
+interface ProviderCallResult {
+  text: string;
+  inputTokens: number;
+  outputTokens: number;
+}
+
 // ── Meta-prompts ───────────────────────────────────────────────────
 
 const INSPIRED_META_PROMPT = `You are a senior UI/UX designer creating design system themes for web applications.
@@ -69,7 +81,7 @@ async function callAnthropic(
   model: string,
   systemPrompt: string,
   userContent: Array<{ type: string; [key: string]: unknown }>,
-): Promise<string> {
+): Promise<ProviderCallResult> {
   const res = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: {
@@ -90,8 +102,15 @@ async function callAnthropic(
     throw new Error(`Anthropic API error (${res.status}): ${text}`);
   }
 
-  const data = (await res.json()) as { content: Array<{ type: string; text?: string }> };
-  return data.content?.find((c) => c.type === 'text')?.text || '';
+  const data = (await res.json()) as {
+    content: Array<{ type: string; text?: string }>;
+    usage?: { input_tokens?: number; output_tokens?: number };
+  };
+  return {
+    text: data.content?.find((c) => c.type === 'text')?.text || '',
+    inputTokens: data.usage?.input_tokens ?? 0,
+    outputTokens: data.usage?.output_tokens ?? 0,
+  };
 }
 
 async function callOpenAI(
@@ -99,7 +118,7 @@ async function callOpenAI(
   model: string,
   systemPrompt: string,
   userContent: Array<{ type: string; [key: string]: unknown }>,
-): Promise<string> {
+): Promise<ProviderCallResult> {
   const messages = [
     { role: 'system', content: systemPrompt },
     { role: 'user', content: userContent },
@@ -123,8 +142,15 @@ async function callOpenAI(
     throw new Error(`OpenAI API error (${res.status}): ${text}`);
   }
 
-  const data = (await res.json()) as { choices: Array<{ message: { content: string } }> };
-  return data.choices?.[0]?.message?.content || '';
+  const data = (await res.json()) as {
+    choices: Array<{ message: { content: string } }>;
+    usage?: { prompt_tokens?: number; completion_tokens?: number };
+  };
+  return {
+    text: data.choices?.[0]?.message?.content || '',
+    inputTokens: data.usage?.prompt_tokens ?? 0,
+    outputTokens: data.usage?.completion_tokens ?? 0,
+  };
 }
 
 async function callGoogle(
@@ -132,7 +158,7 @@ async function callGoogle(
   model: string,
   systemPrompt: string,
   userContent: Array<{ type: string; [key: string]: unknown }>,
-): Promise<string> {
+): Promise<ProviderCallResult> {
   // Map to Gemini API format
   const parts: Array<{ text?: string; inline_data?: { mime_type: string; data: string } }> = [];
 
@@ -169,8 +195,13 @@ async function callGoogle(
 
   const data = (await res.json()) as {
     candidates: Array<{ content: { parts: Array<{ text: string }> } }>;
+    usageMetadata?: { promptTokenCount?: number; candidatesTokenCount?: number };
   };
-  return data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+  return {
+    text: data.candidates?.[0]?.content?.parts?.[0]?.text || '',
+    inputTokens: data.usageMetadata?.promptTokenCount ?? 0,
+    outputTokens: data.usageMetadata?.candidatesTokenCount ?? 0,
+  };
 }
 
 async function callOpenRouter(
@@ -178,7 +209,7 @@ async function callOpenRouter(
   model: string,
   systemPrompt: string,
   userContent: Array<{ type: string; [key: string]: unknown }>,
-): Promise<string> {
+): Promise<ProviderCallResult> {
   // OpenRouter uses OpenAI-compatible format
   const messages = [
     { role: 'system', content: systemPrompt },
@@ -205,13 +236,20 @@ async function callOpenRouter(
     throw new Error(`OpenRouter API error (${res.status}): ${text}`);
   }
 
-  const data = (await res.json()) as { choices: Array<{ message: { content: string } }> };
-  return data.choices?.[0]?.message?.content || '';
+  const data = (await res.json()) as {
+    choices: Array<{ message: { content: string } }>;
+    usage?: { prompt_tokens?: number; completion_tokens?: number };
+  };
+  return {
+    text: data.choices?.[0]?.message?.content || '',
+    inputTokens: data.usage?.prompt_tokens ?? 0,
+    outputTokens: data.usage?.completion_tokens ?? 0,
+  };
 }
 
 // ── Main Generator ─────────────────────────────────────────────────
 
-export async function generateThemePrompt(params: GenerateThemeParams): Promise<string> {
+export async function generateThemePrompt(params: GenerateThemeParams): Promise<ThemeGenerationResult> {
   const { images, keywords, generationMode, model, apiKey, provider } = params;
 
   // Validate inputs
@@ -270,30 +308,29 @@ export async function generateThemePrompt(params: GenerateThemeParams): Promise<
   });
 
   // Call the appropriate provider
-  let result: string;
+  let callResult: ProviderCallResult;
   switch (provider) {
     case 'anthropic':
-      result = await callAnthropic(apiKey, model, metaPrompt, userContent);
+      callResult = await callAnthropic(apiKey, model, metaPrompt, userContent);
       break;
     case 'openai':
-      result = await callOpenAI(apiKey, model, metaPrompt, userContent);
+      callResult = await callOpenAI(apiKey, model, metaPrompt, userContent);
       break;
     case 'google':
-      result = await callGoogle(apiKey, model, metaPrompt, userContent);
+      callResult = await callGoogle(apiKey, model, metaPrompt, userContent);
       break;
     case 'openrouter':
-      result = await callOpenRouter(apiKey, model, metaPrompt, userContent);
+      callResult = await callOpenRouter(apiKey, model, metaPrompt, userContent);
       break;
     default:
       throw new Error(`Unsupported provider: ${provider}`);
   }
 
   // Extract <theme>...</theme> content if present, or wrap the result
-  const themeMatch = result.match(/<theme>([\s\S]*?)<\/theme>/);
-  if (themeMatch) {
-    return `<theme>${themeMatch[1]}</theme>`;
-  }
+  const themeMatch = callResult.text.match(/<theme>([\s\S]*?)<\/theme>/);
+  const prompt = themeMatch
+    ? `<theme>${themeMatch[1]}</theme>`
+    : `<theme>\n${callResult.text.trim()}\n</theme>`;
 
-  // If the AI didn't wrap in tags, wrap it
-  return `<theme>\n${result.trim()}\n</theme>`;
+  return { prompt, inputTokens: callResult.inputTokens, outputTokens: callResult.outputTokens };
 }
