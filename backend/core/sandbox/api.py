@@ -16,6 +16,7 @@ from daytona_sdk import AsyncSandbox, SessionExecuteRequest
 
 from core.sandbox.sandbox import get_or_start_sandbox, delete_sandbox, create_sandbox, daytona
 from core.sandbox.daytona_file_service import get_file_service
+from core.sandbox.file_content_response import build_file_content_response
 from core.utils.logger import logger
 from core.utils.auth_utils import get_optional_user_id, verify_and_get_user_id_from_jwt, verify_sandbox_access, verify_sandbox_access_optional
 from core.services.db import Table, execute, execute_read, execute_one, execute_mutate
@@ -458,18 +459,17 @@ async def list_files(
         logger.error(f"Error listing files in sandbox {sandbox_id}, path {path}: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
-@router.get("/sandboxes/{sandbox_id}/files/content")
-async def read_file(
-    sandbox_id: str, 
+async def _read_file_content_response(
+    sandbox_id: str,
     path: str,
-    request: Request = None,
-    user_id: Optional[str] = Depends(get_optional_user_id)
-):
-    """Read a file from the sandbox"""
-    # Normalize the path to handle UTF-8 encoding correctly
+    user_id: Optional[str],
+    *,
+    include_body: bool,
+) -> Response:
+    """Read a sandbox file once and build either a GET or HEAD response."""
     original_path = path
     path = normalize_path(path)
-    
+
     logger.info(f"[FILE_READ] sandbox={sandbox_id[:8]}..., path={path}, user_id={'authenticated' if user_id else 'ANONYMOUS'}")
     if original_path != path:
         logger.debug(f"Normalized path from '{original_path}' to '{path}'")
@@ -483,12 +483,9 @@ async def read_file(
     if not sandbox_id.strip():
         raise HTTPException(status_code=400, detail="Sandbox ID cannot be empty")
 
-    # Verify access: try resource-based check first, fall back to direct Daytona check
-    # Agent-created sandboxes may not be in the resources table but are still accessible
     try:
         await verify_sandbox_access_optional(None, sandbox_id, user_id)
     except (HTTPException, Exception) as access_err:
-        # Fallback: check if sandbox exists directly in Daytona (handles agent sandboxes)
         try:
             from core.sandbox.sandbox import get_or_start_sandbox
             await get_or_start_sandbox(sandbox_id)
@@ -497,18 +494,16 @@ async def read_file(
             if isinstance(access_err, HTTPException):
                 raise access_err
             raise HTTPException(status_code=404, detail=f"Sandbox not found: {sandbox_id}")
-    
+
     try:
-        # Get sandbox using the safer method
         try:
-            sandbox = await get_sandbox_by_id_safely(sandbox_id)
+            await get_sandbox_by_id_safely(sandbox_id)
         except HTTPException:
             raise
         except Exception as sandbox_err:
             logger.error(f"Error retrieving sandbox {sandbox_id}: {str(sandbox_err)}")
             raise HTTPException(status_code=500, detail=f"Failed to retrieve sandbox: {str(sandbox_err)}")
-        
-        # Read file using DaytonaFileService (direct HTTP, bypasses broken SDK)
+
         try:
             content = await get_file_service().read_file(sandbox_id, path)
             if content is None:
@@ -516,61 +511,41 @@ async def read_file(
         except Exception as download_err:
             error_msg = str(download_err)
             logger.error(f"Error downloading file {path} from sandbox {sandbox_id}: {error_msg}")
-            # Check if it's a file not found error
             if 'not found' in error_msg.lower() or '404' in error_msg.lower():
-                raise HTTPException(
-                    status_code=404, 
-                    detail=f"File not found: {path}"
-                )
-            # Check if it's a permission error
+                raise HTTPException(status_code=404, detail=f"File not found: {path}")
             if 'permission' in error_msg.lower() or '403' in error_msg.lower():
-                raise HTTPException(
-                    status_code=403,
-                    detail=f"Permission denied: {path}"
-                )
-            # For other errors, return 500
-            raise HTTPException(
-                status_code=500, 
-                detail=f"Failed to download file: {error_msg}"
-            )
-        
-        # Return a Response object with the content directly
-        filename = os.path.basename(path)
-        logger.debug(f"Successfully read file {filename} from sandbox {sandbox_id}")
-        
-        # Detect MIME type from file extension for proper browser rendering
-        import urllib.parse
-        import mimetypes as _mimetypes
-        encoded_filename = urllib.parse.quote(filename, safe='')
+                raise HTTPException(status_code=403, detail=f"Permission denied: {path}")
+            raise HTTPException(status_code=500, detail=f"Failed to download file: {error_msg}")
 
-        mime_type, _ = _mimetypes.guess_type(path)
-        if mime_type is None:
-            mime_type = "application/octet-stream"
-
-        # For renderable types (HTML, JSON, CSS, JS, images), serve inline
-        # For others, serve as download
-        renderable = mime_type.startswith(('text/', 'application/json', 'application/javascript', 'image/'))
-        if renderable:
-            return Response(
-                content=content,
-                media_type=mime_type,
-                headers={
-                    "Cache-Control": "no-cache",
-                },
-            )
-
-        content_disposition = f"attachment; filename*=UTF-8''{encoded_filename}"
-        return Response(
-            content=content,
-            media_type=mime_type,
-            headers={"Content-Disposition": content_disposition}
-        )
+        logger.debug(f"Successfully read file {os.path.basename(path)} from sandbox {sandbox_id}")
+        return build_file_content_response(path, content, include_body=include_body)
     except HTTPException:
-        # Re-raise HTTP exceptions without wrapping
         raise
     except Exception as e:
         logger.error(f"Error reading file in sandbox {sandbox_id}, path {path}: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+
+
+@router.get("/sandboxes/{sandbox_id}/files/content")
+async def read_file(
+    sandbox_id: str, 
+    path: str,
+    request: Request = None,
+    user_id: Optional[str] = Depends(get_optional_user_id)
+):
+    """Read a file from the sandbox."""
+    return await _read_file_content_response(sandbox_id, path, user_id, include_body=True)
+
+
+@router.head("/sandboxes/{sandbox_id}/files/content")
+async def head_file(
+    sandbox_id: str,
+    path: str,
+    request: Request = None,
+    user_id: Optional[str] = Depends(get_optional_user_id)
+):
+    """Return file metadata headers without a response body."""
+    return await _read_file_content_response(sandbox_id, path, user_id, include_body=False)
 
 @router.delete("/sandboxes/{sandbox_id}/files")
 async def delete_file(

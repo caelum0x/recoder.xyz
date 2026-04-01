@@ -1,6 +1,6 @@
 # Recoder Platform — Task List
 
-Last updated: 2026-04-01 (Hetzner safe cleanup reduced unexpected checkout drift from 45 to 17; remaining work is split into branch-sync vs local-overlap buckets, and one workflow/deploy overlap slice is now being landed with tests)
+Last updated: 2026-04-01 (Hetzner safe cleanup reduced unexpected checkout drift from 45 to 17; the workflow/deploy overlap slice is landed, and the agents file-proxy HEAD mismatch now has a backend fix in branch)
 
 ---
 
@@ -26,6 +26,10 @@ This top section supersedes older task notes below where they conflict.
   - proxied Nike `slide_01.html` returns `200`
   - proxied Nike image `slide1_logo.jpg` returns `200`
 - The current work is broader browser verification and infra hardening, not the old Nike blank-presentation root cause.
+- `recoder-tai` also moved from investigation to implementation:
+  - agents already had `HEAD /api/files/content`
+  - the backend did not, so proxying `HEAD` still produced `405`
+  - branch now adds backend `HEAD /sandboxes/{sandbox_id}/files/content` plus shared response-building for GET/HEAD and focused helper tests
 
 - The old Web IDE cookie theory is no longer the best explanation. Direct backend smoke tests proved Daytona container creation, file write/read, exec, snapshot, and Vite startup work.
 - The concrete backend fixes were:
