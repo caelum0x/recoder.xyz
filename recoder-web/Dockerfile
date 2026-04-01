@@ -65,6 +65,8 @@ RUN find recoder-web/build/server -name '*.js' -exec \
 RUN rm -rf recoder-web/starters
 
 # Aggressively prune build-time-only packages from node_modules and .pnpm store.
+# Keep vite-plugin-node-polyfills in the runtime image because the Remix server
+# bundle can still reference its shim modules after build.
 # With shamefully-hoist, top-level entries are symlinks into .pnpm/.
 # We remove both the symlinks AND matching .pnpm store entries.
 RUN rm -rf node_modules/.cache 2>/dev/null; \
@@ -75,8 +77,7 @@ RUN rm -rf node_modules/.cache 2>/dev/null; \
       @vitejs vitest @vitest playwright @playwright cypress jest \
       @babel babel-loader babel-plugin-macros @next next \
       turbo @turbo wrangler @cloudflare/workers-types workerd miniflare \
-      tsx ts-node source-map-support source-map \
-      vite-plugin-node-polyfills; \
+      tsx ts-node source-map-support source-map; \
     do \
       rm -rf "node_modules/$pkg" 2>/dev/null; \
     done; \
@@ -89,7 +90,7 @@ RUN rm -rf node_modules/.cache 2>/dev/null; \
       cypress@* jest@* @babel+* babel-* @next+* next@* turbo@* @turbo+* \
       wrangler@* workerd@* miniflare@* tsx@* ts-node@* \
       source-map@* source-map-support@* \
-      vite-plugin-node-polyfills@* webpack@* \
+      webpack@* \
       2>/dev/null || true
 
 # Remove source maps, TypeScript source files, and docs from remaining node_modules
