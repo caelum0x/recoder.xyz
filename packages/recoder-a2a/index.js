@@ -58,6 +58,18 @@ const WS_MAX_RETRIES = 10;
 // Inbound task queue
 const inboundTasks = [];
 const MAX_INBOUND_TASKS = 50;
+let mcpReady = false; // set to true after notifications/initialized
+
+function pushNotification(level, data) {
+  if (!mcpReady) return;
+  try {
+    process.stdout.write(JSON.stringify({
+      jsonrpc: '2.0',
+      method: 'notifications/message',
+      params: { level, logger: 'recoder-a2a', data },
+    }) + '\n');
+  } catch {}
+}
 
 function handleBridgeMessage(msg) {
   switch (msg.type) {
@@ -78,6 +90,9 @@ function handleBridgeMessage(msg) {
       if (inboundTasks.length > MAX_INBOUND_TASKS) inboundTasks.pop();
       process.stderr.write(`[recoder-a2a] Task assigned: ${task.taskId} from ${task.from}\n`);
       wsSend({ type: 'task.progress', taskId: task.taskId, progress: 0, output: `Task received by ${AGENT_ID}` });
+      // Push MCP notification so Claude Code sees the task immediately without polling
+      const preview = task.prompt.slice(0, 120);
+      pushNotification('info', `📨 New task [${task.taskId}] from ${task.from}: ${preview}${task.prompt.length > 120 ? '...' : ''} — run recoder_inbox to view`);
       break;
     }
     case 'task.cancelled': {
@@ -427,10 +442,11 @@ async function handleMessage(msg) {
       respond(id, {
         protocolVersion: '2024-11-05',
         capabilities: { tools: {} },
-        serverInfo: { name: 'recoder-a2a', version: '2.2.0' },
+        serverInfo: { name: 'recoder-a2a', version: '2.3.0' },
       });
       break;
     case 'notifications/initialized':
+      mcpReady = true;
       process.stderr.write(`[recoder-a2a] Ready. ${TOOLS.length} tools | bridge: ${A2A_URL}\n`);
       break;
     case 'tools/list':
@@ -454,7 +470,7 @@ async function handleMessage(msg) {
 process.on('uncaughtException', (err) => { process.stderr.write(`[recoder-a2a] uncaught: ${err.message}\n`); });
 process.on('unhandledRejection', (err) => { process.stderr.write(`[recoder-a2a] unhandled rejection: ${err}\n`); });
 
-process.stderr.write('[recoder-a2a] Recoder A2A MCP Server v2.2\n');
+process.stderr.write('[recoder-a2a] Recoder A2A MCP Server v2.3\n');
 process.stderr.write(`[recoder-a2a] API: ${API_URL} | A2A: ${A2A_URL}\n`);
 if (DAYTONA_KEY) process.stderr.write('[recoder-a2a] Daytona sandbox enabled\n');
 if (PLATFORM_TOKEN || PYTHON_API_KEY) process.stderr.write('[recoder-a2a] API auth configured\n');

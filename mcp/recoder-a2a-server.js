@@ -56,6 +56,18 @@ const WS_MAX_RETRIES = 10;
 // Inbound task queue — tasks assigned to this agent by the bridge
 const inboundTasks = [];    // { taskId, prompt, context, from, receivedAt, status: 'pending'|'accepted'|'completed'|'failed' }
 const MAX_INBOUND_TASKS = 50;
+let mcpReady = false; // set to true after notifications/initialized
+
+function pushNotification(level, data) {
+  if (!mcpReady) return;
+  try {
+    process.stdout.write(JSON.stringify({
+      jsonrpc: '2.0',
+      method: 'notifications/message',
+      params: { level, logger: 'recoder-a2a', data },
+    }) + '\n');
+  } catch {}
+}
 
 function handleBridgeMessage(msg) {
   switch (msg.type) {
@@ -78,6 +90,9 @@ function handleBridgeMessage(msg) {
       process.stderr.write(`[recoder-a2a] Task assigned: ${task.taskId} from ${task.from}\n`);
       // Auto-acknowledge receipt
       wsSend({ type: 'task.progress', taskId: task.taskId, progress: 0, output: `Task received by ${AGENT_ID}` });
+      // Push MCP notification so Claude Code sees the task immediately without polling
+      const preview = task.prompt.slice(0, 120);
+      pushNotification('info', `📨 New task [${task.taskId}] from ${task.from}: ${preview}${task.prompt.length > 120 ? '...' : ''} — run recoder_inbox to view`);
       break;
     }
 
@@ -461,10 +476,11 @@ async function handleMessage(msg) {
       respond(id, {
         protocolVersion: '2024-11-05',
         capabilities: { tools: {} },
-        serverInfo: { name: 'recoder-a2a', version: '2.2.0' },
+        serverInfo: { name: 'recoder-a2a', version: '2.3.0' },
       });
       break;
     case 'notifications/initialized':
+      mcpReady = true;
       process.stderr.write(`[recoder-a2a] Ready. ${TOOLS.length} tools | bridge: ${A2A_URL}\n`);
       break;
     case 'tools/list':
