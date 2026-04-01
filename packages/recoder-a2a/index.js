@@ -252,6 +252,23 @@ const TOOLS = [
       required: ['task_id', 'result'],
     },
   },
+  {
+    name: 'recoder_canvas_update',
+    description: 'Push live Excalidraw element updates to a canvas board open in the Recoder agents UI. The browser\'s CanvasPanel will call updateScene() immediately, adding or replacing elements without a full reload.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        project_id: { type: 'string', description: 'Project/workspace ID the canvas belongs to' },
+        thread_id: { type: 'string', description: 'Thread ID that owns the canvas (optional, used for routing)' },
+        elements: {
+          type: 'array',
+          description: 'Excalidraw elements array (shapes, text, arrows). Each element must have type, id, x, y, width, height at minimum.',
+          items: { type: 'object' },
+        },
+      },
+      required: ['project_id', 'elements'],
+    },
+  },
 ];
 
 // ── Helpers ──
@@ -510,6 +527,22 @@ async function handleToolCall(name, args) {
       return `Task ${args.task_id} → ${targetState}.\nState: ${transData.data?.state || transData.state}`;
     }
 
+    case 'recoder_canvas_update': {
+      if (!args.project_id || !Array.isArray(args.elements)) {
+        throw new Error('project_id and elements[] are required');
+      }
+      await apiFetch(`${DOCKER_URL}/api/a2a/canvas-update`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          projectId: args.project_id,
+          threadId: args.thread_id || '',
+          elements: args.elements,
+        }),
+      });
+      return `Canvas updated: ${args.elements.length} element(s) pushed to project ${args.project_id}. The board in the Recoder UI will update live.`;
+    }
+
     default:
       throw new Error(`Unknown tool: ${name}`);
   }
@@ -524,7 +557,7 @@ async function handleMessage(msg) {
       respond(id, {
         protocolVersion: '2024-11-05',
         capabilities: { tools: {} },
-        serverInfo: { name: 'recoder-a2a', version: '2.5.0' },
+        serverInfo: { name: 'recoder-a2a', version: '2.6.0' },
       });
       break;
     case 'notifications/initialized':
@@ -552,7 +585,7 @@ async function handleMessage(msg) {
 process.on('uncaughtException', (err) => { process.stderr.write(`[recoder-a2a] uncaught: ${err.message}\n`); });
 process.on('unhandledRejection', (err) => { process.stderr.write(`[recoder-a2a] unhandled rejection: ${err}\n`); });
 
-process.stderr.write('[recoder-a2a] Recoder A2A MCP Server v2.5.0\n');
+process.stderr.write('[recoder-a2a] Recoder A2A MCP Server v2.6.0\n');
 process.stderr.write(`[recoder-a2a] API: ${API_URL} | A2A: ${A2A_URL}\n`);
 if (DAYTONA_KEY) process.stderr.write('[recoder-a2a] Daytona sandbox enabled\n');
 if (PLATFORM_TOKEN || PYTHON_API_KEY) process.stderr.write('[recoder-a2a] API auth configured\n');
