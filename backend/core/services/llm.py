@@ -22,8 +22,8 @@ logging.getLogger("LiteLLM").setLevel(logging.WARNING)
 logging.getLogger("litellm").setLevel(logging.WARNING)
 
 litellm.num_retries = int(os.environ.get("LITELLM_NUM_RETRIES", 1))
-litellm.request_timeout = 1800
-litellm.stream_timeout = int(os.environ.get("LITELLM_STREAM_TIMEOUT", 300))
+litellm.request_timeout = int(os.environ.get("LITELLM_REQUEST_TIMEOUT", 300))  # 5 min (was 30 min)
+litellm.stream_timeout = int(os.environ.get("LITELLM_STREAM_TIMEOUT", 120))    # 2 min per-chunk
 
 from litellm.integrations.custom_logger import CustomLogger
 
