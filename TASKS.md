@@ -77,6 +77,22 @@ This supersedes older notes that treated the Windsurf connector as an unfixable 
   - active-task tracking and bridge notification handling
 - Remaining work is live bridge compatibility verification, not basic backend implementation.
 
+## 2026-04-01 Correction (streaming task output)
+
+This supersedes any older notes that still imply plan step 12 is blocked on the bridge or on the MCP consumer contract.
+
+- The bridge-side streaming foundation is already landed:
+  - task subscribe
+  - task stream fan-out
+  - task interrupt
+- The missing MCP-side consumer contract is now fixed in branch:
+  - `packages/recoder-a2a/index.js` now reads MCP `progressToken` metadata on `recoder_stream_task`
+  - inbound `task.stream` chunks are forwarded as `notifications/progress`, scoped to the subscribing tool call instead of only appearing as generic debug notifications
+  - backend event typing now includes `task.stream` and `task.interrupted`, with focused bridge/event-bus regression coverage
+- Remaining streaming work is now producer-side adoption:
+  - more runtimes/agents still need to emit `task.stream` during long-running execution
+  - step 12 is no longer blocked by bridge fan-out or MCP consumer delivery
+
 ## 2026-04-01 Correction (Hetzner infra)
 
 This supersedes older task notes that still treat deploy-network breakage, root `.env` drift, or unguarded local Postgres DSNs as the current top Hetzner blockers.

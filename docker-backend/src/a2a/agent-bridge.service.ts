@@ -522,7 +522,7 @@ export class AgentBridgeService {
         // Also publish to event bus for SSE consumers
         getA2AEventBus().publish({
           id: `evt_${uuid().replace(/-/g, '').slice(0, 16)}`,
-          type: 'task.stream' as string,
+          type: A2AEventType.TaskStream,
           timestamp: new Date().toISOString(),
           taskId: streamTaskId,
           data: { agentId, sessionId, chunk, done },
@@ -569,7 +569,7 @@ export class AgentBridgeService {
 
         getA2AEventBus().publish({
           id: `evt_${uuid().replace(/-/g, '').slice(0, 16)}`,
-          type: 'task.interrupted' as string,
+          type: A2AEventType.TaskInterrupted,
           timestamp: new Date().toISOString(),
           taskId: interruptTaskId,
           data: { from: agentId, targetAgent, reason },

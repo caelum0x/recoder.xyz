@@ -83,6 +83,25 @@ This top block also supersedes older notes that still describe Hetzner backend D
   - Hetzner DB credential drift should now fail fast during deploy/closeout instead of surfacing later as agent/backend `500`s
   - Hetzner app deployability is restored; remaining host cleanup is now the 17-entry `recoder-025` remainder
 
+## Current Correction (2026-04-01, streaming task output)
+
+This supersedes any older reading of plan step 12 as "SSE exists, token streaming partial" where the missing piece was assumed to be the bridge itself.
+
+- The bridge is no longer the blocker:
+  - `docker-backend/src/a2a/agent-bridge.service.ts` already supports `task.subscribe`, `task.stream`, and `task.interrupt`
+  - backend event typing now explicitly includes `task.stream` and `task.interrupted`
+- The MCP consumer gap is also now fixed in branch:
+  - `packages/recoder-a2a/index.js` extracts `progressToken` from `tools/call`
+  - `recoder_stream_task` registers request-scoped watchers
+  - streamed chunks now emit `notifications/progress` with task/chunk metadata instead of only generic log-style notifications
+- Focused coverage now exists for:
+  - bridge fan-out to subscribers
+  - subscription cleanup on `done=true`
+  - typed interrupt publication
+- Remaining step-12 risk is narrower:
+  - not every runtime/agent currently emits `task.stream` while it works
+  - the missing work is producer-side adoption, not bridge transport or MCP-side delivery
+
 ## Current Priority Order (2026-04-01, post-`recoder-8sm`)
 1. Browser-verify Web IDE preview + publish on the latest deployed build.
 2. Clean the remaining 17 unexpected source-drift entries on the Hetzner app checkout (`recoder-025`).

@@ -42,10 +42,12 @@ export const A2AEventType = {
   TaskSubmitted: 'task.submitted',
   TaskStarted: 'task.started',
   TaskProgress: 'task.progress',
+  TaskStream: 'task.stream',
   TaskInputRequired: 'task.input-required',
   TaskCompleted: 'task.completed',
   TaskFailed: 'task.failed',
   TaskCancelled: 'task.cancelled',
+  TaskInterrupted: 'task.interrupted',
 
   // Channel events
   MessageNew: 'message.new',
@@ -97,6 +99,7 @@ export const TASK_EVENT_TYPES = new Set<string>([
   A2AEventType.TaskSubmitted,
   A2AEventType.TaskStarted,
   A2AEventType.TaskProgress,
+  A2AEventType.TaskStream,
   A2AEventType.TaskInputRequired,
   A2AEventType.TaskCompleted,
   A2AEventType.TaskFailed,
