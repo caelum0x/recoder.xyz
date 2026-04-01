@@ -111,6 +111,42 @@ export function wireA2AEventBridge(): void {
 
     eventBus.publish(event);
     // NATS mirroring is handled automatically by A2AEventBus.publishToNats()
+
+    // ── PM integration: completed tasks with intent=feature → create PM feature ──
+    if (auditEvent.event_type === 'task.completed' && taskId) {
+      const taskResult = lifecycleService.getTask(taskId);
+      if (taskResult.ok) {
+        const payload = (taskResult.data as { payload?: Record<string, unknown> }).payload;
+        const intent = payload?.intent;
+        if (intent === 'feature' || intent === 'implement') {
+          const title = String(payload?.task ?? payload?.title ?? `Feature from task ${taskId}`);
+          const description = String(
+            (taskResult.data as { result?: { text?: string } }).result?.text
+            ?? payload?.description
+            ?? ''
+          );
+          // Non-blocking: create PM feature via recoder-pm API
+          const pmUrl = process.env.RECODER_PM_URL ?? 'http://recoder-pm:3004';
+          fetch(`${pmUrl}/api/features`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              title: title.slice(0, 200),
+              description: description.slice(0, 2000),
+              status: 'done',
+              source: 'a2a',
+              sourceTaskId: taskId,
+            }),
+            signal: AbortSignal.timeout(10_000),
+          }).then((res) => {
+            if (res.ok) logger.info({ taskId, title: title.slice(0, 80) }, 'PM feature created from completed task');
+            else logger.debug({ taskId, status: res.status }, 'PM feature creation skipped (API error)');
+          }).catch(() => {
+            // Non-fatal — PM might not be running
+          });
+        }
+      }
+    }
   };
 
   lifecycleService.addAuditSink(auditSink);
