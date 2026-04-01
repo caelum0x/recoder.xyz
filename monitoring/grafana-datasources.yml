@@ -1,5 +1,6 @@
 # Grafana Datasource Provisioning
-# Auto-configures Prometheus as default datasource on Grafana startup
+# VictoriaMetrics is Prometheus-compatible — same PromQL queries work.
+# VM listens on port 8428 inside the container.
 
 apiVersion: 1
 
@@ -8,6 +9,6 @@ datasources:
     uid: prometheus
     type: prometheus
     access: proxy
-    url: http://prometheus:9090
+    url: http://victoriametrics:8428
     isDefault: true
     editable: false

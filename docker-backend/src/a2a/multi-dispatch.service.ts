@@ -19,6 +19,7 @@ import { getWorktreeManagerService } from './worktree-manager.service';
 import { getA2AEventBus, A2AEventType } from './a2a-event-bus';
 import { getAgentBridgeService } from './agent-bridge.service';
 import { loadA2ADispatches, saveA2ADispatches } from './a2a-persistence';
+import { getRecentContext } from './memory-store';
 import { createLogger } from '../logger';
 import type {
   OrchestrationPattern,
@@ -183,6 +184,29 @@ export class MultiDispatchService {
 
       // If the agent is connected via the bridge, push the task assignment
       if (bridge.isAgentOnline(agentId)) {
+        // ── Sprint E deep wiring: inject relevant memories into task context ──
+        // Fetch top 10 semantically relevant memories for the workspace owner
+        // so the receiving agent has persistent context without explicitly recalling.
+        let memoryContext: Array<{ content: string; type: string; score?: number }> = [];
+        try {
+          const wsOwner = ws.ownerId;
+          if (wsOwner) {
+            const memories = await getRecentContext({
+              query: request.prompt,
+              userId: wsOwner,
+              limit: 10,
+            });
+            memoryContext = memories.map((m) => ({
+              content: m.content,
+              type: m.type,
+              score: m.score,
+            }));
+          }
+        } catch (memErr) {
+          // Non-fatal — dispatch continues without memory context
+          logger.debug({ err: memErr }, 'memory context injection skipped');
+        }
+
         bridge.sendToAgent(agentId, {
           type: 'task.assigned',
           taskId: task.id,
@@ -195,6 +219,7 @@ export class MultiDispatchService {
               worktreeBranch: worktreeInfo.branchName,
               worktreePath: worktreeInfo.worktreePath,
             } : {}),
+            ...(memoryContext.length > 0 ? { memories: memoryContext } : {}),
           },
         });
         // Mark agent as working

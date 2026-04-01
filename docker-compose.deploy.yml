@@ -68,6 +68,9 @@ services:
       - QDRANT_URL=http://qdrant:6333
       - MEILISEARCH_URL=http://meilisearch:7700
       - MEILI_MASTER_KEY=${MEILI_MASTER_KEY:-recoder_meili_dev_key}
+      - OPENMETER_URL=http://openmeter:8888
+      - FLAGSMITH_URL=http://flagsmith:8000
+      - NATS_URL=nats://nats:4222
       # Tier-1 connector flags (runtime image installs codex/claude CLIs).
       - RECODER_A2A_ENABLE_CODEX=${RECODER_A2A_ENABLE_CODEX:-true}
       - RECODER_A2A_ENABLE_CLAUDE_CODE=${RECODER_A2A_ENABLE_CLAUDE_CODE:-true}
@@ -445,6 +448,141 @@ services:
       - recoder
 
   # ================================================================
+  # Docs — Starlight developer documentation (docs.recoder.xyz)
+  # Build: cd docs/site && npm install && npm run build
+  # Serves static output via nginx
+  # ================================================================
+  docs:
+    image: nginx:1.27-alpine
+    container_name: recoder-docs
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3008:80"
+    volumes:
+      - ./docs/site/dist:/usr/share/nginx/html:ro
+    healthcheck:
+      test: ["CMD-SHELL", "wget --quiet --tries=1 --spider http://localhost:80/ || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          cpus: '0.1'
+          memory: 32M
+    networks:
+      - recoder
+
+  # ================================================================
+  # NATS — Lightweight event bus with JetStream for A2A messaging
+  # Replaces Redis pub/sub for real-time event fan-out. ~20MB RAM.
+  # ================================================================
+  nats:
+    image: nats:2.10-alpine
+    container_name: recoder-nats
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:4222:4222"
+      - "127.0.0.1:8222:8222"   # monitoring dashboard
+    command:
+      - "--js"
+      - "--sd=/data"
+      - "--http_port=8222"
+      - "--max_payload=1048576"
+    volumes:
+      - nats-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "wget --quiet --tries=1 --spider http://localhost:8222/healthz || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          cpus: '0.2'
+          memory: 64M
+    networks:
+      - recoder
+
+  # ================================================================
+  # OpenMeter — Usage metering for billing foundation
+  # Provides per-user token spend, per-project cost, per-model breakdown.
+  # ================================================================
+  openmeter:
+    image: ghcr.io/openmeterio/openmeter:latest
+    container_name: recoder-openmeter
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8888:8888"
+    environment:
+      - POSTGRES_URL=postgresql://recoder:recoder_prod_2026@host.docker.internal:5432/recoder_backend
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8888/api/v1/health || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          cpus: '0.3'
+          memory: 256M
+    networks:
+      - recoder
+
+  # ================================================================
+  # Flagsmith — Feature flags for gradual rollouts, A/B tests, kill-switches
+  # ================================================================
+  flagsmith:
+    image: flagsmith/flagsmith:latest
+    container_name: recoder-flagsmith
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8001:8000"
+    environment:
+      - DATABASE_URL=postgresql://recoder:recoder_prod_2026@host.docker.internal:5432/recoder_backend
+      - DJANGO_SECRET_KEY=${FLAGSMITH_SECRET:-change_me_flagsmith_secret}
+      - ENABLE_ADMIN_ACCESS_USER_PASS=True
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8000/health || exit 1"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+    networks:
+      - recoder
+
+  # ================================================================
+  # Umami — Privacy-first web analytics (GDPR compliant, no cookies)
+  # ================================================================
+  umami:
+    image: ghcr.io/umami-software/umami:postgresql-latest
+    container_name: recoder-umami
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3006:3000"
+    environment:
+      - DATABASE_URL=postgresql://recoder:recoder_prod_2026@host.docker.internal:5432/recoder_backend
+      - APP_SECRET=${UMAMI_SECRET:-change_me_umami_secret}
+      - DISABLE_UPDATES=1
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:3000/api/heartbeat || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          cpus: '0.3'
+          memory: 256M
+    networks:
+      - recoder
+
+  # ================================================================
   # Chatwoot — Omnichannel inbox (replaces OpenClaw social gateway)
   # nginx: chat.recoder.xyz → port 3005
   # Setup: docker exec recoder-chatwoot bundle exec rails db:chatwoot_prepare
@@ -519,7 +657,8 @@ volumes:
   meili-data:
   openclaw-config:
   openclaw-workspace:
-  prometheus-data:
+  victoriametrics-data:
+  nats-data:
   alertmanager-data:
   grafana-data:
 

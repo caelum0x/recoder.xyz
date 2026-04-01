@@ -299,6 +299,14 @@ ENV PATH="/opt/mcp-servers/node_modules/.bin:$PATH"
 # Set npm to use cache
 RUN npm config set cache /opt/npm-cache/.npm --global
 
+# ============================================
+# Ollama — Local LLM for cheap inference inside sandbox
+# Agents use this for docstrings, code comments, quick Q&A
+# to save expensive Claude/GPT-4 API calls for complex reasoning.
+# Start with: ollama serve & ollama run qwen2.5-coder:3b
+# ============================================
+RUN curl -fsSL https://ollama.ai/install.sh | sh
+
 # PTY Server
 COPY pty-server.js /opt/pty/pty-server.js
 
