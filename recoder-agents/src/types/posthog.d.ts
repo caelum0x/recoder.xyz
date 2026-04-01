@@ -11,5 +11,6 @@ interface Window {
 }
 
 interface WindowEventMap {
+  'canvas-tool-updated': CustomEvent<{ canvasPath: string; timestamp: number }>;
   'locale-change': CustomEvent<string>;
 }
