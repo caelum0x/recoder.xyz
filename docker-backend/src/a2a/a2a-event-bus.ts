@@ -85,6 +85,9 @@ export const A2AEventType = {
   WorktreeMerged: 'worktree.merged',
   WorktreeConflict: 'worktree.conflict',
   WorktreeRemoved: 'worktree.removed',
+
+  // Canvas events
+  CanvasUpdate: 'canvas.update',
 } as const;
 
 export type A2AEventTypeValue = (typeof A2AEventType)[keyof typeof A2AEventType];

@@ -1301,6 +1301,10 @@ api_router.include_router(models_router)
 from core.agents.executors.executor_api import router as agent_executor_router
 api_router.include_router(agent_executor_router)
 
+# ACI (Agent-Computer Interface) — structured file edits, test-fix loop, git ops
+from core.agents.patterns.aci_api import router as aci_router
+api_router.include_router(aci_router)
+
 app.include_router(api_router, prefix="/v1")
 
 METRICS_LOG_INTERVAL_SECONDS = int(os.getenv("METRICS_LOG_INTERVAL_SECONDS", "300"))  # 5 min

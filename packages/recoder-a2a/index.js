@@ -2,7 +2,7 @@
 /**
  * Recoder A2A MCP Server for Claude Code, Codex, and Cursor
  *
- * Provides 8 tools to interact with the Recoder platform:
+ * Core A2A tools:
  * - recoder_list_agents: List connected A2A agents
  * - recoder_list_tasks: View A2A task queue
  * - recoder_send_task: Send task to another agent via A2A
@@ -11,6 +11,21 @@
  * - recoder_get_thread: Get thread messages (including AI responses)
  * - recoder_inbox: Check inbound tasks assigned to this agent
  * - recoder_task_respond: Respond to an inbound task
+ *
+ * Data & inference tools:
+ * - recoder_search_code: Search codebase
+ * - recoder_search: Meilisearch full-text search
+ * - recoder_local_llm: Call local Ollama model in sandbox
+ * - recoder_canvas_update: Push live Excalidraw updates
+ * - recoder_query_data: Run SQL against DuckDB session
+ * - recoder_load_csv: Load CSV into DuckDB
+ * - recoder_load_json: Load JSON into DuckDB
+ *
+ * ACI (Agent-Computer Interface) tools:
+ * - recoder_aci_edit: Targeted search/replace file edit
+ * - recoder_aci_create_file: Create new file in sandbox
+ * - recoder_aci_test_fix: Test-run-fix loop (auto-fixes failing tests)
+ * - recoder_aci_git: Git operations (status, diff, branch, commit)
  */
 
 const DOCKER_URL = process.env.RECODER_DOCKER_URL || 'https://docker.recoder.xyz';
@@ -384,6 +399,67 @@ const TOOLS = [
         records: { type: 'array', items: { type: 'object' }, description: 'Array of objects to load as rows' },
       },
       required: ['table_name', 'records'],
+    },
+  },
+  {
+    name: 'recoder_aci_edit',
+    description: 'Apply a targeted search/replace edit to a file in the sandbox. The old_text must appear exactly once. Use instead of overwriting entire files — minimal, safe, reviewable diffs.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        sandbox_id: { type: 'string', description: 'Daytona sandbox ID' },
+        file_path: { type: 'string', description: 'Absolute path to the file inside the sandbox' },
+        old_text: { type: 'string', description: 'Exact text to find (must be unique in the file)' },
+        new_text: { type: 'string', description: 'Replacement text' },
+      },
+      required: ['sandbox_id', 'file_path', 'old_text', 'new_text'],
+    },
+  },
+  {
+    name: 'recoder_aci_create_file',
+    description: 'Create a new file in the sandbox with specified content. Creates parent directories automatically.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        sandbox_id: { type: 'string', description: 'Daytona sandbox ID' },
+        file_path: { type: 'string', description: 'Absolute path for the new file' },
+        content: { type: 'string', description: 'File content' },
+      },
+      required: ['sandbox_id', 'file_path', 'content'],
+    },
+  },
+  {
+    name: 'recoder_aci_test_fix',
+    description: 'Run the test-run-fix loop: execute test_command, ask LLM to generate a fix on failure, apply it, repeat until tests pass or max_iterations. Use after writing code to validate and auto-fix.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        sandbox_id: { type: 'string', description: 'Daytona sandbox ID' },
+        test_command: { type: 'string', description: 'Shell command to run tests (e.g. "pytest tests/" or "npm test")' },
+        context: { type: 'string', description: 'Additional context about the codebase for the LLM fixer' },
+        max_iterations: { type: 'number', default: 5, description: 'Max fix attempts (1-10)' },
+        model: { type: 'string', default: 'anthropic/claude-sonnet-4-20250514', description: 'LLM model for fix generation' },
+      },
+      required: ['sandbox_id', 'test_command'],
+    },
+  },
+  {
+    name: 'recoder_aci_git',
+    description: 'Git operations in the sandbox: status, diff, branch creation, and commit. Use to inspect and commit work after ACI edits.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        sandbox_id: { type: 'string', description: 'Daytona sandbox ID' },
+        operation: {
+          type: 'string',
+          enum: ['status', 'diff', 'diff_unstaged', 'branch', 'commit'],
+          description: 'Operation: status=show changes, diff=staged diff, diff_unstaged=unstaged diff, branch=create branch, commit=stage+commit',
+        },
+        branch_name: { type: 'string', description: 'Branch name (required for branch operation)' },
+        commit_message: { type: 'string', description: 'Commit message (required for commit operation)' },
+        paths: { type: 'array', items: { type: 'string' }, description: 'Specific paths to stage for commit (default: all)' },
+      },
+      required: ['sandbox_id', 'operation'],
     },
   },
 ];
@@ -805,6 +881,117 @@ async function handleToolCall(name, args) {
       return `Table "${args.table_name}" created: ${result.rowCount} rows, columns: ${result.columns.join(', ')}. Use recoder_query_data to query it.`;
     }
 
+    case 'recoder_aci_edit': {
+      if (!args.sandbox_id || !args.file_path || args.old_text === undefined || args.new_text === undefined) {
+        throw new Error('sandbox_id, file_path, old_text, and new_text are required');
+      }
+      const data = await apiFetch(`${API_URL}/v1/aci/edit`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sandbox_id: args.sandbox_id,
+          file_path: args.file_path,
+          old_text: args.old_text,
+          new_text: args.new_text,
+        }),
+      });
+      return data.success
+        ? `Edit applied: ${data.message}`
+        : `Edit failed: ${data.message}`;
+    }
+
+    case 'recoder_aci_create_file': {
+      if (!args.sandbox_id || !args.file_path || args.content === undefined) {
+        throw new Error('sandbox_id, file_path, and content are required');
+      }
+      const data = await apiFetch(`${API_URL}/v1/aci/create-file`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sandbox_id: args.sandbox_id,
+          file_path: args.file_path,
+          content: args.content,
+        }),
+      });
+      return data.success
+        ? `File created: ${data.message}`
+        : `File creation failed: ${data.message}`;
+    }
+
+    case 'recoder_aci_test_fix': {
+      if (!args.sandbox_id || !args.test_command) {
+        throw new Error('sandbox_id and test_command are required');
+      }
+      const data = await apiFetch(`${API_URL}/v1/aci/test-fix`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sandbox_id: args.sandbox_id,
+          test_command: args.test_command,
+          context: args.context || '',
+          max_iterations: args.max_iterations || 5,
+          model: args.model || 'anthropic/claude-sonnet-4-20250514',
+        }),
+      });
+      const status = data.passed ? 'PASSED' : 'FAILED';
+      const fixes = data.fixes_applied?.length
+        ? `\n\nFixes applied (${data.fixes_applied.length}):\n${data.fixes_applied.join('\n')}`
+        : '';
+      return `Tests ${status} after ${data.iterations} iteration(s).\n\n${data.output.slice(0, 3000)}${fixes}`;
+    }
+
+    case 'recoder_aci_git': {
+      if (!args.sandbox_id || !args.operation) {
+        throw new Error('sandbox_id and operation are required');
+      }
+      const op = args.operation;
+      if (op === 'status') {
+        const data = await apiFetch(`${API_URL}/v1/aci/git/status`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sandbox_id: args.sandbox_id }),
+        });
+        return data.is_repo
+          ? `Git status (${data.is_repo ? 'repo' : 'not a repo'}):\n${data.status || '(clean)'}`
+          : 'Not a git repository';
+      }
+      if (op === 'diff' || op === 'diff_unstaged') {
+        const data = await apiFetch(`${API_URL}/v1/aci/git/diff`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sandbox_id: args.sandbox_id, staged: op === 'diff' }),
+        });
+        return data.diff || '(no changes)';
+      }
+      if (op === 'branch') {
+        if (!args.branch_name) throw new Error('branch_name is required for branch operation');
+        const data = await apiFetch(`${API_URL}/v1/aci/git/branch`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sandbox_id: args.sandbox_id, branch_name: args.branch_name }),
+        });
+        return data.success
+          ? `Branch created: ${data.branch_name}`
+          : `Branch failed: ${data.message}`;
+      }
+      if (op === 'commit') {
+        if (!args.commit_message) throw new Error('commit_message is required for commit operation');
+        const data = await apiFetch(`${API_URL}/v1/aci/git/commit`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            sandbox_id: args.sandbox_id,
+            message: args.commit_message,
+            paths: args.paths || null,
+          }),
+        });
+        return data.success
+          ? `Committed: ${data.message}`
+          : `Commit failed: ${data.message}`;
+      }
+      throw new Error(`Unknown git operation: ${op}`);
+    }
+
     default:
       throw new Error(`Unknown tool: ${name}`);
   }
@@ -819,7 +1006,7 @@ async function handleMessage(msg) {
       respond(id, {
         protocolVersion: '2024-11-05',
         capabilities: { tools: {} },
-        serverInfo: { name: 'recoder-a2a', version: '2.9.0' },
+        serverInfo: { name: 'recoder-a2a', version: '3.0.0' },
       });
       break;
     case 'notifications/initialized':
@@ -847,7 +1034,7 @@ async function handleMessage(msg) {
 process.on('uncaughtException', (err) => { process.stderr.write(`[recoder-a2a] uncaught: ${err.message}\n`); });
 process.on('unhandledRejection', (err) => { process.stderr.write(`[recoder-a2a] unhandled rejection: ${err}\n`); });
 
-process.stderr.write('[recoder-a2a] Recoder A2A MCP Server v2.6.0\n');
+process.stderr.write('[recoder-a2a] Recoder A2A MCP Server v3.0.0\n');
 process.stderr.write(`[recoder-a2a] API: ${API_URL} | A2A: ${A2A_URL}\n`);
 if (DAYTONA_KEY) process.stderr.write('[recoder-a2a] Daytona sandbox enabled\n');
 if (PLATFORM_TOKEN || PYTHON_API_KEY) process.stderr.write('[recoder-a2a] API auth configured\n');
