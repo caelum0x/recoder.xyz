@@ -122,7 +122,8 @@ The roadmap below remains useful, but older claims elsewhere that the Nike prese
   `recoder-agents` now supports dedicated `.excalidraw` and `.excalidraw.json` board files via `src/components/canvas/CanvasPanel.tsx`, while legacy `.kanvax` files remain on the existing backend image-composition contract.
   Canvas mode entry points are now aligned to that board workflow through a shared config in `src/lib/canvas/mode-config.ts`: the mode panel, chat mode label, and new-thread empty state now steer users toward board/diagram/wireframe/flowchart prompts that explicitly create `.excalidraw` boards under `/workspace/canvases/` instead of stale image-generation prompts.
   The thread tool-view path now also recognizes generic file writes to `.excalidraw` boards as canvas updates, so inline canvas results can refresh/render through the shared canvas view instead of assuming every board write is `.kanvax`.
-  Remaining A1 work is agent-side board mutation tooling and live broadcast wiring (`recoder_canvas_update`) so agents can actively draw/update boards after creation.
+  The backend live-update path is now unified too: `docker-backend` no longer shadows `/api/a2a/canvas-update` with two competing handlers. The route module is the single source of truth for validating updates, publishing `canvas.update` to the A2A event bus, broadcasting to the workspace bridge, and relaying to `recoder-agents` SSE when a `threadId` is present. Regression coverage now exists in `docker-backend/src/a2a/__tests__/canvas-routes.test.ts`.
+  Remaining A1 work is now narrower: agent behavior still needs to actively call `recoder_canvas_update` during board-edit flows, and the full live board update path still needs browser verification in the deployed UI.
 - `npm install @excalidraw/excalidraw` in `recoder-agents`
 - Create `CanvasPanel.tsx` component wrapping `<Excalidraw>` with `initialData` prop
 - Add canvas tool to agent tool sidebar (replace broken FAL canvas)

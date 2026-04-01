@@ -82,7 +82,7 @@ import { searchRouter } from './a2a/search.routes.js';
 import { webhookRouter } from './a2a/webhook.routes.js';
 import { workflowTriggerRouter } from './a2a/workflow-trigger.routes.js';
 import { duckdbRouter } from './a2a/duckdb.routes.js';
-import { canvasRouter } from './a2a/canvas.routes.js';
+import { createCanvasRouter } from './a2a/canvas.routes.js';
 import { indexFile as codeSearchIndexFile } from './a2a/code-search.js';
 import { indexFile as meiliIndexFile, indexThread as meiliIndexThread } from './a2a/search-proxy.js';
 import { trackLlmCall, trackSandboxExec, trackFileOp, trackPublish } from './metering/openmeter-client.js';
@@ -15015,7 +15015,11 @@ app.use('/api/a2a/search', searchRouter);
 app.use('/api/a2a/webhook', webhookRouter);
 app.use('/api/a2a/workflows', workflowTriggerRouter);
 app.use('/api/a2a/data', duckdbRouter);
-app.use('/api/a2a/canvas-update', canvasRouter);
+app.use('/api/a2a/canvas-update', authenticateRequest, createCanvasRouter({
+  canvasHandlerUrl: process.env.RECODER_A2A_CANVAS_HANDLER_URL || '',
+  internalServiceKey: process.env.INTERNAL_SERVICE_KEY || '',
+}));
+startupInfo('routes.canvas-update', 'registered');
 app.use('/api/a2a', connectorHealthRouter);
 app.use('/api/a2a/patterns', patternRouter);
 app.use('/api/a2a', a2aOpenApiRouter);
@@ -17517,57 +17521,6 @@ app.get('/api/web-search', asyncHandler(async (req: express.Request, res: expres
 startupInfo('routes.web-search', `registered (SearXNG at ${SEARXNG_BASE_URL})`);
 
 // ==================== END SEARXNG WEB SEARCH PROXY ====================
-
-// ==================== A2A CANVAS UPDATE ====================
-// Agents call recoder_canvas_update MCP tool → POSTs here → bridge broadcasts to UI clients.
-// Optional: if RECODER_A2A_CANVAS_HANDLER_URL is set, also relays to the SSE endpoint in
-// recoder-agents so the browser's CanvasPanel can call excalidrawAPI.updateScene().
-
-const CANVAS_HANDLER_URL = process.env.RECODER_A2A_CANVAS_HANDLER_URL || '';
-
-app.post('/api/a2a/canvas-update', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
-  const { projectId, threadId, elements } = req.body as {
-    projectId?: string;
-    threadId?: string;
-    elements?: unknown;
-  };
-
-  if (!projectId || !Array.isArray(elements)) {
-    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'projectId and elements[] required'));
-  }
-
-  const bridge = getAgentBridgeService();
-  bridge.broadcastToWorkspace(projectId, {
-    type: 'canvas_update',
-    projectId,
-    threadId: threadId || '',
-    elements,
-    timestamp: Date.now(),
-  } as any);
-
-  // Forward to recoder-agents SSE relay if configured
-  if (CANVAS_HANDLER_URL) {
-    try {
-      await fetch(CANVAS_HANDLER_URL, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${process.env.INTERNAL_SERVICE_KEY || ''}`,
-        },
-        body: JSON.stringify({ projectId, threadId, elements }),
-        signal: AbortSignal.timeout(5000),
-      });
-    } catch (err) {
-      logger.warn({ err, url: CANVAS_HANDLER_URL }, 'canvas handler relay failed (non-fatal)');
-    }
-  }
-
-  sendSuccess(res, { broadcasted: true, projectId, elementCount: elements.length });
-}));
-
-startupInfo('routes.canvas-update', 'registered');
-
-// ==================== END A2A CANVAS UPDATE ====================
 
 // Register shutdown handlers
 process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
