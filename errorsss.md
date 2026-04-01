@@ -1,6 +1,6 @@
 # Recoder Platform — Error Registry
 
-Last updated: 2026-04-01 (Hetzner safe cleanup reduced unexpected checkout drift from 45 to 17; the workflow metering/qdrant overlap is landed, and the agents file-proxy HEAD mismatch is now deployed on the backend)
+Last updated: 2026-04-02 (OpenMeter LLM usage reporting and deploy-compose alignment are landed in the main repo; the agents file-proxy HEAD mismatch is deployed on the backend, and the only remaining local dirty path is the nested `recoder-web/starters` repo)
 
 ---
 
@@ -82,6 +82,15 @@ This top block also supersedes older notes that still describe Hetzner backend D
 - Result:
   - Hetzner DB credential drift should now fail fast during deploy/closeout instead of surfacing later as agent/backend `500`s
   - Hetzner app deployability is restored; remaining host cleanup is now the 17-entry `recoder-025` remainder
+
+## Current Correction (2026-04-02, metering cleanup)
+
+This supersedes any stale reading that the OpenMeter LLM hook and compose alignment were still uncommitted local dirt.
+
+- `backend/core/services/llm.py` now best-effort reports LLM usage to OpenMeter for sync and streaming completions.
+- `docker-compose.deploy.yml` now keeps OpenMeter on internal port `8888` while publishing it on host port `8889`, and the NATS service uses an explicit `nats-server` entrypoint plus short-form JetStream flags.
+- The main repo is no longer dirty because of those two files.
+- The only remaining local dirty path is the separate nested repo `recoder-web/starters` (`recoder-0vj`).
 
 ## Current Correction (2026-04-01, streaming task output)
 

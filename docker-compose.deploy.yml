@@ -68,7 +68,7 @@ services:
       - QDRANT_URL=http://qdrant:6333
       - MEILISEARCH_URL=http://meilisearch:7700
       - MEILI_MASTER_KEY=${MEILI_MASTER_KEY:-recoder_meili_dev_key}
-      - OPENMETER_URL=http://openmeter:8888
+      - OPENMETER_URL=http://openmeter:8888  # internal Docker port (host: 8889)
       - FLAGSMITH_URL=http://flagsmith:8000
       - NATS_URL=nats://nats:4222
       - ZROK_API_URL=http://zrok-controller:18080
@@ -660,11 +660,8 @@ services:
     ports:
       - "127.0.0.1:4222:4222"
       - "127.0.0.1:8222:8222"   # monitoring dashboard
-    command:
-      - "--js"
-      - "--sd=/data"
-      - "--http_port=8222"
-      - "--max_payload=1048576"
+    entrypoint: ["nats-server"]
+    command: ["-js", "-sd", "/data", "-m", "8222"]
     volumes:
       - nats-data:/data
     healthcheck:
@@ -689,7 +686,7 @@ services:
     container_name: recoder-openmeter
     restart: unless-stopped
     ports:
-      - "127.0.0.1:8888:8888"
+      - "127.0.0.1:8889:8888"
     environment:
       - POSTGRES_URL=postgresql://recoder:recoder_prod_2026@host.docker.internal:5432/recoder_backend
     healthcheck:
