@@ -133,7 +133,7 @@ export async function addAppsToPlaylist(
 		: 0;
 
 	const toInsert = triggerIds
-		.map((tid) => triggerMap.get(tid))
+		.map((tid) => triggerMap.get(tid as `fltg-${string}`))
 		.filter((dbId): dbId is number => dbId !== undefined)
 		.map((flowTriggerDbId) => ({
 			playlistDbId: playlist.dbId,

@@ -56,7 +56,7 @@ export async function getFeaturedApps(teamDbId: number) {
 			workspaceDbId: apps.workspaceDbId,
 		})
 		.from(apps)
-		.where(and(eq(apps.teamDbId, teamDbId), inArray(apps.id, ids)));
+		.where(and(eq(apps.teamDbId, teamDbId), inArray(apps.id, ids as `app-${string}`[])));
 }
 
 export async function getFeaturedWorkflows(teamDbId: number) {
@@ -81,7 +81,7 @@ export async function getFeaturedWorkflows(teamDbId: number) {
 		})
 		.from(workspaces)
 		.where(
-			and(eq(workspaces.teamDbId, teamDbId), inArray(workspaces.id, ids)),
+			and(eq(workspaces.teamDbId, teamDbId), inArray(workspaces.id, ids as `wrks-${string}`[])),
 		);
 }
 

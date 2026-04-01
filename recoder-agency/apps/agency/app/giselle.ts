@@ -667,17 +667,21 @@ export const giselle = NextGiselle({
 					installationIds: () => [1234],
 				},
 			},
-			...(hasGitHubCredentials
+			authV2: hasGitHubCredentials
 				? {
-						authV2: {
-							appId: githubAppId!,
-							privateKey: githubAppPrivateKey!,
-							clientId: githubAppClientId!,
-							clientSecret: githubAppClientSecret!,
-							webhookSecret: githubAppWebhookSecret!,
-						},
+						appId: githubAppId!,
+						privateKey: githubAppPrivateKey!,
+						clientId: githubAppClientId!,
+						clientSecret: githubAppClientSecret!,
+						webhookSecret: githubAppWebhookSecret!,
 					}
-				: {}),
+				: {
+						appId: "",
+						privateKey: "",
+						clientId: "",
+						clientSecret: "",
+						webhookSecret: "",
+					},
 		},
 	},
 	vault,

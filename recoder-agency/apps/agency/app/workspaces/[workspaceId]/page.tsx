@@ -128,7 +128,12 @@ export default async function ({
 				workspaceSaveAction={async (workspace: Workspace) => {
 					"use server";
 
-					await giselle.updateWorkspace(workspace);
+					try {
+						await giselle.updateWorkspace(workspace);
+					} catch (error) {
+						logger.error({ workspaceId, error }, "Failed to save workspace");
+						throw error;
+					}
 				}}
 			/>
 		</Suspense>

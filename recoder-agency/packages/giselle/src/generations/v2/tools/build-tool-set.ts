@@ -11,6 +11,7 @@ import { decryptSecret } from "../../../secrets";
 import type { GiselleContext } from "../../../types";
 import { createGitHubTools } from "./github";
 import { createPostgresTool } from "./postgres";
+import { createRecoderWebSearchTools } from "./recoder-web-search";
 
 export async function buildToolSet({
 	context,
@@ -176,6 +177,33 @@ export async function buildToolSet({
 
 				Object.assign(toolSet, postgresTools.toolSet);
 				cleanupFunctions.push(postgresTools.cleanup);
+				break;
+			}
+			case "recoder-web-search": {
+				const rawUseTools =
+					tool.configuration[
+						languageModelTool.configurationOptions.useTools.name
+					];
+				if (!Array.isArray(rawUseTools)) {
+					context.logger.warn(
+						`${generationId}, ${nodeId}, recoder-web-search useTools is not an array`,
+					);
+					continue;
+				}
+				const rawMaxResults =
+					tool.configuration[
+						languageModelTool.configurationOptions.maxResults.name
+					];
+				const maxResults =
+					typeof rawMaxResults === "number" ? rawMaxResults : undefined;
+
+				const recoderTools = createRecoderWebSearchTools({
+					toolDefs: languageModelTool.tools,
+					useTools: rawUseTools,
+					maxResults,
+					context,
+				});
+				Object.assign(toolSet, recoderTools);
 				break;
 			}
 			default: {
