@@ -64,5 +64,8 @@
     "tsx": "^4.7.0",
     "typescript": "^5.3.3",
     "vitest": "^2.0.1"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": ["duckdb", "better-sqlite3", "node-pty"]
   }
 }

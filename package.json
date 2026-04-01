@@ -304,5 +304,8 @@
   "funding": {
     "type": "github",
     "url": "https://github.com/sponsors/recoder-team"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": ["duckdb", "better-sqlite3", "node-pty", "@swc/core", "esbuild", "lightningcss", "sharp", "canvas"]
   }
 }
