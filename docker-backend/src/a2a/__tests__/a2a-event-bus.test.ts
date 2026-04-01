@@ -402,6 +402,7 @@ describe('Event type constants', () => {
     expect(TASK_EVENT_TYPES.has(A2AEventType.TaskSubmitted)).toBe(true);
     expect(TASK_EVENT_TYPES.has(A2AEventType.TaskStarted)).toBe(true);
     expect(TASK_EVENT_TYPES.has(A2AEventType.TaskProgress)).toBe(true);
+    expect(TASK_EVENT_TYPES.has(A2AEventType.TaskStream)).toBe(true);
     expect(TASK_EVENT_TYPES.has(A2AEventType.TaskInputRequired)).toBe(true);
     expect(TASK_EVENT_TYPES.has(A2AEventType.TaskCompleted)).toBe(true);
     expect(TASK_EVENT_TYPES.has(A2AEventType.TaskFailed)).toBe(true);
@@ -419,6 +420,7 @@ describe('Event type constants', () => {
     expect(TERMINAL_TASK_EVENT_TYPES.has(A2AEventType.TaskCompleted)).toBe(true);
     expect(TERMINAL_TASK_EVENT_TYPES.has(A2AEventType.TaskFailed)).toBe(true);
     expect(TERMINAL_TASK_EVENT_TYPES.has(A2AEventType.TaskCancelled)).toBe(true);
+    expect(TERMINAL_TASK_EVENT_TYPES.has(A2AEventType.TaskStream)).toBe(false);
   });
 
   it('CHANNEL_EVENT_TYPES contains all channel events', () => {

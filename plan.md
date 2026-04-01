@@ -872,10 +872,16 @@ recoder_subscribe_scratchpad({ key: "research/*" })  // notified on writes
 
 **Interrupt**: Agent A can send `{ type: "interrupt", taskId }` to agent B mid-stream. "Stop, wrong direction." Agent B pauses, receives a correction, continues. Like a human developer saying "wait, actually..."
 
+**Current status (2026-04-01)**:
+- Branch already had the bridge-side streaming foundation in `4322699e`: subscribe, fan-out, and interrupt over the A2A bridge.
+- The remaining MCP-side gap is now closed for consumers: `recoder_stream_task` uses MCP `notifications/progress` when the caller provides a `progressToken`, so chunk updates are request-scoped instead of only appearing as generic debug notifications.
+- Backend event taxonomy now includes typed `task.stream` and `task.interrupted` events, with regression coverage for bridge fan-out, cleanup on `done=true`, and interrupt routing.
+- Remaining work is narrower than before: more execution runtimes still need to actively emit `task.stream` during long-running work. The consumer contract, bridge transport, and interrupt path are no longer the blocker.
+
 **What to build**:
 - Streaming task response type: `{ taskId, chunk, done: false }` messages over WebSocket
 - Fan-out: bridge delivers stream chunks to all subscribers of that task
-- MCP streaming: `recoder_stream_task` tool returns an async iterator
+- MCP streaming: `recoder_stream_task` now forwards chunks through MCP progress notifications keyed by `progressToken`
 - Interrupt signal: `recoder_interrupt_task` sends stop signal to executing agent
 
 ---

@@ -11,6 +11,7 @@ vi.mock('../../logger', () => ({
 }));
 
 import { AgentBridgeService } from '../agent-bridge.service';
+import { A2AEventType, getA2AEventBus, resetA2AEventBus, type A2AEvent } from '../a2a-event-bus';
 import { getHeartbeatTracker, resetHeartbeatTracker } from '../heartbeat-tracker.service';
 
 function makeSocket() {
@@ -26,12 +27,14 @@ describe('AgentBridgeService heartbeat tracking', () => {
 
   beforeEach(() => {
     resetHeartbeatTracker();
+    resetA2AEventBus();
     service = new AgentBridgeService();
   });
 
   afterEach(() => {
     service.shutdown();
     resetHeartbeatTracker();
+    resetA2AEventBus();
   });
 
   it('records bridge agents in the heartbeat tracker on register', () => {
@@ -102,5 +105,106 @@ describe('AgentBridgeService heartbeat tracking', () => {
         workspaceCount: 1,
       },
     });
+  });
+
+  it('fans out task stream chunks to subscribers and publishes typed stream events', () => {
+    const sourceSocket = makeSocket();
+    const subscriberSocket = makeSocket();
+    const events: A2AEvent[] = [];
+
+    getA2AEventBus().subscribeGlobal((event) => events.push(event));
+
+    service.registerAgent(sourceSocket, 'codex', 'user-1', ['execute'], [], 'source-session');
+    service.registerAgent(subscriberSocket, 'claude_code', 'user-1', ['plan'], [], 'subscriber-session');
+
+    service.handleMessage(subscriberSocket, JSON.stringify({ type: 'task.subscribe', taskId: 'task-stream-1' }));
+    service.handleMessage(sourceSocket, JSON.stringify({
+      type: 'task.stream',
+      taskId: 'task-stream-1',
+      chunk: 'partial output',
+      done: false,
+    }));
+
+    const deliveredPayloads = subscriberSocket.send.mock.calls
+      .map(([raw]) => JSON.parse(String(raw)));
+
+    expect(deliveredPayloads).toEqual(expect.arrayContaining([
+      expect.objectContaining({ type: 'task.subscribed', taskId: 'task-stream-1' }),
+      expect.objectContaining({
+        type: 'task.stream',
+        taskId: 'task-stream-1',
+        chunk: 'partial output',
+        done: false,
+        from: 'codex',
+      }),
+    ]));
+
+    expect(events).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        type: A2AEventType.TaskStream,
+        taskId: 'task-stream-1',
+        data: expect.objectContaining({ agentId: 'codex', chunk: 'partial output', done: false }),
+      }),
+    ]));
+  });
+
+  it('clears task stream subscriptions after done=true', () => {
+    const sourceSocket = makeSocket();
+    const subscriberSocket = makeSocket();
+
+    service.registerAgent(sourceSocket, 'codex', 'user-1', ['execute'], [], 'source-session');
+    service.registerAgent(subscriberSocket, 'claude_code', 'user-1', ['plan'], [], 'subscriber-session');
+
+    service.handleMessage(subscriberSocket, JSON.stringify({ type: 'task.subscribe', taskId: 'task-stream-2' }));
+    service.handleMessage(sourceSocket, JSON.stringify({
+      type: 'task.stream',
+      taskId: 'task-stream-2',
+      chunk: 'final chunk',
+      done: true,
+    }));
+
+    subscriberSocket.send.mockClear();
+
+    service.handleMessage(sourceSocket, JSON.stringify({
+      type: 'task.stream',
+      taskId: 'task-stream-2',
+      chunk: 'should not deliver',
+      done: false,
+    }));
+
+    expect(subscriberSocket.send).not.toHaveBeenCalled();
+  });
+
+  it('routes interrupts to the target agent and publishes a typed interrupt event', () => {
+    const senderSocket = makeSocket();
+    const targetSocket = makeSocket();
+    const events: A2AEvent[] = [];
+
+    getA2AEventBus().subscribeGlobal((event) => events.push(event));
+
+    service.registerAgent(senderSocket, 'claude_code', 'user-1', ['plan'], [], 'sender-session');
+    service.registerAgent(targetSocket, 'codex', 'user-1', ['execute'], [], 'target-session');
+
+    service.handleMessage(senderSocket, JSON.stringify({
+      type: 'task.interrupt',
+      taskId: 'task-stream-3',
+      targetAgent: 'codex',
+      reason: 'wrong direction',
+    }));
+
+    expect(targetSocket.send).toHaveBeenCalledWith(JSON.stringify({
+      type: 'task.interrupt',
+      taskId: 'task-stream-3',
+      from: 'claude_code',
+      reason: 'wrong direction',
+    }));
+
+    expect(events).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        type: A2AEventType.TaskInterrupted,
+        taskId: 'task-stream-3',
+        data: expect.objectContaining({ from: 'claude_code', targetAgent: 'codex', reason: 'wrong direction' }),
+      }),
+    ]));
   });
 });

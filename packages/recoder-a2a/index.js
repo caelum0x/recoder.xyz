@@ -75,6 +75,8 @@ const WS_MAX_RETRIES = 9999; // effectively unlimited — reconnect until proces
 const inboundTasks = [];
 const MAX_INBOUND_TASKS = 50;
 let mcpReady = false; // set to true after notifications/initialized
+let streamWatcherCounter = 0;
+const taskStreamWatchers = new Map(); // taskId -> Map<watcherId, { progressToken, chunkCount, from }>
 
 function pushNotification(level, data) {
   if (!mcpReady) return;
@@ -85,6 +87,71 @@ function pushNotification(level, data) {
       params: { level, logger: 'recoder-a2a', data },
     }) + '\n');
   } catch {}
+}
+
+function pushProgressNotification(progressToken, progress, meta = {}) {
+  if (!mcpReady || !progressToken) return;
+  const params = { progressToken, progress, ...meta };
+  try {
+    process.stdout.write(JSON.stringify({
+      jsonrpc: '2.0',
+      method: 'notifications/progress',
+      params,
+    }) + '\n');
+  } catch {}
+}
+
+function extractProgressToken(callParams) {
+  if (!callParams || typeof callParams !== 'object') return null;
+  const topLevel = callParams._meta && typeof callParams._meta === 'object'
+    ? callParams._meta.progressToken
+    : null;
+  if (typeof topLevel === 'string' && topLevel.length > 0) return topLevel;
+
+  const nested = callParams.arguments && typeof callParams.arguments === 'object' && callParams.arguments._meta && typeof callParams.arguments._meta === 'object'
+    ? callParams.arguments._meta.progressToken
+    : null;
+  return typeof nested === 'string' && nested.length > 0 ? nested : null;
+}
+
+function registerTaskStreamWatcher(taskId, progressToken) {
+  const watcherId = `watch_${(++streamWatcherCounter).toString(36)}`;
+  const watchers = taskStreamWatchers.get(taskId) || new Map();
+  watchers.set(watcherId, {
+    progressToken: progressToken || null,
+    chunkCount: 0,
+  });
+  taskStreamWatchers.set(taskId, watchers);
+  return watcherId;
+}
+
+function completeTaskStreamWatchers(taskId) {
+  taskStreamWatchers.delete(taskId);
+}
+
+function emitTaskStreamChunk(taskId, chunk, done, from) {
+  const watchers = taskStreamWatchers.get(taskId);
+  if (!watchers || watchers.size === 0) {
+    if (done) completeTaskStreamWatchers(taskId);
+    return;
+  }
+
+  for (const watcher of watchers.values()) {
+    watcher.chunkCount += 1;
+    if (watcher.progressToken) {
+      pushProgressNotification(watcher.progressToken, watcher.chunkCount, {
+        taskId,
+        done,
+        chunk,
+        from,
+        message: done
+          ? `Stream ${taskId} complete`
+          : `[${from}] ${String(chunk || '').slice(0, 500)}`,
+      });
+    }
+  }
+
+  if (done) completeTaskStreamWatchers(taskId);
 }
 
 function handleBridgeMessage(msg) {
@@ -121,6 +188,7 @@ function handleBridgeMessage(msg) {
       const chunk = msg.chunk || '';
       const done = msg.done || false;
       const from = msg.from || 'unknown';
+      emitTaskStreamChunk(msg.taskId, chunk, done, from);
       if (done) {
         pushNotification('info', `✅ Stream [${msg.taskId}] from ${from} complete.`);
       } else if (chunk.length > 0) {
@@ -579,7 +647,7 @@ async function apiFetch(url, options = {}) {
 
 // ── Tool Implementations ──
 
-async function handleToolCall(name, args) {
+async function handleToolCall(name, args, callParams = {}) {
   switch (name) {
     case 'recoder_list_agents': {
       const lines = [];
@@ -970,10 +1038,14 @@ async function handleToolCall(name, args) {
 
     case 'recoder_stream_task': {
       if (!args.task_id) throw new Error('task_id required');
+      const progressToken = extractProgressToken(callParams);
       // Subscribe via WebSocket bridge
       if (wsConnected && ws) {
+        if (progressToken) registerTaskStreamWatcher(args.task_id, progressToken);
         ws.send(JSON.stringify({ type: 'task.subscribe', taskId: args.task_id }));
-        return `Subscribed to task ${args.task_id} stream. You will receive token-by-token output as notifications.\nSession: ${SESSION_ID}`;
+        return progressToken
+          ? `Subscribed to task ${args.task_id} stream. Chunk updates will arrive via MCP progress notifications.\nSession: ${SESSION_ID}`
+          : `Subscribed to task ${args.task_id} stream. You will receive token-by-token output as notifications.\nSession: ${SESSION_ID}`;
       }
       return `Bridge disconnected — cannot subscribe to stream. Reconnect first.`;
     }
@@ -1221,7 +1293,7 @@ async function handleMessage(msg) {
       break;
     case 'tools/call':
       try {
-        const text = await handleToolCall(params.name, params.arguments || {});
+        const text = await handleToolCall(params.name, params.arguments || {}, params || {});
         respond(id, { content: [{ type: 'text', text }] });
       } catch (err) {
         respond(id, { content: [{ type: 'text', text: `Error: ${err.message}` }], isError: true });
