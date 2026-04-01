@@ -148,6 +148,7 @@ ssh_cmd "cd ${REMOTE_DIR} && git tag -f \"pre-deploy-\$(date +%Y%m%d-%H%M%S)\" |
 
 rsync -az --timeout=120 --progress \
   --exclude='node_modules' --exclude='.git' \
+  --exclude='/.env' \
   --exclude='.next' --exclude='.turbo' --exclude='coverage' \
   --exclude='.aitimemachine' --exclude='.claude' --exclude='.codex' \
   --exclude='*.log' --exclude='logs' \
@@ -174,6 +175,7 @@ RECODER_A2A_SHARED_SECRET=${RECODER_A2A_SHARED_SECRET}
 RECODER_A2A_WORKER_TOKEN=${RECODER_A2A_WORKER_TOKEN}
 OPENCLAW_GATEWAY_TOKEN=${OPENCLAW_GATEWAY_TOKEN}
 INNEREOF
+chmod 600 .env
 
 echo "Wrote .env with shared secrets"
 ENDSSH
