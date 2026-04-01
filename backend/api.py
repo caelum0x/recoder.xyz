@@ -1297,6 +1297,10 @@ async def health_check_docker():
 # Unified Model Registry
 api_router.include_router(models_router)
 
+# Smolagents code-first executor
+from core.agents.executors.executor_api import router as agent_executor_router
+api_router.include_router(agent_executor_router)
+
 app.include_router(api_router, prefix="/v1")
 
 METRICS_LOG_INTERVAL_SECONDS = int(os.getenv("METRICS_LOG_INTERVAL_SECONDS", "300"))  # 5 min
