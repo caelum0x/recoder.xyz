@@ -89,9 +89,25 @@ This supersedes any older notes that still imply plan step 12 is blocked on the 
   - `packages/recoder-a2a/index.js` now reads MCP `progressToken` metadata on `recoder_stream_task`
   - inbound `task.stream` chunks are forwarded as `notifications/progress`, scoped to the subscribing tool call instead of only appearing as generic debug notifications
   - backend event typing now includes `task.stream` and `task.interrupted`, with focused bridge/event-bus regression coverage
-- Remaining streaming work is now producer-side adoption:
-  - more runtimes/agents still need to emit `task.stream` during long-running execution
-  - step 12 is no longer blocked by bridge fan-out or MCP consumer delivery
+- Producer-side adoption is now landed in branch too:
+  - `docker-backend/src/a2a/workflow-step-executor.ts` now publishes typed `task.stream` chunks/finals during OpenRouter SSE execution
+  - `codex-connector-runtime`, `claude-connector-runtime`, and `windsurf-connector-runtime` now publish typed `task.stream` events instead of only local emitter notifications during long-running work
+  - focused regression coverage now exists for all four producer paths
+- Remaining step-12 work is live verification and any future runtime-specific adoption outside those paths, not the bridge or MCP contract
+
+## 2026-04-01 Correction (TodoWrite sync)
+
+This supersedes older plan notes that still describe TodoWrite sync as purely future work or as an MCP-side intercept only.
+
+- `packages/recoder-code/packages/core/src/tools/todoWrite.ts` still writes the per-session `~/.recoder/todos/<session>.json` file as the source of truth.
+- In agent-backed Recoder sessions, `todo_write` now also mirrors the current todo list to the shared A2A scratchpad under `todo-board:<agentId>`.
+- The mirror is intentionally best-effort:
+  - it only activates when `RECODER_AGENT_ID`, `RECODER_SESSION_ID`, and a backend URL are present
+  - it does not change plain local CLI behavior
+  - local todo persistence still succeeds even if scratchpad sync fails
+- Remaining work is the bigger product surface:
+  - expose that mirrored state in a first-class shared board/dashboard
+  - converge the scratchpad-backed mirror into the longer-term Redis-backed planning board
 
 ## 2026-04-01 Correction (Hetzner infra)
 

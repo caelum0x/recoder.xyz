@@ -98,9 +98,22 @@ This supersedes any older reading of plan step 12 as "SSE exists, token streamin
   - bridge fan-out to subscribers
   - subscription cleanup on `done=true`
   - typed interrupt publication
-- Remaining step-12 risk is narrower:
-  - not every runtime/agent currently emits `task.stream` while it works
-  - the missing work is producer-side adoption, not bridge transport or MCP-side delivery
+- Producer-side adoption is now landed for the main long-running execution paths:
+  - `workflow-step-executor` emits typed `task.stream` chunks/finals during streaming workflow LLM calls
+  - `codex-connector-runtime`, `claude-connector-runtime`, and `windsurf-connector-runtime` now publish typed `task.stream` events while they work instead of only emitting local progress/update notifications
+- Remaining step-12 risk is now live verification and any future runtime-specific adoption outside those paths, not bridge transport or MCP-side delivery
+
+## Current Correction (2026-04-01, TodoWrite sync)
+
+This supersedes older planning notes that still describe TodoWrite sync as missing or as something that must happen only inside the MCP server.
+
+- `todo_write` still persists the local session file under `~/.recoder/todos/`; that remains the source of truth.
+- In agent-backed Recoder sessions, the same tool now also mirrors the todo list into the shared A2A scratchpad under `todo-board:<agentId>`.
+- The sync is intentionally best-effort:
+  - it only activates when `RECODER_AGENT_ID`, `RECODER_SESSION_ID`, and a backend URL are present
+  - it does not alter normal standalone CLI behavior
+  - local todo writes still succeed if the scratchpad mirror fails
+- Remaining work is product-level surfacing and eventual convergence into the longer-term Redis-backed shared board.
 
 ## Current Priority Order (2026-04-01, post-`recoder-8sm`)
 1. Browser-verify Web IDE preview + publish on the latest deployed build.

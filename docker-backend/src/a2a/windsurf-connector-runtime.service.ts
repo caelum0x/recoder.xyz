@@ -30,6 +30,8 @@ import type {
 } from '@recoder/shared/a2a';
 import { getTaskLifecycleService } from './task-lifecycle.service';
 import { getAgentRegistryService } from './agent-registry.service';
+import { getA2AEventBus, A2AEventType } from './a2a-event-bus';
+import { extractTaskStreamChunk } from './task-stream-payload';
 import { createLogger } from '../logger';
 
 const logger = createLogger('windsurf-connector-runtime');
@@ -180,6 +182,7 @@ export class WindsurfConnectorRuntime extends EventEmitter {
   private lastError: string | null = null;
   private stderrBuffer: string[] = [];
   private activeTasks = new Set<string>();
+  private taskContexts = new Map<string, { workspaceId?: string; threadId?: string }>();
 
   /** Implements ConnectorProcess.connectorId */
   readonly connectorId = 'windsurf';
@@ -333,6 +336,10 @@ export class WindsurfConnectorRuntime extends EventEmitter {
 
     this.lastActivity = new Date().toISOString();
     this.activeTasks.add(input.taskId);
+    this.taskContexts.set(input.taskId, {
+      workspaceId: input.workspaceId,
+      threadId: input.threadId,
+    });
 
     try {
       // Transition task to 'working' state
@@ -363,7 +370,9 @@ export class WindsurfConnectorRuntime extends EventEmitter {
         { text: resultText, data: { raw: response } },
         WINDSURF_CONNECTOR_IDENTITY.id,
       );
+      this.publishTaskStream(input.taskId, resultText, true);
       this.activeTasks.delete(input.taskId);
+      this.taskContexts.delete(input.taskId);
 
       return {
         taskId: input.taskId,
@@ -374,6 +383,8 @@ export class WindsurfConnectorRuntime extends EventEmitter {
     } catch (err) {
       const errMsg = err instanceof Error ? err.message : String(err);
       this.activeTasks.delete(input.taskId);
+      this.taskContexts.delete(input.taskId);
+      this.publishTaskStream(input.taskId, errMsg, true);
 
       // Transition task to 'failed'
       try {
@@ -615,6 +626,9 @@ export class WindsurfConnectorRuntime extends EventEmitter {
       }
 
       this.emit('task-update', msg.params);
+      if (taskId) {
+        this.publishTaskStream(taskId, extractTaskStreamChunk(msg.params));
+      }
     }
 
     // Emit for stream subscribers
@@ -627,6 +641,24 @@ export class WindsurfConnectorRuntime extends EventEmitter {
       pending.reject(new Error(reason));
       this.pendingRequests.delete(id);
     }
+  }
+
+  private publishTaskStream(taskId: string, chunk: string, done = false): void {
+    if (!taskId || (!chunk && !done)) return;
+
+    const context = this.taskContexts.get(taskId);
+    getA2AEventBus().publish({
+      id: `evt_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`,
+      type: A2AEventType.TaskStream,
+      timestamp: new Date().toISOString(),
+      taskId,
+      workspaceId: context?.workspaceId,
+      data: {
+        agentId: WINDSURF_CONNECTOR_IDENTITY.id,
+        chunk,
+        done,
+      },
+    });
   }
 
   // -------------------------------------------------------------------------

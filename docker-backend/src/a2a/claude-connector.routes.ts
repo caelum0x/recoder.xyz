@@ -139,6 +139,8 @@ claudeConnectorRouter.post('/execute', async (req: Request, res: Response) => {
       prompt,
       toolName,
       toolArgs,
+      workspaceId: req.body.workspace_id,
+      threadId: req.body.thread_id,
       requester: {
         id: requester?.id || 'api-caller',
         name: requester?.name || 'API Caller',
