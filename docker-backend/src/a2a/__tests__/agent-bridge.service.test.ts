@@ -82,4 +82,25 @@ describe('AgentBridgeService heartbeat tracking', () => {
       metadata: { source: 'rest' },
     });
   });
+
+  it('keeps the logical bridge heartbeat online while another session remains', () => {
+    const firstSocket = makeSocket();
+    const secondSocket = makeSocket();
+
+    const first = service.registerAgent(firstSocket, 'claude_code', 'user-1', ['execute'], [], 'session-a');
+    service.registerAgent(secondSocket, 'claude_code', 'user-1', ['plan'], ['ws-1'], 'session-b');
+
+    service.unregisterAgent(first.sessionId);
+
+    expect(getHeartbeatTracker().getRecord('claude_code')).toMatchObject({
+      agentId: 'claude_code',
+      isOnline: true,
+      metadata: {
+        source: 'bridge',
+        sessionCount: 1,
+        capabilityCount: 1,
+        workspaceCount: 1,
+      },
+    });
+  });
 });
