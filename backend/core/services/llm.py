@@ -283,32 +283,51 @@ async def make_llm_api_call(
         params["stream_options"] = {"include_usage": True}
     
     import time as time_module
+    import os
     call_start = time_module.monotonic()
-    
+
+    # Request-level timeout: prevents LLM calls from hanging forever.
+    # Streaming: 120s for first token (TTFT), then handled by stream wrapper.
+    # Non-streaming: 180s total.
+    LLM_STREAM_TIMEOUT = float(os.getenv("LLM_STREAM_TIMEOUT_SECONDS", "120"))
+    LLM_SYNC_TIMEOUT = float(os.getenv("LLM_SYNC_TIMEOUT_SECONDS", "180"))
+
     try:
         # Save debug input and get correlation_id for tracking
         correlation_id = _save_debug_input(params)
-        
+
         if stream:
-            response = await litellm.acompletion(**params)
+            response = await asyncio.wait_for(
+                litellm.acompletion(**params),
+                timeout=LLM_STREAM_TIMEOUT,
+            )
             ttft = time_module.monotonic() - call_start
-            
+
             if ttft > 30.0:
                 logger.error(f"[LLM] TTFT={ttft:.2f}s (CRITICAL) {model_name}")
             elif ttft > 10.0:
                 logger.warning(f"[LLM] TTFT={ttft:.2f}s (slow) {model_name}")
             else:
                 logger.info(f"[LLM] TTFT={ttft:.2f}s {model_name}")
-            
+
             if hasattr(response, '__aiter__'):
                 return _wrap_streaming_response(response, call_start, model_name, ttft_seconds=ttft, correlation_id=correlation_id)
             return response
         else:
-            response = await litellm.acompletion(**params)
+            response = await asyncio.wait_for(
+                litellm.acompletion(**params),
+                timeout=LLM_SYNC_TIMEOUT,
+            )
             duration = time_module.monotonic() - call_start
             logger.info(f"[LLM] {duration:.2f}s {model_name}")
             return response
-        
+
+    except asyncio.TimeoutError:
+        total_time = time_module.monotonic() - call_start
+        timeout_val = LLM_STREAM_TIMEOUT if stream else LLM_SYNC_TIMEOUT
+        logger.error(f"[LLM] TIMEOUT after {total_time:.2f}s (limit {timeout_val}s) for {model_name}")
+        raise LLMError(f"LLM request timed out after {timeout_val}s for {model_name}. The model provider may be overloaded.")
+
     except Exception as e:
         total_time = time_module.monotonic() - call_start
         logger.error(f"[LLM] call error after {total_time:.2f}s for {model_name}: {str(e)[:100]}")
