@@ -1305,6 +1305,10 @@ api_router.include_router(agent_executor_router)
 from core.agents.patterns.aci_api import router as aci_router
 api_router.include_router(aci_router)
 
+# Sidebar alias routes — fixes 12 frontend 404s (see plan.md audit)
+from core.routes.sidebar_aliases import router as sidebar_aliases_router
+api_router.include_router(sidebar_aliases_router)
+
 app.include_router(api_router, prefix="/v1")
 
 METRICS_LOG_INTERVAL_SECONDS = int(os.getenv("METRICS_LOG_INTERVAL_SECONDS", "300"))  # 5 min
