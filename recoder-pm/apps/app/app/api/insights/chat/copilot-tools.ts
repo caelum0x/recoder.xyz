@@ -1,3 +1,4 @@
+import { RecoderPmRole } from "@repo/backend/auth";
 import { database } from "@repo/backend/database";
 import { textToContent } from "@repo/editor/lib/tiptap";
 import { log } from "@repo/observability/log";
@@ -189,6 +190,24 @@ type ToolResult = {
   error?: string;
 };
 
+export type CopilotActor = {
+  id: string;
+  user_metadata: {
+    organization_role: string;
+  };
+};
+
+function requireWriteAccess(actor: CopilotActor): ToolResult | null {
+  if (actor.user_metadata.organization_role === RecoderPmRole.Member) {
+    return {
+      success: false,
+      error: "You do not have permission to modify product data.",
+    };
+  }
+
+  return null;
+}
+
 /**
  * Execute a tool call returned by the LLM.
  *
@@ -198,24 +217,25 @@ type ToolResult = {
 export async function executeTool(
   name: string,
   args: Record<string, unknown>,
-  organizationId: string
+  organizationId: string,
+  actor: CopilotActor
 ): Promise<ToolResult> {
   try {
     switch (name) {
       case "createFeature":
-        return await handleCreateFeature(args, organizationId);
+        return await handleCreateFeature(args, organizationId, actor);
       case "updateFeatureStatus":
-        return await handleUpdateFeatureStatus(args, organizationId);
+        return await handleUpdateFeatureStatus(args, organizationId, actor);
       case "createFeedback":
         return await handleCreateFeedback(args, organizationId);
       case "createRelease":
-        return await handleCreateRelease(args, organizationId);
+        return await handleCreateRelease(args, organizationId, actor);
       case "updateReleaseState":
-        return await handleUpdateReleaseState(args, organizationId);
+        return await handleUpdateReleaseState(args, organizationId, actor);
       case "createInitiative":
-        return await handleCreateInitiative(args, organizationId);
+        return await handleCreateInitiative(args, organizationId, actor);
       case "updateInitiativeState":
-        return await handleUpdateInitiativeState(args, organizationId);
+        return await handleUpdateInitiativeState(args, organizationId, actor);
       case "listFeatures":
         return await handleListFeatures(args, organizationId);
       case "listFeedback":
@@ -234,8 +254,14 @@ export async function executeTool(
 
 async function handleCreateFeature(
   args: Record<string, unknown>,
-  organizationId: string
+  organizationId: string,
+  actor: CopilotActor
 ): Promise<ToolResult> {
+  const accessError = requireWriteAccess(actor);
+  if (accessError) {
+    return accessError;
+  }
+
   const title = String(args.title ?? "").trim();
   if (!title) {
     return { success: false, error: "title is required" };
@@ -261,9 +287,8 @@ async function handleCreateFeature(
     data: {
       title,
       organizationId,
-      // Use a system-level creator/owner marker — the copilot acts on behalf of the org
-      creatorId: "copilot",
-      ownerId: "copilot",
+      creatorId: actor.id,
+      ownerId: actor.id,
       statusId: defaultStatus.id,
       ...(description ? { content: textToContent(description) } : {}),
     },
@@ -278,8 +303,14 @@ async function handleCreateFeature(
 
 async function handleUpdateFeatureStatus(
   args: Record<string, unknown>,
-  organizationId: string
+  organizationId: string,
+  actor: CopilotActor
 ): Promise<ToolResult> {
+  const accessError = requireWriteAccess(actor);
+  if (accessError) {
+    return accessError;
+  }
+
   const featureId = String(args.featureId ?? "").trim();
   const statusName = String(args.statusName ?? "").trim();
   if (!(featureId && statusName)) {
@@ -304,8 +335,17 @@ async function handleUpdateFeatureStatus(
     };
   }
 
+  const feature = await database.feature.findFirst({
+    where: { id: featureId, organizationId },
+    select: { id: true },
+  });
+
+  if (!feature) {
+    return { success: false, error: "Feature not found in this organization" };
+  }
+
   await database.feature.update({
-    where: { id: featureId },
+    where: { id: feature.id },
     data: { statusId: status.id },
     select: { id: true },
   });
@@ -346,8 +386,14 @@ async function handleCreateFeedback(
 
 async function handleCreateRelease(
   args: Record<string, unknown>,
-  organizationId: string
+  organizationId: string,
+  actor: CopilotActor
 ): Promise<ToolResult> {
+  const accessError = requireWriteAccess(actor);
+  if (accessError) {
+    return accessError;
+  }
+
   const title = String(args.title ?? "").trim();
   if (!title) {
     return { success: false, error: "title is required" };
@@ -374,8 +420,14 @@ async function handleCreateRelease(
 
 async function handleUpdateReleaseState(
   args: Record<string, unknown>,
-  organizationId: string
+  organizationId: string,
+  actor: CopilotActor
 ): Promise<ToolResult> {
+  const accessError = requireWriteAccess(actor);
+  if (accessError) {
+    return accessError;
+  }
+
   const releaseId = String(args.releaseId ?? "").trim();
   const state = String(args.state ?? "").trim();
   if (!(releaseId && state)) {
@@ -411,21 +463,48 @@ async function handleUpdateReleaseState(
 
 async function handleCreateInitiative(
   args: Record<string, unknown>,
-  organizationId: string
+  organizationId: string,
+  actor: CopilotActor
 ): Promise<ToolResult> {
+  const accessError = requireWriteAccess(actor);
+  if (accessError) {
+    return accessError;
+  }
+
   const title = String(args.title ?? "").trim();
   if (!title) {
     return { success: false, error: "title is required" };
   }
 
-  const initiative = await database.initiative.create({
-    data: {
-      title,
-      organizationId,
-      creatorId: "copilot",
-      ownerId: "copilot",
-    },
-    select: { id: true, title: true },
+  const initiative = await database.$transaction(async (tx) => {
+    const created = await tx.initiative.create({
+      data: {
+        title,
+        organizationId,
+        creatorId: actor.id,
+        ownerId: actor.id,
+        pages: {
+          create: {
+            title,
+            creatorId: actor.id,
+            default: true,
+            content: textToContent(""),
+          },
+        },
+      },
+      select: { id: true, title: true },
+    });
+
+    await tx.initiativeMember.create({
+      data: {
+        userId: actor.id,
+        initiativeId: created.id,
+        creatorId: actor.id,
+        organizationId,
+      },
+    });
+
+    return created;
   });
 
   return {
@@ -436,8 +515,14 @@ async function handleCreateInitiative(
 
 async function handleUpdateInitiativeState(
   args: Record<string, unknown>,
-  organizationId: string
+  organizationId: string,
+  actor: CopilotActor
 ): Promise<ToolResult> {
+  const accessError = requireWriteAccess(actor);
+  if (accessError) {
+    return accessError;
+  }
+
   const initiativeId = String(args.initiativeId ?? "").trim();
   const state = String(args.state ?? "").trim();
   if (!(initiativeId && state)) {
