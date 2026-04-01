@@ -1,4 +1,8 @@
 import { ToolCallData, ToolResultData } from '../types';
+import {
+  getExcalidrawDisplayName,
+  isExcalidrawFileName,
+} from '@/lib/canvas/excalidraw';
 
 // Legacy type aliases for compatibility
 type ToolCall = ToolCallData | { name?: string; arguments?: Record<string, any>; metadata?: any };
@@ -129,7 +133,11 @@ export function extractCanvasData(
  */
 export function isCanvasFile(filePath: string): boolean {
   if (!filePath) return false;
-  return /\.kanvax$/i.test(filePath) || /canvases\/[^\/]+\.kanvax$/i.test(filePath);
+  return (
+    /\.kanvax$/i.test(filePath) ||
+    /canvases\/[^\/]+\.kanvax$/i.test(filePath) ||
+    isExcalidrawFileName(filePath)
+  );
 }
 
 /**
@@ -147,14 +155,17 @@ export function parseCanvasFilePath(filePath: string | null): {
   // - canvases/[name].kanvax
   // - /workspace/canvases/[name].kanvax
   // - ./canvases/[name].kanvax
-  const match = filePath.match(/canvases\/([^\/]+)\.kanvax$/i);
+  // - canvases/[name].excalidraw
+  // - canvases/[name].excalidraw.json
+  const match = filePath.match(/canvases\/([^\/]+\.(?:kanvax|excalidraw(?:\.json)?))$/i);
   if (match) {
     return {
       isValid: true,
-      canvasName: match[1]
+      canvasName: isExcalidrawFileName(match[1])
+        ? getExcalidrawDisplayName(match[1])
+        : match[1].replace(/\.kanvax$/i, '')
     };
   }
   
   return { isValid: false, canvasName: null };
 }
-

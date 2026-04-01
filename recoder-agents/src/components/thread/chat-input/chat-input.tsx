@@ -36,6 +36,7 @@ import { useRecoderModesStore } from '@/stores/recoder-modes-store';
 import { useComposioToolkitIcon } from '@/hooks/composio/use-composio';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ContextUsageIndicator } from '../ContextUsageIndicator';
+import { getCanvasActionName } from '@/lib/canvas/mode-config';
 
 import { IntegrationsRegistry } from '@/components/agents/integrations-registry';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -513,8 +514,10 @@ function ModeButton({
       case 'canvas':
         // Canvas mode: show action if selected
         if (selectedCanvasAction) {
-          const actionName = t(`canvasActions.${selectedCanvasAction}.name`);
-          return `${t('actionLabel')}: ${actionName}`;
+          const actionName = getCanvasActionName(selectedCanvasAction);
+          if (actionName) {
+            return `${t('actionLabel')}: ${actionName}`;
+          }
         }
         return t('promptSelected');
         

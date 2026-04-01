@@ -78,6 +78,12 @@ import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { Card } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { getPdfUrl } from '@/components/thread/tool-views/utils/presentation-utils';
+import {
+  canvasActionDefinitions,
+  canvasModeSamplePrompts,
+  getCanvasActionName,
+  getCanvasActionPrompt,
+} from '@/lib/canvas/mode-config';
 import { useTranslations } from 'next-intl';
 import { PromptExamples } from '@/components/shared/prompt-examples';
 
@@ -257,26 +263,15 @@ const modes: Mode[] = [
     label: 'Canvas',
     icon: <Palette className="w-4 h-4" strokeWidth={2} />,
     isVisual: true,
-    samplePrompts: [
-      { text: 'Add a tech startup banner to canvas with futuristic city skyline', thumbnail: '/images/image-styles/digital_art_cyberpunk-min.png' },
-      { text: 'Create a coffee brand logo on canvas using earthy minimalist style', thumbnail: '/images/image-styles/minimalist_coffee-min.png' },
-      { text: 'Add my product photo to canvas and remove its background', thumbnail: '/images/canvas/remove-bg.png' },
-      { text: 'Design a renewable energy infographic on canvas with flat icons', thumbnail: '/images/image-styles/geometric_crystal-min.png' },
-      { text: 'Create a sci-fi book cover on canvas with cyberpunk aesthetics', thumbnail: '/images/image-styles/neon_jellyfish-min.png' },
-      { text: 'Add a YouTube thumbnail to canvas for productivity tips video', thumbnail: '/images/canvas/create.png' },
-      { text: 'Build a luxury fashion mood board on canvas for millennials', thumbnail: '/images/image-styles/pastel_landscape-min.png' },
-      { text: 'Design an elegant wedding invitation on canvas with floral patterns', thumbnail: '/images/image-styles/watercolor_garden-min.png' },
-      { text: 'Add my portrait to canvas and apply vintage film effect', thumbnail: '/images/image-styles/vintage_diner-min.png' },
-      { text: 'Create a music festival poster on canvas with psychedelic vibes', thumbnail: '/images/image-styles/abstract_organic-min.png' },
-    ],
+    samplePrompts: canvasModeSamplePrompts,
     options: {
       title: 'Choose canvas action',
-      items: [
-        { id: 'create', name: 'Create New', description: 'Generate from scratch', icon: 'sparkles' },
-        { id: 'edit', name: 'Edit Image', description: 'Modify existing images', icon: 'pencil' },
-        { id: 'upscale', name: 'Upscale', description: 'Enhance and improve', icon: 'maximize' },
-        { id: 'remove-bg', name: 'Remove BG', description: 'Remove background', icon: 'scissors' },
-      ],
+      items: canvasActionDefinitions.map(({ id, name, description, icon }) => ({
+        id,
+        name,
+        description,
+        icon,
+      })),
     },
   },
   {
@@ -1367,27 +1362,13 @@ export function RecoderModesPanel({
           {selectedMode === 'canvas' && (
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               {currentMode.options.items.map((item) => {
-                // Generate action-specific prompts
-                const getCanvasPrompt = (actionId: string) => {
-                  switch (actionId) {
-                    case 'create':
-                      return 'Create a new image for me: [describe what you want]';
-                    case 'edit':
-                      return 'Edit my image: [I will upload the image and describe what changes I want]';
-                    case 'upscale':
-                      return 'Upscale my image to higher resolution - I will upload the image';
-                    case 'remove-bg':
-                      return 'Remove the background from my image - I will upload the image';
-                    default:
-                      return `${item.name}: ${item.description}`;
-                  }
-                };
-                
+                const prompt = getCanvasActionPrompt(item.id) ?? `${item.name}: ${item.description}`;
+
                 return (
                   <Card
                     key={item.id}
                     className="flex flex-col items-center gap-3 cursor-pointer group p-4 bg-transparent hover:bg-muted transition-all duration-200 border border-border rounded-xl overflow-hidden shadow-none"
-                    onClick={() => handlePromptSelect(getCanvasPrompt(item.id))}
+                    onClick={() => handlePromptSelect(prompt)}
                   >
                     <div className="w-12 h-12 rounded-2xl bg-muted/50 group-hover:bg-primary/10 border border-border/50 group-hover:border-primary/30 group-hover:scale-105 transition-all duration-200 flex items-center justify-center text-muted-foreground group-hover:text-primary">
                       {getOptionIcon((item as { icon?: string }).icon || '')}
@@ -1792,26 +1773,12 @@ export function RecoderModesPanel({
           {selectedMode === 'canvas' && (
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               {currentMode.options.items.map((item) => {
-                // Generate action-specific prompts
-                const getCanvasPrompt = (actionId: string) => {
-                  switch (actionId) {
-                    case 'create':
-                      return 'Create a new image for me: [describe what you want]';
-                    case 'edit':
-                      return 'Edit my image: [I will upload the image and describe what changes I want]';
-                    case 'upscale':
-                      return 'Upscale my image to higher resolution - I will upload the image';
-                    case 'remove-bg':
-                      return 'Remove the background from my image - I will upload the image';
-                    default:
-                      return `${item.name}: ${item.description}`;
-                  }
-                };
+                const prompt = getCanvasActionPrompt(item.id) ?? `${item.name}: ${item.description}`;
                 return (
                   <Card
                     key={item.id}
                     className="flex flex-col items-center gap-2 cursor-pointer group p-2 bg-transparent hover:bg-transparent transition-all duration-200 border border-border hover:border-border rounded-xl overflow-hidden shadow-none"
-                    onClick={() => handlePromptSelect(getCanvasPrompt(item.id))}
+                    onClick={() => handlePromptSelect(prompt)}
                   >
                     <div className="w-full aspect-square rounded-lg border border-transparent group-hover:scale-105 transition-all duration-200 flex items-center justify-center overflow-hidden relative">
                       {item.image ? (
@@ -2179,15 +2146,8 @@ export function RecoderModesPanel({
                   {modalMode === 'canvas' && (
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                       {modalModeData.options.items.map((item) => {
-                        const getCanvasPrompt = (actionId: string) => {
-                          switch (actionId) {
-                            case 'create': return 'Create a new image for me: [describe what you want]';
-                            case 'edit': return 'Edit my image: [I will upload the image and describe what changes I want]';
-                            case 'upscale': return 'Upscale my image to higher resolution - I will upload the image';
-                            case 'remove-bg': return 'Remove the background from my image - I will upload the image';
-                            default: return `${item.name}: ${item.description}`;
-                          }
-                        };
+                        const prompt = getCanvasActionPrompt(item.id) ?? `${item.name}: ${item.description}`;
+                        const actionName = getCanvasActionName(item.id) ?? item.name;
                         const isSelected = selectedCanvasAction === item.id;
                         return (
                           <Card
@@ -2200,7 +2160,7 @@ export function RecoderModesPanel({
                             )}
                             onClick={() => {
                               handleCanvasActionSelect(item.id);
-                              handlePromptSelect(getCanvasPrompt(item.id));
+                              handlePromptSelect(prompt);
                               closeModal();
                             }}
                           >
@@ -2218,7 +2178,7 @@ export function RecoderModesPanel({
                                 ? "text-foreground"
                                 : "text-muted-foreground group-hover:text-foreground"
                             )}>
-                              {t(`canvasActions.${item.id}.name`) || item.name}
+                              {actionName}
                             </span>
                           </Card>
                         );
@@ -2420,4 +2380,3 @@ export function RecoderModesPanel({
     </div>
   );
 }
-
