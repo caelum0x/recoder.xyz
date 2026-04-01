@@ -12,8 +12,9 @@ RUN corepack enable pnpm && corepack prepare pnpm@10.30.3 --activate
 
 COPY pnpm-lock.yaml pnpm-workspace.yaml package.json .npmrc* ./
 
-# Allow all native dependencies to build (pnpm 10 requires explicit opt-in)
-RUN echo 'onlyBuiltDependencies[]=' >> .npmrc || true
+# Allow native dependencies to build (pnpm 10 requires explicit opt-in)
+# duckdb requires native compilation; better-sqlite3 does too
+RUN printf '\nonlyBuiltDependencies[]=duckdb\nonlyBuiltDependencies[]=better-sqlite3\nonlyBuiltDependencies[]=node-pty\n' >> .npmrc || true
 
 COPY docker-backend/package*.json ./docker-backend/
 COPY shared/package.json ./shared/
