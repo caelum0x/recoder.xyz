@@ -1,6 +1,6 @@
 # Recoder Platform — Task List
 
-Last updated: 2026-04-01 (Hetzner safe cleanup reduced unexpected checkout drift from 45 to 17; the workflow/deploy overlap slice is landed, and the agents file-proxy HEAD mismatch is now deployed on the backend)
+Last updated: 2026-04-02 (OpenMeter LLM usage reporting and deploy-compose alignment are landed in the main repo; the agents file-proxy HEAD mismatch is deployed on the backend, and the only remaining local dirty path is the nested `recoder-web/starters` repo)
 
 ---
 
@@ -151,6 +151,17 @@ This supersedes older task notes that still treat deploy-network breakage, root 
     - `recoder-0xz` — 7 host-untracked but branch-tracked additions that should arrive via clean checkout sync/deploy
     - `recoder-h3y` — 10 entries that overlap current local work and need manual reconciliation
   - `recoder-32x` is the active overlap sub-slice for the remaining workflow-step metering hooks and the portable Qdrant healthcheck change; those are being landed with focused validation instead of carried as local dirt
+
+## 2026-04-02 Correction (metering cleanup)
+
+This supersedes any stale task note that `backend/core/services/llm.py` and `docker-compose.deploy.yml` were still pending cleanup.
+
+- The OpenMeter LLM usage hook is now landed in `backend/core/services/llm.py` for sync and streaming completions.
+- The deploy compose alignment is also landed:
+  - `OPENMETER_URL` remains `http://openmeter:8888` on the internal Docker network
+  - host publish is now `127.0.0.1:8889:8888`
+  - NATS uses an explicit `nats-server` entrypoint with the short-form JetStream flags
+- The only remaining local dirty path is the separate nested repo `recoder-web/starters`, tracked by `recoder-0vj`.
 
 ## Immediate Follow-ups
 

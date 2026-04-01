@@ -1,6 +1,6 @@
 # Recoder Platform — Master Plan
 
-Last updated: 2026-04-01 (Hetzner safe cleanup reduced unexpected checkout drift from 45 to 17; workflow streaming producers are now landed for workflow/Codex/Claude/Windsurf, and TodoWrite now mirrors into the shared A2A scratchpad in agent-backed sessions)
+Last updated: 2026-04-02 (OpenMeter LLM usage reporting and deploy-compose alignment are now landed in the main repo; workflow streaming producers are landed for workflow/Codex/Claude/Windsurf, and the only remaining local dirt is the nested `recoder-web/starters` repo)
 
 ---
 
@@ -52,6 +52,20 @@ This section supersedes older Redis / `web.recoder.xyz` runtime notes below.
   2. `recoder-0xz` — sync the 7 branch-tracked additions into the Hetzner checkout cleanly
   3. `recoder-h3y` — reconcile the 10 overlap/manual-review entries against current local work
   4. `recoder-32x` — land the remaining workflow-step metering + Qdrant healthcheck overlap with tests instead of carrying it as local drift
+
+## Current Correction — 2026-04-02 (metering cleanup)
+
+This section supersedes any stale note that `backend/core/services/llm.py` and `docker-compose.deploy.yml` were still just validated local dirt.
+
+- The OpenMeter slice is now landed in the main repo:
+  1. `backend/core/services/llm.py` now reports best-effort LLM token usage to OpenMeter for both sync and streaming completions
+  2. the fire-and-forget usage path schedules on the active running event loop instead of relying on legacy event-loop lookup
+- The deploy compose alignment is landed too:
+  1. `docker-compose.deploy.yml` now keeps `OPENMETER_URL=http://openmeter:8888` for in-network traffic while publishing OpenMeter on host port `8889`
+  2. the NATS service now uses an explicit `nats-server` entrypoint with the short-form JetStream/monitoring flags that match the live service expectations
+- Result:
+  - those two files are no longer part of the main-repo dirty-state narrative
+  - the only remaining local dirty path is the separate nested repo `recoder-web/starters`, tracked by `recoder-0vj`
 
 ## Current Correction — 2026-04-01
 
