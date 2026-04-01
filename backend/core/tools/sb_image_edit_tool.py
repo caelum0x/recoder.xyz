@@ -626,7 +626,7 @@ Generate, edit, upscale, or remove background from images. Video generation supp
             has_replicate = bool(config.REPLICATE_API_TOKEN)
 
             if not has_openrouter and not has_replicate:
-                return self.fail_response("Image generation not available. Set OPENROUTER_API_KEY or REPLICATE_API_TOKEN in backend/.env.")
+                return self.fail_response("Image generation not available — no API keys configured.\n\nTo enable: set OPENROUTER_API_KEY or REPLICATE_API_TOKEN in backend/.env.\n\n💡 Alternative: Create diagrams, wireframes, and visual designs using Excalidraw boards — use create_file to write a .excalidraw JSON file under /workspace/canvases/.")
 
             # For edit mode, read source image upfront (needed by both providers)
             edit_image_bytes = None
@@ -730,14 +730,23 @@ Generate, edit, upscale, or remove background from images. Video generation supp
                     return smart_filename
 
                 except Exception as e:
-                    logger.error(f"Replicate image {mode} also failed: {e}")
-                    # Both providers failed — report both errors
+                    replicate_error = str(e)
+                    logger.error(f"Replicate image {mode} also failed: {replicate_error}")
+                    # Both providers failed — report both errors + suggest alternatives
+                    errors = []
                     if openrouter_error:
-                        return self.fail_response(f"Image {mode} failed. OpenRouter: {openrouter_error}. Replicate: {str(e)}")
-                    return self.fail_response(f"Image {mode} failed via Replicate: {str(e)}")
+                        errors.append(f"OpenRouter: {openrouter_error}")
+                    errors.append(f"Replicate: {replicate_error}")
+                    quota_hint = ""
+                    if "quota" in replicate_error.lower() or "credit" in replicate_error.lower() or "billing" in replicate_error.lower() or "rate" in replicate_error.lower():
+                        quota_hint = "\n\n💡 Tip: API quota may be exhausted. You can create diagrams and visual designs using Excalidraw boards instead — use create_file to write a .excalidraw JSON file under /workspace/canvases/."
+                    return self.fail_response(f"Image {mode} failed with all providers.\n{chr(10).join(errors)}{quota_hint}")
 
             # OpenRouter was tried but failed, and no Replicate key available
-            return self.fail_response(f"Image {mode} failed via OpenRouter ({openrouter_error}). Set REPLICATE_API_TOKEN as fallback.")
+            quota_hint = ""
+            if openrouter_error and ("quota" in str(openrouter_error).lower() or "rate" in str(openrouter_error).lower()):
+                quota_hint = "\n\n💡 Tip: You can create diagrams and visual designs using Excalidraw boards instead — use create_file to write a .excalidraw JSON file under /workspace/canvases/."
+            return self.fail_response(f"Image {mode} failed via OpenRouter ({openrouter_error}). Set REPLICATE_API_TOKEN as fallback.{quota_hint}")
 
         except Exception as e:
             error_message = str(e)
