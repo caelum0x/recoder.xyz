@@ -17401,6 +17401,16 @@ app.post('/api/daytona/sandbox/:sandboxId/files/write', authenticateRequest, asy
 
   try {
     await getDaytonaClient().uploadFile(req.params.sandboxId, filePath, content);
+
+    // Queue background indexing (Qdrant + Meilisearch) — fire-and-forget
+    try {
+      const { queueFileIndex } = await import('./a2a/trigger-jobs.js');
+      const textContent = typeof content === 'string' ? content : '';
+      if (textContent.length > 0 && textContent.length < 100_000) {
+        queueFileIndex(req.params.sandboxId, filePath, textContent);
+      }
+    } catch { /* trigger-jobs module may not be available */ }
+
     sendSuccess(res, { written: true, path: filePath });
   } catch (err: any) {
     sendError(res, createError(ErrorCode.INTERNAL_ERROR, `File write failed: ${err.message}`));

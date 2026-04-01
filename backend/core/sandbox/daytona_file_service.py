@@ -31,14 +31,16 @@ class DaytonaFileService:
                 parent_dir = "/".join(path.rsplit("/", 1)[:-1]) or "/"
                 await sandbox.process.exec(f"mkdir -p '{parent_dir}'", timeout=10)
 
-                # Write file via base64 to handle binary content safely
+                # Write file via base64 + heredoc to handle binary content safely.
+                # Using heredoc avoids echo truncation on shell metacharacters.
                 b64_content = base64.b64encode(content).decode("ascii")
 
                 # Split into chunks for very large files (shell arg limit ~128KB)
                 chunk_size = 65000
                 if len(b64_content) <= chunk_size:
+                    # Heredoc with quoted delimiter prevents shell expansion
                     await sandbox.process.exec(
-                        f"echo '{b64_content}' | base64 -d > '{path}'",
+                        f"cat <<'__B64EOF__' | base64 -d > '{path}'\n{b64_content}\n__B64EOF__",
                         timeout=self.timeout,
                     )
                 else:
@@ -47,7 +49,7 @@ class DaytonaFileService:
                     for i in range(0, len(b64_content), chunk_size):
                         chunk = b64_content[i:i + chunk_size]
                         await sandbox.process.exec(
-                            f"echo '{chunk}' | base64 -d >> '{path}'",
+                            f"cat <<'__B64EOF__' | base64 -d >> '{path}'\n{chunk}\n__B64EOF__",
                             timeout=self.timeout,
                         )
 
