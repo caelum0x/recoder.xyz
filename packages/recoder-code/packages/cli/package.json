@@ -1,6 +1,6 @@
 {
   "name": "recoder-code",
-  "version": "2.5.3",
+  "version": "2.5.5",
   "description": "Recoder Code - AI-powered coding assistant CLI. Chat with 40+ models (Claude, GPT-4, DeepSeek, Gemini, Qwen3) with tool calling support.",
   "license": "Apache-2.0",
   "keywords": [
@@ -53,7 +53,7 @@
     "README.md"
   ],
   "config": {
-    "sandboxImageUri": "ghcr.io/recoderxyz/recoder-code:2.5.3"
+    "sandboxImageUri": "ghcr.io/recoderxyz/recoder-code:2.5.5"
   },
   "dependencies": {
     "@google/genai": "1.13.0",
@@ -79,7 +79,7 @@
     "qrcode-terminal": "^0.12.0",
     "react": "^19.1.0",
     "read-package-up": "^11.0.0",
-    "recoder-code-core": "^2.4.4",
+    "recoder-code-core": "^2.4.5",
     "shell-quote": "^1.8.3",
     "simple-git": "^3.28.0",
     "string-width": "^7.1.0",
