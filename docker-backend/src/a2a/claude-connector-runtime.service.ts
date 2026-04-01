@@ -39,6 +39,8 @@ import type {
 } from '@recoder/shared/a2a';
 import { getTaskLifecycleService } from './task-lifecycle.service';
 import { getAgentRegistryService } from './agent-registry.service';
+import { getA2AEventBus, A2AEventType } from './a2a-event-bus';
+import { extractTaskStreamChunk } from './task-stream-payload';
 import { createLogger } from '../logger';
 
 const logger = createLogger('claude-connector-runtime');
@@ -98,6 +100,8 @@ export interface ExecuteTaskInput {
   toolName?: string;
   toolArgs?: Record<string, unknown>;
   requester: RecoderAgentIdentity;
+  workspaceId?: string;
+  threadId?: string;
   /** Input artifacts (files, patches) to provide context to the task. */
   artifacts?: TaskArtifact[];
 }
@@ -171,6 +175,8 @@ export class ClaudeConnectorRuntime extends EventEmitter {
   private restartCount = 0;
   private lastError: string | null = null;
   private stderrBuffer: string[] = [];
+  private activeTasks = new Set<string>();
+  private taskContexts = new Map<string, { workspaceId?: string; threadId?: string }>();
 
   constructor(config?: Partial<ClaudeConnectorConfig>) {
     super();
@@ -350,6 +356,11 @@ export class ClaudeConnectorRuntime extends EventEmitter {
     }
 
     this.lastActivity = new Date().toISOString();
+    this.activeTasks.add(input.taskId);
+    this.taskContexts.set(input.taskId, {
+      workspaceId: input.workspaceId,
+      threadId: input.threadId,
+    });
 
     // Transition the task to 'working' via the lifecycle service
     const lifecycle = getTaskLifecycleService();
@@ -404,6 +415,9 @@ export class ClaudeConnectorRuntime extends EventEmitter {
           CLAUDE_CONNECTOR_IDENTITY.id,
         );
 
+        this.publishTaskStream(input.taskId, resultText, true);
+        this.activeTasks.delete(input.taskId);
+        this.taskContexts.delete(input.taskId);
         this.emit('task:error', { taskId: input.taskId, error: resultText });
 
         return {
@@ -440,6 +454,9 @@ export class ClaudeConnectorRuntime extends EventEmitter {
         CLAUDE_CONNECTOR_IDENTITY.id,
       );
 
+      this.publishTaskStream(input.taskId, resultText, true);
+      this.activeTasks.delete(input.taskId);
+      this.taskContexts.delete(input.taskId);
       this.emit('task:complete', { taskId: input.taskId, resultText, artifacts: outputArtifacts });
 
       return {
@@ -467,6 +484,9 @@ export class ClaudeConnectorRuntime extends EventEmitter {
         CLAUDE_CONNECTOR_IDENTITY.id,
       );
 
+      this.publishTaskStream(input.taskId, errorMsg, true);
+      this.activeTasks.delete(input.taskId);
+      this.taskContexts.delete(input.taskId);
       this.emit('audit', createAuditEvent({
         id: `evt_${randomUUID()}`,
         event_type: AuditEventTypeEnum.ConnectorError,
@@ -922,9 +942,47 @@ export class ClaudeConnectorRuntime extends EventEmitter {
     // Handle specific notification types
     if (method === 'notifications/progress') {
       this.emit('progress', params);
+      const taskId = this.resolveTaskId(params);
+      if (taskId) this.publishTaskStream(taskId, extractTaskStreamChunk(params));
     } else if (method === 'notifications/message') {
       this.emit('message', params);
+      const taskId = this.resolveTaskId(params);
+      if (taskId) this.publishTaskStream(taskId, extractTaskStreamChunk(params));
     }
+  }
+
+  private resolveTaskId(payload: unknown): string | null {
+    if (payload && typeof payload === 'object') {
+      const record = payload as Record<string, unknown>;
+      if (typeof record.taskId === 'string' && record.taskId.trim().length > 0) return record.taskId;
+      if (typeof record.task_id === 'string' && record.task_id.trim().length > 0) return record.task_id;
+      if (typeof record.threadId === 'string' && record.threadId.trim().length > 0) return record.threadId;
+      if (typeof record.thread_id === 'string' && record.thread_id.trim().length > 0) return record.thread_id;
+    }
+
+    if (this.activeTasks.size === 1) {
+      return Array.from(this.activeTasks)[0] ?? null;
+    }
+
+    return null;
+  }
+
+  private publishTaskStream(taskId: string, chunk: string, done = false): void {
+    if (!taskId || (!chunk && !done)) return;
+
+    const context = this.taskContexts.get(taskId);
+    getA2AEventBus().publish({
+      id: `evt_${randomUUID()}`,
+      type: A2AEventType.TaskStream,
+      timestamp: new Date().toISOString(),
+      taskId,
+      workspaceId: context?.workspaceId,
+      data: {
+        agentId: CLAUDE_CONNECTOR_IDENTITY.id,
+        chunk,
+        done,
+      },
+    });
   }
 
   // -------------------------------------------------------------------------

@@ -48,6 +48,17 @@ vi.mock('../agent-registry.service', () => ({
   }),
 }));
 
+const publishMock = vi.fn();
+
+vi.mock('../a2a-event-bus', () => ({
+  A2AEventType: {
+    TaskStream: 'task.stream',
+  },
+  getA2AEventBus: () => ({
+    publish: publishMock,
+  }),
+}));
+
 // ---------------------------------------------------------------------------
 // Import the module under test (after mocks are set up)
 // ---------------------------------------------------------------------------
@@ -545,6 +556,15 @@ describe('CodexConnectorRuntime', () => {
       expect(result.success).toBe(true);
       expect(result.resultText).toBeDefined();
       expect(result.raw).toBeDefined();
+      expect(publishMock).toHaveBeenCalledWith(expect.objectContaining({
+        type: 'task.stream',
+        taskId: 'codex-task-1',
+        data: expect.objectContaining({
+          agentId: 'codex-connector',
+          chunk: 'Task completed successfully',
+          done: true,
+        }),
+      }));
     });
 
     it('tracks task in activeTasks during execution', async () => {
@@ -1029,7 +1049,12 @@ describe('CodexConnectorRuntime', () => {
         JSON.stringify({
           jsonrpc: '2.0',
           method: 'tasks/update',
-          params: { taskId: 'task-99', status: 'working', progress: 50 },
+          params: {
+            taskId: 'task-99',
+            status: 'working',
+            progress: 50,
+            message: 'Working on file edits',
+          },
         }) + '\n',
       );
 
@@ -1037,6 +1062,15 @@ describe('CodexConnectorRuntime', () => {
 
       expect(updates).toHaveLength(1);
       expect((updates[0] as Record<string, unknown>).progress).toBe(50);
+      expect(publishMock).toHaveBeenCalledWith(expect.objectContaining({
+        type: 'task.stream',
+        taskId: 'task-99',
+        data: expect.objectContaining({
+          agentId: 'codex-connector',
+          chunk: 'Working on file edits',
+          done: false,
+        }),
+      }));
     });
 
     it('emits exit event on process exit', async () => {

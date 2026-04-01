@@ -31,7 +31,7 @@ function getOpenRouterKey(): string {
 
 /**
  * Consume an SSE streaming response from OpenRouter.
- * Publishes token chunks as A2A task.progress events so SSE subscribers
+ * Publishes token chunks as A2A task.stream events so SSE subscribers
  * see live output, then returns the assembled content.
  */
 async function consumeStreamingResponse(
@@ -77,13 +77,13 @@ async function consumeStreamingResponse(
             content += delta;
             chunkCount++;
 
-            // Publish token chunk as progress event (batched to reduce noise)
+            // Publish token chunks in small batches to avoid flooding listeners.
             if (chunkCount % 3 === 0 || delta.length > 20) {
               bus.publish({
                 id: `evt_${uuid().replace(/-/g, '').slice(0, 16)}`,
-                type: A2AEventType.TaskProgress,
+                type: A2AEventType.TaskStream,
                 timestamp: new Date().toISOString(),
-                data: { type: 'token', content: delta, accumulated: content.length, model },
+                data: { chunk: delta, content: delta, accumulated: content.length, model, done: false },
                 taskId,
                 workspaceId,
               });
@@ -99,6 +99,17 @@ async function consumeStreamingResponse(
     }
   } finally {
     reader.releaseLock();
+  }
+
+  if (taskId) {
+    bus.publish({
+      id: `evt_${uuid().replace(/-/g, '').slice(0, 16)}`,
+      type: A2AEventType.TaskStream,
+      timestamp: new Date().toISOString(),
+      data: { chunk: '', accumulated: content.length, model, done: true },
+      taskId,
+      workspaceId,
+    });
   }
 
   const userId = String(context._userId ?? 'workflow');
@@ -152,6 +163,7 @@ async function executeLlmStep(
   const maxTokens = Number(config.maxTokens ?? 2048);
   const shouldStream = config.stream !== false; // default: stream
   const openRouterKey = getOpenRouterKey();
+  const startedAt = Date.now();
 
   if (!prompt) throw new Error('llm step requires config.prompt');
   if (!openRouterKey) throw new Error('OPENROUTER_API_KEY not configured');

@@ -5,6 +5,17 @@ vi.mock('../../metering/openmeter-client.js', () => ({
   trackSandboxExec: vi.fn(),
 }));
 
+const publishMock = vi.fn();
+
+vi.mock('../a2a-event-bus.js', () => ({
+  A2AEventType: {
+    TaskStream: 'task.stream',
+  },
+  getA2AEventBus: () => ({
+    publish: publishMock,
+  }),
+}));
+
 import { executeWorkflowSteps } from '../workflow-step-executor.js';
 import { trackLlmCall, trackSandboxExec } from '../../metering/openmeter-client.js';
 
@@ -96,5 +107,59 @@ describe('workflow-step-executor metering', () => {
     const codeCall = vi.mocked(trackSandboxExec).mock.calls[0]?.[0];
     expect(codeCall?.durationMs).toEqual(expect.any(Number));
     expect(codeCall?.durationMs).toBeGreaterThanOrEqual(0);
+  });
+
+  it('emits task.stream events for streaming llm steps', async () => {
+    const encoder = new TextEncoder();
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      body: new ReadableStream({
+        start(controller) {
+          controller.enqueue(encoder.encode('data: {"choices":[{"delta":{"content":"Hello "}}]}\n'));
+          controller.enqueue(encoder.encode('data: {"choices":[{"delta":{"content":"world from stream with enough detail"}}]}\n'));
+          controller.enqueue(encoder.encode('data: [DONE]\n'));
+          controller.close();
+        },
+      }),
+    } as unknown as Response);
+
+    const result = await executeWorkflowSteps(
+      [
+        {
+          name: 'llm-stream-step',
+          type: 'llm',
+          config: {
+            prompt: 'Stream {{topic}}',
+            model: 'openai/gpt-4o-mini',
+          },
+        },
+      ],
+      {
+        _taskId: 'task-stream-1',
+        _workspaceId: 'workspace-stream-1',
+        _userId: 'user-3',
+        _projectId: 'project-3',
+        topic: 'Nike',
+      },
+    );
+
+    expect(result.success).toBe(true);
+    expect(publishMock).toHaveBeenCalledWith(expect.objectContaining({
+      type: 'task.stream',
+      taskId: 'task-stream-1',
+      workspaceId: 'workspace-stream-1',
+      data: expect.objectContaining({
+        chunk: 'world from stream with enough detail',
+        done: false,
+      }),
+    }));
+    expect(publishMock).toHaveBeenCalledWith(expect.objectContaining({
+      type: 'task.stream',
+      taskId: 'task-stream-1',
+      workspaceId: 'workspace-stream-1',
+      data: expect.objectContaining({
+        done: true,
+      }),
+    }));
   });
 });
