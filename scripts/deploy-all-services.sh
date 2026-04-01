@@ -214,6 +214,9 @@ fi
 echo "--- Checking local Postgres DSNs against live Hetzner auth ---"
 bash scripts/check-hetzner-db-env-drift.sh
 
+echo "--- Checking docker-backend build context cleanliness ---"
+bash scripts/check-hetzner-docker-backend-build-context.sh
+
 # Prevent concurrent deploy runs from racing on container names.
 if command -v flock >/dev/null 2>&1; then
   exec 9>/root/.deploy-build.lock

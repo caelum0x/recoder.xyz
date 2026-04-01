@@ -84,22 +84,21 @@ This supersedes older task notes that still treat deploy-network breakage, root 
   - Recoder MCP `recoder_list_agents`, `recoder_list_tasks`, and `recoder_send_task` were returning `502`
   - root cause was `recoder-docker-backend` crash-looping on a mixed DuckDB A3 deploy state where runtime source imports landed without the `duckdb` module in the image
   - rebuilding `recoder-docker-backend` from the repaired stable Hetzner checkout restored `docker.recoder.xyz/health` and the MCP management endpoints
+  - a new deploy guardrail now exists in branch: `scripts/check-hetzner-docker-backend-build-context.sh`, wired into `scripts/deploy-all-services.sh`, and it passes on Hetzner after removing the stale untracked `docker-backend` source files that caused the mixed-state rebuild
 
 ## Immediate Follow-ups
 
 1. Browser-verify Web IDE preview + publish on the currently deployed build.
 2. Deploy and browser-verify the new `recoder-agents` canvas-mode Excalidraw routing. Branch-complete and pushed on `2026-04-01`; live deployment still pending.
 3. Audit the remaining dirty Hetzner app checkout after the git repair (`recoder-zgp`).
-4. Validate the DuckDB A3 rollout before deployment (`recoder-avg`).
-5. Re-enable deployed `STRICT_AUTH=true` only after broader browser verification passes.
-6. Continue broader agents IDE/browser verification beyond the Nike presentation path.
+4. Re-enable deployed `STRICT_AUTH=true` only after broader browser verification passes.
+5. Continue broader agents IDE/browser verification beyond the Nike presentation path.
 
 ## Current Remaining Priorities (2026-03-31, post-`77cd90bb`)
 1. Browser-verify Web IDE preview + publish on the currently deployed build.
 2. Audit the remaining dirty Hetzner app host checkout after the git repair (`recoder-zgp`).
-3. Validate the DuckDB A3 rollout before deployment (`recoder-avg`).
-4. Re-enable deployed `STRICT_AUTH=true` only after broader browser verification passes.
-5. Continue broader agents IDE/browser verification beyond the Nike presentation path.
+3. Re-enable deployed `STRICT_AUTH=true` only after broader browser verification passes.
+4. Continue broader agents IDE/browser verification beyond the Nike presentation path.
 
 ### 1. Agents (agents.recoder.xyz)
 **Works:** LLM responds, file proxy works, Nike presentation metadata/slide/image proxy works, Nike slides render in the real agents UI
