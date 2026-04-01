@@ -74,6 +74,8 @@ export class AgentBridgeService {
   private readonly agentTypeIndex = new Map<string, Set<string>>();
   /** Socket → sessionId */
   private readonly socketToAgent = new Map<WebSocket, string>();
+  /** Stream subscriptions: taskId → Set<sessionId> watching the stream */
+  private readonly streamSubscribers = new Map<string, Set<string>>();
   private heartbeatInterval: ReturnType<typeof setInterval> | null = null;
 
   constructor() {
@@ -192,6 +194,13 @@ export class AgentBridgeService {
       { agentId, sessionId: resolvedSessionId, userId, workspaces: workspaceIds.length, capabilities: capabilities.length },
       'agent registered via bridge',
     );
+
+    // Pre-warm agent memory context in background (fire-and-forget)
+    if (userId && userId !== 'system') {
+      import('./trigger-jobs.js')
+        .then(({ queueMemoryRefresh }) => queueMemoryRefresh(userId, `session start for ${agentId}`))
+        .catch(() => {});
+    }
 
     return agent;
   }
@@ -484,6 +493,86 @@ export class AgentBridgeService {
             sessionId,
             error: msg.error,
           },
+        });
+        break;
+      }
+
+      // ── Streaming: token-by-token output fan-out ──
+      case 'task.stream': {
+        if (!sessionId || !agentId) break;
+        const streamTaskId = msg.taskId as string;
+        const chunk = msg.chunk as string;
+        const done = Boolean(msg.done);
+
+        // Fan out stream chunk to all subscribers of this task
+        const subscribers = this.streamSubscribers.get(streamTaskId);
+        if (subscribers) {
+          for (const subSessionId of subscribers) {
+            if (subSessionId === sessionId) continue; // Don't echo back to sender
+            this.sendToAgent(subSessionId, {
+              type: 'task.stream',
+              taskId: streamTaskId,
+              chunk,
+              done,
+              from: agentId,
+            });
+          }
+        }
+
+        // Also publish to event bus for SSE consumers
+        getA2AEventBus().publish({
+          id: `evt_${uuid().replace(/-/g, '').slice(0, 16)}`,
+          type: 'task.stream' as string,
+          timestamp: new Date().toISOString(),
+          taskId: streamTaskId,
+          data: { agentId, sessionId, chunk, done },
+        });
+
+        if (done) {
+          // Clean up subscriptions when stream ends
+          this.streamSubscribers.delete(streamTaskId);
+        }
+        break;
+      }
+
+      // ── Subscribe: agent wants to watch another agent's task output ──
+      case 'task.subscribe': {
+        if (!sessionId) break;
+        const subTaskId = msg.taskId as string;
+        if (!this.streamSubscribers.has(subTaskId)) {
+          this.streamSubscribers.set(subTaskId, new Set());
+        }
+        this.streamSubscribers.get(subTaskId)!.add(sessionId);
+        this.sendToAgent(sessionId, {
+          type: 'task.subscribed',
+          taskId: subTaskId,
+        });
+        break;
+      }
+
+      // ── Interrupt: agent A tells agent B to stop mid-task ──
+      case 'task.interrupt': {
+        if (!sessionId || !agentId) break;
+        const interruptTaskId = msg.taskId as string;
+        const targetAgent = msg.targetAgent as string | undefined;
+        const reason = (msg.reason as string) ?? 'Interrupted by another agent';
+
+        // Route interrupt to the agent working on this task
+        if (targetAgent) {
+          this.sendToAgent(targetAgent, {
+            type: 'task.interrupt',
+            taskId: interruptTaskId,
+            from: agentId,
+            reason,
+          });
+        }
+
+        getA2AEventBus().publish({
+          id: `evt_${uuid().replace(/-/g, '').slice(0, 16)}`,
+          type: 'task.interrupted' as string,
+          timestamp: new Date().toISOString(),
+          taskId: interruptTaskId,
+          data: { from: agentId, targetAgent, reason },
         });
         break;
       }

@@ -116,6 +116,28 @@ function handleBridgeMessage(msg) {
       if (idx >= 0) inboundTasks[idx].status = 'cancelled';
       break;
     }
+    case 'task.stream': {
+      // Token-by-token output from another agent's task
+      const chunk = msg.chunk || '';
+      const done = msg.done || false;
+      const from = msg.from || 'unknown';
+      if (done) {
+        pushNotification('info', `✅ Stream [${msg.taskId}] from ${from} complete.`);
+      } else if (chunk.length > 0) {
+        // Only notify for substantial chunks to avoid flooding
+        pushNotification('debug', `📝 [${msg.taskId}] ${from}: ${chunk.slice(0, 200)}`);
+      }
+      break;
+    }
+    case 'task.subscribed': {
+      pushNotification('info', `👁 Subscribed to task ${msg.taskId} stream`);
+      break;
+    }
+    case 'task.interrupt': {
+      // Another agent is telling us to stop
+      pushNotification('warning', `⚠️ Interrupt received for task ${msg.taskId} from ${msg.from}: ${msg.reason || 'no reason'}`);
+      break;
+    }
     case 'ping':
       wsSend({ type: 'heartbeat' });
       break;
@@ -374,6 +396,30 @@ const TOOLS = [
     name: 'recoder_list_scratchpad',
     description: 'List all keys and values in the current session scratchpad.',
     inputSchema: { type: 'object', properties: {}, required: [] },
+  },
+  {
+    name: 'recoder_stream_task',
+    description: 'Subscribe to another agent\'s task output stream. Receive token-by-token output as it\'s generated. Enables live pair programming between agents.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        task_id: { type: 'string', description: 'Task ID to watch' },
+      },
+      required: ['task_id'],
+    },
+  },
+  {
+    name: 'recoder_interrupt_task',
+    description: 'Send an interrupt signal to stop another agent mid-task. The target agent receives the interrupt and can abort or adjust.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        task_id: { type: 'string', description: 'Task ID to interrupt' },
+        target_agent: { type: 'string', description: 'Agent ID to interrupt' },
+        reason: { type: 'string', description: 'Why the task should stop' },
+      },
+      required: ['task_id', 'target_agent'],
+    },
   },
   {
     name: 'recoder_canvas_update',
@@ -920,6 +966,30 @@ async function handleToolCall(name, args) {
         const preview = typeof e.value === 'string' ? e.value.slice(0, 80) : JSON.stringify(e.value).slice(0, 80);
         return `[${i + 1}] ${e.key} (by ${e.agentId}, ${e.updatedAt})\n    ${preview}`;
       }).join('\n\n');
+    }
+
+    case 'recoder_stream_task': {
+      if (!args.task_id) throw new Error('task_id required');
+      // Subscribe via WebSocket bridge
+      if (wsConnected && ws) {
+        ws.send(JSON.stringify({ type: 'task.subscribe', taskId: args.task_id }));
+        return `Subscribed to task ${args.task_id} stream. You will receive token-by-token output as notifications.\nSession: ${SESSION_ID}`;
+      }
+      return `Bridge disconnected — cannot subscribe to stream. Reconnect first.`;
+    }
+
+    case 'recoder_interrupt_task': {
+      if (!args.task_id || !args.target_agent) throw new Error('task_id and target_agent required');
+      if (wsConnected && ws) {
+        ws.send(JSON.stringify({
+          type: 'task.interrupt',
+          taskId: args.task_id,
+          targetAgent: args.target_agent,
+          reason: args.reason || 'Interrupted by agent',
+        }));
+        return `Interrupt sent to ${args.target_agent} for task ${args.task_id}.\nReason: ${args.reason || 'Interrupted by agent'}`;
+      }
+      return `Bridge disconnected — cannot send interrupt.`;
     }
 
     case 'recoder_canvas_update': {
