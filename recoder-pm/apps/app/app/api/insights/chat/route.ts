@@ -1,9 +1,13 @@
 import { withOrganizationSystemPrompt } from "@repo/backend/ai-prompts";
-import { currentOrganizationId } from "@repo/backend/auth/utils";
+import { currentOrganizationId, currentUser } from "@repo/backend/auth/utils";
 import { contentToText } from "@repo/editor/lib/tiptap";
 import { log } from "@repo/observability/log";
 import { database } from "@/lib/database";
-import { executeTool, toolDefinitions } from "./copilot-tools";
+import {
+  type CopilotActor,
+  executeTool,
+  toolDefinitions,
+} from "./copilot-tools";
 
 export const maxDuration = 60;
 
@@ -12,6 +16,10 @@ const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
 const OPENROUTER_MODEL =
   process.env.OPENROUTER_TEXT_MODEL || "google/gemini-2.0-flash-001";
 const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
+const OPENROUTER_TIMEOUT_MS = (() => {
+  const configured = Number(process.env.OPENROUTER_REQUEST_TIMEOUT_MS);
+  return Number.isFinite(configured) && configured > 0 ? configured : 45_000;
+})();
 
 // Max tool-call round-trips before giving up (prevents infinite loops)
 const MAX_TOOL_ROUNDS = 5;
@@ -111,6 +119,52 @@ const STREAM_HEADERS = {
   "x-vercel-ai-ui-message-stream": "v1",
   "x-accel-buffering": "no",
 };
+
+function isTimeoutError(error: unknown): boolean {
+  return (
+    error instanceof Error &&
+    (error.name === "AbortError" || error.name === "TimeoutError")
+  );
+}
+
+function openRouterTimeoutResponse(): Response {
+  return Response.json(
+    {
+      error: `AI request timed out after ${Math.round(
+        OPENROUTER_TIMEOUT_MS / 1000
+      )}s`,
+    },
+    { status: 504 }
+  );
+}
+
+function fetchOpenRouter(body: Record<string, unknown>): Promise<Response> {
+  return fetch(OPENROUTER_URL, {
+    method: "POST",
+    headers: openRouterHeaders,
+    body: JSON.stringify(body),
+    signal: AbortSignal.timeout(OPENROUTER_TIMEOUT_MS),
+  });
+}
+
+async function fetchOpenRouterWithTimeoutHandling(
+  body: Record<string, unknown>,
+  timeoutLog: Record<string, unknown>,
+  timeoutMessage: string
+): Promise<Response> {
+  try {
+    return await fetchOpenRouter(body);
+  } catch (error) {
+    if (isTimeoutError(error)) {
+      log.warn(timeoutMessage, {
+        ...timeoutLog,
+        timeoutMs: OPENROUTER_TIMEOUT_MS,
+      });
+      return openRouterTimeoutResponse();
+    }
+    throw error;
+  }
+}
 
 function sseEvent(payload: Record<string, unknown>): string {
   return `data: ${JSON.stringify(payload)}\n\n`;
@@ -403,19 +457,25 @@ async function fetchWorkspaceContext(
  */
 async function runToolCallLoop(
   apiMessages: ChatMessage[],
-  organizationId: string
+  organizationId: string,
+  actor: CopilotActor
 ): Promise<Response> {
   for (let round = 1; round <= MAX_TOOL_ROUNDS; round += 1) {
-    const response = await fetch(OPENROUTER_URL, {
-      method: "POST",
-      headers: openRouterHeaders,
-      body: JSON.stringify({
+    const response = await fetchOpenRouterWithTimeoutHandling(
+      {
         model: OPENROUTER_MODEL,
         messages: apiMessages,
         tools: toolDefinitions,
+        tool_choice: "auto",
         stream: false,
-      }),
-    });
+      },
+      { organizationId, round },
+      "OpenRouter non-stream request timed out"
+    );
+
+    if (response.status === 504) {
+      return response;
+    }
 
     if (!response.ok) {
       const errText = await response.text();
@@ -443,7 +503,9 @@ async function runToolCallLoop(
 
     // No tool calls — the model produced a final text response
     if (!toolCalls || toolCalls.length === 0) {
-      return textToUIMSP(choice.message.content || choice.message.reasoning || "");
+      return textToUIMSP(
+        choice.message.content || choice.message.reasoning || ""
+      );
     }
 
     // Execute tool calls
@@ -464,7 +526,8 @@ async function runToolCallLoop(
       const toolResult = await executeTool(
         toolCall.function.name,
         args,
-        organizationId
+        organizationId,
+        actor
       );
       apiMessages.push({
         role: "tool",
@@ -500,15 +563,19 @@ async function finalStreamingCall(
     organizationId,
   });
 
-  const response = await fetch(OPENROUTER_URL, {
-    method: "POST",
-    headers: openRouterHeaders,
-    body: JSON.stringify({
+  const response = await fetchOpenRouterWithTimeoutHandling(
+    {
       model: OPENROUTER_MODEL,
       messages: apiMessages,
       stream: true,
-    }),
-  });
+    },
+    { organizationId },
+    "OpenRouter final stream request timed out"
+  );
+
+  if (response.status === 504) {
+    return response;
+  }
 
   if (!response.ok) {
     const errText = await response.text();
@@ -556,7 +623,7 @@ export const POST = async (req: Request) => {
     return validated;
   }
 
-  const { chatMessages, organizationId } = validated;
+  const { chatMessages, organizationId, actor } = validated;
 
   try {
     const { contextString } = await fetchWorkspaceContext(organizationId);
@@ -571,7 +638,7 @@ export const POST = async (req: Request) => {
       ...chatMessages,
     ];
 
-    return await runToolCallLoop(apiMessages, organizationId);
+    return await runToolCallLoop(apiMessages, organizationId, actor);
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
     log.error("Insights chat error", {
@@ -591,6 +658,7 @@ export const POST = async (req: Request) => {
 type ValidatedRequest = {
   chatMessages: Array<{ role: string; content: string }>;
   organizationId: string;
+  actor: CopilotActor;
 };
 
 async function validateRequest(
@@ -610,8 +678,9 @@ async function validateRequest(
   }
 
   // Verify the authenticated user belongs to this organization
+  const user = await currentUser();
   const userOrgId = await currentOrganizationId();
-  if (!userOrgId || userOrgId !== organizationId) {
+  if (!(user && userOrgId) || userOrgId !== organizationId) {
     return new Response("Unauthorized", { status: 403 });
   }
 
@@ -640,5 +709,5 @@ async function validateRequest(
     return new Response("No message content", { status: 400 });
   }
 
-  return { chatMessages, organizationId };
+  return { chatMessages, organizationId, actor: user };
 }
