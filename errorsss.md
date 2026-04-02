@@ -1,6 +1,6 @@
 # Recoder Platform — Error Registry
 
-Last updated: 2026-04-02 (Payload CMS blog/changelog scaffold is landed in the main app, Umami/docs/Alertmanager/VictoriaMetrics are healthy live on Hetzner, deploy monitoring now stops scraping JSON/HTML as Prometheus metrics, and the worktree still has unrelated parallel dirt outside this slice)
+Last updated: 2026-04-02 (Payload CMS blog/changelog scaffold is landed in the main app, Umami/docs/Alertmanager/VictoriaMetrics are healthy live on Hetzner, Zrok preview wildcard nginx routing is landed live, and the worktree still has unrelated parallel dirt outside this slice)
 
 ---
 
@@ -159,6 +159,19 @@ This supersedes the stale reading that VictoriaMetrics was blocked by Alertmanag
   - added self-scrapes for `victoriametrics` and `alertmanager`
 - Remaining follow-up:
   - `recoder-9eu` tracks blackbox-style uptime monitoring for public HTTP services if external uptime checks are still wanted in Grafana
+
+## Current Correction (2026-04-02, Zrok preview wildcard proxy)
+
+This supersedes the stale reading that Zrok preview traffic was still failing because nginx wildcard routing had not been added.
+
+- Nginx proxy routing is now fixed:
+  - tracked `nginx/nginx-production.conf` now contains the preview wildcard upstream/proxy blocks
+  - the live Hetzner nginx config was updated from that tracked file
+  - public HTTP requests to `*.preview.recoder.xyz` now reach the Zrok frontend and return the expected “host not found” page for unknown share tokens
+  - direct-origin HTTPS routing reaches the Zrok frontend too, which confirms the origin-side wildcard proxy path is now wired
+- The remaining failure is now specifically TLS/public certificate coverage:
+  - public `https://*.preview.recoder.xyz` still fails during the Cloudflare TLS handshake before the request reaches origin
+  - the next real task is `recoder-6qa`, not more nginx guesswork
 
 ## Current Correction (2026-04-01, streaming task output)
 

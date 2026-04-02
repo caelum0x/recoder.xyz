@@ -1,6 +1,6 @@
 # Recoder Platform — Master Plan
 
-Last updated: 2026-04-02 (Payload CMS blog/changelog scaffold is landed in the main app, Umami/docs/Alertmanager/VictoriaMetrics are healthy live on Hetzner, deploy monitoring now stops scraping JSON/HTML as Prometheus metrics, and the worktree still has unrelated parallel dirt outside this slice)
+Last updated: 2026-04-02 (Payload CMS blog/changelog scaffold is landed in the main app, Umami/docs/Alertmanager/VictoriaMetrics are healthy live on Hetzner, Zrok preview wildcard nginx routing is landed live, and the worktree still has unrelated parallel dirt outside this slice)
 
 ---
 
@@ -130,6 +130,21 @@ This supersedes the stale blocker table that still described Umami, docs, Alertm
   4. removed the invalid app/HTML/JSON scrape jobs
 - Remaining follow-up:
   1. `recoder-9eu` — add blackbox-style uptime monitoring for public HTTP services if we still want dashboard uptime checks for `recoder.xyz`, `web.recoder.xyz`, `agents.recoder.xyz`, and similar domains
+
+## Current Correction — 2026-04-02 (Zrok preview wildcard proxy)
+
+This supersedes the stale reading that the remaining Zrok blocker was “nginx routing not added yet” or that `*.preview.recoder.xyz` was still entirely unproxied.
+
+- Landed in source:
+  1. `nginx/nginx-production.conf` now tracks the Zrok preview upstream and wildcard proxy blocks instead of relying on an untracked host-only edit
+  2. `scripts/setup-zrok.sh` now matches the live frontend port (`127.0.0.1:8080`) and no longer tells operators to append a raw server block outside `http {}`
+  3. Recoder iframe policy now explicitly allows `https://*.preview.recoder.xyz`
+- Verified live on Hetzner:
+  1. `http://test.preview.recoder.xyz` reaches the Zrok frontend and returns the expected Zrok 404 page for an unknown share token
+  2. direct-origin HTTPS routing also reaches the Zrok frontend when resolved to the origin host, which confirms the nginx `443` path is now wired correctly
+- Remaining blocker is TLS coverage, not proxy routing:
+  1. public `https://test.preview.recoder.xyz` still fails during the Cloudflare TLS handshake before the request reaches origin
+  2. follow-up `recoder-6qa` now tracks the required Cloudflare edge/origin certificate coverage for `*.preview.recoder.xyz`
 
 ## Current Correction — 2026-04-02 (Umami compose)
 
