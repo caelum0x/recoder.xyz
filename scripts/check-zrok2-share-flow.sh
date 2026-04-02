@@ -50,7 +50,8 @@ DOCKER_BACKEND_CONTAINER="$(
 )"
 
 ZROK2_API_ENDPOINT="${ZROK2_API_ENDPOINT:-http://127.0.0.1:18080}"
-PREVIEW_BASE_DOMAIN="${PREVIEW_BASE_DOMAIN:-preview.recoder.xyz}"
+PREVIEW_PUBLIC_BASE_DOMAIN="${PREVIEW_PUBLIC_BASE_DOMAIN:-recoder.xyz}"
+ZROK_INTERNAL_FRONTEND_DOMAIN="${ZROK_INTERNAL_FRONTEND_DOMAIN:-preview.recoder.xyz}"
 ZROK2_ENABLE_TOKEN="${ZROK2_ENABLE_TOKEN:-}"
 DIAG_IMAGE="${DIAG_IMAGE:-nginx:1.27-alpine}"
 DIAG_ID="$(date +%s)-$$"
@@ -125,7 +126,7 @@ for _ in $(seq 1 30); do
   )"
 
   SHARE_TOKEN="$(
-    python3 - "$DIAG_CONTAINER" <<'PY' <<<"$SHARES_JSON"
+      python3 - "$DIAG_CONTAINER" <<'PY' <<<"$SHARES_JSON"
 import json
 import sys
 
@@ -148,22 +149,28 @@ PY
 
   if [[ -f "$SHARE_LOG" ]]; then
     SHARE_TOKEN="$(
-      python3 - "$PREVIEW_BASE_DOMAIN" "$SHARE_LOG" <<'PY'
+      python3 - "$PREVIEW_PUBLIC_BASE_DOMAIN" "$ZROK_INTERNAL_FRONTEND_DOMAIN" "$SHARE_LOG" <<'PY'
 import re
 import sys
 
-domain = re.escape(sys.argv[1])
-path = sys.argv[2]
-pattern = re.compile(rf'([a-z0-9-]+)\.{domain}')
+public_domain = re.escape(sys.argv[1])
+internal_domain = re.escape(sys.argv[2])
+path = sys.argv[3]
+patterns = (
+    re.compile(rf'preview-([a-z0-9-]+)\.{public_domain}'),
+    re.compile(rf'([a-z0-9-]+)\.{internal_domain}'),
+)
 
 try:
     text = open(path, encoding="utf-8").read()
 except FileNotFoundError:
     raise SystemExit(0)
 
-match = pattern.search(text)
-if match:
-    print(match.group(1))
+for pattern in patterns:
+    match = pattern.search(text)
+    if match:
+        print(match.group(1))
+        break
 PY
     )"
   fi
@@ -181,7 +188,7 @@ if [[ -z "$SHARE_TOKEN" ]]; then
   exit 1
 fi
 
-PREVIEW_URL="https://${SHARE_TOKEN}.${PREVIEW_BASE_DOMAIN}"
+PREVIEW_URL="https://preview-${SHARE_TOKEN}.${PREVIEW_PUBLIC_BASE_DOMAIN}"
 
 echo "[6/8] Waiting for public preview URL ${PREVIEW_URL}..."
 for _ in $(seq 1 20); do
