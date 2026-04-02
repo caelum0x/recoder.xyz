@@ -1,6 +1,6 @@
 # Recoder Platform — Task List
 
-Last updated: 2026-04-02 (Payload CMS blog/changelog scaffold is landed in the main app, OpenMeter LLM usage reporting and Umami DB targeting are landed in the main repo, and the worktree still has unrelated parallel dirt outside this slice)
+Last updated: 2026-04-02 (Payload CMS blog/changelog scaffold is landed in the main app, deploy compose supports an overrideable host-Postgres path, Alertmanager defaults are hardened, and the worktree still has unrelated parallel dirt outside this slice)
 
 ---
 
@@ -133,6 +133,22 @@ This supersedes any stale task note that Payload CMS in the main app was still "
 - Remaining follow-up tasks are now explicit:
   1. `recoder-1o4` — unblock the real `/cms` admin surface by aligning the app with a Payload-supported Next/React combination
   2. `recoder-b4e` — run schema/migration/seed/live-enable work so deployed blog and changelog pages read from Payload instead of fallback arrays
+
+## 2026-04-02 Correction (host DB path + Alertmanager)
+
+This supersedes stale task notes that framed Umami as needing a one-off host-IP edit in code or Alertmanager as blocked solely on production SMTP rollout.
+
+- Landed in source:
+  1. host-backed Postgres URLs in `docker-compose.deploy.yml` now use `${HOST_POSTGRES_HOST:-host.docker.internal}`
+  2. Alertmanager’s template now routes email to `${ALERT_EMAIL_TO}`
+  3. `scripts/alertmanager-entrypoint.sh` now maps `RESEND_API_KEY` into SMTP auth defaults and supports `ALERTMANAGER_RENDER_ONLY=1`
+- Verification:
+  - `bash -n scripts/alertmanager-entrypoint.sh` passed
+  - rendered config parsed successfully with a dummy Resend key and with no email env configured
+  - `docker compose -f docker-compose.deploy.yml config` passed
+- Remaining live follow-up:
+  1. `recoder-23s` — create/verify the Umami DB and validate the service on Hetzner
+  2. deploy and verify Alertmanager health on Hetzner after the next compose rollout
 - `recoder-xxp` is fixed live:
   - repo-root `/.env` is excluded from deploy rsync
   - Hetzner root `.env` is restored to the minimal Compose-interpolation form

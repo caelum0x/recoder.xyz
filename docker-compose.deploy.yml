@@ -466,8 +466,8 @@ services:
     ports:
       - "127.0.0.1:3010:3000"
     environment:
-      - DATABASE_URL=postgresql://recoder:recoder_prod_2026@host.docker.internal:5432/recoder_backend
-      - DIRECT_URL=postgresql://recoder:recoder_prod_2026@host.docker.internal:5432/recoder_backend
+      - DATABASE_URL=postgresql://recoder:recoder_prod_2026@${HOST_POSTGRES_HOST:-host.docker.internal}:5432/recoder_backend
+      - DIRECT_URL=postgresql://recoder:recoder_prod_2026@${HOST_POSTGRES_HOST:-host.docker.internal}:5432/recoder_backend
       - SESSION_SECRET=${TRIGGER_SESSION_SECRET:-recoder_trigger_session_secret}
       - MAGIC_LINK_SECRET=${TRIGGER_MAGIC_LINK_SECRET:-recoder_trigger_magic_link_secret}
       - ENCRYPTION_KEY=${TRIGGER_ENCRYPTION_KEY:-recoder_trigger_encryption_key_32ch}
@@ -528,7 +528,7 @@ services:
     image: ghcr.io/hatchet-dev/hatchet/hatchet-migrate:latest
     container_name: recoder-hatchet-migrate
     environment:
-      - DATABASE_URL=postgresql://recoder:recoder_prod_2026@host.docker.internal:5432/recoder_backend
+      - DATABASE_URL=postgresql://recoder:recoder_prod_2026@${HOST_POSTGRES_HOST:-host.docker.internal}:5432/recoder_backend
     extra_hosts:
       - "host.docker.internal:host-gateway"
     networks:
@@ -545,9 +545,9 @@ services:
     ports:
       - "127.0.0.1:7077:7077"
     environment:
-      - DATABASE_URL=postgresql://recoder:recoder_prod_2026@host.docker.internal:5432/recoder_backend
+      - DATABASE_URL=postgresql://recoder:recoder_prod_2026@${HOST_POSTGRES_HOST:-host.docker.internal}:5432/recoder_backend
       - DATABASE_POSTGRES_PORT=5432
-      - DATABASE_POSTGRES_HOST=host.docker.internal
+      - DATABASE_POSTGRES_HOST=${HOST_POSTGRES_HOST:-host.docker.internal}
       - DATABASE_POSTGRES_USERNAME=recoder
       - DATABASE_POSTGRES_PASSWORD=recoder_prod_2026
       - DATABASE_POSTGRES_DB_NAME=recoder_backend
@@ -583,7 +583,7 @@ services:
     ports:
       - "127.0.0.1:8084:8080"
     environment:
-      - DATABASE_URL=postgresql://recoder:recoder_prod_2026@host.docker.internal:5432/recoder_backend
+      - DATABASE_URL=postgresql://recoder:recoder_prod_2026@${HOST_POSTGRES_HOST:-host.docker.internal}:5432/recoder_backend
       - SERVER_AUTH_SET_IF_NOT_EXISTS=true
     depends_on:
       hatchet-engine:
@@ -722,7 +722,7 @@ services:
     ports:
       - "127.0.0.1:8889:8888"
     environment:
-      - POSTGRES_URL=postgresql://recoder:recoder_prod_2026@host.docker.internal:5432/recoder_backend
+      - POSTGRES_URL=postgresql://recoder:recoder_prod_2026@${HOST_POSTGRES_HOST:-host.docker.internal}:5432/recoder_backend
     healthcheck:
       test: ["CMD-SHELL", "curl -sf http://localhost:8888/api/v1/health || exit 1"]
       interval: 30s
@@ -748,7 +748,7 @@ services:
     ports:
       - "127.0.0.1:8001:8000"
     environment:
-      - DATABASE_URL=postgresql://recoder:recoder_prod_2026@host.docker.internal:5432/recoder_backend
+      - DATABASE_URL=postgresql://recoder:recoder_prod_2026@${HOST_POSTGRES_HOST:-host.docker.internal}:5432/recoder_backend
       - DJANGO_SECRET_KEY=${FLAGSMITH_SECRET:-change_me_flagsmith_secret}
       - ENABLE_ADMIN_ACCESS_USER_PASS=True
     healthcheck:
@@ -777,7 +777,7 @@ services:
     ports:
       - "127.0.0.1:3006:3000"
     environment:
-      - DATABASE_URL=postgresql://recoder:recoder_prod_2026@host.docker.internal:5432/umami
+      - DATABASE_URL=postgresql://recoder:recoder_prod_2026@${HOST_POSTGRES_HOST:-host.docker.internal}:5432/umami
       - APP_SECRET=${UMAMI_SECRET:-change_me_umami_secret}
       - DISABLE_UPDATES=1
     healthcheck:
@@ -807,7 +807,7 @@ services:
     ports:
       - "127.0.0.1:3005:3000"
     environment:
-      - DATABASE_URL=postgresql://recoder:recoder_prod_2026@host.docker.internal:5432/recoder_backend
+      - DATABASE_URL=postgresql://recoder:recoder_prod_2026@${HOST_POSTGRES_HOST:-host.docker.internal}:5432/recoder_backend
       - REDIS_URL=redis://:${REDIS_PASSWORD:-}@recoder-redis:6379/2
       - SECRET_KEY_BASE=${CHATWOOT_SECRET:-change_me_in_production_chatwoot_secret}
       - RAILS_ENV=production

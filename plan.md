@@ -1,6 +1,6 @@
 # Recoder Platform — Master Plan
 
-Last updated: 2026-04-02 (Payload CMS blog/changelog scaffold is now landed in the main app, OpenMeter LLM usage reporting and Umami DB targeting are landed in the main repo, and the worktree still has unrelated parallel dirt outside this slice)
+Last updated: 2026-04-02 (Payload CMS blog/changelog scaffold is landed in the main app, deploy compose now supports an overrideable host-Postgres path, Alertmanager defaults are hardened, and the worktree still has unrelated parallel dirt outside this slice)
 
 ---
 
@@ -88,6 +88,27 @@ This supersedes any stale note that Sprint J3 "Payload CMS for recoder.xyz conte
 - Remaining J3 follow-up is now split cleanly:
   1. `recoder-1o4` — unblock a real `/cms` admin surface; current Payload 3.81.0 Next integration expects Next `<15.5` or `16.2` canary+ and React 19, while the app is on Next 15.5.9 and React 18.3.1
   2. `recoder-b4e` — run the DB/schema/seed/live-enable path so deployed blog/changelog pages read from Payload instead of the fallback arrays
+
+## Current Correction — 2026-04-02 (deploy compose host DB + Alertmanager)
+
+This supersedes the stale assumption that Umami still specifically needed a hard-coded `172.17.0.1` edit in source or that Alertmanager health depended on a full SMTP rollout before the service could even start cleanly.
+
+- Deploy compose no longer hard-codes `host.docker.internal` inside all host-Postgres URLs:
+  1. host-connected services now use `${HOST_POSTGRES_HOST:-host.docker.internal}`
+  2. this covers Trigger.dev, Hatchet, OpenMeter, Flagsmith, Umami, and Chatwoot
+  3. operators can now override to a bridge IP like `172.17.0.1` without editing multiple service definitions
+- Alertmanager source defaults are hardened:
+  1. `monitoring/alertmanager.yml` now routes email receivers via `${ALERT_EMAIL_TO}` instead of the stale `${ALERT_EMAIL}` field
+  2. `scripts/alertmanager-entrypoint.sh` now derives Resend-compatible SMTP settings automatically when only `RESEND_API_KEY` is provided
+  3. if no email routing is configured yet, the rendered config still remains valid by falling back to a placeholder recipient and localhost SMTP transport
+  4. the entrypoint also now supports `ALERTMANAGER_RENDER_ONLY=1`, which makes config rendering testable without starting the daemon
+- Validation:
+  - `bash -n scripts/alertmanager-entrypoint.sh` passed
+  - rendered Alertmanager YAML parsed successfully both with and without a Resend key
+  - `docker compose -f docker-compose.deploy.yml config` passed
+- Remaining operational follow-up:
+  1. `recoder-23s` still covers the live Umami DB/service enablement
+  2. live Alertmanager/Hetzner verification is still needed after the next deploy
 
 ## Current Correction — 2026-04-02 (Umami compose)
 
