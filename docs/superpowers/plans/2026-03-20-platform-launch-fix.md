@@ -453,7 +453,7 @@ ssh -i ~/.ssh/id_ed25519_hetzner root@77.42.23.19 "curl -sI https://openclaw.rec
 1. packages/shared/ (recoder-shared)        → npm publish
 2. packages/roo-code-types/ (roo-code-types) → npm run build && npm publish
 3. packages/recoder-code/packages/core/ (recoder-code-core) → npm publish
-4. packages/recoder-code/ (recoder-code)     → npm publish
+4. packages/recoder-code/packages/cli/ (recoder-code) → npm publish
 5. packages/recoder-cli-router/              → npm publish
 6. homebrew-recoder/Formula/                 → update formula
 ```
@@ -493,8 +493,8 @@ npm publish --access public
 - [ ] **Step 5: Build and publish recoder-code**
 
 ```bash
-cd packages/recoder-code
-npm run build  # builds core, cli, mcp-eternos, vscode
+cd packages/recoder-code/packages/cli
+npm run build
 npm publish --access public
 ```
 

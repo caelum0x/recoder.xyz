@@ -1,7 +1,8 @@
 {
-  "name": "recoder-code",
+  "name": "recoder-code-workspace",
   "version": "2.4.5",
-  "description": "🚀 Recoder Code - AI-powered CLI for developers. Chat with 40+ models (Claude, GPT-4, DeepSeek, Gemini, Qwen3) with tool calling support. Build projects, automate workflows. Free agentic models included! Features interactive mode, file operations, and optional sandbox security.",
+  "private": true,
+  "description": "Workspace root for the Recoder Code package set.",
   "main": "index.js",
   "scripts": {
     "start": "node cli/run.js",
@@ -37,13 +38,10 @@
     "todo:stats": "node cli/todo-manager.js stats",
     "production:check": "npm run lint && npm run typecheck && npm run security:audit",
     "production:bundle": "npm run production:check && npm run build:production",
-    "production:deploy": "npm run production:bundle && npm publish --access public",
-    "postinstall": "node -e \"console.log('\\\\n🚀 Recoder Code v2.4.5 installed successfully!\\\\n\\\\n✅ Quick Start: recoder-code\\\\n🔧 Setup Wizard: recoder-code --setup\\\\n🤖 40+ AI Models with Tool Calling Support\\\\n💡 Get Free API Key: https://openrouter.ai/keys\\\\n📚 Documentation: https://recoder.xyz\\\\n')\"",
+    "production:deploy": "npm run production:bundle && npm publish --access public --workspace=packages/cli",
+    "postinstall": "node -e \"console.log('\\\\n📦 Recoder Code workspace ready.\\\\n\\\\nCLI package: packages/cli\\\\nCore package: packages/core\\\\nPublished CLI: recoder-code\\\\n')\"",
     "prepare": "echo 'Package prepared for distribution'",
     "prepublishOnly": "npm run prepare && npm run security:audit"
-  },
-  "bin": {
-    "recoder-code": "./packages/cli/dist/index.js"
   },
   "dependencies": {
     "@octokit/rest": "^22.0.0",
@@ -138,14 +136,6 @@
     }
   ],
   "license": "MIT",
-  "directories": {
-    "bin": "./packages/cli",
-    "example": "./examples",
-    "test": "./tests",
-    "doc": "./docs",
-    "lib": "./scripts",
-    "config": "./rules"
-  },
   "type": "commonjs",
   "workspaces": [
     "packages/*"
@@ -154,35 +144,6 @@
   "engines": {
     "node": ">=18.0.0",
     "npm": ">=9.0.0"
-  },
-  "files": [
-    "packages/",
-    "config.js",
-    "index.js",
-    "setup.js",
-    "setup-global-npm.js",
-    "validate.js",
-    "README.md",
-    "LICENSE.md",
-    "CHANGELOG.md",
-    "SANDBOX_SETUP_GUIDE.md",
-    "SANDBOX_QUICK_REFERENCE.md",
-    "CONTRIBUTING.md",
-    "CODE_OF_CONDUCT.md",
-    ".devcontainer/",
-    "!**/*.test.js",
-    "!**/*.test.ts",
-    "!**/*.spec.js",
-    "!**/*.spec.ts",
-    "!**/tests/",
-    "!**/__tests__/",
-    "!.env*",
-    "!**/sessions/",
-    "!**/*.log"
-  ],
-  "publishConfig": {
-    "access": "public",
-    "registry": "https://registry.npmjs.org/"
   },
   "config": {
     "unsafe-perm": true
