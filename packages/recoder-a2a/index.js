@@ -466,6 +466,29 @@ const TOOLS = [
     inputSchema: { type: 'object', properties: {}, required: [] },
   },
   {
+    name: 'recoder_sync_todos',
+    description: 'Sync your current todo list to the shared A2A task board so other agents (Codex, Claude Code) and the dashboard can see your active work. Call this after every TodoWrite to keep the board updated.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        todos: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              id: { type: 'string' },
+              content: { type: 'string' },
+              status: { type: 'string', enum: ['pending', 'in_progress', 'completed'] },
+            },
+          },
+          description: 'Array of todo items from TodoWrite. Each with id, content, and status.',
+        },
+        goal: { type: 'string', description: 'High-level goal these todos work toward' },
+      },
+      required: ['todos'],
+    },
+  },
+  {
     name: 'recoder_stream_task',
     description: 'Subscribe to another agent\'s task output stream. Receive token-by-token output as it\'s generated. Enables live pair programming between agents.',
     inputSchema: {
@@ -1034,6 +1057,45 @@ async function handleToolCall(name, args, callParams = {}) {
         const preview = typeof e.value === 'string' ? e.value.slice(0, 80) : JSON.stringify(e.value).slice(0, 80);
         return `[${i + 1}] ${e.key} (by ${e.agentId}, ${e.updatedAt})\n    ${preview}`;
       }).join('\n\n');
+    }
+
+    case 'recoder_sync_todos': {
+      const todos = args.todos || [];
+      const goal = args.goal || '';
+      // Write to shared scratchpad so other agents can see our work
+      const boardData = {
+        agentId: AGENT_ID,
+        sessionId: SESSION_ID,
+        goal,
+        todos,
+        updatedAt: new Date().toISOString(),
+        summary: `${todos.filter(t => t.status === 'completed').length}/${todos.length} done`,
+      };
+      // Push to scratchpad
+      try {
+        await apiFetch(`${DOCKER_URL}/api/a2a/scratchpad/write`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            sessionId: SESSION_ID,
+            agentId: AGENT_ID,
+            key: `taskboard/${AGENT_ID}`,
+            value: boardData,
+          }),
+        });
+      } catch {}
+      // Also broadcast via bridge so watchers get notified
+      if (wsConnected && ws) {
+        ws.send(JSON.stringify({
+          type: 'channel.message',
+          channelId: 'taskboard',
+          text: JSON.stringify(boardData),
+        }));
+      }
+      const completed = todos.filter(t => t.status === 'completed').length;
+      const inProgress = todos.filter(t => t.status === 'in_progress').length;
+      const pending = todos.filter(t => t.status === 'pending').length;
+      return `Task board synced: ${completed} done, ${inProgress} in progress, ${pending} pending (${todos.length} total)${goal ? `\nGoal: ${goal}` : ''}`;
     }
 
     case 'recoder_stream_task': {
