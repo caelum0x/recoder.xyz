@@ -1,6 +1,6 @@
 # Recoder Platform — Error Registry
 
-Last updated: 2026-04-02 (Payload CMS blog/changelog scaffold is landed in the main app, OpenMeter LLM usage reporting and Umami DB targeting are landed in the main repo, and the worktree still has unrelated parallel dirt outside this slice)
+Last updated: 2026-04-02 (Payload CMS blog/changelog scaffold is landed in the main app, deploy compose supports an overrideable host-Postgres path, Alertmanager defaults are hardened, and the worktree still has unrelated parallel dirt outside this slice)
 
 ---
 
@@ -121,6 +121,24 @@ This supersedes any stale reading that Sprint J3 in the main app was still "not 
 - Verification:
   - `pnpm --dir app build` passed
   - app-wide `tsc` still fails on a pre-existing unrelated `NextRequest` test mismatch in `app/api/platform/events/__tests__/route.test.ts`
+
+## Current Correction (2026-04-02, host DB path + Alertmanager)
+
+This supersedes the stale reading that Umami needed a one-off hard-coded IP edit in source or that Alertmanager was blocked purely on “real SMTP config” before it could become healthy.
+
+- Source-level host DB access is now parameterized:
+  - host-backed Postgres URLs in `docker-compose.deploy.yml` now use `${HOST_POSTGRES_HOST:-host.docker.internal}`
+  - this removes the need to edit multiple services if Linux needs `172.17.0.1` or another explicit bridge address
+- Alertmanager source-level health blockers are also corrected:
+  - the template now sends email to `${ALERT_EMAIL_TO}`
+  - the entrypoint derives Resend SMTP auth automatically from `RESEND_API_KEY`
+  - no-email environments now still render a valid config via a placeholder recipient and localhost SMTP fallback
+  - `ALERTMANAGER_RENDER_ONLY=1` now exists for render-only validation
+- Validation:
+  - shell syntax check passed
+  - rendered YAML parsed successfully both with dummy Resend input and with no email env
+  - compose config still resolves cleanly
+- Remaining live work is deployment/verification, not more source-level guessing
 
 ## Current Correction (2026-04-01, streaming task output)
 
