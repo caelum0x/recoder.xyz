@@ -160,18 +160,18 @@ This supersedes the stale reading that VictoriaMetrics was blocked by Alertmanag
 - Remaining follow-up:
   - `recoder-9eu` tracks blackbox-style uptime monitoring for public HTTP services if external uptime checks are still wanted in Grafana
 
-## Current Correction (2026-04-02, Zrok preview wildcard proxy)
+## Current Correction (2026-04-03, Zrok preview public HTTPS + zrok2 share flow)
 
-This supersedes the stale reading that Zrok preview traffic was still failing because nginx wildcard routing had not been added.
+This supersedes the stale reading that preview traffic was still blocked on nginx or wildcard TLS.
 
-- Nginx proxy routing is now fixed:
-  - tracked `nginx/nginx-production.conf` now contains the preview wildcard upstream/proxy blocks
-  - the live Hetzner nginx config was updated from that tracked file
-  - public HTTP requests to `*.preview.recoder.xyz` now reach the Zrok frontend and return the expected “host not found” page for unknown share tokens
-  - direct-origin HTTPS routing reaches the Zrok frontend too, which confirms the origin-side wildcard proxy path is now wired
-- The remaining failure is now specifically TLS/public certificate coverage:
-  - public `https://*.preview.recoder.xyz` still fails during the Cloudflare TLS handshake before the request reaches origin
-  - the next real task is `recoder-6qa`, not more nginx guesswork
+- What is fixed live:
+  - tracked `nginx/nginx-production.conf` now uses the dedicated `preview.recoder.xyz` wildcard certificate
+  - the Cloudflare wildcard `*.preview.recoder.xyz` A record is DNS-only, so public HTTPS terminates on the origin cert
+  - public unknown-share requests now work over both HTTP and HTTPS
+  - a disposable zrok2 public share against an in-network nginx backend returned `200` at `https://yiiqxa0v5ueh.preview.recoder.xyz` before cleanup
+- What remains:
+  - the infra/TLS bead `recoder-6qa` is closed
+  - the next real task is `recoder-crg`: migrate `docker-backend/src/zrok-preview.ts` and the surrounding operator path from legacy zrok v1 assumptions to the deployed zrok2 environment/share model
 
 ## Current Correction (2026-04-01, streaming task output)
 

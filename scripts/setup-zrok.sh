@@ -1,18 +1,34 @@
 #!/usr/bin/env bash
-# Setup Zrok — bootstrap controller + generate admin token + create environment
-# Run this ONCE after first docker compose up
+# Legacy Zrok v1 bootstrap helper.
+#
+# The live Recoder preview stack now runs zrok2 via docker-compose.zrok.yml.
+# Keep this helper only for legacy single-container experiments; do not treat
+# it as the source of truth for the deployed zrok2 stack.
+#
 # Usage: ./scripts/setup-zrok.sh
 #
 # Prerequisites:
-#   1. Cloudflare DNS: *.preview.recoder.xyz → 77.42.23.19
+#   1. DNS: *.preview.recoder.xyz → 77.42.23.19
 #   2. nginx http{} includes preview wildcard proxy → http://127.0.0.1:8080
-#   3. HTTPS requires certificate coverage for *.preview.recoder.xyz
-#      (for example a Cloudflare edge/origin certificate or a wildcard LE cert)
+#   3. Public HTTPS should use a cert that explicitly covers
+#      *.preview.recoder.xyz (for example the LE wildcard issued below)
 set -euo pipefail
 
 ZROK_CONTAINER="${ZROK_CONTAINER:-recoder-zrok}"
 ZROK_ADMIN_TOKEN="${ZROK_ADMIN_TOKEN:-$(openssl rand -hex 16)}"
 ZROK_FRONTEND_CONTAINER="${ZROK_FRONTEND_CONTAINER:-recoder-zrok-frontend}"
+
+if docker ps --format '{{.Names}}' | grep -Eq 'zrok2-controller|recoder-zrok2-controller'; then
+  cat >&2 <<'EOF'
+Detected a live zrok2 stack. This helper still bootstraps legacy zrok v1-style
+controller state and should not be used for the deployed preview path.
+
+Use instead:
+  1. docker-compose.zrok.yml for zrok2 provisioning
+  2. scripts/check-zrok2-share-flow.sh for end-to-end public share verification
+EOF
+  exit 1
+fi
 
 echo "=== Zrok Setup ==="
 echo "Controller: $ZROK_CONTAINER"
@@ -97,13 +113,13 @@ server {
     }
 }
 
-# Optional HTTPS block once *.preview.recoder.xyz certificate coverage exists.
+# HTTPS block once the preview wildcard certificate exists.
 server {
     listen 443 ssl http2;
     server_name *.preview.recoder.xyz;
 
-    ssl_certificate /etc/nginx/ssl/recoder.crt;
-    ssl_certificate_key /etc/nginx/ssl/recoder.key;
+    ssl_certificate /etc/letsencrypt/live/preview.recoder.xyz/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/preview.recoder.xyz/privkey.pem;
 
     location / {
         proxy_pass http://127.0.0.1:8080;
@@ -131,11 +147,16 @@ echo ""
 echo "Cloudflare DNS needed:"
 echo "  *.preview.recoder.xyz → A → 77.42.23.19"
 echo ""
-echo "Cloudflare / TLS needed for public HTTPS:"
-echo "  - edge certificate coverage for *.preview.recoder.xyz"
-echo "  - origin certificate coverage for *.preview.recoder.xyz if using Full (Strict)"
+echo "Issue the wildcard cert with certbot:"
+echo "  certbot certonly --dns-cloudflare --dns-cloudflare-credentials /root/.secrets/cloudflare.ini \\"
+echo "    --cert-name preview.recoder.xyz -d preview.recoder.xyz -d '*.preview.recoder.xyz'"
+echo ""
+echo "Then keep the wildcard DNS record DNS-only so public HTTPS terminates on the origin cert."
 echo ""
 echo "Then restart docker-backend + zrok:"
 echo "  docker compose -f docker-compose.deploy.yml restart docker-backend zrok-controller zrok-frontend"
+echo ""
+echo "For the deployed zrok2 stack, run:"
+echo "  ./scripts/check-zrok2-share-flow.sh"
 echo ""
 echo "Web console: http://localhost:18080"
