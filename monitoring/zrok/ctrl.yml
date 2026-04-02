@@ -1,0 +1,24 @@
+# Zrok Controller Configuration
+# See: https://docs.zrok.io/docs/guides/self-hosting/
+#
+# ZROK_ADMIN_TOKEN must be set in .env on the host
+# After first deploy, run: ./scripts/setup-zrok.sh
+
+v: 4
+
+admin:
+  # Secrets are injected from ZROK_ADMIN_TOKEN env var at runtime
+  # The setup script will bootstrap the controller with this token
+
+endpoint:
+  host: 0.0.0.0
+  port: 18080
+
+store:
+  path: /var/lib/zrok/zrok.db
+  type: sqlite3
+
+metrics:
+  agent:
+    source:
+      type: websocket
