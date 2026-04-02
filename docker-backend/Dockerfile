@@ -1,3 +1,6 @@
+# ── Stage 0: zrok2 client ──
+FROM docker.io/openziti/zrok2:latest AS zrok2
+
 # ── Stage 1: Build ──
 FROM node:20-slim AS builder
 
@@ -59,6 +62,7 @@ COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/docker-backend ./docker-backend
 COPY --from=builder /app/shared ./shared
 COPY --from=builder /app/packages ./packages
+COPY --from=zrok2 /usr/local/bin/zrok2 /usr/local/bin/zrok2
 
 WORKDIR /app/docker-backend
 
