@@ -171,19 +171,23 @@ This supersedes stale task notes that still describe VictoriaMetrics as blocked 
 
 ## 2026-04-03 Correction (Zrok preview public HTTPS + zrok2 share flow)
 
-This supersedes stale task notes that still treat the preview wildcard as blocked on nginx or public TLS.
+This supersedes stale task notes that still treat the preview wildcard as blocked on nginx, public TLS, or legacy zrok v1 API calls.
 
 - Landed in source:
   1. `nginx/nginx-production.conf` now points the preview wildcard at the dedicated `preview.recoder.xyz` wildcard cert
   2. `scripts/setup-zrok.sh` now warns away from the legacy zrok v1 bootstrap path
   3. `scripts/check-zrok2-share-flow.sh` now verifies an end-to-end public share against the deployed zrok2 stack
+  4. `docker-backend/src/zrok-preview.ts` now uses zrok2 enable/share subprocesses instead of `/api/v1/share` semantics
+  5. `docker-backend/Dockerfile` now includes the `zrok2` binary, and `docker-backend/src/server.ts` plus `docker-backend/src/preview.ts` now retarget active shares to the actual ready port
+  6. `docker-backend/src/__tests__/zrok-preview.test.ts` now covers the zrok2 share lifecycle
 - Verified live:
   1. `http://test.preview.recoder.xyz` returns the expected unknown-share `404`
   2. `https://test.preview.recoder.xyz` now succeeds TLS publicly with the wildcard cert
   3. a disposable zrok2 share against an in-network nginx backend returned `200` before cleanup
 - Remaining blocker:
   1. `recoder-6qa` is closed
-  2. `recoder-crg` now tracks migrating `docker-backend/src/zrok-preview.ts` from legacy zrok v1 API semantics to the deployed zrok2 environment/share flow
+  2. `recoder-crg` is the source-migration task and should no longer be treated as a live TLS/preview blocker
+  3. `recoder-vy7` now tracks the remaining publish-side gap: zrok2 does not support the old reserved/frontdoor flow, so persistent published preview URLs need a new design
 - `recoder-xxp` is fixed live:
   - repo-root `/.env` is excluded from deploy rsync
   - Hetzner root `.env` is restored to the minimal Compose-interpolation form

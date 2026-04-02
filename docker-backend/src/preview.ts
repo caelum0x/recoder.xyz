@@ -11,6 +11,7 @@ import { isLikelySandboxProjectId } from './auth-utils.js';
 import { devServerManager } from './dev-server.js';
 import { getDaytonaClient } from './daytona-client.js';
 import { daytonaGetLogs, ensureDaytonaSandboxRunning } from './daytona-file-ops.js';
+import { updateShareTarget, getPreviewUrl as getZrokPreviewUrl } from './zrok-preview.js';
 
 const docker = new Docker();
 const autoStartAttempts = new Map<string, number>();
@@ -764,10 +765,19 @@ export function setupPreviewProxy(app: WsExpressApp, containers: Map<string, { i
       if (readyPort !== null) {
         const dc = getDaytonaClient();
         entry.port = readyPort;
-        const newPreviewUrl = dc.getPreviewUrl(entry.id, readyPort);
-        if (newPreviewUrl !== (entry as any).daytonaPreviewUrl) {
-          (entry as any).daytonaPreviewUrl = newPreviewUrl;
-          console.log(`[Preview] Updated Daytona preview URL to port ${readyPort}`);
+        const daytonaPreviewUrl = dc.getPreviewUrl(entry.id, readyPort);
+        let effectivePreviewUrl = daytonaPreviewUrl;
+        try {
+          const zrokUpdated = await updateShareTarget(projectId, readyPort);
+          if (zrokUpdated) {
+            effectivePreviewUrl = getZrokPreviewUrl(projectId) ?? daytonaPreviewUrl;
+          }
+        } catch (zrokErr: any) {
+          console.warn(`[Preview] Failed to retarget Zrok share for ${projectId}:`, zrokErr?.message || zrokErr);
+        }
+        if (effectivePreviewUrl !== (entry as any).daytonaPreviewUrl) {
+          (entry as any).daytonaPreviewUrl = effectivePreviewUrl;
+          console.log(`[Preview] Updated preview URL to port ${readyPort}`);
         }
       }
 
