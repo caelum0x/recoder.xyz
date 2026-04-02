@@ -1,6 +1,6 @@
 # Recoder Platform — Master Plan
 
-Last updated: 2026-04-02 (Payload CMS blog/changelog scaffold is landed in the main app, deploy compose now supports an overrideable host-Postgres path, Alertmanager defaults are hardened, and the worktree still has unrelated parallel dirt outside this slice)
+Last updated: 2026-04-02 (Payload CMS blog/changelog scaffold is landed in the main app, Umami/docs/Alertmanager/VictoriaMetrics are healthy live on Hetzner, deploy monitoring now stops scraping JSON/HTML as Prometheus metrics, and the worktree still has unrelated parallel dirt outside this slice)
 
 ---
 
@@ -107,8 +107,29 @@ This supersedes the stale assumption that Umami still specifically needed a hard
   - rendered Alertmanager YAML parsed successfully both with and without a Resend key
   - `docker compose -f docker-compose.deploy.yml config` passed
 - Remaining operational follow-up:
-  1. `recoder-23s` still covers the live Umami DB/service enablement
-  2. live Alertmanager/Hetzner verification is still needed after the next deploy
+  1. this source slice is now verified live too: `recoder-alertmanager` is healthy on Hetzner
+  2. the dedicated Umami DB/service path is also verified live: `/api/heartbeat` returns `{"ok":true}` and the dashboard root serves `200`
+
+## Current Correction — 2026-04-02 (deploy monitoring targets)
+
+This supersedes the stale blocker table that still described Umami, docs, Alertmanager, or VictoriaMetrics as currently unhealthy and misdiagnosed the remaining VictoriaMetrics issue as an Alertmanager dependency problem.
+
+- Live Hetzner state now confirmed:
+  1. `recoder-alertmanager` is healthy
+  2. `recoder-victoriametrics` is healthy
+  3. `recoder-umami` is healthy
+  4. `recoder-docs` is healthy
+- The actual monitoring bug was the scrape config itself:
+  1. `monitoring/prometheus.yml` still tried to scrape JSON health endpoints and even the `recoder-web` HTML root as if they were Prometheus metrics
+  2. it also referenced stale/nonexistent DNS targets like `app`, `recoder-pm`, `recoder-agency`, `recoder-agents`, and `openclaw-gateway`
+  3. that produced continuous VictoriaMetrics parse errors and lookup noise despite the TSDB being healthy
+- Landed fix:
+  1. deploy monitoring now scrapes only real Prometheus-compatible endpoints
+  2. retained jobs: `docker-backend`, `docker-backend-a2a`, `redis-exporter`, and `node-exporter`
+  3. added self-metrics scrapes for `victoriametrics` and `alertmanager`
+  4. removed the invalid app/HTML/JSON scrape jobs
+- Remaining follow-up:
+  1. `recoder-9eu` — add blackbox-style uptime monitoring for public HTTP services if we still want dashboard uptime checks for `recoder.xyz`, `web.recoder.xyz`, `agents.recoder.xyz`, and similar domains
 
 ## Current Correction — 2026-04-02 (Umami compose)
 

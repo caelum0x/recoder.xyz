@@ -1,6 +1,6 @@
 # Recoder Platform — Task List
 
-Last updated: 2026-04-02 (Payload CMS blog/changelog scaffold is landed in the main app, deploy compose supports an overrideable host-Postgres path, Alertmanager defaults are hardened, and the worktree still has unrelated parallel dirt outside this slice)
+Last updated: 2026-04-02 (Payload CMS blog/changelog scaffold is landed in the main app, Umami/docs/Alertmanager/VictoriaMetrics are healthy live on Hetzner, deploy monitoring now stops scraping JSON/HTML as Prometheus metrics, and the worktree still has unrelated parallel dirt outside this slice)
 
 ---
 
@@ -147,8 +147,27 @@ This supersedes stale task notes that framed Umami as needing a one-off host-IP 
   - rendered config parsed successfully with a dummy Resend key and with no email env configured
   - `docker compose -f docker-compose.deploy.yml config` passed
 - Remaining live follow-up:
-  1. `recoder-23s` — create/verify the Umami DB and validate the service on Hetzner
-  2. deploy and verify Alertmanager health on Hetzner after the next compose rollout
+  1. source-level fix is now also verified live: Alertmanager is healthy on Hetzner
+  2. the dedicated Umami DB/service path is also verified live: `/api/heartbeat` returns `{"ok":true}` and the dashboard root serves `200`
+
+## 2026-04-02 Correction (deploy monitoring targets)
+
+This supersedes stale task notes that still describe VictoriaMetrics as blocked by Alertmanager health or that treat Umami/docs/Alertmanager as the active outage set.
+
+- Verified live on Hetzner:
+  1. `recoder-alertmanager` healthy
+  2. `recoder-victoriametrics` healthy
+  3. `recoder-umami` healthy
+  4. `recoder-docs` healthy
+- The real deploy-monitoring bug was config drift:
+  1. `monitoring/prometheus.yml` was scraping JSON health responses and even HTML as if they were Prometheus metrics
+  2. it also still referenced stale/nonexistent service names
+- Landed in source:
+  1. removed the invalid app/HTML/JSON scrape jobs
+  2. kept the real metrics jobs
+  3. added self-scrapes for `victoriametrics` and `alertmanager`
+- Remaining follow-up:
+  1. `recoder-9eu` — add blackbox-style uptime monitoring if we still want public HTTP uptime checks in Grafana
 - `recoder-xxp` is fixed live:
   - repo-root `/.env` is excluded from deploy rsync
   - Hetzner root `.env` is restored to the minimal Compose-interpolation form
