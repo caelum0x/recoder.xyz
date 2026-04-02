@@ -68,7 +68,7 @@
     "lucide-react": "^0.400.0",
     "mjml": "^4.16.1",
     "nanoid": "^5.1.6",
-    "next": "^15.5.9",
+    "next": "15.4.3",
     "next-intl": "^4.6.1",
     "nodemailer": "^7.0.9",
     "otplib": "^12.0.1",
