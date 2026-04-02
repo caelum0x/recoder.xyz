@@ -1,6 +1,6 @@
 # Recoder Platform — Task List
 
-Last updated: 2026-04-02 (OpenMeter LLM usage reporting, Umami DB targeting, and deploy-compose alignment are landed in the main repo; the agents file-proxy HEAD mismatch is deployed on the backend, and the only remaining local dirty path is the nested `recoder-web/starters` repo)
+Last updated: 2026-04-02 (Payload CMS blog/changelog scaffold is landed in the main app, OpenMeter LLM usage reporting and Umami DB targeting are landed in the main repo, and the worktree still has unrelated parallel dirt outside this slice)
 
 ---
 
@@ -117,6 +117,22 @@ This supersedes older task notes that still treat deploy-network breakage, root 
   - deploy no longer depends on stack-wide `docker compose down`
   - Redis is no longer published onto the host, avoiding the `127.0.0.1:6379` collision with the host `redis-server`
   - `recoder-web`, `recoder-redis`, and `recoder-redis-exporter` were re-converged under Compose ownership on `recoder-network`
+
+## 2026-04-02 Correction (Payload CMS scaffold)
+
+This supersedes any stale task note that Payload CMS in the main app was still "not started".
+
+- Landed in source:
+  1. Postgres-backed Payload config in `app/payload.config.ts`
+  2. collections for CMS users, blog posts, and changelog entries
+  3. headless REST route at `app/app/api/cms/[...slug]/route.ts`
+  4. blog/changelog public pages now read through Payload-aware helpers with a static fallback path
+- Verification:
+  - `pnpm --dir app build` passed with the scaffold in place
+  - app-wide `tsc` is still blocked by a pre-existing unrelated `NextRequest` typing issue in `app/api/platform/events/__tests__/route.test.ts`
+- Remaining follow-up tasks are now explicit:
+  1. `recoder-1o4` — unblock the real `/cms` admin surface by aligning the app with a Payload-supported Next/React combination
+  2. `recoder-b4e` — run schema/migration/seed/live-enable work so deployed blog and changelog pages read from Payload instead of fallback arrays
 - `recoder-xxp` is fixed live:
   - repo-root `/.env` is excluded from deploy rsync
   - Hetzner root `.env` is restored to the minimal Compose-interpolation form
@@ -161,7 +177,7 @@ This supersedes any stale task note that `backend/core/services/llm.py` and `doc
   - `OPENMETER_URL` remains `http://openmeter:8888` on the internal Docker network
   - host publish is now `127.0.0.1:8889:8888`
   - NATS uses an explicit `nats-server` entrypoint with the short-form JetStream flags
-- The only remaining local dirty path is the separate nested repo `recoder-web/starters`, tracked by `recoder-0vj`.
+- Any remaining dirt after that slice is from unrelated parallel work, with the separate nested repo `recoder-web/starters` still tracked by `recoder-0vj`.
 
 ## 2026-04-02 Correction (Umami compose)
 
