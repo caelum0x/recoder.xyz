@@ -331,6 +331,7 @@ services:
       - '-retentionPeriod=30d'
       - '-httpListenAddr=:8428'
       - '-search.latencyOffset=5s'
+      - '-promscrape.config.strictParse=false'
     depends_on:
       node-exporter:
         condition: service_healthy
