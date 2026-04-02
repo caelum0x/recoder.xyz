@@ -1,0 +1,325 @@
+# Zrok + OpenZiti self-hosted stack for Recoder preview URLs
+#
+# This is a SEPARATE compose file from docker-compose.deploy.yml because
+# Zrok needs its own Ziti network, Postgres, and RabbitMQ.
+#
+# Usage:
+#   cp .env.zrok.example .env.zrok
+#   # Edit ZROK2_DNS_ZONE, ZITI_PWD, ZROK2_ADMIN_TOKEN
+#   docker compose -f docker-compose.zrok.yml up -d
+#
+# After first start, create a user account:
+#   docker compose -f docker-compose.zrok.yml exec zrok2-controller \
+#     zrok2 admin create account docker-backend@recoder.xyz YOUR_PASSWORD
+#
+# The ZROK_TOKEN for docker-backend .env is the account's enable token.
+
+x-zrok2-image: &zrok2-image
+  image: ${ZROK2_IMAGE:-docker.io/openziti/zrok2}:${ZROK2_TAG:-latest}
+
+services:
+
+  # ── Ziti Overlay Network ──────────────────────────────────────────────────
+
+  ziti-controller:
+    image: ${ZITI_CONTROLLER_IMAGE:-docker.io/openziti/ziti-controller}:${ZITI_CONTROLLER_TAG:-latest}
+    container_name: recoder-ziti-controller
+    environment:
+      ZITI_BOOTSTRAP: "true"
+      ZITI_BOOTSTRAP_CLUSTER: "true"
+      ZITI_CTRL_ADVERTISED_ADDRESS: ziti.${ZROK2_DNS_ZONE:?Set ZROK2_DNS_ZONE in .env.zrok}
+      ZITI_CTRL_ADVERTISED_PORT: ${ZITI_CTRL_PORT:-1280}
+      ZITI_USER: ${ZITI_USER:-admin}
+      ZITI_PWD: ${ZITI_PWD:?Set ZITI_PWD in .env.zrok}
+      ZITI_CLUSTER_TRUST_DOMAIN: ${ZROK2_DNS_ZONE}
+      ZITI_CLUSTER_NODE_NAME: ziti-ctrl
+      PFXLOG_NO_JSON: "true"
+    volumes:
+      - ziti-ctrl-data:/ziti-controller
+    ports:
+      - "127.0.0.1:${ZITI_CTRL_PORT:-1280}:${ZITI_CTRL_PORT:-1280}"
+    networks:
+      zrok2:
+        aliases:
+          - ziti.${ZROK2_DNS_ZONE}
+    healthcheck:
+      test: ["CMD", "ziti", "agent", "stats"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '0.3'
+          memory: 128M
+
+  ziti-router-init:
+    image: ${ZITI_CONTROLLER_IMAGE:-docker.io/openziti/ziti-controller}:${ZITI_CONTROLLER_TAG:-latest}
+    container_name: recoder-ziti-router-init
+    entrypoint: ["/bin/bash", "-c"]
+    command:
+      - |
+        set -o errexit -o nounset -o pipefail
+        ROUTER_NAME="$${ZITI_ROUTER_NAME:-zrok2-router}"
+        JWT_FILE="/ziti-router/$${ROUTER_NAME}.jwt"
+        ZITI_ENDPOINT="https://ziti.$${ZROK2_DNS_ZONE}:$${ZITI_CTRL_PORT:-1280}"
+
+        # Retry login
+        for i in $$(seq 1 60); do
+          if ziti edge login "$$ZITI_ENDPOINT" --username "$${ZITI_USER:-admin}" --password "$${ZITI_PWD}" --yes 2>/dev/null; then
+            break
+          fi
+          echo "Waiting for Ziti controller... ($$i/60)"
+          sleep 5
+        done
+
+        # Skip if already enrolled
+        if [[ -f "/ziti-router/$${ROUTER_NAME}.cert.pem" || -f "/ziti-router/certs/cert.pem" ]]; then
+          echo "Router identity already exists, skipping"
+          exit 0
+        fi
+
+        # Create edge router if needed
+        if ! ziti edge list edge-routers "name=\"$$ROUTER_NAME\"" 2>/dev/null | grep -q "$$ROUTER_NAME"; then
+          ziti edge create edge-router "$$ROUTER_NAME" --jwt-output-file "$$JWT_FILE" --tunneler-enabled
+          echo "Edge router created"
+        fi
+    environment:
+      ZROK2_DNS_ZONE: ${ZROK2_DNS_ZONE}
+      ZITI_PWD: ${ZITI_PWD}
+      ZITI_USER: ${ZITI_USER:-admin}
+      ZITI_CTRL_PORT: ${ZITI_CTRL_PORT:-1280}
+      ZITI_ROUTER_NAME: ${ZITI_ROUTER_NAME:-zrok2-router}
+    depends_on:
+      ziti-controller:
+        condition: service_healthy
+    volumes:
+      - ziti-router-data:/ziti-router
+    networks:
+      - zrok2
+
+  ziti-router:
+    image: ${ZITI_ROUTER_IMAGE:-docker.io/openziti/ziti-router}:${ZITI_ROUTER_TAG:-latest}
+    container_name: recoder-ziti-router
+    environment:
+      ZITI_BOOTSTRAP: "true"
+      ZITI_BOOTSTRAP_ENROLLMENT: "true"
+      ZITI_BOOTSTRAP_CONFIG: "true"
+      ZITI_AUTO_RENEW_CERTS: "true"
+      ZITI_CTRL_ADVERTISED_ADDRESS: ziti.${ZROK2_DNS_ZONE}
+      ZITI_CTRL_ADVERTISED_PORT: ${ZITI_CTRL_PORT:-1280}
+      ZITI_ROUTER_ADVERTISED_ADDRESS: router.${ZROK2_DNS_ZONE}
+      ZITI_ROUTER_PORT: ${ZITI_ROUTER_PORT:-3022}
+      ZITI_ROUTER_NAME: ${ZITI_ROUTER_NAME:-zrok2-router}
+      ZITI_ENROLL_TOKEN: /ziti-router/${ZITI_ROUTER_NAME:-zrok2-router}.jwt
+      PFXLOG_NO_JSON: "true"
+    depends_on:
+      ziti-router-init:
+        condition: service_completed_successfully
+    volumes:
+      - ziti-router-data:/ziti-router
+    ports:
+      - "0.0.0.0:${ZITI_ROUTER_PORT:-3022}:${ZITI_ROUTER_PORT:-3022}"
+    networks:
+      zrok2:
+        aliases:
+          - router.${ZROK2_DNS_ZONE}
+    healthcheck:
+      test: ["CMD", "ziti", "agent", "stats"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '0.3'
+          memory: 128M
+
+  # ── RabbitMQ (required for Zrok dynamic frontend) ─────────────────────────
+
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: recoder-zrok-rabbitmq
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+    networks:
+      - zrok2
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '0.2'
+          memory: 128M
+
+  # ── Zrok Postgres (separate from main — lightweight) ─────────────────────
+
+  zrok-postgres:
+    image: postgres:16-alpine
+    container_name: recoder-zrok-postgres
+    environment:
+      POSTGRES_USER: zrok2
+      POSTGRES_PASSWORD: ${ZROK2_DB_PASSWORD:-zrok2defaultpw}
+      POSTGRES_DB: zrok2
+    volumes:
+      - zrok-pg-data:/var/lib/postgresql/data
+    networks:
+      - zrok2
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U zrok2"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '0.2'
+          memory: 64M
+
+  # ── Zrok2 Bootstrap (one-shot) ────────────────────────────────────────────
+
+  zrok2-init:
+    <<: *zrok2-image
+    container_name: recoder-zrok2-init
+    user: "0:0"
+    entrypoint: ["/bin/bash", "-c"]
+    command:
+      - |
+        set -o errexit -o nounset -o pipefail
+        echo "Bootstrapping zrok2..."
+
+        # Generate minimal ctrl config if missing
+        mkdir -p /var/lib/zrok2/config
+        if [ ! -f /var/lib/zrok2/config/ctrl.yaml ]; then
+          cat > /var/lib/zrok2/config/ctrl.yaml << CFGEOF
+        v: 4
+        admin:
+          secrets:
+            - $${ZROK2_ADMIN_TOKEN}
+        endpoint:
+          host: 0.0.0.0
+          port: $${ZROK2_CTRL_PORT:-18080}
+        store:
+          type: postgres
+          dsn: "host=zrok-postgres port=5432 user=zrok2 password=$${ZROK2_DB_PASSWORD:-zrok2defaultpw} dbname=zrok2 sslmode=disable"
+        ziti:
+          api_endpoint: "https://ziti.$${ZROK2_DNS_ZONE}:$${ZITI_CTRL_PORT:-1280}"
+          username: "$${ZITI_USER:-admin}"
+          password: "$${ZITI_PWD}"
+        CFGEOF
+          echo "Generated ctrl.yaml"
+        fi
+
+        # Generate frontend config if missing
+        if [ ! -f /var/lib/zrok2/config/frontend.yaml ]; then
+          cat > /var/lib/zrok2/config/frontend.yaml << FEEOF
+        host: 0.0.0.0:$${ZROK2_FRONTEND_PORT:-8080}
+        zrok:
+          api_endpoint: "http://zrok2-controller:$${ZROK2_CTRL_PORT:-18080}"
+        FEEOF
+          echo "Generated frontend.yaml"
+        fi
+
+        # Bootstrap the controller
+        zrok2 admin bootstrap /var/lib/zrok2/config/ctrl.yaml 2>&1 || echo "Bootstrap already done or failed — check logs"
+        echo "Init complete"
+    environment:
+      ZROK2_DNS_ZONE: ${ZROK2_DNS_ZONE}
+      ZROK2_ADMIN_TOKEN: ${ZROK2_ADMIN_TOKEN}
+      ZITI_PWD: ${ZITI_PWD}
+      ZITI_USER: ${ZITI_USER:-admin}
+      ZITI_CTRL_PORT: ${ZITI_CTRL_PORT:-1280}
+      ZROK2_CTRL_PORT: ${ZROK2_CTRL_PORT:-18080}
+      ZROK2_FRONTEND_PORT: ${ZROK2_FRONTEND_PORT:-8080}
+      ZROK2_DB_PASSWORD: ${ZROK2_DB_PASSWORD:-zrok2defaultpw}
+      HOME: /var/lib/zrok2
+    depends_on:
+      ziti-controller:
+        condition: service_healthy
+      zrok-postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    volumes:
+      - zrok2-config:/var/lib/zrok2
+    networks:
+      - zrok2
+
+  # ── Zrok2 Controller ──────────────────────────────────────────────────────
+
+  zrok2-controller:
+    <<: *zrok2-image
+    container_name: recoder-zrok2-controller
+    command: ["controller", "/var/lib/zrok2/config/ctrl.yaml"]
+    environment:
+      ZROK2_ADMIN_TOKEN: ${ZROK2_ADMIN_TOKEN}
+      ZROK2_API_ENDPOINT: http://127.0.0.1:${ZROK2_CTRL_PORT:-18080}
+      HOME: /var/lib/zrok2
+    depends_on:
+      zrok2-init:
+        condition: service_completed_successfully
+    volumes:
+      - zrok2-config:/var/lib/zrok2
+    ports:
+      - "127.0.0.1:${ZROK2_CTRL_PORT:-18080}:${ZROK2_CTRL_PORT:-18080}"
+    networks:
+      zrok2:
+        aliases:
+          - zrok2.${ZROK2_DNS_ZONE}
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://127.0.0.1:${ZROK2_CTRL_PORT:-18080}/api/v1/version"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 15s
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '0.3'
+          memory: 128M
+
+  # ── Zrok2 Frontend (proxy for preview URLs) ───────────────────────────────
+
+  zrok2-frontend:
+    <<: *zrok2-image
+    container_name: recoder-zrok2-frontend
+    command: ["access", "dynamicProxy", "/var/lib/zrok2/config/frontend.yaml"]
+    environment:
+      ZROK2_API_ENDPOINT: http://zrok2-controller:${ZROK2_CTRL_PORT:-18080}
+      HOME: /var/lib/zrok2
+    depends_on:
+      zrok2-controller:
+        condition: service_healthy
+    volumes:
+      - zrok2-config:/var/lib/zrok2:ro
+    ports:
+      - "127.0.0.1:${ZROK2_FRONTEND_PORT:-8080}:${ZROK2_FRONTEND_PORT:-8080}"
+    networks:
+      - zrok2
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '0.3'
+          memory: 128M
+
+networks:
+  zrok2:
+    driver: bridge
+
+volumes:
+  ziti-ctrl-data:
+  ziti-router-data:
+  zrok2-config:
+  zrok-pg-data:
+  rabbitmq-data:
