@@ -1,6 +1,6 @@
 # Recoder Platform — Master Plan
 
-Last updated: 2026-04-02 (OpenMeter LLM usage reporting, Umami DB targeting, and deploy-compose alignment are now landed in the main repo; workflow streaming producers are landed for workflow/Codex/Claude/Windsurf, and the only remaining local dirt is the nested `recoder-web/starters` repo)
+Last updated: 2026-04-02 (Payload CMS blog/changelog scaffold is now landed in the main app, OpenMeter LLM usage reporting and Umami DB targeting are landed in the main repo, and the worktree still has unrelated parallel dirt outside this slice)
 
 ---
 
@@ -65,7 +65,29 @@ This section supersedes any stale note that `backend/core/services/llm.py` and `
   2. the NATS service now uses an explicit `nats-server` entrypoint with the short-form JetStream/monitoring flags that match the live service expectations
 - Result:
   - those two files are no longer part of the main-repo dirty-state narrative
-  - the only remaining local dirty path is the separate nested repo `recoder-web/starters`, tracked by `recoder-0vj`
+  - any remaining dirt after this slice is from unrelated parallel work, with `recoder-web/starters` still the dedicated nested-repo track
+
+## Current Correction — 2026-04-02 (Payload CMS scaffold)
+
+This supersedes any stale note that Sprint J3 "Payload CMS for recoder.xyz content" was still unstarted in source.
+
+- The main app now has a real Payload scaffold:
+  1. `app/payload.config.ts` with Postgres-backed Payload config
+  2. collections for `cms-users`, `blog-posts`, and `changelog-entries`
+  3. headless REST route at `app/app/api/cms/[...slug]/route.ts`
+- The public content path is now CMS-first with fail-open fallback:
+  1. blog index reads through `app/lib/cms/blog.ts`
+  2. blog detail reads through the same helper and keeps the current markdown renderer
+  3. changelog reads through `app/lib/cms/changelog.ts`
+  4. if Payload is not enabled or the DB/schema is not ready, the site falls back to the existing hard-coded content
+- The enabling flag is explicit:
+  - `PAYLOAD_CMS_ENABLED=true` is required before the app will initialize Payload for public-page reads
+- Local verification:
+  - `pnpm --dir app build` passed with the scaffold in place
+  - app-wide `tsc` is still noisy on a pre-existing unrelated `NextRequest` test mismatch in `app/api/platform/events/__tests__/route.test.ts`
+- Remaining J3 follow-up is now split cleanly:
+  1. `recoder-1o4` — unblock a real `/cms` admin surface; current Payload 3.81.0 Next integration expects Next `<15.5` or `16.2` canary+ and React 19, while the app is on Next 15.5.9 and React 18.3.1
+  2. `recoder-b4e` — run the DB/schema/seed/live-enable path so deployed blog/changelog pages read from Payload instead of the fallback arrays
 
 ## Current Correction — 2026-04-02 (Umami compose)
 

@@ -1,8 +1,8 @@
 import type { Metadata } from 'next';
-import Link from 'next/link';
 import { Sparkles, Zap, Bug, Shield } from 'lucide-react';
 import { SiteHeader } from '@/components/SiteHeader';
 import { SiteFooter } from '@/components/SiteFooter';
+import { getChangelogEntries } from '@/lib/cms/changelog';
 
 export const metadata: Metadata = {
   title: 'Changelog - Recoder.xyz',
@@ -26,35 +26,8 @@ export const metadata: Metadata = {
   },
 };
 
-export default function ChangelogPage() {
-  const releases = [
-    {
-      version: '1.0.0-beta',
-      date: 'December 2025',
-      title: 'Public Beta Launch',
-      changes: [
-        { type: 'feature', text: 'Web IDE with full AI integration' },
-        { type: 'feature', text: 'CLI tool for terminal-based development' },
-        { type: 'feature', text: '40+ AI model support (GPT, Claude, Gemini, Llama)' },
-        { type: 'feature', text: 'Google and GitHub OAuth authentication' },
-        { type: 'feature', text: 'Bring Your Own API Key model - 100% free' },
-        { type: 'feature', text: 'Project management dashboard' },
-        { type: 'feature', text: 'MCP (Model Context Protocol) support' },
-        { type: 'security', text: 'End-to-end encryption for API keys' },
-      ]
-    },
-    {
-      version: '0.9.0-alpha',
-      date: 'November 2025',
-      title: 'Alpha Testing',
-      changes: [
-        { type: 'feature', text: 'Initial Web IDE implementation' },
-        { type: 'feature', text: 'Basic CLI functionality' },
-        { type: 'feature', text: 'User authentication system' },
-        { type: 'fix', text: 'Various stability improvements' },
-      ]
-    }
-  ];
+export default async function ChangelogPage() {
+  const releases = await getChangelogEntries();
 
   const getIcon = (type: string) => {
     switch (type) {

@@ -1,5 +1,6 @@
 const createNextIntlPlugin = require('next-intl/plugin');
 const { withSentryConfig } = require('@sentry/nextjs');
+const withPayload = require('@payloadcms/next/withPayload').default;
 
 const withNextIntl = createNextIntlPlugin('./i18n.ts');
 
@@ -55,7 +56,9 @@ const nextConfig = {
 }
 
 // Wrap with Sentry only if DSN is configured (no-op otherwise)
-const baseConfig = withNextIntl(nextConfig);
+const baseConfig = withPayload(withNextIntl(nextConfig), {
+  devBundleServerPackages: true,
+});
 
 module.exports = process.env.NEXT_PUBLIC_SENTRY_DSN
   ? withSentryConfig(baseConfig, {

@@ -2,56 +2,13 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { SiteHeader } from '@/components/SiteHeader';
 import { SiteFooter } from '@/components/SiteFooter';
+import { getBlogPosts } from '@/lib/cms/blog';
 
 export const metadata: Metadata = {
   title: 'Blog - Engineering & Product Updates | Recoder.xyz',
   description:
     'Engineering insights, product updates, and deep dives from the Recoder team. Learn about AI-powered development, BYOK architecture, and the future of coding tools.',
 };
-
-interface BlogPost {
-  slug: string;
-  title: string;
-  excerpt: string;
-  date: string;
-  author: string;
-  category: string;
-  readTime: string;
-}
-
-const posts: BlogPost[] = [
-  {
-    slug: 'introducing-recoder-xyz',
-    title:
-      'Introducing Recoder.xyz — Free AI Coding Platform with 40+ Models',
-    excerpt:
-      'Today we are launching Recoder.xyz into public beta: a completely free AI coding platform that gives every developer access to 40+ models through both a browser-based Web IDE and a terminal CLI. Here is why we built it and where we are headed.',
-    date: '2025-02-10',
-    author: 'Recoder Team',
-    category: 'Launch',
-    readTime: '6 min read',
-  },
-  {
-    slug: 'why-we-built-byok',
-    title: 'Why We Built BYOK (Bring Your Own Key) Support',
-    excerpt:
-      'Most AI coding tools lock you into a single provider and a fixed monthly bill. We took a different path. BYOK lets you plug in your own API keys from OpenAI, Anthropic, Google, or any OpenRouter-compatible provider and pay only for what you use.',
-    date: '2025-02-17',
-    author: 'Recoder Team',
-    category: 'Product',
-    readTime: '5 min read',
-  },
-  {
-    slug: 'cli-web-ide-cross-platform',
-    title: 'Recoder CLI + Web IDE: Seamless Cross-Platform Development',
-    excerpt:
-      'Start a coding session in your terminal, pick it up in the browser, and push to production from either surface. A deep dive into how Recoder keeps your context, files, and agent state in sync across the CLI and Web IDE.',
-    date: '2025-02-24',
-    author: 'Recoder Team',
-    category: 'Engineering',
-    readTime: '7 min read',
-  },
-];
 
 function formatDate(dateStr: string): string {
   const date = new Date(dateStr + 'T00:00:00');
@@ -75,7 +32,9 @@ function categoryColor(category: string): string {
   }
 }
 
-export default function BlogIndexPage() {
+export default async function BlogIndexPage() {
+  const posts = await getBlogPosts();
+
   return (
     <div className="min-h-screen bg-black text-white">
       <SiteHeader fixed={false} />

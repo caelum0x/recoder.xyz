@@ -1,6 +1,6 @@
 # Recoder Platform — Error Registry
 
-Last updated: 2026-04-02 (OpenMeter LLM usage reporting, Umami DB targeting, and deploy-compose alignment are landed in the main repo; the agents file-proxy HEAD mismatch is deployed on the backend, and the only remaining local dirty path is the nested `recoder-web/starters` repo)
+Last updated: 2026-04-02 (Payload CMS blog/changelog scaffold is landed in the main app, OpenMeter LLM usage reporting and Umami DB targeting are landed in the main repo, and the worktree still has unrelated parallel dirt outside this slice)
 
 ---
 
@@ -90,7 +90,7 @@ This supersedes any stale reading that the OpenMeter LLM hook and compose alignm
 - `backend/core/services/llm.py` now best-effort reports LLM usage to OpenMeter for sync and streaming completions.
 - `docker-compose.deploy.yml` now keeps OpenMeter on internal port `8888` while publishing it on host port `8889`, and the NATS service uses an explicit `nats-server` entrypoint plus short-form JetStream flags.
 - The main repo is no longer dirty because of those two files.
-- The only remaining local dirty path is the separate nested repo `recoder-web/starters` (`recoder-0vj`).
+- Any remaining dirt after that slice is from unrelated parallel work, with `recoder-web/starters` (`recoder-0vj`) still the dedicated nested-repo track.
 
 ## Current Correction (2026-04-02, Umami compose)
 
@@ -100,6 +100,27 @@ This supersedes any stale reading that the Umami compose entry still points at t
 - Remaining work, if Umami is to go live, is operational:
   - ensure the `umami` database exists on the host Postgres
   - deploy and verify the service
+
+## Current Correction (2026-04-02, Payload CMS scaffold)
+
+This supersedes any stale reading that Sprint J3 in the main app was still "not started".
+
+- Source-level Payload scaffolding is landed:
+  - `app/payload.config.ts`
+  - Payload collections for blog and changelog content plus CMS users
+  - headless REST route at `app/app/api/cms/[...slug]/route.ts`
+- Public pages now read CMS-first with fail-open fallback:
+  - blog index and detail route through `app/lib/cms/blog.ts`
+  - changelog routes through `app/lib/cms/changelog.ts`
+  - current static content is preserved as the fallback source of truth until live enablement
+- Current root-cause blocker for a real admin UI is framework compatibility, not missing app code:
+  - Payload 3.81.0 expects a supported Next/React window that does not include the current main-app combo of Next 15.5.9 + React 18.3.1
+  - follow-up issue: `recoder-1o4`
+- Live enablement is also separate from the scaffold itself:
+  - DB/schema setup, content seeding, `PAYLOAD_CMS_ENABLED` / `PAYLOAD_SECRET`, and deployed verification are tracked in `recoder-b4e`
+- Verification:
+  - `pnpm --dir app build` passed
+  - app-wide `tsc` still fails on a pre-existing unrelated `NextRequest` test mismatch in `app/api/platform/events/__tests__/route.test.ts`
 
 ## Current Correction (2026-04-01, streaming task output)
 
