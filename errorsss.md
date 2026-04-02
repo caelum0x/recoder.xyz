@@ -162,16 +162,22 @@ This supersedes the stale reading that VictoriaMetrics was blocked by Alertmanag
 
 ## Current Correction (2026-04-03, Zrok preview public HTTPS + zrok2 share flow)
 
-This supersedes the stale reading that preview traffic was still blocked on nginx or wildcard TLS.
+This supersedes the stale reading that preview traffic was still blocked on nginx, wildcard TLS, or the old zrok v1 REST path.
 
 - What is fixed live:
   - tracked `nginx/nginx-production.conf` now uses the dedicated `preview.recoder.xyz` wildcard certificate
   - the Cloudflare wildcard `*.preview.recoder.xyz` A record is DNS-only, so public HTTPS terminates on the origin cert
   - public unknown-share requests now work over both HTTP and HTTPS
   - a disposable zrok2 public share against an in-network nginx backend returned `200` at `https://yiiqxa0v5ueh.preview.recoder.xyz` before cleanup
+- What is fixed in source:
+  - `docker-backend/src/zrok-preview.ts` now manages zrok2-enabled environments and long-lived `zrok2 share public` subprocesses instead of legacy `/api/v1/share` calls
+  - `docker-backend/Dockerfile` now includes the `zrok2` binary in the runtime image
+  - `docker-backend/src/server.ts` and `docker-backend/src/preview.ts` now retarget active preview shares when the actual dev-server port changes
+  - `docker-backend/src/__tests__/zrok-preview.test.ts` covers the zrok2 preview lifecycle and the intentional no-op `reservePreviewShare()` fallback
 - What remains:
   - the infra/TLS bead `recoder-6qa` is closed
-  - the next real task is `recoder-crg`: migrate `docker-backend/src/zrok-preview.ts` and the surrounding operator path from legacy zrok v1 assumptions to the deployed zrok2 environment/share model
+  - the source-migration bead `recoder-crg` should no longer be read as "still blocked on legacy zrok code"
+  - the real follow-up is `recoder-vy7`: define and implement a supported persistent published-preview strategy for zrok2, since the old reserved/frontdoor flow does not exist there
 
 ## Current Correction (2026-04-01, streaming task output)
 

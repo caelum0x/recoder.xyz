@@ -87,7 +87,7 @@ import { createCanvasRouter } from './a2a/canvas.routes.js';
 import { indexFile as codeSearchIndexFile } from './a2a/code-search.js';
 import { indexFile as meiliIndexFile, indexThread as meiliIndexThread } from './a2a/search-proxy.js';
 import { trackLlmCall, trackSandboxExec, trackFileOp, trackPublish } from './metering/openmeter-client.js';
-import { createPreviewShare, destroyPreviewShare, reservePreviewShare } from './zrok-preview.js';
+import { createPreviewShare, destroyPreviewShare, reservePreviewShare, updateShareTarget, getPreviewUrl as getZrokPreviewUrl } from './zrok-preview.js';
 import { patternRouter } from './a2a/patterns/index.js';
 import { approvalRouter } from './policy/index.js';
 import { startA2AIntentWorker } from './a2a-intent-worker.js';
@@ -4968,8 +4968,18 @@ app.post('/api/dev-server/start', authenticateRequest, async (req: Authenticated
       entry.port = result.port;
       if (isDaytonaSandbox(entry)) {
         const dc = getDaytonaClient();
-        (entry as any).daytonaPreviewUrl = dc.getPreviewUrl(entry.id, result.port);
-        logger.info({ projectId: safeProjectId, port: result.port }, 'Updated preview URL to actual dev server port');
+        const daytonaPreviewUrl = dc.getPreviewUrl(entry.id, result.port);
+        let effectivePreviewUrl = daytonaPreviewUrl;
+        try {
+          const zrokUpdated = await updateShareTarget(safeProjectId, result.port);
+          if (zrokUpdated) {
+            effectivePreviewUrl = getZrokPreviewUrl(safeProjectId) ?? daytonaPreviewUrl;
+          }
+        } catch (zrokErr) {
+          logger.debug({ err: zrokErr, projectId: safeProjectId, port: result.port }, 'Zrok target update skipped');
+        }
+        (entry as any).daytonaPreviewUrl = effectivePreviewUrl;
+        logger.info({ projectId: safeProjectId, port: result.port, previewUrl: effectivePreviewUrl }, 'Updated preview URL to actual dev server port');
       }
       persistContainers();
     }

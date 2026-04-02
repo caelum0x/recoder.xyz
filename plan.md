@@ -133,19 +133,26 @@ This supersedes the stale blocker table that still described Umami, docs, Alertm
 
 ## Current Correction — 2026-04-03 (Zrok preview public HTTPS + zrok2 share flow)
 
-This supersedes the stale reading that the remaining Zrok blocker was still nginx proxying or wildcard TLS coverage.
+This supersedes the stale reading that the remaining Zrok blocker was still nginx proxying, wildcard TLS coverage, or the old zrok v1 API path.
 
 - Landed in source:
   1. `nginx/nginx-production.conf` now uses the dedicated `preview.recoder.xyz` Let's Encrypt wildcard certificate for `*.preview.recoder.xyz`
   2. `scripts/setup-zrok.sh` now explicitly warns that it is a legacy zrok v1 helper and points operators at the real zrok2 stack
   3. `scripts/check-zrok2-share-flow.sh` now provides a reproducible end-to-end verification path for the deployed zrok2 preview stack
+  4. `docker-backend/src/zrok-preview.ts` now uses `zrok2 enable` state plus long-lived `zrok2 share public` processes instead of legacy `/api/v1/share` assumptions
+  5. `docker-backend/Dockerfile` now ships the `zrok2` binary in the runtime image, and `docker-backend/src/server.ts` plus `docker-backend/src/preview.ts` now retarget active shares when the real dev-server port differs from `5173`
+  6. `docker-backend/src/__tests__/zrok-preview.test.ts` now covers the zrok2 share lifecycle and the intentional `reservePreviewShare()` fallback
 - Verified live on Hetzner:
   1. public `http://test.preview.recoder.xyz` reaches the Zrok frontend and returns the expected unknown-share `404`
   2. public `https://test.preview.recoder.xyz` now succeeds TLS with the origin-served wildcard certificate after switching the Cloudflare wildcard record to DNS-only
   3. a disposable zrok2-enabled environment created a real public share against an in-network nginx backend, and `https://yiiqxa0v5ueh.preview.recoder.xyz` returned `200` before cleanup
-- Remaining Zrok work is now source migration, not infra/TLS:
+- Verified in local code:
+  1. `pnpm --dir docker-backend exec vitest run src/__tests__/zrok-preview.test.ts` passes
+  2. full `pnpm --dir docker-backend exec tsc --noEmit --pretty false` still fails, but only on unrelated existing files (`a2a-event-bridge.ts`, `durable-workflow.ts`, `code-index.ts`, `domain-manager.ts`)
+- Remaining Zrok work is now product follow-up, not infra/TLS or legacy API migration:
   1. `recoder-6qa` is closed
-  2. new follow-up `recoder-crg` tracks migrating `docker-backend/src/zrok-preview.ts` from legacy zrok v1 assumptions (`ZROK_API_URL`, `envZId`, reserved shares) to the deployed zrok2 environment/share flow
+  2. `recoder-crg` covers the zrok2 source migration and should no longer be treated as the remaining live blocker
+  3. new follow-up `recoder-vy7` tracks a supported persistent published-preview strategy because zrok2 does not implement the old reserved/frontdoor flow that `reservePreviewShare()` used to assume
 
 ## Current Correction — 2026-04-02 (Umami compose)
 
