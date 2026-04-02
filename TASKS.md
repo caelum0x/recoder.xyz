@@ -169,18 +169,21 @@ This supersedes stale task notes that still describe VictoriaMetrics as blocked 
 - Remaining follow-up:
   1. `recoder-9eu` — add blackbox-style uptime monitoring if we still want public HTTP uptime checks in Grafana
 
-## 2026-04-02 Correction (Zrok preview wildcard proxy)
+## 2026-04-03 Correction (Zrok preview public HTTPS + zrok2 share flow)
 
-This supersedes stale task notes that still treat the preview wildcard as “not wired through nginx yet”.
+This supersedes stale task notes that still treat the preview wildcard as blocked on nginx or public TLS.
 
 - Landed in source:
-  1. `nginx/nginx-production.conf` now tracks the preview wildcard proxy blocks
-  2. `scripts/setup-zrok.sh` now matches the real frontend port and documents the remaining TLS requirement
+  1. `nginx/nginx-production.conf` now points the preview wildcard at the dedicated `preview.recoder.xyz` wildcard cert
+  2. `scripts/setup-zrok.sh` now warns away from the legacy zrok v1 bootstrap path
+  3. `scripts/check-zrok2-share-flow.sh` now verifies an end-to-end public share against the deployed zrok2 stack
 - Verified live:
-  1. `http://test.preview.recoder.xyz` reaches the Zrok frontend and returns the expected unknown-share 404
-  2. direct-origin HTTPS routing also reaches the Zrok frontend when resolved to the origin host
+  1. `http://test.preview.recoder.xyz` returns the expected unknown-share `404`
+  2. `https://test.preview.recoder.xyz` now succeeds TLS publicly with the wildcard cert
+  3. a disposable zrok2 share against an in-network nginx backend returned `200` before cleanup
 - Remaining blocker:
-  1. `recoder-6qa` — provision Cloudflare edge/origin TLS coverage for `*.preview.recoder.xyz` so public HTTPS preview URLs work end-to-end
+  1. `recoder-6qa` is closed
+  2. `recoder-crg` now tracks migrating `docker-backend/src/zrok-preview.ts` from legacy zrok v1 API semantics to the deployed zrok2 environment/share flow
 - `recoder-xxp` is fixed live:
   - repo-root `/.env` is excluded from deploy rsync
   - Hetzner root `.env` is restored to the minimal Compose-interpolation form
