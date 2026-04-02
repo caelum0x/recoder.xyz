@@ -332,12 +332,10 @@ services:
       - '-httpListenAddr=:8428'
       - '-search.latencyOffset=5s'
     depends_on:
-      alertmanager:
-        condition: service_started
       node-exporter:
-        condition: service_started
+        condition: service_healthy
       redis-exporter:
-        condition: service_started
+        condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "wget --quiet --tries=1 --spider http://localhost:8428/-/healthy || exit 1"]
       interval: 30s
@@ -556,6 +554,8 @@ services:
       - SERVER_GRPC_PORT=7077
       - SERVER_GRPC_INSECURE=true
       - SERVER_AUTH_SET_IF_NOT_EXISTS=true
+      - SERVER_AUTH_COOKIE_DOMAIN=localhost
+      - SERVER_AUTH_COOKIE_INSECURE=true
       - SERVER_ENCRYPTION_MASTER_KEYSET=${HATCHET_MASTER_ENCRYPTION_KEY:-}
       - SERVER_ENCRYPTION_JWT_PRIVATE_KEYSET=${HATCHET_JWT_SECRET:-}
       - SERVER_TASKQUEUE_KIND=postgres
