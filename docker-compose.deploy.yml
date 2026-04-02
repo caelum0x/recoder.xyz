@@ -524,17 +524,41 @@ services:
   # API: http://localhost:7077 (gRPC for workers)
   # Bootstrap: docker exec recoder-hatchet /hatchet-admin quickstart --skip create-tenant
   # ================================================================
+  # Migration init: runs DB migration before engine starts
+  hatchet-migration:
+    image: ghcr.io/hatchet-dev/hatchet/hatchet-migrate:latest
+    container_name: recoder-hatchet-migrate
+    environment:
+      - DATABASE_URL=postgresql://recoder:recoder_prod_2026@host.docker.internal:5432/recoder_backend
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - recoder
+    restart: "no"
+
   hatchet-engine:
     image: ghcr.io/hatchet-dev/hatchet/hatchet-engine:latest
     container_name: recoder-hatchet
     restart: unless-stopped
+    depends_on:
+      hatchet-migration:
+        condition: service_completed_successfully
     ports:
       - "127.0.0.1:7077:7077"
     environment:
       - DATABASE_URL=postgresql://recoder:recoder_prod_2026@host.docker.internal:5432/recoder_backend
+      - DATABASE_POSTGRES_PORT=5432
+      - DATABASE_POSTGRES_HOST=host.docker.internal
+      - DATABASE_POSTGRES_USERNAME=recoder
+      - DATABASE_POSTGRES_PASSWORD=recoder_prod_2026
+      - DATABASE_POSTGRES_DB_NAME=recoder_backend
       - SERVER_GRPC_BIND_ADDRESS=0.0.0.0
       - SERVER_GRPC_PORT=7077
+      - SERVER_GRPC_INSECURE=true
       - SERVER_AUTH_SET_IF_NOT_EXISTS=true
+      - SERVER_ENCRYPTION_MASTER_KEYSET=${HATCHET_MASTER_ENCRYPTION_KEY:-}
+      - SERVER_ENCRYPTION_JWT_PRIVATE_KEYSET=${HATCHET_JWT_SECRET:-}
+      - SERVER_TASKQUEUE_KIND=postgres
     healthcheck:
       test: ["CMD-SHELL", "curl -sf http://localhost:7077/live || exit 1"]
       interval: 30s
@@ -596,6 +620,7 @@ services:
       - PFXLOG_NO_JSON=true
     command: ["controller", "/etc/zrok/ctrl.yml"]
     volumes:
+      - ./monitoring/zrok/ctrl.yml:/etc/zrok/ctrl.yml:ro
       - zrok-data:/var/lib/zrok
     healthcheck:
       test: ["CMD-SHELL", "curl -sf http://localhost:18080/api/v1/version || exit 1"]
@@ -751,7 +776,7 @@ services:
     ports:
       - "127.0.0.1:3006:3000"
     environment:
-      - DATABASE_URL=postgresql://recoder:recoder_prod_2026@host.docker.internal:5432/recoder_backend
+      - DATABASE_URL=postgresql://recoder:recoder_prod_2026@host.docker.internal:5432/umami
       - APP_SECRET=${UMAMI_SECRET:-change_me_umami_secret}
       - DISABLE_UPDATES=1
     healthcheck:
