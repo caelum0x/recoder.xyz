@@ -144,6 +144,8 @@ services:
   rabbitmq:
     image: rabbitmq:3-management-alpine
     container_name: recoder-zrok-rabbitmq
+    environment:
+      - RABBITMQ_VM_MEMORY_HIGH_WATERMARK=0.8
     volumes:
       - rabbitmq-data:/var/lib/rabbitmq
     networks:
@@ -152,13 +154,14 @@ services:
       test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
       interval: 10s
       timeout: 5s
-      retries: 10
+      retries: 15
+      start_period: 30s
     restart: unless-stopped
     deploy:
       resources:
         limits:
           cpus: '0.2'
-          memory: 128M
+          memory: 256M
 
   # ── Zrok Postgres (separate from main — lightweight) ─────────────────────
 
