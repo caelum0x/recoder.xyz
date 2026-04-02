@@ -8,10 +8,10 @@
 # Usage: ./scripts/setup-zrok.sh
 #
 # Prerequisites:
-#   1. DNS: *.preview.recoder.xyz → 77.42.23.19
-#   2. nginx http{} includes preview wildcard proxy → http://127.0.0.1:8080
-#   3. Public HTTPS should use a cert that explicitly covers
-#      *.preview.recoder.xyz (for example the LE wildcard issued below)
+#   1. Public preview hosts must resolve as preview-{token}.recoder.xyz
+#      (typically via the existing *.recoder.xyz wildcard).
+#   2. nginx http{} includes the regex preview proxy → http://127.0.0.1:8080
+#   3. Public HTTPS should use a cert that covers *.recoder.xyz
 set -euo pipefail
 
 ZROK_CONTAINER="${ZROK_CONTAINER:-recoder-zrok}"
@@ -95,14 +95,14 @@ echo "[5/5] Generating nginx config..."
 cat << 'NGINXEOF'
 
 # Add these inside the http {} block of nginx/nginx-production.conf.
-# HTTP routing works immediately once wildcard DNS exists.
+# HTTP routing works immediately once preview-*.recoder.xyz resolves to origin.
 server {
     listen 80;
-    server_name *.preview.recoder.xyz;
+    server_name ~^preview-(?<zrok_share_token>[a-z0-9-]+)\.recoder\.xyz$;
 
     location / {
         proxy_pass http://127.0.0.1:8080;
-        proxy_set_header Host $host;
+        proxy_set_header Host $zrok_share_token.preview.recoder.xyz;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
@@ -113,17 +113,17 @@ server {
     }
 }
 
-# HTTPS block once the preview wildcard certificate exists.
+# HTTPS block once the main recoder wildcard/origin certificate exists.
 server {
     listen 443 ssl http2;
-    server_name *.preview.recoder.xyz;
+    server_name ~^preview-(?<zrok_share_token>[a-z0-9-]+)\.recoder\.xyz$;
 
-    ssl_certificate /etc/letsencrypt/live/preview.recoder.xyz/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/preview.recoder.xyz/privkey.pem;
+    ssl_certificate /etc/nginx/ssl/recoder.crt;
+    ssl_certificate_key /etc/nginx/ssl/recoder.key;
 
     location / {
         proxy_pass http://127.0.0.1:8080;
-        proxy_set_header Host $host;
+        proxy_set_header Host $zrok_share_token.preview.recoder.xyz;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
@@ -143,15 +143,13 @@ echo ""
 echo "  ZROK_ADMIN_TOKEN=$ZROK_ADMIN_TOKEN"
 echo "  ZROK_TOKEN=$ZROK_TOKEN"
 echo "  ZROK_FRONTEND=preview.recoder.xyz"
+echo "  ZROK_PUBLIC_BASE_DOMAIN=recoder.xyz"
 echo ""
-echo "Cloudflare DNS needed:"
-echo "  *.preview.recoder.xyz → A → 77.42.23.19"
+echo "Public DNS needed:"
+echo "  preview-{token}.recoder.xyz must resolve to 77.42.23.19"
+echo "  (typically via the existing *.recoder.xyz wildcard)"
 echo ""
-echo "Issue the wildcard cert with certbot:"
-echo "  certbot certonly --dns-cloudflare --dns-cloudflare-credentials /root/.secrets/cloudflare.ini \\"
-echo "    --cert-name preview.recoder.xyz -d preview.recoder.xyz -d '*.preview.recoder.xyz'"
-echo ""
-echo "Then keep the wildcard DNS record DNS-only so public HTTPS terminates on the origin cert."
+echo "Public HTTPS should use the main recoder wildcard/origin certificate."
 echo ""
 echo "Then restart docker-backend + zrok:"
 echo "  docker compose -f docker-compose.deploy.yml restart docker-backend zrok-controller zrok-frontend"

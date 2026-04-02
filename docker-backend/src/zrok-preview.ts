@@ -17,6 +17,7 @@ const ZROK2_BINARY = process.env.ZROK2_BINARY ?? 'zrok2';
 const ZROK2_API_ENDPOINT = process.env.ZROK2_API_ENDPOINT ?? process.env.ZROK_API_URL ?? 'http://zrok-controller:18080';
 const ZROK_ENABLE_TOKEN = process.env.ZROK_TOKEN ?? '';
 const ZROK_FRONTEND = process.env.ZROK_FRONTEND ?? 'preview.recoder.xyz';
+const ZROK_PUBLIC_BASE_DOMAIN = process.env.ZROK_PUBLIC_BASE_DOMAIN ?? 'recoder.xyz';
 const ZROK_NAMESPACE_TOKEN = process.env.ZROK_NAMESPACE_TOKEN ?? 'public';
 const ZROK_STATE_DIR = process.env.ZROK_STATE_DIR ?? path.join(process.env.HOME ?? '/tmp', '.zrok2-recoder-backend');
 const ZROK_ENVIRONMENT_FILE = path.join(ZROK_STATE_DIR, '.zrok2', 'environment.json');
@@ -83,12 +84,20 @@ function sleep(ms: number): Promise<void> {
 }
 
 function buildPreviewUrl(shareToken: string): string {
-  return `https://${shareToken}.${ZROK_FRONTEND}`;
+  // Public preview URLs stay under *.recoder.xyz so Cloudflare Universal SSL
+  // can cover them. nginx rewrites the Host header back to zrok's native
+  // {token}.preview.recoder.xyz shape before proxying to the frontend.
+  return `https://preview-${shareToken}.${ZROK_PUBLIC_BASE_DOMAIN}`;
 }
 
 function parseShareTokenFromText(text: string): string | null {
-  const match = new RegExp(`([a-z0-9-]+)\\.${escapeRegExp(ZROK_FRONTEND)}`, 'i').exec(text);
-  return match?.[1]?.toLowerCase() ?? null;
+  const publicMatch = new RegExp(`preview-([a-z0-9-]+)\\.${escapeRegExp(ZROK_PUBLIC_BASE_DOMAIN)}`, 'i').exec(text);
+  if (publicMatch?.[1]) {
+    return publicMatch[1].toLowerCase();
+  }
+
+  const internalMatch = new RegExp(`([a-z0-9-]+)\\.${escapeRegExp(ZROK_FRONTEND)}`, 'i').exec(text);
+  return internalMatch?.[1]?.toLowerCase() ?? null;
 }
 
 function loadEnabledEnvironment(): ZrokEnabledEnvironment | null {
@@ -230,9 +239,7 @@ async function waitForShareReady(child: ChildProcess, envZId: string, backendTar
     if (matching?.shareToken) {
       return {
         shareToken: matching.shareToken,
-        frontendEndpoint: matching.frontendEndpoints?.[0]
-          ? `https://${matching.frontendEndpoints[0]}`
-          : buildPreviewUrl(matching.shareToken),
+        frontendEndpoint: buildPreviewUrl(matching.shareToken),
       };
     }
 

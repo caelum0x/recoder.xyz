@@ -165,10 +165,10 @@ This supersedes the stale reading that VictoriaMetrics was blocked by Alertmanag
 This supersedes the stale reading that preview traffic was still blocked on nginx, wildcard TLS, or the old zrok v1 REST path.
 
 - What is fixed live:
-  - tracked `nginx/nginx-production.conf` now uses the dedicated `preview.recoder.xyz` wildcard certificate
-  - the Cloudflare wildcard `*.preview.recoder.xyz` A record is DNS-only, so public HTTPS terminates on the origin cert
+  - tracked `nginx/nginx-production.conf` now exposes public previews at `preview-{token}.recoder.xyz` and rewrites upstream `Host` back to `{token}.preview.recoder.xyz`
+  - public preview TLS now stays under the main `*.recoder.xyz` certificate coverage instead of depending on a nested wildcard workaround
   - public unknown-share requests now work over both HTTP and HTTPS
-  - a disposable zrok2 public share against an in-network nginx backend returned `200` at `https://yiiqxa0v5ueh.preview.recoder.xyz` before cleanup
+  - a disposable zrok2 public share against an in-network nginx backend returned `200` at `https://preview-yiiqxa0v5ueh.recoder.xyz` before cleanup
 - What is fixed in source:
   - `docker-backend/src/zrok-preview.ts` now manages zrok2-enabled environments and long-lived `zrok2 share public` subprocesses instead of legacy `/api/v1/share` calls
   - `docker-backend/Dockerfile` now includes the `zrok2` binary in the runtime image
@@ -590,7 +590,7 @@ Preview URLs — biggest immediate win
    the Zrok frontend → URL is ready in ~2 seconds. Browser talks directly to Vite through the tunnel. No proxy, no asset rewriting, no health check. Vite HMR WebSockets work natively
    through the tunnel. The whole preview.ts file becomes unnecessary.                                                                                                                 
                                                                            
-  Reserved tokens make it permanent: {projectId}.preview.recoder.xyz stays the same URL even when the sandbox stops and restarts. The iframe never needs to reload.                   
+  Reserved tokens make it permanent: preview-{projectId}.recoder.xyz stays the same URL even when the sandbox stops and restarts. The iframe never needs to reload.
   
   ---                                                                                                                                                                                 
   A2A — solves the identity problem that's been the hardest to fix         

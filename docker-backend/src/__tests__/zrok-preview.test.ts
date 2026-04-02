@@ -79,6 +79,7 @@ describe('zrok-preview', () => {
     mkdirSync(path.join(tempDir, '.zrok2'), { recursive: true });
     process.env.ZROK_TOKEN = 'enable-token';
     process.env.ZROK_FRONTEND = 'preview.recoder.xyz';
+    process.env.ZROK_PUBLIC_BASE_DOMAIN = 'recoder.xyz';
     process.env.ZROK_STATE_DIR = tempDir;
     process.env.ZROK2_API_ENDPOINT = 'http://127.0.0.1:18080';
     writeFileSync(path.join(tempDir, '.zrok2', 'environment.json'), JSON.stringify({
@@ -126,10 +127,10 @@ describe('zrok-preview', () => {
     });
 
     expect(created).toEqual({
-      previewUrl: 'https://abc123.preview.recoder.xyz',
+      previewUrl: 'https://preview-abc123.recoder.xyz',
       shareToken: 'abc123',
     });
-    expect(mod.getPreviewUrl('project-1')).toBe('https://abc123.preview.recoder.xyz');
+    expect(mod.getPreviewUrl('project-1')).toBe('https://preview-abc123.recoder.xyz');
 
     await mod.destroyPreviewShare('project-1');
 
@@ -178,5 +179,47 @@ describe('zrok-preview', () => {
     });
 
     await expect(mod.reservePreviewShare('project-2')).resolves.toBeNull();
+  });
+
+  it('normalizes zrok-native frontend endpoints to the public single-label preview hostname', async () => {
+    const shareProc = createMockChildProcess();
+    const listProc = createMockChildProcess({ emitSpawn: false });
+
+    (spawn as unknown as ReturnType<typeof vi.fn>).mockImplementation((_cmd: string, args: string[]) => {
+      if (args[0] === 'share' && args[1] === 'public') {
+        return shareProc;
+      }
+
+      if (args[0] === 'list' && args[1] === 'shares' && args[2] === '--json') {
+        process.nextTick(() => {
+          listProc.stdout!.push(JSON.stringify({
+            shares: [{
+              envZId: 'ENV123',
+              frontendEndpoints: ['list123.preview.recoder.xyz'],
+              shareToken: 'list123',
+              target: 'http://sandbox-3:5173',
+              updatedAt: Date.now(),
+            }],
+          }));
+          listProc.emit('exit', 0, null);
+        });
+        return listProc;
+      }
+
+      throw new Error(`Unexpected spawn args: ${args.join(' ')}`);
+    });
+
+    const mod = await import('../zrok-preview.js');
+    const created = await mod.createPreviewShare({
+      projectId: 'project-3',
+      sandboxId: 'sandbox-3',
+      targetPort: 5173,
+    });
+
+    expect(created).toEqual({
+      previewUrl: 'https://preview-list123.recoder.xyz',
+      shareToken: 'list123',
+    });
+    expect(mod.getPreviewUrl('project-3')).toBe('https://preview-list123.recoder.xyz');
   });
 });
