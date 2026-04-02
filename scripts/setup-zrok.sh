@@ -5,7 +5,9 @@
 #
 # Prerequisites:
 #   1. Cloudflare DNS: *.preview.recoder.xyz → 77.42.23.19
-#   2. nginx: *.preview.recoder.xyz → proxy_pass http://127.0.0.1:8082
+#   2. nginx http{} includes preview wildcard proxy → http://127.0.0.1:8080
+#   3. HTTPS requires certificate coverage for *.preview.recoder.xyz
+#      (for example a Cloudflare edge/origin certificate or a wildcard LE cert)
 set -euo pipefail
 
 ZROK_CONTAINER="${ZROK_CONTAINER:-recoder-zrok}"
@@ -76,22 +78,43 @@ echo ""
 echo "[5/5] Generating nginx config..."
 cat << 'NGINXEOF'
 
-# Add to nginx.conf for Zrok preview URLs:
+# Add these inside the http {} block of nginx/nginx-production.conf.
+# HTTP routing works immediately once wildcard DNS exists.
 server {
-    listen 443 ssl http2;
+    listen 80;
     server_name *.preview.recoder.xyz;
 
-    ssl_certificate /etc/ssl/certs/recoder.xyz.pem;
-    ssl_certificate_key /etc/ssl/private/recoder.xyz.key;
-
     location / {
-        proxy_pass http://127.0.0.1:8082;
+        proxy_pass http://127.0.0.1:8080;
         proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "upgrade";
         proxy_http_version 1.1;
+        proxy_read_timeout 86400;
+    }
+}
+
+# Optional HTTPS block once *.preview.recoder.xyz certificate coverage exists.
+server {
+    listen 443 ssl http2;
+    server_name *.preview.recoder.xyz;
+
+    ssl_certificate /etc/nginx/ssl/recoder.crt;
+    ssl_certificate_key /etc/nginx/ssl/recoder.key;
+
+    location / {
+        proxy_pass http://127.0.0.1:8080;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_http_version 1.1;
+        proxy_read_timeout 86400;
     }
 }
 NGINXEOF
@@ -107,6 +130,10 @@ echo "  ZROK_FRONTEND=preview.recoder.xyz"
 echo ""
 echo "Cloudflare DNS needed:"
 echo "  *.preview.recoder.xyz → A → 77.42.23.19"
+echo ""
+echo "Cloudflare / TLS needed for public HTTPS:"
+echo "  - edge certificate coverage for *.preview.recoder.xyz"
+echo "  - origin certificate coverage for *.preview.recoder.xyz if using Full (Strict)"
 echo ""
 echo "Then restart docker-backend + zrok:"
 echo "  docker compose -f docker-compose.deploy.yml restart docker-backend zrok-controller zrok-frontend"
