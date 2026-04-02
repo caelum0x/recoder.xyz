@@ -333,16 +333,17 @@ services:
       - '-search.latencyOffset=5s'
     depends_on:
       alertmanager:
-        condition: service_healthy
+        condition: service_started
       node-exporter:
-        condition: service_healthy
+        condition: service_started
       redis-exporter:
-        condition: service_healthy
+        condition: service_started
     healthcheck:
       test: ["CMD-SHELL", "wget --quiet --tries=1 --spider http://localhost:8428/-/healthy || exit 1"]
       interval: 30s
       timeout: 5s
-      retries: 3
+      retries: 5
+      start_period: 15s
     deploy:
       resources:
         limits:
@@ -374,10 +375,11 @@ services:
       - SMTP_AUTH_PASSWORD=${SMTP_AUTH_PASSWORD:-}
     entrypoint: ["/bin/sh", "/app/alertmanager-entrypoint.sh"]
     healthcheck:
-      test: ["CMD-SHELL", "alertmanager --version >/dev/null 2>&1"]
+      test: ["CMD-SHELL", "wget --quiet --tries=1 --spider http://localhost:9093/-/healthy || exit 1"]
       interval: 30s
       timeout: 5s
-      retries: 3
+      retries: 5
+      start_period: 30s
     deploy:
       resources:
         limits:
@@ -484,6 +486,8 @@ services:
         limits:
           cpus: '0.5'
           memory: 512M
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     networks:
       - recoder
 
@@ -542,6 +546,8 @@ services:
         limits:
           cpus: '0.5'
           memory: 512M
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     networks:
       - recoder
 
@@ -567,6 +573,8 @@ services:
         limits:
           cpus: '0.3'
           memory: 256M
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     networks:
       - recoder
 
@@ -699,6 +707,8 @@ services:
         limits:
           cpus: '0.3'
           memory: 256M
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     networks:
       - recoder
 
@@ -726,6 +736,8 @@ services:
         limits:
           cpus: '0.5'
           memory: 512M
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     networks:
       - recoder
 
@@ -752,6 +764,8 @@ services:
         limits:
           cpus: '0.3'
           memory: 256M
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     networks:
       - recoder
 
@@ -793,6 +807,8 @@ services:
         limits:
           cpus: '1.0'
           memory: 1G
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     networks:
       - recoder
 
