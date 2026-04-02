@@ -131,20 +131,21 @@ This supersedes the stale blocker table that still described Umami, docs, Alertm
 - Remaining follow-up:
   1. `recoder-9eu` — add blackbox-style uptime monitoring for public HTTP services if we still want dashboard uptime checks for `recoder.xyz`, `web.recoder.xyz`, `agents.recoder.xyz`, and similar domains
 
-## Current Correction — 2026-04-02 (Zrok preview wildcard proxy)
+## Current Correction — 2026-04-03 (Zrok preview public HTTPS + zrok2 share flow)
 
-This supersedes the stale reading that the remaining Zrok blocker was “nginx routing not added yet” or that `*.preview.recoder.xyz` was still entirely unproxied.
+This supersedes the stale reading that the remaining Zrok blocker was still nginx proxying or wildcard TLS coverage.
 
 - Landed in source:
-  1. `nginx/nginx-production.conf` now tracks the Zrok preview upstream and wildcard proxy blocks instead of relying on an untracked host-only edit
-  2. `scripts/setup-zrok.sh` now matches the live frontend port (`127.0.0.1:8080`) and no longer tells operators to append a raw server block outside `http {}`
-  3. Recoder iframe policy now explicitly allows `https://*.preview.recoder.xyz`
+  1. `nginx/nginx-production.conf` now uses the dedicated `preview.recoder.xyz` Let's Encrypt wildcard certificate for `*.preview.recoder.xyz`
+  2. `scripts/setup-zrok.sh` now explicitly warns that it is a legacy zrok v1 helper and points operators at the real zrok2 stack
+  3. `scripts/check-zrok2-share-flow.sh` now provides a reproducible end-to-end verification path for the deployed zrok2 preview stack
 - Verified live on Hetzner:
-  1. `http://test.preview.recoder.xyz` reaches the Zrok frontend and returns the expected Zrok 404 page for an unknown share token
-  2. direct-origin HTTPS routing also reaches the Zrok frontend when resolved to the origin host, which confirms the nginx `443` path is now wired correctly
-- Remaining blocker is TLS coverage, not proxy routing:
-  1. public `https://test.preview.recoder.xyz` still fails during the Cloudflare TLS handshake before the request reaches origin
-  2. follow-up `recoder-6qa` now tracks the required Cloudflare edge/origin certificate coverage for `*.preview.recoder.xyz`
+  1. public `http://test.preview.recoder.xyz` reaches the Zrok frontend and returns the expected unknown-share `404`
+  2. public `https://test.preview.recoder.xyz` now succeeds TLS with the origin-served wildcard certificate after switching the Cloudflare wildcard record to DNS-only
+  3. a disposable zrok2-enabled environment created a real public share against an in-network nginx backend, and `https://yiiqxa0v5ueh.preview.recoder.xyz` returned `200` before cleanup
+- Remaining Zrok work is now source migration, not infra/TLS:
+  1. `recoder-6qa` is closed
+  2. new follow-up `recoder-crg` tracks migrating `docker-backend/src/zrok-preview.ts` from legacy zrok v1 assumptions (`ZROK_API_URL`, `envZId`, reserved shares) to the deployed zrok2 environment/share flow
 
 ## Current Correction — 2026-04-02 (Umami compose)
 
