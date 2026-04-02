@@ -71,7 +71,7 @@ services:
       - OPENMETER_URL=http://openmeter:8888  # internal Docker port (host: 8889)
       - FLAGSMITH_URL=http://flagsmith:8000
       - NATS_URL=nats://nats:4222
-      - ZROK_API_URL=http://zrok-controller:18080
+      - ZROK_API_URL=${ZROK_API_URL:-http://zrok-controller:18080}
       - ZROK_TOKEN=${ZROK_TOKEN:-}
       - ZROK_FRONTEND=${ZROK_FRONTEND:-preview.recoder.xyz}
       - HATCHET_CLIENT_TOKEN=${HATCHET_CLIENT_TOKEN:-}
