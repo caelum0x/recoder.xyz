@@ -174,15 +174,15 @@ This supersedes stale task notes that still describe VictoriaMetrics as blocked 
 This supersedes stale task notes that still treat the preview wildcard as blocked on nginx, public TLS, or legacy zrok v1 API calls.
 
 - Landed in source:
-  1. `nginx/nginx-production.conf` now points the preview wildcard at the dedicated `preview.recoder.xyz` wildcard cert
+  1. `nginx/nginx-production.conf` now serves public previews at `preview-{token}.recoder.xyz`, rewrites the upstream `Host` header back to `{token}.preview.recoder.xyz`, and uses the main `*.recoder.xyz` certificate
   2. `scripts/setup-zrok.sh` now warns away from the legacy zrok v1 bootstrap path
   3. `scripts/check-zrok2-share-flow.sh` now verifies an end-to-end public share against the deployed zrok2 stack
   4. `docker-backend/src/zrok-preview.ts` now uses zrok2 enable/share subprocesses instead of `/api/v1/share` semantics
   5. `docker-backend/Dockerfile` now includes the `zrok2` binary, and `docker-backend/src/server.ts` plus `docker-backend/src/preview.ts` now retarget active shares to the actual ready port
   6. `docker-backend/src/__tests__/zrok-preview.test.ts` now covers the zrok2 share lifecycle
 - Verified live:
-  1. `http://test.preview.recoder.xyz` returns the expected unknown-share `404`
-  2. `https://test.preview.recoder.xyz` now succeeds TLS publicly with the wildcard cert
+  1. `http://preview-test.recoder.xyz` returns the expected unknown-share `404`
+  2. `https://preview-test.recoder.xyz` now succeeds TLS publicly under the main `*.recoder.xyz` certificate path
   3. a disposable zrok2 share against an in-network nginx backend returned `200` before cleanup
   4. `recoder-docker-backend` is rebuilt on Hetzner, `zrok2` exists at `/usr/local/bin/zrok2`, and `https://docker.recoder.xyz/health` returns `status: ok`
 - Remaining blocker:
@@ -536,7 +536,7 @@ Preview URLs — biggest immediate win
    the Zrok frontend → URL is ready in ~2 seconds. Browser talks directly to Vite through the tunnel. No proxy, no asset rewriting, no health check. Vite HMR WebSockets work natively
    through the tunnel. The whole preview.ts file becomes unnecessary.                                                                                                                 
                                                                            
-  Reserved tokens make it permanent: {projectId}.preview.recoder.xyz stays the same URL even when the sandbox stops and restarts. The iframe never needs to reload.                   
+  Reserved tokens make it permanent: preview-{projectId}.recoder.xyz stays the same URL even when the sandbox stops and restarts. The iframe never needs to reload.
   
   ---                                                                                                                                                                                 
   A2A — solves the identity problem that's been the hardest to fix         

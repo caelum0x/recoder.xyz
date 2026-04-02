@@ -136,16 +136,16 @@ This supersedes the stale blocker table that still described Umami, docs, Alertm
 This supersedes the stale reading that the remaining Zrok blocker was still nginx proxying, wildcard TLS coverage, or the old zrok v1 API path.
 
 - Landed in source:
-  1. `nginx/nginx-production.conf` now uses the dedicated `preview.recoder.xyz` Let's Encrypt wildcard certificate for `*.preview.recoder.xyz`
+  1. `nginx/nginx-production.conf` now exposes public previews at `preview-{token}.recoder.xyz`, rewrites the upstream `Host` header back to `{token}.preview.recoder.xyz`, and uses the main `*.recoder.xyz` origin certificate
   2. `scripts/setup-zrok.sh` now explicitly warns that it is a legacy zrok v1 helper and points operators at the real zrok2 stack
   3. `scripts/check-zrok2-share-flow.sh` now provides a reproducible end-to-end verification path for the deployed zrok2 preview stack
   4. `docker-backend/src/zrok-preview.ts` now uses `zrok2 enable` state plus long-lived `zrok2 share public` processes instead of legacy `/api/v1/share` assumptions
   5. `docker-backend/Dockerfile` now ships the `zrok2` binary in the runtime image, and `docker-backend/src/server.ts` plus `docker-backend/src/preview.ts` now retarget active shares when the real dev-server port differs from `5173`
   6. `docker-backend/src/__tests__/zrok-preview.test.ts` now covers the zrok2 share lifecycle and the intentional `reservePreviewShare()` fallback
 - Verified live on Hetzner:
-  1. public `http://test.preview.recoder.xyz` reaches the Zrok frontend and returns the expected unknown-share `404`
-  2. public `https://test.preview.recoder.xyz` now succeeds TLS with the origin-served wildcard certificate after switching the Cloudflare wildcard record to DNS-only
-  3. a disposable zrok2-enabled environment created a real public share against an in-network nginx backend, and `https://yiiqxa0v5ueh.preview.recoder.xyz` returned `200` before cleanup
+  1. public `http://preview-test.recoder.xyz` reaches the Zrok frontend and returns the expected unknown-share `404`
+  2. public `https://preview-test.recoder.xyz` is now covered by the main `*.recoder.xyz` certificate path instead of the nested wildcard workaround
+  3. a disposable zrok2-enabled environment created a real public share against an in-network nginx backend, and `https://preview-yiiqxa0v5ueh.recoder.xyz` returned `200` before cleanup
 - Verified in local code:
   1. `pnpm --dir docker-backend exec vitest run src/__tests__/zrok-preview.test.ts` passes
   2. full `pnpm --dir docker-backend exec tsc --noEmit --pretty false` still fails, but only on unrelated existing files (`a2a-event-bridge.ts`, `durable-workflow.ts`, `code-index.ts`, `domain-manager.ts`)
@@ -334,8 +334,8 @@ The roadmap below remains useful, but older claims elsewhere that the Nike prese
       - ZROK_POSTGRES_URL=postgresql://recoder:recoder_prod_2026@host.docker.internal:5432/recoder_backend
   ```
 - Run `zrok2 bootstrap` to generate identities and policies
-- Add nginx upstream: `*.preview.recoder.xyz` → Zrok frontend (port 18080)
-- Add Cloudflare wildcard DNS: `*.preview.recoder.xyz → 77.42.23.19`
+- Add nginx upstream: `preview-*.recoder.xyz` → Zrok frontend (port 18080) with `Host` rewritten to `{token}.preview.recoder.xyz`
+- Ensure first-level preview hosts resolve to origin (for example `*.recoder.xyz → 77.42.23.19`)
 - Success: Zrok web console accessible at `zrok.recoder.xyz`
 
 **C2. docker-backend Zrok integration**
@@ -354,10 +354,10 @@ The roadmap below remains useful, but older claims elsewhere that the Nike prese
 - Success: `preview.ts` shrinks from 400+ lines to ~50 lines
 
 **C4. Publish flow via Zrok Frontdoor**
-- Reserved share token = permanent URL: `{projectId}.preview.recoder.xyz` (survives sandbox stop/start)
+- Reserved share token = permanent URL: `preview-{projectId}.recoder.xyz` (survives sandbox stop/start)
 - Publish = enable Frontdoor on the reserved share → always-on, served by `zrok2-share.service`
 - Publish button in UI calls new endpoint `POST /api/publish/{projectId}/frontdoor`
-- Custom domain: user can CNAME their domain to `{projectId}.preview.recoder.xyz`
+- Custom domain: user can CNAME their domain to `preview-{projectId}.recoder.xyz`
 - Files: `docker-backend/src/server.ts` publish route, `recoder-web/app/components/header/HeaderActionButtons.client.tsx`
 - Success: publish works, live URL permanent, custom domains possible
 
@@ -819,7 +819,7 @@ Ziti Controller   :1280   — manages identities and policies
 Ziti Router       :3022   — routes encrypted traffic between endpoints
 Zrok Controller   :18080  — Zrok API + web console
 PostgreSQL        — reuse recoder_backend (Zrok supports Postgres natively)
-nginx             — add *.preview.recoder.xyz → Zrok frontend (one-time)
+nginx             — add preview-*.recoder.xyz → Zrok frontend with Host rewrite (one-time)
 ```
 Additional RAM: ~150–250MB total. Runs alongside existing stack.
 
@@ -835,13 +835,13 @@ const tunnel = await share({
   target: `localhost:${sandboxPort}`,
   token: projectId,  // reserved token → deterministic, persistent URL
 })
-// → https://{projectId}.preview.recoder.xyz  (immediate, no polling)
+// → https://preview-{projectId}.recoder.xyz  (immediate, no polling)
 containers.set(projectId, { ...entry, previewUrl: tunnel.shareUrl })
 ```
 
 This replaces the entire `preview.ts` proxy + health-check loop. URL is available immediately. No 30-second wait. No asset URL rewriting needed — requests go directly through the Zrok tunnel to Vite.
 
-**Reserved tokens** = persistent preview URLs. `{projectId}.preview.recoder.xyz` survives sandbox restarts. Frontend always uses the same iframe URL. Vite HMR works through the tunnel. Publish gets its own permanent Frontdoor URL (`zrok2-share.service` systemd unit).
+**Reserved tokens** = persistent preview URLs. `preview-{projectId}.recoder.xyz` survives sandbox restarts. Frontend always uses the same iframe URL. Vite HMR works through the tunnel. Publish gets its own permanent Frontdoor URL (`zrok2-share.service` systemd unit).
 
 **Agent identity**: Each Claude Code / Codex terminal runs `zrok enable <token>` once → stores identity in `~/.zrok/`. Cryptographically unique per terminal. Bridge sees distinct Ziti fingerprints for each instance:
 ```
@@ -1089,7 +1089,7 @@ Added (all internal):
   Zrok Controller         :18080 (~80MB RAM, uses existing Postgres)
 
 nginx additions (one-time):
-  *.preview.recoder.xyz   → Zrok frontend
+  preview-*.recoder.xyz   → Zrok frontend
   zrok.recoder.xyz        → Zrok web console
 ```
 
@@ -1728,7 +1728,7 @@ Dashboard
    the Zrok frontend → URL is ready in ~2 seconds. Browser talks directly to Vite through the tunnel. No proxy, no asset rewriting, no health check. Vite HMR WebSockets work natively
    through the tunnel. The whole preview.ts file becomes unnecessary.                                                                                                                 
                                                                            
-  Reserved tokens make it permanent: {projectId}.preview.recoder.xyz stays the same URL even when the sandbox stops and restarts. The iframe never needs to reload.                   
+  Reserved tokens make it permanent: preview-{projectId}.recoder.xyz stays the same URL even when the sandbox stops and restarts. The iframe never needs to reload.
   
   ---                                                                                                                                                                                 
   A2A — solves the identity problem that's been the hardest to fix         
