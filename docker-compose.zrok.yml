@@ -144,8 +144,6 @@ services:
   rabbitmq:
     image: rabbitmq:3-management-alpine
     container_name: recoder-zrok-rabbitmq
-    environment:
-      - RABBITMQ_VM_MEMORY_HIGH_WATERMARK=0.8
     volumes:
       - rabbitmq-data:/var/lib/rabbitmq
     networks:
