@@ -12,10 +12,11 @@
 global:
   # Filled by alertmanager-entrypoint.sh
   slack_api_url: '${ALERT_SLACK_API_URL}'
-  # Resend SMTP for email alerts — set RESEND_API_KEY in env
-  smtp_from: 'alerts@recoder.xyz'
-  smtp_smarthost: 'smtp.resend.com:587'
-  smtp_auth_username: 'resend'
+  # SMTP defaults are normalized by alertmanager-entrypoint.sh.
+  # If RESEND_API_KEY is set, it maps to the SMTP auth password automatically.
+  smtp_from: '${SMTP_FROM}'
+  smtp_smarthost: '${SMTP_SMARTHOST}'
+  smtp_auth_username: '${SMTP_AUTH_USERNAME}'
   smtp_auth_password: '${SMTP_AUTH_PASSWORD}'
   smtp_require_tls: true
 
@@ -146,7 +147,7 @@ receivers:
           follow_redirects: true
         max_alerts: 10
     email_configs:
-      - to: '${ALERT_EMAIL}'
+      - to: '${ALERT_EMAIL_TO}'
         send_resolved: true
         headers:
           Subject: '[Recoder Warning] {{ .GroupLabels.alertname }}'
@@ -161,7 +162,7 @@ receivers:
           follow_redirects: true
         max_alerts: 0  # Send all alerts, no limit
     email_configs:
-      - to: '${ALERT_EMAIL}'
+      - to: '${ALERT_EMAIL_TO}'
         send_resolved: true
         headers:
           Subject: '[Recoder CRITICAL] {{ .GroupLabels.alertname }}'

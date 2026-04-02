@@ -4,14 +4,27 @@
 
 set -e
 
-TEMPLATE="/etc/alertmanager/alertmanager.yml.tpl"
-CONFIG="/tmp/alertmanager.yml"
+: "${TEMPLATE:=/etc/alertmanager/alertmanager.yml.tpl}"
+: "${CONFIG:=/tmp/alertmanager.yml}"
 SUBST_VARS='${ALERT_WEBHOOK_URL} ${ALERT_CRITICAL_WEBHOOK_URL} ${ALERT_SLACK_API_URL} ${ALERT_EMAIL} ${ALERT_EMAIL_TO} ${RESEND_API_KEY} ${SMTP_SMARTHOST} ${SMTP_FROM} ${SMTP_AUTH_USERNAME} ${SMTP_AUTH_PASSWORD}'
 
 : "${ALERT_WEBHOOK_URL:=http://localhost:9095/alertmanager-not-configured}"
 : "${ALERT_CRITICAL_WEBHOOK_URL:=${ALERT_WEBHOOK_URL}}"
 : "${ALERT_SLACK_API_URL:=http://localhost:9095/alertmanager-not-configured}"
+: "${SMTP_FROM:=alerts@recoder.xyz}"
+: "${SMTP_SMARTHOST:=localhost:25}"
+: "${ALERT_EMAIL_TO:=${ALERT_EMAIL:-alerts@recoder.invalid}}"
+
+if [ -n "${RESEND_API_KEY:-}" ]; then
+  if [ "${SMTP_SMARTHOST}" = "localhost:25" ]; then
+    SMTP_SMARTHOST="smtp.resend.com:587"
+  fi
+  : "${SMTP_AUTH_USERNAME:=resend}"
+  : "${SMTP_AUTH_PASSWORD:=${RESEND_API_KEY}}"
+fi
+
 export ALERT_WEBHOOK_URL ALERT_CRITICAL_WEBHOOK_URL ALERT_SLACK_API_URL
+export ALERT_EMAIL ALERT_EMAIL_TO SMTP_SMARTHOST SMTP_FROM SMTP_AUTH_USERNAME SMTP_AUTH_PASSWORD RESEND_API_KEY
 
 render_without_envsubst() {
   awk '
@@ -40,7 +53,12 @@ if grep -Eq '\$\{(ALERT_WEBHOOK_URL|ALERT_CRITICAL_WEBHOOK_URL|ALERT_SLACK_API_U
     render_without_envsubst
   fi
 else
-  cp "$TEMPLATE" "$CONFIG"
+  cp -f "$TEMPLATE" "$CONFIG"
+fi
+
+if [ "${ALERTMANAGER_RENDER_ONLY:-}" = "1" ]; then
+  cat "$CONFIG"
+  exit 0
 fi
 
 exec alertmanager \
