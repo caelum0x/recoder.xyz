@@ -1,6 +1,6 @@
 # Recoder Platform — Error Registry
 
-Last updated: 2026-04-02 (OpenMeter LLM usage reporting and deploy-compose alignment are landed in the main repo; the agents file-proxy HEAD mismatch is deployed on the backend, and the only remaining local dirty path is the nested `recoder-web/starters` repo)
+Last updated: 2026-04-02 (OpenMeter LLM usage reporting, Umami DB targeting, and deploy-compose alignment are landed in the main repo; the agents file-proxy HEAD mismatch is deployed on the backend, and the only remaining local dirty path is the nested `recoder-web/starters` repo)
 
 ---
 
@@ -91,6 +91,15 @@ This supersedes any stale reading that the OpenMeter LLM hook and compose alignm
 - `docker-compose.deploy.yml` now keeps OpenMeter on internal port `8888` while publishing it on host port `8889`, and the NATS service uses an explicit `nats-server` entrypoint plus short-form JetStream flags.
 - The main repo is no longer dirty because of those two files.
 - The only remaining local dirty path is the separate nested repo `recoder-web/starters` (`recoder-0vj`).
+
+## Current Correction (2026-04-02, Umami compose)
+
+This supersedes any stale reading that the Umami compose entry still points at the shared `recoder_backend` database in source.
+
+- `docker-compose.deploy.yml` now targets a dedicated `umami` database for the Umami service.
+- Remaining work, if Umami is to go live, is operational:
+  - ensure the `umami` database exists on the host Postgres
+  - deploy and verify the service
 
 ## Current Correction (2026-04-01, streaming task output)
 

@@ -1,6 +1,6 @@
 # Recoder Platform — Task List
 
-Last updated: 2026-04-02 (OpenMeter LLM usage reporting and deploy-compose alignment are landed in the main repo; the agents file-proxy HEAD mismatch is deployed on the backend, and the only remaining local dirty path is the nested `recoder-web/starters` repo)
+Last updated: 2026-04-02 (OpenMeter LLM usage reporting, Umami DB targeting, and deploy-compose alignment are landed in the main repo; the agents file-proxy HEAD mismatch is deployed on the backend, and the only remaining local dirty path is the nested `recoder-web/starters` repo)
 
 ---
 
@@ -162,6 +162,13 @@ This supersedes any stale task note that `backend/core/services/llm.py` and `doc
   - host publish is now `127.0.0.1:8889:8888`
   - NATS uses an explicit `nats-server` entrypoint with the short-form JetStream flags
 - The only remaining local dirty path is the separate nested repo `recoder-web/starters`, tracked by `recoder-0vj`.
+
+## 2026-04-02 Correction (Umami compose)
+
+This supersedes any stale task note that the source-level Umami blocker is still the wrong database target.
+
+- `docker-compose.deploy.yml` now points Umami at a dedicated `umami` database instead of `recoder_backend`.
+- Remaining Umami work is now deploy/runtime validation, not this config-line correction.
 
 ## Immediate Follow-ups
 

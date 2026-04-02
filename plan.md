@@ -1,6 +1,6 @@
 # Recoder Platform — Master Plan
 
-Last updated: 2026-04-02 (OpenMeter LLM usage reporting and deploy-compose alignment are now landed in the main repo; workflow streaming producers are landed for workflow/Codex/Claude/Windsurf, and the only remaining local dirt is the nested `recoder-web/starters` repo)
+Last updated: 2026-04-02 (OpenMeter LLM usage reporting, Umami DB targeting, and deploy-compose alignment are now landed in the main repo; workflow streaming producers are landed for workflow/Codex/Claude/Windsurf, and the only remaining local dirt is the nested `recoder-web/starters` repo)
 
 ---
 
@@ -66,6 +66,13 @@ This section supersedes any stale note that `backend/core/services/llm.py` and `
 - Result:
   - those two files are no longer part of the main-repo dirty-state narrative
   - the only remaining local dirty path is the separate nested repo `recoder-web/starters`, tracked by `recoder-0vj`
+
+## Current Correction — 2026-04-02 (Umami compose)
+
+This supersedes any stale note that Umami still needs the basic host-database target fix in source.
+
+- `docker-compose.deploy.yml` now points the Umami service at `postgresql://recoder:...@host.docker.internal:5432/umami` instead of sharing `recoder_backend`.
+- This is a source/config correction only. It is not yet a claim that Umami is deployed live or that the dedicated `umami` database already exists on Hetzner.
 
 ## Current Correction — 2026-04-01
 
