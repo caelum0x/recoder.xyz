@@ -1,6 +1,6 @@
 # Recoder Platform — Error Registry
 
-Last updated: 2026-04-02 (Payload CMS blog/changelog scaffold is landed in the main app, deploy compose supports an overrideable host-Postgres path, Alertmanager defaults are hardened, and the worktree still has unrelated parallel dirt outside this slice)
+Last updated: 2026-04-02 (Payload CMS blog/changelog scaffold is landed in the main app, Umami/docs/Alertmanager/VictoriaMetrics are healthy live on Hetzner, deploy monitoring now stops scraping JSON/HTML as Prometheus metrics, and the worktree still has unrelated parallel dirt outside this slice)
 
 ---
 
@@ -139,6 +139,26 @@ This supersedes the stale reading that Umami needed a one-off hard-coded IP edit
   - rendered YAML parsed successfully both with dummy Resend input and with no email env
   - compose config still resolves cleanly
 - Remaining live work is deployment/verification, not more source-level guessing
+
+## Current Correction (2026-04-02, deploy monitoring targets)
+
+This supersedes the stale reading that VictoriaMetrics was blocked by Alertmanager health or that Umami/docs/Alertmanager were still generally unhealthy live.
+
+- Live Hetzner verification now shows:
+  - `recoder-alertmanager` healthy
+  - `recoder-victoriametrics` healthy
+  - `recoder-umami` healthy
+  - `recoder-docs` healthy
+- The real remaining error was scrape noise, not service liveness:
+  - `monitoring/prometheus.yml` was scraping JSON health endpoints and the `recoder-web` HTML root as if they were Prometheus metrics
+  - it also still referenced stale/nonexistent targets like `app`, `recoder-pm`, `recoder-agency`, `recoder-agents`, and `openclaw-gateway`
+  - that caused ongoing VictoriaMetrics parse errors and DNS lookup warnings despite the TSDB being up
+- Source fix:
+  - removed the invalid app/HTML/JSON scrape jobs
+  - retained only real Prometheus-compatible jobs
+  - added self-scrapes for `victoriametrics` and `alertmanager`
+- Remaining follow-up:
+  - `recoder-9eu` tracks blackbox-style uptime monitoring for public HTTP services if external uptime checks are still wanted in Grafana
 
 ## Current Correction (2026-04-01, streaming task output)
 
