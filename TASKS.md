@@ -1,6 +1,6 @@
 # Recoder Platform — Task List
 
-Last updated: 2026-04-02 (Payload CMS blog/changelog scaffold is landed in the main app, Umami/docs/Alertmanager/VictoriaMetrics are healthy live on Hetzner, deploy monitoring now stops scraping JSON/HTML as Prometheus metrics, and the worktree still has unrelated parallel dirt outside this slice)
+Last updated: 2026-04-02 (Payload CMS blog/changelog scaffold is landed in the main app, Umami/docs/Alertmanager/VictoriaMetrics are healthy live on Hetzner, Zrok preview wildcard nginx routing is landed live, and the worktree still has unrelated parallel dirt outside this slice)
 
 ---
 
@@ -168,6 +168,19 @@ This supersedes stale task notes that still describe VictoriaMetrics as blocked 
   3. added self-scrapes for `victoriametrics` and `alertmanager`
 - Remaining follow-up:
   1. `recoder-9eu` — add blackbox-style uptime monitoring if we still want public HTTP uptime checks in Grafana
+
+## 2026-04-02 Correction (Zrok preview wildcard proxy)
+
+This supersedes stale task notes that still treat the preview wildcard as “not wired through nginx yet”.
+
+- Landed in source:
+  1. `nginx/nginx-production.conf` now tracks the preview wildcard proxy blocks
+  2. `scripts/setup-zrok.sh` now matches the real frontend port and documents the remaining TLS requirement
+- Verified live:
+  1. `http://test.preview.recoder.xyz` reaches the Zrok frontend and returns the expected unknown-share 404
+  2. direct-origin HTTPS routing also reaches the Zrok frontend when resolved to the origin host
+- Remaining blocker:
+  1. `recoder-6qa` — provision Cloudflare edge/origin TLS coverage for `*.preview.recoder.xyz` so public HTTPS preview URLs work end-to-end
 - `recoder-xxp` is fixed live:
   - repo-root `/.env` is excluded from deploy rsync
   - Hetzner root `.env` is restored to the minimal Compose-interpolation form
