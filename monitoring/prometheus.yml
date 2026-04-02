@@ -2,8 +2,11 @@
 # Deployed at: monitor.recoder.xyz (behind nginx auth)
 # Server: Hetzner 8 vCPU, 16GB RAM (77.42.23.19)
 #
-# NOTE: Targets use Docker Compose service names for DNS resolution
-# on the shared 'recoder' network.
+# NOTE:
+# - Keep this file limited to Prometheus-compatible metrics endpoints.
+# - Public JSON health endpoints and HTML pages are NOT scrapeable here.
+# - External uptime checks for web/agents/agency/pm should use a blackbox
+#   exporter or app-native metrics when those are added.
 
 global:
   scrape_interval: 30s
@@ -23,32 +26,7 @@ alerting:
       timeout: 10s
 
 scrape_configs:
-  # App services (Next.js)
-  - job_name: 'recoder-app'
-    static_configs:
-      - targets: ['app:3000']
-    metrics_path: /api/health
-    scrape_interval: 60s
-
-  - job_name: 'recoder-agents'
-    static_configs:
-      - targets: ['recoder-agents:3001']
-    metrics_path: /api/health
-    scrape_interval: 60s
-
-  - job_name: 'recoder-pm'
-    static_configs:
-      - targets: ['recoder-pm:3004']
-    metrics_path: /api/health
-    scrape_interval: 60s
-
-  - job_name: 'recoder-agency'
-    static_configs:
-      - targets: ['recoder-agency:3007']
-    metrics_path: /api/health
-    scrape_interval: 60s
-
-  # Docker services
+  # Docker backend metrics
   - job_name: 'docker-backend'
     static_configs:
       - targets: ['docker-backend:3100']
@@ -62,17 +40,19 @@ scrape_configs:
     metrics_path: /api/a2a/metrics/prometheus
     scrape_interval: 30s
 
-  - job_name: 'recoder-web'
+  # VictoriaMetrics self-metrics
+  - job_name: 'victoriametrics'
     static_configs:
-      - targets: ['recoder-web:5173']
-    metrics_path: /
-    scrape_interval: 60s
+      - targets: ['victoriametrics:8428']
+    metrics_path: /metrics
+    scrape_interval: 30s
 
-  - job_name: 'openclaw-gateway'
+  # Alertmanager self-metrics
+  - job_name: 'alertmanager'
     static_configs:
-      - targets: ['openclaw-gateway:18789']
-    metrics_path: /health
-    scrape_interval: 60s
+      - targets: ['alertmanager:9093']
+    metrics_path: /metrics
+    scrape_interval: 30s
 
   # Redis metrics via redis_exporter sidecar
   - job_name: 'redis'
