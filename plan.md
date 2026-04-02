@@ -149,10 +149,15 @@ This supersedes the stale reading that the remaining Zrok blocker was still ngin
 - Verified in local code:
   1. `pnpm --dir docker-backend exec vitest run src/__tests__/zrok-preview.test.ts` passes
   2. full `pnpm --dir docker-backend exec tsc --noEmit --pretty false` still fails, but only on unrelated existing files (`a2a-event-bridge.ts`, `durable-workflow.ts`, `code-index.ts`, `domain-manager.ts`)
+- Rolled out live on Hetzner:
+  1. `docker compose -f docker-compose.deploy.yml up -d --force-recreate --no-deps docker-backend` now runs the new `recoderxyz-docker-backend` image with `zrok2` available at `/usr/local/bin/zrok2`
+  2. `https://docker.recoder.xyz/health` returns `{"status":"ok",...,"a2a":{"enabled":true,"agents":4,...}}`
+  3. the rollout initially hit `ENOSPC` on `/home/backend/.cache/node/corepack/v1`; a safe `docker image prune -f && docker builder prune -f` recovered disk and the service came back healthy
 - Remaining Zrok work is now product follow-up, not infra/TLS or legacy API migration:
   1. `recoder-6qa` is closed
   2. `recoder-crg` covers the zrok2 source migration and should no longer be treated as the remaining live blocker
   3. new follow-up `recoder-vy7` tracks a supported persistent published-preview strategy because zrok2 does not implement the old reserved/frontdoor flow that `reservePreviewShare()` used to assume
+  4. new ops follow-up `recoder-8b6` tracks a pre-deploy Docker disk-pressure guard for Hetzner rebuilds after the live rollout exposed root-disk exhaustion
 
 ## Current Correction — 2026-04-02 (Umami compose)
 

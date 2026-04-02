@@ -184,10 +184,12 @@ This supersedes stale task notes that still treat the preview wildcard as blocke
   1. `http://test.preview.recoder.xyz` returns the expected unknown-share `404`
   2. `https://test.preview.recoder.xyz` now succeeds TLS publicly with the wildcard cert
   3. a disposable zrok2 share against an in-network nginx backend returned `200` before cleanup
+  4. `recoder-docker-backend` is rebuilt on Hetzner, `zrok2` exists at `/usr/local/bin/zrok2`, and `https://docker.recoder.xyz/health` returns `status: ok`
 - Remaining blocker:
   1. `recoder-6qa` is closed
   2. `recoder-crg` is the source-migration task and should no longer be treated as a live TLS/preview blocker
   3. `recoder-vy7` now tracks the remaining publish-side gap: zrok2 does not support the old reserved/frontdoor flow, so persistent published preview URLs need a new design
+  4. `recoder-8b6` now tracks the deploy-side disk-pressure guard after the live rollout briefly failed with `ENOSPC` until safe Docker cache/image pruning restored space
 - `recoder-xxp` is fixed live:
   - repo-root `/.env` is excluded from deploy rsync
   - Hetzner root `.env` is restored to the minimal Compose-interpolation form
