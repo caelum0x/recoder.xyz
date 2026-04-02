@@ -1,14 +1,12 @@
-# Zrok Controller Configuration
-# See: https://docs.zrok.io/docs/guides/self-hosting/
-#
-# ZROK_ADMIN_TOKEN must be set in .env on the host
-# After first deploy, run: ./scripts/setup-zrok.sh
-
+# Legacy zrok v1 controller template for docker-compose.deploy.yml.
+# The live preview path uses docker-compose.zrok.yml and zrok2 instead.
+# Keep this file minimally parse-valid for the legacy openziti/zrok image.
 v: 4
 
 admin:
-  # Secrets are injected from ZROK_ADMIN_TOKEN env var at runtime
-  # The setup script will bootstrap the controller with this token
+  # This must match the docker-compose.deploy.yml fallback token.
+  secrets:
+    - recoder_zrok_admin
 
 endpoint:
   host: 0.0.0.0
@@ -17,8 +15,3 @@ endpoint:
 store:
   path: /var/lib/zrok/zrok.db
   type: sqlite3
-
-metrics:
-  agent:
-    source:
-      type: websocket
