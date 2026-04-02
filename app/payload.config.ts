@@ -2,9 +2,12 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { postgresAdapter } from '@payloadcms/db-postgres';
 import { buildConfig } from 'payload';
-import { BlogPosts } from './lib/cms/collections/BlogPosts';
-import { ChangelogEntries } from './lib/cms/collections/ChangelogEntries';
-import { CmsUsers } from './lib/cms/collections/CmsUsers';
+
+// The Payload CLI loads this file through tsx rather than Next's bundler, so
+// the collection imports need explicit TS extensions for ESM resolution.
+import { BlogPosts } from './lib/cms/collections/BlogPosts.ts';
+import { ChangelogEntries } from './lib/cms/collections/ChangelogEntries.ts';
+import { CmsUsers } from './lib/cms/collections/CmsUsers.ts';
 
 const filename = fileURLToPath(import.meta.url);
 const dirname = path.dirname(filename);

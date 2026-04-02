@@ -11,6 +11,7 @@ const intlMiddleware = createMiddleware({
 
 const PROTECTED_PREFIXES = ['/dashboard', '/settings', '/billing', '/projects'];
 const ADMIN_PREFIX = '/admin';
+const PAYLOAD_CMS_PREFIX = '/cms';
 
 /** Cookie name used to cache onboarding completion status at the edge. */
 const ONBOARDING_COMPLETED_COOKIE = 'onboarding_completed';
@@ -19,6 +20,7 @@ const ONBOARDING_SKIPPED_COOKIE = 'onboarding_skipped';
 
 /** Paths that should never trigger the onboarding redirect. */
 const ONBOARDING_BYPASS_PREFIXES = [
+  '/cms',
   '/onboarding',
   '/auth',
   '/api',
@@ -85,8 +87,13 @@ export default async function middleware(request: NextRequest) {
     }
   }
 
-  // Run i18n middleware first
-  const response = intlMiddleware(request);
+  const isPayloadCmsRoute =
+    request.nextUrl.pathname === PAYLOAD_CMS_PREFIX ||
+    request.nextUrl.pathname.startsWith(`${PAYLOAD_CMS_PREFIX}/`);
+
+  // Payload admin stays outside locale rewrites. Its route tree lives at
+  // /cms, not /{locale}/cms, and Payload handles its own auth/session flow.
+  const response = isPayloadCmsRoute ? NextResponse.next() : intlMiddleware(request);
 
   // Check if route is protected
   const stripped = stripLocale(request.nextUrl.pathname);

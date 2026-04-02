@@ -1,6 +1,6 @@
 # Recoder Platform — Error Registry
 
-Last updated: 2026-04-02 (Payload CMS blog/changelog scaffold is landed in the main app, Umami/docs/Alertmanager/VictoriaMetrics are healthy live on Hetzner, Zrok preview wildcard nginx routing is landed live, and the worktree still has unrelated parallel dirt outside this slice)
+Last updated: 2026-04-03 (Payload CMS `/cms` admin compatibility is fixed locally, the initial Payload migration + seed path are landed in source, Umami/docs/Alertmanager/VictoriaMetrics are healthy live on Hetzner, and single-label Zrok previews are live)
 
 ---
 
@@ -101,25 +101,36 @@ This supersedes any stale reading that the Umami compose entry still points at t
   - ensure the `umami` database exists on the host Postgres
   - deploy and verify the service
 
-## Current Correction (2026-04-02, Payload CMS scaffold)
+## Current Correction (2026-04-03, Payload CMS admin + bootstrap path)
 
-This supersedes any stale reading that Sprint J3 in the main app was still "not started".
+This supersedes the stale reading that `/cms` was still blocked by Next/React compatibility alone.
 
 - Source-level Payload scaffolding is landed:
   - `app/payload.config.ts`
   - Payload collections for blog and changelog content plus CMS users
   - headless REST route at `app/app/api/cms/[...slug]/route.ts`
+- The real admin surface is now mounted too:
+  - `app/app/(payload)/cms/[[...segments]]/page.tsx`
+  - `app/app/(payload)/cms/layout.tsx`
+  - `app/app/(payload)/cms/actions.ts`
+  - `app/lib/payload/react-compiler-runtime-shim.ts`
+- The locale middleware no longer rewrites `/cms` into `/{locale}/cms`
 - Public pages now read CMS-first with fail-open fallback:
   - blog index and detail route through `app/lib/cms/blog.ts`
   - changelog routes through `app/lib/cms/changelog.ts`
   - current static content is preserved as the fallback source of truth until live enablement
-- Current root-cause blocker for a real admin UI is framework compatibility, not missing app code:
-  - Payload 3.81.0 expects a supported Next/React window that does not include the current main-app combo of Next 15.5.9 + React 18.3.1
-  - follow-up issue: `recoder-1o4`
-- Live enablement is also separate from the scaffold itself:
-  - DB/schema setup, content seeding, `PAYLOAD_CMS_ENABLED` / `PAYLOAD_SECRET`, and deployed verification are tracked in `recoder-b4e`
+- Source-level bootstrap is landed:
+  - initial migration at `app/payload-migrations/20260402_232717_init_payload_cms.ts`
+  - seed helper at `app/scripts/seed-payload-cms.ts`
+  - package scripts for `cms:migrate*`, `cms:seed`, `cms:types`, and `cms:importmap`
+- The remaining blocker is now DB/live enablement, not route compatibility:
+  - local `/cms/login` renders, but without the Payload tables the app logs `relation "cms_users" does not exist`
+  - DB/schema setup, real seeding, `PAYLOAD_CMS_ENABLED` / `PAYLOAD_SECRET`, and deployed verification remain in `recoder-b4e`
 - Verification:
   - `pnpm --dir app build` passed
+  - `curl http://127.0.0.1:3111/cms/login` returned `200`
+  - `pnpm --dir app exec payload migrate:status` read the pending migration successfully
+  - `cd app && node scripts/seed-payload-cms.ts --dry-run` succeeded
   - app-wide `tsc` still fails on a pre-existing unrelated `NextRequest` test mismatch in `app/api/platform/events/__tests__/route.test.ts`
 
 ## Current Correction (2026-04-02, host DB path + Alertmanager)
