@@ -174,10 +174,15 @@ This supersedes the stale reading that preview traffic was still blocked on ngin
   - `docker-backend/Dockerfile` now includes the `zrok2` binary in the runtime image
   - `docker-backend/src/server.ts` and `docker-backend/src/preview.ts` now retarget active preview shares when the actual dev-server port changes
   - `docker-backend/src/__tests__/zrok-preview.test.ts` covers the zrok2 preview lifecycle and the intentional no-op `reservePreviewShare()` fallback
+- What is fixed live:
+  - `recoder-docker-backend` on Hetzner is rebuilt on the zrok2-capable image and is healthy again
+  - `docker exec recoder-docker-backend which zrok2` resolves to `/usr/local/bin/zrok2`
+  - `https://docker.recoder.xyz/health` returns `status: ok` with A2A enabled and 4 agents wired
 - What remains:
   - the infra/TLS bead `recoder-6qa` is closed
   - the source-migration bead `recoder-crg` should no longer be read as "still blocked on legacy zrok code"
   - the real follow-up is `recoder-vy7`: define and implement a supported persistent published-preview strategy for zrok2, since the old reserved/frontdoor flow does not exist there
+  - the rollout exposed a separate ops issue now tracked as `recoder-8b6`: Hetzner Docker rebuilds need a disk-pressure guard to avoid `ENOSPC` crash loops
 
 ## Current Correction (2026-04-01, streaming task output)
 
