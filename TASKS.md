@@ -1,6 +1,6 @@
 # Recoder Platform — Task List
 
-Last updated: 2026-04-02 (Payload CMS blog/changelog scaffold is landed in the main app, Umami/docs/Alertmanager/VictoriaMetrics are healthy live on Hetzner, Zrok preview wildcard nginx routing is landed live, and the worktree still has unrelated parallel dirt outside this slice)
+Last updated: 2026-04-03 (Payload CMS `/cms` admin compatibility is fixed locally, the initial Payload migration + seed path are landed in source, Umami/docs/Alertmanager/VictoriaMetrics are healthy live on Hetzner, and single-label Zrok previews are live)
 
 ---
 
@@ -118,21 +118,28 @@ This supersedes older task notes that still treat deploy-network breakage, root 
   - Redis is no longer published onto the host, avoiding the `127.0.0.1:6379` collision with the host `redis-server`
   - `recoder-web`, `recoder-redis`, and `recoder-redis-exporter` were re-converged under Compose ownership on `recoder-network`
 
-## 2026-04-02 Correction (Payload CMS scaffold)
+## 2026-04-03 Correction (Payload CMS admin + bootstrap path)
 
-This supersedes any stale task note that Payload CMS in the main app was still "not started".
+This supersedes any stale task note that `/cms` was still framework-blocked.
 
 - Landed in source:
   1. Postgres-backed Payload config in `app/payload.config.ts`
   2. collections for CMS users, blog posts, and changelog entries
   3. headless REST route at `app/app/api/cms/[...slug]/route.ts`
-  4. blog/changelog public pages now read through Payload-aware helpers with a static fallback path
+  4. real admin route group at `app/app/(payload)/cms/[[...segments]]/page.tsx`
+  5. local server-action bridge at `app/app/(payload)/cms/actions.ts`
+  6. compiler-runtime compatibility shim at `app/lib/payload/react-compiler-runtime-shim.ts`
+  7. initial migration at `app/payload-migrations/20260402_232717_init_payload_cms.ts`
+  8. content seed helper at `app/scripts/seed-payload-cms.ts`
+  9. blog/changelog public pages now read through Payload-aware helpers with a static fallback path
 - Verification:
   - `pnpm --dir app build` passed with the scaffold in place
+  - local `/cms/login` returned `200`
+  - `pnpm --dir app exec payload migrate:status` shows the migration file as pending and readable
+  - `cd app && node scripts/seed-payload-cms.ts --dry-run` prepared the current fallback content for Payload
   - app-wide `tsc` is still blocked by a pre-existing unrelated `NextRequest` typing issue in `app/api/platform/events/__tests__/route.test.ts`
-- Remaining follow-up tasks are now explicit:
-  1. `recoder-1o4` — unblock the real `/cms` admin surface by aligning the app with a Payload-supported Next/React combination
-  2. `recoder-b4e` — run schema/migration/seed/live-enable work so deployed blog and changelog pages read from Payload instead of fallback arrays
+- Remaining follow-up task is now explicit:
+  1. `recoder-b4e` — run the real migration + seed against the target DB, set deploy env, and verify the deployed app reads from Payload instead of fallback arrays
 
 ## 2026-04-02 Correction (host DB path + Alertmanager)
 

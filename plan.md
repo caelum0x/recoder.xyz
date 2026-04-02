@@ -1,6 +1,6 @@
 # Recoder Platform — Master Plan
 
-Last updated: 2026-04-02 (Payload CMS blog/changelog scaffold is landed in the main app, Umami/docs/Alertmanager/VictoriaMetrics are healthy live on Hetzner, Zrok preview wildcard nginx routing is landed live, and the worktree still has unrelated parallel dirt outside this slice)
+Last updated: 2026-04-03 (Payload CMS `/cms` admin compatibility is fixed locally, the initial Payload migration + seed path are landed in source, Umami/docs/Alertmanager/VictoriaMetrics are healthy live on Hetzner, and single-label Zrok previews are live)
 
 ---
 
@@ -67,27 +67,37 @@ This section supersedes any stale note that `backend/core/services/llm.py` and `
   - those two files are no longer part of the main-repo dirty-state narrative
   - any remaining dirt after this slice is from unrelated parallel work, with `recoder-web/starters` still the dedicated nested-repo track
 
-## Current Correction — 2026-04-02 (Payload CMS scaffold)
+## Current Correction — 2026-04-03 (Payload CMS admin + bootstrap path)
 
-This supersedes any stale note that Sprint J3 "Payload CMS for recoder.xyz content" was still unstarted in source.
+This supersedes the stale reading that Sprint J3 was still blocked on Payload/Next framework incompatibility alone.
 
-- The main app now has a real Payload scaffold:
+- The main app now has a real Payload scaffold and admin route:
   1. `app/payload.config.ts` with Postgres-backed Payload config
   2. collections for `cms-users`, `blog-posts`, and `changelog-entries`
   3. headless REST route at `app/app/api/cms/[...slug]/route.ts`
+  4. real admin route group at `app/app/(payload)/cms/[[...segments]]/page.tsx`
+  5. local server-action bridge at `app/app/(payload)/cms/actions.ts`
+  6. React 18 compatibility shim for Payload's compiler-runtime import in `app/lib/payload/react-compiler-runtime-shim.ts`
 - The public content path is now CMS-first with fail-open fallback:
   1. blog index reads through `app/lib/cms/blog.ts`
   2. blog detail reads through the same helper and keeps the current markdown renderer
   3. changelog reads through `app/lib/cms/changelog.ts`
   4. if Payload is not enabled or the DB/schema is not ready, the site falls back to the existing hard-coded content
-- The enabling flag is explicit:
+- Locale middleware no longer breaks `/cms`:
+  - `app/middleware.ts` now bypasses locale rewrites for the Payload admin surface
+- The enabling flags and bootstrap path are explicit:
   - `PAYLOAD_CMS_ENABLED=true` is required before the app will initialize Payload for public-page reads
+  - `app/payload-migrations/20260402_232717_init_payload_cms.ts` now contains the initial CMS schema migration
+  - `app/scripts/seed-payload-cms.ts` upserts the current fallback blog/changelog content into Payload collections
+  - `app/package.json` now exposes `cms:migrate`, `cms:migrate:status`, `cms:migrate:create`, `cms:seed`, `cms:types`, and `cms:importmap`
 - Local verification:
   - `pnpm --dir app build` passed with the scaffold in place
+  - `curl http://127.0.0.1:3111/cms/login` returned `200` with the Payload login HTML after the route-group + server-action fix
+  - `pnpm --dir app exec payload migrate:status` shows the initial migration as pending and readable
+  - `cd app && node scripts/seed-payload-cms.ts --dry-run` prepared 3 blog posts and 2 changelog entries
   - app-wide `tsc` is still noisy on a pre-existing unrelated `NextRequest` test mismatch in `app/api/platform/events/__tests__/route.test.ts`
-- Remaining J3 follow-up is now split cleanly:
-  1. `recoder-1o4` — unblock a real `/cms` admin surface; current Payload 3.81.0 Next integration expects Next `<15.5` or `16.2` canary+ and React 19, while the app is on Next 15.5.9 and React 18.3.1
-  2. `recoder-b4e` — run the DB/schema/seed/live-enable path so deployed blog/changelog pages read from Payload instead of the fallback arrays
+- Remaining J3 follow-up is now narrowed:
+  1. `recoder-b4e` — apply the migration to the target database, run the real seed, set the deploy env (`PAYLOAD_CMS_ENABLED` / `PAYLOAD_SECRET`), and verify the deployed app reads from Payload instead of fallback arrays
 
 ## Current Correction — 2026-04-02 (deploy compose host DB + Alertmanager)
 

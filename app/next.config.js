@@ -1,6 +1,7 @@
 const createNextIntlPlugin = require('next-intl/plugin');
 const { withSentryConfig } = require('@sentry/nextjs');
 const withPayload = require('@payloadcms/next/withPayload').default;
+const path = require('path');
 
 const withNextIntl = createNextIntlPlugin('./i18n.ts');
 
@@ -30,9 +31,23 @@ const nextConfig = {
       // Don't bundle Prisma Client - use the node_modules version
       config.externals.push('_http_common');
     }
+
+    config.resolve = config.resolve || {};
+    config.resolve.alias = config.resolve.alias || {};
+    config.resolve.alias['react/compiler-runtime'] = path.resolve(
+      __dirname,
+      'lib/payload/react-compiler-runtime-shim.ts',
+    );
+
     return config;
   },
-  
+
+  turbopack: {
+    resolveAlias: {
+      'react/compiler-runtime': './lib/payload/react-compiler-runtime-shim.ts',
+    },
+  },
+
   experimental: {},
 
   // Ensure Prisma and Better Auth are not bundled (moved from experimental in Next.js 15.5+)
