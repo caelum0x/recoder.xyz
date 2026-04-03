@@ -1,6 +1,36 @@
 # Recoder Platform — Master Plan
 
-Last updated: 2026-04-03 (Payload CMS `/cms` admin compatibility is fixed locally, the initial Payload migration + seed path are landed in source, Umami/docs/Alertmanager/VictoriaMetrics are healthy live on Hetzner, and single-label Zrok previews are live)
+Last updated: 2026-04-04 (current remaining-work summary reconciled with the latest live verification and ticket state)
+
+## Current Remaining Work — Authoritative Summary (2026-04-04)
+
+Use this section as the source of truth when older blocks below conflict with later corrections.
+
+- `recoder-96g` — still open. The core agent coding loop is not closed yet for real app tasks.
+  - Concrete live blocker under it: `recoder-sti` (watch/terminal WebSocket proxy resolving to `undefined`)
+  - Support regressions around preview/file listing were fixed live on 2026-04-03, but the full create → follow-up edit → file mutation → preview update path still needs end-to-end production browser verification
+- `recoder-i3v` — still open. `web.recoder.xyz` multi-turn editing still needs explicit production browser verification before it can be claimed fixed live
+- Approved next capability work under the coding-loop track:
+  - `recoder-coi` — spike an `opencode` connector runtime behind `docker-backend`
+  - `recoder-4bc` — design hash-anchored edits for reliable multi-turn file modification
+- Connector/runtime follow-up still pending:
+  - Windsurf connector needs real-binary method verification plus live/browser verification
+- Agents/canvas follow-up still pending:
+  - Excalidraw incremental-update behavior should still explicitly call `recoder_canvas_update`
+  - the live board-update path still needs browser verification in the deployed UI
+- A2A productionization backlog still pending:
+  - inbox push notifications
+  - per-terminal discovery/session IDs for Claude Code and Codex
+  - task claim/lock
+  - production deployment of the Redis-backed persistent task store
+  - package release, threading/history, and workspace discovery follow-ups
+- Source-level compose corrections that are not yet the same thing as a live closeout:
+  - Umami host-DB compose fix exists in source, but this file should not be read as claiming live Umami deploy/database verification unless stated explicitly in a later correction
+
+When in doubt:
+- trust the newest correction block above any older roadmap block
+- trust `bd` ticket state over historical roadmap prose
+- treat the older roadmap sections as useful design history, not live-status truth
 
 ---
 
@@ -752,7 +782,8 @@ Three separate root causes blocked the presentation creation flow:
 - **Decoy**: `/etc/nginx/sites-enabled/recoder-production.conf` — NOT included in nginx.conf, NOT loaded, edits here have NO effect
 - **Local copy**: `/Users/arhansubasi/recoder.xyz/nginx-production.conf` — kept in sync with server after each nginx change
 
-### agents.recoder.xyz — Known Remaining Issues
+### Historical Snapshot — 2026-03-29 agents.recoder.xyz Remaining Issues
+This block is preserved for roadmap history only. It is superseded by later correction sections above wherever it conflicts with live-status notes about Nike, `recoder-agents`, or deployed presentation fixes.
 1. **Presentation images not loading** — fix implemented but not yet deployed (recoder-agents stopped)
 2. **recoder-agents stopped** — needs manual deployment restart (see above)
 3. **FullScreenPresentationViewer** — also uses blob iframe approach, will benefit from same path-rewriting fix once deployed
