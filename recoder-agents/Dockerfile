@@ -68,7 +68,7 @@ WORKDIR /app/recoder-agents
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV NEXT_OUTPUT=standalone
 
-ARG BUILD_NODE_MAX_OLD_SPACE=3072
+ARG BUILD_NODE_MAX_OLD_SPACE=5120
 
 # NEXT_PUBLIC_* vars must be declared as ARGs so Next.js can inline them at build time
 ARG NEXT_PUBLIC_APP_URL=https://agents.recoder.xyz
