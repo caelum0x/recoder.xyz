@@ -149,6 +149,11 @@ import {
 } from './daytona-file-ops.js';
 import { templateManager } from './templates/index.js';
 import {
+  buildOpencodeSandboxCommand,
+  parseOpencodeSandboxOutput,
+  type OpencodeSandboxProviderKeys,
+} from './opencode-sandbox.js';
+import {
   getProjectIdFromRequest,
   isLikelySandboxProjectId,
   isStrictAuthMode,
@@ -4801,6 +4806,98 @@ app.post('/api/exec/:projectId', authenticateRequest, verifyProjectOwnership, as
       exitCode,
       output: errMsg,
       canRetry: isDockerUnavailable
+    });
+  }
+});
+
+app.post('/api/opencode/:projectId', authenticateRequest, verifyProjectOwnership, async (req: AuthenticatedRequest, res) => {
+  try {
+    const projectId = sanitizeProjectId(req.params.projectId);
+    const {
+      prompt,
+      model,
+      sessionId,
+      continueSession,
+      providerKeys,
+    } = (req.body || {}) as {
+      prompt?: string;
+      model?: string;
+      sessionId?: string;
+      continueSession?: boolean;
+      providerKeys?: OpencodeSandboxProviderKeys;
+    };
+
+    if (!prompt || typeof prompt !== 'string') {
+      return res.status(400).json({ success: false, error: 'prompt is required' });
+    }
+
+    const entry = await getOrRecoverContainer(projectId);
+    if (!entry) {
+      return res.status(404).json({ success: false, error: 'Container not found. Create a project first.' });
+    }
+
+    const containerStatus = await ensureContainerRunning(entry, projectId);
+    if (!containerStatus.running) {
+      return res.status(503).json({
+        success: false,
+        error: containerStatus.error || 'Container could not be started',
+        canRetry: true,
+      });
+    }
+
+    entry.lastActive = Date.now();
+
+    const command = buildOpencodeSandboxCommand({
+      prompt,
+      model,
+      sessionId,
+      continueSession,
+      cwd: '/workspace',
+      providerKeys,
+    });
+
+    let output = '';
+    let exitCode: number | null = 0;
+
+    if (isDaytonaSandbox(entry)) {
+      const dayCommand = command
+        .replace(/\/workspace\//g, '/home/daytona/')
+        .replace(/\/workspace(?=["'\s]|$)/g, '/home/daytona');
+      const result = await daytonaExec(entry.id, dayCommand, {
+        cwd: '/home/daytona',
+        timeoutSecs: 15 * 60,
+      });
+      output = result.output;
+      exitCode = result.exitCode ?? 0;
+
+      if (exitCode !== 0) {
+        return res.status(500).json({
+          success: false,
+          error: output || `OpenCode exited with code ${exitCode}`,
+          output,
+          exitCode,
+        });
+      }
+    } else {
+      const container = docker.getContainer(entry.id);
+      output = await execCommand(container, command);
+    }
+
+    const parsed = parseOpencodeSandboxOutput(output);
+
+    return res.json({
+      success: !parsed.error,
+      sessionId: parsed.sessionId,
+      text: parsed.text,
+      error: parsed.error,
+      output,
+      exitCode,
+    });
+  } catch (err: any) {
+    logger.error({ error: err.message, stack: err.stack }, 'OpenCode sandbox execution failed');
+    return res.status(500).json({
+      success: false,
+      error: err.message || 'OpenCode sandbox execution failed',
     });
   }
 });
@@ -15093,6 +15190,47 @@ import { activityFeedRouter } from './unified-activity-feed.js';
 import { dashboardRouter } from './unified-dashboard.js';
 app.use('/api/a2a/activity', activityFeedRouter);
 app.use('/api/a2a/dashboard', dashboardRouter);
+
+// ── Coding Runtime API ──────────────────────────────────────────────────────
+// Deep coding mode: start/prompt/dispose sessions via runtime adapters
+app.post('/api/coding-runtime/session', authenticateRequest, verifyProjectOwnership, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const { getRuntime } = await import('./a2a/coding-runtime.js');
+  const { projectId, sandboxId, runtimeType = 'opencode', model, provider, apiKey } = req.body;
+  if (!projectId || !sandboxId) return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'projectId and sandboxId required'));
+  const runtime = getRuntime(runtimeType);
+  if (!runtime) return sendError(res, createError(ErrorCode.VALIDATION_ERROR, `Unknown runtime: ${runtimeType}`));
+  const daytonaUrl = (process.env.DAYTONA_SERVER_URL ?? 'http://localhost:3900/api').replace(/\/api\/?$/, '');
+  const session = await runtime.startSession({
+    projectId, sandboxId,
+    sandboxExecUrl: `${daytonaUrl}/api/toolbox/${sandboxId}/toolbox/process/execute`,
+    daytonaApiKey: process.env.DAYTONA_API_KEY ?? '',
+    model, provider, apiKey,
+  });
+  sendSuccess(res, session);
+}));
+
+app.post('/api/coding-runtime/prompt', authenticateRequest, verifyProjectOwnership, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const { getRuntime } = await import('./a2a/coding-runtime.js');
+  const { projectId, prompt, runtimeType = 'opencode', agent } = req.body;
+  if (!projectId || !prompt) return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'projectId and prompt required'));
+  const runtime = getRuntime(runtimeType);
+  if (!runtime) return sendError(res, createError(ErrorCode.VALIDATION_ERROR, `Unknown runtime: ${runtimeType}`));
+  const state = runtime.getState(projectId);
+  if (!state || state.status !== 'ready') return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'No ready session. Call /session first.'));
+  const daytonaUrl = (process.env.DAYTONA_SERVER_URL ?? 'http://localhost:3900/api').replace(/\/api\/?$/, '');
+  const result = await runtime.sendPrompt({
+    projectId, prompt, agent,
+    sandboxExecUrl: `${daytonaUrl}/api/toolbox/${state.sandboxId}/toolbox/process/execute`,
+    daytonaApiKey: process.env.DAYTONA_API_KEY ?? '',
+  });
+  sendSuccess(res, result);
+}));
+
+app.get('/api/coding-runtime/runtimes', (_req, res) => {
+  import('./a2a/coding-runtime.js').then(({ listRuntimes }) => {
+    sendSuccess(res, { runtimes: listRuntimes() });
+  });
+});
 
 // Wire the A2A event bridge (TaskLifecycleService audit -> SSE event bus)
 wireA2AEventBridge();
