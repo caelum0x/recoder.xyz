@@ -1,4 +1,5 @@
 import type { NextConfig } from 'next';
+import path from 'node:path';
 import bundleAnalyzer from '@next/bundle-analyzer';
 import { withSentryConfig } from '@sentry/nextjs';
 
@@ -116,6 +117,14 @@ const nextConfig: NextConfig = {
   
   // Webpack configuration to make Konva work with Next.js
   webpack: (config) => {
+    config.resolve = config.resolve || {};
+    config.resolve.alias = {
+      ...(config.resolve.alias || {}),
+      '@recoder/ecosystem-config': path.resolve(
+        process.cwd(),
+        '../packages/ecosystem-config/src/index.ts',
+      ),
+    };
     config.externals = [...config.externals, { canvas: 'canvas' }]; // required to make Konva & react-konva work
     return config;
   },
