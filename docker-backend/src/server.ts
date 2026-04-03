@@ -1762,6 +1762,7 @@ async function getOrRecoverContainer(projectId: string): Promise<ContainerEntry 
       port: 5173,
       ptyPort: 0,
       lastActive: Date.now(),
+      userId: match.labels?.userId,
       daytona: true,
       daytonaPreviewUrl: previewUrl,
     };
@@ -1814,6 +1815,10 @@ function registerUserContainer(userId: string, projectId: string): void {
     userContainers.set(userId, new Set());
   }
   userContainers.get(userId)!.add(projectId);
+  ownershipCache.set(`${userId}:${projectId}`, {
+    isOwner: true,
+    expiresAt: Date.now() + OWNERSHIP_CACHE_TTL,
+  });
 }
 
 /**
@@ -1827,6 +1832,7 @@ function unregisterUserContainer(userId: string, projectId: string): void {
       userContainers.delete(userId);
     }
   }
+  ownershipCache.delete(`${userId}:${projectId}`);
 }
 
 const IMAGE_NAME = 'recoder-workspace:latest';
@@ -2612,6 +2618,9 @@ app.get('/api/metrics/prometheus', metricsAuth, (_, res) => {
 
 // Create or get container for project (SECURED: requires auth + ownership)
 app.post('/api/container', containerLimiter, optionalAuthenticateRequest, flexibleProjectOwnership, async (req: AuthenticatedRequest, res) => {
+  let reservedOwnership = false;
+  let reservedProjectId: string | null = null;
+  let reservedUserId: string | null = null;
   try {
     const { projectId, framework, templateId } = req.body;
     const userId = req.userId || 'anonymous'; // May be anonymous for web.recoder.xyz unauthenticated users
@@ -2666,7 +2675,7 @@ app.post('/api/container', containerLimiter, optionalAuthenticateRequest, flexib
       try {
         const dc = getDaytonaClient();
         const sandbox = await dc.createSandbox({
-          labels: { projectId, source: 'web-ide' },
+          labels: { projectId, userId, source: 'web-ide' },
           // Uses 43200s (12hr) defaults from daytona-client.ts — do NOT override here
           public: true,
         });
@@ -2746,9 +2755,20 @@ app.post('/api/container', containerLimiter, optionalAuthenticateRequest, flexib
     // Check per-user container limit (skip for anonymous users, skip if this project already has a container)
     const existingContainer = containers.get(projectId);
     if (!existingContainer && !isAnonymous) {
+      // Reserve ownership before slower quota/credential work so parallel file/preview
+      // requests during bootstrap do not fail auth against an unregistered project.
+      registerUserContainer(userId, projectId);
+      reservedOwnership = true;
+      reservedProjectId = projectId;
+      reservedUserId = userId;
+
       const currentCount = getUserContainerCount(userId);
       if (currentCount >= MAX_CONTAINERS_PER_USER) {
         logger.info({ userId, currentCount, max: MAX_CONTAINERS_PER_USER }, 'user at container limit');
+        unregisterUserContainer(userId, projectId);
+        reservedOwnership = false;
+        reservedProjectId = null;
+        reservedUserId = null;
         return res.status(429).json({
           error: `Container limit reached. You have ${currentCount} active containers. Maximum allowed: ${MAX_CONTAINERS_PER_USER}. Please close unused projects.`,
           code: 'CONTAINER_LIMIT_REACHED',
@@ -3189,6 +3209,9 @@ app.post('/api/container', containerLimiter, optionalAuthenticateRequest, flexib
     });
   } catch (err: any) {
     logger.error({ err }, 'container create error');
+    if (reservedOwnership && reservedProjectId && reservedUserId && !containers.has(reservedProjectId)) {
+      unregisterUserContainer(reservedUserId, reservedProjectId);
+    }
     res.status(500).json({ error: err.message });
   }
 });
