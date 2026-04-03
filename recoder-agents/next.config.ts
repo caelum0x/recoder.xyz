@@ -98,8 +98,13 @@ const withBundleAnalyzer = bundleAnalyzer({
 const nextConfig: NextConfig = {
   output: (process.env.NEXT_OUTPUT as 'standalone') || undefined,
 
-  // Transpile shared package
-  transpilePackages: ['@recoder/shared', '@recoder/auth'],
+  // Source-only workspace packages must be transpiled in production/Docker builds.
+  transpilePackages: [
+    '@recoder/shared',
+    '@recoder/auth',
+    '@recoder/ui',
+    '@recoder/ecosystem-config',
+  ],
 
   // Keep Node.js-only packages out of client bundles
   serverExternalPackages: ['redis', '@redis/client'],
