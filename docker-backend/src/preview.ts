@@ -8,9 +8,10 @@ import http from 'http';
 import Docker from 'dockerode';
 import WebSocket from 'ws';
 import { isLikelySandboxProjectId } from './auth-utils.js';
-import { devServerManager } from './dev-server.js';
+import { devServerManager, detectFrameworkFromContainer } from './dev-server.js';
 import { getDaytonaClient } from './daytona-client.js';
 import { daytonaGetLogs, ensureDaytonaSandboxRunning } from './daytona-file-ops.js';
+import { rewritePreviewBody, shouldRewritePreviewBody } from './preview-rewrite.js';
 import { updateShareTarget, getPreviewUrl as getZrokPreviewUrl } from './zrok-preview.js';
 
 const docker = new Docker();
@@ -57,14 +58,16 @@ async function execInContainer(containerId: string, cmd: string): Promise<string
 
 async function detectFramework(containerId: string, isDaytona?: boolean): Promise<string> {
   try {
-    let pkgRaw: string;
-    if (isDaytona) {
-      const dc = getDaytonaClient();
-      const result = await dc.execCommand(containerId, 'cat /home/daytona/package.json 2>/dev/null || echo ""', { timeoutSecs: 10 });
-      pkgRaw = result.output;
-    } else {
-      pkgRaw = await execInContainer(containerId, 'cat /workspace/package.json 2>/dev/null || echo ""');
+    if (!isDaytona) {
+      const detected = await detectFrameworkFromContainer(containerId);
+      return detected === 'unknown' ? 'vite' : detected;
     }
+
+    let pkgRaw: string;
+    const dc = getDaytonaClient();
+    const result = await dc.execCommand(containerId, 'cat /home/daytona/package.json 2>/dev/null || echo ""', { timeoutSecs: 10 });
+    pkgRaw = result.output;
+
     if (!pkgRaw) return 'vite';
     let pkg: Record<string, any>;
     try {
@@ -74,8 +77,20 @@ async function detectFramework(containerId: string, isDaytona?: boolean): Promis
     }
     const deps = { ...(pkg.dependencies || {}), ...(pkg.devDependencies || {}) };
     if (deps.next || pkg.scripts?.dev?.includes('next')) return 'next';
+    if (deps.expo || deps['react-native']) return 'expo';
+    if (deps.nuxt) return 'nuxt';
+    if (deps['@sveltejs/kit']) return 'sveltekit';
+    if (deps.svelte) return 'svelte';
+    if (deps['@angular/core']) return 'angular';
+    if (deps.vue) return 'vue';
     if (deps.vite || pkg.scripts?.dev?.includes('vite')) return 'vite';
+    if (deps.servor || deps.serve) return 'static';
+    if (pkg.scripts?.start && !pkg.scripts?.dev) return 'static';
     if (deps.react) return 'react';
+    if (deps.express || deps.fastify || deps.koa) return 'node-server';
+    const indexHtml = await dc.execCommand(containerId, 'test -f /home/daytona/index.html && echo "yes" || echo "no"', { timeoutSecs: 10 });
+    if (indexHtml.output.includes('yes')) return 'static';
+    return 'node';
   } catch {
     // ignore
   }
@@ -237,61 +252,6 @@ function getQuerySuffix(req: { originalUrl?: string; url?: string }): string {
   return queryStart >= 0 ? urlWithQuery.slice(queryStart) : '';
 }
 
-function shouldRewritePreviewBody(contentType: string, requestPath: string): boolean {
-  return contentType.includes('text/html') ||
-    contentType.includes('javascript') ||
-    contentType.includes('ecmascript') ||
-    /\.(?:[cm]?[jt]sx?)$/i.test(requestPath);
-}
-
-function rewriteViteHmrClient(body: string, proxyPrefix: string): string {
-  const normalizedPrefix = proxyPrefix.replace(/\/+$/, '');
-  const socketTarget = normalizedPrefix ? `${normalizedPrefix}/` : '/';
-  return body
-    .replace(/const serverHost = "[^"]*";/, `const serverHost = \`${'${importMetaUrl.host}'}${socketTarget}\`;`)
-    .replace(/const socketHost = `[^`]+`;/, `const socketHost = \`${'${importMetaUrl.host}'}${socketTarget}\`;`)
-    .replace(/const directSocketHost = "[^"]*";/, `const directSocketHost = \`${'${importMetaUrl.host}'}${socketTarget}\`;`)
-    .replace(/const base = "[^"]*" \|\| "\/";/, `const base = "${socketTarget}" || "/";`);
-}
-
-function rewritePreviewBody(body: string, proxyPrefix: string, contentType: string, requestPath: string = ''): string {
-  const normalizedPrefix = proxyPrefix.replace(/\/+$/, '');
-  const proxyRoot = `${normalizedPrefix}/`;
-  const absolutePathGuard = '(?!\\/|preview\\/|api\\/sandbox-preview\\/)';
-  let modifiedBody = body;
-
-  if (contentType.includes('text/html')) {
-    modifiedBody = modifiedBody
-      .replace(new RegExp(`(<script[^>]+src=["'])\\/${absolutePathGuard}`, 'gi'), `$1${proxyRoot}`)
-      .replace(new RegExp(`(<link[^>]+href=["'])\\/${absolutePathGuard}`, 'gi'), `$1${proxyRoot}`)
-      .replace(new RegExp(`(<img[^>]+src=["'])\\/${absolutePathGuard}`, 'gi'), `$1${proxyRoot}`)
-      .replace(new RegExp(`(<source[^>]+src=["'])\\/${absolutePathGuard}`, 'gi'), `$1${proxyRoot}`)
-      .replace(new RegExp(`(import\\s+[^"']*["'])\\/${absolutePathGuard}`, 'gi'), `$1${proxyRoot}`)
-      .replace(new RegExp(`(new\\s+URL\\s*\\(\\s*["'])\\/${absolutePathGuard}`, 'gi'), `$1${proxyRoot}`);
-
-    if (modifiedBody.includes('<head>') && !modifiedBody.includes('data-recoder-error-handler')) {
-      modifiedBody = modifiedBody.replace('<head>', '<head>' + ERROR_CAPTURE_SCRIPT);
-    } else if (/<head\b/i.test(modifiedBody) && !modifiedBody.includes('data-recoder-error-handler')) {
-      modifiedBody = modifiedBody.replace(/<head[^>]*>/i, (match) => match + ERROR_CAPTURE_SCRIPT);
-    }
-  }
-
-  if (contentType.includes('javascript') || contentType.includes('ecmascript') || !contentType) {
-    modifiedBody = modifiedBody
-      .replace(new RegExp(`(from\\s+["'])\\/${absolutePathGuard}`, 'g'), `$1${proxyRoot}`)
-      .replace(new RegExp(`(import\\s+["'])\\/${absolutePathGuard}`, 'g'), `$1${proxyRoot}`)
-      .replace(new RegExp(`(export\\s+.*from\\s+["'])\\/${absolutePathGuard}`, 'g'), `$1${proxyRoot}`)
-      .replace(new RegExp(`(import\\s*\\(\\s*["'])\\/${absolutePathGuard}`, 'g'), `$1${proxyRoot}`)
-      .replace(new RegExp(`(new\\s+URL\\s*\\(\\s*["'])\\/${absolutePathGuard}`, 'g'), `$1${proxyRoot}`);
-
-    if (requestPath === '@vite/client') {
-      modifiedBody = rewriteViteHmrClient(modifiedBody, normalizedPrefix);
-    }
-  }
-
-  return modifiedBody;
-}
-
 // Helper to escape HTML entities
 function escapeHtml(str: string): string {
   return str
@@ -308,8 +268,8 @@ function escapeHtml(str: string): string {
  */
 async function recoverContainerFromDocker(
   projectId: string,
-  containers: Map<string, { id: string; lastActive: number; port: number; ptyPort?: number }>
-): Promise<{ id: string; lastActive: number; port: number } | undefined> {
+  containers: Map<string, { id: string; lastActive: number; port: number; ptyPort?: number; userId?: string }>
+): Promise<{ id: string; lastActive: number; port: number; ptyPort?: number; userId?: string } | undefined> {
   try {
     // Look for containers with our naming pattern
     const allContainers = await docker.listContainers({ all: false }); // only running
@@ -349,7 +309,8 @@ async function recoverContainerFromDocker(
             id: containerInfo.Id,
             lastActive: Date.now(),
             port: basePort,
-            ptyPort: port9999Host || basePort + 3
+            ptyPort: port9999Host || basePort + 3,
+            userId: containerInfo.Labels?.userId,
           };
           
           console.log(`🔄 [Preview] Recovered container for ${projectId}: ${containerInfo.Id.slice(0, 12)} (port: ${basePort})`);
@@ -399,6 +360,7 @@ async function recoverContainerFromDaytona(
         port: defaultPort,
         ptyPort: 0,
         lastActive: Date.now(),
+        userId: match.labels?.userId,
         daytona: true,
         daytonaPreviewUrl: previewUrl,
       } as any;
@@ -942,51 +904,21 @@ export function setupPreviewProxy(app: WsExpressApp, containers: Map<string, { i
             proxyRes.on('end', () => {
               console.log(`📄 [${fileType} Rewrite] Original length: ${body.length} chars`);
 
-              // Rewrite absolute paths to include preview prefix
-              // Vite uses: /@vite/client, /src/main.jsx, /@react-refresh, /node_modules/.vite/deps/*, etc.
-              let modifiedBody = body;
-
-              if (isHtml) {
-                // HTML-specific rewrites
-                modifiedBody = modifiedBody
-                  // Rewrite script src: <script src="/path"> -> <script src="/preview/projectId/path">
-                  .replace(/(<script[^>]+src=["'])\/(?!preview\/)/gi, `$1/preview/${projectId}/`)
-                  // Rewrite link href: <link href="/path"> -> <link href="/preview/projectId/path">
-                  .replace(/(<link[^>]+href=["'])\/(?!preview\/)/gi, `$1/preview/${projectId}/`)
-                  // Rewrite inline imports in script tags
-                  .replace(/(import\s+[^"']*["'])\/(?!preview\/)/gi, `$1/preview/${projectId}/`)
-                  // Rewrite import.meta.url references
-                  .replace(/(new\s+URL\s*\(\s*["'])\/(?!preview\/)/gi, `$1/preview/${projectId}/`);
-
-                // Inject error capture script right after <head> tag (if present)
-                // This captures runtime errors and navigation events and reports them to the parent frame
-                if (modifiedBody.includes('<head>') && !modifiedBody.includes('data-recoder-error-handler')) {
-                  modifiedBody = modifiedBody.replace('<head>', '<head>' + ERROR_CAPTURE_SCRIPT);
-                  console.log('🛡️ [HTML Rewrite] Injected error capture script');
-                } else if (modifiedBody.includes('<head ') && !modifiedBody.includes('data-recoder-error-handler')) {
-                  // Handle <head ...attributes> case
-                  modifiedBody = modifiedBody.replace(/<head[^>]*>/, (match) => match + ERROR_CAPTURE_SCRIPT);
-                  console.log('🛡️ [HTML Rewrite] Injected error capture script (with head attributes)');
-                }
-              }
-
-              if (isJavaScript) {
-                // JavaScript-specific rewrites - rewrite ALL import/export paths
-                modifiedBody = modifiedBody
-                  // Rewrite: import ... from "/path"
-                  .replace(/(from\s+["'])\/(?!preview\/)/g, `$1/preview/${projectId}/`)
-                  // Rewrite: import "/path"
-                  .replace(/(import\s+["'])\/(?!preview\/)/g, `$1/preview/${projectId}/`)
-                  // Rewrite: export ... from "/path"
-                  .replace(/(export\s+.*from\s+["'])\/(?!preview\/)/g, `$1/preview/${projectId}/`)
-                  // Rewrite: import() dynamic imports
-                  .replace(/(import\s*\(\s*["'])\/(?!preview\/)/g, `$1/preview/${projectId}/`)
-                  // Rewrite: new URL("/path", import.meta.url)
-                  .replace(/(new\s+URL\s*\(\s*["'])\/(?!preview\/)/g, `$1/preview/${projectId}/`);
-              }
+              const requestPath = typeof (req as any).url === 'string'
+                ? (req as any).url.split('?')[0].replace(/^\/+/, '')
+                : '';
+              const modifiedBody = rewritePreviewBody(body, {
+                proxyPrefix: `/preview/${projectId}`,
+                contentType,
+                requestPath,
+                errorCaptureScript: ERROR_CAPTURE_SCRIPT,
+              });
 
               const changed = body !== modifiedBody;
               console.log(`✅ [${fileType} Rewrite] Modified length: ${modifiedBody.length} chars - Changes: ${changed ? 'YES' : 'NO'}`);
+              if (isHtml && changed && modifiedBody.includes('<base ')) {
+                console.log(`🧭 [HTML Rewrite] Injected preview base tag for ${projectId}`);
+              }
               if (changed && modifiedBody.length < 1000) {
                 console.log(`✅ [${fileType} Rewrite] Modified content:`, modifiedBody);
               }
@@ -1107,7 +1039,12 @@ export function setupPreviewProxy(app: WsExpressApp, containers: Map<string, { i
       res.status(proxyResult.status);
       const contentType = proxyResult.headers['content-type'] || '';
       const responseBody = shouldRewritePreviewBody(contentType, normalizedSubPath)
-        ? Buffer.from(rewritePreviewBody(proxyResult.body.toString('utf8'), proxyPrefix, contentType, normalizedSubPath), 'utf8')
+        ? Buffer.from(rewritePreviewBody(proxyResult.body.toString('utf8'), {
+            proxyPrefix,
+            contentType,
+            requestPath: normalizedSubPath,
+            errorCaptureScript: ERROR_CAPTURE_SCRIPT,
+          }), 'utf8')
         : proxyResult.body;
 
       for (const [key, value] of Object.entries(proxyResult.headers)) {
@@ -1206,6 +1143,7 @@ export function setupPreviewProxy(app: WsExpressApp, containers: Map<string, { i
               port: 5173,
               ptyPort: 0,
               lastActive: Date.now(),
+              userId: match.labels?.userId,
               daytona: true,
               daytonaPreviewUrl: previewUrl,
             } as any;

@@ -352,6 +352,7 @@ export class DevServerManager {
       react: 'npm start',
       vue: 'npm run serve',
       bun: 'npm run dev',
+      static: 'python3 -m http.server 5173 --bind 0.0.0.0 2>/dev/null || python -m http.server 5173 --bind 0.0.0.0 2>/dev/null || npx serve -l 5173',
       // REACT_NATIVE_PACKAGER_HOSTNAME: hostname for QR codes/connection URLs (container IP is unreachable from phones)
       // EXPO_DEVTOOLS_LISTEN_ADDRESS: allow connections from outside the container
       // BROWSER=none: don't try to open a browser inside the container
@@ -388,6 +389,7 @@ export class DevServerManager {
       next: 'next dev',
       react: 'react-scripts start',
       vue: 'vue-cli-service serve',
+      static: 'python3 -m http.server 5173|python -m http.server 5173|serve -l 5173',
       expo: 'expo start|metro',
 
       // Python
@@ -698,7 +700,7 @@ export function getDevCommand(framework: string): string {
     'java-spring': 'mvn spring-boot:run -Dspring-boot.run.arguments=--server.port=8080 2>/dev/null || gradle bootRun',
     
     // Static - use simple HTTP server
-    'static': 'npx serve -l 5173 2>/dev/null || python -m http.server 5173',
+    'static': 'python3 -m http.server 5173 --bind 0.0.0.0 2>/dev/null || python -m http.server 5173 --bind 0.0.0.0 2>/dev/null || npx serve -l 5173',
   };
   
   return commands[framework] || commands['vite'];
