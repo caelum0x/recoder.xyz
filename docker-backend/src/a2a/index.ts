@@ -224,6 +224,24 @@ export {
 // Codex Connector Routes
 export { codexConnectorRouter } from './codex-connector.routes';
 
+// OpenCode Connector Runtime (experimental)
+export {
+  OpencodeConnectorRuntime,
+  getOpencodeConnectorRuntime,
+  resetOpencodeConnectorRuntime,
+  getOpencodeConnectorIdentity,
+  type OpencodeConnectorStatus,
+  type OpencodeConnectorConfig,
+  type OpencodeConnectorState,
+  type OpencodeProviderKeys,
+  type OpencodeExecuteInput,
+  type OpencodeExecuteResult,
+  type OpencodeTaskStatus,
+} from './opencode-connector-runtime.service';
+
+// OpenCode Connector Routes
+export { opencodeConnectorRouter } from './opencode-connector.routes';
+
 // Cursor IDE Connector Runtime (Tier-2)
 export {
   CursorConnectorRuntime,

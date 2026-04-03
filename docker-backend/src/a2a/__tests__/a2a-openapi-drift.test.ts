@@ -5,6 +5,7 @@ import type { Router } from 'express';
 import { sseStreamRouter } from '../sse-stream.router';
 import { claudeConnectorRouter } from '../claude-connector.routes';
 import { codexConnectorRouter } from '../codex-connector.routes';
+import { opencodeConnectorRouter } from '../opencode-connector.routes';
 import { contextBridgeRouter } from '../context-bridge.routes';
 import { connectorHealthRouter } from '../connector-health.routes';
 import { patternRouter } from '../patterns/pattern.routes';
@@ -94,6 +95,7 @@ describe('A2A OpenAPI drift check', () => {
       ...collectMountedRoutes('/api/a2a', sseStreamRouter),
       ...collectMountedRoutes('/api/a2a/connectors/claude', claudeConnectorRouter),
       ...collectMountedRoutes('/api/a2a/connectors/codex', codexConnectorRouter),
+      ...collectMountedRoutes('/api/a2a/connectors/opencode', opencodeConnectorRouter),
       ...collectMountedRoutes('/api/a2a/context', contextBridgeRouter),
       ...collectMountedRoutes('/api/a2a', connectorHealthRouter),
       ...collectMountedRoutes('/api/a2a/patterns', patternRouter),

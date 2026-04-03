@@ -35,6 +35,7 @@ import { agentRegistryRouter } from './agent-registry.routes';
 import { sseStreamRouter } from './sse-stream.router';
 import { claudeConnectorRouter } from './claude-connector.routes';
 import { codexConnectorRouter } from './codex-connector.routes';
+import { opencodeConnectorRouter } from './opencode-connector.routes';
 import { cursorConnectorRouter } from './cursor-connector.routes';
 import { windsurfConnectorRouter } from './windsurf-connector.routes';
 import { replitConnectorRouter } from './replit-connector.routes';
@@ -168,6 +169,7 @@ export function createA2AGateway(config?: GatewayConfig): Router {
   // Connector routes (one per AI coding agent platform)
   router.use('/connectors/claude', claudeConnectorRouter);
   router.use('/connectors/codex', codexConnectorRouter);
+  router.use('/connectors/opencode', opencodeConnectorRouter);
   router.use('/connectors/cursor', cursorConnectorRouter);
   router.use('/connectors/windsurf', windsurfConnectorRouter);
   router.use('/connectors/replit', replitConnectorRouter);
