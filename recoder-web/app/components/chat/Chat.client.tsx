@@ -353,6 +353,7 @@ export const ChatImpl = memo(({ chatId, projectId, projectName, projectFramework
   const { messages, isLoading, input, handleInputChange, setInput, stop, append } = useSimpleChat({
     api: '/api/chat',
     body: {
+      chatId,
       provider: selectedProvider,
       model: selectedModel,
       maxTokens: inferenceParams.maxTokens,
