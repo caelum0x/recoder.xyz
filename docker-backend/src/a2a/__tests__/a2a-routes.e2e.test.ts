@@ -30,6 +30,18 @@ const mocks = vi.hoisted(() => {
     callTool: vi.fn(async () => ({ content: [{ type: 'text', text: 'ok' }] })),
   };
 
+  const opencodeRuntime = {
+    isRunning: vi.fn(() => false),
+    start: vi.fn(async () => undefined),
+    stop: vi.fn(async () => undefined),
+    restart: vi.fn(async () => undefined),
+    getState: vi.fn(() => ({ status: 'stopped', pid: null, startedAt: null, lastActivity: null, error: null, activeTasks: 0 })),
+    executeTask: vi.fn(async () => ({ taskId: 't1', success: true, resultText: 'ok', sessionId: 'sess_1', raw: {} })),
+    getTaskStatus: vi.fn(async () => ({ status: 'running', taskId: 't1' })),
+    cancelTask: vi.fn(async () => ({ taskId: 't1', cancelled: true })),
+    respondToApproval: vi.fn(async () => ({ approvalId: 'a1', supported: false, approved: true })),
+  };
+
   const monitor = {
     getAllConnectorsHealth: vi.fn(() => ({
       connectors: [],
@@ -66,6 +78,7 @@ const mocks = vi.hoisted(() => {
   return {
     codexRuntime,
     claudeRuntime,
+    opencodeRuntime,
     monitor,
     fakePattern,
     patternRegistry,
@@ -90,6 +103,10 @@ vi.mock('../claude-connector-runtime.service', () => ({
   getClaudeConnectorRuntime: () => mocks.claudeRuntime,
 }));
 
+vi.mock('../opencode-connector-runtime.service', () => ({
+  getOpencodeConnectorRuntime: () => mocks.opencodeRuntime,
+}));
+
 vi.mock('../connector-health-monitor.service', () => ({
   getConnectorHealthMonitor: () => mocks.monitor,
 }));
@@ -100,6 +117,7 @@ vi.mock('../patterns/pattern-registry', () => ({
 
 import { codexConnectorRouter } from '../codex-connector.routes';
 import { claudeConnectorRouter } from '../claude-connector.routes';
+import { opencodeConnectorRouter } from '../opencode-connector.routes';
 import { contextBridgeRouter } from '../context-bridge.routes';
 import { connectorHealthRouter } from '../connector-health.routes';
 import { patternRouter } from '../patterns/pattern.routes';
@@ -116,6 +134,7 @@ describe('A2A routes HTTP E2E (socket-backed)', () => {
     app.use('/api/a2a', express.text({ type: 'application/json', limit: '2mb' }));
     app.use('/api/a2a/connectors/claude', claudeConnectorRouter);
     app.use('/api/a2a/connectors/codex', codexConnectorRouter);
+    app.use('/api/a2a/connectors/opencode', opencodeConnectorRouter);
     app.use('/api/a2a/context', contextBridgeRouter);
     app.use('/api/a2a', connectorHealthRouter);
     app.use('/api/a2a/patterns', patternRouter);
@@ -162,6 +181,12 @@ describe('A2A routes HTTP E2E (socket-backed)', () => {
     expect(claudeRes.status).toBe(200);
     expect(claudeJson.success).toBe(true);
     expect(claudeJson.data.connector).toBe('claude-code-mcp');
+
+    const opencodeRes = await fetch(`${baseUrl}/api/a2a/connectors/opencode/status`);
+    const opencodeJson = await opencodeRes.json();
+    expect(opencodeRes.status).toBe(200);
+    expect(opencodeJson.success).toBe(true);
+    expect(opencodeJson.data.connector).toBe('opencode-cli');
   });
 
   it('supports context lifecycle routes over real HTTP', async () => {

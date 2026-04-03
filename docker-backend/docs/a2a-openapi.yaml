@@ -4,7 +4,7 @@ info:
   version: 1.0.0
   description: |
     OpenAPI surface for docker-backend A2A routes.
-    This spec documents the 13 A2A route groups mounted under `/api/a2a`.
+    This spec documents the 14 A2A route groups mounted under `/api/a2a`.
 servers:
   - url: https://docker.recoder.xyz
     description: Production
@@ -21,6 +21,7 @@ tags:
   - name: SSE
   - name: Claude Connector
   - name: Codex Connector
+  - name: OpenCode Connector
   - name: Context Bridge
   - name: Connector Health
   - name: Patterns
@@ -333,6 +334,72 @@ paths:
     post:
       tags: [Codex Connector]
       summary: Respond to pending Codex approval request
+      parameters:
+        - name: approvalId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Approval response accepted
+  /api/a2a/connectors/opencode/status:
+    get:
+      tags: [OpenCode Connector]
+      summary: Get OpenCode connector runtime status
+      responses:
+        '200':
+          description: Runtime state
+  /api/a2a/connectors/opencode/start:
+    post:
+      tags: [OpenCode Connector]
+      summary: Start OpenCode connector runtime
+      responses:
+        '201':
+          description: Started
+  /api/a2a/connectors/opencode/stop:
+    post:
+      tags: [OpenCode Connector]
+      summary: Stop OpenCode connector runtime
+      responses:
+        '200':
+          description: Stopped
+  /api/a2a/connectors/opencode/restart:
+    post:
+      tags: [OpenCode Connector]
+      summary: Restart OpenCode connector runtime
+      responses:
+        '200':
+          description: Restarted
+  /api/a2a/connectors/opencode/execute:
+    post:
+      tags: [OpenCode Connector]
+      summary: Execute task via OpenCode connector
+      responses:
+        '200':
+          description: Task executed
+  /api/a2a/connectors/opencode/task/{taskId}:
+    get:
+      tags: [OpenCode Connector]
+      summary: Get OpenCode task status
+      parameters:
+        - $ref: '#/components/parameters/taskId'
+      responses:
+        '200':
+          description: OpenCode task status
+  /api/a2a/connectors/opencode/task/{taskId}/cancel:
+    post:
+      tags: [OpenCode Connector]
+      summary: Cancel a running OpenCode task
+      parameters:
+        - $ref: '#/components/parameters/taskId'
+      responses:
+        '200':
+          description: Cancellation result
+  /api/a2a/connectors/opencode/approval/{approvalId}:
+    post:
+      tags: [OpenCode Connector]
+      summary: Respond to pending OpenCode approval request
       parameters:
         - name: approvalId
           in: path

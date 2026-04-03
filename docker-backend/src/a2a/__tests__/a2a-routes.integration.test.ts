@@ -27,6 +27,18 @@ const mocks = vi.hoisted(() => {
     callTool: vi.fn(async () => ({ content: [{ type: 'text', text: 'ok' }] })),
   };
 
+  const opencodeRuntime = {
+    isRunning: vi.fn(() => false),
+    start: vi.fn(async () => undefined),
+    stop: vi.fn(async () => undefined),
+    restart: vi.fn(async () => undefined),
+    getState: vi.fn(() => ({ status: 'stopped', pid: null, startedAt: null, lastActivity: null, error: null, activeTasks: 0 })),
+    executeTask: vi.fn(async () => ({ taskId: 't1', success: true, resultText: 'ok', sessionId: 'sess_1', raw: {} })),
+    getTaskStatus: vi.fn(async () => ({ status: 'running', taskId: 't1' })),
+    cancelTask: vi.fn(async () => ({ taskId: 't1', cancelled: true })),
+    respondToApproval: vi.fn(async () => ({ approvalId: 'a1', supported: false, approved: true })),
+  };
+
   const monitor = {
     getAllConnectorsHealth: vi.fn(() => ({
       connectors: [],
@@ -63,6 +75,7 @@ const mocks = vi.hoisted(() => {
   return {
     codexRuntime,
     claudeRuntime,
+    opencodeRuntime,
     monitor,
     fakePattern,
     patternRegistry,
@@ -87,6 +100,10 @@ vi.mock('../claude-connector-runtime.service', () => ({
   getClaudeConnectorRuntime: () => mocks.claudeRuntime,
 }));
 
+vi.mock('../opencode-connector-runtime.service', () => ({
+  getOpencodeConnectorRuntime: () => mocks.opencodeRuntime,
+}));
+
 vi.mock('../connector-health-monitor.service', () => ({
   getConnectorHealthMonitor: () => mocks.monitor,
 }));
@@ -98,6 +115,7 @@ vi.mock('../patterns/pattern-registry', () => ({
 import type { Router } from 'express';
 import { codexConnectorRouter } from '../codex-connector.routes';
 import { claudeConnectorRouter } from '../claude-connector.routes';
+import { opencodeConnectorRouter } from '../opencode-connector.routes';
 import { contextBridgeRouter } from '../context-bridge.routes';
 import { connectorHealthRouter } from '../connector-health.routes';
 import { patternRouter } from '../patterns/pattern.routes';
@@ -271,6 +289,16 @@ describe('A2A route integrations', () => {
     expect(state.statusCode).toBe(200);
     expect(state.jsonData.success).toBe(true);
     expect(state.jsonData.data.connector).toBe('codex-cli');
+  });
+
+  it('returns opencode runtime status via GET /status', async () => {
+    const req = makeReq({ method: 'GET' });
+    const { res, state } = makeRes();
+    await runStack(opencodeConnectorRouter, '/status', 'get', req, res);
+
+    expect(state.statusCode).toBe(200);
+    expect(state.jsonData.success).toBe(true);
+    expect(state.jsonData.data.connector).toBe('opencode-cli');
   });
 
   it('returns 503 on codex execute when connector is not running', async () => {
@@ -494,4 +522,3 @@ describe('A2A route integrations', () => {
     expect(snapshot?.data?.task?.id).toBe(created.data.id);
   });
 });
-
