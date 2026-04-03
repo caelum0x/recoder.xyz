@@ -11,7 +11,7 @@
  */
 
 import dns from 'dns';
-import { promisify, randomUUID } from 'util';
+import { promisify } from 'util';
 import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';

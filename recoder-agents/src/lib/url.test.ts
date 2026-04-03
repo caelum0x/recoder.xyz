@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
-import { appendUrlSearchParam, buildSandboxFileUrl, constructHtmlPreviewUrl } from '@/lib/utils/url';
+import {
+  appendUrlSearchParam,
+  buildProjectAppPreviewUrl,
+  buildSandboxFileUrl,
+  buildSandboxPortPreviewUrl,
+  constructHtmlPreviewUrl,
+} from '@/lib/utils/url';
 
 describe('buildSandboxFileUrl', () => {
   it('routes relative presentation paths through the same-origin proxy', () => {
@@ -45,5 +51,52 @@ describe('appendUrlSearchParam', () => {
     expect(appendUrlSearchParam(url, 't', 456)).toBe(
       'https://8080-sandbox-123.sandbox.recoder.xyz/presentations/nike/slide_01.html?t=456',
     );
+  });
+});
+
+describe('buildSandboxPortPreviewUrl', () => {
+  it('builds a Daytona preview hostname from a sandbox id', () => {
+    expect(buildSandboxPortPreviewUrl('sandbox-123', 5173)).toBe(
+      'https://5173-sandbox-123.sandbox.recoder.xyz',
+    );
+  });
+
+  it('derives the sandbox id from the sandbox service URL', () => {
+    expect(
+      buildSandboxPortPreviewUrl('https://8080-sandbox-123.sandbox.recoder.xyz', 3000),
+    ).toBe('https://3000-sandbox-123.sandbox.recoder.xyz');
+  });
+});
+
+describe('buildProjectAppPreviewUrl', () => {
+  it('prefers the Vite dev-server port for Vite projects', () => {
+    expect(
+      buildProjectAppPreviewUrl({
+        sandboxId: 'sandbox-123',
+        framework: 'vite',
+      }),
+    ).toBe('https://5173-sandbox-123.sandbox.recoder.xyz');
+  });
+
+  it('prefers the Next.js dev-server port for Next projects', () => {
+    expect(
+      buildProjectAppPreviewUrl({
+        sandboxUrl: 'https://8080-sandbox-123.sandbox.recoder.xyz',
+        framework: 'nextjs',
+      }),
+    ).toBe('https://3000-sandbox-123.sandbox.recoder.xyz');
+  });
+
+  it('uses exposed port URLs when the backend already provided them', () => {
+    expect(
+      buildProjectAppPreviewUrl({
+        sandboxId: 'sandbox-123',
+        framework: 'vite',
+        exposedPorts: [
+          { port: 3000, url: 'https://3000-sandbox-123.sandbox.recoder.xyz' },
+          { port: 5173, url: 'https://custom-preview.recoder.xyz' },
+        ],
+      }),
+    ).toBe('https://custom-preview.recoder.xyz');
   });
 });

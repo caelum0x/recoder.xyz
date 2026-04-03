@@ -9,10 +9,11 @@ REMOTE_DIR="${REMOTE_DIR:-/root/recoder.xyz}"
 check_cmd='
 set -euo pipefail
 containers=(
-  recoder-prometheus
+  recoder-victoriametrics
   recoder-alertmanager
   recoder-node-exporter
   recoder-redis-exporter
+  recoder-blackbox-exporter
   recoder-redis
 )
 
@@ -62,20 +63,23 @@ done
 
 echo
 echo "== Monitoring Endpoint Health =="
-prom="$(curl -sS -o /dev/null -w "%{http_code}" http://127.0.0.1:9090/-/healthy || true)"
+vm="$(curl -sS -o /dev/null -w "%{http_code}" http://127.0.0.1:9090/-/healthy || true)"
 am="$(curl -sS -o /dev/null -w "%{http_code}" http://127.0.0.1:9093/-/healthy || true)"
 nodeexp="$(curl -sS -o /dev/null -w "%{http_code}" http://127.0.0.1:9100/metrics || true)"
 redisexp="$(curl -sS -o /dev/null -w "%{http_code}" http://127.0.0.1:9121/metrics || true)"
+blackbox="$(curl -sS -o /dev/null -w "%{http_code}" 'http://127.0.0.1:9115/probe?target=https://recoder.xyz&module=http_public_site' || true)"
 
-echo "prometheus=$prom"
+echo "victoriametrics=$vm"
 echo "alertmanager=$am"
 echo "node-exporter=$nodeexp"
 echo "redis-exporter=$redisexp"
+echo "blackbox-exporter=$blackbox"
 
-test "$prom" = "200"
+test "$vm" = "200"
 test "$am" = "200"
 test "$nodeexp" = "200"
 test "$redisexp" = "200"
+test "$blackbox" = "200"
 
 echo
 echo "PASS monitoring stack is healthy"

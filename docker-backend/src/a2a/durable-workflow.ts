@@ -60,13 +60,11 @@ export async function executeDurableWorkflow(
   // With Upstash Workflow — each step is wrapped in context.run()
   // so it persists and can resume after crashes.
   try {
-    const { Client } = await import('@upstash/workflow');
-    const client = new Client({ token: QSTASH_TOKEN });
-
     // Execute each step through Upstash's durable context
     const results: DurableExecutionResult['results'] = [];
     const ctx = { ...initialContext };
     const workflowRunId = `wf_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
+    const stepCompleteUrl = `${process.env.RECODER_DOCKER_URL ?? 'http://localhost:3100'}/api/a2a/workflows/step-complete`;
 
     for (const step of steps) {
       const start = Date.now();
@@ -82,10 +80,17 @@ export async function executeDurableWorkflow(
 
         results.push({ step: step.name, type: step.type, output, durationMs });
 
-        // Notify Upstash of step completion (fire-and-forget)
-        client.publishJSON({
-          url: `${process.env.RECODER_DOCKER_URL ?? 'http://localhost:3100'}/api/a2a/workflows/step-complete`,
-          body: { workflowRunId, step: step.name, status: 'completed', durationMs },
+        // Notify the local workflow callback endpoint without blocking execution.
+        void fetch(stepCompleteUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            workflowRunId,
+            step: step.name,
+            status: 'completed',
+            durationMs,
+          }),
+          signal: AbortSignal.timeout(10_000),
         }).catch(() => {});
       } catch (err) {
         const durationMs = Date.now() - start;
