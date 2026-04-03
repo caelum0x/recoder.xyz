@@ -290,6 +290,7 @@ Click here to get started: ${process.env.MAIN_SITE_URL || 'http://localhost:3000
   try {
     requestBody = await request.json() as {
       messages: Messages;
+      chatId?: string;
       provider?: string;
       model?: string;
       maxTokens?: number;
@@ -636,6 +637,28 @@ IMPORTANT:
     const { getWebToolCapabilityPrompt } = modesModule;
     const webToolCapabilityPrompt = getWebToolCapabilityPrompt(provider, model);
     const systemPrompt = baseSystemPrompt + chatModePrompt + webToolCapabilityPrompt + recoderContextPrompt + mcpToolsPrompt + clientMcpTools + projectContext + codeContext + frameworkSkillsPrompt + projectConfigPrompt + themePrompt + ragContextPrompt;
+
+    if (provider.toLowerCase() === 'opencode') {
+      const { executeOpencodeChat } = await import('~/lib/.server/llm/opencode-exec');
+      const opencodeStream = await executeOpencodeChat({
+        context,
+        request,
+        projectId: requestBody.projectId || '',
+        chatId: requestBody.chatId,
+        model,
+        systemPrompt,
+        messages,
+      });
+
+      stream.switchSource(opencodeStream);
+
+      return new Response(stream.readable, {
+        status: 200,
+        headers: {
+          'Content-Type': 'text/plain; charset=utf-8',
+        },
+      });
+    }
 
     // Get API key (User's BYOK > Environment variable)
     const { getAPIKey } = apiKeyModule;

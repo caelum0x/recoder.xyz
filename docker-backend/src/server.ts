@@ -2939,6 +2939,9 @@ app.post('/api/container', containerLimiter, optionalAuthenticateRequest, flexib
               if (aiProviderKeys?.openai) {
                 envLines.push(`export OPENAI_API_KEY=${aiProviderKeys.openai}`);
               }
+              if (aiProviderKeys?.openrouter) {
+                envLines.push(`export OPENROUTER_API_KEY=${aiProviderKeys.openrouter}`);
+              }
               if (aiProviderKeys?.gemini) {
                 envLines.push(`export GEMINI_API_KEY=${aiProviderKeys.gemini}`);
               }
@@ -2998,6 +3001,10 @@ app.post('/api/container', containerLimiter, optionalAuthenticateRequest, flexib
             if (aiProviderKeys?.openai) {
               containerEnv.push(`OPENAI_API_KEY=${aiProviderKeys.openai}`);
               authDebug('injecting OpenAI key into container', { projectId: maskIdentifier(projectId) });
+            }
+            if (aiProviderKeys?.openrouter) {
+              containerEnv.push(`OPENROUTER_API_KEY=${aiProviderKeys.openrouter}`);
+              authDebug('injecting OpenRouter key into container', { projectId: maskIdentifier(projectId) });
             }
             if (aiProviderKeys?.gemini) {
               containerEnv.push(`GEMINI_API_KEY=${aiProviderKeys.gemini}`);
