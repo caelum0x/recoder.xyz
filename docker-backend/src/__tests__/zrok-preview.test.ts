@@ -68,6 +68,15 @@ function createMockChildProcess({
   return proc;
 }
 
+function createJsonCommandProcess(payload: unknown): ChildProcess {
+  const proc = createMockChildProcess({ emitSpawn: false });
+  process.nextTick(() => {
+    proc.stdout!.emit('data', Buffer.from(JSON.stringify(payload)));
+    process.nextTick(() => proc.emit('exit', 0, null));
+  });
+  return proc;
+}
+
 describe('zrok-preview', () => {
   const originalEnv = { ...process.env };
   let tempDir: string;
@@ -98,20 +107,26 @@ describe('zrok-preview', () => {
 
   it('creates and destroys a zrok2 preview share with the share subprocess lifecycle', async () => {
     const shareProc = createMockChildProcess();
-    const deleteProc = createMockChildProcess({ emitSpawn: false });
 
     (spawn as unknown as ReturnType<typeof vi.fn>).mockImplementation((_cmd: string, args: string[]) => {
       if (args[0] === 'share' && args[1] === 'public') {
-        process.nextTick(() => {
-          shareProc.stderr!.push('access your zrok share at the following endpoints:\n');
-          shareProc.stderr!.push('  abc123.preview.recoder.xyz\n');
-        });
         return shareProc;
       }
 
+      if (args[0] === 'list' && args[1] === 'shares' && args[2] === '--json') {
+        return createJsonCommandProcess({
+          shares: [{
+            envZId: 'ENV123',
+            frontendEndpoints: ['abc123.preview.recoder.xyz'],
+            shareToken: 'abc123',
+            target: 'http://sandbox-host:5173',
+            updatedAt: Date.now(),
+          }],
+        });
+      }
+
       if (args[0] === 'delete' && args[1] === 'share') {
-        process.nextTick(() => deleteProc.emit('exit', 0, null));
-        return deleteProc;
+        return createJsonCommandProcess({});
       }
 
       throw new Error(`Unexpected spawn args: ${args.join(' ')}`);
@@ -157,33 +172,100 @@ describe('zrok-preview', () => {
     expect(mod.getPreviewUrl('project-1')).toBeNull();
   });
 
-  it('does not expose a fake permanent publish URL for zrok2', async () => {
+  it('creates and destroys a persistent published share using a reserved public name', async () => {
     const shareProc = createMockChildProcess();
 
     (spawn as unknown as ReturnType<typeof vi.fn>).mockImplementation((_cmd: string, args: string[]) => {
+      if (args[0] === 'list' && args[1] === 'names' && args[2] === '-n' && args[3] === 'public' && args[4] === '--json') {
+        return createJsonCommandProcess([]);
+      }
+
       if (args[0] === 'share' && args[1] === 'public') {
-        process.nextTick(() => {
-          shareProc.stdout!.push('share available at xyz789.preview.recoder.xyz\n');
-        });
         return shareProc;
+      }
+
+      if (args[0] === 'create' && args[1] === 'name') {
+        return createJsonCommandProcess({});
+      }
+
+      if (args[0] === 'list' && args[1] === 'shares' && args[2] === '--json') {
+        return createJsonCommandProcess({
+          shares: [{
+            envZId: 'ENV123',
+            frontendEndpoints: ['project-2.preview.recoder.xyz'],
+            shareToken: 'shr999',
+            target: '/tmp/published/project-2',
+            updatedAt: Date.now(),
+          }],
+        });
+      }
+
+      if (args[0] === 'delete' && args[1] === 'share') {
+        return createJsonCommandProcess({});
+      }
+
+      if (args[0] === 'delete' && args[1] === 'name') {
+        return createJsonCommandProcess({});
       }
 
       throw new Error(`Unexpected spawn args: ${args.join(' ')}`);
     });
 
     const mod = await import('../zrok-preview.js');
-    await mod.createPreviewShare({
+    const created = await mod.ensurePublishedShare({
       projectId: 'project-2',
-      sandboxId: 'sandbox-2',
-      targetPort: 5173,
+      publishedPath: '/tmp/published/project-2',
     });
 
-    await expect(mod.reservePreviewShare('project-2')).resolves.toBeNull();
+    expect(created).toEqual({
+      previewUrl: 'https://preview-project-2.recoder.xyz',
+      shareToken: 'shr999',
+    });
+    expect(mod.getPublishedShareUrl('project-2')).toBe('https://preview-project-2.recoder.xyz');
+
+    await mod.destroyPublishedShare('project-2', { deleteName: true });
+
+    const spawnCalls = (spawn as unknown as ReturnType<typeof vi.fn>).mock.calls.map((call) => call[1]);
+
+    expect(spawnCalls).toContainEqual([
+      'create',
+      'name',
+      '-n',
+      'public',
+      'project-2',
+    ]);
+    expect(spawnCalls).toContainEqual([
+      'share',
+      'public',
+      '/tmp/published/project-2',
+      '--backend-mode',
+      'web',
+      '--headless',
+      '--force-local',
+      '--open',
+      '-n',
+      'public:project-2',
+    ]);
+    expect(spawnCalls).toContainEqual([
+      'delete',
+      'share',
+      'shr999',
+      '--envzid',
+      'ENV123',
+    ]);
+    expect(spawnCalls).toContainEqual([
+      'delete',
+      'name',
+      '-n',
+      'public',
+      'project-2',
+    ]);
+    expect(shareProc.kill).toHaveBeenCalledWith('SIGTERM');
+    expect(mod.getPublishedShareUrl('project-2')).toBeNull();
   });
 
   it('normalizes zrok-native frontend endpoints to the public single-label preview hostname', async () => {
     const shareProc = createMockChildProcess();
-    const listProc = createMockChildProcess({ emitSpawn: false });
 
     (spawn as unknown as ReturnType<typeof vi.fn>).mockImplementation((_cmd: string, args: string[]) => {
       if (args[0] === 'share' && args[1] === 'public') {
@@ -191,19 +273,15 @@ describe('zrok-preview', () => {
       }
 
       if (args[0] === 'list' && args[1] === 'shares' && args[2] === '--json') {
-        process.nextTick(() => {
-          listProc.stdout!.push(JSON.stringify({
-            shares: [{
-              envZId: 'ENV123',
-              frontendEndpoints: ['list123.preview.recoder.xyz'],
-              shareToken: 'list123',
-              target: 'http://sandbox-3:5173',
-              updatedAt: Date.now(),
-            }],
-          }));
-          listProc.emit('exit', 0, null);
+        return createJsonCommandProcess({
+          shares: [{
+            envZId: 'ENV123',
+            frontendEndpoints: ['list123.preview.recoder.xyz'],
+            shareToken: 'list123',
+            target: 'http://sandbox-3:5173',
+            updatedAt: Date.now(),
+          }],
         });
-        return listProc;
       }
 
       throw new Error(`Unexpected spawn args: ${args.join(' ')}`);

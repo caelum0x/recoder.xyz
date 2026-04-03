@@ -87,7 +87,16 @@ import { createCanvasRouter } from './a2a/canvas.routes.js';
 import { indexFile as codeSearchIndexFile } from './a2a/code-search.js';
 import { indexFile as meiliIndexFile, indexThread as meiliIndexThread } from './a2a/search-proxy.js';
 import { trackLlmCall, trackSandboxExec, trackFileOp, trackPublish } from './metering/openmeter-client.js';
-import { createPreviewShare, destroyPreviewShare, reservePreviewShare, updateShareTarget, getPreviewUrl as getZrokPreviewUrl } from './zrok-preview.js';
+import {
+  createPreviewShare,
+  destroyPreviewShare,
+  ensurePublishedShare,
+  destroyPublishedShare,
+  restorePublishedShares,
+  updateShareTarget,
+  getPreviewUrl as getZrokPreviewUrl,
+  getPublishedShareUrl,
+} from './zrok-preview.js';
 import { patternRouter } from './a2a/patterns/index.js';
 import { approvalRouter } from './policy/index.js';
 import { startA2AIntentWorker } from './a2a-intent-worker.js';
@@ -15538,6 +15547,53 @@ import {
   savePublishMeta,
   changeSlug,
 } from './persistence.js';
+
+async function ensurePublishedZrokUrl(projectId: string, publishedDir: string): Promise<string | null> {
+  try {
+    const publishedShare = await ensurePublishedShare({ projectId, publishedPath: publishedDir });
+    if (publishedShare?.previewUrl) {
+      return publishedShare.previewUrl;
+    }
+  } catch (err) {
+    logger.warn({ err, projectId, publishedDir }, 'Publish: failed to ensure persistent zrok URL');
+  }
+
+  return getPublishedShareUrl(projectId);
+}
+
+async function restorePublishedZrokSharesFromDisk(): Promise<void> {
+  const publishedRoot = path.dirname(getPublishedPath('__probe__'));
+  if (!fsSync.existsSync(publishedRoot)) {
+    return;
+  }
+
+  const restorable: Array<{ projectId: string; publishedPath: string }> = [];
+  for (const entry of fsSync.readdirSync(publishedRoot, { withFileTypes: true })) {
+    if (!entry.isDirectory() || entry.name.startsWith('.')) {
+      continue;
+    }
+
+    const slug = entry.name;
+    const publishedPath = getPublishedPath(slug);
+    if (!fsSync.existsSync(path.join(publishedPath, 'index.html'))) {
+      continue;
+    }
+
+    const meta = getPublishMeta(slug) as { projectId?: unknown } | null;
+    if (typeof meta?.projectId !== 'string' || meta.projectId.trim().length === 0) {
+      continue;
+    }
+
+    restorable.push({ projectId: meta.projectId, publishedPath });
+  }
+
+  if (restorable.length === 0) {
+    return;
+  }
+
+  await restorePublishedShares(restorable);
+  startupInfo('zrok-publish', 'restored', { shares: restorable.length });
+}
 import { execSync, execFileSync } from 'child_process';
 
 /**
@@ -15727,15 +15783,12 @@ app.post('/api/publish/:projectId', authenticateRequest, verifyProjectOwnership,
     logger.info({ projectId, url }, 'Publish: project published');
     trackPublish({ userId: req.userId ?? 'anonymous', projectId, slug: slug!, target: 'web' });
 
-    // ── Sprint C: Reserve Zrok share for permanent published URL ──
+    // Persistent zrok-backed publish URL for stable subdomain access.
     let zrokUrl: string | null = null;
-    try {
-      const reserved = await reservePreviewShare(projectId);
-      if (reserved) {
-        zrokUrl = reserved.previewUrl;
-        logger.info({ projectId, zrokUrl }, 'Publish: Zrok frontdoor reserved');
-      }
-    } catch { /* non-fatal */ }
+    zrokUrl = await ensurePublishedZrokUrl(projectId, publishedDir);
+    if (zrokUrl) {
+      logger.info({ projectId, zrokUrl }, 'Publish: persistent zrok URL ready');
+    }
 
     sendSuccess(res, { url, slug, publishedAt, ...(zrokUrl ? { zrokUrl } : {}) });
   } catch (error: any) {
@@ -15757,6 +15810,10 @@ app.post('/api/unpublish/:projectId', authenticateRequest, verifyProjectOwnershi
   if (!slug) {
     return sendError(res, createError(ErrorCode.NOT_FOUND, 'Project is not published'));
   }
+
+  await destroyPublishedShare(projectId, { deleteName: true }).catch((err) => {
+    logger.warn({ err, projectId }, 'Publish: failed to destroy persistent zrok URL during unpublish');
+  });
 
   // Remove published files
   const publishedDir = getPublishedPath(slug);
@@ -15788,12 +15845,14 @@ app.get('/api/publish-status/:projectId', authenticateRequest, verifyProjectOwne
   const meta = getPublishMeta(slug);
   const { getDomainsForProject } = await import('./domain-manager.js');
   const customDomains = getDomainsForProject(projectId);
+  const zrokUrl = await ensurePublishedZrokUrl(projectId, publishedDir);
   sendSuccess(res, {
     published: true,
     url: `https://web.recoder.xyz/published/${slug}`,
     slug,
     publishedAt: meta?.publishedAt || null,
     framework: meta?.framework || null,
+    zrokUrl,
     customDomains: customDomains.map(d => ({
       domain: d.domain,
       status: d.status,
@@ -15817,9 +15876,11 @@ app.post('/api/publish/:projectId/slug', authenticateRequest, verifyProjectOwner
     return sendError(res, createError(ErrorCode.VALIDATION_ERROR, result.error || 'Failed to change slug'));
   }
 
+  const publishedDir = getPublishedPath(result.slug);
   const url = `https://web.recoder.xyz/published/${result.slug}`;
+  const zrokUrl = await ensurePublishedZrokUrl(projectId, publishedDir);
   logger.info({ projectId, slug: result.slug }, 'Publish: project slug changed');
-  sendSuccess(res, { url, slug: result.slug, changed: true });
+  sendSuccess(res, { url, slug: result.slug, changed: true, ...(zrokUrl ? { zrokUrl } : {}) });
 }));
 
 // ── Serve published sites at /published/{slug}/* ──
@@ -17585,6 +17646,11 @@ server.listen(PORT, async () => {
   // Run startup sequence AFTER server is listening
   // This ensures cleanup happens first, then pool is initialized
   await startupSequence();
+  await restorePublishedZrokSharesFromDisk().catch((err) => {
+    startupInfo('zrok-publish', 'restore failed', {
+      error: err instanceof Error ? err.message : 'unknown',
+    });
+  });
 
   if ((process.env.RECODER_A2A_ENABLE_CONSUMER || '').toLowerCase() === 'true') {
     const worker = await startA2AIntentWorker({ serviceId: 'recoder_backend' });

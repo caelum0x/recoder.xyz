@@ -56,6 +56,30 @@ groups:
             More than 2 services are unreachable. This may indicate a host-level
             failure, network partition, or infrastructure outage.
 
+      # --- Critical: public HTTPS endpoint is unreachable ---
+      - alert: PublicServiceDown
+        expr: probe_success{job="public-http-uptime"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "{{ $labels.public_service }} is DOWN"
+          description: >-
+            The public HTTPS probe for {{ $labels.public_service }} has been
+            failing for more than 2 minutes.
+
+      # --- Warning: public HTTPS endpoint is flapping ---
+      - alert: PublicServiceFlapping
+        expr: changes(probe_success{job="public-http-uptime"}[15m]) > 2
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.public_service }} is flapping"
+          description: >-
+            The public HTTPS probe for {{ $labels.public_service }} changed
+            state more than twice in the last 15 minutes.
+
   # ──────────────────────────────────────────────
   # 2. HTTP Error Rate
   #    SLO: < 1% 5xx error rate
@@ -171,8 +195,6 @@ groups:
       # --- Warning: health endpoint slow (should be < 200ms) ---
       - alert: HealthEndpointSlow
         expr: >-
-          probe_duration_seconds > 0.2
-          or
           histogram_quantile(0.95,
             rate(http_request_duration_seconds_bucket{handler="/api/health"}[5m])
           ) > 0.2
@@ -184,6 +206,32 @@ groups:
           description: >-
             Health checks should complete in under 200ms. Slow health checks
             indicate resource starvation or downstream dependency issues.
+
+      # --- Warning: public site probe latency > 2s ---
+      - alert: PublicServiceLatencyHigh
+        expr: avg_over_time(probe_duration_seconds{job="public-http-uptime"}[5m]) > 2
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Public site latency above 2s on {{ $labels.public_service }}"
+          description: >-
+            The blackbox HTTPS probe for {{ $labels.public_service }} has
+            averaged above 2 seconds over the last 5 minutes.
+
+      # --- Warning: TLS certificate expiration within 14 days ---
+      - alert: PublicTlsCertificateExpiringSoon
+        expr: >-
+          (probe_ssl_earliest_cert_expiry{job="public-http-uptime"} - time()) < 14 * 24 * 60 * 60
+          and probe_success{job="public-http-uptime"} == 1
+        for: 30m
+        labels:
+          severity: warning
+        annotations:
+          summary: "TLS certificate expiring soon for {{ $labels.public_service }}"
+          description: >-
+            The earliest observed TLS certificate for {{ $labels.public_service }}
+            expires in less than 14 days.
 
   # ──────────────────────────────────────────────
   # 4. Infrastructure (requires node_exporter)

@@ -18,8 +18,24 @@ if [ -f "${HOME}/.ssh/id_ed25519_hetzner" ]; then
   SSH_OPTS="${SSH_OPTS} -i ${HOME}/.ssh/id_ed25519_hetzner"
 fi
 
+DISK_WARN_PERCENT="${DISK_WARN_PERCENT:-85}"
+DISK_RECLAIM_PERCENT="${DISK_RECLAIM_PERCENT:-88}"
+DISK_FAIL_PERCENT="${DISK_FAIL_PERCENT:-90}"
+
 ssh_cmd() {
   ssh $SSH_OPTS "${SERVER}" "$@"
+}
+
+remote_disk_usage() {
+  ssh $SSH_OPTS "${SERVER}" "df / --output=pcent | tail -1 | tr -d ' %'" 2>/dev/null || echo "0"
+}
+
+remote_safe_docker_reclaim() {
+  ssh $SSH_OPTS "${SERVER}" \
+    "docker image prune -f >/tmp/recoder-docker-image-prune.log 2>&1 || true; \
+     docker builder prune -f >/tmp/recoder-docker-builder-prune.log 2>&1 || true; \
+     tail -n 20 /tmp/recoder-docker-image-prune.log 2>/dev/null || true; \
+     tail -n 20 /tmp/recoder-docker-builder-prune.log 2>/dev/null || true"
 }
 
 # Retry wrapper: retries an SSH command up to N times on connection failure
@@ -56,15 +72,26 @@ if ! ssh $SSH_OPTS "${SERVER}" "echo ok" >/dev/null 2>&1; then
 fi
 echo "OK"
 
-# Check disk space (fail if root >90% full)
+# Check disk space and attempt safe Docker reclaim before build pressure turns
+# into ENOSPC during image rebuilds.
 echo -n "Checking disk space... "
-DISK_USAGE=$(ssh $SSH_OPTS "${SERVER}" "df / --output=pcent | tail -1 | tr -d ' %'" 2>/dev/null || echo "0")
-if [ "$DISK_USAGE" -gt 90 ]; then
+DISK_USAGE="$(remote_disk_usage)"
+if [ "$DISK_USAGE" -ge "$DISK_RECLAIM_PERCENT" ]; then
+  echo "WARN (${DISK_USAGE}% used — attempting safe Docker reclaim)"
+  remote_safe_docker_reclaim
+  DISK_USAGE="$(remote_disk_usage)"
+  echo -n "Re-checked disk space... "
+fi
+if [ "$DISK_USAGE" -gt "$DISK_FAIL_PERCENT" ]; then
   echo "FAIL (${DISK_USAGE}%)"
-  echo "FATAL: Root filesystem is ${DISK_USAGE}% full. Free space before deploying."
+  echo "FATAL: Root filesystem is ${DISK_USAGE}% full after safe reclaim. Free space before deploying."
   exit 1
 fi
-echo "OK (${DISK_USAGE}% used)"
+if [ "$DISK_USAGE" -ge "$DISK_WARN_PERCENT" ]; then
+  echo "WARN (${DISK_USAGE}% used)"
+else
+  echo "OK (${DISK_USAGE}% used)"
+fi
 
 # Check Docker daemon is running
 echo -n "Checking Docker daemon... "
@@ -213,6 +240,9 @@ fi
 
 echo "--- Checking local Postgres DSNs against live Hetzner auth ---"
 bash scripts/check-hetzner-db-env-drift.sh
+
+echo "--- Checking Docker disk pressure ---"
+bash scripts/check-hetzner-docker-disk-pressure.sh
 
 echo "--- Checking docker-backend build context cleanliness ---"
 bash scripts/check-hetzner-docker-backend-build-context.sh

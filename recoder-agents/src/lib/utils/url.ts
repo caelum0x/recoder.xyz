@@ -1,6 +1,7 @@
 import { getSessionAccessToken } from '@/lib/auth/session-token';
 
 const SANDBOX_FILE_PROXY_PATH = '/api/files/content';
+const SANDBOX_PREVIEW_DOMAIN = 'sandbox.recoder.xyz';
 
 function extractSandboxPathFromUrl(filePath: string): string {
   if (!filePath.includes('://') && !filePath.includes('/sandboxes/') && !filePath.includes('/files/content')) {
@@ -317,4 +318,91 @@ export function constructHtmlPreviewUrl(
   const encodedPath = pathSegments.join('/');
 
   return `${sandboxUrl}/${encodedPath}`;
+}
+
+function extractSandboxIdFromReference(reference: string | undefined): string | undefined {
+  const trimmed = reference?.trim();
+  if (!trimmed) {
+    return undefined;
+  }
+
+  if (!trimmed.includes('://') && !trimmed.includes('/')) {
+    return trimmed;
+  }
+
+  try {
+    const parsed = new URL(trimmed);
+    const hostMatch = parsed.hostname.match(new RegExp(`^(?:\\d+)-([^.]+)\\.${SANDBOX_PREVIEW_DOMAIN}$`, 'i'));
+    if (hostMatch?.[1]) {
+      return hostMatch[1];
+    }
+  } catch {
+    const textMatch = trimmed.match(new RegExp(`(?:^|//)(?:\\d+)-([^.]+)\\.${SANDBOX_PREVIEW_DOMAIN}`, 'i'));
+    if (textMatch?.[1]) {
+      return textMatch[1];
+    }
+  }
+
+  return undefined;
+}
+
+export function buildSandboxPortPreviewUrl(
+  sandboxReference: string | undefined,
+  port: number,
+): string | undefined {
+  if (!Number.isFinite(port) || port <= 0) {
+    return undefined;
+  }
+
+  const sandboxId = extractSandboxIdFromReference(sandboxReference);
+  if (!sandboxId) {
+    return undefined;
+  }
+
+  return `https://${port}-${sandboxId}.${SANDBOX_PREVIEW_DOMAIN}`;
+}
+
+type AppPreviewFramework = 'nextjs' | 'vite' | 'react' | 'generic';
+
+const APP_PREVIEW_PORTS: Record<AppPreviewFramework, number[]> = {
+  nextjs: [3000, 3001],
+  vite: [5173, 4173, 3000, 3001],
+  react: [3000, 5173, 4173, 8080],
+  generic: [3000, 8000, 8080, 5173],
+};
+
+export function buildProjectAppPreviewUrl(options: {
+  sandboxId?: string;
+  sandboxUrl?: string;
+  framework?: AppPreviewFramework;
+  exposedPorts?: Array<{ port?: number; url?: string }>;
+}): string | undefined {
+  const framework = options.framework ?? 'generic';
+  const preferredPorts = APP_PREVIEW_PORTS[framework];
+
+  if (Array.isArray(options.exposedPorts)) {
+    const exposedByPort = new Map<number, string>();
+    for (const entry of options.exposedPorts) {
+      if (entry?.port && entry?.url) {
+        exposedByPort.set(entry.port, entry.url);
+      }
+    }
+
+    for (const port of preferredPorts) {
+      const exposedUrl = exposedByPort.get(port);
+      if (exposedUrl) {
+        return exposedUrl;
+      }
+    }
+  }
+
+  const sandboxReference = options.sandboxId || options.sandboxUrl;
+  for (const port of preferredPorts) {
+    const previewUrl = buildSandboxPortPreviewUrl(sandboxReference, port);
+    if (previewUrl) {
+      return previewUrl;
+    }
+  }
+
+  return framework === 'generic' ? options.sandboxUrl : undefined;
 }

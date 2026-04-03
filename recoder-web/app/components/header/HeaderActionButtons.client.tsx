@@ -310,6 +310,7 @@ function GoLiveButton() {
   const publishState = useStore(workbenchStore.publishState) as PublishState;
   const [showPopover, setShowPopover] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [previewCopied, setPreviewCopied] = useState(false);
   const [editingSlug, setEditingSlug] = useState(false);
   const [newSlug, setNewSlug] = useState('');
   const [slugSaving, setSlugSaving] = useState(false);
@@ -354,6 +355,14 @@ function GoLiveButton() {
       navigator.clipboard.writeText(publishState.url);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
+    }
+  };
+
+  const handleCopyPreviewUrl = () => {
+    if (publishState.zrokUrl) {
+      navigator.clipboard.writeText(publishState.zrokUrl);
+      setPreviewCopied(true);
+      setTimeout(() => setPreviewCopied(false), 2000);
     }
   };
 
@@ -524,6 +533,38 @@ function GoLiveButton() {
                 Open
               </a>
             </div>
+
+            {publishState.zrokUrl && publishState.zrokUrl !== publishState.url && (
+              <>
+                <div className="mt-3">
+                  <div className="text-xs font-medium text-recoder-elements-textSecondary mb-2">Stable Preview URL</div>
+                  <div className="flex items-center gap-2 p-2 rounded-md" style={{ backgroundColor: 'var(--recoder-elements-bg-depth-2)' }}>
+                    <span className="text-xs text-recoder-elements-textPrimary truncate flex-1">{publishState.zrokUrl}</span>
+                  </div>
+                </div>
+
+                <div className="flex gap-2 mt-2">
+                  <button
+                    onClick={handleCopyPreviewUrl}
+                    className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-md text-xs font-medium transition-colors text-recoder-elements-textPrimary hover:bg-recoder-elements-background-depth-2"
+                    style={{ border: '1px solid var(--recoder-elements-borderColor)' }}
+                  >
+                    <div className={previewCopied ? 'i-ph:check' : 'i-ph:copy'} />
+                    {previewCopied ? 'Copied' : 'Copy Preview'}
+                  </button>
+                  <a
+                    href={publishState.zrokUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-md text-xs font-medium transition-colors text-recoder-elements-textPrimary hover:bg-recoder-elements-background-depth-2"
+                    style={{ border: '1px solid var(--recoder-elements-borderColor)' }}
+                  >
+                    <div className="i-ph:arrow-square-out" />
+                    Open Preview
+                  </a>
+                </div>
+              </>
+            )}
 
             <div className="flex gap-2 mt-2">
               <button
