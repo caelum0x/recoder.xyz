@@ -829,6 +829,7 @@ RULES:
 - Use str_replace for targeted edits on existing files
 - NEVER overwrite config files (vite.config, tsconfig, tailwind.config, postcss.config)
 - Read target files first with readFile before modifying
+- For follow-up edits on existing files, prefer readFile includeLineHashes="true" and reuse lineRef/startLineRef/endLineRef on edit actions so stale edits are rejected
 - Only change what the user asked for — nothing else`;
               break;
           }
@@ -876,6 +877,7 @@ RULES:
         content: `FILE CONTEXT ALREADY PROVIDED: The <project_context> section above contains the current file contents for this project.
 You do NOT need to use readFile, listFiles, or searchFiles — you already have the information.
 IMMEDIATELY output <recoderAction type="str_replace"> or <recoderAction type="file"> actions to implement the requested change.
+If you need to make a second-pass targeted edit after re-reading a file, use readFile includeLineHashes="true" and then send anchored lineRef/startLineRef/endLineRef attributes with the edit action.
 Do NOT say "I will update..." without also outputting the actual action tags in this same response.`,
       });
     }

@@ -6,7 +6,7 @@ import type { ActionCallbackData } from './message-parser';
 import { autoSyncToGitHub } from './github-auto-sync';
 import { WORK_DIR } from '~/utils/constants';
 import { snapshotBeforeAI, snapshotAfterAI, setAutoSave, createSnapshot } from '~/lib/stores/snapshots';
-import { dockerFetch, dockerPost, dockerGet, DOCKER_URL, CONTAINER_CREATE_TIMEOUT_MS, getSessionToken } from '~/lib/services/docker-api';
+import { dockerFetch, dockerPost, dockerGet, DOCKER_URL, CONTAINER_CREATE_TIMEOUT_MS, withDockerCredentials } from '~/lib/services/docker-api';
 import { isNonNodeFramework, getInstallCommand, getDevServerCommand } from './language-generators';
 import * as undoManager from '~/lib/services/undo-manager';
 import type { FileChange } from '~/lib/types/proposals';
@@ -32,6 +32,7 @@ import {
   sanitizePackageJsonVersions,
 } from './package-json-sanitizer';
 import { isLikelySandboxProjectId } from '~/lib/services/sandbox-project-id';
+import { HashlineMismatchError, formatHashLines, resolveLineRef, validateLineRefs } from './hashline';
 import { 
   runTypeCheck, 
   formatTypeCheckErrors, 
@@ -250,6 +251,10 @@ const nodePath = {
 };
 
 const logger = createScopedLogger('ActionRunner');
+
+function buildHashlineRetryHint(filePath: string): string {
+  return `Re-read ${filePath} with <recoderAction type="readFile" filePath="${filePath}" includeLineHashes="true"></recoderAction> and retry using the updated {line}#{hash} references.`;
+}
 
 export type ActionStatus = 'pending' | 'running' | 'complete' | 'aborted' | 'failed';
 
@@ -619,9 +624,10 @@ export class ActionRunner {
 
     try {
       // Read existing package.json from container
-      const existingRes = await fetch(`${DOCKER_URL}/api/file/${this.#projectId}?path=package.json`, {
-        headers: { 'Authorization': `Bearer ${getSessionToken() || ''}` },
-      });
+      const existingRes = await fetch(
+        `${DOCKER_URL}/api/file/${this.#projectId}?path=package.json`,
+        withDockerCredentials()
+      );
       if (!existingRes.ok) return null; // No existing file, use new content as-is
 
       const existingContent = await existingRes.text();
@@ -810,14 +816,13 @@ export class ActionRunner {
       relativePath = relativePath.substring(1);
     }
 
-    const res = await fetch(`${DOCKER_URL}/api/file/${this.#projectId}`, {
+    const res = await fetch(`${DOCKER_URL}/api/file/${this.#projectId}`, withDockerCredentials({
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${getSessionToken() || ''}`,
       },
       body: JSON.stringify({ path: relativePath, content }),
-    });
+    }));
     if (!res.ok) {
       const errData = await res.json() as { error?: string };
       throw new Error(errData.error || 'Docker write failed');
@@ -827,14 +832,13 @@ export class ActionRunner {
   async #dockerExec(command: string, cwd: string = '', background: boolean = false): Promise<string> {
     // Normalize cwd path - if it starts with /, use as-is, otherwise prepend /workspace/
     const workDir = cwd ? (cwd.startsWith('/') ? cwd : `/workspace/${cwd}`) : '/workspace';
-    const res = await fetch(`${DOCKER_URL}/api/exec/${this.#projectId}`, {
+    const res = await fetch(`${DOCKER_URL}/api/exec/${this.#projectId}`, withDockerCredentials({
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${getSessionToken() || ''}`,
       },
       body: JSON.stringify({ command, cwd: workDir, background }),
-    });
+    }));
     const data = await res.json() as DockerExecResponse;
     if (!res.ok) throw new Error(data.error || 'Docker exec failed');
 
@@ -1703,9 +1707,10 @@ export class ActionRunner {
       const basename = action.filePath.split('/').pop() || action.filePath;
       // Check if file already exists in container
       try {
-        const checkRes = await fetch(`${DOCKER_URL}/api/file/${this.#projectId}?path=${encodeURIComponent(action.filePath)}`, {
-          headers: { 'Authorization': `Bearer ${getSessionToken() || ''}` },
-        });
+        const checkRes = await fetch(
+          `${DOCKER_URL}/api/file/${this.#projectId}?path=${encodeURIComponent(action.filePath)}`,
+          withDockerCredentials()
+        );
         if (checkRes.ok) {
           logger.warn(`[config-protection] Skipping overwrite of "${basename}" at ${action.filePath} (protected config file already exists)`);
 
@@ -1829,11 +1834,10 @@ export class ActionRunner {
     // Save previous state for undo and rollback (if file exists)
     let previousContent: string | null = null;
     try {
-      const res = await fetch(`${DOCKER_URL}/api/file/${this.#projectId}?path=${encodeURIComponent(action.filePath)}`, {
-        headers: {
-          'Authorization': `Bearer ${getSessionToken() || ''}`,
-        },
-      });
+      const res = await fetch(
+        `${DOCKER_URL}/api/file/${this.#projectId}?path=${encodeURIComponent(action.filePath)}`,
+        withDockerCredentials()
+      );
       if (res.ok) {
         previousContent = await res.text();
         // Store for rollback support (bulletproof action management)
@@ -2711,9 +2715,10 @@ export class ActionRunner {
       // Also read package.json from the container if not in written files
       if (!files['package.json']) {
         try {
-          const pkgRes = await fetch(`${DOCKER_URL}/api/file/${this.#projectId}?path=package.json`, {
-            headers: { 'Authorization': `Bearer ${getSessionToken() || ''}` },
-          });
+          const pkgRes = await fetch(
+            `${DOCKER_URL}/api/file/${this.#projectId}?path=package.json`,
+            withDockerCredentials()
+          );
           if (pkgRes.ok) {
             files['package.json'] = await pkgRes.text();
           }
@@ -2809,9 +2814,7 @@ export class ActionRunner {
       // Reset retry counter once the pipeline is idle
       this.#compileCheckRetryCount = 0;
 
-      const res = await fetch(`${DOCKER_URL}/api/logs/${this.#projectId}`, {
-        headers: { 'Authorization': `Bearer ${getSessionToken() || ''}` },
-      });
+      const res = await fetch(`${DOCKER_URL}/api/logs/${this.#projectId}`, withDockerCredentials());
       if (!res.ok) return;
 
       const data = await res.json() as { logs?: string };
@@ -2998,12 +3001,10 @@ export class ActionRunner {
   async #checkDevServerHealth(markContainerReady: boolean = false) {
     try {
       // Check preview health endpoint
-      const healthRes = await fetch(`${DOCKER_URL}/api/preview/${this.#projectId}/health`, {
-        headers: {
-          'Authorization': `Bearer ${getSessionToken() || ''}`,
-        },
-        signal: AbortSignal.timeout(10000),
-      });
+      const healthRes = await fetch(
+        `${DOCKER_URL}/api/preview/${this.#projectId}/health`,
+        withDockerCredentials({ signal: AbortSignal.timeout(10000) })
+      );
       if (healthRes.ok) {
         const healthData = await healthRes.json() as DockerHealthCheckResponse;
         const respondingPort = healthData.ports.find(p => p.responding);
@@ -3036,11 +3037,7 @@ export class ActionRunner {
       }
 
       // Also check logs for errors
-      const res = await fetch(`${DOCKER_URL}/api/logs/${this.#projectId}`, {
-        headers: {
-          'Authorization': `Bearer ${getSessionToken() || ''}`,
-        },
-      });
+      const res = await fetch(`${DOCKER_URL}/api/logs/${this.#projectId}`, withDockerCredentials());
       if (!res.ok) {
         logger.warn('⚠️ Could not read dev server logs');
         return;
@@ -3375,6 +3372,15 @@ export class ActionRunner {
         resultContent += `\n\n[...truncated to ${action.maxLines} lines. Use line ranges to read more.]`;
       }
 
+      if (action.includeLineHashes) {
+        const baseLine = action.startLine || 1;
+        const [visibleContent, notice] = resultContent.split('\n\n[...truncated', 2);
+        resultContent = formatHashLines(visibleContent, baseLine);
+        if (notice) {
+          resultContent += `\n\n[...truncated${notice}`;
+        }
+      }
+
       action.content = resultContent;
       logger.info(`Successfully read file: ${action.filePath} (${lineCount} lines)`);
     } catch (error) {
@@ -3394,14 +3400,13 @@ export class ActionRunner {
 
   async #dockerReadFile(path: string): Promise<string> {
     const normalizedPath = path.startsWith('/') ? path : `/${path}`;
-    const res = await fetch(`${DOCKER_URL}/api/exec/${this.#projectId}`, {
+    const res = await fetch(`${DOCKER_URL}/api/exec/${this.#projectId}`, withDockerCredentials({
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${getSessionToken() || ''}`,
       },
       body: JSON.stringify({ command: `cat "/workspace${normalizedPath}"` }),
-    });
+    }));
     if (!res.ok) {
       throw new Error('Docker read failed');
     }
@@ -3542,6 +3547,12 @@ export class ActionRunner {
         return;
       }
 
+      const anchoredRefs = [action.startLineRef, action.endLineRef].filter((value): value is string => Boolean(value));
+      if (anchoredRefs.length > 0) {
+        const currentContent = await this.#dockerReadFile(action.filePath);
+        validateLineRefs(currentContent.split('\n'), anchoredRefs);
+      }
+
       // Call enterprise tools API for search-replace
       const replaceResponse = await fetch('/api/enterprise-tools', {
         method: 'POST',
@@ -3627,6 +3638,12 @@ export class ActionRunner {
         throw new Error(result.message);
       }
     } catch (error) {
+      if (error instanceof HashlineMismatchError || error instanceof Error && error.message.includes('line reference')) {
+        action.content = `${error.message}\n\n${buildHashlineRetryHint(action.filePath)}`;
+        logger.warn(`Hashline validation failed for str_replace on ${action.filePath}:`, error);
+        return;
+      }
+
       logger.error(`String replacement failed:`, error);
       throw new Error(`Could not replace text in: ${action.filePath}`);
     }
@@ -4286,17 +4303,33 @@ export class ActionRunner {
       unreachable('Expected edit_file action');
     }
 
-    logger.info(`Editing file: ${action.filePath} at line ${action.lineNumber}`);
+    logger.info(`Editing file: ${action.filePath} at line ${action.lineNumber ?? action.lineRef ?? 'unknown'}`);
 
     try {
+      let resolvedLineNumber = action.lineNumber;
+      let resolvedEndLineNumber = action.endLineNumber;
+
+      if (action.lineRef || action.endLineRef) {
+        await this.#ensureDockerReady();
+        const currentContent = await this.#dockerReadFile(action.filePath);
+        const currentLines = currentContent.split('\n');
+
+        if (action.lineRef) {
+          resolvedLineNumber = resolveLineRef(currentLines, action.lineRef);
+        }
+        if (action.endLineRef) {
+          resolvedEndLineNumber = resolveLineRef(currentLines, action.endLineRef);
+        }
+      }
+
       // Validate line numbers
-      if (action.lineNumber < 1) {
-        action.content = `Invalid line number: ${action.lineNumber}. Line numbers start at 1.`;
+      if (!resolvedLineNumber || resolvedLineNumber < 1) {
+        action.content = `Invalid line number: ${resolvedLineNumber ?? 'missing'}. Provide lineNumber or a valid lineRef.`;
         return;
       }
 
-      if (action.endLineNumber && action.endLineNumber < action.lineNumber) {
-        action.content = `Invalid range: end line (${action.endLineNumber}) must be >= start line (${action.lineNumber})`;
+      if (resolvedEndLineNumber && resolvedEndLineNumber < resolvedLineNumber) {
+        action.content = `Invalid range: end line (${resolvedEndLineNumber}) must be >= start line (${resolvedLineNumber})`;
         return;
       }
 
@@ -4308,10 +4341,10 @@ export class ActionRunner {
           params: {
             filePath: action.filePath,
             edits: [{
-              lineNumber: action.lineNumber,
+              lineNumber: resolvedLineNumber,
               operation: action.operation,
               content: action.content,
-              endLine: action.endLineNumber
+              endLine: resolvedEndLineNumber
             }],
             workingDir: '/workspace'
           }
@@ -4324,9 +4357,15 @@ export class ActionRunner {
         return;
       }
 
-      action.content = `File edit completed. Modified ${action.filePath} at line ${action.lineNumber}`;
-      logger.info(`File edit completed: ${action.operation} at line ${action.lineNumber}`);
+      action.content = `File edit completed. Modified ${action.filePath} at line ${resolvedLineNumber}`;
+      logger.info(`File edit completed: ${action.operation} at line ${resolvedLineNumber}`);
     } catch (error) {
+      if (error instanceof HashlineMismatchError || error instanceof Error && error.message.includes('line reference')) {
+        action.content = `${error.message}\n\n${buildHashlineRetryHint(action.filePath)}`;
+        logger.warn(`Hashline validation failed for edit_file on ${action.filePath}:`, error);
+        return;
+      }
+
       logger.warn('EditFile unavailable, using strReplace:', error);
       action.content = `Line-based edit failed. Use strReplace for this change instead.`;
     }
@@ -4614,16 +4653,15 @@ export class ActionRunner {
       }
 
       // Call docker-backend to clone the website (it has full Node.js capabilities)
-      const response = await fetch(`${DOCKER_URL}/api/clone-url/${this.#projectId}`, {
+      const response = await fetch(`${DOCKER_URL}/api/clone-url/${this.#projectId}`, withDockerCredentials({
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${getSessionToken() || ''}`,
         },
         body: JSON.stringify({
           url: action.url,
         }),
-      });
+      }));
 
       if (!response.ok) {
         const error = await response.json().catch(() => ({ error: 'Failed to clone URL' })) as ErrorResponse;
