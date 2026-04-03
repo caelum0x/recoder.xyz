@@ -32,7 +32,7 @@ import { Button } from '@/components/ui/button';
 import { CheckCircle, AlertTriangle } from 'lucide-react';
 import { CodeBlockCode } from '@/components/ui/code-block';
 import { getLanguageFromFileName } from '../file-operation/_utils';
-import { buildProjectAppPreviewUrl, constructHtmlPreviewUrl } from '@/lib/utils/url';
+import { buildProjectAppPreviewUrl, buildProjectPreviewProxyUrl, constructHtmlPreviewUrl } from '@/lib/utils/url';
 import {
   Dialog,
   DialogContent,
@@ -480,6 +480,11 @@ function extractProjectData(toolCall: ToolCallData, toolResult?: ToolResultData)
 }
 
 function getProjectPreviewUrl(project: any, projectData: ProjectData): string | null {
+  const previewProxyUrl = buildProjectPreviewProxyUrl(project?.id);
+  if (previewProxyUrl) {
+    return previewProxyUrl;
+  }
+
   const framework = projectData.isVite
     ? 'vite'
     : projectData.isNextJs
@@ -513,6 +518,8 @@ export function GetProjectStructureView({
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const { data: sandboxStatusData, isAutoStarting } = useSandboxStatusWithAutoStart(project?.id);
   const isSandboxReady = sandboxStatusData ? isSandboxUsable(sandboxStatusData.status) : false;
+  const effectiveSandboxId = sandboxStatusData?.sandbox_id || project?.sandbox?.id;
+  const effectiveSandboxUrl = sandboxStatusData?.sandbox_url || project?.sandbox?.sandbox_url;
   
   // Extract name safely - use fallback if toolCall is undefined
   const name = toolCall?.function_name?.replace(/_/g, '-').toLowerCase() || 'get-project-structure';
@@ -550,7 +557,7 @@ export function GetProjectStructureView({
   }, []);
 
   const handleFileClick = useCallback(async (filePath: string) => {
-    if (!project?.sandbox?.sandbox_url || !projectData) return;
+    if (!effectiveSandboxUrl || !projectData) return;
     
     setSelectedFile(filePath);
     setLoadingFile(true);
@@ -558,7 +565,7 @@ export function GetProjectStructureView({
 
     try {
       const fileUrl = constructHtmlPreviewUrl(
-        project.sandbox.sandbox_url,
+        effectiveSandboxUrl,
         `${projectData.projectName}/${filePath}`
       );
 
@@ -579,12 +586,12 @@ export function GetProjectStructureView({
     } finally {
       setLoadingFile(false);
     }
-  }, [project, projectData]);
+  }, [effectiveSandboxUrl, projectData]);
 
   const isHtmlFile = selectedFile?.endsWith('.html');
-  const previewUrl = isHtmlFile && project?.sandbox?.sandbox_url && projectData
+  const previewUrl = isHtmlFile && effectiveSandboxUrl && projectData
     ? constructHtmlPreviewUrl(
-        project.sandbox.sandbox_url,
+        effectiveSandboxUrl,
         `${projectData.projectName}/${selectedFile}`
       )
     : undefined;
@@ -592,7 +599,17 @@ export function GetProjectStructureView({
   const language = selectedFile ? getLanguageFromFileName(selectedFile) : 'plaintext';
 
   // Get the project preview URL if available
-  const projectPreviewUrl = projectData ? getProjectPreviewUrl(project, projectData) : null;
+  const projectPreviewUrl = projectData ? getProjectPreviewUrl({
+    ...project,
+    sandbox: project?.sandbox ? {
+      ...project.sandbox,
+      id: effectiveSandboxId,
+      sandbox_url: effectiveSandboxUrl,
+    } : {
+      id: effectiveSandboxId,
+      sandbox_url: effectiveSandboxUrl,
+    },
+  }, projectData) : null;
 
   const handlePreview = () => {
     if (isAutoStarting || sandboxStatusData?.status === 'STARTING') {
