@@ -337,6 +337,10 @@ echo "--- Building recoder-web ---"
 docker build -f recoder-web/Dockerfile -t recoderxyz-recoder-web:latest .
 echo "[$(date -u)] recoder-web built"
 
+echo "--- Building recoder-app ---"
+docker build -f app/Dockerfile -t recoderxyz-recoder-app:latest .
+echo "[$(date -u)] recoder-app built"
+
 echo "--- Building recoder-frontend ---"
 docker build \
   -f recoder-agents/Dockerfile \
@@ -456,6 +460,7 @@ check_service() {
 
 check_service "docker-backend(:3100)" curl -sf http://localhost:3100/health
 check_service "recoder-web(:5173)" curl -sf -o /dev/null -w "%{http_code}" http://localhost:5173
+check_service "recoder-app(:3000)" curl -sf http://localhost:3000/api/health
 check_service "recoder-frontend(:3001)" curl -sf -o /dev/null -w "%{http_code}" http://localhost:3001
 check_service "openclaw-gateway(:18789)" curl -sf -o /dev/null -w "%{http_code}" http://localhost:18789/health
 check_service "recoder-studio(:3005)" curl -sf -o /dev/null -w "%{http_code}" http://localhost:3005/login
