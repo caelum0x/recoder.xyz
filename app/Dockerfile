@@ -59,6 +59,10 @@ COPY --from=base /app/app/public ./public
 COPY --from=base --chown=nextjs:nodejs /app/app/.next/standalone ./
 COPY --from=base --chown=nextjs:nodejs /app/app/.next/static ./.next/static
 COPY --from=base --chown=nextjs:nodejs /app/app/.next/static ./app/.next/static
+# @recoder/auth uses a separately generated Prisma client with a custom output
+# path. Next standalone does not copy it automatically, so make it available
+# where Prisma looks at runtime: /app/prisma/auth-client.
+COPY --from=base --chown=nextjs:nodejs /app/packages/auth/prisma/auth-client ./prisma/auth-client
 # Next standalone output keeps pnpm symlinks pointing to /node_modules/.pnpm.
 # Copy the virtual store so those symlinks resolve at runtime.
 COPY --from=base --chown=nextjs:nodejs /app/node_modules/.pnpm /node_modules/.pnpm
