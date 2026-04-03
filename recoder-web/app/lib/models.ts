@@ -33,6 +33,22 @@ export interface ProviderConfig {
 }
 
 export const MODEL_PROVIDERS: Record<string, ProviderConfig> = {
+  opencode: {
+    id: 'opencode',
+    name: 'OpenCode',
+    icon: 'OC',
+    endpoint: '/api/chat',
+    signupUrl: 'https://opencode.ai',
+    requiresApiKey: true,
+    description: 'Deep coding mode that runs OpenCode inside your live sandbox workspace',
+    models: [
+      { id: 'openrouter/anthropic/claude-sonnet-4.5', name: 'Claude Sonnet 4.5 via OpenRouter', contextWindow: 200000, supportsTools: true },
+      { id: 'openrouter/openai/gpt-4.1', name: 'GPT-4.1 via OpenRouter', contextWindow: 1000000, supportsTools: true },
+      { id: 'anthropic/claude-sonnet-4-5-20250929', name: 'Claude Sonnet 4.5 Direct', contextWindow: 200000, supportsTools: true },
+      { id: 'openai/gpt-4.1', name: 'GPT-4.1 Direct', contextWindow: 1000000, supportsTools: true },
+      { id: 'google/gemini-2.5-pro', name: 'Gemini 2.5 Pro Direct', contextWindow: 2000000, supportsTools: true, supportsVision: true },
+    ],
+  },
   openrouter: {
     id: 'openrouter',
     name: 'OpenRouter',
