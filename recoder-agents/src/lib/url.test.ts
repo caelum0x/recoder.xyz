@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   appendUrlSearchParam,
   buildProjectAppPreviewUrl,
+  buildProjectPreviewProxyUrl,
   buildSandboxFileUrl,
   buildSandboxPortPreviewUrl,
   constructHtmlPreviewUrl,
@@ -98,5 +99,17 @@ describe('buildProjectAppPreviewUrl', () => {
         ],
       }),
     ).toBe('https://custom-preview.recoder.xyz');
+  });
+});
+
+describe('buildProjectPreviewProxyUrl', () => {
+  it('builds a docker-backend preview proxy URL for a project', () => {
+    expect(
+      buildProjectPreviewProxyUrl('project-123', 'https://docker.recoder.xyz/'),
+    ).toBe('https://docker.recoder.xyz/preview/project-123');
+  });
+
+  it('returns undefined when the project id is missing', () => {
+    expect(buildProjectPreviewProxyUrl(undefined)).toBeUndefined();
   });
 });
