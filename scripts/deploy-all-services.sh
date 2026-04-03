@@ -245,7 +245,14 @@ echo "--- Checking Docker disk pressure ---"
 bash scripts/check-hetzner-docker-disk-pressure.sh
 
 echo "--- Checking docker-backend build context cleanliness ---"
-bash scripts/check-hetzner-docker-backend-build-context.sh
+CURRENT_BRANCH="$(git rev-parse --abbrev-ref HEAD)"
+BUILD_CONTEXT_COMPARE_REF="HEAD"
+if [[ -n "$CURRENT_BRANCH" && "$CURRENT_BRANCH" != "HEAD" ]]; then
+  echo "Fetching origin/${CURRENT_BRANCH} for build-context comparison..."
+  git fetch origin "$CURRENT_BRANCH"
+  BUILD_CONTEXT_COMPARE_REF="origin/${CURRENT_BRANCH}"
+fi
+GIT_COMPARE_REF="$BUILD_CONTEXT_COMPARE_REF" bash scripts/check-hetzner-docker-backend-build-context.sh
 
 echo "--- Checking docker-backend dist parity ---"
 bash scripts/check-docker-backend-dist-parity.sh
