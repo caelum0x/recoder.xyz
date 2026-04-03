@@ -165,6 +165,20 @@ function getValidatedPreviewProjectId(rawProjectId?: string): string | null {
   return isLikelySandboxProjectId(projectId) ? projectId : null;
 }
 
+export function buildDockerPreviewUpstreamHeaders(
+  targetPort: number,
+  baseHeaders: Record<string, string> = {}
+): Record<string, string> {
+  const loopbackHost = `127.0.0.1:${targetPort}`;
+  const upstreamOrigin = `http://${loopbackHost}`;
+
+  return {
+    ...baseHeaders,
+    host: loopbackHost,
+    origin: upstreamOrigin,
+  };
+}
+
 async function probeDaytonaPort(entry: { id: string }, port: number, path: string = '/'): Promise<boolean> {
   const proxyHost = getDaytonaProxyHost();
   const proxyPort = getDaytonaProxyPort();
@@ -617,6 +631,7 @@ export function setupPreviewProxy(app: WsExpressApp, containers: Map<string, { i
         return;
       }
       upstreamUrl = `ws://${PREVIEW_TARGET_HOST}:${targetPort}${upstreamPath}`;
+      upstreamHeaders = buildDockerPreviewUpstreamHeaders(targetPort);
     }
 
     const upstreamWs = protocols?.length
@@ -848,8 +863,19 @@ export function setupPreviewProxy(app: WsExpressApp, containers: Map<string, { i
         target: `http://${PREVIEW_TARGET_HOST}:${targetPort}`,
         changeOrigin: true,
         pathRewrite: { [`^/preview/${projectId}`]: '' },
-        ws: true,
+        // ws: false — WebSocket upgrades for /preview/ are handled by the dedicated
+        // app.ws('/preview/:projectId') handler above. Enabling ws:true here causes
+        // http-proxy-middleware to hook into the server-level 'upgrade' event and
+        // intercept unrelated WebSocket paths (/watch/, /build-errors/, /terminal/),
+        // producing "Invalid frame header" errors when the proxy target is undefined.
+        ws: false,
         selfHandleResponse: true, // We'll handle the response to inject <base> tag
+        onProxyReq: (proxyReq) => {
+          const upstreamHeaders = buildDockerPreviewUpstreamHeaders(targetPort);
+          for (const [key, value] of Object.entries(upstreamHeaders)) {
+            proxyReq.setHeader(key, value);
+          }
+        },
         onProxyRes: (proxyRes, req, res) => {
           delete proxyRes.headers['cross-origin-embedder-policy'];
           delete proxyRes.headers['cross-origin-opener-policy'];

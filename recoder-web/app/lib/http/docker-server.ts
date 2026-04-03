@@ -23,14 +23,14 @@ export function getDockerBackendUrl(
 ): string {
   const env = (context as { cloudflare?: { env?: Record<string, string> } } | undefined)?.cloudflare?.env;
   return (
-    env?.DOCKER_URL
-    || env?.VITE_DOCKER_URL
-    || env?.DOCKER_BACKEND_URL
+    env?.DOCKER_BACKEND_URL
     || env?.VITE_DOCKER_BACKEND_URL
-    || process.env.DOCKER_URL
-    || process.env.VITE_DOCKER_URL
+    || env?.DOCKER_URL
+    || env?.VITE_DOCKER_URL
     || process.env.DOCKER_BACKEND_URL
     || process.env.VITE_DOCKER_BACKEND_URL
+    || process.env.DOCKER_URL
+    || process.env.VITE_DOCKER_URL
     || 'https://docker.recoder.xyz'
   );
 }
