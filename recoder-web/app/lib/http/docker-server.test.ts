@@ -61,6 +61,18 @@ describe('docker-server http helpers', () => {
     vi.unstubAllEnvs();
   });
 
+  it('prefers process DOCKER_BACKEND_URL over DOCKER_URL when both are set', () => {
+    vi.stubEnv('DOCKER_URL', 'http://localhost:3100');
+    vi.stubEnv('DOCKER_BACKEND_URL', 'http://recoder-docker-backend:3100');
+    vi.stubEnv('VITE_DOCKER_URL', '');
+    vi.stubEnv('VITE_DOCKER_BACKEND_URL', '');
+
+    const url = getDockerBackendUrl();
+    expect(url).toBe('http://recoder-docker-backend:3100');
+
+    vi.unstubAllEnvs();
+  });
+
   it('prefers Authorization bearer token over cookie token for proxy headers', () => {
     const request = {
       headers: {
