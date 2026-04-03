@@ -272,6 +272,7 @@ describe('sub-router mounting', () => {
       '/events',
       '/connectors/claude',
       '/connectors/codex',
+      '/connectors/opencode',
       '/connectors/cursor',
       '/connectors/windsurf',
       '/connectors/replit',
@@ -293,9 +294,9 @@ describe('sub-router mounting', () => {
       expect(found, `Expected sub-router mount at '${expected}'`).toBe(true);
     }
 
-    // Also verify we have at least 16 sub-router mounts
+    // Also verify we have at least 17 sub-router mounts
     const routerLayers = stack.filter((l: any) => l.name === 'router');
-    expect(routerLayers.length).toBeGreaterThanOrEqual(16);
+    expect(routerLayers.length).toBeGreaterThanOrEqual(17);
   });
 
   it('has a direct /health route', () => {
