@@ -25,6 +25,13 @@ import { createLogger } from '../logger';
 
 const logger = createLogger('a2a-event-bridge');
 
+function toRecord(value: unknown): Record<string, unknown> | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return undefined;
+  }
+  return value as Record<string, unknown>;
+}
+
 // ---------------------------------------------------------------------------
 // Audit event type -> SSE event type mapping
 // ---------------------------------------------------------------------------
@@ -116,12 +123,13 @@ export function wireA2AEventBridge(): void {
     if (auditEvent.event_type === 'task.completed' && taskId) {
       const taskResult = lifecycleService.getTask(taskId);
       if (taskResult.ok) {
-        const payload = (taskResult.data as { payload?: Record<string, unknown> }).payload;
+        const payload = toRecord(taskResult.data.payload);
         const intent = payload?.intent;
         if (intent === 'feature' || intent === 'implement') {
           const title = String(payload?.task ?? payload?.title ?? `Feature from task ${taskId}`);
+          const result = toRecord(taskResult.data.result);
           const description = String(
-            (taskResult.data as { result?: { text?: string } }).result?.text
+            result?.text
             ?? payload?.description
             ?? ''
           );

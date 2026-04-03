@@ -32,7 +32,7 @@ import { Button } from '@/components/ui/button';
 import { CheckCircle, AlertTriangle } from 'lucide-react';
 import { CodeBlockCode } from '@/components/ui/code-block';
 import { getLanguageFromFileName } from '../file-operation/_utils';
-import { constructHtmlPreviewUrl } from '@/lib/utils/url';
+import { buildProjectAppPreviewUrl, constructHtmlPreviewUrl } from '@/lib/utils/url';
 import {
   Dialog,
   DialogContent,
@@ -40,6 +40,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { toast } from '@/lib/toast';
+import { isSandboxUsable, useSandboxStatusWithAutoStart } from '@/hooks/files';
 import {
   Tooltip,
   TooltipContent,
@@ -478,31 +479,21 @@ function extractProjectData(toolCall: ToolCallData, toolResult?: ToolResultData)
   };
 }
 
-// Helper function to construct preview URL
-function getProjectPreviewUrl(project: any, projectName: string): string | null {
-  // Check if there's an exposed port for this project
-  // This would typically come from the project's sandbox configuration
-  // For now, we'll construct a URL based on common patterns
-  
-  if (project?.sandbox?.exposed_ports) {
-    // Look for common dev server ports (3000, 5173, 8080, etc.)
-    const commonPorts = [3000, 3001, 5173, 5174, 8080, 8000, 4200];
-    const exposedPort = project.sandbox.exposed_ports.find((p: any) => 
-      commonPorts.includes(p.port)
-    );
-    
-    if (exposedPort) {
-      return exposedPort.url;
-    }
-  }
-  
-  // If sandbox has a base URL, construct preview URL
-  if (project?.sandbox?.sandbox_url) {
-    // Try common dev server ports
-    return `${project.sandbox.sandbox_url}:3000`;
-  }
-  
-  return null;
+function getProjectPreviewUrl(project: any, projectData: ProjectData): string | null {
+  const framework = projectData.isVite
+    ? 'vite'
+    : projectData.isNextJs
+      ? 'nextjs'
+      : projectData.isReact
+        ? 'react'
+        : 'generic';
+
+  return buildProjectAppPreviewUrl({
+    sandboxId: project?.sandbox?.id,
+    sandboxUrl: project?.sandbox?.sandbox_url,
+    framework,
+    exposedPorts: project?.sandbox?.exposed_ports,
+  }) ?? null;
 }
 
 export function GetProjectStructureView({
@@ -520,6 +511,8 @@ export function GetProjectStructureView({
   const [loadingFile, setLoadingFile] = useState(false);
   const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set(['.', 'src']));
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const { data: sandboxStatusData, isAutoStarting } = useSandboxStatusWithAutoStart(project?.id);
+  const isSandboxReady = sandboxStatusData ? isSandboxUsable(sandboxStatusData.status) : false;
   
   // Extract name safely - use fallback if toolCall is undefined
   const name = toolCall?.function_name?.replace(/_/g, '-').toLowerCase() || 'get-project-structure';
@@ -599,9 +592,23 @@ export function GetProjectStructureView({
   const language = selectedFile ? getLanguageFromFileName(selectedFile) : 'plaintext';
 
   // Get the project preview URL if available
-  const projectPreviewUrl = projectData ? getProjectPreviewUrl(project, projectData.projectName) : null;
+  const projectPreviewUrl = projectData ? getProjectPreviewUrl(project, projectData) : null;
 
   const handlePreview = () => {
+    if (isAutoStarting || sandboxStatusData?.status === 'STARTING') {
+      toast.info('Sandbox is starting. Try preview again in a few seconds.');
+      return;
+    }
+
+    if (sandboxStatusData && !isSandboxReady) {
+      toast.info(
+        sandboxStatusData.status === 'FAILED'
+          ? 'Sandbox is running but its services are unhealthy. Restart it before previewing.'
+          : 'Sandbox is not live yet. Start it and wait for services to finish booting before previewing.',
+      );
+      return;
+    }
+
     if (projectPreviewUrl) {
       window.open(projectPreviewUrl, '_blank');
     } else {
@@ -672,9 +679,11 @@ export function GetProjectStructureView({
                   </TooltipTrigger>
                   <TooltipContent>
                     <p className="text-xs">
-                      {projectPreviewUrl 
-                        ? "Open running application" 
-                        : "Build and start production server first"
+                      {isAutoStarting || sandboxStatusData?.status === 'STARTING'
+                        ? "Sandbox is starting"
+                        : projectPreviewUrl
+                          ? "Open application preview"
+                          : "Build and start the app first"
                       }
                     </p>
                   </TooltipContent>

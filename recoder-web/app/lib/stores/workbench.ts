@@ -173,6 +173,7 @@ export interface CustomDomainInfo {
 export interface PublishState {
   status: PublishStatus;
   url: string | null;
+  zrokUrl?: string | null;
   slug: string | null;
   publishedAt: string | null;
   error: string | null;
@@ -224,6 +225,7 @@ export class WorkbenchStore {
   publishState: WritableAtom<PublishState> = import.meta.hot?.data.publishState ?? atom<PublishState>({
     status: 'idle',
     url: null,
+    zrokUrl: null,
     slug: null,
     publishedAt: null,
     error: null,
@@ -1955,13 +1957,14 @@ export class WorkbenchStore {
     this.publishState.set({
       status: 'building',
       url: null,
+      zrokUrl: null,
       slug: null,
       publishedAt: null,
       error: null,
     });
 
     try {
-      const result = await dockerPost<{ url: string; slug: string; publishedAt: string }>(
+      const result = await dockerPost<{ url: string; slug: string; publishedAt: string; zrokUrl?: string | null }>(
         `/api/publish/${projectId}`,
         { name: projectName || projectId },
         { timeout: 120000 } // 2 minute timeout for build
@@ -1970,6 +1973,7 @@ export class WorkbenchStore {
       this.publishState.set({
         status: 'published',
         url: result.url,
+        zrokUrl: result.zrokUrl || null,
         slug: result.slug,
         publishedAt: result.publishedAt,
         error: null,
@@ -1980,6 +1984,7 @@ export class WorkbenchStore {
       this.publishState.set({
         status: 'error',
         url: null,
+        zrokUrl: null,
         slug: null,
         publishedAt: null,
         error: error.message || 'Publish failed',
@@ -2000,6 +2005,7 @@ export class WorkbenchStore {
       this.publishState.set({
         status: 'idle',
         url: null,
+        zrokUrl: null,
         slug: null,
         publishedAt: null,
         error: null,
@@ -2019,7 +2025,7 @@ export class WorkbenchStore {
     if (!projectId || !DOCKER_URL) return false;
 
     try {
-      const result = await dockerPost<{ url: string; slug: string; changed: boolean }>(
+      const result = await dockerPost<{ url: string; slug: string; changed: boolean; zrokUrl?: string | null }>(
         `/api/publish/${projectId}/slug`,
         { slug: newSlug },
       );
@@ -2029,6 +2035,7 @@ export class WorkbenchStore {
         this.publishState.set({
           ...currentState,
           url: result.url,
+          zrokUrl: result.zrokUrl ?? currentState.zrokUrl ?? null,
           slug: result.slug,
         });
       }
@@ -2127,6 +2134,7 @@ export class WorkbenchStore {
       const result = await dockerGet<{
         published: boolean;
         url?: string;
+        zrokUrl?: string | null;
         slug?: string;
         publishedAt?: string;
         customDomains?: CustomDomainInfo[];
@@ -2136,6 +2144,7 @@ export class WorkbenchStore {
         this.publishState.set({
           status: 'published',
           url: result.url || null,
+          zrokUrl: result.zrokUrl || null,
           slug: result.slug || null,
           publishedAt: result.publishedAt || null,
           error: null,

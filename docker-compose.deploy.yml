@@ -310,6 +310,30 @@ services:
     networks:
       - recoder
 
+  blackbox-exporter:
+    image: quay.io/prometheus/blackbox-exporter:latest
+    container_name: recoder-blackbox-exporter
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:9115:9115"
+    command:
+      - '--config.file=/etc/blackbox_exporter/config.yml'
+    volumes:
+      - ./monitoring/blackbox.yml:/etc/blackbox_exporter/config.yml:ro
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:9115/metrics"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          cpus: '0.1'
+          memory: 128M
+    networks:
+      - recoder
+
   # ================================================================
   # VictoriaMetrics — Prometheus-compatible TSDB (lighter, faster)
   # Replaces Prometheus. Uses same prometheus.yml scrape config.
@@ -336,6 +360,8 @@ services:
       node-exporter:
         condition: service_healthy
       redis-exporter:
+        condition: service_healthy
+      blackbox-exporter:
         condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "wget --quiet --tries=1 --spider http://localhost:8428/-/healthy || exit 1"]
@@ -798,8 +824,34 @@ services:
   # ================================================================
   # Chatwoot — Omnichannel inbox (replaces OpenClaw social gateway)
   # nginx: chat.recoder.xyz → port 3005
-  # Setup: docker exec recoder-chatwoot bundle exec rails db:chatwoot_prepare
+  # Bootstrap: chatwoot-init runs bundle exec rails db:chatwoot_prepare
+  # Verify: bash scripts/verify-chatwoot.sh remote
   # ================================================================
+  chatwoot-init:
+    image: chatwoot/chatwoot:v3.10.1
+    container_name: recoder-chatwoot-init
+    restart: "no"
+    command: ["bundle", "exec", "rails", "db:chatwoot_prepare"]
+    environment:
+      - DATABASE_URL=postgresql://recoder:recoder_prod_2026@${HOST_POSTGRES_HOST:-host.docker.internal}:5432/chatwoot
+      - REDIS_URL=redis://:${REDIS_PASSWORD:-}@redis:6379/2
+      - SECRET_KEY_BASE=${CHATWOOT_SECRET:-change_me_in_production_chatwoot_secret}
+      - RAILS_ENV=production
+      - NODE_ENV=production
+      - INSTALLATION_NAME=Recoder
+      - DEFAULT_LOCALE=en
+      - FORCE_SSL=false
+      - ENABLE_ACCOUNT_SIGNUP=false
+      - FRONTEND_URL=https://chat.recoder.xyz
+      - RECODER_A2A_WEBHOOK_URL=http://docker-backend:3100/api/a2a/webhook/chatwoot
+    depends_on:
+      redis:
+        condition: service_healthy
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - recoder
+
   chatwoot:
     image: chatwoot/chatwoot:v3.10.1
     container_name: recoder-chatwoot
@@ -807,8 +859,8 @@ services:
     ports:
       - "127.0.0.1:3005:3000"
     environment:
-      - DATABASE_URL=postgresql://recoder:recoder_prod_2026@${HOST_POSTGRES_HOST:-host.docker.internal}:5432/recoder_backend
-      - REDIS_URL=redis://:${REDIS_PASSWORD:-}@recoder-redis:6379/2
+      - DATABASE_URL=postgresql://recoder:recoder_prod_2026@${HOST_POSTGRES_HOST:-host.docker.internal}:5432/chatwoot
+      - REDIS_URL=redis://:${REDIS_PASSWORD:-}@redis:6379/2
       - SECRET_KEY_BASE=${CHATWOOT_SECRET:-change_me_in_production_chatwoot_secret}
       - RAILS_ENV=production
       - NODE_ENV=production
@@ -822,8 +874,10 @@ services:
     depends_on:
       redis:
         condition: service_healthy
+      chatwoot-init:
+        condition: service_completed_successfully
     healthcheck:
-      test: ["CMD-SHELL", "curl -sf http://localhost:3000/auth/sign_in | grep -q 'Chatwoot\\|html' || exit 1"]
+      test: ["CMD-SHELL", "status=$$(curl -s -o /dev/null -w '%{http_code}' -H 'Host: chat.recoder.xyz' http://127.0.0.1:3000/auth/sign_in || true); case \"$$status\" in 200|302|303|307|308) exit 0 ;; *) exit 1 ;; esac"]
       interval: 60s
       timeout: 10s
       retries: 5

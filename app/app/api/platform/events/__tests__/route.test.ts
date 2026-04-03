@@ -1,5 +1,6 @@
 import crypto from "node:crypto";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { NextRequest } from "next/server";
 
 // Mock prisma
 vi.mock("@/lib/prisma", () => ({
@@ -47,9 +48,9 @@ import { prisma } from "@/lib/prisma";
 import { sendEmail } from "@/lib/email";
 import { verifyInternalServiceRequest } from "@/lib/internal-service-auth";
 
-function makeRequest(body: Record<string, unknown>) {
+function makeRequest(body: Record<string, unknown>): NextRequest {
   const rawBody = JSON.stringify(body);
-  return new Request("https://recoder.xyz/api/platform/events", {
+  return new NextRequest("https://recoder.xyz/api/platform/events", {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: rawBody,

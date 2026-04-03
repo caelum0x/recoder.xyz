@@ -6,6 +6,11 @@
  * The deployed preview stack uses zrok2 enable tokens plus long-lived
  * `zrok2 share public ...` processes. This module keeps that local environment
  * enabled and maintains one background share process per active project.
+ *
+ * zrok v2 replaces the old `reserve` / `share reserved` flow with namespaces
+ * and reserved names. Instant sandbox previews still use ephemeral public
+ * shares, while published sites use a reserved name derived from the project id
+ * so they keep the same public URL across publish updates and backend restarts.
  */
 
 import { spawn, type ChildProcess } from 'child_process';
@@ -16,7 +21,6 @@ import { logger } from './logger.js';
 const ZROK2_BINARY = process.env.ZROK2_BINARY ?? 'zrok2';
 const ZROK2_API_ENDPOINT = process.env.ZROK2_API_ENDPOINT ?? process.env.ZROK_API_URL ?? 'http://zrok-controller:18080';
 const ZROK_ENABLE_TOKEN = process.env.ZROK_TOKEN ?? '';
-const ZROK_FRONTEND = process.env.ZROK_FRONTEND ?? 'preview.recoder.xyz';
 const ZROK_PUBLIC_BASE_DOMAIN = process.env.ZROK_PUBLIC_BASE_DOMAIN ?? 'recoder.xyz';
 const ZROK_NAMESPACE_TOKEN = process.env.ZROK_NAMESPACE_TOKEN ?? 'public';
 const ZROK_STATE_DIR = process.env.ZROK_STATE_DIR ?? path.join(process.env.HOME ?? '/tmp', '.zrok2-recoder-backend');
@@ -40,7 +44,14 @@ interface ListedShare {
   updatedAt?: number;
 }
 
-interface ZrokShare {
+interface ListedName {
+  name?: string;
+  namespaceToken?: string;
+  reserved?: boolean;
+  shareToken?: string;
+}
+
+interface ZrokPreviewShare {
   sandboxId: string;
   sandboxHost?: string;
   targetPort: number;
@@ -52,8 +63,21 @@ interface ZrokShare {
   createdAt: string;
 }
 
-const activeShares = new Map<string, ZrokShare>();
-const pendingShareCreates = new Map<string, Promise<{ previewUrl: string; shareToken: string } | null>>();
+interface ZrokPublishedShare {
+  publishedPath: string;
+  reservedName: string;
+  shareToken: string;
+  frontendEndpoint: string;
+  backendTarget: string;
+  envZId: string;
+  process: ChildProcess;
+  createdAt: string;
+}
+
+const activePreviewShares = new Map<string, ZrokPreviewShare>();
+const activePublishedShares = new Map<string, ZrokPublishedShare>();
+const pendingPreviewShareCreates = new Map<string, Promise<{ previewUrl: string; shareToken: string } | null>>();
+const pendingPublishedShareCreates = new Map<string, Promise<{ previewUrl: string; shareToken: string } | null>>();
 let enablePromise: Promise<ZrokEnabledEnvironment> | null = null;
 
 function isZrokConfigured(): boolean {
@@ -75,10 +99,6 @@ function buildZrokEnv(): NodeJS.ProcessEnv {
   };
 }
 
-function escapeRegExp(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -90,14 +110,14 @@ function buildPreviewUrl(shareToken: string): string {
   return `https://preview-${shareToken}.${ZROK_PUBLIC_BASE_DOMAIN}`;
 }
 
-function parseShareTokenFromText(text: string): string | null {
-  const publicMatch = new RegExp(`preview-([a-z0-9-]+)\\.${escapeRegExp(ZROK_PUBLIC_BASE_DOMAIN)}`, 'i').exec(text);
-  if (publicMatch?.[1]) {
-    return publicMatch[1].toLowerCase();
-  }
+function buildPublishedShareName(projectId: string): string {
+  const normalized = projectId
+    .toLowerCase()
+    .replace(/[^a-z0-9-]/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '');
 
-  const internalMatch = new RegExp(`([a-z0-9-]+)\\.${escapeRegExp(ZROK_FRONTEND)}`, 'i').exec(text);
-  return internalMatch?.[1]?.toLowerCase() ?? null;
+  return normalized.slice(0, 63) || 'project';
 }
 
 function loadEnabledEnvironment(): ZrokEnabledEnvironment | null {
@@ -166,6 +186,21 @@ async function listShares(envZId: string): Promise<ListedShare[]> {
     .sort((a, b) => (b.updatedAt ?? 0) - (a.updatedAt ?? 0));
 }
 
+async function listNames(namespaceToken = ZROK_NAMESPACE_TOKEN): Promise<ListedName[]> {
+  const args = ['list', 'names'];
+  if (namespaceToken) {
+    args.push('-n', namespaceToken);
+  }
+  args.push('--json');
+
+  const { stdout } = await runZrokCommand(args);
+  if (!stdout.trim()) {
+    return [];
+  }
+
+  return JSON.parse(stdout) as ListedName[];
+}
+
 async function ensureEnabledEnvironment(): Promise<ZrokEnabledEnvironment> {
   const existing = loadEnabledEnvironment();
   if (existing) {
@@ -199,27 +234,26 @@ function buildBackendTarget(sandboxId: string, targetPort: number, sandboxHost?:
     : `http://${sandboxId}:${targetPort}`;
 }
 
-function attachUnexpectedExitHandler(projectId: string, child: ChildProcess): void {
+function attachUnexpectedExitHandler<T extends { process: ChildProcess }>(
+  projectId: string,
+  child: ChildProcess,
+  shares: Map<string, T>,
+  label: string,
+): void {
   child.once('exit', (code, signal) => {
-    const current = activeShares.get(projectId);
+    const current = shares.get(projectId);
     if (current?.process === child) {
-      activeShares.delete(projectId);
-      logger.info({ projectId, code, signal }, '[zrok] Preview share process exited');
+      shares.delete(projectId);
+      logger.info({ projectId, code, signal }, `[zrok] ${label} share process exited`);
     }
   });
 }
 
-async function waitForShareReady(child: ChildProcess, envZId: string, backendTarget: string): Promise<{ shareToken: string; frontendEndpoint: string }> {
-  let parsedShareToken: string | null = null;
+async function waitForShareReady(child: ChildProcess, envZId: string, backendTarget: string): Promise<ListedShare> {
   let lastOutput = '';
 
   const capture = (chunk: Buffer | string) => {
-    const text = chunk.toString();
-    lastOutput += text;
-    const token = parseShareTokenFromText(text);
-    if (token) {
-      parsedShareToken = token;
-    }
+    lastOutput += chunk.toString();
   };
 
   child.stdout?.on('data', capture);
@@ -227,20 +261,10 @@ async function waitForShareReady(child: ChildProcess, envZId: string, backendTar
 
   const startedAt = Date.now();
   while (Date.now() - startedAt < SHARE_DISCOVERY_TIMEOUT_MS) {
-    if (parsedShareToken) {
-      return {
-        shareToken: parsedShareToken,
-        frontendEndpoint: buildPreviewUrl(parsedShareToken),
-      };
-    }
-
     const currentShares = await listShares(envZId).catch(() => []);
     const matching = currentShares.find((share) => share.target === backendTarget && share.shareToken);
-    if (matching?.shareToken) {
-      return {
-        shareToken: matching.shareToken,
-        frontendEndpoint: buildPreviewUrl(matching.shareToken),
-      };
+    if (matching) {
+      return matching;
     }
 
     if (child.exitCode !== null || child.killed) {
@@ -251,6 +275,32 @@ async function waitForShareReady(child: ChildProcess, envZId: string, backendTar
   }
 
   throw new Error(`zrok2 share did not become ready for ${backendTarget}: ${lastOutput.trim()}`);
+}
+
+async function ensureReservedPublicName(name: string): Promise<void> {
+  const existing = (await listNames(ZROK_NAMESPACE_TOKEN)).find(
+    (entry) => entry.name === name && entry.namespaceToken === ZROK_NAMESPACE_TOKEN,
+  );
+
+  if (!existing) {
+    await runZrokCommand(['create', 'name', '-n', ZROK_NAMESPACE_TOKEN, name]);
+    logger.info({ namespace: ZROK_NAMESPACE_TOKEN, name }, '[zrok] Reserved public name created');
+    return;
+  }
+
+  if (!existing.reserved) {
+    await runZrokCommand(['modify', 'name', '-n', ZROK_NAMESPACE_TOKEN, '-r', name]);
+    logger.info({ namespace: ZROK_NAMESPACE_TOKEN, name }, '[zrok] Public name promoted to reserved');
+  }
+}
+
+async function deleteReservedPublicName(name: string): Promise<void> {
+  try {
+    await runZrokCommand(['delete', 'name', '-n', ZROK_NAMESPACE_TOKEN, name]);
+    logger.info({ namespace: ZROK_NAMESPACE_TOKEN, name }, '[zrok] Reserved public name deleted');
+  } catch (err) {
+    logger.warn({ err, namespace: ZROK_NAMESPACE_TOKEN, name }, '[zrok] Failed to delete reserved public name');
+  }
 }
 
 async function spawnShare(params: {
@@ -277,23 +327,80 @@ async function spawnShare(params: {
     stdio: ['ignore', 'pipe', 'pipe'],
   });
 
-  attachUnexpectedExitHandler(projectId, child);
+  attachUnexpectedExitHandler(projectId, child, activePreviewShares, 'Preview');
 
   try {
     const ready = await waitForShareReady(child, env.envZId, backendTarget);
-    const share: ZrokShare = {
+    if (!ready.shareToken) {
+      throw new Error(`zrok2 preview share for ${backendTarget} did not return a share token`);
+    }
+
+    const share: ZrokPreviewShare = {
       sandboxId,
       sandboxHost,
       targetPort,
       shareToken: ready.shareToken,
-      frontendEndpoint: ready.frontendEndpoint,
+      frontendEndpoint: buildPreviewUrl(ready.shareToken),
       backendTarget,
       envZId: env.envZId,
       process: child,
       createdAt: new Date().toISOString(),
     };
-    activeShares.set(projectId, share);
+    activePreviewShares.set(projectId, share);
     logger.info({ projectId, shareToken: share.shareToken, frontendEndpoint: share.frontendEndpoint, backendTarget }, '[zrok] Preview share created');
+    return { previewUrl: share.frontendEndpoint, shareToken: share.shareToken };
+  } catch (err) {
+    child.kill('SIGTERM');
+    throw err;
+  }
+}
+
+async function spawnPublishedShare(params: {
+  projectId: string;
+  publishedPath: string;
+  reservedName: string;
+  env: ZrokEnabledEnvironment;
+}): Promise<{ previewUrl: string; shareToken: string }> {
+  const { projectId, publishedPath, reservedName, env } = params;
+  const backendTarget = path.resolve(publishedPath);
+  const nameSelection = `${ZROK_NAMESPACE_TOKEN}:${reservedName}`;
+
+  const child = spawn(ZROK2_BINARY, [
+    'share',
+    'public',
+    backendTarget,
+    '--backend-mode',
+    'web',
+    '--headless',
+    '--force-local',
+    '--open',
+    '-n',
+    nameSelection,
+  ], {
+    env: buildZrokEnv(),
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+
+  attachUnexpectedExitHandler(projectId, child, activePublishedShares, 'Published');
+
+  try {
+    const ready = await waitForShareReady(child, env.envZId, backendTarget);
+    if (!ready.shareToken) {
+      throw new Error(`zrok2 published share for ${backendTarget} did not return a share token`);
+    }
+
+    const share: ZrokPublishedShare = {
+      publishedPath: backendTarget,
+      reservedName,
+      shareToken: ready.shareToken,
+      frontendEndpoint: buildPreviewUrl(reservedName),
+      backendTarget,
+      envZId: env.envZId,
+      process: child,
+      createdAt: new Date().toISOString(),
+    };
+    activePublishedShares.set(projectId, share);
+    logger.info({ projectId, shareToken: share.shareToken, frontendEndpoint: share.frontendEndpoint, backendTarget }, '[zrok] Published share created');
     return { previewUrl: share.frontendEndpoint, shareToken: share.shareToken };
   } catch (err) {
     child.kill('SIGTERM');
@@ -314,7 +421,7 @@ async function createPreviewShareInternal(params: {
 
   const { sandboxId, projectId, targetPort = 5173, sandboxHost } = params;
   const backendTarget = buildBackendTarget(sandboxId, targetPort, sandboxHost);
-  const existing = activeShares.get(projectId);
+  const existing = activePreviewShares.get(projectId);
 
   if (existing && existing.backendTarget === backendTarget && existing.process.exitCode === null && !existing.process.killed) {
     return { previewUrl: existing.frontendEndpoint, shareToken: existing.shareToken };
@@ -339,39 +446,106 @@ export async function createPreviewShare(params: {
   targetPort?: number;
   sandboxHost?: string;
 }): Promise<{ previewUrl: string; shareToken: string } | null> {
-  const pending = pendingShareCreates.get(params.projectId);
+  const pending = pendingPreviewShareCreates.get(params.projectId);
   if (pending) {
     return pending;
   }
 
   const created = createPreviewShareInternal(params).finally(() => {
-    pendingShareCreates.delete(params.projectId);
+    pendingPreviewShareCreates.delete(params.projectId);
   });
-  pendingShareCreates.set(params.projectId, created);
+  pendingPreviewShareCreates.set(params.projectId, created);
   return created;
 }
 
 /**
- * zrok2 no longer has the old reserved-share frontdoor model this codebase
- * originally assumed. Keep publish on the stable web publish URL for now.
+ * Published shares use a reserved public name derived from the project id.
+ * The share process is recreated against the latest published directory as
+ * needed, but the public URL remains stable.
  */
-export async function reservePreviewShare(projectId: string): Promise<{ previewUrl: string } | null> {
-  if (!isZrokConfigured()) return null;
-
-  if (!activeShares.has(projectId)) {
-    logger.warn({ projectId }, '[zrok] No active share to promote for publish');
+async function ensurePublishedShareInternal(params: {
+  projectId: string;
+  publishedPath: string;
+}): Promise<{ previewUrl: string; shareToken: string } | null> {
+  if (!isZrokConfigured()) {
+    logger.debug('[zrok] Not configured — skipping published share creation');
     return null;
   }
 
-  logger.info({ projectId }, '[zrok] zrok2 does not support the legacy reserved-share publish flow; skipping zrok publish URL');
-  return null;
+  const { projectId, publishedPath } = params;
+  const backendTarget = path.resolve(publishedPath);
+  const reservedName = buildPublishedShareName(projectId);
+  const existing = activePublishedShares.get(projectId);
+
+  if (
+    existing
+    && existing.backendTarget === backendTarget
+    && existing.reservedName === reservedName
+    && existing.process.exitCode === null
+    && !existing.process.killed
+  ) {
+    return { previewUrl: existing.frontendEndpoint, shareToken: existing.shareToken };
+  }
+
+  if (existing) {
+    await destroyPublishedShare(projectId, { deleteName: false });
+  }
+
+  try {
+    const env = await ensureEnabledEnvironment();
+    await ensureReservedPublicName(reservedName);
+    return await spawnPublishedShare({
+      projectId,
+      publishedPath: backendTarget,
+      reservedName,
+      env,
+    });
+  } catch (err) {
+    logger.warn({ err, projectId, publishedPath: backendTarget }, '[zrok] Failed to create persistent published share');
+    return null;
+  }
+}
+
+export async function ensurePublishedShare(params: {
+  projectId: string;
+  publishedPath: string;
+}): Promise<{ previewUrl: string; shareToken: string } | null> {
+  const pending = pendingPublishedShareCreates.get(params.projectId);
+  if (pending) {
+    return pending;
+  }
+
+  const created = ensurePublishedShareInternal(params).finally(() => {
+    pendingPublishedShareCreates.delete(params.projectId);
+  });
+  pendingPublishedShareCreates.set(params.projectId, created);
+  return created;
+}
+
+export async function restorePublishedShares(entries: Array<{
+  projectId: string;
+  publishedPath: string;
+}>): Promise<void> {
+  if (!isZrokConfigured()) {
+    return;
+  }
+
+  for (const entry of entries) {
+    if (!entry.projectId || !entry.publishedPath) {
+      continue;
+    }
+
+    await ensurePublishedShare(entry).catch((err) => {
+      logger.warn({ err, projectId: entry.projectId, publishedPath: entry.publishedPath }, '[zrok] Failed to restore published share');
+    });
+  }
 }
 
 export async function destroyPreviewShare(projectId: string): Promise<void> {
-  const existing = activeShares.get(projectId);
+  const existing = activePreviewShares.get(projectId);
   if (!existing) return;
 
-  activeShares.delete(projectId);
+  activePreviewShares.delete(projectId);
 
   try {
     await runZrokCommand(['delete', 'share', existing.shareToken, '--envzid', existing.envZId]);
@@ -385,12 +559,46 @@ export async function destroyPreviewShare(projectId: string): Promise<void> {
   }
 }
 
+export async function destroyPublishedShare(
+  projectId: string,
+  options: { deleteName?: boolean } = {},
+): Promise<void> {
+  const existing = activePublishedShares.get(projectId);
+  if (!existing) {
+    if (options.deleteName) {
+      await deleteReservedPublicName(buildPublishedShareName(projectId));
+    }
+    return;
+  }
+
+  activePublishedShares.delete(projectId);
+
+  try {
+    await runZrokCommand(['delete', 'share', existing.shareToken, '--envzid', existing.envZId]);
+    logger.info({ projectId, shareToken: existing.shareToken }, '[zrok] Published share destroyed');
+  } catch (err) {
+    logger.warn({ err, projectId, shareToken: existing.shareToken }, '[zrok] Failed to delete published share record (may already be gone)');
+  }
+
+  if (!existing.process.killed && existing.process.exitCode === null) {
+    existing.process.kill('SIGTERM');
+  }
+
+  if (options.deleteName) {
+    await deleteReservedPublicName(existing.reservedName);
+  }
+}
+
 export function getPreviewUrl(projectId: string): string | null {
-  return activeShares.get(projectId)?.frontendEndpoint ?? null;
+  return activePreviewShares.get(projectId)?.frontendEndpoint ?? null;
+}
+
+export function getPublishedShareUrl(projectId: string): string | null {
+  return activePublishedShares.get(projectId)?.frontendEndpoint ?? null;
 }
 
 export async function updateShareTarget(projectId: string, newPort: number): Promise<boolean> {
-  const existing = activeShares.get(projectId);
+  const existing = activePreviewShares.get(projectId);
   if (!existing || !isZrokConfigured()) {
     return false;
   }
@@ -411,16 +619,27 @@ export async function updateShareTarget(projectId: string, newPort: number): Pro
 }
 
 export function zrokStats(): { configured: boolean; activeShares: number; reservedShares: number } {
-  return { configured: isZrokConfigured(), activeShares: activeShares.size, reservedShares: 0 };
+  return {
+    configured: isZrokConfigured(),
+    activeShares: activePreviewShares.size,
+    reservedShares: activePublishedShares.size,
+  };
 }
 
 export function __resetZrokPreviewStateForTests(): void {
   enablePromise = null;
-  pendingShareCreates.clear();
-  for (const share of activeShares.values()) {
+  pendingPreviewShareCreates.clear();
+  pendingPublishedShareCreates.clear();
+  for (const share of activePreviewShares.values()) {
     if (!share.process.killed && share.process.exitCode === null) {
       share.process.kill('SIGTERM');
     }
   }
-  activeShares.clear();
+  for (const share of activePublishedShares.values()) {
+    if (!share.process.killed && share.process.exitCode === null) {
+      share.process.kill('SIGTERM');
+    }
+  }
+  activePreviewShares.clear();
+  activePublishedShares.clear();
 }

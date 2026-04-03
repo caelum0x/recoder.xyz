@@ -6,7 +6,6 @@
 
 import * as fs from 'fs/promises';
 import * as path from 'path';
-import { glob } from 'glob';
 
 // ==================== Types ====================
 
@@ -296,22 +295,65 @@ export function getIndexingProgress(projectId: string): IndexingProgress | null 
 
 // ==================== Main Functions ====================
 
-const DEFAULT_IGNORE_PATTERNS = [
-  'node_modules/**',
-  '.git/**',
-  'dist/**',
-  'build/**',
-  '.next/**',
-  'coverage/**',
-  '*.lock',
+const IGNORED_DIRECTORY_NAMES = new Set([
+  'node_modules',
+  '.git',
+  'dist',
+  'build',
+  '.next',
+  'coverage',
+  '.recoder',
+]);
+
+const IGNORED_FILE_NAMES = new Set([
   'package-lock.json',
   'pnpm-lock.yaml',
   'yarn.lock',
-  '*.min.js',
-  '*.min.css',
-  '*.map',
-  '.recoder/**',
-];
+]);
+
+const IGNORED_FILE_SUFFIXES = ['.lock', '.min.js', '.min.css', '.map'];
+
+function shouldIgnoreFile(fileName: string): boolean {
+  return (
+    IGNORED_FILE_NAMES.has(fileName) ||
+    IGNORED_FILE_SUFFIXES.some((suffix) => fileName.endsWith(suffix))
+  );
+}
+
+async function collectWorkspaceFiles(workspacePath: string): Promise<string[]> {
+  const files: string[] = [];
+
+  async function walk(currentPath: string, relativeDir = ''): Promise<void> {
+    const entries = await fs.readdir(currentPath, { withFileTypes: true });
+    entries.sort((a, b) => a.name.localeCompare(b.name));
+
+    for (const entry of entries) {
+      const relativePath = relativeDir ? `${relativeDir}/${entry.name}` : entry.name;
+      const fullPath = path.join(currentPath, entry.name);
+
+      if (entry.isSymbolicLink()) {
+        continue;
+      }
+
+      if (entry.isDirectory()) {
+        if (IGNORED_DIRECTORY_NAMES.has(entry.name)) {
+          continue;
+        }
+        await walk(fullPath, relativePath);
+        continue;
+      }
+
+      if (shouldIgnoreFile(entry.name) || !isSupported(relativePath)) {
+        continue;
+      }
+
+      files.push(relativePath);
+    }
+  }
+
+  await walk(workspacePath);
+  return files;
+}
 
 /**
  * Index a workspace for semantic code search
@@ -343,15 +385,7 @@ export async function indexWorkspace(
 
     // Scan for files
     progress.status = 'scanning';
-    const extensions = Object.keys(SUPPORTED_EXTENSIONS).map(ext => ext.slice(1));
-    const pattern = `**/*.{${extensions.join(',')}}`;
-
-    const files = await glob(pattern, {
-      cwd: workspacePath,
-      ignore: DEFAULT_IGNORE_PATTERNS,
-      nodir: true,
-      absolute: false,
-    });
+    const files = await collectWorkspaceFiles(workspacePath);
 
     progress.totalFiles = files.length;
     console.log(`[CodeIndex] Found ${files.length} files to index`);
