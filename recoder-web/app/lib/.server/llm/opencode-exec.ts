@@ -28,9 +28,10 @@ interface ExecuteOpencodeChatOptions {
 }
 
 interface ExecCommandResponse {
-  output?: string;
   success?: boolean;
-  exitCode?: number | null;
+  text?: string;
+  output?: string;
+  sessionId?: string;
   error?: string;
 }
 
@@ -333,22 +334,17 @@ export async function executeOpencodeChat(options: ExecuteOpencodeChatOptions): 
     hasSession: Boolean(existingSessionId),
   });
 
-  const command = buildOpencodeCommand({
-    model: options.model,
-    prompt,
-    sessionId: existingSessionId,
-    ...providerKeys,
-  });
-
   const dockerUrl = getDockerBackendUrl(options.context);
   const headers = createDockerProxyHeaders(options.request);
 
-  const upstream = await fetch(`${dockerUrl}/api/exec/${encodeURIComponent(options.projectId)}`, {
+  const upstream = await fetch(`${dockerUrl}/api/opencode/${encodeURIComponent(options.projectId)}`, {
     method: 'POST',
     headers,
     body: JSON.stringify({
-      command,
-      cwd: '/workspace',
+      prompt,
+      model: options.model,
+      sessionId: existingSessionId,
+      providerKeys,
     }),
   });
 
@@ -359,19 +355,18 @@ export async function executeOpencodeChat(options: ExecuteOpencodeChatOptions): 
   }
 
   const execResult = await upstream.json() as ExecCommandResponse;
-  const parsed = parseOpencodeExecOutput(execResult.output || '');
 
-  if (parsed.sessionId) {
-    storeSessionId(options.projectId, options.chatId, parsed.sessionId);
+  if (execResult.sessionId) {
+    storeSessionId(options.projectId, options.chatId, execResult.sessionId);
   }
 
-  if (execResult.success === false || parsed.error) {
-    const failureText = parsed.error || parsed.text || execResult.error || execResult.output || 'OpenCode execution failed.';
+  if (execResult.success === false || execResult.error) {
+    const failureText = execResult.error || execResult.text || execResult.output || 'OpenCode execution failed.';
     return createTextStream(failureText);
   }
 
-  if (parsed.text) {
-    return createTextStream(parsed.text);
+  if (execResult.text) {
+    return createTextStream(execResult.text);
   }
 
   return createTextStream('OpenCode completed, but it did not return a textual summary.');
