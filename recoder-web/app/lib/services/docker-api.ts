@@ -311,13 +311,12 @@ export async function dockerFetch<T = unknown>(
     const timeoutId = setTimeout(() => controller.abort(), timeout);
 
     try {
-      const response = await fetch(url, {
+      const response = await fetch(url, withDockerCredentials({
         ...fetchOptions,
         headers,
         body: body ? JSON.stringify(body) : undefined,
-        credentials: 'include',
         signal: controller.signal,
-      });
+      }));
 
       clearTimeout(timeoutId);
       const result = await parseResponse<T>(response, endpoint);
@@ -497,7 +496,8 @@ export function createDockerWebSocket(
     protocols?: string | string[];
   } = {}
 ): ReconnectingWebSocket {
-  const wsUrl = DOCKER_URL.replace(/^http/, 'ws') + path;
+  const normalizedPath = normalizeDockerWebSocketPath(path);
+  const wsUrl = DOCKER_URL.replace(/^http/, 'ws') + normalizedPath;
   const token = getSessionToken();
   const urlWithToken = token ? `${wsUrl}${wsUrl.includes('?') ? '&' : '?'}token=${encodeURIComponent(token)}` : wsUrl;
 
@@ -536,6 +536,40 @@ export function createDockerWebSocket(
       });
     },
   });
+}
+
+/**
+ * Normalize legacy websocket endpoints to the canonical docker-backend routes.
+ * recoder-web still has older callers that use `/api/watch/...` and
+ * `/api/terminal/...`, while the backend only serves `/watch/...` and
+ * `/terminal/...` with `terminalId` as a query param.
+ */
+export function normalizeDockerWebSocketPath(path: string): string {
+  const queryIndex = path.indexOf('?');
+  const pathname = queryIndex === -1 ? path : path.slice(0, queryIndex);
+  const rawQuery = queryIndex === -1 ? '' : path.slice(queryIndex + 1);
+
+  if (pathname.startsWith('/api/watch/')) {
+    const canonicalPath = pathname.replace('/api/watch/', '/watch/');
+    return rawQuery ? `${canonicalPath}?${rawQuery}` : canonicalPath;
+  }
+
+  const terminalMatch = pathname.match(/^\/api\/terminal\/([^/?]+)(?:\/([^/?]+))?$/);
+  if (!terminalMatch) {
+    return path;
+  }
+
+  const [, projectId, terminalId] = terminalMatch;
+  const params = new URLSearchParams(rawQuery);
+
+  if (terminalId && !params.has('terminalId')) {
+    params.set('terminalId', terminalId);
+  }
+
+  const canonicalPath = `/terminal/${projectId}`;
+  const query = params.toString();
+
+  return query ? `${canonicalPath}?${query}` : canonicalPath;
 }
 
 /**

@@ -25,7 +25,6 @@ import {
   createDockerWebSocket,
   checkDockerHealth,
   DOCKER_URL,
-  getSessionToken,
   type ConnectionState,
 } from './docker-api';
 import type { ReconnectingWebSocket } from '~/lib/utils/error-handler';
@@ -554,17 +553,15 @@ export class DockerSandbox implements SandboxProvider {
   }
 
   async createTerminal(): Promise<SandboxTerminal> {
-    // Request a new terminal session
-    const response = await dockerPost<{ terminalId: string }>(`/api/terminal/${this.id}`);
-    const terminalId = response.terminalId;
+    const terminalId = typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+      ? crypto.randomUUID()
+      : `term-${Date.now()}`;
 
-    // Create WebSocket connection
-    const wsUrl = `${DOCKER_URL.replace(/^http/, 'ws')}/api/terminal/${this.id}/${terminalId}`;
-    const token = getSessionToken();
-    const urlWithToken = token ? `${wsUrl}?token=${encodeURIComponent(token)}` : wsUrl;
-
-    const ws = createDockerWebSocket(`/api/terminal/${this.id}/${terminalId}`, {
+    const ws = createDockerWebSocket(`/terminal/${this.id}?terminalId=${encodeURIComponent(terminalId)}`, {
       onMessage: (data) => {
+        if (typeof data !== 'string') {
+          return;
+        }
         this.emit({
           type: 'output',
           data: { terminalId, output: data },
@@ -578,12 +575,16 @@ export class DockerSandbox implements SandboxProvider {
       ws,
       write: (data: string) => {
         if (ws.isConnected()) {
-          ws.send(JSON.stringify({ type: 'input', data }));
+          ws.send(data);
         }
       },
       resize: (cols: number, rows: number) => {
         if (ws.isConnected()) {
-          ws.send(JSON.stringify({ type: 'resize', cols, rows }));
+          ws.send(JSON.stringify({
+            id: Date.now(),
+            method: 'terminal.resize',
+            params: { cols, rows },
+          }));
         }
       },
       close: () => {
@@ -591,7 +592,11 @@ export class DockerSandbox implements SandboxProvider {
       },
       kill: () => {
         if (ws.isConnected()) {
-          ws.send(JSON.stringify({ type: 'kill' }));
+          ws.send(JSON.stringify({
+            id: Date.now(),
+            method: 'terminal.kill',
+            params: {},
+          }));
         }
       },
     };
@@ -681,8 +686,19 @@ export class DockerSandbox implements SandboxProvider {
 
   // Private methods
   #startFileWatcher(): void {
-    this.#fileWatcherWs = createDockerWebSocket(`/api/watch/${this.id}`, {
+    this.#fileWatcherWs = createDockerWebSocket(`/watch/${this.id}`, {
       onMessage: (data: any) => {
+        if (data?.type === 'file-changes' && Array.isArray(data.changes)) {
+          for (const change of data.changes) {
+            this.emit({
+              type: 'file-change',
+              data: { path: change.path, event: change.type },
+              timestamp: new Date(),
+            });
+          }
+          return;
+        }
+
         if (data?.type === 'file-change') {
           this.emit({
             type: 'file-change',
