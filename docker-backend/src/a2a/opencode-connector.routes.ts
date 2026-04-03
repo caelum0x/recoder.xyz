@@ -94,6 +94,11 @@ function readRequesterPlatform(value: unknown): RecoderAgentPlatform {
   }
 }
 
+function readProjectId(body: Record<string, unknown>): string | undefined {
+  const candidate = body.projectId ?? body.project_id;
+  return typeof candidate === 'string' && candidate.trim().length > 0 ? candidate.trim() : undefined;
+}
+
 export const opencodeConnectorRouter = Router();
 
 opencodeConnectorRouter.use(parseJsonTextBody);
@@ -102,21 +107,12 @@ opencodeConnectorRouter.post('/execute', async (req: Request, res: Response) => 
   let executionStartedAt: number | null = null;
 
   try {
-    const runtime = getOpencodeConnectorRuntime();
-
-    if (!runtime.isRunning()) {
-      sendError(res, 503, buildA2AError({
-        code: A2AErrorCodeEnum.ConnectorUnavailable,
-        message: 'OpenCode connector is not running. Start it first via POST /start.',
-      }));
-      return;
-    }
-
     const body = (req.body || {}) as Record<string, unknown>;
     const prompt = body.prompt;
     const requester = (body.requester || {}) as Record<string, unknown>;
     const taskId = typeof body.taskId === 'string' ? body.taskId : undefined;
     const requesterPlatform = readRequesterPlatform(requester.platform);
+    const projectId = readProjectId(body);
 
     if (!prompt || typeof prompt !== 'string') {
       sendError(res, 400, buildA2AError({
@@ -132,7 +128,7 @@ opencodeConnectorRouter.post('/execute', async (req: Request, res: Response) => 
 
     if (!effectiveTaskId) {
       const createResult = lifecycle.createTask({
-        workspace_id: typeof body.workspace_id === 'string' ? body.workspace_id : 'default',
+        workspace_id: typeof body.workspace_id === 'string' ? body.workspace_id : projectId || 'default',
         thread_id: typeof body.thread_id === 'string' ? body.thread_id : generateId('thr'),
         requester: {
           agent_id: typeof requester.id === 'string' ? requester.id : 'api-caller',
@@ -159,6 +155,74 @@ opencodeConnectorRouter.post('/execute', async (req: Request, res: Response) => 
       }
 
       effectiveTaskId = createResult.data.id;
+    }
+
+    if (projectId) {
+      executionStartedAt = Date.now();
+
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+      };
+      const authHeader = req.headers.authorization;
+      if (typeof authHeader === 'string' && authHeader.trim()) {
+        headers.Authorization = authHeader;
+      }
+
+      const upstream = await fetch(`http://127.0.0.1:${process.env.PORT || '3100'}/api/opencode/${encodeURIComponent(projectId)}`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          prompt,
+          model: typeof body.model === 'string' ? body.model : undefined,
+          sessionId: typeof body.sessionId === 'string' ? body.sessionId : typeof body.session_id === 'string' ? body.session_id : undefined,
+          continueSession: body.continueSession === true || body.continue_session === true,
+          providerKeys: readProviderKeys(body),
+        }),
+      });
+
+      const payload = await upstream.json().catch(async () => ({ error: await upstream.text().catch(() => 'Sandbox execution failed') })) as {
+        success?: boolean;
+        text?: string;
+        sessionId?: string;
+        output?: string;
+        error?: string;
+      };
+
+      getA2ASloMetrics().recordConnectorExecution({
+        connectorId: 'opencode',
+        success: upstream.ok && payload.success !== false,
+        durationMs: Date.now() - executionStartedAt,
+      });
+
+      if (upstream.ok && payload.success !== false) {
+        sendSuccess(res, {
+          taskId: effectiveTaskId,
+          resultText: payload.text || payload.output || '',
+          sessionId: payload.sessionId,
+          raw: payload,
+        });
+        return;
+      }
+
+      sendError(res, upstream.status || 500, buildA2AError({
+        code: upstream.status === 401
+          ? A2AErrorCodeEnum.AuthenticationFailed
+          : upstream.status === 403
+            ? A2AErrorCodeEnum.AuthorizationDenied
+            : A2AErrorCodeEnum.ConnectorError,
+        message: payload.error || 'Sandbox-backed OpenCode execution failed',
+        details: { taskId: effectiveTaskId, projectId },
+      }));
+      return;
+    }
+
+    const runtime = getOpencodeConnectorRuntime();
+    if (!runtime.isRunning()) {
+      sendError(res, 503, buildA2AError({
+        code: A2AErrorCodeEnum.ConnectorUnavailable,
+        message: 'OpenCode connector is not running. Start it first via POST /start.',
+      }));
+      return;
     }
 
     const input: OpencodeExecuteInput = {
