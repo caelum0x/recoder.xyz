@@ -397,12 +397,19 @@ export class StreamingMessageParser {
       let filePath = this.#extractAttribute(actionTag, 'filePath') as string;
       if (!filePath) filePath = this.#extractAttribute(actionTag, 'filepath') as string;
       if (!filePath) filePath = this.#extractAttribute(actionTag, 'path') as string;
+      const includeLineHashes =
+        (this.#extractAttribute(actionTag, 'includeLineHashes') as string) ||
+        (this.#extractAttribute(actionTag, 'lineHashes') as string) ||
+        (this.#extractAttribute(actionTag, 'hashLines') as string);
       if (!filePath) {
         const pathMatch = actionTag.match(REGEX_CACHE.aggressivePath);
         if (pathMatch) filePath = pathMatch[1];
       }
       if (!filePath) filePath = 'unknown-file.txt';
       (actionAttributes as any).filePath = filePath;
+      if (includeLineHashes === 'true') {
+        (actionAttributes as any).includeLineHashes = true;
+      }
     } else if (actionType === 'searchFiles') {
       // Parse searchFiles action attributes
       const query = this.#extractAttribute(actionTag, 'query') as string;
@@ -428,9 +435,21 @@ export class StreamingMessageParser {
       if (!filePath) filePath = this.#extractAttribute(actionTag, 'path') as string;
       const oldString = this.#extractAttribute(actionTag, 'oldString') as string;
       const newString = this.#extractAttribute(actionTag, 'newString') as string;
+      const startLineRef =
+        (this.#extractAttribute(actionTag, 'startLineRef') as string) ||
+        (this.#extractAttribute(actionTag, 'anchorStartRef') as string);
+      const endLineRef =
+        (this.#extractAttribute(actionTag, 'endLineRef') as string) ||
+        (this.#extractAttribute(actionTag, 'anchorEndRef') as string);
       (actionAttributes as any).filePath = filePath || '';
       (actionAttributes as any).oldString = oldString || '';
       (actionAttributes as any).newString = newString || '';
+      if (startLineRef) {
+        (actionAttributes as any).startLineRef = startLineRef;
+      }
+      if (endLineRef) {
+        (actionAttributes as any).endLineRef = endLineRef;
+      }
     } else if (actionType === 'memory_operation') {
       const operation = this.#extractAttribute(actionTag, 'operation') as string;
       const key = this.#extractAttribute(actionTag, 'key') as string;
@@ -485,6 +504,10 @@ export class StreamingMessageParser {
       const operation = this.#extractAttribute(actionTag, 'operation') as string;
       const lineNumber = this.#extractAttribute(actionTag, 'lineNumber') as string;
       const endLineNumber = this.#extractAttribute(actionTag, 'endLineNumber') as string;
+      const lineRef =
+        (this.#extractAttribute(actionTag, 'lineRef') as string) ||
+        (this.#extractAttribute(actionTag, 'startLineRef') as string);
+      const endLineRef = this.#extractAttribute(actionTag, 'endLineRef') as string;
       (actionAttributes as any).filePath = filePath || '';
       if (operation === 'insert' || operation === 'delete' || operation === 'replace') {
         (actionAttributes as any).operation = operation;
@@ -500,6 +523,12 @@ export class StreamingMessageParser {
         if (!Number.isNaN(parsed) && parsed > 0) {
           (actionAttributes as any).endLineNumber = parsed;
         }
+      }
+      if (lineRef) {
+        (actionAttributes as any).lineRef = lineRef;
+      }
+      if (endLineRef) {
+        (actionAttributes as any).endLineRef = endLineRef;
       }
     } else if (actionType === 'read_many_files') {
       const filePathsAttr = this.#extractAttribute(actionTag, 'filePaths') as string;

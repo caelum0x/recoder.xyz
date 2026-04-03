@@ -433,17 +433,20 @@ export async function runEditFileAction(action: ActionState): Promise<void> {
     unreachable('Expected edit_file action');
   }
 
-  logger.info(`Editing file: ${action.filePath} at line ${action.lineNumber}`);
+  logger.info(`Editing file: ${action.filePath} at line ${action.lineNumber ?? action.lineRef ?? 'unknown'}`);
 
   try {
+    const resolvedLineNumber = action.lineNumber;
+    const resolvedEndLineNumber = action.endLineNumber;
+
     // Validate line numbers
-    if (action.lineNumber < 1) {
-      action.content = `Invalid line number: ${action.lineNumber}. Line numbers start at 1.`;
+    if (!resolvedLineNumber || resolvedLineNumber < 1) {
+      action.content = `Invalid line number: ${resolvedLineNumber ?? 'missing'}. Provide lineNumber or a valid lineRef.`;
       return;
     }
 
-    if (action.endLineNumber && action.endLineNumber < action.lineNumber) {
-      action.content = `Invalid range: end line (${action.endLineNumber}) must be >= start line (${action.lineNumber})`;
+    if (resolvedEndLineNumber && resolvedEndLineNumber < resolvedLineNumber) {
+      action.content = `Invalid range: end line (${resolvedEndLineNumber}) must be >= start line (${resolvedLineNumber})`;
       return;
     }
 
@@ -455,10 +458,10 @@ export async function runEditFileAction(action: ActionState): Promise<void> {
         params: {
           filePath: action.filePath,
           edits: [{
-            lineNumber: action.lineNumber,
+            lineNumber: resolvedLineNumber,
             operation: action.operation,
             content: action.content,
-            endLine: action.endLineNumber
+            endLine: resolvedEndLineNumber
           }],
           workingDir: '/workspace'
         }
@@ -471,8 +474,8 @@ export async function runEditFileAction(action: ActionState): Promise<void> {
       return;
     }
 
-    action.content = `File edit completed. Modified ${action.filePath} at line ${action.lineNumber}`;
-    logger.info(`File edit completed: ${action.operation} at line ${action.lineNumber}`);
+    action.content = `File edit completed. Modified ${action.filePath} at line ${resolvedLineNumber}`;
+    logger.info(`File edit completed: ${action.operation} at line ${resolvedLineNumber}`);
   } catch (error) {
     logger.warn('EditFile unavailable, using strReplace:', error);
     action.content = `Line-based edit failed. Use strReplace for this change instead.`;
