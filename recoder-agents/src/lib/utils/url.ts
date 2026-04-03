@@ -1,4 +1,5 @@
 import { getSessionAccessToken } from '@/lib/auth/session-token';
+import { resolveDockerBackendUrl } from '@/lib/runtime-urls';
 
 const SANDBOX_FILE_PROXY_PATH = '/api/files/content';
 const SANDBOX_PREVIEW_DOMAIN = 'sandbox.recoder.xyz';
@@ -360,6 +361,18 @@ export function buildSandboxPortPreviewUrl(
   }
 
   return `https://${port}-${sandboxId}.${SANDBOX_PREVIEW_DOMAIN}`;
+}
+
+export function buildProjectPreviewProxyUrl(
+  projectId: string | undefined,
+  dockerBackendUrl: string = resolveDockerBackendUrl(),
+): string | undefined {
+  const normalizedProjectId = projectId?.trim();
+  if (!normalizedProjectId) {
+    return undefined;
+  }
+
+  return `${dockerBackendUrl.replace(/\/+$/, '')}/preview/${encodeURIComponent(normalizedProjectId)}`;
 }
 
 type AppPreviewFramework = 'nextjs' | 'vite' | 'react' | 'generic';
