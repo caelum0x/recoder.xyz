@@ -39,6 +39,8 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - backend-data:/app/data
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     env_file:
       - ./docker-backend/.env
     environment:
