@@ -162,4 +162,32 @@ describe('StreamingMessageParser action parsing', () => {
     expect(actions[4].filePaths).toEqual(['src/App.tsx', 'src/main.tsx']);
     expect(actions[4].maxFileSize).toBe(4096);
   });
+
+  it('parses hashline-aware read and edit attributes', () => {
+    const onActionClose = vi.fn<(data: ActionCallbackData) => void>();
+    const parser = new StreamingMessageParser({
+      artifactElement: () => '',
+      callbacks: { onActionClose },
+    });
+
+    const input = `<recoderArtifact id="a7" title="hashline tools">
+<recoderAction type="readFile" filePath="src/App.tsx" includeLineHashes="true">Read file</recoderAction>
+<recoderAction type="str_replace" filePath="src/App.tsx" oldString="const a = 1;" newString="const a = 2;" startLineRef="12#ZP" endLineRef="14#MQ">Replace text</recoderAction>
+<recoderAction type="edit_file" filePath="src/App.tsx" operation="replace" lineRef="42#VR" endLineRef="43#WS">const answer = 42;</recoderAction>
+</recoderArtifact>`;
+
+    parser.parse('msg-7', input);
+
+    const actions = onActionClose.mock.calls.map((call) => call[0].action as any);
+
+    expect(actions[0].type).toBe('readFile');
+    expect(actions[0].includeLineHashes).toBe(true);
+    expect(actions[1].type).toBe('str_replace');
+    expect(actions[1].startLineRef).toBe('12#ZP');
+    expect(actions[1].endLineRef).toBe('14#MQ');
+    expect(actions[2].type).toBe('edit_file');
+    expect(actions[2].lineRef).toBe('42#VR');
+    expect(actions[2].endLineRef).toBe('43#WS');
+    expect(actions[2].lineNumber).toBeUndefined();
+  });
 });

@@ -50,6 +50,7 @@ export interface ReadFileAction extends BaseAction {
   startLine?: number;
   endLine?: number;
   maxLines?: number;
+  includeLineHashes?: boolean;
 }
 
 export interface ListFilesAction extends BaseAction {
@@ -70,6 +71,8 @@ export interface StrReplaceAction extends BaseAction {
   filePath: string;
   oldString: string;
   newString: string;
+  startLineRef?: string;
+  endLineRef?: string;
 }
 
 export interface DelegateSubagentAction extends BaseAction {
@@ -154,9 +157,11 @@ export interface EditFileAction extends Omit<BaseAction, 'content'> {
   type: 'edit_file';
   filePath: string;
   operation: 'insert' | 'delete' | 'replace';
-  lineNumber: number;
+  lineNumber?: number;
   content: string; // Required for insert/replace operations
   endLineNumber?: number;
+  lineRef?: string;
+  endLineRef?: string;
 }
 
 export interface ReadManyFilesAction extends BaseAction {
