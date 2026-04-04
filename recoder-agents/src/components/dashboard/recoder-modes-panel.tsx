@@ -70,6 +70,7 @@ import {
   Library,
   ShieldCheck,
   NotebookPen,
+  Terminal,
   type LucideIcon,
 } from 'lucide-react';
 import { RecoderLoader } from '@/components/ui/recoder-loader';
@@ -110,7 +111,7 @@ interface RecoderModesPanelProps {
   onUpgradeClick?: () => void;
 }
 
-type ModeType = 'image' | 'slides' | 'data' | 'docs' | 'canvas' | 'video' | 'research';
+type ModeType = 'image' | 'slides' | 'data' | 'docs' | 'canvas' | 'video' | 'research' | 'deep-coding';
 
 interface SamplePrompt {
   text: string;
@@ -319,6 +320,22 @@ const modes: Mode[] = [
       { text: 'Investigate the latest developments in gene therapy for rare diseases', thumbnail: '/images/landing-showcase/research.png' },
       { text: 'Study pricing strategies of successful D2C subscription box companies', thumbnail: '/images/landing-showcase/research.png' },
       { text: 'Research the competitive landscape of AI-powered cybersecurity solutions', thumbnail: '/images/landing-showcase/research.png' },
+    ],
+  },
+  {
+    id: 'deep-coding',
+    label: 'Deep Coding',
+    icon: <Terminal className="w-4 h-4" strokeWidth={2} />,
+    isVisual: false,
+    samplePrompts: [
+      { text: 'Refactor the auth module to use JWT refresh tokens with automatic rotation' },
+      { text: 'Fix the failing CI tests in the payment service and ensure all edge cases pass' },
+      { text: 'Add comprehensive error handling and retry logic to the API client layer' },
+      { text: 'Migrate the database schema from v2 to v3 with zero-downtime migration scripts' },
+      { text: 'Debug why the WebSocket connection drops after 30 seconds and implement reconnection' },
+      { text: 'Add TypeScript strict mode and fix all type errors across the shared packages' },
+      { text: 'Implement rate limiting middleware with Redis-backed sliding window counters' },
+      { text: 'Set up a complete test suite with unit, integration, and E2E coverage for the API' },
     ],
   },
   {

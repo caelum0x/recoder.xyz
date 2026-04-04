@@ -55,6 +55,9 @@ export type {
 
 export * from './utils';
 
+// OpenCode client for backend service integration
+export * from './opencode-client';
+
 // Security exports
 export * from './security/soc2-compliance-scanner';
 
