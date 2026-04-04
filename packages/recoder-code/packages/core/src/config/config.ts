@@ -473,6 +473,11 @@ export class Config {
     this.subagentManager = new SubagentManager(this);
     this.toolRegistry = await this.createToolRegistry();
     logCliConfiguration(this, new StartSessionEvent(this, this.toolRegistry));
+
+    // Auto-register with A2A terminal registry (best-effort, non-blocking)
+    import('../a2a/terminal-registration.js').then(({ registerTerminal }) => {
+      registerTerminal({ workspaceDir: this.getWorkingDir() }).catch(() => {});
+    }).catch(() => {});
   }
 
   async refreshAuth(authMethod: AuthType) {
