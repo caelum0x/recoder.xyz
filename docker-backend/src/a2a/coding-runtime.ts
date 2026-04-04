@@ -13,6 +13,7 @@
 
 import { createLogger } from '../logger';
 import type { PromptResult } from './opencode-connector.service';
+import type { OmoProviderKeys } from './omo-connector-runtime.service';
 
 const logger = createLogger('coding-runtime');
 
@@ -87,6 +88,65 @@ export function listRuntimes(): RuntimeType[] {
   return Array.from(adapters.keys());
 }
 
+type RuntimeProviderKey = keyof OmoProviderKeys;
+
+interface StoredRuntimeConfig {
+  model?: string;
+  providerKeys?: OmoProviderKeys;
+}
+
+function inferProviderFromModel(model?: string): RuntimeProviderKey | undefined {
+  const normalizedModel = model?.trim().toLowerCase();
+  if (!normalizedModel) {
+    return undefined;
+  }
+
+  if (normalizedModel.startsWith('openrouter/')) {
+    return 'openrouter';
+  }
+  if (normalizedModel.startsWith('openai/')) {
+    return 'openai';
+  }
+  if (normalizedModel.startsWith('anthropic/')) {
+    return 'anthropic';
+  }
+  if (normalizedModel.startsWith('google/') || normalizedModel.startsWith('gemini-') || normalizedModel.startsWith('gemini/')) {
+    return 'google';
+  }
+
+  return undefined;
+}
+
+function normalizeProvider(provider?: string, model?: string): RuntimeProviderKey | undefined {
+  const normalizedProvider = provider?.trim().toLowerCase();
+
+  switch (normalizedProvider) {
+    case 'openrouter':
+    case 'openai':
+    case 'anthropic':
+    case 'google':
+    case 'gemini':
+      return normalizedProvider;
+    default:
+      return inferProviderFromModel(model);
+  }
+}
+
+function buildProviderKeys(provider?: string, apiKey?: string, model?: string): OmoProviderKeys | undefined {
+  if (!apiKey) {
+    return undefined;
+  }
+
+  const normalizedProvider = normalizeProvider(provider, model);
+  if (!normalizedProvider) {
+    return undefined;
+  }
+
+  return { [normalizedProvider]: apiKey };
+}
+
+const centralizedOpenCodeConfigs = new Map<string, StoredRuntimeConfig>();
+
 // ---------------------------------------------------------------------------
 // OpenCode adapter
 // ---------------------------------------------------------------------------
@@ -103,6 +163,10 @@ export function createOpenCodeAdapter(): RuntimeAdapter {
         const session = await getOrCreateSession(params.projectId, {
           directory: '/workspace',
           title: `Project ${params.projectId}`,
+        });
+        centralizedOpenCodeConfigs.set(params.projectId, {
+          model: params.model,
+          providerKeys: buildProviderKeys(params.provider, params.apiKey, params.model),
         });
         return {
           id: session.id,
@@ -130,19 +194,21 @@ export function createOpenCodeAdapter(): RuntimeAdapter {
 
     async sendPrompt(params: SendPromptParams): Promise<PromptResult> {
       if (useCentralized) {
-        const { promptProject } = await import('./opencode-service-adapter.js');
-        const result = await promptProject(params.projectId, {
-          content: params.prompt,
-          agent: params.agent,
+        const { handleOpencodeServicePrompt } = await import('./opencode-service-handler.js');
+        const runtimeConfig = centralizedOpenCodeConfigs.get(params.projectId);
+        const result = await handleOpencodeServicePrompt({
+          projectId: params.projectId,
+          prompt: params.prompt,
+          model: runtimeConfig?.model,
+          providerKeys: runtimeConfig?.providerKeys,
+          directory: '/workspace',
         });
 
-        const textParts = result.parts
-          .filter((p: Record<string, unknown>) => p.type === 'text')
-          .map((p: Record<string, unknown>) => String(p.text || p.content || ''))
+        const textParts = [result.text]
           .filter(Boolean);
 
         return {
-          messageId: result.info.id,
+          messageId: (result.raw as { info?: { id?: string } } | undefined)?.info?.id || `opencode_${Date.now()}`,
           parts: textParts.map((t: string) => ({ type: 'text' as const, content: t })),
         };
       }
@@ -193,6 +259,7 @@ export function createOpenCodeAdapter(): RuntimeAdapter {
       if (useCentralized) {
         const { disposeProjectSession } = await import('./opencode-service-adapter.js');
         await disposeProjectSession(projectId);
+        centralizedOpenCodeConfigs.delete(projectId);
         return;
       }
 
@@ -263,7 +330,13 @@ export function createNativeAdapter(): RuntimeAdapter {
  * HTTP sessions, OMO is one-shot per subprocess invocation. We track a
  * virtual session ID for resumption semantics.
  */
-const omoProjectSessions = new Map<string, { sessionId: string; sandboxId: string; createdAt: string }>();
+const omoProjectSessions = new Map<string, {
+  sessionId: string;
+  sandboxId: string;
+  createdAt: string;
+  model?: string;
+  providerKeys?: OmoProviderKeys;
+}>();
 
 export function createOmoAdapter(): RuntimeAdapter {
   return {
@@ -275,6 +348,8 @@ export function createOmoAdapter(): RuntimeAdapter {
         sessionId,
         sandboxId: params.sandboxId,
         createdAt: new Date().toISOString(),
+        model: params.model,
+        providerKeys: buildProviderKeys(params.provider, params.apiKey, params.model),
       });
 
       return {
@@ -296,8 +371,10 @@ export function createOmoAdapter(): RuntimeAdapter {
       const result = await runtime.executeTask({
         taskId: `omo_task_${Date.now().toString(36)}`,
         prompt: params.prompt,
+        model: session?.model,
         sessionId: session?.sessionId,
         continueSession: Boolean(session),
+        providerKeys: session?.providerKeys,
       });
 
       // Update session ID if OMO returned a new one
@@ -385,9 +462,9 @@ export function createCodexAdapter(): RuntimeAdapter {
         taskId,
         prompt: params.prompt,
         requester: {
-          agent_id: 'docker-backend',
-          platform: 'custom',
+          id: 'docker-backend',
           name: 'Docker Backend',
+          platform: 'custom',
         },
         workspaceId: params.projectId,
       });
@@ -474,9 +551,9 @@ export function createClaudeCodeAdapter(): RuntimeAdapter {
         taskId,
         prompt: params.prompt,
         requester: {
-          agent_id: 'docker-backend',
-          platform: 'custom',
+          id: 'docker-backend',
           name: 'Docker Backend',
+          platform: 'custom',
         },
         workspaceId: params.projectId,
       });
