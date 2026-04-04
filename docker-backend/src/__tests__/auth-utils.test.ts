@@ -269,6 +269,50 @@ describe('Auth Migration Mode Scenarios', () => {
     });
   });
 
+  describe('resolveA2ASystemSession', () => {
+    it('accepts the shared secret and uses default system identity', async () => {
+      process.env.RECODER_A2A_SHARED_SECRET = 'shared-secret-1234';
+
+      const { resolveA2ASystemSession } = await import('../auth-utils');
+
+      expect(resolveA2ASystemSession('shared-secret-1234')).toEqual({
+        userId: 'agent:a2a-bridge',
+        sessionId: 'shared-s',
+      });
+    });
+
+    it('accepts bridge and worker tokens with explicit query overrides', async () => {
+      process.env.RECODER_A2A_BRIDGE_TOKEN = 'bridge-secret-1234';
+      process.env.RECODER_A2A_WORKER_TOKEN = 'worker-secret-1234';
+
+      const { resolveA2ASystemSession } = await import('../auth-utils');
+
+      expect(resolveA2ASystemSession('bridge-secret-1234', {
+        agentId: 'codex',
+        sessionId: 'session-bridge',
+      })).toEqual({
+        userId: 'agent:codex',
+        sessionId: 'session-bridge',
+      });
+
+      expect(resolveA2ASystemSession('worker-secret-1234', {
+        agentId: ['claude-code'],
+      })).toEqual({
+        userId: 'agent:claude-code',
+        sessionId: 'worker-s',
+      });
+    });
+
+    it('rejects unknown or empty A2A tokens', async () => {
+      process.env.RECODER_A2A_SHARED_SECRET = 'shared-secret-1234';
+
+      const { resolveA2ASystemSession } = await import('../auth-utils');
+
+      expect(resolveA2ASystemSession('')).toBeNull();
+      expect(resolveA2ASystemSession('not-a-match')).toBeNull();
+    });
+  });
+
   describe('WebSocket Auth Scenarios', () => {
     it('should handle WebSocket upgrade without token in migration mode', async () => {
       process.env.NODE_ENV = 'development';

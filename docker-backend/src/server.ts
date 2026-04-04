@@ -157,6 +157,7 @@ import {
   getProjectIdFromRequest,
   isLikelySandboxProjectId,
   isStrictAuthMode,
+  resolveA2ASystemSession,
 } from './auth-utils.js';
 import { type ContainerCreationEntry, withCreationTimeout, isCreationStale } from './container-creation.js';
 // Deployment modules are lazily imported to avoid requiring node-fetch/form-data at startup
@@ -481,8 +482,38 @@ async function authenticateWebSocket(
     return null;
   }
 
+  const a2aSession = resolveA2ASystemSession(token, req.query as Record<string, unknown>);
+  if (a2aSession) {
+    return a2aSession;
+  }
+
+  // Check negative cache first to avoid spamming the auth service + logs
+  // with repeated bad-token retries from stuck CLI reconnect loops.
+  const now = Date.now();
+  const negEntry = authNegativeCache.get(token);
+  if (negEntry && negEntry.expiresAt > now) {
+    negEntry.attempts++;
+    // Only log once per NEG_AUTH_LOG_INTERVAL per token
+    if (now - negEntry.lastLoggedAt > NEG_AUTH_LOG_INTERVAL) {
+      logWarning(ErrorCode.AUTH_INVALID_TOKEN, 'Rejected WebSocket connection with invalid token (cached, suppressing spam)', {
+        path: req.path,
+        attempts: negEntry.attempts,
+      });
+      negEntry.lastLoggedAt = now;
+    }
+    ws.close(1008, 'Invalid or expired session');
+    return null;
+  }
+
   const session = await verifySessionToken(token);
   if (!session) {
+    // Cache the negative result to suppress repeat attempts
+    authNegativeCache.set(token, {
+      expiresAt: now + NEG_AUTH_TTL,
+      attempts: 1,
+      lastLoggedAt: now,
+    });
+
     // In migration mode, allow with warning
     if (allowAnonymous && !STRICT_AUTH) {
       logWarning(ErrorCode.AUTH_INVALID_TOKEN, 'Invalid WebSocket token accepted in migration mode', {
@@ -513,6 +544,12 @@ function withTimeout<T>(promise: Promise<T>, ms: number, operation: string): Pro
 // Auth cache - avoid repeated HTTP calls for the same session token
 const authCache = new Map<string, { userId: string; sessionId: string; expiresAt: number }>();
 const AUTH_CACHE_TTL = 60_000; // 60 seconds
+
+// Negative auth cache - remember bad tokens to avoid log spam and wasted lookups
+// when a stale CLI session keeps retrying with an expired token.
+const authNegativeCache = new Map<string, { expiresAt: number; attempts: number; lastLoggedAt: number }>();
+const NEG_AUTH_TTL = 60_000; // 60 seconds
+const NEG_AUTH_LOG_INTERVAL = 300_000; // only log once every 5 min per token
 
 // Ownership cache - avoid repeated HTTP calls for the same user+project
 const ownershipCache = new Map<string, { isOwner: boolean; expiresAt: number }>();
