@@ -1,6 +1,6 @@
 /**
  * Tests for coding-runtime — the abstraction layer for coding runtimes
- * (native, opencode, codex, claude-code).
+ * (native, opencode, omo, codex, claude-code).
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
@@ -10,6 +10,7 @@ import {
   listRuntimes,
   createNativeAdapter,
   createOpenCodeAdapter,
+  createOmoAdapter,
   type RuntimeAdapter,
   type StartSessionParams,
   type SendPromptParams,
@@ -221,6 +222,119 @@ describe('coding-runtime', () => {
       expect(session.status).toBe('ready');
       expect(session.id).toBe('sess_centralized');
       expect(mockFetch).toHaveBeenCalled();
+    });
+
+    it('reuses session model and provider key for centralized prompts', async () => {
+      process.env.OPENCODE_SERVICE_URL = 'http://opencode-test:4096';
+
+      const getOrCreateSession = vi.fn().mockResolvedValue({
+        id: 'sess_configured',
+        version: 1,
+        time: { created: 2_000, updated: 2_000 },
+      });
+      const handleOpencodeServicePrompt = vi.fn().mockResolvedValue({
+        success: true,
+        sessionId: 'sess_configured',
+        text: 'centralized ok',
+        output: '{}',
+        raw: {
+          info: { id: 'msg_opencode_1' },
+          parts: [],
+        },
+      });
+
+      vi.doMock('../opencode-service-adapter', () => ({
+        getOrCreateSession,
+        disposeProjectSession: vi.fn(),
+        getActiveProjects: vi.fn(() => []),
+      }));
+      vi.doMock('../opencode-service-handler', () => ({
+        handleOpencodeServicePrompt,
+      }));
+
+      const { createOpenCodeAdapter: freshCreateOpenCodeAdapter } = await import('../coding-runtime');
+      const adapter = freshCreateOpenCodeAdapter();
+
+      await adapter.startSession({
+        projectId: 'proj_opencode_config',
+        sandboxId: 'sbx_1',
+        sandboxExecUrl: 'http://test/exec',
+        daytonaApiKey: 'key',
+        model: 'openrouter/anthropic/claude-sonnet-4.5',
+        provider: 'opencode',
+        apiKey: 'sk-or-test',
+      });
+
+      const result = await adapter.sendPrompt({
+        projectId: 'proj_opencode_config',
+        prompt: 'Ship it',
+        sandboxExecUrl: 'http://test/exec',
+        daytonaApiKey: 'key',
+      });
+
+      expect(handleOpencodeServicePrompt).toHaveBeenCalledWith(expect.objectContaining({
+        projectId: 'proj_opencode_config',
+        prompt: 'Ship it',
+        model: 'openrouter/anthropic/claude-sonnet-4.5',
+        providerKeys: { openrouter: 'sk-or-test' },
+      }));
+      expect(result.messageId).toBe('msg_opencode_1');
+      expect(result.parts).toEqual([{ type: 'text', content: 'centralized ok' }]);
+    });
+  });
+
+  describe('omo adapter', () => {
+    beforeEach(() => {
+      vi.resetModules();
+    });
+
+    afterEach(() => {
+      vi.unmock('../omo-connector-runtime.service');
+    });
+
+    it('reuses session model and provider key for subprocess prompts', async () => {
+      const executeTask = vi.fn().mockResolvedValue({
+        taskId: 'omo_task_1',
+        success: true,
+        resultText: 'omo ok',
+        sessionId: 'omo_session_next',
+        exitCode: 0,
+        durationMs: 12,
+      });
+
+      vi.doMock('../omo-connector-runtime.service', () => ({
+        getOmoConnectorRuntime: () => ({ executeTask }),
+      }));
+
+      const { createOmoAdapter: freshCreateOmoAdapter } = await import('../coding-runtime');
+      const adapter = freshCreateOmoAdapter();
+
+      await adapter.startSession({
+        projectId: 'proj_omo_config',
+        sandboxId: 'sbx_1',
+        sandboxExecUrl: 'http://test/exec',
+        daytonaApiKey: 'key',
+        model: 'gemini-2.5-pro',
+        provider: 'omo',
+        apiKey: 'sk-google-test',
+      });
+
+      const result = await adapter.sendPrompt({
+        projectId: 'proj_omo_config',
+        prompt: 'Make a landing page',
+        sandboxExecUrl: 'http://test/exec',
+        daytonaApiKey: 'key',
+      });
+
+      expect(executeTask).toHaveBeenCalledWith(expect.objectContaining({
+        prompt: 'Make a landing page',
+        model: 'gemini-2.5-pro',
+        sessionId: expect.stringMatching(/^omo_/),
+        continueSession: true,
+        providerKeys: { google: 'sk-google-test' },
+      }));
+      expect(result.parts).toEqual([{ type: 'text', content: 'omo ok' }]);
+      expect(adapter.getState('proj_omo_config')?.id).toBe('omo_session_next');
     });
   });
 });
