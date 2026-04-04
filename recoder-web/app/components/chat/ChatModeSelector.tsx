@@ -61,7 +61,7 @@ export function ChatModeSelector({ compact = true }: ChatModeSelectorProps) {
       if (isModifierPressed && event.key === '.') {
         event.preventDefault();
         // Toggle through modes
-        const modes: ChatMode[] = ['build', 'ask', 'agent'];
+        const modes: ChatMode[] = ['build', 'ask', 'agent', 'deep-coding'];
         const currentIndex = modes.indexOf(mode);
         const nextIndex = (currentIndex + 1) % modes.length;
         setChatMode(modes[nextIndex]);
@@ -82,6 +82,7 @@ export function ChatModeSelector({ compact = true }: ChatModeSelectorProps) {
       blue: 'text-blue-400 bg-blue-500/10 border-blue-500/30',
       green: 'text-green-400 bg-green-500/10 border-green-500/30',
       purple: 'text-purple-400 bg-purple-500/10 border-purple-500/30',
+      orange: 'text-orange-400 bg-orange-500/10 border-orange-500/30',
     };
     return colors[modeData.color] || colors.blue;
   };
@@ -91,6 +92,7 @@ export function ChatModeSelector({ compact = true }: ChatModeSelectorProps) {
       blue: 'hover:bg-blue-500/20',
       green: 'hover:bg-green-500/20',
       purple: 'hover:bg-purple-500/20',
+      orange: 'hover:bg-orange-500/20',
     };
     return colors[modeData.color] || colors.blue;
   };
@@ -183,6 +185,7 @@ export function ChatModeIndicator() {
       blue: 'text-blue-400',
       green: 'text-green-400',
       purple: 'text-purple-400',
+      orange: 'text-orange-400',
     };
     return colors[color] || colors.blue;
   };

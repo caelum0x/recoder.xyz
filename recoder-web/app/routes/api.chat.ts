@@ -7,6 +7,7 @@ import {
   resolveFileMentionsBestEffort,
 } from '~/lib/services/chat/docker-enrichment';
 import type { Messages } from '~/lib/types/chat';
+import type { ChatMode } from '~/lib/stores/chat-mode';
 import { createScopedLogger } from '~/utils/logger';
 
 const logger = createScopedLogger('Chat');
@@ -545,7 +546,7 @@ IMPORTANT:
     // Get enhanced system prompt with coding excellence guidelines and append all context (with mode)
     const { getEnhancedSystemPrompt, CODING_EXCELLENCE_GUIDELINES, getChatModeSystemPrompt, getFrameworkPrompt } = promptsModule;
     const baseSystemPrompt = getEnhancedSystemPrompt(undefined, customTools, aiMode);
-    const chatModePrompt = getChatModeSystemPrompt(chatMode as 'build' | 'ask' | 'agent');
+    const chatModePrompt = getChatModeSystemPrompt(chatMode as ChatMode);
 
     // Detect project framework using smart skills system (package.json + file patterns)
     let frameworkSkillsPrompt = '';
@@ -638,7 +639,7 @@ IMPORTANT:
     const webToolCapabilityPrompt = getWebToolCapabilityPrompt(provider, model);
     const systemPrompt = baseSystemPrompt + chatModePrompt + webToolCapabilityPrompt + recoderContextPrompt + mcpToolsPrompt + clientMcpTools + projectContext + codeContext + frameworkSkillsPrompt + projectConfigPrompt + themePrompt + ragContextPrompt;
 
-    if (provider.toLowerCase() === 'opencode') {
+    if (provider.toLowerCase() === 'opencode' || chatMode === 'deep-coding') {
       const { executeOpencodeChat } = await import('~/lib/.server/llm/opencode-exec');
       const opencodeStream = await executeOpencodeChat({
         context,

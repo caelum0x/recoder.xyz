@@ -163,6 +163,7 @@ const MODE_PROFILE_MAP: Record<ChatMode, ProfileId> = {
   build: 'powerful',
   ask: 'balanced',
   agent: 'balanced',
+  'deep-coding': 'powerful',
 };
 
 const ERROR_FIX_PROFILE: ProfileId = 'fast';

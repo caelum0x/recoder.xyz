@@ -18,7 +18,7 @@ import { handleFiles, FileUploadHandler } from './file-upload-handler';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { X, Image as ImageIcon, Presentation, BarChart3, FileText, Search, Palette, Video, Code2, Sparkles, Brain as BrainIcon, MessageSquare, CornerDownLeft, Plug, Lock } from 'lucide-react';
+import { X, Image as ImageIcon, Presentation, BarChart3, FileText, Search, Palette, Video, Code2, Sparkles, Brain as BrainIcon, MessageSquare, CornerDownLeft, Plug, Lock, Terminal } from 'lucide-react';
 import { RecoderLoader } from '@/components/ui/recoder-loader';
 import { VoiceRecorder } from './voice-recorder';
 import { useTheme } from 'next-themes';
@@ -559,6 +559,8 @@ function ModeButton({
         return <Presentation className={iconClass} strokeWidth={strokeWidth} />;
       case 'image':
         return <ImageIcon className={iconClass} strokeWidth={strokeWidth} />;
+      case 'deep-coding':
+        return <Terminal className={iconClass} strokeWidth={strokeWidth} />;
       default:
         return null;
     }

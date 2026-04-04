@@ -160,60 +160,118 @@ opencodeConnectorRouter.post('/execute', async (req: Request, res: Response) => 
     if (projectId) {
       executionStartedAt = Date.now();
 
-      const headers: Record<string, string> = {
-        'Content-Type': 'application/json',
-      };
-      const authHeader = req.headers.authorization;
-      if (typeof authHeader === 'string' && authHeader.trim()) {
-        headers.Authorization = authHeader;
-      }
+      try {
+        // Route through centralized opencode service when available,
+        // otherwise fall back to sandbox-embedded exec via /api/opencode/:projectId
+        if (process.env.OPENCODE_SERVICE_URL) {
+          const { promptProject, setProviderKey } = await import('./opencode-service-adapter.js');
 
-      const upstream = await fetch(`http://127.0.0.1:${process.env.PORT || '3100'}/api/opencode/${encodeURIComponent(projectId)}`, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({
-          prompt,
-          model: typeof body.model === 'string' ? body.model : undefined,
-          sessionId: typeof body.sessionId === 'string' ? body.sessionId : typeof body.session_id === 'string' ? body.session_id : undefined,
-          continueSession: body.continueSession === true || body.continue_session === true,
-          providerKeys: readProviderKeys(body),
-        }),
-      });
+          // Forward BYOK keys
+          const keys = readProviderKeys(body);
+          if (keys) {
+            const keyEntries: Array<[string, string | undefined]> = [
+              ['openrouter', keys.openrouter],
+              ['openai', keys.openai],
+              ['anthropic', keys.anthropic],
+              ['google', keys.gemini],
+            ];
+            for (const [provider, key] of keyEntries) {
+              if (key) await setProviderKey(provider, key).catch(() => {});
+            }
+          }
 
-      const payload = await upstream.json().catch(async () => ({ error: await upstream.text().catch(() => 'Sandbox execution failed') })) as {
-        success?: boolean;
-        text?: string;
-        sessionId?: string;
-        output?: string;
-        error?: string;
-      };
+          const result = await promptProject(projectId, {
+            content: prompt,
+            agent: typeof body.model === 'string' ? body.model : undefined,
+          });
 
-      getA2ASloMetrics().recordConnectorExecution({
-        connectorId: 'opencode',
-        success: upstream.ok && payload.success !== false,
-        durationMs: Date.now() - executionStartedAt,
-      });
+          const textParts = result.parts
+            .filter((p: Record<string, unknown>) => p.type === 'text' || p.type === 'tool-result')
+            .map((p: Record<string, unknown>) => String(p.text || p.content || ''))
+            .filter(Boolean);
 
-      if (upstream.ok && payload.success !== false) {
-        sendSuccess(res, {
-          taskId: effectiveTaskId,
-          resultText: payload.text || payload.output || '',
-          sessionId: payload.sessionId,
-          raw: payload,
+          getA2ASloMetrics().recordConnectorExecution({
+            connectorId: 'opencode',
+            success: true,
+            durationMs: Date.now() - executionStartedAt,
+          });
+
+          sendSuccess(res, {
+            taskId: effectiveTaskId,
+            resultText: textParts.join('\n\n'),
+            sessionId: result.info.sessionID,
+            raw: result,
+          });
+          return;
+        }
+
+        // Legacy fallback: self-fetch through /api/opencode/:projectId (sandbox exec path)
+        const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+        const authHeader = req.headers.authorization;
+        if (typeof authHeader === 'string' && authHeader.trim()) {
+          headers.Authorization = authHeader;
+        }
+
+        const upstream = await fetch(`http://127.0.0.1:${process.env.PORT || '3100'}/api/opencode/${encodeURIComponent(projectId)}`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            prompt,
+            model: typeof body.model === 'string' ? body.model : undefined,
+            sessionId: typeof body.sessionId === 'string' ? body.sessionId : typeof body.session_id === 'string' ? body.session_id : undefined,
+            continueSession: body.continueSession === true || body.continue_session === true,
+            providerKeys: readProviderKeys(body),
+          }),
         });
+
+        const payload = await upstream.json().catch(async () => ({ error: await upstream.text().catch(() => 'Sandbox execution failed') })) as {
+          success?: boolean;
+          text?: string;
+          sessionId?: string;
+          output?: string;
+          error?: string;
+        };
+
+        getA2ASloMetrics().recordConnectorExecution({
+          connectorId: 'opencode',
+          success: upstream.ok && payload.success !== false,
+          durationMs: Date.now() - executionStartedAt,
+        });
+
+        if (upstream.ok && payload.success !== false) {
+          sendSuccess(res, {
+            taskId: effectiveTaskId,
+            resultText: payload.text || payload.output || '',
+            sessionId: payload.sessionId,
+            raw: payload,
+          });
+          return;
+        }
+
+        sendError(res, upstream.status || 500, buildA2AError({
+          code: upstream.status === 401
+            ? A2AErrorCodeEnum.AuthenticationFailed
+            : upstream.status === 403
+              ? A2AErrorCodeEnum.AuthorizationDenied
+              : A2AErrorCodeEnum.ConnectorError,
+          message: payload.error || 'Sandbox-backed OpenCode execution failed',
+          details: { taskId: effectiveTaskId, projectId },
+        }));
+        return;
+      } catch (err: unknown) {
+        const errMsg = err instanceof Error ? err.message : String(err);
+        getA2ASloMetrics().recordConnectorExecution({
+          connectorId: 'opencode',
+          success: false,
+          durationMs: Date.now() - executionStartedAt,
+        });
+        sendError(res, 500, buildA2AError({
+          code: A2AErrorCodeEnum.ConnectorError,
+          message: errMsg,
+          details: { taskId: effectiveTaskId, projectId },
+        }));
         return;
       }
-
-      sendError(res, upstream.status || 500, buildA2AError({
-        code: upstream.status === 401
-          ? A2AErrorCodeEnum.AuthenticationFailed
-          : upstream.status === 403
-            ? A2AErrorCodeEnum.AuthorizationDenied
-            : A2AErrorCodeEnum.ConnectorError,
-        message: payload.error || 'Sandbox-backed OpenCode execution failed',
-        details: { taskId: effectiveTaskId, projectId },
-      }));
-      return;
     }
 
     const runtime = getOpencodeConnectorRuntime();

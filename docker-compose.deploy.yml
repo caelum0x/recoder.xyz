@@ -81,6 +81,10 @@ services:
       # Tier-1 connector flags (runtime image installs codex/claude CLIs).
       - RECODER_A2A_ENABLE_CODEX=${RECODER_A2A_ENABLE_CODEX:-true}
       - RECODER_A2A_ENABLE_CLAUDE_CODE=${RECODER_A2A_ENABLE_CLAUDE_CODE:-true}
+      # OpenCode centralized service
+      - OPENCODE_SERVICE_URL=http://opencode-service:4096
+      - OPENCODE_SERVER_PASSWORD=${OPENCODE_SERVER_PASSWORD:-recoder_opencode_key}
+      - OPENCODE_SERVER_USERNAME=opencode
     depends_on:
       redis:
         condition: service_healthy
@@ -103,6 +107,42 @@ services:
           cpus: '1'
           memory: 512M
     stop_grace_period: 45s
+    networks:
+      - recoder
+
+  opencode-service:
+    build:
+      context: ./opencode
+      dockerfile: Dockerfile.service
+    container_name: recoder-opencode
+    restart: unless-stopped
+    environment:
+      - OPENCODE_SERVER_PASSWORD=${OPENCODE_SERVER_PASSWORD:-recoder_opencode_key}
+      - OPENCODE_SERVER_USERNAME=opencode
+      - OPENCODE_DB=/data/opencode.db
+      - XDG_DATA_HOME=/data
+      - XDG_CONFIG_HOME=/config
+      - XDG_CACHE_HOME=/cache
+      - XDG_STATE_HOME=/state
+      - BUN_RUNTIME_TRANSPILER_CACHE_PATH=0
+    volumes:
+      - opencode-data:/data
+      - opencode-config:/config
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:4096/session"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    stop_grace_period: 30s
     networks:
       - recoder
 
@@ -937,6 +977,8 @@ volumes:
   nats-data:
   zrok-data:
   alertmanager-data:
+  opencode-data:
+  opencode-config:
   grafana-data:
 
 networks:
