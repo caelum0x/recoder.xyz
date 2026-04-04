@@ -29,4 +29,5 @@ export * from './utils';
 export * from './animations';
 export * from './constants/upload-limits';
 export * from './errors';
+export * from './opencode-client';
 // Note: a2a is server-only (uses Redis) - import via '@recoder/shared/a2a' directly
