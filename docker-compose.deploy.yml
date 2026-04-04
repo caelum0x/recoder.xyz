@@ -112,7 +112,7 @@ services:
 
   opencode-service:
     build:
-      context: ./opencode
+      context: ./docker-backend/vendor/opencode
       dockerfile: Dockerfile.service
     container_name: recoder-opencode
     restart: unless-stopped
