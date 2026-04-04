@@ -698,10 +698,11 @@ export class AIProviderRouter extends EventEmitter {
         this.emit('providerHealthUpdated', { providerId: provider.id, status: newStatus });
 
       } catch (error) {
+        const message = error instanceof Error ? error.message : 'Unknown error';
         this.handleProviderError(provider.id, {
           timestamp: new Date().toISOString(),
           type: 'network_error',
-          message: error.message
+          message
         });
       }
     });

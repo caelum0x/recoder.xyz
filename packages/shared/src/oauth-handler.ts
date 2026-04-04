@@ -222,15 +222,16 @@ export class OAuthHandler extends EventEmitter {
       };
 
     } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
       this.emit('authError', {
         provider,
         platform,
-        error: error.message
+        error: message
       });
 
       return {
         success: false,
-        error: error.message,
+        error: message,
         errorCode: 'auth_failed'
       };
     }
