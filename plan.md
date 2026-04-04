@@ -26,9 +26,11 @@ Use this section as the source of truth when older handoff notes or chat transcr
   - ~~inbox push notifications~~ — DONE (commit `cab1b8d0`, zrok-agent-tunnel.ts)
   - ~~per-terminal discovery/session IDs for Claude Code and Codex~~ — DONE (commit `cab1b8d0`, agent-terminal-registry.ts + REST endpoints)
   - ~~production deployment of the Redis-backed persistent task store~~ — DONE (auto-activates via REDIS_URL in docker-compose)
-  - task claim/lock — still pending
-  - package release, threading/history, and workspace discovery follow-ups — still pending
-  - wire recoder-code CLI to auto-register terminals on startup — pending
+  - ~~wire recoder-code CLI to auto-register terminals on startup~~ — DONE (commit `d4692db9`)
+  - ~~task claim/lock~~ — already implemented (TaskLifecycleService.claimTask + POST /api/a2a/tasks/:taskId/claim)
+  - ~~workspace discovery~~ — already implemented (workspace.service.ts + workspace.routes.ts + SSE stream)
+  - package release — npm publish of updated packages when ready
+  - threading/history — collaboration.service.ts already supports threads; expose in UI when needed
 - Source-level compose corrections that are not yet the same thing as a live closeout:
   - Umami host-DB compose fix exists in source, but this file should not be read as claiming live Umami deploy/database verification unless stated explicitly in a later correction
 
