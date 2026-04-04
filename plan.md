@@ -183,7 +183,60 @@ Recoder should have two coding paths:
 4. ~~expose a `Deep Coding` mode in `recoder-web` and `recoder-agents`~~ — DONE (deployed 2026-04-04)
    - `recoder-web`: ChatMode `deep-coding` added, routes through `/api/opencode/:projectId` backend bridge
    - `recoder-agents`: ModeType `deep-coding` added to modes panel with Terminal icon and sample prompts
-5. benchmark on real tasks before broad rollout — NEXT
+5. benchmark on real tasks before broad rollout
+6. **NEXT — Intelligence layer on top of the 5-runtime registry**:
+   Recoder now has 5 runtime adapters (native, opencode, omo, codex, claude-code) with BYOK key forwarding and 1664 passing tests. The gap is that callers still have to pick a runtime manually. Three new modules close that gap:
+
+   **6a. Intent Gate** (`docker-backend/src/a2a/intent-gate.ts`)
+   - Pure function `classifyIntent(prompt: string): IntentClassification`
+   - Keyword/regex heuristics (fast, deterministic, no LLM call)
+   - Categories: `bug-fix`, `feature`, `refactor`, `test`, `doc`, `visual`, `debug`, `other`
+   - Returns `{ category, confidence, keywords }` — confidence score lets callers fall back to manual selection when ambiguous
+   - ~120 lines + ~25 unit tests
+
+   **6b. Category Router** (`docker-backend/src/a2a/category-router.ts`)
+   - `routeByCategory(classification): RouteDecision`
+   - Maps category → `RuntimeType` + model tier (reuses `RuntimeType` from `coding-runtime.ts`)
+   - Default mapping inspired by oh-my-opencode's discipline-agent routing:
+     - `visual` → opencode + powerful (claude-sonnet)
+     - `bug-fix` / `debug` → claude-code + powerful (opus for debugging)
+     - `feature` → opencode + powerful
+     - `refactor` → opencode + balanced
+     - `test` / `doc` → omo + fast
+     - `other` → native + balanced
+   - Falls back to `native` if target runtime isn't registered (uses `listRuntimes()`)
+   - ~100 lines + ~15 unit tests
+
+   **6c. Completion Loop** (`docker-backend/src/a2a/completion-loop.ts`)
+   - `runWithCompletionLoop(runtime, params, options)` — bounded retry wrapper around `runtime.sendPrompt()`
+   - Simpler Ralph-Loop equivalent: no file state, no hooks, pure async wrapper
+   - Completion heuristics (configurable): TODO markers, hedge phrases, minimum result length, custom override
+   - Hard-capped at `maxIterations: 3` with exponential backoff, default 1000ms
+   - ~130 lines + ~18 unit tests
+
+   **End-to-end flow when wired**:
+   ```
+   User: "Build a landing page for a coffee shop"
+     → classifyIntent → { category: 'visual', confidence: 0.85 }
+     → routeByCategory → { runtime: 'opencode', tier: 'powerful' }
+     → getRuntime('opencode') → existing adapter with BYOK key inference
+     → runWithCompletionLoop(runtime, params, { maxIterations: 3 })
+     → final result, iteration count, completion status
+   ```
+
+   **Explicit non-goals for this slice**:
+   - No route wiring — modules ship as libraries, caller integration is follow-up
+   - No LLM-based classification (keyword heuristics only, LLM path can come later)
+   - No UI changes
+   - No discipline-agent personas (Sisyphus/Prometheus/Hephaestus) — separate plan
+   - No `doctor` command — separate plan
+   - Clean reimplementation in Recoder style, no copy-paste from oh-my-openagent source
+
+   **Verification**:
+   - `pnpm --dir docker-backend exec tsc --noEmit --pretty false` — zero new errors
+   - `pnpm exec vitest run src/a2a/__tests__/intent-gate.test.ts src/a2a/__tests__/category-router.test.ts src/a2a/__tests__/completion-loop.test.ts` — all pass
+   - Full a2a suite 1664/1664 still passes
+   - Single clean commit
 
 ### External Runtime Sources (copied 2026-04-04)
 
