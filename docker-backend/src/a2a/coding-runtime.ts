@@ -336,9 +336,189 @@ export function createOmoAdapter(): RuntimeAdapter {
 }
 
 // ---------------------------------------------------------------------------
+// Codex adapter (wraps the real codex-connector-runtime.service)
+// ---------------------------------------------------------------------------
+
+const codexProjectSessions = new Map<string, { taskId: string; sandboxId: string; createdAt: string }>();
+
+export function createCodexAdapter(): RuntimeAdapter {
+  return {
+    type: 'codex',
+
+    async startSession(params: StartSessionParams): Promise<CodingSession> {
+      const sessionId = `codex_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
+      codexProjectSessions.set(params.projectId, {
+        taskId: sessionId,
+        sandboxId: params.sandboxId,
+        createdAt: new Date().toISOString(),
+      });
+
+      return {
+        id: sessionId,
+        projectId: params.projectId,
+        sandboxId: params.sandboxId,
+        threadId: params.threadId,
+        runtimeType: 'codex',
+        status: 'ready',
+        createdAt: new Date().toISOString(),
+      };
+    },
+
+    async sendPrompt(params: SendPromptParams): Promise<PromptResult> {
+      const { getCodexConnectorRuntime } = await import('./codex-connector-runtime.service.js');
+      const runtime = getCodexConnectorRuntime();
+
+      if (!runtime.isRunning()) {
+        try {
+          await runtime.start();
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          return {
+            messageId: `codex_err_${Date.now()}`,
+            parts: [{ type: 'text', content: `Failed to start Codex connector: ${msg}` }],
+          };
+        }
+      }
+
+      const taskId = `codex_task_${Date.now().toString(36)}`;
+      const result = await runtime.executeTask({
+        taskId,
+        prompt: params.prompt,
+        requester: {
+          agent_id: 'docker-backend',
+          platform: 'custom',
+          name: 'Docker Backend',
+        },
+        workspaceId: params.projectId,
+      });
+
+      return {
+        messageId: result.taskId,
+        parts: [
+          {
+            type: 'text',
+            content: result.success
+              ? (result.resultText ?? '[codex returned no output]')
+              : `Codex task failed: ${result.error ?? 'unknown error'}`,
+          },
+        ],
+      };
+    },
+
+    getState(projectId: string): CodingSession | undefined {
+      const session = codexProjectSessions.get(projectId);
+      if (!session) return undefined;
+      return {
+        id: session.taskId,
+        projectId,
+        sandboxId: session.sandboxId,
+        runtimeType: 'codex',
+        status: 'ready',
+        createdAt: session.createdAt,
+      };
+    },
+
+    async dispose(projectId: string): Promise<void> {
+      codexProjectSessions.delete(projectId);
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Claude Code adapter (wraps the real claude-connector-runtime.service)
+// ---------------------------------------------------------------------------
+
+const claudeProjectSessions = new Map<string, { taskId: string; sandboxId: string; createdAt: string }>();
+
+export function createClaudeCodeAdapter(): RuntimeAdapter {
+  return {
+    type: 'claude-code',
+
+    async startSession(params: StartSessionParams): Promise<CodingSession> {
+      const sessionId = `claude_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
+      claudeProjectSessions.set(params.projectId, {
+        taskId: sessionId,
+        sandboxId: params.sandboxId,
+        createdAt: new Date().toISOString(),
+      });
+
+      return {
+        id: sessionId,
+        projectId: params.projectId,
+        sandboxId: params.sandboxId,
+        threadId: params.threadId,
+        runtimeType: 'claude-code',
+        status: 'ready',
+        createdAt: new Date().toISOString(),
+      };
+    },
+
+    async sendPrompt(params: SendPromptParams): Promise<PromptResult> {
+      const { getClaudeConnectorRuntime } = await import('./claude-connector-runtime.service.js');
+      const runtime = getClaudeConnectorRuntime();
+
+      if (!runtime.isRunning()) {
+        try {
+          await runtime.start();
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          return {
+            messageId: `claude_err_${Date.now()}`,
+            parts: [{ type: 'text', content: `Failed to start Claude Code connector: ${msg}` }],
+          };
+        }
+      }
+
+      const taskId = `claude_task_${Date.now().toString(36)}`;
+      const result = await runtime.executeTask({
+        taskId,
+        prompt: params.prompt,
+        requester: {
+          agent_id: 'docker-backend',
+          platform: 'custom',
+          name: 'Docker Backend',
+        },
+        workspaceId: params.projectId,
+      });
+
+      return {
+        messageId: result.taskId,
+        parts: [
+          {
+            type: 'text',
+            content: result.success
+              ? (result.resultText ?? '[claude-code returned no output]')
+              : `Claude Code task failed: ${result.error ?? 'unknown error'}`,
+          },
+        ],
+      };
+    },
+
+    getState(projectId: string): CodingSession | undefined {
+      const session = claudeProjectSessions.get(projectId);
+      if (!session) return undefined;
+      return {
+        id: session.taskId,
+        projectId,
+        sandboxId: session.sandboxId,
+        runtimeType: 'claude-code',
+        status: 'ready',
+        createdAt: session.createdAt,
+      };
+    },
+
+    async dispose(projectId: string): Promise<void> {
+      claudeProjectSessions.delete(projectId);
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Auto-register on import
 // ---------------------------------------------------------------------------
 
 registerRuntime(createNativeAdapter());
 registerRuntime(createOpenCodeAdapter());
 registerRuntime(createOmoAdapter());
+registerRuntime(createCodexAdapter());
+registerRuntime(createClaudeCodeAdapter());

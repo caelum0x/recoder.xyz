@@ -147,11 +147,12 @@ Recoder should have two coding paths:
 - `getState`
 - `dispose`
 
-2. Implement runtime adapters behind that abstraction
-- current native Recoder flow
-- Codex connector
-- Claude Code connector
-- experimental OpenCode connector
+2. Implement runtime adapters behind that abstraction — **ALL 5 DONE**
+- ~~current native Recoder flow~~ — createNativeAdapter()
+- ~~Codex connector~~ — createCodexAdapter() wired to codex-connector-runtime.service
+- ~~Claude Code connector~~ — createClaudeCodeAdapter() wired to claude-connector-runtime.service
+- ~~experimental OpenCode connector~~ — createOpenCodeAdapter() (HTTP + sandbox fallback)
+- **OMO (oh-my-openagent)** — createOmoAdapter() spawns `omo` as subprocess (bonus)
 
 3. Do not force deep runtimes through `<recoderAction>` XML
 - let hard-task runtimes operate directly on the mounted workspace
