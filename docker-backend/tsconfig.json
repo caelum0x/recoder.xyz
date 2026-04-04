@@ -22,5 +22,12 @@
     "types": ["node"]
   },
   "include": ["src/**/*"],
-  "exclude": ["node_modules", "dist", "**/*.test.ts"]
+  "exclude": [
+    "node_modules",
+    "dist",
+    "**/*.test.ts",
+    "src/a2a/opencode-bash-tool.ts",
+    "src/a2a/opencode-edit-tool.ts",
+    "src/a2a/opencode-session-processor.ts"
+  ]
 }
