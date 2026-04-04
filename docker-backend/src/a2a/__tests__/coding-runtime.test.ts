@@ -19,10 +19,68 @@ describe('coding-runtime', () => {
   describe('registry', () => {
     it('lists registered runtimes', () => {
       const runtimes = listRuntimes();
-      // native, opencode, and omo are auto-registered on module import
+      // All 5 runtimes are auto-registered on module import
       expect(runtimes).toContain('native');
       expect(runtimes).toContain('opencode');
       expect(runtimes).toContain('omo');
+      expect(runtimes).toContain('codex');
+      expect(runtimes).toContain('claude-code');
+    });
+
+    it('codex adapter is registered with full implementation', () => {
+      const codex = getRuntime('codex');
+      expect(codex).toBeDefined();
+      expect(codex?.type).toBe('codex');
+      expect(typeof codex?.startSession).toBe('function');
+      expect(typeof codex?.sendPrompt).toBe('function');
+      expect(typeof codex?.getState).toBe('function');
+      expect(typeof codex?.dispose).toBe('function');
+    });
+
+    it('claude-code adapter is registered with full implementation', () => {
+      const claude = getRuntime('claude-code');
+      expect(claude).toBeDefined();
+      expect(claude?.type).toBe('claude-code');
+      expect(typeof claude?.startSession).toBe('function');
+      expect(typeof claude?.sendPrompt).toBe('function');
+      expect(typeof claude?.getState).toBe('function');
+      expect(typeof claude?.dispose).toBe('function');
+    });
+
+    it('codex startSession tracks project state', async () => {
+      const codex = getRuntime('codex')!;
+      const session = await codex.startSession({
+        projectId: 'proj_codex_test',
+        sandboxId: 'sbx_1',
+        sandboxExecUrl: 'http://test/exec',
+        daytonaApiKey: 'key',
+      });
+      expect(session.runtimeType).toBe('codex');
+      expect(session.projectId).toBe('proj_codex_test');
+
+      const state = codex.getState('proj_codex_test');
+      expect(state?.runtimeType).toBe('codex');
+
+      await codex.dispose('proj_codex_test');
+      expect(codex.getState('proj_codex_test')).toBeUndefined();
+    });
+
+    it('claude-code startSession tracks project state', async () => {
+      const claude = getRuntime('claude-code')!;
+      const session = await claude.startSession({
+        projectId: 'proj_claude_test',
+        sandboxId: 'sbx_1',
+        sandboxExecUrl: 'http://test/exec',
+        daytonaApiKey: 'key',
+      });
+      expect(session.runtimeType).toBe('claude-code');
+      expect(session.projectId).toBe('proj_claude_test');
+
+      const state = claude.getState('proj_claude_test');
+      expect(state?.runtimeType).toBe('claude-code');
+
+      await claude.dispose('proj_claude_test');
+      expect(claude.getState('proj_claude_test')).toBeUndefined();
     });
 
     it('getRuntime returns the registered adapter', () => {
