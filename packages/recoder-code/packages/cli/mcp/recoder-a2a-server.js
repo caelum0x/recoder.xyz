@@ -517,7 +517,8 @@ async function handleToolCall(name, args) {
         }
         return `Task ${args.task_id} marked as ${wsTask.status}. Response sent via bridge.`;
       }
-      // REST task: claim then transition
+      // REST task: claim, then working, then completed/failed
+      // State machine: submitted → working → completed|failed
       const isComplete = (args.status || 'complete') === 'complete';
       const targetState = isComplete ? 'completed' : 'failed';
       try {
@@ -529,6 +530,25 @@ async function handleToolCall(name, args) {
       } catch (claimErr) {
         if ((claimErr.message || '').includes('409')) return `Task ${args.task_id} is claimed by another session.`;
       }
+
+      // First transition: submitted → working (required by state machine)
+      // Ignore errors here — if task is already 'working', the next transition still succeeds
+      try {
+        await apiFetch(`${DOCKER_URL}/api/a2a/tasks/${args.task_id}/transition`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            target_state: 'working',
+            triggered_by: `${AGENT_ID}:${SESSION_ID}`,
+            reason: 'Task claimed and started',
+          }),
+        });
+      } catch (workingErr) {
+        // If already working or past it, continue — only fail if it's a real error
+        if (!(workingErr.message || '').includes('422')) throw workingErr;
+      }
+
+      // Second transition: working → completed|failed
       const transData = await apiFetch(`${DOCKER_URL}/api/a2a/tasks/${args.task_id}/transition`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
